@@ -47,6 +47,229 @@ export type Database = {
         }
         Relationships: []
       }
+      categorias_insumo: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      centros_custo: {
+        Row: {
+          ativo: boolean
+          codigo: string | null
+          created_at: string
+          created_by: string | null
+          equipamento_id: string | null
+          id: string
+          nivel: number
+          nome: string
+          obra_id: string | null
+          orcamento: number | null
+          pai_id: string | null
+          sistema: boolean
+          tipo: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          equipamento_id?: string | null
+          id?: string
+          nivel: number
+          nome: string
+          obra_id?: string | null
+          orcamento?: number | null
+          pai_id?: string | null
+          sistema?: boolean
+          tipo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          equipamento_id?: string | null
+          id?: string
+          nivel?: number
+          nome?: string
+          obra_id?: string | null
+          orcamento?: number | null
+          pai_id?: string | null
+          sistema?: boolean
+          tipo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "centros_custo_equipamento_fk"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "centros_custo_obra_fk"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "centros_custo_pai_id_fkey"
+            columns: ["pai_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clientes: {
+        Row: {
+          ativo: boolean
+          cidade: string | null
+          cpf_cnpj: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          endereco: string | null
+          id: string
+          inscricao_estadual: string | null
+          nome: string
+          nome_fantasia: string | null
+          observacoes: string | null
+          telefone: string | null
+          tipo: string
+          uf: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cidade?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          nome: string
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          telefone?: string | null
+          tipo?: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cidade?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          nome?: string
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          telefone?: string | null
+          tipo?: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      colaboradores: {
+        Row: {
+          ativo: boolean
+          centro_custo_id: string | null
+          cpf: string | null
+          created_at: string
+          created_by: string | null
+          data_admissao: string | null
+          funcao: string | null
+          id: string
+          nome: string
+          obra_id: string | null
+          telefone: string | null
+          updated_at: string
+          vinculo: string
+        }
+        Insert: {
+          ativo?: boolean
+          centro_custo_id?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_admissao?: string | null
+          funcao?: string | null
+          id?: string
+          nome: string
+          obra_id?: string | null
+          telefone?: string | null
+          updated_at?: string
+          vinculo?: string
+        }
+        Update: {
+          ativo?: boolean
+          centro_custo_id?: string | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_admissao?: string | null
+          funcao?: string | null
+          id?: string
+          nome?: string
+          obra_id?: string | null
+          telefone?: string | null
+          updated_at?: string
+          vinculo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "colaboradores_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "colaboradores_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       configuracoes: {
         Row: {
           chave: string
@@ -71,6 +294,57 @@ export type Database = {
         }
         Relationships: []
       }
+      depositos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          insumo_id: string | null
+          nome: string
+          obra_id: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_id?: string | null
+          nome: string
+          obra_id?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_id?: string | null
+          nome?: string
+          obra_id?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "depositos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "depositos_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documento_sequencias: {
         Row: {
           ano: number
@@ -88,6 +362,209 @@ export type Database = {
           tipo?: string
         }
         Relationships: []
+      }
+      equipamento_documentos: {
+        Row: {
+          anexo_path: string | null
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          equipamento_id: string
+          id: string
+          tipo: string
+          updated_at: string
+          vencimento: string | null
+        }
+        Insert: {
+          anexo_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          equipamento_id: string
+          id?: string
+          tipo: string
+          updated_at?: string
+          vencimento?: string | null
+        }
+        Update: {
+          anexo_path?: string | null
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          equipamento_id?: string
+          id?: string
+          tipo?: string
+          updated_at?: string
+          vencimento?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipamento_documentos_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipamentos: {
+        Row: {
+          ano: number | null
+          ativo: boolean
+          codigo: string | null
+          controle_por: string
+          created_at: string
+          created_by: string | null
+          descricao: string
+          id: string
+          marca: string | null
+          modelo: string | null
+          placa: string | null
+          tipo: string | null
+          updated_at: string
+        }
+        Insert: {
+          ano?: number | null
+          ativo?: boolean
+          codigo?: string | null
+          controle_por?: string
+          created_at?: string
+          created_by?: string | null
+          descricao: string
+          id?: string
+          marca?: string | null
+          modelo?: string | null
+          placa?: string | null
+          tipo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ano?: number | null
+          ativo?: boolean
+          codigo?: string | null
+          controle_por?: string
+          created_at?: string
+          created_by?: string | null
+          descricao?: string
+          id?: string
+          marca?: string | null
+          modelo?: string | null
+          placa?: string | null
+          tipo?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fornecedores: {
+        Row: {
+          ativo: boolean
+          cidade: string | null
+          cnpj_cpf: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          endereco: string | null
+          id: string
+          inscricao_estadual: string | null
+          nome_fantasia: string | null
+          observacoes: string | null
+          razao_social: string
+          telefone: string | null
+          tipo: string
+          uf: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cidade?: string | null
+          cnpj_cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          razao_social: string
+          telefone?: string | null
+          tipo?: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cidade?: string | null
+          cnpj_cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          endereco?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          nome_fantasia?: string | null
+          observacoes?: string | null
+          razao_social?: string
+          telefone?: string | null
+          tipo?: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      insumos: {
+        Row: {
+          ativo: boolean
+          categoria_id: string
+          codigo: string | null
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          unidade_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria_id: string
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          unidade_id: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria_id?: string
+          codigo?: string | null
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          unidade_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insumos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_insumo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insumos_unidade_id_fkey"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "unidades_medida"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lixeira: {
         Row: {
@@ -124,6 +601,71 @@ export type Database = {
           tabela?: string
         }
         Relationships: []
+      }
+      obras: {
+        Row: {
+          ativo: boolean
+          cliente_id: string | null
+          created_at: string
+          created_by: string | null
+          data_fim_prevista: string | null
+          data_inicio: string | null
+          extensao_km: number | null
+          id: string
+          lote: string | null
+          nome: string
+          numero_contrato: string | null
+          observacoes: string | null
+          rodovia: string | null
+          status: string
+          uf: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cliente_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim_prevista?: string | null
+          data_inicio?: string | null
+          extensao_km?: number | null
+          id?: string
+          lote?: string | null
+          nome: string
+          numero_contrato?: string | null
+          observacoes?: string | null
+          rodovia?: string | null
+          status?: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cliente_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_fim_prevista?: string | null
+          data_inicio?: string | null
+          extensao_km?: number | null
+          id?: string
+          lote?: string | null
+          nome?: string
+          numero_contrato?: string | null
+          observacoes?: string | null
+          rodovia?: string | null
+          status?: string
+          uf?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obras_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       perfil_permissoes: {
         Row: {
@@ -183,6 +725,39 @@ export type Database = {
           descricao?: string | null
           id?: string
           nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      unidades_medida: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          sigla: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          sigla: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          sigla?: string
+          tipo?: string
           updated_at?: string
         }
         Relationships: []
@@ -270,6 +845,15 @@ export type Database = {
     Functions: {
       aplicar_perfil: {
         Args: { p_perfil_id: string; p_usuario_id: string }
+        Returns: undefined
+      }
+      fn_excluir_cadastro: {
+        Args: { p_id: string; p_motivo: string; p_tabela: string }
+        Returns: undefined
+      }
+      fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string }
+      fn_restaurar_cadastro: {
+        Args: { p_lixeira_id: string }
         Returns: undefined
       }
       nomes_usuarios_auditoria: {
