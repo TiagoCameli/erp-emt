@@ -1,0 +1,12 @@
+# Config remota gerenciada por `supabase config push`.
+# Somente as chaves declaradas aqui são sincronizadas.
+project_id = "erp-emt"
+
+[auth]
+# Sem cadastro publico: usuarios entram so por convite do admin.
+enable_signup = false
+site_url = "https://erp-emt-tiagocameli-4731s-projects.vercel.app"
+additional_redirect_urls = [
+  "https://erp-emt-tiagocameli-4731s-projects.vercel.app/auth/confirm",
+  "http://localhost:3000/auth/confirm",
+]
