@@ -6,7 +6,7 @@ import {
   importar,
   validarImport,
 } from "@/modules/cadastros/categorias/actions";
-import { CategoriasNovoButton } from "@/modules/cadastros/categorias/components/categorias-novo-button";
+import { CategoriasAcoesCabecalho } from "@/modules/cadastros/categorias/components/categorias-acoes-cabecalho";
 import { CategoriasTabela } from "@/modules/cadastros/categorias/components/categorias-tabela";
 import { listar } from "@/modules/cadastros/categorias/queries";
 import { ImportarCadastro } from "@/modules/cadastros/_shared/importar-cadastro";
@@ -37,7 +37,7 @@ export default async function PaginaCategorias() {
                 validarAction={validarImport}
                 importarAction={importar}
               />
-              <CategoriasNovoButton />
+              <CategoriasAcoesCabecalho />
             </>
           ) : undefined
         }

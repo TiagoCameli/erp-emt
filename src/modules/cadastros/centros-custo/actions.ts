@@ -26,11 +26,12 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 
 const uuidSchema = z.uuid();
 
-/** Campos que governam as travas: sistema e equipamento são geridos pelo banco. */
+/** Campos que governam as travas: sistema, equipamento e obra são geridos pelo banco. */
 interface NoTravas {
   nivel: number;
   sistema: boolean;
   equipamento_id: string | null;
+  obra_id: string | null;
   pai_id: string | null;
 }
 
@@ -41,15 +42,18 @@ async function carregarNo(
 ): Promise<NoTravas | null> {
   const { data } = await supabase
     .from(TABELA)
-    .select("nivel, sistema, equipamento_id, pai_id")
+    .select("nivel, sistema, equipamento_id, obra_id, pai_id")
     .eq("id", id)
     .maybeSingle();
   return data;
 }
 
-/** True quando o nó é gerido pelo sistema (de sistema ou gerado por equipamento). */
+/**
+ * True quando o nó é gerido pelo sistema: de sistema, gerado por equipamento ou
+ * raiz de obra (criada pela trigger da obra, espelha o nome da obra).
+ */
 function noGerido(no: NoTravas): boolean {
-  return no.sistema || no.equipamento_id !== null;
+  return no.sistema || no.equipamento_id !== null || no.obra_id !== null;
 }
 
 /**
@@ -150,8 +154,9 @@ export async function editarNo(
 
   const orcamento = validado.data.orcamento ?? null;
 
-  // Nó gerido: só orçamento. Nó manual: nome, código e orçamento.
-  const atualizacao = noGerido(no)
+  // Nó gerido (sistema, equipamento, raiz de obra) ou de nível 1: só orçamento.
+  // Nó manual (etapa/item criado à mão): nome, código e orçamento.
+  const atualizacao = no.nivel === 1 || noGerido(no)
     ? { orcamento }
     : {
         nome: validado.data.nome,
@@ -358,11 +363,55 @@ export async function importar(
     centroPorNome.set(centro.nome.trim().toLowerCase(), centro.id);
   }
 
+  // Resolve TODOS os centros antes de inserir qualquer coisa. Como o supabase-js
+  // não abre transação, validar o centro de cada linha primeiro evita abortar no
+  // meio deixando parte da hierarquia gravada (importação não atômica).
+  for (const linha of resultado.validas) {
+    const nomeCentro = String(linha.dados.centro ?? "").trim();
+    if (!centroPorNome.has(nomeCentro.toLowerCase())) {
+      return {
+        erro: `O centro "${nomeCentro}" não existe (linha ${linha.linha}). Centros nascem de Obras ou são de sistema; a planilha só cria etapas e itens.`,
+      };
+    }
+  }
+
   // Caches de etapas e itens já existentes ou criados nesta importação.
   // Chave da etapa: `${centroId}::${nomeEtapaMinusculo}`.
   // Chave do item: `${etapaId}::${nomeItemMinusculo}`.
+  // Os existentes no banco são carregados uma vez por pai e casados por nome
+  // normalizado em memória (sem ILIKE, que trataria % e _ como curinga).
   const etapaPorChave = new Map<string, string>();
   const itemPorChave = new Map<string, string>();
+  const paisCarregados = new Set<string>();
+
+  /**
+   * Carrega os filhos de um pai (nível 2 ou 3) uma única vez e indexa por nome
+   * normalizado no cache. Propaga erro de leitura. Em irmãos homônimos mantém o
+   * primeiro (a importação não cria duplicata; reaproveita um nó existente).
+   */
+  async function carregarFilhos(
+    paiId: string,
+    nivel: 2 | 3,
+    cache: Map<string, string>,
+  ): Promise<string | null> {
+    if (paisCarregados.has(paiId)) return null;
+    const { data, error } = await supabase
+      .from(TABELA)
+      .select("id, nome")
+      .eq("pai_id", paiId)
+      .eq("nivel", nivel);
+    if (error) {
+      return nivel === 2
+        ? "Não foi possível ler as etapas existentes. Tente novamente"
+        : "Não foi possível ler os itens existentes. Tente novamente";
+    }
+    for (const filho of data ?? []) {
+      const chave = `${paiId}::${filho.nome.trim().toLowerCase()}`;
+      if (!cache.has(chave)) cache.set(chave, filho.id);
+    }
+    paisCarregados.add(paiId);
+    return null;
+  }
 
   let importadas = 0;
 
@@ -374,72 +423,49 @@ export async function importar(
     const orcamento =
       typeof dados.orcamento === "number" ? dados.orcamento : null;
 
-    const centroId = centroPorNome.get(nomeCentro.toLowerCase());
-    if (!centroId) {
-      return {
-        erro: `O centro "${nomeCentro}" não existe. Centros nascem de Obras ou são de sistema; a planilha só cria etapas e itens.`,
-      };
-    }
+    // centroId garantido pela pré-validação acima.
+    const centroId = centroPorNome.get(nomeCentro.toLowerCase())!;
 
-    // Resolve a etapa: cache, banco ou cria.
+    // Resolve a etapa: cache (existentes + criados nesta rodada) ou cria.
+    const erroEtapas = await carregarFilhos(centroId, 2, etapaPorChave);
+    if (erroEtapas) return { erro: erroEtapas };
+
     const chaveEtapa = `${centroId}::${nomeEtapa.toLowerCase()}`;
     let etapaId = etapaPorChave.get(chaveEtapa);
 
     if (!etapaId) {
-      const { data: etapaExistente } = await supabase
+      const { data: etapaCriada, error: erroEtapa } = await supabase
         .from(TABELA)
+        .insert({
+          nome: nomeEtapa,
+          pai_id: centroId,
+          nivel: 2,
+          tipo: null,
+          sistema: false,
+          orcamento: nomeItem ? null : orcamento,
+          ativo: true,
+        })
         .select("id")
-        .eq("pai_id", centroId)
-        .eq("nivel", 2)
-        .ilike("nome", nomeEtapa)
-        .maybeSingle();
+        .single();
 
-      if (etapaExistente) {
-        etapaId = etapaExistente.id;
-      } else {
-        const { data: etapaCriada, error: erroEtapa } = await supabase
-          .from(TABELA)
-          .insert({
-            nome: nomeEtapa,
-            pai_id: centroId,
-            nivel: 2,
-            tipo: null,
-            sistema: false,
-            orcamento: nomeItem ? null : orcamento,
-            ativo: true,
-          })
-          .select("id")
-          .single();
-
-        if (erroEtapa || !etapaCriada) {
-          return {
-            erro: "Não foi possível importar as etapas. Tente novamente",
-          };
-        }
-        etapaId = etapaCriada.id;
-        importadas += 1;
+      if (erroEtapa || !etapaCriada) {
+        return {
+          erro: "Não foi possível importar as etapas. Tente novamente",
+        };
       }
+      etapaId = etapaCriada.id;
       etapaPorChave.set(chaveEtapa, etapaId);
+      importadas += 1;
     }
 
     if (!nomeItem) continue;
 
-    // Resolve o item: cache, banco ou cria.
+    // Resolve o item: cache (existentes + criados nesta rodada) ou cria.
+    const erroItens = await carregarFilhos(etapaId, 3, itemPorChave);
+    if (erroItens) return { erro: erroItens };
+
     const chaveItem = `${etapaId}::${nomeItem.toLowerCase()}`;
     if (itemPorChave.has(chaveItem)) continue;
-
-    const { data: itemExistente } = await supabase
-      .from(TABELA)
-      .select("id")
-      .eq("pai_id", etapaId)
-      .eq("nivel", 3)
-      .ilike("nome", nomeItem)
-      .maybeSingle();
-
-    if (itemExistente) {
-      itemPorChave.set(chaveItem, itemExistente.id);
-      continue;
-    }
 
     const { data: itemCriado, error: erroItem } = await supabase
       .from(TABELA)

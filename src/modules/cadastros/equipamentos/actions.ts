@@ -374,7 +374,7 @@ export async function importarEquipamentos(
   }
 
   if (validas.length === 0) {
-    return { importadas: 0 };
+    return { erro: "Nenhuma linha válida para importar" };
   }
 
   const supabase = await createClient();

@@ -14,7 +14,7 @@ const COLUNAS_MODELO = [
 /** Baixa o modelo .xlsx de importação de colaboradores. */
 export async function GET() {
   const usuario = await getUsuarioLogado();
-  if (!usuario || !temPermissao(usuario, "cadastros.colaboradores", "ver")) {
+  if (!usuario || !temPermissao(usuario, "cadastros.colaboradores", "criar")) {
     return new NextResponse("Sem permissão", { status: 403 });
   }
 

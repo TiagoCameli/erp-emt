@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { EquipamentosAcoes } from "@/modules/cadastros/equipamentos/components/equipamentos-acoes";
+import { EquipamentosAcoesCabecalho } from "@/modules/cadastros/equipamentos/components/equipamentos-acoes-cabecalho";
 import { EquipamentosTabela } from "@/modules/cadastros/equipamentos/components/equipamentos-tabela";
 import {
   listarDocumentos,
@@ -36,7 +36,7 @@ export default async function PaginaEquipamentos() {
       <PageHeader
         titulo="Equipamentos"
         descricao="Frota e maquinário. Cada equipamento vira uma etapa do centro de custo de Manutenção"
-        acoes={<EquipamentosAcoes podeCriar={podeCriar} />}
+        acoes={<EquipamentosAcoesCabecalho podeCriar={podeCriar} />}
       />
       <EquipamentosTabela
         equipamentos={equipamentos}

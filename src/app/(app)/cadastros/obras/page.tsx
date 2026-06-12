@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { ObrasAcoes } from "@/modules/cadastros/obras/components/obras-acoes";
+import { ObrasAcoesCabecalho } from "@/modules/cadastros/obras/components/obras-acoes-cabecalho";
 import { ObrasTabela } from "@/modules/cadastros/obras/components/obras-tabela";
 import { listarClientes, listarObras } from "@/modules/cadastros/obras/queries";
 
@@ -25,7 +25,7 @@ export default async function PaginaObras() {
       <PageHeader
         titulo="Obras"
         descricao="Contratos de obra. Cada obra gera o centro de custo raiz dela"
-        acoes={<ObrasAcoes clientes={clientes} podeCriar={podeCriar} />}
+        acoes={<ObrasAcoesCabecalho clientes={clientes} podeCriar={podeCriar} />}
       />
       <ObrasTabela obras={obras} clientes={clientes} podeEditar={podeEditar} />
     </>

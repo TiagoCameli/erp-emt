@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -18,6 +19,8 @@ const RECURSO = "cadastros.insumos" as const;
 const ROTA = "/cadastros/insumos";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
+
+const uuidSchema = z.uuid();
 
 /** Forma de cada linha lida da planilha de importação. */
 interface LinhaImportInsumo {
@@ -91,6 +94,9 @@ export async function editar(
     return { erro: "Sem permissão para editar insumos" };
   }
 
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Insumo inválido" };
+
   const validado = insumoSchema.safeParse(dados);
   if (!validado.success) {
     return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
@@ -100,7 +106,7 @@ export async function editar(
   const { error } = await supabase
     .from("insumos")
     .update(montarRegistro(validado.data))
-    .eq("id", id);
+    .eq("id", idValido.data);
 
   if (error) {
     return { erro: "Não foi possível salvar o insumo. Tente novamente" };
@@ -121,11 +127,14 @@ export async function alternarAtivo(
     return { erro: "Sem permissão para editar insumos" };
   }
 
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Insumo inválido" };
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("insumos")
     .update({ ativo })
-    .eq("id", id);
+    .eq("id", idValido.data);
 
   if (error) {
     return { erro: "Não foi possível alterar o status do insumo. Tente novamente" };
@@ -146,10 +155,13 @@ export async function excluir(
     return { erro: "Sem permissão para excluir insumos" };
   }
 
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Insumo inválido" };
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_excluir_cadastro", {
     p_tabela: "insumos",
-    p_id: id,
+    p_id: idValido.data,
     p_motivo: motivo,
   });
 
@@ -236,9 +248,20 @@ export async function importar(
     return { erro: "Não foi possível carregar categorias e unidades para casar" };
   }
 
-  const categoriaPorNome = new Map(
-    (categorias.data ?? []).map((c) => [c.nome.trim().toLowerCase(), c.id]),
-  );
+  // categorias_insumo tem UNIQUE (nome, tipo): dá pra ter o mesmo nome com
+  // tipos diferentes. A planilha não tem coluna de tipo, então um nome repetido
+  // é ambíguo e não pode ser casado por adivinhação. Conta as ocorrências por
+  // nome e bloqueia o que colidir, em vez de a última entrada vencer no Map.
+  const categoriaPorNome = new Map<string, string>();
+  const categoriaNomeAmbiguo = new Set<string>();
+  for (const c of categorias.data ?? []) {
+    const chave = c.nome.trim().toLowerCase();
+    if (categoriaPorNome.has(chave)) {
+      categoriaNomeAmbiguo.add(chave);
+    } else {
+      categoriaPorNome.set(chave, c.id);
+    }
+  }
   const unidadePorSigla = new Map(
     (unidades.data ?? []).map((u) => [u.sigla.trim().toLowerCase(), u.id]),
   );
@@ -259,6 +282,12 @@ export async function importar(
     const unidadeSigla = String(linha.dados.unidade ?? "")
       .trim()
       .toLowerCase();
+
+    if (categoriaNomeAmbiguo.has(categoriaNome)) {
+      return {
+        erro: `Categoria "${linha.dados.categoria}" (linha ${linha.linha}) está cadastrada com mais de um tipo. Renomeie a categoria ou cadastre o insumo pela tela para escolher o tipo certo.`,
+      };
+    }
 
     const categoriaId = categoriaPorNome.get(categoriaNome);
     if (!categoriaId) {

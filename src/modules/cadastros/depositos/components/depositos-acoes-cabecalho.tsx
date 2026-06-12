@@ -15,7 +15,7 @@ import type {
   ObraOpcao,
 } from "@/modules/cadastros/depositos/queries";
 
-export interface DepositosHeaderAcoesProps {
+export interface DepositosAcoesCabecalhoProps {
   obras: ObraOpcao[];
   insumos: InsumoOpcao[];
   podeCriar: boolean;
@@ -25,11 +25,11 @@ export interface DepositosHeaderAcoesProps {
  * Ações do cabeçalho: importar planilha e criar depósito. Carrega o próprio
  * drawer de criação (a edição fica no menu de cada linha da tabela).
  */
-export function DepositosHeaderAcoes({
+export function DepositosAcoesCabecalho({
   obras,
   insumos,
   podeCriar,
-}: DepositosHeaderAcoesProps) {
+}: DepositosAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
   return (

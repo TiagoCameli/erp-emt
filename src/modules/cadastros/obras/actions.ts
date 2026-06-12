@@ -280,7 +280,8 @@ export async function validarImport(
 
 /**
  * Importa as linhas válidas da planilha de obras. Resolve o cliente pelo
- * nome ou nome_fantasia. Linhas com cliente inexistente entram sem cliente.
+ * nome ou nome_fantasia. Cliente preenchido mas inexistente vira erro (não
+ * entra sem vínculo); célula vazia entra sem cliente.
  * Insere em massa; RLS cobre a permissão de criar.
  */
 export async function importarObras(
@@ -306,7 +307,7 @@ export async function importarObras(
   }
 
   if (validas.length === 0) {
-    return { importadas: 0 };
+    return { erro: "Nenhuma linha válida para importar" };
   }
 
   const supabase = await createClient();
@@ -328,19 +329,43 @@ export async function importarObras(
     }
   }
 
-  const registros = validas.map(({ dados }) => ({
-    nome: dados.nome ?? "",
-    numero_contrato: dados.numeroContrato ?? null,
-    cliente_id: dados.cliente
-      ? (clientePorNome.get(dados.cliente.trim().toLowerCase()) ?? null)
-      : null,
-    rodovia: dados.rodovia ?? null,
-    lote: dados.lote ?? null,
-    uf: dados.uf ?? null,
-    extensao_km: dados.extensaoKm ?? null,
-    status: dados.status ?? "em_andamento",
-    ativo: true,
-  }));
+  const registros: {
+    nome: string;
+    numero_contrato: string | null;
+    cliente_id: string | null;
+    rodovia: string | null;
+    lote: string | null;
+    uf: string | null;
+    extensao_km: number | null;
+    status: StatusObra;
+    ativo: boolean;
+  }[] = [];
+
+  for (const { linha, dados } of validas) {
+    // Cliente preenchido mas inexistente vira erro, não vínculo silencioso null.
+    let clienteId: string | null = null;
+    if (dados.cliente) {
+      const encontrado = clientePorNome.get(dados.cliente.trim().toLowerCase());
+      if (!encontrado) {
+        return {
+          erro: `Cliente "${dados.cliente}" não encontrado (linha ${linha}). Cadastre o cliente antes ou corrija o nome`,
+        };
+      }
+      clienteId = encontrado;
+    }
+
+    registros.push({
+      nome: dados.nome ?? "",
+      numero_contrato: dados.numeroContrato ?? null,
+      cliente_id: clienteId,
+      rodovia: dados.rodovia ?? null,
+      lote: dados.lote ?? null,
+      uf: dados.uf ?? null,
+      extensao_km: dados.extensaoKm ?? null,
+      status: dados.status ?? "em_andamento",
+      ativo: true,
+    });
+  }
 
   const { error } = await supabase.from(TABELA).insert(registros);
   if (error) {

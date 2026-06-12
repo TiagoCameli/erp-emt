@@ -1,7 +1,15 @@
+import { notFound } from "next/navigation";
+
 import { gerarModeloXlsx } from "@/lib/importacao";
+import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 
 /** GET: baixa o modelo .xlsx para importação de unidades de medida. */
 export async function GET() {
+  const usuario = await getUsuarioLogado();
+  if (!usuario || !temPermissao(usuario, "cadastros.unidades", "criar")) {
+    notFound();
+  }
+
   const buffer = await gerarModeloXlsx(
     [
       { rotulo: "Sigla", exemplo: "t" },

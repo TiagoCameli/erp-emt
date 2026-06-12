@@ -195,6 +195,10 @@ export async function validarImport(formData: FormData): Promise<{
   invalidas: { linha: number; erros: string[] }[];
   totalLinhas: number;
 }> {
+  if (!(await checarPermissao("criar"))) {
+    throw new Error("Sem permissão para importar depósitos");
+  }
+
   const arquivo = formData.get("arquivo");
   if (!(arquivo instanceof File)) {
     throw new Error("Nenhum arquivo enviado");
@@ -274,12 +278,18 @@ export async function importar(
     return { erro: "Não foi possível carregar obras e insumos para o vínculo" };
   }
 
-  const obraPorNome = new Map(
-    (obrasResposta.data ?? []).map((obra) => [
-      obra.nome.trim().toLowerCase(),
-      obra.id,
-    ]),
-  );
+  // obras.nome não é unique: nomes repetidos são ambíguos e não podem ser
+  // casados por adivinhação (o último venceria no Map). Marca os ambíguos.
+  const obraPorNome = new Map<string, string>();
+  const obraNomeAmbiguo = new Set<string>();
+  for (const obra of obrasResposta.data ?? []) {
+    const chave = obra.nome.trim().toLowerCase();
+    if (obraPorNome.has(chave)) {
+      obraNomeAmbiguo.add(chave);
+    } else {
+      obraPorNome.set(chave, obra.id);
+    }
+  }
   const insumoPorNome = new Map(
     (insumosResposta.data ?? []).map((insumo) => [
       insumo.nome.trim().toLowerCase(),
@@ -301,7 +311,13 @@ export async function importar(
 
     if (errosDeTanque(tipo, insumo).length > 0) continue;
 
-    const obraId = obra ? (obraPorNome.get(obra.toLowerCase()) ?? null) : null;
+    const obraChave = obra ? obra.trim().toLowerCase() : null;
+    if (obraChave && obraNomeAmbiguo.has(obraChave)) {
+      return {
+        erro: `Obra "${obra}" está cadastrada mais de uma vez (linha ${linha.linha}). Use um nome único ou ajuste o cadastro antes de importar`,
+      };
+    }
+    const obraId = obraChave ? (obraPorNome.get(obraChave) ?? null) : null;
     if (obra && !obraId) {
       return {
         erro: `Obra "${obra}" não encontrada (linha ${linha.linha}). Cadastre a obra antes ou corrija o nome`,

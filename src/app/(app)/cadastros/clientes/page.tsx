@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ImportarCadastro } from "@/modules/cadastros/_shared/importar-cadastro";
-import { ClientesNovoBotao } from "@/modules/cadastros/clientes/components/clientes-novo-botao";
+import { ClientesAcoesCabecalho } from "@/modules/cadastros/clientes/components/clientes-acoes-cabecalho";
 import { ClientesTabela } from "@/modules/cadastros/clientes/components/clientes-tabela";
 import { validarImport, importar } from "@/modules/cadastros/clientes/actions";
 import { listar } from "@/modules/cadastros/clientes/queries";
@@ -34,7 +34,7 @@ export default async function PaginaClientes() {
                 validarAction={validarImport}
                 importarAction={importar}
               />
-              <ClientesNovoBotao />
+              <ClientesAcoesCabecalho />
             </>
           ) : undefined
         }

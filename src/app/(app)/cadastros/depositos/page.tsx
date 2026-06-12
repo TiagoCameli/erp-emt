@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { DepositosHeaderAcoes } from "@/modules/cadastros/depositos/components/depositos-header-acoes";
+import { DepositosAcoesCabecalho } from "@/modules/cadastros/depositos/components/depositos-acoes-cabecalho";
 import { DepositosTabela } from "@/modules/cadastros/depositos/components/depositos-tabela";
 import {
   listar,
@@ -32,7 +32,7 @@ export default async function PaginaDepositos() {
         titulo="Depósitos e tanques"
         descricao="Depósitos centrais, de obra, almoxarifados e tanques de combustível ou betuminoso"
         acoes={
-          <DepositosHeaderAcoes
+          <DepositosAcoesCabecalho
             obras={obras}
             insumos={insumos}
             podeCriar={podeCriar}

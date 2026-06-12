@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ClientesFormDrawer } from "./clientes-form-drawer";
 
 /** Botão "Novo cliente" do cabeçalho, com o drawer de criação acoplado. */
-export function ClientesNovoBotao() {
+export function ClientesAcoesCabecalho() {
   const [aberto, setAberto] = React.useState(false);
 
   return (

@@ -1,4 +1,7 @@
+import { notFound } from "next/navigation";
+
 import { gerarModeloXlsx } from "@/lib/importacao";
+import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 
 const COLUNAS = [
   { rotulo: "Nome", exemplo: "Tanque diesel usina" },
@@ -9,6 +12,11 @@ const COLUNAS = [
 
 /** Devolve o modelo .xlsx de importação de depósitos para download. */
 export async function GET() {
+  const usuario = await getUsuarioLogado();
+  if (!usuario || !temPermissao(usuario, "cadastros.depositos", "criar")) {
+    notFound();
+  }
+
   const buffer = await gerarModeloXlsx(COLUNAS, "Depósitos");
 
   return new Response(new Uint8Array(buffer), {

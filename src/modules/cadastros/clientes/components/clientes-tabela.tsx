@@ -143,7 +143,7 @@ export function ClientesTabela({
               {row.original.cpfCnpj}
             </span>
           ) : (
-            <span className="text-muted-foreground">Não informado</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {
@@ -152,7 +152,7 @@ export function ClientesTabela({
         cell: ({ row }) => {
           const { cidade, uf } = row.original;
           if (!cidade && !uf) {
-            return <span className="text-muted-foreground">Não informado</span>;
+            return <span className="text-muted-foreground">-</span>;
           }
           return <span>{[cidade, uf].filter(Boolean).join(", ")}</span>;
         },

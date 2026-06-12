@@ -154,7 +154,7 @@ export function FornecedoresTabela({
               {row.original.cnpjCpf}
             </span>
           ) : (
-            <span className="text-muted-foreground">Não informado</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {
@@ -166,7 +166,7 @@ export function FornecedoresTabela({
           return texto ? (
             <span>{texto}</span>
           ) : (
-            <span className="text-muted-foreground">Não informado</span>
+            <span className="text-muted-foreground">-</span>
           );
         },
       },
@@ -177,7 +177,7 @@ export function FornecedoresTabela({
           row.original.telefone ? (
             <span className="tabular-nums">{row.original.telefone}</span>
           ) : (
-            <span className="text-muted-foreground">Não informado</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {

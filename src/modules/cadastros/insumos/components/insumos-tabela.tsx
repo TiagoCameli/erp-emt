@@ -121,7 +121,7 @@ export function InsumosTabela({
           row.original.codigo ? (
             <span className="codigo-doc">{row.original.codigo}</span>
           ) : (
-            <span className="text-muted-foreground">Sem código</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {
@@ -136,7 +136,7 @@ export function InsumosTabela({
         header: "Categoria",
         cell: ({ row }) =>
           row.original.categoriaNome ?? (
-            <span className="text-muted-foreground">Sem categoria</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {
@@ -144,7 +144,7 @@ export function InsumosTabela({
         header: "Unidade",
         cell: ({ row }) =>
           row.original.unidadeSigla ?? (
-            <span className="text-muted-foreground">Sem unidade</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {

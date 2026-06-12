@@ -55,9 +55,14 @@ interface NoArvore extends NoCentroCusto {
   filhos: NoArvore[];
 }
 
-/** True quando o nó é gerido pelo sistema (de sistema ou gerado por equipamento). */
+/**
+ * True quando o nó é gerido pelo sistema: de sistema, gerado por equipamento,
+ * raiz de obra (espelha o nome da obra) ou qualquer centro de nível 1.
+ */
 function ehGerido(no: NoCentroCusto): boolean {
-  return no.sistema || no.equipamento_id !== null;
+  return (
+    no.nivel === 1 || no.sistema || no.equipamento_id !== null || no.obra_id !== null
+  );
 }
 
 /**

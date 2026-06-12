@@ -11,7 +11,7 @@ import {
 } from "@/modules/cadastros/equipamentos/actions";
 import { EquipamentosFormDrawer } from "./equipamentos-form-drawer";
 
-export interface EquipamentosAcoesProps {
+export interface EquipamentosAcoesCabecalhoProps {
   podeCriar: boolean;
 }
 
@@ -19,7 +19,9 @@ export interface EquipamentosAcoesProps {
  * Ações do cabeçalho de equipamentos: importar planilha e criar um novo
  * equipamento. Só renderiza quando o usuário tem permissão de criar.
  */
-export function EquipamentosAcoes({ podeCriar }: EquipamentosAcoesProps) {
+export function EquipamentosAcoesCabecalho({
+  podeCriar,
+}: EquipamentosAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
   if (!podeCriar) return null;

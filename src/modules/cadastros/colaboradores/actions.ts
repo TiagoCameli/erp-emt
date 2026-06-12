@@ -233,15 +233,30 @@ export async function importar(
   if (erroObras) {
     return { erro: "Não foi possível carregar as obras para a importação" };
   }
-  const obraPorNome = new Map(
-    (obras ?? []).map((obra) => [obra.nome.trim().toLowerCase(), obra.id]),
-  );
+  // obras.nome não é unique: nomes repetidos são ambíguos e não podem ser
+  // casados por adivinhação (o último venceria no Map). Marca os ambíguos.
+  const obraPorNome = new Map<string, string>();
+  const obraNomeAmbiguo = new Set<string>();
+  for (const obra of obras ?? []) {
+    const chave = obra.nome.trim().toLowerCase();
+    if (obraPorNome.has(chave)) {
+      obraNomeAmbiguo.add(chave);
+    } else {
+      obraPorNome.set(chave, obra.id);
+    }
+  }
 
   const linhasValidas = [];
   for (const { dados } of resultado.validas) {
     let obraId: string | null = null;
     if (dados.obra) {
-      const encontrada = obraPorNome.get(dados.obra.trim().toLowerCase());
+      const chave = dados.obra.trim().toLowerCase();
+      if (obraNomeAmbiguo.has(chave)) {
+        return {
+          erro: `Obra "${dados.obra}" está cadastrada mais de uma vez. Use um nome único ou ajuste o cadastro antes de importar`,
+        };
+      }
+      const encontrada = obraPorNome.get(chave);
       if (!encontrada) {
         return {
           erro: `Obra "${dados.obra}" não encontrada. Cadastre a obra antes ou ajuste a planilha`,

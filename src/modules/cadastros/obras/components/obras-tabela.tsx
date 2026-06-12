@@ -4,11 +4,23 @@ import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Building2 } from "lucide-react";
 
-import { DataTable, EmptyState, StatusBadge } from "@/components/canonicos";
+import {
+  DataTable,
+  EmptyState,
+  FilterBar,
+  FiltroBusca,
+  FiltroSelect,
+  StatusBadge,
+} from "@/components/canonicos";
 import { formatarQuantidade } from "@/lib/formatadores";
 import type { ClienteOpcao, ObraLista } from "@/modules/cadastros/obras/queries";
 import { STATUS_OBRA_CONFIG } from "@/modules/cadastros/obras/schemas";
 import { ObrasFormDrawer } from "./obras-form-drawer";
+
+const OPCOES_STATUS = [
+  { valor: "ativos", rotulo: "Ativos" },
+  { valor: "inativos", rotulo: "Inativos" },
+];
 
 /** Texto "Rodovia / Lote" quando há os dois, senão o que existir. */
 function rodoviaLote(obra: ObraLista): string {
@@ -91,10 +103,22 @@ export interface ObrasTabelaProps {
 export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
+  const [busca, setBusca] = React.useState("");
+  const [status, setStatus] = React.useState("ativos");
 
   // Deriva da prop pra refletir edições depois do revalidatePath.
   const obraSelecionada =
     obras.find((obra) => obra.id === selecionadaId) ?? null;
+
+  const dados = React.useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return obras.filter((obra) => {
+      if (status === "ativos" && !obra.ativo) return false;
+      if (status === "inativos" && obra.ativo) return false;
+      if (termo && !obra.nome.toLowerCase().includes(termo)) return false;
+      return true;
+    });
+  }, [obras, busca, status]);
 
   function abrirEdicao(obra: ObraLista) {
     if (!podeEditar) return;
@@ -103,12 +127,25 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-2">
+      <FilterBar>
+        <FiltroBusca
+          valor={busca}
+          onValorChange={setBusca}
+          placeholder="Buscar por nome"
+        />
+        <FiltroSelect
+          valor={status === "todos" ? "" : status}
+          onValorChange={(valor) => setStatus(valor === "" ? "todos" : valor)}
+          opcoes={OPCOES_STATUS}
+          placeholder="Status"
+          todosRotulo="Todos"
+        />
+      </FilterBar>
+
       <DataTable
         columns={colunas}
-        data={obras}
-        searchKey="nome"
-        searchPlaceholder="Buscar por nome"
+        data={dados}
         onRowClick={podeEditar ? abrirEdicao : undefined}
         emptyState={
           <EmptyState
@@ -127,6 +164,6 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
         obra={obraSelecionada}
         clientes={clientes}
       />
-    </>
+    </div>
   );
 }

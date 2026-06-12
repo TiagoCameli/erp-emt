@@ -58,7 +58,11 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
   const editando = modo?.tipo === "editar";
   const noEditado = modo?.tipo === "editar" ? modo.no : null;
   const geridoSistema = Boolean(
-    noEditado && (noEditado.sistema || noEditado.equipamento_id !== null),
+    noEditado &&
+      (noEditado.nivel === 1 ||
+        noEditado.sistema ||
+        noEditado.equipamento_id !== null ||
+        noEditado.obra_id !== null),
   );
 
   // Sincroniza os campos com o modo no momento em que o drawer abre. Em vez de um

@@ -10,7 +10,7 @@ import { CategoriasFormDrawer } from "./categorias-form-drawer";
  * Botão "Nova categoria" + drawer de criação, para a ação primária do
  * PageHeader. Edições partem do menu de cada linha na tabela.
  */
-export function CategoriasNovoButton() {
+export function CategoriasAcoesCabecalho() {
   const [aberto, setAberto] = React.useState(false);
 
   return (

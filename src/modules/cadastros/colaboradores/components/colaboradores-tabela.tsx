@@ -125,7 +125,7 @@ export function ColaboradoresTabela({
         header: "Função",
         cell: ({ row }) =>
           row.original.funcao ?? (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {
@@ -138,7 +138,7 @@ export function ColaboradoresTabela({
         header: "Obra",
         cell: ({ row }) =>
           row.original.obraNome ?? (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">-</span>
           ),
       },
       {
@@ -148,7 +148,7 @@ export function ColaboradoresTabela({
           <span className="tabular-nums">
             {row.original.dataAdmissao
               ? formatarData(row.original.dataAdmissao)
-              : "—"}
+              : "-"}
           </span>
         ),
       },

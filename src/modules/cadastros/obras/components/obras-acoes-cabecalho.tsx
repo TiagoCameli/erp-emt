@@ -12,7 +12,7 @@ import {
 import type { ClienteOpcao } from "@/modules/cadastros/obras/queries";
 import { ObrasFormDrawer } from "./obras-form-drawer";
 
-export interface ObrasAcoesProps {
+export interface ObrasAcoesCabecalhoProps {
   clientes: ClienteOpcao[];
   podeCriar: boolean;
 }
@@ -21,7 +21,10 @@ export interface ObrasAcoesProps {
  * Ações do cabeçalho de obras: importar planilha e criar uma nova obra.
  * Só renderiza quando o usuário tem permissão de criar.
  */
-export function ObrasAcoes({ clientes, podeCriar }: ObrasAcoesProps) {
+export function ObrasAcoesCabecalho({
+  clientes,
+  podeCriar,
+}: ObrasAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
   if (!podeCriar) return null;
