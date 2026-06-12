@@ -28,7 +28,7 @@ export default async function InicioPage() {
             key={modulo.id}
             titulo="Módulo"
             valor={modulo.nome}
-            detalhe="Abrir módulo"
+            detalhe={`Abrir ${modulo.nome.toLowerCase()}`}
             href={modulo.rota}
           />
         ))}

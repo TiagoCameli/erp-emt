@@ -10,3 +10,7 @@ additional_redirect_urls = [
   "https://erp-emt-tiagocameli-4731s-projects.vercel.app/auth/confirm",
   "http://localhost:3000/auth/confirm",
 ]
+# Pendente (ligar no dashboard, Authentication > Sign In / Providers):
+# - Leaked password protection (HaveIBeenPwned)
+# - MFA adicional
+# O CLI 2.75 instalado nao expoe essas chaves no config.toml.
