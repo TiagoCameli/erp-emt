@@ -41,7 +41,7 @@ export type ModuloId = (typeof MODULOS)[number]["id"];
 export const RECURSOS = [
   {
     id: "administracao.usuarios",
-    nome: "Usuários e Permissões",
+    nome: "Usuários e permissões",
     modulo: "administracao",
     rota: "/administracao/usuarios",
     acoes: ["ver", "criar", "editar", "excluir"],

@@ -17,7 +17,7 @@ const CLASSES_RASCUNHO = "bg-status-rascunho/10 text-status-rascunho";
 const CLASSES_PENDENTE = "bg-status-pendente/10 text-status-pendente";
 const CLASSES_APROVADO = "bg-status-aprovado/10 text-status-aprovado";
 const CLASSES_REJEITADO = "bg-status-rejeitado/10 text-status-rejeitado";
-const CLASSES_EFEITO = "bg-[#166534]/10 text-[#166534]";
+const CLASSES_EFEITO = "bg-status-efeito/10 text-status-efeito";
 
 const MAPA_STATUS: Record<StatusPadrao, { rotulo: string; classes: string }> = {
   rascunho: { rotulo: "Rascunho", classes: CLASSES_RASCUNHO },

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
 
@@ -9,6 +8,7 @@ import {
   DataTable,
   EmptyState,
   Trilha,
+  useFiltrosUrl,
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -74,26 +74,9 @@ export function LixeiraTabela({
   mostrarRestaurados,
   podeEditar,
 }: LixeiraTabelaProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { setMuitos: atualizarParams } = useFiltrosUrl();
   const [itemSelecionado, setItemSelecionado] =
     React.useState<ItemLixeira | null>(null);
-
-  const atualizarParams = React.useCallback(
-    (mudancas: Record<string, string | null>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      for (const [chave, valor] of Object.entries(mudancas)) {
-        if (valor === null || valor === "") params.delete(chave);
-        else params.set(chave, valor);
-      }
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, {
-        scroll: false,
-      });
-    },
-    [router, pathname, searchParams],
-  );
 
   const colunas = React.useMemo<ColumnDef<ItemLixeira, unknown>[]>(() => {
     const base: ColumnDef<ItemLixeira, unknown>[] = [

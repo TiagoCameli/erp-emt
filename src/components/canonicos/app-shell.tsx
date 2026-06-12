@@ -183,7 +183,7 @@ export function AppShell({ usuario, modulos, children, onSair }: AppShellProps) 
               href={modulo.rota}
               aria-current={ativo ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-0.5 border-t-2 py-2",
+                "flex flex-col items-center gap-0.5 border-t-[3px] py-2",
                 ativo
                   ? "border-faixa text-primary"
                   : "border-transparent text-muted-foreground"

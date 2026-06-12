@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AppShell, type ModuloNavegacao } from "@/components/canonicos";
 import { MODULOS, recursosDoModulo, type RecursoId } from "@/config/recursos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { createClient } from "@/lib/supabase/server";
 import { sair } from "@/modules/auth/actions";
 
 export default async function AppLayout({
@@ -12,7 +13,28 @@ export default async function AppLayout({
   children: ReactNode;
 }) {
   const usuario = await getUsuarioLogado();
-  if (!usuario) redirect("/login");
+
+  if (!usuario) {
+    // Sessão válida com usuário desativado (ou sem cadastro) iria
+    // em loop /login <-> /: o middleware devolve quem tem sessão.
+    // Conta desativada tem página própria, fora desse ciclo.
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) redirect("/conta-desativada");
+    redirect("/login");
+  }
+
+  // Senha temporária (fallback de convite sem email): força a troca
+  // antes de qualquer outra tela.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user?.user_metadata?.senha_temporaria === true) {
+    redirect("/definir-senha");
+  }
 
   const modulosVisiveis: ModuloNavegacao[] = MODULOS.filter((modulo) =>
     recursosDoModulo(modulo.id).some((recurso) =>

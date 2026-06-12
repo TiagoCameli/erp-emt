@@ -120,13 +120,16 @@ export function useFiltrosUrl() {
     [searchParams],
   );
 
-  const set = React.useCallback(
-    (chave: string, valor: string | null) => {
+  // Várias chaves numa única navegação (ex: trocar filtro + zerar página).
+  const setMuitos = React.useCallback(
+    (mudancas: Record<string, string | null>) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (valor === null || valor === "") {
-        params.delete(chave);
-      } else {
-        params.set(chave, valor);
+      for (const [chave, valor] of Object.entries(mudancas)) {
+        if (valor === null || valor === "") {
+          params.delete(chave);
+        } else {
+          params.set(chave, valor);
+        }
       }
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, {
@@ -136,5 +139,12 @@ export function useFiltrosUrl() {
     [router, pathname, searchParams],
   );
 
-  return { get, set };
+  const set = React.useCallback(
+    (chave: string, valor: string | null) => {
+      setMuitos({ [chave]: valor });
+    },
+    [setMuitos],
+  );
+
+  return { get, set, setMuitos };
 }

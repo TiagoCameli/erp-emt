@@ -5,21 +5,16 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ACOES, MODULOS, recursosDoModulo, type Acao } from "@/config/recursos";
+import {
+  MatrizRecursosAcoes,
+  chavePermissao,
+  permissaoDaChave,
+} from "@/components/canonicos/matriz-recursos-acoes";
+import type { Acao } from "@/config/recursos";
 import { createClient } from "@/lib/supabase/client";
 import { salvarMatrizUsuario } from "@/modules/administracao/usuarios/actions";
 import type { MatrizInput } from "@/modules/administracao/usuarios/schemas";
-
-const ROTULOS_ACOES: Record<Acao, string> = {
-  ver: "Ver",
-  criar: "Criar",
-  editar: "Editar",
-  excluir: "Excluir",
-  aprovar: "Aprovar",
-  desaprovar: "Desaprovar",
-};
 
 export interface MatrizPermissoesProps {
   usuarioId: string;
@@ -29,9 +24,9 @@ export interface MatrizPermissoesProps {
 }
 
 /**
- * Editor da matriz individual de permissões: linhas = recursos
- * agrupados por módulo, colunas = ações. Células fora do catálogo
- * ficam vazias. Salvar substitui a matriz inteira do usuário.
+ * Editor da matriz individual do usuário sobre a matriz canônica
+ * de recursos x ações. Salvar substitui a matriz inteira numa
+ * transação só (RPC salvar_matriz_usuario).
  */
 export function MatrizPermissoes({
   usuarioId,
@@ -66,7 +61,9 @@ export function MatrizPermissoes({
           setCarga({
             chave: chaveCarga,
             selecao: new Set(
-              (data ?? []).map((par) => `${par.recurso}|${par.acao}`),
+              (data ?? []).map((par) =>
+                chavePermissao(par.recurso, par.acao as Acao),
+              ),
             ),
           });
         }
@@ -81,7 +78,7 @@ export function MatrizPermissoes({
     setCarga((atual) => {
       if (!atual) return atual;
       const nova = new Set(atual.selecao);
-      const chave = `${recursoId}|${acao}`;
+      const chave = chavePermissao(recursoId, acao);
       if (marcado) nova.add(chave);
       else nova.delete(chave);
       return { chave: atual.chave, selecao: nova };
@@ -90,14 +87,9 @@ export function MatrizPermissoes({
 
   async function salvar() {
     setSalvando(true);
-    const permissoes: MatrizInput = [];
-    for (const chave of selecao) {
-      const separador = chave.indexOf("|");
-      permissoes.push({
-        recurso: chave.slice(0, separador),
-        acao: chave.slice(separador + 1) as Acao,
-      });
-    }
+    const permissoes: MatrizInput = [...selecao].map((chave) =>
+      permissaoDaChave(chave),
+    );
 
     const resultado = await salvarMatrizUsuario(usuarioId, permissoes);
     setSalvando(false);
@@ -110,71 +102,26 @@ export function MatrizPermissoes({
   }
 
   if (carregando) {
+    // Espelha o tamanho da matriz real: o drawer não pula quando carrega.
     return (
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-64 w-full rounded-md" />
+        {podeEditar ? (
+          <div className="flex justify-end">
+            <Skeleton className="h-8 w-28" />
+          </div>
+        ) : null}
       </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="max-h-96 overflow-auto rounded-md border border-border">
-        <table className="w-full border-collapse text-detalhe">
-          <thead className="sticky top-0 z-10 bg-surface">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground">
-                Recurso
-              </th>
-              {ACOES.map((acao) => (
-                <th
-                  key={acao}
-                  className="px-2 py-2 text-center font-medium text-muted-foreground"
-                >
-                  {ROTULOS_ACOES[acao]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {MODULOS.map((modulo) => (
-              <React.Fragment key={modulo.id}>
-                <tr className="border-t border-border bg-surface/60">
-                  <td
-                    colSpan={ACOES.length + 1}
-                    className="px-3 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                  >
-                    {modulo.nome}
-                  </td>
-                </tr>
-                {recursosDoModulo(modulo.id).map((recurso) => (
-                  <tr key={recurso.id} className="border-t border-border">
-                    <td className="px-3 py-1.5 whitespace-nowrap">
-                      {recurso.nome}
-                    </td>
-                    {ACOES.map((acao) => (
-                      <td key={acao} className="px-2 py-1.5 text-center">
-                        {recurso.acoes.includes(acao) ? (
-                          <Checkbox
-                            checked={selecao.has(`${recurso.id}|${acao}`)}
-                            onCheckedChange={(marcado) =>
-                              alternar(recurso.id, acao, marcado === true)
-                            }
-                            disabled={!podeEditar || salvando}
-                            aria-label={`${recurso.nome}: ${ROTULOS_ACOES[acao]}`}
-                          />
-                        ) : null}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <MatrizRecursosAcoes
+        selecionadas={selecao}
+        onAlternar={alternar}
+        desabilitada={!podeEditar || salvando}
+      />
 
       {podeEditar ? (
         <div className="flex justify-end">

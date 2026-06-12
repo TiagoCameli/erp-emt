@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { RECURSOS, type Acao } from "@/config/recursos";
-import { exigirPermissao } from "@/lib/permissoes";
+import {
+  exigirPermissao,
+  getUsuarioLogado,
+  temPermissao,
+} from "@/lib/permissoes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -38,6 +42,29 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
 const uuidSchema = z.uuid();
 
 /**
+ * URL pública do app pros links de convite. Em produção exige
+ * NEXT_PUBLIC_SITE_URL (ou usa a URL da Vercel); nunca cai em
+ * localhost fora do dev.
+ */
+function siteUrl(): string {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("NEXT_PUBLIC_SITE_URL não configurada em produção");
+  }
+  return "http://localhost:3000";
+}
+
+/** Senha temporária forte: 16 caracteres de classes misturadas. */
+function gerarSenhaTemporaria(): string {
+  const alfabeto =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alfabeto[b % alfabeto.length]).join("");
+}
+
+/**
  * Convida um usuário por email. Se o envio do convite falhar (SMTP),
  * cria o usuário com senha temporária e a retorna para o admin repassar.
  * O trigger do banco cria a linha em usuarios; o perfil é aplicado via RPC.
@@ -56,9 +83,7 @@ export async function convidarUsuario(
 
   const { nome, email, perfilId } = validado.data;
   const admin = createAdminClient();
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const redirectTo = `${siteUrl}/auth/confirm`;
+  const redirectTo = `${siteUrl()}/auth/confirm`;
 
   let usuarioId: string | undefined;
   let senhaTemporaria: string | undefined;
@@ -74,10 +99,11 @@ export async function convidarUsuario(
     }
 
     // Fallback sem email: cria com senha temporária pro admin repassar.
-    senhaTemporaria = crypto.randomUUID().slice(0, 12);
+    // A flag senha_temporaria força a troca no primeiro acesso.
+    senhaTemporaria = gerarSenhaTemporaria();
     const criado = await admin.auth.admin.createUser({
       email,
-      user_metadata: { nome },
+      user_metadata: { nome, senha_temporaria: true },
       email_confirm: true,
       password: senhaTemporaria,
     });
@@ -115,12 +141,18 @@ export async function convidarUsuario(
   return resultado;
 }
 
-/** Atualiza nome e status (ativo) do usuário. RLS cobre o update. */
+/**
+ * Atualiza nome e status (ativo) do usuário. RLS cobre o update.
+ * Desativar também bane na auth (bloqueia login e refresh da sessão);
+ * reativar remove o ban. O ativo=false já corta o acesso imediato via
+ * RLS e getUsuarioLogado em toda request.
+ */
 export async function editarUsuario(
   id: string,
   dados: EditarUsuarioInput,
 ): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("editar"))) {
+  const editor = await getUsuarioLogado();
+  if (!editor || !temPermissao(editor, RECURSO, "editar")) {
     return { erro: "Sem permissão para editar usuários" };
   }
 
@@ -132,6 +164,10 @@ export async function editarUsuario(
     return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
+  if (idValido.data === editor.id && !validado.data.ativo) {
+    return { erro: "Você não pode desativar a sua própria conta" };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("usuarios")
@@ -140,6 +176,18 @@ export async function editarUsuario(
 
   if (error) {
     return { erro: "Não foi possível salvar o usuário. Tente novamente" };
+  }
+
+  // Espelha o status na auth: banido não loga nem renova sessão.
+  const admin = createAdminClient();
+  const { error: erroBan } = await admin.auth.admin.updateUserById(
+    idValido.data,
+    { ban_duration: validado.data.ativo ? "none" : "87600h" },
+  );
+  if (erroBan) {
+    return {
+      erro: "Status salvo, mas o bloqueio na autenticação falhou. Tente salvar de novo",
+    };
   }
 
   revalidatePath(ROTA);
@@ -176,8 +224,10 @@ export async function aplicarPerfilUsuario(
 }
 
 /**
- * Substitui a matriz individual do usuário: apaga tudo e insere as novas.
- * Pares fora do catálogo RECURSOS são descartados em silêncio.
+ * Substitui a matriz individual do usuário numa transação só, via RPC
+ * salvar_matriz_usuario (delete + insert atômicos, com trava de
+ * auto-lockout no banco). Pares fora do catálogo RECURSOS são
+ * descartados em silêncio.
  */
 export async function salvarMatrizUsuario(
   usuarioId: string,
@@ -206,30 +256,18 @@ export async function salvarMatrizUsuario(
   );
 
   const supabase = await createClient();
+  const { error } = await supabase.rpc("salvar_matriz_usuario", {
+    p_usuario_id: usuarioValido.data,
+    p_permissoes: unicas,
+  });
 
-  const { error: erroDelete } = await supabase
-    .from("usuario_permissoes")
-    .delete()
-    .eq("usuario_id", usuarioValido.data);
-
-  if (erroDelete) {
-    return { erro: "Não foi possível salvar a matriz. Tente novamente" };
-  }
-
-  if (unicas.length > 0) {
-    const { error: erroInsert } = await supabase.from("usuario_permissoes").insert(
-      unicas.map((par) => ({
-        usuario_id: usuarioValido.data,
-        recurso: par.recurso,
-        acao: par.acao,
-      })),
-    );
-
-    if (erroInsert) {
+  if (error) {
+    if (error.message.includes("propria permissao")) {
       return {
-        erro: "Não foi possível salvar as permissões. Recarregue e tente de novo",
+        erro: "Você não pode remover sua própria permissão de editar usuários",
       };
     }
+    return { erro: "Não foi possível salvar a matriz. Tente novamente" };
   }
 
   revalidatePath(ROTA);

@@ -15,3 +15,4 @@ export * from "./tab-nav";
 export * from "./trilha";
 export * from "./trilha-helpers";
 export * from "./import-dialog";
+export * from "./matriz-recursos-acoes";

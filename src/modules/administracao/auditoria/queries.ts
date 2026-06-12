@@ -84,12 +84,14 @@ export async function listarAuditoria(
     ),
   ];
 
+  // RPC com security definer: resolve nomes pra quem tem permissão de
+  // auditoria mesmo sem administracao.usuarios ver (RLS da tabela).
   const nomesPorId = new Map<string, string>();
   if (idsUsuarios.length > 0) {
-    const { data: usuarios, error: erroUsuarios } = await supabase
-      .from("usuarios")
-      .select("id, nome")
-      .in("id", idsUsuarios);
+    const { data: usuarios, error: erroUsuarios } = await supabase.rpc(
+      "nomes_usuarios_auditoria",
+      { p_ids: idsUsuarios },
+    );
 
     if (erroUsuarios) {
       throw new Error(
@@ -120,20 +122,20 @@ export async function listarAuditoria(
   return { registros, total: count ?? 0 };
 }
 
-/** Tabelas distintas presentes no audit_log, em ordem alfabética. */
+/**
+ * Tabelas distintas presentes no audit_log, em ordem alfabética.
+ * Distinct no banco via RPC: sem o cap de 1000 linhas do PostgREST.
+ */
 export async function listarTabelasAuditadas(): Promise<string[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("audit_log")
-    .select("tabela")
-    .order("tabela", { ascending: true });
+  const { data, error } = await supabase.rpc("tabelas_auditadas");
 
   if (error) {
     throw new Error(`Falha ao listar as tabelas auditadas: ${error.message}`);
   }
 
-  return [...new Set((data ?? []).map((linha) => linha.tabela))];
+  return data ?? [];
 }
 
 /** Usuários para o filtro da auditoria, em ordem alfabética. */

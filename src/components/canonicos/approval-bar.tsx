@@ -79,7 +79,7 @@ export function ApprovalBar({
               Rejeitar
             </Button>
             <Button type="button" disabled={aprovando} onClick={aprovar}>
-              {aprovando ? 'Aguarde...' : 'Aprovar'}
+              {aprovando ? 'Aprovando...' : 'Aprovar'}
             </Button>
           </>
         ) : null}

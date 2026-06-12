@@ -69,12 +69,13 @@ export async function listarLixeira({
     if (linha.restaurado_por) idsUsuarios.add(linha.restaurado_por);
   }
 
+  // RPC com security definer: nomes pra quem tem permissão de lixeira
+  // mesmo sem administracao.usuarios ver (RLS da tabela).
   const nomes = new Map<string, string>();
   if (idsUsuarios.size > 0) {
-    const { data: usuarios } = await supabase
-      .from("usuarios")
-      .select("id, nome")
-      .in("id", [...idsUsuarios]);
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_auditoria", {
+      p_ids: [...idsUsuarios],
+    });
     for (const usuario of usuarios ?? []) {
       nomes.set(usuario.id, usuario.nome);
     }

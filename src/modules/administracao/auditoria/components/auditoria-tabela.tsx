@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { History } from "lucide-react";
 
@@ -11,6 +10,7 @@ import {
   FilterBar,
   FiltroSelect,
   StatusBadge,
+  useFiltrosUrl,
 } from "@/components/canonicos";
 import {
   Dialog,
@@ -123,27 +123,10 @@ export function AuditoriaTabela({
   tabelas,
   usuarios,
 }: AuditoriaTabelaProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { setMuitos: atualizarParams } = useFiltrosUrl();
 
   const [selecionado, setSelecionado] =
     React.useState<RegistroAuditoria | null>(null);
-
-  const atualizarParams = React.useCallback(
-    (mudancas: Record<string, string | null>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      for (const [chave, valor] of Object.entries(mudancas)) {
-        if (valor === null || valor === "") params.delete(chave);
-        else params.set(chave, valor);
-      }
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, {
-        scroll: false,
-      });
-    },
-    [router, pathname, searchParams],
-  );
 
   return (
     <div className="flex flex-col gap-2">

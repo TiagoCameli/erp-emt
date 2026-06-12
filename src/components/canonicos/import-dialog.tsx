@@ -238,17 +238,17 @@ export function ImportDialog({
               {validando ? (
                 <>
                   <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-detalhe text-muted-foreground">
                     Validando {nomeArquivo}...
                   </p>
                 </>
               ) : (
                 <>
                   <Upload className="size-6 text-muted-foreground" />
-                  <p className="text-sm font-medium">
+                  <p className="text-detalhe font-medium">
                     Arraste o arquivo aqui ou clique para escolher
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-legenda text-muted-foreground">
                     Somente arquivos .xlsx
                   </p>
                 </>
@@ -266,12 +266,12 @@ export function ImportDialog({
 
         {passo === "previa" && validacao && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-detalhe">
               <FileSpreadsheet className="size-4 shrink-0 text-muted-foreground" />
               <span className="truncate font-medium">{nomeArquivo}</span>
             </div>
 
-            <p className="text-sm">
+            <p className="text-detalhe">
               <span className="font-semibold tabular-nums">
                 {validacao.validas}
               </span>{" "}
@@ -281,7 +281,7 @@ export function ImportDialog({
 
             {validacao.invalidas.length > 0 && (
               <>
-                <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <div className="flex items-start gap-2 rounded-lg border border-status-pendente/30 bg-accent px-4 py-3 text-detalhe text-accent-foreground">
                   <TriangleAlert className="mt-0.5 size-4 shrink-0" />
                   <span>As linhas com erro serão ignoradas</span>
                 </div>
@@ -290,19 +290,19 @@ export function ImportDialog({
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="h-8 w-20 text-xs">
+                        <TableHead className="h-8 w-20 text-legenda">
                           Linha
                         </TableHead>
-                        <TableHead className="h-8 text-xs">Erros</TableHead>
+                        <TableHead className="h-8 text-legenda">Erros</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {validacao.invalidas.map((linhaInvalida) => (
                         <TableRow key={linhaInvalida.linha}>
-                          <TableCell className="py-1.5 font-mono text-xs tabular-nums">
+                          <TableCell className="py-1.5 font-mono text-legenda tabular-nums">
                             {linhaInvalida.linha}
                           </TableCell>
-                          <TableCell className="py-1.5 text-xs text-destructive">
+                          <TableCell className="py-1.5 text-legenda text-destructive">
                             {linhaInvalida.erros.join("; ")}
                           </TableCell>
                         </TableRow>
@@ -336,8 +336,8 @@ export function ImportDialog({
         {passo === "resultado" && (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <CircleCheck className="size-10 text-green-700" />
-              <p className="text-sm font-medium">
+              <CircleCheck className="size-10 text-status-aprovado" />
+              <p className="text-detalhe font-medium">
                 {importadas === 1
                   ? "1 linha importada"
                   : `${importadas} linhas importadas`}

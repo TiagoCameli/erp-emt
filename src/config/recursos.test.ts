@@ -72,7 +72,7 @@ describe("RECURSOS", () => {
 describe("recursoPorId", () => {
   it("retorna o recurso para um id conhecido", () => {
     const recurso = recursoPorId("administracao.usuarios");
-    expect(recurso.nome).toBe("Usuários e Permissões");
+    expect(recurso.nome).toBe("Usuários e permissões");
     expect(recurso.rota).toBe("/administracao/usuarios");
   });
 

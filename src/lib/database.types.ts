@@ -272,7 +272,23 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string }
         Returns: undefined
       }
+      nomes_usuarios_auditoria: {
+        Args: { p_ids: string[] }
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
       proximo_numero_documento: { Args: { p_tipo: string }; Returns: string }
+      salvar_matriz_usuario: {
+        Args: { p_permissoes: Json; p_usuario_id: string }
+        Returns: undefined
+      }
+      salvar_permissoes_perfil: {
+        Args: { p_perfil_id: string; p_permissoes: Json }
+        Returns: undefined
+      }
+      tabelas_auditadas: { Args: never; Returns: string[] }
       tem_permissao: {
         Args: { p_acao: string; p_recurso: string }
         Returns: boolean

@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -99,7 +100,14 @@ export function ConfirmDialog({
             disabled={carregando || !motivoValido}
             onClick={confirmar}
           >
-            {carregando ? 'Aguarde...' : textoConfirmar}
+            {carregando ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                {textoConfirmar}
+              </>
+            ) : (
+              textoConfirmar
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

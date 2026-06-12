@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { RECURSOS, type Acao } from "@/config/recursos";
 import { exigirPermissao } from "@/lib/permissoes";
@@ -13,6 +14,8 @@ import {
 } from "@/modules/administracao/perfis/schemas";
 
 const ROTA_PERFIS = "/administracao/perfis";
+
+const uuidSchema = z.uuid();
 
 type ResultadoAcao = { erro: string } | undefined;
 
@@ -47,6 +50,9 @@ export async function editarPerfil(
   id: string,
   dados: PerfilInput,
 ): Promise<ResultadoAcao> {
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Perfil inválido" };
+
   const resultado = perfilSchema.safeParse(dados);
   if (!resultado.success) {
     return { erro: resultado.error.issues[0]?.message ?? "Dados inválidos" };
@@ -88,6 +94,9 @@ export async function excluirPerfil(
   id: string,
   motivo: string,
 ): Promise<ResultadoAcao> {
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Perfil inválido" };
+
   if (!motivo.trim()) {
     return { erro: "Informe o motivo da exclusão" };
   }
@@ -95,23 +104,20 @@ export async function excluirPerfil(
   await exigirPermissao("administracao.perfis", "excluir");
   const supabase = await createClient();
 
-  const { count, error: erroContagem } = await supabase
-    .from("usuarios")
-    .select("id", { count: "exact", head: true })
-    .eq("perfil_id", id);
-
-  if (erroContagem) {
-    return { erro: "Não foi possível verificar os usuários do perfil" };
-  }
-  if ((count ?? 0) > 0) {
-    return {
-      erro: "Este perfil tem usuários vinculados. Troque o perfil deles antes de excluir",
-    };
-  }
-
-  const { error } = await supabase.from("perfis").delete().eq("id", id);
+  // A trava de verdade é a FK de usuarios.perfil_id: a contagem prévia
+  // seria cega pra quem não tem administracao.usuarios ver (RLS), então
+  // o erro 23503 do banco é quem decide.
+  const { error } = await supabase
+    .from("perfis")
+    .delete()
+    .eq("id", idValido.data);
 
   if (error) {
+    if (error.code === "23503") {
+      return {
+        erro: "Este perfil tem usuários vinculados. Troque o perfil deles antes de excluir",
+      };
+    }
     return { erro: "Não foi possível excluir o perfil. Tente novamente" };
   }
 
@@ -119,7 +125,8 @@ export async function excluirPerfil(
 }
 
 /**
- * Substitui a matriz de permissões do perfil (delete + insert).
+ * Substitui a matriz de permissões do perfil numa transação só, via
+ * RPC salvar_permissoes_perfil (delete + insert atômicos).
  *
  * Salvar a matriz NÃO reaplica o perfil nos usuários que já o usam:
  * a reaplicação é manual, pela ação de aplicar perfil na aba Usuários
@@ -129,12 +136,15 @@ export async function salvarPermissoesPerfil(
   perfilId: string,
   permissoes: PermissaoPerfilInput[],
 ): Promise<ResultadoAcao> {
+  const perfilValido = uuidSchema.safeParse(perfilId);
+  if (!perfilValido.success) return { erro: "Perfil inválido" };
+
   const resultado = permissoesPerfilSchema.safeParse(permissoes);
   if (!resultado.success) {
     return { erro: "Permissões inválidas" };
   }
 
-  const usuario = await exigirPermissao("administracao.perfis", "editar");
+  await exigirPermissao("administracao.perfis", "editar");
   const supabase = await createClient();
 
   // Mantém só pares recurso + ação que existem no catálogo RECURSOS.
@@ -154,28 +164,13 @@ export async function salvarPermissoesPerfil(
     ).values(),
   ];
 
-  const { error: erroDelete } = await supabase
-    .from("perfil_permissoes")
-    .delete()
-    .eq("perfil_id", perfilId);
+  const { error } = await supabase.rpc("salvar_permissoes_perfil", {
+    p_perfil_id: perfilValido.data,
+    p_permissoes: unicas,
+  });
 
-  if (erroDelete) {
-    return { erro: "Não foi possível atualizar as permissões. Tente novamente" };
-  }
-
-  if (unicas.length > 0) {
-    const { error: erroInsert } = await supabase.from("perfil_permissoes").insert(
-      unicas.map((permissao) => ({
-        perfil_id: perfilId,
-        recurso: permissao.recurso,
-        acao: permissao.acao,
-        created_by: usuario.id,
-      })),
-    );
-
-    if (erroInsert) {
-      return { erro: "Não foi possível salvar as permissões. Tente novamente" };
-    }
+  if (error) {
+    return { erro: "Não foi possível salvar as permissões. Tente novamente" };
   }
 
   revalidatePath(ROTA_PERFIS);

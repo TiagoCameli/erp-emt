@@ -66,6 +66,8 @@ export async function definirSenha(
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({
     password: resultado.data.senha,
+    // Limpa a flag de senha temporária do convite sem email.
+    data: { senha_temporaria: false },
   });
 
   if (error) {

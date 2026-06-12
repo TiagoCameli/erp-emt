@@ -42,6 +42,8 @@
   --status-pendente: #b45309;
   --status-rejeitado: #b91c1c;
   --status-rascunho: #6b7280;
+  /* Efeito do modulo: recebido, pago, faturado, executado */
+  --status-efeito: #166534;
 
   /* Graficos (modulo Gestao) */
   --chart-1: #b45309;
@@ -90,6 +92,7 @@
   --color-status-pendente: var(--status-pendente);
   --color-status-rejeitado: var(--status-rejeitado);
   --color-status-rascunho: var(--status-rascunho);
+  --color-status-efeito: var(--status-efeito);
 
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
