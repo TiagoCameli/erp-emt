@@ -12,7 +12,7 @@ Você está construindo o ERP-EMT: sistema de gestão integrada da EMT Construto
 
 ## Regras de ouro (valem mais que qualquer atalho)
 
-1. **RLS em 100% das tabelas.** Nenhuma migration cria tabela sem política. Service role nunca chega ao client.
+1. **RLS em 100% das tabelas.** Nenhuma migration cria tabela sem política. Service role nunca chega ao client. **Grants explícitos sempre**: tabela nova não herda privilégio nenhum, então a migration declara `grant` pro `authenticated` só do que as policies permitem (sem policy de DELETE = sem grant de DELETE; `anon` nunca recebe nada; tabela de acesso por função não recebe grant).
 2. **Permissão tripla**: RLS no banco (função `tem_permissao(recurso, acao)`), checagem na Server Action, UI esconde o que o usuário não pode ver. As três sempre.
 3. **Dinheiro é NUMERIC(14,2), quantidade NUMERIC(14,3).** Float é proibido para valores. Exibição BRL: R$ 1.234,56, alinhado à direita, `tabular-nums`.
 4. **Timezone America/Rio_Branco** na exibição. Banco guarda timestamptz em UTC.
