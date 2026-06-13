@@ -97,12 +97,17 @@ export const documentoSchema = z.object({
     .min(2, { error: "O tipo precisa ter pelo menos 2 caracteres" })
     .max(80, { error: "Máximo de 80 caracteres" }),
   descricao: textoOpcional(200),
-  vencimento: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Data inválida" })
-    .optional()
-    .transform((valor) => (valor === "" ? undefined : valor)),
+  // Vazio vira undefined ANTES do regex: o input date manda "" quando em
+  // branco, e validar o formato direto rejeitaria o vencimento opcional.
+  vencimento: z.preprocess(
+    (valor) =>
+      typeof valor === "string" && valor.trim() === "" ? undefined : valor,
+    z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Data inválida" })
+      .optional(),
+  ),
 });
 
 export type DocumentoInput = z.infer<typeof documentoSchema>;

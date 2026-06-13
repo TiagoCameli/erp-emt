@@ -50,13 +50,21 @@ function textoOpcional(maximo: number) {
     .transform((valor) => (valor === "" ? undefined : valor));
 }
 
-/** Data no formato ISO (yyyy-MM-dd) vinda do input type=date. */
-const dataOpcional = z
-  .string()
-  .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Data inválida" })
-  .optional()
-  .transform((valor) => (valor === "" ? undefined : valor));
+/**
+ * Data ISO (yyyy-MM-dd) do input type=date, opcional. Normaliza vazio para
+ * undefined ANTES de validar o formato: o input manda "" quando em branco, e
+ * validar o regex direto rejeitaria a data opcional não preenchida com
+ * "Data inválida".
+ */
+const dataOpcional = z.preprocess(
+  (valor) =>
+    typeof valor === "string" && valor.trim() === "" ? undefined : valor,
+  z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Data inválida" })
+    .optional(),
+);
 
 /** Schema base de obra, compartilhado entre criar e editar. */
 export const obraSchema = z.object({
