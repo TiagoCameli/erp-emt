@@ -1,0 +1,405 @@
+import "server-only";
+
+import {
+  eventosDoAuditLog,
+  type EventoTrilha,
+  type RegistroAuditLog,
+} from "@/components/canonicos";
+import { createClient } from "@/lib/supabase/server";
+
+/** Linha da listagem de ordens de compra. */
+export interface OrdemLista {
+  id: string;
+  numero: string | null;
+  fornecedorNome: string;
+  valorTotal: number;
+  status: string;
+  dataEmissao: string;
+}
+
+/** Item de uma OC, com os nomes resolvidos via join. */
+export interface OrdemItem {
+  id: string;
+  insumoId: string;
+  insumoNome: string;
+  unidade: string | null;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal: number;
+  centroCustoId: string;
+  centroCustoNome: string;
+  depositoId: string | null;
+  depositoNome: string | null;
+}
+
+/** Lançamento financeiro vinculado à OC (origem='oc'). Read-only nas telas. */
+export interface LancamentoVinculado {
+  id: string;
+  status: string;
+  valor: number;
+  dataVencimento: string | null;
+}
+
+/** OC completa para a tela de detalhe. */
+export interface OrdemDetalhe {
+  id: string;
+  numero: string | null;
+  fornecedorId: string;
+  fornecedorNome: string;
+  condicaoPagamento: string | null;
+  pedidoId: string | null;
+  pedidoNumero: string | null;
+  cotacaoId: string | null;
+  cotacaoNumero: string | null;
+  valorTotal: number;
+  status: string;
+  motivoRejeicao: string | null;
+  dataEmissao: string;
+  observacoes: string | null;
+  itens: OrdemItem[];
+  lancamento: LancamentoVinculado | null;
+}
+
+/** Opção de fornecedor para o select. */
+export interface FornecedorOpcao {
+  id: string;
+  nome: string;
+}
+
+/** Opção de insumo para o select, com a unidade para exibir na linha. */
+export interface InsumoOpcao {
+  id: string;
+  nome: string;
+  unidade: string | null;
+}
+
+/** Opção de centro de custo para o select. */
+export interface CentroCustoOpcao {
+  id: string;
+  nome: string;
+  codigo: string | null;
+}
+
+/** Opção de depósito para o select. */
+export interface DepositoOpcao {
+  id: string;
+  nome: string;
+}
+
+/** Opção de pedido aprovado para vincular à OC. */
+export interface PedidoOpcao {
+  id: string;
+  numero: string | null;
+}
+
+/** Opção de cotação finalizada para vincular à OC. */
+export interface CotacaoOpcao {
+  id: string;
+  numero: string | null;
+}
+
+/** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
+function nomeFornecedor(fornecedor: {
+  razao_social: string;
+  nome_fantasia: string | null;
+}): string {
+  return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+}
+
+/**
+ * Lista as ordens de compra com o nome do fornecedor resolvido (join).
+ * O valor_total vem do banco (trigger), nunca recalculado no app.
+ */
+export async function listarOrdens(): Promise<OrdemLista[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("ordens_compra")
+    .select(
+      "id, numero, valor_total, status, data_emissao, fornecedores(razao_social, nome_fantasia)",
+    )
+    .order("data_emissao", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error("Não foi possível carregar as ordens de compra");
+  }
+
+  return (data ?? []).map((ordem) => ({
+    id: ordem.id,
+    numero: ordem.numero,
+    fornecedorNome: ordem.fornecedores
+      ? nomeFornecedor(ordem.fornecedores)
+      : "-",
+    valorTotal: ordem.valor_total,
+    status: ordem.status,
+    dataEmissao: ordem.data_emissao,
+  }));
+}
+
+/**
+ * OC completa para o detalhe: dados, itens com nomes resolvidos e o
+ * lançamento financeiro vinculado (origem='oc'). Retorna null se não achar.
+ */
+export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
+  const supabase = await createClient();
+
+  const { data: ordem, error } = await supabase
+    .from("ordens_compra")
+    .select(
+      `id, numero, fornecedor_id, condicao_pagamento, pedido_id, cotacao_id,
+       valor_total, status, motivo_rejeicao, data_emissao, observacoes,
+       fornecedores(razao_social, nome_fantasia),
+       pedidos(numero),
+       cotacoes(numero),
+       oc_itens(
+         id, insumo_id, quantidade, preco_unitario, centro_custo_id, deposito_id,
+         insumos(nome, unidades_medida(sigla)),
+         centros_custo(nome, codigo),
+         depositos(nome)
+       )`,
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !ordem) return null;
+
+  const { data: lancamento } = await supabase
+    .from("lancamentos")
+    .select("id, status, valor, data_vencimento")
+    .eq("origem", "oc")
+    .eq("origem_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const itens: OrdemItem[] = (ordem.oc_itens ?? []).map((item) => ({
+    id: item.id,
+    insumoId: item.insumo_id,
+    insumoNome: item.insumos?.nome ?? "-",
+    unidade: item.insumos?.unidades_medida?.sigla ?? null,
+    quantidade: item.quantidade,
+    precoUnitario: item.preco_unitario,
+    subtotal: item.quantidade * item.preco_unitario,
+    centroCustoId: item.centro_custo_id,
+    centroCustoNome: item.centros_custo?.nome ?? "-",
+    depositoId: item.deposito_id,
+    depositoNome: item.depositos?.nome ?? null,
+  }));
+
+  return {
+    id: ordem.id,
+    numero: ordem.numero,
+    fornecedorId: ordem.fornecedor_id,
+    fornecedorNome: ordem.fornecedores
+      ? nomeFornecedor(ordem.fornecedores)
+      : "-",
+    condicaoPagamento: ordem.condicao_pagamento,
+    pedidoId: ordem.pedido_id,
+    pedidoNumero: ordem.pedidos?.numero ?? null,
+    cotacaoId: ordem.cotacao_id,
+    cotacaoNumero: ordem.cotacoes?.numero ?? null,
+    valorTotal: ordem.valor_total,
+    status: ordem.status,
+    motivoRejeicao: ordem.motivo_rejeicao,
+    dataEmissao: ordem.data_emissao,
+    observacoes: ordem.observacoes,
+    itens,
+    lancamento: lancamento
+      ? {
+          id: lancamento.id,
+          status: lancamento.status,
+          valor: lancamento.valor,
+          dataVencimento: lancamento.data_vencimento,
+        }
+      : null,
+  };
+}
+
+/** Fornecedores ativos para o select da OC, em ordem alfabética. */
+export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("fornecedores")
+    .select("id, razao_social, nome_fantasia")
+    .eq("ativo", true)
+    .order("razao_social");
+
+  if (error) {
+    throw new Error("Não foi possível carregar os fornecedores");
+  }
+
+  return (data ?? []).map((fornecedor) => ({
+    id: fornecedor.id,
+    nome: nomeFornecedor(fornecedor),
+  }));
+}
+
+/** Insumos ativos para o select dos itens, com a sigla da unidade. */
+export async function listarInsumos(): Promise<InsumoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("insumos")
+    .select("id, nome, unidades_medida(sigla)")
+    .eq("ativo", true)
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar os insumos");
+  }
+
+  return (data ?? []).map((insumo) => ({
+    id: insumo.id,
+    nome: insumo.nome,
+    unidade: insumo.unidades_medida?.sigla ?? null,
+  }));
+}
+
+/** Centros de custo ativos para o select dos itens, em ordem de código. */
+export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("centros_custo")
+    .select("id, nome, codigo")
+    .eq("ativo", true)
+    .order("codigo", { ascending: true, nullsFirst: false })
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar os centros de custo");
+  }
+
+  return (data ?? []).map((centro) => ({
+    id: centro.id,
+    nome: centro.nome,
+    codigo: centro.codigo,
+  }));
+}
+
+/** Depósitos ativos para o select dos itens, em ordem alfabética. */
+export async function listarDepositos(): Promise<DepositoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("depositos")
+    .select("id, nome")
+    .eq("ativo", true)
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar os depósitos");
+  }
+
+  return (data ?? []).map((deposito) => ({
+    id: deposito.id,
+    nome: deposito.nome,
+  }));
+}
+
+/** Pedidos aprovados para vincular à OC, mais recentes primeiro. */
+export async function listarPedidosAprovados(): Promise<PedidoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("id, numero")
+    .eq("status", "aprovado")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error("Não foi possível carregar os pedidos");
+  }
+
+  return (data ?? []).map((pedido) => ({
+    id: pedido.id,
+    numero: pedido.numero,
+  }));
+}
+
+/** Cotações finalizadas para vincular à OC, mais recentes primeiro. */
+export async function listarCotacoesFinalizadas(): Promise<CotacaoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("cotacoes")
+    .select("id, numero")
+    .eq("status", "finalizada")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error("Não foi possível carregar as cotações");
+  }
+
+  return (data ?? []).map((cotacao) => ({
+    id: cotacao.id,
+    numero: cotacao.numero,
+  }));
+}
+
+/**
+ * Trilha de auditoria da OC: lê o audit_log da ordem e dos itens dela e
+ * resolve os nomes dos usuários via RPC (security definer), igual à tela
+ * de auditoria. Converte para eventos do componente Trilha.
+ */
+export async function trilhaOrdem(id: string): Promise<EventoTrilha[]> {
+  const supabase = await createClient();
+
+  const { data: itens } = await supabase
+    .from("oc_itens")
+    .select("id")
+    .eq("ordem_compra_id", id);
+
+  const idsItens = (itens ?? []).map((item) => item.id);
+  const idsRegistros = [id, ...idsItens];
+
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select(
+      "id, tabela, registro_id, acao, usuario_id, dados_antes, dados_depois, criado_em",
+    )
+    .in("tabela", ["ordens_compra", "oc_itens"])
+    .in("registro_id", idsRegistros)
+    .order("criado_em", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error || !data) return [];
+
+  const idsUsuarios = [
+    ...new Set(
+      data
+        .map((linha) => linha.usuario_id)
+        .filter((usuarioId): usuarioId is string => usuarioId !== null),
+    ),
+  ];
+
+  const nomesPorId = new Map<string, string>();
+  if (idsUsuarios.length > 0) {
+    const { data: usuarios } = await supabase.rpc(
+      "nomes_usuarios_auditoria",
+      { p_ids: idsUsuarios },
+    );
+    for (const usuario of usuarios ?? []) {
+      nomesPorId.set(usuario.id, usuario.nome);
+    }
+  }
+
+  const registros: RegistroAuditLog[] = data.map((linha) => ({
+    id: linha.id,
+    tabela: linha.tabela,
+    registro_id: linha.registro_id,
+    acao: linha.acao,
+    usuario_id: linha.usuario_id,
+    usuario_nome:
+      linha.usuario_id === null
+        ? "Sistema"
+        : (nomesPorId.get(linha.usuario_id) ?? "Sistema"),
+    dados_antes: linha.dados_antes,
+    dados_depois: linha.dados_depois,
+    criado_em: linha.criado_em,
+  }));
+
+  return eventosDoAuditLog(registros);
+}

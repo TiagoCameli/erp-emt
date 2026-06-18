@@ -1,0 +1,93 @@
+import type { StatusPadrao } from "@/components/canonicos";
+
+/**
+ * Rótulos e cor de badge dos status de Compras. Helpers puros, sem 'use server',
+ * compartilhados pelas telas. `badge` é o StatusPadrao que dá a cor do StatusBadge;
+ * `rotulo` é o texto pt-BR exibido. Para status custom (aberta, finalizada,
+ * recebido_parcial) escolhemos o StatusPadrao de cor mais próxima e passamos o
+ * rótulo certo: <StatusBadge status={info.badge} rotulo={info.rotulo} />.
+ */
+export interface InfoStatus {
+  rotulo: string;
+  badge: StatusPadrao;
+}
+
+/** Status de pedido: rascunho | pendente_aprovacao | aprovado | rejeitado | cancelado. */
+export const ROTULO_STATUS_PEDIDO = {
+  rascunho: { rotulo: "Rascunho", badge: "rascunho" },
+  pendente_aprovacao: { rotulo: "Pendente de aprovação", badge: "pendente_aprovacao" },
+  aprovado: { rotulo: "Aprovado", badge: "aprovado" },
+  rejeitado: { rotulo: "Rejeitado", badge: "rejeitado" },
+  cancelado: { rotulo: "Cancelado", badge: "cancelado" },
+} as const satisfies Record<string, InfoStatus>;
+
+export type StatusPedido = keyof typeof ROTULO_STATUS_PEDIDO;
+
+/** Status de cotação: aberta | finalizada | cancelada. */
+export const ROTULO_STATUS_COTACAO = {
+  aberta: { rotulo: "Aberta", badge: "pendente_aprovacao" },
+  finalizada: { rotulo: "Finalizada", badge: "aprovado" },
+  cancelada: { rotulo: "Cancelada", badge: "cancelado" },
+} as const satisfies Record<string, InfoStatus>;
+
+export type StatusCotacao = keyof typeof ROTULO_STATUS_COTACAO;
+
+/** Status de ordem de compra: inclui recebimento parcial e total. */
+export const ROTULO_STATUS_OC = {
+  rascunho: { rotulo: "Rascunho", badge: "rascunho" },
+  pendente_aprovacao: { rotulo: "Pendente de aprovação", badge: "pendente_aprovacao" },
+  aprovado: { rotulo: "Aprovada", badge: "aprovado" },
+  rejeitado: { rotulo: "Rejeitada", badge: "rejeitado" },
+  cancelado: { rotulo: "Cancelada", badge: "cancelado" },
+  recebido_parcial: { rotulo: "Recebida parcial", badge: "pendente_aprovacao" },
+  recebido: { rotulo: "Recebida", badge: "recebido" },
+} as const satisfies Record<string, InfoStatus>;
+
+export type StatusOC = keyof typeof ROTULO_STATUS_OC;
+
+/** Status de recebimento: registrado | cancelado. */
+export const ROTULO_STATUS_RECEBIMENTO = {
+  registrado: { rotulo: "Registrado", badge: "recebido" },
+  cancelado: { rotulo: "Cancelado", badge: "cancelado" },
+} as const satisfies Record<string, InfoStatus>;
+
+export type StatusRecebimento = keyof typeof ROTULO_STATUS_RECEBIMENTO;
+
+/** Info de status com fallback neutro se vier um status desconhecido do banco. */
+function infoComFallback(
+  mapa: Record<string, InfoStatus>,
+  status: string,
+): InfoStatus {
+  return mapa[status] ?? { rotulo: status, badge: "rascunho" };
+}
+
+export function infoStatusPedido(status: string): InfoStatus {
+  return infoComFallback(ROTULO_STATUS_PEDIDO, status);
+}
+
+export function infoStatusCotacao(status: string): InfoStatus {
+  return infoComFallback(ROTULO_STATUS_COTACAO, status);
+}
+
+export function infoStatusOC(status: string): InfoStatus {
+  return infoComFallback(ROTULO_STATUS_OC, status);
+}
+
+export function infoStatusRecebimento(status: string): InfoStatus {
+  return infoComFallback(ROTULO_STATUS_RECEBIMENTO, status);
+}
+
+const KILO = 1024;
+const MEGA = KILO * KILO;
+
+/** Tamanho de arquivo legível: B, KB ou MB com vírgula decimal pt-BR. */
+export function formatarTamanhoArquivo(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined || Number.isNaN(bytes) || bytes < 0) {
+    return "";
+  }
+  if (bytes < KILO) return `${bytes} B`;
+  if (bytes < MEGA) {
+    return `${(bytes / KILO).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} KB`;
+  }
+  return `${(bytes / MEGA).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+}
