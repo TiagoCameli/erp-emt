@@ -33,12 +33,87 @@ export interface RecursoDef {
 
 /** Módulos na ordem de exibição da sidebar */
 export const MODULOS = [
+  { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
 export type ModuloId = (typeof MODULOS)[number]["id"];
 
+const CRUD = ["ver", "criar", "editar", "excluir"] as const;
+
 export const RECURSOS = [
+  // Cadastros
+  {
+    id: "cadastros.obras",
+    nome: "Obras",
+    modulo: "cadastros",
+    rota: "/cadastros/obras",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.centros-custo",
+    nome: "Centros de custo",
+    modulo: "cadastros",
+    rota: "/cadastros/centros-custo",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.clientes",
+    nome: "Clientes",
+    modulo: "cadastros",
+    rota: "/cadastros/clientes",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.fornecedores",
+    nome: "Fornecedores",
+    modulo: "cadastros",
+    rota: "/cadastros/fornecedores",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.insumos",
+    nome: "Insumos",
+    modulo: "cadastros",
+    rota: "/cadastros/insumos",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.equipamentos",
+    nome: "Equipamentos",
+    modulo: "cadastros",
+    rota: "/cadastros/equipamentos",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.depositos",
+    nome: "Depósitos e tanques",
+    modulo: "cadastros",
+    rota: "/cadastros/depositos",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.colaboradores",
+    nome: "Colaboradores",
+    modulo: "cadastros",
+    rota: "/cadastros/colaboradores",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.unidades",
+    nome: "Unidades de medida",
+    modulo: "cadastros",
+    rota: "/cadastros/unidades",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.categorias",
+    nome: "Categorias",
+    modulo: "cadastros",
+    rota: "/cadastros/categorias",
+    acoes: CRUD,
+  },
+  // Administração
   {
     id: "administracao.usuarios",
     nome: "Usuários e permissões",

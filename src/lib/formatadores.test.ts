@@ -122,6 +122,14 @@ describe("formatarData", () => {
     expect(formatarData(new Date("2026-06-11T12:00:00Z"))).toBe("11/06/2026");
   });
 
+  it("preserva o dia em string date-only (coluna `date`), sem deslocar", () => {
+    // Sem o ajuste, new Date('2026-06-12') seria UTC meia-noite e cairia em
+    // 11/06/2026 ao exibir em Rio Branco (UTC-5).
+    expect(formatarData("2026-06-12")).toBe("12/06/2026");
+    expect(formatarData("2026-01-01")).toBe("01/01/2026");
+    expect(formatarData("2026-12-31")).toBe("31/12/2026");
+  });
+
   it("retorna vazio para null, undefined e data inválida", () => {
     expect(formatarData(null)).toBe("");
     expect(formatarData(undefined)).toBe("");
@@ -142,6 +150,10 @@ describe("formatarDataHora", () => {
     expect(formatarDataHora(new Date("2026-06-11T12:00:00Z"))).toBe(
       "11/06/2026 07:00",
     );
+  });
+
+  it("ancora string date-only na meia-noite local, sem deslocar o dia", () => {
+    expect(formatarDataHora("2026-06-12")).toBe("12/06/2026 00:00");
   });
 
   it("retorna vazio para null, undefined e data inválida", () => {

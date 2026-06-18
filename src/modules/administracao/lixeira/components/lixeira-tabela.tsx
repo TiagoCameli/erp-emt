@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Trash2 } from "lucide-react";
+import { LoaderCircle, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   DataTable,
@@ -12,6 +13,8 @@ import {
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { restaurarItem } from "@/modules/administracao/lixeira/actions";
+import { tabelaRestauravel } from "@/modules/administracao/lixeira/restauravel";
 import {
   Dialog,
   DialogContent,
@@ -77,6 +80,19 @@ export function LixeiraTabela({
   const { setMuitos: atualizarParams } = useFiltrosUrl();
   const [itemSelecionado, setItemSelecionado] =
     React.useState<ItemLixeira | null>(null);
+  const [restaurando, setRestaurando] = React.useState(false);
+
+  async function handleRestaurar(item: ItemLixeira) {
+    setRestaurando(true);
+    const resultado = await restaurarItem(item.id);
+    setRestaurando(false);
+    if (resultado?.erro) {
+      toast.error(resultado.erro);
+    } else {
+      toast.success("Registro restaurado");
+      setItemSelecionado(null);
+    }
+  }
 
   const colunas = React.useMemo<ColumnDef<ItemLixeira, unknown>[]>(() => {
     const base: ColumnDef<ItemLixeira, unknown>[] = [
@@ -218,25 +234,38 @@ export function LixeiraTabela({
 
               {podeEditar && !itemSelecionado.restauradoEm ? (
                 <DialogFooter>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span tabIndex={0}>
-                          {/* Fase 1+: habilitar o botão e chamar a action:
-                              const resultado = await restaurarItem(itemSelecionado.id);
-                              if (resultado?.erro) toast.error(resultado.erro);
-                              else toast.success("Registro restaurado"); */}
-                          <Button type="button" disabled>
-                            Restaurar
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Restauração estará disponível quando os módulos
-                        transacionais existirem (Fase 1+)
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  {tabelaRestauravel(itemSelecionado.tabela) ? (
+                    <Button
+                      type="button"
+                      disabled={restaurando}
+                      onClick={() => handleRestaurar(itemSelecionado)}
+                    >
+                      {restaurando ? (
+                        <>
+                          <LoaderCircle className="animate-spin" />
+                          Restaurando...
+                        </>
+                      ) : (
+                        "Restaurar"
+                      )}
+                    </Button>
+                  ) : (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span tabIndex={0}>
+                            <Button type="button" disabled>
+                              Restaurar
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Este tipo de registro não pode ser restaurado pela
+                          lixeira.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </DialogFooter>
               ) : null}
             </>
