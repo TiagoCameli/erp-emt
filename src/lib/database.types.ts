@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      anexos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          nome_arquivo: string
+          path_storage: string
+          registro_id: string
+          tabela: string
+          tamanho_bytes: number | null
+          tipo_mime: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome_arquivo: string
+          path_storage: string
+          registro_id: string
+          tabela: string
+          tamanho_bytes?: number | null
+          tipo_mime?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome_arquivo?: string
+          path_storage?: string
+          registro_id?: string
+          tabela?: string
+          tamanho_bytes?: number | null
+          tipo_mime?: string | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           acao: string
@@ -294,6 +330,163 @@ export type Database = {
         }
         Relationships: []
       }
+      cotacao_fornecedores: {
+        Row: {
+          condicao_pagamento: string | null
+          cotacao_id: string
+          created_at: string
+          created_by: string | null
+          fornecedor_id: string
+          id: string
+          observacao: string | null
+          prazo_entrega_dias: number | null
+        }
+        Insert: {
+          condicao_pagamento?: string | null
+          cotacao_id: string
+          created_at?: string
+          created_by?: string | null
+          fornecedor_id: string
+          id?: string
+          observacao?: string | null
+          prazo_entrega_dias?: number | null
+        }
+        Update: {
+          condicao_pagamento?: string | null
+          cotacao_id?: string
+          created_at?: string
+          created_by?: string | null
+          fornecedor_id?: string
+          id?: string
+          observacao?: string | null
+          prazo_entrega_dias?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacao_fornecedores_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacao_fornecedores_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cotacao_itens: {
+        Row: {
+          cotacao_fornecedor_id: string
+          cotacao_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          insumo_id: string
+          preco_unitario: number
+          quantidade: number
+        }
+        Insert: {
+          cotacao_fornecedor_id: string
+          cotacao_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_id: string
+          preco_unitario: number
+          quantidade: number
+        }
+        Update: {
+          cotacao_fornecedor_id?: string
+          cotacao_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insumo_id?: string
+          preco_unitario?: number
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacao_itens_cotacao_fornecedor_id_fkey"
+            columns: ["cotacao_fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "cotacao_fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacao_itens_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacao_itens_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cotacoes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          motivo_selecao: string | null
+          numero: string | null
+          observacoes: string | null
+          pedido_id: string | null
+          status: string
+          updated_at: string
+          vencedor_fornecedor_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          motivo_selecao?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          pedido_id?: string | null
+          status?: string
+          updated_at?: string
+          vencedor_fornecedor_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          motivo_selecao?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          pedido_id?: string | null
+          status?: string
+          updated_at?: string
+          vencedor_fornecedor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cotacoes_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_vencedor_fornecedor_id_fkey"
+            columns: ["vencedor_fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       depositos: {
         Row: {
           ativo: boolean
@@ -566,6 +759,72 @@ export type Database = {
           },
         ]
       }
+      lancamentos: {
+        Row: {
+          centro_custo_id: string | null
+          created_at: string
+          created_by: string | null
+          data_emissao: string
+          data_vencimento: string | null
+          descricao: string
+          fornecedor_id: string | null
+          id: string
+          origem: string
+          origem_id: string | null
+          status: string
+          tipo: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string
+          data_vencimento?: string | null
+          descricao: string
+          fornecedor_id?: string | null
+          id?: string
+          origem: string
+          origem_id?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string
+          data_vencimento?: string | null
+          descricao?: string
+          fornecedor_id?: string | null
+          id?: string
+          origem?: string
+          origem_id?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamentos_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamentos_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lixeira: {
         Row: {
           dados: Json
@@ -667,6 +926,269 @@ export type Database = {
           },
         ]
       }
+      oc_itens: {
+        Row: {
+          centro_custo_id: string
+          created_at: string
+          created_by: string | null
+          deposito_id: string | null
+          id: string
+          insumo_id: string
+          ordem_compra_id: string
+          preco_unitario: number
+          quantidade: number
+        }
+        Insert: {
+          centro_custo_id: string
+          created_at?: string
+          created_by?: string | null
+          deposito_id?: string | null
+          id?: string
+          insumo_id: string
+          ordem_compra_id: string
+          preco_unitario: number
+          quantidade: number
+        }
+        Update: {
+          centro_custo_id?: string
+          created_at?: string
+          created_by?: string | null
+          deposito_id?: string | null
+          id?: string
+          insumo_id?: string
+          ordem_compra_id?: string
+          preco_unitario?: number
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oc_itens_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oc_itens_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oc_itens_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oc_itens_ordem_compra_id_fkey"
+            columns: ["ordem_compra_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordens_compra: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          condicao_pagamento: string | null
+          cotacao_id: string | null
+          created_at: string
+          created_by: string | null
+          data_emissao: string
+          fornecedor_id: string
+          id: string
+          motivo_rejeicao: string | null
+          numero: string | null
+          observacoes: string | null
+          pedido_id: string | null
+          status: string
+          updated_at: string
+          valor_total: number
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          condicao_pagamento?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string
+          fornecedor_id: string
+          id?: string
+          motivo_rejeicao?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          pedido_id?: string | null
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          condicao_pagamento?: string | null
+          cotacao_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string
+          fornecedor_id?: string
+          id?: string
+          motivo_rejeicao?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          pedido_id?: string | null
+          status?: string
+          updated_at?: string
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordens_compra_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_compra_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_compra_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_compra_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pedido_itens: {
+        Row: {
+          centro_custo_id: string
+          created_at: string
+          created_by: string | null
+          deposito_id: string | null
+          id: string
+          insumo_id: string
+          observacao: string | null
+          pedido_id: string
+          quantidade: number
+        }
+        Insert: {
+          centro_custo_id: string
+          created_at?: string
+          created_by?: string | null
+          deposito_id?: string | null
+          id?: string
+          insumo_id: string
+          observacao?: string | null
+          pedido_id: string
+          quantidade: number
+        }
+        Update: {
+          centro_custo_id?: string
+          created_at?: string
+          created_by?: string | null
+          deposito_id?: string | null
+          id?: string
+          insumo_id?: string
+          observacao?: string | null
+          pedido_id?: string
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedido_itens_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedido_itens_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedido_itens_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedido_itens_pedido_id_fkey"
+            columns: ["pedido_id"]
+            isOneToOne: false
+            referencedRelation: "pedidos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pedidos: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          justificativa: string | null
+          motivo_rejeicao: string | null
+          numero: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          justificativa?: string | null
+          motivo_rejeicao?: string | null
+          numero?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          justificativa?: string | null
+          motivo_rejeicao?: string | null
+          numero?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       perfil_permissoes: {
         Row: {
           acao: string
@@ -728,6 +1250,98 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      recebimento_itens: {
+        Row: {
+          created_at: string
+          id: string
+          oc_item_id: string
+          quantidade_recebida: number
+          recebimento_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          oc_item_id: string
+          quantidade_recebida: number
+          recebimento_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          oc_item_id?: string
+          quantidade_recebida?: number
+          recebimento_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recebimento_itens_oc_item_id_fkey"
+            columns: ["oc_item_id"]
+            isOneToOne: false
+            referencedRelation: "oc_itens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recebimento_itens_recebimento_id_fkey"
+            columns: ["recebimento_id"]
+            isOneToOne: false
+            referencedRelation: "recebimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recebimentos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_recebimento: string
+          data_vencimento: string | null
+          id: string
+          numero: string | null
+          numero_nf: string | null
+          observacoes: string | null
+          ordem_compra_id: string
+          status: string
+          updated_at: string
+          valor_nf: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_recebimento?: string
+          data_vencimento?: string | null
+          id?: string
+          numero?: string | null
+          numero_nf?: string | null
+          observacoes?: string | null
+          ordem_compra_id: string
+          status?: string
+          updated_at?: string
+          valor_nf?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_recebimento?: string
+          data_vencimento?: string | null
+          id?: string
+          numero?: string | null
+          numero_nf?: string | null
+          observacoes?: string | null
+          ordem_compra_id?: string
+          status?: string
+          updated_at?: string
+          valor_nf?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recebimentos_ordem_compra_id_fkey"
+            columns: ["ordem_compra_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_compra"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unidades_medida: {
         Row: {
@@ -847,11 +1461,29 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string }
         Returns: undefined
       }
+      fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
+      fn_desaprovar_ordem_compra: {
+        Args: { p_motivo: string; p_oc_id: string }
+        Returns: undefined
+      }
       fn_excluir_cadastro: {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
       }
+      fn_recurso_do_anexo: { Args: { p_tabela: string }; Returns: string }
       fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string }
+      fn_registrar_recebimento: {
+        Args: {
+          p_data_recebimento: string
+          p_data_vencimento: string
+          p_itens: Json
+          p_numero_nf: string
+          p_observacoes?: string
+          p_oc_id: string
+          p_valor_nf: number
+        }
+        Returns: string
+      }
       fn_restaurar_cadastro: {
         Args: { p_lixeira_id: string }
         Returns: undefined

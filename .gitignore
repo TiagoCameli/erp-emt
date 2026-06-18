@@ -43,3 +43,7 @@ next-env.d.ts
 
 # supabase CLI
 supabase/.temp/
+
+# Conflitos de sincronizacao do iCloud (pasta Documents)
+* 2.*
+*\ 2

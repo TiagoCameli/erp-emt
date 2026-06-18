@@ -34,12 +34,21 @@ export interface RecursoDef {
 /** Módulos na ordem de exibição da sidebar */
 export const MODULOS = [
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
+  { id: "compras", nome: "Compras", rota: "/compras" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
 export type ModuloId = (typeof MODULOS)[number]["id"];
 
 const CRUD = ["ver", "criar", "editar", "excluir"] as const;
+const CRUD_APROVA = [
+  "ver",
+  "criar",
+  "editar",
+  "excluir",
+  "aprovar",
+  "desaprovar",
+] as const;
 
 export const RECURSOS = [
   // Cadastros
@@ -112,6 +121,42 @@ export const RECURSOS = [
     modulo: "cadastros",
     rota: "/cadastros/categorias",
     acoes: CRUD,
+  },
+  // Compras
+  {
+    id: "compras.pedidos",
+    nome: "Pedidos",
+    modulo: "compras",
+    rota: "/compras/pedidos",
+    acoes: CRUD_APROVA,
+  },
+  {
+    id: "compras.cotacoes",
+    nome: "Cotações",
+    modulo: "compras",
+    rota: "/compras/cotacoes",
+    acoes: CRUD,
+  },
+  {
+    id: "compras.ordens",
+    nome: "Ordens de compra",
+    modulo: "compras",
+    rota: "/compras/ordens",
+    acoes: CRUD_APROVA,
+  },
+  {
+    id: "compras.recebimentos",
+    nome: "Recebimentos",
+    modulo: "compras",
+    rota: "/compras/recebimentos",
+    acoes: CRUD,
+  },
+  {
+    id: "compras.painel",
+    nome: "Painel de compras",
+    modulo: "compras",
+    rota: "/compras/painel",
+    acoes: ["ver"],
   },
   // Administração
   {
