@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
+import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   aprovarOrdem,
   cancelarOrdem,
@@ -74,14 +75,6 @@ function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode 
   );
 }
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-md border border-border bg-surface p-4">
-      <h2 className="mb-3 text-detalhe font-semibold">{titulo}</h2>
-      {children}
-    </section>
-  );
-}
 
 export interface OrdemDetalheViewProps {
   ordem: OrdemDetalhe;
@@ -271,7 +264,7 @@ export function OrdemDetalheView({
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
-          <Secao titulo="Dados da ordem">
+          <SecaoDetalhe card titulo="Dados da ordem">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Dado rotulo="Fornecedor">{ordem.fornecedorNome}</Dado>
               <Dado rotulo="Emissão">{formatarData(ordem.dataEmissao)}</Dado>
@@ -301,9 +294,9 @@ export function OrdemDetalheView({
                 <Dado rotulo="Observações">{ordem.observacoes}</Dado>
               </div>
             ) : null}
-          </Secao>
+          </SecaoDetalhe>
 
-          <Secao titulo="Lançamento financeiro">
+          <SecaoDetalhe card titulo="Lançamento financeiro">
             {ordem.lancamento ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -330,9 +323,9 @@ export function OrdemDetalheView({
                 previsto.
               </p>
             )}
-          </Secao>
+          </SecaoDetalhe>
 
-          <Secao titulo="Itens">
+          <SecaoDetalhe card titulo="Itens">
             <div className="overflow-hidden rounded-md border border-border">
               <table className="w-full text-detalhe">
                 <thead>
@@ -385,21 +378,21 @@ export function OrdemDetalheView({
                 </tfoot>
               </table>
             </div>
-          </Secao>
+          </SecaoDetalhe>
 
-          <Secao titulo="Anexos">
+          <SecaoDetalhe card titulo="Anexos">
             <AnexosRegistro
               tabela="ordens_compra"
               registroId={ordem.id}
               podeEditar={podeEditar}
             />
-          </Secao>
+          </SecaoDetalhe>
         </div>
 
         <div className="lg:col-span-1">
-          <Secao titulo="Trilha">
+          <SecaoDetalhe card titulo="Trilha">
             <Trilha eventos={trilha} />
-          </Secao>
+          </SecaoDetalhe>
         </div>
       </div>
 

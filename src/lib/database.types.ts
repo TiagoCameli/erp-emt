@@ -1484,11 +1484,19 @@ export type Database = {
         }
         Returns: string
       }
+      fn_recurso_do_path_anexo: { Args: { p_path: string }; Returns: string }
       fn_restaurar_cadastro: {
         Args: { p_lixeira_id: string }
         Returns: undefined
       }
       nomes_usuarios_auditoria: {
+        Args: { p_ids: string[] }
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
+      nomes_usuarios_compras: {
         Args: { p_ids: string[] }
         Returns: {
           id: string

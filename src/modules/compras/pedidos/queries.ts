@@ -68,7 +68,12 @@ function nomePorId(
   return mapa.get(id) ?? null;
 }
 
-/** Busca os nomes dos usuários de uma lista de ids num único select. */
+/**
+ * Busca os nomes dos usuários de uma lista de ids. Resolve por uma RPC security
+ * definer gated em compras.pedidos/ver, porque a RLS de public.usuarios só deixa
+ * o usuário ver o próprio registro: ler a tabela direto sumiria com o nome do
+ * solicitante e do aprovador para quem não é admin.
+ */
 async function mapaNomesUsuarios(
   supabase: Awaited<ReturnType<typeof createClient>>,
   ids: (string | null)[],
@@ -76,10 +81,9 @@ async function mapaNomesUsuarios(
   const unicos = [...new Set(ids.filter((id): id is string => Boolean(id)))];
   if (unicos.length === 0) return new Map();
 
-  const { data } = await supabase
-    .from("usuarios")
-    .select("id, nome")
-    .in("id", unicos);
+  const { data } = await supabase.rpc("nomes_usuarios_compras", {
+    p_ids: unicos,
+  });
 
   const mapa = new Map<string, string>();
   for (const usuario of data ?? []) {

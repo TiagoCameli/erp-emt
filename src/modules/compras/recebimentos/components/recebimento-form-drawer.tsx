@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatarQuantidade } from "@/lib/formatadores";
+import { dataHojeISO, formatarQuantidade } from "@/lib/formatadores";
 import {
   CampoFormulario,
   classesFormulario,
@@ -34,11 +34,6 @@ import {
 
 const ID_FORM = "form-recebimento";
 
-/** Data de hoje no formato do input date (yyyy-MM-dd). */
-function hoje(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 /** Valor inicial de quantidade de um item: o saldo a receber, com vírgula. */
 function saldoComoTexto(saldo: number): string {
   if (saldo <= 0) return "0";
@@ -50,8 +45,8 @@ function valoresIniciais(ordem: OrdemReceptivel | null): RecebimentoFormInput {
     ordemCompraId: ordem?.id ?? "",
     numeroNf: "",
     valorNf: "",
-    dataRecebimento: hoje(),
-    dataVencimento: hoje(),
+    dataRecebimento: dataHojeISO(),
+    dataVencimento: dataHojeISO(),
     observacoes: "",
     itens: (ordem?.itens ?? []).map((item) => ({
       ocItemId: item.ocItemId,

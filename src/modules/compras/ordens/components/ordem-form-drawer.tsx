@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatarBRL } from "@/lib/formatadores";
+import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
 import {
   CampoFormulario,
   classesFormulario,
@@ -46,15 +46,6 @@ const SEM_VINCULO = "sem-vinculo";
 const SEM_DEPOSITO = "sem-deposito";
 const ID_FORM = "form-ordem-compra";
 
-/** Data de hoje no formato yyyy-MM-dd para o input date. */
-function hoje(): string {
-  const agora = new Date();
-  const ano = agora.getFullYear();
-  const mes = String(agora.getMonth() + 1).padStart(2, "0");
-  const dia = String(agora.getDate()).padStart(2, "0");
-  return `${ano}-${mes}-${dia}`;
-}
-
 /** Item em branco para o array de itens. */
 function itemVazio(): OrdemCompraFormInput["itens"][number] {
   return {
@@ -74,7 +65,7 @@ function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
       condicaoPagamento: "",
       pedidoId: undefined,
       cotacaoId: undefined,
-      dataEmissao: hoje(),
+      dataEmissao: dataHojeISO(),
       observacoes: "",
       itens: [itemVazio()],
     };

@@ -146,7 +146,16 @@ export async function editarOrdem(
     return { erro: "Não foi possível salvar a ordem de compra. Tente novamente" };
   }
 
-  // Troca os itens por inteiro: apaga os antigos e insere os novos.
+  // Troca os itens por inteiro: apaga os antigos e insere os novos. Sem
+  // transação no supabase-js, guardamos os itens antigos antes de apagar e os
+  // restauramos se o insert falhar, para a OC nunca ficar sem nenhum item.
+  const { data: itensAntigos } = await supabase
+    .from("oc_itens")
+    .select(
+      "ordem_compra_id, insumo_id, quantidade, preco_unitario, centro_custo_id, deposito_id",
+    )
+    .eq("ordem_compra_id", idValido.data);
+
   const { error: erroDelete } = await supabase
     .from("oc_itens")
     .delete()
@@ -161,6 +170,10 @@ export async function editarOrdem(
     .insert(itensParaRegistros(idValido.data, validado.data.itens));
 
   if (erroItens) {
+    // Restaura o estado anterior para não deixar a OC sem itens.
+    if (itensAntigos && itensAntigos.length > 0) {
+      await supabase.from("oc_itens").insert(itensAntigos);
+    }
     return { erro: "Não foi possível salvar os itens. Tente novamente" };
   }
 

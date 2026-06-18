@@ -135,7 +135,16 @@ export async function editarPedido(
     return { erro: "Não foi possível salvar o pedido. Tente novamente" };
   }
 
-  // Reescreve os itens: apaga os atuais e insere os novos.
+  // Reescreve os itens: apaga os atuais e insere os novos. Sem transação no
+  // supabase-js, guardamos os itens antigos antes de apagar e os restauramos
+  // se o insert falhar, para o pedido nunca ficar sem nenhum item.
+  const { data: itensAntigos } = await supabase
+    .from("pedido_itens")
+    .select(
+      "pedido_id, insumo_id, quantidade, centro_custo_id, deposito_id, observacao",
+    )
+    .eq("pedido_id", idValido.data);
+
   const { error: erroApagar } = await supabase
     .from("pedido_itens")
     .delete()
@@ -150,6 +159,10 @@ export async function editarPedido(
     .insert(itensParaRegistro(idValido.data, validado.data));
 
   if (erroItens) {
+    // Restaura o estado anterior para não deixar o pedido sem itens.
+    if (itensAntigos && itensAntigos.length > 0) {
+      await supabase.from("pedido_itens").insert(itensAntigos);
+    }
     return { erro: "Não foi possível salvar os itens do pedido. Tente novamente" };
   }
 

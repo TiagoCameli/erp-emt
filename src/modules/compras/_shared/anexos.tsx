@@ -173,7 +173,7 @@ export function AnexosRegistro({
                 className="size-4 shrink-0 text-muted-foreground"
                 aria-hidden="true"
               />
-              <span className="min-w-0 flex-1 truncate text-sm">
+              <span className="min-w-0 flex-1 truncate text-detalhe">
                 {anexo.nomeArquivo}
               </span>
               <span className="shrink-0 text-detalhe text-muted-foreground tabular-nums">

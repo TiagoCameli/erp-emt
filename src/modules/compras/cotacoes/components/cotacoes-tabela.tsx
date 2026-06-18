@@ -74,6 +74,36 @@ const colunas: ColumnDef<CotacaoLista, unknown>[] = [
   },
 ];
 
+/**
+ * Estado e fluxo único de criação de cotação (drawer + aoCriar): cria, mostra o
+ * toast e leva ao detalhe. Reusado pelo cabeçalho, pelo botão da tabela e pelo
+ * EmptyState, para não duplicar a lógica de criação em vários pontos.
+ */
+function useCriarCotacao() {
+  const router = useRouter();
+  const [drawerAberto, setDrawerAberto] = React.useState(false);
+  const [criando, setCriando] = React.useState(false);
+
+  const aoCriar = React.useCallback(
+    async (pedidoId: string | undefined, observacoes: string) => {
+      setCriando(true);
+      const resultado = await criarCotacao({ pedidoId, observacoes });
+      setCriando(false);
+
+      if ("erro" in resultado) {
+        toast.error(resultado.erro);
+        return;
+      }
+      toast.success("Cotação criada");
+      setDrawerAberto(false);
+      router.push(`/compras/cotacoes/${resultado.id}`);
+    },
+    [router],
+  );
+
+  return { drawerAberto, setDrawerAberto, criando, aoCriar };
+}
+
 export interface CotacoesTabelaProps {
   cotacoes: CotacaoLista[];
   pedidos: PedidoAprovadoOpcao[];
@@ -92,8 +122,7 @@ export function CotacoesTabela({
   const router = useRouter();
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState("");
-  const [drawerAberto, setDrawerAberto] = React.useState(false);
-  const [criando, setCriando] = React.useState(false);
+  const { drawerAberto, setDrawerAberto, criando, aoCriar } = useCriarCotacao();
 
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -108,23 +137,6 @@ export function CotacoesTabela({
       return true;
     });
   }, [cotacoes, busca, status]);
-
-  async function aoCriar(pedidoId: string | undefined, observacoes: string) {
-    setCriando(true);
-    const resultado = await criarCotacao({
-      pedidoId,
-      observacoes,
-    });
-    setCriando(false);
-
-    if ("erro" in resultado) {
-      toast.error(resultado.erro);
-      return;
-    }
-    toast.success("Cotação criada");
-    setDrawerAberto(false);
-    router.push(`/compras/cotacoes/${resultado.id}`);
-  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -196,25 +208,9 @@ export function CotacoesAcoesCabecalho({
   pedidos: PedidoAprovadoOpcao[];
   podeCriar: boolean;
 }) {
-  const router = useRouter();
-  const [drawerAberto, setDrawerAberto] = React.useState(false);
-  const [criando, setCriando] = React.useState(false);
+  const { drawerAberto, setDrawerAberto, criando, aoCriar } = useCriarCotacao();
 
   if (!podeCriar) return null;
-
-  async function aoCriar(pedidoId: string | undefined, observacoes: string) {
-    setCriando(true);
-    const resultado = await criarCotacao({ pedidoId, observacoes });
-    setCriando(false);
-
-    if ("erro" in resultado) {
-      toast.error(resultado.erro);
-      return;
-    }
-    toast.success("Cotação criada");
-    setDrawerAberto(false);
-    router.push(`/compras/cotacoes/${resultado.id}`);
-  }
 
   return (
     <>

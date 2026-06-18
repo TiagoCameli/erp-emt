@@ -273,6 +273,33 @@ export async function buscarCotacao(
     },
   );
 
+  // Cotação que veio de um pedido e ainda não tem nenhum preço lançado nasce
+  // com os insumos a cotar do próprio pedido (quantidade do pedido, preço a
+  // lançar, sem fornecedor): o comprador não redigita os itens no mapa.
+  if (insumosMap.size === 0 && cotacao.pedido_id) {
+    const { data: itensPedido } = await supabase
+      .from("pedido_itens")
+      .select(
+        "insumo_id, quantidade, insumos(nome, codigo, unidades_medida(sigla))",
+      )
+      .eq("pedido_id", cotacao.pedido_id);
+
+    for (const item of itensPedido ?? []) {
+      const atual = insumosMap.get(item.insumo_id);
+      if (atual) {
+        atual.quantidade += item.quantidade;
+        continue;
+      }
+      insumosMap.set(item.insumo_id, {
+        insumoId: item.insumo_id,
+        insumoNome: item.insumos?.nome ?? "",
+        insumoCodigo: item.insumos?.codigo ?? null,
+        unidadeSigla: item.insumos?.unidades_medida?.sigla ?? null,
+        quantidade: item.quantidade,
+      });
+    }
+  }
+
   const insumos = [...insumosMap.values()].sort((a, b) =>
     a.insumoNome.localeCompare(b.insumoNome, "pt-BR"),
   );

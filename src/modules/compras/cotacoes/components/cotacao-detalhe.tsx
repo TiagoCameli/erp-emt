@@ -16,6 +16,7 @@ import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
 import { infoStatusCotacao } from "@/modules/compras/_shared/formato";
+import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   cancelarCotacao,
   removerFornecedor,
@@ -35,27 +36,6 @@ export interface CotacaoDetalheProps {
   insumos: InsumoOpcao[];
   trilha: EventoTrilha[];
   podeEditar: boolean;
-}
-
-/** Bloco de seção com título do detalhe. */
-function Secao({
-  titulo,
-  acao,
-  children,
-}: {
-  titulo: string;
-  acao?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-secao font-semibold">{titulo}</h2>
-        {acao}
-      </div>
-      {children}
-    </section>
-  );
 }
 
 /**
@@ -173,7 +153,7 @@ export function CotacaoDetalhe({
         </div>
       ) : null}
 
-      <Secao
+      <SecaoDetalhe
         titulo="Fornecedores"
         acao={
           editavel ? (
@@ -254,27 +234,27 @@ export function CotacaoDetalhe({
             ))}
           </ul>
         )}
-      </Secao>
+      </SecaoDetalhe>
 
-      <Secao titulo="Mapa comparativo">
+      <SecaoDetalhe titulo="Mapa comparativo">
         <MapaComparativo
           cotacao={cotacao}
           insumos={insumos}
           podeEditar={podeEditar}
         />
-      </Secao>
+      </SecaoDetalhe>
 
-      <Secao titulo="Anexos">
+      <SecaoDetalhe titulo="Anexos">
         <AnexosRegistro
           tabela="cotacoes"
           registroId={cotacao.id}
           podeEditar={podeEditar}
         />
-      </Secao>
+      </SecaoDetalhe>
 
-      <Secao titulo="Trilha">
+      <SecaoDetalhe titulo="Trilha">
         <Trilha eventos={trilha} />
-      </Secao>
+      </SecaoDetalhe>
 
       {editavel ? (
         <FornecedorCotacaoDrawer

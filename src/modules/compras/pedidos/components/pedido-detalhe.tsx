@@ -24,6 +24,7 @@ import {
 import { formatarData, formatarDataHora, formatarQuantidade } from "@/lib/formatadores";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
 import { ROTULO_STATUS_PEDIDO } from "@/modules/compras/_shared/formato";
+import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   aprovarPedido,
   cancelarPedido,
@@ -161,7 +162,7 @@ export function PedidoDetalhe({
         <div className="flex items-center gap-3">
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="icon-sm"
             aria-label="Voltar para a lista de pedidos"
             onClick={() => router.push("/compras/pedidos")}
@@ -243,8 +244,7 @@ export function PedidoDetalhe({
         </CampoResumo>
       ) : null}
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-secao font-semibold">Itens</h2>
+      <SecaoDetalhe titulo="Itens">
         <div className="overflow-hidden rounded-md border border-border">
           <Table>
             <TableHeader>
@@ -294,21 +294,19 @@ export function PedidoDetalhe({
             </TableBody>
           </Table>
         </div>
-      </section>
+      </SecaoDetalhe>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-secao font-semibold">Anexos</h2>
+      <SecaoDetalhe titulo="Anexos">
         <AnexosRegistro
           tabela="pedidos"
           registroId={pedido.id}
           podeEditar={podeEditar}
         />
-      </section>
+      </SecaoDetalhe>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-secao font-semibold">Trilha</h2>
+      <SecaoDetalhe titulo="Trilha">
         <Trilha eventos={eventos} />
-      </section>
+      </SecaoDetalhe>
 
       {podeAbrirEdicao ? (
         <PedidoFormDrawer

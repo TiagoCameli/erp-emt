@@ -14,6 +14,7 @@ import {
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
 import { infoStatusRecebimento } from "@/modules/compras/_shared/formato";
+import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   carregarRecebimento,
   carregarTrilhaRecebimento,
@@ -114,7 +115,7 @@ export function RecebimentoDetalheDrawer({
               <Dado rotulo="Ordem de compra">
                 {detalhe.ordemCompraNumero ? (
                   <Link
-                    href={`/compras/ordens?oc=${detalhe.ordemCompraId}`}
+                    href={`/compras/ordens/${detalhe.ordemCompraId}`}
                     className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                   >
                     <span className="codigo-doc">
@@ -155,8 +156,7 @@ export function RecebimentoDetalheDrawer({
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-2">
-            <p className="text-detalhe font-medium">Itens recebidos</p>
+          <SecaoDetalhe titulo="Itens recebidos">
             <div className="overflow-hidden rounded-md border border-border">
               <table className="w-full text-detalhe">
                 <thead>
@@ -190,21 +190,19 @@ export function RecebimentoDetalheDrawer({
                 </tbody>
               </table>
             </div>
-          </div>
+          </SecaoDetalhe>
 
-          <div className="flex flex-col gap-2">
-            <p className="text-detalhe font-medium">Anexos</p>
+          <SecaoDetalhe titulo="Anexos">
             <AnexosRegistro
               tabela="recebimentos"
               registroId={detalhe.id}
               podeEditar={podeEditar}
             />
-          </div>
+          </SecaoDetalhe>
 
-          <div className="flex flex-col gap-2">
-            <p className="text-detalhe font-medium">Trilha</p>
+          <SecaoDetalhe titulo="Trilha">
             <Trilha eventos={trilha} />
-          </div>
+          </SecaoDetalhe>
         </div>
       )}
     </FormDrawer>

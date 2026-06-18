@@ -56,9 +56,11 @@ async function exigirAberta(
 }
 
 /**
- * Cria uma cotação aberta, avulsa ou a partir de um pedido aprovado.
- * Quando vem de um pedido, copia os itens dele como insumos a cotar
- * (quantidade do pedido, preço zerado, sem fornecedor ainda). RLS cobre o insert.
+ * Cria uma cotação aberta, avulsa ou a partir de um pedido aprovado. Grava só o
+ * cabeçalho (pedido_id, observações): os insumos a cotar do pedido aparecem no
+ * mapa do detalhe (buscarCotacao traz os itens do pedido com quantidade do
+ * pedido e preço a lançar), já que cotacao_itens exige um fornecedor. RLS cobre
+ * o insert.
  */
 export async function criarCotacao(
   dados: CotacaoInput,
@@ -263,6 +265,15 @@ export async function salvarPrecos(
     }
   }
 
+  // Sem transação no supabase-js, guardamos os preços antigos antes de apagar
+  // e os restauramos se o insert falhar, para não perder o mapa já lançado.
+  const { data: precosAntigos } = await supabase
+    .from("cotacao_itens")
+    .select(
+      "cotacao_id, cotacao_fornecedor_id, insumo_id, quantidade, preco_unitario",
+    )
+    .eq("cotacao_id", idValido.data);
+
   const { error: erroDelete } = await supabase
     .from("cotacao_itens")
     .delete()
@@ -284,6 +295,10 @@ export async function salvarPrecos(
     );
 
     if (erroInsert) {
+      // Restaura os preços anteriores para não esvaziar o mapa da cotação.
+      if (precosAntigos && precosAntigos.length > 0) {
+        await supabase.from("cotacao_itens").insert(precosAntigos);
+      }
       return { erro: "Não foi possível salvar os preços. Tente novamente" };
     }
   }
