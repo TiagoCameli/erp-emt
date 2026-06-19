@@ -85,3 +85,11 @@ export function formatarDataHora(
   if (Number.isNaN(d.getTime())) return "";
   return format(d, "dd/MM/yyyy HH:mm", { in: tz(TIMEZONE), locale: ptBR });
 }
+
+/**
+ * Data de hoje (yyyy-MM-dd) no fuso de Rio Branco, para default de input date.
+ * Usa o fuso do sistema, não o ISO em UTC, para não pular um dia à noite.
+ */
+export function dataHojeISO(): string {
+  return format(new Date(), "yyyy-MM-dd", { in: tz(TIMEZONE) });
+}

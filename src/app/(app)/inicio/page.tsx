@@ -11,6 +11,10 @@ export default async function InicioPage() {
     ),
   );
 
+  const veCompras = recursosDoModulo("compras").some((recurso) =>
+    temPermissao(usuario, recurso.id as RecursoId, "ver"),
+  );
+
   return (
     <div>
       <PageHeader
@@ -23,15 +27,25 @@ export default async function InicioPage() {
           valor="Fundação"
           detalhe="Permissões, auditoria e administração ativas"
         />
-        {modulosVisiveis.map((modulo) => (
+        {veCompras ? (
           <KPICard
-            key={modulo.id}
             titulo="Módulo"
-            valor={modulo.nome}
-            detalhe={`Abrir ${modulo.nome.toLowerCase()}`}
-            href={modulo.rota}
+            valor="Compras"
+            detalhe="Pedidos, cotações, ordens e recebimentos"
+            href="/compras"
           />
-        ))}
+        ) : null}
+        {modulosVisiveis
+          .filter((modulo) => modulo.id !== "compras")
+          .map((modulo) => (
+            <KPICard
+              key={modulo.id}
+              titulo="Módulo"
+              valor={modulo.nome}
+              detalhe={`Abrir ${modulo.nome.toLowerCase()}`}
+              href={modulo.rota}
+            />
+          ))}
       </div>
     </div>
   );
