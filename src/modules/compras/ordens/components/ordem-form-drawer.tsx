@@ -141,16 +141,15 @@ export function OrdemFormDrawer({
   const salvando = form.formState.isSubmitting;
 
   // Total ao vivo: recalcula a cada digitação dos itens.
+  // Computado a cada render (sem useMemo): o react-hook-form reusa a
+  // referência do array de form.watch("itens"), então um useMemo dependente
+  // dela não recomputa quando os campos mudam e o total ficava zerado.
   const itensObservados = form.watch("itens");
-  const totalPrevia = React.useMemo(
-    () =>
-      totalOrdemCompra(
-        (itensObservados ?? []).map((item) => ({
-          quantidade: paraNumero(item.quantidade ?? ""),
-          precoUnitario: paraNumero(item.precoUnitario ?? ""),
-        })),
-      ),
-    [itensObservados],
+  const totalPrevia = totalOrdemCompra(
+    (itensObservados ?? []).map((item) => ({
+      quantidade: paraNumero(item.quantidade ?? ""),
+      precoUnitario: paraNumero(item.precoUnitario ?? ""),
+    })),
   );
 
   async function aoEnviar(valores: OrdemCompraFormInput) {
