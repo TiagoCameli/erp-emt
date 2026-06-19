@@ -35,6 +35,7 @@ export interface RecursoDef {
 export const MODULOS = [
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
+  { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -156,6 +157,63 @@ export const RECURSOS = [
     nome: "Painel de compras",
     modulo: "compras",
     rota: "/compras/painel",
+    acoes: ["ver"],
+  },
+  // Financeiro
+  {
+    id: "financeiro.lancamentos",
+    nome: "Lançamentos",
+    modulo: "financeiro",
+    rota: "/financeiro/lancamentos",
+    acoes: CRUD,
+  },
+  {
+    id: "financeiro.aprovacao-pagamentos",
+    nome: "Aprovação de pagamentos",
+    modulo: "financeiro",
+    rota: "/financeiro/aprovacao-pagamentos",
+    acoes: ["ver", "aprovar", "desaprovar"],
+  },
+  {
+    id: "financeiro.pagamentos",
+    nome: "Pagamentos",
+    modulo: "financeiro",
+    rota: "/financeiro/pagamentos",
+    acoes: ["ver", "criar"],
+  },
+  {
+    id: "financeiro.contas-receber",
+    nome: "Contas a receber",
+    modulo: "financeiro",
+    rota: "/financeiro/contas-receber",
+    acoes: ["ver", "criar", "editar"],
+  },
+  {
+    id: "financeiro.contas-bancarias",
+    nome: "Contas bancárias",
+    modulo: "financeiro",
+    rota: "/financeiro/contas-bancarias",
+    acoes: CRUD,
+  },
+  {
+    id: "financeiro.conciliacao",
+    nome: "Conciliação",
+    modulo: "financeiro",
+    rota: "/financeiro/conciliacao",
+    acoes: ["ver", "criar", "editar"],
+  },
+  {
+    id: "financeiro.categorias",
+    nome: "Categorias",
+    modulo: "financeiro",
+    rota: "/financeiro/categorias",
+    acoes: CRUD,
+  },
+  {
+    id: "financeiro.relatorios",
+    nome: "Relatórios",
+    modulo: "financeiro",
+    rota: "/financeiro/relatorios",
     acoes: ["ver"],
   },
   // Administração
