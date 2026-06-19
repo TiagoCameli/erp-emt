@@ -54,8 +54,9 @@ function rateiosParaRpc(dados: LancamentoInput): Json {
  * soma do rateio = valor; o erro do banco é repassado direto ao toast.
  *
  * Lançamentos de origem diferente de 'manual' (ex: 'oc', vindos de compras) são
- * somente-leitura aqui: o bloqueio de edição é da UI e do banco; esta action
- * só atende ao cadastro manual.
+ * somente-leitura aqui: a barreira é tripla (UI esconde o botão, esta action
+ * recusa antes de chamar a RPC, e a própria RPC levanta exceção). Editar um
+ * lançamento de OC se faz na origem (Compras).
  */
 export async function salvarLancamento(
   id: string | null,
@@ -73,9 +74,27 @@ export async function salvarLancamento(
     };
   }
 
+  const supabase = await createClient();
+
   if (id !== null) {
     const idValido = uuidSchema.safeParse(id);
     if (!idValido.success) return { erro: "Lançamento inválido" };
+
+    // Só lançamento manual se edita aqui. OC e outras origens editam-se na
+    // origem; bloqueamos antes da RPC (que também recusa).
+    const { data: existente, error: erroExistente } = await supabase
+      .from("lancamentos")
+      .select("origem")
+      .eq("id", idValido.data)
+      .maybeSingle();
+    if (erroExistente || !existente) {
+      return { erro: "Lançamento não encontrado" };
+    }
+    if (existente.origem !== "manual") {
+      return {
+        erro: `Lançamento de origem ${existente.origem} é somente-leitura aqui. Edite na origem.`,
+      };
+    }
   }
 
   const validado = lancamentoSchema.safeParse(dados);
@@ -83,7 +102,6 @@ export async function salvarLancamento(
     return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
-  const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_salvar_lancamento", {
     p_id: id as string,
     p_dados: dadosParaRpc(validado.data),

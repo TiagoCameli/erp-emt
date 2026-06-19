@@ -23,7 +23,10 @@ export const TAMANHO_PAGINA_PADRAO = 25;
 const valorSchema = z
   .number({ error: "Valor inválido" })
   .positive({ error: "O valor precisa ser maior que zero" })
-  .max(999999999999.99, { error: "Valor acima do permitido" });
+  .max(999999999999.99, { error: "Valor acima do permitido" })
+  .refine((valor) => Number.isInteger(Math.round(valor * 100)), {
+    error: "Use no máximo 2 casas decimais",
+  });
 
 /** Data no formato date-only do Postgres (yyyy-MM-dd), opcional. */
 const dataOpcionalSchema = z

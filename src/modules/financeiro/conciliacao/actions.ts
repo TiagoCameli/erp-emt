@@ -81,13 +81,18 @@ export async function importarOfx(
     }),
   );
 
+  // Quando o OFX não traz DTSTART/DTEND, derivamos o período pela menor e maior
+  // data das transações (a ordem do arquivo não é garantidamente cronológica).
+  const datas = transacoes.map((transacao) => transacao.data);
+  const inicioFallback = datas.reduce((a, b) => (a < b ? a : b));
+  const fimFallback = datas.reduce((a, b) => (a > b ? a : b));
+
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_importar_extrato", {
     p_conta_id: contaId,
     p_nome: arquivo.name,
-    p_periodo_inicio: extrato.periodoInicio ?? transacoes[0].data,
-    p_periodo_fim:
-      extrato.periodoFim ?? transacoes[transacoes.length - 1].data,
+    p_periodo_inicio: extrato.periodoInicio ?? inicioFallback,
+    p_periodo_fim: extrato.periodoFim ?? fimFallback,
     p_transacoes: transacoes as unknown as Json,
   });
 

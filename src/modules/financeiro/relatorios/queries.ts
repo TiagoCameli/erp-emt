@@ -76,10 +76,11 @@ interface AcumuladorFluxo {
 }
 
 /**
- * Fluxo de caixa por mês de vencimento da parcela: entradas (lançamentos
- * a_receber) x saídas (a_pagar), separando realizado (parcelas pagas, pelo
- * mês de vencimento) de projetado (parcelas pendentes/aprovadas). Parcelas
- * canceladas ficam de fora.
+ * Fluxo de caixa mensal: entradas (lançamentos a_receber) x saídas (a_pagar),
+ * separando realizado de projetado. O realizado (parcelas pagas) entra no mês
+ * em que o dinheiro de fato se moveu (data_pagamento), refletindo a posição de
+ * caixa; o projetado (pendentes/aprovadas) entra no mês de vencimento, pois é
+ * quando deve ocorrer. Parcelas canceladas ficam de fora.
  */
 export async function fluxoCaixa(): Promise<FluxoCaixa> {
   const supabase = await createClient();
@@ -87,7 +88,7 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
   const { data, error } = await supabase
     .from("lancamento_parcelas")
     .select(
-      "valor, status, data_vencimento, lancamentos!inner(tipo, status)",
+      "valor, status, data_vencimento, data_pagamento, lancamentos!inner(tipo, status)",
     )
     .neq("status", "cancelado")
     .neq("lancamentos.status", "cancelado");
@@ -99,7 +100,13 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
   const porMes = new Map<string, AcumuladorFluxo>();
 
   for (const parcela of data ?? []) {
-    const mes = mesDe(parcela.data_vencimento);
+    const realizado = parcela.status === "pago";
+    // realizado pelo mês do pagamento (quando o caixa moveu); projetado pelo
+    // mês de vencimento (quando deve mover). O pago cai no vencimento se não
+    // tiver data de pagamento, por garantia.
+    const mes = realizado
+      ? mesDe(parcela.data_pagamento ?? parcela.data_vencimento)
+      : mesDe(parcela.data_vencimento);
     if (mes === null) continue;
 
     const lancamento = parcela.lancamentos as unknown as {
@@ -109,7 +116,6 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
 
     const centavos = paraCentavos(parcela.valor);
     const ehEntrada = lancamento.tipo === "a_receber";
-    const realizado = parcela.status === "pago";
 
     const atual =
       porMes.get(mes) ??
@@ -190,6 +196,12 @@ interface OpcaoMesParam {
  * (a_pagar) somadas por categoria_financeira, com totais e resultado. Usa o
  * valor do lançamento (regime de competência), não das parcelas. Lançamentos
  * cancelados ficam de fora. `mes` no formato "YYYY-MM".
+ *
+ * A competência é a data de referência, mas lançamentos antigos podem tê-la
+ * nula (ex: OC anterior à correção que passou a preenchê-la). Para não sumir
+ * com despesa nenhuma do DRE, quando a competência é nula caímos no vencimento
+ * e, na falta deste, na data de emissão. O filtro de mês é aplicado em memória
+ * sobre essa data efetiva.
  */
 export async function dreGerencial({
   mes,
@@ -201,10 +213,10 @@ export async function dreGerencial({
 
   const { data, error } = await supabase
     .from("lancamentos")
-    .select("tipo, valor, competencia, categorias_financeiras(id, nome)")
-    .neq("status", "cancelado")
-    .gte("competencia", inicio)
-    .lt("competencia", fim);
+    .select(
+      "tipo, valor, competencia, data_vencimento, data_emissao, categorias_financeiras(id, nome)",
+    )
+    .neq("status", "cancelado");
 
   if (error) {
     throw new Error("Não foi possível carregar o DRE gerencial");
@@ -214,6 +226,14 @@ export async function dreGerencial({
   const despesasBrutas: LancamentoCategoria[] = [];
 
   for (const lancamento of data ?? []) {
+    const referencia =
+      lancamento.competencia ??
+      lancamento.data_vencimento ??
+      lancamento.data_emissao;
+    if (referencia === null || referencia < inicio || referencia >= fim) {
+      continue;
+    }
+
     const categoria = lancamento.categorias_financeiras as unknown as {
       id: string;
       nome: string;

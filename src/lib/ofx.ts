@@ -34,16 +34,23 @@ function campo(bloco: string, tag: string): string | null {
 /**
  * Converte o valor de TRNAMT para number. O padrão OFX usa ponto como decimal
  * (1234.56), mas exportadores brasileiros às vezes mandam vírgula decimal e
- * ponto de milhar (1.234,56). Detecta pela presença da vírgula: se houver, o
- * ponto é milhar e a vírgula vira o decimal; sem vírgula, segue o padrão OFX.
+ * ponto de milhar (1.234,56). Regras:
+ * - Com vírgula: o ponto é milhar e a vírgula vira o decimal (1.234,56).
+ * - Sem vírgula e com 2+ pontos: todos os pontos são milhar e não há decimal
+ *   (1.234.567), então removemos os pontos.
+ * - Sem vírgula e com no máximo 1 ponto: padrão OFX, o ponto é o decimal.
  * Devolve NaN para entrada inválida (a transação é então ignorada).
  */
 function valorOfxParaNumero(bruto: string): number {
   const limpo = bruto.trim();
-  const normalizado = limpo.includes(",")
-    ? limpo.replace(/\./g, "").replace(",", ".")
-    : limpo;
-  return Number(normalizado);
+  if (limpo.includes(",")) {
+    return Number(limpo.replace(/\./g, "").replace(",", "."));
+  }
+  // Sem vírgula: 2+ pontos só pode ser separador de milhar (sem casas decimais).
+  if ((limpo.match(/\./g)?.length ?? 0) >= 2) {
+    return Number(limpo.replace(/\./g, ""));
+  }
+  return Number(limpo);
 }
 
 /** Converte data OFX (yyyyMMdd com hora/fuso opcionais) para ISO yyyy-MM-dd. */

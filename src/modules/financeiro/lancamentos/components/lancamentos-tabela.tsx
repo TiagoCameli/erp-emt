@@ -97,7 +97,14 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     header: "Status",
     cell: ({ row }) => {
       const info = STATUS_LANCAMENTO[row.original.status];
-      return <StatusBadge status={info.badge} rotulo={info.rotulo} />;
+      // Todo lançamento nasce com status 'a_pagar' (em aberto); para um
+      // recebível o rótulo correto é "A receber", não "A pagar".
+      const rotulo =
+        row.original.status === "a_pagar" &&
+        row.original.tipo === "a_receber"
+          ? "A receber"
+          : info.rotulo;
+      return <StatusBadge status={info.badge} rotulo={rotulo} />;
     },
   },
 ];

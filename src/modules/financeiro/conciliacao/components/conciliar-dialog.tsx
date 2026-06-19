@@ -18,6 +18,7 @@ import {
 import { EmptyState, MoneyText } from "@/components/canonicos";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
 import { conciliar } from "@/modules/financeiro/conciliacao/actions";
 import type {
   ParcelaVinculada,
@@ -142,7 +143,8 @@ export function ConciliarDialog({
                       </span>
                     </p>
                     <p className="text-legenda text-muted-foreground">
-                      Parcela {parcela.numeroParcela}
+                      {ROTULO_TIPO_LANCAMENTO[parcela.tipoLancamento]} · Parcela{" "}
+                      {parcela.numeroParcela}
                       {parcela.fornecedorNome
                         ? ` · ${parcela.fornecedorNome}`
                         : ""}

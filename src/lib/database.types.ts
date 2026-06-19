@@ -733,6 +733,7 @@ export type Database = {
       }
       extrato_transacoes: {
         Row: {
+          chave_dedup: string | null
           conciliada: boolean
           conciliado_em: string | null
           conciliado_por: string | null
@@ -748,6 +749,7 @@ export type Database = {
           valor: number
         }
         Insert: {
+          chave_dedup?: string | null
           conciliada?: boolean
           conciliado_em?: string | null
           conciliado_por?: string | null
@@ -763,6 +765,7 @@ export type Database = {
           valor: number
         }
         Update: {
+          chave_dedup?: string | null
           conciliada?: boolean
           conciliado_em?: string | null
           conciliado_por?: string | null

@@ -17,11 +17,17 @@ import { z } from "zod";
 /** Centavos de tolerância na comparação de somas (erro de arredondamento). */
 const TOLERANCIA = 0.005;
 
-/** Valor monetário NUMERIC(14,2): não negativo, dentro do limite da coluna. */
+/** Quantas casas decimais o número tem (até 2 é o aceito pela coluna). */
+function ateDuasCasas(valor: number): boolean {
+  return Number.isInteger(Math.round(valor * 100));
+}
+
+/** Valor monetário NUMERIC(14,2): não negativo, no máximo 2 casas decimais. */
 const valorSchema = z
   .number({ error: "Valor inválido" })
   .min(0, { error: "O valor não pode ser negativo" })
-  .max(999999999999.99, { error: "Valor acima do permitido" });
+  .max(999999999999.99, { error: "Valor acima do permitido" })
+  .refine(ateDuasCasas, { error: "Use no máximo 2 casas decimais" });
 
 /** Data opcional no formato yyyy-MM-dd; string vazia vira undefined. */
 const dataOpcionalSchema = z

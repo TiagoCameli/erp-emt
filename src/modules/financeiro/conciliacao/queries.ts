@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   ROTULO_BANCO,
   type BancoConta,
+  type TipoLancamento,
 } from "@/modules/financeiro/_shared/formato";
 
 /** Tipo de movimento de uma transação de extrato. */
@@ -15,6 +16,8 @@ export interface ParcelaVinculada {
   lancamentoId: string;
   lancamentoNumero: string | null;
   lancamentoDescricao: string;
+  /** Tipo do lançamento: a_receber (entrada) ou a_pagar (saída). */
+  tipoLancamento: TipoLancamento;
   fornecedorNome: string | null;
   numeroParcela: number;
   valor: number;
@@ -95,11 +98,17 @@ interface ParcelaJoin {
     id: string;
     numero: string | null;
     descricao: string;
+    tipo: string;
     fornecedores: {
       razao_social: string;
       nome_fantasia: string | null;
     } | null;
   } | null;
+}
+
+/** Tipo bruto de lançamento normalizado: tudo que não é a_receber é a_pagar. */
+function tipoLancamento(tipo: string | undefined): TipoLancamento {
+  return tipo === "a_receber" ? "a_receber" : "a_pagar";
 }
 
 /** Converte a parcela embutida (join) no shape de ParcelaVinculada. */
@@ -110,6 +119,7 @@ function paraParcelaVinculada(parcela: ParcelaJoin): ParcelaVinculada {
     lancamentoId: lancamento?.id ?? "",
     lancamentoNumero: lancamento?.numero ?? null,
     lancamentoDescricao: lancamento?.descricao ?? "-",
+    tipoLancamento: tipoLancamento(lancamento?.tipo),
     fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
     numeroParcela: parcela.numero_parcela,
     valor: parcela.valor,
@@ -120,7 +130,7 @@ function paraParcelaVinculada(parcela: ParcelaJoin): ParcelaVinculada {
 
 /** Colunas da parcela usadas no select embutido das transações. */
 const SELECT_PARCELA =
-  "id, numero_parcela, valor, data_pagamento, data_vencimento, lancamentos(id, numero, descricao, fornecedores(razao_social, nome_fantasia))";
+  "id, numero_parcela, valor, data_pagamento, data_vencimento, lancamentos(id, numero, descricao, tipo, fornecedores(razao_social, nome_fantasia))";
 
 /**
  * Lista os extratos OFX importados, com a conta, o período e a contagem de
@@ -213,7 +223,8 @@ function diferencaDias(dataA: string, dataB: string): number {
 
 /**
  * Sugere parcelas pagas para conciliar com a transação: mesma conta bancária,
- * valor igual em módulo, pagas (status pago) e ainda não vinculadas a nenhuma
+ * valor igual em módulo, sentido coerente (crédito casa com a_receber, débito
+ * com a_pagar), pagas (status pago) e ainda não vinculadas a nenhuma
  * transação, com data de pagamento dentro de +/- 3 dias do movimento. Ordena
  * pela proximidade da data de pagamento.
  */
@@ -223,6 +234,9 @@ export async function sugerirParcelas(
   const supabase = await createClient();
 
   const valorAbsoluto = Math.abs(transacao.valor);
+  // Crédito (entrada) só casa com recebível; débito (saída) só com a pagar.
+  const tipoEsperado: TipoLancamento =
+    transacao.valor >= 0 ? "a_receber" : "a_pagar";
 
   const { data, error } = await supabase
     .from("lancamento_parcelas")
@@ -230,6 +244,7 @@ export async function sugerirParcelas(
     .eq("status", "pago")
     .eq("conta_bancaria_id", transacao.contaBancariaId)
     .eq("valor", valorAbsoluto)
+    .eq("lancamentos.tipo", tipoEsperado)
     .not("data_pagamento", "is", null);
 
   if (error) {
@@ -252,6 +267,9 @@ export async function sugerirParcelas(
   return (data ?? [])
     .map((parcela) => paraParcelaVinculada(parcela as ParcelaJoin))
     .filter((parcela) => {
+      // O !inner não está disponível aqui (lancamentos pode vir null no join
+      // filtrado), então reforçamos o sentido em memória.
+      if (parcela.tipoLancamento !== tipoEsperado) return false;
       if (vinculadas.has(parcela.id)) return false;
       if (!parcela.dataPagamento) return false;
       return diferencaDias(parcela.dataPagamento, transacao.dataMovimento) <= 3;

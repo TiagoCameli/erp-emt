@@ -107,6 +107,26 @@ describe("parseOfx com vírgula como decimal", () => {
   });
 });
 
+describe("parseOfx com ponto de milhar e sem decimal", () => {
+  // Exportador fora do padrão: valor inteiro com pontos de milhar e sem vírgula
+  // (1.234.567). Os pontos são milhar, não decimal: o valor é 1234567.
+  const ofx = `<OFX>
+<STMTTRN>
+<DTPOSTED>20260110
+<TRNAMT>1.234.567
+<FITID>Z1
+<MEMO>Valor alto sem decimal
+</STMTTRN>
+</OFX>`;
+
+  it("trata 2+ pontos sem vírgula como separador de milhar", () => {
+    const extrato = parseOfx(ofx);
+    expect(extrato.transacoes).toHaveLength(1);
+    expect(extrato.transacoes[0]?.valor).toBe(1234567);
+    expect(extrato.transacoes[0]?.tipo).toBe("credito");
+  });
+});
+
 describe("parseOfx com NAME no lugar de MEMO", () => {
   const ofx = `<OFX>
 <STMTTRN>

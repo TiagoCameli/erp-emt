@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import type { Acao } from "@/config/recursos";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -18,11 +19,23 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 
 const uuidSchema = z.uuid();
 
+/** Converte o throw de exigirPermissao no contrato { erro } das actions. */
+async function checarPermissao(acao: Acao): Promise<boolean> {
+  try {
+    await exigirPermissao(RECURSO, acao);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Cria uma categoria financeira. */
 export async function criarCategoria(
   dados: CategoriaFinanceiraInput,
 ): Promise<ResultadoAcao> {
-  await exigirPermissao(RECURSO, "criar");
+  if (!(await checarPermissao("criar"))) {
+    return { erro: "Sem permissão para criar categorias" };
+  }
 
   const validado = categoriaFinanceiraSchema.safeParse(dados);
   if (!validado.success) {
@@ -53,7 +66,9 @@ export async function editarCategoria(
   id: string,
   dados: CategoriaFinanceiraInput,
 ): Promise<ResultadoAcao> {
-  await exigirPermissao(RECURSO, "editar");
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar categorias" };
+  }
 
   const idValido = uuidSchema.safeParse(id);
   if (!idValido.success) return { erro: "Categoria inválida" };
@@ -95,7 +110,9 @@ export async function alternarAtivo(
   id: string,
   ativo: boolean,
 ): Promise<ResultadoAcao> {
-  await exigirPermissao(RECURSO, "editar");
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para alterar categorias" };
+  }
 
   const idValido = uuidSchema.safeParse(id);
   if (!idValido.success) return { erro: "Categoria inválida" };

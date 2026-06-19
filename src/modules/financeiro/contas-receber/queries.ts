@@ -137,10 +137,13 @@ async function somarEmAberto(
 
   if (error || !data) return 0;
 
-  return data.reduce(
-    (total, parcela) => total + Number(parcela.valor ?? 0),
+  // Soma em centavos (inteiros) para não acumular erro de ponto flutuante e só
+  // dividimos por 100 no fim, igual ao padrão do módulo.
+  const totalCentavos = data.reduce(
+    (total, parcela) => total + Math.round(Number(parcela.valor ?? 0) * 100),
     0,
   );
+  return totalCentavos / 100;
 }
 
 /** Contas bancárias ativas para a baixa, em ordem alfabética. */
