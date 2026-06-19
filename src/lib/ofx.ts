@@ -31,6 +31,21 @@ function campo(bloco: string, tag: string): string | null {
   return m ? m[1].trim() : null;
 }
 
+/**
+ * Converte o valor de TRNAMT para number. O padrão OFX usa ponto como decimal
+ * (1234.56), mas exportadores brasileiros às vezes mandam vírgula decimal e
+ * ponto de milhar (1.234,56). Detecta pela presença da vírgula: se houver, o
+ * ponto é milhar e a vírgula vira o decimal; sem vírgula, segue o padrão OFX.
+ * Devolve NaN para entrada inválida (a transação é então ignorada).
+ */
+function valorOfxParaNumero(bruto: string): number {
+  const limpo = bruto.trim();
+  const normalizado = limpo.includes(",")
+    ? limpo.replace(/\./g, "").replace(",", ".")
+    : limpo;
+  return Number(normalizado);
+}
+
 /** Converte data OFX (yyyyMMdd com hora/fuso opcionais) para ISO yyyy-MM-dd. */
 function dataOfxParaIso(valor: string | null): string | null {
   if (!valor) return null;
@@ -58,7 +73,7 @@ export function parseOfx(conteudo: string): ExtratoOfx {
     const dataIso = dataOfxParaIso(campo(bloco, "DTPOSTED"));
     if (valorBruto === null || dataIso === null) continue;
 
-    const valor = Number(valorBruto.replace(",", "."));
+    const valor = valorOfxParaNumero(valorBruto);
     if (Number.isNaN(valor)) continue;
 
     transacoes.push({
