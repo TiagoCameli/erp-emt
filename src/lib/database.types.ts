@@ -83,6 +83,47 @@ export type Database = {
         }
         Relationships: []
       }
+      categorias_financeiras: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          pai_id: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          pai_id?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          pai_id?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categorias_financeiras_pai_id_fkey"
+            columns: ["pai_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_financeiras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categorias_insumo: {
         Row: {
           ativo: boolean
@@ -327,6 +368,48 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           valor?: Json
+        }
+        Relationships: []
+      }
+      contas_bancarias: {
+        Row: {
+          agencia: string | null
+          ativo: boolean
+          banco: string
+          conta: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          saldo_inicial: number
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          agencia?: string | null
+          ativo?: boolean
+          banco?: string
+          conta?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          saldo_inicial?: number
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          agencia?: string | null
+          ativo?: boolean
+          banco?: string
+          conta?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          saldo_inicial?: number
+          tipo?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -648,6 +731,127 @@ export type Database = {
         }
         Relationships: []
       }
+      extrato_transacoes: {
+        Row: {
+          chave_dedup: string | null
+          conciliada: boolean
+          conciliado_em: string | null
+          conciliado_por: string | null
+          conta_bancaria_id: string
+          created_at: string
+          data_movimento: string
+          extrato_id: string
+          fitid: string | null
+          id: string
+          memo: string | null
+          parcela_id: string | null
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          chave_dedup?: string | null
+          conciliada?: boolean
+          conciliado_em?: string | null
+          conciliado_por?: string | null
+          conta_bancaria_id: string
+          created_at?: string
+          data_movimento: string
+          extrato_id: string
+          fitid?: string | null
+          id?: string
+          memo?: string | null
+          parcela_id?: string | null
+          tipo: string
+          valor: number
+        }
+        Update: {
+          chave_dedup?: string | null
+          conciliada?: boolean
+          conciliado_em?: string | null
+          conciliado_por?: string | null
+          conta_bancaria_id?: string
+          created_at?: string
+          data_movimento?: string
+          extrato_id?: string
+          fitid?: string | null
+          id?: string
+          memo?: string | null
+          parcela_id?: string | null
+          tipo?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extrato_transacoes_conciliado_por_fkey"
+            columns: ["conciliado_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extrato_transacoes_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extrato_transacoes_extrato_id_fkey"
+            columns: ["extrato_id"]
+            isOneToOne: false
+            referencedRelation: "extratos_ofx"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extrato_transacoes_parcela_id_fkey"
+            columns: ["parcela_id"]
+            isOneToOne: false
+            referencedRelation: "lancamento_parcelas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      extratos_ofx: {
+        Row: {
+          conta_bancaria_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          importado_em: string
+          nome_arquivo: string | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
+        }
+        Insert: {
+          conta_bancaria_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          importado_em?: string
+          nome_arquivo?: string | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+        }
+        Update: {
+          conta_bancaria_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          importado_em?: string
+          nome_arquivo?: string | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extratos_ofx_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fornecedores: {
         Row: {
           ativo: boolean
@@ -759,9 +963,136 @@ export type Database = {
           },
         ]
       }
+      lancamento_parcelas: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          conta_bancaria_id: string | null
+          created_at: string
+          created_by: string | null
+          data_pagamento: string | null
+          data_vencimento: string | null
+          id: string
+          lancamento_id: string
+          numero_parcela: number
+          pago_em: string | null
+          pago_por: string | null
+          status: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          id?: string
+          lancamento_id: string
+          numero_parcela?: number
+          pago_em?: string | null
+          pago_por?: string | null
+          status?: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          conta_bancaria_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_pagamento?: string | null
+          data_vencimento?: string | null
+          id?: string
+          lancamento_id?: string
+          numero_parcela?: number
+          pago_em?: string | null
+          pago_por?: string | null
+          status?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamento_parcelas_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamento_parcelas_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamento_parcelas_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamento_parcelas_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lancamento_rateios: {
+        Row: {
+          centro_custo_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lancamento_id: string
+          valor: number
+        }
+        Insert: {
+          centro_custo_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lancamento_id: string
+          valor: number
+        }
+        Update: {
+          centro_custo_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lancamento_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamento_rateios_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lancamento_rateios_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lancamentos: {
         Row: {
+          categoria_id: string | null
           centro_custo_id: string | null
+          competencia: string | null
           created_at: string
           created_by: string | null
           data_emissao: string
@@ -769,6 +1100,7 @@ export type Database = {
           descricao: string
           fornecedor_id: string | null
           id: string
+          numero: string | null
           origem: string
           origem_id: string | null
           status: string
@@ -777,7 +1109,9 @@ export type Database = {
           valor: number
         }
         Insert: {
+          categoria_id?: string | null
           centro_custo_id?: string | null
+          competencia?: string | null
           created_at?: string
           created_by?: string | null
           data_emissao?: string
@@ -785,6 +1119,7 @@ export type Database = {
           descricao: string
           fornecedor_id?: string | null
           id?: string
+          numero?: string | null
           origem: string
           origem_id?: string | null
           status?: string
@@ -793,7 +1128,9 @@ export type Database = {
           valor: number
         }
         Update: {
+          categoria_id?: string | null
           centro_custo_id?: string | null
+          competencia?: string | null
           created_at?: string
           created_by?: string | null
           data_emissao?: string
@@ -801,6 +1138,7 @@ export type Database = {
           descricao?: string
           fornecedor_id?: string | null
           id?: string
+          numero?: string | null
           origem?: string
           origem_id?: string | null
           status?: string
@@ -809,6 +1147,13 @@ export type Database = {
           valor?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "lancamentos_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_financeiras"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lancamentos_centro_custo_id_fkey"
             columns: ["centro_custo_id"]
@@ -1462,16 +1807,52 @@ export type Database = {
         Returns: undefined
       }
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
+      fn_aprovar_parcela: { Args: { p_parcela_id: string }; Returns: undefined }
+      fn_conciliar_transacao: {
+        Args: { p_parcela_id: string; p_transacao_id: string }
+        Returns: undefined
+      }
       fn_desaprovar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string }
+        Returns: undefined
+      }
+      fn_desaprovar_parcela: {
+        Args: { p_motivo: string; p_parcela_id: string }
+        Returns: undefined
+      }
+      fn_desconciliar_transacao: {
+        Args: { p_transacao_id: string }
         Returns: undefined
       }
       fn_excluir_cadastro: {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
       }
+      fn_importar_extrato: {
+        Args: {
+          p_conta_id: string
+          p_nome: string
+          p_periodo_fim: string
+          p_periodo_inicio: string
+          p_transacoes: Json
+        }
+        Returns: Json
+      }
+      fn_pagar_parcela: {
+        Args: {
+          p_conta_id: string
+          p_data_pagamento: string
+          p_parcela_id: string
+        }
+        Returns: undefined
+      }
+      fn_recalcular_status_lancamento: {
+        Args: { p_lanc_id: string }
+        Returns: undefined
+      }
       fn_recurso_do_anexo: { Args: { p_tabela: string }; Returns: string }
       fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string }
+      fn_recurso_do_path_anexo: { Args: { p_path: string }; Returns: string }
       fn_registrar_recebimento: {
         Args: {
           p_data_recebimento: string
@@ -1484,10 +1865,13 @@ export type Database = {
         }
         Returns: string
       }
-      fn_recurso_do_path_anexo: { Args: { p_path: string }; Returns: string }
       fn_restaurar_cadastro: {
         Args: { p_lixeira_id: string }
         Returns: undefined
+      }
+      fn_salvar_lancamento: {
+        Args: { p_dados: Json; p_id: string; p_parcelas: Json; p_rateios: Json }
+        Returns: string
       }
       nomes_usuarios_auditoria: {
         Args: { p_ids: string[] }

@@ -15,6 +15,10 @@ export default async function InicioPage() {
     temPermissao(usuario, recurso.id as RecursoId, "ver"),
   );
 
+  const veFinanceiro = recursosDoModulo("financeiro").some((recurso) =>
+    temPermissao(usuario, recurso.id as RecursoId, "ver"),
+  );
+
   return (
     <div>
       <PageHeader
@@ -35,8 +39,18 @@ export default async function InicioPage() {
             href="/compras"
           />
         ) : null}
+        {veFinanceiro ? (
+          <KPICard
+            titulo="Módulo"
+            valor="Financeiro"
+            detalhe="Lançamentos, aprovação, pagamentos e conciliação"
+            href="/financeiro"
+          />
+        ) : null}
         {modulosVisiveis
-          .filter((modulo) => modulo.id !== "compras")
+          .filter(
+            (modulo) => modulo.id !== "compras" && modulo.id !== "financeiro",
+          )
           .map((modulo) => (
             <KPICard
               key={modulo.id}
