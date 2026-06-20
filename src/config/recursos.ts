@@ -36,6 +36,7 @@ export const MODULOS = [
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
+  { id: "estoque", nome: "Estoque", rota: "/estoque" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -215,6 +216,56 @@ export const RECURSOS = [
     modulo: "financeiro",
     rota: "/financeiro/relatorios",
     acoes: ["ver"],
+  },
+  // Estoque e Combustível
+  {
+    id: "estoque.posicao",
+    nome: "Posição de estoque",
+    modulo: "estoque",
+    rota: "/estoque/posicao",
+    acoes: ["ver"],
+  },
+  {
+    id: "estoque.entradas",
+    nome: "Entradas",
+    modulo: "estoque",
+    rota: "/estoque/entradas",
+    acoes: ["ver", "criar"],
+  },
+  {
+    id: "estoque.saidas",
+    nome: "Saídas e consumos",
+    modulo: "estoque",
+    rota: "/estoque/saidas",
+    acoes: ["ver", "criar"],
+  },
+  {
+    id: "estoque.transferencias",
+    nome: "Transferências",
+    modulo: "estoque",
+    rota: "/estoque/transferencias",
+    acoes: ["ver", "criar"],
+  },
+  {
+    id: "estoque.inventario",
+    nome: "Inventário e ajustes",
+    modulo: "estoque",
+    rota: "/estoque/inventario",
+    acoes: ["ver", "criar"],
+  },
+  {
+    id: "estoque.tanques",
+    nome: "Tanques",
+    modulo: "estoque",
+    rota: "/estoque/tanques",
+    acoes: ["ver", "criar"],
+  },
+  {
+    id: "estoque.alertas",
+    nome: "Alertas",
+    modulo: "estoque",
+    rota: "/estoque/alertas",
+    acoes: ["ver", "editar"],
   },
   // Administração
   {
