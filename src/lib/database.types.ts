@@ -314,6 +314,184 @@ export type Database = {
           },
         ]
       }
+      checklist_execucoes: {
+        Row: {
+          checklist_id: string
+          created_at: string
+          created_by: string | null
+          data: string
+          equipamento_id: string
+          horimetro: number | null
+          id: string
+          km: number | null
+          observacao: string | null
+          operador_id: string | null
+          status: string
+        }
+        Insert: {
+          checklist_id: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          equipamento_id: string
+          horimetro?: number | null
+          id?: string
+          km?: number | null
+          observacao?: string | null
+          operador_id?: string | null
+          status?: string
+        }
+        Update: {
+          checklist_id?: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          equipamento_id?: string
+          horimetro?: number | null
+          id?: string
+          km?: number | null
+          observacao?: string | null
+          operador_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_execucoes_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_execucoes_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_execucoes_operador_id_fkey"
+            columns: ["operador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_perguntas: {
+        Row: {
+          checklist_id: string
+          created_at: string
+          id: string
+          ordem: number
+          pergunta: string
+        }
+        Insert: {
+          checklist_id: string
+          created_at?: string
+          id?: string
+          ordem?: number
+          pergunta: string
+        }
+        Update: {
+          checklist_id?: string
+          created_at?: string
+          id?: string
+          ordem?: number
+          pergunta?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_perguntas_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_respostas: {
+        Row: {
+          created_at: string
+          execucao_id: string
+          id: string
+          observacao: string | null
+          os_id: string | null
+          pergunta_id: string
+          resposta: string
+        }
+        Insert: {
+          created_at?: string
+          execucao_id: string
+          id?: string
+          observacao?: string | null
+          os_id?: string | null
+          pergunta_id: string
+          resposta: string
+        }
+        Update: {
+          created_at?: string
+          execucao_id?: string
+          id?: string
+          observacao?: string | null
+          os_id?: string | null
+          pergunta_id?: string
+          resposta?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_respostas_execucao_id_fkey"
+            columns: ["execucao_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_execucoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_respostas_os_id_fkey"
+            columns: ["os_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_respostas_pergunta_id_fkey"
+            columns: ["pergunta_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_perguntas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklists: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       clientes: {
         Row: {
           ativo: boolean
@@ -766,6 +944,57 @@ export type Database = {
             columns: ["equipamento_id"]
             isOneToOne: false
             referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipamento_planos: {
+        Row: {
+          ativo: boolean
+          base_data: string
+          base_horimetro: number | null
+          base_km: number | null
+          created_at: string
+          created_by: string | null
+          equipamento_id: string
+          id: string
+          plano_id: string
+        }
+        Insert: {
+          ativo?: boolean
+          base_data?: string
+          base_horimetro?: number | null
+          base_km?: number | null
+          created_at?: string
+          created_by?: string | null
+          equipamento_id: string
+          id?: string
+          plano_id: string
+        }
+        Update: {
+          ativo?: boolean
+          base_data?: string
+          base_horimetro?: number | null
+          base_km?: number | null
+          created_at?: string
+          created_by?: string | null
+          equipamento_id?: string
+          id?: string
+          plano_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipamento_planos_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipamento_planos_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos_preventivos"
             referencedColumns: ["id"]
           },
         ]
@@ -1495,6 +1724,50 @@ export type Database = {
           },
         ]
       }
+      leituras_equipamento: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data: string
+          equipamento_id: string
+          id: string
+          origem: string
+          origem_id: string | null
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          equipamento_id: string
+          id?: string
+          origem?: string
+          origem_id?: string | null
+          tipo: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          equipamento_id?: string
+          id?: string
+          origem?: string
+          origem_id?: string | null
+          tipo?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leituras_equipamento_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lixeira: {
         Row: {
           dados: Json
@@ -1747,6 +2020,317 @@ export type Database = {
           },
         ]
       }
+      ordens_servico: {
+        Row: {
+          centro_custo_id: string | null
+          created_at: string
+          created_by: string | null
+          custo_mao_obra: number
+          custo_pecas: number
+          custo_terceiros: number
+          custo_total: number
+          data_abertura: string
+          data_conclusao: string | null
+          descricao: string
+          equipamento_id: string
+          horimetro_abertura: number | null
+          horimetro_fechamento: number | null
+          id: string
+          km_abertura: number | null
+          km_fechamento: number | null
+          motivo_cancelamento: string | null
+          numero: string | null
+          observacao: string | null
+          origem: string
+          origem_id: string | null
+          prioridade: string
+          status: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          custo_mao_obra?: number
+          custo_pecas?: number
+          custo_terceiros?: number
+          custo_total?: number
+          data_abertura?: string
+          data_conclusao?: string | null
+          descricao: string
+          equipamento_id: string
+          horimetro_abertura?: number | null
+          horimetro_fechamento?: number | null
+          id?: string
+          km_abertura?: number | null
+          km_fechamento?: number | null
+          motivo_cancelamento?: string | null
+          numero?: string | null
+          observacao?: string | null
+          origem?: string
+          origem_id?: string | null
+          prioridade?: string
+          status?: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          custo_mao_obra?: number
+          custo_pecas?: number
+          custo_terceiros?: number
+          custo_total?: number
+          data_abertura?: string
+          data_conclusao?: string | null
+          descricao?: string
+          equipamento_id?: string
+          horimetro_abertura?: number | null
+          horimetro_fechamento?: number | null
+          id?: string
+          km_abertura?: number | null
+          km_fechamento?: number | null
+          motivo_cancelamento?: string | null
+          numero?: string | null
+          observacao?: string | null
+          origem?: string
+          origem_id?: string | null
+          prioridade?: string
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordens_servico_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_servico_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      os_mao_obra: {
+        Row: {
+          colaborador_id: string
+          created_at: string
+          created_by: string | null
+          custo_total: number | null
+          horas: number
+          id: string
+          ordem_servico_id: string
+          valor_hora: number
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number | null
+          horas: number
+          id?: string
+          ordem_servico_id: string
+          valor_hora?: number
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number | null
+          horas?: number
+          id?: string
+          ordem_servico_id?: string
+          valor_hora?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "os_mao_obra_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_mao_obra_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      os_pecas: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          custo_total: number
+          custo_unitario: number
+          deposito_id: string
+          id: string
+          insumo_id: string
+          movimento_id: string | null
+          ordem_servico_id: string
+          quantidade: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number
+          custo_unitario?: number
+          deposito_id: string
+          id?: string
+          insumo_id: string
+          movimento_id?: string | null
+          ordem_servico_id: string
+          quantidade: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number
+          custo_unitario?: number
+          deposito_id?: string
+          id?: string
+          insumo_id?: string
+          movimento_id?: string | null
+          ordem_servico_id?: string
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "os_pecas_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_pecas_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_pecas_movimento_id_fkey"
+            columns: ["movimento_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_movimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_pecas_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      os_terceiros: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_vencimento: string | null
+          descricao: string
+          fornecedor_id: string | null
+          id: string
+          lancamento_id: string | null
+          ordem_servico_id: string
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_vencimento?: string | null
+          descricao: string
+          fornecedor_id?: string | null
+          id?: string
+          lancamento_id?: string | null
+          ordem_servico_id: string
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_vencimento?: string | null
+          descricao?: string
+          fornecedor_id?: string | null
+          id?: string
+          lancamento_id?: string | null
+          ordem_servico_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "os_terceiros_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_terceiros_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_terceiros_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      os_transicoes: {
+        Row: {
+          criado_em: string
+          de_status: string | null
+          id: string
+          motivo: string | null
+          ordem_servico_id: string
+          para_status: string
+          usuario_id: string | null
+        }
+        Insert: {
+          criado_em?: string
+          de_status?: string | null
+          id?: string
+          motivo?: string | null
+          ordem_servico_id: string
+          para_status: string
+          usuario_id?: string | null
+        }
+        Update: {
+          criado_em?: string
+          de_status?: string | null
+          id?: string
+          motivo?: string | null
+          ordem_servico_id?: string
+          para_status?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "os_transicoes_ordem_servico_id_fkey"
+            columns: ["ordem_servico_id"]
+            isOneToOne: false
+            referencedRelation: "ordens_servico"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pedido_itens: {
         Row: {
           centro_custo_id: string
@@ -1912,6 +2496,74 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      plano_atividades: {
+        Row: {
+          created_at: string
+          descricao: string
+          id: string
+          intervalo_tipo: string
+          intervalo_valor: number
+          ordem: number
+          plano_id: string
+        }
+        Insert: {
+          created_at?: string
+          descricao: string
+          id?: string
+          intervalo_tipo: string
+          intervalo_valor: number
+          ordem?: number
+          plano_id: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string
+          id?: string
+          intervalo_tipo?: string
+          intervalo_valor?: number
+          ordem?: number
+          plano_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plano_atividades_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos_preventivos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planos_preventivos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
           created_at?: string
           created_by?: string | null
           descricao?: string | null
@@ -2144,10 +2796,31 @@ export type Database = {
         }
         Returns: string
       }
+      fn_abrir_os: {
+        Args: {
+          p_descricao: string
+          p_equipamento: string
+          p_horimetro?: number
+          p_km?: number
+          p_origem?: string
+          p_origem_id?: string
+          p_prioridade?: string
+          p_tipo: string
+        }
+        Returns: string
+      }
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: { Args: { p_parcela_id: string }; Returns: undefined }
+      fn_cancelar_os: {
+        Args: { p_motivo: string; p_os: string }
+        Returns: undefined
+      }
       fn_conciliar_transacao: {
         Args: { p_parcela_id: string; p_transacao_id: string }
+        Returns: undefined
+      }
+      fn_concluir_os: {
+        Args: { p_horimetro_fech?: number; p_km_fech?: number; p_os: string }
         Returns: undefined
       }
       fn_desaprovar_ordem_compra: {
@@ -2236,6 +2909,23 @@ export type Database = {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
       }
+      fn_executar_checklist: {
+        Args: {
+          p_abrir_os?: boolean
+          p_checklist: string
+          p_equipamento: string
+          p_horimetro?: number
+          p_km?: number
+          p_obs?: string
+          p_operador?: string
+          p_respostas: Json
+        }
+        Returns: string
+      }
+      fn_gerar_os_preventiva: {
+        Args: { p_equip_plano: string }
+        Returns: string
+      }
       fn_importar_extrato: {
         Args: {
           p_conta_id: string
@@ -2245,6 +2935,16 @@ export type Database = {
           p_transacoes: Json
         }
         Returns: Json
+      }
+      fn_iniciar_os: { Args: { p_os: string }; Returns: undefined }
+      fn_os_adicionar_peca: {
+        Args: {
+          p_deposito: string
+          p_insumo: string
+          p_os: string
+          p_quantidade: number
+        }
+        Returns: string
       }
       fn_pagar_parcela: {
         Args: {

@@ -37,6 +37,7 @@ export const MODULOS = [
   { id: "compras", nome: "Compras", rota: "/compras" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
   { id: "estoque", nome: "Estoque", rota: "/estoque" },
+  { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -266,6 +267,35 @@ export const RECURSOS = [
     modulo: "estoque",
     rota: "/estoque/alertas",
     acoes: ["ver", "editar"],
+  },
+  // Manutenção
+  {
+    id: "manutencao.ordens-servico",
+    nome: "Ordens de serviço",
+    modulo: "manutencao",
+    rota: "/manutencao/ordens-servico",
+    acoes: ["ver", "criar", "editar"],
+  },
+  {
+    id: "manutencao.planos-preventivos",
+    nome: "Planos preventivos",
+    modulo: "manutencao",
+    rota: "/manutencao/planos-preventivos",
+    acoes: CRUD,
+  },
+  {
+    id: "manutencao.checklists",
+    nome: "Checklists",
+    modulo: "manutencao",
+    rota: "/manutencao/checklists",
+    acoes: CRUD,
+  },
+  {
+    id: "manutencao.painel",
+    nome: "Painel de frota",
+    modulo: "manutencao",
+    rota: "/manutencao/painel",
+    acoes: ["ver"],
   },
   // Administração
   {
