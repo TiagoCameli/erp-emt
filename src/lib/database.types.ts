@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      abastecimentos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          custo_total: number | null
+          data_abastecimento: string
+          deposito_id: string
+          equipamento_id: string
+          horimetro: number | null
+          id: string
+          insumo_id: string
+          km: number | null
+          movimento_id: string | null
+          observacao: string | null
+          operador_id: string | null
+          quantidade: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number | null
+          data_abastecimento?: string
+          deposito_id: string
+          equipamento_id: string
+          horimetro?: number | null
+          id?: string
+          insumo_id: string
+          km?: number | null
+          movimento_id?: string | null
+          observacao?: string | null
+          operador_id?: string | null
+          quantidade: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number | null
+          data_abastecimento?: string
+          deposito_id?: string
+          equipamento_id?: string
+          horimetro?: number | null
+          id?: string
+          insumo_id?: string
+          km?: number | null
+          movimento_id?: string | null
+          observacao?: string | null
+          operador_id?: string | null
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "abastecimentos_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abastecimentos_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abastecimentos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abastecimentos_movimento_id_fkey"
+            columns: ["movimento_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_movimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abastecimentos_operador_id_fkey"
+            columns: ["operador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       anexos: {
         Row: {
           created_at: string
@@ -730,6 +817,244 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      estoque_camadas: {
+        Row: {
+          created_at: string
+          custo_unitario: number
+          data_entrada: string
+          deposito_id: string
+          id: string
+          insumo_id: string
+          movimento_id: string | null
+          quantidade_inicial: number
+          quantidade_restante: number
+          sequencia: number
+        }
+        Insert: {
+          created_at?: string
+          custo_unitario: number
+          data_entrada: string
+          deposito_id: string
+          id?: string
+          insumo_id: string
+          movimento_id?: string | null
+          quantidade_inicial: number
+          quantidade_restante: number
+          sequencia?: never
+        }
+        Update: {
+          created_at?: string
+          custo_unitario?: number
+          data_entrada?: string
+          deposito_id?: string
+          id?: string
+          insumo_id?: string
+          movimento_id?: string | null
+          quantidade_inicial?: number
+          quantidade_restante?: number
+          sequencia?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_camadas_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_camadas_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_camadas_movimento_id_fkey"
+            columns: ["movimento_id"]
+            isOneToOne: false
+            referencedRelation: "estoque_movimentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_minimos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deposito_id: string
+          id: string
+          insumo_id: string
+          minimo: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deposito_id: string
+          id?: string
+          insumo_id: string
+          minimo?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deposito_id?: string
+          id?: string
+          insumo_id?: string
+          minimo?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_minimos_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_minimos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_movimentos: {
+        Row: {
+          centro_custo_id: string | null
+          created_at: string
+          created_by: string | null
+          custo_total: number | null
+          custo_unitario: number | null
+          data_movimento: string
+          deposito_destino_id: string | null
+          deposito_id: string
+          equipamento_id: string | null
+          id: string
+          insumo_id: string
+          observacao: string | null
+          origem: string
+          origem_id: string | null
+          quantidade: number
+          tipo: string
+        }
+        Insert: {
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number | null
+          custo_unitario?: number | null
+          data_movimento?: string
+          deposito_destino_id?: string | null
+          deposito_id: string
+          equipamento_id?: string | null
+          id?: string
+          insumo_id: string
+          observacao?: string | null
+          origem?: string
+          origem_id?: string | null
+          quantidade: number
+          tipo: string
+        }
+        Update: {
+          centro_custo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number | null
+          custo_unitario?: number | null
+          data_movimento?: string
+          deposito_destino_id?: string | null
+          deposito_id?: string
+          equipamento_id?: string | null
+          id?: string
+          insumo_id?: string
+          observacao?: string | null
+          origem?: string
+          origem_id?: string | null
+          quantidade?: number
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_movimentos_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentos_deposito_destino_id_fkey"
+            columns: ["deposito_destino_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentos_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentos_equipamento_id_fkey"
+            columns: ["equipamento_id"]
+            isOneToOne: false
+            referencedRelation: "equipamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_movimentos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estoque_saldos: {
+        Row: {
+          atualizado_em: string
+          deposito_id: string
+          insumo_id: string
+          quantidade: number
+          valor_total: number
+        }
+        Insert: {
+          atualizado_em?: string
+          deposito_id: string
+          insumo_id: string
+          quantidade?: number
+          valor_total?: number
+        }
+        Update: {
+          atualizado_em?: string
+          deposito_id?: string
+          insumo_id?: string
+          quantidade?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_saldos_deposito_id_fkey"
+            columns: ["deposito_id"]
+            isOneToOne: false
+            referencedRelation: "depositos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estoque_saldos_insumo_id_fkey"
+            columns: ["insumo_id"]
+            isOneToOne: false
+            referencedRelation: "insumos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       extrato_transacoes: {
         Row: {
@@ -1806,6 +2131,19 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string }
         Returns: undefined
       }
+      fn_abastecer: {
+        Args: {
+          p_data?: string
+          p_equipamento: string
+          p_horimetro?: number
+          p_km?: number
+          p_obs?: string
+          p_operador?: string
+          p_quantidade: number
+          p_tanque: string
+        }
+        Returns: string
+      }
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: { Args: { p_parcela_id: string }; Returns: undefined }
       fn_conciliar_transacao: {
@@ -1823,6 +2161,76 @@ export type Database = {
       fn_desconciliar_transacao: {
         Args: { p_transacao_id: string }
         Returns: undefined
+      }
+      fn_estoque_ajuste: {
+        Args: {
+          p_deposito: string
+          p_insumo: string
+          p_motivo: string
+          p_quantidade_nova: number
+        }
+        Returns: string
+      }
+      fn_estoque_entrada: {
+        Args: {
+          p_custo_unitario: number
+          p_data: string
+          p_deposito: string
+          p_insumo: string
+          p_obs: string
+          p_quantidade: number
+        }
+        Returns: string
+      }
+      fn_estoque_entrada_interna: {
+        Args: {
+          p_custo_unitario: number
+          p_data: string
+          p_deposito: string
+          p_insumo: string
+          p_obs: string
+          p_origem: string
+          p_origem_id: string
+          p_quantidade: number
+        }
+        Returns: string
+      }
+      fn_estoque_saida: {
+        Args: {
+          p_centro_custo: string
+          p_data: string
+          p_deposito: string
+          p_insumo: string
+          p_obs: string
+          p_quantidade: number
+        }
+        Returns: string
+      }
+      fn_estoque_saida_interna: {
+        Args: {
+          p_centro_custo: string
+          p_data: string
+          p_deposito: string
+          p_equipamento: string
+          p_insumo: string
+          p_obs: string
+          p_origem: string
+          p_origem_id: string
+          p_quantidade: number
+          p_tipo: string
+        }
+        Returns: string
+      }
+      fn_estoque_transferencia: {
+        Args: {
+          p_data: string
+          p_destino: string
+          p_insumo: string
+          p_obs: string
+          p_origem: string
+          p_quantidade: number
+        }
+        Returns: string
       }
       fn_excluir_cadastro: {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
@@ -1844,6 +2252,10 @@ export type Database = {
           p_data_pagamento: string
           p_parcela_id: string
         }
+        Returns: undefined
+      }
+      fn_recalcular_saldo_estoque: {
+        Args: { p_deposito: string; p_insumo: string }
         Returns: undefined
       }
       fn_recalcular_status_lancamento: {
