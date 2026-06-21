@@ -38,6 +38,7 @@ export const MODULOS = [
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
   { id: "estoque", nome: "Estoque", rota: "/estoque" },
   { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
+  { id: "medicao", nome: "Medição", rota: "/medicao" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -295,6 +296,28 @@ export const RECURSOS = [
     nome: "Painel de frota",
     modulo: "manutencao",
     rota: "/manutencao/painel",
+    acoes: ["ver"],
+  },
+  // Medição
+  {
+    id: "medicao.planilha-contratual",
+    nome: "Planilha contratual",
+    modulo: "medicao",
+    rota: "/medicao/planilha-contratual",
+    acoes: CRUD,
+  },
+  {
+    id: "medicao.medicoes",
+    nome: "Medições",
+    modulo: "medicao",
+    rota: "/medicao/medicoes",
+    acoes: CRUD_APROVA,
+  },
+  {
+    id: "medicao.faturas",
+    nome: "Faturas geradas",
+    modulo: "medicao",
+    rota: "/medicao/faturas",
     acoes: ["ver"],
   },
   // Administração
