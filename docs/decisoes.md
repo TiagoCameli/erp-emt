@@ -115,3 +115,15 @@ Construção via workflow (subagentes paralelos). 3 abas: Planilha contratual, M
 **Boletim em Excel** (exceljs). PDF ficou de fora (pdfmake não instalado) — folga conhecida.
 
 **Correções da revisão adversarial da Fase 6.** (1) Desaprovar uma medição agora volta ela para RASCUNHO (não cancelada), revertendo a fatura e o a receber, pra poder corrigir e reaprovar (antes prendia o usuário). (2) `fn_aprovar_medicao` serializa por obra com advisory lock: duas aprovações concorrentes da mesma obra não furam o saldo contratual. (3) Triggers de integridade no banco garantem que a planilha pertence à obra da medição e que o item medido pertence à planilha (Server Action não era barreira suficiente). (4) Permissão de remover item da planilha alinhada entre action e RLS (ambas 'editar').
+
+## 2026-06-21 - Fase 7 (RH) - espinha (PR #7)
+
+Decisão do Tiago: RH (10 abas) construído em dois cortes. Espinha primeiro (onde está o valor de fechar a folha): Ponto e apontamentos, Adiantamentos, Diaristas, Folha gerencial. As abas de RH-admin/alerta (Férias, EPI, Documentos/ASO, Ocorrências, Banco de horas) ficam para o PR seguinte.
+
+**Colaborador completou no RH.** O cadastro (Fase 1) ganhou `salario` e `valor_diaria` (ALTER em colaboradores). A aba Colaboradores rica fica no segundo corte; a espinha usa o cadastro existente.
+
+**Modelo da espinha.** `rh_pontos` (dia por obra/equipe) + `rh_apontamentos` (horas por colaborador, só editável com o ponto aberto; aprovar o dia trava). `rh_adiantamentos` (descontado na folha; trava ao entrar numa folha). `rh_diarias` (diaristas; fechar gera um lançamento a_pagar + rateio no CC, origem 'diaria'). `folhas` + `folha_itens` (folha gerencial mensal).
+
+**Folha é GERENCIAL, não oficial.** `fn_gerar_folha` consolida os CLT ativos: salário + horas extras dos apontamentos APROVADOS (só tipo 'normal') + encargos (percentual configurável). Estimativas declaradas: hora = salário/220, hora extra a 50% (1,5x). custo_total = salário + extras + encargos (custo da empresa), alocado no centro de custo da obra onde o colaborador mais apontou no mês; valor_liquido = salário + extras − adiantamentos. Exporta planilha Excel para o contador fechar a folha oficial. Não posta no financeiro nem faz eSocial.
+
+**Correções da revisão adversarial da Fase 7.** (1) `fn_gerar_folha` reseta o centro de custo a cada colaborador: um CLT sem apontamentos herdava o CC do anterior (SELECT INTO com GROUP BY sem linha não zera a variável), alocando custo na obra errada. (2) `fn_fechar_diarias` trava as diárias com `for update` (fechamentos concorrentes geravam pagamento dobrado) e filtra pela competência (campo), casando com o painel. (3) A folha soma só horas de dias tipo 'normal' (falta/folga/atestado não pagam extra). Folga conhecida: adiantamento de diarista não entra na folha (diarista é pago por diária).
