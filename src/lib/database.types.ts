@@ -1406,6 +1406,83 @@ export type Database = {
           },
         ]
       }
+      faturas: {
+        Row: {
+          cliente_id: string | null
+          competencia: string
+          created_at: string
+          created_by: string | null
+          data_vencimento: string | null
+          id: string
+          lancamento_id: string | null
+          medicao_id: string | null
+          numero: string | null
+          obra_id: string
+          status: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          cliente_id?: string | null
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          data_vencimento?: string | null
+          id?: string
+          lancamento_id?: string | null
+          medicao_id?: string | null
+          numero?: string | null
+          obra_id: string
+          status?: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          cliente_id?: string | null
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          data_vencimento?: string | null
+          id?: string
+          lancamento_id?: string | null
+          medicao_id?: string | null
+          numero?: string | null
+          obra_id?: string
+          status?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "faturas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "faturas_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "faturas_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "faturas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fornecedores: {
         Row: {
           ativo: boolean
@@ -1803,6 +1880,161 @@ export type Database = {
           tabela?: string
         }
         Relationships: []
+      }
+      medicao_anexos: {
+        Row: {
+          caminho: string
+          created_at: string
+          created_by: string | null
+          id: string
+          medicao_id: string
+          nome: string
+        }
+        Insert: {
+          caminho: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          medicao_id: string
+          nome: string
+        }
+        Update: {
+          caminho?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          medicao_id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicao_anexos_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medicao_itens: {
+        Row: {
+          created_at: string
+          id: string
+          medicao_id: string
+          memoria_calculo: string | null
+          planilha_item_id: string
+          quantidade: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          medicao_id: string
+          memoria_calculo?: string | null
+          planilha_item_id: string
+          quantidade: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          medicao_id?: string
+          memoria_calculo?: string | null
+          planilha_item_id?: string
+          quantidade?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicao_itens_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medicao_itens_planilha_item_id_fkey"
+            columns: ["planilha_item_id"]
+            isOneToOne: false
+            referencedRelation: "planilha_itens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medicoes: {
+        Row: {
+          competencia: string
+          created_at: string
+          created_by: string | null
+          data_aprovacao: string | null
+          descricao: string | null
+          id: string
+          motivo_cancelamento: string | null
+          numero: string | null
+          obra_id: string
+          planilha_id: string
+          reajuste_tipo: string
+          reajuste_valor: number
+          status: string
+          updated_at: string
+          valor_bruto: number
+          valor_reajuste: number
+          valor_total: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          data_aprovacao?: string | null
+          descricao?: string | null
+          id?: string
+          motivo_cancelamento?: string | null
+          numero?: string | null
+          obra_id: string
+          planilha_id: string
+          reajuste_tipo?: string
+          reajuste_valor?: number
+          status?: string
+          updated_at?: string
+          valor_bruto?: number
+          valor_reajuste?: number
+          valor_total?: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          data_aprovacao?: string | null
+          descricao?: string | null
+          id?: string
+          motivo_cancelamento?: string | null
+          numero?: string | null
+          obra_id?: string
+          planilha_id?: string
+          reajuste_tipo?: string
+          reajuste_valor?: number
+          status?: string
+          updated_at?: string
+          valor_bruto?: number
+          valor_reajuste?: number
+          valor_total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicoes_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medicoes_planilha_id_fkey"
+            columns: ["planilha_id"]
+            isOneToOne: false
+            referencedRelation: "planilhas_contratuais"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       obras: {
         Row: {
@@ -2505,6 +2737,101 @@ export type Database = {
         }
         Relationships: []
       }
+      planilha_itens: {
+        Row: {
+          codigo: string | null
+          created_at: string
+          descricao: string
+          id: string
+          ordem: number
+          planilha_id: string
+          preco_unitario: number
+          quantidade_contratada: number
+          unidade_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          codigo?: string | null
+          created_at?: string
+          descricao: string
+          id?: string
+          ordem?: number
+          planilha_id: string
+          preco_unitario: number
+          quantidade_contratada: number
+          unidade_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          codigo?: string | null
+          created_at?: string
+          descricao?: string
+          id?: string
+          ordem?: number
+          planilha_id?: string
+          preco_unitario?: number
+          quantidade_contratada?: number
+          unidade_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planilha_itens_planilha_id_fkey"
+            columns: ["planilha_id"]
+            isOneToOne: false
+            referencedRelation: "planilhas_contratuais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planilha_itens_unidade_id_fkey"
+            columns: ["unidade_id"]
+            isOneToOne: false
+            referencedRelation: "unidades_medida"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planilhas_contratuais: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          obra_id: string
+          observacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          obra_id: string
+          observacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          obra_id?: string
+          observacao?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planilhas_contratuais_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: true
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plano_atividades: {
         Row: {
           created_at: string
@@ -2809,8 +3136,16 @@ export type Database = {
         }
         Returns: string
       }
+      fn_aprovar_medicao: {
+        Args: { p_data_vencimento?: string; p_medicao: string }
+        Returns: string
+      }
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: { Args: { p_parcela_id: string }; Returns: undefined }
+      fn_cancelar_medicao: {
+        Args: { p_medicao: string; p_motivo: string }
+        Returns: undefined
+      }
       fn_cancelar_os: {
         Args: { p_motivo: string; p_os: string }
         Returns: undefined
@@ -2821,6 +3156,10 @@ export type Database = {
       }
       fn_concluir_os: {
         Args: { p_horimetro_fech?: number; p_km_fech?: number; p_os: string }
+        Returns: undefined
+      }
+      fn_desaprovar_medicao: {
+        Args: { p_medicao: string; p_motivo: string }
         Returns: undefined
       }
       fn_desaprovar_ordem_compra: {
