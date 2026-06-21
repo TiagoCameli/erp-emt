@@ -127,3 +127,11 @@ Decisão do Tiago: RH (10 abas) construído em dois cortes. Espinha primeiro (on
 **Folha é GERENCIAL, não oficial.** `fn_gerar_folha` consolida os CLT ativos: salário + horas extras dos apontamentos APROVADOS (só tipo 'normal') + encargos (percentual configurável). Estimativas declaradas: hora = salário/220, hora extra a 50% (1,5x). custo_total = salário + extras + encargos (custo da empresa), alocado no centro de custo da obra onde o colaborador mais apontou no mês; valor_liquido = salário + extras − adiantamentos. Exporta planilha Excel para o contador fechar a folha oficial. Não posta no financeiro nem faz eSocial.
 
 **Correções da revisão adversarial da Fase 7.** (1) `fn_gerar_folha` reseta o centro de custo a cada colaborador: um CLT sem apontamentos herdava o CC do anterior (SELECT INTO com GROUP BY sem linha não zera a variável), alocando custo na obra errada. (2) `fn_fechar_diarias` trava as diárias com `for update` (fechamentos concorrentes geravam pagamento dobrado) e filtra pela competência (campo), casando com o painel. (3) A folha soma só horas de dias tipo 'normal' (falta/folga/atestado não pagam extra). Folga conhecida: adiantamento de diarista não entra na folha (diarista é pago por diária).
+
+## 2026-06-21 - Fase 7 (RH) - 2o corte (PR #8)
+
+Completa o RH com as abas de RH-admin/alerta (CRUD, sem funções transacionais): Férias, Ausências e ocorrências, EPI, Documentos e ASO, Banco de horas. Tabelas: `rh_ferias`, `rh_ocorrencias`, `rh_epis`, `rh_documentos`, `banco_horas_movimentos`. RLS + grants + auditoria; CRUD direto por recurso.
+
+**Alertas calculados na leitura (sem regra fiscal inventada).** Férias: limite de gozo = fim do período aquisitivo + 12 meses; vencida/a vencer destacadas. Documentos/ASO: vencido (data_vencimento < hoje) e a vencer (<= 30 dias), com KPIs no topo. Banco de horas: saldo = créditos − débitos por colaborador.
+
+**Folgas conhecidas:** banco de horas entregue como aba normal (o plano previa "ativável por configuração" — o gate por flag ficou de fora); upload de arquivo de documento/EPI não implementado (só metadados + vencimento).

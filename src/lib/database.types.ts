@@ -170,6 +170,53 @@ export type Database = {
         }
         Relationships: []
       }
+      banco_horas_movimentos: {
+        Row: {
+          colaborador_id: string
+          created_at: string
+          created_by: string | null
+          data: string
+          horas: number
+          id: string
+          motivo: string | null
+          observacao: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          horas: number
+          id?: string
+          motivo?: string | null
+          observacao?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          horas?: number
+          id?: string
+          motivo?: string | null
+          observacao?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "banco_horas_movimentos_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categorias_financeiras: {
         Row: {
           ativo: boolean
@@ -3281,6 +3328,203 @@ export type Database = {
             columns: ["obra_id"]
             isOneToOne: false
             referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_documentos: {
+        Row: {
+          colaborador_id: string
+          created_at: string
+          created_by: string | null
+          data_emissao: string | null
+          data_vencimento: string | null
+          descricao: string
+          id: string
+          observacao: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string | null
+          data_vencimento?: string | null
+          descricao: string
+          id?: string
+          observacao?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string | null
+          data_vencimento?: string | null
+          descricao?: string
+          id?: string
+          observacao?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_documentos_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_epis: {
+        Row: {
+          assinado: boolean
+          ca: string | null
+          colaborador_id: string
+          created_at: string
+          created_by: string | null
+          data_devolucao: string | null
+          data_entrega: string
+          descricao: string
+          id: string
+          observacao: string | null
+          quantidade: number
+          updated_at: string
+        }
+        Insert: {
+          assinado?: boolean
+          ca?: string | null
+          colaborador_id: string
+          created_at?: string
+          created_by?: string | null
+          data_devolucao?: string | null
+          data_entrega?: string
+          descricao: string
+          id?: string
+          observacao?: string | null
+          quantidade?: number
+          updated_at?: string
+        }
+        Update: {
+          assinado?: boolean
+          ca?: string | null
+          colaborador_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_devolucao?: string | null
+          data_entrega?: string
+          descricao?: string
+          id?: string
+          observacao?: string | null
+          quantidade?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_epis_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_ferias: {
+        Row: {
+          colaborador_id: string
+          created_at: string
+          created_by: string | null
+          data_fim: string | null
+          data_inicio: string | null
+          dias: number
+          id: string
+          observacao: string | null
+          periodo_aquisitivo_fim: string
+          periodo_aquisitivo_inicio: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          dias?: number
+          id?: string
+          observacao?: string | null
+          periodo_aquisitivo_fim: string
+          periodo_aquisitivo_inicio: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_fim?: string | null
+          data_inicio?: string | null
+          dias?: number
+          id?: string
+          observacao?: string | null
+          periodo_aquisitivo_fim?: string
+          periodo_aquisitivo_inicio?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_ferias_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_ocorrencias: {
+        Row: {
+          colaborador_id: string
+          created_at: string
+          created_by: string | null
+          data: string
+          descricao: string
+          id: string
+          observacao: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          descricao: string
+          id?: string
+          observacao?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          descricao?: string
+          id?: string
+          observacao?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_ocorrencias_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
             referencedColumns: ["id"]
           },
         ]
