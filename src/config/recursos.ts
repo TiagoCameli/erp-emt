@@ -350,6 +350,41 @@ export const RECURSOS = [
     rota: "/rh/folha",
     acoes: ["ver", "criar", "editar"],
   },
+  {
+    id: "rh.ferias",
+    nome: "Férias",
+    modulo: "rh",
+    rota: "/rh/ferias",
+    acoes: CRUD,
+  },
+  {
+    id: "rh.ocorrencias",
+    nome: "Ausências e ocorrências",
+    modulo: "rh",
+    rota: "/rh/ocorrencias",
+    acoes: CRUD,
+  },
+  {
+    id: "rh.epis",
+    nome: "EPI",
+    modulo: "rh",
+    rota: "/rh/epis",
+    acoes: CRUD,
+  },
+  {
+    id: "rh.documentos",
+    nome: "Documentos e ASO",
+    modulo: "rh",
+    rota: "/rh/documentos",
+    acoes: CRUD,
+  },
+  {
+    id: "rh.banco-horas",
+    nome: "Banco de horas",
+    modulo: "rh",
+    rota: "/rh/banco-horas",
+    acoes: ["ver", "criar", "editar"],
+  },
   // Administração
   {
     id: "administracao.usuarios",
