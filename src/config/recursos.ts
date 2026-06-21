@@ -40,6 +40,7 @@ export const MODULOS = [
   { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
   { id: "medicao", nome: "Medição", rota: "/medicao" },
   { id: "rh", nome: "RH", rota: "/rh" },
+  { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -384,6 +385,42 @@ export const RECURSOS = [
     modulo: "rh",
     rota: "/rh/banco-horas",
     acoes: ["ver", "criar", "editar"],
+  },
+  // Gestão (BI)
+  {
+    id: "gestao.painel-empresa",
+    nome: "Painel da empresa",
+    modulo: "gestao",
+    rota: "/gestao/painel-empresa",
+    acoes: ["ver"],
+  },
+  {
+    id: "gestao.painel-obra",
+    nome: "Painel por obra",
+    modulo: "gestao",
+    rota: "/gestao/painel-obra",
+    acoes: ["ver"],
+  },
+  {
+    id: "gestao.custos",
+    nome: "Custos",
+    modulo: "gestao",
+    rota: "/gestao/custos",
+    acoes: ["ver"],
+  },
+  {
+    id: "gestao.equipamentos",
+    nome: "Equipamentos",
+    modulo: "gestao",
+    rota: "/gestao/equipamentos",
+    acoes: ["ver"],
+  },
+  {
+    id: "gestao.alertas",
+    nome: "Alertas",
+    modulo: "gestao",
+    rota: "/gestao/alertas",
+    acoes: ["ver"],
   },
   // Administração
   {

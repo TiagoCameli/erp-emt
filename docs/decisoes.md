@@ -135,3 +135,13 @@ Completa o RH com as abas de RH-admin/alerta (CRUD, sem funções transacionais)
 **Alertas calculados na leitura (sem regra fiscal inventada).** Férias: limite de gozo = fim do período aquisitivo + 12 meses; vencida/a vencer destacadas. Documentos/ASO: vencido (data_vencimento < hoje) e a vencer (<= 30 dias), com KPIs no topo. Banco de horas: saldo = créditos − débitos por colaborador.
 
 **Folgas conhecidas:** banco de horas entregue como aba normal (o plano previa "ativável por configuração" — o gate por flag ficou de fora); upload de arquivo de documento/EPI não implementado (só metadados + vencimento).
+
+## 2026-06-21 - Fase 8 (Gestão / BI) - a vitrine
+
+Módulo SOMENTE LEITURA: agrega os dados dos outros módulos, sem tabelas novas (só semeia permissões). 5 painéis: Painel da empresa, Painel por obra, Custos, Equipamentos, Alertas. Recharts pros gráficos.
+
+**Modelo de custo unificado, base CONSUMO (resolve a tensão da Fase 4).** O custo gerencial por obra/CC soma: consumo de estoque (material/combustível/peças) + folha (folha_itens) + lançamentos a pagar rateados de origem 'os'/'diaria'/'manual'. A COMPRA (lançamento origem 'oc') é caixa/ativo e NÃO entra como custo, e a receita ('fatura') também não, evitando dupla contagem. Verificado em banco: consumo 800 + folha 500 + terceiro 300 = custo 1600, com a OC de 1000 fora. Margem da obra = medido (medições aprovadas) − custo. CC->obra resolvido subindo a árvore de centros de custo até a raiz.
+
+**BI respeita o RLS (sem bypass).** Os painéis leem as tabelas com a sessão do usuário, então cada um vê no painel o que pode ver nos módulos. Admin vê tudo; o perfil Gestor recebe 'ver' nos módulos via seeds. Escolha deliberada: BI que respeita permissão não vaza dado por agregação. Para um usuário ver o consolidado completo, o perfil precisa de 'ver' nos módulos de origem.
+
+**Folgas conhecidas:** custo de equipamento (manutenção + combustível) ainda NÃO é rateado pra obra (fica no painel de Equipamentos / CC de Manutenção); os grupos combustível/manutenção do painel por obra refletem só o que cai direto no CC da obra. os_mao_obra (mão de obra interna de OS) não entra no custo unificado (gerencial, fora de lançamento/folha/estoque). Drill-down dos painéis leva à lista do módulo de origem (ainda não abre a composição exata número a número). Alertas "inteligentes" do plano (margem caindo X pontos, custo sem medição no período) ficaram de fora; os alertas entregues são os concretos (estoque crítico, documentos/férias vencendo, faturas vencidas, OS abertas).
