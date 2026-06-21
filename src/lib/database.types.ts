@@ -561,8 +561,10 @@ export type Database = {
           id: string
           nome: string
           obra_id: string | null
+          salario: number | null
           telefone: string | null
           updated_at: string
+          valor_diaria: number | null
           vinculo: string
         }
         Insert: {
@@ -576,8 +578,10 @@ export type Database = {
           id?: string
           nome: string
           obra_id?: string | null
+          salario?: number | null
           telefone?: string | null
           updated_at?: string
+          valor_diaria?: number | null
           vinculo?: string
         }
         Update: {
@@ -591,8 +595,10 @@ export type Database = {
           id?: string
           nome?: string
           obra_id?: string | null
+          salario?: number | null
           telefone?: string | null
           updated_at?: string
+          valor_diaria?: number | null
           vinculo?: string
         }
         Relationships: [
@@ -1482,6 +1488,124 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      folha_itens: {
+        Row: {
+          adiantamentos: number
+          centro_custo_id: string | null
+          colaborador_id: string
+          created_at: string
+          custo_total: number
+          encargos: number
+          folha_id: string
+          horas_extras: number
+          horas_normais: number
+          id: string
+          salario_base: number
+          valor_extras: number
+          valor_liquido: number
+        }
+        Insert: {
+          adiantamentos?: number
+          centro_custo_id?: string | null
+          colaborador_id: string
+          created_at?: string
+          custo_total?: number
+          encargos?: number
+          folha_id: string
+          horas_extras?: number
+          horas_normais?: number
+          id?: string
+          salario_base?: number
+          valor_extras?: number
+          valor_liquido?: number
+        }
+        Update: {
+          adiantamentos?: number
+          centro_custo_id?: string | null
+          colaborador_id?: string
+          created_at?: string
+          custo_total?: number
+          encargos?: number
+          folha_id?: string
+          horas_extras?: number
+          horas_normais?: number
+          id?: string
+          salario_base?: number
+          valor_extras?: number
+          valor_liquido?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folha_itens_centro_custo_id_fkey"
+            columns: ["centro_custo_id"]
+            isOneToOne: false
+            referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_itens_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_itens_folha_id_fkey"
+            columns: ["folha_id"]
+            isOneToOne: false
+            referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folhas: {
+        Row: {
+          competencia: string
+          created_at: string
+          created_by: string | null
+          custo_total: number
+          data_fechamento: string | null
+          encargos_percentual: number
+          id: string
+          status: string
+          updated_at: string
+          valor_adiantamentos: number
+          valor_bruto: number
+          valor_encargos: number
+          valor_liquido: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number
+          data_fechamento?: string | null
+          encargos_percentual?: number
+          id?: string
+          status?: string
+          updated_at?: string
+          valor_adiantamentos?: number
+          valor_bruto?: number
+          valor_encargos?: number
+          valor_liquido?: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number
+          data_fechamento?: string | null
+          encargos_percentual?: number
+          id?: string
+          status?: string
+          updated_at?: string
+          valor_adiantamentos?: number
+          valor_bruto?: number
+          valor_encargos?: number
+          valor_liquido?: number
+        }
+        Relationships: []
       }
       fornecedores: {
         Row: {
@@ -2992,6 +3116,232 @@ export type Database = {
           },
         ]
       }
+      rh_adiantamentos: {
+        Row: {
+          colaborador_id: string
+          competencia: string
+          created_at: string
+          created_by: string | null
+          data: string
+          descricao: string | null
+          folha_id: string | null
+          id: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          colaborador_id: string
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          descricao?: string | null
+          folha_id?: string | null
+          id?: string
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          colaborador_id?: string
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          descricao?: string | null
+          folha_id?: string | null
+          id?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_adiantamentos_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_adiantamentos_folha_id_fkey"
+            columns: ["folha_id"]
+            isOneToOne: false
+            referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_apontamentos: {
+        Row: {
+          colaborador_id: string
+          created_at: string
+          horas_extras: number
+          horas_normais: number
+          id: string
+          observacao: string | null
+          ponto_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          created_at?: string
+          horas_extras?: number
+          horas_normais?: number
+          id?: string
+          observacao?: string | null
+          ponto_id: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          created_at?: string
+          horas_extras?: number
+          horas_normais?: number
+          id?: string
+          observacao?: string | null
+          ponto_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_apontamentos_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_apontamentos_ponto_id_fkey"
+            columns: ["ponto_id"]
+            isOneToOne: false
+            referencedRelation: "rh_pontos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_diarias: {
+        Row: {
+          colaborador_id: string
+          competencia: string
+          created_at: string
+          created_by: string | null
+          data: string
+          id: string
+          lancamento_id: string | null
+          obra_id: string | null
+          observacao: string | null
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          colaborador_id: string
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          id?: string
+          lancamento_id?: string | null
+          obra_id?: string | null
+          observacao?: string | null
+          updated_at?: string
+          valor: number
+        }
+        Update: {
+          colaborador_id?: string
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          id?: string
+          lancamento_id?: string | null
+          obra_id?: string | null
+          observacao?: string | null
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_diarias_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_diarias_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_diarias_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_pontos: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          created_at: string
+          created_by: string | null
+          data: string
+          encarregado_id: string | null
+          id: string
+          obra_id: string
+          observacao: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string
+          created_by?: string | null
+          data: string
+          encarregado_id?: string | null
+          id?: string
+          obra_id: string
+          observacao?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          encarregado_id?: string | null
+          id?: string
+          obra_id?: string
+          observacao?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_pontos_encarregado_id_fkey"
+            columns: ["encarregado_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_pontos_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       unidades_medida: {
         Row: {
           ativo: boolean
@@ -3142,6 +3492,7 @@ export type Database = {
       }
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: { Args: { p_parcela_id: string }; Returns: undefined }
+      fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined }
       fn_cancelar_medicao: {
         Args: { p_medicao: string; p_motivo: string }
         Returns: undefined
@@ -3261,6 +3612,19 @@ export type Database = {
         }
         Returns: string
       }
+      fn_fechar_diarias: {
+        Args: {
+          p_colaborador: string
+          p_competencia: string
+          p_data_vencimento?: string
+        }
+        Returns: string
+      }
+      fn_fechar_folha: { Args: { p_folha: string }; Returns: undefined }
+      fn_gerar_folha: {
+        Args: { p_competencia: string; p_encargos_pct?: number }
+        Returns: string
+      }
       fn_gerar_os_preventiva: {
         Args: { p_equip_plano: string }
         Returns: string
@@ -3293,6 +3657,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      fn_reabrir_folha: { Args: { p_folha: string }; Returns: undefined }
+      fn_reabrir_ponto: { Args: { p_ponto: string }; Returns: undefined }
       fn_recalcular_saldo_estoque: {
         Args: { p_deposito: string; p_insumo: string }
         Returns: undefined
