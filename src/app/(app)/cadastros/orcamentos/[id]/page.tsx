@@ -23,6 +23,9 @@ export default async function PaginaOrcamentoDetalhe({
     <OrcamentoArvore
       cabecalho={orcamento.cabecalho}
       itens={orcamento.itens}
+      podeCriar={temPermissao(usuario, "cadastros.orcamentos", "criar")}
+      podeEditar={temPermissao(usuario, "cadastros.orcamentos", "editar")}
+      podeExcluir={temPermissao(usuario, "cadastros.orcamentos", "excluir")}
     />
   );
 }
