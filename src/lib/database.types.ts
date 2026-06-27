@@ -2337,6 +2337,140 @@ export type Database = {
           },
         ]
       }
+      orcamento_itens: {
+        Row: {
+          bdi: number | null
+          codigo: string | null
+          created_at: string
+          custo_total: number | null
+          custo_unitario: number | null
+          descricao: string
+          id: string
+          indice: string | null
+          orcamento_id: string
+          ordem: number
+          parent_id: string | null
+          preco_total: number | null
+          preco_unitario: number | null
+          quantidade: number | null
+          tipo: string
+          unidade: string | null
+          updated_at: string
+        }
+        Insert: {
+          bdi?: number | null
+          codigo?: string | null
+          created_at?: string
+          custo_total?: number | null
+          custo_unitario?: number | null
+          descricao: string
+          id?: string
+          indice?: string | null
+          orcamento_id: string
+          ordem?: number
+          parent_id?: string | null
+          preco_total?: number | null
+          preco_unitario?: number | null
+          quantidade?: number | null
+          tipo: string
+          unidade?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bdi?: number | null
+          codigo?: string | null
+          created_at?: string
+          custo_total?: number | null
+          custo_unitario?: number | null
+          descricao?: string
+          id?: string
+          indice?: string | null
+          orcamento_id?: string
+          ordem?: number
+          parent_id?: string | null
+          preco_total?: number | null
+          preco_unitario?: number | null
+          quantidade?: number | null
+          tipo?: string
+          unidade?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamento_itens_orcamento_id_fkey"
+            columns: ["orcamento_id"]
+            isOneToOne: false
+            referencedRelation: "orcamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orcamento_itens_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "orcamento_itens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orcamentos: {
+        Row: {
+          ativo: boolean
+          bdi: number | null
+          created_at: string
+          created_by: string | null
+          custo_total: number
+          descricao: string | null
+          id: string
+          numero: string | null
+          obra_id: string
+          observacoes: string | null
+          origem: string
+          preco_total: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          bdi?: number | null
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number
+          descricao?: string | null
+          id?: string
+          numero?: string | null
+          obra_id: string
+          observacoes?: string | null
+          origem?: string
+          preco_total?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          bdi?: number | null
+          created_at?: string
+          created_by?: string | null
+          custo_total?: number
+          descricao?: string | null
+          id?: string
+          numero?: string | null
+          obra_id?: string
+          observacoes?: string | null
+          origem?: string
+          preco_total?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orcamentos_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ordens_compra: {
         Row: {
           aprovado_em: string | null

@@ -66,6 +66,13 @@ export const RECURSOS = [
     acoes: CRUD,
   },
   {
+    id: "cadastros.orcamentos",
+    nome: "Orçamentos",
+    modulo: "cadastros",
+    rota: "/cadastros/orcamentos",
+    acoes: CRUD,
+  },
+  {
     id: "cadastros.centros-custo",
     nome: "Centros de custo",
     modulo: "cadastros",
