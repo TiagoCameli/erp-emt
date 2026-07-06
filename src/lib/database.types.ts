@@ -4060,6 +4060,56 @@ export type Database = {
         }
         Returns: string
       }
+      fn_rel_aging: {
+        Args: never
+        Returns: {
+          data_vencimento: string
+          tipo: string
+          total: number
+        }[]
+      }
+      fn_rel_custo_centro_custo: {
+        Args: never
+        Returns: {
+          centro_custo_id: string
+          codigo: string
+          nome: string
+          total: number
+        }[]
+      }
+      fn_rel_dre: {
+        Args: { p_fim: string; p_inicio: string }
+        Returns: {
+          categoria: string
+          categoria_id: string
+          tipo: string
+          total: number
+        }[]
+      }
+      fn_rel_fluxo_caixa: {
+        Args: never
+        Returns: {
+          mes: string
+          realizado: boolean
+          tipo: string
+          total: number
+        }[]
+      }
+      fn_rel_fornecedores_com_lancamentos: {
+        Args: never
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
+      fn_rel_posicao_bancaria: {
+        Args: never
+        Returns: {
+          conta_bancaria_id: string
+          tipo: string
+          total: number
+        }[]
+      }
       fn_restaurar_cadastro: {
         Args: { p_lixeira_id: string }
         Returns: undefined
@@ -4083,6 +4133,7 @@ export type Database = {
         }[]
       }
       proximo_numero_documento: { Args: { p_tipo: string }; Returns: string }
+      recalcular_orcamento: { Args: { p_orc: string }; Returns: undefined }
       salvar_matriz_usuario: {
         Args: { p_permissoes: Json; p_usuario_id: string }
         Returns: undefined
