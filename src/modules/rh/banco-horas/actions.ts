@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -53,7 +54,11 @@ export async function criarMovimento(
   });
 
   if (error) {
-    return { erro: "Não foi possível salvar o movimento. Tente novamente" };
+    return erroAcao(
+      "rh.banco-horas.criar",
+      error,
+      "Não foi possível salvar o movimento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -91,7 +96,11 @@ export async function editarMovimento(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o movimento. Tente novamente" };
+    return erroAcao(
+      "rh.banco-horas.editar",
+      error,
+      "Não foi possível salvar o movimento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

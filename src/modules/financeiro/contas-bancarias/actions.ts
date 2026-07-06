@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -61,7 +62,11 @@ export async function criarConta(dados: ContaInput): Promise<ResultadoAcao> {
     .insert(paraRegistro(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar a conta. Tente novamente" };
+    return erroAcao(
+      "financeiro.contas-bancarias.criarConta",
+      error,
+      "Não foi possível salvar a conta. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -92,7 +97,11 @@ export async function editarConta(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a conta. Tente novamente" };
+    return erroAcao(
+      "financeiro.contas-bancarias.editarConta",
+      error,
+      "Não foi possível salvar a conta. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -121,7 +130,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a conta. Tente novamente" };
+    return erroAcao(
+      "financeiro.contas-bancarias.alternarAtivo",
+      error,
+      "Não foi possível salvar a conta. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

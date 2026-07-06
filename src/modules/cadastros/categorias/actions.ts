@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import {
   lerEValidarXlsx,
   type ColunaImportacao,
@@ -82,9 +83,17 @@ export async function criar(dados: CategoriaInput): Promise<ResultadoAcao> {
 
   if (error) {
     if (error.code === "23505") {
-      return { erro: "Já existe uma categoria com este nome e tipo" };
+      return erroAcao(
+        "cadastros.categorias.criar",
+        error,
+        "Já existe uma categoria com este nome e tipo",
+      );
     }
-    return { erro: "Não foi possível salvar a categoria. Tente novamente" };
+    return erroAcao(
+      "cadastros.categorias.criar",
+      error,
+      "Não foi possível salvar a categoria. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -118,9 +127,17 @@ export async function editar(
 
   if (error) {
     if (error.code === "23505") {
-      return { erro: "Já existe uma categoria com este nome e tipo" };
+      return erroAcao(
+        "cadastros.categorias.editar",
+        error,
+        "Já existe uma categoria com este nome e tipo",
+      );
     }
-    return { erro: "Não foi possível salvar a categoria. Tente novamente" };
+    return erroAcao(
+      "cadastros.categorias.editar",
+      error,
+      "Não foi possível salvar a categoria. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -144,7 +161,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "cadastros.categorias.alternarAtivo",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -175,8 +196,12 @@ export async function excluir(
 
   if (error) {
     const emUso = traduzErroExclusao(error);
-    if (emUso) return { erro: emUso };
-    return { erro: "Não foi possível excluir a categoria. Tente novamente" };
+    if (emUso) return erroAcao("cadastros.categorias.excluir", error, emUso);
+    return erroAcao(
+      "cadastros.categorias.excluir",
+      error,
+      "Não foi possível excluir a categoria. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -225,8 +250,8 @@ export async function importar(
   let buffer: ArrayBuffer;
   try {
     buffer = await lerArquivo(formData);
-  } catch {
-    return { erro: "Nenhum arquivo enviado" };
+  } catch (e) {
+    return erroAcao("cadastros.categorias.importar", e, "Nenhum arquivo enviado");
   }
 
   const resultado = await lerEValidarXlsx<LinhaImportCategoria>(
@@ -249,11 +274,17 @@ export async function importar(
 
   if (error) {
     if (error.code === "23505") {
-      return {
-        erro: "A planilha tem categorias repetidas ou já cadastradas (nome e tipo)",
-      };
+      return erroAcao(
+        "cadastros.categorias.importar",
+        error,
+        "A planilha tem categorias repetidas ou já cadastradas (nome e tipo)",
+      );
     }
-    return { erro: "Não foi possível importar as categorias. Tente novamente" };
+    return erroAcao(
+      "cadastros.categorias.importar",
+      error,
+      "Não foi possível importar as categorias. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

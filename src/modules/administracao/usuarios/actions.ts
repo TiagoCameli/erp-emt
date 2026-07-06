@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { RECURSOS, type Acao } from "@/config/recursos";
+import { erroAcao, logErroServidor } from "@/lib/erros";
 import {
   exigirPermissao,
   getUsuarioLogado,
@@ -98,6 +99,8 @@ export async function convidarUsuario(
       return { erro: "Já existe um usuário com este email" };
     }
 
+    logErroServidor("administracao.usuarios.convidar", convite.error);
+
     // Fallback sem email: cria com senha temporária pro admin repassar.
     // A flag senha_temporaria força a troca no primeiro acesso.
     senhaTemporaria = gerarSenhaTemporaria();
@@ -112,7 +115,11 @@ export async function convidarUsuario(
       if (criado.error.code === "email_exists") {
         return { erro: "Já existe um usuário com este email" };
       }
-      return { erro: "Não foi possível convidar o usuário. Tente novamente" };
+      return erroAcao(
+        "administracao.usuarios.convidar",
+        criado.error,
+        "Não foi possível convidar o usuário. Tente novamente",
+      );
     }
     usuarioId = criado.data.user?.id;
   } else {
@@ -128,6 +135,7 @@ export async function convidarUsuario(
       p_perfil_id: perfilId,
     });
     if (error) {
+      logErroServidor("administracao.usuarios.convidar", error);
       aviso =
         "Usuário criado, mas o perfil não foi aplicado. Abra o usuário e aplique de novo";
     }
@@ -175,7 +183,11 @@ export async function editarUsuario(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o usuário. Tente novamente" };
+    return erroAcao(
+      "administracao.usuarios.editar",
+      error,
+      "Não foi possível salvar o usuário. Tente novamente",
+    );
   }
 
   // Espelha o status na auth: banido não loga nem renova sessão.
@@ -185,9 +197,11 @@ export async function editarUsuario(
     { ban_duration: validado.data.ativo ? "none" : "87600h" },
   );
   if (erroBan) {
-    return {
-      erro: "Status salvo, mas o bloqueio na autenticação falhou. Tente salvar de novo",
-    };
+    return erroAcao(
+      "administracao.usuarios.editar",
+      erroBan,
+      "Status salvo, mas o bloqueio na autenticação falhou. Tente salvar de novo",
+    );
   }
 
   revalidatePath(ROTA);
@@ -216,7 +230,11 @@ export async function aplicarPerfilUsuario(
   });
 
   if (error) {
-    return { erro: "Não foi possível aplicar o perfil. Tente novamente" };
+    return erroAcao(
+      "administracao.usuarios.aplicar-perfil",
+      error,
+      "Não foi possível aplicar o perfil. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -267,7 +285,11 @@ export async function salvarMatrizUsuario(
         erro: "Você não pode remover sua própria permissão de editar usuários",
       };
     }
-    return { erro: "Não foi possível salvar a matriz. Tente novamente" };
+    return erroAcao(
+      "administracao.usuarios.salvar-matriz",
+      error,
+      "Não foi possível salvar a matriz. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

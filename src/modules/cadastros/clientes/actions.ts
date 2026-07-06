@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { lerEValidarXlsx, type ColunaImportacao } from "@/lib/importacao";
@@ -114,7 +115,11 @@ export async function criar(dados: ClienteInput): Promise<ResultadoAcao> {
   const { error } = await supabase.from("clientes").insert(paraInsert(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar o cliente. Tente novamente." };
+    return erroAcao(
+      "cadastros.clientes.criar",
+      error,
+      "Não foi possível salvar o cliente. Tente novamente.",
+    );
   }
 
   revalidatePath(ROTA);
@@ -143,7 +148,11 @@ export async function editar(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o cliente. Tente novamente." };
+    return erroAcao(
+      "cadastros.clientes.editar",
+      error,
+      "Não foi possível salvar o cliente. Tente novamente.",
+    );
   }
 
   revalidatePath(ROTA);
@@ -167,7 +176,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível atualizar o status. Tente novamente." };
+    return erroAcao(
+      "cadastros.clientes.alternarAtivo",
+      error,
+      "Não foi possível atualizar o status. Tente novamente.",
+    );
   }
 
   revalidatePath(ROTA);
@@ -196,7 +209,11 @@ export async function excluir(
 
   if (error) {
     const amigavel = traduzErroExclusao(error);
-    return { erro: amigavel ?? "Não foi possível excluir o cliente. Tente novamente." };
+    return erroAcao(
+      "cadastros.clientes.excluir",
+      error,
+      amigavel ?? "Não foi possível excluir o cliente. Tente novamente.",
+    );
   }
 
   revalidatePath(ROTA);
@@ -258,7 +275,11 @@ export async function importar(formData: FormData): Promise<ResultadoImport> {
   const { error } = await supabase.from("clientes").insert(linhas);
 
   if (error) {
-    return { erro: "Não foi possível importar os clientes. Tente novamente." };
+    return erroAcao(
+      "cadastros.clientes.importar",
+      error,
+      "Não foi possível importar os clientes. Tente novamente.",
+    );
   }
 
   revalidatePath(ROTA);

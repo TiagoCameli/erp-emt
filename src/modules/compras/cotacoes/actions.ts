@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -48,7 +49,13 @@ async function exigirAberta(
     .eq("id", cotacaoId)
     .maybeSingle();
 
-  if (error || !data) return { erro: "Cotação não encontrada" };
+  if (error || !data) {
+    return erroAcao(
+      "compras.cotacoes.exigirAberta",
+      error,
+      "Cotação não encontrada",
+    );
+  }
   if (data.status !== "aberta") {
     return { erro: "Só dá para alterar uma cotação aberta" };
   }
@@ -87,7 +94,11 @@ export async function criarCotacao(
     .single();
 
   if (error || !cotacao) {
-    return { erro: "Não foi possível criar a cotação. Tente novamente" };
+    return erroAcao(
+      "compras.cotacoes.criarCotacao",
+      error,
+      "Não foi possível criar a cotação. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -125,7 +136,11 @@ export async function editarCotacao(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a cotação. Tente novamente" };
+    return erroAcao(
+      "compras.cotacoes.editarCotacao",
+      error,
+      "Não foi possível salvar a cotação. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -175,7 +190,11 @@ export async function adicionarFornecedor(
   });
 
   if (error) {
-    return { erro: "Não foi possível adicionar o fornecedor. Tente novamente" };
+    return erroAcao(
+      "compras.cotacoes.adicionarFornecedor",
+      error,
+      "Não foi possível adicionar o fornecedor. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -215,7 +234,11 @@ export async function removerFornecedor(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível remover o fornecedor. Tente novamente" };
+    return erroAcao(
+      "compras.cotacoes.removerFornecedor",
+      error,
+      "Não foi possível remover o fornecedor. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -255,7 +278,11 @@ export async function salvarPrecos(
     .eq("cotacao_id", idValido.data);
 
   if (erroVinculos) {
-    return { erro: "Não foi possível validar os fornecedores da cotação" };
+    return erroAcao(
+      "compras.cotacoes.salvarPrecos",
+      erroVinculos,
+      "Não foi possível validar os fornecedores da cotação",
+    );
   }
 
   const idsValidos = new Set((vinculos ?? []).map((vinculo) => vinculo.id));
@@ -280,7 +307,11 @@ export async function salvarPrecos(
     .eq("cotacao_id", idValido.data);
 
   if (erroDelete) {
-    return { erro: "Não foi possível salvar os preços. Tente novamente" };
+    return erroAcao(
+      "compras.cotacoes.salvarPrecos",
+      erroDelete,
+      "Não foi possível salvar os preços. Tente novamente",
+    );
   }
 
   if (validado.data.length > 0) {
@@ -299,7 +330,11 @@ export async function salvarPrecos(
       if (precosAntigos && precosAntigos.length > 0) {
         await supabase.from("cotacao_itens").insert(precosAntigos);
       }
-      return { erro: "Não foi possível salvar os preços. Tente novamente" };
+      return erroAcao(
+        "compras.cotacoes.salvarPrecos",
+        erroInsert,
+        "Não foi possível salvar os preços. Tente novamente",
+      );
     }
   }
 
@@ -341,7 +376,11 @@ export async function finalizarCotacao(
     .eq("cotacao_id", idValido.data);
 
   if (erroFornecedores) {
-    return { erro: "Não foi possível validar os fornecedores da cotação" };
+    return erroAcao(
+      "compras.cotacoes.finalizarCotacao",
+      erroFornecedores,
+      "Não foi possível validar os fornecedores da cotação",
+    );
   }
 
   const idsFornecedores = new Set((fornecedores ?? []).map((f) => f.id));
@@ -356,7 +395,11 @@ export async function finalizarCotacao(
     .eq("cotacao_id", idValido.data);
 
   if (erroItens) {
-    return { erro: "Não foi possível calcular os totais da cotação" };
+    return erroAcao(
+      "compras.cotacoes.finalizarCotacao",
+      erroItens,
+      "Não foi possível calcular os totais da cotação",
+    );
   }
 
   const totalPorFornecedor = new Map<string, number>();
@@ -396,7 +439,11 @@ export async function finalizarCotacao(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível finalizar a cotação. Tente novamente" };
+    return erroAcao(
+      "compras.cotacoes.finalizarCotacao",
+      error,
+      "Não foi possível finalizar a cotação. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -431,7 +478,11 @@ export async function cancelarCotacao(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível cancelar a cotação. Tente novamente" };
+    return erroAcao(
+      "compras.cotacoes.cancelarCotacao",
+      error,
+      "Não foi possível cancelar a cotação. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

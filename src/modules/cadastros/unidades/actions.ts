@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -51,7 +52,11 @@ export async function criar(dados: UnidadeInput): Promise<ResultadoAcao> {
     if (error.code === "23505") {
       return { erro: "Já existe uma unidade com esta sigla" };
     }
-    return { erro: "Não foi possível salvar a unidade. Tente novamente" };
+    return erroAcao(
+      "cadastros.unidades.criar",
+      error,
+      "Não foi possível salvar a unidade. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -92,7 +97,11 @@ export async function editar(
     if (error.code === "23505") {
       return { erro: "Já existe uma unidade com esta sigla" };
     }
-    return { erro: "Não foi possível salvar a unidade. Tente novamente" };
+    return erroAcao(
+      "cadastros.unidades.editar",
+      error,
+      "Não foi possível salvar a unidade. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -120,7 +129,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "cadastros.unidades.alternarAtivo",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -153,8 +166,12 @@ export async function excluir(
 
   if (error) {
     const traduzido = traduzErroExclusao(error);
-    if (traduzido) return { erro: traduzido };
-    return { erro: "Não foi possível excluir a unidade. Tente novamente" };
+    if (traduzido) return erroAcao("cadastros.unidades.excluir", error, traduzido);
+    return erroAcao(
+      "cadastros.unidades.excluir",
+      error,
+      "Não foi possível excluir a unidade. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -237,8 +254,8 @@ export async function importar(
   let buffer: Buffer;
   try {
     buffer = await lerArquivo(formData);
-  } catch {
-    return { erro: "Nenhum arquivo enviado" };
+  } catch (e) {
+    return erroAcao("cadastros.unidades.importar", e, "Nenhum arquivo enviado");
   }
 
   let resultado;
@@ -248,12 +265,13 @@ export async function importar(
       COLUNAS_IMPORT,
     );
   } catch (erro) {
-    return {
-      erro:
-        erro instanceof Error
-          ? erro.message
-          : "Não foi possível ler a planilha",
-    };
+    return erroAcao(
+      "cadastros.unidades.importar",
+      erro,
+      erro instanceof Error
+        ? erro.message
+        : "Não foi possível ler a planilha",
+    );
   }
 
   if (resultado.validas.length === 0) {
@@ -275,7 +293,11 @@ export async function importar(
         erro: "Há siglas repetidas no arquivo ou já cadastradas. Corrija e tente de novo",
       };
     }
-    return { erro: "Não foi possível importar as unidades. Tente novamente" };
+    return erroAcao(
+      "cadastros.unidades.importar",
+      error,
+      "Não foi possível importar as unidades. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

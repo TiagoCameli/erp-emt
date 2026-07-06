@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import type { Json } from "@/lib/database.types";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -93,9 +94,11 @@ export async function criarReceber(
   });
 
   if (error || !data) {
-    return {
-      erro: error?.message || "Não foi possível salvar a conta a receber",
-    };
+    return erroAcao(
+      "financeiro.contas-receber.criarReceber",
+      error,
+      error?.message || "Não foi possível salvar a conta a receber",
+    );
   }
 
   revalidatePath(ROTA);
@@ -132,7 +135,11 @@ export async function baixarRecebimento(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível registrar o recebimento" };
+    return erroAcao(
+      "financeiro.contas-receber.baixarRecebimento",
+      error,
+      error.message || "Não foi possível registrar o recebimento",
+    );
   }
 
   revalidatePath(ROTA);

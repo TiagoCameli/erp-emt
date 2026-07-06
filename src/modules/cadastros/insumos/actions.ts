@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -76,7 +77,11 @@ export async function criar(dados: InsumoInput): Promise<ResultadoAcao> {
     .insert(montarRegistro(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar o insumo. Tente novamente" };
+    return erroAcao(
+      "cadastros.insumos.criar",
+      error,
+      "Não foi possível salvar o insumo. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -109,7 +114,11 @@ export async function editar(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o insumo. Tente novamente" };
+    return erroAcao(
+      "cadastros.insumos.editar",
+      error,
+      "Não foi possível salvar o insumo. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -137,7 +146,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status do insumo. Tente novamente" };
+    return erroAcao(
+      "cadastros.insumos.alternarAtivo",
+      error,
+      "Não foi possível alterar o status do insumo. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -167,8 +180,12 @@ export async function excluir(
 
   if (error) {
     const traduzido = traduzErroExclusao(error);
-    if (traduzido) return { erro: traduzido };
-    return { erro: "Não foi possível excluir o insumo. Tente novamente" };
+    if (traduzido) return erroAcao("cadastros.insumos.excluir", error, traduzido);
+    return erroAcao(
+      "cadastros.insumos.excluir",
+      error,
+      "Não foi possível excluir o insumo. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -228,9 +245,11 @@ export async function importar(
     const buffer = Buffer.from(await arquivo.arrayBuffer());
     validacao = await lerEValidarXlsx(buffer, colunasImportInsumo);
   } catch (erro) {
-    return {
-      erro: erro instanceof Error ? erro.message : "Não foi possível ler o arquivo",
-    };
+    return erroAcao(
+      "cadastros.insumos.importar",
+      erro,
+      erro instanceof Error ? erro.message : "Não foi possível ler o arquivo",
+    );
   }
 
   if (validacao.validas.length === 0) {
@@ -245,7 +264,11 @@ export async function importar(
   ]);
 
   if (categorias.error || unidades.error) {
-    return { erro: "Não foi possível carregar categorias e unidades para casar" };
+    return erroAcao(
+      "cadastros.insumos.importar",
+      categorias.error ?? unidades.error,
+      "Não foi possível carregar categorias e unidades para casar",
+    );
   }
 
   // categorias_insumo tem UNIQUE (nome, tipo): dá pra ter o mesmo nome com
@@ -320,7 +343,11 @@ export async function importar(
 
   const { error } = await supabase.from("insumos").insert(registros);
   if (error) {
-    return { erro: "Não foi possível importar os insumos. Tente novamente" };
+    return erroAcao(
+      "cadastros.insumos.importar",
+      error,
+      "Não foi possível importar os insumos. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

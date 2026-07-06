@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
+import { logErroServidor } from "@/lib/erros";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -29,6 +30,8 @@ export async function GET(request: NextRequest) {
         type === "invite" || type === "recovery" ? "/definir-senha" : "/";
       return NextResponse.redirect(url);
     }
+
+    logErroServidor("auth.confirm.verify-otp", error);
   } else if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -43,6 +46,8 @@ export async function GET(request: NextRequest) {
           : "/";
       return NextResponse.redirect(url);
     }
+
+    logErroServidor("auth.confirm.exchange-code", error);
   }
 
   url.pathname = "/login";

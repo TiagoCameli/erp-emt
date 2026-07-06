@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { epiSchema, type EpiInput } from "@/modules/rh/epis/schemas";
@@ -55,7 +56,11 @@ export async function criarEpi(dados: EpiInput): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).insert(paraRegistro(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar o EPI. Tente novamente" };
+    return erroAcao(
+      "rh.epis.criar",
+      error,
+      "Não foi possível salvar o EPI. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -86,7 +91,11 @@ export async function editarEpi(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o EPI. Tente novamente" };
+    return erroAcao(
+      "rh.epis.editar",
+      error,
+      "Não foi possível salvar o EPI. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -106,7 +115,11 @@ export async function removerEpi(id: string): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).delete().eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir o EPI. Tente novamente" };
+    return erroAcao(
+      "rh.epis.remover",
+      error,
+      "Não foi possível excluir o EPI. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

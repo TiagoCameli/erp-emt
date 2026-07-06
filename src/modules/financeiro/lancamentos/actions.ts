@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Json } from "@/lib/database.types";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -88,7 +89,11 @@ export async function salvarLancamento(
       .eq("id", idValido.data)
       .maybeSingle();
     if (erroExistente || !existente) {
-      return { erro: "Lançamento não encontrado" };
+      return erroAcao(
+        "financeiro.lancamentos.salvarLancamento",
+        erroExistente,
+        "Lançamento não encontrado",
+      );
     }
     if (existente.origem !== "manual") {
       return {
@@ -110,7 +115,11 @@ export async function salvarLancamento(
   });
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível salvar o lançamento" };
+    return erroAcao(
+      "financeiro.lancamentos.salvarLancamento",
+      error,
+      error?.message || "Não foi possível salvar o lançamento",
+    );
   }
 
   revalidatePath(ROTA);

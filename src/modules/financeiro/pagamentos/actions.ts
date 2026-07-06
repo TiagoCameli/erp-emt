@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -51,7 +52,11 @@ export async function pagarParcela(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível registrar o pagamento" };
+    return erroAcao(
+      "financeiro.pagamentos.pagarParcela",
+      error,
+      error.message || "Não foi possível registrar o pagamento",
+    );
   }
 
   revalidatePath(ROTA);

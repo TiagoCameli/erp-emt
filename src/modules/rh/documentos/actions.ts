@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -53,7 +54,11 @@ export async function criarDocumento(
   });
 
   if (error) {
-    return { erro: "Não foi possível salvar o documento. Tente novamente" };
+    return erroAcao(
+      "rh.documentos.criar",
+      error,
+      "Não foi possível salvar o documento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -91,7 +96,11 @@ export async function editarDocumento(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o documento. Tente novamente" };
+    return erroAcao(
+      "rh.documentos.editar",
+      error,
+      "Não foi possível salvar o documento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -111,7 +120,11 @@ export async function removerDocumento(id: string): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).delete().eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir o documento. Tente novamente" };
+    return erroAcao(
+      "rh.documentos.remover",
+      error,
+      "Não foi possível excluir o documento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

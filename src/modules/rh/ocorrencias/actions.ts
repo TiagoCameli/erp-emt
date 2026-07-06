@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -57,7 +58,11 @@ export async function criarOcorrencia(
   const { error } = await supabase.from(TABELA).insert(paraRegistro(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar a ocorrência. Tente novamente" };
+    return erroAcao(
+      "rh.ocorrencias.criar",
+      error,
+      "Não foi possível salvar a ocorrência. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -88,7 +93,11 @@ export async function editarOcorrencia(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a ocorrência. Tente novamente" };
+    return erroAcao(
+      "rh.ocorrencias.editar",
+      error,
+      "Não foi possível salvar a ocorrência. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -108,7 +117,11 @@ export async function removerOcorrencia(id: string): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).delete().eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir a ocorrência. Tente novamente" };
+    return erroAcao(
+      "rh.ocorrencias.remover",
+      error,
+      "Não foi possível excluir a ocorrência. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

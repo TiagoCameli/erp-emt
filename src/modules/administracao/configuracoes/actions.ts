@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -67,7 +68,11 @@ export async function salvarConfiguracao(
     .eq("chave", resultado.data.chave);
 
   if (error) {
-    return { erro: "Não foi possível salvar a configuração" };
+    return erroAcao(
+      "administracao.configuracoes.salvar",
+      error,
+      "Não foi possível salvar a configuração",
+    );
   }
 
   revalidatePath("/administracao/configuracoes");

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import {
   lerEValidarXlsx,
   type ColunaImportacao,
@@ -78,7 +79,11 @@ export async function criarEquipamento(
     .insert(paraRegistro(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar o equipamento. Tente novamente" };
+    return erroAcao(
+      "cadastros.equipamentos.criarEquipamento",
+      error,
+      "Não foi possível salvar o equipamento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -112,7 +117,11 @@ export async function editarEquipamento(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o equipamento. Tente novamente" };
+    return erroAcao(
+      "cadastros.equipamentos.editarEquipamento",
+      error,
+      "Não foi possível salvar o equipamento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -141,7 +150,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o equipamento. Tente novamente" };
+    return erroAcao(
+      "cadastros.equipamentos.alternarAtivo",
+      error,
+      "Não foi possível salvar o equipamento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -179,7 +192,11 @@ export async function adicionarDocumento(
   });
 
   if (error) {
-    return { erro: "Não foi possível salvar o documento. Tente novamente" };
+    return erroAcao(
+      "cadastros.equipamentos.adicionarDocumento",
+      error,
+      "Não foi possível salvar o documento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -202,7 +219,11 @@ export async function removerDocumento(id: string): Promise<ResultadoAcao> {
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível remover o documento. Tente novamente" };
+    return erroAcao(
+      "cadastros.equipamentos.removerDocumento",
+      error,
+      "Não foi possível remover o documento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -365,12 +386,13 @@ export async function importarEquipamentos(
     const resultado = await lerEValidarXlsx<LinhaEquipamento>(buffer, COLUNAS);
     validas = resultado.validas;
   } catch (erro) {
-    return {
-      erro:
-        erro instanceof Error && erro.message
-          ? erro.message
-          : "Não foi possível ler o arquivo",
-    };
+    return erroAcao(
+      "cadastros.equipamentos.importarEquipamentos",
+      erro,
+      erro instanceof Error && erro.message
+        ? erro.message
+        : "Não foi possível ler o arquivo",
+    );
   }
 
   if (validas.length === 0) {
@@ -393,9 +415,11 @@ export async function importarEquipamentos(
 
   const { error } = await supabase.from(TABELA).insert(registros);
   if (error) {
-    return {
-      erro: "Não foi possível importar os equipamentos. Tente novamente",
-    };
+    return erroAcao(
+      "cadastros.equipamentos.importarEquipamentos",
+      error,
+      "Não foi possível importar os equipamentos. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

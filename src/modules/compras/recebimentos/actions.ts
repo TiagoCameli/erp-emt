@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { EventoTrilha } from "@/components/canonicos";
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -85,7 +86,11 @@ export async function registrarRecebimento(
   if (error) {
     // A RPC manda mensagens de negócio prontas (divergência de NF, OC fora do
     // status, sem permissão). Repassa direto para o toast.
-    return { erro: error.message };
+    return erroAcao(
+      "compras.recebimentos.registrarRecebimento",
+      error,
+      error.message,
+    );
   }
 
   revalidatePath(ROTA);

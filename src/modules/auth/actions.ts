@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { erroAcao } from "@/lib/erros";
 import { createClient } from "@/lib/supabase/server";
 import {
   definirSenhaSchema,
@@ -34,7 +35,11 @@ export async function entrar(dados: LoginInput): Promise<ResultadoAcao> {
     if (error.code === "invalid_credentials") {
       return { erro: "Email ou senha incorretos" };
     }
-    return { erro: "Não foi possível entrar. Tente novamente" };
+    return erroAcao(
+      "auth.entrar",
+      error,
+      "Não foi possível entrar. Tente novamente",
+    );
   }
 
   revalidatePath("/", "layout");
@@ -77,7 +82,11 @@ export async function definirSenha(
     if (error.code === "weak_password") {
       return { erro: "Senha muito fraca. Use uma combinação mais segura" };
     }
-    return { erro: "Não foi possível definir a senha. Tente novamente" };
+    return erroAcao(
+      "auth.definir-senha",
+      error,
+      "Não foi possível definir a senha. Tente novamente",
+    );
   }
 
   revalidatePath("/", "layout");

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Json } from "@/lib/database.types";
+import { erroAcao } from "@/lib/erros";
 import { parseOfx } from "@/lib/ofx";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -63,8 +64,12 @@ export async function importarOfx(
   let texto: string;
   try {
     texto = await arquivo.text();
-  } catch {
-    return { erro: "Não foi possível ler o arquivo. Tente novamente" };
+  } catch (e) {
+    return erroAcao(
+      "financeiro.conciliacao.importarOfx",
+      e,
+      "Não foi possível ler o arquivo. Tente novamente",
+    );
   }
 
   const extrato = parseOfx(texto);
@@ -97,14 +102,20 @@ export async function importarOfx(
   });
 
   if (error) {
-    return {
-      erro: error.message || "Não foi possível importar o extrato",
-    };
+    return erroAcao(
+      "financeiro.conciliacao.importarOfx",
+      error,
+      error.message || "Não foi possível importar o extrato",
+    );
   }
 
   const resumo = resultadoImportacaoSchema.safeParse(data);
   if (!resumo.success) {
-    return { erro: "Não foi possível ler o resultado da importação" };
+    return erroAcao(
+      "financeiro.conciliacao.importarOfx",
+      resumo.error,
+      "Não foi possível ler o resultado da importação",
+    );
   }
 
   revalidatePath(ROTA);
@@ -143,8 +154,12 @@ export async function buscarSugestoes(transacao: {
   try {
     const sugestoes = await sugerirParcelas(transacao);
     return { ok: true, sugestoes };
-  } catch {
-    return { erro: "Não foi possível buscar sugestões de parcela" };
+  } catch (e) {
+    return erroAcao(
+      "financeiro.conciliacao.buscarSugestoes",
+      e,
+      "Não foi possível buscar sugestões de parcela",
+    );
   }
 }
 
@@ -173,7 +188,11 @@ export async function conciliar(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível conciliar a transação" };
+    return erroAcao(
+      "financeiro.conciliacao.conciliar",
+      error,
+      error.message || "Não foi possível conciliar a transação",
+    );
   }
 
   revalidatePath(ROTA);
@@ -200,9 +219,11 @@ export async function desconciliar(
   });
 
   if (error) {
-    return {
-      erro: error.message || "Não foi possível desconciliar a transação",
-    };
+    return erroAcao(
+      "financeiro.conciliacao.desconciliar",
+      error,
+      error.message || "Não foi possível desconciliar a transação",
+    );
   }
 
   revalidatePath(ROTA);

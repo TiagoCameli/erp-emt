@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -44,7 +45,11 @@ export async function salvarMinimo(
   );
 
   if (error) {
-    return { erro: "Não foi possível salvar o mínimo. Tente novamente" };
+    return erroAcao(
+      "estoque.alertas.salvarMinimo",
+      error,
+      "Não foi possível salvar o mínimo. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

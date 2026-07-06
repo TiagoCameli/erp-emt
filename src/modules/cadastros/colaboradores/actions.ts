@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -53,7 +54,11 @@ export async function criar(dados: ColaboradorInput): Promise<ResultadoAcao> {
     .insert({ ...paraLinhaBanco(validado.data), created_by: usuario.id });
 
   if (error) {
-    return { erro: "Não foi possível salvar o colaborador. Tente novamente" };
+    return erroAcao(
+      "cadastros.colaboradores.criar",
+      error,
+      "Não foi possível salvar o colaborador. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -82,7 +87,11 @@ export async function editar(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o colaborador. Tente novamente" };
+    return erroAcao(
+      "cadastros.colaboradores.editar",
+      error,
+      "Não foi possível salvar o colaborador. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -106,7 +115,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível atualizar o status. Tente novamente" };
+    return erroAcao(
+      "cadastros.colaboradores.alternarAtivo",
+      error,
+      "Não foi possível atualizar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -137,7 +150,11 @@ export async function excluir(
 
   if (error) {
     const traduzido = traduzErroExclusao(error);
-    return { erro: traduzido ?? "Não foi possível excluir o colaborador. Tente novamente" };
+    return erroAcao(
+      "cadastros.colaboradores.excluir",
+      error,
+      traduzido ?? "Não foi possível excluir o colaborador. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -211,12 +228,13 @@ export async function importar(
       colunasImportacao,
     );
   } catch (erro) {
-    return {
-      erro:
-        erro instanceof Error && erro.message
-          ? erro.message
-          : "Não foi possível ler a planilha",
-    };
+    return erroAcao(
+      "cadastros.colaboradores.importar",
+      erro,
+      erro instanceof Error && erro.message
+        ? erro.message
+        : "Não foi possível ler a planilha",
+    );
   }
 
   if (resultado.validas.length === 0) {
@@ -231,7 +249,11 @@ export async function importar(
     .select("id, nome")
     .eq("ativo", true);
   if (erroObras) {
-    return { erro: "Não foi possível carregar as obras para a importação" };
+    return erroAcao(
+      "cadastros.colaboradores.importar",
+      erroObras,
+      "Não foi possível carregar as obras para a importação",
+    );
   }
   // obras.nome não é unique: nomes repetidos são ambíguos e não podem ser
   // casados por adivinhação (o último venceria no Map). Marca os ambíguos.
@@ -276,7 +298,11 @@ export async function importar(
 
   const { error } = await supabase.from("colaboradores").insert(linhasValidas);
   if (error) {
-    return { erro: "Não foi possível importar os colaboradores. Tente novamente" };
+    return erroAcao(
+      "cadastros.colaboradores.importar",
+      error,
+      "Não foi possível importar os colaboradores. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
