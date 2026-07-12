@@ -4,7 +4,6 @@ import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import {
   agregarAging,
-  mesDe,
   paraCentavos,
   paraReais,
   proximoMes,
@@ -30,8 +29,10 @@ export {
 } from "@/modules/financeiro/relatorios/calculo";
 
 /**
- * Queries dos relatórios financeiros. Tudo somente leitura, agregando a partir
- * de lancamentos / lancamento_parcelas / lancamento_rateios / contas_bancarias.
+ * Queries dos relatórios financeiros. Tudo somente leitura. A agregação pesada
+ * (GROUP BY sobre lancamentos / lancamento_parcelas / lancamento_rateios) roda
+ * no banco pelas RPCs fn_rel_* (security invoker: o RLS do usuário vale igual),
+ * que devolvem só as linhas agregadas em vez das milhares de linhas brutas.
  *
  * Datas: as colunas usadas (competencia, data_vencimento, data_pagamento) são
  * `date` puro no Postgres (sem hora), então o mês de um registro é o prefixo
@@ -85,13 +86,9 @@ interface AcumuladorFluxo {
 export async function fluxoCaixa(): Promise<FluxoCaixa> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("lancamento_parcelas")
-    .select(
-      "valor, status, data_vencimento, data_pagamento, lancamentos!inner(tipo, status)",
-    )
-    .neq("status", "cancelado")
-    .neq("lancamentos.status", "cancelado");
+  // Agregado no banco: uma linha por mês/tipo/realizado (a regra do mês do
+  // pagamento x mês do vencimento vive na fn_rel_fluxo_caixa).
+  const { data, error } = await supabase.rpc("fn_rel_fluxo_caixa");
 
   if (error) {
     throw new Error("Não foi possível carregar o fluxo de caixa");
@@ -99,26 +96,12 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
 
   const porMes = new Map<string, AcumuladorFluxo>();
 
-  for (const parcela of data ?? []) {
-    const realizado = parcela.status === "pago";
-    // realizado pelo mês do pagamento (quando o caixa moveu); projetado pelo
-    // mês de vencimento (quando deve mover). O pago cai no vencimento se não
-    // tiver data de pagamento, por garantia.
-    const mes = realizado
-      ? mesDe(parcela.data_pagamento ?? parcela.data_vencimento)
-      : mesDe(parcela.data_vencimento);
-    if (mes === null) continue;
-
-    const lancamento = parcela.lancamentos as unknown as {
-      tipo: string;
-    } | null;
-    if (!lancamento) continue;
-
-    const centavos = paraCentavos(parcela.valor);
-    const ehEntrada = lancamento.tipo === "a_receber";
+  for (const linha of data ?? []) {
+    const centavos = paraCentavos(linha.total);
+    const ehEntrada = linha.tipo === "a_receber";
 
     const atual =
-      porMes.get(mes) ??
+      porMes.get(linha.mes) ??
       ({
         entradasRealizado: 0,
         entradasProjetado: 0,
@@ -127,14 +110,14 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
       } satisfies AcumuladorFluxo);
 
     if (ehEntrada) {
-      if (realizado) atual.entradasRealizado += centavos;
+      if (linha.realizado) atual.entradasRealizado += centavos;
       else atual.entradasProjetado += centavos;
     } else {
-      if (realizado) atual.saidasRealizado += centavos;
+      if (linha.realizado) atual.saidasRealizado += centavos;
       else atual.saidasProjetado += centavos;
     }
 
-    porMes.set(mes, atual);
+    porMes.set(linha.mes, atual);
   }
 
   const meses: FluxoCaixaMes[] = [...porMes.entries()]
@@ -211,12 +194,12 @@ export async function dreGerencial({
   const inicio = `${mes}-01`;
   const fim = proximoMes(mes);
 
-  const { data, error } = await supabase
-    .from("lancamentos")
-    .select(
-      "tipo, valor, competencia, data_vencimento, data_emissao, categorias_financeiras(id, nome)",
-    )
-    .neq("status", "cancelado");
+  // Agregado no banco: uma linha por tipo/categoria do mês (a data efetiva
+  // competência -> vencimento -> emissão vive na fn_rel_dre).
+  const { data, error } = await supabase.rpc("fn_rel_dre", {
+    p_inicio: inicio,
+    p_fim: fim,
+  });
 
   if (error) {
     throw new Error("Não foi possível carregar o DRE gerencial");
@@ -225,25 +208,13 @@ export async function dreGerencial({
   const receitasBrutas: LancamentoCategoria[] = [];
   const despesasBrutas: LancamentoCategoria[] = [];
 
-  for (const lancamento of data ?? []) {
-    const referencia =
-      lancamento.competencia ??
-      lancamento.data_vencimento ??
-      lancamento.data_emissao;
-    if (referencia === null || referencia < inicio || referencia >= fim) {
-      continue;
-    }
-
-    const categoria = lancamento.categorias_financeiras as unknown as {
-      id: string;
-      nome: string;
-    } | null;
+  for (const agregado of data ?? []) {
     const linha: LancamentoCategoria = {
-      categoriaId: categoria?.id ?? null,
-      categoria: categoria?.nome ?? null,
-      valor: lancamento.valor,
+      categoriaId: agregado.categoria_id,
+      categoria: agregado.categoria,
+      valor: agregado.total,
     };
-    if (lancamento.tipo === "a_receber") {
+    if (agregado.tipo === "a_receber") {
       receitasBrutas.push(linha);
     } else {
       despesasBrutas.push(linha);
@@ -290,13 +261,10 @@ export async function aging(): Promise<Aging> {
   const supabase = await createClient();
   const hoje = dataHojeISO();
 
-  const { data, error } = await supabase
-    .from("lancamento_parcelas")
-    .select(
-      "valor, status, data_vencimento, lancamentos!inner(tipo, status)",
-    )
-    .in("status", ["pendente", "aprovado"])
-    .neq("lancamentos.status", "cancelado");
+  // Agregado no banco: uma linha por tipo/data de vencimento. A classificação
+  // em faixas continua no agregarAging (puro e testado), que agora recebe uma
+  // linha por data distinta em vez de uma por parcela.
+  const { data, error } = await supabase.rpc("fn_rel_aging");
 
   if (error) {
     throw new Error("Não foi possível carregar o aging");
@@ -305,17 +273,12 @@ export async function aging(): Promise<Aging> {
   const aPagar: ParcelaAging[] = [];
   const aReceber: ParcelaAging[] = [];
 
-  for (const parcela of data ?? []) {
-    const lancamento = parcela.lancamentos as unknown as {
-      tipo: string;
-    } | null;
-    if (!lancamento) continue;
-
+  for (const linha of data ?? []) {
     const item: ParcelaAging = {
-      valor: parcela.valor,
-      dataVencimento: parcela.data_vencimento,
+      valor: linha.total,
+      dataVencimento: linha.data_vencimento,
     };
-    if (lancamento.tipo === "a_receber") {
+    if (linha.tipo === "a_receber") {
       aReceber.push(item);
     } else {
       aPagar.push(item);
@@ -375,14 +338,10 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
 
-  const { data: parcelas, error: erroParcelas } = await supabase
-    .from("lancamento_parcelas")
-    .select(
-      "valor, conta_bancaria_id, lancamentos!inner(tipo, status)",
-    )
-    .eq("status", "pago")
-    .not("conta_bancaria_id", "is", null)
-    .neq("lancamentos.status", "cancelado");
+  // Agregado no banco: uma linha por conta/tipo das parcelas pagas.
+  const { data: movimentos, error: erroParcelas } = await supabase.rpc(
+    "fn_rel_posicao_bancaria",
+  );
 
   if (erroParcelas) {
     throw new Error("Não foi possível carregar os pagamentos das contas");
@@ -391,25 +350,12 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   const entradasPorConta = new Map<string, number>();
   const saidasPorConta = new Map<string, number>();
 
-  for (const parcela of parcelas ?? []) {
-    const contaId = parcela.conta_bancaria_id;
-    if (!contaId) continue;
-    const lancamento = parcela.lancamentos as unknown as {
-      tipo: string;
-    } | null;
-    if (!lancamento) continue;
-
-    const centavos = paraCentavos(parcela.valor);
-    if (lancamento.tipo === "a_receber") {
-      entradasPorConta.set(
-        contaId,
-        (entradasPorConta.get(contaId) ?? 0) + centavos,
-      );
+  for (const movimento of movimentos ?? []) {
+    const centavos = paraCentavos(movimento.total);
+    if (movimento.tipo === "a_receber") {
+      entradasPorConta.set(movimento.conta_bancaria_id, centavos);
     } else {
-      saidasPorConta.set(
-        contaId,
-        (saidasPorConta.get(contaId) ?? 0) + centavos,
-      );
+      saidasPorConta.set(movimento.conta_bancaria_id, centavos);
     }
   }
 
@@ -462,42 +408,20 @@ export interface CustoPorCentroCusto {
 export async function custoPorCentroCusto(): Promise<CustoPorCentroCusto> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("lancamento_rateios")
-    .select(
-      "valor, centro_custo_id, centros_custo(nome, codigo), lancamentos!inner(tipo, status)",
-    )
-    .eq("lancamentos.tipo", "a_pagar")
-    .neq("lancamentos.status", "cancelado");
+  // Agregado no banco: uma linha por centro de custo, já com nome e código.
+  const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo");
 
   if (error) {
     throw new Error("Não foi possível carregar o custo por centro de custo");
   }
 
-  const porCentro = new Map<string, CustoCentroCusto>();
-
-  for (const rateio of data ?? []) {
-    const centro = rateio.centros_custo as unknown as {
-      nome: string;
-      codigo: string | null;
-    } | null;
-    const chave = rateio.centro_custo_id;
-    const centavos = paraCentavos(rateio.valor);
-    const atual = porCentro.get(chave);
-    if (atual) {
-      atual.valor += centavos;
-    } else {
-      porCentro.set(chave, {
-        centroCustoId: chave,
-        nome: centro?.nome ?? "Sem centro de custo",
-        codigo: centro?.codigo ?? null,
-        valor: centavos,
-      });
-    }
-  }
-
-  const centros = [...porCentro.values()]
-    .map((c) => ({ ...c, valor: paraReais(c.valor) }))
+  const centros: CustoCentroCusto[] = (data ?? [])
+    .map((linha) => ({
+      centroCustoId: linha.centro_custo_id,
+      nome: linha.nome ?? "Sem centro de custo",
+      codigo: linha.codigo,
+      valor: paraReais(paraCentavos(linha.total)),
+    }))
     .sort((a, b) => b.valor - a.valor);
 
   return {
@@ -535,48 +459,25 @@ interface ExtratoParam {
   fornecedorId?: string;
 }
 
-/** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
-function nomeFornecedor(fornecedor: {
-  razao_social: string;
-  nome_fantasia: string | null;
-}): string {
-  return fornecedor.nome_fantasia ?? fornecedor.razao_social;
-}
-
 /** Fornecedores que têm ao menos um lançamento a_pagar, em ordem alfabética. */
 export async function listarFornecedoresComLancamentos(): Promise<
   FornecedorOpcao[]
 > {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("lancamentos")
-    .select("fornecedores!inner(id, razao_social, nome_fantasia)")
-    .eq("tipo", "a_pagar")
-    .neq("status", "cancelado")
-    .not("fornecedor_id", "is", null);
+  // DISTINCT no banco (antes vinha 1 linha por lançamento). O nome de exibição
+  // (fantasia, senão razão social) já vem resolvido da fn_rel_*.
+  const { data, error } = await supabase.rpc(
+    "fn_rel_fornecedores_com_lancamentos",
+  );
 
   if (error) {
     throw new Error("Não foi possível carregar os fornecedores");
   }
 
-  const porId = new Map<string, FornecedorOpcao>();
-  for (const linha of data ?? []) {
-    const fornecedor = linha.fornecedores as unknown as {
-      id: string;
-      razao_social: string;
-      nome_fantasia: string | null;
-    } | null;
-    if (!fornecedor) continue;
-    if (!porId.has(fornecedor.id)) {
-      porId.set(fornecedor.id, {
-        id: fornecedor.id,
-        nome: nomeFornecedor(fornecedor),
-      });
-    }
-  }
-
-  return [...porId.values()].sort((a, b) => a.nome.localeCompare(b.nome));
+  return (data ?? [])
+    .map((linha) => ({ id: linha.id, nome: linha.nome }))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 }
 
 /**
