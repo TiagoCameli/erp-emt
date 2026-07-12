@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { MoreHorizontal, Package, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,6 +14,8 @@ import {
   FiltroSelect,
   PageHeader,
   StatusBadge,
+  useBuscaUrl,
+  useFiltrosUrl,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +46,11 @@ const OPCOES_STATUS = [
 
 export interface InsumosTabelaProps {
   insumos: InsumoLista[];
+  total: number;
+  pagina: number;
+  tamanho: number;
+  busca: string;
+  status: string;
   categorias: CategoriaOpcao[];
   unidades: UnidadeOpcao[];
   podeCriar: boolean;
@@ -52,20 +59,26 @@ export interface InsumosTabelaProps {
 }
 
 /**
- * Tela de insumos: cabeçalho com importar e novo, filtro de busca e status,
- * tabela com ações de linha (editar, ativar/desativar, excluir) e o drawer
- * de criação e edição.
+ * Tela de insumos: cabeçalho com importar e novo, filtros de busca e status
+ * persistidos na URL (resolvidos no servidor), tabela com paginação
+ * server-side e ações de linha (editar, ativar/desativar, excluir) e o
+ * drawer de criação e edição.
  */
 export function InsumosTabela({
   insumos,
+  total,
+  pagina,
+  tamanho,
+  busca: buscaInicial,
+  status,
   categorias,
   unidades,
   podeCriar,
   podeEditar,
   podeExcluir,
 }: InsumosTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState("ativos");
+  const { setMuitos } = useFiltrosUrl();
+  const { busca, setBusca } = useBuscaUrl(buscaInicial);
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<InsumoLista | null>(null);
@@ -102,15 +115,12 @@ export function InsumosTabela({
     setExcluindo(null);
   }
 
-  const filtrados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return insumos.filter((insumo) => {
-      if (status === "ativos" && !insumo.ativo) return false;
-      if (status === "inativos" && insumo.ativo) return false;
-      if (!termo) return true;
-      return insumo.nome.toLowerCase().includes(termo);
+  function aoMudarPaginacao(paginacao: PaginationState) {
+    setMuitos({
+      pagina: String(paginacao.pageIndex + 1),
+      tamanho: String(paginacao.pageSize),
     });
-  }, [insumos, busca, status]);
+  }
 
   const colunas: ColumnDef<InsumoLista, unknown>[] = React.useMemo(() => {
     const base: ColumnDef<InsumoLista, unknown>[] = [
@@ -237,11 +247,13 @@ export function InsumosTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={setBusca}
-          placeholder="Buscar por nome"
+          placeholder="Buscar por nome ou código"
         />
         <FiltroSelect
-          valor={status}
-          onValorChange={(valor) => setStatus(valor === "" ? "ativos" : valor)}
+          valor={status === "todos" ? "" : status}
+          onValorChange={(valor) =>
+            setMuitos({ status: valor === "" ? "todos" : valor, pagina: "1" })
+          }
           opcoes={OPCOES_STATUS}
           placeholder="Status"
           todosRotulo="Todos"
@@ -250,7 +262,11 @@ export function InsumosTabela({
 
       <DataTable
         columns={colunas}
-        data={filtrados}
+        data={insumos}
+        total={total}
+        pageIndex={pagina}
+        pageSize={tamanho}
+        onPaginationChange={aoMudarPaginacao}
         emptyState={
           <EmptyState
             icone={Package}

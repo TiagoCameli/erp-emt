@@ -6,7 +6,16 @@ import {
   type RegistroAuditLog,
 } from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
+import { padraoBusca } from "@/modules/compras/_shared/lista";
 import type { StatusPedido } from "@/modules/compras/pedidos/schemas";
+
+/** Filtros e paginação da listagem de pedidos. */
+export interface ListarPedidosParams {
+  pagina: number;
+  tamanho: number;
+  status?: StatusPedido;
+  busca?: string;
+}
 
 /** Linha da listagem de pedidos. */
 export interface PedidoLista {
@@ -16,6 +25,12 @@ export interface PedidoLista {
   qtdItens: number;
   criadoEm: string;
   solicitanteNome: string | null;
+}
+
+/** Resultado paginado da listagem de pedidos. */
+export interface PedidosPagina {
+  itens: PedidoLista[];
+  total: number;
 }
 
 /** Item de um pedido no detalhe, com nomes resolvidos para exibir. */
@@ -93,17 +108,36 @@ async function mapaNomesUsuarios(
 }
 
 /**
- * Lista os pedidos com contagem de itens e nome do solicitante.
- * O solicitante (created_by) não tem FK declarada para usuarios, então
- * resolvemos os nomes num select separado.
+ * Lista os pedidos com paginação server-side (range + count exact), contagem
+ * de itens agregada no banco e nome do solicitante. Aceita filtro por status
+ * e busca por número (o nome do solicitante vem de RPC, não dá para filtrar
+ * no banco). O solicitante (created_by) não tem FK declarada para usuarios,
+ * então resolvemos os nomes num select separado.
  */
-export async function listarPedidos(): Promise<PedidoLista[]> {
+export async function listarPedidos(
+  params: ListarPedidosParams,
+): Promise<PedidosPagina> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const pagina = Math.max(0, params.pagina);
+  const tamanho = Math.max(1, params.tamanho);
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  let consulta = supabase
     .from("pedidos")
-    .select("id, numero, status, created_at, created_by, pedido_itens(id)")
-    .order("created_at", { ascending: false });
+    .select("id, numero, status, created_at, created_by, pedido_itens(count)", {
+      count: "exact",
+    })
+    .order("created_at", { ascending: false })
+    .range(de, ate);
+
+  if (params.status) consulta = consulta.eq("status", params.status);
+  if (params.busca) {
+    consulta = consulta.ilike("numero", padraoBusca(params.busca));
+  }
+
+  const { data, error, count } = await consulta;
 
   if (error) {
     throw new Error("Não foi possível carregar os pedidos");
@@ -115,14 +149,19 @@ export async function listarPedidos(): Promise<PedidoLista[]> {
     linhas.map((pedido) => pedido.created_by),
   );
 
-  return linhas.map((pedido) => ({
-    id: pedido.id,
-    numero: pedido.numero,
-    status: pedido.status as StatusPedido,
-    qtdItens: pedido.pedido_itens?.length ?? 0,
-    criadoEm: pedido.created_at,
-    solicitanteNome: nomePorId(mapaNomes, pedido.created_by),
-  }));
+  const itens: PedidoLista[] = linhas.map((pedido) => {
+    const itensPedido = pedido.pedido_itens as { count: number }[] | null;
+    return {
+      id: pedido.id,
+      numero: pedido.numero,
+      status: pedido.status as StatusPedido,
+      qtdItens: itensPedido?.[0]?.count ?? 0,
+      criadoEm: pedido.created_at,
+      solicitanteNome: nomePorId(mapaNomes, pedido.created_by),
+    };
+  });
+
+  return { itens, total: count ?? 0 };
 }
 
 /**

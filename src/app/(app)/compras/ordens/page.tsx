@@ -2,6 +2,11 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { ROTULO_STATUS_OC, type StatusOC } from "@/modules/compras/_shared/formato";
+import {
+  lerParametrosLista,
+  parametroValido,
+} from "@/modules/compras/_shared/lista";
 import { OrdensAcoesCabecalho } from "@/modules/compras/ordens/components/ordens-acoes-cabecalho";
 import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela";
 import {
@@ -14,7 +19,13 @@ import {
   listarPedidosAprovados,
 } from "@/modules/compras/ordens/queries";
 
-export default async function PaginaOrdens() {
+const STATUS_VALIDOS = Object.keys(ROTULO_STATUS_OC) as StatusOC[];
+
+export default async function PaginaOrdens({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const usuario = await getUsuarioLogado();
   if (!usuario || !temPermissao(usuario, "compras.ordens", "ver")) {
     notFound();
@@ -22,8 +33,12 @@ export default async function PaginaOrdens() {
 
   const podeCriar = temPermissao(usuario, "compras.ordens", "criar");
 
+  const params = await searchParams;
+  const { pagina, tamanho, busca } = lerParametrosLista(params);
+  const status = parametroValido(params.status, STATUS_VALIDOS);
+
   const [
-    ordens,
+    { itens, total },
     fornecedores,
     insumos,
     centrosCusto,
@@ -31,7 +46,7 @@ export default async function PaginaOrdens() {
     pedidos,
     cotacoes,
   ] = await Promise.all([
-    listarOrdens(),
+    listarOrdens({ pagina, tamanho, status, busca }),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
@@ -57,7 +72,14 @@ export default async function PaginaOrdens() {
           />
         }
       />
-      <OrdensTabela ordens={ordens} />
+      <OrdensTabela
+        ordens={itens}
+        total={total}
+        pagina={pagina}
+        tamanho={tamanho}
+        status={status ?? ""}
+        busca={busca ?? ""}
+      />
     </>
   );
 }

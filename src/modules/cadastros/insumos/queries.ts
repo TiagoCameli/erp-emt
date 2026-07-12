@@ -28,22 +28,62 @@ export interface UnidadeOpcao {
   sigla: string;
 }
 
-/** Lista todos os insumos com categoria (nome) e unidade (sigla) resolvidas. */
-export async function listar(): Promise<InsumoLista[]> {
+/** Filtros e paginação da listagem de insumos. */
+export interface ListarInsumosParams {
+  pagina: number;
+  tamanho: number;
+  /** Busca por nome ou código (ilike no servidor). */
+  busca?: string;
+  /** true = só ativos, false = só inativos; ausente = todos. */
+  ativo?: boolean;
+}
+
+/** Resultado paginado da listagem de insumos. */
+export interface InsumosPagina {
+  itens: InsumoLista[];
+  total: number;
+}
+
+/**
+ * Lista os insumos com paginação server-side (count exato), categoria (nome)
+ * e unidade (sigla) resolvidas. Aceita busca por nome ou código e filtro por
+ * ativo/inativo.
+ */
+export async function listar(
+  params: ListarInsumosParams,
+): Promise<InsumosPagina> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const pagina = Math.max(0, params.pagina);
+  const tamanho = Math.max(1, params.tamanho);
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  let consulta = supabase
     .from("insumos")
     .select(
       "id, codigo, nome, categoria_id, unidade_id, descricao, ativo, categorias_insumo(nome), unidades_medida(sigla)",
+      { count: "exact" },
     )
-    .order("nome");
+    .order("nome")
+    .order("id")
+    .range(de, ate);
+
+  if (params.ativo !== undefined) consulta = consulta.eq("ativo", params.ativo);
+
+  // Remove caracteres que quebram a sintaxe do filtro `or` do PostgREST.
+  const termo = (params.busca ?? "").trim().replace(/[,()"\\]/g, "");
+  if (termo) {
+    consulta = consulta.or(`nome.ilike.%${termo}%,codigo.ilike.%${termo}%`);
+  }
+
+  const { data, error, count } = await consulta;
 
   if (error) {
     throw new Error("Não foi possível carregar os insumos");
   }
 
-  return (data ?? []).map((insumo) => ({
+  const itens: InsumoLista[] = (data ?? []).map((insumo) => ({
     id: insumo.id,
     codigo: insumo.codigo,
     nome: insumo.nome,
@@ -54,6 +94,8 @@ export async function listar(): Promise<InsumoLista[]> {
     descricao: insumo.descricao,
     ativo: insumo.ativo,
   }));
+
+  return { itens, total: count ?? 0 };
 }
 
 /** Categorias de insumo ativas, para o select do formulário. */

@@ -67,47 +67,83 @@ export interface SaldoLista {
   valorTotal: number;
 }
 
+/** Filtros e paginação (opcional) da listagem de saldos. */
+export interface ListarSaldosParams {
+  /** Traz também os saldos zerados (padrão: só quantidade > 0). */
+  incluirZerados?: boolean;
+  /** Busca por nome ou código do insumo (ilike no servidor). */
+  busca?: string;
+  depositoId?: string;
+  /** Página (base 0). Junto com `tamanho` ativa a paginação server-side. */
+  pagina?: number;
+  /** Tamanho da página. Junto com `pagina` ativa a paginação server-side. */
+  tamanho?: number;
+}
+
+/** Resultado da listagem de saldos, com o count exato do servidor. */
+export interface SaldosPagina {
+  itens: SaldoLista[];
+  total: number;
+}
+
 /**
  * Lista os saldos materializados (insumo + depósito) com quantidade > 0 por
- * padrão, com os nomes resolvidos. Base da posição de estoque e dos alertas.
- * Passe `incluirZerados` para trazer também os saldos zerados.
+ * padrão, com os nomes resolvidos e ordenação por insumo e depósito no
+ * servidor. Base da posição de estoque e dos alertas. Aceita busca por
+ * insumo (nome ou código), filtro por depósito e paginação server-side
+ * (count exato); sem `pagina`/`tamanho`, retorna todas as linhas.
  */
 export async function listarSaldos(
-  incluirZerados = false,
-): Promise<SaldoLista[]> {
+  params: ListarSaldosParams = {},
+): Promise<SaldosPagina> {
   const supabase = await createClient();
 
   let consulta = supabase
     .from("estoque_saldos")
     .select(
       `insumo_id, deposito_id, quantidade, valor_total,
-       insumos(nome, codigo, unidades_medida(sigla)),
-       depositos(nome, tipo)`,
-    );
+       insumos!inner(nome, codigo, unidades_medida(sigla)),
+       depositos!inner(nome, tipo)`,
+      { count: "exact" },
+    )
+    .order("insumos(nome)")
+    .order("depositos(nome)")
+    .order("insumo_id");
 
-  if (!incluirZerados) consulta = consulta.gt("quantidade", 0);
+  if (!params.incluirZerados) consulta = consulta.gt("quantidade", 0);
+  if (params.depositoId) consulta = consulta.eq("deposito_id", params.depositoId);
 
-  const { data, error } = await consulta;
+  // Remove caracteres que quebram a sintaxe do filtro `or` do PostgREST.
+  const termo = (params.busca ?? "").trim().replace(/[,()"\\]/g, "");
+  if (termo) {
+    consulta = consulta.or(`nome.ilike.%${termo}%,codigo.ilike.%${termo}%`, {
+      referencedTable: "insumos",
+    });
+  }
+
+  if (params.pagina !== undefined && params.tamanho !== undefined) {
+    const pagina = Math.max(0, params.pagina);
+    const tamanho = Math.max(1, params.tamanho);
+    consulta = consulta.range(pagina * tamanho, pagina * tamanho + tamanho - 1);
+  }
+
+  const { data, error, count } = await consulta;
 
   if (error) throw new Error("Não foi possível carregar os saldos");
 
-  return (data ?? [])
-    .map((saldo) => ({
-      insumoId: saldo.insumo_id,
-      insumoNome: saldo.insumos?.nome ?? "-",
-      insumoCodigo: saldo.insumos?.codigo ?? null,
-      unidadeSigla: saldo.insumos?.unidades_medida?.sigla ?? "",
-      depositoId: saldo.deposito_id,
-      depositoNome: saldo.depositos?.nome ?? "-",
-      depositoTipo: (saldo.depositos?.tipo ?? "central") as TipoDeposito,
-      quantidade: saldo.quantidade,
-      valorTotal: saldo.valor_total,
-    }))
-    .sort(
-      (a, b) =>
-        a.insumoNome.localeCompare(b.insumoNome) ||
-        a.depositoNome.localeCompare(b.depositoNome),
-    );
+  const itens: SaldoLista[] = (data ?? []).map((saldo) => ({
+    insumoId: saldo.insumo_id,
+    insumoNome: saldo.insumos?.nome ?? "-",
+    insumoCodigo: saldo.insumos?.codigo ?? null,
+    unidadeSigla: saldo.insumos?.unidades_medida?.sigla ?? "",
+    depositoId: saldo.deposito_id,
+    depositoNome: saldo.depositos?.nome ?? "-",
+    depositoTipo: (saldo.depositos?.tipo ?? "central") as TipoDeposito,
+    quantidade: saldo.quantidade,
+    valorTotal: saldo.valor_total,
+  }));
+
+  return { itens, total: count ?? 0 };
 }
 
 /** Saldo atual (quantidade) de um insumo num depósito; 0 se não houver. */

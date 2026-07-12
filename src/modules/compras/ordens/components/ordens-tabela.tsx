@@ -1,8 +1,7 @@
 "use client";
 
-import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { ShoppingCart } from "lucide-react";
 
 import {
@@ -13,6 +12,8 @@ import {
   FiltroSelect,
   MoneyText,
   StatusBadge,
+  useBuscaUrl,
+  useFiltrosUrl,
 } from "@/components/canonicos";
 import { formatarData } from "@/lib/formatadores";
 import { infoStatusOC, ROTULO_STATUS_OC } from "@/modules/compras/_shared/formato";
@@ -67,25 +68,36 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
 
 export interface OrdensTabelaProps {
   ordens: OrdemLista[];
+  total: number;
+  pagina: number;
+  tamanho: number;
+  status: string;
+  busca: string;
 }
 
-/** Listagem das ordens de compra. Clicar numa linha abre o detalhe. */
-export function OrdensTabela({ ordens }: OrdensTabelaProps) {
+/**
+ * Listagem das ordens de compra com paginação server-side e filtros (busca
+ * por número ou fornecedor e status) persistidos na URL. Clicar numa linha
+ * abre o detalhe.
+ */
+export function OrdensTabela({
+  ordens,
+  total,
+  pagina,
+  tamanho,
+  status,
+  busca: buscaUrl,
+}: OrdensTabelaProps) {
   const router = useRouter();
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState("");
+  const { setMuitos } = useFiltrosUrl();
+  const { busca, setBusca } = useBuscaUrl(buscaUrl);
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return ordens.filter((ordem) => {
-      if (status !== "" && ordem.status !== status) return false;
-      if (termo) {
-        const alvo = `${ordem.numero ?? ""} ${ordem.fornecedorNome}`.toLowerCase();
-        if (!alvo.includes(termo)) return false;
-      }
-      return true;
+  function aoMudarPaginacao(paginacao: PaginationState) {
+    setMuitos({
+      pagina: String(paginacao.pageIndex + 1),
+      tamanho: String(paginacao.pageSize),
     });
-  }, [ordens, busca, status]);
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -97,7 +109,9 @@ export function OrdensTabela({ ordens }: OrdensTabelaProps) {
         />
         <FiltroSelect
           valor={status}
-          onValorChange={setStatus}
+          onValorChange={(valor) =>
+            setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
+          }
           opcoes={OPCOES_STATUS}
           placeholder="Status"
           todosRotulo="Todos os status"
@@ -106,7 +120,11 @@ export function OrdensTabela({ ordens }: OrdensTabelaProps) {
 
       <DataTable
         columns={colunas}
-        data={dados}
+        data={ordens}
+        total={total}
+        pageIndex={pagina}
+        pageSize={tamanho}
+        onPaginationChange={aoMudarPaginacao}
         onRowClick={(ordem) => router.push(`/compras/ordens/${ordem.id}`)}
         emptyState={
           <EmptyState

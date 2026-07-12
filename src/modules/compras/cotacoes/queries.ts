@@ -6,7 +6,19 @@ import {
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
+import {
+  idsFornecedoresPorNome,
+  padraoBusca,
+} from "@/modules/compras/_shared/lista";
 import type { StatusCotacao } from "@/modules/compras/cotacoes/schemas";
+
+/** Filtros e paginação da listagem de cotações. */
+export interface ListarCotacoesParams {
+  pagina: number;
+  tamanho: number;
+  status?: StatusCotacao;
+  busca?: string;
+}
 
 /** Linha da listagem de cotações. */
 export interface CotacaoLista {
@@ -17,6 +29,12 @@ export interface CotacaoLista {
   vencedorNome: string | null;
   pedidoNumero: string | null;
   createdAt: string;
+}
+
+/** Resultado paginado da listagem de cotações. */
+export interface CotacoesPagina {
+  itens: CotacaoLista[];
+  total: number;
 }
 
 /** Fornecedor dentro do detalhe da cotação, com seu total cotado. */
@@ -94,7 +112,7 @@ interface LinhaListaCotacao {
   status: string;
   created_at: string;
   vencedor_fornecedor_id: string | null;
-  cotacao_fornecedores: { id: string }[] | null;
+  cotacao_fornecedores: { count: number }[] | null;
   pedidos: { numero: string | null } | null;
   fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
 }
@@ -111,34 +129,63 @@ function nomeFornecedor(
 }
 
 /**
- * Lista todas as cotações com a contagem de fornecedores, o nome do vencedor
- * (quando finalizada) e o número do pedido de origem (quando houver).
+ * Lista as cotações com paginação server-side (range + count exact), a
+ * contagem de fornecedores agregada no banco, o nome do vencedor (quando
+ * finalizada) e o número do pedido de origem (quando houver). Aceita filtro
+ * por status e busca por número da cotação ou nome do fornecedor vencedor.
  */
-export async function listarCotacoes(): Promise<CotacaoLista[]> {
+export async function listarCotacoes(
+  params: ListarCotacoesParams,
+): Promise<CotacoesPagina> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const pagina = Math.max(0, params.pagina);
+  const tamanho = Math.max(1, params.tamanho);
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  let consulta = supabase
     .from("cotacoes")
     .select(
-      "id, numero, status, created_at, vencedor_fornecedor_id, cotacao_fornecedores(id), pedidos(numero), fornecedores(razao_social, nome_fantasia)",
+      "id, numero, status, created_at, vencedor_fornecedor_id, cotacao_fornecedores(count), pedidos(numero), fornecedores(razao_social, nome_fantasia)",
+      { count: "exact" },
     )
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(de, ate);
+
+  if (params.status) consulta = consulta.eq("status", params.status);
+
+  if (params.busca) {
+    const padrao = padraoBusca(params.busca);
+    const idsVencedores = await idsFornecedoresPorNome(supabase, padrao);
+    const clausulas = [`numero.ilike.${padrao}`];
+    if (idsVencedores.length > 0) {
+      clausulas.push(`vencedor_fornecedor_id.in.(${idsVencedores.join(",")})`);
+    }
+    consulta = consulta.or(clausulas.join(","));
+  }
+
+  const { data, error, count } = await consulta;
 
   if (error) {
     throw new Error("Não foi possível carregar as cotações");
   }
 
-  return ((data ?? []) as LinhaListaCotacao[]).map((cotacao) => ({
-    id: cotacao.id,
-    numero: cotacao.numero,
-    status: cotacao.status as StatusCotacao,
-    qtdFornecedores: cotacao.cotacao_fornecedores?.length ?? 0,
-    vencedorNome: cotacao.vencedor_fornecedor_id
-      ? nomeFornecedor(cotacao.fornecedores) || null
-      : null,
-    pedidoNumero: cotacao.pedidos?.numero ?? null,
-    createdAt: cotacao.created_at,
-  }));
+  const itens: CotacaoLista[] = ((data ?? []) as LinhaListaCotacao[]).map(
+    (cotacao) => ({
+      id: cotacao.id,
+      numero: cotacao.numero,
+      status: cotacao.status as StatusCotacao,
+      qtdFornecedores: cotacao.cotacao_fornecedores?.[0]?.count ?? 0,
+      vencedorNome: cotacao.vencedor_fornecedor_id
+        ? nomeFornecedor(cotacao.fornecedores) || null
+        : null,
+      pedidoNumero: cotacao.pedidos?.numero ?? null,
+      createdAt: cotacao.created_at,
+    }),
+  );
+
+  return { itens, total: count ?? 0 };
 }
 
 interface LinhaFornecedorCotacao {

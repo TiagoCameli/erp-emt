@@ -27,18 +27,19 @@ export default async function PaginaInventario({
     await searchParams,
   );
 
-  const [{ itens, total }, insumos, depositos, saldos] = await Promise.all([
-    listarMovimentos({
-      tipos: ["ajuste_positivo", "ajuste_negativo"],
-      pagina,
-      tamanho,
-      insumoId,
-      depositoId,
-    }),
-    listarInsumos(),
-    listarDepositos(),
-    listarSaldos(true),
-  ]);
+  const [{ itens, total }, insumos, depositos, { itens: saldos }] =
+    await Promise.all([
+      listarMovimentos({
+        tipos: ["ajuste_positivo", "ajuste_negativo"],
+        pagina,
+        tamanho,
+        insumoId,
+        depositoId,
+      }),
+      listarInsumos(),
+      listarDepositos(),
+      listarSaldos({ incluirZerados: true }),
+    ]);
 
   return (
     <>

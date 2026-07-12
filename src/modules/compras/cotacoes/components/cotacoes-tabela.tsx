@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { ClipboardList, LoaderCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,6 +13,8 @@ import {
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
+  useBuscaUrl,
+  useFiltrosUrl,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
@@ -106,37 +108,41 @@ function useCriarCotacao() {
 
 export interface CotacoesTabelaProps {
   cotacoes: CotacaoLista[];
+  total: number;
+  pagina: number;
+  tamanho: number;
+  status: string;
+  busca: string;
   pedidos: PedidoAprovadoOpcao[];
   podeCriar: boolean;
 }
 
 /**
- * Listagem de cotações. Clicar numa linha abre o detalhe (mapa comparativo).
- * O botão de nova cotação cria e leva direto ao detalhe para montar o mapa.
+ * Listagem de cotações com paginação server-side e filtros (busca por número
+ * ou vencedor e status) persistidos na URL. Clicar numa linha abre o detalhe
+ * (mapa comparativo). O botão de nova cotação cria e leva direto ao detalhe.
  */
 export function CotacoesTabela({
   cotacoes,
+  total,
+  pagina,
+  tamanho,
+  status,
+  busca: buscaUrl,
   pedidos,
   podeCriar,
 }: CotacoesTabelaProps) {
   const router = useRouter();
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState("");
+  const { setMuitos } = useFiltrosUrl();
+  const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const { drawerAberto, setDrawerAberto, criando, aoCriar } = useCriarCotacao();
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return cotacoes.filter((cotacao) => {
-      if (status && cotacao.status !== status) return false;
-      if (termo) {
-        const alvo = `${cotacao.numero ?? ""} ${
-          cotacao.vencedorNome ?? ""
-        } ${cotacao.pedidoNumero ?? ""}`.toLowerCase();
-        if (!alvo.includes(termo)) return false;
-      }
-      return true;
+  function aoMudarPaginacao(paginacao: PaginationState) {
+    setMuitos({
+      pagina: String(paginacao.pageIndex + 1),
+      tamanho: String(paginacao.pageSize),
     });
-  }, [cotacoes, busca, status]);
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -144,11 +150,13 @@ export function CotacoesTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={setBusca}
-          placeholder="Buscar por número, vencedor ou pedido"
+          placeholder="Buscar por número ou vencedor"
         />
         <FiltroSelect
           valor={status}
-          onValorChange={setStatus}
+          onValorChange={(valor) =>
+            setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
+          }
           opcoes={OPCOES_STATUS}
           placeholder="Status"
           todosRotulo="Todos"
@@ -157,7 +165,11 @@ export function CotacoesTabela({
 
       <DataTable
         columns={colunas}
-        data={dados}
+        data={cotacoes}
+        total={total}
+        pageIndex={pagina}
+        pageSize={tamanho}
+        onPaginationChange={aoMudarPaginacao}
         onRowClick={(cotacao) =>
           router.push(`/compras/cotacoes/${cotacao.id}`)
         }

@@ -32,7 +32,7 @@ function chave(insumoId: string, depositoId: string): string {
 export async function listarMinimos(): Promise<MinimoLista[]> {
   const supabase = await createClient();
 
-  const [{ data, error }, saldos] = await Promise.all([
+  const [{ data, error }, { itens: saldos }] = await Promise.all([
     supabase
       .from("estoque_minimos")
       .select(
@@ -40,7 +40,7 @@ export async function listarMinimos(): Promise<MinimoLista[]> {
          insumos(nome, codigo, unidades_medida(sigla)),
          depositos(nome, tipo)`,
       ),
-    listarSaldos(true),
+    listarSaldos({ incluirZerados: true }),
   ]);
 
   if (error) throw new Error("Não foi possível carregar os mínimos");
