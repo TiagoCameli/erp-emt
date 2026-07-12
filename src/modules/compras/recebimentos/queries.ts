@@ -8,9 +8,20 @@ import {
 } from "@/components/canonicos";
 import type { StatusRecebimento } from "@/modules/compras/_shared/formato";
 import {
+  idsFornecedoresPorNome,
+  padraoBusca,
+} from "@/modules/compras/_shared/lista";
+import {
   saldoAReceber,
   totalRecebido,
 } from "@/modules/compras/recebimentos/calculo";
+
+/** Filtros e paginação da listagem de recebimentos. */
+export interface ListarRecebimentosParams {
+  pagina: number;
+  tamanho: number;
+  busca?: string;
+}
 
 /** Linha da listagem de recebimentos, com OC e fornecedor resolvidos. */
 export interface RecebimentoLista {
@@ -23,6 +34,12 @@ export interface RecebimentoLista {
   valorNf: number | null;
   dataRecebimento: string;
   status: StatusRecebimento;
+}
+
+/** Resultado paginado da listagem de recebimentos. */
+export interface RecebimentosPagina {
+  itens: RecebimentoLista[];
+  total: number;
 }
 
 /** Item de um recebimento já gravado, com o insumo e a OC de origem. */
@@ -79,26 +96,70 @@ function nomeFornecedor(
   return fornecedor.nome_fantasia ?? fornecedor.razao_social;
 }
 
+/** Máximo de OCs resolvidas na busca por número de OC ou fornecedor. */
+const MAX_OCS_BUSCA = 50;
+
 /**
- * Lista os recebimentos com a OC e o fornecedor resolvidos, mais recentes
- * primeiro. RLS de compras.recebimentos cobre a visibilidade.
+ * Lista os recebimentos com paginação server-side (range + count exact), a OC
+ * e o fornecedor resolvidos, mais recentes primeiro. A busca cobre número do
+ * recebimento, número da NF, número da OC e nome do fornecedor (estes dois
+ * resolvidos para ids num select prévio, porque o or() do PostgREST não
+ * mistura colunas do pai com joins). RLS de compras.recebimentos cobre a
+ * visibilidade.
  */
-export async function listarRecebimentos(): Promise<RecebimentoLista[]> {
+export async function listarRecebimentos(
+  params: ListarRecebimentosParams,
+): Promise<RecebimentosPagina> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const pagina = Math.max(0, params.pagina);
+  const tamanho = Math.max(1, params.tamanho);
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  let consulta = supabase
     .from("recebimentos")
     .select(
       "id, numero, ordem_compra_id, numero_nf, valor_nf, data_recebimento, status, ordens_compra(numero, fornecedores(razao_social, nome_fantasia))",
+      { count: "exact" },
     )
     .order("data_recebimento", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(de, ate);
+
+  if (params.busca) {
+    const padrao = padraoBusca(params.busca);
+    const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
+
+    const clausulasOc = [`numero.ilike.${padrao}`];
+    if (idsFornecedores.length > 0) {
+      clausulasOc.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
+    }
+    const { data: ordens, error: erroOrdens } = await supabase
+      .from("ordens_compra")
+      .select("id")
+      .or(clausulasOc.join(","))
+      .limit(MAX_OCS_BUSCA);
+
+    if (erroOrdens) {
+      throw new Error("Não foi possível carregar os recebimentos");
+    }
+
+    const idsOrdens = (ordens ?? []).map((ordem) => ordem.id);
+    const clausulas = [`numero.ilike.${padrao}`, `numero_nf.ilike.${padrao}`];
+    if (idsOrdens.length > 0) {
+      clausulas.push(`ordem_compra_id.in.(${idsOrdens.join(",")})`);
+    }
+    consulta = consulta.or(clausulas.join(","));
+  }
+
+  const { data, error, count } = await consulta;
 
   if (error) {
     throw new Error("Não foi possível carregar os recebimentos");
   }
 
-  return (data ?? []).map((recebimento) => ({
+  const itens: RecebimentoLista[] = (data ?? []).map((recebimento) => ({
     id: recebimento.id,
     numero: recebimento.numero,
     ordemCompraId: recebimento.ordem_compra_id,
@@ -111,6 +172,8 @@ export async function listarRecebimentos(): Promise<RecebimentoLista[]> {
     dataRecebimento: recebimento.data_recebimento,
     status: recebimento.status as StatusRecebimento,
   }));
+
+  return { itens, total: count ?? 0 };
 }
 
 /**

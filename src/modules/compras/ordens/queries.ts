@@ -6,6 +6,19 @@ import {
   type RegistroAuditLog,
 } from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
+import type { StatusOC } from "@/modules/compras/_shared/formato";
+import {
+  idsFornecedoresPorNome,
+  padraoBusca,
+} from "@/modules/compras/_shared/lista";
+
+/** Filtros e paginação da listagem de ordens de compra. */
+export interface ListarOrdensParams {
+  pagina: number;
+  tamanho: number;
+  status?: StatusOC;
+  busca?: string;
+}
 
 /** Linha da listagem de ordens de compra. */
 export interface OrdemLista {
@@ -15,6 +28,12 @@ export interface OrdemLista {
   valorTotal: number;
   status: string;
   dataEmissao: string;
+}
+
+/** Resultado paginado da listagem de ordens de compra. */
+export interface OrdensPagina {
+  itens: OrdemLista[];
+  total: number;
 }
 
 /** Item de uma OC, com os nomes resolvidos via join. */
@@ -107,25 +126,50 @@ function nomeFornecedor(fornecedor: {
 }
 
 /**
- * Lista as ordens de compra com o nome do fornecedor resolvido (join).
- * O valor_total vem do banco (trigger), nunca recalculado no app.
+ * Lista as ordens de compra com paginação server-side (range + count exact) e
+ * o nome do fornecedor resolvido (join). Aceita filtro por status e busca por
+ * número da OC ou nome do fornecedor. O valor_total vem do banco (trigger),
+ * nunca recalculado no app.
  */
-export async function listarOrdens(): Promise<OrdemLista[]> {
+export async function listarOrdens(
+  params: ListarOrdensParams,
+): Promise<OrdensPagina> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const pagina = Math.max(0, params.pagina);
+  const tamanho = Math.max(1, params.tamanho);
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  let consulta = supabase
     .from("ordens_compra")
     .select(
       "id, numero, valor_total, status, data_emissao, fornecedores(razao_social, nome_fantasia)",
+      { count: "exact" },
     )
     .order("data_emissao", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(de, ate);
+
+  if (params.status) consulta = consulta.eq("status", params.status);
+
+  if (params.busca) {
+    const padrao = padraoBusca(params.busca);
+    const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
+    const clausulas = [`numero.ilike.${padrao}`];
+    if (idsFornecedores.length > 0) {
+      clausulas.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
+    }
+    consulta = consulta.or(clausulas.join(","));
+  }
+
+  const { data, error, count } = await consulta;
 
   if (error) {
     throw new Error("Não foi possível carregar as ordens de compra");
   }
 
-  return (data ?? []).map((ordem) => ({
+  const itens: OrdemLista[] = (data ?? []).map((ordem) => ({
     id: ordem.id,
     numero: ordem.numero,
     fornecedorNome: ordem.fornecedores
@@ -135,6 +179,8 @@ export async function listarOrdens(): Promise<OrdemLista[]> {
     status: ordem.status,
     dataEmissao: ordem.data_emissao,
   }));
+
+  return { itens, total: count ?? 0 };
 }
 
 /**

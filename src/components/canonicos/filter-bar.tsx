@@ -148,3 +148,27 @@ export function useFiltrosUrl() {
 
   return { get, set, setMuitos };
 }
+
+/** Espera (ms) entre a digitação e a escrita da busca na URL. */
+const DEBOUNCE_BUSCA_MS = 400;
+
+/**
+ * Estado local de busca textual sincronizado com a URL, com debounce, para
+ * listagens com filtro server-side. Escrever a busca zera a página. Use o
+ * `busca`/`setBusca` retornados direto no FiltroBusca.
+ */
+export function useBuscaUrl(buscaInicial: string, chave = "busca") {
+  const { setMuitos } = useFiltrosUrl();
+  const [busca, setBusca] = React.useState(buscaInicial);
+
+  React.useEffect(() => {
+    const termo = busca.trim();
+    if (termo === buscaInicial.trim()) return;
+    const timer = setTimeout(() => {
+      setMuitos({ [chave]: termo === "" ? null : termo, pagina: "1" });
+    }, DEBOUNCE_BUSCA_MS);
+    return () => clearTimeout(timer);
+  }, [busca, buscaInicial, chave, setMuitos]);
+
+  return { busca, setBusca };
+}

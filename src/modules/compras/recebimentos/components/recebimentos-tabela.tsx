@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { PackageCheck, Plus } from "lucide-react";
 
 import {
@@ -11,6 +11,8 @@ import {
   FiltroBusca,
   MoneyText,
   StatusBadge,
+  useBuscaUrl,
+  useFiltrosUrl,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
@@ -87,20 +89,30 @@ const colunas: ColumnDef<RecebimentoLista, unknown>[] = [
 
 export interface RecebimentosTabelaProps {
   recebimentos: RecebimentoLista[];
+  total: number;
+  pagina: number;
+  tamanho: number;
+  busca: string;
   ordens: OrdemReceptivel[];
   podeCriar: boolean;
 }
 
 /**
- * Listagem de recebimentos. O botão registra um novo (escolhendo a OC
+ * Listagem de recebimentos com paginação server-side e busca (número, NF, OC
+ * ou fornecedor) persistida na URL. O botão registra um novo (escolhendo a OC
  * receptível); clicar numa linha abre o detalhe com itens, NF e trilha.
  */
 export function RecebimentosTabela({
   recebimentos,
+  total,
+  pagina,
+  tamanho,
+  busca: buscaUrl,
   ordens,
   podeCriar,
 }: RecebimentosTabelaProps) {
-  const [busca, setBusca] = React.useState("");
+  const { setMuitos } = useFiltrosUrl();
+  const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const [formAberto, setFormAberto] = React.useState(false);
   // Muda a cada abertura: remonta o form com estado limpo, sem reset em efeito.
   const [chaveForm, setChaveForm] = React.useState(0);
@@ -111,21 +123,12 @@ export function RecebimentosTabela({
     setFormAberto(true);
   }
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    if (!termo) return recebimentos;
-    return recebimentos.filter((recebimento) => {
-      const campos = [
-        recebimento.numero,
-        recebimento.ordemCompraNumero,
-        recebimento.fornecedorNome,
-        recebimento.numeroNf,
-      ];
-      return campos.some(
-        (campo) => campo && campo.toLowerCase().includes(termo),
-      );
+  function aoMudarPaginacao(paginacao: PaginationState) {
+    setMuitos({
+      pagina: String(paginacao.pageIndex + 1),
+      tamanho: String(paginacao.pageSize),
     });
-  }, [recebimentos, busca]);
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -158,7 +161,11 @@ export function RecebimentosTabela({
 
       <DataTable
         columns={colunas}
-        data={dados}
+        data={recebimentos}
+        total={total}
+        pageIndex={pagina}
+        pageSize={tamanho}
+        onPaginationChange={aoMudarPaginacao}
         onRowClick={(recebimento) => setDetalheId(recebimento.id)}
         emptyState={
           <EmptyState

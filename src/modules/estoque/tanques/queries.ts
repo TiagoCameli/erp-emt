@@ -107,7 +107,7 @@ export interface NivelTanque {
  * Ordenado por nome.
  */
 export async function listarNiveisTanques(): Promise<NivelTanque[]> {
-  const saldos = await listarSaldos(true);
+  const { itens: saldos } = await listarSaldos({ incluirZerados: true });
 
   return saldos
     .filter((saldo) => TIPOS_TANQUE.includes(saldo.depositoTipo))

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { ClipboardList, Plus } from "lucide-react";
 
 import {
@@ -12,6 +12,8 @@ import {
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
+  useBuscaUrl,
+  useFiltrosUrl,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
@@ -81,6 +83,11 @@ const colunas: ColumnDef<PedidoLista, unknown>[] = [
 
 export interface PedidosTabelaProps {
   pedidos: PedidoLista[];
+  total: number;
+  pagina: number;
+  tamanho: number;
+  status: string;
+  busca: string;
   insumos: InsumoOpcao[];
   centrosCusto: OpcaoSelecao[];
   depositos: OpcaoSelecao[];
@@ -88,11 +95,17 @@ export interface PedidosTabelaProps {
 }
 
 /**
- * Listagem de pedidos. Clicar numa linha abre o detalhe; o botão do cabeçalho
- * abre o drawer de criação para quem tem permissão de criar.
+ * Listagem de pedidos com paginação server-side e filtros (busca por número e
+ * status) persistidos na URL. Clicar numa linha abre o detalhe; o botão do
+ * cabeçalho abre o drawer de criação para quem tem permissão de criar.
  */
 export function PedidosTabela({
   pedidos,
+  total,
+  pagina,
+  tamanho,
+  status,
+  busca: buscaUrl,
   insumos,
   centrosCusto,
   depositos,
@@ -100,23 +113,15 @@ export function PedidosTabela({
 }: PedidosTabelaProps) {
   const router = useRouter();
   const [criando, setCriando] = React.useState(false);
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState("");
+  const { setMuitos } = useFiltrosUrl();
+  const { busca, setBusca } = useBuscaUrl(buscaUrl);
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return pedidos.filter((pedido) => {
-      if (status && pedido.status !== status) return false;
-      if (termo) {
-        const numero = pedido.numero?.toLowerCase() ?? "";
-        const solicitante = pedido.solicitanteNome?.toLowerCase() ?? "";
-        if (!numero.includes(termo) && !solicitante.includes(termo)) {
-          return false;
-        }
-      }
-      return true;
+  function aoMudarPaginacao(paginacao: PaginationState) {
+    setMuitos({
+      pagina: String(paginacao.pageIndex + 1),
+      tamanho: String(paginacao.pageSize),
     });
-  }, [pedidos, busca, status]);
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -125,11 +130,13 @@ export function PedidosTabela({
           <FiltroBusca
             valor={busca}
             onValorChange={setBusca}
-            placeholder="Buscar por número ou solicitante"
+            placeholder="Buscar por número"
           />
           <FiltroSelect
             valor={status}
-            onValorChange={setStatus}
+            onValorChange={(valor) =>
+              setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
+            }
             opcoes={OPCOES_STATUS}
             placeholder="Status"
             todosRotulo="Todos os status"
@@ -146,7 +153,11 @@ export function PedidosTabela({
 
       <DataTable
         columns={colunas}
-        data={dados}
+        data={pedidos}
+        total={total}
+        pageIndex={pagina}
+        pageSize={tamanho}
+        onPaginationChange={aoMudarPaginacao}
         onRowClick={(pedido) => router.push(`/compras/pedidos/${pedido.id}`)}
         emptyState={
           <EmptyState

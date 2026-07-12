@@ -1,7 +1,6 @@
 "use client";
 
-import * as React from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { Boxes } from "lucide-react";
 
 import {
@@ -11,6 +10,8 @@ import {
   FiltroBusca,
   FiltroSelect,
   MoneyText,
+  useBuscaUrl,
+  useFiltrosUrl,
 } from "@/components/canonicos";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { ROTULO_TIPO_DEPOSITO } from "@/modules/cadastros/depositos/schemas";
@@ -18,6 +19,11 @@ import type { SaldoLista } from "@/modules/estoque/_shared/queries";
 
 export interface PosicaoTabelaProps {
   saldos: SaldoLista[];
+  total: number;
+  pagina: number;
+  tamanho: number;
+  busca: string;
+  depositoId: string;
   depositos: { id: string; nome: string }[];
 }
 
@@ -68,30 +74,32 @@ const COLUNAS: ColumnDef<SaldoLista, unknown>[] = [
 
 /**
  * Posição de estoque (somente leitura): busca por insumo (nome ou código) e
- * filtro por depósito, ambos client-side. A tabela pagina sozinha (sem props
- * de paginação server-side), já que os saldos chegam inteiros do servidor.
+ * filtro por depósito resolvidos no servidor e persistidos na URL, com
+ * paginação server-side.
  */
-export function PosicaoTabela({ saldos, depositos }: PosicaoTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [depositoId, setDepositoId] = React.useState("");
+export function PosicaoTabela({
+  saldos,
+  total,
+  pagina,
+  tamanho,
+  busca: buscaInicial,
+  depositoId,
+  depositos,
+}: PosicaoTabelaProps) {
+  const { setMuitos } = useFiltrosUrl();
+  const { busca, setBusca } = useBuscaUrl(buscaInicial);
 
   const opcoesDeposito = depositos.map((deposito) => ({
     valor: deposito.id,
     rotulo: deposito.nome,
   }));
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return saldos.filter((saldo) => {
-      if (depositoId && saldo.depositoId !== depositoId) return false;
-      if (termo) {
-        const nome = saldo.insumoNome.toLowerCase();
-        const codigo = saldo.insumoCodigo?.toLowerCase() ?? "";
-        if (!nome.includes(termo) && !codigo.includes(termo)) return false;
-      }
-      return true;
+  function aoMudarPaginacao(paginacao: PaginationState) {
+    setMuitos({
+      pagina: String(paginacao.pageIndex + 1),
+      tamanho: String(paginacao.pageSize),
     });
-  }, [saldos, busca, depositoId]);
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -103,7 +111,9 @@ export function PosicaoTabela({ saldos, depositos }: PosicaoTabelaProps) {
         />
         <FiltroSelect
           valor={depositoId}
-          onValorChange={setDepositoId}
+          onValorChange={(valor) =>
+            setMuitos({ deposito: valor === "" ? null : valor, pagina: "1" })
+          }
           opcoes={opcoesDeposito}
           placeholder="Depósito"
           todosRotulo="Todos os depósitos"
@@ -112,7 +122,11 @@ export function PosicaoTabela({ saldos, depositos }: PosicaoTabelaProps) {
 
       <DataTable
         columns={COLUNAS}
-        data={dados}
+        data={saldos}
+        total={total}
+        pageIndex={pagina}
+        pageSize={tamanho}
+        onPaginationChange={aoMudarPaginacao}
         emptyState={
           <EmptyState
             icone={Boxes}
