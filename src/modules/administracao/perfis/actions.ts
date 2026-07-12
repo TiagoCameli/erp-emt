@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { RECURSOS, type Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -39,7 +40,11 @@ export async function criarPerfil(dados: PerfilInput): Promise<ResultadoAcao> {
     if (error.code === "23505") {
       return { erro: "Já existe um perfil com esse nome" };
     }
-    return { erro: "Não foi possível criar o perfil. Tente novamente" };
+    return erroAcao(
+      "administracao.perfis.criar",
+      error,
+      "Não foi possível criar o perfil. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA_PERFIS);
@@ -73,7 +78,11 @@ export async function editarPerfil(
     if (error.code === "23505") {
       return { erro: "Já existe um perfil com esse nome" };
     }
-    return { erro: "Não foi possível salvar o perfil. Tente novamente" };
+    return erroAcao(
+      "administracao.perfis.editar",
+      error,
+      "Não foi possível salvar o perfil. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA_PERFIS);
@@ -118,7 +127,11 @@ export async function excluirPerfil(
         erro: "Este perfil tem usuários vinculados. Troque o perfil deles antes de excluir",
       };
     }
-    return { erro: "Não foi possível excluir o perfil. Tente novamente" };
+    return erroAcao(
+      "administracao.perfis.excluir",
+      error,
+      "Não foi possível excluir o perfil. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA_PERFIS);
@@ -170,7 +183,11 @@ export async function salvarPermissoesPerfil(
   });
 
   if (error) {
-    return { erro: "Não foi possível salvar as permissões. Tente novamente" };
+    return erroAcao(
+      "administracao.perfis.salvar-permissoes",
+      error,
+      "Não foi possível salvar as permissões. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA_PERFIS);

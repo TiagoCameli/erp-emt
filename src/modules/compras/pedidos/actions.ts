@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { pedidoSchema, type PedidoInput } from "@/modules/compras/pedidos/schemas";
@@ -81,7 +82,11 @@ export async function criarPedido(
     .single();
 
   if (error || !pedido) {
-    return { erro: "Não foi possível salvar o pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.criarPedido",
+      error,
+      "Não foi possível salvar o pedido. Tente novamente",
+    );
   }
 
   const { error: erroItens } = await supabase
@@ -90,7 +95,11 @@ export async function criarPedido(
 
   if (erroItens) {
     await supabase.from(TABELA).delete().eq("id", pedido.id);
-    return { erro: "Não foi possível salvar os itens do pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.criarPedido",
+      erroItens,
+      "Não foi possível salvar os itens do pedido. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -132,7 +141,11 @@ export async function editarPedido(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.editarPedido",
+      error,
+      "Não foi possível salvar o pedido. Tente novamente",
+    );
   }
 
   // Reescreve os itens: apaga os atuais e insere os novos. Sem transação no
@@ -151,7 +164,11 @@ export async function editarPedido(
     .eq("pedido_id", idValido.data);
 
   if (erroApagar) {
-    return { erro: "Não foi possível atualizar os itens. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.editarPedido",
+      erroApagar,
+      "Não foi possível atualizar os itens. Tente novamente",
+    );
   }
 
   const { error: erroItens } = await supabase
@@ -163,7 +180,11 @@ export async function editarPedido(
     if (itensAntigos && itensAntigos.length > 0) {
       await supabase.from("pedido_itens").insert(itensAntigos);
     }
-    return { erro: "Não foi possível salvar os itens do pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.editarPedido",
+      erroItens,
+      "Não foi possível salvar os itens do pedido. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -193,7 +214,11 @@ export async function enviarParaAprovacao(id: string): Promise<ResultadoAcao> {
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível enviar o pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.enviarParaAprovacao",
+      error,
+      "Não foi possível enviar o pedido. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -235,7 +260,11 @@ export async function aprovarPedido(id: string): Promise<ResultadoAcao> {
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível aprovar o pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.aprovarPedido",
+      error,
+      "Não foi possível aprovar o pedido. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -276,7 +305,11 @@ export async function rejeitarPedido(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível rejeitar o pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.rejeitarPedido",
+      error,
+      "Não foi possível rejeitar o pedido. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -322,7 +355,11 @@ export async function desaprovarPedido(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível desaprovar o pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.desaprovarPedido",
+      error,
+      "Não foi possível desaprovar o pedido. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -363,7 +400,11 @@ export async function cancelarPedido(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível cancelar o pedido. Tente novamente" };
+    return erroAcao(
+      "compras.pedidos.cancelarPedido",
+      error,
+      "Não foi possível cancelar o pedido. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

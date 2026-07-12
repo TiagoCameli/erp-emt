@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -54,7 +55,11 @@ export async function criarCategoria(
     if (error.code === "23505") {
       return { erro: "Já existe uma categoria com este nome e tipo" };
     }
-    return { erro: "Não foi possível salvar a categoria. Tente novamente" };
+    return erroAcao(
+      "financeiro.categorias.criarCategoria",
+      error,
+      "Não foi possível salvar a categoria. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -98,7 +103,11 @@ export async function editarCategoria(
     if (error.code === "23505") {
       return { erro: "Já existe uma categoria com este nome e tipo" };
     }
-    return { erro: "Não foi possível salvar a categoria. Tente novamente" };
+    return erroAcao(
+      "financeiro.categorias.editarCategoria",
+      error,
+      "Não foi possível salvar a categoria. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -124,7 +133,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "financeiro.categorias.alternarAtivo",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

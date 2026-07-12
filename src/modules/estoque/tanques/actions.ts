@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { erroAcao } from "@/lib/erros";
 import { dataHojeISO } from "@/lib/formatadores";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -68,9 +69,11 @@ export async function registrarAbastecimento(
   const { data, error } = await supabase.rpc("fn_abastecer", args);
 
   if (error || !data) {
-    return {
-      erro: error?.message || "Não foi possível registrar o abastecimento",
-    };
+    return erroAcao(
+      "estoque.tanques.registrarAbastecimento",
+      error,
+      error?.message || "Não foi possível registrar o abastecimento",
+    );
   }
 
   revalidatePath(ROTA);

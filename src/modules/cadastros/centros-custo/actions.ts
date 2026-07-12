@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao, logErroServidor } from "@/lib/erros";
 import {
   lerEValidarXlsx,
   type ColunaImportacao,
@@ -86,7 +87,11 @@ export async function criarEtapa(dados: CriarEtapaInput): Promise<ResultadoAcao>
   });
 
   if (error) {
-    return { erro: "Não foi possível criar a etapa. Tente novamente" };
+    return erroAcao(
+      "cadastros.centros-custo.criarEtapa",
+      error,
+      "Não foi possível criar a etapa. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -123,7 +128,11 @@ export async function criarItem(dados: CriarItemInput): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: "Não foi possível criar o item. Tente novamente" };
+    return erroAcao(
+      "cadastros.centros-custo.criarItem",
+      error,
+      "Não foi possível criar o item. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -170,7 +179,11 @@ export async function editarNo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar. Tente novamente" };
+    return erroAcao(
+      "cadastros.centros-custo.editarNo",
+      error,
+      "Não foi possível salvar. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -208,7 +221,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "cadastros.centros-custo.alternarAtivo",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -333,8 +350,8 @@ export async function importar(
   let buffer: ArrayBuffer;
   try {
     buffer = await lerArquivo(formData);
-  } catch {
-    return { erro: "Nenhum arquivo enviado" };
+  } catch (e) {
+    return erroAcao("cadastros.centros-custo.importar", e, "Nenhum arquivo enviado");
   }
 
   const resultado = await lerEValidarXlsx<LinhaImportCentroCusto>(
@@ -355,7 +372,11 @@ export async function importar(
     .eq("nivel", 1);
 
   if (erroCentros) {
-    return { erro: "Não foi possível ler os centros de custo. Tente novamente" };
+    return erroAcao(
+      "cadastros.centros-custo.importar",
+      erroCentros,
+      "Não foi possível ler os centros de custo. Tente novamente",
+    );
   }
 
   const centroPorNome = new Map<string, string>();
@@ -401,6 +422,7 @@ export async function importar(
       .eq("pai_id", paiId)
       .eq("nivel", nivel);
     if (error) {
+      logErroServidor("cadastros.centros-custo.importar", error);
       return nivel === 2
         ? "Não foi possível ler as etapas existentes. Tente novamente"
         : "Não foi possível ler os itens existentes. Tente novamente";
@@ -449,9 +471,11 @@ export async function importar(
         .single();
 
       if (erroEtapa || !etapaCriada) {
-        return {
-          erro: "Não foi possível importar as etapas. Tente novamente",
-        };
+        return erroAcao(
+          "cadastros.centros-custo.importar",
+          erroEtapa,
+          "Não foi possível importar as etapas. Tente novamente",
+        );
       }
       etapaId = etapaCriada.id;
       etapaPorChave.set(chaveEtapa, etapaId);
@@ -482,7 +506,11 @@ export async function importar(
       .single();
 
     if (erroItem || !itemCriado) {
-      return { erro: "Não foi possível importar os itens. Tente novamente" };
+      return erroAcao(
+        "cadastros.centros-custo.importar",
+        erroItem,
+        "Não foi possível importar os itens. Tente novamente",
+      );
     }
     itemPorChave.set(chaveItem, itemCriado.id);
     importadas += 1;

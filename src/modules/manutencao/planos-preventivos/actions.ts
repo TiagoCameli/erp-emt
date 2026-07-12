@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao, RecursoId } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -84,7 +85,11 @@ export async function criarPlano(
     if (error?.code === "23505") {
       return { erro: "Já existe um plano com este nome" };
     }
-    return { erro: "Não foi possível salvar o plano. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.criarPlano",
+      error,
+      "Não foi possível salvar o plano. Tente novamente",
+    );
   }
 
   const { error: erroAtividades } = await supabase
@@ -94,7 +99,11 @@ export async function criarPlano(
   if (erroAtividades) {
     // Desfaz o plano sem atividades para não deixar cabeçalho órfão.
     await supabase.from("planos_preventivos").delete().eq("id", plano.id);
-    return { erro: "Não foi possível salvar as atividades. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.criarPlano",
+      erroAtividades,
+      "Não foi possível salvar as atividades. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -136,7 +145,11 @@ export async function editarPlano(
     if (error.code === "23505") {
       return { erro: "Já existe um plano com este nome" };
     }
-    return { erro: "Não foi possível salvar o plano. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.editarPlano",
+      error,
+      "Não foi possível salvar o plano. Tente novamente",
+    );
   }
 
   const { data: atividadesAntigas } = await supabase
@@ -150,7 +163,11 @@ export async function editarPlano(
     .eq("plano_id", idValido.data);
 
   if (erroDelete) {
-    return { erro: "Não foi possível atualizar as atividades. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.editarPlano",
+      erroDelete,
+      "Não foi possível atualizar as atividades. Tente novamente",
+    );
   }
 
   const { error: erroAtividades } = await supabase
@@ -162,7 +179,11 @@ export async function editarPlano(
     if (atividadesAntigas && atividadesAntigas.length > 0) {
       await supabase.from("plano_atividades").insert(atividadesAntigas);
     }
-    return { erro: "Não foi possível salvar as atividades. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.editarPlano",
+      erroAtividades,
+      "Não foi possível salvar as atividades. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -188,7 +209,11 @@ export async function alternarAtivoPlano(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.alternarAtivoPlano",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -226,7 +251,11 @@ export async function atribuirPlano(
     if (error.code === "23505") {
       return { erro: "Esse plano já está atribuído a esse equipamento" };
     }
-    return { erro: "Não foi possível atribuir o plano. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.atribuirPlano",
+      error,
+      "Não foi possível atribuir o plano. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -249,7 +278,11 @@ export async function removerAtribuicao(id: string): Promise<ResultadoAcao> {
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível remover a atribuição. Tente novamente" };
+    return erroAcao(
+      "manutencao.planos-preventivos.removerAtribuicao",
+      error,
+      "Não foi possível remover a atribuição. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -283,7 +316,11 @@ export async function registrarLeitura(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível registrar a leitura" };
+    return erroAcao(
+      "manutencao.planos-preventivos.registrarLeitura",
+      error,
+      error.message || "Não foi possível registrar a leitura",
+    );
   }
 
   revalidatePath(ROTA);
@@ -314,7 +351,11 @@ export async function gerarOsPreventiva(
   });
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível gerar a OS preventiva" };
+    return erroAcao(
+      "manutencao.planos-preventivos.gerarOsPreventiva",
+      error,
+      error?.message || "Não foi possível gerar a OS preventiva",
+    );
   }
 
   revalidatePath(ROTA);

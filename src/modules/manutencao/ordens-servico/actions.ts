@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -110,7 +111,11 @@ export async function abrirOrdem(
   const { data, error } = await supabase.rpc("fn_abrir_os", args);
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível abrir a ordem de serviço" };
+    return erroAcao(
+      "manutencao.ordens-servico.abrirOrdem",
+      error,
+      error?.message || "Não foi possível abrir a ordem de serviço",
+    );
   }
 
   revalidatePath(ROTA);
@@ -134,7 +139,11 @@ export async function iniciarOrdem(id: string): Promise<ResultadoAcao> {
   const { error } = await supabase.rpc("fn_iniciar_os", { p_os: idValido.data });
 
   if (error) {
-    return { erro: error.message || "Não foi possível iniciar a ordem de serviço" };
+    return erroAcao(
+      "manutencao.ordens-servico.iniciarOrdem",
+      error,
+      error.message || "Não foi possível iniciar a ordem de serviço",
+    );
   }
 
   revalidatePath(ROTA);
@@ -178,7 +187,11 @@ export async function concluirOrdem(
   const { error } = await supabase.rpc("fn_concluir_os", args);
 
   if (error) {
-    return { erro: error.message || "Não foi possível concluir a ordem de serviço" };
+    return erroAcao(
+      "manutencao.ordens-servico.concluirOrdem",
+      error,
+      error.message || "Não foi possível concluir a ordem de serviço",
+    );
   }
 
   revalidatePath(ROTA);
@@ -208,7 +221,11 @@ export async function cancelarOrdem(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível cancelar a ordem de serviço" };
+    return erroAcao(
+      "manutencao.ordens-servico.cancelarOrdem",
+      error,
+      error.message || "Não foi possível cancelar a ordem de serviço",
+    );
   }
 
   revalidatePath(ROTA);
@@ -249,7 +266,11 @@ export async function adicionarPeca(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível adicionar a peça" };
+    return erroAcao(
+      "manutencao.ordens-servico.adicionarPeca",
+      error,
+      error.message || "Não foi possível adicionar a peça",
+    );
   }
 
   revalidatePath(ROTA);
@@ -290,7 +311,11 @@ export async function adicionarMaoObra(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível adicionar a mão de obra" };
+    return erroAcao(
+      "manutencao.ordens-servico.adicionarMaoObra",
+      error,
+      error.message || "Não foi possível adicionar a mão de obra",
+    );
   }
 
   revalidatePath(ROTA);
@@ -323,7 +348,11 @@ export async function removerMaoObra(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: error.message || "Não foi possível remover a mão de obra" };
+    return erroAcao(
+      "manutencao.ordens-servico.removerMaoObra",
+      error,
+      error.message || "Não foi possível remover a mão de obra",
+    );
   }
 
   revalidatePath(ROTA);
@@ -365,7 +394,11 @@ export async function adicionarTerceiro(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível adicionar o terceiro" };
+    return erroAcao(
+      "manutencao.ordens-servico.adicionarTerceiro",
+      error,
+      error.message || "Não foi possível adicionar o terceiro",
+    );
   }
 
   revalidatePath(ROTA);
@@ -398,7 +431,11 @@ export async function removerTerceiro(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: error.message || "Não foi possível remover o terceiro" };
+    return erroAcao(
+      "manutencao.ordens-servico.removerTerceiro",
+      error,
+      error.message || "Não foi possível remover o terceiro",
+    );
   }
 
   revalidatePath(ROTA);

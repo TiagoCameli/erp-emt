@@ -5,6 +5,7 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -72,7 +73,11 @@ export async function gerarFolha(
   });
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível gerar a folha" };
+    return erroAcao(
+      "rh.folha.gerar",
+      error,
+      error?.message || "Não foi possível gerar a folha",
+    );
   }
 
   revalidatePath(ROTA);
@@ -99,7 +104,11 @@ export async function fecharFolha(id: string): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível fechar a folha" };
+    return erroAcao(
+      "rh.folha.fechar",
+      error,
+      error.message || "Não foi possível fechar a folha",
+    );
   }
 
   revalidatePath(ROTA);
@@ -122,7 +131,11 @@ export async function reabrirFolha(id: string): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível reabrir a folha" };
+    return erroAcao(
+      "rh.folha.reabrir",
+      error,
+      error.message || "Não foi possível reabrir a folha",
+    );
   }
 
   revalidatePath(ROTA);

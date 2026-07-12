@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -84,7 +85,11 @@ export async function criarOrdem(
     .single();
 
   if (error || !ordem) {
-    return { erro: "Não foi possível salvar a ordem de compra. Tente novamente" };
+    return erroAcao(
+      "compras.ordens.criarOrdem",
+      error,
+      "Não foi possível salvar a ordem de compra. Tente novamente",
+    );
   }
 
   const { error: erroItens } = await supabase
@@ -94,7 +99,11 @@ export async function criarOrdem(
   if (erroItens) {
     // Desfaz a OC sem itens para não deixar cabeçalho órfão.
     await supabase.from(TABELA).delete().eq("id", ordem.id);
-    return { erro: "Não foi possível salvar os itens. Tente novamente" };
+    return erroAcao(
+      "compras.ordens.criarOrdem",
+      erroItens,
+      "Não foi possível salvar os itens. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -130,7 +139,13 @@ export async function editarOrdem(
     .eq("id", idValido.data)
     .single();
 
-  if (erroBusca || !atual) return { erro: "Ordem de compra não encontrada" };
+  if (erroBusca || !atual) {
+    return erroAcao(
+      "compras.ordens.editarOrdem",
+      erroBusca,
+      "Ordem de compra não encontrada",
+    );
+  }
   if (!STATUS_EDITAVEIS.has(atual.status)) {
     return {
       erro: "Só dá para editar ordens em rascunho ou pendentes. Desaprove antes de alterar",
@@ -143,7 +158,11 @@ export async function editarOrdem(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a ordem de compra. Tente novamente" };
+    return erroAcao(
+      "compras.ordens.editarOrdem",
+      error,
+      "Não foi possível salvar a ordem de compra. Tente novamente",
+    );
   }
 
   // Troca os itens por inteiro: apaga os antigos e insere os novos. Sem
@@ -162,7 +181,11 @@ export async function editarOrdem(
     .eq("ordem_compra_id", idValido.data);
 
   if (erroDelete) {
-    return { erro: "Não foi possível atualizar os itens. Tente novamente" };
+    return erroAcao(
+      "compras.ordens.editarOrdem",
+      erroDelete,
+      "Não foi possível atualizar os itens. Tente novamente",
+    );
   }
 
   const { error: erroItens } = await supabase
@@ -174,7 +197,11 @@ export async function editarOrdem(
     if (itensAntigos && itensAntigos.length > 0) {
       await supabase.from("oc_itens").insert(itensAntigos);
     }
-    return { erro: "Não foi possível salvar os itens. Tente novamente" };
+    return erroAcao(
+      "compras.ordens.editarOrdem",
+      erroItens,
+      "Não foi possível salvar os itens. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -203,7 +230,13 @@ async function transicionarStatus(
     .eq("id", idValido.data)
     .single();
 
-  if (erroBusca || !atual) return { erro: "Ordem de compra não encontrada" };
+  if (erroBusca || !atual) {
+    return erroAcao(
+      "compras.ordens.transicionarStatus",
+      erroBusca,
+      "Ordem de compra não encontrada",
+    );
+  }
   if (atual.status !== statusEsperado) {
     return { erro: "A ordem não está no status esperado para esta ação" };
   }
@@ -214,7 +247,11 @@ async function transicionarStatus(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível atualizar a ordem de compra. Tente novamente" };
+    return erroAcao(
+      "compras.ordens.transicionarStatus",
+      error,
+      "Não foi possível atualizar a ordem de compra. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -246,7 +283,11 @@ export async function aprovarOrdem(id: string): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível aprovar a ordem de compra" };
+    return erroAcao(
+      "compras.ordens.aprovarOrdem",
+      error,
+      error.message || "Não foi possível aprovar a ordem de compra",
+    );
   }
 
   revalidatePath(ROTA);
@@ -292,7 +333,11 @@ export async function desaprovarOrdem(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível desaprovar a ordem de compra" };
+    return erroAcao(
+      "compras.ordens.desaprovarOrdem",
+      error,
+      error.message || "Não foi possível desaprovar a ordem de compra",
+    );
   }
 
   revalidatePath(ROTA);
@@ -321,7 +366,13 @@ export async function cancelarOrdem(
     .eq("id", idValido.data)
     .single();
 
-  if (erroBusca || !atual) return { erro: "Ordem de compra não encontrada" };
+  if (erroBusca || !atual) {
+    return erroAcao(
+      "compras.ordens.cancelarOrdem",
+      erroBusca,
+      "Ordem de compra não encontrada",
+    );
+  }
   if (atual.status === "recebido" || atual.status === "recebido_parcial") {
     return { erro: "Estorne os recebimentos antes de cancelar a ordem" };
   }
@@ -338,7 +389,11 @@ export async function cancelarOrdem(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível cancelar a ordem de compra. Tente novamente" };
+    return erroAcao(
+      "compras.ordens.cancelarOrdem",
+      error,
+      "Não foi possível cancelar a ordem de compra. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

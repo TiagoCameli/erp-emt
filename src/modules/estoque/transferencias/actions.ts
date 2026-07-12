@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { erroAcao } from "@/lib/erros";
 import { dataHojeISO } from "@/lib/formatadores";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -46,9 +47,11 @@ export async function registrarTransferencia(
   });
 
   if (error || !data) {
-    return {
-      erro: error?.message || "Não foi possível registrar a transferência",
-    };
+    return erroAcao(
+      "estoque.transferencias.registrarTransferencia",
+      error,
+      error?.message || "Não foi possível registrar a transferência",
+    );
   }
 
   revalidatePath(ROTA);

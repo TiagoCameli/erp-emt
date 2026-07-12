@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -43,7 +44,13 @@ async function garantirEmAberto(
     .eq("id", id)
     .maybeSingle();
 
-  if (error) return { erro: "Não foi possível carregar o adiantamento" };
+  if (error) {
+    return erroAcao(
+      "rh.adiantamentos.garantirEmAberto",
+      error,
+      "Não foi possível carregar o adiantamento",
+    );
+  }
   if (!data) return { erro: "Adiantamento não encontrado" };
   if (data.folha_id !== null) {
     return { erro: "Adiantamento já incluído numa folha" };
@@ -74,7 +81,11 @@ export async function criarAdiantamento(
   });
 
   if (error) {
-    return { erro: "Não foi possível salvar o adiantamento. Tente novamente" };
+    return erroAcao(
+      "rh.adiantamentos.criar",
+      error,
+      "Não foi possível salvar o adiantamento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -115,7 +126,11 @@ export async function editarAdiantamento(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o adiantamento. Tente novamente" };
+    return erroAcao(
+      "rh.adiantamentos.editar",
+      error,
+      "Não foi possível salvar o adiantamento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -142,7 +157,11 @@ export async function removerAdiantamento(id: string): Promise<ResultadoAcao> {
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir o adiantamento. Tente novamente" };
+    return erroAcao(
+      "rh.adiantamentos.remover",
+      error,
+      "Não foi possível excluir o adiantamento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

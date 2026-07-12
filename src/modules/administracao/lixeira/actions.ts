@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,7 +42,11 @@ export async function restaurarItem(lixeiraId: string): Promise<ResultadoAcao> {
         erro: "Já existe um registro com esses dados. Não foi possível restaurar",
       };
     }
-    return { erro: "Não foi possível restaurar o item. Tente novamente" };
+    return erroAcao(
+      "administracao.lixeira.restaurar",
+      error,
+      "Não foi possível restaurar o item. Tente novamente",
+    );
   }
 
   revalidatePath("/administracao/lixeira");

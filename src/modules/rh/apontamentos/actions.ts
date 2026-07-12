@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -91,7 +92,11 @@ export async function criarPonto(dados: PontoInput): Promise<ResultadoCriacao> {
     if (error?.code === ERRO_UNIQUE) {
       return { erro: "Já existe ponto dessa obra nesse dia" };
     }
-    return { erro: error?.message || "Não foi possível criar o ponto" };
+    return erroAcao(
+      "rh.apontamentos.criarPonto",
+      error,
+      error?.message || "Não foi possível criar o ponto",
+    );
   }
 
   revalidatePath(ROTA);
@@ -131,7 +136,11 @@ export async function editarPonto(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: error.message || "Não foi possível salvar o ponto" };
+    return erroAcao(
+      "rh.apontamentos.editarPonto",
+      error,
+      error.message || "Não foi possível salvar o ponto",
+    );
   }
 
   revalidatePath(ROTA);
@@ -180,7 +189,11 @@ export async function adicionarApontamento(
     if (error.code === ERRO_UNIQUE) {
       return { erro: "Esse colaborador já está lançado neste ponto" };
     }
-    return { erro: error.message || "Não foi possível lançar o apontamento" };
+    return erroAcao(
+      "rh.apontamentos.adicionar",
+      error,
+      error.message || "Não foi possível lançar o apontamento",
+    );
   }
 
   revalidatePath(ROTA);
@@ -228,7 +241,11 @@ export async function editarApontamento(
     if (error.code === ERRO_UNIQUE) {
       return { erro: "Esse colaborador já está lançado neste ponto" };
     }
-    return { erro: error.message || "Não foi possível salvar o apontamento" };
+    return erroAcao(
+      "rh.apontamentos.editar",
+      error,
+      error.message || "Não foi possível salvar o apontamento",
+    );
   }
 
   revalidatePath(ROTA);
@@ -261,7 +278,11 @@ export async function removerApontamento(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: error.message || "Não foi possível remover o apontamento" };
+    return erroAcao(
+      "rh.apontamentos.remover",
+      error,
+      error.message || "Não foi possível remover o apontamento",
+    );
   }
 
   revalidatePath(ROTA);
@@ -288,7 +309,11 @@ export async function aprovarPonto(id: string): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível aprovar o ponto" };
+    return erroAcao(
+      "rh.apontamentos.aprovarPonto",
+      error,
+      error.message || "Não foi possível aprovar o ponto",
+    );
   }
 
   revalidatePath(ROTA);
@@ -311,7 +336,11 @@ export async function reabrirPonto(id: string): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível reabrir o ponto" };
+    return erroAcao(
+      "rh.apontamentos.reabrirPonto",
+      error,
+      error.message || "Não foi possível reabrir o ponto",
+    );
   }
 
   revalidatePath(ROTA);

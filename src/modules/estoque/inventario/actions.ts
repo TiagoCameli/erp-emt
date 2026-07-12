@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -44,7 +45,11 @@ export async function registrarAjuste(
   });
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível registrar o ajuste" };
+    return erroAcao(
+      "estoque.inventario.registrarAjuste",
+      error,
+      error?.message || "Não foi possível registrar o ajuste",
+    );
   }
 
   revalidatePath(ROTA);

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { erroAcao } from "@/lib/erros";
 import { dataHojeISO } from "@/lib/formatadores";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -46,7 +47,11 @@ export async function registrarSaida(
   });
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível registrar a saída" };
+    return erroAcao(
+      "estoque.saidas.registrarSaida",
+      error,
+      error?.message || "Não foi possível registrar a saída",
+    );
   }
 
   revalidatePath(ROTA);

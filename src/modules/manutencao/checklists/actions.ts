@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import type { Database, Json } from "@/lib/database.types";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -76,7 +77,11 @@ export async function criarChecklist(
     .single();
 
   if (error || !checklist) {
-    return { erro: "Não foi possível salvar o checklist. Tente novamente" };
+    return erroAcao(
+      "manutencao.checklists.criarChecklist",
+      error,
+      "Não foi possível salvar o checklist. Tente novamente",
+    );
   }
 
   const { error: erroPerguntas } = await supabase
@@ -84,7 +89,11 @@ export async function criarChecklist(
     .insert(linhasPerguntas(checklist.id, validado.data.perguntas));
 
   if (erroPerguntas) {
-    return { erro: "Não foi possível salvar as perguntas. Tente novamente" };
+    return erroAcao(
+      "manutencao.checklists.criarChecklist",
+      erroPerguntas,
+      "Não foi possível salvar as perguntas. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -123,7 +132,11 @@ export async function editarChecklist(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o checklist. Tente novamente" };
+    return erroAcao(
+      "manutencao.checklists.editarChecklist",
+      error,
+      "Não foi possível salvar o checklist. Tente novamente",
+    );
   }
 
   const { error: erroRemover } = await supabase
@@ -132,7 +145,11 @@ export async function editarChecklist(
     .eq("checklist_id", idValido.data);
 
   if (erroRemover) {
-    return { erro: "Não foi possível atualizar as perguntas. Tente novamente" };
+    return erroAcao(
+      "manutencao.checklists.editarChecklist",
+      erroRemover,
+      "Não foi possível atualizar as perguntas. Tente novamente",
+    );
   }
 
   const { error: erroInserir } = await supabase
@@ -140,7 +157,11 @@ export async function editarChecklist(
     .insert(linhasPerguntas(idValido.data, validado.data.perguntas));
 
   if (erroInserir) {
-    return { erro: "Não foi possível salvar as perguntas. Tente novamente" };
+    return erroAcao(
+      "manutencao.checklists.editarChecklist",
+      erroInserir,
+      "Não foi possível salvar as perguntas. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -166,7 +187,11 @@ export async function alternarAtivoChecklist(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "manutencao.checklists.alternarAtivoChecklist",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -219,7 +244,11 @@ export async function executarChecklist(
   const { data, error } = await supabase.rpc("fn_executar_checklist", args);
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível enviar o checklist" };
+    return erroAcao(
+      "manutencao.checklists.executarChecklist",
+      error,
+      error?.message || "Não foi possível enviar o checklist",
+    );
   }
 
   // Houve reprovação quando há ao menos um 'nok'; a OS só abre se a flag

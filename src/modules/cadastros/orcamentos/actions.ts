@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -136,7 +137,11 @@ export async function criarGrupo(dados: CriarGrupoInput): Promise<ResultadoAcao>
   });
 
   if (error) {
-    return { erro: "Não foi possível criar. Tente novamente" };
+    return erroAcao(
+      "cadastros.orcamentos.criarGrupo",
+      error,
+      "Não foi possível criar. Tente novamente",
+    );
   }
 
   revalidatePath(`${ROTA}/${orcamentoId}`);
@@ -192,7 +197,11 @@ export async function criarItem(dados: CriarItemInput): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: "Não foi possível criar o item. Tente novamente" };
+    return erroAcao(
+      "cadastros.orcamentos.criarItem",
+      error,
+      "Não foi possível criar o item. Tente novamente",
+    );
   }
 
   revalidatePath(`${ROTA}/${orcamentoId}`);
@@ -232,7 +241,11 @@ export async function editarGrupo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar. Tente novamente" };
+    return erroAcao(
+      "cadastros.orcamentos.editarGrupo",
+      error,
+      "Não foi possível salvar. Tente novamente",
+    );
   }
 
   revalidatePath(`${ROTA}/${item.orcamento_id}`);
@@ -276,7 +289,11 @@ export async function editarItem(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar. Tente novamente" };
+    return erroAcao(
+      "cadastros.orcamentos.editarItem",
+      error,
+      "Não foi possível salvar. Tente novamente",
+    );
   }
 
   revalidatePath(`${ROTA}/${item.orcamento_id}`);
@@ -304,7 +321,11 @@ export async function excluirItem(id: string): Promise<ResultadoAcao> {
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir. Tente novamente" };
+    return erroAcao(
+      "cadastros.orcamentos.excluirItem",
+      error,
+      "Não foi possível excluir. Tente novamente",
+    );
   }
 
   revalidatePath(`${ROTA}/${item.orcamento_id}`);
@@ -329,7 +350,11 @@ export async function excluir(id: string): Promise<ResultadoAcao> {
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir o orçamento. Tente novamente" };
+    return erroAcao(
+      "cadastros.orcamentos.excluir",
+      error,
+      "Não foi possível excluir o orçamento. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

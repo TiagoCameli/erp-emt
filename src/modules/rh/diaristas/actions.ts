@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -46,7 +47,13 @@ async function garantirEmAberto(
     .eq("id", id)
     .maybeSingle();
 
-  if (error) return { erro: "Não foi possível carregar a diária" };
+  if (error) {
+    return erroAcao(
+      "rh.diaristas.garantirEmAberto",
+      error,
+      "Não foi possível carregar a diária",
+    );
+  }
   if (!data) return { erro: "Diária não encontrada" };
   if (data.lancamento_id !== null) {
     return { erro: "Diária já fechada/paga" };
@@ -76,7 +83,11 @@ export async function criarDiaria(dados: DiariaInput): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: "Não foi possível salvar a diária. Tente novamente" };
+    return erroAcao(
+      "rh.diaristas.criar",
+      error,
+      "Não foi possível salvar a diária. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -118,7 +129,11 @@ export async function editarDiaria(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a diária. Tente novamente" };
+    return erroAcao(
+      "rh.diaristas.editar",
+      error,
+      "Não foi possível salvar a diária. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -142,7 +157,11 @@ export async function removerDiaria(id: string): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).delete().eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir a diária. Tente novamente" };
+    return erroAcao(
+      "rh.diaristas.remover",
+      error,
+      "Não foi possível excluir a diária. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -181,7 +200,11 @@ export async function fecharDiarias(
   const { error } = await supabase.rpc("fn_fechar_diarias", args);
 
   if (error) {
-    return { erro: error.message || "Não foi possível fechar as diárias" };
+    return erroAcao(
+      "rh.diaristas.fechar",
+      error,
+      error.message || "Não foi possível fechar as diárias",
+    );
   }
 
   revalidatePath(ROTA);

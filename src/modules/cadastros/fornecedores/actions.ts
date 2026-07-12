@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -60,7 +61,11 @@ export async function criar(dados: unknown): Promise<ResultadoAcao> {
     .insert(paraLinha(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar o fornecedor. Tente novamente" };
+    return erroAcao(
+      "cadastros.fornecedores.criar",
+      error,
+      "Não foi possível salvar o fornecedor. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -89,7 +94,11 @@ export async function editar(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o fornecedor. Tente novamente" };
+    return erroAcao(
+      "cadastros.fornecedores.editar",
+      error,
+      "Não foi possível salvar o fornecedor. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -113,7 +122,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "cadastros.fornecedores.alternarAtivo",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -144,8 +157,12 @@ export async function excluir(
 
   if (error) {
     const traduzido = traduzErroExclusao(error);
-    if (traduzido) return { erro: traduzido };
-    return { erro: "Não foi possível excluir o fornecedor. Tente novamente" };
+    if (traduzido) return erroAcao("cadastros.fornecedores.excluir", error, traduzido);
+    return erroAcao(
+      "cadastros.fornecedores.excluir",
+      error,
+      "Não foi possível excluir o fornecedor. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -222,7 +239,11 @@ export async function importar(
   const { error } = await supabase.from("fornecedores").insert(linhas);
 
   if (error) {
-    return { erro: "Não foi possível importar os fornecedores. Tente novamente" };
+    return erroAcao(
+      "cadastros.fornecedores.importar",
+      error,
+      "Não foi possível importar os fornecedores. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

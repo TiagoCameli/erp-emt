@@ -5,6 +5,7 @@ import ExcelJS from "exceljs";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -132,8 +133,12 @@ export async function buscarPlanilhaDaObra(
   try {
     const planilha = await planilhaDaObra(idValido.data);
     return { ok: true, planilha };
-  } catch {
-    return { erro: "Não foi possível carregar a planilha da obra" };
+  } catch (e) {
+    return erroAcao(
+      "medicao.medicoes.buscarPlanilhaDaObra",
+      e,
+      "Não foi possível carregar a planilha da obra",
+    );
   }
 }
 
@@ -172,7 +177,11 @@ export async function criarMedicao(
     .single();
 
   if (error || !data) {
-    return { erro: error?.message || "Não foi possível criar a medição" };
+    return erroAcao(
+      "medicao.medicoes.criarMedicao",
+      error,
+      error?.message || "Não foi possível criar a medição",
+    );
   }
 
   revalidatePath(ROTA);
@@ -218,7 +227,11 @@ export async function editarCabecalho(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: error.message || "Não foi possível salvar o cabeçalho" };
+    return erroAcao(
+      "medicao.medicoes.editarCabecalho",
+      error,
+      error.message || "Não foi possível salvar o cabeçalho",
+    );
   }
 
   revalidatePath(ROTA);
@@ -276,7 +289,11 @@ export async function adicionarItem(
     if (error.code === "23505") {
       return { erro: "Esse item já foi lançado nesta medição" };
     }
-    return { erro: error.message || "Não foi possível lançar o item" };
+    return erroAcao(
+      "medicao.medicoes.adicionarItem",
+      error,
+      error.message || "Não foi possível lançar o item",
+    );
   }
 
   revalidatePath(ROTA);
@@ -334,7 +351,11 @@ export async function editarItem(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: error.message || "Não foi possível salvar o item" };
+    return erroAcao(
+      "medicao.medicoes.editarItem",
+      error,
+      error.message || "Não foi possível salvar o item",
+    );
   }
 
   revalidatePath(ROTA);
@@ -367,7 +388,11 @@ export async function removerItem(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: error.message || "Não foi possível remover o item" };
+    return erroAcao(
+      "medicao.medicoes.removerItem",
+      error,
+      error.message || "Não foi possível remover o item",
+    );
   }
 
   revalidatePath(ROTA);
@@ -411,7 +436,11 @@ export async function aprovarMedicao(
   const { error } = await supabase.rpc("fn_aprovar_medicao", args);
 
   if (error) {
-    return { erro: error.message || "Não foi possível aprovar a medição" };
+    return erroAcao(
+      "medicao.medicoes.aprovarMedicao",
+      error,
+      error.message || "Não foi possível aprovar a medição",
+    );
   }
 
   revalidatePath(ROTA);
@@ -443,7 +472,11 @@ export async function cancelarMedicao(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível cancelar a medição" };
+    return erroAcao(
+      "medicao.medicoes.cancelarMedicao",
+      error,
+      error.message || "Não foi possível cancelar a medição",
+    );
   }
 
   revalidatePath(ROTA);
@@ -478,7 +511,11 @@ export async function desaprovarMedicao(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível desaprovar a medição" };
+    return erroAcao(
+      "medicao.medicoes.desaprovarMedicao",
+      error,
+      error.message || "Não foi possível desaprovar a medição",
+    );
   }
 
   revalidatePath(ROTA);

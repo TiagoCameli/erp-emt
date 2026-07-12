@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import {
   lerEValidarXlsx,
   type ColunaImportacao,
@@ -74,7 +75,11 @@ export async function criarObra(dados: ObraInput): Promise<ResultadoCriacao> {
     .insert(paraRegistro(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar a obra. Tente novamente" };
+    return erroAcao(
+      "cadastros.obras.criarObra",
+      error,
+      "Não foi possível salvar a obra. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -108,7 +113,11 @@ export async function editarObra(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a obra. Tente novamente" };
+    return erroAcao(
+      "cadastros.obras.editarObra",
+      error,
+      "Não foi possível salvar a obra. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -137,7 +146,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar a obra. Tente novamente" };
+    return erroAcao(
+      "cadastros.obras.alternarAtivo",
+      error,
+      "Não foi possível salvar a obra. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -298,12 +311,13 @@ export async function importarObras(
     const resultado = await lerEValidarXlsx<LinhaObra>(buffer, COLUNAS);
     validas = resultado.validas;
   } catch (erro) {
-    return {
-      erro:
-        erro instanceof Error && erro.message
-          ? erro.message
-          : "Não foi possível ler o arquivo",
-    };
+    return erroAcao(
+      "cadastros.obras.importarObras",
+      erro,
+      erro instanceof Error && erro.message
+        ? erro.message
+        : "Não foi possível ler o arquivo",
+    );
   }
 
   if (validas.length === 0) {
@@ -318,7 +332,11 @@ export async function importarObras(
     .select("id, nome, nome_fantasia");
 
   if (erroClientes) {
-    return { erro: "Não foi possível carregar os clientes para casar" };
+    return erroAcao(
+      "cadastros.obras.importarObras",
+      erroClientes,
+      "Não foi possível carregar os clientes para casar",
+    );
   }
 
   const clientePorNome = new Map<string, string>();
@@ -369,7 +387,11 @@ export async function importarObras(
 
   const { error } = await supabase.from(TABELA).insert(registros);
   if (error) {
-    return { erro: "Não foi possível importar as obras. Tente novamente" };
+    return erroAcao(
+      "cadastros.obras.importarObras",
+      error,
+      "Não foi possível importar as obras. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao, logErroServidor } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -43,7 +44,11 @@ export async function aprovarParcela(id: string): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível aprovar o pagamento" };
+    return erroAcao(
+      "financeiro.aprovacao-pagamentos.aprovarParcela",
+      error,
+      error.message || "Não foi possível aprovar o pagamento",
+    );
   }
 
   revalidatePath(ROTA);
@@ -76,7 +81,11 @@ export async function rejeitarParcela(
   });
 
   if (error) {
-    return { erro: error.message || "Não foi possível rejeitar o pagamento" };
+    return erroAcao(
+      "financeiro.aprovacao-pagamentos.rejeitarParcela",
+      error,
+      error.message || "Não foi possível rejeitar o pagamento",
+    );
   }
 
   revalidatePath(ROTA);
@@ -110,6 +119,10 @@ export async function aprovarParcelasEmLote(
     });
     if (error) {
       revalidatePath(ROTA);
+      logErroServidor(
+        "financeiro.aprovacao-pagamentos.aprovarParcelasEmLote",
+        error,
+      );
       return {
         erro: error.message || "Não foi possível aprovar o pagamento",
         aprovadas,

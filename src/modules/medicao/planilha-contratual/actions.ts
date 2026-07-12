@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { lerEValidarXlsx } from "@/lib/importacao";
@@ -52,7 +53,11 @@ export async function criarPlanilha(
     if (error.code === "23505") {
       return { erro: "Essa obra já tem planilha contratual" };
     }
-    return { erro: "Não foi possível salvar a planilha. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.criarPlanilha",
+      error,
+      "Não foi possível salvar a planilha. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -93,7 +98,11 @@ export async function editarPlanilha(
     if (error.code === "23505") {
       return { erro: "Essa obra já tem planilha contratual" };
     }
-    return { erro: "Não foi possível salvar a planilha. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.editarPlanilha",
+      error,
+      "Não foi possível salvar a planilha. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -145,7 +154,11 @@ export async function criarItem(
     .maybeSingle();
 
   if (erroOrdem) {
-    return { erro: "Não foi possível salvar o item. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.criarItem",
+      erroOrdem,
+      "Não foi possível salvar o item. Tente novamente",
+    );
   }
 
   const proximaOrdem = (ultimo?.ordem ?? 0) + 1;
@@ -157,7 +170,11 @@ export async function criarItem(
   });
 
   if (error) {
-    return { erro: "Não foi possível salvar o item. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.criarItem",
+      error,
+      "Não foi possível salvar o item. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -190,7 +207,11 @@ export async function editarItem(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o item. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.editarItem",
+      error,
+      "Não foi possível salvar o item. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -220,7 +241,11 @@ export async function removerItem(id: string): Promise<ResultadoAcao> {
         erro: "Item já usado em uma medição. Remova-o da medição antes de excluir",
       };
     }
-    return { erro: "Não foi possível remover o item. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.removerItem",
+      error,
+      "Não foi possível remover o item. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -288,12 +313,11 @@ export async function importarItens(
     const buffer = Buffer.from(await arquivo.arrayBuffer());
     validacao = await lerEValidarXlsx(buffer, colunasImportItem);
   } catch (erro) {
-    return {
-      erro:
-        erro instanceof Error
-          ? erro.message
-          : "Não foi possível ler o arquivo",
-    };
+    return erroAcao(
+      "medicao.planilha-contratual.importarItens",
+      erro,
+      erro instanceof Error ? erro.message : "Não foi possível ler o arquivo",
+    );
   }
 
   if (validacao.validas.length === 0) {
@@ -308,7 +332,11 @@ export async function importarItens(
     .eq("ativo", true);
 
   if (erroUnidades) {
-    return { erro: "Não foi possível carregar as unidades para casar" };
+    return erroAcao(
+      "medicao.planilha-contratual.importarItens",
+      erroUnidades,
+      "Não foi possível carregar as unidades para casar",
+    );
   }
 
   const unidadePorSigla = new Map(
@@ -324,7 +352,11 @@ export async function importarItens(
     .maybeSingle();
 
   if (erroOrdem) {
-    return { erro: "Não foi possível preparar a importação. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.importarItens",
+      erroOrdem,
+      "Não foi possível preparar a importação. Tente novamente",
+    );
   }
 
   let ordem = ultimo?.ordem ?? 0;
@@ -374,7 +406,11 @@ export async function importarItens(
 
   const { error } = await supabase.from("planilha_itens").insert(registros);
   if (error) {
-    return { erro: "Não foi possível importar os itens. Tente novamente" };
+    return erroAcao(
+      "medicao.planilha-contratual.importarItens",
+      error,
+      "Não foi possível importar os itens. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

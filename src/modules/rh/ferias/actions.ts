@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
+import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { feriasSchema, type FeriasInput } from "@/modules/rh/ferias/schemas";
@@ -55,7 +56,11 @@ export async function criarFerias(dados: FeriasInput): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).insert(paraRegistro(validado.data));
 
   if (error) {
-    return { erro: "Não foi possível salvar as férias. Tente novamente" };
+    return erroAcao(
+      "rh.ferias.criar",
+      error,
+      "Não foi possível salvar as férias. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -86,7 +91,11 @@ export async function editarFerias(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar as férias. Tente novamente" };
+    return erroAcao(
+      "rh.ferias.editar",
+      error,
+      "Não foi possível salvar as férias. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -106,7 +115,11 @@ export async function removerFerias(id: string): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).delete().eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível excluir as férias. Tente novamente" };
+    return erroAcao(
+      "rh.ferias.remover",
+      error,
+      "Não foi possível excluir as férias. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { erroAcao } from "@/lib/erros";
 import {
   lerEValidarXlsx,
   type ColunaImportacao,
@@ -46,7 +47,11 @@ export async function criar(dados: DepositoInput): Promise<ResultadoAcao> {
   });
 
   if (error) {
-    return { erro: "Não foi possível criar o depósito. Tente novamente" };
+    return erroAcao(
+      "cadastros.depositos.criar",
+      error,
+      "Não foi possível criar o depósito. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -82,7 +87,11 @@ export async function editar(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível salvar o depósito. Tente novamente" };
+    return erroAcao(
+      "cadastros.depositos.editar",
+      error,
+      "Não foi possível salvar o depósito. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -106,7 +115,11 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
-    return { erro: "Não foi possível alterar o status. Tente novamente" };
+    return erroAcao(
+      "cadastros.depositos.alternarAtivo",
+      error,
+      "Não foi possível alterar o status. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -137,8 +150,12 @@ export async function excluir(
 
   if (error) {
     const traduzido = traduzErroExclusao(error);
-    if (traduzido) return { erro: traduzido };
-    return { erro: "Não foi possível excluir o depósito. Tente novamente" };
+    if (traduzido) return erroAcao("cadastros.depositos.excluir", error, traduzido);
+    return erroAcao(
+      "cadastros.depositos.excluir",
+      error,
+      "Não foi possível excluir o depósito. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
@@ -275,7 +292,11 @@ export async function importar(
   ]);
 
   if (obrasResposta.error || insumosResposta.error) {
-    return { erro: "Não foi possível carregar obras e insumos para o vínculo" };
+    return erroAcao(
+      "cadastros.depositos.importar",
+      obrasResposta.error ?? insumosResposta.error,
+      "Não foi possível carregar obras e insumos para o vínculo",
+    );
   }
 
   // obras.nome não é unique: nomes repetidos são ambíguos e não podem ser
@@ -348,7 +369,11 @@ export async function importar(
 
   const { error } = await supabase.from("depositos").insert(linhasValidas);
   if (error) {
-    return { erro: "Não foi possível importar os depósitos. Tente novamente" };
+    return erroAcao(
+      "cadastros.depositos.importar",
+      error,
+      "Não foi possível importar os depósitos. Tente novamente",
+    );
   }
 
   revalidatePath(ROTA);
