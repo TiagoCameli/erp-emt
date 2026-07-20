@@ -10,7 +10,6 @@ export const TABELAS_RESTAURAVEIS = [
   "clientes",
   "fornecedores",
   "insumos",
-  "depositos",
   "colaboradores",
 ] as const;
 

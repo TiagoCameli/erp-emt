@@ -18,7 +18,7 @@ import { formatarTamanhoArquivo } from "@/modules/compras/_shared/formato";
 const TIPOS_ACEITOS = ".pdf,.png,.jpg,.jpeg";
 
 export interface AnexosRegistroProps {
-  /** Tabela do registro (pedidos, cotacoes, ordens_compra, recebimentos). */
+  /** Tabela do registro (cotacoes, ordens_compra). */
   tabela: string;
   /** Id do registro dono dos anexos. */
   registroId: string;

@@ -6,10 +6,8 @@ import {
   buscarOrdem,
   listarCentrosCusto,
   listarCotacoesFinalizadas,
-  listarDepositos,
   listarFornecedores,
   listarInsumos,
-  listarPedidosAprovados,
   trilhaOrdem,
 } from "@/modules/compras/ordens/queries";
 
@@ -32,16 +30,12 @@ export default async function PaginaOrdemDetalhe({
     fornecedores,
     insumos,
     centrosCusto,
-    depositos,
-    pedidos,
     cotacoes,
   ] = await Promise.all([
     trilhaOrdem(id),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
-    listarDepositos(),
-    listarPedidosAprovados(),
     listarCotacoesFinalizadas(),
   ]);
 
@@ -56,8 +50,6 @@ export default async function PaginaOrdemDetalhe({
       fornecedores={fornecedores}
       insumos={insumos}
       centrosCusto={centrosCusto}
-      depositos={depositos}
-      pedidos={pedidos}
       cotacoes={cotacoes}
       podeEditar={podeEditar}
       podeAprovar={podeAprovar}

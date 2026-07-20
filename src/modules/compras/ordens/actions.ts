@@ -21,7 +21,7 @@ export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
 
 const uuidSchema = z.uuid();
 
-/** Status em que a OC ainda é editável (sem efeito financeiro nem recebimento). */
+/** Status em que a OC ainda é editável (sem efeito financeiro). */
 const STATUS_EDITAVEIS = new Set(["rascunho", "pendente_aprovacao"]);
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
@@ -45,7 +45,6 @@ function itensParaRegistros(
     quantidade: item.quantidade,
     preco_unitario: item.precoUnitario,
     centro_custo_id: item.centroCustoId,
-    deposito_id: item.depositoId ?? null,
   }));
 }
 
@@ -54,7 +53,6 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
   return {
     fornecedor_id: dados.fornecedorId,
     condicao_pagamento: dados.condicaoPagamento ?? null,
-    pedido_id: dados.pedidoId ?? null,
     cotacao_id: dados.cotacaoId ?? null,
     data_emissao: dados.dataEmissao,
     observacoes: dados.observacoes ?? null,
@@ -171,7 +169,7 @@ export async function editarOrdem(
   const { data: itensAntigos } = await supabase
     .from("oc_itens")
     .select(
-      "ordem_compra_id, insumo_id, quantidade, preco_unitario, centro_custo_id, deposito_id",
+      "ordem_compra_id, insumo_id, quantidade, preco_unitario, centro_custo_id",
     )
     .eq("ordem_compra_id", idValido.data);
 
@@ -309,8 +307,7 @@ export async function rejeitarOrdem(
 
 /**
  * Desaprova a OC via RPC: volta para pendente e cancela o lançamento
- * previsto. Bloqueia se houver recebimento (a RPC devolve a mensagem clara,
- * que é repassada ao toast).
+ * previsto. Erros de regra vêm da RPC com mensagem clara, repassada ao toast.
  */
 export async function desaprovarOrdem(
   id: string,
@@ -372,9 +369,6 @@ export async function cancelarOrdem(
       erroBusca,
       "Ordem de compra não encontrada",
     );
-  }
-  if (atual.status === "recebido" || atual.status === "recebido_parcial") {
-    return { erro: "Estorne os recebimentos antes de cancelar a ordem" };
   }
   if (atual.status === "cancelado") {
     return { erro: "A ordem já está cancelada" };

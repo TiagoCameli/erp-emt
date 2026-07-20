@@ -28,11 +28,9 @@ import {
 import type {
   CentroCustoOpcao,
   CotacaoOpcao,
-  DepositoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
-  PedidoOpcao,
 } from "@/modules/compras/ordens/queries";
 import { OrdemFormDrawer } from "./ordem-form-drawer";
 
@@ -62,9 +60,6 @@ function infoLancamento(status: string): { rotulo: string; classes: string } {
   );
 }
 
-/** Status de OC que bloqueiam a desaprovação (já têm recebimento). */
-const STATUS_COM_RECEBIMENTO = new Set(["recebido_parcial", "recebido"]);
-
 /** Linha rotulada para os dados do cabeçalho. */
 function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
@@ -82,8 +77,6 @@ export interface OrdemDetalheViewProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
-  depositos: DepositoOpcao[];
-  pedidos: PedidoOpcao[];
   cotacoes: CotacaoOpcao[];
   podeEditar: boolean;
   podeAprovar: boolean;
@@ -101,8 +94,6 @@ export function OrdemDetalheView({
   fornecedores,
   insumos,
   centrosCusto,
-  depositos,
-  pedidos,
   cotacoes,
   podeEditar,
   podeAprovar,
@@ -122,7 +113,6 @@ export function OrdemDetalheView({
     (ordem.status === "rascunho" ||
       ordem.status === "pendente_aprovacao" ||
       ordem.status === "rejeitado");
-  const bloqueiaDesaprovar = STATUS_COM_RECEBIMENTO.has(ordem.status);
 
   async function aoEnviarParaAprovacao() {
     if (enviando) return;
@@ -249,8 +239,6 @@ export function OrdemDetalheView({
         onAprovar={aoAprovar}
         onRejeitar={aoRejeitar}
         onDesaprovar={aoDesaprovar}
-        desabilitarDesaprovar={bloqueiaDesaprovar}
-        motivoBloqueioDesaprovar="Estorne os recebimentos antes de desaprovar"
       />
 
       {ordem.motivoRejeicao ? (
@@ -270,13 +258,6 @@ export function OrdemDetalheView({
               <Dado rotulo="Emissão">{formatarData(ordem.dataEmissao)}</Dado>
               <Dado rotulo="Condição de pagamento">
                 {ordem.condicaoPagamento ?? "-"}
-              </Dado>
-              <Dado rotulo="Pedido de origem">
-                {ordem.pedidoNumero ? (
-                  <span className="codigo-doc">{ordem.pedidoNumero}</span>
-                ) : (
-                  "-"
-                )}
               </Dado>
               <Dado rotulo="Cotação de origem">
                 {ordem.cotacaoNumero ? (
@@ -334,7 +315,6 @@ export function OrdemDetalheView({
                     <th className="px-3 py-2 text-left font-medium">
                       Centro de custo
                     </th>
-                    <th className="px-3 py-2 text-left font-medium">Depósito</th>
                     <th className="px-3 py-2 text-right font-medium">Qtd.</th>
                     <th className="px-3 py-2 text-right font-medium">Preço</th>
                     <th className="px-3 py-2 text-right font-medium">Subtotal</th>
@@ -353,7 +333,6 @@ export function OrdemDetalheView({
                         ) : null}
                       </td>
                       <td className="px-3 py-2">{item.centroCustoNome}</td>
-                      <td className="px-3 py-2">{item.depositoNome ?? "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {formatarQuantidade(item.quantidade)}
                       </td>
@@ -368,7 +347,7 @@ export function OrdemDetalheView({
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td className="px-3 py-2" colSpan={5}>
+                    <td className="px-3 py-2" colSpan={4}>
                       Total
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
@@ -407,8 +386,6 @@ export function OrdemDetalheView({
           fornecedores={fornecedores}
           insumos={insumos}
           centrosCusto={centrosCusto}
-          depositos={depositos}
-          pedidos={pedidos}
           cotacoes={cotacoes}
         />
       ) : null}

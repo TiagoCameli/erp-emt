@@ -63,11 +63,9 @@ async function exigirAberta(
 }
 
 /**
- * Cria uma cotação aberta, avulsa ou a partir de um pedido aprovado. Grava só o
- * cabeçalho (pedido_id, observações): os insumos a cotar do pedido aparecem no
- * mapa do detalhe (buscarCotacao traz os itens do pedido com quantidade do
- * pedido e preço a lançar), já que cotacao_itens exige um fornecedor. RLS cobre
- * o insert.
+ * Cria uma cotação aberta avulsa. Grava só o cabeçalho (observações): os
+ * insumos a cotar entram pelo mapa do detalhe, já que cotacao_itens exige um
+ * fornecedor. RLS cobre o insert.
  */
 export async function criarCotacao(
   dados: CotacaoInput,
@@ -86,7 +84,6 @@ export async function criarCotacao(
   const { data: cotacao, error } = await supabase
     .from(TABELA)
     .insert({
-      pedido_id: validado.data.pedidoId ?? null,
       observacoes: validado.data.observacoes ?? null,
       status: "aberta",
     })
@@ -130,7 +127,6 @@ export async function editarCotacao(
   const { error } = await supabase
     .from(TABELA)
     .update({
-      pedido_id: validado.data.pedidoId ?? null,
       observacoes: validado.data.observacoes ?? null,
     })
     .eq("id", idValido.data);

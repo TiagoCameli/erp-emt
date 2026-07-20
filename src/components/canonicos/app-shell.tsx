@@ -4,18 +4,14 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   Circle,
   FolderOpen,
   LogOut,
-  Package,
-  Ruler,
   Search,
   Settings,
   ShoppingCart,
   Users,
   Wallet,
-  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -35,11 +31,7 @@ const MAPA_ICONES: Record<string, LucideIcon> = {
   cadastros: FolderOpen,
   compras: ShoppingCart,
   financeiro: Wallet,
-  estoque: Package,
-  manutencao: Wrench,
-  medicao: Ruler,
   rh: Users,
-  gestao: BarChart3,
 };
 
 const COLUNAS_MOBILE: Record<number, string> = {

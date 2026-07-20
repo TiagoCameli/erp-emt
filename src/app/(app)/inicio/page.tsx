@@ -35,7 +35,7 @@ export default async function InicioPage() {
           <KPICard
             titulo="Módulo"
             valor="Compras"
-            detalhe="Pedidos, cotações, ordens e recebimentos"
+            detalhe="Cotações e ordens de compra"
             href="/compras"
           />
         ) : null}

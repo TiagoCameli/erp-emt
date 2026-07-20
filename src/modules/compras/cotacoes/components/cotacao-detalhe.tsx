@@ -39,7 +39,7 @@ export interface CotacaoDetalheProps {
 }
 
 /**
- * Detalhe da cotação: cabeçalho com status e origem, lista de fornecedores
+ * Detalhe da cotação: cabeçalho com status, lista de fornecedores
  * (adicionar/remover com a cotação aberta), mapa comparativo, finalização com
  * escolha do vencedor, anexos e trilha de auditoria.
  */
@@ -97,9 +97,6 @@ export function CotacaoDetalhe({
           </div>
           <p className="text-detalhe text-muted-foreground">
             Criada em {formatarData(cotacao.createdAt)}
-            {cotacao.pedidoNumero
-              ? ` · Pedido ${cotacao.pedidoNumero}`
-              : " · Avulsa"}
           </p>
         </div>
 

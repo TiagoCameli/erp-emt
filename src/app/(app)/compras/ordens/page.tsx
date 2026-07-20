@@ -12,11 +12,9 @@ import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela"
 import {
   listarCentrosCusto,
   listarCotacoesFinalizadas,
-  listarDepositos,
   listarFornecedores,
   listarInsumos,
   listarOrdens,
-  listarPedidosAprovados,
 } from "@/modules/compras/ordens/queries";
 
 const STATUS_VALIDOS = Object.keys(ROTULO_STATUS_OC) as StatusOC[];
@@ -42,16 +40,12 @@ export default async function PaginaOrdens({
     fornecedores,
     insumos,
     centrosCusto,
-    depositos,
-    pedidos,
     cotacoes,
   ] = await Promise.all([
     listarOrdens({ pagina, tamanho, status, busca }),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
-    listarDepositos(),
-    listarPedidosAprovados(),
     listarCotacoesFinalizadas(),
   ]);
 
@@ -66,8 +60,6 @@ export default async function PaginaOrdens({
             fornecedores={fornecedores}
             insumos={insumos}
             centrosCusto={centrosCusto}
-            depositos={depositos}
-            pedidos={pedidos}
             cotacoes={cotacoes}
           />
         }

@@ -31,11 +31,9 @@ import {
 import type {
   CentroCustoOpcao,
   CotacaoOpcao,
-  DepositoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
-  PedidoOpcao,
 } from "@/modules/compras/ordens/queries";
 import {
   ordemCompraFormSchema,
@@ -43,7 +41,6 @@ import {
 } from "@/modules/compras/ordens/schemas";
 
 const SEM_VINCULO = "sem-vinculo";
-const SEM_DEPOSITO = "sem-deposito";
 const ID_FORM = "form-ordem-compra";
 
 /** Item em branco para o array de itens. */
@@ -53,7 +50,6 @@ function itemVazio(): OrdemCompraFormInput["itens"][number] {
     quantidade: "",
     precoUnitario: "",
     centroCustoId: "",
-    depositoId: undefined,
   };
 }
 
@@ -63,7 +59,6 @@ function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
     return {
       fornecedorId: "",
       condicaoPagamento: "",
-      pedidoId: undefined,
       cotacaoId: undefined,
       dataEmissao: dataHojeISO(),
       observacoes: "",
@@ -73,7 +68,6 @@ function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
   return {
     fornecedorId: ordem.fornecedorId,
     condicaoPagamento: ordem.condicaoPagamento ?? "",
-    pedidoId: ordem.pedidoId ?? undefined,
     cotacaoId: ordem.cotacaoId ?? undefined,
     dataEmissao: ordem.dataEmissao,
     observacoes: ordem.observacoes ?? "",
@@ -84,7 +78,6 @@ function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
             quantidade: String(item.quantidade).replace(".", ","),
             precoUnitario: String(item.precoUnitario).replace(".", ","),
             centroCustoId: item.centroCustoId,
-            depositoId: item.depositoId ?? undefined,
           }))
         : [itemVazio()],
   };
@@ -98,8 +91,6 @@ export interface OrdemFormDrawerProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
-  depositos: DepositoOpcao[];
-  pedidos: PedidoOpcao[];
   cotacoes: CotacaoOpcao[];
   /** Chamado depois de criar uma OC, com o id, para navegar ao detalhe. */
   onCriada?: (id: string) => void;
@@ -117,8 +108,6 @@ export function OrdemFormDrawer({
   fornecedores,
   insumos,
   centrosCusto,
-  depositos,
-  pedidos,
   cotacoes,
   onCriada,
 }: OrdemFormDrawerProps) {
@@ -156,7 +145,6 @@ export function OrdemFormDrawer({
     const dados = {
       fornecedorId: valores.fornecedorId,
       condicaoPagamento: valores.condicaoPagamento,
-      pedidoId: valores.pedidoId,
       cotacaoId: valores.cotacaoId,
       dataEmissao: valores.dataEmissao,
       observacoes: valores.observacoes,
@@ -165,7 +153,6 @@ export function OrdemFormDrawer({
         quantidade: paraNumero(item.quantidade),
         precoUnitario: paraNumero(item.precoUnitario),
         centroCustoId: item.centroCustoId,
-        depositoId: item.depositoId,
       })),
     };
 
@@ -191,7 +178,6 @@ export function OrdemFormDrawer({
   }
 
   const fornecedorValor = form.watch("fornecedorId");
-  const pedidoValor = form.watch("pedidoId") ?? SEM_VINCULO;
   const cotacaoValor = form.watch("cotacaoId") ?? SEM_VINCULO;
   const erroItens = form.formState.errors.itens;
 
@@ -300,65 +286,34 @@ export function OrdemFormDrawer({
           </CampoFormulario>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <CampoFormulario
-            id="oc-pedido"
-            rotulo="Pedido de origem"
-            ajuda="Opcional: vincule um pedido aprovado"
+        <CampoFormulario
+          id="oc-cotacao"
+          rotulo="Cotação de origem"
+          ajuda="Opcional: vincule uma cotação finalizada"
+        >
+          <Select
+            value={cotacaoValor}
+            onValueChange={(valor) =>
+              form.setValue(
+                "cotacaoId",
+                valor === SEM_VINCULO ? undefined : valor,
+              )
+            }
+            disabled={salvando}
           >
-            <Select
-              value={pedidoValor}
-              onValueChange={(valor) =>
-                form.setValue(
-                  "pedidoId",
-                  valor === SEM_VINCULO ? undefined : valor,
-                )
-              }
-              disabled={salvando}
-            >
-              <SelectTrigger id="oc-pedido" className="w-full">
-                <SelectValue placeholder="Sem pedido" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SEM_VINCULO}>Sem pedido</SelectItem>
-                {pedidos.map((pedido) => (
-                  <SelectItem key={pedido.id} value={pedido.id}>
-                    {pedido.numero ?? "Sem número"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CampoFormulario>
-
-          <CampoFormulario
-            id="oc-cotacao"
-            rotulo="Cotação de origem"
-            ajuda="Opcional: vincule uma cotação finalizada"
-          >
-            <Select
-              value={cotacaoValor}
-              onValueChange={(valor) =>
-                form.setValue(
-                  "cotacaoId",
-                  valor === SEM_VINCULO ? undefined : valor,
-                )
-              }
-              disabled={salvando}
-            >
-              <SelectTrigger id="oc-cotacao" className="w-full">
-                <SelectValue placeholder="Sem cotação" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SEM_VINCULO}>Sem cotação</SelectItem>
-                {cotacoes.map((cotacao) => (
-                  <SelectItem key={cotacao.id} value={cotacao.id}>
-                    {cotacao.numero ?? "Sem número"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CampoFormulario>
-        </div>
+            <SelectTrigger id="oc-cotacao" className="w-full">
+              <SelectValue placeholder="Sem cotação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_VINCULO}>Sem cotação</SelectItem>
+              {cotacoes.map((cotacao) => (
+                <SelectItem key={cotacao.id} value={cotacao.id}>
+                  {cotacao.numero ?? "Sem número"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CampoFormulario>
 
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -384,8 +339,6 @@ export function OrdemFormDrawer({
           <div className="flex flex-col gap-3">
             {fields.map((field, indice) => {
               const errosItem = form.formState.errors.itens?.[indice];
-              const depositoValor =
-                form.watch(`itens.${indice}.depositoId`) ?? SEM_DEPOSITO;
               return (
                 <div
                   key={field.id}
@@ -472,71 +425,37 @@ export function OrdemFormDrawer({
                     </CampoFormulario>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <CampoFormulario
-                      id={`oc-item-cc-${indice}`}
-                      rotulo="Centro de custo"
-                      obrigatorio
-                      erro={errosItem?.centroCustoId?.message}
+                  <CampoFormulario
+                    id={`oc-item-cc-${indice}`}
+                    rotulo="Centro de custo"
+                    obrigatorio
+                    erro={errosItem?.centroCustoId?.message}
+                  >
+                    <Select
+                      value={form.watch(`itens.${indice}.centroCustoId`)}
+                      onValueChange={(valor) =>
+                        form.setValue(`itens.${indice}.centroCustoId`, valor, {
+                          shouldValidate: true,
+                        })
+                      }
+                      disabled={salvando}
                     >
-                      <Select
-                        value={form.watch(`itens.${indice}.centroCustoId`)}
-                        onValueChange={(valor) =>
-                          form.setValue(`itens.${indice}.centroCustoId`, valor, {
-                            shouldValidate: true,
-                          })
-                        }
-                        disabled={salvando}
+                      <SelectTrigger
+                        id={`oc-item-cc-${indice}`}
+                        className="w-full"
                       >
-                        <SelectTrigger
-                          id={`oc-item-cc-${indice}`}
-                          className="w-full"
-                        >
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {centrosCusto.map((centro) => (
-                            <SelectItem key={centro.id} value={centro.id}>
-                              {centro.codigo ? `${centro.codigo} ` : ""}
-                              {centro.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </CampoFormulario>
-
-                    <CampoFormulario
-                      id={`oc-item-deposito-${indice}`}
-                      rotulo="Depósito"
-                      ajuda="Opcional"
-                    >
-                      <Select
-                        value={depositoValor}
-                        onValueChange={(valor) =>
-                          form.setValue(
-                            `itens.${indice}.depositoId`,
-                            valor === SEM_DEPOSITO ? undefined : valor,
-                          )
-                        }
-                        disabled={salvando}
-                      >
-                        <SelectTrigger
-                          id={`oc-item-deposito-${indice}`}
-                          className="w-full"
-                        >
-                          <SelectValue placeholder="Sem depósito" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={SEM_DEPOSITO}>Sem depósito</SelectItem>
-                          {depositos.map((deposito) => (
-                            <SelectItem key={deposito.id} value={deposito.id}>
-                              {deposito.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </CampoFormulario>
-                  </div>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {centrosCusto.map((centro) => (
+                          <SelectItem key={centro.id} value={centro.id}>
+                            {centro.codigo ? `${centro.codigo} ` : ""}
+                            {centro.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </CampoFormulario>
 
                   <div className="text-right text-detalhe text-muted-foreground">
                     Subtotal{" "}

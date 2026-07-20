@@ -27,7 +27,6 @@ export interface CotacaoLista {
   status: StatusCotacao;
   qtdFornecedores: number;
   vencedorNome: string | null;
-  pedidoNumero: string | null;
   createdAt: string;
 }
 
@@ -73,8 +72,6 @@ export interface CotacaoDetalhe {
   id: string;
   numero: string | null;
   status: StatusCotacao;
-  pedidoId: string | null;
-  pedidoNumero: string | null;
   motivoSelecao: string | null;
   observacoes: string | null;
   vencedorFornecedorId: string | null;
@@ -100,12 +97,6 @@ export interface InsumoOpcao {
   unidadeSigla: string | null;
 }
 
-/** Pedido aprovado que pode originar uma cotação (select). */
-export interface PedidoAprovadoOpcao {
-  id: string;
-  numero: string | null;
-}
-
 interface LinhaListaCotacao {
   id: string;
   numero: string | null;
@@ -113,7 +104,6 @@ interface LinhaListaCotacao {
   created_at: string;
   vencedor_fornecedor_id: string | null;
   cotacao_fornecedores: { count: number }[] | null;
-  pedidos: { numero: string | null } | null;
   fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
 }
 
@@ -130,9 +120,9 @@ function nomeFornecedor(
 
 /**
  * Lista as cotações com paginação server-side (range + count exact), a
- * contagem de fornecedores agregada no banco, o nome do vencedor (quando
- * finalizada) e o número do pedido de origem (quando houver). Aceita filtro
- * por status e busca por número da cotação ou nome do fornecedor vencedor.
+ * contagem de fornecedores agregada no banco e o nome do vencedor (quando
+ * finalizada). Aceita filtro por status e busca por número da cotação ou
+ * nome do fornecedor vencedor.
  */
 export async function listarCotacoes(
   params: ListarCotacoesParams,
@@ -147,7 +137,7 @@ export async function listarCotacoes(
   let consulta = supabase
     .from("cotacoes")
     .select(
-      "id, numero, status, created_at, vencedor_fornecedor_id, cotacao_fornecedores(count), pedidos(numero), fornecedores(razao_social, nome_fantasia)",
+      "id, numero, status, created_at, vencedor_fornecedor_id, cotacao_fornecedores(count), fornecedores(razao_social, nome_fantasia)",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -180,7 +170,6 @@ export async function listarCotacoes(
       vencedorNome: cotacao.vencedor_fornecedor_id
         ? nomeFornecedor(cotacao.fornecedores) || null
         : null,
-      pedidoNumero: cotacao.pedidos?.numero ?? null,
       createdAt: cotacao.created_at,
     }),
   );
@@ -223,7 +212,7 @@ export async function buscarCotacao(
   const { data: cotacao, error } = await supabase
     .from("cotacoes")
     .select(
-      "id, numero, status, pedido_id, motivo_selecao, observacoes, vencedor_fornecedor_id, created_at, pedidos(numero), fornecedores(razao_social, nome_fantasia)",
+      "id, numero, status, motivo_selecao, observacoes, vencedor_fornecedor_id, created_at, fornecedores(razao_social, nome_fantasia)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -320,33 +309,6 @@ export async function buscarCotacao(
     },
   );
 
-  // Cotação que veio de um pedido e ainda não tem nenhum preço lançado nasce
-  // com os insumos a cotar do próprio pedido (quantidade do pedido, preço a
-  // lançar, sem fornecedor): o comprador não redigita os itens no mapa.
-  if (insumosMap.size === 0 && cotacao.pedido_id) {
-    const { data: itensPedido } = await supabase
-      .from("pedido_itens")
-      .select(
-        "insumo_id, quantidade, insumos(nome, codigo, unidades_medida(sigla))",
-      )
-      .eq("pedido_id", cotacao.pedido_id);
-
-    for (const item of itensPedido ?? []) {
-      const atual = insumosMap.get(item.insumo_id);
-      if (atual) {
-        atual.quantidade += item.quantidade;
-        continue;
-      }
-      insumosMap.set(item.insumo_id, {
-        insumoId: item.insumo_id,
-        insumoNome: item.insumos?.nome ?? "",
-        insumoCodigo: item.insumos?.codigo ?? null,
-        unidadeSigla: item.insumos?.unidades_medida?.sigla ?? null,
-        quantidade: item.quantidade,
-      });
-    }
-  }
-
   const insumos = [...insumosMap.values()].sort((a, b) =>
     a.insumoNome.localeCompare(b.insumoNome, "pt-BR"),
   );
@@ -355,8 +317,6 @@ export async function buscarCotacao(
     id: cotacao.id,
     numero: cotacao.numero,
     status: cotacao.status as StatusCotacao,
-    pedidoId: cotacao.pedido_id,
-    pedidoNumero: cotacao.pedidos?.numero ?? null,
     motivoSelecao: cotacao.motivo_selecao,
     observacoes: cotacao.observacoes,
     vencedorFornecedorId: cotacao.vencedor_fornecedor_id,
@@ -411,26 +371,6 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
     nome: insumo.nome,
     codigo: insumo.codigo,
     unidadeSigla: insumo.unidades_medida?.sigla ?? null,
-  }));
-}
-
-/** Pedidos aprovados que podem originar uma cotação, mais recentes primeiro. */
-export async function listarPedidosAprovados(): Promise<PedidoAprovadoOpcao[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("id, numero")
-    .eq("status", "aprovado")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error("Não foi possível carregar os pedidos aprovados");
-  }
-
-  return (data ?? []).map((pedido) => ({
-    id: pedido.id,
-    numero: pedido.numero,
   }));
 }
 

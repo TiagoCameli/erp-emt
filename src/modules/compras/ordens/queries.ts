@@ -47,8 +47,6 @@ export interface OrdemItem {
   subtotal: number;
   centroCustoId: string;
   centroCustoNome: string;
-  depositoId: string | null;
-  depositoNome: string | null;
 }
 
 /** Lançamento financeiro vinculado à OC (origem='oc'). Read-only nas telas. */
@@ -66,8 +64,6 @@ export interface OrdemDetalhe {
   fornecedorId: string;
   fornecedorNome: string;
   condicaoPagamento: string | null;
-  pedidoId: string | null;
-  pedidoNumero: string | null;
   cotacaoId: string | null;
   cotacaoNumero: string | null;
   valorTotal: number;
@@ -97,18 +93,6 @@ export interface CentroCustoOpcao {
   id: string;
   nome: string;
   codigo: string | null;
-}
-
-/** Opção de depósito para o select. */
-export interface DepositoOpcao {
-  id: string;
-  nome: string;
-}
-
-/** Opção de pedido aprovado para vincular à OC. */
-export interface PedidoOpcao {
-  id: string;
-  numero: string | null;
 }
 
 /** Opção de cotação finalizada para vincular à OC. */
@@ -193,16 +177,14 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
   const { data: ordem, error } = await supabase
     .from("ordens_compra")
     .select(
-      `id, numero, fornecedor_id, condicao_pagamento, pedido_id, cotacao_id,
+      `id, numero, fornecedor_id, condicao_pagamento, cotacao_id,
        valor_total, status, motivo_rejeicao, data_emissao, observacoes,
        fornecedores(razao_social, nome_fantasia),
-       pedidos(numero),
        cotacoes(numero),
        oc_itens(
-         id, insumo_id, quantidade, preco_unitario, centro_custo_id, deposito_id,
+         id, insumo_id, quantidade, preco_unitario, centro_custo_id,
          insumos(nome, unidades_medida(sigla)),
-         centros_custo(nome, codigo),
-         depositos(nome)
+         centros_custo(nome, codigo)
        )`,
     )
     .eq("id", id)
@@ -229,8 +211,6 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     subtotal: item.quantidade * item.preco_unitario,
     centroCustoId: item.centro_custo_id,
     centroCustoNome: item.centros_custo?.nome ?? "-",
-    depositoId: item.deposito_id,
-    depositoNome: item.depositos?.nome ?? null,
   }));
 
   return {
@@ -241,8 +221,6 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
       ? nomeFornecedor(ordem.fornecedores)
       : "-",
     condicaoPagamento: ordem.condicao_pagamento,
-    pedidoId: ordem.pedido_id,
-    pedidoNumero: ordem.pedidos?.numero ?? null,
     cotacaoId: ordem.cotacao_id,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
     valorTotal: ordem.valor_total,
@@ -322,46 +300,6 @@ export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
     id: centro.id,
     nome: centro.nome,
     codigo: centro.codigo,
-  }));
-}
-
-/** Depósitos ativos para o select dos itens, em ordem alfabética. */
-export async function listarDepositos(): Promise<DepositoOpcao[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("depositos")
-    .select("id, nome")
-    .eq("ativo", true)
-    .order("nome");
-
-  if (error) {
-    throw new Error("Não foi possível carregar os depósitos");
-  }
-
-  return (data ?? []).map((deposito) => ({
-    id: deposito.id,
-    nome: deposito.nome,
-  }));
-}
-
-/** Pedidos aprovados para vincular à OC, mais recentes primeiro. */
-export async function listarPedidosAprovados(): Promise<PedidoOpcao[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("id, numero")
-    .eq("status", "aprovado")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error("Não foi possível carregar os pedidos");
-  }
-
-  return (data ?? []).map((pedido) => ({
-    id: pedido.id,
-    numero: pedido.numero,
   }));
 }
 

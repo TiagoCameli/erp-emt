@@ -6,10 +6,8 @@ import type { Acao, RecursoId } from "@/config/recursos";
  * exportar constantes (só funções async).
  */
 const RECURSO_POR_TABELA = {
-  pedidos: "compras.pedidos",
   cotacoes: "compras.cotacoes",
   ordens_compra: "compras.ordens",
-  recebimentos: "compras.recebimentos",
 } as const satisfies Record<string, RecursoId>;
 
 /** Tabelas de Compras que aceitam anexos. */
@@ -26,11 +24,9 @@ export function recursoDaTabelaAnexo(tabela: string): RecursoId {
 }
 
 /**
- * Ação exigida para anexar/remover anexos da tabela. Em geral é 'editar', mas
- * recebimento não tem fluxo de editar na Fase 2: quem cria o recebimento anexa
- * a NF logo em seguida, então o anexo segue a permissão de 'criar'. Mantém a
- * UI (liberada por podeCriar) e a Server Action concordando.
+ * Ação exigida para anexar/remover anexos: sempre 'editar'. Mantém a UI
+ * (liberada por podeEditar) e a Server Action concordando.
  */
-export function acaoDoAnexo(tabela: string): Acao {
-  return tabela === "recebimentos" ? "criar" : "editar";
+export function acaoDoAnexo(): Acao {
+  return "editar";
 }

@@ -1,8 +1,7 @@
 import { z } from "zod";
 
 /**
- * Status de ordem de compra, igual ao check do banco. O status custom
- * (recebido_parcial, recebido) sai das RPCs de recebimento; o app só transita
+ * Status de ordem de compra, igual ao check do banco. O app só transita
  * rascunho > pendente_aprovacao > aprovado/rejeitado e cancelado.
  */
 export const STATUS_OC = [
@@ -11,8 +10,6 @@ export const STATUS_OC = [
   "aprovado",
   "rejeitado",
   "cancelado",
-  "recebido_parcial",
-  "recebido",
 ] as const;
 
 export type StatusOcSchema = (typeof STATUS_OC)[number];
@@ -45,7 +42,6 @@ export const ocItemSchema = z.object({
   quantidade: quantidadeSchema,
   precoUnitario: precoSchema,
   centroCustoId: z.uuid({ error: "Centro de custo inválido" }),
-  depositoId: z.uuid({ error: "Depósito inválido" }).optional(),
 });
 
 export type OcItemInput = z.infer<typeof ocItemSchema>;
@@ -54,7 +50,6 @@ export type OcItemInput = z.infer<typeof ocItemSchema>;
 export const ordemCompraSchema = z.object({
   fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
   condicaoPagamento: textoOpcional(120),
-  pedidoId: z.uuid({ error: "Pedido inválido" }).optional(),
   cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
   dataEmissao: z
     .string()
@@ -96,7 +91,6 @@ export const ocItemFormSchema = z.object({
       { error: "Informe um preço válido" },
     ),
   centroCustoId: z.uuid({ error: "Selecione o centro de custo" }),
-  depositoId: z.uuid().optional(),
 });
 
 export type OcItemFormInput = z.infer<typeof ocItemFormSchema>;
@@ -108,7 +102,6 @@ export const ordemCompraFormSchema = z.object({
     .string()
     .trim()
     .max(120, { error: "Máximo de 120 caracteres" }),
-  pedidoId: z.uuid().optional(),
   cotacaoId: z.uuid().optional(),
   dataEmissao: z
     .string()
