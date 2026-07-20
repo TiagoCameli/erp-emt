@@ -54,7 +54,6 @@ export type OcItemInput = z.infer<typeof ocItemSchema>;
 export const ordemCompraSchema = z.object({
   fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
   condicaoPagamento: textoOpcional(120),
-  pedidoId: z.uuid({ error: "Pedido inválido" }).optional(),
   cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
   dataEmissao: z
     .string()
@@ -108,7 +107,6 @@ export const ordemCompraFormSchema = z.object({
     .string()
     .trim()
     .max(120, { error: "Máximo de 120 caracteres" }),
-  pedidoId: z.uuid().optional(),
   cotacaoId: z.uuid().optional(),
   dataEmissao: z
     .string()

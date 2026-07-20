@@ -66,8 +66,6 @@ export interface OrdemDetalhe {
   fornecedorId: string;
   fornecedorNome: string;
   condicaoPagamento: string | null;
-  pedidoId: string | null;
-  pedidoNumero: string | null;
   cotacaoId: string | null;
   cotacaoNumero: string | null;
   valorTotal: number;
@@ -103,12 +101,6 @@ export interface CentroCustoOpcao {
 export interface DepositoOpcao {
   id: string;
   nome: string;
-}
-
-/** Opção de pedido aprovado para vincular à OC. */
-export interface PedidoOpcao {
-  id: string;
-  numero: string | null;
 }
 
 /** Opção de cotação finalizada para vincular à OC. */
@@ -193,10 +185,9 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
   const { data: ordem, error } = await supabase
     .from("ordens_compra")
     .select(
-      `id, numero, fornecedor_id, condicao_pagamento, pedido_id, cotacao_id,
+      `id, numero, fornecedor_id, condicao_pagamento, cotacao_id,
        valor_total, status, motivo_rejeicao, data_emissao, observacoes,
        fornecedores(razao_social, nome_fantasia),
-       pedidos(numero),
        cotacoes(numero),
        oc_itens(
          id, insumo_id, quantidade, preco_unitario, centro_custo_id, deposito_id,
@@ -241,8 +232,6 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
       ? nomeFornecedor(ordem.fornecedores)
       : "-",
     condicaoPagamento: ordem.condicao_pagamento,
-    pedidoId: ordem.pedido_id,
-    pedidoNumero: ordem.pedidos?.numero ?? null,
     cotacaoId: ordem.cotacao_id,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
     valorTotal: ordem.valor_total,
@@ -342,26 +331,6 @@ export async function listarDepositos(): Promise<DepositoOpcao[]> {
   return (data ?? []).map((deposito) => ({
     id: deposito.id,
     nome: deposito.nome,
-  }));
-}
-
-/** Pedidos aprovados para vincular à OC, mais recentes primeiro. */
-export async function listarPedidosAprovados(): Promise<PedidoOpcao[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("id, numero")
-    .eq("status", "aprovado")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error("Não foi possível carregar os pedidos");
-  }
-
-  return (data ?? []).map((pedido) => ({
-    id: pedido.id,
-    numero: pedido.numero,
   }));
 }
 

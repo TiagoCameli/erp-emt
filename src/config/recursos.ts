@@ -119,13 +119,6 @@ export const RECURSOS = [
   },
   // Compras
   {
-    id: "compras.pedidos",
-    nome: "Pedidos",
-    modulo: "compras",
-    rota: "/compras/pedidos",
-    acoes: CRUD_APROVA,
-  },
-  {
     id: "compras.cotacoes",
     nome: "Cotações",
     modulo: "compras",
@@ -138,20 +131,6 @@ export const RECURSOS = [
     modulo: "compras",
     rota: "/compras/ordens",
     acoes: CRUD_APROVA,
-  },
-  {
-    id: "compras.recebimentos",
-    nome: "Recebimentos",
-    modulo: "compras",
-    rota: "/compras/recebimentos",
-    acoes: CRUD,
-  },
-  {
-    id: "compras.painel",
-    nome: "Painel de compras",
-    modulo: "compras",
-    rota: "/compras/painel",
-    acoes: ["ver"],
   },
   // Financeiro
   {

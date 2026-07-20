@@ -16,7 +16,6 @@ import {
   listarFornecedores,
   listarInsumos,
   listarOrdens,
-  listarPedidosAprovados,
 } from "@/modules/compras/ordens/queries";
 
 const STATUS_VALIDOS = Object.keys(ROTULO_STATUS_OC) as StatusOC[];
@@ -43,7 +42,6 @@ export default async function PaginaOrdens({
     insumos,
     centrosCusto,
     depositos,
-    pedidos,
     cotacoes,
   ] = await Promise.all([
     listarOrdens({ pagina, tamanho, status, busca }),
@@ -51,7 +49,6 @@ export default async function PaginaOrdens({
     listarInsumos(),
     listarCentrosCusto(),
     listarDepositos(),
-    listarPedidosAprovados(),
     listarCotacoesFinalizadas(),
   ]);
 
@@ -67,7 +64,6 @@ export default async function PaginaOrdens({
             insumos={insumos}
             centrosCusto={centrosCusto}
             depositos={depositos}
-            pedidos={pedidos}
             cotacoes={cotacoes}
           />
         }

@@ -80,7 +80,7 @@ export async function enviarAnexo(
   let recurso;
   try {
     recurso = recursoDaTabelaAnexo(tabela);
-    await exigirPermissao(recurso, acaoDoAnexo(tabela));
+    await exigirPermissao(recurso, acaoDoAnexo());
   } catch {
     return { erro: "Você não tem permissão para anexar arquivos aqui" };
   }
@@ -161,7 +161,7 @@ export async function excluirAnexo(
 
   try {
     const recurso = recursoDaTabelaAnexo(anexo.tabela);
-    await exigirPermissao(recurso, acaoDoAnexo(anexo.tabela));
+    await exigirPermissao(recurso, acaoDoAnexo());
   } catch {
     return { erro: "Você não tem permissão para remover este anexo" };
   }

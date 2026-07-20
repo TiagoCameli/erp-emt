@@ -11,7 +11,6 @@ import type {
   DepositoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
-  PedidoOpcao,
 } from "@/modules/compras/ordens/queries";
 import { OrdemFormDrawer } from "./ordem-form-drawer";
 
@@ -21,7 +20,6 @@ export interface OrdensAcoesCabecalhoProps {
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
   depositos: DepositoOpcao[];
-  pedidos: PedidoOpcao[];
   cotacoes: CotacaoOpcao[];
 }
 
@@ -35,7 +33,6 @@ export function OrdensAcoesCabecalho({
   insumos,
   centrosCusto,
   depositos,
-  pedidos,
   cotacoes,
 }: OrdensAcoesCabecalhoProps) {
   const router = useRouter();
@@ -59,7 +56,6 @@ export function OrdensAcoesCabecalho({
         insumos={insumos}
         centrosCusto={centrosCusto}
         depositos={depositos}
-        pedidos={pedidos}
         cotacoes={cotacoes}
         onCriada={(id) => router.push(`/compras/ordens/${id}`)}
       />

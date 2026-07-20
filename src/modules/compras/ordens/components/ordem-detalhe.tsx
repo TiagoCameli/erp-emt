@@ -32,7 +32,6 @@ import type {
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
-  PedidoOpcao,
 } from "@/modules/compras/ordens/queries";
 import { OrdemFormDrawer } from "./ordem-form-drawer";
 
@@ -83,7 +82,6 @@ export interface OrdemDetalheViewProps {
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
   depositos: DepositoOpcao[];
-  pedidos: PedidoOpcao[];
   cotacoes: CotacaoOpcao[];
   podeEditar: boolean;
   podeAprovar: boolean;
@@ -102,7 +100,6 @@ export function OrdemDetalheView({
   insumos,
   centrosCusto,
   depositos,
-  pedidos,
   cotacoes,
   podeEditar,
   podeAprovar,
@@ -271,13 +268,6 @@ export function OrdemDetalheView({
               <Dado rotulo="Condição de pagamento">
                 {ordem.condicaoPagamento ?? "-"}
               </Dado>
-              <Dado rotulo="Pedido de origem">
-                {ordem.pedidoNumero ? (
-                  <span className="codigo-doc">{ordem.pedidoNumero}</span>
-                ) : (
-                  "-"
-                )}
-              </Dado>
               <Dado rotulo="Cotação de origem">
                 {ordem.cotacaoNumero ? (
                   <span className="codigo-doc">{ordem.cotacaoNumero}</span>
@@ -408,7 +398,6 @@ export function OrdemDetalheView({
           insumos={insumos}
           centrosCusto={centrosCusto}
           depositos={depositos}
-          pedidos={pedidos}
           cotacoes={cotacoes}
         />
       ) : null}
