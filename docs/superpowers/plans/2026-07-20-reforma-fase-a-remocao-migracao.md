@@ -18,6 +18,9 @@
 - **Projeto Supabase é único e compartilhado** (preview e produção usam o mesmo). Dropar tabela é irreversível. **Antes de aplicar a primeira migration destrutiva, confirmar com o Tiago:** aplicar direto no projeto (precedente das fases 1-8) ou criar branch Supabase de teste (`create_branch`) e validar antes. As tabelas mortas estão vazias; o único dado real é `lancamentos`/`lancamento_parcelas` (7964 linhas, todas `origem='manual'`), que o Tiago mandou zerar.
 - **Nunca duas fases abertas ao mesmo tempo.** Esta é a Fase A. B a F vêm depois (ver Roadmap).
 
+
+> **CORRECAO 2026-07-20 (execucao):** durante a execucao, invertida a ordem Estoque<->Manutencao: Manutencao dropa PRIMEIRO (migration 120002) porque `os_pecas` (Manutencao) tem FK para `depositos` e `estoque_movimentos` (Estoque), e `fn_os_adicionar_peca` (Manutencao) chama `fn_estoque_saida_interna` (Estoque). Estoque dropa depois (120003). Tambem corrigidas as discovery queries de funcao: `\b...\b` (invalido no Postgres) trocado por alternacao simples `(...)`, com revisao manual pra excluir funcoes compartilhadas/genericas.
+
 ## Roadmap das fases (contexto; só a Fase A é detalhada aqui)
 
 - **Fase A (este plano):** remoção de módulos + migração de dados.
@@ -307,7 +310,7 @@ git commit -m "feat(db,reforma-a): dropa Pedidos/Recebimentos, ajusta fn_desapro
 ## Task 5: Migração — dropar Estoque
 
 **Files:**
-- Create: `supabase/migrations/20260720120002_reforma_a_drop_estoque.sql`
+- Create: `supabase/migrations/20260720120003_reforma_a_drop_estoque.sql`
 
 **Interfaces:**
 - Consumes: FK `oc_itens_deposito_id_fkey` (única FK cruzada que fica → estoque).
@@ -321,13 +324,13 @@ from pg_proc p join pg_namespace n on n.oid=p.pronamespace
 where n.nspname='public'
   and (p.proname like 'fn_estoque%' or p.proname like 'fn_abastec%'
        or p.proname like '%deposito%' or p.proname like '%_peps%'
-       or pg_get_functiondef(p.oid) ~* '\b(estoque_movimentos|estoque_camadas|estoque_saldos|estoque_minimos|abastecimentos|depositos|leituras_equipamento)\b');
+       or pg_get_functiondef(p.oid) ~* '(estoque_movimentos|estoque_camadas|estoque_saldos|estoque_minimos|abastecimentos|depositos|leituras_equipamento)');
 ```
 Guardar as linhas geradas para colar na migration (Step 2). Revisar a lista: não dropar funções que também são usadas por Manutenção/Medição (essas saem nas Tasks 6 e 7); em caso de dúvida, deixar para a task do módulo dono.
 
 - [ ] **Step 2: Escrever a migration**
 
-Criar `supabase/migrations/20260720120002_reforma_a_drop_estoque.sql`:
+Criar `supabase/migrations/20260720120003_reforma_a_drop_estoque.sql`:
 ```sql
 -- Reforma A: dropa o modulo Estoque e Combustivel.
 
@@ -348,7 +351,7 @@ drop table if exists public.depositos;
 ```
 Nota: `leituras_equipamento` era compartilhada com a previsão de Manutenção (que sai na Task 6); dropar aqui é seguro porque o app de Manutenção já foi removido na Task 1.
 
-- [ ] **Step 3: Aplicar** via MCP `apply_migration` (name `20260720120002_reforma_a_drop_estoque`).
+- [ ] **Step 3: Aplicar** via MCP `apply_migration` (name `20260720120003_reforma_a_drop_estoque`).
 
 - [ ] **Step 4: Verificar**
 
@@ -362,7 +365,7 @@ Rodar `get_advisors`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260720120002_reforma_a_drop_estoque.sql
+git add supabase/migrations/20260720120003_reforma_a_drop_estoque.sql
 git commit -m "feat(db,reforma-a): dropa modulo Estoque e a coluna deposito_id da OC"
 ```
 
@@ -371,7 +374,7 @@ git commit -m "feat(db,reforma-a): dropa modulo Estoque e a coluna deposito_id d
 ## Task 6: Migração — dropar Manutenção
 
 **Files:**
-- Create: `supabase/migrations/20260720120003_reforma_a_drop_manutencao.sql`
+- Create: `supabase/migrations/20260720120002_reforma_a_drop_manutencao.sql`
 
 **Interfaces:**
 - Consumes: schema de manutenção.
@@ -384,13 +387,13 @@ select 'drop function if exists '||p.oid::regprocedure||' cascade;'
 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
 where n.nspname='public'
   and p.proname <> 'fn_equipamento_cria_etapa_manutencao'
-  and pg_get_functiondef(p.oid) ~* '\b(ordens_servico|os_pecas|os_mao_obra|os_terceiros|os_transicoes|checklists|checklist_perguntas|checklist_respostas|checklist_execucoes|planos_preventivos|plano_atividades|equipamento_planos)\b';
+  and pg_get_functiondef(p.oid) ~* '(ordens_servico|os_pecas|os_mao_obra|os_terceiros|os_transicoes|checklists|checklist_perguntas|checklist_respostas|checklist_execucoes|planos_preventivos|plano_atividades|equipamento_planos)';
 ```
 Guardar para colar. **Não** incluir `fn_equipamento_cria_etapa_manutencao` (o filtro já exclui).
 
 - [ ] **Step 2: Escrever a migration**
 
-Criar `supabase/migrations/20260720120003_reforma_a_drop_manutencao.sql`:
+Criar `supabase/migrations/20260720120002_reforma_a_drop_manutencao.sql`:
 ```sql
 -- Reforma A: dropa o modulo Manutencao. Mantem o trigger de centro de custo do equipamento.
 
@@ -411,7 +414,7 @@ drop table if exists public.equipamento_planos;
 drop table if exists public.planos_preventivos;
 ```
 
-- [ ] **Step 3: Aplicar** via MCP `apply_migration` (name `20260720120003_reforma_a_drop_manutencao`).
+- [ ] **Step 3: Aplicar** via MCP `apply_migration` (name `20260720120002_reforma_a_drop_manutencao`).
 
 - [ ] **Step 4: Verificar**
 
@@ -426,7 +429,7 @@ Rodar `get_advisors`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20260720120003_reforma_a_drop_manutencao.sql
+git add supabase/migrations/20260720120002_reforma_a_drop_manutencao.sql
 git commit -m "feat(db,reforma-a): dropa modulo Manutencao (mantem trigger de CC do equipamento)"
 ```
 
@@ -447,7 +450,7 @@ git commit -m "feat(db,reforma-a): dropa modulo Manutencao (mantem trigger de CC
 select 'drop function if exists '||p.oid::regprocedure||' cascade;'
 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
 where n.nspname='public'
-  and pg_get_functiondef(p.oid) ~* '\b(medicoes|medicao_itens|medicao_anexos|planilhas_contratuais|planilha_itens|faturas)\b';
+  and pg_get_functiondef(p.oid) ~* '(medicoes|medicao_itens|medicao_anexos|planilhas_contratuais|planilha_itens|faturas)';
 ```
 Guardar (deve trazer `fn_aprovar_medicao`, `fn_cancelar_medicao`, `fn_desaprovar_medicao`, `fn_check_medicao_item_planilha`, `fn_check_medicao_planilha`, `fn_set_medicao_numero`).
 
@@ -509,7 +512,7 @@ git commit -m "feat(db,reforma-a): dropa modulo Medicao e ajusta origem do lanca
 select 'drop function if exists '||p.oid::regprocedure||' cascade;'
 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
 where n.nspname='public'
-  and pg_get_functiondef(p.oid) ~* '\b(orcamentos|orcamento_itens)\b';
+  and pg_get_functiondef(p.oid) ~* '(orcamentos|orcamento_itens)';
 ```
 Guardar (deve trazer `recalcular_orcamento` e a(s) função(ões) de trigger de cálculo do item). `drop ... cascade` já remove os triggers dependentes.
 
