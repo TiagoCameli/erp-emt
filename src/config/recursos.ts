@@ -36,11 +36,7 @@ export const MODULOS = [
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
-  { id: "estoque", nome: "Estoque", rota: "/estoque" },
-  { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
-  { id: "medicao", nome: "Medição", rota: "/medicao" },
   { id: "rh", nome: "RH", rota: "/rh" },
-  { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -228,107 +224,6 @@ export const RECURSOS = [
     rota: "/financeiro/relatorios",
     acoes: ["ver"],
   },
-  // Estoque e Combustível
-  {
-    id: "estoque.posicao",
-    nome: "Posição de estoque",
-    modulo: "estoque",
-    rota: "/estoque/posicao",
-    acoes: ["ver"],
-  },
-  {
-    id: "estoque.entradas",
-    nome: "Entradas",
-    modulo: "estoque",
-    rota: "/estoque/entradas",
-    acoes: ["ver", "criar"],
-  },
-  {
-    id: "estoque.saidas",
-    nome: "Saídas e consumos",
-    modulo: "estoque",
-    rota: "/estoque/saidas",
-    acoes: ["ver", "criar"],
-  },
-  {
-    id: "estoque.transferencias",
-    nome: "Transferências",
-    modulo: "estoque",
-    rota: "/estoque/transferencias",
-    acoes: ["ver", "criar"],
-  },
-  {
-    id: "estoque.inventario",
-    nome: "Inventário e ajustes",
-    modulo: "estoque",
-    rota: "/estoque/inventario",
-    acoes: ["ver", "criar"],
-  },
-  {
-    id: "estoque.tanques",
-    nome: "Tanques",
-    modulo: "estoque",
-    rota: "/estoque/tanques",
-    acoes: ["ver", "criar"],
-  },
-  {
-    id: "estoque.alertas",
-    nome: "Alertas",
-    modulo: "estoque",
-    rota: "/estoque/alertas",
-    acoes: ["ver", "editar"],
-  },
-  // Manutenção
-  {
-    id: "manutencao.ordens-servico",
-    nome: "Ordens de serviço",
-    modulo: "manutencao",
-    rota: "/manutencao/ordens-servico",
-    acoes: ["ver", "criar", "editar"],
-  },
-  {
-    id: "manutencao.planos-preventivos",
-    nome: "Planos preventivos",
-    modulo: "manutencao",
-    rota: "/manutencao/planos-preventivos",
-    acoes: CRUD,
-  },
-  {
-    id: "manutencao.checklists",
-    nome: "Checklists",
-    modulo: "manutencao",
-    rota: "/manutencao/checklists",
-    acoes: CRUD,
-  },
-  {
-    id: "manutencao.painel",
-    nome: "Painel de frota",
-    modulo: "manutencao",
-    rota: "/manutencao/painel",
-    acoes: ["ver"],
-  },
-  // Medição
-  {
-    id: "medicao.planilha-contratual",
-    nome: "Planilha contratual",
-    modulo: "medicao",
-    rota: "/medicao/planilha-contratual",
-    acoes: CRUD,
-  },
-  {
-    id: "medicao.medicoes",
-    nome: "Medições",
-    modulo: "medicao",
-    rota: "/medicao/medicoes",
-    acoes: CRUD_APROVA,
-  },
-  {
-    id: "medicao.faturas",
-    nome: "Faturas geradas",
-    modulo: "medicao",
-    rota: "/medicao/faturas",
-    acoes: ["ver"],
-  },
   // RH
   {
     id: "rh.apontamentos",
@@ -392,42 +287,6 @@ export const RECURSOS = [
     modulo: "rh",
     rota: "/rh/banco-horas",
     acoes: ["ver", "criar", "editar"],
-  },
-  // Gestão (BI)
-  {
-    id: "gestao.painel-empresa",
-    nome: "Painel da empresa",
-    modulo: "gestao",
-    rota: "/gestao/painel-empresa",
-    acoes: ["ver"],
-  },
-  {
-    id: "gestao.painel-obra",
-    nome: "Painel por obra",
-    modulo: "gestao",
-    rota: "/gestao/painel-obra",
-    acoes: ["ver"],
-  },
-  {
-    id: "gestao.custos",
-    nome: "Custos",
-    modulo: "gestao",
-    rota: "/gestao/custos",
-    acoes: ["ver"],
-  },
-  {
-    id: "gestao.equipamentos",
-    nome: "Equipamentos",
-    modulo: "gestao",
-    rota: "/gestao/equipamentos",
-    acoes: ["ver"],
-  },
-  {
-    id: "gestao.alertas",
-    nome: "Alertas",
-    modulo: "gestao",
-    rota: "/gestao/alertas",
-    acoes: ["ver"],
   },
   // Administração
   {
