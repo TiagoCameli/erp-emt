@@ -1,8 +1,7 @@
 import { z } from "zod";
 
 /**
- * Status de ordem de compra, igual ao check do banco. O status custom
- * (recebido_parcial, recebido) sai das RPCs de recebimento; o app só transita
+ * Status de ordem de compra, igual ao check do banco. O app só transita
  * rascunho > pendente_aprovacao > aprovado/rejeitado e cancelado.
  */
 export const STATUS_OC = [
@@ -11,8 +10,6 @@ export const STATUS_OC = [
   "aprovado",
   "rejeitado",
   "cancelado",
-  "recebido_parcial",
-  "recebido",
 ] as const;
 
 export type StatusOcSchema = (typeof STATUS_OC)[number];

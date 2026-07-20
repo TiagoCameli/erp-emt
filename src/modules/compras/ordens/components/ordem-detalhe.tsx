@@ -60,9 +60,6 @@ function infoLancamento(status: string): { rotulo: string; classes: string } {
   );
 }
 
-/** Status de OC que bloqueiam a desaprovação (já têm recebimento). */
-const STATUS_COM_RECEBIMENTO = new Set(["recebido_parcial", "recebido"]);
-
 /** Linha rotulada para os dados do cabeçalho. */
 function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
@@ -116,7 +113,6 @@ export function OrdemDetalheView({
     (ordem.status === "rascunho" ||
       ordem.status === "pendente_aprovacao" ||
       ordem.status === "rejeitado");
-  const bloqueiaDesaprovar = STATUS_COM_RECEBIMENTO.has(ordem.status);
 
   async function aoEnviarParaAprovacao() {
     if (enviando) return;
@@ -243,8 +239,6 @@ export function OrdemDetalheView({
         onAprovar={aoAprovar}
         onRejeitar={aoRejeitar}
         onDesaprovar={aoDesaprovar}
-        desabilitarDesaprovar={bloqueiaDesaprovar}
-        motivoBloqueioDesaprovar="Estorne os recebimentos antes de desaprovar"
       />
 
       {ordem.motivoRejeicao ? (

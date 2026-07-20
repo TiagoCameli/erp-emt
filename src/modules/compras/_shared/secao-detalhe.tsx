@@ -12,8 +12,8 @@ export interface SecaoDetalheProps {
 
 /**
  * Cabeçalho de seção dos detalhes de Compras. Um único tratamento de título
- * (h2 text-secao font-semibold) compartilhado por pedido, OC, cotação e
- * recebimento, para a hierarquia de seção ficar consistente entre as telas.
+ * (h2 text-secao font-semibold) compartilhado por OC e cotação, para a
+ * hierarquia de seção ficar consistente entre as telas.
  * Com card, envolve numa superfície com borda (layout do detalhe da OC).
  */
 export function SecaoDetalhe({ titulo, acao, card, children }: SecaoDetalheProps) {

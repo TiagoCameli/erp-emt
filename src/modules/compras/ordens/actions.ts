@@ -21,7 +21,7 @@ export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
 
 const uuidSchema = z.uuid();
 
-/** Status em que a OC ainda é editável (sem efeito financeiro nem recebimento). */
+/** Status em que a OC ainda é editável (sem efeito financeiro). */
 const STATUS_EDITAVEIS = new Set(["rascunho", "pendente_aprovacao"]);
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
@@ -307,8 +307,7 @@ export async function rejeitarOrdem(
 
 /**
  * Desaprova a OC via RPC: volta para pendente e cancela o lançamento
- * previsto. Bloqueia se houver recebimento (a RPC devolve a mensagem clara,
- * que é repassada ao toast).
+ * previsto. Erros de regra vêm da RPC com mensagem clara, repassada ao toast.
  */
 export async function desaprovarOrdem(
   id: string,
@@ -370,9 +369,6 @@ export async function cancelarOrdem(
       erroBusca,
       "Ordem de compra não encontrada",
     );
-  }
-  if (atual.status === "recebido" || atual.status === "recebido_parcial") {
-    return { erro: "Estorne os recebimentos antes de cancelar a ordem" };
   }
   if (atual.status === "cancelado") {
     return { erro: "A ordem já está cancelada" };
