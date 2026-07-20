@@ -16,19 +16,17 @@ function textoOpcional(maximo: number) {
 }
 
 /**
- * Cabeçalho da cotação: pode nascer de um pedido aprovado (pedido_id) ou
- * avulsa (sem pedido). Só observações são editáveis no cabeçalho.
+ * Cabeçalho da cotação: sempre avulsa. Só observações são editáveis no
+ * cabeçalho.
  */
 export const cotacaoSchema = z.object({
-  pedidoId: z.uuid({ error: "Pedido inválido" }).optional(),
   observacoes: textoOpcional(2000),
 });
 
 export type CotacaoInput = z.infer<typeof cotacaoSchema>;
 
-/** Schema do formulário do cabeçalho (client). pedidoId opcional via select. */
+/** Schema do formulário do cabeçalho (client). */
 export const cotacaoFormSchema = z.object({
-  pedidoId: z.uuid({ error: "Pedido inválido" }).optional(),
   observacoes: z
     .string()
     .trim()

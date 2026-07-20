@@ -22,7 +22,6 @@ import { criarCotacao } from "@/modules/compras/cotacoes/actions";
 import type { CotacaoLista } from "@/modules/compras/cotacoes/queries";
 import { infoStatusCotacao } from "@/modules/compras/_shared/formato";
 import { NovaCotacaoDrawer } from "./nova-cotacao-drawer";
-import type { PedidoAprovadoOpcao } from "@/modules/compras/cotacoes/queries";
 
 const OPCOES_STATUS = [
   { valor: "aberta", rotulo: "Aberta" },
@@ -87,9 +86,9 @@ function useCriarCotacao() {
   const [criando, setCriando] = React.useState(false);
 
   const aoCriar = React.useCallback(
-    async (pedidoId: string | undefined, observacoes: string) => {
+    async (observacoes: string) => {
       setCriando(true);
-      const resultado = await criarCotacao({ pedidoId, observacoes });
+      const resultado = await criarCotacao({ observacoes });
       setCriando(false);
 
       if ("erro" in resultado) {
@@ -113,7 +112,6 @@ export interface CotacoesTabelaProps {
   tamanho: number;
   status: string;
   busca: string;
-  pedidos: PedidoAprovadoOpcao[];
   podeCriar: boolean;
 }
 
@@ -129,7 +127,6 @@ export function CotacoesTabela({
   tamanho,
   status,
   busca: buscaUrl,
-  pedidos,
   podeCriar,
 }: CotacoesTabelaProps) {
   const router = useRouter();
@@ -179,7 +176,7 @@ export function CotacoesTabela({
             titulo="Nenhuma cotação"
             descricao={
               podeCriar
-                ? "Crie a primeira cotação a partir de um pedido aprovado ou avulsa"
+                ? "Crie a primeira cotação para começar"
                 : "Quando houver cotações, elas aparecem aqui"
             }
             acao={
@@ -203,7 +200,6 @@ export function CotacoesTabela({
         <NovaCotacaoDrawer
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
-          pedidos={pedidos}
           criando={criando}
           onCriar={aoCriar}
         />
@@ -214,10 +210,8 @@ export function CotacoesTabela({
 
 /** Botão de nova cotação para o cabeçalho da página. */
 export function CotacoesAcoesCabecalho({
-  pedidos,
   podeCriar,
 }: {
-  pedidos: PedidoAprovadoOpcao[];
   podeCriar: boolean;
 }) {
   const { drawerAberto, setDrawerAberto, criando, aoCriar } = useCriarCotacao();
@@ -233,7 +227,6 @@ export function CotacoesAcoesCabecalho({
       <NovaCotacaoDrawer
         aberto={drawerAberto}
         onAbertoChange={setDrawerAberto}
-        pedidos={pedidos}
         criando={criando}
         onCriar={aoCriar}
       />

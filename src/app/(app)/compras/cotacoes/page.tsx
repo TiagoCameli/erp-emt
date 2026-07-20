@@ -10,10 +10,7 @@ import {
   CotacoesAcoesCabecalho,
   CotacoesTabela,
 } from "@/modules/compras/cotacoes/components/cotacoes-tabela";
-import {
-  listarCotacoes,
-  listarPedidosAprovados,
-} from "@/modules/compras/cotacoes/queries";
+import { listarCotacoes } from "@/modules/compras/cotacoes/queries";
 import { STATUS_COTACAO } from "@/modules/compras/cotacoes/schemas";
 
 export default async function PaginaCotacoes({
@@ -30,10 +27,12 @@ export default async function PaginaCotacoes({
   const { pagina, tamanho, busca } = lerParametrosLista(params);
   const status = parametroValido(params.status, STATUS_COTACAO);
 
-  const [{ itens, total }, pedidos] = await Promise.all([
-    listarCotacoes({ pagina, tamanho, status, busca }),
-    listarPedidosAprovados(),
-  ]);
+  const { itens, total } = await listarCotacoes({
+    pagina,
+    tamanho,
+    status,
+    busca,
+  });
 
   const podeCriar = temPermissao(usuario, "compras.cotacoes", "criar");
 
@@ -42,9 +41,7 @@ export default async function PaginaCotacoes({
       <PageHeader
         titulo="Cotações"
         descricao="Compare preços de fornecedores e escolha o vencedor"
-        acoes={
-          <CotacoesAcoesCabecalho pedidos={pedidos} podeCriar={podeCriar} />
-        }
+        acoes={<CotacoesAcoesCabecalho podeCriar={podeCriar} />}
       />
       <CotacoesTabela
         cotacoes={itens}
@@ -53,7 +50,6 @@ export default async function PaginaCotacoes({
         tamanho={tamanho}
         status={status ?? ""}
         busca={busca ?? ""}
-        pedidos={pedidos}
         podeCriar={podeCriar}
       />
     </>
