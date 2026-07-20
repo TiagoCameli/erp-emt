@@ -45,7 +45,6 @@ function itensParaRegistros(
     quantidade: item.quantidade,
     preco_unitario: item.precoUnitario,
     centro_custo_id: item.centroCustoId,
-    deposito_id: item.depositoId ?? null,
   }));
 }
 
@@ -170,7 +169,7 @@ export async function editarOrdem(
   const { data: itensAntigos } = await supabase
     .from("oc_itens")
     .select(
-      "ordem_compra_id, insumo_id, quantidade, preco_unitario, centro_custo_id, deposito_id",
+      "ordem_compra_id, insumo_id, quantidade, preco_unitario, centro_custo_id",
     )
     .eq("ordem_compra_id", idValido.data);
 

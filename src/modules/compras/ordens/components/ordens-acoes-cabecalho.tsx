@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import type {
   CentroCustoOpcao,
   CotacaoOpcao,
-  DepositoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
 } from "@/modules/compras/ordens/queries";
@@ -19,7 +18,6 @@ export interface OrdensAcoesCabecalhoProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
-  depositos: DepositoOpcao[];
   cotacoes: CotacaoOpcao[];
 }
 
@@ -32,7 +30,6 @@ export function OrdensAcoesCabecalho({
   fornecedores,
   insumos,
   centrosCusto,
-  depositos,
   cotacoes,
 }: OrdensAcoesCabecalhoProps) {
   const router = useRouter();
@@ -55,7 +52,6 @@ export function OrdensAcoesCabecalho({
         fornecedores={fornecedores}
         insumos={insumos}
         centrosCusto={centrosCusto}
-        depositos={depositos}
         cotacoes={cotacoes}
         onCriada={(id) => router.push(`/compras/ordens/${id}`)}
       />

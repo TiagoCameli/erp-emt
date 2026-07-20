@@ -47,8 +47,6 @@ export interface OrdemItem {
   subtotal: number;
   centroCustoId: string;
   centroCustoNome: string;
-  depositoId: string | null;
-  depositoNome: string | null;
 }
 
 /** Lançamento financeiro vinculado à OC (origem='oc'). Read-only nas telas. */
@@ -95,12 +93,6 @@ export interface CentroCustoOpcao {
   id: string;
   nome: string;
   codigo: string | null;
-}
-
-/** Opção de depósito para o select. */
-export interface DepositoOpcao {
-  id: string;
-  nome: string;
 }
 
 /** Opção de cotação finalizada para vincular à OC. */
@@ -190,10 +182,9 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
        fornecedores(razao_social, nome_fantasia),
        cotacoes(numero),
        oc_itens(
-         id, insumo_id, quantidade, preco_unitario, centro_custo_id, deposito_id,
+         id, insumo_id, quantidade, preco_unitario, centro_custo_id,
          insumos(nome, unidades_medida(sigla)),
-         centros_custo(nome, codigo),
-         depositos(nome)
+         centros_custo(nome, codigo)
        )`,
     )
     .eq("id", id)
@@ -220,8 +211,6 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     subtotal: item.quantidade * item.preco_unitario,
     centroCustoId: item.centro_custo_id,
     centroCustoNome: item.centros_custo?.nome ?? "-",
-    depositoId: item.deposito_id,
-    depositoNome: item.depositos?.nome ?? null,
   }));
 
   return {
@@ -311,26 +300,6 @@ export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
     id: centro.id,
     nome: centro.nome,
     codigo: centro.codigo,
-  }));
-}
-
-/** Depósitos ativos para o select dos itens, em ordem alfabética. */
-export async function listarDepositos(): Promise<DepositoOpcao[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("depositos")
-    .select("id, nome")
-    .eq("ativo", true)
-    .order("nome");
-
-  if (error) {
-    throw new Error("Não foi possível carregar os depósitos");
-  }
-
-  return (data ?? []).map((deposito) => ({
-    id: deposito.id,
-    nome: deposito.nome,
   }));
 }
 

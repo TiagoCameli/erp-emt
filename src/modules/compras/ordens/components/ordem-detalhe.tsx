@@ -28,7 +28,6 @@ import {
 import type {
   CentroCustoOpcao,
   CotacaoOpcao,
-  DepositoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
@@ -81,7 +80,6 @@ export interface OrdemDetalheViewProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
-  depositos: DepositoOpcao[];
   cotacoes: CotacaoOpcao[];
   podeEditar: boolean;
   podeAprovar: boolean;
@@ -99,7 +97,6 @@ export function OrdemDetalheView({
   fornecedores,
   insumos,
   centrosCusto,
-  depositos,
   cotacoes,
   podeEditar,
   podeAprovar,
@@ -324,7 +321,6 @@ export function OrdemDetalheView({
                     <th className="px-3 py-2 text-left font-medium">
                       Centro de custo
                     </th>
-                    <th className="px-3 py-2 text-left font-medium">Depósito</th>
                     <th className="px-3 py-2 text-right font-medium">Qtd.</th>
                     <th className="px-3 py-2 text-right font-medium">Preço</th>
                     <th className="px-3 py-2 text-right font-medium">Subtotal</th>
@@ -343,7 +339,6 @@ export function OrdemDetalheView({
                         ) : null}
                       </td>
                       <td className="px-3 py-2">{item.centroCustoNome}</td>
-                      <td className="px-3 py-2">{item.depositoNome ?? "-"}</td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {formatarQuantidade(item.quantidade)}
                       </td>
@@ -358,7 +353,7 @@ export function OrdemDetalheView({
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td className="px-3 py-2" colSpan={5}>
+                    <td className="px-3 py-2" colSpan={4}>
                       Total
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
@@ -397,7 +392,6 @@ export function OrdemDetalheView({
           fornecedores={fornecedores}
           insumos={insumos}
           centrosCusto={centrosCusto}
-          depositos={depositos}
           cotacoes={cotacoes}
         />
       ) : null}

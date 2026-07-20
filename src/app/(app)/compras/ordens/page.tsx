@@ -12,7 +12,6 @@ import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela"
 import {
   listarCentrosCusto,
   listarCotacoesFinalizadas,
-  listarDepositos,
   listarFornecedores,
   listarInsumos,
   listarOrdens,
@@ -41,14 +40,12 @@ export default async function PaginaOrdens({
     fornecedores,
     insumos,
     centrosCusto,
-    depositos,
     cotacoes,
   ] = await Promise.all([
     listarOrdens({ pagina, tamanho, status, busca }),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
-    listarDepositos(),
     listarCotacoesFinalizadas(),
   ]);
 
@@ -63,7 +60,6 @@ export default async function PaginaOrdens({
             fornecedores={fornecedores}
             insumos={insumos}
             centrosCusto={centrosCusto}
-            depositos={depositos}
             cotacoes={cotacoes}
           />
         }

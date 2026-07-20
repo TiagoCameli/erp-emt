@@ -45,7 +45,6 @@ export const ocItemSchema = z.object({
   quantidade: quantidadeSchema,
   precoUnitario: precoSchema,
   centroCustoId: z.uuid({ error: "Centro de custo inválido" }),
-  depositoId: z.uuid({ error: "Depósito inválido" }).optional(),
 });
 
 export type OcItemInput = z.infer<typeof ocItemSchema>;
@@ -95,7 +94,6 @@ export const ocItemFormSchema = z.object({
       { error: "Informe um preço válido" },
     ),
   centroCustoId: z.uuid({ error: "Selecione o centro de custo" }),
-  depositoId: z.uuid().optional(),
 });
 
 export type OcItemFormInput = z.infer<typeof ocItemFormSchema>;
