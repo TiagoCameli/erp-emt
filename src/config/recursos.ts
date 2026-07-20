@@ -62,13 +62,6 @@ export const RECURSOS = [
     acoes: CRUD,
   },
   {
-    id: "cadastros.orcamentos",
-    nome: "Orçamentos",
-    modulo: "cadastros",
-    rota: "/cadastros/orcamentos",
-    acoes: CRUD,
-  },
-  {
     id: "cadastros.centros-custo",
     nome: "Centros de custo",
     modulo: "cadastros",
@@ -101,13 +94,6 @@ export const RECURSOS = [
     nome: "Equipamentos",
     modulo: "cadastros",
     rota: "/cadastros/equipamentos",
-    acoes: CRUD,
-  },
-  {
-    id: "cadastros.depositos",
-    nome: "Depósitos e tanques",
-    modulo: "cadastros",
-    rota: "/cadastros/depositos",
     acoes: CRUD,
   },
   {
