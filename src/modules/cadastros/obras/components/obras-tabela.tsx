@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Building2 } from "lucide-react";
+import { Building2, MoreHorizontal } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   DataTable,
@@ -12,7 +13,15 @@ import {
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatarQuantidade } from "@/lib/formatadores";
+import { alternarAtivo } from "@/modules/cadastros/obras/actions";
 import type { ClienteOpcao, ObraLista } from "@/modules/cadastros/obras/queries";
 import { STATUS_OBRA_CONFIG } from "@/modules/cadastros/obras/schemas";
 import { ObrasFormDrawer } from "./obras-form-drawer";
@@ -120,11 +129,68 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
     });
   }, [obras, busca, status]);
 
-  function abrirEdicao(obra: ObraLista) {
-    if (!podeEditar) return;
-    setSelecionadaId(obra.id);
-    setAberto(true);
-  }
+  const abrirEdicao = React.useCallback(
+    (obra: ObraLista) => {
+      if (!podeEditar) return;
+      setSelecionadaId(obra.id);
+      setAberto(true);
+    },
+    [podeEditar],
+  );
+
+  const alternar = React.useCallback(async (obra: ObraLista) => {
+    const resultado = await alternarAtivo(obra.id, !obra.ativo);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success(obra.ativo ? "Obra desativada" : "Obra reativada");
+  }, []);
+
+  // Coluna de ações (menu ⋮) só quando o usuário pode editar. Reaproveita as
+  // colunas base e acrescenta Editar + Desativar/Reativar, no padrão dos
+  // outros cadastros. O clique na linha continua abrindo a edição.
+  const colunasComAcoes = React.useMemo<ColumnDef<ObraLista, unknown>[]>(() => {
+    if (!podeEditar) return colunas;
+    return [
+      ...colunas,
+      {
+        id: "acoes",
+        header: "",
+        meta: { alinharDireita: true },
+        cell: ({ row }) => {
+          const obra = row.original;
+          return (
+            <div
+              className="flex justify-end"
+              onClick={(evento) => evento.stopPropagation()}
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Ações da obra"
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => abrirEdicao(obra)}>
+                    Editar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void alternar(obra)}>
+                    {obra.ativo ? "Desativar" : "Reativar"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        },
+      },
+    ];
+  }, [podeEditar, abrirEdicao, alternar]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -144,7 +210,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
       </FilterBar>
 
       <DataTable
-        columns={colunas}
+        columns={colunasComAcoes}
         data={dados}
         onRowClick={podeEditar ? abrirEdicao : undefined}
         emptyState={
