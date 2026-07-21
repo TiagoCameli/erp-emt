@@ -33,6 +33,7 @@ export interface RecursoDef {
 
 /** Módulos na ordem de exibição da sidebar */
 export const MODULOS = [
+  { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
@@ -53,6 +54,14 @@ const CRUD_APROVA = [
 ] as const;
 
 export const RECURSOS = [
+  // Gestão
+  {
+    id: "gestao.painel",
+    nome: "Painel",
+    modulo: "gestao",
+    rota: "/gestao",
+    acoes: ["ver"],
+  },
   // Cadastros
   {
     id: "cadastros.obras",

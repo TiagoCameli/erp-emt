@@ -10,7 +10,7 @@ vi.mock("react", async (importOriginal) => {
   return { ...original, cache: <T>(fn: T): T => fn };
 });
 
-import { temPermissao } from "@/lib/permissoes";
+import { modulosVisiveis, rotaInicial, temPermissao } from "@/lib/permissoes";
 import type { PermissaoUsuario, UsuarioLogado } from "@/lib/permissoes";
 
 function criarUsuario(permissoes: PermissaoUsuario[] = []): UsuarioLogado {
@@ -67,5 +67,59 @@ describe("temPermissao", () => {
       true,
     );
     expect(temPermissao(usuario, "administracao.lixeira", "ver")).toBe(false);
+  });
+});
+
+describe("modulosVisiveis", () => {
+  it("usuário null não vê nenhum módulo", () => {
+    expect(modulosVisiveis(null)).toHaveLength(0);
+  });
+
+  it("retorna os módulos na ordem de MODULOS (Gestão antes de Compras)", () => {
+    const usuario = criarUsuario([
+      { recurso: "compras.ordens", acao: "ver" },
+      { recurso: "gestao.painel", acao: "ver" },
+    ]);
+    expect(modulosVisiveis(usuario).map((m) => m.id)).toEqual([
+      "gestao",
+      "compras",
+    ]);
+  });
+});
+
+describe("rotaInicial", () => {
+  it("sem nenhuma permissão retorna null", () => {
+    expect(rotaInicial(criarUsuario([]))).toBeNull();
+  });
+
+  it("perfil de Compras cai em /compras", () => {
+    const usuario = criarUsuario([{ recurso: "compras.ordens", acao: "ver" }]);
+    expect(rotaInicial(usuario)).toBe("/compras");
+  });
+
+  it("perfil de Financeiro cai em /financeiro", () => {
+    const usuario = criarUsuario([
+      { recurso: "financeiro.lancamentos", acao: "ver" },
+    ]);
+    expect(rotaInicial(usuario)).toBe("/financeiro");
+  });
+
+  it("perfil de RH cai em /rh", () => {
+    const usuario = criarUsuario([{ recurso: "rh.folha", acao: "ver" }]);
+    expect(rotaInicial(usuario)).toBe("/rh");
+  });
+
+  it("quem vê Gestão cai em /gestao, mesmo vendo outros módulos", () => {
+    const usuario = criarUsuario([
+      { recurso: "gestao.painel", acao: "ver" },
+      { recurso: "compras.ordens", acao: "ver" },
+      { recurso: "financeiro.lancamentos", acao: "ver" },
+    ]);
+    expect(rotaInicial(usuario)).toBe("/gestao");
+  });
+
+  it("ação diferente de ver não conta como módulo visível", () => {
+    const usuario = criarUsuario([{ recurso: "compras.ordens", acao: "criar" }]);
+    expect(rotaInicial(usuario)).toBeNull();
   });
 });
