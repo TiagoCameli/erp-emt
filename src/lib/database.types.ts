@@ -400,6 +400,30 @@ export type Database = {
           },
         ]
       }
+      condicoes_pagamento: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          descricao: string
+          id: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao: string
+          id?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string
+          id?: string
+        }
+        Relationships: []
+      }
       configuracoes: {
         Row: {
           chave: string

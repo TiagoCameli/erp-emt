@@ -19,6 +19,7 @@ export interface OrdensAcoesCabecalhoProps {
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
+  condicoesPagamento: string[];
 }
 
 /**
@@ -31,6 +32,7 @@ export function OrdensAcoesCabecalho({
   insumos,
   centrosCusto,
   cotacoes,
+  condicoesPagamento,
 }: OrdensAcoesCabecalhoProps) {
   const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
@@ -53,6 +55,7 @@ export function OrdensAcoesCabecalho({
         insumos={insumos}
         centrosCusto={centrosCusto}
         cotacoes={cotacoes}
+        condicoesPagamento={condicoesPagamento}
         onCriada={(id) => router.push(`/compras/ordens/${id}`)}
       />
     </>
