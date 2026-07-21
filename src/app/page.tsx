@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
 
-export default function Home() {
-  redirect("/inicio");
+import { getUsuarioLogado, rotaInicial } from "@/lib/permissoes";
+
+export default async function Home() {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) redirect("/login");
+  redirect(rotaInicial(usuario) ?? "/sem-acesso");
 }
