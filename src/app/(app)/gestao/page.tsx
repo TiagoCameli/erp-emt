@@ -23,12 +23,18 @@ function Secao<T>({
   rota,
   resultado,
   children,
+  rotuloLink,
 }: {
   titulo: string;
   rota: string;
   resultado: PromiseSettledResult<T>;
   children: (dados: T) => ReactNode;
+  rotuloLink?: string;
 }) {
+  if (resultado.status === "rejected") {
+    console.error(`[gestao] falha ao carregar a seção ${titulo}:`, resultado.reason);
+  }
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -37,7 +43,7 @@ function Secao<T>({
           href={rota}
           className="text-detalhe text-muted-foreground hover:text-foreground hover:underline"
         >
-          Abrir {titulo.toLowerCase()}
+          {rotuloLink ?? `Abrir ${titulo.toLowerCase()}`}
         </Link>
       </div>
       {resultado.status === "fulfilled" ? (
@@ -49,6 +55,7 @@ function Secao<T>({
           icone={TriangleAlert}
           titulo="Não foi possível carregar esta seção"
           descricao="Recarregue a página. Se continuar, avise o administrador."
+          acao={<Link href="/gestao" className="text-detalhe text-muted-foreground hover:text-foreground hover:underline">Recarregar</Link>}
         />
       )}
     </section>
@@ -118,7 +125,7 @@ export default async function GestaoPage() {
         )}
       </Secao>
 
-      <Secao<ResumoRh> titulo="RH" rota="/rh" resultado={rh}>
+      <Secao<ResumoRh> titulo="RH" rota="/rh" resultado={rh} rotuloLink="Abrir RH">
         {(d) => (
           <>
             <KPICard

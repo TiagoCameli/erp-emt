@@ -42,6 +42,7 @@ const COLUNAS_MOBILE: Record<number, string> = {
   3: "grid-cols-3",
   4: "grid-cols-4",
   5: "grid-cols-5",
+  6: "grid-cols-6",
 };
 
 export interface ModuloNavegacao {
@@ -75,7 +76,7 @@ function iniciaisDoNome(nome: string): string {
 
 export function AppShell({ usuario, modulos, children, onSair }: AppShellProps) {
   const pathname = usePathname();
-  const modulosMobile = modulos.slice(0, 5);
+  const modulosMobile = modulos.slice(0, 6);
 
   return (
     <div className="flex h-screen overflow-hidden">
