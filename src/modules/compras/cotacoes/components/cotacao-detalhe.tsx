@@ -35,6 +35,7 @@ export interface CotacaoDetalheProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   trilha: EventoTrilha[];
+  condicoesPagamento: string[];
   podeEditar: boolean;
 }
 
@@ -48,6 +49,7 @@ export function CotacaoDetalhe({
   fornecedores,
   insumos,
   trilha,
+  condicoesPagamento,
   podeEditar,
 }: CotacaoDetalheProps) {
   const editavel = podeEditar && cotacao.status === "aberta";
@@ -260,6 +262,7 @@ export function CotacaoDetalhe({
           cotacaoId={cotacao.id}
           fornecedores={fornecedores}
           fornecedoresUsados={fornecedoresUsados}
+          condicoesPagamento={condicoesPagamento}
         />
       ) : null}
 

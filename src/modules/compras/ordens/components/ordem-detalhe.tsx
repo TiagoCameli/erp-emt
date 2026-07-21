@@ -78,6 +78,7 @@ export interface OrdemDetalheViewProps {
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
+  condicoesPagamento: string[];
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
@@ -95,6 +96,7 @@ export function OrdemDetalheView({
   insumos,
   centrosCusto,
   cotacoes,
+  condicoesPagamento,
   podeEditar,
   podeAprovar,
   podeDesaprovar,
@@ -387,6 +389,7 @@ export function OrdemDetalheView({
           insumos={insumos}
           centrosCusto={centrosCusto}
           cotacoes={cotacoes}
+          condicoesPagamento={condicoesPagamento}
         />
       ) : null}
 

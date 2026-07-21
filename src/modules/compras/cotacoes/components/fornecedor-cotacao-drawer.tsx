@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { ComboboxCriavel, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +21,7 @@ import {
   CampoFormulario,
   classesFormulario,
 } from "@/modules/cadastros/_shared/campos";
+import { criarCondicaoPagamento } from "@/modules/compras/condicoes-pagamento/actions";
 import { adicionarFornecedor } from "@/modules/compras/cotacoes/actions";
 import {
   fornecedorCotacaoFormSchema,
@@ -37,6 +38,7 @@ export interface FornecedorCotacaoDrawerProps {
   fornecedores: FornecedorOpcao[];
   /** Ids de fornecedor já na cotação, para não oferecer de novo. */
   fornecedoresUsados: string[];
+  condicoesPagamento: string[];
 }
 
 /**
@@ -49,6 +51,7 @@ export function FornecedorCotacaoDrawer({
   cotacaoId,
   fornecedores,
   fornecedoresUsados,
+  condicoesPagamento,
 }: FornecedorCotacaoDrawerProps) {
   const form = useForm<FornecedorCotacaoFormInput>({
     resolver: zodResolver(fornecedorCotacaoFormSchema),
@@ -59,6 +62,15 @@ export function FornecedorCotacaoDrawer({
       observacao: "",
     },
   });
+
+  async function criarCondicao(texto: string) {
+    const r = await criarCondicaoPagamento(texto);
+    if ("erro" in r) {
+      toast.error(r.erro);
+      return null;
+    }
+    return r.descricao;
+  }
 
   React.useEffect(() => {
     if (aberto) {
@@ -177,11 +189,20 @@ export function FornecedorCotacaoDrawer({
           rotulo="Condição de pagamento"
           erro={form.formState.errors.condicaoPagamento?.message}
         >
-          <Input
-            id="fornecedor-condicao"
-            placeholder="30 dias"
-            disabled={salvando}
-            {...form.register("condicaoPagamento")}
+          <Controller
+            name="condicaoPagamento"
+            control={form.control}
+            render={({ field }) => (
+              <ComboboxCriavel
+                id="fornecedor-condicao"
+                valor={field.value ?? ""}
+                onValorChange={field.onChange}
+                opcoes={condicoesPagamento}
+                onCriar={criarCondicao}
+                placeholder="30 dias"
+                disabled={salvando}
+              />
+            )}
           />
         </CampoFormulario>
 

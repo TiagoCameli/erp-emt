@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { ComboboxCriavel, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +22,7 @@ import {
   CampoFormulario,
   classesFormulario,
 } from "@/modules/cadastros/_shared/campos";
+import { criarCondicaoPagamento } from "@/modules/compras/condicoes-pagamento/actions";
 import { criarOrdem, editarOrdem } from "@/modules/compras/ordens/actions";
 import {
   paraNumero,
@@ -92,6 +93,7 @@ export interface OrdemFormDrawerProps {
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
+  condicoesPagamento: string[];
   /** Chamado depois de criar uma OC, com o id, para navegar ao detalhe. */
   onCriada?: (id: string) => void;
 }
@@ -109,6 +111,7 @@ export function OrdemFormDrawer({
   insumos,
   centrosCusto,
   cotacoes,
+  condicoesPagamento,
   onCriada,
 }: OrdemFormDrawerProps) {
   const editando = ordem !== null;
@@ -117,6 +120,15 @@ export function OrdemFormDrawer({
     resolver: zodResolver(ordemCompraFormSchema),
     defaultValues: valoresIniciais(ordem),
   });
+
+  async function criarCondicao(texto: string) {
+    const r = await criarCondicaoPagamento(texto);
+    if ("erro" in r) {
+      toast.error(r.erro);
+      return null;
+    }
+    return r.descricao;
+  }
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -263,11 +275,20 @@ export function OrdemFormDrawer({
             rotulo="Condição de pagamento"
             erro={form.formState.errors.condicaoPagamento?.message}
           >
-            <Input
-              id="oc-condicao"
-              placeholder="30 dias"
-              disabled={salvando}
-              {...form.register("condicaoPagamento")}
+            <Controller
+              name="condicaoPagamento"
+              control={form.control}
+              render={({ field }) => (
+                <ComboboxCriavel
+                  id="oc-condicao"
+                  valor={field.value ?? ""}
+                  onValorChange={field.onChange}
+                  opcoes={condicoesPagamento}
+                  onCriar={criarCondicao}
+                  placeholder="30 dias"
+                  disabled={salvando}
+                />
+              )}
             />
           </CampoFormulario>
 

@@ -7,6 +7,7 @@ import {
   lerParametrosLista,
   parametroValido,
 } from "@/modules/compras/_shared/lista";
+import { listarCondicoesPagamento } from "@/modules/compras/condicoes-pagamento/queries";
 import { OrdensAcoesCabecalho } from "@/modules/compras/ordens/components/ordens-acoes-cabecalho";
 import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela";
 import {
@@ -41,12 +42,14 @@ export default async function PaginaOrdens({
     insumos,
     centrosCusto,
     cotacoes,
+    condicoesPagamento,
   ] = await Promise.all([
     listarOrdens({ pagina, tamanho, status, busca }),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
     listarCotacoesFinalizadas(),
+    listarCondicoesPagamento(),
   ]);
 
   return (
@@ -61,6 +64,7 @@ export default async function PaginaOrdens({
             insumos={insumos}
             centrosCusto={centrosCusto}
             cotacoes={cotacoes}
+            condicoesPagamento={condicoesPagamento}
           />
         }
       />
