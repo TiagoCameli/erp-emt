@@ -138,15 +138,6 @@ export function ComboboxCriavel({
               </div>
             ) : null}
 
-            {valor ? (
-              <CommandGroup>
-                <CommandItem value="__limpar__" onSelect={() => selecionar("")}>
-                  <X className="mr-2 size-4 opacity-50" />
-                  Limpar seleção
-                </CommandItem>
-              </CommandGroup>
-            ) : null}
-
             {opcoesFiltradas.length > 0 ? (
               <CommandGroup>
                 {opcoesFiltradas.map((opcao) => (
@@ -176,6 +167,15 @@ export function ComboboxCriavel({
                 >
                   <Plus className="mr-2 size-4" />
                   {`Criar "${buscaLimpa}"`}
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+
+            {valor ? (
+              <CommandGroup>
+                <CommandItem value="__limpar__" onSelect={() => selecionar("")}>
+                  <X className="mr-2 size-4 opacity-50" />
+                  Limpar seleção
                 </CommandItem>
               </CommandGroup>
             ) : null}
