@@ -96,3 +96,18 @@ describe("recursosDoModulo", () => {
     ]);
   });
 });
+
+describe("módulo Gestão", () => {
+  it("Gestão é o primeiro módulo (vira a home de quem o vê)", () => {
+    expect(MODULOS[0].id).toBe("gestao");
+    expect(MODULOS[0].rota).toBe("/gestao");
+  });
+
+  it("existe o recurso gestao.painel só com a ação ver", () => {
+    const painel = RECURSOS.find((r) => r.id === "gestao.painel");
+    expect(painel, "recurso gestao.painel não encontrado").toBeDefined();
+    expect(painel?.modulo).toBe("gestao");
+    expect(painel?.rota).toBe("/gestao");
+    expect([...(painel?.acoes ?? [])]).toEqual(["ver"]);
+  });
+});

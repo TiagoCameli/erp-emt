@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Circle,
   FolderOpen,
+  LayoutDashboard,
   LogOut,
   Search,
   Settings,
@@ -27,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const MAPA_ICONES: Record<string, LucideIcon> = {
+  gestao: LayoutDashboard,
   administracao: Settings,
   cadastros: FolderOpen,
   compras: ShoppingCart,
