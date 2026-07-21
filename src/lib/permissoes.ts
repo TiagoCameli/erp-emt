@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { MODULOS, recursosDoModulo } from "@/config/recursos";
 import type { Acao, RecursoId } from "@/config/recursos";
 
 export interface PermissaoUsuario {
@@ -83,4 +84,26 @@ export async function exigirPermissao(
     throw new Error(`Sem permissão: ${recurso} / ${acao}`);
   }
   return usuario;
+}
+
+/**
+ * Módulos que o usuário pode ver, na ordem da sidebar (MODULOS).
+ * Um módulo é visível quando o usuário tem "ver" em algum recurso dele.
+ */
+export function modulosVisiveis(
+  usuario: UsuarioLogado | null,
+): ReadonlyArray<(typeof MODULOS)[number]> {
+  return MODULOS.filter((modulo) =>
+    recursosDoModulo(modulo.id).some((recurso) =>
+      temPermissao(usuario, recurso.id as RecursoId, "ver"),
+    ),
+  );
+}
+
+/**
+ * Rota inicial do usuário: o primeiro módulo visível na ordem da sidebar.
+ * Retorna null quando não há nenhum módulo visível.
+ */
+export function rotaInicial(usuario: UsuarioLogado | null): string | null {
+  return modulosVisiveis(usuario)[0]?.rota ?? null;
 }
