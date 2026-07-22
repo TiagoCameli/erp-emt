@@ -9,7 +9,9 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   ordemCompraSchema,
+  recebimentoSchema,
   type OrdemCompraInput,
+  type RecebimentoInput,
 } from "@/modules/compras/ordens/schemas";
 
 const RECURSO = "compras.ordens" as const;
@@ -285,6 +287,51 @@ export async function aprovarOrdem(id: string): Promise<ResultadoAcao> {
       "compras.ordens.aprovarOrdem",
       error,
       error.message || "Não foi possível aprovar a ordem de compra",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Registra o recebimento da OC aprovada via RPC: confirma a NF (nº, valor,
+ * data), confirma o lançamento previsto -> a_pagar e gera as parcelas do
+ * a_pagar pela condição de pagamento da OC (vencimento = data do
+ * recebimento + dias_offset da parcela). Reusa a permissão 'aprovar', mesma
+ * capacidade que já gera o lançamento previsto na aprovação.
+ */
+export async function registrarRecebimento(
+  id: string,
+  dados: RecebimentoInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("aprovar"))) {
+    return {
+      erro: "Sem permissão para registrar recebimento de ordens de compra",
+    };
+  }
+
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Ordem de compra inválida" };
+
+  const validado = recebimentoSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_registrar_recebimento", {
+    p_oc_id: idValido.data,
+    p_numero_nf: validado.data.numeroNf,
+    p_valor_nf: validado.data.valorNf,
+    p_data_recebimento: validado.data.dataRecebimento,
+  });
+
+  if (error) {
+    return erroAcao(
+      "compras.ordens.registrarRecebimento",
+      error,
+      error.message || "Não foi possível registrar o recebimento",
     );
   }
 

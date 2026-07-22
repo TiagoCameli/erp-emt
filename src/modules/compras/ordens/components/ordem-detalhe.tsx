@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Ban, Pencil } from "lucide-react";
+import { ArrowLeft, Ban, Pencil, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -32,8 +32,10 @@ import type {
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
+  ParcelaCondicaoOpcao,
 } from "@/modules/compras/ordens/queries";
 import { OrdemFormDrawer } from "./ordem-form-drawer";
+import { RecebimentoDialog } from "./recebimento-dialog";
 
 /** Rótulo e cor do status do lançamento financeiro vinculado. */
 const STATUS_LANCAMENTO: Record<string, { rotulo: string; classes: string }> = {
@@ -80,9 +82,11 @@ export interface OrdemDetalheViewProps {
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
+  parcelasCondicao: ParcelaCondicaoOpcao[];
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
+  podeReceber: boolean;
 }
 
 /**
@@ -98,13 +102,16 @@ export function OrdemDetalheView({
   centrosCusto,
   cotacoes,
   condicoesPagamento,
+  parcelasCondicao,
   podeEditar,
   podeAprovar,
   podeDesaprovar,
+  podeReceber,
 }: OrdemDetalheViewProps) {
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [dialogCancelar, setDialogCancelar] = React.useState(false);
+  const [dialogRecebimento, setDialogRecebimento] = React.useState(false);
   const [enviando, setEnviando] = React.useState(false);
 
   const info = infoStatusOC(ordem.status);
@@ -116,6 +123,7 @@ export function OrdemDetalheView({
     (ordem.status === "rascunho" ||
       ordem.status === "pendente_aprovacao" ||
       ordem.status === "rejeitado");
+  const recebivel = podeReceber && ordem.status === "aprovado";
 
   async function aoEnviarParaAprovacao() {
     if (enviando) return;
@@ -230,6 +238,16 @@ export function OrdemDetalheView({
             >
               <Ban />
               Cancelar ordem
+            </Button>
+          ) : null}
+          {recebivel ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setDialogRecebimento(true)}
+            >
+              <ReceiptText />
+              Registrar recebimento
             </Button>
           ) : null}
         </div>
@@ -403,6 +421,17 @@ export function OrdemDetalheView({
         variante="destrutivo"
         exigeMotivo
         onConfirmar={aoCancelar}
+      />
+
+      <RecebimentoDialog
+        aberto={dialogRecebimento}
+        onAbertoChange={(aberto) => {
+          setDialogRecebimento(aberto);
+          if (!aberto) router.refresh();
+        }}
+        ordemId={ordem.id}
+        valorTotalOc={ordem.valorTotal}
+        parcelasCondicao={parcelasCondicao}
       />
     </div>
   );

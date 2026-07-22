@@ -57,7 +57,10 @@ export async function criarCondicao(
 
   const supabase = await createClient();
   const { data: id, error } = await supabase.rpc("salvar_condicao", {
-    p_id: null,
+    // A RPC aceita p_id nulo em runtime (cria quando nulo, edita quando
+    // preenchido); o tipo gerado pro Args não reflete essa nulidade (mesmo
+    // padrão de p_id em fn_salvar_lancamento, financeiro/lancamentos/actions.ts).
+    p_id: null as unknown as string,
     p_descricao: validado.data.descricao,
     p_ativo: validado.data.ativo,
     p_parcelas: parcelasParaRpc(validado.data.parcelas),

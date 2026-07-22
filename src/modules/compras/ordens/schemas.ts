@@ -10,6 +10,7 @@ export const STATUS_OC = [
   "aprovado",
   "rejeitado",
   "cancelado",
+  "recebido",
 ] as const;
 
 export type StatusOcSchema = (typeof STATUS_OC)[number];
@@ -161,3 +162,63 @@ export const ordemCompraFormSchema = z.object({
 });
 
 export type OrdemCompraFormInput = z.infer<typeof ordemCompraFormSchema>;
+
+// ---------------------------------------------------------------------------
+// Recebimento da OC (Task 6): confirma a NF e gera as parcelas do a_pagar
+// pela condição de pagamento. Mesmo par de schema server/form do resto do
+// módulo (ver ocItemSchema/ocInsumoFormSchema acima).
+// ---------------------------------------------------------------------------
+
+/** Nº da NF: texto obrigatório, até 60 caracteres. */
+const numeroNfSchema = z
+  .string()
+  .trim()
+  .min(1, { error: "Informe o número da nota fiscal" })
+  .max(60, { error: "Máximo de 60 caracteres" });
+
+/** Valor da NF NUMERIC(14,2): maior que zero. */
+const valorNfSchema = z
+  .number({ error: "Valor da nota fiscal inválido" })
+  .positive({ error: "O valor da nota fiscal precisa ser maior que zero" })
+  .max(999999999999.99, { error: "Valor acima do permitido" });
+
+/** Data do recebimento: yyyy-mm-dd. */
+const dataRecebimentoSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data do recebimento" });
+
+/**
+ * Recebimento validado no servidor: nº NF, valor e data que a RPC
+ * fn_registrar_recebimento usa para confirmar o lançamento previsto e gerar
+ * as parcelas do a_pagar pela condição de pagamento da OC.
+ */
+export const recebimentoSchema = z.object({
+  numeroNf: numeroNfSchema,
+  valorNf: valorNfSchema,
+  dataRecebimento: dataRecebimentoSchema,
+});
+
+export type RecebimentoInput = z.infer<typeof recebimentoSchema>;
+
+/** Formulário de recebimento (client): valor como string pra casar com o input. */
+export const recebimentoFormSchema = z.object({
+  numeroNf: z
+    .string()
+    .trim()
+    .min(1, { error: "Informe o número da nota fiscal" })
+    .max(60, { error: "Máximo de 60 caracteres" }),
+  valorNf: z.string().trim().refine(
+    (valor) => {
+      const numero = Number(valor.replace(",", "."));
+      return valor !== "" && !Number.isNaN(numero) && numero > 0;
+    },
+    { error: "Informe um valor de nota fiscal maior que zero" },
+  ),
+  dataRecebimento: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data do recebimento" }),
+});
+
+export type RecebimentoFormInput = z.infer<typeof recebimentoFormSchema>;

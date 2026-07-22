@@ -108,6 +108,12 @@ export interface CondicaoPagamentoOpcao {
   descricao: string;
 }
 
+/** Parcela de uma condição de pagamento, para a prévia do recebimento. */
+export interface ParcelaCondicaoOpcao {
+  diasOffset: number;
+  percentual: number;
+}
+
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
 function nomeFornecedor(fornecedor: {
   razao_social: string;
@@ -331,6 +337,35 @@ export async function listarCondicoesPagamento(): Promise<
   return (data ?? []).map((condicao) => ({
     id: condicao.id,
     descricao: condicao.descricao,
+  }));
+}
+
+/**
+ * Parcelas de uma condição de pagamento (dias + percentual), em ordem de
+ * vencimento. Usada na prévia do diálogo de recebimento: as mesmas
+ * dias_offset/percentual que fn_registrar_recebimento usa pra gerar as
+ * lancamento_parcelas.
+ */
+export async function listarParcelasCondicao(
+  condicaoPagamentoId: string,
+): Promise<ParcelaCondicaoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("condicao_parcelas")
+    .select("dias_offset, percentual")
+    .eq("condicao_id", condicaoPagamentoId)
+    .order("numero", { ascending: true });
+
+  if (error) {
+    throw new Error(
+      "Não foi possível carregar as parcelas da condição de pagamento",
+    );
+  }
+
+  return (data ?? []).map((parcela) => ({
+    diasOffset: parcela.dias_offset,
+    percentual: parcela.percentual,
   }));
 }
 

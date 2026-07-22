@@ -1653,6 +1653,54 @@ export type Database = {
         }
         Relationships: []
       }
+      recebimentos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          data_recebimento: string
+          id: string
+          lancamento_id: string
+          numero_nf: string
+          ordem_compra_id: string
+          valor_nf: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          data_recebimento: string
+          id?: string
+          lancamento_id: string
+          numero_nf: string
+          ordem_compra_id: string
+          valor_nf: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          data_recebimento?: string
+          id?: string
+          lancamento_id?: string
+          numero_nf?: string
+          ordem_compra_id?: string
+          valor_nf?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recebimentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recebimentos_ordem_compra_id_fkey"
+            columns: ["ordem_compra_id"]
+            isOneToOne: true
+            referencedRelation: "ordens_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rh_adiantamentos: {
         Row: {
           colaborador_id: string
@@ -2257,6 +2305,15 @@ export type Database = {
       fn_recurso_do_anexo: { Args: { p_tabela: string }; Returns: string }
       fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string }
       fn_recurso_do_path_anexo: { Args: { p_path: string }; Returns: string }
+      fn_registrar_recebimento: {
+        Args: {
+          p_data_recebimento: string
+          p_numero_nf: string
+          p_oc_id: string
+          p_valor_nf: number
+        }
+        Returns: undefined
+      }
       fn_rel_aging: {
         Args: never
         Returns: {
@@ -2334,7 +2391,7 @@ export type Database = {
         Args: {
           p_ativo: boolean
           p_descricao: string
-          p_id: string | null
+          p_id: string
           p_parcelas: Json
         }
         Returns: string
