@@ -34,6 +34,11 @@ import {
   subtotalItem,
   totalOrdemCompra,
 } from "@/modules/compras/ordens/calculo";
+import {
+  achatarGruposEmItens,
+  agruparItensPorCentroCusto,
+  type GrupoForm,
+} from "@/modules/compras/ordens/form-mapeamento";
 import type {
   CentroCustoOpcao,
   CotacaoOpcao,
@@ -48,8 +53,6 @@ import {
 
 const SEM_VINCULO = "sem-vinculo";
 const ID_FORM = "form-ordem-compra";
-
-type GrupoForm = OrdemCompraFormInput["centrosCusto"][number];
 
 /** Linha de insumo em branco. */
 function insumoVazio(): GrupoForm["insumos"][number] {
@@ -74,32 +77,13 @@ function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
     };
   }
 
-  // Agrupa os itens planos por centro de custo, preservando a ordem em que
-  // cada centro apareceu.
-  const ordemCentros: string[] = [];
-  const porCentro = new Map<string, GrupoForm["insumos"]>();
-  for (const item of ordem.itens) {
-    if (!porCentro.has(item.centroCustoId)) {
-      porCentro.set(item.centroCustoId, []);
-      ordemCentros.push(item.centroCustoId);
-    }
-    porCentro.get(item.centroCustoId)!.push({
-      insumoId: item.insumoId,
-      quantidade: String(item.quantidade).replace(".", ","),
-      precoUnitario: String(item.precoUnitario).replace(".", ","),
-    });
-  }
-
   return {
     fornecedorId: ordem.fornecedorId,
     condicaoPagamento: ordem.condicaoPagamento ?? "",
     cotacaoId: ordem.cotacaoId ?? undefined,
     dataEmissao: ordem.dataEmissao,
     observacoes: ordem.observacoes ?? "",
-    centrosCusto: ordemCentros.map((centroCustoId) => ({
-      centroCustoId,
-      insumos: porCentro.get(centroCustoId)!,
-    })),
+    centrosCusto: agruparItensPorCentroCusto(ordem.itens),
   };
 }
 
@@ -190,14 +174,7 @@ export function OrdemFormDrawer({
       cotacaoId: valores.cotacaoId,
       dataEmissao: valores.dataEmissao,
       observacoes: valores.observacoes,
-      itens: valores.centrosCusto.flatMap((grupo) =>
-        grupo.insumos.map((insumo) => ({
-          insumoId: insumo.insumoId,
-          quantidade: paraNumero(insumo.quantidade),
-          precoUnitario: paraNumero(insumo.precoUnitario),
-          centroCustoId: grupo.centroCustoId,
-        })),
-      ),
+      itens: achatarGruposEmItens(valores.centrosCusto),
     };
 
     if (editando) {
@@ -661,6 +638,12 @@ function GrupoCentroCusto({
             </div>
           );
         })}
+
+        {typeof errosGrupo?.insumos?.root?.message === "string" ? (
+          <p className="text-legenda text-destructive" role="alert">
+            {errosGrupo.insumos.root.message}
+          </p>
+        ) : null}
 
         <div className="flex items-center justify-between gap-3">
           <Button
