@@ -110,14 +110,16 @@ git commit -m "feat(db): tabela condicao_parcelas + salvar_condicao_parcelas (so
 
 ---
 
-## Task 2: Migração de dados + FK texto→id (migration destrutiva)
+## Task 2: EXPAND — coluna FK (nullable) + backfill + parcelas (migration ADITIVA)
+
+**Estratégia expand-contract (decisão do Tiago):** esta migration é **aditiva e não-destrutiva** — mantém a coluna texto `condicao_pagamento` intacta para o código EM PRODUÇÃO continuar funcionando. A coluna texto só é dropada na **Task 9 (contract), depois do deploy** do código novo. Nada aqui pode quebrar o app que está no ar.
 
 **Files:**
-- Create: `supabase/migrations/<ts>_condicao_pagamento_fk.sql`
+- Create: `supabase/migrations/<ts>_condicao_pagamento_fk_expand.sql`
 
 **Interfaces:**
 - Consumes: `condicao_parcelas` (Task 1).
-- Produces: `ordens_compra.condicao_pagamento_id uuid not null` FK; `cotacao_fornecedores.condicao_pagamento_id uuid` FK (nullable); coluna texto `condicao_pagamento` removida das duas; parcelas semeadas para as condições existentes.
+- Produces: `ordens_compra.condicao_pagamento_id uuid` FK **NULLABLE**; `cotacao_fornecedores.condicao_pagamento_id uuid` FK (nullable); parcelas semeadas para as condições existentes. Colunas texto **permanecem**.
 
 - [ ] **Step 1: Ler o estado real** (MCP `execute_sql`)
 
@@ -148,44 +150,35 @@ on conflict (descricao) do nothing;
 ```
 Repetir o Step 2 para as recém-criadas (parcela 100% pelo número/à vista). Se um texto não tiver número e não for "à vista", cai em dias 0 (registrar no log qual foi).
 
-- [ ] **Step 4: Adicionar as colunas FK e backfill**
+- [ ] **Step 4: Adicionar as colunas FK (NULLABLE) e backfill — SEM not null, SEM drop**
 
 ```sql
 alter table public.ordens_compra add column condicao_pagamento_id uuid references public.condicoes_pagamento(id);
 update public.ordens_compra o set condicao_pagamento_id = c.id
   from public.condicoes_pagamento c where c.descricao = o.condicao_pagamento;
--- Toda OC precisa de condição: as sem texto recebem 'À vista'.
+-- rows sem texto recebem 'À vista' (mas a coluna segue NULLABLE nesta fase):
 update public.ordens_compra set condicao_pagamento_id =
   (select id from public.condicoes_pagamento where descricao = 'À vista' limit 1)
   where condicao_pagamento_id is null;
-alter table public.ordens_compra alter column condicao_pagamento_id set not null;
 
 alter table public.cotacao_fornecedores add column condicao_pagamento_id uuid references public.condicoes_pagamento(id);
 update public.cotacao_fornecedores f set condicao_pagamento_id = c.id
   from public.condicoes_pagamento c where c.descricao = f.condicao_pagamento;
-```
 
-- [ ] **Step 5: Conferir que não há OC sem FK, depois dropar as colunas texto**
-
-```sql
--- checagem (deve dar 0):
--- select count(*) from public.ordens_compra where condicao_pagamento_id is null;
-alter table public.ordens_compra drop column condicao_pagamento;
-alter table public.cotacao_fornecedores drop column condicao_pagamento;
 create index idx_ordens_compra_condicao on public.ordens_compra (condicao_pagamento_id);
 create index idx_cotacao_fornecedores_condicao on public.cotacao_fornecedores (condicao_pagamento_id);
 ```
-Rollback documentado: re-add colunas texto, `update` de volta pela descrição, drop das FK. (As parcelas semeadas podem ficar; são inertes.)
+**NÃO** rodar `set not null` nem `drop column` aqui (isso quebraria o código em produção que ainda insere/lê a coluna texto). Isso fica na Task 9. Rollback: `drop column condicao_pagamento_id` das duas tabelas (a coluna texto nunca foi tocada).
 
-- [ ] **Step 6: Aplicar via MCP, advisors, regenerar tipos**
+- [ ] **Step 5: Aplicar via MCP, advisors, regenerar tipos**
 
-`apply_migration(...)`; `get_advisors` (security+performance); `generate_typescript_types` e atualizar `src/lib/database.types.ts`.
+`apply_migration(name: "<ts>_condicao_pagamento_fk_expand", ...)`; `get_advisors` (security+performance); `generate_typescript_types` e atualizar `src/lib/database.types.ts`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/<ts>_condicao_pagamento_fk.sql src/lib/database.types.ts
-git commit -m "feat(db): condicao_pagamento vira FK em OC/cotação + migra dados e semeia parcelas"
+git add supabase/migrations/<ts>_condicao_pagamento_fk_expand.sql src/lib/database.types.ts
+git commit -m "feat(db): adiciona condicao_pagamento_id (nullable) + backfill + semeia parcelas (expand)"
 ```
 
 ---
@@ -331,6 +324,8 @@ git commit -m "feat(cadastros): tela de condições de pagamento com editor de p
 - Consumes: FK `condicao_pagamento_id` (Task 2); `listarCondicoes` (Task 3).
 - Produces: OC exige `condicaoPagamentoId`; cotação aceita opcional.
 
+**Nota expand-contract:** o app passa a exigir `condicaoPagamentoId` (Zod obrigatório na OC) e a gravar SÓ a FK, mesmo com a coluna texto ainda existindo no banco (fase expand). Não escrever mais `condicao_pagamento` (texto) em lugar nenhum do código novo; a coluna some na Task 9. A coluna FK no banco segue NULLABLE até a Task 9 — a obrigatoriedade é garantida pelo app até lá.
+
 - [ ] **Step 1: Schemas**
 
 Trocar `condicaoPagamento: textoOpcional(120)` por `condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" })` na OC (obrigatório) e `z.uuid().optional()` na cotação. Atualizar os testes de schema.
@@ -439,10 +434,50 @@ Limpar duplicatas do `.next`; `npm run typecheck && npm run lint && npm test -- 
 
 Push da branch; pegar a URL de preview. Roteiro (Tiago): criar condição "Entrada 50% + 30 dias" e "30/60/90"; OC com condição obrigatória; aprovar; registrar recebimento (NF, valor, data); ver as parcelas do a_pagar em Lançamentos com os vencimentos certos e ajustar uma data; conferir a trilha da OC limpa.
 
-- [ ] **Step 4: Merge após o OK do Tiago**
+- [ ] **Step 4: Merge + deploy após o OK do Tiago, e VALIDAR em produção**
 
 ```bash
 git checkout main && git merge --no-ff feat-condicoes-vencimento -m "Merge feat-condicoes-vencimento: condições estruturadas + vencimento no recebimento"
+git push origin main
+```
+Esperar o deploy da Vercel subir e o Tiago confirmar em produção que criar OC (com condição obrigatória), aprovar e registrar recebimento funciona com o código novo. **Só depois disso** rodar a Task 9 (contract). A coluna texto ainda existe no banco neste ponto (inerte, o código novo não usa).
+
+---
+
+## Task 9: CONTRACT — not null + drop das colunas texto (destrutiva, SÓ pós-deploy validado)
+
+**Só executar depois que a Task 8 Step 4 estiver no ar e validada.** Agora o código em produção já usa só a FK, então é seguro dropar a coluna texto.
+
+**Files:**
+- Create: `supabase/migrations/<ts>_condicao_pagamento_fk_contract.sql`
+
+- [ ] **Step 1: Backfill de qualquer FK nula criada na janela + not null + drop**
+
+```sql
+-- OCs criadas entre o expand e o deploy pelo código antigo podem ter FK nula:
+update public.ordens_compra o set condicao_pagamento_id = c.id
+  from public.condicoes_pagamento c
+  where o.condicao_pagamento_id is null and c.descricao = o.condicao_pagamento;
+update public.ordens_compra set condicao_pagamento_id =
+  (select id from public.condicoes_pagamento where descricao = 'À vista' limit 1)
+  where condicao_pagamento_id is null;
+-- checagem (deve dar 0): select count(*) from public.ordens_compra where condicao_pagamento_id is null;
+alter table public.ordens_compra alter column condicao_pagamento_id set not null;
+
+alter table public.ordens_compra drop column condicao_pagamento;
+alter table public.cotacao_fornecedores drop column condicao_pagamento;
+```
+Rollback: re-add as colunas texto e `update` de volta pela descrição; `drop not null` na FK.
+
+- [ ] **Step 2: Aplicar via MCP, advisors, regenerar tipos**
+
+`apply_migration(name: "<ts>_condicao_pagamento_fk_contract", ...)`; `get_advisors`; `generate_typescript_types` → `src/lib/database.types.ts`. Rodar `typecheck`/`build` (nada no código deve mais referenciar a coluna texto).
+
+- [ ] **Step 3: Commit + push**
+
+```bash
+git add supabase/migrations/<ts>_condicao_pagamento_fk_contract.sql src/lib/database.types.ts
+git commit -m "feat(db): condicao_pagamento_id not null + drop das colunas texto (contract)"
 git push origin main
 ```
 
@@ -450,6 +485,7 @@ git push origin main
 
 ## Self-review (feito ao escrever)
 
-- **Cobertura do spec:** condicao_parcelas + validação (T1); migração texto→FK + dados (T2); cadastro backend+UI (T3, T4); OC/cotação por id + obrigatória (T5, resolve item 2a); recebimento na OC gera parcelas pela condição, base data NF (T6); ajuste de datas no lançamento (reusa tela existente — nada a fazer além do T6 gerar as parcelas); item 3 transacional (T7); advisors/preview (T8). Coberto.
+- **Cobertura do spec:** condicao_parcelas + validação (T1); expand FK+dados (T2, aditivo); cadastro backend+UI (T3, T4); OC/cotação por id + obrigatória (T5, resolve item 2a); recebimento na OC gera parcelas pela condição, base data NF (T6); ajuste de datas no lançamento (reusa tela existente — nada a fazer além do T6 gerar as parcelas); item 3 transacional (T7); merge+deploy+validação (T8); contract/drop pós-deploy (T9). Coberto.
+- **Expand-contract:** nenhuma migration destrutiva roda antes do deploy do código novo. T2 é aditiva (mantém a coluna texto, FK nullable); T9 (drop + not null) só após a T8 validada em produção. Prod nunca quebra durante o desenvolvimento.
 - **Placeholders:** as funções/triggers vivos têm Step 1 explícito de "ler ao vivo via MCP" antes de alterar (o repo pode divergir), com a transformação e os blocos novos especificados. Não há TODO solto; os `<ts>` e `<fn_auditoria_do_projeto>` são valores a preencher na hora (timestamp e nome real conferido no Step 1), sinalizados.
 - **Consistência de tipos:** `condicaoPagamentoId` (uuid) usado igual em OC/cotação; `dividirValorPorParcelas`/`datasParcelas` definidos na T3 e reusados na T6; `salvar_condicao_parcelas(uuid, jsonb)` mesma assinatura em T1/T3.
