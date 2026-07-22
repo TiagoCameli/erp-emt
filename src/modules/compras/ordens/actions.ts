@@ -52,7 +52,7 @@ function itensParaRegistros(
 function cabecalhoParaRegistro(dados: OrdemCompraInput) {
   return {
     fornecedor_id: dados.fornecedorId,
-    condicao_pagamento: dados.condicaoPagamento ?? null,
+    condicao_pagamento_id: dados.condicaoPagamentoId,
     cotacao_id: dados.cotacaoId ?? null,
     data_emissao: dados.dataEmissao,
     observacoes: dados.observacoes ?? null,

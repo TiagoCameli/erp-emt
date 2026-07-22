@@ -63,7 +63,8 @@ export interface OrdemDetalhe {
   numero: string | null;
   fornecedorId: string;
   fornecedorNome: string;
-  condicaoPagamento: string | null;
+  condicaoPagamentoId: string | null;
+  condicaoPagamentoDescricao: string | null;
   cotacaoId: string | null;
   cotacaoNumero: string | null;
   valorTotal: number;
@@ -99,6 +100,12 @@ export interface CentroCustoOpcao {
 export interface CotacaoOpcao {
   id: string;
   numero: string | null;
+}
+
+/** Opção de condição de pagamento ativa para o select da OC. */
+export interface CondicaoPagamentoOpcao {
+  id: string;
+  descricao: string;
 }
 
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
@@ -177,10 +184,11 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
   const { data: ordem, error } = await supabase
     .from("ordens_compra")
     .select(
-      `id, numero, fornecedor_id, condicao_pagamento, cotacao_id,
+      `id, numero, fornecedor_id, condicao_pagamento_id, cotacao_id,
        valor_total, status, motivo_rejeicao, data_emissao, observacoes,
        fornecedores(razao_social, nome_fantasia),
        cotacoes(numero),
+       condicoes_pagamento(descricao),
        oc_itens(
          id, insumo_id, quantidade, preco_unitario, centro_custo_id,
          insumos(nome, unidades_medida(sigla)),
@@ -220,7 +228,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     fornecedorNome: ordem.fornecedores
       ? nomeFornecedor(ordem.fornecedores)
       : "-",
-    condicaoPagamento: ordem.condicao_pagamento,
+    condicaoPagamentoId: ordem.condicao_pagamento_id,
+    condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
     cotacaoId: ordem.cotacao_id,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
     valorTotal: ordem.valor_total,
@@ -300,6 +309,28 @@ export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
     id: centro.id,
     nome: centro.nome,
     codigo: centro.codigo,
+  }));
+}
+
+/** Condições de pagamento ativas para o select da OC, em ordem alfabética. */
+export async function listarCondicoesPagamento(): Promise<
+  CondicaoPagamentoOpcao[]
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("condicoes_pagamento")
+    .select("id, descricao")
+    .eq("ativo", true)
+    .order("descricao", { ascending: true });
+
+  if (error) {
+    throw new Error("Não foi possível carregar as condições de pagamento");
+  }
+
+  return (data ?? []).map((condicao) => ({
+    id: condicao.id,
+    descricao: condicao.descricao,
   }));
 }
 

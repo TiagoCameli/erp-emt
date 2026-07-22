@@ -49,7 +49,7 @@ export type OcItemInput = z.infer<typeof ocItemSchema>;
 /** Schema da OC validado no servidor (criar e editar). */
 export const ordemCompraSchema = z.object({
   fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
-  condicaoPagamento: textoOpcional(120),
+  condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
   cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
   dataEmissao: z
     .string()
@@ -131,10 +131,7 @@ export type OcGrupoCentroCustoFormInput = z.infer<
  */
 export const ordemCompraFormSchema = z.object({
   fornecedorId: z.uuid({ error: "Selecione o fornecedor" }),
-  condicaoPagamento: z
-    .string()
-    .trim()
-    .max(120, { error: "Máximo de 120 caracteres" }),
+  condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
   cotacaoId: z.uuid().optional(),
   dataEmissao: z
     .string()

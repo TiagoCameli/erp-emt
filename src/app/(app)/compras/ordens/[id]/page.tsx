@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarCondicoesPagamento } from "@/modules/compras/condicoes-pagamento/queries";
 import { OrdemDetalheView } from "@/modules/compras/ordens/components/ordem-detalhe";
 import {
   buscarOrdem,
   listarCentrosCusto,
+  listarCondicoesPagamento,
   listarCotacoesFinalizadas,
   listarFornecedores,
   listarInsumos,

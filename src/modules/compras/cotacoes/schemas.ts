@@ -38,7 +38,9 @@ export type CotacaoFormInput = z.infer<typeof cotacaoFormSchema>;
 /** Dados de um fornecedor que entra na cotação. */
 export const fornecedorCotacaoSchema = z.object({
   fornecedorId: z.uuid({ error: "Selecione um fornecedor" }),
-  condicaoPagamento: textoOpcional(120),
+  condicaoPagamentoId: z
+    .uuid({ error: "Condição de pagamento inválida" })
+    .optional(),
   prazoEntregaDias: z
     .number({ error: "Prazo inválido" })
     .int({ error: "Prazo em dias inteiros" })
@@ -53,10 +55,9 @@ export type FornecedorCotacaoInput = z.infer<typeof fornecedorCotacaoSchema>;
 /** Schema do formulário de fornecedor (client). Campos texto como string. */
 export const fornecedorCotacaoFormSchema = z.object({
   fornecedorId: z.uuid({ error: "Selecione um fornecedor" }),
-  condicaoPagamento: z
-    .string()
-    .trim()
-    .max(120, { error: "Máximo de 120 caracteres" }),
+  condicaoPagamentoId: z
+    .uuid({ error: "Condição de pagamento inválida" })
+    .optional(),
   prazoEntregaDias: z
     .string()
     .trim()

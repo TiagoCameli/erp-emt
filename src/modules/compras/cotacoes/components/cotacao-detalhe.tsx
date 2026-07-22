@@ -22,6 +22,7 @@ import {
   removerFornecedor,
 } from "@/modules/compras/cotacoes/actions";
 import type {
+  CondicaoPagamentoOpcao,
   CotacaoDetalhe as CotacaoDetalheData,
   FornecedorOpcao,
   InsumoOpcao,
@@ -35,7 +36,7 @@ export interface CotacaoDetalheProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   trilha: EventoTrilha[];
-  condicoesPagamento: string[];
+  condicoesPagamento: CondicaoPagamentoOpcao[];
   podeEditar: boolean;
 }
 
@@ -194,7 +195,7 @@ export function CotacaoDetalhe({
                   </p>
                   <p className="text-legenda text-muted-foreground">
                     {[
-                      fornecedor.condicaoPagamento,
+                      fornecedor.condicaoPagamentoDescricao,
                       fornecedor.prazoEntregaDias !== null
                         ? `${fornecedor.prazoEntregaDias} dias`
                         : null,

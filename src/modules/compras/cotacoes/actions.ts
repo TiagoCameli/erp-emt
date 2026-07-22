@@ -180,7 +180,7 @@ export async function adicionarFornecedor(
   const { error } = await supabase.from("cotacao_fornecedores").insert({
     cotacao_id: idValido.data,
     fornecedor_id: validado.data.fornecedorId,
-    condicao_pagamento: validado.data.condicaoPagamento ?? null,
+    condicao_pagamento_id: validado.data.condicaoPagamentoId ?? null,
     prazo_entrega_dias: validado.data.prazoEntregaDias ?? null,
     observacao: validado.data.observacao ?? null,
   });

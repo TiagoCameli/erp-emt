@@ -27,6 +27,7 @@ import {
 } from "@/modules/compras/ordens/actions";
 import type {
   CentroCustoOpcao,
+  CondicaoPagamentoOpcao,
   CotacaoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
@@ -78,7 +79,7 @@ export interface OrdemDetalheViewProps {
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
-  condicoesPagamento: string[];
+  condicoesPagamento: CondicaoPagamentoOpcao[];
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
@@ -259,7 +260,7 @@ export function OrdemDetalheView({
               <Dado rotulo="Fornecedor">{ordem.fornecedorNome}</Dado>
               <Dado rotulo="Emissão">{formatarData(ordem.dataEmissao)}</Dado>
               <Dado rotulo="Condição de pagamento">
-                {ordem.condicaoPagamento ?? "-"}
+                {ordem.condicaoPagamentoDescricao ?? "-"}
               </Dado>
               <Dado rotulo="Cotação de origem">
                 {ordem.cotacaoNumero ? (
