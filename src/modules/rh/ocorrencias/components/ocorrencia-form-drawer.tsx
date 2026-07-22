@@ -6,16 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
@@ -128,109 +126,95 @@ export function OcorrenciaFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="ocorrencia-colaborador"
+          rotulo="Colaborador"
+          erro={form.formState.errors.colaboradorId?.message}
         >
-          <FormField
-            control={form.control}
-            name="colaboradorId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Colaborador</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={colaboradores.map((colaborador) => ({
-                      valor: colaborador.id,
-                      rotulo: `${colaborador.nome}${
-                        colaborador.funcao ? ` - ${colaborador.funcao}` : ""
-                      }`,
-                    }))}
-                    placeholder="Selecione o colaborador"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={form.watch("colaboradorId")}
+            onValorChange={(valor) =>
+              form.setValue("colaboradorId", valor, { shouldValidate: true })
+            }
+            opcoes={colaboradores.map((colaborador) => ({
+              valor: colaborador.id,
+              rotulo: `${colaborador.nome}${
+                colaborador.funcao ? ` - ${colaborador.funcao}` : ""
+              }`,
+            }))}
+            placeholder="Selecione o colaborador"
+            className="w-full"
+            id="ocorrencia-colaborador"
           />
+        </CampoFormulario>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="data"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="ocorrencia-data"
+            rotulo="Data"
+            erro={form.formState.errors.data?.message}
+          >
+            <Input
+              id="ocorrencia-data"
+              type="date"
+              {...form.register("data")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="tipo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tipo</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      valor={field.value}
-                      onValorChange={field.onChange}
-                      opcoes={TIPOS_OCORRENCIA.map((valor) => ({
-                        valor,
-                        rotulo: ROTULO_TIPO_OCORRENCIA[valor],
-                      }))}
-                      placeholder="Selecione o tipo"
-                      className="w-full"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="ocorrencia-tipo"
+            rotulo="Tipo"
+            erro={form.formState.errors.tipo?.message}
+          >
+            <Combobox
+              valor={form.watch("tipo")}
+              onValorChange={(valor) =>
+                form.setValue("tipo", valor as OcorrenciaFormInput["tipo"], {
+                  shouldValidate: true,
+                })
+              }
+              opcoes={TIPOS_OCORRENCIA.map((valor) => ({
+                valor,
+                rotulo: ROTULO_TIPO_OCORRENCIA[valor],
+              }))}
+              placeholder="Selecione o tipo"
+              className="w-full"
+              id="ocorrencia-tipo"
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <FormField
-            control={form.control}
-            name="descricao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descrição</FormLabel>
-                <FormControl>
-                  <Textarea
-                    rows={3}
-                    placeholder="O que aconteceu"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="ocorrencia-descricao"
+          rotulo="Descrição"
+          erro={form.formState.errors.descricao?.message}
+        >
+          <Textarea
+            id="ocorrencia-descricao"
+            rows={3}
+            placeholder="O que aconteceu"
+            {...form.register("descricao")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="observacao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observação</FormLabel>
-                <FormControl>
-                  <Textarea rows={2} placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="ocorrencia-observacao"
+          rotulo="Observação"
+          erro={form.formState.errors.observacao?.message}
+        >
+          <Textarea
+            id="ocorrencia-observacao"
+            rows={2}
+            placeholder="Opcional"
+            {...form.register("observacao")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

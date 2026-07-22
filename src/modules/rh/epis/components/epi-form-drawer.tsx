@@ -6,19 +6,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
 import { criarEpi, editarEpi } from "@/modules/rh/epis/actions";
@@ -132,157 +129,120 @@ export function EpiFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="epi-colaborador"
+          rotulo="Colaborador"
+          erro={form.formState.errors.colaboradorId?.message}
         >
-          <FormField
-            control={form.control}
-            name="colaboradorId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Colaborador</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={colaboradores.map((colaborador) => ({
-                      valor: colaborador.id,
-                      rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
-                    }))}
-                    placeholder="Selecione o colaborador"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={form.watch("colaboradorId")}
+            onValorChange={(valor) =>
+              form.setValue("colaboradorId", valor, { shouldValidate: true })
+            }
+            opcoes={colaboradores.map((colaborador) => ({
+              valor: colaborador.id,
+              rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
+            }))}
+            placeholder="Selecione o colaborador"
+            className="w-full"
+            id="epi-colaborador"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="descricao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>EPI</FormLabel>
-                <FormControl>
-                  <Input placeholder="Ex: Botina de segurança" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="epi-descricao"
+          rotulo="EPI"
+          erro={form.formState.errors.descricao?.message}
+        >
+          <Input
+            id="epi-descricao"
+            placeholder="Ex: Botina de segurança"
+            {...form.register("descricao")}
           />
+        </CampoFormulario>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="ca"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>CA</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Certificado de Aprovação"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="epi-ca"
+            rotulo="CA"
+            erro={form.formState.errors.ca?.message}
+          >
+            <Input
+              id="epi-ca"
+              placeholder="Certificado de Aprovação"
+              {...form.register("ca")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="quantidade"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quantidade</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      inputMode="numeric"
-                      className="text-right tabular-nums"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="epi-quantidade"
+            rotulo="Quantidade"
+            erro={form.formState.errors.quantidade?.message}
+          >
+            <Input
+              id="epi-quantidade"
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              className="text-right tabular-nums"
+              {...form.register("quantidade")}
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="dataEntrega"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data de entrega</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="epi-data-entrega"
+            rotulo="Data de entrega"
+            erro={form.formState.errors.dataEntrega?.message}
+          >
+            <Input
+              id="epi-data-entrega"
+              type="date"
+              {...form.register("dataEntrega")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="dataDevolucao"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data de devolução</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="epi-data-devolucao"
+            rotulo="Data de devolução"
+            erro={form.formState.errors.dataDevolucao?.message}
+          >
+            <Input
+              id="epi-data-devolucao"
+              type="date"
+              {...form.register("dataDevolucao")}
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <FormField
-            control={form.control}
-            name="assinado"
-            render={({ field }) => (
-              <FormItem className="flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <FormLabel>Termo assinado</FormLabel>
-                  <FormDescription>
-                    Marque quando o colaborador assinar o termo de entrega.
-                  </FormDescription>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    disabled={salvando}
-                    aria-label="Termo assinado"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
+        <SelectAtivo
+          value={form.watch("assinado")}
+          onChange={(valor) => form.setValue("assinado", valor)}
+          disabled={salvando}
+          rotulo="Termo assinado"
+          ajuda="Marque quando o colaborador assinar o termo de entrega."
+        />
+
+        <CampoFormulario
+          id="epi-observacao"
+          rotulo="Observação"
+          erro={form.formState.errors.observacao?.message}
+        >
+          <Textarea
+            id="epi-observacao"
+            rows={2}
+            placeholder="Opcional"
+            {...form.register("observacao")}
           />
-
-          <FormField
-            control={form.control}
-            name="observacao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observação</FormLabel>
-                <FormControl>
-                  <Textarea rows={2} placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

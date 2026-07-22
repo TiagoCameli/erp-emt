@@ -6,16 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
@@ -26,13 +24,10 @@ import {
   diariaFormSchema,
   type DiariaFormInput,
 } from "@/modules/rh/diaristas/schemas";
-import type {
-  DiaristaOpcao,
-  ObraOpcao,
-} from "@/modules/rh/_shared/queries";
+import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
 
 const ID_FORM = "form-diaria";
-/** Valor da obra "sem obra" no select (Radix proíbe value vazio). */
+/** Valor da obra "sem obra" no combobox (Radix proíbe value vazio). */
 const SEM_OBRA = "__sem_obra__";
 
 function valoresIniciais(): DiariaFormInput {
@@ -125,6 +120,8 @@ export function DiariaFormDrawer({
     onAbertoChange(false);
   }
 
+  const obraValor = form.watch("obraId");
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -150,113 +147,89 @@ export function DiariaFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="diaria-colaborador"
+          rotulo="Diarista"
+          erro={form.formState.errors.colaboradorId?.message}
         >
-          <FormField
-            control={form.control}
-            name="colaboradorId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Diarista</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={aoEscolherDiarista}
-                    opcoes={diaristas.map((diarista) => ({
-                      valor: diarista.id,
-                      rotulo: diarista.nome,
-                    }))}
-                    placeholder="Selecione o diarista"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={form.watch("colaboradorId")}
+            onValorChange={aoEscolherDiarista}
+            opcoes={diaristas.map((diarista) => ({
+              valor: diarista.id,
+              rotulo: diarista.nome,
+            }))}
+            placeholder="Selecione o diarista"
+            className="w-full"
+            id="diaria-colaborador"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="obraId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Obra</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value === "" ? SEM_OBRA : field.value}
-                    onValorChange={(valor) =>
-                      field.onChange(valor === SEM_OBRA ? "" : valor)
-                    }
-                    opcoes={[
-                      { valor: SEM_OBRA, rotulo: "Sem obra" },
-                      ...obras.map((obra) => ({
-                        valor: obra.id,
-                        rotulo: obra.nome + (obra.lote ? ` - Lote ${obra.lote}` : ""),
-                      })),
-                    ]}
-                    placeholder="Sem obra"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="diaria-obra"
+          rotulo="Obra"
+          erro={form.formState.errors.obraId?.message}
+        >
+          <Combobox
+            valor={obraValor === "" ? SEM_OBRA : obraValor}
+            onValorChange={(valor) =>
+              form.setValue("obraId", valor === SEM_OBRA ? "" : valor)
+            }
+            opcoes={[
+              { valor: SEM_OBRA, rotulo: "Sem obra" },
+              ...obras.map((obra) => ({
+                valor: obra.id,
+                rotulo: obra.nome + (obra.lote ? ` - Lote ${obra.lote}` : ""),
+              })),
+            ]}
+            placeholder="Sem obra"
+            className="w-full"
+            id="diaria-obra"
           />
+        </CampoFormulario>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="data"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data da diária</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="diaria-data"
+            rotulo="Data da diária"
+            erro={form.formState.errors.data?.message}
+          >
+            <Input id="diaria-data" type="date" {...form.register("data")} />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="diaria-valor"
+            rotulo="Valor (R$)"
+            erro={form.formState.errors.valor?.message}
+          >
+            <Input
+              id="diaria-valor"
+              inputMode="decimal"
+              placeholder="0,00"
+              className="text-right tabular-nums"
+              {...form.register("valor")}
             />
+          </CampoFormulario>
+        </LinhaCampos>
 
-            <FormField
-              control={form.control}
-              name="valor"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Valor (R$)</FormLabel>
-                  <FormControl>
-                    <Input
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      className="text-right tabular-nums"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <FormField
-            control={form.control}
-            name="observacao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observação</FormLabel>
-                <FormControl>
-                  <Textarea rows={2} placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="diaria-observacao"
+          rotulo="Observação"
+          erro={form.formState.errors.observacao?.message}
+        >
+          <Textarea
+            id="diaria-observacao"
+            rows={2}
+            placeholder="Opcional"
+            {...form.register("observacao")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

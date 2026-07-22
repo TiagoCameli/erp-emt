@@ -6,16 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
@@ -133,99 +131,84 @@ export function AdiantamentoFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="adiantamento-colaborador"
+          rotulo="Colaborador"
+          erro={form.formState.errors.colaboradorId?.message}
         >
-          <FormField
-            control={form.control}
-            name="colaboradorId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Colaborador</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={colaboradores.map((colaborador) => ({
-                      valor: colaborador.id,
-                      rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
-                    }))}
-                    placeholder="Selecione o colaborador"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={form.watch("colaboradorId")}
+            onValorChange={(valor) =>
+              form.setValue("colaboradorId", valor, { shouldValidate: true })
+            }
+            opcoes={colaboradores.map((colaborador) => ({
+              valor: colaborador.id,
+              rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
+            }))}
+            placeholder="Selecione o colaborador"
+            className="w-full"
+            id="adiantamento-colaborador"
           />
+        </CampoFormulario>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="competencia"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Competência</FormLabel>
-                  <FormControl>
-                    <Input type="month" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="adiantamento-competencia"
+            rotulo="Competência"
+            erro={form.formState.errors.competencia?.message}
+          >
+            <Input
+              id="adiantamento-competencia"
+              type="month"
+              {...form.register("competencia")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="valor"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Valor (R$)</FormLabel>
-                  <FormControl>
-                    <Input
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      className="text-right tabular-nums"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="adiantamento-valor"
+            rotulo="Valor (R$)"
+            erro={form.formState.errors.valor?.message}
+          >
+            <Input
+              id="adiantamento-valor"
+              inputMode="decimal"
+              placeholder="0,00"
+              className="text-right tabular-nums"
+              {...form.register("valor")}
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <FormField
-            control={form.control}
-            name="data"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data do adiantamento</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="adiantamento-data"
+          rotulo="Data do adiantamento"
+          erro={form.formState.errors.data?.message}
+        >
+          <Input
+            id="adiantamento-data"
+            type="date"
+            {...form.register("data")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="descricao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descrição</FormLabel>
-                <FormControl>
-                  <Textarea rows={2} placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="adiantamento-descricao"
+          rotulo="Descrição"
+          erro={form.formState.errors.descricao?.message}
+        >
+          <Textarea
+            id="adiantamento-descricao"
+            rows={2}
+            placeholder="Opcional"
+            {...form.register("descricao")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

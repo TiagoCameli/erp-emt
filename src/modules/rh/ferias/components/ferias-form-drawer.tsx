@@ -6,16 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { criarFerias, editarFerias } from "@/modules/rh/ferias/actions";
@@ -131,156 +129,136 @@ export function FeriasFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="ferias-colaborador"
+          rotulo="Colaborador"
+          erro={form.formState.errors.colaboradorId?.message}
         >
-          <FormField
-            control={form.control}
-            name="colaboradorId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Colaborador</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={colaboradores.map((colaborador) => ({
-                      valor: colaborador.id,
-                      rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
-                    }))}
-                    placeholder="Selecione o colaborador"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={form.watch("colaboradorId")}
+            onValorChange={(valor) =>
+              form.setValue("colaboradorId", valor, { shouldValidate: true })
+            }
+            opcoes={colaboradores.map((colaborador) => ({
+              valor: colaborador.id,
+              rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
+            }))}
+            placeholder="Selecione o colaborador"
+            className="w-full"
+            id="ferias-colaborador"
           />
+        </CampoFormulario>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="periodoAquisitivoInicio"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Período aquisitivo - início</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="ferias-periodo-inicio"
+            rotulo="Período aquisitivo - início"
+            erro={form.formState.errors.periodoAquisitivoInicio?.message}
+          >
+            <Input
+              id="ferias-periodo-inicio"
+              type="date"
+              {...form.register("periodoAquisitivoInicio")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="periodoAquisitivoFim"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Período aquisitivo - fim</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="ferias-periodo-fim"
+            rotulo="Período aquisitivo - fim"
+            erro={form.formState.errors.periodoAquisitivoFim?.message}
+          >
+            <Input
+              id="ferias-periodo-fim"
+              type="date"
+              {...form.register("periodoAquisitivoFim")}
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="dataInicio"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Gozo - início</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="ferias-gozo-inicio"
+            rotulo="Gozo - início"
+            erro={form.formState.errors.dataInicio?.message}
+          >
+            <Input
+              id="ferias-gozo-inicio"
+              type="date"
+              {...form.register("dataInicio")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="dataFim"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Gozo - fim</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="ferias-gozo-fim"
+            rotulo="Gozo - fim"
+            erro={form.formState.errors.dataFim?.message}
+          >
+            <Input
+              id="ferias-gozo-fim"
+              type="date"
+              {...form.register("dataFim")}
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="dias"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Dias</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1}
-                      inputMode="numeric"
-                      className="text-right tabular-nums"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="ferias-dias"
+            rotulo="Dias"
+            erro={form.formState.errors.dias?.message}
+          >
+            <Input
+              id="ferias-dias"
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              className="text-right tabular-nums"
+              {...form.register("dias")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      valor={field.value}
-                      onValorChange={field.onChange}
-                      opcoes={STATUS_FERIAS.map((valor) => ({
-                        valor,
-                        rotulo: ROTULO_STATUS_FERIAS[valor],
-                      }))}
-                      placeholder="Selecione o status"
-                      className="w-full"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="ferias-status"
+            rotulo="Status"
+            erro={form.formState.errors.status?.message}
+          >
+            <Combobox
+              valor={form.watch("status")}
+              onValorChange={(valor) =>
+                form.setValue("status", valor as FeriasFormInput["status"], {
+                  shouldValidate: true,
+                })
+              }
+              opcoes={STATUS_FERIAS.map((valor) => ({
+                valor,
+                rotulo: ROTULO_STATUS_FERIAS[valor],
+              }))}
+              placeholder="Selecione o status"
+              className="w-full"
+              id="ferias-status"
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <FormField
-            control={form.control}
-            name="observacao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observação</FormLabel>
-                <FormControl>
-                  <Textarea rows={2} placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="ferias-observacao"
+          rotulo="Observação"
+          erro={form.formState.errors.observacao?.message}
+        >
+          <Textarea
+            id="ferias-observacao"
+            rows={2}
+            placeholder="Opcional"
+            {...form.register("observacao")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

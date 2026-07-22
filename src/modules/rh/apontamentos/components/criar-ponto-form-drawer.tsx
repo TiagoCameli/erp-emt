@@ -6,16 +6,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
@@ -29,7 +26,7 @@ import {
 
 const ID_FORM = "form-criar-ponto";
 
-/** Sentinela do Select para "sem encarregado" (valor vazio é proibido no Radix). */
+/** Sentinela do Combobox para "sem encarregado" (valor vazio é proibido no Radix). */
 const SEM_ENCARREGADO = "__sem__";
 
 function valoresIniciais(): PontoFormInput {
@@ -78,6 +75,8 @@ export function CriarPontoFormDrawer({
     onCriado?.(resultado.id);
   }
 
+  const encarregadoValor = form.watch("encarregadoId");
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -103,96 +102,78 @@ export function CriarPontoFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="criar-ponto-obra"
+          rotulo="Obra"
+          erro={form.formState.errors.obraId?.message}
         >
-          <FormField
-            control={form.control}
-            name="obraId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Obra</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={obras.map((obra) => ({
-                      valor: obra.id,
-                      rotulo: `${obra.nome}${obra.lote ? ` (Lote ${obra.lote})` : ""}`,
-                    }))}
-                    placeholder="Selecione a obra"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={form.watch("obraId")}
+            onValorChange={(valor) =>
+              form.setValue("obraId", valor, { shouldValidate: true })
+            }
+            opcoes={obras.map((obra) => ({
+              valor: obra.id,
+              rotulo: `${obra.nome}${obra.lote ? ` (Lote ${obra.lote})` : ""}`,
+            }))}
+            placeholder="Selecione a obra"
+            className="w-full"
+            id="criar-ponto-obra"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="data"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <CampoFormulario
+          id="criar-ponto-data"
+          rotulo="Data"
+          erro={form.formState.errors.data?.message}
+        >
+          <Input id="criar-ponto-data" type="date" {...form.register("data")} />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="encarregadoId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Encarregado (opcional)</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value === "" ? SEM_ENCARREGADO : field.value}
-                    onValorChange={(valor) =>
-                      field.onChange(valor === SEM_ENCARREGADO ? "" : valor)
-                    }
-                    opcoes={[
-                      { valor: SEM_ENCARREGADO, rotulo: "Sem encarregado" },
-                      ...colaboradores.map((colaborador) => ({
-                        valor: colaborador.id,
-                        rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
-                      })),
-                    ]}
-                    placeholder="Sem encarregado"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="criar-ponto-encarregado"
+          rotulo="Encarregado (opcional)"
+          erro={form.formState.errors.encarregadoId?.message}
+        >
+          <Combobox
+            valor={encarregadoValor === "" ? SEM_ENCARREGADO : encarregadoValor}
+            onValorChange={(valor) =>
+              form.setValue(
+                "encarregadoId",
+                valor === SEM_ENCARREGADO ? "" : valor,
+              )
+            }
+            opcoes={[
+              { valor: SEM_ENCARREGADO, rotulo: "Sem encarregado" },
+              ...colaboradores.map((colaborador) => ({
+                valor: colaborador.id,
+                rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
+              })),
+            ]}
+            placeholder="Sem encarregado"
+            className="w-full"
+            id="criar-ponto-encarregado"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="observacao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observação (opcional)</FormLabel>
-                <FormControl>
-                  <Textarea
-                    rows={2}
-                    placeholder="Alguma nota sobre o dia"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="criar-ponto-observacao"
+          rotulo="Observação (opcional)"
+          erro={form.formState.errors.observacao?.message}
+        >
+          <Textarea
+            id="criar-ponto-observacao"
+            rows={2}
+            placeholder="Alguma nota sobre o dia"
+            {...form.register("observacao")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }
