@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { MoneyText } from "@/components/canonicos";
+import { Combobox, MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,13 +17,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { dataHojeISO } from "@/lib/formatadores";
 import {
   CampoFormulario,
@@ -118,24 +111,20 @@ export function BaixaRecebimentoDialog({
             obrigatorio
             erro={form.formState.errors.contaId?.message}
           >
-            <Select
-              value={contaValor ?? ""}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={contaValor ?? ""}
+              onValorChange={(valor) =>
                 form.setValue("contaId", valor, { shouldValidate: true })
               }
+              opcoes={contas.map((conta) => ({
+                valor: conta.id,
+                rotulo: conta.nome,
+              }))}
+              placeholder="Selecione a conta"
               disabled={salvando}
-            >
-              <SelectTrigger id="baixa-conta" className="w-full">
-                <SelectValue placeholder="Selecione a conta" />
-              </SelectTrigger>
-              <SelectContent>
-                {contas.map((conta) => (
-                  <SelectItem key={conta.id} value={conta.id}>
-                    {conta.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id="baixa-conta"
+              className="w-full"
+            />
           </CampoFormulario>
 
           <CampoFormulario

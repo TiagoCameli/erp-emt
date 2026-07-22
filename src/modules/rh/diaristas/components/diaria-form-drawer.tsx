@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -17,13 +17,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
 import { criarDiaria, editarDiaria } from "@/modules/rh/diaristas/actions";
@@ -169,20 +162,18 @@ export function DiariaFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Diarista</FormLabel>
-                <Select value={field.value} onValueChange={aoEscolherDiarista}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o diarista" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {diaristas.map((diarista) => (
-                      <SelectItem key={diarista.id} value={diarista.id}>
-                        {diarista.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={aoEscolherDiarista}
+                    opcoes={diaristas.map((diarista) => ({
+                      valor: diarista.id,
+                      rotulo: diarista.nome,
+                    }))}
+                    placeholder="Selecione o diarista"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -194,27 +185,23 @@ export function DiariaFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Obra</FormLabel>
-                <Select
-                  value={field.value === "" ? SEM_OBRA : field.value}
-                  onValueChange={(valor) =>
-                    field.onChange(valor === SEM_OBRA ? "" : valor)
-                  }
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sem obra" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={SEM_OBRA}>Sem obra</SelectItem>
-                    {obras.map((obra) => (
-                      <SelectItem key={obra.id} value={obra.id}>
-                        {obra.nome}
-                        {obra.lote ? ` - Lote ${obra.lote}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value === "" ? SEM_OBRA : field.value}
+                    onValorChange={(valor) =>
+                      field.onChange(valor === SEM_OBRA ? "" : valor)
+                    }
+                    opcoes={[
+                      { valor: SEM_OBRA, rotulo: "Sem obra" },
+                      ...obras.map((obra) => ({
+                        valor: obra.id,
+                        rotulo: obra.nome + (obra.lote ? ` - Lote ${obra.lote}` : ""),
+                      })),
+                    ]}
+                    placeholder="Sem obra"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

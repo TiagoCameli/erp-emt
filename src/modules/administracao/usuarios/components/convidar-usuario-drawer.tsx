@@ -7,7 +7,7 @@ import { Copy, LoaderCircle, TriangleAlert, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,13 +20,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { convidarUsuario } from "@/modules/administracao/usuarios/actions";
 import { convidarUsuarioSchema } from "@/modules/administracao/usuarios/schemas";
 import type { PerfilOpcao } from "@/modules/administracao/usuarios/queries";
@@ -216,23 +209,21 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="perfil-convite">Perfil (opcional)</Label>
-                <Select
-                  value={perfilId}
-                  onValueChange={setPerfilId}
+                <Combobox
+                  valor={perfilId}
+                  onValorChange={setPerfilId}
+                  opcoes={[
+                    { valor: SEM_PERFIL, rotulo: "Sem perfil" },
+                    ...perfis.map((perfil) => ({
+                      valor: perfil.id,
+                      rotulo: perfil.nome,
+                    })),
+                  ]}
+                  placeholder="Sem perfil"
                   disabled={enviando}
-                >
-                  <SelectTrigger id="perfil-convite" className="w-full">
-                    <SelectValue placeholder="Sem perfil" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={SEM_PERFIL}>Sem perfil</SelectItem>
-                    {perfis.map((perfil) => (
-                      <SelectItem key={perfil.id} value={perfil.id}>
-                        {perfil.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  id="perfil-convite"
+                  className="w-full"
+                />
                 <p className="text-detalhe text-muted-foreground">
                   O perfil aplica um conjunto pronto de permissões. Dá para
                   ajustar depois na matriz do usuário.

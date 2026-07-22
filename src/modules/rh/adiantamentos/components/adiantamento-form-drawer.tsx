@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -17,13 +17,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
 import {
@@ -152,21 +145,18 @@ export function AdiantamentoFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Colaborador</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o colaborador" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {colaboradores.map((colaborador) => (
-                      <SelectItem key={colaborador.id} value={colaborador.id}>
-                        {colaborador.nome}
-                        {colaborador.funcao ? ` - ${colaborador.funcao}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={colaboradores.map((colaborador) => ({
+                      valor: colaborador.id,
+                      rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
+                    }))}
+                    placeholder="Selecione o colaborador"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

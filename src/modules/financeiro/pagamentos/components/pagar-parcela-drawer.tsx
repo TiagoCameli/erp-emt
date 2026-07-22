@@ -4,16 +4,9 @@ import * as React from "react";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer, MoneyText } from "@/components/canonicos";
+import { Combobox, FormDrawer, MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
 import {
@@ -176,22 +169,18 @@ export function PagarParcelaDrawer({
         ) : null}
 
         <CampoFormulario id="pagamento-conta" rotulo="Conta bancária" obrigatorio>
-          <Select
-            value={contaId}
-            onValueChange={setContaId}
+          <Combobox
+            valor={contaId}
+            onValorChange={setContaId}
+            opcoes={contas.map((conta) => ({
+              valor: conta.id,
+              rotulo: rotuloConta(conta),
+            }))}
+            placeholder="Selecione a conta"
             disabled={salvando}
-          >
-            <SelectTrigger id="pagamento-conta" className="w-full">
-              <SelectValue placeholder="Selecione a conta" />
-            </SelectTrigger>
-            <SelectContent>
-              {contas.map((conta) => (
-                <SelectItem key={conta.id} value={conta.id}>
-                  {rotuloConta(conta)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            id="pagamento-conta"
+            className="w-full"
+          />
         </CampoFormulario>
 
         <CampoFormulario

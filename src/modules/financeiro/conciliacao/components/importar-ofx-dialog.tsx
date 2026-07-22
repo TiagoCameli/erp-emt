@@ -15,13 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/canonicos";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { importarOfx } from "@/modules/financeiro/conciliacao/actions";
@@ -171,18 +165,16 @@ export function ImportarOfxDialog({
           <div className="flex flex-col gap-4">
             <div className="grid gap-2">
               <Label htmlFor="conta-ofx">Conta bancária</Label>
-              <Select value={contaId} onValueChange={setContaId}>
-                <SelectTrigger id="conta-ofx" className="w-full">
-                  <SelectValue placeholder="Selecione a conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {contas.map((conta) => (
-                    <SelectItem key={conta.id} value={conta.id}>
-                      {conta.nome} ({conta.bancoRotulo})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                valor={contaId}
+                onValorChange={setContaId}
+                opcoes={contas.map((conta) => ({
+                  valor: conta.id,
+                  rotulo: `${conta.nome} (${conta.bancoRotulo})`,
+                }))}
+                placeholder="Selecione a conta"
+                id="conta-ofx"
+              />
             </div>
 
             <div

@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer, StatusBadge } from "@/components/canonicos";
+import { Combobox, FormDrawer, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -18,13 +18,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -182,22 +175,18 @@ export function DetalheUsuarioDrawer({
             <div className="flex flex-col gap-2">
               <Label htmlFor="aplicar-perfil">Aplicar perfil</Label>
               <div className="flex items-center gap-2">
-                <Select
-                  value={perfilSelecionado}
-                  onValueChange={setPerfilSelecionado}
+                <Combobox
+                  valor={perfilSelecionado}
+                  onValorChange={setPerfilSelecionado}
+                  opcoes={perfis.map((perfil) => ({
+                    valor: perfil.id,
+                    rotulo: perfil.nome,
+                  }))}
+                  placeholder="Escolha um perfil"
                   disabled={aplicandoPerfil || perfis.length === 0}
-                >
-                  <SelectTrigger id="aplicar-perfil" className="flex-1">
-                    <SelectValue placeholder="Escolha um perfil" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {perfis.map((perfil) => (
-                      <SelectItem key={perfil.id} value={perfil.id}>
-                        {perfil.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  id="aplicar-perfil"
+                  className="flex-1"
+                />
                 <Button
                   type="button"
                   variant="outline"

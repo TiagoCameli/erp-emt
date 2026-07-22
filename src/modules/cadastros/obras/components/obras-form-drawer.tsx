@@ -6,16 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CampoFormulario,
@@ -201,29 +194,26 @@ export function ObrasFormDrawer({
           rotulo="Cliente"
           erro={form.formState.errors.clienteId?.message}
         >
-          <Select
-            value={clienteValor}
-            onValueChange={(valor) =>
+          <Combobox
+            valor={clienteValor}
+            onValorChange={(valor) =>
               form.setValue(
                 "clienteId",
                 valor === SEM_CLIENTE ? undefined : valor,
                 { shouldValidate: true },
               )
             }
+            opcoes={[
+              { valor: SEM_CLIENTE, rotulo: "Sem cliente" },
+              ...clientes.map((cliente) => ({
+                valor: cliente.id,
+                rotulo: cliente.nome,
+              })),
+            ]}
+            placeholder="Sem cliente"
             disabled={salvando}
-          >
-            <SelectTrigger id="obra-cliente" className="w-full">
-              <SelectValue placeholder="Sem cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SEM_CLIENTE}>Sem cliente</SelectItem>
-              {clientes.map((cliente) => (
-                <SelectItem key={cliente.id} value={cliente.id}>
-                  {cliente.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            id="obra-cliente"
+          />
         </CampoFormulario>
 
         <div className="grid grid-cols-2 gap-4">
@@ -319,26 +309,20 @@ export function ObrasFormDrawer({
           obrigatorio
           erro={form.formState.errors.status?.message}
         >
-          <Select
-            value={statusValor}
-            onValueChange={(valor) =>
+          <Combobox
+            valor={statusValor}
+            onValorChange={(valor) =>
               form.setValue("status", valor as ObraFormInput["status"], {
                 shouldValidate: true,
               })
             }
+            opcoes={STATUS_OBRA.map((status) => ({
+              valor: status,
+              rotulo: STATUS_OBRA_CONFIG[status].rotulo,
+            }))}
             disabled={salvando}
-          >
-            <SelectTrigger id="obra-status" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OBRA.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {STATUS_OBRA_CONFIG[status].rotulo}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            id="obra-status"
+          />
         </CampoFormulario>
 
         <CampoFormulario

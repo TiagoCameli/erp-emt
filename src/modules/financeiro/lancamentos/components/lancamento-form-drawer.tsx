@@ -6,16 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, LoaderCircle, Plus, TriangleAlert, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import {
@@ -268,27 +261,21 @@ export function LancamentoFormDrawer({
             obrigatorio
             erro={form.formState.errors.tipo?.message}
           >
-            <Select
-              value={tipoValor}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={tipoValor}
+              onValorChange={(valor) =>
                 form.setValue("tipo", valor as LancamentoFormInput["tipo"], {
                   shouldValidate: true,
                 })
               }
+              opcoes={[
+                { valor: "a_pagar", rotulo: ROTULO_TIPO_LANCAMENTO.a_pagar },
+                { valor: "a_receber", rotulo: ROTULO_TIPO_LANCAMENTO.a_receber },
+              ]}
+              placeholder="Selecione"
               disabled={salvando}
-            >
-              <SelectTrigger id="lan-tipo" className="w-full">
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="a_pagar">
-                  {ROTULO_TIPO_LANCAMENTO.a_pagar}
-                </SelectItem>
-                <SelectItem value="a_receber">
-                  {ROTULO_TIPO_LANCAMENTO.a_receber}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              id="lan-tipo"
+            />
           </CampoFormulario>
 
           <CampoFormulario
@@ -328,53 +315,47 @@ export function LancamentoFormDrawer({
             rotulo="Fornecedor"
             ajuda="Opcional"
           >
-            <Select
-              value={fornecedorValor}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={fornecedorValor}
+              onValorChange={(valor) =>
                 form.setValue(
                   "fornecedorId",
                   valor === SEM_VINCULO ? undefined : valor,
                 )
               }
+              opcoes={[
+                { valor: SEM_VINCULO, rotulo: "Sem fornecedor" },
+                ...fornecedores.map((fornecedor) => ({
+                  valor: fornecedor.id,
+                  rotulo: fornecedor.nome,
+                })),
+              ]}
+              placeholder="Sem fornecedor"
               disabled={salvando}
-            >
-              <SelectTrigger id="lan-fornecedor" className="w-full">
-                <SelectValue placeholder="Sem fornecedor" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SEM_VINCULO}>Sem fornecedor</SelectItem>
-                {fornecedores.map((fornecedor) => (
-                  <SelectItem key={fornecedor.id} value={fornecedor.id}>
-                    {fornecedor.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id="lan-fornecedor"
+            />
           </CampoFormulario>
 
           <CampoFormulario id="lan-categoria" rotulo="Categoria" ajuda="Opcional">
-            <Select
-              value={categoriaValor}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={categoriaValor}
+              onValorChange={(valor) =>
                 form.setValue(
                   "categoriaId",
                   valor === SEM_VINCULO ? undefined : valor,
                 )
               }
+              opcoes={[
+                { valor: SEM_VINCULO, rotulo: "Sem categoria" },
+                ...categorias.map((categoria) => ({
+                  valor: categoria.id,
+                  rotulo: categoria.nome,
+                })),
+              ]}
+              placeholder="Sem categoria"
               disabled={salvando}
-            >
-              <SelectTrigger id="lan-categoria" className="w-full">
-                <SelectValue placeholder="Sem categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SEM_VINCULO}>Sem categoria</SelectItem>
-                {categorias.map((categoria) => (
-                  <SelectItem key={categoria.id} value={categoria.id}>
-                    {categoria.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id="lan-categoria"
+            />
           </CampoFormulario>
         </div>
 
@@ -532,32 +513,23 @@ export function LancamentoFormDrawer({
                       obrigatorio
                       erro={errosRateio?.centroCustoId?.message}
                     >
-                      <Select
-                        value={form.watch(`rateios.${indice}.centroCustoId`)}
-                        onValueChange={(valor) =>
+                      <Combobox
+                        valor={form.watch(`rateios.${indice}.centroCustoId`)}
+                        onValorChange={(valor) =>
                           form.setValue(
                             `rateios.${indice}.centroCustoId`,
                             valor,
                             { shouldValidate: true },
                           )
                         }
+                        opcoes={centrosCusto.map((centro) => ({
+                          valor: centro.id,
+                          rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
+                        }))}
+                        placeholder="Selecione"
                         disabled={salvando}
-                      >
-                        <SelectTrigger
-                          id={`lan-rateio-cc-${indice}`}
-                          className="w-full"
-                        >
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {centrosCusto.map((centro) => (
-                            <SelectItem key={centro.id} value={centro.id}>
-                              {centro.codigo ? `${centro.codigo} ` : ""}
-                              {centro.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        id={`lan-rateio-cc-${indice}`}
+                      />
                     </CampoFormulario>
                     <CampoFormulario
                       id={`lan-rateio-valor-${indice}`}
