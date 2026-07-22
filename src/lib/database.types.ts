@@ -2249,6 +2249,10 @@ export type Database = {
         Args: { p_parcela_id: string; p_transacao_id: string }
         Returns: undefined
       }
+      fn_criar_ordem_compra: {
+        Args: { p_cabecalho: Json; p_itens: Json }
+        Returns: string
+      }
       fn_desaprovar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string }
         Returns: undefined
