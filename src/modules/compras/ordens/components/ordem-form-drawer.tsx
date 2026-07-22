@@ -12,18 +12,20 @@ import { LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  CampoFormulario,
+  classesFormulario,
   Combobox,
   ComboboxCriavel,
   FormDrawer,
+  LinhaCampos,
+  SecaoFormulario,
+  TabelaItens,
+  type ColunaItem,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
-import {
-  CampoFormulario,
-  classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
 import { criarCondicaoPagamento } from "@/modules/compras/condicoes-pagamento/actions";
 import { criarOrdem, editarOrdem } from "@/modules/compras/ordens/actions";
 import {
@@ -275,7 +277,7 @@ export function OrdemFormDrawer({
           />
         </CampoFormulario>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="oc-condicao"
             rotulo="Condição de pagamento"
@@ -311,7 +313,7 @@ export function OrdemFormDrawer({
               {...form.register("dataEmissao")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
         <CampoFormulario
           id="oc-cotacao"
@@ -339,9 +341,9 @@ export function OrdemFormDrawer({
           />
         </CampoFormulario>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-detalhe font-semibold">Itens</h3>
+        <SecaoFormulario
+          titulo="Itens"
+          acao={
             <Button
               type="button"
               variant="outline"
@@ -352,8 +354,8 @@ export function OrdemFormDrawer({
               <Plus />
               Adicionar centro de custo
             </Button>
-          </div>
-
+          }
+        >
           {erroCentrosMensagem ? (
             <p className="text-legenda text-destructive" role="alert">
               {erroCentrosMensagem}
@@ -387,7 +389,7 @@ export function OrdemFormDrawer({
               );
             })}
           </div>
-        </div>
+        </SecaoFormulario>
 
         <CampoFormulario
           id="oc-observacoes"
@@ -406,6 +408,26 @@ export function OrdemFormDrawer({
     </FormDrawer>
   );
 }
+
+/** Colunas da tabela de insumos: insumo, quantidade, preço unitário e subtotal. */
+const COLUNAS_ITEM: ColunaItem[] = [
+  { chave: "insumo", rotulo: "Insumo", largura: "minmax(0,1fr)", obrigatorio: true },
+  {
+    chave: "quantidade",
+    rotulo: "Qtd",
+    largura: "120px",
+    alinhamento: "right",
+    obrigatorio: true,
+  },
+  {
+    chave: "precoUnitario",
+    rotulo: "Preço un.",
+    largura: "140px",
+    alinhamento: "right",
+    obrigatorio: true,
+  },
+  { chave: "subtotal", rotulo: "Subtotal", largura: "140px", alinhamento: "right" },
+];
 
 /** Um grupo de centro de custo com sua lista de insumos (field array próprio). */
 function GrupoCentroCusto({
@@ -492,151 +514,132 @@ function GrupoCentroCusto({
         </Button>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-3">
-        {linhas.map((linha, j) => {
-          const errosLinha = errosGrupo?.insumos?.[j];
-          const insumoDestaLinha = insumosObservados?.[j]?.insumoId ?? "";
-          const usadosPorOutrasLinhas = new Set(
-            (insumosObservados ?? [])
-              .filter((_, k) => k !== j)
-              .map((insumo) => insumo.insumoId)
-              .filter(Boolean),
-          );
-          const insumosDisponiveis = insumos.filter(
-            (ins) =>
-              ins.id === insumoDestaLinha || !usadosPorOutrasLinhas.has(ins.id),
-          );
-          return (
-            <div
-              key={linha.id}
-              className="grid gap-2 rounded-md bg-card px-3 py-2"
-            >
-              <div className="flex items-start gap-2">
-                <div className="flex-1">
-                  <CampoFormulario
-                    id={`oc-insumo-${indice}-${j}`}
-                    rotulo="Insumo"
-                    obrigatorio
-                    erro={errosLinha?.insumoId?.message}
-                  >
-                    <Combobox
-                      valor={form.watch(
-                        `centrosCusto.${indice}.insumos.${j}.insumoId`,
-                      )}
-                      onValorChange={(valor) =>
-                        form.setValue(
-                          `centrosCusto.${indice}.insumos.${j}.insumoId`,
-                          valor,
-                          { shouldValidate: true },
-                        )
-                      }
-                      opcoes={insumosDisponiveis.map((insumo) => ({
-                        valor: insumo.id,
-                        rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}`,
-                      }))}
-                      placeholder="Selecione o insumo"
-                      disabled={salvando}
-                      id={`oc-insumo-${indice}-${j}`}
-                    />
-                  </CampoFormulario>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="mt-7"
-                  aria-label="Remover insumo"
-                  disabled={salvando || linhas.length === 1}
-                  onClick={() => removerInsumo(j)}
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <CampoFormulario
-                  id={`oc-qtd-${indice}-${j}`}
-                  rotulo="Quantidade"
-                  obrigatorio
-                  erro={errosLinha?.quantidade?.message}
-                >
-                  <Input
-                    id={`oc-qtd-${indice}-${j}`}
-                    inputMode="decimal"
-                    placeholder="0,000"
-                    className="tabular-nums text-right"
-                    disabled={salvando}
-                    {...form.register(
-                      `centrosCusto.${indice}.insumos.${j}.quantidade`,
-                    )}
-                  />
-                </CampoFormulario>
-                <CampoFormulario
-                  id={`oc-preco-${indice}-${j}`}
-                  rotulo="Preço unitário"
-                  obrigatorio
-                  erro={errosLinha?.precoUnitario?.message}
-                >
-                  <Input
-                    id={`oc-preco-${indice}-${j}`}
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    className="tabular-nums text-right"
-                    disabled={salvando}
-                    {...form.register(
-                      `centrosCusto.${indice}.insumos.${j}.precoUnitario`,
-                    )}
-                  />
-                </CampoFormulario>
-              </div>
-
-              <div className="text-right text-legenda text-muted-foreground">
-                Subtotal{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatarBRL(
-                    subtotalItem(
-                      paraNumero(
-                        form.watch(
-                          `centrosCusto.${indice}.insumos.${j}.quantidade`,
-                        ) ?? "",
-                      ),
-                      paraNumero(
-                        form.watch(
-                          `centrosCusto.${indice}.insumos.${j}.precoUnitario`,
-                        ) ?? "",
-                      ),
-                    ),
+      <div className="border-t border-border pt-3">
+        <TabelaItens
+          colunas={COLUNAS_ITEM}
+          linhas={linhas}
+          chaveLinha={(linha) => linha.id}
+          onRemover={(j) => removerInsumo(j)}
+          podeRemover={() => linhas.length > 1}
+          rotuloRemover="Remover insumo"
+          erroCelula={(chave, j) => {
+            const e = errosGrupo?.insumos?.[j];
+            if (chave === "insumo") return e?.insumoId?.message;
+            if (chave === "quantidade") return e?.quantidade?.message;
+            if (chave === "precoUnitario") return e?.precoUnitario?.message;
+            return undefined;
+          }}
+          renderCelula={(chave, j) => {
+            if (chave === "insumo") {
+              const insumoDestaLinha = insumosObservados?.[j]?.insumoId ?? "";
+              const usadosPorOutrasLinhas = new Set(
+                (insumosObservados ?? [])
+                  .filter((_, k) => k !== j)
+                  .map((insumo) => insumo.insumoId)
+                  .filter(Boolean),
+              );
+              const insumosDisponiveis = insumos.filter(
+                (ins) =>
+                  ins.id === insumoDestaLinha ||
+                  !usadosPorOutrasLinhas.has(ins.id),
+              );
+              return (
+                <Combobox
+                  valor={form.watch(
+                    `centrosCusto.${indice}.insumos.${j}.insumoId`,
                   )}
+                  onValorChange={(valor) =>
+                    form.setValue(
+                      `centrosCusto.${indice}.insumos.${j}.insumoId`,
+                      valor,
+                      { shouldValidate: true },
+                    )
+                  }
+                  opcoes={insumosDisponiveis.map((insumo) => ({
+                    valor: insumo.id,
+                    rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}`,
+                  }))}
+                  placeholder="Selecione o insumo"
+                  disabled={salvando}
+                  ariaLabel="Insumo"
+                  id={`oc-insumo-${indice}-${j}`}
+                />
+              );
+            }
+            if (chave === "quantidade") {
+              return (
+                <Input
+                  aria-label="Quantidade"
+                  inputMode="decimal"
+                  placeholder="0,000"
+                  className="tabular-nums text-right"
+                  disabled={salvando}
+                  {...form.register(
+                    `centrosCusto.${indice}.insumos.${j}.quantidade`,
+                  )}
+                />
+              );
+            }
+            if (chave === "precoUnitario") {
+              return (
+                <Input
+                  aria-label="Preço unitário"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  className="tabular-nums text-right"
+                  disabled={salvando}
+                  {...form.register(
+                    `centrosCusto.${indice}.insumos.${j}.precoUnitario`,
+                  )}
+                />
+              );
+            }
+            // subtotal (display)
+            return (
+              <span className="text-detalhe font-medium tabular-nums">
+                {formatarBRL(
+                  subtotalItem(
+                    paraNumero(
+                      form.watch(
+                        `centrosCusto.${indice}.insumos.${j}.quantidade`,
+                      ) ?? "",
+                    ),
+                    paraNumero(
+                      form.watch(
+                        `centrosCusto.${indice}.insumos.${j}.precoUnitario`,
+                      ) ?? "",
+                    ),
+                  ),
+                )}
+              </span>
+            );
+          }}
+          rodape={
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={salvando || !podeAdicionarInsumo}
+                onClick={() => adicionarInsumo(insumoVazio())}
+              >
+                <Plus />
+                Adicionar insumo
+              </Button>
+              <div className="text-detalhe text-muted-foreground">
+                Subtotal do centro{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {formatarBRL(subtotalGrupo)}
                 </span>
               </div>
             </div>
-          );
-        })}
-
+          }
+        />
         {typeof errosGrupo?.insumos?.root?.message === "string" ? (
-          <p className="text-legenda text-destructive" role="alert">
+          <p className="mt-2 text-legenda text-destructive" role="alert">
             {errosGrupo.insumos.root.message}
           </p>
         ) : null}
-
-        <div className="flex items-center justify-between gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={salvando || !podeAdicionarInsumo}
-            onClick={() => adicionarInsumo(insumoVazio())}
-          >
-            <Plus />
-            Adicionar insumo
-          </Button>
-          <div className="text-detalhe text-muted-foreground">
-            Subtotal do centro{" "}
-            <span className="font-medium text-foreground tabular-nums">
-              {formatarBRL(subtotalGrupo)}
-            </span>
-          </div>
-        </div>
       </div>
     </div>
   );
