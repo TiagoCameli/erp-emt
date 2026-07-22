@@ -216,7 +216,7 @@ export function OrdemFormDrawer({
           ? "Atualize os dados e os itens desta ordem"
           : "Emita a ordem de compra com fornecedor, condição de pagamento e itens"
       }
-      larguraClassName="sm:max-w-3xl"
+      larguraClassName="sm:max-w-[95vw]"
       rodape={
         <div className="flex w-full items-center justify-between gap-4">
           <div className="text-detalhe text-muted-foreground">
