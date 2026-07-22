@@ -4,7 +4,12 @@ import * as React from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, MoneyText } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  MoneyText,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { finalizarCotacao } from "@/modules/compras/cotacoes/actions";
 import type { FornecedorCotacao } from "@/modules/compras/cotacoes/queries";
@@ -91,9 +95,8 @@ export function FinalizarCotacaoDialog({
             Lance os preços de pelo menos um fornecedor antes de finalizar.
           </p>
         ) : (
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="cotacao-vencedor">Fornecedor vencedor</Label>
+          <div className={classesFormulario}>
+            <CampoFormulario id="cotacao-vencedor" rotulo="Fornecedor vencedor">
               <Combobox
                 valor={vencedorId}
                 onValorChange={setVencedorId}
@@ -121,11 +124,14 @@ export function FinalizarCotacaoDialog({
                   />
                 </p>
               ) : null}
-            </div>
+            </CampoFormulario>
 
             {motivoObrigatorio ? (
-              <div className="grid gap-2">
-                <Label htmlFor="cotacao-motivo">Motivo da escolha</Label>
+              <CampoFormulario
+                id="cotacao-motivo"
+                rotulo="Motivo da escolha"
+                ajuda="Esse fornecedor não tem o menor total, então o motivo é obrigatório."
+              >
                 <Textarea
                   id="cotacao-motivo"
                   value={motivo}
@@ -135,11 +141,7 @@ export function FinalizarCotacaoDialog({
                   disabled={salvando}
                   autoFocus
                 />
-                <p className="text-legenda text-muted-foreground">
-                  Esse fornecedor não tem o menor total, então o motivo é
-                  obrigatório.
-                </p>
-              </div>
+              </CampoFormulario>
             ) : null}
           </div>
         )}

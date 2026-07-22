@@ -5,13 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 
-import { FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   CampoFormulario,
   classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
+  FormDrawer,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   cotacaoFormSchema,
   type CotacaoFormInput,
@@ -29,6 +29,12 @@ export interface NovaCotacaoDrawerProps {
 /**
  * Drawer de nova cotação avulsa: só observações. A montagem do mapa de
  * preços acontece no detalhe.
+ *
+ * Kit canônico: só tem um campo, então usa apenas `CampoFormulario` +
+ * `classesFormulario` (sem `LinhaCampos`/`SecaoFormulario`, que não têm o que
+ * agrupar aqui). Este drawer não lista itens — a lista de insumos e preços da
+ * cotação é editada em `mapa-comparativo.tsx`, uma matriz comparativa com uma
+ * coluna por fornecedor (layout N×M), que não casa com a `TabelaItens`.
  */
 export function NovaCotacaoDrawer({
   aberto,

@@ -8,19 +8,16 @@ import { toast } from "sonner";
 
 import { z } from "zod";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { criar, editar } from "@/modules/cadastros/colaboradores/actions";
 import type {
   ColaboradorLista,
@@ -154,6 +151,10 @@ export function ColaboradoresFormDrawer({
     definirAberto(false);
   }
 
+  const vinculoValor = form.watch("vinculo");
+  const obraValor = form.watch("obraId");
+  const centroCustoValor = form.watch("centroCustoId");
+
   return (
     <>
       {mostrarGatilho ? (
@@ -193,213 +194,163 @@ export function ColaboradoresFormDrawer({
           </>
         }
       >
-        <Form {...form}>
-          <form
-            id={ID_FORM}
-            onSubmit={form.handleSubmit(aoEnviar)}
-            className="space-y-4"
-            noValidate
+        <form
+          id={ID_FORM}
+          onSubmit={form.handleSubmit(aoEnviar)}
+          className={classesFormulario}
+          noValidate
+        >
+          <CampoFormulario
+            id="colaborador-nome"
+            rotulo="Nome"
+            erro={form.formState.errors.nome?.message}
           >
-            <FormField
-              control={form.control}
-              name="nome"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome</FormLabel>
-                  <FormControl>
-                    <Input
-                      autoComplete="off"
-                      placeholder="Nome completo"
-                      disabled={salvando}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <Input
+              id="colaborador-nome"
+              autoComplete="off"
+              placeholder="Nome completo"
+              disabled={salvando}
+              {...form.register("nome")}
             />
+          </CampoFormulario>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="cpf"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>CPF</FormLabel>
-                    <FormControl>
-                      <Input
-                        inputMode="numeric"
-                        autoComplete="off"
-                        placeholder="000.000.000-00"
-                        disabled={salvando}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <LinhaCampos>
+            <CampoFormulario
+              id="colaborador-cpf"
+              rotulo="CPF"
+              erro={form.formState.errors.cpf?.message}
+            >
+              <Input
+                id="colaborador-cpf"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="000.000.000-00"
+                disabled={salvando}
+                {...form.register("cpf")}
               />
+            </CampoFormulario>
 
-              <FormField
-                control={form.control}
-                name="telefone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Telefone</FormLabel>
-                    <FormControl>
-                      <Input
-                        inputMode="tel"
-                        autoComplete="off"
-                        placeholder="(68) 99999-9999"
-                        disabled={salvando}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <CampoFormulario
+              id="colaborador-telefone"
+              rotulo="Telefone"
+              erro={form.formState.errors.telefone?.message}
+            >
+              <Input
+                id="colaborador-telefone"
+                inputMode="tel"
+                autoComplete="off"
+                placeholder="(68) 99999-9999"
+                disabled={salvando}
+                {...form.register("telefone")}
               />
-            </div>
+            </CampoFormulario>
+          </LinhaCampos>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="funcao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Função</FormLabel>
-                    <FormControl>
-                      <Input
-                        autoComplete="off"
-                        placeholder="Operador"
-                        disabled={salvando}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <LinhaCampos>
+            <CampoFormulario
+              id="colaborador-funcao"
+              rotulo="Função"
+              erro={form.formState.errors.funcao?.message}
+            >
+              <Input
+                id="colaborador-funcao"
+                autoComplete="off"
+                placeholder="Operador"
+                disabled={salvando}
+                {...form.register("funcao")}
               />
+            </CampoFormulario>
 
-              <FormField
-                control={form.control}
-                name="vinculo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vínculo</FormLabel>
-                    <FormControl>
-                      <Combobox
-                        valor={field.value}
-                        onValorChange={field.onChange}
-                        opcoes={VINCULOS.map((vinculo) => ({
-                          valor: vinculo,
-                          rotulo: ROTULO_VINCULO[vinculo],
-                        }))}
-                        placeholder="Selecione o vínculo"
-                        disabled={salvando}
-                        className="w-full"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <CampoFormulario
+              id="colaborador-vinculo"
+              rotulo="Vínculo"
+              erro={form.formState.errors.vinculo?.message}
+            >
+              <Combobox
+                valor={vinculoValor}
+                onValorChange={(valor) =>
+                  form.setValue("vinculo", valor as FormValues["vinculo"], {
+                    shouldValidate: true,
+                  })
+                }
+                opcoes={VINCULOS.map((vinculo) => ({
+                  valor: vinculo,
+                  rotulo: ROTULO_VINCULO[vinculo],
+                }))}
+                placeholder="Selecione o vínculo"
+                disabled={salvando}
+                className="w-full"
+                id="colaborador-vinculo"
               />
-            </div>
+            </CampoFormulario>
+          </LinhaCampos>
 
-            <FormField
-              control={form.control}
-              name="dataAdmissao"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data de admissão</FormLabel>
-                  <FormControl>
-                    <Input type="date" disabled={salvando} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="colaborador-data-admissao"
+            rotulo="Data de admissão"
+            erro={form.formState.errors.dataAdmissao?.message}
+          >
+            <Input
+              id="colaborador-data-admissao"
+              type="date"
+              disabled={salvando}
+              {...form.register("dataAdmissao")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="obraId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Obra</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      valor={field.value}
-                      onValorChange={field.onChange}
-                      opcoes={[
-                        { valor: SEM_OBRA, rotulo: "Sem obra" },
-                        ...obras.map((obra) => ({
-                          valor: obra.id,
-                          rotulo: obra.nome,
-                        })),
-                      ]}
-                      placeholder="Sem obra"
-                      disabled={salvando}
-                      className="w-full"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="colaborador-obra"
+            rotulo="Obra"
+            erro={form.formState.errors.obraId?.message}
+          >
+            <Combobox
+              valor={obraValor}
+              onValorChange={(valor) => form.setValue("obraId", valor)}
+              opcoes={[
+                { valor: SEM_OBRA, rotulo: "Sem obra" },
+                ...obras.map((obra) => ({
+                  valor: obra.id,
+                  rotulo: obra.nome,
+                })),
+              ]}
+              placeholder="Sem obra"
+              disabled={salvando}
+              className="w-full"
+              id="colaborador-obra"
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="centroCustoId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Centro de custo</FormLabel>
-                  <FormControl>
-                    <Combobox
-                      valor={field.value}
-                      onValorChange={field.onChange}
-                      opcoes={[
-                        { valor: SEM_CENTRO_CUSTO, rotulo: "Sem centro de custo" },
-                        ...centrosCusto.map((centro) => ({
-                          valor: centro.id,
-                          rotulo: centro.nome,
-                        })),
-                      ]}
-                      placeholder="Sem centro de custo"
-                      disabled={salvando}
-                      className="w-full"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="colaborador-centro-custo"
+            rotulo="Centro de custo"
+            erro={form.formState.errors.centroCustoId?.message}
+          >
+            <Combobox
+              valor={centroCustoValor}
+              onValorChange={(valor) =>
+                form.setValue("centroCustoId", valor)
+              }
+              opcoes={[
+                { valor: SEM_CENTRO_CUSTO, rotulo: "Sem centro de custo" },
+                ...centrosCusto.map((centro) => ({
+                  valor: centro.id,
+                  rotulo: centro.nome,
+                })),
+              ]}
+              placeholder="Sem centro de custo"
+              disabled={salvando}
+              className="w-full"
+              id="colaborador-centro-custo"
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="ativo"
-              render={({ field }) => (
-                <FormItem className="flex items-start justify-between gap-4">
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor="colaborador-ativo">Ativo</Label>
-                    <p className="text-detalhe text-muted-foreground">
-                      Inativos somem das listas de seleção, mas ficam no
-                      histórico.
-                    </p>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      id="colaborador-ativo"
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={salvando}
-                      aria-label="Ativo"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </form>
-        </Form>
+          <SelectAtivo
+            value={form.watch("ativo")}
+            onChange={(valor) => form.setValue("ativo", valor)}
+            disabled={salvando}
+            ajuda="Inativos somem das listas de seleção, mas ficam no histórico."
+          />
+        </form>
       </FormDrawer>
     </>
   );

@@ -6,19 +6,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { criar, editar } from "@/modules/cadastros/unidades/actions";
 import type { UnidadeLista } from "@/modules/cadastros/unidades/queries";
 import {
@@ -93,6 +89,8 @@ export function UnidadesFormDrawer({
     onAbertoChange(false);
   }
 
+  const tipoValor = form.watch("tipo");
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -128,100 +126,71 @@ export function UnidadesFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
-          noValidate
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+        noValidate
+      >
+        <CampoFormulario
+          id="unidade-sigla"
+          rotulo="Sigla"
+          erro={form.formState.errors.sigla?.message}
         >
-          <FormField
-            control={form.control}
-            name="sigla"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Sigla</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="t, m3, kg"
-                    disabled={salvando}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Input
+            id="unidade-sigla"
+            autoComplete="off"
+            placeholder="t, m3, kg"
+            disabled={salvando}
+            {...form.register("sigla")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="nome"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="Tonelada"
-                    disabled={salvando}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="unidade-nome"
+          rotulo="Nome"
+          erro={form.formState.errors.nome?.message}
+        >
+          <Input
+            id="unidade-nome"
+            autoComplete="off"
+            placeholder="Tonelada"
+            disabled={salvando}
+            {...form.register("nome")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="tipo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tipo</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={TIPOS_UNIDADE.map((tipo) => ({
-                      valor: tipo,
-                      rotulo: ROTULO_TIPO_UNIDADE[tipo],
-                    }))}
-                    placeholder="Selecione o tipo"
-                    disabled={salvando}
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="unidade-tipo"
+          rotulo="Tipo"
+          erro={form.formState.errors.tipo?.message}
+        >
+          <Combobox
+            valor={tipoValor}
+            onValorChange={(valor) =>
+              form.setValue("tipo", valor as UnidadeFormInput["tipo"], {
+                shouldValidate: true,
+              })
+            }
+            opcoes={TIPOS_UNIDADE.map((tipo) => ({
+              valor: tipo,
+              rotulo: ROTULO_TIPO_UNIDADE[tipo],
+            }))}
+            placeholder="Selecione o tipo"
+            disabled={salvando}
+            className="w-full"
+            id="unidade-tipo"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="ativo"
-            render={({ field }) => (
-              <FormItem className="flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <FormLabel>Ativa</FormLabel>
-                  <FormDescription>
-                    Unidades inativas somem das listas de seleção, mas continuam
-                    no histórico.
-                  </FormDescription>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    disabled={salvando}
-                    aria-label="Ativa"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </form>
-      </Form>
+        <SelectAtivo
+          value={form.watch("ativo") ?? true}
+          onChange={(valor) => form.setValue("ativo", valor)}
+          disabled={salvando}
+          rotulo="Ativa"
+          ajuda="Unidades inativas somem das listas de seleção, mas continuam no histórico."
+        />
+      </form>
     </FormDrawer>
   );
 }

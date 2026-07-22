@@ -7,19 +7,15 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { criar, editar } from "@/modules/cadastros/insumos/actions";
 import type {
@@ -89,6 +85,9 @@ export function InsumosFormDrawer({
     aoMudarAberto(false);
   }
 
+  const categoriaValor = form.watch("categoriaId");
+  const unidadeValor = form.watch("unidadeId");
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -120,143 +119,103 @@ export function InsumosFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="space-y-4"
-          noValidate
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+        noValidate
+      >
+        <CampoFormulario
+          id="insumo-codigo"
+          rotulo="Código"
+          erro={form.formState.errors.codigo?.message}
         >
-          <FormField
-            control={form.control}
-            name="codigo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Código</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="MAT-001"
-                    disabled={salvando}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Input
+            id="insumo-codigo"
+            autoComplete="off"
+            placeholder="MAT-001"
+            disabled={salvando}
+            {...form.register("codigo")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="nome"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="Brita 1"
-                    disabled={salvando}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="insumo-nome"
+          rotulo="Nome"
+          erro={form.formState.errors.nome?.message}
+        >
+          <Input
+            id="insumo-nome"
+            autoComplete="off"
+            placeholder="Brita 1"
+            disabled={salvando}
+            {...form.register("nome")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="categoriaId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Categoria</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={categorias.map((categoria) => ({
-                      valor: categoria.id,
-                      rotulo: categoria.nome,
-                    }))}
-                    placeholder="Selecione a categoria"
-                    disabled={salvando}
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="insumo-categoria"
+          rotulo="Categoria"
+          erro={form.formState.errors.categoriaId?.message}
+        >
+          <Combobox
+            valor={categoriaValor}
+            onValorChange={(valor) =>
+              form.setValue("categoriaId", valor, { shouldValidate: true })
+            }
+            opcoes={categorias.map((categoria) => ({
+              valor: categoria.id,
+              rotulo: categoria.nome,
+            }))}
+            placeholder="Selecione a categoria"
+            disabled={salvando}
+            className="w-full"
+            id="insumo-categoria"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="unidadeId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Unidade de medida</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={unidades.map((unidade) => ({
-                      valor: unidade.id,
-                      rotulo: `${unidade.sigla} - ${unidade.nome}`,
-                    }))}
-                    placeholder="Selecione a unidade"
-                    disabled={salvando}
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="insumo-unidade"
+          rotulo="Unidade de medida"
+          erro={form.formState.errors.unidadeId?.message}
+        >
+          <Combobox
+            valor={unidadeValor}
+            onValorChange={(valor) =>
+              form.setValue("unidadeId", valor, { shouldValidate: true })
+            }
+            opcoes={unidades.map((unidade) => ({
+              valor: unidade.id,
+              rotulo: `${unidade.sigla} - ${unidade.nome}`,
+            }))}
+            placeholder="Selecione a unidade"
+            disabled={salvando}
+            className="w-full"
+            id="insumo-unidade"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="descricao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descrição</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Detalhes do insumo"
-                    rows={3}
-                    disabled={salvando}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="insumo-descricao"
+          rotulo="Descrição"
+          erro={form.formState.errors.descricao?.message}
+        >
+          <Textarea
+            id="insumo-descricao"
+            placeholder="Detalhes do insumo"
+            rows={3}
+            disabled={salvando}
+            {...form.register("descricao")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="ativo"
-            render={({ field }) => (
-              <FormItem className="flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <FormLabel>Ativo</FormLabel>
-                  <FormDescription>
-                    Insumos inativos somem das listas de seleção, mas continuam
-                    no histórico.
-                  </FormDescription>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    disabled={salvando}
-                    aria-label="Ativo"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </form>
-      </Form>
+        <SelectAtivo
+          value={form.watch("ativo") ?? true}
+          onChange={(valor) => form.setValue("ativo", valor)}
+          disabled={salvando}
+          ajuda="Insumos inativos somem das listas de seleção, mas continuam no histórico."
+        />
+      </form>
     </FormDrawer>
   );
 }

@@ -6,14 +6,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   CampoFormulario,
-  SelectAtivo,
   classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
 import {
   criarConta,
@@ -163,7 +165,7 @@ export function ContasFormDrawer({
           />
         </CampoFormulario>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="conta-banco"
             rotulo="Banco"
@@ -207,9 +209,9 @@ export function ContasFormDrawer({
               id="conta-tipo"
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="conta-agencia"
             rotulo="Agência"
@@ -237,7 +239,7 @@ export function ContasFormDrawer({
               {...form.register("conta")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
         <CampoFormulario
           id="conta-saldo-inicial"

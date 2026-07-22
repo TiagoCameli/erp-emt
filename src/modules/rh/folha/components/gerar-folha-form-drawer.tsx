@@ -6,17 +6,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  FormDrawer,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataHojeISO } from "@/lib/formatadores";
 import { gerarFolha } from "@/modules/rh/folha/actions";
@@ -117,56 +112,41 @@ export function GerarFolhaFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
-          noValidate
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+        noValidate
+      >
+        <CampoFormulario
+          id="gerar-folha-competencia"
+          rotulo="Competência"
+          erro={form.formState.errors.competencia?.message}
+          ajuda={regerar ? "A competência não muda ao regerar." : undefined}
         >
-          <FormField
-            control={form.control}
-            name="competencia"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Competência</FormLabel>
-                <FormControl>
-                  <Input type="month" disabled={regerar} {...field} />
-                </FormControl>
-                {regerar ? (
-                  <FormDescription>
-                    A competência não muda ao regerar.
-                  </FormDescription>
-                ) : null}
-                <FormMessage />
-              </FormItem>
-            )}
+          <Input
+            id="gerar-folha-competencia"
+            type="month"
+            disabled={regerar}
+            {...form.register("competencia")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="encargosPercentual"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Encargos (%)</FormLabel>
-                <FormControl>
-                  <Input
-                    inputMode="decimal"
-                    placeholder="0"
-                    className="text-right tabular-nums"
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Percentual aplicado sobre salário e extras para estimar o custo
-                  da empresa.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="gerar-folha-encargos"
+          rotulo="Encargos (%)"
+          erro={form.formState.errors.encargosPercentual?.message}
+          ajuda="Percentual aplicado sobre salário e extras para estimar o custo da empresa."
+        >
+          <Input
+            id="gerar-folha-encargos"
+            inputMode="decimal"
+            placeholder="0"
+            className="text-right tabular-nums"
+            {...form.register("encargosPercentual")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

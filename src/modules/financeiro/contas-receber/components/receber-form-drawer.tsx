@@ -6,13 +6,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   CampoFormulario,
   classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { criarReceber } from "@/modules/financeiro/contas-receber/actions";
 import type { CategoriaOpcao } from "@/modules/financeiro/contas-receber/queries";
 import {
@@ -191,7 +193,7 @@ export function ReceberFormDrawer({
           />
         </CampoFormulario>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="receber-competencia"
             rotulo="Competência"
@@ -217,7 +219,7 @@ export function ReceberFormDrawer({
               {...form.register("dataVencimento")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
       </form>
     </FormDrawer>
   );

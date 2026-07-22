@@ -6,17 +6,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, ConfirmDialog, FormDrawer } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  ConfirmDialog,
+  FormDrawer,
+  LinhaCampos,
+  SelectAtivo,
+} from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
-import {
-  CampoFormulario,
-  SelectAtivo,
-  classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
 import {
   adicionarDocumento,
   criarEquipamento,
@@ -186,7 +189,7 @@ export function EquipamentosFormDrawer({
         className={classesFormulario}
         noValidate
       >
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="equipamento-codigo"
             rotulo="Código"
@@ -216,7 +219,7 @@ export function EquipamentosFormDrawer({
               {...form.register("placa")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
         <CampoFormulario
           id="equipamento-descricao"
@@ -246,7 +249,7 @@ export function EquipamentosFormDrawer({
           />
         </CampoFormulario>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="equipamento-marca"
             rotulo="Marca"
@@ -272,9 +275,9 @@ export function EquipamentosFormDrawer({
               {...form.register("modelo")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="equipamento-ano"
             rotulo="Ano"
@@ -314,7 +317,7 @@ export function EquipamentosFormDrawer({
               id="equipamento-controle"
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
         <SelectAtivo
           value={form.watch("ativo")}

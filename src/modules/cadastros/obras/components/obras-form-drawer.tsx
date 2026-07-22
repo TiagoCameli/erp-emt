@@ -6,15 +6,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+  SelectAtivo,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  CampoFormulario,
-  SelectAtivo,
-  classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
 import { criarObra, editarObra } from "@/modules/cadastros/obras/actions";
 import type { ClienteOpcao, ObraLista } from "@/modules/cadastros/obras/queries";
 import {
@@ -216,7 +218,7 @@ export function ObrasFormDrawer({
           />
         </CampoFormulario>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="obra-rodovia"
             rotulo="Rodovia"
@@ -242,9 +244,9 @@ export function ObrasFormDrawer({
               {...form.register("lote")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="obra-uf"
             rotulo="UF"
@@ -273,9 +275,9 @@ export function ObrasFormDrawer({
               {...form.register("extensaoKm")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="obra-data-inicio"
             rotulo="Data de início"
@@ -301,7 +303,7 @@ export function ObrasFormDrawer({
               {...form.register("dataFimPrevista")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
         <CampoFormulario
           id="obra-status"

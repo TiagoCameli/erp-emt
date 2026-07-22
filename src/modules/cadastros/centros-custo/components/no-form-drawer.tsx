@@ -4,10 +4,13 @@ import * as React from "react";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  FormDrawer,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   criarEtapa,
   criarItem,
@@ -212,9 +215,17 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
         </>
       }
     >
-      <form id={ID_FORM} onSubmit={aoEnviar} className="flex flex-col gap-5">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="no-nome">Nome</Label>
+      <form id={ID_FORM} onSubmit={aoEnviar} className={classesFormulario}>
+        <CampoFormulario
+          id="no-nome"
+          rotulo="Nome"
+          ajuda={
+            nomeTravado
+              ? "O nome é gerido pelo sistema e não pode ser alterado aqui."
+              : undefined
+          }
+          erro={erroNome ?? undefined}
+        >
           <Input
             id="no-nome"
             value={nome}
@@ -223,19 +234,14 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
             disabled={nomeTravado}
             autoFocus={!nomeTravado}
           />
-          {nomeTravado ? (
-            <p className="text-legenda text-muted-foreground">
-              O nome é gerido pelo sistema e não pode ser alterado aqui.
-            </p>
-          ) : null}
-          {erroNome ? (
-            <p className="text-legenda text-destructive">{erroNome}</p>
-          ) : null}
-        </div>
+        </CampoFormulario>
 
         {editando ? (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="no-codigo">Código</Label>
+          <CampoFormulario
+            id="no-codigo"
+            rotulo="Código"
+            ajuda={nomeTravado ? "O código é gerido pelo sistema." : undefined}
+          >
             <Input
               id="no-codigo"
               value={codigo}
@@ -244,16 +250,15 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
               disabled={nomeTravado}
               className="font-mono"
             />
-            {nomeTravado ? (
-              <p className="text-legenda text-muted-foreground">
-                O código é gerido pelo sistema.
-              </p>
-            ) : null}
-          </div>
+          </CampoFormulario>
         ) : null}
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="no-orcamento">Orçamento</Label>
+        <CampoFormulario
+          id="no-orcamento"
+          rotulo="Orçamento"
+          ajuda="Quando preenchido, habilita o orçado x realizado deste nó."
+          erro={erroOrcamento ?? undefined}
+        >
           <Input
             id="no-orcamento"
             value={orcamento}
@@ -262,13 +267,7 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
             inputMode="decimal"
             className="text-right tabular-nums"
           />
-          <p className="text-legenda text-muted-foreground">
-            Quando preenchido, habilita o orçado x realizado deste nó.
-          </p>
-          {erroOrcamento ? (
-            <p className="text-legenda text-destructive">{erroOrcamento}</p>
-          ) : null}
-        </div>
+        </CampoFormulario>
       </form>
     </FormDrawer>
   );

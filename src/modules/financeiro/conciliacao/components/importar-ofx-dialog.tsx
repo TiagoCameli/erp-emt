@@ -15,8 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Combobox } from "@/components/canonicos";
-import { Label } from "@/components/ui/label";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+} from "@/components/canonicos";
 import { cn } from "@/lib/utils";
 import { importarOfx } from "@/modules/financeiro/conciliacao/actions";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
@@ -162,9 +165,8 @@ export function ImportarOfxDialog({
             </DialogFooter>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="conta-ofx">Conta bancária</Label>
+          <div className={classesFormulario}>
+            <CampoFormulario id="conta-ofx" rotulo="Conta bancária">
               <Combobox
                 valor={contaId}
                 onValorChange={setContaId}
@@ -175,7 +177,7 @@ export function ImportarOfxDialog({
                 placeholder="Selecione a conta"
                 id="conta-ofx"
               />
-            </div>
+            </CampoFormulario>
 
             <div
               role="button"

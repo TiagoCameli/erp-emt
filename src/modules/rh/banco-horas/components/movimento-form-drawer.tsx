@@ -6,16 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
@@ -130,124 +128,104 @@ export function MovimentoFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="movimento-colaborador"
+          rotulo="Colaborador"
+          erro={form.formState.errors.colaboradorId?.message}
         >
-          <FormField
-            control={form.control}
-            name="colaboradorId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Colaborador</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={colaboradores.map((colaborador) => ({
-                      valor: colaborador.id,
-                      rotulo: colaborador.funcao
-                        ? `${colaborador.nome} - ${colaborador.funcao}`
-                        : colaborador.nome,
-                    }))}
-                    placeholder="Selecione o colaborador"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={form.watch("colaboradorId")}
+            onValorChange={(valor) =>
+              form.setValue("colaboradorId", valor, { shouldValidate: true })
+            }
+            opcoes={colaboradores.map((colaborador) => ({
+              valor: colaborador.id,
+              rotulo: colaborador.funcao
+                ? `${colaborador.nome} - ${colaborador.funcao}`
+                : colaborador.nome,
+            }))}
+            placeholder="Selecione o colaborador"
+            className="w-full"
+            id="movimento-colaborador"
           />
+        </CampoFormulario>
 
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="data"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="movimento-data"
+            rotulo="Data"
+            erro={form.formState.errors.data?.message}
+          >
+            <Input id="movimento-data" type="date" {...form.register("data")} />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="movimento-horas"
+            rotulo="Horas"
+            erro={form.formState.errors.horas?.message}
+          >
+            <Input
+              id="movimento-horas"
+              inputMode="decimal"
+              placeholder="0,00"
+              className="text-right tabular-nums"
+              {...form.register("horas")}
             />
+          </CampoFormulario>
+        </LinhaCampos>
 
-            <FormField
-              control={form.control}
-              name="horas"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Horas</FormLabel>
-                  <FormControl>
-                    <Input
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      className="text-right tabular-nums"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          <FormField
-            control={form.control}
-            name="tipo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tipo</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={TIPOS_MOVIMENTO.map((tipo) => ({
-                      valor: tipo,
-                      rotulo: ROTULO_TIPO_MOVIMENTO[tipo],
-                    }))}
-                    placeholder="Selecione o tipo"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="movimento-tipo"
+          rotulo="Tipo"
+          erro={form.formState.errors.tipo?.message}
+        >
+          <Combobox
+            valor={form.watch("tipo")}
+            onValorChange={(valor) =>
+              form.setValue("tipo", valor as MovimentoFormInput["tipo"], {
+                shouldValidate: true,
+              })
+            }
+            opcoes={TIPOS_MOVIMENTO.map((tipo) => ({
+              valor: tipo,
+              rotulo: ROTULO_TIPO_MOVIMENTO[tipo],
+            }))}
+            placeholder="Selecione o tipo"
+            className="w-full"
+            id="movimento-tipo"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="motivo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Motivo</FormLabel>
-                <FormControl>
-                  <Input placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="movimento-motivo"
+          rotulo="Motivo"
+          erro={form.formState.errors.motivo?.message}
+        >
+          <Input
+            id="movimento-motivo"
+            placeholder="Opcional"
+            {...form.register("motivo")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="observacao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observação</FormLabel>
-                <FormControl>
-                  <Textarea rows={2} placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="movimento-observacao"
+          rotulo="Observação"
+          erro={form.formState.errors.observacao?.message}
+        >
+          <Textarea
+            id="movimento-observacao"
+            rows={2}
+            placeholder="Opcional"
+            {...form.register("observacao")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

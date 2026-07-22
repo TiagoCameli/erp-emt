@@ -7,19 +7,15 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { criar, editar } from "@/modules/cadastros/categorias/actions";
 import type { CategoriaLista } from "@/modules/cadastros/categorias/queries";
 import {
@@ -90,6 +86,8 @@ export function CategoriasFormDrawer({
     onAbertoChange(false);
   }
 
+  const tipoValor = form.watch("tipo");
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -115,78 +113,52 @@ export function CategoriasFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+      >
+        <CampoFormulario
+          id="categoria-nome"
+          rotulo="Nome"
+          erro={form.formState.errors.nome?.message}
         >
-          <FormField
-            control={form.control}
-            name="nome"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Materiais de construção"
-                    autoFocus
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Input
+            id="categoria-nome"
+            placeholder="Materiais de construção"
+            autoFocus
+            {...form.register("nome")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="tipo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tipo</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={TIPOS_CATEGORIA.map((tipo) => ({
-                      valor: tipo,
-                      rotulo: ROTULO_TIPO_CATEGORIA[tipo],
-                    }))}
-                    placeholder="Escolha o tipo"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="categoria-tipo"
+          rotulo="Tipo"
+          erro={form.formState.errors.tipo?.message}
+        >
+          <Combobox
+            valor={tipoValor}
+            onValorChange={(valor) =>
+              form.setValue("tipo", valor as CategoriaInput["tipo"], {
+                shouldValidate: true,
+              })
+            }
+            opcoes={TIPOS_CATEGORIA.map((tipo) => ({
+              valor: tipo,
+              rotulo: ROTULO_TIPO_CATEGORIA[tipo],
+            }))}
+            placeholder="Escolha o tipo"
+            className="w-full"
+            id="categoria-tipo"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="ativo"
-            render={({ field }) => (
-              <FormItem className="flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="categoria-ativo">Ativo</Label>
-                  <p className="text-legenda text-muted-foreground">
-                    Categorias inativas somem das listas de seleção, mas
-                    continuam no histórico.
-                  </p>
-                </div>
-                <FormControl>
-                  <Switch
-                    id="categoria-ativo"
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    aria-label="Ativo"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </form>
-      </Form>
+        <SelectAtivo
+          value={form.watch("ativo") ?? true}
+          onChange={(valor) => form.setValue("ativo", valor)}
+          ajuda="Categorias inativas somem das listas de seleção, mas continuam no histórico."
+        />
+      </form>
     </FormDrawer>
   );
 }

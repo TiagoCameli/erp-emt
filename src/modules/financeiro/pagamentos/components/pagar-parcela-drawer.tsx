@@ -4,15 +4,17 @@ import * as React from "react";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer, MoneyText } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  MoneyText,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
-import {
-  CampoFormulario,
-  classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
 import { pagarParcela } from "@/modules/financeiro/pagamentos/actions";
 import type {
   ContaBancariaOpcao,

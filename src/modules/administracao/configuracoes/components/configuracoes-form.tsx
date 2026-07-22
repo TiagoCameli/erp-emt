@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 
+import { CampoFormulario, classesFormulario } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import type { Json } from "@/lib/database.types";
+import { cn } from "@/lib/utils";
 import { salvarConfiguracao } from "@/modules/administracao/configuracoes/actions";
 import type { Configuracao } from "@/modules/administracao/configuracoes/queries";
 
@@ -76,6 +78,7 @@ function CartaoPercentual({
 
   const numero = Number(texto.replace(",", "."));
   const mudou = texto.trim() !== "" && numero !== valorInicial;
+  const idCampo = `config-${chave}`;
 
   function salvar() {
     if (Number.isNaN(numero)) {
@@ -91,36 +94,40 @@ function CartaoPercentual({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-corpo">{rotulo}</CardTitle>
-        {descricao ? <CardDescription>{descricao}</CardDescription> : null}
-      </CardHeader>
-      <CardContent className="flex items-center justify-between gap-4">
-        <div className="relative w-40">
-          <Input
-            type="number"
-            inputMode="decimal"
-            min={min}
-            max={max}
-            step="0.01"
-            value={texto}
-            onChange={(evento) => setTexto(evento.target.value)}
-            disabled={!podeEditar || pendente}
-            aria-label={rotulo}
-            className="pr-8 text-right tabular-nums"
-          />
-          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-detalhe text-muted-foreground">
-            %
-          </span>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          onClick={salvar}
-          disabled={!podeEditar || !mudou || pendente}
+      <CardContent>
+        <CampoFormulario
+          id={idCampo}
+          rotulo={rotulo}
+          ajuda={descricao ?? undefined}
         >
-          {pendente ? "Salvando" : "Salvar"}
-        </Button>
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative w-40">
+              <Input
+                id={idCampo}
+                type="number"
+                inputMode="decimal"
+                min={min}
+                max={max}
+                step="0.01"
+                value={texto}
+                onChange={(evento) => setTexto(evento.target.value)}
+                disabled={!podeEditar || pendente}
+                className="pr-8 text-right tabular-nums"
+              />
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-detalhe text-muted-foreground">
+                %
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={salvar}
+              disabled={!podeEditar || !mudou || pendente}
+            >
+              {pendente ? "Salvando" : "Salvar"}
+            </Button>
+          </div>
+        </CampoFormulario>
       </CardContent>
     </Card>
   );
@@ -152,6 +159,7 @@ function CartaoBooleano({
   }
 
   const mudou = ativo !== valorInicial;
+  const idCampo = `config-${chave}`;
 
   function salvar() {
     startTransition(async () => {
@@ -163,30 +171,34 @@ function CartaoBooleano({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-corpo">{rotulo}</CardTitle>
-        {descricao ? <CardDescription>{descricao}</CardDescription> : null}
-      </CardHeader>
-      <CardContent className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={ativo}
-            onCheckedChange={setAtivo}
-            disabled={!podeEditar || pendente}
-            aria-label={rotulo}
-          />
-          <span className="text-detalhe text-muted-foreground">
-            {ativo ? "Ativado" : "Desativado"}
-          </span>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          onClick={salvar}
-          disabled={!podeEditar || !mudou || pendente}
+      <CardContent>
+        <CampoFormulario
+          id={idCampo}
+          rotulo={rotulo}
+          ajuda={descricao ?? undefined}
         >
-          {pendente ? "Salvando" : "Salvar"}
-        </Button>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                id={idCampo}
+                checked={ativo}
+                onCheckedChange={setAtivo}
+                disabled={!podeEditar || pendente}
+              />
+              <span className="text-detalhe text-muted-foreground">
+                {ativo ? "Ativado" : "Desativado"}
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={salvar}
+              disabled={!podeEditar || !mudou || pendente}
+            >
+              {pendente ? "Salvando" : "Salvar"}
+            </Button>
+          </div>
+        </CampoFormulario>
       </CardContent>
     </Card>
   );
@@ -226,7 +238,7 @@ export function ConfiguracoesForm({
   podeEditar,
 }: ConfiguracoesFormProps) {
   return (
-    <div className="flex max-w-2xl flex-col gap-4">
+    <div className={cn(classesFormulario, "max-w-2xl")}>
       {configuracoes.map((configuracao) => {
         const definicao = DEFINICOES[configuracao.chave];
 
