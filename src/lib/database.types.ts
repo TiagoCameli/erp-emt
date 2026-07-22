@@ -400,6 +400,41 @@ export type Database = {
           },
         ]
       }
+      condicao_parcelas: {
+        Row: {
+          condicao_id: string
+          created_at: string
+          dias_offset: number
+          id: string
+          numero: number
+          percentual: number
+        }
+        Insert: {
+          condicao_id: string
+          created_at?: string
+          dias_offset: number
+          id?: string
+          numero: number
+          percentual: number
+        }
+        Update: {
+          condicao_id?: string
+          created_at?: string
+          dias_offset?: number
+          id?: string
+          numero?: number
+          percentual?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "condicao_parcelas_condicao_id_fkey"
+            columns: ["condicao_id"]
+            isOneToOne: false
+            referencedRelation: "condicoes_pagamento"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       condicoes_pagamento: {
         Row: {
           ativo: boolean
@@ -493,6 +528,7 @@ export type Database = {
       cotacao_fornecedores: {
         Row: {
           condicao_pagamento: string | null
+          condicao_pagamento_id: string | null
           cotacao_id: string
           created_at: string
           created_by: string | null
@@ -503,6 +539,7 @@ export type Database = {
         }
         Insert: {
           condicao_pagamento?: string | null
+          condicao_pagamento_id?: string | null
           cotacao_id: string
           created_at?: string
           created_by?: string | null
@@ -513,6 +550,7 @@ export type Database = {
         }
         Update: {
           condicao_pagamento?: string | null
+          condicao_pagamento_id?: string | null
           cotacao_id?: string
           created_at?: string
           created_by?: string | null
@@ -522,6 +560,13 @@ export type Database = {
           prazo_entrega_dias?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cotacao_fornecedores_condicao_pagamento_id_fkey"
+            columns: ["condicao_pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "condicoes_pagamento"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cotacao_fornecedores_cotacao_id_fkey"
             columns: ["cotacao_id"]
@@ -1465,6 +1510,7 @@ export type Database = {
           aprovado_em: string | null
           aprovado_por: string | null
           condicao_pagamento: string | null
+          condicao_pagamento_id: string | null
           cotacao_id: string | null
           created_at: string
           created_by: string | null
@@ -1482,6 +1528,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           condicao_pagamento?: string | null
+          condicao_pagamento_id?: string | null
           cotacao_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1499,6 +1546,7 @@ export type Database = {
           aprovado_em?: string | null
           aprovado_por?: string | null
           condicao_pagamento?: string | null
+          condicao_pagamento_id?: string | null
           cotacao_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1518,6 +1566,13 @@ export type Database = {
             columns: ["aprovado_por"]
             isOneToOne: false
             referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordens_compra_condicao_pagamento_id_fkey"
+            columns: ["condicao_pagamento_id"]
+            isOneToOne: false
+            referencedRelation: "condicoes_pagamento"
             referencedColumns: ["id"]
           },
           {
@@ -2275,6 +2330,10 @@ export type Database = {
         }[]
       }
       proximo_numero_documento: { Args: { p_tipo: string }; Returns: string }
+      salvar_condicao_parcelas: {
+        Args: { p_condicao_id: string; p_parcelas: Json }
+        Returns: undefined
+      }
       salvar_matriz_usuario: {
         Args: { p_permissoes: Json; p_usuario_id: string }
         Returns: undefined
