@@ -44,8 +44,8 @@ export interface FornecedorCotacaoDrawerProps {
  * Kit canônico: campos com `CampoFormulario`, condição de pagamento e prazo
  * de entrega (curtos, andam juntos) em `LinhaCampos`. Sem itens aqui — a
  * lista de insumos e preços da cotação é editada em `mapa-comparativo.tsx`,
- * uma matriz comparativa com uma coluna por fornecedor, incompatível com
- * `TabelaItens` (ver comentário lá).
+ * uma matriz comparativa com uma coluna por fornecedor (layout N×M), que não
+ * casa com a `TabelaItens` (linhas homogêneas), então fica fora do kit.
  */
 export function FornecedorCotacaoDrawer({
   aberto,

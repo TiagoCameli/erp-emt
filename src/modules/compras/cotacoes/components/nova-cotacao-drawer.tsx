@@ -34,7 +34,7 @@ export interface NovaCotacaoDrawerProps {
  * `classesFormulario` (sem `LinhaCampos`/`SecaoFormulario`, que não têm o que
  * agrupar aqui). Este drawer não lista itens — a lista de insumos e preços da
  * cotação é editada em `mapa-comparativo.tsx`, uma matriz comparativa com uma
- * coluna por fornecedor, incompatível com `TabelaItens` (ver comentário lá).
+ * coluna por fornecedor (layout N×M), que não casa com a `TabelaItens`.
  */
 export function NovaCotacaoDrawer({
   aberto,
