@@ -520,7 +520,7 @@ function GrupoCentroCusto({
           linhas={linhas}
           chaveLinha={(linha) => linha.id}
           onRemover={(j) => removerInsumo(j)}
-          podeRemover={() => linhas.length > 1}
+          podeRemover={() => !salvando && linhas.length > 1}
           rotuloRemover="Remover insumo"
           erroCelula={(chave, j) => {
             const e = errosGrupo?.insumos?.[j];
