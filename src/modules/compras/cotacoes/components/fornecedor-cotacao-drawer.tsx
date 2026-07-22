@@ -7,17 +7,16 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  CampoFormulario,
+  classesFormulario,
   Combobox,
   ComboboxCriavel,
   FormDrawer,
+  LinhaCampos,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  CampoFormulario,
-  classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
 import { criarCondicaoPagamento } from "@/modules/compras/condicoes-pagamento/actions";
 import { adicionarFornecedor } from "@/modules/compras/cotacoes/actions";
 import {
@@ -41,6 +40,12 @@ export interface FornecedorCotacaoDrawerProps {
 /**
  * Drawer para adicionar um fornecedor à cotação, com condição de pagamento,
  * prazo de entrega e observação. Fornecedores já na cotação não aparecem.
+ *
+ * Kit canônico: campos com `CampoFormulario`, condição de pagamento e prazo
+ * de entrega (curtos, andam juntos) em `LinhaCampos`. Sem itens aqui — a
+ * lista de insumos e preços da cotação é editada em `mapa-comparativo.tsx`,
+ * uma matriz comparativa com uma coluna por fornecedor, incompatível com
+ * `TabelaItens` (ver comentário lá).
  */
 export function FornecedorCotacaoDrawer({
   aberto,
@@ -175,42 +180,44 @@ export function FornecedorCotacaoDrawer({
           />
         </CampoFormulario>
 
-        <CampoFormulario
-          id="fornecedor-condicao"
-          rotulo="Condição de pagamento"
-          erro={form.formState.errors.condicaoPagamento?.message}
-        >
-          <Controller
-            name="condicaoPagamento"
-            control={form.control}
-            render={({ field }) => (
-              <ComboboxCriavel
-                id="fornecedor-condicao"
-                valor={field.value ?? ""}
-                onValorChange={field.onChange}
-                opcoes={condicoesPagamento}
-                onCriar={criarCondicao}
-                placeholder="30 dias"
-                disabled={salvando}
-              />
-            )}
-          />
-        </CampoFormulario>
+        <LinhaCampos>
+          <CampoFormulario
+            id="fornecedor-condicao"
+            rotulo="Condição de pagamento"
+            erro={form.formState.errors.condicaoPagamento?.message}
+          >
+            <Controller
+              name="condicaoPagamento"
+              control={form.control}
+              render={({ field }) => (
+                <ComboboxCriavel
+                  id="fornecedor-condicao"
+                  valor={field.value ?? ""}
+                  onValorChange={field.onChange}
+                  opcoes={condicoesPagamento}
+                  onCriar={criarCondicao}
+                  placeholder="30 dias"
+                  disabled={salvando}
+                />
+              )}
+            />
+          </CampoFormulario>
 
-        <CampoFormulario
-          id="fornecedor-prazo"
-          rotulo="Prazo de entrega (dias)"
-          erro={form.formState.errors.prazoEntregaDias?.message}
-        >
-          <Input
+          <CampoFormulario
             id="fornecedor-prazo"
-            inputMode="numeric"
-            placeholder="7"
-            className="tabular-nums"
-            disabled={salvando}
-            {...form.register("prazoEntregaDias")}
-          />
-        </CampoFormulario>
+            rotulo="Prazo de entrega (dias)"
+            erro={form.formState.errors.prazoEntregaDias?.message}
+          >
+            <Input
+              id="fornecedor-prazo"
+              inputMode="numeric"
+              placeholder="7"
+              className="tabular-nums"
+              disabled={salvando}
+              {...form.register("prazoEntregaDias")}
+            />
+          </CampoFormulario>
+        </LinhaCampos>
 
         <CampoFormulario
           id="fornecedor-observacao"
