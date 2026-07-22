@@ -215,6 +215,7 @@ export function CategoriasFormDrawer({
         <SelectAtivo
           value={form.watch("ativo") ?? true}
           onChange={(valor) => form.setValue("ativo", valor)}
+          ajuda="Categorias inativas somem das listas de seleção, mas continuam no histórico."
         />
       </form>
     </FormDrawer>
