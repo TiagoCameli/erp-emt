@@ -6,17 +6,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { SelectAtivo } from "@/modules/cadastros/_shared/campos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { criar, editar } from "@/modules/cadastros/clientes/actions";
@@ -92,6 +90,8 @@ export function ClientesFormDrawer({
     onAbertoChange(false);
   }
 
+  const tipoValor = form.watch("tipo");
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -123,283 +123,185 @@ export function ClientesFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="space-y-4"
-          noValidate
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+        noValidate
+      >
+        <CampoFormulario
+          id="cliente-tipo"
+          rotulo="Tipo"
+          erro={form.formState.errors.tipo?.message}
         >
-          <FormField
-            control={form.control}
-            name="tipo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tipo</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={[
-                      { valor: "pj", rotulo: "Pessoa jurídica" },
-                      { valor: "pf", rotulo: "Pessoa física" },
-                    ]}
-                    placeholder="Selecione o tipo"
-                    disabled={salvando}
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={tipoValor}
+            onValorChange={(valor) =>
+              form.setValue("tipo", valor as ClienteInput["tipo"], {
+                shouldValidate: true,
+              })
+            }
+            opcoes={[
+              { valor: "pj", rotulo: "Pessoa jurídica" },
+              { valor: "pf", rotulo: "Pessoa física" },
+            ]}
+            placeholder="Selecione o tipo"
+            disabled={salvando}
+            className="w-full"
+            id="cliente-tipo"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="nome"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome ou razão social</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="DNIT"
-                    disabled={salvando}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-nome"
+          rotulo="Nome ou razão social"
+          erro={form.formState.errors.nome?.message}
+        >
+          <Input
+            id="cliente-nome"
+            autoComplete="off"
+            placeholder="DNIT"
+            disabled={salvando}
+            {...form.register("nome")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="nome_fantasia"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome fantasia</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="Nome fantasia"
-                    disabled={salvando}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-nome-fantasia"
+          rotulo="Nome fantasia"
+          erro={form.formState.errors.nome_fantasia?.message}
+        >
+          <Input
+            id="cliente-nome-fantasia"
+            autoComplete="off"
+            placeholder="Nome fantasia"
+            disabled={salvando}
+            {...form.register("nome_fantasia")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="cpf_cnpj"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>CPF ou CNPJ</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="00.000.000/0001-00"
-                    disabled={salvando}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-cpf-cnpj"
+          rotulo="CPF ou CNPJ"
+          erro={form.formState.errors.cpf_cnpj?.message}
+        >
+          <Input
+            id="cliente-cpf-cnpj"
+            autoComplete="off"
+            placeholder="00.000.000/0001-00"
+            disabled={salvando}
+            {...form.register("cpf_cnpj")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="inscricao_estadual"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Inscrição estadual</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="Inscrição estadual"
-                    disabled={salvando}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-inscricao-estadual"
+          rotulo="Inscrição estadual"
+          erro={form.formState.errors.inscricao_estadual?.message}
+        >
+          <Input
+            id="cliente-inscricao-estadual"
+            autoComplete="off"
+            placeholder="Inscrição estadual"
+            disabled={salvando}
+            {...form.register("inscricao_estadual")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email</FormLabel>
-                <FormControl>
-                  <Input
-                    type="email"
-                    autoComplete="off"
-                    placeholder="contato@orgao.gov.br"
-                    disabled={salvando}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-email"
+          rotulo="Email"
+          erro={form.formState.errors.email?.message}
+        >
+          <Input
+            id="cliente-email"
+            type="email"
+            autoComplete="off"
+            placeholder="contato@orgao.gov.br"
+            disabled={salvando}
+            {...form.register("email")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="telefone"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Telefone</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="(68) 0000-0000"
-                    disabled={salvando}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-telefone"
+          rotulo="Telefone"
+          erro={form.formState.errors.telefone?.message}
+        >
+          <Input
+            id="cliente-telefone"
+            autoComplete="off"
+            placeholder="(68) 0000-0000"
+            disabled={salvando}
+            {...form.register("telefone")}
           />
+        </CampoFormulario>
 
-          <div className="grid grid-cols-[1fr_6rem] gap-4">
-            <FormField
-              control={form.control}
-              name="cidade"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cidade</FormLabel>
-                  <FormControl>
-                    <Input
-                      autoComplete="off"
-                      placeholder="Rio Branco"
-                      disabled={salvando}
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <LinhaCampos>
+          <CampoFormulario
+            id="cliente-cidade"
+            rotulo="Cidade"
+            erro={form.formState.errors.cidade?.message}
+          >
+            <Input
+              id="cliente-cidade"
+              autoComplete="off"
+              placeholder="Rio Branco"
+              disabled={salvando}
+              {...form.register("cidade")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="uf"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>UF</FormLabel>
-                  <FormControl>
-                    <Input
-                      autoComplete="off"
-                      placeholder="AC"
-                      maxLength={2}
-                      disabled={salvando}
-                      value={field.value ?? ""}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="cliente-uf"
+            rotulo="UF"
+            erro={form.formState.errors.uf?.message}
+          >
+            <Input
+              id="cliente-uf"
+              autoComplete="off"
+              placeholder="AC"
+              maxLength={2}
+              disabled={salvando}
+              {...form.register("uf")}
             />
-          </div>
+          </CampoFormulario>
+        </LinhaCampos>
 
-          <FormField
-            control={form.control}
-            name="endereco"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Endereço</FormLabel>
-                <FormControl>
-                  <Input
-                    autoComplete="off"
-                    placeholder="Rua, número, bairro"
-                    disabled={salvando}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-endereco"
+          rotulo="Endereço"
+          erro={form.formState.errors.endereco?.message}
+        >
+          <Input
+            id="cliente-endereco"
+            autoComplete="off"
+            placeholder="Rua, número, bairro"
+            disabled={salvando}
+            {...form.register("endereco")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="observacoes"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observações</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Anotações sobre o cliente"
-                    rows={3}
-                    disabled={salvando}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="cliente-observacoes"
+          rotulo="Observações"
+          erro={form.formState.errors.observacoes?.message}
+        >
+          <Textarea
+            id="cliente-observacoes"
+            placeholder="Anotações sobre o cliente"
+            rows={3}
+            disabled={salvando}
+            {...form.register("observacoes")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="ativo"
-            render={({ field }) => (
-              <FormItem>
-                <SelectAtivo
-                  value={field.value}
-                  onChange={field.onChange}
-                  disabled={salvando}
-                />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </form>
-      </Form>
+        <SelectAtivo
+          value={form.watch("ativo")}
+          onChange={(valor) => form.setValue("ativo", valor)}
+          disabled={salvando}
+        />
+      </form>
     </FormDrawer>
   );
 }
