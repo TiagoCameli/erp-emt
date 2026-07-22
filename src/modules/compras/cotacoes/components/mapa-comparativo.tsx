@@ -320,7 +320,10 @@ export function MapaComparativo({
                       return (
                         <TableCell
                           key={fornecedor.id}
-                          className="px-3 text-right text-detalhe"
+                          className={cn(
+                            "px-3 text-right text-detalhe",
+                            ehMenor && "bg-status-aprovado/10",
+                          )}
                         >
                           {editavel ? (
                             <Input
@@ -384,7 +387,10 @@ export function MapaComparativo({
                 return (
                   <TableCell
                     key={fornecedor.id}
-                    className="px-3 text-right text-detalhe"
+                    className={cn(
+                      "px-3 text-right text-detalhe",
+                      ehMenorTotal && "bg-status-aprovado/10",
+                    )}
                   >
                     <MoneyText
                       valor={total}
@@ -393,6 +399,11 @@ export function MapaComparativo({
                         ehMenorTotal && "text-status-aprovado",
                       )}
                     />
+                    {ehMenorTotal ? (
+                      <span className="block text-legenda font-medium text-status-aprovado">
+                        sugerido
+                      </span>
+                    ) : null}
                   </TableCell>
                 );
               })}

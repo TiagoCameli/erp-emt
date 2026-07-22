@@ -365,10 +365,13 @@ export async function finalizarCotacao(
   const aberta = await exigirAberta(supabase, idValido.data);
   if ("erro" in aberta) return aberta;
 
-  // O vencedor precisa ser um fornecedor da cotação.
+  // O vencedor precisa ser um fornecedor da cotação. O front manda o id da
+  // LINHA (cotacao_fornecedores.id), que é o que a validação e os totais usam;
+  // mas a coluna vencedor_fornecedor_id tem FK para fornecedores.id, então na
+  // gravação resolvemos a linha para o fornecedor_id dela.
   const { data: fornecedores, error: erroFornecedores } = await supabase
     .from("cotacao_fornecedores")
-    .select("id")
+    .select("id, fornecedor_id")
     .eq("cotacao_id", idValido.data);
 
   if (erroFornecedores) {
@@ -379,8 +382,10 @@ export async function finalizarCotacao(
     );
   }
 
-  const idsFornecedores = new Set((fornecedores ?? []).map((f) => f.id));
-  if (!idsFornecedores.has(vencedorValido.data)) {
+  const participanteVencedor = (fornecedores ?? []).find(
+    (f) => f.id === vencedorValido.data,
+  );
+  if (!participanteVencedor) {
     return { erro: "O vencedor precisa ser um fornecedor da cotação" };
   }
 
@@ -429,7 +434,7 @@ export async function finalizarCotacao(
     .from(TABELA)
     .update({
       status: "finalizada",
-      vencedor_fornecedor_id: vencedorValido.data,
+      vencedor_fornecedor_id: participanteVencedor.fornecedor_id,
       motivo_selecao: motivoLimpo.length > 0 ? motivoLimpo : null,
     })
     .eq("id", idValido.data);
