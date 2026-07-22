@@ -121,6 +121,7 @@ export function FornecedorCotacaoDrawer({
       onAbertoChange={onAbertoChange}
       titulo="Adicionar fornecedor"
       descricao="Quem vai cotar os insumos desta cotação"
+      larguraClassName="sm:max-w-[95vw]"
       rodape={
         <>
           <Button
