@@ -4,7 +4,7 @@ import * as React from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { MoneyText } from "@/components/canonicos";
+import { Combobox, MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,13 +15,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { finalizarCotacao } from "@/modules/compras/cotacoes/actions";
 import type { FornecedorCotacao } from "@/modules/compras/cotacoes/queries";
@@ -101,23 +94,20 @@ export function FinalizarCotacaoDialog({
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="cotacao-vencedor">Fornecedor vencedor</Label>
-              <Select
-                value={vencedorId === "" ? undefined : vencedorId}
-                onValueChange={setVencedorId}
+              <Combobox
+                valor={vencedorId}
+                onValorChange={setVencedorId}
+                opcoes={elegiveis.map((fornecedor) => ({
+                  valor: fornecedor.id,
+                  rotulo: `${fornecedor.fornecedorNome}${
+                    fornecedor.menorTotal ? " (menor total)" : ""
+                  }`,
+                }))}
+                placeholder="Escolha o vencedor"
                 disabled={salvando}
-              >
-                <SelectTrigger id="cotacao-vencedor" className="w-full">
-                  <SelectValue placeholder="Escolha o vencedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {elegiveis.map((fornecedor) => (
-                    <SelectItem key={fornecedor.id} value={fornecedor.id}>
-                      {fornecedor.fornecedorNome}
-                      {fornecedor.menorTotal ? " (menor total)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                id="cotacao-vencedor"
+                className="w-full"
+              />
               {vencedor ? (
                 <p className="text-detalhe text-muted-foreground">
                   Total cotado:{" "}

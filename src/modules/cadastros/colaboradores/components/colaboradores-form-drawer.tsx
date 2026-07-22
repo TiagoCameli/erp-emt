@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { z } from "zod";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -20,13 +20,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { criar, editar } from "@/modules/cadastros/colaboradores/actions";
 import type {
@@ -294,24 +287,19 @@ export function ColaboradoresFormDrawer({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Vínculo</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={salvando}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Selecione o vínculo" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {VINCULOS.map((vinculo) => (
-                          <SelectItem key={vinculo} value={vinculo}>
-                            {ROTULO_VINCULO[vinculo]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Combobox
+                        valor={field.value}
+                        onValorChange={field.onChange}
+                        opcoes={VINCULOS.map((vinculo) => ({
+                          valor: vinculo,
+                          rotulo: ROTULO_VINCULO[vinculo],
+                        }))}
+                        placeholder="Selecione o vínculo"
+                        disabled={salvando}
+                        className="w-full"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -338,25 +326,22 @@ export function ColaboradoresFormDrawer({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Obra</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={salvando}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Sem obra" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={SEM_OBRA}>Sem obra</SelectItem>
-                      {obras.map((obra) => (
-                        <SelectItem key={obra.id} value={obra.id}>
-                          {obra.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      valor={field.value}
+                      onValorChange={field.onChange}
+                      opcoes={[
+                        { valor: SEM_OBRA, rotulo: "Sem obra" },
+                        ...obras.map((obra) => ({
+                          valor: obra.id,
+                          rotulo: obra.nome,
+                        })),
+                      ]}
+                      placeholder="Sem obra"
+                      disabled={salvando}
+                      className="w-full"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -368,27 +353,22 @@ export function ColaboradoresFormDrawer({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Centro de custo</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    disabled={salvando}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Sem centro de custo" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={SEM_CENTRO_CUSTO}>
-                        Sem centro de custo
-                      </SelectItem>
-                      {centrosCusto.map((centro) => (
-                        <SelectItem key={centro.id} value={centro.id}>
-                          {centro.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Combobox
+                      valor={field.value}
+                      onValorChange={field.onChange}
+                      opcoes={[
+                        { valor: SEM_CENTRO_CUSTO, rotulo: "Sem centro de custo" },
+                        ...centrosCusto.map((centro) => ({
+                          valor: centro.id,
+                          rotulo: centro.nome,
+                        })),
+                      ]}
+                      placeholder="Sem centro de custo"
+                      disabled={salvando}
+                      className="w-full"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

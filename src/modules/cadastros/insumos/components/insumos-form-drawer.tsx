@@ -7,7 +7,7 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -19,13 +19,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { criar, editar } from "@/modules/cadastros/insumos/actions";
@@ -178,24 +171,19 @@ export function InsumosFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Categoria</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={salvando}
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione a categoria" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {categorias.map((categoria) => (
-                      <SelectItem key={categoria.id} value={categoria.id}>
-                        {categoria.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={categorias.map((categoria) => ({
+                      valor: categoria.id,
+                      rotulo: categoria.nome,
+                    }))}
+                    placeholder="Selecione a categoria"
+                    disabled={salvando}
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -207,24 +195,19 @@ export function InsumosFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Unidade de medida</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={salvando}
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione a unidade" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {unidades.map((unidade) => (
-                      <SelectItem key={unidade.id} value={unidade.id}>
-                        {unidade.sigla} - {unidade.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={unidades.map((unidade) => ({
+                      valor: unidade.id,
+                      rotulo: `${unidade.sigla} - ${unidade.nome}`,
+                    }))}
+                    placeholder="Selecione a unidade"
+                    disabled={salvando}
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

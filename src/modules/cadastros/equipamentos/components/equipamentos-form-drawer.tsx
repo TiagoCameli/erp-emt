@@ -6,17 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { ConfirmDialog, FormDrawer } from "@/components/canonicos";
+import { Combobox, ConfirmDialog, FormDrawer } from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import {
@@ -304,28 +297,22 @@ export function EquipamentosFormDrawer({
             obrigatorio
             erro={form.formState.errors.controlePor?.message}
           >
-            <Select
-              value={controleValor}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={controleValor}
+              onValorChange={(valor) =>
                 form.setValue(
                   "controlePor",
                   valor as EquipamentoFormInput["controlePor"],
                   { shouldValidate: true },
                 )
               }
+              opcoes={CONTROLE_POR.map((controle) => ({
+                valor: controle,
+                rotulo: CONTROLE_POR_CONFIG[controle],
+              }))}
               disabled={salvando}
-            >
-              <SelectTrigger id="equipamento-controle" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CONTROLE_POR.map((controle) => (
-                  <SelectItem key={controle} value={controle}>
-                    {CONTROLE_POR_CONFIG[controle]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id="equipamento-controle"
+            />
           </CampoFormulario>
         </div>
 

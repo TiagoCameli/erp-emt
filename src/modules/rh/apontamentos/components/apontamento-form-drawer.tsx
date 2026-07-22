@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -18,13 +18,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ROTULO_TIPO_APONTAMENTO } from "@/modules/rh/_shared/formato";
 import type { TipoApontamento } from "@/modules/rh/_shared/formato";
@@ -160,21 +153,20 @@ export function ApontamentoFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Colaborador</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o colaborador" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {colaboradores.map((colaborador) => (
-                      <SelectItem key={colaborador.id} value={colaborador.id}>
-                        {colaborador.nome}
-                        {colaborador.funcao ? ` - ${colaborador.funcao}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={colaboradores.map((colaborador) => ({
+                      valor: colaborador.id,
+                      rotulo: colaborador.funcao
+                        ? `${colaborador.nome} - ${colaborador.funcao}`
+                        : colaborador.nome,
+                    }))}
+                    placeholder="Selecione o colaborador"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -226,20 +218,18 @@ export function ApontamentoFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Tipo" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {TIPOS_APONTAMENTO.map((tipo) => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {ROTULO_TIPO_APONTAMENTO[tipo]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={TIPOS_APONTAMENTO.map((tipo) => ({
+                      valor: tipo,
+                      rotulo: ROTULO_TIPO_APONTAMENTO[tipo],
+                    }))}
+                    placeholder="Tipo"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

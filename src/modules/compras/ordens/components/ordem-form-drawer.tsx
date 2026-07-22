@@ -11,16 +11,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { ComboboxCriavel, FormDrawer } from "@/components/canonicos";
+import {
+  Combobox,
+  ComboboxCriavel,
+  FormDrawer,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
 import {
@@ -263,24 +260,19 @@ export function OrdemFormDrawer({
           obrigatorio
           erro={form.formState.errors.fornecedorId?.message}
         >
-          <Select
-            value={fornecedorValor}
-            onValueChange={(valor) =>
+          <Combobox
+            valor={fornecedorValor}
+            onValorChange={(valor) =>
               form.setValue("fornecedorId", valor, { shouldValidate: true })
             }
+            opcoes={fornecedores.map((fornecedor) => ({
+              valor: fornecedor.id,
+              rotulo: fornecedor.nome,
+            }))}
+            placeholder="Selecione o fornecedor"
             disabled={salvando}
-          >
-            <SelectTrigger id="oc-fornecedor" className="w-full">
-              <SelectValue placeholder="Selecione o fornecedor" />
-            </SelectTrigger>
-            <SelectContent>
-              {fornecedores.map((fornecedor) => (
-                <SelectItem key={fornecedor.id} value={fornecedor.id}>
-                  {fornecedor.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            id="oc-fornecedor"
+          />
         </CampoFormulario>
 
         <div className="grid grid-cols-2 gap-4">
@@ -326,28 +318,25 @@ export function OrdemFormDrawer({
           rotulo="Cotação de origem"
           ajuda="Opcional: vincule uma cotação finalizada"
         >
-          <Select
-            value={cotacaoValor}
-            onValueChange={(valor) =>
+          <Combobox
+            valor={cotacaoValor}
+            onValorChange={(valor) =>
               form.setValue(
                 "cotacaoId",
                 valor === SEM_VINCULO ? undefined : valor,
               )
             }
+            opcoes={[
+              { valor: SEM_VINCULO, rotulo: "Sem cotação" },
+              ...cotacoes.map((cotacao) => ({
+                valor: cotacao.id,
+                rotulo: cotacao.numero ?? "Sem número",
+              })),
+            ]}
+            placeholder="Sem cotação"
             disabled={salvando}
-          >
-            <SelectTrigger id="oc-cotacao" className="w-full">
-              <SelectValue placeholder="Sem cotação" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SEM_VINCULO}>Sem cotação</SelectItem>
-              {cotacoes.map((cotacao) => (
-                <SelectItem key={cotacao.id} value={cotacao.id}>
-                  {cotacao.numero ?? "Sem número"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            id="oc-cotacao"
+          />
         </CampoFormulario>
 
         <div className="flex flex-col gap-3">
@@ -473,27 +462,21 @@ function GrupoCentroCusto({
             obrigatorio
             erro={errosGrupo?.centroCustoId?.message}
           >
-            <Select
-              value={form.watch(`centrosCusto.${indice}.centroCustoId`)}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={form.watch(`centrosCusto.${indice}.centroCustoId`)}
+              onValorChange={(valor) =>
                 form.setValue(`centrosCusto.${indice}.centroCustoId`, valor, {
                   shouldValidate: true,
                 })
               }
+              opcoes={centrosDisponiveis.map((centro) => ({
+                valor: centro.id,
+                rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
+              }))}
+              placeholder="Selecione"
               disabled={salvando}
-            >
-              <SelectTrigger id={`oc-grupo-cc-${indice}`} className="w-full">
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {centrosDisponiveis.map((centro) => (
-                  <SelectItem key={centro.id} value={centro.id}>
-                    {centro.codigo ? `${centro.codigo} ` : ""}
-                    {centro.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id={`oc-grupo-cc-${indice}`}
+            />
           </CampoFormulario>
         </div>
         <Button
@@ -536,34 +519,25 @@ function GrupoCentroCusto({
                     obrigatorio
                     erro={errosLinha?.insumoId?.message}
                   >
-                    <Select
-                      value={form.watch(
+                    <Combobox
+                      valor={form.watch(
                         `centrosCusto.${indice}.insumos.${j}.insumoId`,
                       )}
-                      onValueChange={(valor) =>
+                      onValorChange={(valor) =>
                         form.setValue(
                           `centrosCusto.${indice}.insumos.${j}.insumoId`,
                           valor,
                           { shouldValidate: true },
                         )
                       }
+                      opcoes={insumosDisponiveis.map((insumo) => ({
+                        valor: insumo.id,
+                        rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}`,
+                      }))}
+                      placeholder="Selecione o insumo"
                       disabled={salvando}
-                    >
-                      <SelectTrigger
-                        id={`oc-insumo-${indice}-${j}`}
-                        className="w-full"
-                      >
-                        <SelectValue placeholder="Selecione o insumo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {insumosDisponiveis.map((insumo) => (
-                          <SelectItem key={insumo.id} value={insumo.id}>
-                            {insumo.nome}
-                            {insumo.unidade ? ` (${insumo.unidade})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      id={`oc-insumo-${indice}-${j}`}
+                    />
                   </CampoFormulario>
                 </div>
                 <Button

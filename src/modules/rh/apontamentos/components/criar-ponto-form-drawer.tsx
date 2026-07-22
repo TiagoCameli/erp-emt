@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -17,13 +17,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
 import type { ColaboradorOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
@@ -122,21 +115,18 @@ export function CriarPontoFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Obra</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione a obra" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {obras.map((obra) => (
-                      <SelectItem key={obra.id} value={obra.id}>
-                        {obra.nome}
-                        {obra.lote ? ` (Lote ${obra.lote})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={obras.map((obra) => ({
+                      valor: obra.id,
+                      rotulo: `${obra.nome}${obra.lote ? ` (Lote ${obra.lote})` : ""}`,
+                    }))}
+                    placeholder="Selecione a obra"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -162,29 +152,23 @@ export function CriarPontoFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Encarregado (opcional)</FormLabel>
-                <Select
-                  value={field.value === "" ? SEM_ENCARREGADO : field.value}
-                  onValueChange={(valor) =>
-                    field.onChange(valor === SEM_ENCARREGADO ? "" : valor)
-                  }
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sem encarregado" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={SEM_ENCARREGADO}>
-                      Sem encarregado
-                    </SelectItem>
-                    {colaboradores.map((colaborador) => (
-                      <SelectItem key={colaborador.id} value={colaborador.id}>
-                        {colaborador.nome}
-                        {colaborador.funcao ? ` - ${colaborador.funcao}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value === "" ? SEM_ENCARREGADO : field.value}
+                    onValorChange={(valor) =>
+                      field.onChange(valor === SEM_ENCARREGADO ? "" : valor)
+                    }
+                    opcoes={[
+                      { valor: SEM_ENCARREGADO, rotulo: "Sem encarregado" },
+                      ...colaboradores.map((colaborador) => ({
+                        valor: colaborador.id,
+                        rotulo: `${colaborador.nome}${colaborador.funcao ? ` - ${colaborador.funcao}` : ""}`,
+                      })),
+                    ]}
+                    placeholder="Sem encarregado"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

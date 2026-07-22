@@ -6,16 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   CampoFormulario,
   SelectAtivo,
@@ -177,26 +170,20 @@ export function ContasFormDrawer({
             obrigatorio
             erro={form.formState.errors.banco?.message}
           >
-            <Select
-              value={bancoValor}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={bancoValor}
+              onValorChange={(valor) =>
                 form.setValue("banco", valor as ContaFormInput["banco"], {
                   shouldValidate: true,
                 })
               }
+              opcoes={BANCO_CONTA.map((banco) => ({
+                valor: banco,
+                rotulo: ROTULO_BANCO[banco],
+              }))}
               disabled={salvando}
-            >
-              <SelectTrigger id="conta-banco" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {BANCO_CONTA.map((banco) => (
-                  <SelectItem key={banco} value={banco}>
-                    {ROTULO_BANCO[banco]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id="conta-banco"
+            />
           </CampoFormulario>
 
           <CampoFormulario
@@ -205,26 +192,20 @@ export function ContasFormDrawer({
             obrigatorio
             erro={form.formState.errors.tipo?.message}
           >
-            <Select
-              value={tipoValor}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={tipoValor}
+              onValorChange={(valor) =>
                 form.setValue("tipo", valor as ContaFormInput["tipo"], {
                   shouldValidate: true,
                 })
               }
+              opcoes={TIPO_CONTA.map((tipo) => ({
+                valor: tipo,
+                rotulo: ROTULO_TIPO_CONTA[tipo],
+              }))}
               disabled={salvando}
-            >
-              <SelectTrigger id="conta-tipo" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TIPO_CONTA.map((tipo) => (
-                  <SelectItem key={tipo} value={tipo}>
-                    {ROTULO_TIPO_CONTA[tipo]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id="conta-tipo"
+            />
           </CampoFormulario>
         </div>
 

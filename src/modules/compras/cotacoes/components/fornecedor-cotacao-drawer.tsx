@@ -6,16 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { ComboboxCriavel, FormDrawer } from "@/components/canonicos";
+import {
+  Combobox,
+  ComboboxCriavel,
+  FormDrawer,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   CampoFormulario,
@@ -158,30 +155,24 @@ export function FornecedorCotacaoDrawer({
           obrigatorio
           erro={form.formState.errors.fornecedorId?.message}
         >
-          <Select
-            value={fornecedorValor === "" ? undefined : fornecedorValor}
-            onValueChange={(valor) =>
+          <Combobox
+            valor={fornecedorValor}
+            onValorChange={(valor) =>
               form.setValue("fornecedorId", valor, { shouldValidate: true })
             }
+            opcoes={disponiveis.map((fornecedor) => ({
+              valor: fornecedor.id,
+              rotulo: fornecedor.nome,
+            }))}
+            placeholder={
+              disponiveis.length === 0
+                ? "Todos os fornecedores já estão na cotação"
+                : "Escolha um fornecedor"
+            }
             disabled={salvando || disponiveis.length === 0}
-          >
-            <SelectTrigger id="fornecedor-cotacao" className="w-full">
-              <SelectValue
-                placeholder={
-                  disponiveis.length === 0
-                    ? "Todos os fornecedores já estão na cotação"
-                    : "Escolha um fornecedor"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {disponiveis.map((fornecedor) => (
-                <SelectItem key={fornecedor.id} value={fornecedor.id}>
-                  {fornecedor.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            id="fornecedor-cotacao"
+            className="w-full"
+          />
         </CampoFormulario>
 
         <CampoFormulario

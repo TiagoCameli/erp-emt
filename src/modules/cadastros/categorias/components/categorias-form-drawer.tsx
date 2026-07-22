@@ -7,7 +7,7 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -19,13 +19,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { criar, editar } from "@/modules/cadastros/categorias/actions";
 import type { CategoriaLista } from "@/modules/cadastros/categorias/queries";
@@ -152,20 +145,18 @@ export function CategoriasFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Escolha o tipo" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {TIPOS_CATEGORIA.map((tipo) => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {ROTULO_TIPO_CATEGORIA[tipo]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={TIPOS_CATEGORIA.map((tipo) => ({
+                      valor: tipo,
+                      rotulo: ROTULO_TIPO_CATEGORIA[tipo],
+                    }))}
+                    placeholder="Escolha o tipo"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

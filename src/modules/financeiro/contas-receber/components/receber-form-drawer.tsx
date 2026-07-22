@@ -6,16 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   CampoFormulario,
   classesFormulario,
@@ -160,29 +153,26 @@ export function ReceberFormDrawer({
           ajuda="Categoria de receita para o relatório"
           erro={form.formState.errors.categoriaId?.message}
         >
-          <Select
-            value={categoriaValor}
-            onValueChange={(valor) =>
+          <Combobox
+            valor={categoriaValor}
+            onValorChange={(valor) =>
               form.setValue(
                 "categoriaId",
                 valor === SEM_CATEGORIA ? undefined : valor,
                 { shouldValidate: true },
               )
             }
+            opcoes={[
+              { valor: SEM_CATEGORIA, rotulo: "Sem categoria" },
+              ...categorias.map((categoria) => ({
+                valor: categoria.id,
+                rotulo: categoria.nome,
+              })),
+            ]}
+            placeholder="Sem categoria"
             disabled={salvando}
-          >
-            <SelectTrigger id="receber-categoria" className="w-full">
-              <SelectValue placeholder="Sem categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={SEM_CATEGORIA}>Sem categoria</SelectItem>
-              {categorias.map((categoria) => (
-                <SelectItem key={categoria.id} value={categoria.id}>
-                  {categoria.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            id="receber-categoria"
+          />
         </CampoFormulario>
 
         <CampoFormulario

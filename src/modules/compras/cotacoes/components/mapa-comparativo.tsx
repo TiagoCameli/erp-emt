@@ -4,16 +4,9 @@ import * as React from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { EmptyState, MoneyText } from "@/components/canonicos";
+import { Combobox, EmptyState, MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -412,28 +405,22 @@ export function MapaComparativo({
       {editavel ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Select
-              value={insumoNovo === "" ? undefined : insumoNovo}
-              onValueChange={setInsumoNovo}
+            <Combobox
+              valor={insumoNovo}
+              onValorChange={setInsumoNovo}
+              opcoes={insumosDisponiveis.map((insumo) => ({
+                valor: insumo.id,
+                rotulo: insumo.nome,
+              }))}
+              placeholder={
+                insumosDisponiveis.length === 0
+                  ? "Todos os insumos já estão no mapa"
+                  : "Adicionar insumo"
+              }
               disabled={insumosDisponiveis.length === 0}
-            >
-              <SelectTrigger size="sm" className="w-64 text-detalhe">
-                <SelectValue
-                  placeholder={
-                    insumosDisponiveis.length === 0
-                      ? "Todos os insumos já estão no mapa"
-                      : "Adicionar insumo"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {insumosDisponiveis.map((insumo) => (
-                  <SelectItem key={insumo.id} value={insumo.id}>
-                    {insumo.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              size="sm"
+              className="w-64 text-detalhe"
+            />
             <Button
               type="button"
               variant="outline"

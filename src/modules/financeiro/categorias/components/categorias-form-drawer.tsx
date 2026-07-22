@@ -7,7 +7,7 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -19,13 +19,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
   criarCategoria,
@@ -167,20 +160,18 @@ export function CategoriasFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Escolha o tipo" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {TIPOS_CATEGORIA_FINANCEIRA.map((tipo) => (
-                      <SelectItem key={tipo} value={tipo}>
-                        {ROTULO_TIPO_CATEGORIA_FINANCEIRA[tipo]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={TIPOS_CATEGORIA_FINANCEIRA.map((tipo) => ({
+                      valor: tipo,
+                      rotulo: ROTULO_TIPO_CATEGORIA_FINANCEIRA[tipo],
+                    }))}
+                    placeholder="Escolha o tipo"
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -206,27 +197,24 @@ export function CategoriasFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Categoria pai</FormLabel>
-                <Select
-                  value={field.value ?? SEM_PAI}
-                  onValueChange={(valor) =>
-                    field.onChange(valor === SEM_PAI ? null : valor)
-                  }
-                  disabled={opcoesPai.length === 0}
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Sem categoria pai" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value={SEM_PAI}>Sem categoria pai</SelectItem>
-                    {opcoesPai.map((pai) => (
-                      <SelectItem key={pai.id} value={pai.id}>
-                        {pai.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value ?? SEM_PAI}
+                    onValorChange={(valor) =>
+                      field.onChange(valor === SEM_PAI ? null : valor)
+                    }
+                    opcoes={[
+                      { valor: SEM_PAI, rotulo: "Sem categoria pai" },
+                      ...opcoesPai.map((pai) => ({
+                        valor: pai.id,
+                        rotulo: pai.nome,
+                      })),
+                    ]}
+                    placeholder="Sem categoria pai"
+                    disabled={opcoesPai.length === 0}
+                    className="w-full"
+                  />
+                </FormControl>
                 <p className="text-legenda text-muted-foreground">
                   Opcional. Agrupa esta categoria sob uma categoria raiz do mesmo
                   tipo.

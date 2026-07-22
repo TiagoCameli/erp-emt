@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
+import { Combobox, FormDrawer } from "@/components/canonicos";
 import { SelectAtivo } from "@/modules/cadastros/_shared/campos";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,13 +18,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { criar, editar } from "@/modules/cadastros/clientes/actions";
 import {
@@ -143,21 +136,19 @@ export function ClientesFormDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo</FormLabel>
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  disabled={salvando}
-                >
-                  <FormControl>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="pj">Pessoa jurídica</SelectItem>
-                    <SelectItem value="pf">Pessoa física</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    valor={field.value}
+                    onValorChange={field.onChange}
+                    opcoes={[
+                      { valor: "pj", rotulo: "Pessoa jurídica" },
+                      { valor: "pf", rotulo: "Pessoa física" },
+                    ]}
+                    placeholder="Selecione o tipo"
+                    disabled={salvando}
+                    className="w-full"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
