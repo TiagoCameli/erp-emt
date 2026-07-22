@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ocInsumoFormSchema,
   ocItemSchema,
   ordemCompraFormSchema,
   ordemCompraSchema,
@@ -46,6 +47,36 @@ describe("ocItemSchema", () => {
   it("rejeita quantidade zero", () => {
     const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 0 });
     expect(r.success).toBe(false);
+  });
+
+  it("aceita quantidade com exatamente 3 casas decimais", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.235 });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita quantidade com mais de 3 casas decimais (arredondaria em silêncio no banco)", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.2345 });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "A quantidade aceita no máximo 3 casas decimais",
+      );
+    }
+  });
+
+  it("aceita preço com exatamente 2 casas decimais", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 12.34 });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita preço com mais de 2 casas decimais (arredondaria em silêncio no banco)", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 12.345 });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "O preço aceita no máximo 2 casas decimais",
+      );
+    }
   });
 });
 
@@ -93,6 +124,44 @@ describe("ordemCompraSchema", () => {
       condicaoPagamentoId: "não-é-uuid",
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
+  const insumoValido = { insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5" };
+
+  it("aceita quantidade com vírgula e 3 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      quantidade: "1,235",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita quantidade com vírgula e mais de 3 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      quantidade: "1,2345",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "A quantidade aceita no máximo 3 casas decimais",
+      );
+    }
+  });
+
+  it("rejeita preço com ponto e mais de 2 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      precoUnitario: "12.345",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "O preço aceita no máximo 2 casas decimais",
+      );
+    }
   });
 });
 
