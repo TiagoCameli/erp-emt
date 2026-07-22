@@ -196,6 +196,13 @@ export function Combobox({
               </CommandGroup>
             ) : null}
 
+            {onCriar && buscaLimpa.length === 0 ? (
+              <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-legenda text-muted-foreground">
+                <Plus className="size-3.5 shrink-0" />
+                Digite um nome novo e toque em &quot;Criar&quot; para adicionar.
+              </div>
+            ) : null}
+
             {limpavel && valor ? (
               <CommandGroup>
                 <CommandItem value="__limpar__" onSelect={() => selecionar("")}>
