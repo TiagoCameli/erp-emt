@@ -22,7 +22,7 @@ export function SecaoFormulario({
   return (
     <section className={cn("flex flex-col gap-3", className)}>
       <div className="flex items-center justify-between gap-3">
-        <h3 className="border-l-[3px] border-primary pl-2 text-detalhe font-semibold">
+        <h3 className="border-l-[3px] border-faixa pl-2 text-detalhe font-semibold">
           {titulo}
         </h3>
         {acao}
