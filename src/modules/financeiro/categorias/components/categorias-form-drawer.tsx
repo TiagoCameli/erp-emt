@@ -7,19 +7,15 @@ import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  SelectAtivo,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   criarCategoria,
   editarCategoria,
@@ -123,6 +119,8 @@ export function CategoriasFormDrawer({
     onAbertoChange(false);
   }
 
+  const paiValor = form.watch("paiId") ?? SEM_PAI;
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -148,107 +146,77 @@ export function CategoriasFormDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="flex flex-col gap-5"
+      <form
+        id={ID_FORM}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+        noValidate
+      >
+        <CampoFormulario
+          id="categoria-tipo"
+          rotulo="Tipo"
+          erro={form.formState.errors.tipo?.message}
         >
-          <FormField
-            control={form.control}
-            name="tipo"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Tipo</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value}
-                    onValorChange={field.onChange}
-                    opcoes={TIPOS_CATEGORIA_FINANCEIRA.map((tipo) => ({
-                      valor: tipo,
-                      rotulo: ROTULO_TIPO_CATEGORIA_FINANCEIRA[tipo],
-                    }))}
-                    placeholder="Escolha o tipo"
-                    className="w-full"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Combobox
+            valor={tipoSelecionado}
+            onValorChange={(valor) =>
+              form.setValue("tipo", valor as CategoriaFinanceiraInput["tipo"], {
+                shouldValidate: true,
+              })
+            }
+            opcoes={TIPOS_CATEGORIA_FINANCEIRA.map((tipo) => ({
+              valor: tipo,
+              rotulo: ROTULO_TIPO_CATEGORIA_FINANCEIRA[tipo],
+            }))}
+            placeholder="Escolha o tipo"
+            className="w-full"
+            id="categoria-tipo"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="nome"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome</FormLabel>
-                <FormControl>
-                  <Input placeholder="Combustível" autoFocus {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="categoria-nome"
+          rotulo="Nome"
+          erro={form.formState.errors.nome?.message}
+        >
+          <Input
+            id="categoria-nome"
+            placeholder="Combustível"
+            autoFocus
+            {...form.register("nome")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="paiId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Categoria pai</FormLabel>
-                <FormControl>
-                  <Combobox
-                    valor={field.value ?? SEM_PAI}
-                    onValorChange={(valor) =>
-                      field.onChange(valor === SEM_PAI ? null : valor)
-                    }
-                    opcoes={[
-                      { valor: SEM_PAI, rotulo: "Sem categoria pai" },
-                      ...opcoesPai.map((pai) => ({
-                        valor: pai.id,
-                        rotulo: pai.nome,
-                      })),
-                    ]}
-                    placeholder="Sem categoria pai"
-                    disabled={opcoesPai.length === 0}
-                    className="w-full"
-                  />
-                </FormControl>
-                <p className="text-legenda text-muted-foreground">
-                  Opcional. Agrupa esta categoria sob uma categoria raiz do mesmo
-                  tipo.
-                </p>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="categoria-pai"
+          rotulo="Categoria pai"
+          ajuda="Opcional. Agrupa esta categoria sob uma categoria raiz do mesmo tipo."
+          erro={form.formState.errors.paiId?.message}
+        >
+          <Combobox
+            valor={paiValor}
+            onValorChange={(valor) =>
+              form.setValue("paiId", valor === SEM_PAI ? null : valor)
+            }
+            opcoes={[
+              { valor: SEM_PAI, rotulo: "Sem categoria pai" },
+              ...opcoesPai.map((pai) => ({
+                valor: pai.id,
+                rotulo: pai.nome,
+              })),
+            ]}
+            placeholder="Sem categoria pai"
+            disabled={opcoesPai.length === 0}
+            className="w-full"
+            id="categoria-pai"
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="ativo"
-            render={({ field }) => (
-              <FormItem className="flex items-start justify-between gap-4">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="categoria-financeira-ativo">Ativo</Label>
-                  <p className="text-legenda text-muted-foreground">
-                    Categorias inativas somem das listas de seleção, mas
-                    continuam no histórico.
-                  </p>
-                </div>
-                <FormControl>
-                  <Switch
-                    id="categoria-financeira-ativo"
-                    checked={field.value ?? true}
-                    onCheckedChange={field.onChange}
-                    aria-label="Ativo"
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </form>
-      </Form>
+        <SelectAtivo
+          value={form.watch("ativo") ?? true}
+          onChange={(valor) => form.setValue("ativo", valor)}
+        />
+      </form>
     </FormDrawer>
   );
 }

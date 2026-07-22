@@ -6,7 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, MoneyText } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  MoneyText,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,10 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { dataHojeISO } from "@/lib/formatadores";
-import {
-  CampoFormulario,
-  classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
 import { baixarRecebimento } from "@/modules/financeiro/contas-receber/actions";
 import type {
   ContaBancariaOpcao,

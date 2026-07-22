@@ -3,18 +3,23 @@
 import * as React from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, LoaderCircle, Plus, TriangleAlert, Trash2 } from "lucide-react";
+import { Check, LoaderCircle, Plus, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+  SecaoFormulario,
+  TabelaItens,
+  type ColunaItem,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
-import {
-  CampoFormulario,
-  classesFormulario,
-} from "@/modules/cadastros/_shared/campos";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
 import { salvarLancamento } from "@/modules/financeiro/lancamentos/actions";
 import type {
@@ -50,6 +55,36 @@ function parcelaVazia(): LancamentoFormInput["parcelas"][number] {
 function rateioVazio(): LancamentoFormInput["rateios"][number] {
   return { centroCustoId: "", valor: "" };
 }
+
+/** Colunas da tabela de parcelas: número (exibição), valor e vencimento. */
+const COLUNAS_PARCELA: ColunaItem[] = [
+  { chave: "numero", rotulo: "#", largura: "48px" },
+  {
+    chave: "valor",
+    rotulo: "Valor",
+    largura: "minmax(0,1fr)",
+    alinhamento: "right",
+    obrigatorio: true,
+  },
+  { chave: "dataVencimento", rotulo: "Vencimento", largura: "160px" },
+];
+
+/** Colunas da tabela de rateio: centro de custo e valor. */
+const COLUNAS_RATEIO: ColunaItem[] = [
+  {
+    chave: "centroCusto",
+    rotulo: "Centro de custo",
+    largura: "minmax(0,2fr)",
+    obrigatorio: true,
+  },
+  {
+    chave: "valor",
+    rotulo: "Valor",
+    largura: "minmax(0,1fr)",
+    alinhamento: "right",
+    obrigatorio: true,
+  },
+];
 
 /** Valores iniciais do formulário, a partir de um lançamento ou em branco. */
 function valoresIniciais(lancamento: LancamentoDetalhe | null): LancamentoFormInput {
@@ -254,7 +289,7 @@ export function LancamentoFormDrawer({
         className={classesFormulario}
         noValidate
       >
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="lan-tipo"
             rotulo="Tipo"
@@ -293,7 +328,7 @@ export function LancamentoFormDrawer({
               {...form.register("valor")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
         <CampoFormulario
           id="lan-descricao"
@@ -309,7 +344,7 @@ export function LancamentoFormDrawer({
           />
         </CampoFormulario>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="lan-fornecedor"
             rotulo="Fornecedor"
@@ -357,9 +392,9 @@ export function LancamentoFormDrawer({
               id="lan-categoria"
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
-        <div className="grid grid-cols-2 gap-4">
+        <LinhaCampos>
           <CampoFormulario
             id="lan-competencia"
             rotulo="Competência"
@@ -385,12 +420,13 @@ export function LancamentoFormDrawer({
               {...form.register("dataVencimento")}
             />
           </CampoFormulario>
-        </div>
+        </LinhaCampos>
 
-        {/* Parcelas */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-detalhe font-semibold">Parcelas</h3>
+        {/* Parcelas: colunas homogêneas (valor/vencimento), mesmo padrão de
+            tabela de itens usado na OC. */}
+        <SecaoFormulario
+          titulo="Parcelas"
+          acao={
             <Button
               type="button"
               variant="outline"
@@ -401,85 +437,73 @@ export function LancamentoFormDrawer({
               <Plus />
               Adicionar parcela
             </Button>
-          </div>
-
+          }
+        >
           {typeof erroParcelas?.message === "string" ? (
             <p className="text-legenda text-destructive" role="alert">
               {erroParcelas.message}
             </p>
           ) : null}
 
-          <div className="flex flex-col gap-2">
-            {parcelas.fields.map((field, indice) => {
+          <TabelaItens
+            colunas={COLUNAS_PARCELA}
+            linhas={parcelas.fields}
+            chaveLinha={(linha) => linha.id}
+            onRemover={(indice) => parcelas.remove(indice)}
+            podeRemover={() => !salvando && parcelas.fields.length > 1}
+            rotuloRemover="Remover parcela"
+            erroCelula={(chave, indice) => {
               const errosParcela = form.formState.errors.parcelas?.[indice];
-              return (
-                <div
-                  key={field.id}
-                  className="grid grid-cols-[2rem_1fr_1fr_auto] items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5"
-                >
-                  <span className="mt-2 text-detalhe text-muted-foreground tabular-nums">
+              if (chave === "valor") return errosParcela?.valor?.message;
+              return undefined;
+            }}
+            renderCelula={(chave, indice) => {
+              if (chave === "numero") {
+                return (
+                  <span className="text-detalhe text-muted-foreground tabular-nums">
                     {indice + 1}
                   </span>
-                  <CampoFormulario
+                );
+              }
+              if (chave === "valor") {
+                return (
+                  <Input
                     id={`lan-parcela-valor-${indice}`}
-                    rotulo="Valor"
-                    obrigatorio
-                    erro={errosParcela?.valor?.message}
-                  >
-                    <Input
-                      id={`lan-parcela-valor-${indice}`}
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      className="tabular-nums text-right"
-                      disabled={salvando}
-                      {...form.register(`parcelas.${indice}.valor`)}
-                    />
-                  </CampoFormulario>
-                  <CampoFormulario
-                    id={`lan-parcela-venc-${indice}`}
-                    rotulo="Vencimento"
-                  >
-                    <Input
-                      id={`lan-parcela-venc-${indice}`}
-                      type="date"
-                      disabled={salvando}
-                      {...form.register(`parcelas.${indice}.dataVencimento`)}
-                    />
-                  </CampoFormulario>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="mt-7"
-                    aria-label="Remover parcela"
-                    disabled={salvando || parcelas.fields.length === 1}
-                    onClick={() => parcelas.remove(indice)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
+                    aria-label="Valor"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    className="tabular-nums text-right"
+                    disabled={salvando}
+                    {...form.register(`parcelas.${indice}.valor`)}
+                  />
+                );
+              }
+              // dataVencimento
+              return (
+                <Input
+                  id={`lan-parcela-venc-${indice}`}
+                  aria-label="Vencimento"
+                  type="date"
+                  disabled={salvando}
+                  {...form.register(`parcelas.${indice}.dataVencimento`)}
+                />
               );
-            })}
-          </div>
-
-          <IndicadorSoma
-            soma={somaParcelas}
-            valor={valorAlvo}
-            rotulo="Soma das parcelas"
+            }}
+            rodape={
+              <IndicadorSoma
+                soma={somaParcelas}
+                valor={valorAlvo}
+                rotulo="Soma das parcelas"
+              />
+            }
           />
-        </div>
+        </SecaoFormulario>
 
-        {/* Rateio por centro de custo */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-detalhe font-semibold">
-                Rateio por centro de custo
-              </h3>
-              <p className="text-legenda text-muted-foreground">
-                Opcional. Quando preenchido, a soma precisa bater com o valor.
-              </p>
-            </div>
+        {/* Rateio por centro de custo: colunas homogêneas (centro/valor),
+            mesmo padrão de tabela de itens usado na OC. */}
+        <SecaoFormulario
+          titulo="Rateio por centro de custo"
+          acao={
             <Button
               type="button"
               variant="outline"
@@ -490,7 +514,11 @@ export function LancamentoFormDrawer({
               <Plus />
               Adicionar rateio
             </Button>
-          </div>
+          }
+        >
+          <p className="text-legenda text-muted-foreground">
+            Opcional. Quando preenchido, a soma precisa bater com o valor.
+          </p>
 
           {typeof erroRateios?.message === "string" ? (
             <p className="text-legenda text-destructive" role="alert">
@@ -499,80 +527,70 @@ export function LancamentoFormDrawer({
           ) : null}
 
           {rateios.fields.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {rateios.fields.map((field, indice) => {
+            <TabelaItens
+              colunas={COLUNAS_RATEIO}
+              linhas={rateios.fields}
+              chaveLinha={(linha) => linha.id}
+              onRemover={(indice) => rateios.remove(indice)}
+              podeRemover={() => !salvando}
+              rotuloRemover="Remover rateio"
+              erroCelula={(chave, indice) => {
                 const errosRateio = form.formState.errors.rateios?.[indice];
-                return (
-                  <div
-                    key={field.id}
-                    className="grid grid-cols-[2fr_1fr_auto] items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5"
-                  >
-                    <CampoFormulario
-                      id={`lan-rateio-cc-${indice}`}
-                      rotulo="Centro de custo"
-                      obrigatorio
-                      erro={errosRateio?.centroCustoId?.message}
-                    >
-                      <Combobox
-                        valor={form.watch(`rateios.${indice}.centroCustoId`)}
-                        onValorChange={(valor) =>
-                          form.setValue(
-                            `rateios.${indice}.centroCustoId`,
-                            valor,
-                            { shouldValidate: true },
-                          )
-                        }
-                        opcoes={centrosCusto.map((centro) => ({
-                          valor: centro.id,
-                          rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
-                        }))}
-                        placeholder="Selecione"
-                        disabled={salvando}
-                        id={`lan-rateio-cc-${indice}`}
-                      />
-                    </CampoFormulario>
-                    <CampoFormulario
-                      id={`lan-rateio-valor-${indice}`}
-                      rotulo="Valor"
-                      obrigatorio
-                      erro={errosRateio?.valor?.message}
-                    >
-                      <Input
-                        id={`lan-rateio-valor-${indice}`}
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        className="tabular-nums text-right"
-                        disabled={salvando}
-                        {...form.register(`rateios.${indice}.valor`)}
-                      />
-                    </CampoFormulario>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="mt-7"
-                      aria-label="Remover rateio"
+                if (chave === "centroCusto")
+                  return errosRateio?.centroCustoId?.message;
+                if (chave === "valor") return errosRateio?.valor?.message;
+                return undefined;
+              }}
+              renderCelula={(chave, indice) => {
+                if (chave === "centroCusto") {
+                  return (
+                    <Combobox
+                      valor={form.watch(`rateios.${indice}.centroCustoId`)}
+                      onValorChange={(valor) =>
+                        form.setValue(
+                          `rateios.${indice}.centroCustoId`,
+                          valor,
+                          { shouldValidate: true },
+                        )
+                      }
+                      opcoes={centrosCusto.map((centro) => ({
+                        valor: centro.id,
+                        rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
+                      }))}
+                      placeholder="Selecione"
                       disabled={salvando}
-                      onClick={() => rateios.remove(indice)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
+                      ariaLabel="Centro de custo"
+                      id={`lan-rateio-cc-${indice}`}
+                    />
+                  );
+                }
+                // valor
+                return (
+                  <Input
+                    id={`lan-rateio-valor-${indice}`}
+                    aria-label="Valor"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    className="tabular-nums text-right"
+                    disabled={salvando}
+                    {...form.register(`rateios.${indice}.valor`)}
+                  />
                 );
-              })}
-
-              <IndicadorSoma
-                soma={somaRateios}
-                valor={valorAlvo}
-                rotulo="Soma do rateio"
-              />
-            </div>
+              }}
+              rodape={
+                <IndicadorSoma
+                  soma={somaRateios}
+                  valor={valorAlvo}
+                  rotulo="Soma do rateio"
+                />
+              }
+            />
           ) : (
             <p className="text-detalhe text-muted-foreground">
               Sem rateio. O custo fica sem distribuição por centro de custo.
             </p>
           )}
-        </div>
+        </SecaoFormulario>
       </form>
     </FormDrawer>
   );
