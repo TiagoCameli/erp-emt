@@ -8,7 +8,6 @@ import {
   FolderOpen,
   LayoutDashboard,
   LogOut,
-  Search,
   Settings,
   ShoppingCart,
   Users,
@@ -24,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const MAPA_ICONES: Record<string, LucideIcon> = {
@@ -113,21 +111,11 @@ export function AppShell({ usuario, modulos, children, onSair }: AppShellProps) 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Topo */}
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-4">
-          <div className="relative hidden md:block">
-            <Search
-              className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              disabled
-              placeholder="Buscar (em breve)"
-              className="h-8 w-64 pl-8"
-              aria-label="Busca global"
-            />
-          </div>
+          {/* Busca global escondida até existir de verdade (evita parecer quebrado). */}
           <div className="md:hidden">
             <span className="font-semibold">EMT</span>
           </div>
+          <div className="hidden md:block" aria-hidden="true" />
           <DropdownMenu>
             <DropdownMenuTrigger
               className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
