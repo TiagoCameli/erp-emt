@@ -10,6 +10,7 @@ export * from "./combobox";
 export * from "./combobox-criavel";
 export * from "./data-table";
 export * from "./form-drawer";
+export * from "./campo-formulario";
 export * from "./confirm-dialog";
 export * from "./approval-bar";
 export * from "./filter-bar";
