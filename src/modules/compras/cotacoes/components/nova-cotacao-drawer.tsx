@@ -61,6 +61,7 @@ export function NovaCotacaoDrawer({
       onAbertoChange={onAbertoChange}
       titulo="Nova cotação"
       descricao="Os fornecedores e preços você adiciona no detalhe"
+      larguraClassName="sm:max-w-[95vw]"
       rodape={
         <>
           <Button
