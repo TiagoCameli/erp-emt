@@ -126,6 +126,13 @@ export const RECURSOS = [
     rota: "/cadastros/categorias",
     acoes: CRUD,
   },
+  {
+    id: "cadastros.condicoes-pagamento",
+    nome: "Condições de pagamento",
+    modulo: "cadastros",
+    rota: "/cadastros/condicoes-pagamento",
+    acoes: CRUD,
+  },
   // Compras
   {
     id: "compras.cotacoes",
