@@ -26,13 +26,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/canonicos/combobox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -302,27 +296,19 @@ export function DataTable<TData>({
             <span className="text-detalhe text-muted-foreground">
               Linhas por página
             </span>
-            <Select
-              value={String(tamanhoPagina)}
-              onValueChange={(valor) =>
+            <Combobox
+              valor={String(tamanhoPagina)}
+              onValorChange={(valor) =>
                 aoMudarPaginacao({ pageIndex: 0, pageSize: Number(valor) })
               }
-            >
-              <SelectTrigger
-                size="sm"
-                className="w-[4.5rem] text-detalhe"
-                aria-label="Linhas por página"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TAMANHOS_PAGINA.map((tamanho) => (
-                  <SelectItem key={tamanho} value={String(tamanho)}>
-                    {tamanho}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              opcoes={TAMANHOS_PAGINA.map((tamanho) => ({
+                valor: String(tamanho),
+                rotulo: String(tamanho),
+              }))}
+              size="sm"
+              className="w-[4.5rem] text-detalhe"
+              ariaLabel="Linhas por página"
+            />
           </div>
           <div className="flex items-center gap-1">
             <Button

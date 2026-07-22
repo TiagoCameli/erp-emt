@@ -5,13 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Combobox } from "@/components/canonicos/combobox";
 import { cn } from "@/lib/utils";
 
 /** Sentinela interna do Radix Select para a opção "todos" (valor vazio é proibido). */
@@ -85,24 +79,16 @@ export function FiltroSelect({
   todosRotulo = "Todos",
 }: FiltroSelectProps) {
   return (
-    <Select
-      value={valor === "" ? VALOR_TODOS : valor}
-      onValueChange={(novoValor) =>
+    <Combobox
+      valor={valor === "" ? VALOR_TODOS : valor}
+      onValorChange={(novoValor) =>
         onValorChange(novoValor === VALOR_TODOS ? "" : novoValor)
       }
-    >
-      <SelectTrigger size="sm" className="h-8 w-fit gap-1.5 text-detalhe">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={VALOR_TODOS}>{todosRotulo}</SelectItem>
-        {opcoes.map((opcao) => (
-          <SelectItem key={opcao.valor} value={opcao.valor}>
-            {opcao.rotulo}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      opcoes={[{ valor: VALOR_TODOS, rotulo: todosRotulo }, ...opcoes]}
+      placeholder={placeholder ?? todosRotulo}
+      size="sm"
+      className="h-8 w-fit gap-1.5 text-detalhe"
+    />
   );
 }
 
