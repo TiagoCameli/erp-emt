@@ -20,10 +20,15 @@ export interface ComboboxCriavelProps {
  * "limpar". Wrapper fino sobre Combobox para os campos que guardam o próprio
  * texto (ex: condição de pagamento).
  */
-export function ComboboxCriavel({ opcoes, ...props }: ComboboxCriavelProps) {
+export function ComboboxCriavel({
+  opcoes,
+  buscaPlaceholder = "Buscar ou digitar para criar",
+  ...props
+}: ComboboxCriavelProps) {
   return (
     <Combobox
       {...props}
+      buscaPlaceholder={buscaPlaceholder}
       opcoes={opcoes.map((opcao) => ({ valor: opcao, rotulo: opcao }))}
       limpavel
     />
