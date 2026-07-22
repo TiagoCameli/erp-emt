@@ -13,6 +13,7 @@ export * from "./form-drawer";
 export * from "./campo-formulario";
 export * from "./linha-campos";
 export * from "./secao-formulario";
+export * from "./tabela-itens";
 export * from "./confirm-dialog";
 export * from "./approval-bar";
 export * from "./filter-bar";
