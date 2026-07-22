@@ -2,14 +2,14 @@
 
 import type { ReactNode } from 'react';
 
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 export interface FormDrawerProps {
@@ -22,6 +22,11 @@ export interface FormDrawerProps {
   larguraClassName?: string;
 }
 
+/**
+ * Modal de formulário canônico: abre CENTRALIZADO na tela. Cabeçalho fixo,
+ * corpo rolável (o modal não passa de 90vh) e rodapé fixo com as ações.
+ * Mantém a API antiga (nome FormDrawer) para não mexer nos consumidores.
+ */
 export function FormDrawer({
   aberto,
   onAbertoChange,
@@ -32,20 +37,22 @@ export function FormDrawer({
   larguraClassName,
 }: FormDrawerProps) {
   return (
-    <Sheet open={aberto} onOpenChange={onAbertoChange}>
-      <SheetContent
-        side="right"
-        className={cn('flex w-full flex-col gap-0 p-0', larguraClassName ?? 'sm:max-w-xl')}
+    <Dialog open={aberto} onOpenChange={onAbertoChange}>
+      <DialogContent
+        className={cn(
+          'flex max-h-[90vh] w-full flex-col gap-0 overflow-hidden p-0',
+          larguraClassName ?? 'sm:max-w-xl',
+        )}
         {...(descricao ? {} : { 'aria-describedby': undefined })}
       >
-        <SheetHeader className="gap-1 border-b border-border px-6 py-4">
-          <SheetTitle className="text-secao font-semibold">{titulo}</SheetTitle>
+        <DialogHeader className="gap-1 space-y-0 border-b border-border px-6 py-4 text-left">
+          <DialogTitle className="text-secao font-semibold">{titulo}</DialogTitle>
           {descricao ? (
-            <SheetDescription className="text-detalhe text-muted-foreground">
+            <DialogDescription className="text-detalhe text-muted-foreground">
               {descricao}
-            </SheetDescription>
+            </DialogDescription>
           ) : null}
-        </SheetHeader>
+        </DialogHeader>
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="px-6 py-5">{children}</div>
@@ -56,7 +63,7 @@ export function FormDrawer({
             {rodape}
           </div>
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
