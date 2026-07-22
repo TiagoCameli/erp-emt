@@ -6,16 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  FormDrawer,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { criarPerfil } from "@/modules/administracao/perfis/actions";
@@ -89,52 +85,40 @@ export function NovoPerfilDrawer({
         </>
       }
     >
-      <Form {...form}>
-        <form
-          id={idFormulario}
-          onSubmit={form.handleSubmit(aoEnviar)}
-          className="space-y-4"
-          noValidate
+      <form
+        id={idFormulario}
+        onSubmit={form.handleSubmit(aoEnviar)}
+        className={classesFormulario}
+        noValidate
+      >
+        <CampoFormulario
+          id="perfil-nome"
+          rotulo="Nome"
+          erro={form.formState.errors.nome?.message}
         >
-          <FormField
-            control={form.control}
-            name="nome"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Ex: Comprador, Financeiro, Engenharia"
-                    disabled={enviando}
-                    autoFocus
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+          <Input
+            id="perfil-nome"
+            placeholder="Ex: Comprador, Financeiro, Engenharia"
+            disabled={enviando}
+            autoFocus
+            {...form.register("nome")}
           />
+        </CampoFormulario>
 
-          <FormField
-            control={form.control}
-            name="descricao"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descrição</FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="O que esse perfil pode fazer no sistema"
-                    rows={3}
-                    disabled={enviando}
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        <CampoFormulario
+          id="perfil-descricao"
+          rotulo="Descrição"
+          erro={form.formState.errors.descricao?.message}
+        >
+          <Textarea
+            id="perfil-descricao"
+            placeholder="O que esse perfil pode fazer no sistema"
+            rows={3}
+            disabled={enviando}
+            {...form.register("descricao")}
           />
-        </form>
-      </Form>
+        </CampoFormulario>
+      </form>
     </FormDrawer>
   );
 }

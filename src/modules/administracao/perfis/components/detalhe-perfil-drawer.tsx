@@ -6,16 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { ConfirmDialog, FormDrawer } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  ConfirmDialog,
+  FormDrawer,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -180,65 +177,55 @@ export function DetalhePerfilDrawer({
           </>
         }
       >
-        <Form {...form}>
-          <form
-            id={idFormulario}
-            onSubmit={form.handleSubmit(aoSalvar)}
-            className="space-y-4"
-            noValidate
+        <form
+          id={idFormulario}
+          onSubmit={form.handleSubmit(aoSalvar)}
+          className={classesFormulario}
+          noValidate
+        >
+          <CampoFormulario
+            id="perfil-detalhe-nome"
+            rotulo="Nome"
+            erro={form.formState.errors.nome?.message}
           >
-            <FormField
-              control={form.control}
-              name="nome"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome</FormLabel>
-                  <FormControl>
-                    <Input disabled={!podeEditar || salvando} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <Input
+              id="perfil-detalhe-nome"
+              disabled={!podeEditar || salvando}
+              {...form.register("nome")}
             />
+          </CampoFormulario>
 
-            <FormField
-              control={form.control}
-              name="descricao"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Descrição</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      rows={3}
-                      placeholder="O que esse perfil pode fazer no sistema"
-                      disabled={!podeEditar || salvando}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <CampoFormulario
+            id="perfil-detalhe-descricao"
+            rotulo="Descrição"
+            erro={form.formState.errors.descricao?.message}
+          >
+            <Textarea
+              id="perfil-detalhe-descricao"
+              rows={3}
+              placeholder="O que esse perfil pode fazer no sistema"
+              disabled={!podeEditar || salvando}
+              {...form.register("descricao")}
             />
+          </CampoFormulario>
 
-            <Separator className="my-5" />
+          <Separator className="my-5" />
 
-            <section className="space-y-2">
-              <div>
-                <h3 className="text-corpo font-medium">Permissões do perfil</h3>
-                <p className="text-detalhe text-muted-foreground">
-                  Salvar a matriz não muda quem já usa o perfil. Para
-                  atualizar esses usuários, aplique o perfil de novo na aba
-                  Usuários.
-                </p>
-              </div>
-              <MatrizPermissoesPerfil
-                selecionadas={selecionadas}
-                onAlternar={alternarPermissao}
-                desabilitada={!podeEditar || salvando}
-              />
-            </section>
-          </form>
-        </Form>
+          <section className="space-y-2">
+            <div>
+              <h3 className="text-corpo font-medium">Permissões do perfil</h3>
+              <p className="text-detalhe text-muted-foreground">
+                Salvar a matriz não muda quem já usa o perfil. Para atualizar
+                esses usuários, aplique o perfil de novo na aba Usuários.
+              </p>
+            </div>
+            <MatrizPermissoesPerfil
+              selecionadas={selecionadas}
+              onAlternar={alternarPermissao}
+              desabilitada={!podeEditar || salvando}
+            />
+          </section>
+        </form>
       </FormDrawer>
 
       <ConfirmDialog

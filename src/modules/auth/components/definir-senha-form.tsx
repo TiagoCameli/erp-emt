@@ -4,16 +4,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
+import { CampoFormulario, classesFormulario } from "@/components/canonicos";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { definirSenha } from "@/modules/auth/actions";
 import {
@@ -40,67 +33,55 @@ export function DefinirSenhaForm() {
   const enviando = form.formState.isSubmitting;
 
   return (
-    <Form {...form}>
-      <form
-        onSubmit={form.handleSubmit(aoEnviar)}
-        className="space-y-4"
-        noValidate
+    <form
+      onSubmit={form.handleSubmit(aoEnviar)}
+      className={classesFormulario}
+      noValidate
+    >
+      {erro ? (
+        <Alert variant="destructive">
+          <AlertDescription>{erro}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <CampoFormulario
+        id="definir-senha-senha"
+        rotulo="Nova senha"
+        erro={form.formState.errors.senha?.message}
       >
-        {erro ? (
-          <Alert variant="destructive">
-            <AlertDescription>{erro}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <FormField
-          control={form.control}
-          name="senha"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Nova senha</FormLabel>
-              <FormControl>
-                <Input
-                  type="password"
-                  autoComplete="new-password"
-                  disabled={enviando}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+        <Input
+          id="definir-senha-senha"
+          type="password"
+          autoComplete="new-password"
+          disabled={enviando}
+          {...form.register("senha")}
         />
+      </CampoFormulario>
 
-        <FormField
-          control={form.control}
-          name="confirmacao"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Confirme a senha</FormLabel>
-              <FormControl>
-                <Input
-                  type="password"
-                  autoComplete="new-password"
-                  disabled={enviando}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+      <CampoFormulario
+        id="definir-senha-confirmacao"
+        rotulo="Confirme a senha"
+        erro={form.formState.errors.confirmacao?.message}
+      >
+        <Input
+          id="definir-senha-confirmacao"
+          type="password"
+          autoComplete="new-password"
+          disabled={enviando}
+          {...form.register("confirmacao")}
         />
+      </CampoFormulario>
 
-        <Button type="submit" className="w-full" disabled={enviando}>
-          {enviando ? (
-            <>
-              <LoaderCircle className="animate-spin" />
-              Salvando...
-            </>
-          ) : (
-            "Definir senha"
-          )}
-        </Button>
-      </form>
-    </Form>
+      <Button type="submit" className="w-full" disabled={enviando}>
+        {enviando ? (
+          <>
+            <LoaderCircle className="animate-spin" />
+            Salvando...
+          </>
+        ) : (
+          "Definir senha"
+        )}
+      </Button>
+    </form>
   );
 }

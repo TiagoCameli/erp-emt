@@ -7,19 +7,15 @@ import { Copy, LoaderCircle, TriangleAlert, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
-import { Combobox, FormDrawer } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+} from "@/components/canonicos";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { convidarUsuario } from "@/modules/administracao/usuarios/actions";
 import { convidarUsuarioSchema } from "@/modules/administracao/usuarios/schemas";
 import type { PerfilOpcao } from "@/modules/administracao/usuarios/queries";
@@ -161,76 +157,63 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
             </AlertDescription>
           </Alert>
         ) : (
-          <Form {...form}>
-            <form
-              id={ID_FORM}
-              onSubmit={form.handleSubmit(aoEnviar)}
-              className="space-y-4"
-              noValidate
+          <form
+            id={ID_FORM}
+            onSubmit={form.handleSubmit(aoEnviar)}
+            className={classesFormulario}
+            noValidate
+          >
+            <CampoFormulario
+              id="convite-nome"
+              rotulo="Nome"
+              erro={form.formState.errors.nome?.message}
             >
-              <FormField
-                control={form.control}
-                name="nome"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome</FormLabel>
-                    <FormControl>
-                      <Input
-                        autoComplete="off"
-                        placeholder="Nome completo"
-                        disabled={enviando}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+              <Input
+                id="convite-nome"
+                autoComplete="off"
+                placeholder="Nome completo"
+                disabled={enviando}
+                {...form.register("nome")}
               />
+            </CampoFormulario>
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        autoComplete="off"
-                        placeholder="pessoa@emtconstrutora.com"
-                        disabled={enviando}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            <CampoFormulario
+              id="convite-email"
+              rotulo="Email"
+              erro={form.formState.errors.email?.message}
+            >
+              <Input
+                id="convite-email"
+                type="email"
+                autoComplete="off"
+                placeholder="pessoa@emtconstrutora.com"
+                disabled={enviando}
+                {...form.register("email")}
               />
+            </CampoFormulario>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="perfil-convite">Perfil (opcional)</Label>
-                <Combobox
-                  valor={perfilId}
-                  onValorChange={setPerfilId}
-                  opcoes={[
-                    { valor: SEM_PERFIL, rotulo: "Sem perfil" },
-                    ...perfis.map((perfil) => ({
-                      valor: perfil.id,
-                      rotulo: perfil.nome,
-                    })),
-                  ]}
-                  placeholder="Sem perfil"
-                  disabled={enviando}
-                  id="perfil-convite"
-                  className="w-full"
-                />
-                <p className="text-detalhe text-muted-foreground">
-                  O perfil aplica um conjunto pronto de permissões. Dá para
-                  ajustar depois na matriz do usuário.
-                </p>
-              </div>
-            </form>
-          </Form>
+            <CampoFormulario
+              id="perfil-convite"
+              rotulo="Perfil (opcional)"
+              ajuda="O perfil aplica um conjunto pronto de permissões. Dá para ajustar depois na matriz do usuário."
+            >
+              <Combobox
+                valor={perfilId}
+                onValorChange={setPerfilId}
+                opcoes={[
+                  { valor: SEM_PERFIL, rotulo: "Sem perfil" },
+                  ...perfis.map((perfil) => ({
+                    valor: perfil.id,
+                    rotulo: perfil.nome,
+                  })),
+                ]}
+                placeholder="Sem perfil"
+                disabled={enviando}
+                id="perfil-convite"
+                className="w-full"
+              />
+            </CampoFormulario>
+          </form>
         )}
       </FormDrawer>
     </>

@@ -6,26 +6,29 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, FormDrawer, StatusBadge } from "@/components/canonicos";
-import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  SelectAtivo,
+  StatusBadge,
+} from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import {
   aplicarPerfilUsuario,
   editarUsuario,
 } from "@/modules/administracao/usuarios/actions";
-import { editarUsuarioSchema, type EditarUsuarioInput } from "@/modules/administracao/usuarios/schemas";
-import type { PerfilOpcao, UsuarioLista } from "@/modules/administracao/usuarios/queries";
+import {
+  editarUsuarioSchema,
+  type EditarUsuarioInput,
+} from "@/modules/administracao/usuarios/schemas";
+import type {
+  PerfilOpcao,
+  UsuarioLista,
+} from "@/modules/administracao/usuarios/queries";
 import { MatrizPermissoes } from "./matriz-permissoes";
 
 export interface DetalheUsuarioDrawerProps {
@@ -113,67 +116,52 @@ export function DetalheUsuarioDrawer({
 
         {podeEditar ? (
           <>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(aoSalvar)}
-                className="space-y-4"
-                noValidate
+            <form
+              onSubmit={form.handleSubmit(aoSalvar)}
+              className={classesFormulario}
+              noValidate
+            >
+              <CampoFormulario
+                id="usuario-nome"
+                rotulo="Nome"
+                erro={form.formState.errors.nome?.message}
               >
-                <FormField
-                  control={form.control}
-                  name="nome"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome</FormLabel>
-                      <FormControl>
-                        <Input disabled={salvando} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                <Input
+                  id="usuario-nome"
+                  disabled={salvando}
+                  {...form.register("nome")}
                 />
+              </CampoFormulario>
 
-                <FormField
-                  control={form.control}
-                  name="ativo"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
-                      <div>
-                        <FormLabel>Ativo</FormLabel>
-                        <p className="text-detalhe text-muted-foreground">
-                          Usuário inativo não entra no sistema
-                        </p>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          disabled={salvando}
-                        />
-                      </FormControl>
-                    </FormItem>
+              <SelectAtivo
+                value={form.watch("ativo")}
+                onChange={(valor) => form.setValue("ativo", valor)}
+                disabled={salvando}
+                ajuda="Usuário inativo não entra no sistema"
+                className="rounded-md border border-border px-3 py-2.5"
+              />
+
+              <div className="flex justify-end">
+                <Button type="submit" size="sm" disabled={salvando}>
+                  {salvando ? (
+                    <>
+                      <LoaderCircle className="animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    "Salvar alterações"
                   )}
-                />
-
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm" disabled={salvando}>
-                    {salvando ? (
-                      <>
-                        <LoaderCircle className="animate-spin" />
-                        Salvando...
-                      </>
-                    ) : (
-                      "Salvar alterações"
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </Form>
+                </Button>
+              </div>
+            </form>
 
             <Separator />
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="aplicar-perfil">Aplicar perfil</Label>
+            <CampoFormulario
+              id="aplicar-perfil"
+              rotulo="Aplicar perfil"
+              ajuda="Aplicar um perfil substitui a matriz individual pelo template do perfil"
+            >
               <div className="flex items-center gap-2">
                 <Combobox
                   valor={perfilSelecionado}
@@ -204,11 +192,7 @@ export function DetalheUsuarioDrawer({
                   )}
                 </Button>
               </div>
-              <p className="text-detalhe text-muted-foreground">
-                Aplicar um perfil substitui a matriz individual pelo template do
-                perfil
-              </p>
-            </div>
+            </CampoFormulario>
 
             <Separator />
           </>
