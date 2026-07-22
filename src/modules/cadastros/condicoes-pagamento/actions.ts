@@ -23,7 +23,7 @@ const uuidSchema = z.uuid();
 const ERRO_DESCRICAO_DUPLICADA =
   "Já existe uma condição de pagamento com esta descrição";
 
-/** Payload das parcelas no formato esperado pela RPC salvar_condicao_parcelas. */
+/** Payload das parcelas no formato esperado pela RPC salvar_condicao. */
 function parcelasParaRpc(parcelas: CondicaoPagamentoInput["parcelas"]) {
   return parcelas.map((parcela) => ({
     dias_offset: parcela.diasOffset,
@@ -32,11 +32,14 @@ function parcelasParaRpc(parcelas: CondicaoPagamentoInput["parcelas"]) {
 }
 
 /**
- * Cria uma condição de pagamento com suas parcelas. O cabeçalho (descrição,
- * ativo) vai direto na tabela; as parcelas só são gravadas pela RPC
- * salvar_condicao_parcelas (security definer) — não há grant de INSERT em
- * condicao_parcelas para o client, e a RPC valida de novo que a soma fecha
- * em 100.
+ * Cria uma condição de pagamento com suas parcelas. Cabeçalho (descrição,
+ * ativo) e parcelas são gravados numa transação só pela RPC
+ * salvar_condicao (security definer): não há grant de INSERT/DELETE direto
+ * em condicao_parcelas nem de DELETE em condicoes_pagamento para o client,
+ * e a RPC valida de novo que a soma dos percentuais fecha em 100. Como
+ * tudo roda na mesma transação da chamada, uma falha na validação (ou na
+ * checagem de permissão) desfaz o cabeçalho junto — nunca fica uma
+ * condição órfã sem parcelas.
  */
 export async function criarCondicao(
   dados: CondicaoPagamentoInput,
@@ -53,52 +56,33 @@ export async function criarCondicao(
   }
 
   const supabase = await createClient();
-  const { data: condicao, error } = await supabase
-    .from(TABELA)
-    .insert({
-      descricao: validado.data.descricao,
-      ativo: validado.data.ativo,
-    })
-    .select("id")
-    .single();
+  const { data: id, error } = await supabase.rpc("salvar_condicao", {
+    p_id: null,
+    p_descricao: validado.data.descricao,
+    p_ativo: validado.data.ativo,
+    p_parcelas: parcelasParaRpc(validado.data.parcelas),
+  });
 
-  if (error || !condicao) {
+  if (error || !id) {
     if (error?.code === "23505") {
       return { erro: ERRO_DESCRICAO_DUPLICADA };
     }
     return erroAcao(
       "cadastros.condicoes-pagamento.criarCondicao",
       error,
-      "Não foi possível salvar a condição de pagamento. Tente novamente",
-    );
-  }
-
-  const { error: erroParcelas } = await supabase.rpc(
-    "salvar_condicao_parcelas",
-    {
-      p_condicao_id: condicao.id,
-      p_parcelas: parcelasParaRpc(validado.data.parcelas),
-    },
-  );
-
-  if (erroParcelas) {
-    // Desfaz o cabeçalho para não deixar uma condição sem nenhuma parcela.
-    await supabase.from(TABELA).delete().eq("id", condicao.id);
-    return erroAcao(
-      "cadastros.condicoes-pagamento.criarCondicao",
-      erroParcelas,
-      erroParcelas.message ||
-        "Não foi possível salvar as parcelas. Tente novamente",
+      error?.message ||
+        "Não foi possível salvar a condição de pagamento. Tente novamente",
     );
   }
 
   revalidatePath(ROTA);
-  return { ok: true, id: condicao.id };
+  return { ok: true, id };
 }
 
 /**
  * Edita a descrição/status e substitui por inteiro as parcelas de uma
- * condição existente (a RPC apaga e reinsere numa transação).
+ * condição existente. Cabeçalho e parcelas são gravados numa transação só
+ * pela RPC salvar_condicao (mesma usada em criarCondicao).
  */
 export async function editarCondicao(
   id: string,
@@ -119,13 +103,12 @@ export async function editarCondicao(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from(TABELA)
-    .update({
-      descricao: validado.data.descricao,
-      ativo: validado.data.ativo,
-    })
-    .eq("id", idValido.data);
+  const { error } = await supabase.rpc("salvar_condicao", {
+    p_id: idValido.data,
+    p_descricao: validado.data.descricao,
+    p_ativo: validado.data.ativo,
+    p_parcelas: parcelasParaRpc(validado.data.parcelas),
+  });
 
   if (error) {
     if (error.code === "23505") {
@@ -134,24 +117,8 @@ export async function editarCondicao(
     return erroAcao(
       "cadastros.condicoes-pagamento.editarCondicao",
       error,
-      "Não foi possível salvar a condição de pagamento. Tente novamente",
-    );
-  }
-
-  const { error: erroParcelas } = await supabase.rpc(
-    "salvar_condicao_parcelas",
-    {
-      p_condicao_id: idValido.data,
-      p_parcelas: parcelasParaRpc(validado.data.parcelas),
-    },
-  );
-
-  if (erroParcelas) {
-    return erroAcao(
-      "cadastros.condicoes-pagamento.editarCondicao",
-      erroParcelas,
-      erroParcelas.message ||
-        "Não foi possível salvar as parcelas. Tente novamente",
+      error.message ||
+        "Não foi possível salvar a condição de pagamento. Tente novamente",
     );
   }
 

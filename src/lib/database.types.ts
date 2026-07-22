@@ -2330,6 +2330,15 @@ export type Database = {
         }[]
       }
       proximo_numero_documento: { Args: { p_tipo: string }; Returns: string }
+      salvar_condicao: {
+        Args: {
+          p_ativo: boolean
+          p_descricao: string
+          p_id: string | null
+          p_parcelas: Json
+        }
+        Returns: string
+      }
       salvar_condicao_parcelas: {
         Args: { p_condicao_id: string; p_parcelas: Json }
         Returns: undefined
