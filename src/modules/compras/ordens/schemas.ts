@@ -2,7 +2,9 @@ import { z } from "zod";
 
 /**
  * Status de ordem de compra, igual ao check do banco. O app só transita
- * rascunho > pendente_aprovacao > aprovado/rejeitado e cancelado.
+ * rascunho > pendente_aprovacao > aprovado/rejeitado e cancelado. `pago`
+ * é cascata automática (banco) quando o lançamento da OC quita todas as
+ * parcelas (Bug #5 QA) — não é uma transição que a UI dispara.
  */
 export const STATUS_OC = [
   "rascunho",
@@ -11,6 +13,7 @@ export const STATUS_OC = [
   "rejeitado",
   "cancelado",
   "recebido",
+  "pago",
 ] as const;
 
 export type StatusOcSchema = (typeof STATUS_OC)[number];

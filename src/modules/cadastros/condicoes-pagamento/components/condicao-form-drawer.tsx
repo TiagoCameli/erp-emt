@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { criarCondicao, editarCondicao } from "@/modules/cadastros/condicoes-pagamento/actions";
+import { dividirPercentualIgual } from "@/modules/cadastros/condicoes-pagamento/calculo";
 import type { CondicaoLista } from "@/modules/cadastros/condicoes-pagamento/queries";
 import {
   condicaoPagamentoSchema,
@@ -56,6 +57,7 @@ function valoresIniciais(
 }
 
 const formatadorSoma = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
@@ -111,6 +113,28 @@ export function CondicaoFormDrawer({
 
   const salvando = form.formState.isSubmitting;
 
+  /** Redistribui igualmente o percentual entre as parcelas 0..quantidade-1. */
+  function redistribuirPercentualIgual(quantidade: number) {
+    dividirPercentualIgual(quantidade).forEach((percentual, indice) => {
+      form.setValue(`parcelas.${indice}.percentual`, percentual, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    });
+  }
+
+  /** Adiciona uma parcela e redivide o percentual igualmente entre todas. */
+  function aoAdicionarParcela() {
+    adicionarParcela(parcelaVazia());
+    redistribuirPercentualIgual(parcelas.length + 1);
+  }
+
+  /** Remove a parcela do índice e redivide o percentual entre as restantes. */
+  function aoRemoverParcela(indice: number) {
+    removerParcela(indice);
+    redistribuirPercentualIgual(parcelas.length - 1);
+  }
+
   // Sincroniza o formulário com a condição ao abrir.
   React.useEffect(() => {
     if (!aberto) return;
@@ -140,8 +164,8 @@ export function CondicaoFormDrawer({
     (acc, parcela) => acc + (Number(parcela?.percentual) || 0),
     0,
   );
-  const somaFechada =
-    Math.abs(somaPercentual - 100) <= TOLERANCIA_SOMA_PERCENTUAL;
+  const diferencaPercentual = 100 - somaPercentual;
+  const somaFechada = Math.abs(diferencaPercentual) <= TOLERANCIA_SOMA_PERCENTUAL;
 
   const erroParcelas = form.formState.errors.parcelas;
   const mensagemErroParcelas =
@@ -219,7 +243,7 @@ export function CondicaoFormDrawer({
             colunas={COLUNAS_PARCELA}
             linhas={parcelas}
             chaveLinha={(linha) => linha.id}
-            onRemover={(indice) => removerParcela(indice)}
+            onRemover={(indice) => aoRemoverParcela(indice)}
             podeRemover={() => !salvando && parcelas.length > 1}
             rotuloRemover="Remover parcela"
             erroCelula={(chave, indice) => {
@@ -276,7 +300,7 @@ export function CondicaoFormDrawer({
                   variant="outline"
                   size="sm"
                   disabled={salvando}
-                  onClick={() => adicionarParcela(parcelaVazia())}
+                  onClick={aoAdicionarParcela}
                 >
                   <Plus />
                   Adicionar parcela
@@ -288,6 +312,13 @@ export function CondicaoFormDrawer({
                   )}
                 >
                   Soma das parcelas: {formatadorSoma.format(somaPercentual)}%
+                  {!somaFechada && (
+                    <>
+                      {" "}
+                      — {diferencaPercentual > 0 ? "faltam" : "sobra"}{" "}
+                      {formatadorSoma.format(Math.abs(diferencaPercentual))}%
+                    </>
+                  )}
                 </p>
               </div>
             }

@@ -2245,6 +2245,10 @@ export type Database = {
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: { Args: { p_parcela_id: string }; Returns: undefined }
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined }
+      fn_cancelar_ordem_compra: {
+        Args: { p_motivo: string; p_oc_id: string }
+        Returns: undefined
+      }
       fn_conciliar_transacao: {
         Args: { p_parcela_id: string; p_transacao_id: string }
         Returns: undefined

@@ -19,6 +19,19 @@ export function dividirValorPorParcelas(
   return valores.map((c) => c / 100);
 }
 
+/**
+ * Divide 100% igualmente entre n parcelas (2 casas); a última parcela absorve
+ * o resto do arredondamento para a soma fechar exatamente em 100.00.
+ */
+export function dividirPercentualIgual(n: number): number[] {
+  if (n <= 0) return [];
+  const centavos = Math.floor(10000 / n);
+  const percentuais = new Array(n).fill(centavos / 100);
+  const somaMenosUltima = centavos * (n - 1);
+  percentuais[n - 1] = (10000 - somaMenosUltima) / 100;
+  return percentuais;
+}
+
 /** Datas de vencimento = dataBase (ISO yyyy-mm-dd) + cada offset em dias. */
 export function datasParcelas(
   dataBaseISO: string,
