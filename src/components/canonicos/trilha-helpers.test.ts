@@ -46,12 +46,32 @@ describe("eventosDoAuditLog", () => {
     expect(e.descricao).not.toContain("→");
   });
 
-  it("situação em palavras", () => {
-    eventosDoAuditLog([reg({
-      dados_antes: { observacoes: "a" }, dados_depois: { observacoes: "a", status: "aprovado" },
+  it("situação sem case dedicado cai no fallback 'Situação: {label}' via mapa SITUACOES", () => {
+    const [e] = eventosDoAuditLog([reg({
+      dados_antes: {}, dados_depois: { status: "previsto" },
+    })], { entidade: "Lançamento", genero: "m" });
+    expect(e.titulo).toBe("Situação: Previsto");
+  });
+
+  it("campo visível que vira null mostra '—' na descrição", () => {
+    const [e] = eventosDoAuditLog([reg({
+      dados_antes: { numero_nf: "12345" }, dados_depois: { numero_nf: null },
     })], { entidade: "Ordem", genero: "f" });
-    // título já cobre status; aqui garantimos o mapa de situação
-    expect(eventosDoAuditLog([reg({ dados_antes: {}, dados_depois: { motivo_rejeicao: "x", status: "cancelado" } })], {})[0].titulo).toBe("Cancelada");
+    expect(e.descricao).toBe("Nota fiscal: —");
+  });
+
+  it("transição de situação no masculino usa título masculino", () => {
+    const [e] = eventosDoAuditLog([reg({
+      dados_antes: { status: "pendente_aprovacao" }, dados_depois: { status: "aprovado" },
+    })], { entidade: "Lançamento", genero: "m" });
+    expect(e.titulo).toBe("Aprovado");
+  });
+
+  it("sem opcoes (retrocompat): INSERT vira 'Registro criado' e DELETE vira 'Registro excluído'", () => {
+    const [ins] = eventosDoAuditLog([reg({ acao: "INSERT", dados_antes: null, dados_depois: { status: "rascunho" } })]);
+    expect(ins.titulo).toBe("Registro criado");
+    const [del] = eventosDoAuditLog([reg({ acao: "DELETE", dados_antes: { status: "rascunho" }, dados_depois: null })]);
+    expect(del.titulo).toBe("Registro excluído");
   });
 
   it("resolve FK pelo mapa nomes; oculta FK sem nome", () => {

@@ -183,7 +183,7 @@ export function eventosDoAuditLog(
 ): EventoTrilha[] {
   const nomes = opcoes?.nomes ?? {};
   const entidade = opcoes?.entidade ?? "Registro";
-  const genero = opcoes?.genero ?? "f";
+  const genero = opcoes?.genero ?? "m";
   return registros.map((r) => {
     const antes = ehObjetoJson(r.dados_antes) ? r.dados_antes : null;
     const depois = ehObjetoJson(r.dados_depois) ? r.dados_depois : null;
