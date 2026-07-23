@@ -21,7 +21,7 @@ export const ROTULO_STATUS_COTACAO = {
 
 export type StatusCotacao = keyof typeof ROTULO_STATUS_COTACAO;
 
-/** Status de ordem de compra: rascunho | pendente_aprovacao | aprovado | rejeitado | cancelado | recebido. */
+/** Status de ordem de compra: rascunho | pendente_aprovacao | aprovado | rejeitado | cancelado | recebido | pago. */
 export const ROTULO_STATUS_OC = {
   rascunho: { rotulo: "Rascunho", badge: "rascunho" },
   pendente_aprovacao: { rotulo: "Pendente de aprovação", badge: "pendente_aprovacao" },
@@ -29,6 +29,8 @@ export const ROTULO_STATUS_OC = {
   rejeitado: { rotulo: "Rejeitada", badge: "rejeitado" },
   cancelado: { rotulo: "Cancelada", badge: "cancelado" },
   recebido: { rotulo: "Recebida", badge: "recebido" },
+  // Bug #5 (QA): fecha o ciclo quando o lançamento da OC quita todas as parcelas.
+  pago: { rotulo: "Paga", badge: "pago" },
 } as const satisfies Record<string, InfoStatus>;
 
 export type StatusOC = keyof typeof ROTULO_STATUS_OC;
