@@ -32,6 +32,14 @@ function nomeFornecedor(
  * mais novo, para a fila priorizar o que vence primeiro. O filtro por tipo
  * a_pagar é feito via embed com `!inner` para descartar parcelas de
  * lançamentos a_receber.
+ *
+ * Defesa em profundidade do bug #4 do QA: também exclui parcelas cujo
+ * lançamento pai está `cancelado` (`lancamentos.status <> 'cancelado'`).
+ * Cancelar a OC já cascateia o cancelamento pro lançamento e pras parcelas
+ * não pagas (`fn_cancelar_ordem_compra`), então isso não deveria filtrar
+ * nada em condições normais — mas se alguma parcela escapar da cascata (ex:
+ * dado legado, outra origem de lançamento cancelado sem cascata), ela não
+ * aparece na fila nem infla o "Total a aprovar".
  */
 export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
   const supabase = await createClient();
@@ -41,12 +49,13 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     .select(
       `id, numero_parcela, valor, data_vencimento, lancamento_id,
        lancamentos!inner(
-         numero, descricao, tipo,
+         numero, descricao, tipo, status,
          fornecedores(razao_social, nome_fantasia)
        )`,
     )
     .eq("status", "pendente")
     .eq("lancamentos.tipo", "a_pagar")
+    .neq("lancamentos.status", "cancelado")
     .order("data_vencimento", { ascending: true, nullsFirst: false });
 
   if (error) {

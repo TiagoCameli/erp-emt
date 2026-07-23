@@ -385,7 +385,16 @@ export async function desaprovarOrdem(
   return { ok: true };
 }
 
-/** Cancela a OC, com motivo registrado para a auditoria. */
+/**
+ * Cancela a OC via RPC: marca a ordem cancelada e cascateia o cancelamento
+ * para o lançamento vinculado (origem='oc') e suas parcelas ainda não pagas
+ * (bug #4 do QA: cancelar só a OC deixava o lançamento/parcela ativos e a
+ * fila de aprovação de pagamentos, que lê `lancamento_parcelas`, mostrava
+ * parcela órfã de OC cancelada). `lancamentos`/`lancamento_parcelas` só têm
+ * grant de SELECT para `authenticated` — a cascata só é possível via RPC
+ * security definer. Erros de regra vêm da RPC com mensagem clara, repassada
+ * ao toast, no mesmo padrão de `desaprovarOrdem`.
+ */
 export async function cancelarOrdem(
   id: string,
   motivo: string,
@@ -401,36 +410,17 @@ export async function cancelarOrdem(
   if (motivoLimpo === "") return { erro: "Informe o motivo do cancelamento" };
 
   const supabase = await createClient();
-  const { data: atual, error: erroBusca } = await supabase
-    .from(TABELA)
-    .select("status")
-    .eq("id", idValido.data)
-    .single();
-
-  if (erroBusca || !atual) {
-    return erroAcao(
-      "compras.ordens.cancelarOrdem",
-      erroBusca,
-      "Ordem de compra não encontrada",
-    );
-  }
-  if (atual.status === "cancelado") {
-    return { erro: "A ordem já está cancelada" };
-  }
-  if (atual.status === "aprovado") {
-    return { erro: "Desaprove a ordem antes de cancelar" };
-  }
-
-  const { error } = await supabase
-    .from(TABELA)
-    .update({ status: "cancelado", motivo_rejeicao: motivoLimpo })
-    .eq("id", idValido.data);
+  const { error } = await supabase.rpc("fn_cancelar_ordem_compra", {
+    p_oc_id: idValido.data,
+    p_motivo: motivoLimpo,
+  });
 
   if (error) {
     return erroAcao(
       "compras.ordens.cancelarOrdem",
       error,
-      "Não foi possível cancelar a ordem de compra. Tente novamente",
+      error.message ||
+        "Não foi possível cancelar a ordem de compra. Tente novamente",
     );
   }
 
