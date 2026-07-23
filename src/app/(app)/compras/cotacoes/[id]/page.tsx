@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexos } from "@/modules/compras/_shared/anexos-actions";
 import { CotacaoDetalhe } from "@/modules/compras/cotacoes/components/cotacao-detalhe";
 import {
   buscarCotacao,
@@ -29,12 +30,14 @@ export default async function PaginaCotacaoDetalhe({
   const cotacao = await buscarCotacao(id);
   if (!cotacao) notFound();
 
-  const [fornecedores, insumos, trilha, condicoesPagamento] = await Promise.all([
-    listarFornecedores(),
-    listarInsumos(),
-    trilhaCotacao(id),
-    listarCondicoesPagamento(),
-  ]);
+  const [fornecedores, insumos, trilha, condicoesPagamento, anexosIniciais] =
+    await Promise.all([
+      listarFornecedores(),
+      listarInsumos(),
+      trilhaCotacao(id),
+      listarCondicoesPagamento(),
+      listarAnexos("cotacoes", id),
+    ]);
 
   const podeEditar = temPermissao(usuario, "compras.cotacoes", "editar");
 
@@ -58,6 +61,7 @@ export default async function PaginaCotacaoDetalhe({
         insumos={insumos}
         trilha={trilha}
         condicoesPagamento={condicoesPagamento}
+        anexosIniciais={anexosIniciais}
         podeEditar={podeEditar}
       />
     </>

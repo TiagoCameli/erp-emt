@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexos } from "@/modules/compras/_shared/anexos-actions";
 import { OrdemDetalheView } from "@/modules/compras/ordens/components/ordem-detalhe";
 import {
   buscarOrdem,
@@ -35,6 +36,7 @@ export default async function PaginaOrdemDetalhe({
     cotacoes,
     condicoesPagamento,
     parcelasCondicao,
+    anexosIniciais,
   ] = await Promise.all([
     trilhaOrdem(id),
     listarFornecedores(),
@@ -45,6 +47,7 @@ export default async function PaginaOrdemDetalhe({
     ordem.condicaoPagamentoId
       ? listarParcelasCondicao(ordem.condicaoPagamentoId)
       : Promise.resolve([]),
+    listarAnexos("ordens_compra", id),
   ]);
 
   const podeEditar = temPermissao(usuario, "compras.ordens", "editar");
@@ -62,6 +65,7 @@ export default async function PaginaOrdemDetalhe({
       cotacoes={cotacoes}
       condicoesPagamento={condicoesPagamento}
       parcelasCondicao={parcelasCondicao}
+      anexosIniciais={anexosIniciais}
       podeEditar={podeEditar}
       podeAprovar={podeAprovar}
       podeDesaprovar={podeDesaprovar}
