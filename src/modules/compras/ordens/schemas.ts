@@ -10,21 +10,46 @@ export const STATUS_OC = [
   "aprovado",
   "rejeitado",
   "cancelado",
+  "recebido",
 ] as const;
 
 export type StatusOcSchema = (typeof STATUS_OC)[number];
 
-/** Quantidade NUMERIC(14,3): positiva, no máximo 3 casas. */
+/**
+ * Quantas casas decimais um número tem, contando pela representação decimal
+ * (sem notação científica: os valores desta tela nunca chegam nessa faixa).
+ */
+function casasDecimais(valor: number): number {
+  const texto = valor.toString();
+  const ponto = texto.indexOf(".");
+  return ponto === -1 ? 0 : texto.length - ponto - 1;
+}
+
+/**
+ * Quantidade NUMERIC(14,3): positiva, no máximo 3 casas. A trava de casas é
+ * necessária porque o banco arredonda silenciosamente ao gravar na coluna
+ * (14,3): sem ela, uma entrada como 1.2345 seria aceita aqui e gravada como
+ * 1.235, divergindo do valor que o usuário digitou.
+ */
 const quantidadeSchema = z
   .number({ error: "Quantidade inválida" })
   .positive({ error: "A quantidade precisa ser maior que zero" })
-  .max(99999999999.999, { error: "Quantidade acima do permitido" });
+  .max(99999999999.999, { error: "Quantidade acima do permitido" })
+  .refine((valor) => casasDecimais(valor) <= 3, {
+    error: "A quantidade aceita no máximo 3 casas decimais",
+  });
 
-/** Preço unitário NUMERIC(14,2): não negativo, no máximo 2 casas. */
+/**
+ * Preço unitário NUMERIC(14,2): não negativo, no máximo 2 casas. Mesma razão
+ * da trava acima: a coluna (14,2) arredonda sem avisar.
+ */
 const precoSchema = z
   .number({ error: "Preço inválido" })
   .min(0, { error: "O preço não pode ser negativo" })
-  .max(999999999999.99, { error: "Preço acima do permitido" });
+  .max(999999999999.99, { error: "Preço acima do permitido" })
+  .refine((valor) => casasDecimais(valor) <= 2, {
+    error: "O preço aceita no máximo 2 casas decimais",
+  });
 
 /** Texto opcional: vazio vira undefined para não gravar string em branco. */
 function textoOpcional(maximo: number) {
@@ -49,7 +74,7 @@ export type OcItemInput = z.infer<typeof ocItemSchema>;
 /** Schema da OC validado no servidor (criar e editar). */
 export const ordemCompraSchema = z.object({
   fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
-  condicaoPagamento: textoOpcional(120),
+  condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
   cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
   dataEmissao: z
     .string()
@@ -64,9 +89,23 @@ export const ordemCompraSchema = z.object({
 export type OrdemCompraInput = z.infer<typeof ordemCompraSchema>;
 
 /**
+ * Casas decimais de um número digitado no form (string, vírgula ou ponto
+ * como separador). Contado sobre o texto, não sobre o número convertido:
+ * evita qualquer artefato de arredondamento de ponto flutuante na contagem.
+ */
+function casasDecimaisTexto(valor: string): number {
+  const normalizado = valor.replace(",", ".");
+  const ponto = normalizado.indexOf(".");
+  return ponto === -1 ? 0 : normalizado.length - ponto - 1;
+}
+
+/**
  * Insumo-linha no formulário (client), dentro de um grupo de centro de custo.
  * Quantidade e preço continuam como string para casar input/output do
  * react-hook-form; a coerção real acontece no submit antes de chamar a action.
+ * As travas de casas decimais espelham quantidadeSchema/precoSchema do
+ * servidor (mesma razão: o banco arredonda silenciosamente ao gravar), só
+ * que aqui já na tela, antes de bater no servidor.
  */
 export const ocInsumoFormSchema = z.object({
   insumoId: z.uuid({ error: "Selecione o insumo" }),
@@ -79,7 +118,10 @@ export const ocInsumoFormSchema = z.object({
         return valor !== "" && !Number.isNaN(numero) && numero > 0;
       },
       { error: "Informe uma quantidade maior que zero" },
-    ),
+    )
+    .refine((valor) => casasDecimaisTexto(valor) <= 3, {
+      error: "A quantidade aceita no máximo 3 casas decimais",
+    }),
   precoUnitario: z
     .string()
     .trim()
@@ -89,7 +131,10 @@ export const ocInsumoFormSchema = z.object({
         return valor !== "" && !Number.isNaN(numero) && numero >= 0;
       },
       { error: "Informe um preço válido" },
-    ),
+    )
+    .refine((valor) => casasDecimaisTexto(valor) <= 2, {
+      error: "O preço aceita no máximo 2 casas decimais",
+    }),
 });
 
 export type OcInsumoFormInput = z.infer<typeof ocInsumoFormSchema>;
@@ -131,10 +176,7 @@ export type OcGrupoCentroCustoFormInput = z.infer<
  */
 export const ordemCompraFormSchema = z.object({
   fornecedorId: z.uuid({ error: "Selecione o fornecedor" }),
-  condicaoPagamento: z
-    .string()
-    .trim()
-    .max(120, { error: "Máximo de 120 caracteres" }),
+  condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
   cotacaoId: z.uuid().optional(),
   dataEmissao: z
     .string()
@@ -164,3 +206,63 @@ export const ordemCompraFormSchema = z.object({
 });
 
 export type OrdemCompraFormInput = z.infer<typeof ordemCompraFormSchema>;
+
+// ---------------------------------------------------------------------------
+// Recebimento da OC (Task 6): confirma a NF e gera as parcelas do a_pagar
+// pela condição de pagamento. Mesmo par de schema server/form do resto do
+// módulo (ver ocItemSchema/ocInsumoFormSchema acima).
+// ---------------------------------------------------------------------------
+
+/** Nº da NF: texto obrigatório, até 60 caracteres. */
+const numeroNfSchema = z
+  .string()
+  .trim()
+  .min(1, { error: "Informe o número da nota fiscal" })
+  .max(60, { error: "Máximo de 60 caracteres" });
+
+/** Valor da NF NUMERIC(14,2): maior que zero. */
+const valorNfSchema = z
+  .number({ error: "Valor da nota fiscal inválido" })
+  .positive({ error: "O valor da nota fiscal precisa ser maior que zero" })
+  .max(999999999999.99, { error: "Valor acima do permitido" });
+
+/** Data do recebimento: yyyy-mm-dd. */
+const dataRecebimentoSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data do recebimento" });
+
+/**
+ * Recebimento validado no servidor: nº NF, valor e data que a RPC
+ * fn_registrar_recebimento usa para confirmar o lançamento previsto e gerar
+ * as parcelas do a_pagar pela condição de pagamento da OC.
+ */
+export const recebimentoSchema = z.object({
+  numeroNf: numeroNfSchema,
+  valorNf: valorNfSchema,
+  dataRecebimento: dataRecebimentoSchema,
+});
+
+export type RecebimentoInput = z.infer<typeof recebimentoSchema>;
+
+/** Formulário de recebimento (client): valor como string pra casar com o input. */
+export const recebimentoFormSchema = z.object({
+  numeroNf: z
+    .string()
+    .trim()
+    .min(1, { error: "Informe o número da nota fiscal" })
+    .max(60, { error: "Máximo de 60 caracteres" }),
+  valorNf: z.string().trim().refine(
+    (valor) => {
+      const numero = Number(valor.replace(",", "."));
+      return valor !== "" && !Number.isNaN(numero) && numero > 0;
+    },
+    { error: "Informe um valor de nota fiscal maior que zero" },
+  ),
+  dataRecebimento: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data do recebimento" }),
+});
+
+export type RecebimentoFormInput = z.infer<typeof recebimentoFormSchema>;

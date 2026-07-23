@@ -5,10 +5,10 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarCondicoesPagamento } from "@/modules/compras/condicoes-pagamento/queries";
 import { CotacaoDetalhe } from "@/modules/compras/cotacoes/components/cotacao-detalhe";
 import {
   buscarCotacao,
+  listarCondicoesPagamento,
   listarFornecedores,
   listarInsumos,
   trilhaCotacao,

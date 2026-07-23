@@ -41,7 +41,8 @@ export interface FornecedorCotacao {
   id: string;
   fornecedorId: string;
   fornecedorNome: string;
-  condicaoPagamento: string | null;
+  condicaoPagamentoId: string | null;
+  condicaoPagamentoDescricao: string | null;
   prazoEntregaDias: number | null;
   observacao: string | null;
   /** Soma de quantidade x preço de todos os itens deste fornecedor. */
@@ -95,6 +96,12 @@ export interface InsumoOpcao {
   nome: string;
   codigo: string | null;
   unidadeSigla: string | null;
+}
+
+/** Opção de condição de pagamento ativa para o select do fornecedor da cotação. */
+export interface CondicaoPagamentoOpcao {
+  id: string;
+  descricao: string;
 }
 
 interface LinhaListaCotacao {
@@ -180,10 +187,11 @@ export async function listarCotacoes(
 interface LinhaFornecedorCotacao {
   id: string;
   fornecedor_id: string;
-  condicao_pagamento: string | null;
+  condicao_pagamento_id: string | null;
   prazo_entrega_dias: number | null;
   observacao: string | null;
   fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
+  condicoes_pagamento: { descricao: string } | null;
 }
 
 interface LinhaItemCotacao {
@@ -223,7 +231,7 @@ export async function buscarCotacao(
     supabase
       .from("cotacao_fornecedores")
       .select(
-        "id, fornecedor_id, condicao_pagamento, prazo_entrega_dias, observacao, fornecedores(razao_social, nome_fantasia)",
+        "id, fornecedor_id, condicao_pagamento_id, prazo_entrega_dias, observacao, fornecedores(razao_social, nome_fantasia), condicoes_pagamento(descricao)",
       )
       .eq("cotacao_id", id)
       .order("created_at", { ascending: true }),
@@ -300,7 +308,9 @@ export async function buscarCotacao(
         id: fornecedor.id,
         fornecedorId: fornecedor.fornecedor_id,
         fornecedorNome: nomeFornecedor(fornecedor.fornecedores),
-        condicaoPagamento: fornecedor.condicao_pagamento,
+        condicaoPagamentoId: fornecedor.condicao_pagamento_id,
+        condicaoPagamentoDescricao:
+          fornecedor.condicoes_pagamento?.descricao ?? null,
         prazoEntregaDias: fornecedor.prazo_entrega_dias,
         observacao: fornecedor.observacao,
         total,
@@ -371,6 +381,28 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
     nome: insumo.nome,
     codigo: insumo.codigo,
     unidadeSigla: insumo.unidades_medida?.sigla ?? null,
+  }));
+}
+
+/** Condições de pagamento ativas para o select do fornecedor, em ordem alfabética. */
+export async function listarCondicoesPagamento(): Promise<
+  CondicaoPagamentoOpcao[]
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("condicoes_pagamento")
+    .select("id, descricao")
+    .eq("ativo", true)
+    .order("descricao", { ascending: true });
+
+  if (error) {
+    throw new Error("Não foi possível carregar as condições de pagamento");
+  }
+
+  return (data ?? []).map((condicao) => ({
+    id: condicao.id,
+    descricao: condicao.descricao,
   }));
 }
 

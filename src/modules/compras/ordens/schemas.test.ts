@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ocInsumoFormSchema,
   ocItemSchema,
   ordemCompraFormSchema,
   ordemCompraSchema,
@@ -11,6 +12,7 @@ const INSUMO = "22222222-2222-4222-8222-222222222222";
 const CENTRO = "33333333-3333-4333-8333-333333333333";
 const INSUMO2 = "44444444-4444-4444-8444-444444444444";
 const CENTRO2 = "55555555-5555-4555-8555-555555555555";
+const CONDICAO = "66666666-6666-4666-8666-666666666666";
 
 const itemValido = {
   insumoId: INSUMO,
@@ -21,6 +23,7 @@ const itemValido = {
 
 const ocValida = {
   fornecedorId: FORNECEDOR,
+  condicaoPagamentoId: CONDICAO,
   dataEmissao: "2026-06-18",
   itens: [itemValido],
 };
@@ -44,6 +47,36 @@ describe("ocItemSchema", () => {
   it("rejeita quantidade zero", () => {
     const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 0 });
     expect(r.success).toBe(false);
+  });
+
+  it("aceita quantidade com exatamente 3 casas decimais", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.235 });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita quantidade com mais de 3 casas decimais (arredondaria em silêncio no banco)", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.2345 });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "A quantidade aceita no máximo 3 casas decimais",
+      );
+    }
+  });
+
+  it("aceita preço com exatamente 2 casas decimais", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 12.34 });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita preço com mais de 2 casas decimais (arredondaria em silêncio no banco)", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 12.345 });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "O preço aceita no máximo 2 casas decimais",
+      );
+    }
   });
 });
 
@@ -76,13 +109,59 @@ describe("ordemCompraSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("transforma condição de pagamento vazia em undefined", () => {
+  it("exige condição de pagamento", () => {
+    const r = ordemCompraSchema.safeParse({
+      fornecedorId: FORNECEDOR,
+      dataEmissao: "2026-06-18",
+      itens: [itemValido],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("rejeita condição de pagamento inválida", () => {
     const r = ordemCompraSchema.safeParse({
       ...ocValida,
-      condicaoPagamento: "",
+      condicaoPagamentoId: "não-é-uuid",
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
+  const insumoValido = { insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5" };
+
+  it("aceita quantidade com vírgula e 3 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      quantidade: "1,235",
     });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.condicaoPagamento).toBeUndefined();
+  });
+
+  it("rejeita quantidade com vírgula e mais de 3 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      quantidade: "1,2345",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "A quantidade aceita no máximo 3 casas decimais",
+      );
+    }
+  });
+
+  it("rejeita preço com ponto e mais de 2 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      precoUnitario: "12.345",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "O preço aceita no máximo 2 casas decimais",
+      );
+    }
   });
 });
 
@@ -93,7 +172,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
   };
   const formValido = {
     fornecedorId: FORNECEDOR,
-    condicaoPagamento: "",
+    condicaoPagamentoId: CONDICAO,
     dataEmissao: "2026-06-18",
     observacoes: "",
     centrosCusto: [grupoValido],
@@ -101,6 +180,16 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
 
   it("aceita OC com um centro de custo e um insumo", () => {
     expect(ordemCompraFormSchema.safeParse(formValido).success).toBe(true);
+  });
+
+  it("exige condição de pagamento no formulário", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      fornecedorId: FORNECEDOR,
+      dataEmissao: "2026-06-18",
+      observacoes: "",
+      centrosCusto: [grupoValido],
+    });
+    expect(r.success).toBe(false);
   });
 
   it("aceita vários centros de custo distintos", () => {

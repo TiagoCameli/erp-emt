@@ -9,11 +9,34 @@ import {
 const FORNECEDOR = "11111111-1111-4111-8111-111111111111";
 const COTACAO_FORNECEDOR = "22222222-2222-4222-8222-222222222222";
 const INSUMO = "33333333-3333-4333-8333-333333333333";
+const CONDICAO = "44444444-4444-4444-8444-444444444444";
 
 describe("fornecedorCotacaoSchema", () => {
   it("aceita fornecedor com prazo opcional ausente", () => {
     const r = fornecedorCotacaoSchema.safeParse({ fornecedorId: FORNECEDOR });
     expect(r.success).toBe(true);
+  });
+
+  it("aceita fornecedor com condição de pagamento ausente (opcional)", () => {
+    const r = fornecedorCotacaoSchema.safeParse({ fornecedorId: FORNECEDOR });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.condicaoPagamentoId).toBeUndefined();
+  });
+
+  it("aceita fornecedor com condição de pagamento válida", () => {
+    const r = fornecedorCotacaoSchema.safeParse({
+      fornecedorId: FORNECEDOR,
+      condicaoPagamentoId: CONDICAO,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita condição de pagamento inválida", () => {
+    const r = fornecedorCotacaoSchema.safeParse({
+      fornecedorId: FORNECEDOR,
+      condicaoPagamentoId: "não-é-uuid",
+    });
+    expect(r.success).toBe(false);
   });
 
   it("rejeita prazo negativo", () => {

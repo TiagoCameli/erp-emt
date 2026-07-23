@@ -9,7 +9,9 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   ordemCompraSchema,
+  recebimentoSchema,
   type OrdemCompraInput,
+  type RecebimentoInput,
 } from "@/modules/compras/ordens/schemas";
 
 const RECURSO = "compras.ordens" as const;
@@ -34,17 +36,26 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
   }
 }
 
-/** Mapeia os itens validados para os registros de oc_itens. */
+/** Mapeia um item validado para o formato de coluna (snake_case), sem o id
+ * da OC: usado tanto pro insert direto de editarOrdem quanto pro jsonb de
+ * itens que fn_criar_ordem_compra recebe. */
+function itemParaRegistro(item: OrdemCompraInput["itens"][number]) {
+  return {
+    insumo_id: item.insumoId,
+    quantidade: item.quantidade,
+    preco_unitario: item.precoUnitario,
+    centro_custo_id: item.centroCustoId,
+  };
+}
+
+/** Mapeia os itens validados para os registros de oc_itens (com o id da OC). */
 function itensParaRegistros(
   ordemCompraId: string,
   itens: OrdemCompraInput["itens"],
 ) {
   return itens.map((item) => ({
     ordem_compra_id: ordemCompraId,
-    insumo_id: item.insumoId,
-    quantidade: item.quantidade,
-    preco_unitario: item.precoUnitario,
-    centro_custo_id: item.centroCustoId,
+    ...itemParaRegistro(item),
   }));
 }
 
@@ -52,7 +63,7 @@ function itensParaRegistros(
 function cabecalhoParaRegistro(dados: OrdemCompraInput) {
   return {
     fornecedor_id: dados.fornecedorId,
-    condicao_pagamento: dados.condicaoPagamento ?? null,
+    condicao_pagamento_id: dados.condicaoPagamentoId,
     cotacao_id: dados.cotacaoId ?? null,
     data_emissao: dados.dataEmissao,
     observacoes: dados.observacoes ?? null,
@@ -60,8 +71,11 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
 }
 
 /**
- * Cria uma OC em rascunho com seus itens. O valor_total é calculado pelo
- * trigger do banco, nunca no app. RLS cobre os inserts.
+ * Cria uma OC em rascunho com seus itens via RPC transacional: cabeçalho,
+ * itens e valor_total final são gravados na mesma transação no banco, então
+ * a trilha de auditoria registra um único "criado" com o total certo (nunca
+ * "criado (total 0)" seguido de "editado"). Ver
+ * supabase/migrations/20260722150004_fn_criar_ordem_compra.sql.
  */
 export async function criarOrdem(
   dados: OrdemCompraInput,
@@ -76,13 +90,12 @@ export async function criarOrdem(
   }
 
   const supabase = await createClient();
-  const { data: ordem, error } = await supabase
-    .from(TABELA)
-    .insert({ ...cabecalhoParaRegistro(validado.data), status: "rascunho" })
-    .select("id")
-    .single();
+  const { data: id, error } = await supabase.rpc("fn_criar_ordem_compra", {
+    p_cabecalho: cabecalhoParaRegistro(validado.data),
+    p_itens: validado.data.itens.map(itemParaRegistro),
+  });
 
-  if (error || !ordem) {
+  if (error || !id) {
     return erroAcao(
       "compras.ordens.criarOrdem",
       error,
@@ -90,22 +103,8 @@ export async function criarOrdem(
     );
   }
 
-  const { error: erroItens } = await supabase
-    .from("oc_itens")
-    .insert(itensParaRegistros(ordem.id, validado.data.itens));
-
-  if (erroItens) {
-    // Desfaz a OC sem itens para não deixar cabeçalho órfão.
-    await supabase.from(TABELA).delete().eq("id", ordem.id);
-    return erroAcao(
-      "compras.ordens.criarOrdem",
-      erroItens,
-      "Não foi possível salvar os itens. Tente novamente",
-    );
-  }
-
   revalidatePath(ROTA);
-  return { ok: true, id: ordem.id };
+  return { ok: true, id };
 }
 
 /**
@@ -285,6 +284,51 @@ export async function aprovarOrdem(id: string): Promise<ResultadoAcao> {
       "compras.ordens.aprovarOrdem",
       error,
       error.message || "Não foi possível aprovar a ordem de compra",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Registra o recebimento da OC aprovada via RPC: confirma a NF (nº, valor,
+ * data), confirma o lançamento previsto -> a_pagar e gera as parcelas do
+ * a_pagar pela condição de pagamento da OC (vencimento = data do
+ * recebimento + dias_offset da parcela). Reusa a permissão 'aprovar', mesma
+ * capacidade que já gera o lançamento previsto na aprovação.
+ */
+export async function registrarRecebimento(
+  id: string,
+  dados: RecebimentoInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("aprovar"))) {
+    return {
+      erro: "Sem permissão para registrar recebimento de ordens de compra",
+    };
+  }
+
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Ordem de compra inválida" };
+
+  const validado = recebimentoSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_registrar_recebimento", {
+    p_oc_id: idValido.data,
+    p_numero_nf: validado.data.numeroNf,
+    p_valor_nf: validado.data.valorNf,
+    p_data_recebimento: validado.data.dataRecebimento,
+  });
+
+  if (error) {
+    return erroAcao(
+      "compras.ordens.registrarRecebimento",
+      error,
+      error.message || "Não foi possível registrar o recebimento",
     );
   }
 

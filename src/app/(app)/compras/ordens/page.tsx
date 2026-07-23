@@ -7,11 +7,11 @@ import {
   lerParametrosLista,
   parametroValido,
 } from "@/modules/compras/_shared/lista";
-import { listarCondicoesPagamento } from "@/modules/compras/condicoes-pagamento/queries";
 import { OrdensAcoesCabecalho } from "@/modules/compras/ordens/components/ordens-acoes-cabecalho";
 import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela";
 import {
   listarCentrosCusto,
+  listarCondicoesPagamento,
   listarCotacoesFinalizadas,
   listarFornecedores,
   listarInsumos,

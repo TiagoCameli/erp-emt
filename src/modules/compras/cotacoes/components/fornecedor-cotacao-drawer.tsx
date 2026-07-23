@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -10,22 +10,24 @@ import {
   CampoFormulario,
   classesFormulario,
   Combobox,
-  ComboboxCriavel,
   FormDrawer,
   LinhaCampos,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { criarCondicaoPagamento } from "@/modules/compras/condicoes-pagamento/actions";
 import { adicionarFornecedor } from "@/modules/compras/cotacoes/actions";
 import {
   fornecedorCotacaoFormSchema,
   type FornecedorCotacaoFormInput,
 } from "@/modules/compras/cotacoes/schemas";
-import type { FornecedorOpcao } from "@/modules/compras/cotacoes/queries";
+import type {
+  CondicaoPagamentoOpcao,
+  FornecedorOpcao,
+} from "@/modules/compras/cotacoes/queries";
 
 const ID_FORM = "form-fornecedor-cotacao";
+const SEM_CONDICAO = "sem-condicao";
 
 export interface FornecedorCotacaoDrawerProps {
   aberto: boolean;
@@ -34,7 +36,7 @@ export interface FornecedorCotacaoDrawerProps {
   fornecedores: FornecedorOpcao[];
   /** Ids de fornecedor já na cotação, para não oferecer de novo. */
   fornecedoresUsados: string[];
-  condicoesPagamento: string[];
+  condicoesPagamento: CondicaoPagamentoOpcao[];
 }
 
 /**
@@ -59,26 +61,17 @@ export function FornecedorCotacaoDrawer({
     resolver: zodResolver(fornecedorCotacaoFormSchema),
     defaultValues: {
       fornecedorId: "",
-      condicaoPagamento: "",
+      condicaoPagamentoId: undefined,
       prazoEntregaDias: "",
       observacao: "",
     },
   });
 
-  async function criarCondicao(texto: string) {
-    const r = await criarCondicaoPagamento(texto);
-    if ("erro" in r) {
-      toast.error(r.erro);
-      return null;
-    }
-    return r.descricao;
-  }
-
   React.useEffect(() => {
     if (aberto) {
       form.reset({
         fornecedorId: "",
-        condicaoPagamento: "",
+        condicaoPagamentoId: undefined,
         prazoEntregaDias: "",
         observacao: "",
       });
@@ -100,7 +93,7 @@ export function FornecedorCotacaoDrawer({
 
     const resultado = await adicionarFornecedor(cotacaoId, {
       fornecedorId: valores.fornecedorId,
-      condicaoPagamento: valores.condicaoPagamento,
+      condicaoPagamentoId: valores.condicaoPagamentoId,
       prazoEntregaDias: prazo,
       observacao: valores.observacao,
     });
@@ -114,6 +107,8 @@ export function FornecedorCotacaoDrawer({
   }
 
   const fornecedorValor = form.watch("fornecedorId");
+  const condicaoPagamentoValor =
+    form.watch("condicaoPagamentoId") ?? SEM_CONDICAO;
 
   return (
     <FormDrawer
@@ -185,22 +180,26 @@ export function FornecedorCotacaoDrawer({
           <CampoFormulario
             id="fornecedor-condicao"
             rotulo="Condição de pagamento"
-            erro={form.formState.errors.condicaoPagamento?.message}
+            erro={form.formState.errors.condicaoPagamentoId?.message}
           >
-            <Controller
-              name="condicaoPagamento"
-              control={form.control}
-              render={({ field }) => (
-                <ComboboxCriavel
-                  id="fornecedor-condicao"
-                  valor={field.value ?? ""}
-                  onValorChange={field.onChange}
-                  opcoes={condicoesPagamento}
-                  onCriar={criarCondicao}
-                  placeholder="30 dias"
-                  disabled={salvando}
-                />
-              )}
+            <Combobox
+              valor={condicaoPagamentoValor}
+              onValorChange={(valor) =>
+                form.setValue(
+                  "condicaoPagamentoId",
+                  valor === SEM_CONDICAO ? undefined : valor,
+                )
+              }
+              opcoes={[
+                { valor: SEM_CONDICAO, rotulo: "Sem condição informada" },
+                ...condicoesPagamento.map((condicao) => ({
+                  valor: condicao.id,
+                  rotulo: condicao.descricao,
+                })),
+              ]}
+              placeholder="Selecione a condição de pagamento"
+              disabled={salvando}
+              id="fornecedor-condicao"
             />
           </CampoFormulario>
 

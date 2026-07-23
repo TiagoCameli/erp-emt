@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
   CentroCustoOpcao,
+  CondicaoPagamentoOpcao,
   CotacaoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
@@ -19,7 +20,7 @@ export interface OrdensAcoesCabecalhoProps {
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
-  condicoesPagamento: string[];
+  condicoesPagamento: CondicaoPagamentoOpcao[];
 }
 
 /**

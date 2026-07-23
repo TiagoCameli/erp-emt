@@ -21,13 +21,14 @@ export const ROTULO_STATUS_COTACAO = {
 
 export type StatusCotacao = keyof typeof ROTULO_STATUS_COTACAO;
 
-/** Status de ordem de compra: rascunho | pendente_aprovacao | aprovado | rejeitado | cancelado. */
+/** Status de ordem de compra: rascunho | pendente_aprovacao | aprovado | rejeitado | cancelado | recebido. */
 export const ROTULO_STATUS_OC = {
   rascunho: { rotulo: "Rascunho", badge: "rascunho" },
   pendente_aprovacao: { rotulo: "Pendente de aprovação", badge: "pendente_aprovacao" },
   aprovado: { rotulo: "Aprovada", badge: "aprovado" },
   rejeitado: { rotulo: "Rejeitada", badge: "rejeitado" },
   cancelado: { rotulo: "Cancelada", badge: "cancelado" },
+  recebido: { rotulo: "Recebida", badge: "recebido" },
 } as const satisfies Record<string, InfoStatus>;
 
 export type StatusOC = keyof typeof ROTULO_STATUS_OC;
