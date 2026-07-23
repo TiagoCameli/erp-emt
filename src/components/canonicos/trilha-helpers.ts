@@ -204,7 +204,11 @@ function descricaoDasMudancas(
     if (v === null) continue;
     linhas.push(`${rotuloCampo(campo)}: ${v}`);
   }
-  return linhas.length ? linhas.slice(0, 6).join(" · ") : undefined;
+  if (!linhas.length) return undefined;
+  if (linhas.length <= 6) return linhas.join(" · ");
+  const restantes = linhas.length - 6;
+  const sufixo = `e mais ${restantes} ${restantes === 1 ? "campo" : "campos"}`;
+  return [...linhas.slice(0, 6), sufixo].join(" · ");
 }
 
 /** Converte linhas do audit_log em eventos prontos para o componente Trilha. */

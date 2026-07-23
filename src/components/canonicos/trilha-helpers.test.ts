@@ -82,6 +82,21 @@ describe("eventosDoAuditLog", () => {
     expect(semNome.descricao).toBeUndefined(); // sem nome, o campo é ocultado
   });
 
+  it("mais de 6 campos mudados: mostra 6 e indica 'e mais N campos'", () => {
+    const [e] = eventosDoAuditLog([reg({
+      dados_antes: {
+        observacoes: "a", numero_nf: "1", motivo_rejeicao: "x", quantidade: 1,
+        valor: 1, preco_unitario: 1, data_emissao: "2026-01-01", data_vencimento: "2026-01-01",
+      },
+      dados_depois: {
+        observacoes: "b", numero_nf: "2", motivo_rejeicao: "y", quantidade: 2,
+        valor: 2, preco_unitario: 2, data_emissao: "2026-02-01", data_vencimento: "2026-02-01",
+      },
+    })], { entidade: "Ordem", genero: "f" });
+    expect(e.descricao).toMatch(/ e mais 2 campos$/);
+    expect((e.descricao?.match(/ · /g) ?? []).length).toBe(6);
+  });
+
   it("oculta ruído (aprovado_por, aprovado_em, timestamps) e mostra '—' pra vazio relevante", () => {
     const [e] = eventosDoAuditLog([reg({
       dados_antes: { aprovado_por: "x", aprovado_em: "2026-07-22T19:30:00Z", motivo_rejeicao: null },
