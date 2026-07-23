@@ -5,6 +5,7 @@ import {
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
@@ -12,6 +13,9 @@ import {
   idsFornecedoresPorNome,
   padraoBusca,
 } from "@/modules/compras/_shared/lista";
+
+/** Client de servidor (mesmo tipo que `createClient()` de `@/lib/supabase/server` devolve). */
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 /** Filtros e paginação da listagem de ordens de compra. */
 export interface ListarOrdensParams {
@@ -390,30 +394,106 @@ export async function listarCotacoesFinalizadas(): Promise<CotacaoOpcao[]> {
   }));
 }
 
+/** Linha do audit_log de lancamento_parcelas relevante pra um evento de pagamento. */
+interface LinhaPagamentoParcela {
+  id: number | string;
+  usuario_id: string | null;
+  dados_antes: RegistroAuditLog["dados_antes"];
+  dados_depois: RegistroAuditLog["dados_depois"];
+  criado_em: string;
+}
+
+/** Lê o campo `status` de um dados_antes/dados_depois do audit_log, se houver. */
+function statusDoAuditLog(dados: RegistroAuditLog["dados_depois"]): string | undefined {
+  if (!dados || typeof dados !== "object" || Array.isArray(dados)) return undefined;
+  const status = (dados as Record<string, unknown>).status;
+  return typeof status === "string" ? status : undefined;
+}
+
+/**
+ * Busca os eventos de PAGAMENTO das parcelas de TODOS os lançamentos
+ * vinculados à OC (origem='oc'): acha os lançamentos, as parcelas deles, e as
+ * linhas do audit_log de lancamento_parcelas em que o status virou 'pago' (e
+ * não já estava 'pago' antes, pra não duplicar em updates posteriores).
+ *
+ * Uma OC pode ter mais de um lançamento com o mesmo origem_id:
+ * fn_aprovar_ordem_compra insere um lançamento novo a cada aprovação, e
+ * fn_desaprovar_ordem_compra só cancela o antigo (não apaga). No fluxo
+ * aprovar → desaprovar → reaprovar, a OC fica com 2+ lançamentos. Por isso
+ * não dá pra usar `.maybeSingle()` aqui: buscamos todos e agregamos as
+ * parcelas de todos. Um lançamento cancelado (do ciclo de desaprovação) só
+ * tem parcelas não pagas, então incluí-lo é seguro — só pagamentos reais
+ * viram evento.
+ *
+ * Sem lançamento ou sem parcela paga, devolve lista vazia.
+ */
+async function auditLogPagamentosParcelasDaOrdem(
+  supabase: SupabaseServerClient,
+  ordemId: string,
+): Promise<LinhaPagamentoParcela[]> {
+  const { data: lancamentos } = await supabase
+    .from("lancamentos")
+    .select("id")
+    .eq("origem", "oc")
+    .eq("origem_id", ordemId);
+
+  const idsLancamentos = (lancamentos ?? []).map((lancamento) => lancamento.id);
+  if (idsLancamentos.length === 0) return [];
+
+  const { data: parcelas } = await supabase
+    .from("lancamento_parcelas")
+    .select("id")
+    .in("lancamento_id", idsLancamentos);
+
+  const idsParcelas = (parcelas ?? []).map((parcela) => parcela.id);
+  if (idsParcelas.length === 0) return [];
+
+  const { data: linhas } = await supabase
+    .from("audit_log")
+    .select("id, usuario_id, dados_antes, dados_depois, criado_em")
+    .eq("tabela", "lancamento_parcelas")
+    .eq("acao", "UPDATE")
+    .in("registro_id", idsParcelas)
+    .order("criado_em", { ascending: false })
+    .order("id", { ascending: false });
+
+  return (linhas ?? []).filter((linha) => {
+    const statusDepois = statusDoAuditLog(linha.dados_depois);
+    const statusAntes = statusDoAuditLog(linha.dados_antes);
+    return statusDepois === "pago" && statusAntes !== "pago";
+  });
+}
+
 /**
  * Trilha de auditoria da OC: lê o audit_log só da própria ordem (cabeçalho),
  * sem os itens, pra não duplicar "Ordem criada" por item, e resolve os nomes
  * dos usuários via RPC (security definer), igual à tela de auditoria.
- * Converte para eventos do componente Trilha.
+ * Enriquece com os eventos de pagamento das parcelas do lançamento vinculado
+ * (origem='oc'): sem isso, a trilha só mostra a OC virando "Paga" no status,
+ * sem detalhar quais parcelas foram quitadas. Devolve tudo ordenado por
+ * data desc (o componente Trilha também ordena, mas já entregamos assim).
  */
 export async function trilhaOrdem(id: string): Promise<EventoTrilha[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("audit_log")
-    .select(
-      "id, tabela, registro_id, acao, usuario_id, dados_antes, dados_depois, criado_em",
-    )
-    .eq("tabela", "ordens_compra")
-    .eq("registro_id", id)
-    .order("criado_em", { ascending: false })
-    .order("id", { ascending: false });
+  const [{ data, error }, linhasPagamento] = await Promise.all([
+    supabase
+      .from("audit_log")
+      .select(
+        "id, tabela, registro_id, acao, usuario_id, dados_antes, dados_depois, criado_em",
+      )
+      .eq("tabela", "ordens_compra")
+      .eq("registro_id", id)
+      .order("criado_em", { ascending: false })
+      .order("id", { ascending: false }),
+    auditLogPagamentosParcelasDaOrdem(supabase, id),
+  ]);
 
   if (error || !data) return [];
 
   const idsUsuarios = [
     ...new Set(
-      data
+      [...data, ...linhasPagamento]
         .map((linha) => linha.usuario_id)
         .filter((usuarioId): usuarioId is string => usuarioId !== null),
     ),
@@ -430,21 +510,49 @@ export async function trilhaOrdem(id: string): Promise<EventoTrilha[]> {
     }
   }
 
+  const nomeUsuario = (usuarioId: string | null): string =>
+    usuarioId === null ? "Sistema" : (nomesPorId.get(usuarioId) ?? "Sistema");
+
   const registros: RegistroAuditLog[] = data.map((linha) => ({
     id: linha.id,
     tabela: linha.tabela,
     registro_id: linha.registro_id,
     acao: linha.acao,
     usuario_id: linha.usuario_id,
-    usuario_nome:
-      linha.usuario_id === null
-        ? "Sistema"
-        : (nomesPorId.get(linha.usuario_id) ?? "Sistema"),
+    usuario_nome: nomeUsuario(linha.usuario_id),
     dados_antes: linha.dados_antes,
     dados_depois: linha.dados_depois,
     criado_em: linha.criado_em,
   }));
 
   const nomes = await resolverNomesAuditLog(supabase, registros);
-  return eventosDoAuditLog(registros, { nomes, entidade: "Ordem", genero: "f" });
+  const eventosOrdem = eventosDoAuditLog(registros, {
+    nomes,
+    entidade: "Ordem",
+    genero: "f",
+  });
+
+  const eventosPagamento: EventoTrilha[] = linhasPagamento.map((linha) => {
+    const depois =
+      linha.dados_depois && typeof linha.dados_depois === "object" && !Array.isArray(linha.dados_depois)
+        ? (linha.dados_depois as Record<string, unknown>)
+        : {};
+    const valor = typeof depois.valor === "number" || typeof depois.valor === "string"
+      ? depois.valor
+      : null;
+    const dataVencimento =
+      typeof depois.data_vencimento === "string" ? depois.data_vencimento : null;
+    return {
+      id: `pag-${linha.id}`,
+      data: linha.criado_em,
+      titulo: "Parcela paga",
+      descricao: `${formatarBRL(valor)} · venc ${formatarData(dataVencimento)}`,
+      usuario: nomeUsuario(linha.usuario_id),
+      tipo: "aprovacao",
+    };
+  });
+
+  return [...eventosOrdem, ...eventosPagamento].sort(
+    (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime(),
+  );
 }

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import { infoStatusCotacao } from "@/modules/compras/_shared/formato";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
@@ -37,6 +38,7 @@ export interface CotacaoDetalheProps {
   insumos: InsumoOpcao[];
   trilha: EventoTrilha[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
+  anexosIniciais: AnexoResumo[];
   podeEditar: boolean;
 }
 
@@ -51,6 +53,7 @@ export function CotacaoDetalhe({
   insumos,
   trilha,
   condicoesPagamento,
+  anexosIniciais,
   podeEditar,
 }: CotacaoDetalheProps) {
   const editavel = podeEditar && cotacao.status === "aberta";
@@ -249,6 +252,7 @@ export function CotacaoDetalhe({
           tabela="cotacoes"
           registroId={cotacao.id}
           podeEditar={podeEditar}
+          anexosIniciais={anexosIniciais}
         />
       </SecaoDetalhe>
 

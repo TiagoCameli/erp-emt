@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
@@ -83,6 +84,7 @@ export interface OrdemDetalheViewProps {
   cotacoes: CotacaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   parcelasCondicao: ParcelaCondicaoOpcao[];
+  anexosIniciais: AnexoResumo[];
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
@@ -103,6 +105,7 @@ export function OrdemDetalheView({
   cotacoes,
   condicoesPagamento,
   parcelasCondicao,
+  anexosIniciais,
   podeEditar,
   podeAprovar,
   podeDesaprovar,
@@ -385,6 +388,7 @@ export function OrdemDetalheView({
               tabela="ordens_compra"
               registroId={ordem.id}
               podeEditar={podeEditar}
+              anexosIniciais={anexosIniciais}
             />
           </SecaoDetalhe>
         </div>
