@@ -1,5 +1,6 @@
 "use client";
 
+import { formatarValorCampo, rotuloCampo } from "@/components/canonicos";
 import type { Json } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
 
@@ -61,9 +62,24 @@ function montarLinhas(
   });
 }
 
-function ValorCelula({ valor }: { valor: Json | undefined }) {
+interface ValorCelulaProps {
+  campo: string;
+  valor: Json | undefined;
+  nomes: Record<string, string>;
+}
+
+/**
+ * Valor formatado de uma célula do diff. Tenta primeiro o formato amigável
+ * do mapa de campos (dinheiro, data, situação, FK por nome); campo fora do
+ * mapa cai no fallback cru (booleano Sim/Não, objeto em JSON, texto puro).
+ */
+function ValorCelula({ campo, valor, nomes }: ValorCelulaProps) {
   if (valor === undefined || valor === null) {
     return <span className="text-muted-foreground italic">vazio</span>;
+  }
+  const formatado = formatarValorCampo(campo, valor, nomes);
+  if (formatado !== undefined) {
+    return <span className="break-all">{formatado}</span>;
   }
   if (typeof valor === "boolean") {
     return <span>{valor ? "Sim" : "Não"}</span>;
@@ -81,15 +97,24 @@ const GRADE_COLUNAS = "grid grid-cols-[minmax(8rem,1fr)_2fr_2fr]";
 export interface DiffAuditoriaProps {
   dadosAntes: Json | null;
   dadosDepois: Json | null;
+  /** Nome resolvido (id -> nome) dos campos FK que aparecem nos dados. */
+  nomes?: Record<string, string>;
 }
 
 /**
  * Diff legível de um registro do audit_log: compara dados_antes e
  * dados_depois campo a campo (ignora updated_at). Alterados em âmbar
- * claro, adicionados em verde claro, removidos em vermelho claro.
+ * claro, adicionados em verde claro, removidos em vermelho claro. Rótulo do
+ * campo e valores usam o mesmo mapa amigável da trilha do detalhe (dinheiro,
+ * data, situação, nome de FK); campo fora do mapa mantém o nome cru (com
+ * espaço) e o valor sem formatação especial.
  * O JSON cru fica atrás de "Ver JSON completo".
  */
-export function DiffAuditoria({ dadosAntes, dadosDepois }: DiffAuditoriaProps) {
+export function DiffAuditoria({
+  dadosAntes,
+  dadosDepois,
+  nomes = {},
+}: DiffAuditoriaProps) {
   const linhas = montarLinhas(dadosAntes, dadosDepois);
 
   return (
@@ -115,8 +140,11 @@ export function DiffAuditoria({ dadosAntes, dadosDepois }: DiffAuditoriaProps) {
               key={linha.campo}
               className={cn(GRADE_COLUNAS, "border-t border-border text-detalhe")}
             >
-              <div className="codigo-doc px-3 py-1.5 text-muted-foreground">
-                {linha.campo}
+              <div
+                className="px-3 py-1.5 text-muted-foreground"
+                title={linha.campo}
+              >
+                {rotuloCampo(linha.campo)}
               </div>
               <div
                 className={cn(
@@ -125,7 +153,7 @@ export function DiffAuditoria({ dadosAntes, dadosDepois }: DiffAuditoriaProps) {
                   linha.estado === "removido" && "bg-status-rejeitado/10",
                 )}
               >
-                <ValorCelula valor={linha.antes} />
+                <ValorCelula campo={linha.campo} valor={linha.antes} nomes={nomes} />
               </div>
               <div
                 className={cn(
@@ -134,7 +162,7 @@ export function DiffAuditoria({ dadosAntes, dadosDepois }: DiffAuditoriaProps) {
                   linha.estado === "adicionado" && "bg-status-aprovado/10",
                 )}
               >
-                <ValorCelula valor={linha.depois} />
+                <ValorCelula campo={linha.campo} valor={linha.depois} nomes={nomes} />
               </div>
             </div>
           ))}

@@ -1,4 +1,5 @@
 import type { Json } from "@/lib/database.types";
+import { formatarBRL, formatarData, formatarDataHora } from "@/lib/formatadores";
 
 import type { EventoTrilha, TipoEventoTrilha } from "./trilha";
 
@@ -15,82 +16,224 @@ export interface RegistroAuditLog {
   criado_em: string;
 }
 
-const CAMPOS_IGNORADOS = new Set(["updated_at", "created_at"]);
-const LIMITE_CAMPOS = 5;
+export type TabelaFk =
+  | "condicoes_pagamento"
+  | "fornecedores"
+  | "centros_custo"
+  | "insumos"
+  | "usuarios";
 
-const MAPA_ACOES: Record<string, { tipo: TipoEventoTrilha; titulo: string }> =
-  {
-    INSERT: { tipo: "criacao", titulo: "Registro criado" },
-    UPDATE: { tipo: "edicao", titulo: "Registro editado" },
-    DELETE: { tipo: "exclusao", titulo: "Registro excluído" },
-  };
+type TipoCampo = "texto" | "dinheiro" | "data" | "datahora" | "situacao" | "booleano" | "fk";
+interface MetaCampo { rotulo?: string; tipo?: TipoCampo; oculto?: boolean; fkTabela?: TabelaFk; }
+
+const CAMPOS: Record<string, MetaCampo> = {
+  status: { rotulo: "Situação", tipo: "situacao" },
+  valor_total: { rotulo: "Valor total", tipo: "dinheiro" },
+  valor: { rotulo: "Valor", tipo: "dinheiro" },
+  valor_nf: { rotulo: "Valor da NF", tipo: "dinheiro" },
+  preco_unitario: { rotulo: "Preço unitário", tipo: "dinheiro" },
+  quantidade: { rotulo: "Quantidade", tipo: "texto" },
+  condicao_pagamento_id: { rotulo: "Condição de pagamento", tipo: "fk", fkTabela: "condicoes_pagamento" },
+  fornecedor_id: { rotulo: "Fornecedor", tipo: "fk", fkTabela: "fornecedores" },
+  centro_custo_id: { rotulo: "Centro de custo", tipo: "fk", fkTabela: "centros_custo" },
+  insumo_id: { rotulo: "Insumo", tipo: "fk", fkTabela: "insumos" },
+  motivo_rejeicao: { rotulo: "Motivo" },
+  observacoes: { rotulo: "Observações" },
+  numero_nf: { rotulo: "Nota fiscal" },
+  data_emissao: { rotulo: "Data de emissão", tipo: "data" },
+  data_recebimento: { rotulo: "Data do recebimento", tipo: "data" },
+  data_vencimento: { rotulo: "Vencimento", tipo: "data" },
+  aprovado_por: { oculto: true },
+  aprovado_em: { oculto: true },
+  created_by: { oculto: true },
+  updated_at: { oculto: true },
+  created_at: { oculto: true },
+};
+
+/** Campos FK -> tabela, exportado para o resolvedor de nomes (server) reusar. */
+export const CAMPOS_FK: Record<string, TabelaFk> = Object.fromEntries(
+  Object.entries(CAMPOS)
+    .filter(([, m]) => m.fkTabela)
+    .map(([k, m]) => [k, m.fkTabela as TabelaFk]),
+);
+
+const SITUACOES: Record<string, string> = {
+  rascunho: "Rascunho",
+  pendente_aprovacao: "Pendente de aprovação",
+  aprovado: "Aprovado",
+  rejeitado: "Rejeitado",
+  cancelado: "Cancelado",
+  recebido: "Recebido",
+  recebido_parcial: "Recebido parcial",
+  finalizada: "Finalizada",
+  pago: "Pago",
+  pendente: "Pendente",
+  previsto: "Previsto",
+  a_pagar: "A pagar",
+  a_receber: "A receber",
+};
 
 type ObjetoJson = { [chave: string]: Json | undefined };
-
-function ehObjetoJson(valor: Json | null): valor is ObjetoJson {
-  return typeof valor === "object" && valor !== null && !Array.isArray(valor);
+function ehObjetoJson(v: Json | null): v is ObjetoJson {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function formatarValor(valor: Json | undefined): string {
-  if (valor === null || valor === undefined) return "vazio";
-  if (typeof valor === "boolean") return valor ? "sim" : "não";
-  if (typeof valor === "object") return JSON.stringify(valor);
-  return String(valor);
+/** Rótulo amigável de um campo do banco; sem entrada no mapa, cai pro nome com espaço. */
+export function rotuloCampo(campo: string): string {
+  return CAMPOS[campo]?.rotulo ?? campo.replace(/_/g, " ");
 }
 
-function descricaoDoDiff(
-  dadosAntes: Json | null,
-  dadosDepois: Json | null,
+/** Formata o valor NOVO conforme o tipo do campo. Devolve null se deve ocultar. */
+function valorFormatado(
+  campo: string,
+  valor: Json | undefined,
+  nomes: Record<string, string>,
+): string | null {
+  const meta = CAMPOS[campo] ?? {};
+  if (meta.oculto) return null;
+  if (meta.tipo === "fk") {
+    if (typeof valor !== "string" || !valor) return null; // vazio de FK: ocultar
+    const nome = nomes[valor];
+    return nome ?? null; // sem nome resolvido: ocultar (não mostra uuid cru)
+  }
+  if (valor === null || valor === undefined) return "—";
+  switch (meta.tipo) {
+    case "dinheiro":
+      return formatarBRL(Number(valor));
+    case "data":
+      return formatarData(String(valor));
+    case "datahora":
+      return formatarDataHora(String(valor));
+    case "situacao":
+      return SITUACOES[String(valor)] ?? String(valor);
+    case "booleano":
+      return valor ? "sim" : "não";
+    default:
+      if (typeof valor === "object") return JSON.stringify(valor);
+      return String(valor);
+  }
+}
+
+/**
+ * Formata um valor pra célula de diff da auditoria global (mostra antes E
+ * depois, nunca oculta): campo do mapa CAMPOS usa o tipo (dinheiro, data,
+ * datahora, situação, FK); FK sem nome resolvido cai pro UUID cru. Campo
+ * fora do mapa, sem tipo, ou valor vazio devolve undefined pro chamador
+ * aplicar o fallback genérico (string/objeto/booleano cru).
+ */
+export function formatarValorCampo(
+  campo: string,
+  valor: Json | undefined,
+  nomes: Record<string, string>,
 ): string | undefined {
-  if (!ehObjetoJson(dadosAntes) || !ehObjetoJson(dadosDepois)) {
-    return undefined;
+  if (valor === null || valor === undefined) return undefined;
+  const meta = CAMPOS[campo];
+  switch (meta?.tipo) {
+    case "fk":
+      return typeof valor === "string" && valor ? (nomes[valor] ?? valor) : undefined;
+    case "dinheiro":
+      return formatarBRL(Number(valor));
+    case "data":
+      return formatarData(String(valor));
+    case "datahora":
+      return formatarDataHora(String(valor));
+    case "situacao":
+      return SITUACOES[String(valor)] ?? String(valor);
+    default:
+      return undefined;
   }
+}
 
-  const chaves = new Set([
-    ...Object.keys(dadosAntes),
-    ...Object.keys(dadosDepois),
-  ]);
+function participio(base: string, genero: "f" | "m"): string {
+  // base no feminino terminando em "a": "criada" -> "criado"
+  return genero === "m" ? base.replace(/a$/, "o") : base;
+}
 
-  const alteracoes: string[] = [];
-  for (const chave of chaves) {
-    if (CAMPOS_IGNORADOS.has(chave)) continue;
-    const antes = dadosAntes[chave];
-    const depois = dadosDepois[chave];
-    if (JSON.stringify(antes ?? null) === JSON.stringify(depois ?? null)) {
-      continue;
+function tituloEvento(
+  acao: string,
+  antes: ObjetoJson | null,
+  depois: ObjetoJson | null,
+  entidade: string,
+  genero: "f" | "m",
+): { titulo: string; tipo: TipoEventoTrilha } {
+  const A = acao.toUpperCase();
+  if (A === "INSERT") return { titulo: `${entidade} ${participio("criada", genero)}`, tipo: "criacao" };
+  if (A === "DELETE") return { titulo: `${entidade} ${participio("excluída", genero)}`, tipo: "exclusao" };
+  const antesStatus = antes && typeof antes.status === "string" ? antes.status : undefined;
+  const depoisStatus = depois && typeof depois.status === "string" ? depois.status : undefined;
+  if (depoisStatus && depoisStatus !== antesStatus) {
+    switch (depoisStatus) {
+      case "pendente_aprovacao":
+        return antesStatus === "aprovado"
+          ? { titulo: "Aprovação revertida", tipo: "desaprovacao" }
+          : { titulo: `${participio("Enviada", genero)} para aprovação`, tipo: "edicao" };
+      case "aprovado":
+        return { titulo: participio("Aprovada", genero), tipo: "aprovacao" };
+      case "rejeitado":
+        return { titulo: participio("Rejeitada", genero), tipo: "rejeicao" };
+      case "cancelado":
+        return { titulo: participio("Cancelada", genero), tipo: "rejeicao" };
+      case "recebido":
+        return { titulo: participio("Recebida", genero), tipo: "aprovacao" };
+      case "recebido_parcial":
+        return { titulo: "Recebimento parcial", tipo: "edicao" };
+      case "finalizada":
+        return { titulo: participio("Finalizada", genero), tipo: "aprovacao" };
+      case "rascunho":
+        return { titulo: "Voltou para rascunho", tipo: "edicao" };
+      default:
+        return { titulo: `Situação: ${SITUACOES[depoisStatus] ?? depoisStatus}`, tipo: "edicao" };
     }
-    alteracoes.push(`${chave}: ${formatarValor(antes)} → ${formatarValor(depois)}`);
   }
+  return { titulo: "Dados alterados", tipo: "edicao" };
+}
 
-  if (alteracoes.length === 0) return undefined;
-
-  const visiveis = alteracoes.slice(0, LIMITE_CAMPOS);
-  const restantes = alteracoes.length - visiveis.length;
-  const sufixo =
-    restantes > 0
-      ? `, e mais ${restantes} ${restantes === 1 ? "campo" : "campos"}`
-      : "";
-
-  return `${visiveis.join(", ")}${sufixo}`;
+/** Linhas "Rótulo: valor novo" dos campos que mudaram (só valor novo, sem "→"). */
+function descricaoDasMudancas(
+  antes: ObjetoJson | null,
+  depois: ObjetoJson | null,
+  nomes: Record<string, string>,
+): string | undefined {
+  if (!ehObjetoJson(depois)) return undefined;
+  const antesObj = ehObjetoJson(antes) ? antes : {};
+  const linhas: string[] = [];
+  for (const campo of Object.keys(depois)) {
+    if (campo === "status") continue; // já vira título
+    if (JSON.stringify(antesObj[campo] ?? null) === JSON.stringify(depois[campo] ?? null)) continue;
+    const v = valorFormatado(campo, depois[campo], nomes);
+    if (v === null) continue;
+    linhas.push(`${rotuloCampo(campo)}: ${v}`);
+  }
+  if (!linhas.length) return undefined;
+  if (linhas.length <= 6) return linhas.join(" · ");
+  const restantes = linhas.length - 6;
+  const sufixo = `e mais ${restantes} ${restantes === 1 ? "campo" : "campos"}`;
+  return [...linhas.slice(0, 6), sufixo].join(" · ");
 }
 
 /** Converte linhas do audit_log em eventos prontos para o componente Trilha. */
 export function eventosDoAuditLog(
   registros: RegistroAuditLog[],
+  opcoes?: { nomes?: Record<string, string>; entidade?: string; genero?: "f" | "m" },
 ): EventoTrilha[] {
-  return registros.map((registro) => {
-    const mapeado = MAPA_ACOES[registro.acao.toUpperCase()] ?? {
-      tipo: "outro" as const,
-      titulo: "Registro alterado",
-    };
-
+  const nomes = opcoes?.nomes ?? {};
+  const entidade = opcoes?.entidade ?? "Registro";
+  const genero = opcoes?.genero ?? "m";
+  return registros.map((r) => {
+    const antes = ehObjetoJson(r.dados_antes) ? r.dados_antes : null;
+    const depois = ehObjetoJson(r.dados_depois) ? r.dados_depois : null;
+    const { titulo, tipo } = tituloEvento(r.acao, antes, depois, entidade, genero);
+    const acaoNormalizada = r.acao.toUpperCase();
+    // Em INSERT/DELETE a descrição por campo polui; mantemos só no UPDATE.
+    const descricao =
+      acaoNormalizada === "UPDATE" ? descricaoDasMudancas(antes, depois, nomes) : undefined;
     return {
-      id: String(registro.id),
-      data: registro.criado_em,
-      titulo: mapeado.titulo,
-      descricao: descricaoDoDiff(registro.dados_antes, registro.dados_depois),
-      usuario: registro.usuario_nome ?? undefined,
-      tipo: mapeado.tipo,
+      id: String(r.id),
+      data: r.criado_em,
+      titulo,
+      descricao,
+      usuario: r.usuario_nome ?? undefined,
+      tipo,
     };
   });
 }

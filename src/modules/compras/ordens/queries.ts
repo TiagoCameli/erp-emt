@@ -6,6 +6,7 @@ import {
   type RegistroAuditLog,
 } from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
+import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
 import {
   idsFornecedoresPorNome,
@@ -451,5 +452,6 @@ export async function trilhaOrdem(id: string): Promise<EventoTrilha[]> {
     criado_em: linha.criado_em,
   }));
 
-  return eventosDoAuditLog(registros);
+  const nomes = await resolverNomesAuditLog(supabase, registros);
+  return eventosDoAuditLog(registros, { nomes, entidade: "Ordem", genero: "f" });
 }
