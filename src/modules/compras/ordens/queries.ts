@@ -391,28 +391,21 @@ export async function listarCotacoesFinalizadas(): Promise<CotacaoOpcao[]> {
 }
 
 /**
- * Trilha de auditoria da OC: lê o audit_log da ordem e dos itens dela e
- * resolve os nomes dos usuários via RPC (security definer), igual à tela
- * de auditoria. Converte para eventos do componente Trilha.
+ * Trilha de auditoria da OC: lê o audit_log só da própria ordem (cabeçalho),
+ * sem os itens, pra não duplicar "Ordem criada" por item, e resolve os nomes
+ * dos usuários via RPC (security definer), igual à tela de auditoria.
+ * Converte para eventos do componente Trilha.
  */
 export async function trilhaOrdem(id: string): Promise<EventoTrilha[]> {
   const supabase = await createClient();
-
-  const { data: itens } = await supabase
-    .from("oc_itens")
-    .select("id")
-    .eq("ordem_compra_id", id);
-
-  const idsItens = (itens ?? []).map((item) => item.id);
-  const idsRegistros = [id, ...idsItens];
 
   const { data, error } = await supabase
     .from("audit_log")
     .select(
       "id, tabela, registro_id, acao, usuario_id, dados_antes, dados_depois, criado_em",
     )
-    .in("tabela", ["ordens_compra", "oc_itens"])
-    .in("registro_id", idsRegistros)
+    .eq("tabela", "ordens_compra")
+    .eq("registro_id", id)
     .order("criado_em", { ascending: false })
     .order("id", { ascending: false });
 

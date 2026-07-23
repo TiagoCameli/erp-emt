@@ -313,35 +313,21 @@ export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
 }
 
 /**
- * Trilha de auditoria do lançamento: lê o audit_log do lançamento, das suas
- * parcelas e dos seus rateios, resolve os nomes dos usuários via RPC e
- * converte para eventos do componente Trilha.
+ * Trilha de auditoria do lançamento: lê o audit_log só do próprio lançamento
+ * (cabeçalho), sem parcelas nem rateios, pra não duplicar "Lançamento criado"
+ * por parcela/rateio. Resolve os nomes dos usuários via RPC e converte para
+ * eventos do componente Trilha.
  */
 export async function trilhaLancamento(id: string): Promise<EventoTrilha[]> {
   const supabase = await createClient();
-
-  const [{ data: parcelas }, { data: rateios }] = await Promise.all([
-    supabase.from("lancamento_parcelas").select("id").eq("lancamento_id", id),
-    supabase.from("lancamento_rateios").select("id").eq("lancamento_id", id),
-  ]);
-
-  const idsRegistros = [
-    id,
-    ...(parcelas ?? []).map((parcela) => parcela.id),
-    ...(rateios ?? []).map((rateio) => rateio.id),
-  ];
 
   const { data, error } = await supabase
     .from("audit_log")
     .select(
       "id, tabela, registro_id, acao, usuario_id, dados_antes, dados_depois, criado_em",
     )
-    .in("tabela", [
-      "lancamentos",
-      "lancamento_parcelas",
-      "lancamento_rateios",
-    ])
-    .in("registro_id", idsRegistros)
+    .eq("tabela", "lancamentos")
+    .eq("registro_id", id)
     .order("criado_em", { ascending: false })
     .order("id", { ascending: false });
 
