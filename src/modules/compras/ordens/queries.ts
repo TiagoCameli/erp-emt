@@ -398,6 +398,7 @@ export async function listarCotacoesFinalizadas(): Promise<CotacaoOpcao[]> {
 interface LinhaPagamentoParcela {
   id: number | string;
   usuario_id: string | null;
+  dados_antes: RegistroAuditLog["dados_antes"];
   dados_depois: RegistroAuditLog["dados_depois"];
   criado_em: string;
 }
@@ -410,29 +411,39 @@ function statusDoAuditLog(dados: RegistroAuditLog["dados_depois"]): string | und
 }
 
 /**
- * Busca os eventos de PAGAMENTO das parcelas do lançamento vinculado à OC
- * (origem='oc'): acha o lançamento, as parcelas dele, e as linhas do
- * audit_log de lancamento_parcelas em que o status virou 'pago' (e não já
- * estava 'pago' antes, pra não duplicar em updates posteriores). Sem
- * lançamento ou sem parcela paga, devolve lista vazia.
+ * Busca os eventos de PAGAMENTO das parcelas de TODOS os lançamentos
+ * vinculados à OC (origem='oc'): acha os lançamentos, as parcelas deles, e as
+ * linhas do audit_log de lancamento_parcelas em que o status virou 'pago' (e
+ * não já estava 'pago' antes, pra não duplicar em updates posteriores).
+ *
+ * Uma OC pode ter mais de um lançamento com o mesmo origem_id:
+ * fn_aprovar_ordem_compra insere um lançamento novo a cada aprovação, e
+ * fn_desaprovar_ordem_compra só cancela o antigo (não apaga). No fluxo
+ * aprovar → desaprovar → reaprovar, a OC fica com 2+ lançamentos. Por isso
+ * não dá pra usar `.maybeSingle()` aqui: buscamos todos e agregamos as
+ * parcelas de todos. Um lançamento cancelado (do ciclo de desaprovação) só
+ * tem parcelas não pagas, então incluí-lo é seguro — só pagamentos reais
+ * viram evento.
+ *
+ * Sem lançamento ou sem parcela paga, devolve lista vazia.
  */
 async function auditLogPagamentosParcelasDaOrdem(
   supabase: SupabaseServerClient,
   ordemId: string,
 ): Promise<LinhaPagamentoParcela[]> {
-  const { data: lancamento } = await supabase
+  const { data: lancamentos } = await supabase
     .from("lancamentos")
     .select("id")
     .eq("origem", "oc")
-    .eq("origem_id", ordemId)
-    .maybeSingle();
+    .eq("origem_id", ordemId);
 
-  if (!lancamento) return [];
+  const idsLancamentos = (lancamentos ?? []).map((lancamento) => lancamento.id);
+  if (idsLancamentos.length === 0) return [];
 
   const { data: parcelas } = await supabase
     .from("lancamento_parcelas")
     .select("id")
-    .eq("lancamento_id", lancamento.id);
+    .in("lancamento_id", idsLancamentos);
 
   const idsParcelas = (parcelas ?? []).map((parcela) => parcela.id);
   if (idsParcelas.length === 0) return [];
