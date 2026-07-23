@@ -100,20 +100,6 @@ export function ProgramadosTabela({
     setDialogProgramarAberto(true);
   }
 
-  // Contagem de parcelas por bucket, para o detalhe de cada KPICard.
-  const contagemBuckets = React.useMemo(() => {
-    const contagem: Record<BucketProgramacao, number> = {
-      atrasada: 0,
-      hoje: 0,
-      proxima: 0,
-    };
-    for (const parcela of parcelas) {
-      if (!parcela.dataEfetiva) continue;
-      contagem[bucketProgramacao(parcela.dataEfetiva, hoje)] += 1;
-    }
-    return contagem;
-  }, [parcelas, hoje]);
-
   const semConta = contas.length === 0;
 
   const colunas = React.useMemo<ColumnDef<ParcelaProgramada, unknown>[]>(
@@ -208,17 +194,17 @@ export function ProgramadosTabela({
         <KPICard
           titulo="Atrasado"
           valor={<MoneyText valor={resumo.atrasado} />}
-          detalhe={`${contagemBuckets.atrasada} ${contagemBuckets.atrasada === 1 ? "parcela" : "parcelas"}`}
+          detalhe={`${resumo.quantidade.atrasado} ${resumo.quantidade.atrasado === 1 ? "parcela" : "parcelas"}`}
         />
         <KPICard
           titulo="Hoje"
           valor={<MoneyText valor={resumo.hoje} />}
-          detalhe={`${contagemBuckets.hoje} ${contagemBuckets.hoje === 1 ? "parcela" : "parcelas"}`}
+          detalhe={`${resumo.quantidade.hoje} ${resumo.quantidade.hoje === 1 ? "parcela" : "parcelas"}`}
         />
         <KPICard
           titulo="Próximos 7 dias"
           valor={<MoneyText valor={resumo.proximos7} />}
-          detalhe={`${contagemBuckets.proxima} ${contagemBuckets.proxima === 1 ? "parcela" : "parcelas"}`}
+          detalhe={`${resumo.quantidade.proximos7} ${resumo.quantidade.proximos7 === 1 ? "parcela" : "parcelas"}`}
         />
       </div>
 

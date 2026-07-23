@@ -50,7 +50,26 @@ describe("resumoProgramados", () => {
       hoje,
     );
 
-    expect(resumo).toEqual({ atrasado: 150, hoje: 200, proximos7: 300 });
+    expect(resumo).toEqual({
+      atrasado: 150,
+      hoje: 200,
+      proximos7: 300,
+      quantidade: { atrasado: 2, hoje: 1, proximos7: 1 },
+    });
+  });
+
+  it("quantidade de próximos7 conta só a janela (hoje, hoje+7], não todo o futuro", () => {
+    const resumo = resumoProgramados(
+      [
+        { dataEfetiva: "2026-07-25", valor: 100 }, // dentro da janela
+        { dataEfetiva: "2026-07-30", valor: 200 }, // borda superior, dentro
+        { dataEfetiva: "2026-08-15", valor: 999 }, // futuro, fora da janela de 7 dias
+      ],
+      hoje,
+    );
+
+    expect(resumo.proximos7).toBe(300);
+    expect(resumo.quantidade.proximos7).toBe(2);
   });
 
   it("hoje entra no bucket hoje, não em atrasado nem próximos7", () => {
@@ -59,7 +78,12 @@ describe("resumoProgramados", () => {
       hoje,
     );
 
-    expect(resumo).toEqual({ atrasado: 0, hoje: 999, proximos7: 0 });
+    expect(resumo).toEqual({
+      atrasado: 0,
+      hoje: 999,
+      proximos7: 0,
+      quantidade: { atrasado: 0, hoje: 1, proximos7: 0 },
+    });
   });
 
   it("hoje+7 entra em próximos7 (borda superior inclusiva)", () => {
@@ -68,7 +92,12 @@ describe("resumoProgramados", () => {
       hoje,
     );
 
-    expect(resumo).toEqual({ atrasado: 0, hoje: 0, proximos7: 400 });
+    expect(resumo).toEqual({
+      atrasado: 0,
+      hoje: 0,
+      proximos7: 400,
+      quantidade: { atrasado: 0, hoje: 0, proximos7: 1 },
+    });
   });
 
   it("hoje+8 fica fora de próximos7", () => {
@@ -77,7 +106,12 @@ describe("resumoProgramados", () => {
       hoje,
     );
 
-    expect(resumo).toEqual({ atrasado: 0, hoje: 0, proximos7: 0 });
+    expect(resumo).toEqual({
+      atrasado: 0,
+      hoje: 0,
+      proximos7: 0,
+      quantidade: { atrasado: 0, hoje: 0, proximos7: 0 },
+    });
   });
 
   it("itens sem data efetiva não entram em nenhum bucket", () => {
@@ -86,7 +120,12 @@ describe("resumoProgramados", () => {
       hoje,
     );
 
-    expect(resumo).toEqual({ atrasado: 0, hoje: 0, proximos7: 0 });
+    expect(resumo).toEqual({
+      atrasado: 0,
+      hoje: 0,
+      proximos7: 0,
+      quantidade: { atrasado: 0, hoje: 0, proximos7: 0 },
+    });
   });
 
   it("soma em centavos sem acumular erro de ponto flutuante", () => {
@@ -106,6 +145,7 @@ describe("resumoProgramados", () => {
       atrasado: 0,
       hoje: 0,
       proximos7: 0,
+      quantidade: { atrasado: 0, hoje: 0, proximos7: 0 },
     });
   });
 });

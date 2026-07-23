@@ -47,6 +47,16 @@ export interface ResumoProgramados {
   atrasado: number;
   hoje: number;
   proximos7: number;
+  /**
+   * Contagem de parcelas em cada janela, na MESMA regra dos valores acima
+   * (proximos7 é limitado a hoje < efetiva <= hoje+7, não o bucket "proxima"
+   * inteiro). Usada pro detalhe dos KPICards bater com o valor exibido.
+   */
+  quantidade: {
+    atrasado: number;
+    hoje: number;
+    proximos7: number;
+  };
 }
 
 /** Soma `dias` a uma data ISO "YYYY-MM-DD" (aritmética em UTC, sem fuso). */
@@ -74,16 +84,22 @@ export function resumoProgramados(
   let atrasadoCentavos = 0;
   let hojeCentavos = 0;
   let proximos7Centavos = 0;
+  let atrasadoQtd = 0;
+  let hojeQtd = 0;
+  let proximos7Qtd = 0;
 
   for (const item of itens) {
     if (!item.dataEfetiva) continue;
     const centavos = paraCentavos(item.valor);
     if (item.dataEfetiva < hojeISO) {
       atrasadoCentavos += centavos;
+      atrasadoQtd += 1;
     } else if (item.dataEfetiva === hojeISO) {
       hojeCentavos += centavos;
+      hojeQtd += 1;
     } else if (item.dataEfetiva <= limite7) {
       proximos7Centavos += centavos;
+      proximos7Qtd += 1;
     }
   }
 
@@ -91,5 +107,10 @@ export function resumoProgramados(
     atrasado: paraReais(atrasadoCentavos),
     hoje: paraReais(hojeCentavos),
     proximos7: paraReais(proximos7Centavos),
+    quantidade: {
+      atrasado: atrasadoQtd,
+      hoje: hojeQtd,
+      proximos7: proximos7Qtd,
+    },
   };
 }
