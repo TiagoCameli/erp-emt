@@ -106,6 +106,8 @@ export interface AuditoriaTabelaProps {
   filtroAcao: string;
   tabelas: string[];
   usuarios: UsuarioParaFiltro[];
+  /** Nome resolvido (id -> nome) dos campos FK, pro diff exibir nome em vez de UUID. */
+  nomes: Record<string, string>;
 }
 
 /**
@@ -122,6 +124,7 @@ export function AuditoriaTabela({
   filtroAcao,
   tabelas,
   usuarios,
+  nomes,
 }: AuditoriaTabelaProps) {
   const { setMuitos: atualizarParams } = useFiltrosUrl();
 
@@ -237,6 +240,7 @@ export function AuditoriaTabela({
                 <DiffAuditoria
                   dadosAntes={selecionado.dadosAntes}
                   dadosDepois={selecionado.dadosDepois}
+                  nomes={nomes}
                 />
               </div>
             </>

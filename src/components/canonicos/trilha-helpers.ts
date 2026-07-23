@@ -78,7 +78,8 @@ function ehObjetoJson(v: Json | null): v is ObjetoJson {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function rotuloCampo(campo: string): string {
+/** Rótulo amigável de um campo do banco; sem entrada no mapa, cai pro nome com espaço. */
+export function rotuloCampo(campo: string): string {
   return CAMPOS[campo]?.rotulo ?? campo.replace(/_/g, " ");
 }
 
@@ -110,6 +111,36 @@ function valorFormatado(
     default:
       if (typeof valor === "object") return JSON.stringify(valor);
       return String(valor);
+  }
+}
+
+/**
+ * Formata um valor pra célula de diff da auditoria global (mostra antes E
+ * depois, nunca oculta): campo do mapa CAMPOS usa o tipo (dinheiro, data,
+ * datahora, situação, FK); FK sem nome resolvido cai pro UUID cru. Campo
+ * fora do mapa, sem tipo, ou valor vazio devolve undefined pro chamador
+ * aplicar o fallback genérico (string/objeto/booleano cru).
+ */
+export function formatarValorCampo(
+  campo: string,
+  valor: Json | undefined,
+  nomes: Record<string, string>,
+): string | undefined {
+  if (valor === null || valor === undefined) return undefined;
+  const meta = CAMPOS[campo];
+  switch (meta?.tipo) {
+    case "fk":
+      return typeof valor === "string" && valor ? (nomes[valor] ?? valor) : undefined;
+    case "dinheiro":
+      return formatarBRL(Number(valor));
+    case "data":
+      return formatarData(String(valor));
+    case "datahora":
+      return formatarDataHora(String(valor));
+    case "situacao":
+      return SITUACOES[String(valor)] ?? String(valor);
+    default:
+      return undefined;
   }
 }
 

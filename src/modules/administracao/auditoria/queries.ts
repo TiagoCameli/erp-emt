@@ -2,6 +2,8 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/database.types";
+import type { RegistroAuditLog } from "@/components/canonicos";
+import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 
 /** Ações gravadas pelos triggers de auditoria. */
 export type AcaoAuditoria = "INSERT" | "UPDATE" | "DELETE";
@@ -32,6 +34,8 @@ export interface FiltrosAuditoria {
 export interface ResultadoAuditoria {
   registros: RegistroAuditoria[];
   total: number;
+  /** Nome resolvido (id -> nome) dos campos FK que aparecem em dados_antes/dados_depois. */
+  nomes: Record<string, string>;
 }
 
 export interface UsuarioParaFiltro {
@@ -119,7 +123,21 @@ export async function listarAuditoria(
     criadoEm: linha.criado_em,
   }));
 
-  return { registros, total: count ?? 0 };
+  // Resolve os nomes de FK (fornecedor, centro de custo, insumo, condição de
+  // pagamento) presentes nos dados_antes/dados_depois desta página, pro diff
+  // exibir nome em vez de UUID cru.
+  const registrosParaNomes: RegistroAuditLog[] = linhas.map((linha) => ({
+    id: linha.id,
+    tabela: linha.tabela,
+    registro_id: linha.registro_id,
+    acao: linha.acao,
+    dados_antes: linha.dados_antes,
+    dados_depois: linha.dados_depois,
+    criado_em: linha.criado_em,
+  }));
+  const nomes = await resolverNomesAuditLog(supabase, registrosParaNomes);
+
+  return { registros, total: count ?? 0, nomes };
 }
 
 /**

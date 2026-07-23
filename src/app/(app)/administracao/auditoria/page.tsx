@@ -46,7 +46,7 @@ export default async function AuditoriaPage({
   const acaoBruta = primeiro(params.acao);
   const acao = ACOES_VALIDAS.find((opcao) => opcao === acaoBruta);
 
-  const [{ registros, total }, tabelas, usuarios] = await Promise.all([
+  const [{ registros, total, nomes }, tabelas, usuarios] = await Promise.all([
     listarAuditoria({ pagina, tamanho, tabela, usuarioId, acao }),
     listarTabelasAuditadas(),
     listarUsuariosParaFiltro(),
@@ -68,6 +68,7 @@ export default async function AuditoriaPage({
         filtroAcao={acao ?? ""}
         tabelas={tabelas}
         usuarios={usuarios}
+        nomes={nomes}
       />
     </>
   );
