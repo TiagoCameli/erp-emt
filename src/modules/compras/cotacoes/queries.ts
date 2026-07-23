@@ -6,6 +6,7 @@ import {
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
+import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import {
   idsFornecedoresPorNome,
   padraoBusca,
@@ -455,5 +456,6 @@ export async function trilhaCotacao(id: string): Promise<EventoTrilha[]> {
     criado_em: linha.criado_em,
   }));
 
-  return eventosDoAuditLog(registros);
+  const nomes = await resolverNomesAuditLog(supabase, registros);
+  return eventosDoAuditLog(registros, { nomes, entidade: "Cotação", genero: "f" });
 }
