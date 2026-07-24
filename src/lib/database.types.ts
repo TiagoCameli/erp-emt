@@ -333,8 +333,12 @@ export type Database = {
       }
       colaboradores: {
         Row: {
+          agencia: string | null
           ativo: boolean
+          banco: string | null
           centro_custo_id: string | null
+          chave_pix: string | null
+          conta: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
@@ -345,13 +349,18 @@ export type Database = {
           obra_id: string | null
           salario: number | null
           telefone: string | null
+          tipo_conta: string | null
           updated_at: string
           valor_diaria: number | null
           vinculo: string
         }
         Insert: {
+          agencia?: string | null
           ativo?: boolean
+          banco?: string | null
           centro_custo_id?: string | null
+          chave_pix?: string | null
+          conta?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
@@ -362,13 +371,18 @@ export type Database = {
           obra_id?: string | null
           salario?: number | null
           telefone?: string | null
+          tipo_conta?: string | null
           updated_at?: string
           valor_diaria?: number | null
           vinculo?: string
         }
         Update: {
+          agencia?: string | null
           ativo?: boolean
+          banco?: string | null
           centro_custo_id?: string | null
+          chave_pix?: string | null
+          conta?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
@@ -379,6 +393,7 @@ export type Database = {
           obra_id?: string | null
           salario?: number | null
           telefone?: string | null
+          tipo_conta?: string | null
           updated_at?: string
           valor_diaria?: number | null
           vinculo?: string

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -17,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
+import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import {
   criarOcorrencia,
   editarOcorrencia,
@@ -49,18 +52,26 @@ export interface OcorrenciaFormDrawerProps {
   colaboradores: ColaboradorOpcao[];
   /** Ocorrência em edição. Ausente significa criar. */
   ocorrencia?: OcorrenciaLista | null;
+  /** Libera anexar/remover arquivos (permissão de editar do recurso). */
+  podeEditar?: boolean;
+  /** Anexos da ocorrência pré-carregados no server, para não travar em "Carregando". */
+  anexosIniciais?: AnexoResumo[];
 }
 
 /**
  * Drawer com o formulário de ocorrência. Cria quando não recebe registro e
- * edita quando recebe. Fecha sozinho ao salvar.
+ * edita quando recebe. Fecha sozinho ao salvar. Na edição, mostra a seção de
+ * anexos (atestado em PDF ou imagem) do registro já existente.
  */
 export function OcorrenciaFormDrawer({
   aberto,
   onAbertoChange,
   colaboradores,
   ocorrencia,
+  podeEditar = false,
+  anexosIniciais,
 }: OcorrenciaFormDrawerProps) {
+  const router = useRouter();
   const editando = Boolean(ocorrencia);
 
   const form = useForm<OcorrenciaFormInput>({
@@ -215,6 +226,19 @@ export function OcorrenciaFormDrawer({
           />
         </CampoFormulario>
       </form>
+
+      {ocorrencia ? (
+        <div className="mt-6 border-t border-border pt-4">
+          <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+          <AnexosRegistro
+            tabela="rh_ocorrencias"
+            registroId={ocorrencia.id}
+            podeEditar={podeEditar}
+            anexosIniciais={anexosIniciais}
+            onMudou={() => router.refresh()}
+          />
+        </div>
+      ) : null}
     </FormDrawer>
   );
 }

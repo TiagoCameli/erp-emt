@@ -16,6 +16,11 @@ export type SituacaoDocumento = "vencido" | "a_vencer" | "ok" | "sem_vencimento"
 /** Janela de alerta de "a vencer", em dias. */
 const JANELA_A_VENCER_DIAS = 30;
 
+/** Filtros opcionais da listagem de documentos. */
+export interface FiltrosDocumentos {
+  colaboradorId?: string;
+}
+
 /** Linha da listagem de documentos. */
 export interface DocumentoLista {
   id: string;
@@ -55,17 +60,26 @@ function calcularSituacao(
 /**
  * Lista os documentos com o nome do colaborador e a situação de vencimento
  * calculada na leitura, ordenados por vencimento (mais próximo primeiro,
- * nulos por último) e, em empate, por criação (desc).
+ * nulos por último) e, em empate, por criação (desc). O filtro fino é no
+ * client; a query aceita colaborador (usado pela ficha do colaborador).
  */
-export async function listarDocumentos(): Promise<DocumentoLista[]> {
+export async function listarDocumentos(
+  filtros: FiltrosDocumentos = {},
+): Promise<DocumentoLista[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  let consulta = supabase
     .from("rh_documentos")
     .select(
       "id, colaborador_id, tipo, descricao, data_emissao, data_vencimento, observacao, created_at, colaboradores(nome)",
     )
     .order("created_at", { ascending: false });
+
+  if (filtros.colaboradorId) {
+    consulta = consulta.eq("colaborador_id", filtros.colaboradorId);
+  }
+
+  const { data, error } = await consulta;
 
   if (error) {
     throw new Error("Não foi possível carregar os documentos");

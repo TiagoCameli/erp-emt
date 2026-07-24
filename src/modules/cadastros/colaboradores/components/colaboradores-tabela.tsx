@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -62,6 +63,7 @@ export function ColaboradoresTabela({
   podeEditar,
   podeExcluir,
 }: ColaboradoresTabelaProps) {
+  const router = useRouter();
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
 
@@ -173,7 +175,10 @@ export function ColaboradoresTabela({
       cell: ({ row }) => {
         const colaborador = row.original;
         return (
-          <div className="flex justify-end">
+          <div
+            className="flex justify-end"
+            onClick={(evento) => evento.stopPropagation()}
+          >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -239,6 +244,9 @@ export function ColaboradoresTabela({
       <DataTable
         columns={colunas}
         data={dados}
+        onRowClick={(colaborador) =>
+          router.push(`/cadastros/colaboradores/${colaborador.id}`)
+        }
         emptyState={
           <EmptyState
             icone={Users}

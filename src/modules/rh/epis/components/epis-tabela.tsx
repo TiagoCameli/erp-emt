@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import { removerEpi } from "@/modules/rh/epis/actions";
 import type { EpiLista } from "@/modules/rh/epis/queries";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
@@ -32,6 +33,8 @@ export interface EpisTabelaProps {
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Anexos por EPI, pré-carregados no server, chaveados por id. */
+  anexosPorRegistro: Record<string, AnexoResumo[]>;
 }
 
 /**
@@ -44,6 +47,7 @@ export function EpisTabela({
   podeCriar,
   podeEditar,
   podeExcluir,
+  anexosPorRegistro,
 }: EpisTabelaProps) {
   const [busca, setBusca] = React.useState("");
 
@@ -234,6 +238,8 @@ export function EpisTabela({
           onAbertoChange={setDrawerAberto}
           colaboradores={colaboradores}
           epi={emEdicao}
+          podeEditar={podeEditar}
+          anexosIniciais={emEdicao ? (anexosPorRegistro[emEdicao.id] ?? []) : undefined}
         />
       ) : null}
 
