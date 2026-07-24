@@ -114,19 +114,19 @@ export interface AlertaEpi {
  * de colaboradores já inativos (`colaboradores.ativo = false`) — quem saiu
  * mas ainda está com o equipamento. Sempre crítico (não passa por
  * `urgenciaDocumento`/`urgenciaFerias`, que são específicas de situação de
- * vencimento). Ordenado por data de entrega mais antiga primeiro.
+ * vencimento). Ordenado por data de entrega mais antiga primeiro (no banco).
+ *
+ * Via `fn_epis_a_recolher` (SECURITY DEFINER, gateada por `rh.epis`/ver): a
+ * fn atravessa a RLS de `colaboradores` e gateia pela permissão correta, sem
+ * depender de `cadastros.colaboradores`. Um `!inner join` no PostgREST vira
+ * INNER JOIN real e a RLS tudo-ou-nada de `colaboradores` zeraria o resultado
+ * para quem tem `rh.epis` mas não `cadastros.colaboradores` (perfil RH) — um
+ * falso "nenhum EPI a recolher" silencioso.
  */
 export async function listarAlertasEpiRecolher(): Promise<AlertaEpi[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("rh_epis")
-    .select(
-      "id, colaborador_id, descricao, ca, quantidade, data_entrega, colaboradores!inner(nome, ativo)",
-    )
-    .is("data_devolucao", null)
-    .eq("colaboradores.ativo", false)
-    .order("data_entrega", { ascending: true });
+  const { data, error } = await supabase.rpc("fn_epis_a_recolher");
 
   if (error) {
     throw new Error("Não foi possível carregar os alertas de EPI a recolher");
@@ -135,7 +135,7 @@ export async function listarAlertasEpiRecolher(): Promise<AlertaEpi[]> {
   return (data ?? []).map((linha) => ({
     id: linha.id,
     colaboradorId: linha.colaborador_id,
-    colaboradorNome: linha.colaboradores?.nome ?? "",
+    colaboradorNome: linha.colaborador_nome,
     descricao: linha.descricao,
     ca: linha.ca,
     quantidade: linha.quantidade,
