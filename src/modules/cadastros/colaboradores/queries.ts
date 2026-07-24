@@ -1,7 +1,10 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Vinculo } from "@/modules/cadastros/colaboradores/schemas";
+import type {
+  TipoConta,
+  Vinculo,
+} from "@/modules/cadastros/colaboradores/schemas";
 
 /** Linha da listagem de colaboradores, com os nomes das FKs resolvidos. */
 export interface ColaboradorLista {
@@ -17,6 +20,13 @@ export interface ColaboradorLista {
   dataAdmissao: string | null;
   telefone: string | null;
   ativo: boolean;
+  salario: number | null;
+  valorDiaria: number | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
+  tipoConta: TipoConta | null;
+  chavePix: string | null;
 }
 
 /** Opção de FK (obra ou centro de custo) para os selects do formulário. */
@@ -35,7 +45,7 @@ export async function listar(): Promise<ColaboradorLista[]> {
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, obras(nome), centros_custo(nome)",
+      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, obras(nome), centros_custo(nome)",
     )
     .order("nome");
 
@@ -56,6 +66,13 @@ export async function listar(): Promise<ColaboradorLista[]> {
     dataAdmissao: colaborador.data_admissao,
     telefone: colaborador.telefone,
     ativo: colaborador.ativo,
+    salario: colaborador.salario,
+    valorDiaria: colaborador.valor_diaria,
+    banco: colaborador.banco,
+    agencia: colaborador.agencia,
+    conta: colaborador.conta,
+    tipoConta: colaborador.tipo_conta as TipoConta | null,
+    chavePix: colaborador.chave_pix,
   }));
 }
 

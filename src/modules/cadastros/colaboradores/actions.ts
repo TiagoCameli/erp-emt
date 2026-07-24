@@ -36,6 +36,13 @@ function paraLinhaBanco(dados: ColaboradorInput) {
     data_admissao: dados.dataAdmissao,
     telefone: dados.telefone,
     ativo: dados.ativo,
+    salario: dados.salario,
+    valor_diaria: dados.valorDiaria,
+    banco: dados.banco,
+    agencia: dados.agencia,
+    conta: dados.conta,
+    tipo_conta: dados.tipoConta,
+    chave_pix: dados.chavePix,
   };
 }
 

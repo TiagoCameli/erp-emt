@@ -14,6 +14,7 @@ import {
   Combobox,
   FormDrawer,
   LinhaCampos,
+  SecaoFormulario,
   SelectAtivo,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -24,15 +25,46 @@ import type {
   OpcaoSelecao,
 } from "@/modules/cadastros/colaboradores/queries";
 import {
+  ROTULO_TIPO_CONTA,
   ROTULO_VINCULO,
+  TIPOS_CONTA,
   VINCULOS,
   colaboradorSchema,
+  paraNumero,
   type ColaboradorInput,
 } from "@/modules/cadastros/colaboradores/schemas";
 
 const SEM_OBRA = "sem-obra";
 const SEM_CENTRO_CUSTO = "sem-centro-custo";
+const SEM_TIPO_CONTA = "sem-tipo-conta";
 const ID_FORM = "form-colaborador";
+
+/**
+ * Casas decimais de um texto digitado (vírgula ou ponto como separador).
+ * Contado sobre o texto, não sobre o número convertido: evita qualquer
+ * artefato de arredondamento de ponto flutuante na contagem (mesmo motivo
+ * de compras/ordens/schemas.ts).
+ */
+function casasDecimaisTexto(valor: string): number {
+  const normalizado = valor.replace(",", ".");
+  const ponto = normalizado.indexOf(".");
+  return ponto === -1 ? 0 : normalizado.length - ponto - 1;
+}
+
+/**
+ * Valida o texto de um campo monetário opcional: vazio é válido (o campo é
+ * opcional), preenchido precisa ser um número não negativo com no máximo 2
+ * casas — mesma trava do dinheiroOpcionalSchema do domínio (schemas.ts), pra
+ * não sobrar erro só descoberto no `colaboradorSchema.parse` do paraInput.
+ */
+function dinheiroOpcionalValido(valor: string): boolean {
+  const texto = valor.trim();
+  if (texto === "") return true;
+  const numero = paraNumero(texto);
+  return (
+    Number.isFinite(numero) && numero >= 0 && casasDecimaisTexto(texto) <= 2
+  );
+}
 
 /**
  * Schema só do formulário: todos os campos são strings preenchidas (com
@@ -53,6 +85,17 @@ const formSchema = z.object({
   dataAdmissao: z.string(),
   telefone: z.string(),
   ativo: z.boolean(),
+  salario: z.string().refine(dinheiroOpcionalValido, {
+    error: "Informe um valor válido (até 2 casas decimais)",
+  }),
+  valorDiaria: z.string().refine(dinheiroOpcionalValido, {
+    error: "Informe um valor válido (até 2 casas decimais)",
+  }),
+  banco: z.string(),
+  agencia: z.string(),
+  conta: z.string(),
+  tipoConta: z.string(),
+  chavePix: z.string(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -68,6 +111,19 @@ function valoresIniciais(colaborador: ColaboradorLista | null): FormValues {
     dataAdmissao: colaborador?.dataAdmissao ?? "",
     telefone: colaborador?.telefone ?? "",
     ativo: colaborador?.ativo ?? true,
+    salario:
+      colaborador?.salario != null
+        ? String(colaborador.salario).replace(".", ",")
+        : "",
+    valorDiaria:
+      colaborador?.valorDiaria != null
+        ? String(colaborador.valorDiaria).replace(".", ",")
+        : "",
+    banco: colaborador?.banco ?? "",
+    agencia: colaborador?.agencia ?? "",
+    conta: colaborador?.conta ?? "",
+    tipoConta: colaborador?.tipoConta ?? SEM_TIPO_CONTA,
+    chavePix: colaborador?.chavePix ?? "",
   };
 }
 
@@ -84,6 +140,13 @@ function paraInput(valores: FormValues): ColaboradorInput {
     dataAdmissao: valores.dataAdmissao,
     telefone: valores.telefone,
     ativo: valores.ativo,
+    salario: valores.salario,
+    valorDiaria: valores.valorDiaria,
+    banco: valores.banco,
+    agencia: valores.agencia,
+    conta: valores.conta,
+    tipoConta: valores.tipoConta === SEM_TIPO_CONTA ? null : valores.tipoConta,
+    chavePix: valores.chavePix,
   });
 }
 
@@ -154,6 +217,7 @@ export function ColaboradoresFormDrawer({
   const vinculoValor = form.watch("vinculo");
   const obraValor = form.watch("obraId");
   const centroCustoValor = form.watch("centroCustoId");
+  const tipoContaValor = form.watch("tipoConta");
 
   return (
     <>
@@ -343,6 +407,128 @@ export function ColaboradoresFormDrawer({
               id="colaborador-centro-custo"
             />
           </CampoFormulario>
+
+          <SecaoFormulario titulo="Remuneração">
+            <LinhaCampos>
+              <CampoFormulario
+                id="colaborador-salario"
+                rotulo="Salário"
+                ajuda="Mensal, usado na folha de pagamento"
+                erro={form.formState.errors.salario?.message}
+              >
+                <Input
+                  id="colaborador-salario"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="0,00"
+                  className="tabular-nums text-right"
+                  disabled={salvando}
+                  {...form.register("salario")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-valor-diaria"
+                rotulo="Valor da diária"
+                ajuda="Para colaboradores diaristas"
+                erro={form.formState.errors.valorDiaria?.message}
+              >
+                <Input
+                  id="colaborador-valor-diaria"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="0,00"
+                  className="tabular-nums text-right"
+                  disabled={salvando}
+                  {...form.register("valorDiaria")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="Dados bancários">
+            <LinhaCampos>
+              <CampoFormulario
+                id="colaborador-banco"
+                rotulo="Banco"
+                erro={form.formState.errors.banco?.message}
+              >
+                <Input
+                  id="colaborador-banco"
+                  autoComplete="off"
+                  placeholder="Ex: Banco do Brasil"
+                  disabled={salvando}
+                  {...form.register("banco")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-agencia"
+                rotulo="Agência"
+                erro={form.formState.errors.agencia?.message}
+              >
+                <Input
+                  id="colaborador-agencia"
+                  autoComplete="off"
+                  placeholder="0000"
+                  disabled={salvando}
+                  {...form.register("agencia")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+
+            <LinhaCampos>
+              <CampoFormulario
+                id="colaborador-conta"
+                rotulo="Conta"
+                erro={form.formState.errors.conta?.message}
+              >
+                <Input
+                  id="colaborador-conta"
+                  autoComplete="off"
+                  placeholder="00000-0"
+                  disabled={salvando}
+                  {...form.register("conta")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-tipo-conta"
+                rotulo="Tipo de conta"
+                erro={form.formState.errors.tipoConta?.message}
+              >
+                <Combobox
+                  valor={tipoContaValor}
+                  onValorChange={(valor) => form.setValue("tipoConta", valor)}
+                  opcoes={[
+                    { valor: SEM_TIPO_CONTA, rotulo: "Não informado" },
+                    ...TIPOS_CONTA.map((tipo) => ({
+                      valor: tipo,
+                      rotulo: ROTULO_TIPO_CONTA[tipo],
+                    })),
+                  ]}
+                  placeholder="Não informado"
+                  disabled={salvando}
+                  className="w-full"
+                  id="colaborador-tipo-conta"
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+
+            <CampoFormulario
+              id="colaborador-chave-pix"
+              rotulo="Chave PIX"
+              erro={form.formState.errors.chavePix?.message}
+            >
+              <Input
+                id="colaborador-chave-pix"
+                autoComplete="off"
+                placeholder="CPF, e-mail, telefone ou chave aleatória"
+                disabled={salvando}
+                {...form.register("chavePix")}
+              />
+            </CampoFormulario>
+          </SecaoFormulario>
 
           <SelectAtivo
             value={form.watch("ativo")}
