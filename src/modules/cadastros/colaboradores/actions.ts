@@ -24,7 +24,14 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 
 const uuidSchema = z.uuid();
 
-/** Converte o ColaboradorInput validado nas colunas da tabela colaboradores. */
+/**
+ * Converte o ColaboradorInput validado nas colunas da tabela colaboradores.
+ * Os 19 campos novos de dados pessoais/eSocial (Bloco 2) são opcionais no
+ * schema (chave pode faltar): quando ausentes, o valor sai `undefined` e o
+ * Supabase simplesmente não toca a coluna (insert usa o default `null` da
+ * tabela; update preserva o valor já gravado) — sem risco de apagar dado já
+ * cadastrado por telas que ainda não enviam esses campos (Task 3 adiciona).
+ */
 function paraLinhaBanco(dados: ColaboradorInput) {
   return {
     nome: dados.nome,
@@ -43,6 +50,25 @@ function paraLinhaBanco(dados: ColaboradorInput) {
     conta: dados.conta,
     tipo_conta: dados.tipoConta,
     chave_pix: dados.chavePix,
+    rg: dados.rg,
+    rg_orgao: dados.rgOrgao,
+    rg_uf: dados.rgUf,
+    ctps_numero: dados.ctpsNumero,
+    ctps_serie: dados.ctpsSerie,
+    ctps_uf: dados.ctpsUf,
+    pis: dados.pis,
+    cnh_numero: dados.cnhNumero,
+    cnh_categoria: dados.cnhCategoria,
+    cnh_validade: dados.cnhValidade,
+    escolaridade: dados.escolaridade,
+    data_nascimento: dados.dataNascimento,
+    nome_mae: dados.nomeMae,
+    nacionalidade: dados.nacionalidade,
+    estado_civil: dados.estadoCivil,
+    raca_cor: dados.racaCor,
+    titulo_eleitor: dados.tituloEleitor,
+    reservista: dados.reservista,
+    cbo: dados.cbo,
   };
 }
 

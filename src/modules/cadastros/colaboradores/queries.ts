@@ -2,6 +2,10 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import type {
+  CnhCategoria,
+  Escolaridade,
+  EstadoCivil,
+  RacaCor,
   TipoConta,
   Vinculo,
 } from "@/modules/cadastros/colaboradores/schemas";
@@ -27,6 +31,27 @@ export interface ColaboradorLista {
   conta: string | null;
   tipoConta: TipoConta | null;
   chavePix: string | null;
+
+  // Dados pessoais / documentação / eSocial (Bloco 2).
+  rg: string | null;
+  rgOrgao: string | null;
+  rgUf: string | null;
+  ctpsNumero: string | null;
+  ctpsSerie: string | null;
+  ctpsUf: string | null;
+  pis: string | null;
+  cnhNumero: string | null;
+  cnhCategoria: CnhCategoria | null;
+  cnhValidade: string | null;
+  escolaridade: Escolaridade | null;
+  dataNascimento: string | null;
+  nomeMae: string | null;
+  nacionalidade: string | null;
+  estadoCivil: EstadoCivil | null;
+  racaCor: RacaCor | null;
+  tituloEleitor: string | null;
+  reservista: string | null;
+  cbo: string | null;
 }
 
 /** Opção de FK (obra ou centro de custo) para os selects do formulário. */
@@ -45,7 +70,7 @@ export async function listar(): Promise<ColaboradorLista[]> {
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, obras(nome), centros_custo(nome)",
+      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, cbo, obras(nome), centros_custo(nome)",
     )
     .order("nome");
 
@@ -73,6 +98,25 @@ export async function listar(): Promise<ColaboradorLista[]> {
     conta: colaborador.conta,
     tipoConta: colaborador.tipo_conta as TipoConta | null,
     chavePix: colaborador.chave_pix,
+    rg: colaborador.rg,
+    rgOrgao: colaborador.rg_orgao,
+    rgUf: colaborador.rg_uf,
+    ctpsNumero: colaborador.ctps_numero,
+    ctpsSerie: colaborador.ctps_serie,
+    ctpsUf: colaborador.ctps_uf,
+    pis: colaborador.pis,
+    cnhNumero: colaborador.cnh_numero,
+    cnhCategoria: colaborador.cnh_categoria as CnhCategoria | null,
+    cnhValidade: colaborador.cnh_validade,
+    escolaridade: colaborador.escolaridade as Escolaridade | null,
+    dataNascimento: colaborador.data_nascimento,
+    nomeMae: colaborador.nome_mae,
+    nacionalidade: colaborador.nacionalidade,
+    estadoCivil: colaborador.estado_civil as EstadoCivil | null,
+    racaCor: colaborador.raca_cor as RacaCor | null,
+    tituloEleitor: colaborador.titulo_eleitor,
+    reservista: colaborador.reservista,
+    cbo: colaborador.cbo,
   }));
 }
 

@@ -19,12 +19,106 @@ export const ROTULO_TIPO_CONTA: Record<TipoConta, string> = {
   poupanca: "Poupança",
 };
 
+/** Escolaridade do colaborador (dados pessoais, RH). */
+export const ESCOLARIDADES = [
+  "analfabeto",
+  "fundamental_incompleto",
+  "fundamental_completo",
+  "medio_incompleto",
+  "medio_completo",
+  "superior_incompleto",
+  "superior_completo",
+  "pos_graduacao",
+  "mestrado",
+  "doutorado",
+] as const;
+export type Escolaridade = (typeof ESCOLARIDADES)[number];
+
+export const ROTULO_ESCOLARIDADE: Record<Escolaridade, string> = {
+  analfabeto: "Analfabeto",
+  fundamental_incompleto: "Fundamental incompleto",
+  fundamental_completo: "Fundamental completo",
+  medio_incompleto: "Médio incompleto",
+  medio_completo: "Médio completo",
+  superior_incompleto: "Superior incompleto",
+  superior_completo: "Superior completo",
+  pos_graduacao: "Pós-graduação",
+  mestrado: "Mestrado",
+  doutorado: "Doutorado",
+};
+
+/** Estado civil do colaborador. */
+export const ESTADOS_CIVIS = [
+  "solteiro",
+  "casado",
+  "divorciado",
+  "viuvo",
+  "uniao_estavel",
+  "separado_judicialmente",
+] as const;
+export type EstadoCivil = (typeof ESTADOS_CIVIS)[number];
+
+export const ROTULO_ESTADO_CIVIL: Record<EstadoCivil, string> = {
+  solteiro: "Solteiro(a)",
+  casado: "Casado(a)",
+  divorciado: "Divorciado(a)",
+  viuvo: "Viúvo(a)",
+  uniao_estavel: "União estável",
+  separado_judicialmente: "Separado(a) judicialmente",
+};
+
+/** Raça/cor do colaborador (autodeclaração, eSocial). */
+export const RACAS_COR = ["branca", "preta", "parda", "amarela", "indigena"] as const;
+export type RacaCor = (typeof RACAS_COR)[number];
+
+export const ROTULO_RACA_COR: Record<RacaCor, string> = {
+  branca: "Branca",
+  preta: "Preta",
+  parda: "Parda",
+  amarela: "Amarela",
+  indigena: "Indígena",
+};
+
+/** Categoria da CNH do colaborador. */
+export const CNH_CATEGORIAS = [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "AB",
+  "AC",
+  "AD",
+  "AE",
+] as const;
+export type CnhCategoria = (typeof CNH_CATEGORIAS)[number];
+
+export const ROTULO_CNH_CATEGORIA: Record<CnhCategoria, string> = {
+  A: "A",
+  B: "B",
+  C: "C",
+  D: "D",
+  E: "E",
+  AB: "AB",
+  AC: "AC",
+  AD: "AD",
+  AE: "AE",
+};
+
 /** Normaliza string vazia para null (campos opcionais do formulário). */
 const textoOpcional = z
   .string()
   .trim()
   .transform((valor) => (valor === "" ? null : valor))
   .nullable();
+
+/**
+ * Mesmo `textoOpcional`, mas também aceita a chave ausente (`undefined`).
+ * Usado nos campos novos de dados pessoais/eSocial: o formulário atual
+ * (Task 3 ainda vai adicioná-los à tela) não os envia, então a chave precisa
+ * poder faltar sem quebrar o `colaboradorSchema.parse` já existente no drawer.
+ */
+const textoOpcionalNovo = textoOpcional.optional();
 
 /**
  * Converte texto digitado (pt-BR: ponto = milhar, vírgula = decimal) em
@@ -96,6 +190,28 @@ export const colaboradorSchema = z.object({
   conta: textoOpcional,
   tipoConta: z.enum(TIPOS_CONTA, { error: "Tipo de conta inválido" }).nullable(),
   chavePix: textoOpcional,
+
+  // Dados pessoais / documentação / eSocial (Bloco 2). Todos opcionais: a
+  // ficha completa é preenchida aos poucos, não no cadastro inicial.
+  rg: textoOpcionalNovo,
+  rgOrgao: textoOpcionalNovo,
+  rgUf: textoOpcionalNovo,
+  ctpsNumero: textoOpcionalNovo,
+  ctpsSerie: textoOpcionalNovo,
+  ctpsUf: textoOpcionalNovo,
+  pis: textoOpcionalNovo,
+  cnhNumero: textoOpcionalNovo,
+  cnhCategoria: z.enum(CNH_CATEGORIAS, { error: "Categoria de CNH inválida" }).nullable().optional(),
+  cnhValidade: textoOpcionalNovo,
+  escolaridade: z.enum(ESCOLARIDADES, { error: "Escolaridade inválida" }).nullable().optional(),
+  dataNascimento: textoOpcionalNovo,
+  nomeMae: textoOpcionalNovo,
+  nacionalidade: textoOpcionalNovo,
+  estadoCivil: z.enum(ESTADOS_CIVIS, { error: "Estado civil inválido" }).nullable().optional(),
+  racaCor: z.enum(RACAS_COR, { error: "Raça/cor inválida" }).nullable().optional(),
+  tituloEleitor: textoOpcionalNovo,
+  reservista: textoOpcionalNovo,
+  cbo: textoOpcionalNovo,
 });
 
 export type ColaboradorInput = z.infer<typeof colaboradorSchema>;
