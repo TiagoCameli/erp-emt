@@ -10,20 +10,6 @@ import {
 import { listarDocumentos, type SituacaoDocumento } from "@/modules/rh/documentos/queries";
 import { listarFerias, type SituacaoFerias } from "@/modules/rh/ferias/queries";
 
-/**
- * Vínculos pagos por diária (não têm salário fixo mensal, então não entram
- * no alerta de "cadastro sem salário"). Hoje só `diarista`; mesmo critério já
- * usado em `rh/_shared/queries.ts` (`listarDiaristas`, filtro
- * `vinculo = 'diarista'`) e nos rótulos de `cadastros/colaboradores/schemas.ts`
- * (`VINCULOS = ["clt", "diarista", "terceiro"]`). `terceiro` não é diária —
- * mantido fora deste conjunto.
- */
-const VINCULOS_PAGOS_POR_DIARIA = ["diarista"] as const;
-
-function ehPagoPorDiaria(vinculo: string): boolean {
-  return (VINCULOS_PAGOS_POR_DIARIA as readonly string[]).includes(vinculo);
-}
-
 /** Ordena os alertas com crítico antes de aviso e, dentro do mesmo nível, por uma chave string asc (nulos por último). */
 function ordenarPorUrgenciaEChave<T extends { urgencia: Urgencia }>(
   itens: T[],
@@ -167,10 +153,9 @@ export interface AlertaCadastro {
 
 /**
  * Alertas de cadastro incompleto: colaboradores ativos sem salário
- * registrado (quando não são pagos por diária) e/ou sem nenhum meio de
- * recebimento (banco ou chave Pix). `pagoPorDiaria` é derivado do vínculo
- * (ver `VINCULOS_PAGOS_POR_DIARIA`). Só devolve quem tem pelo menos um dos
- * dois problemas.
+ * registrado (só para vínculo CLT — ver `VINCULOS_FOLHA_SALARIO` em
+ * `calculo.ts`) e/ou sem nenhum meio de recebimento (banco ou chave Pix,
+ * qualquer vínculo). Só devolve quem tem pelo menos um dos dois problemas.
  */
 export async function listarAlertasCadastro(): Promise<AlertaCadastro[]> {
   const supabase = await createClient();
@@ -193,7 +178,6 @@ export async function listarAlertasCadastro(): Promise<AlertaCadastro[]> {
       salario: c.salario,
       banco: c.banco,
       chavePix: c.chave_pix,
-      pagoPorDiaria: ehPagoPorDiaria(c.vinculo),
     });
 
     if (semSalario || semBanco) {

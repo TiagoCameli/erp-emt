@@ -39,8 +39,6 @@ export interface ColaboradorCadastro {
   salario: number | null;
   banco: string | null;
   chavePix: string | null;
-  /** Derivado do vínculo (ex.: diarista): pago por diária, não por salário fixo. */
-  pagoPorDiaria: boolean;
 }
 
 /** Resultado da checagem de cadastro incompleto. */
@@ -50,15 +48,28 @@ export interface CadastroFaltando {
 }
 
 /**
+ * Vínculos que entram na folha por salário mensal. `fn_gerar_folha` faz o
+ * loop de geração de folha só `where ativo and vinculo = 'clt'` — diarista
+ * (valor_diaria) e terceiro não entram por salário. Não é regra fiscal
+ * inventada, é o que a folha realmente processa.
+ */
+const VINCULOS_FOLHA_SALARIO = ["clt"] as const;
+
+/**
  * Cadastro incompleto de um colaborador ativo:
- * - semSalario: ativo, não pago por diária e sem salário registrado (null ou zero).
- * - semBanco: ativo e sem nenhum meio de recebimento (nem banco, nem chave Pix).
+ * - semSalario: ativo, vínculo CLT (o único que entra na folha por salário
+ *   mensal — ver `VINCULOS_FOLHA_SALARIO`) e sem salário registrado (null ou
+ *   zero). Diarista e terceiro nunca acusam semSalario.
+ * - semBanco: ativo e sem nenhum meio de recebimento (nem banco, nem chave
+ *   Pix), qualquer vínculo.
  * Colaborador inativo nunca acusa (não é alerta de quem já saiu).
  */
 export function cadastroFaltando(c: ColaboradorCadastro): CadastroFaltando {
   if (!c.ativo) return { semSalario: false, semBanco: false };
 
-  const semSalario = !c.pagoPorDiaria && (c.salario == null || c.salario === 0);
+  const semSalario =
+    (VINCULOS_FOLHA_SALARIO as readonly string[]).includes(c.vinculo) &&
+    (c.salario == null || c.salario === 0);
   const semBanco = !c.banco && !c.chavePix;
 
   return { semSalario, semBanco };

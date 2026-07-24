@@ -54,7 +54,6 @@ describe("cadastroFaltando", () => {
         salario: null,
         banco: null,
         chavePix: null,
-        pagoPorDiaria: false,
       }),
     ).toEqual({ semSalario: true, semBanco: true });
   });
@@ -67,12 +66,35 @@ describe("cadastroFaltando", () => {
         salario: 0,
         banco: "Banco X",
         chavePix: null,
-        pagoPorDiaria: false,
       }),
     ).toEqual({ semSalario: true, semBanco: false });
   });
 
-  it("diarista sem salário não acusa (pago por diária, não por salário)", () => {
+  it("ativo CLT com salário maior que zero não acusa semSalario", () => {
+    expect(
+      cadastroFaltando({
+        ativo: true,
+        vinculo: "clt",
+        salario: 3000,
+        banco: "Banco X",
+        chavePix: null,
+      }),
+    ).toEqual({ semSalario: false, semBanco: false });
+  });
+
+  it("terceiro ativo sem salário não acusa semSalario (não entra na folha por salário, fn_gerar_folha só processa CLT)", () => {
+    expect(
+      cadastroFaltando({
+        ativo: true,
+        vinculo: "terceiro",
+        salario: null,
+        banco: "x",
+        chavePix: null,
+      }),
+    ).toEqual({ semSalario: false, semBanco: false });
+  });
+
+  it("diarista ativo sem salário não acusa semSalario (pago por diária, não entra na folha por salário)", () => {
     expect(
       cadastroFaltando({
         ativo: true,
@@ -80,7 +102,6 @@ describe("cadastroFaltando", () => {
         salario: null,
         banco: "x",
         chavePix: null,
-        pagoPorDiaria: true,
       }),
     ).toEqual({ semSalario: false, semBanco: false });
   });
@@ -93,7 +114,6 @@ describe("cadastroFaltando", () => {
         salario: null,
         banco: null,
         chavePix: null,
-        pagoPorDiaria: false,
       }),
     ).toEqual({ semSalario: false, semBanco: false });
   });
@@ -106,7 +126,18 @@ describe("cadastroFaltando", () => {
         salario: 3000,
         banco: null,
         chavePix: null,
-        pagoPorDiaria: false,
+      }),
+    ).toEqual({ semSalario: false, semBanco: true });
+  });
+
+  it("terceiro ativo sem banco e sem pix também acusa semBanco (dados bancários valem para qualquer vínculo)", () => {
+    expect(
+      cadastroFaltando({
+        ativo: true,
+        vinculo: "terceiro",
+        salario: null,
+        banco: null,
+        chavePix: null,
       }),
     ).toEqual({ semSalario: false, semBanco: true });
   });
@@ -119,7 +150,6 @@ describe("cadastroFaltando", () => {
         salario: 3000,
         banco: null,
         chavePix: "11122233344",
-        pagoPorDiaria: false,
       }),
     ).toEqual({ semSalario: false, semBanco: false });
   });
@@ -132,7 +162,6 @@ describe("cadastroFaltando", () => {
         salario: 3000,
         banco: "Banco X",
         chavePix: null,
-        pagoPorDiaria: false,
       }),
     ).toEqual({ semSalario: false, semBanco: false });
   });
@@ -145,7 +174,6 @@ describe("cadastroFaltando", () => {
         salario: 3000,
         banco: "Banco X",
         chavePix: "x",
-        pagoPorDiaria: false,
       }),
     ).toEqual({ semSalario: false, semBanco: false });
   });
