@@ -2,8 +2,9 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { MoneyText, StatusBadge } from "@/components/canonicos";
+import { MoneyText, PageHeader, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { ROTULO_VINCULO, ROTULO_TIPO_CONTA } from "@/modules/cadastros/colaboradores/schemas";
 import type { ColaboradorFicha } from "@/modules/cadastros/colaboradores/ficha";
@@ -32,32 +33,6 @@ export interface FichaColaboradorProps {
   diarias: FichaDiarias | null;
 }
 
-/** Card de seção da ficha (borda + superfície), com título e link "ver tudo". */
-function Secao({
-  titulo,
-  verTudoHref,
-  children,
-}: {
-  titulo: string;
-  verTudoHref: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-md border border-border bg-surface p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-secao font-semibold">{titulo}</h2>
-        <Button asChild variant="ghost" size="sm">
-          <Link href={verTudoHref}>
-            Ver tudo
-            <ArrowRight />
-          </Link>
-        </Button>
-      </div>
-      {children}
-    </section>
-  );
-}
-
 /** Linha rotulada para os dados do cabeçalho. */
 function Dado({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   return (
@@ -71,6 +46,18 @@ function Dado({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 /** Texto exibido quando o bloco não tem nenhum registro. */
 function SemRegistros({ texto }: { texto: string }) {
   return <p className="text-detalhe text-muted-foreground">{texto}</p>;
+}
+
+/** Botão "Ver tudo" padrão de cada bloco da ficha, como ação da seção. */
+function VerTudo({ href }: { href: string }) {
+  return (
+    <Button asChild variant="ghost" size="sm">
+      <Link href={href}>
+        Ver tudo
+        <ArrowRight />
+      </Link>
+    </Button>
+  );
 }
 
 const SITUACAO_FERIAS_BADGE: Record<
@@ -101,6 +88,12 @@ const SITUACAO_DOCUMENTO_BADGE: Record<
  * aqui, só nas abas do RH. Cada card só chega ao componente (não-nulo) quando
  * o Server Component já confirmou que o usuário tem "ver" no recurso — por
  * isso a permissão nunca aparece explicitamente aqui, ela já filtrou os props.
+ *
+ * Cabeçalho e cards usam os canônicos `PageHeader` e `SecaoDetalhe` (variante
+ * card, a mesma dos detalhes de Compras) em vez de reimplementar o container.
+ * Como o `PageHeader` só comporta título/descrição/ações (strings simples),
+ * o badge ativo/inativo e o botão de voltar vão nas ações; os metadados
+ * cadastrais (CPF, banco etc.) ficam num `SecaoDetalhe` próprio, como já era.
  */
 export function FichaColaborador({
   colaborador,
@@ -114,34 +107,27 @@ export function FichaColaborador({
 }: FichaColaboradorProps) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline" size="icon-sm" aria-label="Voltar para a lista">
-            <Link href="/cadastros/colaboradores">
-              <ArrowLeft />
-            </Link>
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-titulo font-semibold">{colaborador.nome}</h1>
-              {colaborador.ativo ? (
-                <StatusBadge status="aprovado" rotulo="Ativo" />
-              ) : (
-                <StatusBadge status="rascunho" rotulo="Inativo" />
-              )}
-            </div>
-            <p className="text-detalhe text-muted-foreground">
-              {colaborador.funcao ?? "Sem função cadastrada"}
-              {" · "}
-              {ROTULO_VINCULO[colaborador.vinculo]}
-              {colaborador.obraNome ? ` · ${colaborador.obraNome}` : ""}
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        titulo={colaborador.nome}
+        descricao={`${colaborador.funcao ?? "Sem função cadastrada"} · ${ROTULO_VINCULO[colaborador.vinculo]}${colaborador.obraNome ? ` · ${colaborador.obraNome}` : ""}`}
+        acoes={
+          <>
+            {colaborador.ativo ? (
+              <StatusBadge status="aprovado" rotulo="Ativo" />
+            ) : (
+              <StatusBadge status="rascunho" rotulo="Inativo" />
+            )}
+            <Button asChild variant="outline" size="sm">
+              <Link href="/cadastros/colaboradores">
+                <ArrowLeft />
+                Voltar
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-      <section className="rounded-md border border-border bg-surface p-4">
-        <h2 className="mb-3 text-secao font-semibold">Dados cadastrais</h2>
+      <SecaoDetalhe titulo="Dados cadastrais" card>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <Dado rotulo="CPF">{colaborador.cpf ?? "-"}</Dado>
           <Dado rotulo="Telefone">{colaborador.telefone ?? "-"}</Dado>
@@ -173,11 +159,11 @@ export function FichaColaborador({
           </Dado>
           <Dado rotulo="Chave PIX">{colaborador.chavePix ?? "-"}</Dado>
         </div>
-      </section>
+      </SecaoDetalhe>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {ponto ? (
-          <Secao titulo="Ponto e apontamentos" verTudoHref="/rh/apontamentos">
+          <SecaoDetalhe titulo="Ponto e apontamentos" card acao={<VerTudo href="/rh/apontamentos" />}>
             {ponto.itens.length === 0 ? (
               <SemRegistros texto="Nenhum apontamento registrado." />
             ) : (
@@ -210,11 +196,11 @@ export function FichaColaborador({
               {ponto.totalRegistros}{" "}
               {ponto.totalRegistros === 1 ? "apontamento no total" : "apontamentos no total"}
             </p>
-          </Secao>
+          </SecaoDetalhe>
         ) : null}
 
         {ferias ? (
-          <Secao titulo="Férias" verTudoHref="/rh/ferias">
+          <SecaoDetalhe titulo="Férias" card acao={<VerTudo href="/rh/ferias" />}>
             {ferias.itens.length === 0 ? (
               <SemRegistros texto="Nenhum período de férias cadastrado." />
             ) : (
@@ -248,11 +234,11 @@ export function FichaColaborador({
                 {ferias.aVencer > 0 ? `${ferias.aVencer} a vencer` : null}
               </p>
             ) : null}
-          </Secao>
+          </SecaoDetalhe>
         ) : null}
 
         {documentos ? (
-          <Secao titulo="Documentos e ASO" verTudoHref="/rh/documentos">
+          <SecaoDetalhe titulo="Documentos e ASO" card acao={<VerTudo href="/rh/documentos" />}>
             {documentos.itens.length === 0 ? (
               <SemRegistros texto="Nenhum documento cadastrado." />
             ) : (
@@ -289,11 +275,11 @@ export function FichaColaborador({
                 {documentos.aVencer > 0 ? `${documentos.aVencer} a vencer` : null}
               </p>
             ) : null}
-          </Secao>
+          </SecaoDetalhe>
         ) : null}
 
         {epis ? (
-          <Secao titulo="EPI" verTudoHref="/rh/epis">
+          <SecaoDetalhe titulo="EPI" card acao={<VerTudo href="/rh/epis" />}>
             {epis.itens.length === 0 ? (
               <SemRegistros texto="Nenhum EPI entregue." />
             ) : (
@@ -326,11 +312,11 @@ export function FichaColaborador({
                 {epis.pendentesDevolucao} pendente(s) de devolução
               </p>
             ) : null}
-          </Secao>
+          </SecaoDetalhe>
         ) : null}
 
         {ocorrencias ? (
-          <Secao titulo="Ausências e ocorrências" verTudoHref="/rh/ocorrencias">
+          <SecaoDetalhe titulo="Ausências e ocorrências" card acao={<VerTudo href="/rh/ocorrencias" />}>
             {ocorrencias.itens.length === 0 ? (
               <SemRegistros texto="Nenhuma ocorrência registrada." />
             ) : (
@@ -353,11 +339,11 @@ export function FichaColaborador({
               {ocorrencias.totalRegistros}{" "}
               {ocorrencias.totalRegistros === 1 ? "ocorrência no total" : "ocorrências no total"}
             </p>
-          </Secao>
+          </SecaoDetalhe>
         ) : null}
 
         {adiantamentos ? (
-          <Secao titulo="Adiantamentos" verTudoHref="/rh/adiantamentos">
+          <SecaoDetalhe titulo="Adiantamentos" card acao={<VerTudo href="/rh/adiantamentos" />}>
             {adiantamentos.itens.length === 0 ? (
               <SemRegistros texto="Nenhum adiantamento registrado." />
             ) : (
@@ -384,11 +370,11 @@ export function FichaColaborador({
                 <MoneyText valor={adiantamentos.totalEmAberto} />
               </p>
             ) : null}
-          </Secao>
+          </SecaoDetalhe>
         ) : null}
 
         {diarias ? (
-          <Secao titulo="Diárias" verTudoHref="/rh/diaristas">
+          <SecaoDetalhe titulo="Diárias" card acao={<VerTudo href="/rh/diaristas" />}>
             {diarias.itens.length === 0 ? (
               <SemRegistros texto="Nenhuma diária registrada." />
             ) : (
@@ -415,7 +401,7 @@ export function FichaColaborador({
                 <MoneyText valor={diarias.totalEmAberto} />
               </p>
             ) : null}
-          </Secao>
+          </SecaoDetalhe>
         ) : null}
       </div>
     </div>

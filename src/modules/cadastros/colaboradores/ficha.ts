@@ -5,11 +5,16 @@ import type {
   TipoConta,
   Vinculo,
 } from "@/modules/cadastros/colaboradores/schemas";
+import { listarAdiantamentos } from "@/modules/rh/adiantamentos/queries";
+import type { AdiantamentoLista } from "@/modules/rh/adiantamentos/queries";
 import { listarDocumentos } from "@/modules/rh/documentos/queries";
 import type { DocumentoLista } from "@/modules/rh/documentos/queries";
+import { listarEpis } from "@/modules/rh/epis/queries";
+import type { EpiLista } from "@/modules/rh/epis/queries";
 import { listarFerias } from "@/modules/rh/ferias/queries";
 import type { FeriasLista } from "@/modules/rh/ferias/queries";
-import type { TipoOcorrencia } from "@/modules/rh/ocorrencias/schemas";
+import { listarOcorrencias } from "@/modules/rh/ocorrencias/queries";
+import type { OcorrenciaLista } from "@/modules/rh/ocorrencias/queries";
 import type {
   StatusPonto,
   TipoApontamento,
@@ -22,7 +27,8 @@ import type {
  * isso usam LIMIT no banco; as demais fontes (férias, documentos, EPI,
  * ocorrências, adiantamentos) já são naturalmente pequenas por colaborador e
  * reaproveitam a query filtrada do módulo de origem, evitando duplicar regra
- * de vencimento/situação (ferias/queries.ts, documentos/queries.ts).
+ * de vencimento/situação/flag (ferias/queries.ts, documentos/queries.ts,
+ * epis/queries.ts, ocorrencias/queries.ts, adiantamentos/queries.ts).
  */
 
 /** Quantos itens recentes cada bloco da ficha traz. */
@@ -37,7 +43,6 @@ export interface ColaboradorFicha {
   vinculo: Vinculo;
   obraId: string | null;
   obraNome: string | null;
-  obraLote: string | null;
   centroCustoId: string | null;
   centroCustoNome: string | null;
   dataAdmissao: string | null;
@@ -61,7 +66,7 @@ export async function buscarColaboradorFicha(
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, obras(nome, lote), centros_custo(nome)",
+      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, obras(nome), centros_custo(nome)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -76,7 +81,6 @@ export async function buscarColaboradorFicha(
     vinculo: data.vinculo as Vinculo,
     obraId: data.obra_id,
     obraNome: data.obras?.nome ?? null,
-    obraLote: data.obras?.lote ?? null,
     centroCustoId: data.centro_custo_id,
     centroCustoNome: data.centros_custo?.nome ?? null,
     dataAdmissao: data.data_admissao,
@@ -109,25 +113,38 @@ export interface FichaPonto {
 }
 
 /**
- * Últimos apontamentos do colaborador (ponto é lançamento diário, então usa
- * LIMIT no banco) + contagem total via count exato sem trazer linhas.
+ * Últimos pontos do colaborador (ponto é lançamento diário, então usa LIMIT
+ * no banco) + contagem total via count exato sem trazer linhas.
+ *
+ * A consulta parte de `rh_pontos` (não de `rh_apontamentos`, que é a tabela
+ * de origem do colaborador): o PostgREST não ordena o registro pai por uma
+ * coluna do embed, então ordenar pela data do dia de trabalho só é possível
+ * fazendo dela a tabela de topo. O embed `rh_apontamentos!inner` filtra só os
+ * pontos em que este colaborador tem apontamento (unique(ponto_id,
+ * colaborador_id), então é no máximo 1 por ponto). Mesmo critério de
+ * ordenação de `listarPontos` (apontamentos/queries.ts): data desc, depois
+ * created_at desc como desempate.
  */
 export async function resumoPonto(colaboradorId: string): Promise<FichaPonto> {
   const supabase = await createClient();
 
   const [{ data, error }, { count, error: erroContagem }] = await Promise.all([
     supabase
-      .from("rh_apontamentos")
+      .from("rh_pontos")
       .select(
-        "horas_normais, horas_extras, tipo, rh_pontos(id, data, status, obras(nome))",
+        "id, data, status, obras(nome), rh_apontamentos!inner(horas_normais, horas_extras, tipo, colaborador_id)",
       )
-      .eq("colaborador_id", colaboradorId)
+      .eq("rh_apontamentos.colaborador_id", colaboradorId)
+      .order("data", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(LIMITE_RECENTES),
     supabase
-      .from("rh_apontamentos")
-      .select("id", { count: "exact", head: true })
-      .eq("colaborador_id", colaboradorId),
+      .from("rh_pontos")
+      .select("id, rh_apontamentos!inner(colaborador_id)", {
+        count: "exact",
+        head: true,
+      })
+      .eq("rh_apontamentos.colaborador_id", colaboradorId),
   ]);
 
   if (error || erroContagem) {
@@ -135,17 +152,17 @@ export async function resumoPonto(colaboradorId: string): Promise<FichaPonto> {
   }
 
   const itens: FichaPontoItem[] = (data ?? [])
-    .filter((linha) => linha.rh_pontos !== null)
-    .map((linha) => {
-      const ponto = linha.rh_pontos!;
+    .filter((ponto) => ponto.rh_apontamentos.length > 0)
+    .map((ponto) => {
+      const apontamento = ponto.rh_apontamentos[0];
       return {
         pontoId: ponto.id,
         data: ponto.data,
         obraNome: ponto.obras?.nome ?? "-",
         status: ponto.status as StatusPonto,
-        tipo: linha.tipo as TipoApontamento,
-        horasNormais: linha.horas_normais,
-        horasExtras: linha.horas_extras,
+        tipo: apontamento.tipo as TipoApontamento,
+        horasNormais: apontamento.horas_normais,
+        horasExtras: apontamento.horas_extras,
       };
     });
 
@@ -196,159 +213,71 @@ export async function resumoDocumentos(
   };
 }
 
-export interface FichaEpiItem {
-  id: string;
-  descricao: string;
-  ca: string | null;
-  quantidade: number;
-  dataEntrega: string;
-  dataDevolucao: string | null;
-}
-
 export interface FichaEpis {
-  itens: FichaEpiItem[];
+  itens: EpiLista[];
   pendentesDevolucao: number;
 }
 
 /**
- * Últimas entregas de EPI do colaborador + contagem dos ainda pendentes de
- * devolução (data_devolucao nula), via count exato sem trazer linhas.
+ * EPIs do colaborador (reaproveita `listarEpis` filtrada, que já ordena por
+ * data de entrega). Volume por colaborador é pequeno: os 5 mais recentes e a
+ * contagem dos pendentes de devolução (dataDevolucao nula) vêm da mesma
+ * leitura filtrada.
  */
 export async function resumoEpis(colaboradorId: string): Promise<FichaEpis> {
-  const supabase = await createClient();
-
-  const [{ data, error }, { count, error: erroPendentes }] = await Promise.all([
-    supabase
-      .from("rh_epis")
-      .select("id, descricao, ca, quantidade, data_entrega, data_devolucao")
-      .eq("colaborador_id", colaboradorId)
-      .order("data_entrega", { ascending: false })
-      .limit(LIMITE_RECENTES),
-    supabase
-      .from("rh_epis")
-      .select("id", { count: "exact", head: true })
-      .eq("colaborador_id", colaboradorId)
-      .is("data_devolucao", null),
-  ]);
-
-  if (error || erroPendentes) {
-    throw new Error("Não foi possível carregar os EPIs do colaborador");
-  }
+  const todos = await listarEpis({ colaboradorId });
 
   return {
-    itens: (data ?? []).map((linha) => ({
-      id: linha.id,
-      descricao: linha.descricao,
-      ca: linha.ca,
-      quantidade: linha.quantidade,
-      dataEntrega: linha.data_entrega,
-      dataDevolucao: linha.data_devolucao,
-    })),
-    pendentesDevolucao: count ?? 0,
+    itens: todos.slice(0, LIMITE_RECENTES),
+    pendentesDevolucao: todos.filter((item) => item.dataDevolucao === null)
+      .length,
   };
-}
-
-export interface FichaOcorrenciaItem {
-  id: string;
-  data: string;
-  tipo: TipoOcorrencia;
-  descricao: string;
 }
 
 export interface FichaOcorrencias {
-  itens: FichaOcorrenciaItem[];
+  itens: OcorrenciaLista[];
   totalRegistros: number;
 }
 
-/** Últimas ocorrências do colaborador + contagem total (count exato). */
+/**
+ * Ocorrências do colaborador (reaproveita `listarOcorrencias` filtrada).
+ * Volume por colaborador é pequeno: os 5 mais recentes e a contagem total
+ * vêm da mesma leitura filtrada.
+ */
 export async function resumoOcorrencias(
   colaboradorId: string,
 ): Promise<FichaOcorrencias> {
-  const supabase = await createClient();
-
-  const [{ data, error }, { count, error: erroContagem }] = await Promise.all([
-    supabase
-      .from("rh_ocorrencias")
-      .select("id, data, tipo, descricao")
-      .eq("colaborador_id", colaboradorId)
-      .order("data", { ascending: false })
-      .limit(LIMITE_RECENTES),
-    supabase
-      .from("rh_ocorrencias")
-      .select("id", { count: "exact", head: true })
-      .eq("colaborador_id", colaboradorId),
-  ]);
-
-  if (error || erroContagem) {
-    throw new Error("Não foi possível carregar as ocorrências do colaborador");
-  }
+  const todas = await listarOcorrencias({ colaboradorId });
 
   return {
-    itens: (data ?? []).map((linha) => ({
-      id: linha.id,
-      data: linha.data,
-      tipo: linha.tipo as TipoOcorrencia,
-      descricao: linha.descricao,
-    })),
-    totalRegistros: count ?? 0,
+    itens: todas.slice(0, LIMITE_RECENTES),
+    totalRegistros: todas.length,
   };
 }
 
-export interface FichaAdiantamentoItem {
-  id: string;
-  competencia: string;
-  data: string;
-  valor: number;
-  naFolha: boolean;
-}
-
 export interface FichaAdiantamentos {
-  itens: FichaAdiantamentoItem[];
+  itens: AdiantamentoLista[];
   qtdEmAberto: number;
   totalEmAberto: number;
 }
 
 /**
- * Últimos adiantamentos do colaborador + total em aberto (folha_id nulo:
- * ainda não entrou em nenhuma folha). A soma dos em aberto exige as linhas
- * (não dá para agregar SUM no PostgREST), mas o conjunto em aberto é sempre
- * pequeno (só a competência corrente costuma estar sem folha fechada).
+ * Adiantamentos do colaborador (reaproveita `listarAdiantamentos` filtrada,
+ * que já calcula a flag `naFolha`). Volume por colaborador é pequeno: os 5
+ * mais recentes vêm da mesma leitura filtrada; o total em aberto (folhaId
+ * nulo: ainda não entrou em nenhuma folha) é agregado em JS porque o
+ * PostgREST não soma no servidor.
  */
 export async function resumoAdiantamentos(
   colaboradorId: string,
 ): Promise<FichaAdiantamentos> {
-  const supabase = await createClient();
-
-  const [{ data, error }, { data: abertos, error: erroAbertos }] =
-    await Promise.all([
-      supabase
-        .from("rh_adiantamentos")
-        .select("id, competencia, data, valor, folha_id")
-        .eq("colaborador_id", colaboradorId)
-        .order("competencia", { ascending: false })
-        .order("data", { ascending: false })
-        .limit(LIMITE_RECENTES),
-      supabase
-        .from("rh_adiantamentos")
-        .select("valor")
-        .eq("colaborador_id", colaboradorId)
-        .is("folha_id", null),
-    ]);
-
-  if (error || erroAbertos) {
-    throw new Error("Não foi possível carregar os adiantamentos do colaborador");
-  }
+  const todos = await listarAdiantamentos({ colaboradorId });
+  const abertos = todos.filter((item) => !item.naFolha);
 
   return {
-    itens: (data ?? []).map((linha) => ({
-      id: linha.id,
-      competencia: linha.competencia,
-      data: linha.data,
-      valor: linha.valor,
-      naFolha: linha.folha_id !== null,
-    })),
-    qtdEmAberto: (abertos ?? []).length,
-    totalEmAberto: (abertos ?? []).reduce((soma, linha) => soma + linha.valor, 0),
+    itens: todos.slice(0, LIMITE_RECENTES),
+    qtdEmAberto: abertos.length,
+    totalEmAberto: abertos.reduce((soma, item) => soma + item.valor, 0),
   };
 }
 
