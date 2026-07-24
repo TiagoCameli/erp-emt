@@ -214,6 +214,13 @@ export const RECURSOS = [
   },
   // RH
   {
+    id: "rh.alertas",
+    nome: "Alertas",
+    modulo: "rh",
+    rota: "/rh/alertas",
+    acoes: ["ver"],
+  },
+  {
     id: "rh.apontamentos",
     nome: "Ponto e apontamentos",
     modulo: "rh",

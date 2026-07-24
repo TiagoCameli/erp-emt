@@ -2281,6 +2281,18 @@ export type Database = {
         Args: { p_transacao_id: string }
         Returns: undefined
       }
+      fn_epis_a_recolher: {
+        Args: never
+        Returns: {
+          ca: string
+          colaborador_id: string
+          colaborador_nome: string
+          data_entrega: string
+          descricao: string
+          id: string
+          quantidade: number
+        }[]
+      }
       fn_excluir_cadastro: {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
