@@ -171,6 +171,13 @@ export const RECURSOS = [
     acoes: ["ver", "criar"],
   },
   {
+    id: "financeiro.programados",
+    nome: "Programados",
+    modulo: "financeiro",
+    rota: "/financeiro/programados",
+    acoes: ["ver", "editar"],
+  },
+  {
     id: "financeiro.contas-receber",
     nome: "Contas a receber",
     modulo: "financeiro",
