@@ -24,6 +24,20 @@ export const ROTULO_PARENTESCO: Record<Parentesco, string> = {
   outro: "Outro",
 };
 
+/**
+ * Rótulo do parentesco com fallback pra dado legado sem parentesco definido
+ * (ver comentário de `listarDependentes` em `dependentes.ts`). Usado na UI
+ * (seção de dependentes do form e ficha) em vez de indexar `ROTULO_PARENTESCO`
+ * direto, porque `Dependente.parentesco` é tipado como `string`, não como
+ * `Parentesco`.
+ */
+export function rotuloParentesco(parentesco: string): string {
+  return (
+    (ROTULO_PARENTESCO as Record<string, string>)[parentesco] ||
+    "Não informado"
+  );
+}
+
 /** Normaliza string vazia para null (campos opcionais do formulário). */
 const textoOpcional = z
   .string()

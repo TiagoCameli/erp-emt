@@ -37,6 +37,39 @@ export interface Dependente {
   dependenteSalarioFamilia: boolean;
 }
 
+const SELECT_DEPENDENTE =
+  "id, colaborador_id, nome, data_nascimento, parentesco, cpf, dependente_irrf, dependente_salario_familia";
+
+/** Linha crua do select acima, antes do mapeamento pro shape da UI. */
+interface LinhaDependente {
+  id: string;
+  colaborador_id: string;
+  nome: string;
+  data_nascimento: string | null;
+  parentesco: string | null;
+  cpf: string | null;
+  dependente_irrf: boolean;
+  dependente_salario_familia: boolean;
+}
+
+/** Converte a linha do banco no `Dependente` exposto pra UI. */
+function paraDependente(linha: LinhaDependente): Dependente {
+  return {
+    id: linha.id,
+    colaboradorId: linha.colaborador_id,
+    nome: linha.nome,
+    dataNascimento: linha.data_nascimento,
+    // A coluna é nullable no banco, mas o schema de escrita sempre exige um
+    // parentesco: na prática nunca fica null. Sem dado (registro legado),
+    // cai em string vazia em vez de expor `null` numa interface tipada como
+    // `string` (assinatura da brief/Task 3).
+    parentesco: (linha.parentesco as Parentesco | null) ?? "",
+    cpf: linha.cpf,
+    dependenteIrrf: linha.dependente_irrf,
+    dependenteSalarioFamilia: linha.dependente_salario_familia,
+  };
+}
+
 /**
  * Lista os dependentes de um colaborador, ordenados por data de nascimento
  * (mais novo por último não importa aqui; o que importa é agrupar quem tem
@@ -50,9 +83,7 @@ export async function listarDependentes(
 
   const { data, error } = await supabase
     .from("rh_dependentes")
-    .select(
-      "id, colaborador_id, nome, data_nascimento, parentesco, cpf, dependente_irrf, dependente_salario_familia",
-    )
+    .select(SELECT_DEPENDENTE)
     .eq("colaborador_id", colaboradorId)
     .order("data_nascimento", { ascending: true, nullsFirst: false })
     .order("nome", { ascending: true });
@@ -61,20 +92,37 @@ export async function listarDependentes(
     throw new Error("Não foi possível carregar os dependentes");
   }
 
-  return (data ?? []).map((dependente) => ({
-    id: dependente.id,
-    colaboradorId: dependente.colaborador_id,
-    nome: dependente.nome,
-    dataNascimento: dependente.data_nascimento,
-    // A coluna é nullable no banco, mas o schema de escrita sempre exige um
-    // parentesco: na prática nunca fica null. Sem dado (registro legado),
-    // cai em string vazia em vez de expor `null` numa interface tipada como
-    // `string` (assinatura da brief/Task 3).
-    parentesco: (dependente.parentesco as Parentesco | null) ?? "",
-    cpf: dependente.cpf,
-    dependenteIrrf: dependente.dependente_irrf,
-    dependenteSalarioFamilia: dependente.dependente_salario_familia,
-  }));
+  return (data ?? []).map(paraDependente);
+}
+
+/**
+ * Todos os dependentes de todos os colaboradores, agrupados por
+ * `colaboradorId` — mesmo padrão de `listarAnexosPorRegistro`
+ * (compras/_shared/anexos-actions.ts): a tabela de colaboradores usa isso
+ * pra já ter os dependentes de qualquer colaborador prontos quando o drawer
+ * de edição abre, sem buscar no cliente (e sem travar em "Carregando").
+ */
+export async function listarDependentesPorColaborador(): Promise<
+  Record<string, Dependente[]>
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("rh_dependentes")
+    .select(SELECT_DEPENDENTE)
+    .order("data_nascimento", { ascending: true, nullsFirst: false })
+    .order("nome", { ascending: true });
+
+  if (error) {
+    throw new Error("Não foi possível carregar os dependentes");
+  }
+
+  const porColaborador: Record<string, Dependente[]> = {};
+  for (const linha of data ?? []) {
+    const dependente = paraDependente(linha);
+    (porColaborador[dependente.colaboradorId] ??= []).push(dependente);
+  }
+  return porColaborador;
 }
 
 /** Converte o DependenteInput validado nas colunas da tabela rh_dependentes. */

@@ -20,11 +20,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { criar, editar } from "@/modules/cadastros/colaboradores/actions";
+import type { Dependente } from "@/modules/cadastros/colaboradores/dependentes";
 import type {
   ColaboradorLista,
   OpcaoSelecao,
 } from "@/modules/cadastros/colaboradores/queries";
 import {
+  CNH_CATEGORIAS,
+  ESCOLARIDADES,
+  ESTADOS_CIVIS,
+  RACAS_COR,
+  ROTULO_CNH_CATEGORIA,
+  ROTULO_ESCOLARIDADE,
+  ROTULO_ESTADO_CIVIL,
+  ROTULO_RACA_COR,
   ROTULO_TIPO_CONTA,
   ROTULO_VINCULO,
   TIPOS_CONTA,
@@ -33,10 +42,15 @@ import {
   paraNumero,
   type ColaboradorInput,
 } from "@/modules/cadastros/colaboradores/schemas";
+import { DependentesSecao } from "./dependentes-secao";
 
 const SEM_OBRA = "sem-obra";
 const SEM_CENTRO_CUSTO = "sem-centro-custo";
 const SEM_TIPO_CONTA = "sem-tipo-conta";
+const SEM_CNH_CATEGORIA = "sem-cnh-categoria";
+const SEM_ESCOLARIDADE = "sem-escolaridade";
+const SEM_ESTADO_CIVIL = "sem-estado-civil";
+const SEM_RACA_COR = "sem-raca-cor";
 const ID_FORM = "form-colaborador";
 
 /**
@@ -96,6 +110,29 @@ const formSchema = z.object({
   conta: z.string(),
   tipoConta: z.string(),
   chavePix: z.string(),
+
+  // Dados pessoais / documentação / eSocial (Bloco 2). Todos strings simples
+  // (com sentinela nos selects opcionais), mesmo padrão dos campos acima —
+  // a validação de domínio (enum/nullable) roda em `paraInput`.
+  rg: z.string(),
+  rgOrgao: z.string(),
+  rgUf: z.string(),
+  ctpsNumero: z.string(),
+  ctpsSerie: z.string(),
+  ctpsUf: z.string(),
+  pis: z.string(),
+  cnhNumero: z.string(),
+  cnhCategoria: z.string(),
+  cnhValidade: z.string(),
+  escolaridade: z.string(),
+  dataNascimento: z.string(),
+  nomeMae: z.string(),
+  nacionalidade: z.string(),
+  estadoCivil: z.string(),
+  racaCor: z.string(),
+  tituloEleitor: z.string(),
+  reservista: z.string(),
+  cbo: z.string(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -124,6 +161,26 @@ function valoresIniciais(colaborador: ColaboradorLista | null): FormValues {
     conta: colaborador?.conta ?? "",
     tipoConta: colaborador?.tipoConta ?? SEM_TIPO_CONTA,
     chavePix: colaborador?.chavePix ?? "",
+
+    rg: colaborador?.rg ?? "",
+    rgOrgao: colaborador?.rgOrgao ?? "",
+    rgUf: colaborador?.rgUf ?? "",
+    ctpsNumero: colaborador?.ctpsNumero ?? "",
+    ctpsSerie: colaborador?.ctpsSerie ?? "",
+    ctpsUf: colaborador?.ctpsUf ?? "",
+    pis: colaborador?.pis ?? "",
+    cnhNumero: colaborador?.cnhNumero ?? "",
+    cnhCategoria: colaborador?.cnhCategoria ?? SEM_CNH_CATEGORIA,
+    cnhValidade: colaborador?.cnhValidade ?? "",
+    escolaridade: colaborador?.escolaridade ?? SEM_ESCOLARIDADE,
+    dataNascimento: colaborador?.dataNascimento ?? "",
+    nomeMae: colaborador?.nomeMae ?? "",
+    nacionalidade: colaborador?.nacionalidade ?? "",
+    estadoCivil: colaborador?.estadoCivil ?? SEM_ESTADO_CIVIL,
+    racaCor: colaborador?.racaCor ?? SEM_RACA_COR,
+    tituloEleitor: colaborador?.tituloEleitor ?? "",
+    reservista: colaborador?.reservista ?? "",
+    cbo: colaborador?.cbo ?? "",
   };
 }
 
@@ -147,6 +204,29 @@ function paraInput(valores: FormValues): ColaboradorInput {
     conta: valores.conta,
     tipoConta: valores.tipoConta === SEM_TIPO_CONTA ? null : valores.tipoConta,
     chavePix: valores.chavePix,
+
+    rg: valores.rg,
+    rgOrgao: valores.rgOrgao,
+    rgUf: valores.rgUf,
+    ctpsNumero: valores.ctpsNumero,
+    ctpsSerie: valores.ctpsSerie,
+    ctpsUf: valores.ctpsUf,
+    pis: valores.pis,
+    cnhNumero: valores.cnhNumero,
+    cnhCategoria:
+      valores.cnhCategoria === SEM_CNH_CATEGORIA ? null : valores.cnhCategoria,
+    cnhValidade: valores.cnhValidade,
+    escolaridade:
+      valores.escolaridade === SEM_ESCOLARIDADE ? null : valores.escolaridade,
+    dataNascimento: valores.dataNascimento,
+    nomeMae: valores.nomeMae,
+    nacionalidade: valores.nacionalidade,
+    estadoCivil:
+      valores.estadoCivil === SEM_ESTADO_CIVIL ? null : valores.estadoCivil,
+    racaCor: valores.racaCor === SEM_RACA_COR ? null : valores.racaCor,
+    tituloEleitor: valores.tituloEleitor,
+    reservista: valores.reservista,
+    cbo: valores.cbo,
   });
 }
 
@@ -160,6 +240,16 @@ export interface ColaboradoresFormDrawerProps {
   onAbertoChange?: (aberto: boolean) => void;
   /** Quando não controlado, renderiza o botão "Novo colaborador". */
   mostrarGatilho?: boolean;
+  /**
+   * Dependentes do colaborador em edição, buscados no server (Task 3). Só é
+   * usada em modo edição; ausente em modo criação (colaborador ainda não
+   * existe, não tem dependente).
+   */
+  dependentesIniciais?: Dependente[];
+  /** Libera adicionar/editar dependente ("editar" em cadastros.colaboradores). */
+  podeEditar?: boolean;
+  /** Libera remover dependente ("excluir" em cadastros.colaboradores). */
+  podeExcluir?: boolean;
 }
 
 /**
@@ -174,6 +264,9 @@ export function ColaboradoresFormDrawer({
   aberto: abertoExterno,
   onAbertoChange,
   mostrarGatilho = false,
+  dependentesIniciais = [],
+  podeEditar = false,
+  podeExcluir = false,
 }: ColaboradoresFormDrawerProps) {
   const [abertoInterno, setAbertoInterno] = React.useState(false);
   const controlado = abertoExterno !== undefined;
@@ -218,6 +311,10 @@ export function ColaboradoresFormDrawer({
   const obraValor = form.watch("obraId");
   const centroCustoValor = form.watch("centroCustoId");
   const tipoContaValor = form.watch("tipoConta");
+  const cnhCategoriaValor = form.watch("cnhCategoria");
+  const escolaridadeValor = form.watch("escolaridade");
+  const estadoCivilValor = form.watch("estadoCivil");
+  const racaCorValor = form.watch("racaCor");
 
   return (
     <>
@@ -530,6 +627,316 @@ export function ColaboradoresFormDrawer({
             </CampoFormulario>
           </SecaoFormulario>
 
+          <SecaoFormulario titulo="Documentos pessoais">
+            <LinhaCampos colunas={3}>
+              <CampoFormulario
+                id="colaborador-rg"
+                rotulo="RG"
+                erro={form.formState.errors.rg?.message}
+              >
+                <Input
+                  id="colaborador-rg"
+                  autoComplete="off"
+                  disabled={salvando}
+                  {...form.register("rg")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-rg-orgao"
+                rotulo="Órgão emissor"
+                erro={form.formState.errors.rgOrgao?.message}
+              >
+                <Input
+                  id="colaborador-rg-orgao"
+                  autoComplete="off"
+                  placeholder="Ex: SSP"
+                  disabled={salvando}
+                  {...form.register("rgOrgao")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-rg-uf"
+                rotulo="UF do RG"
+                erro={form.formState.errors.rgUf?.message}
+              >
+                <Input
+                  id="colaborador-rg-uf"
+                  autoComplete="off"
+                  maxLength={2}
+                  placeholder="AC"
+                  disabled={salvando}
+                  {...form.register("rgUf")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+
+            <LinhaCampos colunas={3}>
+              <CampoFormulario
+                id="colaborador-ctps-numero"
+                rotulo="CTPS (número)"
+                erro={form.formState.errors.ctpsNumero?.message}
+              >
+                <Input
+                  id="colaborador-ctps-numero"
+                  autoComplete="off"
+                  disabled={salvando}
+                  {...form.register("ctpsNumero")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-ctps-serie"
+                rotulo="CTPS (série)"
+                erro={form.formState.errors.ctpsSerie?.message}
+              >
+                <Input
+                  id="colaborador-ctps-serie"
+                  autoComplete="off"
+                  disabled={salvando}
+                  {...form.register("ctpsSerie")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-ctps-uf"
+                rotulo="UF da CTPS"
+                erro={form.formState.errors.ctpsUf?.message}
+              >
+                <Input
+                  id="colaborador-ctps-uf"
+                  autoComplete="off"
+                  maxLength={2}
+                  placeholder="AC"
+                  disabled={salvando}
+                  {...form.register("ctpsUf")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+
+            <CampoFormulario
+              id="colaborador-pis"
+              rotulo="PIS"
+              erro={form.formState.errors.pis?.message}
+            >
+              <Input
+                id="colaborador-pis"
+                autoComplete="off"
+                disabled={salvando}
+                {...form.register("pis")}
+              />
+            </CampoFormulario>
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="CNH">
+            <LinhaCampos colunas={3}>
+              <CampoFormulario
+                id="colaborador-cnh-numero"
+                rotulo="Número da CNH"
+                erro={form.formState.errors.cnhNumero?.message}
+              >
+                <Input
+                  id="colaborador-cnh-numero"
+                  autoComplete="off"
+                  disabled={salvando}
+                  {...form.register("cnhNumero")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-cnh-categoria"
+                rotulo="Categoria"
+                erro={form.formState.errors.cnhCategoria?.message}
+              >
+                <Combobox
+                  valor={cnhCategoriaValor}
+                  onValorChange={(valor) => form.setValue("cnhCategoria", valor)}
+                  opcoes={[
+                    { valor: SEM_CNH_CATEGORIA, rotulo: "Não informado" },
+                    ...CNH_CATEGORIAS.map((categoria) => ({
+                      valor: categoria,
+                      rotulo: ROTULO_CNH_CATEGORIA[categoria],
+                    })),
+                  ]}
+                  placeholder="Não informado"
+                  disabled={salvando}
+                  className="w-full"
+                  id="colaborador-cnh-categoria"
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-cnh-validade"
+                rotulo="Validade"
+                erro={form.formState.errors.cnhValidade?.message}
+              >
+                <Input
+                  id="colaborador-cnh-validade"
+                  type="date"
+                  disabled={salvando}
+                  {...form.register("cnhValidade")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="Dados pessoais">
+            <LinhaCampos>
+              <CampoFormulario
+                id="colaborador-data-nascimento"
+                rotulo="Data de nascimento"
+                erro={form.formState.errors.dataNascimento?.message}
+              >
+                <Input
+                  id="colaborador-data-nascimento"
+                  type="date"
+                  disabled={salvando}
+                  {...form.register("dataNascimento")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-nacionalidade"
+                rotulo="Nacionalidade"
+                erro={form.formState.errors.nacionalidade?.message}
+              >
+                <Input
+                  id="colaborador-nacionalidade"
+                  autoComplete="off"
+                  placeholder="Brasileira"
+                  disabled={salvando}
+                  {...form.register("nacionalidade")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+
+            <LinhaCampos colunas={3}>
+              <CampoFormulario
+                id="colaborador-escolaridade"
+                rotulo="Escolaridade"
+                erro={form.formState.errors.escolaridade?.message}
+              >
+                <Combobox
+                  valor={escolaridadeValor}
+                  onValorChange={(valor) => form.setValue("escolaridade", valor)}
+                  opcoes={[
+                    { valor: SEM_ESCOLARIDADE, rotulo: "Não informado" },
+                    ...ESCOLARIDADES.map((escolaridade) => ({
+                      valor: escolaridade,
+                      rotulo: ROTULO_ESCOLARIDADE[escolaridade],
+                    })),
+                  ]}
+                  placeholder="Não informado"
+                  disabled={salvando}
+                  className="w-full"
+                  id="colaborador-escolaridade"
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-estado-civil"
+                rotulo="Estado civil"
+                erro={form.formState.errors.estadoCivil?.message}
+              >
+                <Combobox
+                  valor={estadoCivilValor}
+                  onValorChange={(valor) => form.setValue("estadoCivil", valor)}
+                  opcoes={[
+                    { valor: SEM_ESTADO_CIVIL, rotulo: "Não informado" },
+                    ...ESTADOS_CIVIS.map((estadoCivil) => ({
+                      valor: estadoCivil,
+                      rotulo: ROTULO_ESTADO_CIVIL[estadoCivil],
+                    })),
+                  ]}
+                  placeholder="Não informado"
+                  disabled={salvando}
+                  className="w-full"
+                  id="colaborador-estado-civil"
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-raca-cor"
+                rotulo="Raça/cor"
+                erro={form.formState.errors.racaCor?.message}
+              >
+                <Combobox
+                  valor={racaCorValor}
+                  onValorChange={(valor) => form.setValue("racaCor", valor)}
+                  opcoes={[
+                    { valor: SEM_RACA_COR, rotulo: "Não informado" },
+                    ...RACAS_COR.map((racaCor) => ({
+                      valor: racaCor,
+                      rotulo: ROTULO_RACA_COR[racaCor],
+                    })),
+                  ]}
+                  placeholder="Não informado"
+                  disabled={salvando}
+                  className="w-full"
+                  id="colaborador-raca-cor"
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+
+            <CampoFormulario
+              id="colaborador-nome-mae"
+              rotulo="Nome da mãe"
+              erro={form.formState.errors.nomeMae?.message}
+            >
+              <Input
+                id="colaborador-nome-mae"
+                autoComplete="off"
+                disabled={salvando}
+                {...form.register("nomeMae")}
+              />
+            </CampoFormulario>
+
+            <LinhaCampos>
+              <CampoFormulario
+                id="colaborador-titulo-eleitor"
+                rotulo="Título de eleitor"
+                erro={form.formState.errors.tituloEleitor?.message}
+              >
+                <Input
+                  id="colaborador-titulo-eleitor"
+                  autoComplete="off"
+                  disabled={salvando}
+                  {...form.register("tituloEleitor")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-reservista"
+                rotulo="Certificado de reservista"
+                erro={form.formState.errors.reservista?.message}
+              >
+                <Input
+                  id="colaborador-reservista"
+                  autoComplete="off"
+                  disabled={salvando}
+                  {...form.register("reservista")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+          </SecaoFormulario>
+
+          <SecaoFormulario titulo="Ocupação">
+            <CampoFormulario
+              id="colaborador-cbo"
+              rotulo="CBO"
+              ajuda="Código Brasileiro de Ocupações"
+              erro={form.formState.errors.cbo?.message}
+            >
+              <Input
+                id="colaborador-cbo"
+                autoComplete="off"
+                disabled={salvando}
+                {...form.register("cbo")}
+              />
+            </CampoFormulario>
+          </SecaoFormulario>
+
           <SelectAtivo
             value={form.watch("ativo")}
             onChange={(valor) => form.setValue("ativo", valor)}
@@ -537,6 +944,17 @@ export function ColaboradoresFormDrawer({
             ajuda="Inativos somem das listas de seleção, mas ficam no histórico."
           />
         </form>
+
+        {editando && colaborador ? (
+          <div className="mt-6 border-t border-border pt-4">
+            <DependentesSecao
+              colaboradorId={colaborador.id}
+              dependentesIniciais={dependentesIniciais}
+              podeEditar={podeEditar}
+              podeExcluir={podeExcluir}
+            />
+          </div>
+        ) : null}
       </FormDrawer>
     </>
   );

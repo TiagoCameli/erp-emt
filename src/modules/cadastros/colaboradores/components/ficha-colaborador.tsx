@@ -6,7 +6,16 @@ import { MoneyText, PageHeader, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
-import { ROTULO_VINCULO, ROTULO_TIPO_CONTA } from "@/modules/cadastros/colaboradores/schemas";
+import type { Dependente } from "@/modules/cadastros/colaboradores/dependentes";
+import { rotuloParentesco } from "@/modules/cadastros/colaboradores/dependentes-schemas";
+import {
+  ROTULO_CNH_CATEGORIA,
+  ROTULO_ESCOLARIDADE,
+  ROTULO_ESTADO_CIVIL,
+  ROTULO_RACA_COR,
+  ROTULO_TIPO_CONTA,
+  ROTULO_VINCULO,
+} from "@/modules/cadastros/colaboradores/schemas";
 import type { ColaboradorFicha } from "@/modules/cadastros/colaboradores/ficha";
 import type {
   FichaAdiantamentos,
@@ -31,6 +40,9 @@ export interface FichaColaboradorProps {
   ocorrencias: FichaOcorrencias | null;
   adiantamentos: FichaAdiantamentos | null;
   diarias: FichaDiarias | null;
+  /** Dependentes do colaborador (Task 3), sempre buscados: RLS/permissão são
+   * as mesmas de `cadastros.colaboradores`, já checadas pra abrir a ficha. */
+  dependentes: Dependente[];
 }
 
 /** Linha rotulada para os dados do cabeçalho. */
@@ -104,6 +116,7 @@ export function FichaColaborador({
   ocorrencias,
   adiantamentos,
   diarias,
+  dependentes,
 }: FichaColaboradorProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -158,6 +171,58 @@ export function FichaColaborador({
             {colaborador.tipoConta ? ` (${ROTULO_TIPO_CONTA[colaborador.tipoConta]})` : ""}
           </Dado>
           <Dado rotulo="Chave PIX">{colaborador.chavePix ?? "-"}</Dado>
+        </div>
+      </SecaoDetalhe>
+
+      <SecaoDetalhe titulo="Documentos e dados pessoais" card>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <Dado rotulo="RG">
+            {colaborador.rg ?? "-"}
+            {colaborador.rgOrgao ? ` · ${colaborador.rgOrgao}` : ""}
+            {colaborador.rgUf ? `/${colaborador.rgUf}` : ""}
+          </Dado>
+          <Dado rotulo="CTPS">
+            {colaborador.ctpsNumero ?? "-"}
+            {colaborador.ctpsSerie ? ` série ${colaborador.ctpsSerie}` : ""}
+            {colaborador.ctpsUf ? `/${colaborador.ctpsUf}` : ""}
+          </Dado>
+          <Dado rotulo="PIS">{colaborador.pis ?? "-"}</Dado>
+          <Dado rotulo="CNH">
+            {colaborador.cnhNumero ?? "-"}
+            {colaborador.cnhCategoria
+              ? ` · Cat. ${ROTULO_CNH_CATEGORIA[colaborador.cnhCategoria]}`
+              : ""}
+          </Dado>
+          <Dado rotulo="Validade da CNH">
+            {colaborador.cnhValidade ? formatarData(colaborador.cnhValidade) : "-"}
+          </Dado>
+          <Dado rotulo="Data de nascimento">
+            {colaborador.dataNascimento
+              ? formatarData(colaborador.dataNascimento)
+              : "-"}
+          </Dado>
+          <Dado rotulo="Nome da mãe">{colaborador.nomeMae ?? "-"}</Dado>
+          <Dado rotulo="Nacionalidade">{colaborador.nacionalidade ?? "-"}</Dado>
+          <Dado rotulo="Escolaridade">
+            {colaborador.escolaridade
+              ? ROTULO_ESCOLARIDADE[colaborador.escolaridade]
+              : "-"}
+          </Dado>
+          <Dado rotulo="Estado civil">
+            {colaborador.estadoCivil
+              ? ROTULO_ESTADO_CIVIL[colaborador.estadoCivil]
+              : "-"}
+          </Dado>
+          <Dado rotulo="Raça/cor">
+            {colaborador.racaCor ? ROTULO_RACA_COR[colaborador.racaCor] : "-"}
+          </Dado>
+          <Dado rotulo="Título de eleitor">
+            {colaborador.tituloEleitor ?? "-"}
+          </Dado>
+          <Dado rotulo="Certificado de reservista">
+            {colaborador.reservista ?? "-"}
+          </Dado>
+          <Dado rotulo="CBO">{colaborador.cbo ?? "-"}</Dado>
         </div>
       </SecaoDetalhe>
 
@@ -403,6 +468,39 @@ export function FichaColaborador({
             ) : null}
           </SecaoDetalhe>
         ) : null}
+
+        <SecaoDetalhe titulo="Dependentes" card>
+          {dependentes.length === 0 ? (
+            <SemRegistros texto="Nenhum dependente cadastrado." />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {dependentes.map((dependente) => (
+                <li
+                  key={dependente.id}
+                  className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0 last:pb-0"
+                >
+                  <div>
+                    <p className="text-detalhe">{dependente.nome}</p>
+                    <p className="text-legenda text-muted-foreground">
+                      {rotuloParentesco(dependente.parentesco)}
+                      {dependente.dataNascimento
+                        ? ` · Nasc. ${formatarData(dependente.dataNascimento)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {dependente.dependenteIrrf ? (
+                      <StatusBadge status="aprovado" rotulo="IRRF" />
+                    ) : null}
+                    {dependente.dependenteSalarioFamilia ? (
+                      <StatusBadge status="aprovado" rotulo="Salário-família" />
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SecaoDetalhe>
       </div>
     </div>
   );

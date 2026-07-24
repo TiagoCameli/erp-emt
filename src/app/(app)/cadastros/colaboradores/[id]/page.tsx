@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { FichaColaborador } from "@/modules/cadastros/colaboradores/components/ficha-colaborador";
+import { listarDependentes } from "@/modules/cadastros/colaboradores/dependentes";
 import {
   buscarColaboradorFicha,
   resumoAdiantamentos,
@@ -43,16 +44,27 @@ export default async function PaginaFichaColaborador({
   const podeAdiantamentos = temPermissao(usuario, "rh.adiantamentos", "ver");
   const podeDiarias = temPermissao(usuario, "rh.diaristas", "ver");
 
-  const [ponto, ferias, documentos, epis, ocorrencias, adiantamentos, diarias] =
-    await Promise.all([
-      podePonto ? resumoPonto(id) : Promise.resolve(null),
-      podeFerias ? resumoFerias(id) : Promise.resolve(null),
-      podeDocumentos ? resumoDocumentos(id) : Promise.resolve(null),
-      podeEpis ? resumoEpis(id) : Promise.resolve(null),
-      podeOcorrencias ? resumoOcorrencias(id) : Promise.resolve(null),
-      podeAdiantamentos ? resumoAdiantamentos(id) : Promise.resolve(null),
-      podeDiarias ? resumoDiarias(id) : Promise.resolve(null),
-    ]);
+  const [
+    ponto,
+    ferias,
+    documentos,
+    epis,
+    ocorrencias,
+    adiantamentos,
+    diarias,
+    dependentes,
+  ] = await Promise.all([
+    podePonto ? resumoPonto(id) : Promise.resolve(null),
+    podeFerias ? resumoFerias(id) : Promise.resolve(null),
+    podeDocumentos ? resumoDocumentos(id) : Promise.resolve(null),
+    podeEpis ? resumoEpis(id) : Promise.resolve(null),
+    podeOcorrencias ? resumoOcorrencias(id) : Promise.resolve(null),
+    podeAdiantamentos ? resumoAdiantamentos(id) : Promise.resolve(null),
+    podeDiarias ? resumoDiarias(id) : Promise.resolve(null),
+    // Dependentes não têm recurso próprio (RLS/permissão são as mesmas de
+    // cadastros.colaboradores, já checadas acima pra abrir a ficha).
+    listarDependentes(id),
+  ]);
 
   return (
     <FichaColaborador
@@ -64,6 +76,7 @@ export default async function PaginaFichaColaborador({
       ocorrencias={ocorrencias}
       adiantamentos={adiantamentos}
       diarias={diarias}
+      dependentes={dependentes}
     />
   );
 }

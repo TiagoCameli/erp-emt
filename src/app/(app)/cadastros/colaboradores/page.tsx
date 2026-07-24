@@ -9,6 +9,7 @@ import {
 } from "@/modules/cadastros/colaboradores/actions";
 import { ColaboradoresFormDrawer } from "@/modules/cadastros/colaboradores/components/colaboradores-form-drawer";
 import { ColaboradoresTabela } from "@/modules/cadastros/colaboradores/components/colaboradores-tabela";
+import { listarDependentesPorColaborador } from "@/modules/cadastros/colaboradores/dependentes";
 import {
   listar,
   listarCentrosCusto,
@@ -21,11 +22,13 @@ export default async function PaginaColaboradores() {
     notFound();
   }
 
-  const [colaboradores, obras, centrosCusto] = await Promise.all([
-    listar(),
-    listarObras(),
-    listarCentrosCusto(),
-  ]);
+  const [colaboradores, obras, centrosCusto, dependentesPorColaborador] =
+    await Promise.all([
+      listar(),
+      listarObras(),
+      listarCentrosCusto(),
+      listarDependentesPorColaborador(),
+    ]);
 
   const podeCriar = temPermissao(usuario, "cadastros.colaboradores", "criar");
   const podeEditar = temPermissao(usuario, "cadastros.colaboradores", "editar");
@@ -64,6 +67,7 @@ export default async function PaginaColaboradores() {
         centrosCusto={centrosCusto}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        dependentesPorColaborador={dependentesPorColaborador}
       />
     </>
   );

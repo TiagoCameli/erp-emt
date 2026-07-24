@@ -28,6 +28,7 @@ import {
   alternarAtivo,
   excluir,
 } from "@/modules/cadastros/colaboradores/actions";
+import type { Dependente } from "@/modules/cadastros/colaboradores/dependentes";
 import type {
   ColaboradorLista,
   OpcaoSelecao,
@@ -50,6 +51,8 @@ export interface ColaboradoresTabelaProps {
   centrosCusto: OpcaoSelecao[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Dependentes de todos os colaboradores, chaveados por colaboradorId (Task 3). */
+  dependentesPorColaborador: Record<string, Dependente[]>;
 }
 
 /**
@@ -62,6 +65,7 @@ export function ColaboradoresTabela({
   centrosCusto,
   podeEditar,
   podeExcluir,
+  dependentesPorColaborador,
 }: ColaboradoresTabelaProps) {
   const router = useRouter();
   const [busca, setBusca] = React.useState("");
@@ -264,6 +268,11 @@ export function ColaboradoresTabela({
         colaborador={emEdicao}
         aberto={edicaoAberta}
         onAbertoChange={setEdicaoAberta}
+        dependentesIniciais={
+          emEdicao ? (dependentesPorColaborador[emEdicao.id] ?? []) : undefined
+        }
+        podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
       />
 
       <ConfirmDialog
