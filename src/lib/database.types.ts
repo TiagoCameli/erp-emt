@@ -336,20 +336,39 @@ export type Database = {
           agencia: string | null
           ativo: boolean
           banco: string | null
+          cbo: string | null
           centro_custo_id: string | null
           chave_pix: string | null
+          cnh_categoria: string | null
+          cnh_numero: string | null
+          cnh_validade: string | null
           conta: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
+          ctps_numero: string | null
+          ctps_serie: string | null
+          ctps_uf: string | null
           data_admissao: string | null
+          data_nascimento: string | null
+          escolaridade: string | null
+          estado_civil: string | null
           funcao: string | null
           id: string
+          nacionalidade: string | null
           nome: string
+          nome_mae: string | null
           obra_id: string | null
+          pis: string | null
+          raca_cor: string | null
+          reservista: string | null
+          rg: string | null
+          rg_orgao: string | null
+          rg_uf: string | null
           salario: number | null
           telefone: string | null
           tipo_conta: string | null
+          titulo_eleitor: string | null
           updated_at: string
           valor_diaria: number | null
           vinculo: string
@@ -358,20 +377,39 @@ export type Database = {
           agencia?: string | null
           ativo?: boolean
           banco?: string | null
+          cbo?: string | null
           centro_custo_id?: string | null
           chave_pix?: string | null
+          cnh_categoria?: string | null
+          cnh_numero?: string | null
+          cnh_validade?: string | null
           conta?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
+          ctps_numero?: string | null
+          ctps_serie?: string | null
+          ctps_uf?: string | null
           data_admissao?: string | null
+          data_nascimento?: string | null
+          escolaridade?: string | null
+          estado_civil?: string | null
           funcao?: string | null
           id?: string
+          nacionalidade?: string | null
           nome: string
+          nome_mae?: string | null
           obra_id?: string | null
+          pis?: string | null
+          raca_cor?: string | null
+          reservista?: string | null
+          rg?: string | null
+          rg_orgao?: string | null
+          rg_uf?: string | null
           salario?: number | null
           telefone?: string | null
           tipo_conta?: string | null
+          titulo_eleitor?: string | null
           updated_at?: string
           valor_diaria?: number | null
           vinculo?: string
@@ -380,20 +418,39 @@ export type Database = {
           agencia?: string | null
           ativo?: boolean
           banco?: string | null
+          cbo?: string | null
           centro_custo_id?: string | null
           chave_pix?: string | null
+          cnh_categoria?: string | null
+          cnh_numero?: string | null
+          cnh_validade?: string | null
           conta?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
+          ctps_numero?: string | null
+          ctps_serie?: string | null
+          ctps_uf?: string | null
           data_admissao?: string | null
+          data_nascimento?: string | null
+          escolaridade?: string | null
+          estado_civil?: string | null
           funcao?: string | null
           id?: string
+          nacionalidade?: string | null
           nome?: string
+          nome_mae?: string | null
           obra_id?: string | null
+          pis?: string | null
+          raca_cor?: string | null
+          reservista?: string | null
+          rg?: string | null
+          rg_orgao?: string | null
+          rg_uf?: string | null
           salario?: number | null
           telefone?: string | null
           tipo_conta?: string | null
+          titulo_eleitor?: string | null
           updated_at?: string
           valor_diaria?: number | null
           vinculo?: string
@@ -1814,6 +1871,56 @@ export type Database = {
             columns: ["ponto_id"]
             isOneToOne: false
             referencedRelation: "rh_pontos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_dependentes: {
+        Row: {
+          colaborador_id: string
+          cpf: string | null
+          created_at: string
+          created_by: string | null
+          data_nascimento: string | null
+          dependente_irrf: boolean
+          dependente_salario_familia: boolean
+          id: string
+          nome: string
+          parentesco: string | null
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: string
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_nascimento?: string | null
+          dependente_irrf?: boolean
+          dependente_salario_familia?: boolean
+          id?: string
+          nome: string
+          parentesco?: string | null
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: string
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_nascimento?: string | null
+          dependente_irrf?: boolean
+          dependente_salario_familia?: boolean
+          id?: string
+          nome?: string
+          parentesco?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_dependentes_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "colaboradores"
             referencedColumns: ["id"]
           },
         ]
