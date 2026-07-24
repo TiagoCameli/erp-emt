@@ -2,6 +2,10 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import type {
+  CnhCategoria,
+  Escolaridade,
+  EstadoCivil,
+  RacaCor,
   TipoConta,
   Vinculo,
 } from "@/modules/cadastros/colaboradores/schemas";
@@ -55,6 +59,28 @@ export interface ColaboradorFicha {
   conta: string | null;
   tipoConta: TipoConta | null;
   chavePix: string | null;
+
+  // Dados pessoais / documentação / eSocial (Bloco 2), mesmos 19 campos de
+  // `ColaboradorLista` (queries.ts) — a ficha mostra o cadastro completo.
+  rg: string | null;
+  rgOrgao: string | null;
+  rgUf: string | null;
+  ctpsNumero: string | null;
+  ctpsSerie: string | null;
+  ctpsUf: string | null;
+  pis: string | null;
+  cnhNumero: string | null;
+  cnhCategoria: CnhCategoria | null;
+  cnhValidade: string | null;
+  escolaridade: Escolaridade | null;
+  dataNascimento: string | null;
+  nomeMae: string | null;
+  nacionalidade: string | null;
+  estadoCivil: EstadoCivil | null;
+  racaCor: RacaCor | null;
+  tituloEleitor: string | null;
+  reservista: string | null;
+  cbo: string | null;
 }
 
 /** Busca o colaborador para o cabeçalho da ficha. Retorna null se não achar. */
@@ -66,7 +92,7 @@ export async function buscarColaboradorFicha(
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, obras(nome), centros_custo(nome)",
+      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, cbo, obras(nome), centros_custo(nome)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -93,6 +119,25 @@ export async function buscarColaboradorFicha(
     conta: data.conta,
     tipoConta: data.tipo_conta as TipoConta | null,
     chavePix: data.chave_pix,
+    rg: data.rg,
+    rgOrgao: data.rg_orgao,
+    rgUf: data.rg_uf,
+    ctpsNumero: data.ctps_numero,
+    ctpsSerie: data.ctps_serie,
+    ctpsUf: data.ctps_uf,
+    pis: data.pis,
+    cnhNumero: data.cnh_numero,
+    cnhCategoria: data.cnh_categoria as CnhCategoria | null,
+    cnhValidade: data.cnh_validade,
+    escolaridade: data.escolaridade as Escolaridade | null,
+    dataNascimento: data.data_nascimento,
+    nomeMae: data.nome_mae,
+    nacionalidade: data.nacionalidade,
+    estadoCivil: data.estado_civil as EstadoCivil | null,
+    racaCor: data.raca_cor as RacaCor | null,
+    tituloEleitor: data.titulo_eleitor,
+    reservista: data.reservista,
+    cbo: data.cbo,
   };
 }
 
