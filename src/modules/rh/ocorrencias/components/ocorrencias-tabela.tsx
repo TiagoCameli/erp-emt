@@ -246,7 +246,7 @@ export function OcorrenciasTabela({
           colaboradores={colaboradores}
           ocorrencia={emEdicao}
           podeEditar={podeEditar}
-          anexosIniciais={emEdicao ? anexosPorRegistro[emEdicao.id] : undefined}
+          anexosIniciais={emEdicao ? (anexosPorRegistro[emEdicao.id] ?? []) : undefined}
         />
       ) : null}
 

@@ -280,7 +280,7 @@ export function DocumentosTabela({
           colaboradores={colaboradores}
           documento={emEdicao}
           podeEditar={podeEditar}
-          anexosIniciais={emEdicao ? anexosPorRegistro[emEdicao.id] : undefined}
+          anexosIniciais={emEdicao ? (anexosPorRegistro[emEdicao.id] ?? []) : undefined}
         />
       ) : null}
 

@@ -239,7 +239,7 @@ export function EpisTabela({
           colaboradores={colaboradores}
           epi={emEdicao}
           podeEditar={podeEditar}
-          anexosIniciais={emEdicao ? anexosPorRegistro[emEdicao.id] : undefined}
+          anexosIniciais={emEdicao ? (anexosPorRegistro[emEdicao.id] ?? []) : undefined}
         />
       ) : null}
 
