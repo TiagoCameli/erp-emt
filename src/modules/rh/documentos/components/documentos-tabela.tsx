@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import { removerDocumento } from "@/modules/rh/documentos/actions";
 import type {
   DocumentoLista,
@@ -40,6 +41,8 @@ export interface DocumentosTabelaProps {
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Anexos por documento, pré-carregados no server, chaveados por id. */
+  anexosPorRegistro: Record<string, AnexoResumo[]>;
 }
 
 /** Opções do filtro de situação. */
@@ -74,6 +77,7 @@ export function DocumentosTabela({
   podeCriar,
   podeEditar,
   podeExcluir,
+  anexosPorRegistro,
 }: DocumentosTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [tipo, setTipo] = React.useState("");
@@ -275,6 +279,8 @@ export function DocumentosTabela({
           onAbertoChange={setDrawerAberto}
           colaboradores={colaboradores}
           documento={emEdicao}
+          podeEditar={podeEditar}
+          anexosIniciais={emEdicao ? anexosPorRegistro[emEdicao.id] : undefined}
         />
       ) : null}
 

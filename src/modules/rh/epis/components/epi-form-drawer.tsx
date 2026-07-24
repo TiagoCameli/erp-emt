@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -18,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
+import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import { criarEpi, editarEpi } from "@/modules/rh/epis/actions";
 import type { EpiLista } from "@/modules/rh/epis/queries";
 import {
@@ -48,19 +51,27 @@ export interface EpiFormDrawerProps {
   colaboradores: ColaboradorOpcao[];
   /** EPI em edição. Ausente significa criar. */
   epi?: EpiLista | null;
+  /** Libera anexar/remover arquivos (permissão de editar do recurso). */
+  podeEditar?: boolean;
+  /** Anexos do EPI pré-carregados no server, para não travar em "Carregando". */
+  anexosIniciais?: AnexoResumo[];
 }
 
 /**
  * Drawer com o formulário de EPI. Cria quando não recebe registro e edita
  * quando recebe. A devolução é opcional (EPI ainda em uso). Fecha sozinho ao
- * salvar.
+ * salvar. Na edição, mostra a seção de anexos (termo de entrega assinado em
+ * PDF ou imagem) do registro já existente.
  */
 export function EpiFormDrawer({
   aberto,
   onAbertoChange,
   colaboradores,
   epi,
+  podeEditar = false,
+  anexosIniciais,
 }: EpiFormDrawerProps) {
+  const router = useRouter();
   const editando = Boolean(epi);
 
   const form = useForm<EpiFormInput>({
@@ -243,6 +254,19 @@ export function EpiFormDrawer({
           />
         </CampoFormulario>
       </form>
+
+      {epi ? (
+        <div className="mt-6 border-t border-border pt-4">
+          <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+          <AnexosRegistro
+            tabela="rh_epis"
+            registroId={epi.id}
+            podeEditar={podeEditar}
+            anexosIniciais={anexosIniciais}
+            onMudou={() => router.refresh()}
+          />
+        </div>
+      ) : null}
     </FormDrawer>
   );
 }

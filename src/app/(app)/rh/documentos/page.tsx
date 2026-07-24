@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { KPICard, PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexosPorRegistro } from "@/modules/compras/_shared/anexos-actions";
 import { DocumentosAcoesCabecalho } from "@/modules/rh/documentos/components/acoes-cabecalho";
 import { DocumentosTabela } from "@/modules/rh/documentos/components/documentos-tabela";
 import { listarDocumentos } from "@/modules/rh/documentos/queries";
@@ -13,9 +14,10 @@ export default async function PaginaDocumentos() {
     notFound();
   }
 
-  const [documentos, colaboradores] = await Promise.all([
+  const [documentos, colaboradores, anexosPorRegistro] = await Promise.all([
     listarDocumentos(),
     listarColaboradores(),
+    listarAnexosPorRegistro("rh_documentos"),
   ]);
 
   const podeCriar = temPermissao(usuario, "rh.documentos", "criar");
@@ -48,6 +50,7 @@ export default async function PaginaDocumentos() {
         podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        anexosPorRegistro={anexosPorRegistro}
       />
     </>
   );

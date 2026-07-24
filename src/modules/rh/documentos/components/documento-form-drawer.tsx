@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -16,6 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import {
   criarDocumento,
   editarDocumento,
@@ -49,18 +52,26 @@ export interface DocumentoFormDrawerProps {
   colaboradores: ColaboradorOpcao[];
   /** Documento em edição. Ausente significa criar. */
   documento?: DocumentoLista | null;
+  /** Libera anexar/remover arquivos (permissão de editar do recurso). */
+  podeEditar?: boolean;
+  /** Anexos do documento pré-carregados no server, para não travar em "Carregando". */
+  anexosIniciais?: AnexoResumo[];
 }
 
 /**
  * Drawer com o formulário de documento. Cria quando não recebe documento e
- * edita quando recebe. Fecha sozinho ao salvar.
+ * edita quando recebe. Fecha sozinho ao salvar. Na edição, mostra a seção de
+ * anexos (ASO/atestado em PDF ou imagem) do registro já existente.
  */
 export function DocumentoFormDrawer({
   aberto,
   onAbertoChange,
   colaboradores,
   documento,
+  podeEditar = false,
+  anexosIniciais,
 }: DocumentoFormDrawerProps) {
+  const router = useRouter();
   const editando = Boolean(documento);
 
   const form = useForm<DocumentoFormInput>({
@@ -225,6 +236,19 @@ export function DocumentoFormDrawer({
           />
         </CampoFormulario>
       </form>
+
+      {documento ? (
+        <div className="mt-6 border-t border-border pt-4">
+          <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+          <AnexosRegistro
+            tabela="rh_documentos"
+            registroId={documento.id}
+            podeEditar={podeEditar}
+            anexosIniciais={anexosIniciais}
+            onMudou={() => router.refresh()}
+          />
+        </div>
+      ) : null}
     </FormDrawer>
   );
 }

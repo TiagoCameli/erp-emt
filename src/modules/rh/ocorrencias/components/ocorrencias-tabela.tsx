@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
+import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import { removerOcorrencia } from "@/modules/rh/ocorrencias/actions";
 import type { OcorrenciaLista } from "@/modules/rh/ocorrencias/queries";
 import {
@@ -38,6 +39,8 @@ export interface OcorrenciasTabelaProps {
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Anexos por ocorrência, pré-carregados no server, chaveados por id. */
+  anexosPorRegistro: Record<string, AnexoResumo[]>;
 }
 
 /** Status do badge por tipo de ocorrência (texto sempre vem do rótulo). */
@@ -68,6 +71,7 @@ export function OcorrenciasTabela({
   podeCriar,
   podeEditar,
   podeExcluir,
+  anexosPorRegistro,
 }: OcorrenciasTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [tipo, setTipo] = React.useState("");
@@ -241,6 +245,8 @@ export function OcorrenciasTabela({
           onAbertoChange={setDrawerAberto}
           colaboradores={colaboradores}
           ocorrencia={emEdicao}
+          podeEditar={podeEditar}
+          anexosIniciais={emEdicao ? anexosPorRegistro[emEdicao.id] : undefined}
         />
       ) : null}
 

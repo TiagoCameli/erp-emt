@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexosPorRegistro } from "@/modules/compras/_shared/anexos-actions";
 import { EpisAcoesCabecalho } from "@/modules/rh/epis/components/epis-acoes-cabecalho";
 import { EpisTabela } from "@/modules/rh/epis/components/epis-tabela";
 import { listarEpis } from "@/modules/rh/epis/queries";
@@ -13,9 +14,10 @@ export default async function PaginaEpis() {
     notFound();
   }
 
-  const [epis, colaboradores] = await Promise.all([
+  const [epis, colaboradores, anexosPorRegistro] = await Promise.all([
     listarEpis(),
     listarColaboradores(),
+    listarAnexosPorRegistro("rh_epis"),
   ]);
 
   const podeCriar = temPermissao(usuario, "rh.epis", "criar");
@@ -39,6 +41,7 @@ export default async function PaginaEpis() {
         podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        anexosPorRegistro={anexosPorRegistro}
       />
     </>
   );

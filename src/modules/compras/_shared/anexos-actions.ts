@@ -56,6 +56,37 @@ export async function listarAnexos(
 }
 
 /**
+ * Lista os anexos de todos os registros de uma tabela, agrupados por
+ * registro_id. Serve para o server pré-carregar os anexos de uma listagem
+ * (ex.: telas de RH com drawer de edição) e passar a lista inicial de cada
+ * registro para o AnexosRegistro, sem um carregamento extra no client. A RLS
+ * da tabela anexos cobre a permissão de ver.
+ */
+export async function listarAnexosPorRegistro(
+  tabela: string,
+): Promise<Record<string, AnexoResumo[]>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("anexos")
+    .select("id, registro_id, nome_arquivo, tamanho_bytes, tipo_mime")
+    .eq("tabela", tabela)
+    .order("created_at", { ascending: true });
+
+  if (error || !data) return {};
+
+  const porRegistro: Record<string, AnexoResumo[]> = {};
+  for (const anexo of data) {
+    (porRegistro[anexo.registro_id] ??= []).push({
+      id: anexo.id,
+      nomeArquivo: anexo.nome_arquivo,
+      tamanhoBytes: anexo.tamanho_bytes,
+      tipoMime: anexo.tipo_mime,
+    });
+  }
+  return porRegistro;
+}
+
+/**
  * Envia um anexo a partir do FormData { tabela, registroId, arquivo }.
  * Exige a permissão de editar do recurso dono da tabela e revalida a rota
  * do módulo de compras.
