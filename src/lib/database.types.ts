@@ -2522,6 +2522,19 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_jornadas_ponto: {
+        Args: never
+        Returns: {
+          colaborador_id: string
+          horas_domingo: number
+          horas_quarta: number
+          horas_quinta: number
+          horas_sabado: number
+          horas_segunda: number
+          horas_sexta: number
+          horas_terca: number
+        }[]
+      }
       fn_pagar_parcela: {
         Args: {
           p_conta_id: string

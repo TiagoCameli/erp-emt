@@ -60,14 +60,10 @@ export interface PontoDetalhe {
 }
 
 /**
- * Colunas das 7 horas da jornada. Cópia local do padrão usado em
- * `cadastros/jornadas/queries.ts` (mesmo princípio de `numero.ts`: a aba de
- * apontamentos não depende do módulo de query de cadastros, só do tipo puro
- * `JornadaHoras`).
+ * Uma linha de horas da jornada, como devolvida pela fn `fn_jornadas_ponto`
+ * (numeric no banco → number no PostgREST). O tipo puro do domínio é
+ * `JornadaHoras`; a aba de apontamentos não depende do módulo de cadastros.
  */
-const SELECT_HORAS_JORNADA =
-  "horas_segunda, horas_terca, horas_quarta, horas_quinta, horas_sexta, horas_sabado, horas_domingo";
-
 interface LinhaHorasJornada {
   horas_segunda: number;
   horas_terca: number;
@@ -101,10 +97,6 @@ const JORNADA_ZERADA: JornadaHoras = {
   horasDomingo: 0,
 };
 
-/** Nome da jornada padrão da empresa (seed em 20260725110001_jornadas.sql),
- *  usada de fallback quando o colaborador não tem `jornada_id`. */
-const NOME_JORNADA_PADRAO = "Padrão EMT";
-
 /** Colaborador do ponto, com a jornada resolvida (própria ou o fallback). */
 export interface ColaboradorComJornada extends ColaboradorOpcao {
   jornada: JornadaHoras;
@@ -112,32 +104,35 @@ export interface ColaboradorComJornada extends ColaboradorOpcao {
 
 /**
  * Colaboradores ativos com a jornada de cada um, para o split normal/extra
- * do apontamento (Bloco 4, Task 4). Quando o colaborador não tem
- * `jornada_id` (null), a jornada cai no fallback "Padrão EMT" — buscada uma
- * única vez aqui fora, não por colaborador. Se nem a "Padrão EMT" existir no
- * banco (sem seed), o fallback é uma jornada zerada: o form não separa
- * normal/extra errado, só deixa de sugerir automaticamente.
+ * do apontamento (Bloco 4, Task 4). A jornada resolvida (própria via
+ * `jornada_id`, ou o fallback "Padrão EMT" quando `jornada_id` é null) vem da
+ * fn `fn_jornadas_ponto` — uma função SECURITY DEFINER gateada por
+ * `rh.apontamentos`, não por `cadastros.jornadas` (que os perfis do ponto,
+ * Apontador e RH, não têm). Ler a jornada por embed `jornadas(...)` passava
+ * pela RLS de `jornadas`: pra esses perfis voltava null e a jornada resolvia
+ * pra zero, jogando 100% do total em horas extras. Ver
+ * `20260725120001_fn_jornadas_ponto.sql`. Colaborador ausente do retorno da fn
+ * (sem "Padrão EMT" no banco, p.ex.) cai numa jornada zerada: o form não
+ * separa normal/extra errado, só deixa de sugerir automaticamente.
  */
 export async function listarColaboradoresComJornada(): Promise<
   ColaboradorComJornada[]
 > {
   const supabase = await createClient();
 
-  const { data: padraoRaw } = await supabase
-    .from("jornadas")
-    .select(SELECT_HORAS_JORNADA)
-    .eq("nome", NOME_JORNADA_PADRAO)
-    .maybeSingle();
+  const { data: jornadasRaw, error: erroJornadas } =
+    await supabase.rpc("fn_jornadas_ponto");
 
-  const jornadaPadrao: JornadaHoras = padraoRaw
-    ? paraJornadaHoras(padraoRaw)
-    : JORNADA_ZERADA;
+  if (erroJornadas) throw new Error("Não foi possível carregar as jornadas");
+
+  const jornadaPorColaborador = new Map<string, JornadaHoras>();
+  for (const linha of jornadasRaw ?? []) {
+    jornadaPorColaborador.set(linha.colaborador_id, paraJornadaHoras(linha));
+  }
 
   const { data, error } = await supabase
     .from("colaboradores")
-    .select(
-      `id, nome, vinculo, funcoes(nome), jornadas(${SELECT_HORAS_JORNADA})`,
-    )
+    .select("id, nome, vinculo, funcoes(nome)")
     .eq("ativo", true)
     .order("nome");
 
@@ -148,9 +143,7 @@ export async function listarColaboradoresComJornada(): Promise<
     nome: colaborador.nome,
     funcao: colaborador.funcoes?.nome ?? null,
     vinculo: colaborador.vinculo,
-    jornada: colaborador.jornadas
-      ? paraJornadaHoras(colaborador.jornadas)
-      : jornadaPadrao,
+    jornada: jornadaPorColaborador.get(colaborador.id) ?? JORNADA_ZERADA,
   }));
 }
 
