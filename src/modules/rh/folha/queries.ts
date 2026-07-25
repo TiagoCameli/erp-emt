@@ -23,6 +23,7 @@ export interface FolhaItem {
   id: string;
   colaboradorId: string;
   colaboradorNome: string;
+  /** Nome da função, vindo do join com `funcoes` (Bloco 3, Task 3). */
   colaboradorFuncao: string | null;
   centroCustoId: string | null;
   centroCustoNome: string | null;
@@ -124,7 +125,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       `id, colaborador_id, centro_custo_id, salario_base, horas_normais,
        horas_extras, valor_extras, encargos, adiantamentos, custo_total,
        valor_liquido,
-       colaboradores(nome, funcao),
+       colaboradores(nome, funcoes(nome)),
        centros_custo(nome, codigo)`,
     )
     .eq("folha_id", id);
@@ -138,7 +139,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       id: item.id,
       colaboradorId: item.colaborador_id,
       colaboradorNome: item.colaboradores?.nome ?? "Colaborador removido",
-      colaboradorFuncao: item.colaboradores?.funcao ?? null,
+      colaboradorFuncao: item.colaboradores?.funcoes?.nome ?? null,
       centroCustoId: item.centro_custo_id,
       centroCustoNome: item.centros_custo?.nome ?? null,
       centroCustoCodigo: item.centros_custo?.codigo ?? null,

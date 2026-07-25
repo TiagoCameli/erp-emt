@@ -36,7 +36,7 @@ function paraLinhaBanco(dados: ColaboradorInput) {
   return {
     nome: dados.nome,
     cpf: dados.cpf,
-    funcao: dados.funcao,
+    funcao_id: dados.funcaoId,
     vinculo: dados.vinculo,
     obra_id: dados.obraId,
     centro_custo_id: dados.centroCustoId,
@@ -68,7 +68,6 @@ function paraLinhaBanco(dados: ColaboradorInput) {
     raca_cor: dados.racaCor,
     titulo_eleitor: dados.tituloEleitor,
     reservista: dados.reservista,
-    cbo: dados.cbo,
   };
 }
 
@@ -238,8 +237,14 @@ export async function validarImport(
 }
 
 /**
- * Importa as linhas válidas da planilha. Resolve a obra pelo nome (ativa)
- * e insere em massa. RLS cobre a permissão de criar.
+ * Importa as linhas válidas da planilha. Resolve a obra pelo nome (ativa) e
+ * a função pelo nome (Bloco 3, Task 3: a planilha ainda traz o nome da
+ * função em texto — a coluna some, não a informação). Se a função não
+ * existir ainda no cadastro, ela é criada automaticamente (sem CBO/salário
+ * base, preenchidos depois em `/cadastros/funcoes`) em vez de bloquear a
+ * importação: diferente da obra (que precisa existir de antemão), a função é
+ * um cadastro simples e o nome já veio confirmado pelo usuário na planilha.
+ * Insere em massa. RLS cobre a permissão de criar.
  */
 export async function importar(
   formData: FormData,
@@ -301,6 +306,49 @@ export async function importar(
     }
   }
 
+  // Mapa nome da função (minúsculo) para id. `funcoes.nome` é unique (ao
+  // contrário de obras.nome), então não há ambiguidade a tratar aqui.
+  const { data: funcoesExistentes, error: erroFuncoes } = await supabase
+    .from("funcoes")
+    .select("id, nome");
+  if (erroFuncoes) {
+    return erroAcao(
+      "cadastros.colaboradores.importar",
+      erroFuncoes,
+      "Não foi possível carregar as funções para a importação",
+    );
+  }
+  const funcaoPorNome = new Map<string, string>();
+  for (const funcao of funcoesExistentes ?? []) {
+    funcaoPorNome.set(funcao.nome.trim().toLowerCase(), funcao.id);
+  }
+
+  // Funções novas citadas na planilha (nome exato, sem duplicar por chave).
+  const funcoesNovasPorChave = new Map<string, string>();
+  for (const { dados } of resultado.validas) {
+    if (!dados.funcaoNome) continue;
+    const nome = dados.funcaoNome.trim();
+    const chave = nome.toLowerCase();
+    if (!funcaoPorNome.has(chave)) funcoesNovasPorChave.set(chave, nome);
+  }
+
+  if (funcoesNovasPorChave.size > 0) {
+    const { data: criadas, error: erroCriar } = await supabase
+      .from("funcoes")
+      .insert([...funcoesNovasPorChave.values()].map((nome) => ({ nome })))
+      .select("id, nome");
+    if (erroCriar) {
+      return erroAcao(
+        "cadastros.colaboradores.importar",
+        erroCriar,
+        "Não foi possível criar as funções novas da planilha",
+      );
+    }
+    for (const funcao of criadas ?? []) {
+      funcaoPorNome.set(funcao.nome.trim().toLowerCase(), funcao.id);
+    }
+  }
+
   const linhasValidas = [];
   for (const { dados } of resultado.validas) {
     let obraId: string | null = null;
@@ -319,10 +367,15 @@ export async function importar(
       }
       obraId = encontrada;
     }
+
+    const funcaoId = dados.funcaoNome
+      ? (funcaoPorNome.get(dados.funcaoNome.trim().toLowerCase()) ?? null)
+      : null;
+
     linhasValidas.push({
       nome: dados.nome ?? "",
       cpf: dados.cpf ?? null,
-      funcao: dados.funcao ?? null,
+      funcao_id: funcaoId,
       vinculo: dados.vinculo ?? "clt",
       obra_id: obraId,
       created_by: usuario.id,

@@ -43,7 +43,11 @@ export interface ColaboradorFicha {
   id: string;
   nome: string;
   cpf: string | null;
+  funcaoId: string | null;
+  /** Nome da função, vindo do join com `funcoes` (Bloco 3, Task 3). */
   funcao: string | null;
+  /** Salário base cadastrado na função. */
+  funcaoSalarioBase: number | null;
   vinculo: Vinculo;
   obraId: string | null;
   obraNome: string | null;
@@ -80,10 +84,16 @@ export interface ColaboradorFicha {
   racaCor: RacaCor | null;
   tituloEleitor: string | null;
   reservista: string | null;
+  /** CBO da função vinculada, vindo do join com `funcoes` (Task 3). */
   cbo: string | null;
 }
 
-/** Busca o colaborador para o cabeçalho da ficha. Retorna null se não achar. */
+/**
+ * Busca o colaborador para o cabeçalho da ficha. Retorna null se não achar.
+ *
+ * A função (Bloco 3, Task 3) é resolvida via join com `funcoes`: nome, CBO e
+ * salário base vêm de lá — o colaborador guarda só `funcao_id`.
+ */
 export async function buscarColaboradorFicha(
   id: string,
 ): Promise<ColaboradorFicha | null> {
@@ -92,7 +102,7 @@ export async function buscarColaboradorFicha(
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, cbo, obras(nome), centros_custo(nome)",
+      "id, nome, cpf, funcao_id, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -103,7 +113,9 @@ export async function buscarColaboradorFicha(
     id: data.id,
     nome: data.nome,
     cpf: data.cpf,
-    funcao: data.funcao,
+    funcaoId: data.funcao_id,
+    funcao: data.funcoes?.nome ?? null,
+    funcaoSalarioBase: data.funcoes?.salario_base ?? null,
     vinculo: data.vinculo as Vinculo,
     obraId: data.obra_id,
     obraNome: data.obras?.nome ?? null,
@@ -137,7 +149,7 @@ export async function buscarColaboradorFicha(
     racaCor: data.raca_cor as RacaCor | null,
     tituloEleitor: data.titulo_eleitor,
     reservista: data.reservista,
-    cbo: data.cbo,
+    cbo: data.funcoes?.cbo ?? null,
   };
 }
 

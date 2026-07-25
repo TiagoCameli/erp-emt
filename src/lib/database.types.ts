@@ -336,7 +336,6 @@ export type Database = {
           agencia: string | null
           ativo: boolean
           banco: string | null
-          cbo: string | null
           centro_custo_id: string | null
           chave_pix: string | null
           cnh_categoria: string | null
@@ -353,7 +352,7 @@ export type Database = {
           data_nascimento: string | null
           escolaridade: string | null
           estado_civil: string | null
-          funcao: string | null
+          funcao_id: string | null
           id: string
           nacionalidade: string | null
           nome: string
@@ -377,7 +376,6 @@ export type Database = {
           agencia?: string | null
           ativo?: boolean
           banco?: string | null
-          cbo?: string | null
           centro_custo_id?: string | null
           chave_pix?: string | null
           cnh_categoria?: string | null
@@ -394,7 +392,7 @@ export type Database = {
           data_nascimento?: string | null
           escolaridade?: string | null
           estado_civil?: string | null
-          funcao?: string | null
+          funcao_id?: string | null
           id?: string
           nacionalidade?: string | null
           nome: string
@@ -418,7 +416,6 @@ export type Database = {
           agencia?: string | null
           ativo?: boolean
           banco?: string | null
-          cbo?: string | null
           centro_custo_id?: string | null
           chave_pix?: string | null
           cnh_categoria?: string | null
@@ -435,7 +432,7 @@ export type Database = {
           data_nascimento?: string | null
           escolaridade?: string | null
           estado_civil?: string | null
-          funcao?: string | null
+          funcao_id?: string | null
           id?: string
           nacionalidade?: string | null
           nome?: string
@@ -461,6 +458,13 @@ export type Database = {
             columns: ["centro_custo_id"]
             isOneToOne: false
             referencedRelation: "centros_custo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "colaboradores_funcao_id_fkey"
+            columns: ["funcao_id"]
+            isOneToOne: false
+            referencedRelation: "funcoes"
             referencedColumns: ["id"]
           },
           {
@@ -1153,6 +1157,39 @@ export type Database = {
           telefone?: string | null
           tipo?: string
           uf?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      funcoes: {
+        Row: {
+          ativo: boolean
+          cbo: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          salario_base: number | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cbo?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          salario_base?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cbo?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          salario_base?: number | null
           updated_at?: string
         }
         Relationships: []

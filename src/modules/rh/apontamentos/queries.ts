@@ -32,6 +32,7 @@ export interface PontoApontamento {
   id: string;
   colaboradorId: string;
   colaboradorNome: string;
+  /** Nome da função, vindo do join com `funcoes` (Bloco 3, Task 3). */
   colaboradorFuncao: string | null;
   horasNormais: number;
   horasExtras: number;
@@ -162,7 +163,7 @@ export async function buscarPonto(id: string): Promise<PontoDetalhe | null> {
     .from("rh_apontamentos")
     .select(
       `id, colaborador_id, horas_normais, horas_extras, tipo, observacao,
-       colaboradores(nome, funcao)`,
+       colaboradores(nome, funcoes(nome))`,
     )
     .eq("ponto_id", id)
     .order("created_at", { ascending: true });
@@ -172,7 +173,7 @@ export async function buscarPonto(id: string): Promise<PontoDetalhe | null> {
       id: linha.id,
       colaboradorId: linha.colaborador_id,
       colaboradorNome: linha.colaboradores?.nome ?? "-",
-      colaboradorFuncao: linha.colaboradores?.funcao ?? null,
+      colaboradorFuncao: linha.colaboradores?.funcoes?.nome ?? null,
       horasNormais: linha.horas_normais,
       horasExtras: linha.horas_extras,
       tipo: tipoApontamento(linha.tipo),

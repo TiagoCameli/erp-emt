@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { criar, editar } from "@/modules/cadastros/colaboradores/actions";
 import type { Dependente } from "@/modules/cadastros/colaboradores/dependentes";
+import { salarioSugerido } from "@/modules/cadastros/colaboradores/funcao-salario";
 import type {
   ColaboradorLista,
   OpcaoSelecao,
@@ -42,10 +43,12 @@ import {
   paraNumero,
   type ColaboradorInput,
 } from "@/modules/cadastros/colaboradores/schemas";
+import type { FuncaoAtiva } from "@/modules/cadastros/funcoes/queries";
 import { DependentesSecao } from "./dependentes-secao";
 
 const SEM_OBRA = "sem-obra";
 const SEM_CENTRO_CUSTO = "sem-centro-custo";
+const SEM_FUNCAO = "sem-funcao";
 const SEM_TIPO_CONTA = "sem-tipo-conta";
 const SEM_CNH_CATEGORIA = "sem-cnh-categoria";
 const SEM_ESCOLARIDADE = "sem-escolaridade";
@@ -92,7 +95,7 @@ const formSchema = z.object({
     .trim()
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
   cpf: z.string(),
-  funcao: z.string(),
+  funcaoId: z.string(),
   vinculo: z.enum(VINCULOS, { error: "Selecione um vínculo" }),
   obraId: z.string(),
   centroCustoId: z.string(),
@@ -132,7 +135,6 @@ const formSchema = z.object({
   racaCor: z.string(),
   tituloEleitor: z.string(),
   reservista: z.string(),
-  cbo: z.string(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -141,7 +143,7 @@ function valoresIniciais(colaborador: ColaboradorLista | null): FormValues {
   return {
     nome: colaborador?.nome ?? "",
     cpf: colaborador?.cpf ?? "",
-    funcao: colaborador?.funcao ?? "",
+    funcaoId: colaborador?.funcaoId ?? SEM_FUNCAO,
     vinculo: colaborador?.vinculo ?? "clt",
     obraId: colaborador?.obraId ?? SEM_OBRA,
     centroCustoId: colaborador?.centroCustoId ?? SEM_CENTRO_CUSTO,
@@ -180,7 +182,6 @@ function valoresIniciais(colaborador: ColaboradorLista | null): FormValues {
     racaCor: colaborador?.racaCor ?? SEM_RACA_COR,
     tituloEleitor: colaborador?.tituloEleitor ?? "",
     reservista: colaborador?.reservista ?? "",
-    cbo: colaborador?.cbo ?? "",
   };
 }
 
@@ -189,7 +190,7 @@ function paraInput(valores: FormValues): ColaboradorInput {
   return colaboradorSchema.parse({
     nome: valores.nome,
     cpf: valores.cpf,
-    funcao: valores.funcao,
+    funcaoId: valores.funcaoId === SEM_FUNCAO ? null : valores.funcaoId,
     vinculo: valores.vinculo,
     obraId: valores.obraId === SEM_OBRA ? null : valores.obraId,
     centroCustoId:
@@ -226,13 +227,14 @@ function paraInput(valores: FormValues): ColaboradorInput {
     racaCor: valores.racaCor === SEM_RACA_COR ? null : valores.racaCor,
     tituloEleitor: valores.tituloEleitor,
     reservista: valores.reservista,
-    cbo: valores.cbo,
   });
 }
 
 export interface ColaboradoresFormDrawerProps {
   obras: OpcaoSelecao[];
   centrosCusto: OpcaoSelecao[];
+  /** Funções ativas para o Combobox de função (Bloco 3, Task 3). */
+  funcoes: FuncaoAtiva[];
   /** Colaborador em edição, ou null para criar um novo. */
   colaborador?: ColaboradorLista | null;
   /** Controle externo (edição abre a partir da tabela). */
@@ -260,6 +262,7 @@ export interface ColaboradoresFormDrawerProps {
 export function ColaboradoresFormDrawer({
   obras,
   centrosCusto,
+  funcoes,
   colaborador = null,
   aberto: abertoExterno,
   onAbertoChange,
@@ -310,11 +313,43 @@ export function ColaboradoresFormDrawer({
   const vinculoValor = form.watch("vinculo");
   const obraValor = form.watch("obraId");
   const centroCustoValor = form.watch("centroCustoId");
+  const funcaoValor = form.watch("funcaoId");
   const tipoContaValor = form.watch("tipoConta");
   const cnhCategoriaValor = form.watch("cnhCategoria");
   const escolaridadeValor = form.watch("escolaridade");
   const estadoCivilValor = form.watch("estadoCivil");
   const racaCorValor = form.watch("racaCor");
+
+  /**
+   * Troca a função selecionada e, só nessa troca ativa do usuário (nunca no
+   * load/reset do formulário, que não passa por aqui), sugere o salário base
+   * da função nova via `salarioSugerido` (lógica pura, testada em
+   * `funcao-salario.test.ts`).
+   */
+  function aoTrocarFuncao(novoValor: string) {
+    const valorAnterior = form.getValues("funcaoId");
+    const anteriorId = valorAnterior === SEM_FUNCAO ? null : valorAnterior;
+    const novoId = novoValor === SEM_FUNCAO ? null : novoValor;
+
+    form.setValue("funcaoId", novoValor, { shouldValidate: true });
+
+    const sugestao = salarioSugerido(anteriorId, novoId, funcoes);
+    if (sugestao !== null) {
+      form.setValue("salario", String(sugestao).replace(".", ","), {
+        shouldValidate: true,
+      });
+    }
+  }
+
+  // CBO informativo (read-only): vem da função selecionada. Se a função do
+  // colaborador não estiver mais entre as ativas (inativada), cai no CBO já
+  // resolvido no carregamento (`colaborador.cbo`, vindo do join no server).
+  const funcaoIdAtual = funcaoValor === SEM_FUNCAO ? null : funcaoValor;
+  const cboAtual =
+    funcoes.find((f) => f.id === funcaoIdAtual)?.cbo ??
+    (colaborador && colaborador.funcaoId === funcaoIdAtual
+      ? colaborador.cbo
+      : null);
 
   return (
     <>
@@ -411,14 +446,22 @@ export function ColaboradoresFormDrawer({
             <CampoFormulario
               id="colaborador-funcao"
               rotulo="Função"
-              erro={form.formState.errors.funcao?.message}
+              erro={form.formState.errors.funcaoId?.message}
             >
-              <Input
-                id="colaborador-funcao"
-                autoComplete="off"
-                placeholder="Operador"
+              <Combobox
+                valor={funcaoValor}
+                onValorChange={aoTrocarFuncao}
+                opcoes={[
+                  { valor: SEM_FUNCAO, rotulo: "Sem função" },
+                  ...funcoes.map((funcao) => ({
+                    valor: funcao.id,
+                    rotulo: funcao.nome,
+                  })),
+                ]}
+                placeholder="Sem função"
                 disabled={salvando}
-                {...form.register("funcao")}
+                className="w-full"
+                id="colaborador-funcao"
               />
             </CampoFormulario>
 
@@ -925,14 +968,14 @@ export function ColaboradoresFormDrawer({
             <CampoFormulario
               id="colaborador-cbo"
               rotulo="CBO"
-              ajuda="Código Brasileiro de Ocupações"
-              erro={form.formState.errors.cbo?.message}
+              ajuda="Código Brasileiro de Ocupações — vem do cadastro da função selecionada"
             >
               <Input
                 id="colaborador-cbo"
-                autoComplete="off"
-                disabled={salvando}
-                {...form.register("cbo")}
+                value={cboAtual ?? ""}
+                placeholder="Sem CBO cadastrado para a função"
+                disabled
+                readOnly
               />
             </CampoFormulario>
           </SecaoFormulario>
