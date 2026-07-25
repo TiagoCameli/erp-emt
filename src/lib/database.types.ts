@@ -336,7 +336,6 @@ export type Database = {
           agencia: string | null
           ativo: boolean
           banco: string | null
-          cbo: string | null
           centro_custo_id: string | null
           chave_pix: string | null
           cnh_categoria: string | null
@@ -353,7 +352,6 @@ export type Database = {
           data_nascimento: string | null
           escolaridade: string | null
           estado_civil: string | null
-          funcao: string | null
           funcao_id: string | null
           id: string
           nacionalidade: string | null
@@ -378,7 +376,6 @@ export type Database = {
           agencia?: string | null
           ativo?: boolean
           banco?: string | null
-          cbo?: string | null
           centro_custo_id?: string | null
           chave_pix?: string | null
           cnh_categoria?: string | null
@@ -395,7 +392,6 @@ export type Database = {
           data_nascimento?: string | null
           escolaridade?: string | null
           estado_civil?: string | null
-          funcao?: string | null
           funcao_id?: string | null
           id?: string
           nacionalidade?: string | null
@@ -420,7 +416,6 @@ export type Database = {
           agencia?: string | null
           ativo?: boolean
           banco?: string | null
-          cbo?: string | null
           centro_custo_id?: string | null
           chave_pix?: string | null
           cnh_categoria?: string | null
@@ -437,7 +432,6 @@ export type Database = {
           data_nascimento?: string | null
           escolaridade?: string | null
           estado_civil?: string | null
-          funcao?: string | null
           funcao_id?: string | null
           id?: string
           nacionalidade?: string | null
