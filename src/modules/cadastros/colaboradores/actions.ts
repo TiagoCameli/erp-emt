@@ -37,6 +37,7 @@ function paraLinhaBanco(dados: ColaboradorInput) {
     nome: dados.nome,
     cpf: dados.cpf,
     funcao_id: dados.funcaoId,
+    jornada_id: dados.jornadaId,
     vinculo: dados.vinculo,
     obra_id: dados.obraId,
     centro_custo_id: dados.centroCustoId,

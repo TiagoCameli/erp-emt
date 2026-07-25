@@ -20,6 +20,13 @@ export interface ColaboradorLista {
   funcao: string | null;
   /** Salário base cadastrado na função, para sugerir ao trocar (Task 3). */
   funcaoSalarioBase: number | null;
+  jornadaId: string | null;
+  /**
+   * Nome da jornada, vindo do join com `jornadas` (Bloco 4, Task 3). Null
+   * quando o colaborador não tem jornada explícita: nesse caso o cadastro
+   * usa a jornada "Padrão EMT" automaticamente.
+   */
+  jornadaNome: string | null;
   vinculo: Vinculo;
   obraId: string | null;
   obraNome: string | null;
@@ -74,6 +81,9 @@ export interface OpcaoSelecao {
  * colaborador guarda só `funcao_id`; nome, CBO e salário base vêm de lá. O
  * campo `funcao` continua com o mesmo nome (= `funcoes.nome`) pra não quebrar
  * os componentes de display que já esperavam esse campo.
+ *
+ * A jornada (Bloco 4, Task 3) segue o mesmo padrão via join com `jornadas`:
+ * o colaborador guarda só `jornada_id`; `jornadaNome` vem de lá.
  */
 export async function listar(): Promise<ColaboradorLista[]> {
   const supabase = await createClient();
@@ -81,7 +91,7 @@ export async function listar(): Promise<ColaboradorLista[]> {
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao_id, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base)",
+      "id, nome, cpf, funcao_id, jornada_id, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base), jornadas(nome)",
     )
     .order("nome");
 
@@ -96,6 +106,8 @@ export async function listar(): Promise<ColaboradorLista[]> {
     funcaoId: colaborador.funcao_id,
     funcao: colaborador.funcoes?.nome ?? null,
     funcaoSalarioBase: colaborador.funcoes?.salario_base ?? null,
+    jornadaId: colaborador.jornada_id,
+    jornadaNome: colaborador.jornadas?.nome ?? null,
     vinculo: colaborador.vinculo as Vinculo,
     obraId: colaborador.obra_id,
     obraNome: colaborador.obras?.nome ?? null,

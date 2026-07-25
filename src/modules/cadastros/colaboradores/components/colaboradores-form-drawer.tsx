@@ -44,11 +44,14 @@ import {
   type ColaboradorInput,
 } from "@/modules/cadastros/colaboradores/schemas";
 import type { FuncaoAtiva } from "@/modules/cadastros/funcoes/queries";
+import type { JornadaAtiva } from "@/modules/cadastros/jornadas/queries";
 import { DependentesSecao } from "./dependentes-secao";
 
 const SEM_OBRA = "sem-obra";
 const SEM_CENTRO_CUSTO = "sem-centro-custo";
 const SEM_FUNCAO = "sem-funcao";
+/** Sentinela do Combobox de jornada: valor "vazio" = usa a Padrão EMT (Bloco 4, Task 3). */
+const SEM_JORNADA = "sem-jornada";
 const SEM_TIPO_CONTA = "sem-tipo-conta";
 const SEM_CNH_CATEGORIA = "sem-cnh-categoria";
 const SEM_ESCOLARIDADE = "sem-escolaridade";
@@ -96,6 +99,7 @@ const formSchema = z.object({
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
   cpf: z.string(),
   funcaoId: z.string(),
+  jornadaId: z.string(),
   vinculo: z.enum(VINCULOS, { error: "Selecione um vínculo" }),
   obraId: z.string(),
   centroCustoId: z.string(),
@@ -144,6 +148,7 @@ function valoresIniciais(colaborador: ColaboradorLista | null): FormValues {
     nome: colaborador?.nome ?? "",
     cpf: colaborador?.cpf ?? "",
     funcaoId: colaborador?.funcaoId ?? SEM_FUNCAO,
+    jornadaId: colaborador?.jornadaId ?? SEM_JORNADA,
     vinculo: colaborador?.vinculo ?? "clt",
     obraId: colaborador?.obraId ?? SEM_OBRA,
     centroCustoId: colaborador?.centroCustoId ?? SEM_CENTRO_CUSTO,
@@ -191,6 +196,7 @@ function paraInput(valores: FormValues): ColaboradorInput {
     nome: valores.nome,
     cpf: valores.cpf,
     funcaoId: valores.funcaoId === SEM_FUNCAO ? null : valores.funcaoId,
+    jornadaId: valores.jornadaId === SEM_JORNADA ? null : valores.jornadaId,
     vinculo: valores.vinculo,
     obraId: valores.obraId === SEM_OBRA ? null : valores.obraId,
     centroCustoId:
@@ -235,6 +241,8 @@ export interface ColaboradoresFormDrawerProps {
   centrosCusto: OpcaoSelecao[];
   /** Funções ativas para o Combobox de função (Bloco 3, Task 3). */
   funcoes: FuncaoAtiva[];
+  /** Jornadas ativas para o Combobox de jornada (Bloco 4, Task 3). */
+  jornadas: JornadaAtiva[];
   /** Colaborador em edição, ou null para criar um novo. */
   colaborador?: ColaboradorLista | null;
   /** Controle externo (edição abre a partir da tabela). */
@@ -263,6 +271,7 @@ export function ColaboradoresFormDrawer({
   obras,
   centrosCusto,
   funcoes,
+  jornadas,
   colaborador = null,
   aberto: abertoExterno,
   onAbertoChange,
@@ -314,6 +323,7 @@ export function ColaboradoresFormDrawer({
   const obraValor = form.watch("obraId");
   const centroCustoValor = form.watch("centroCustoId");
   const funcaoValor = form.watch("funcaoId");
+  const jornadaValor = form.watch("jornadaId");
   const tipoContaValor = form.watch("tipoConta");
   const cnhCategoriaValor = form.watch("cnhCategoria");
   const escolaridadeValor = form.watch("escolaridade");
@@ -545,6 +555,29 @@ export function ColaboradoresFormDrawer({
               disabled={salvando}
               className="w-full"
               id="colaborador-centro-custo"
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="colaborador-jornada"
+            rotulo="Jornada"
+            ajuda="Deixe em branco para usar a jornada Padrão EMT automaticamente"
+            erro={form.formState.errors.jornadaId?.message}
+          >
+            <Combobox
+              valor={jornadaValor}
+              onValorChange={(valor) => form.setValue("jornadaId", valor)}
+              opcoes={[
+                { valor: SEM_JORNADA, rotulo: "Padrão EMT (automático)" },
+                ...jornadas.map((jornada) => ({
+                  valor: jornada.id,
+                  rotulo: jornada.nome,
+                })),
+              ]}
+              placeholder="Padrão EMT (automático)"
+              disabled={salvando}
+              className="w-full"
+              id="colaborador-jornada"
             />
           </CampoFormulario>
 

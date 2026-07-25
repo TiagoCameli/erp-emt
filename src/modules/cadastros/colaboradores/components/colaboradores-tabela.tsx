@@ -35,6 +35,7 @@ import type {
 } from "@/modules/cadastros/colaboradores/queries";
 import { ROTULO_VINCULO } from "@/modules/cadastros/colaboradores/schemas";
 import type { FuncaoAtiva } from "@/modules/cadastros/funcoes/queries";
+import type { JornadaAtiva } from "@/modules/cadastros/jornadas/queries";
 import { ColaboradoresFormDrawer } from "./colaboradores-form-drawer";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -52,6 +53,8 @@ export interface ColaboradoresTabelaProps {
   centrosCusto: OpcaoSelecao[];
   /** Funções ativas para o Combobox de função do drawer de edição (Task 3). */
   funcoes: FuncaoAtiva[];
+  /** Jornadas ativas para o Combobox de jornada do drawer de edição (Bloco 4, Task 3). */
+  jornadas: JornadaAtiva[];
   podeEditar: boolean;
   podeExcluir: boolean;
   /** Dependentes de todos os colaboradores, chaveados por colaboradorId (Task 3). */
@@ -67,6 +70,7 @@ export function ColaboradoresTabela({
   obras,
   centrosCusto,
   funcoes,
+  jornadas,
   podeEditar,
   podeExcluir,
   dependentesPorColaborador,
@@ -270,6 +274,7 @@ export function ColaboradoresTabela({
         obras={obras}
         centrosCusto={centrosCusto}
         funcoes={funcoes}
+        jornadas={jornadas}
         colaborador={emEdicao}
         aberto={edicaoAberta}
         onAbertoChange={setEdicaoAberta}
