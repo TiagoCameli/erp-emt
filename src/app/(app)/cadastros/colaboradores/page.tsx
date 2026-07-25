@@ -16,6 +16,7 @@ import {
   listarObras,
 } from "@/modules/cadastros/colaboradores/queries";
 import { listarFuncoesAtivas } from "@/modules/cadastros/funcoes/queries";
+import { listarJornadasAtivas } from "@/modules/cadastros/jornadas/queries";
 
 export default async function PaginaColaboradores() {
   const usuario = await getUsuarioLogado();
@@ -28,12 +29,14 @@ export default async function PaginaColaboradores() {
     obras,
     centrosCusto,
     funcoes,
+    jornadas,
     dependentesPorColaborador,
   ] = await Promise.all([
     listar(),
     listarObras(),
     listarCentrosCusto(),
     listarFuncoesAtivas(),
+    listarJornadasAtivas(),
     listarDependentesPorColaborador(),
   ]);
 
@@ -63,6 +66,7 @@ export default async function PaginaColaboradores() {
                 obras={obras}
                 centrosCusto={centrosCusto}
                 funcoes={funcoes}
+                jornadas={jornadas}
                 mostrarGatilho
               />
             </>
@@ -74,6 +78,7 @@ export default async function PaginaColaboradores() {
         obras={obras}
         centrosCusto={centrosCusto}
         funcoes={funcoes}
+        jornadas={jornadas}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
         dependentesPorColaborador={dependentesPorColaborador}

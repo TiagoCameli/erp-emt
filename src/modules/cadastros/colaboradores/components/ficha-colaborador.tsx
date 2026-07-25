@@ -148,6 +148,7 @@ export function FichaColaborador({
             {colaborador.dataAdmissao ? formatarData(colaborador.dataAdmissao) : "-"}
           </Dado>
           <Dado rotulo="Centro de custo">{colaborador.centroCustoNome ?? "-"}</Dado>
+          <Dado rotulo="Jornada">{colaborador.jornadaNome ?? "Padrão EMT"}</Dado>
           <Dado rotulo="Salário">
             {colaborador.salario !== null ? (
               <MoneyText valor={colaborador.salario} />

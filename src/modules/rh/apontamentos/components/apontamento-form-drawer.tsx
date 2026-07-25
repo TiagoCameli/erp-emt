@@ -19,11 +19,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ROTULO_TIPO_APONTAMENTO } from "@/modules/rh/_shared/formato";
 import type { TipoApontamento } from "@/modules/rh/_shared/formato";
-import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import {
   adicionarApontamento,
   editarApontamento,
 } from "@/modules/rh/apontamentos/actions";
+import {
+  jornadaDoDia,
+  separaHoras,
+  sugereFalta,
+} from "@/modules/rh/apontamentos/jornada-horas";
+import { paraNumero } from "@/modules/rh/apontamentos/numero";
+import type { ColaboradorComJornada } from "@/modules/rh/apontamentos/queries";
 import {
   apontamentoFormParaInput,
   apontamentoFormSchema,
@@ -67,23 +73,41 @@ function paraCampo(valor: number): string {
   return valor === 0 ? "" : String(valor).replace(".", ",");
 }
 
+/** Total inicial do campo auxiliar: soma de normais + extras já lançados. */
+function totalInicial(edicao?: ApontamentoEdicao): string {
+  if (!edicao) return "";
+  return paraCampo(edicao.horasNormais + edicao.horasExtras);
+}
+
 export interface ApontamentoFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   pontoId: string;
-  colaboradores: ColaboradorOpcao[];
+  /** Data do ponto (yyyy-MM-dd), pra achar a jornada do dia-da-semana. */
+  dataPonto: string;
+  colaboradores: ColaboradorComJornada[];
   /** Quando presente, o drawer edita; quando ausente, adiciona. */
   apontamento?: ApontamentoEdicao;
 }
 
 /**
- * Drawer de apontamento do colaborador no dia: colaborador, horas normais e
- * extras, tipo e observação. Serve para adicionar e editar. Fecha no sucesso.
+ * Drawer de apontamento do colaborador no dia: colaborador, total de horas
+ * (auxiliar), horas normais e extras, tipo e observação. Serve para
+ * adicionar e editar. Fecha no sucesso.
+ *
+ * O campo "Total de horas" é só um auxiliar de UI: ao mexer nele, separa o
+ * total em normais/extras pela jornada do colaborador no dia (Bloco 4,
+ * Task 4) e sugere o tipo "falta" quando o total é zero num dia com jornada.
+ * Os campos normais/extras continuam editáveis depois — o encarregado pode
+ * ajustar — e continuam sendo o que vai pro servidor: o total nunca é
+ * enviado, nem entra no schema (`apontamentoSchema`/`apontamentoFormParaInput`
+ * não mudam).
  */
 export function ApontamentoFormDrawer({
   aberto,
   onAbertoChange,
   pontoId,
+  dataPonto,
   colaboradores,
   apontamento,
 }: ApontamentoFormDrawerProps) {
@@ -93,12 +117,50 @@ export function ApontamentoFormDrawer({
     resolver: zodResolver(apontamentoFormSchema),
     defaultValues: valoresIniciais(apontamento),
   });
+  const [total, setTotal] = React.useState(() => totalInicial(apontamento));
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(apontamento));
+    if (aberto) {
+      form.reset(valoresIniciais(apontamento));
+      setTotal(totalInicial(apontamento));
+    }
   }, [aberto, apontamento, form]);
 
   const salvando = form.formState.isSubmitting;
+
+  /**
+   * Ao mexer no total: separa em normais/extras pela jornada do colaborador
+   * selecionado no dia do ponto, e sugere falta quando total é zero num dia
+   * de jornada > 0. Sem colaborador selecionado, ou total inválido, só
+   * atualiza o campo — não força split nenhum.
+   */
+  function aoMudarTotal(valorTexto: string) {
+    setTotal(valorTexto);
+
+    const colaboradorId = form.getValues("colaboradorId");
+    const colaborador = colaboradores.find((c) => c.id === colaboradorId);
+    if (!colaborador) return;
+
+    const totalNumero = paraNumero(valorTexto);
+    if (!Number.isFinite(totalNumero)) return;
+
+    const jornadaHoras = jornadaDoDia(colaborador.jornada, dataPonto);
+    const { horasNormais, horasExtras } = separaHoras(
+      totalNumero,
+      jornadaHoras,
+    );
+
+    form.setValue("horasNormais", paraCampo(horasNormais), {
+      shouldValidate: true,
+    });
+    form.setValue("horasExtras", paraCampo(horasExtras), {
+      shouldValidate: true,
+    });
+
+    if (sugereFalta(totalNumero, jornadaHoras)) {
+      form.setValue("tipo", "falta", { shouldValidate: true });
+    }
+  }
 
   async function aoEnviar(dados: ApontamentoFormInput) {
     const input = apontamentoFormParaInput(dados);
@@ -163,6 +225,21 @@ export function ApontamentoFormDrawer({
             placeholder="Selecione o colaborador"
             className="w-full"
             id="apontamento-colaborador"
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="apontamento-total"
+          rotulo="Total de horas"
+          ajuda="Preencha o total do dia: as horas normais e extras abaixo são calculadas pela jornada do colaborador."
+        >
+          <Input
+            id="apontamento-total"
+            inputMode="decimal"
+            placeholder="0,00"
+            className="text-right tabular-nums"
+            value={total}
+            onChange={(evento) => aoMudarTotal(evento.target.value)}
           />
         </CampoFormulario>
 

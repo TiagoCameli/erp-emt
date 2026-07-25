@@ -1,11 +1,13 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import type { JornadaHoras } from "@/modules/cadastros/jornadas/formato";
 import {
   STATUS_PONTO,
   type StatusPonto,
   type TipoApontamento,
 } from "@/modules/rh/_shared/formato";
+import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 
 /** Tamanho padrão de página da listagem de pontos. */
 export const TAMANHO_PADRAO = 25;
@@ -55,6 +57,94 @@ export interface PontoDetalhe {
   apontamentos: PontoApontamento[];
   totalHorasNormais: number;
   totalHorasExtras: number;
+}
+
+/**
+ * Uma linha de horas da jornada, como devolvida pela fn `fn_jornadas_ponto`
+ * (numeric no banco → number no PostgREST). O tipo puro do domínio é
+ * `JornadaHoras`; a aba de apontamentos não depende do módulo de cadastros.
+ */
+interface LinhaHorasJornada {
+  horas_segunda: number;
+  horas_terca: number;
+  horas_quarta: number;
+  horas_quinta: number;
+  horas_sexta: number;
+  horas_sabado: number;
+  horas_domingo: number;
+}
+
+function paraJornadaHoras(linha: LinhaHorasJornada): JornadaHoras {
+  return {
+    horasSegunda: linha.horas_segunda,
+    horasTerca: linha.horas_terca,
+    horasQuarta: linha.horas_quarta,
+    horasQuinta: linha.horas_quinta,
+    horasSexta: linha.horas_sexta,
+    horasSabado: linha.horas_sabado,
+    horasDomingo: linha.horas_domingo,
+  };
+}
+
+/** Jornada zerada: fallback de último caso, se nem a "Padrão EMT" existir. */
+const JORNADA_ZERADA: JornadaHoras = {
+  horasSegunda: 0,
+  horasTerca: 0,
+  horasQuarta: 0,
+  horasQuinta: 0,
+  horasSexta: 0,
+  horasSabado: 0,
+  horasDomingo: 0,
+};
+
+/** Colaborador do ponto, com a jornada resolvida (própria ou o fallback). */
+export interface ColaboradorComJornada extends ColaboradorOpcao {
+  jornada: JornadaHoras;
+}
+
+/**
+ * Colaboradores ativos com a jornada de cada um, para o split normal/extra
+ * do apontamento (Bloco 4, Task 4). A jornada resolvida (própria via
+ * `jornada_id`, ou o fallback "Padrão EMT" quando `jornada_id` é null) vem da
+ * fn `fn_jornadas_ponto` — uma função SECURITY DEFINER gateada por
+ * `rh.apontamentos`, não por `cadastros.jornadas` (que os perfis do ponto,
+ * Apontador e RH, não têm). Ler a jornada por embed `jornadas(...)` passava
+ * pela RLS de `jornadas`: pra esses perfis voltava null e a jornada resolvia
+ * pra zero, jogando 100% do total em horas extras. Ver
+ * `20260725120001_fn_jornadas_ponto.sql`. Colaborador ausente do retorno da fn
+ * (sem "Padrão EMT" no banco, p.ex.) cai numa jornada zerada: o form não
+ * separa normal/extra errado, só deixa de sugerir automaticamente.
+ */
+export async function listarColaboradoresComJornada(): Promise<
+  ColaboradorComJornada[]
+> {
+  const supabase = await createClient();
+
+  const { data: jornadasRaw, error: erroJornadas } =
+    await supabase.rpc("fn_jornadas_ponto");
+
+  if (erroJornadas) throw new Error("Não foi possível carregar as jornadas");
+
+  const jornadaPorColaborador = new Map<string, JornadaHoras>();
+  for (const linha of jornadasRaw ?? []) {
+    jornadaPorColaborador.set(linha.colaborador_id, paraJornadaHoras(linha));
+  }
+
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select("id, nome, vinculo, funcoes(nome)")
+    .eq("ativo", true)
+    .order("nome");
+
+  if (error) throw new Error("Não foi possível carregar os colaboradores");
+
+  return (data ?? []).map((colaborador) => ({
+    id: colaborador.id,
+    nome: colaborador.nome,
+    funcao: colaborador.funcoes?.nome ?? null,
+    vinculo: colaborador.vinculo,
+    jornada: jornadaPorColaborador.get(colaborador.id) ?? JORNADA_ZERADA,
+  }));
 }
 
 export interface ListarPontosParams {

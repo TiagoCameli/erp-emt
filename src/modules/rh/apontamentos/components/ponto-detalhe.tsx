@@ -12,13 +12,13 @@ import {
   ROTULO_TIPO_APONTAMENTO,
   STATUS_PONTO,
 } from "@/modules/rh/_shared/formato";
-import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import {
   aprovarPonto,
   reabrirPonto,
   removerApontamento,
 } from "@/modules/rh/apontamentos/actions";
 import type {
+  ColaboradorComJornada,
   PontoApontamento,
   PontoDetalhe,
 } from "@/modules/rh/apontamentos/queries";
@@ -66,7 +66,7 @@ function Dado({
 
 export interface PontoDetalheViewProps {
   ponto: PontoDetalhe;
-  colaboradores: ColaboradorOpcao[];
+  colaboradores: ColaboradorComJornada[];
   podeEditar: boolean;
   podeAprovar: boolean;
 }
@@ -400,6 +400,7 @@ export function PontoDetalheView({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           pontoId={ponto.id}
+          dataPonto={ponto.data}
           colaboradores={colaboradores}
           apontamento={emEdicao}
         />

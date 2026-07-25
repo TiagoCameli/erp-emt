@@ -177,6 +177,11 @@ export const colaboradorSchema = z.object({
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
   cpf: textoOpcional,
   funcaoId: z.uuid({ error: "Função inválida" }).nullable(),
+  /**
+   * Jornada de trabalho (Bloco 4, Task 3). Null = usa a jornada "Padrão EMT"
+   * automaticamente, mesmo padrão de nullable de `funcaoId` acima.
+   */
+  jornadaId: z.uuid({ error: "Jornada inválida" }).nullable(),
   vinculo: z.enum(VINCULOS, { error: "Selecione um vínculo" }),
   obraId: z.uuid({ error: "Obra inválida" }).nullable(),
   centroCustoId: z.uuid({ error: "Centro de custo inválido" }).nullable(),

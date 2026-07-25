@@ -354,6 +354,7 @@ export type Database = {
           estado_civil: string | null
           funcao_id: string | null
           id: string
+          jornada_id: string | null
           nacionalidade: string | null
           nome: string
           nome_mae: string | null
@@ -394,6 +395,7 @@ export type Database = {
           estado_civil?: string | null
           funcao_id?: string | null
           id?: string
+          jornada_id?: string | null
           nacionalidade?: string | null
           nome: string
           nome_mae?: string | null
@@ -434,6 +436,7 @@ export type Database = {
           estado_civil?: string | null
           funcao_id?: string | null
           id?: string
+          jornada_id?: string | null
           nacionalidade?: string | null
           nome?: string
           nome_mae?: string | null
@@ -465,6 +468,13 @@ export type Database = {
             columns: ["funcao_id"]
             isOneToOne: false
             referencedRelation: "funcoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "colaboradores_jornada_id_fkey"
+            columns: ["jornada_id"]
+            isOneToOne: false
+            referencedRelation: "jornadas"
             referencedColumns: ["id"]
           },
           {
@@ -1247,6 +1257,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      jornadas: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          horas_domingo: number
+          horas_quarta: number
+          horas_quinta: number
+          horas_sabado: number
+          horas_segunda: number
+          horas_sexta: number
+          horas_terca: number
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          horas_domingo?: number
+          horas_quarta?: number
+          horas_quinta?: number
+          horas_sabado?: number
+          horas_segunda?: number
+          horas_sexta?: number
+          horas_terca?: number
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          horas_domingo?: number
+          horas_quarta?: number
+          horas_quinta?: number
+          horas_sabado?: number
+          horas_segunda?: number
+          horas_sexta?: number
+          horas_terca?: number
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       lancamento_parcelas: {
         Row: {
@@ -2463,6 +2521,19 @@ export type Database = {
           p_transacoes: Json
         }
         Returns: Json
+      }
+      fn_jornadas_ponto: {
+        Args: never
+        Returns: {
+          colaborador_id: string
+          horas_domingo: number
+          horas_quarta: number
+          horas_quinta: number
+          horas_sabado: number
+          horas_segunda: number
+          horas_sexta: number
+          horas_terca: number
+        }[]
       }
       fn_pagar_parcela: {
         Args: {

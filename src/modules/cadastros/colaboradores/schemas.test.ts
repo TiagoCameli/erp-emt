@@ -17,6 +17,7 @@ const base = {
   nome: "Jose da Silva",
   cpf: "",
   funcaoId: null,
+  jornadaId: null,
   vinculo: "clt" as const,
   obraId: null,
   centroCustoId: null,
