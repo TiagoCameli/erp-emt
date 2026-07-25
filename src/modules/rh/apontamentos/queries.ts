@@ -1,11 +1,13 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import type { JornadaHoras } from "@/modules/cadastros/jornadas/formato";
 import {
   STATUS_PONTO,
   type StatusPonto,
   type TipoApontamento,
 } from "@/modules/rh/_shared/formato";
+import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 
 /** Tamanho padrão de página da listagem de pontos. */
 export const TAMANHO_PADRAO = 25;
@@ -55,6 +57,101 @@ export interface PontoDetalhe {
   apontamentos: PontoApontamento[];
   totalHorasNormais: number;
   totalHorasExtras: number;
+}
+
+/**
+ * Colunas das 7 horas da jornada. Cópia local do padrão usado em
+ * `cadastros/jornadas/queries.ts` (mesmo princípio de `numero.ts`: a aba de
+ * apontamentos não depende do módulo de query de cadastros, só do tipo puro
+ * `JornadaHoras`).
+ */
+const SELECT_HORAS_JORNADA =
+  "horas_segunda, horas_terca, horas_quarta, horas_quinta, horas_sexta, horas_sabado, horas_domingo";
+
+interface LinhaHorasJornada {
+  horas_segunda: number;
+  horas_terca: number;
+  horas_quarta: number;
+  horas_quinta: number;
+  horas_sexta: number;
+  horas_sabado: number;
+  horas_domingo: number;
+}
+
+function paraJornadaHoras(linha: LinhaHorasJornada): JornadaHoras {
+  return {
+    horasSegunda: linha.horas_segunda,
+    horasTerca: linha.horas_terca,
+    horasQuarta: linha.horas_quarta,
+    horasQuinta: linha.horas_quinta,
+    horasSexta: linha.horas_sexta,
+    horasSabado: linha.horas_sabado,
+    horasDomingo: linha.horas_domingo,
+  };
+}
+
+/** Jornada zerada: fallback de último caso, se nem a "Padrão EMT" existir. */
+const JORNADA_ZERADA: JornadaHoras = {
+  horasSegunda: 0,
+  horasTerca: 0,
+  horasQuarta: 0,
+  horasQuinta: 0,
+  horasSexta: 0,
+  horasSabado: 0,
+  horasDomingo: 0,
+};
+
+/** Nome da jornada padrão da empresa (seed em 20260725110001_jornadas.sql),
+ *  usada de fallback quando o colaborador não tem `jornada_id`. */
+const NOME_JORNADA_PADRAO = "Padrão EMT";
+
+/** Colaborador do ponto, com a jornada resolvida (própria ou o fallback). */
+export interface ColaboradorComJornada extends ColaboradorOpcao {
+  jornada: JornadaHoras;
+}
+
+/**
+ * Colaboradores ativos com a jornada de cada um, para o split normal/extra
+ * do apontamento (Bloco 4, Task 4). Quando o colaborador não tem
+ * `jornada_id` (null), a jornada cai no fallback "Padrão EMT" — buscada uma
+ * única vez aqui fora, não por colaborador. Se nem a "Padrão EMT" existir no
+ * banco (sem seed), o fallback é uma jornada zerada: o form não separa
+ * normal/extra errado, só deixa de sugerir automaticamente.
+ */
+export async function listarColaboradoresComJornada(): Promise<
+  ColaboradorComJornada[]
+> {
+  const supabase = await createClient();
+
+  const { data: padraoRaw } = await supabase
+    .from("jornadas")
+    .select(SELECT_HORAS_JORNADA)
+    .eq("nome", NOME_JORNADA_PADRAO)
+    .maybeSingle();
+
+  const jornadaPadrao: JornadaHoras = padraoRaw
+    ? paraJornadaHoras(padraoRaw)
+    : JORNADA_ZERADA;
+
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select(
+      `id, nome, vinculo, funcoes(nome), jornadas(${SELECT_HORAS_JORNADA})`,
+    )
+    .eq("ativo", true)
+    .order("nome");
+
+  if (error) throw new Error("Não foi possível carregar os colaboradores");
+
+  return (data ?? []).map((colaborador) => ({
+    id: colaborador.id,
+    nome: colaborador.nome,
+    funcao: colaborador.funcoes?.nome ?? null,
+    vinculo: colaborador.vinculo,
+    jornada: colaborador.jornadas
+      ? paraJornadaHoras(colaborador.jornadas)
+      : jornadaPadrao,
+  }));
 }
 
 export interface ListarPontosParams {

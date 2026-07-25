@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarColaboradores } from "@/modules/rh/_shared/queries";
 import { PontoDetalheView } from "@/modules/rh/apontamentos/components/ponto-detalhe";
-import { buscarPonto } from "@/modules/rh/apontamentos/queries";
+import {
+  buscarPonto,
+  listarColaboradoresComJornada,
+} from "@/modules/rh/apontamentos/queries";
 
 export default async function PaginaPontoDetalhe({
   params,
@@ -19,7 +21,7 @@ export default async function PaginaPontoDetalhe({
   const ponto = await buscarPonto(id);
   if (!ponto) notFound();
 
-  const colaboradores = await listarColaboradores();
+  const colaboradores = await listarColaboradoresComJornada();
 
   const podeEditar = temPermissao(usuario, "rh.apontamentos", "editar");
   const podeAprovar = temPermissao(usuario, "rh.apontamentos", "aprovar");
