@@ -34,6 +34,7 @@ import type {
   OpcaoSelecao,
 } from "@/modules/cadastros/colaboradores/queries";
 import { ROTULO_VINCULO } from "@/modules/cadastros/colaboradores/schemas";
+import type { FuncaoAtiva } from "@/modules/cadastros/funcoes/queries";
 import { ColaboradoresFormDrawer } from "./colaboradores-form-drawer";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -49,6 +50,8 @@ export interface ColaboradoresTabelaProps {
   colaboradores: ColaboradorLista[];
   obras: OpcaoSelecao[];
   centrosCusto: OpcaoSelecao[];
+  /** Funções ativas para o Combobox de função do drawer de edição (Task 3). */
+  funcoes: FuncaoAtiva[];
   podeEditar: boolean;
   podeExcluir: boolean;
   /** Dependentes de todos os colaboradores, chaveados por colaboradorId (Task 3). */
@@ -63,6 +66,7 @@ export function ColaboradoresTabela({
   colaboradores,
   obras,
   centrosCusto,
+  funcoes,
   podeEditar,
   podeExcluir,
   dependentesPorColaborador,
@@ -265,6 +269,7 @@ export function ColaboradoresTabela({
         key={emEdicao?.id ?? "nenhum"}
         obras={obras}
         centrosCusto={centrosCusto}
+        funcoes={funcoes}
         colaborador={emEdicao}
         aberto={edicaoAberta}
         onAbertoChange={setEdicaoAberta}

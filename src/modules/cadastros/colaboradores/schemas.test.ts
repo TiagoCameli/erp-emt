@@ -16,7 +16,7 @@ import {
 const base = {
   nome: "Jose da Silva",
   cpf: "",
-  funcao: "",
+  funcaoId: null,
   vinculo: "clt" as const,
   obraId: null,
   centroCustoId: null,
@@ -90,6 +90,41 @@ describe("colaboradorSchema — salário e diária (dinheiro opcional)", () => {
   });
 });
 
+describe("colaboradorSchema — funcaoId", () => {
+  it("aceita funcaoId null (colaborador sem função)", () => {
+    const r = colaboradorSchema.safeParse({
+      ...base,
+      salario: "",
+      valorDiaria: "",
+      funcaoId: null,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.funcaoId).toBeNull();
+  });
+
+  it("aceita um uuid válido de função", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const r = colaboradorSchema.safeParse({
+      ...base,
+      salario: "",
+      valorDiaria: "",
+      funcaoId: uuid,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.funcaoId).toBe(uuid);
+  });
+
+  it("rejeita funcaoId que não é um uuid", () => {
+    const r = colaboradorSchema.safeParse({
+      ...base,
+      salario: "",
+      valorDiaria: "",
+      funcaoId: "Pedreiro",
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
 describe("colaboradorSchema — dados bancários", () => {
   it("aceita dados bancários vazios como null", () => {
     const r = colaboradorSchema.safeParse({ ...base, salario: "", valorDiaria: "" });
@@ -142,7 +177,7 @@ describe("colaboradorSchema — dados pessoais novos (Bloco 2)", () => {
     expect(r.success).toBe(true);
   });
 
-  it("aceita texto opcional (rg, ctps, pis, cbo etc.) vazio como null", () => {
+  it("aceita texto opcional (rg, ctps, pis etc.) vazio como null", () => {
     const r = colaboradorSchema.safeParse({
       ...base,
       salario: "",
@@ -161,13 +196,11 @@ describe("colaboradorSchema — dados pessoais novos (Bloco 2)", () => {
       nacionalidade: "",
       tituloEleitor: "",
       reservista: "",
-      cbo: "",
     });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.rg).toBeNull();
       expect(r.data.dataNascimento).toBeNull();
-      expect(r.data.cbo).toBeNull();
     }
   });
 

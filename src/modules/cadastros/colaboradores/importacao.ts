@@ -5,7 +5,12 @@ import { VINCULOS, type Vinculo } from "@/modules/cadastros/colaboradores/schema
 export interface LinhaImportacao {
   nome: string;
   cpf: string | null;
-  funcao: string | null;
+  /**
+   * Nome da função (cargo) como veio na planilha (coluna "Funcao"). A Server
+   * Action (`actions.ts`) resolve isso para `funcao_id`, casando por nome com
+   * `funcoes` (Bloco 3, Task 3) — cria a função se ainda não existir.
+   */
+  funcaoNome: string | null;
   vinculo: Vinculo;
   obra: string | null;
 }
@@ -36,7 +41,7 @@ export const colunasImportacao: ColunaImportacao<LinhaImportacao>[] = [
     transformar: (valor) => paraTexto(valor) || null,
   },
   {
-    chave: "funcao",
+    chave: "funcaoNome",
     rotulo: "Funcao",
     exemplo: "Operador",
     transformar: (valor) => paraTexto(valor) || null,

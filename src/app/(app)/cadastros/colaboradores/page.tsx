@@ -15,6 +15,7 @@ import {
   listarCentrosCusto,
   listarObras,
 } from "@/modules/cadastros/colaboradores/queries";
+import { listarFuncoesAtivas } from "@/modules/cadastros/funcoes/queries";
 
 export default async function PaginaColaboradores() {
   const usuario = await getUsuarioLogado();
@@ -22,13 +23,19 @@ export default async function PaginaColaboradores() {
     notFound();
   }
 
-  const [colaboradores, obras, centrosCusto, dependentesPorColaborador] =
-    await Promise.all([
-      listar(),
-      listarObras(),
-      listarCentrosCusto(),
-      listarDependentesPorColaborador(),
-    ]);
+  const [
+    colaboradores,
+    obras,
+    centrosCusto,
+    funcoes,
+    dependentesPorColaborador,
+  ] = await Promise.all([
+    listar(),
+    listarObras(),
+    listarCentrosCusto(),
+    listarFuncoesAtivas(),
+    listarDependentesPorColaborador(),
+  ]);
 
   const podeCriar = temPermissao(usuario, "cadastros.colaboradores", "criar");
   const podeEditar = temPermissao(usuario, "cadastros.colaboradores", "editar");
@@ -55,6 +62,7 @@ export default async function PaginaColaboradores() {
               <ColaboradoresFormDrawer
                 obras={obras}
                 centrosCusto={centrosCusto}
+                funcoes={funcoes}
                 mostrarGatilho
               />
             </>
@@ -65,6 +73,7 @@ export default async function PaginaColaboradores() {
         colaboradores={colaboradores}
         obras={obras}
         centrosCusto={centrosCusto}
+        funcoes={funcoes}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
         dependentesPorColaborador={dependentesPorColaborador}

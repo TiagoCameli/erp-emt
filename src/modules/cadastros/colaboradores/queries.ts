@@ -15,7 +15,11 @@ export interface ColaboradorLista {
   id: string;
   nome: string;
   cpf: string | null;
+  funcaoId: string | null;
+  /** Nome da função, vindo do join com `funcoes` (Bloco 3, Task 3). */
   funcao: string | null;
+  /** Salário base cadastrado na função, para sugerir ao trocar (Task 3). */
+  funcaoSalarioBase: number | null;
   vinculo: Vinculo;
   obraId: string | null;
   obraNome: string | null;
@@ -51,6 +55,8 @@ export interface ColaboradorLista {
   racaCor: RacaCor | null;
   tituloEleitor: string | null;
   reservista: string | null;
+  /** CBO da função vinculada, vindo do join com `funcoes` (Task 3: a coluna
+   * `colaboradores.cbo` não é mais lida). */
   cbo: string | null;
 }
 
@@ -63,6 +69,11 @@ export interface OpcaoSelecao {
 /**
  * Lista todos os colaboradores, com o nome da obra e do centro de custo
  * resolvidos via select aninhado. Ordena por nome.
+ *
+ * A função (Bloco 3, Task 3) é resolvida via join com `funcoes`: o
+ * colaborador guarda só `funcao_id`; nome, CBO e salário base vêm de lá. O
+ * campo `funcao` continua com o mesmo nome (= `funcoes.nome`) pra não quebrar
+ * os componentes de display que já esperavam esse campo.
  */
 export async function listar(): Promise<ColaboradorLista[]> {
   const supabase = await createClient();
@@ -70,7 +81,7 @@ export async function listar(): Promise<ColaboradorLista[]> {
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, cbo, obras(nome), centros_custo(nome)",
+      "id, nome, cpf, funcao_id, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base)",
     )
     .order("nome");
 
@@ -82,7 +93,9 @@ export async function listar(): Promise<ColaboradorLista[]> {
     id: colaborador.id,
     nome: colaborador.nome,
     cpf: colaborador.cpf,
-    funcao: colaborador.funcao,
+    funcaoId: colaborador.funcao_id,
+    funcao: colaborador.funcoes?.nome ?? null,
+    funcaoSalarioBase: colaborador.funcoes?.salario_base ?? null,
     vinculo: colaborador.vinculo as Vinculo,
     obraId: colaborador.obra_id,
     obraNome: colaborador.obras?.nome ?? null,
@@ -116,7 +129,7 @@ export async function listar(): Promise<ColaboradorLista[]> {
     racaCor: colaborador.raca_cor as RacaCor | null,
     tituloEleitor: colaborador.titulo_eleitor,
     reservista: colaborador.reservista,
-    cbo: colaborador.cbo,
+    cbo: colaborador.funcoes?.cbo ?? null,
   }));
 }
 

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export interface ColaboradorOpcao {
   id: string;
   nome: string;
+  /** Nome da função, vindo do join com `funcoes` (Bloco 3, Task 3). */
   funcao: string | null;
   vinculo: string;
 }
@@ -30,7 +31,7 @@ export async function listarColaboradores(): Promise<ColaboradorOpcao[]> {
 
   const { data, error } = await supabase
     .from("colaboradores")
-    .select("id, nome, funcao, vinculo")
+    .select("id, nome, vinculo, funcoes(nome)")
     .eq("ativo", true)
     .order("nome");
 
@@ -39,7 +40,7 @@ export async function listarColaboradores(): Promise<ColaboradorOpcao[]> {
   return (data ?? []).map((c) => ({
     id: c.id,
     nome: c.nome,
-    funcao: c.funcao,
+    funcao: c.funcoes?.nome ?? null,
     vinculo: c.vinculo,
   }));
 }

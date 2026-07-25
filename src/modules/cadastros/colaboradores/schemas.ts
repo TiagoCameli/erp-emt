@@ -176,7 +176,7 @@ export const colaboradorSchema = z.object({
     .trim()
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
   cpf: textoOpcional,
-  funcao: textoOpcional,
+  funcaoId: z.uuid({ error: "Função inválida" }).nullable(),
   vinculo: z.enum(VINCULOS, { error: "Selecione um vínculo" }),
   obraId: z.uuid({ error: "Obra inválida" }).nullable(),
   centroCustoId: z.uuid({ error: "Centro de custo inválido" }).nullable(),
@@ -211,7 +211,6 @@ export const colaboradorSchema = z.object({
   racaCor: z.enum(RACAS_COR, { error: "Raça/cor inválida" }).nullable().optional(),
   tituloEleitor: textoOpcionalNovo,
   reservista: textoOpcionalNovo,
-  cbo: textoOpcionalNovo,
 });
 
 export type ColaboradorInput = z.infer<typeof colaboradorSchema>;
