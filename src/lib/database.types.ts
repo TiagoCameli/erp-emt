@@ -2564,12 +2564,50 @@ export type Database = {
           },
         ]
       }
+      usuario_senha_provisoria: {
+        Row: {
+          gerada_em: string
+          gerada_por: string | null
+          senha: string
+          usuario_id: string
+        }
+        Insert: {
+          gerada_em?: string
+          gerada_por?: string | null
+          senha: string
+          usuario_id: string
+        }
+        Update: {
+          gerada_em?: string
+          gerada_por?: string | null
+          senha?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuario_senha_provisoria_gerada_por_fkey"
+            columns: ["gerada_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usuario_senha_provisoria_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usuarios: {
         Row: {
           ativo: boolean
           created_at: string
           created_by: string | null
           email: string
+          excluido_em: string | null
+          excluido_por: string | null
           id: string
           nome: string
           perfil_id: string | null
@@ -2580,6 +2618,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email: string
+          excluido_em?: string | null
+          excluido_por?: string | null
           id: string
           nome: string
           perfil_id?: string | null
@@ -2590,12 +2630,21 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email?: string
+          excluido_em?: string | null
+          excluido_por?: string | null
           id?: string
           nome?: string
           perfil_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "usuarios_excluido_por_fkey"
+            columns: ["excluido_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "usuarios_perfil_id_fkey"
             columns: ["perfil_id"]
@@ -2661,6 +2710,10 @@ export type Database = {
       }
       fn_excluir_cadastro: {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
+        Returns: undefined
+      }
+      fn_excluir_usuario: {
+        Args: { p_id: string }
         Returns: undefined
       }
       fn_fechar_diarias: {
