@@ -2471,6 +2471,42 @@ export type Database = {
           },
         ]
       }
+      usuario_senha_provisoria: {
+        Row: {
+          gerada_em: string
+          gerada_por: string | null
+          senha: string
+          usuario_id: string
+        }
+        Insert: {
+          gerada_em?: string
+          gerada_por?: string | null
+          senha: string
+          usuario_id: string
+        }
+        Update: {
+          gerada_em?: string
+          gerada_por?: string | null
+          senha?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuario_senha_provisoria_gerada_por_fkey"
+            columns: ["gerada_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usuario_senha_provisoria_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: true
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usuarios: {
         Row: {
           ativo: boolean
