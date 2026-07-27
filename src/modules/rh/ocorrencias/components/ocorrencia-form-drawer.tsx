@@ -40,6 +40,7 @@ function valoresIniciais(): OcorrenciaFormInput {
   return {
     colaboradorId: "",
     data: dataHojeISO(),
+    dataFim: "",
     tipo: "advertencia",
     descricao: "",
     observacao: "",
@@ -86,6 +87,7 @@ export function OcorrenciaFormDrawer({
       form.reset({
         colaboradorId: ocorrencia.colaboradorId,
         data: ocorrencia.data,
+        dataFim: ocorrencia.dataFim ?? "",
         tipo: ocorrencia.tipo,
         descricao: ocorrencia.descricao,
         observacao: ocorrencia.observacao ?? "",
@@ -96,6 +98,8 @@ export function OcorrenciaFormDrawer({
   }, [aberto, ocorrencia, form]);
 
   const salvando = form.formState.isSubmitting;
+  const tipoAtual = form.watch("tipo");
+  const ehAtestado = tipoAtual === "atestado";
 
   async function aoEnviar(dados: OcorrenciaFormInput) {
     const entrada = ocorrenciaFormParaInput(dados);
@@ -164,10 +168,10 @@ export function OcorrenciaFormDrawer({
           />
         </CampoFormulario>
 
-        <LinhaCampos>
+        <LinhaCampos colunas={ehAtestado ? 3 : 2}>
           <CampoFormulario
             id="ocorrencia-data"
-            rotulo="Data"
+            rotulo={ehAtestado ? "Início" : "Data"}
             erro={form.formState.errors.data?.message}
           >
             <Input
@@ -177,18 +181,35 @@ export function OcorrenciaFormDrawer({
             />
           </CampoFormulario>
 
+          {ehAtestado ? (
+            <CampoFormulario
+              id="ocorrencia-data-fim"
+              rotulo="Fim"
+              erro={form.formState.errors.dataFim?.message}
+            >
+              <Input
+                id="ocorrencia-data-fim"
+                type="date"
+                {...form.register("dataFim")}
+              />
+            </CampoFormulario>
+          ) : null}
+
           <CampoFormulario
             id="ocorrencia-tipo"
             rotulo="Tipo"
             erro={form.formState.errors.tipo?.message}
           >
             <Combobox
-              valor={form.watch("tipo")}
-              onValorChange={(valor) =>
+              valor={tipoAtual}
+              onValorChange={(valor) => {
                 form.setValue("tipo", valor as OcorrenciaFormInput["tipo"], {
                   shouldValidate: true,
-                })
-              }
+                });
+                if (valor !== "atestado") {
+                  form.setValue("dataFim", "", { shouldValidate: true });
+                }
+              }}
               opcoes={TIPOS_OCORRENCIA.map((valor) => ({
                 valor,
                 rotulo: ROTULO_TIPO_OCORRENCIA[valor],
