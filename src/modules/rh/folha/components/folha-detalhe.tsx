@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Lock, RotateCcw, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  Lock,
+  RotateCcw,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -18,6 +24,7 @@ import { fecharFolha, reabrirFolha } from "@/modules/rh/folha/actions";
 import type {
   CustoCentroCusto,
   FolhaDetalhe,
+  ResumoEncargo,
 } from "@/modules/rh/folha/queries";
 import { BotaoPlanilha } from "./botao-planilha";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
@@ -60,6 +67,7 @@ function rotuloCentroCusto(grupo: CustoCentroCusto): string {
 export interface FolhaDetalheViewProps {
   folha: FolhaDetalhe;
   custosPorCentro: CustoCentroCusto[];
+  resumoEncargos: ResumoEncargo[];
   podeCriar: boolean;
   podeEditar: boolean;
 }
@@ -74,6 +82,7 @@ export interface FolhaDetalheViewProps {
 export function FolhaDetalheView({
   folha,
   custosPorCentro,
+  resumoEncargos,
   podeCriar,
   podeEditar,
 }: FolhaDetalheViewProps) {
@@ -274,7 +283,27 @@ export function FolhaDetalheView({
                       <MoneyText valor={item.valorExtras} />
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      <MoneyText valor={item.encargos} />
+                      {item.encargosDetalhe.length > 0 ? (
+                        <details className="group">
+                          <summary className="flex cursor-pointer list-none items-center justify-end gap-1 select-none [&::-webkit-details-marker]:hidden">
+                            <MoneyText valor={item.encargos} />
+                            <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180" />
+                          </summary>
+                          <ul className="mt-1.5 space-y-1 border-t border-border pt-1.5 text-left text-legenda">
+                            {item.encargosDetalhe.map((encargo) => (
+                              <li
+                                key={encargo.nome}
+                                className="flex items-center justify-between gap-3"
+                              >
+                                <span>{encargo.nome}</span>
+                                <MoneyText valor={encargo.valor} />
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : (
+                        <MoneyText valor={item.encargos} />
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
                       <MoneyText valor={item.adiantamentos} />
@@ -343,6 +372,43 @@ export function FolhaDetalheView({
           </div>
         )}
       </Secao>
+
+      {resumoEncargos.length > 0 ? (
+        <Secao titulo="Encargos por tipo">
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full text-detalhe">
+              <thead>
+                <tr className="border-b border-border text-legenda text-muted-foreground">
+                  <th className="px-3 py-2 text-left font-medium">Encargo</th>
+                  <th className="px-3 py-2 text-right font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumoEncargos.map((encargo) => (
+                  <tr
+                    key={encargo.nome}
+                    className="border-b border-border last:border-0"
+                  >
+                    <td className="px-3 py-2">{encargo.nome}</td>
+                    <td className="px-3 py-2 text-right">
+                      <MoneyText valor={encargo.total} />
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-border">
+                  <td className="px-3 py-2 font-semibold">Total</td>
+                  <td className="px-3 py-2 text-right">
+                    <MoneyText
+                      valor={folha.valorEncargos}
+                      className="font-semibold"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Secao>
+      ) : null}
 
       {podeCriar && rascunho ? (
         <GerarFolhaFormDrawer

@@ -18,6 +18,12 @@ export interface FolhaLista {
   totalItens: number;
 }
 
+/** Uma linha de encargo aplicada a um item da folha (nome + valor em R$). */
+export interface EncargoDetalhe {
+  nome: string;
+  valor: number;
+}
+
 /** Item da folha por colaborador, com nome/função e centro de custo resolvidos. */
 export interface FolhaItem {
   id: string;
@@ -33,6 +39,12 @@ export interface FolhaItem {
   horasExtras: number;
   valorExtras: number;
   encargos: number;
+  /**
+   * Quebra do total de `encargos` por tipo (Bloco 6, Task 3/4), vinda de
+   * `folha_item_encargos`. Folhas geradas antes da Task 3 não têm essas
+   * linhas: nesse caso vem `[]` e a UI mostra só o total.
+   */
+  encargosDetalhe: EncargoDetalhe[];
   adiantamentos: number;
   custoTotal: number;
   valorLiquido: number;
@@ -59,6 +71,12 @@ export interface CustoCentroCusto {
   centroCustoNome: string | null;
   centroCustoCodigo: string | null;
   custoTotal: number;
+}
+
+/** Total por tipo de encargo, somado entre todos os colaboradores da folha. */
+export interface ResumoEncargo {
+  nome: string;
+  total: number;
 }
 
 /** Normaliza o status do banco (texto livre) para o domínio conhecido. */
@@ -126,7 +144,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
        horas_extras, valor_extras, encargos, adiantamentos, custo_total,
        valor_liquido,
        colaboradores(nome, funcoes(nome)),
-       centros_custo(nome, codigo)`,
+       centros_custo(nome, codigo),
+       folha_item_encargos(nome, valor)`,
     )
     .eq("folha_id", id);
 
@@ -148,11 +167,17 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       horasExtras: item.horas_extras,
       valorExtras: item.valor_extras,
       encargos: item.encargos,
+      // Folhas geradas antes da Task 3 (Bloco 6) não têm linhas aqui: [].
+      encargosDetalhe: (item.folha_item_encargos ?? [])
+        .map((encargo) => ({ nome: encargo.nome, valor: encargo.valor }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       adiantamentos: item.adiantamentos,
       custoTotal: item.custo_total,
       valorLiquido: item.valor_liquido,
     }))
-    .sort((a, b) => a.colaboradorNome.localeCompare(b.colaboradorNome, "pt-BR"));
+    .sort((a, b) =>
+      a.colaboradorNome.localeCompare(b.colaboradorNome, "pt-BR"),
+    );
 
   return {
     id: folha.id,
@@ -198,4 +223,29 @@ export async function resumoPorCentroCusto(
   }
 
   return [...grupos.values()].sort((a, b) => b.custoTotal - a.custoTotal);
+}
+
+/**
+ * Total por tipo de encargo, somando as linhas de `folha_item_encargos` de
+ * todos os itens da folha. Ordenado por nome. Folhas antigas, sem quebra
+ * gravada (todo item com `encargosDetalhe: []`), retornam lista vazia — a UI
+ * então omite esta seção e mostra só o total consolidado.
+ */
+export async function resumoPorEncargo(
+  folhaId: string,
+): Promise<ResumoEncargo[]> {
+  const folha = await buscarFolha(folhaId);
+  if (!folha) return [];
+
+  const totais = new Map<string, number>();
+
+  for (const item of folha.itens) {
+    for (const encargo of item.encargosDetalhe) {
+      totais.set(encargo.nome, (totais.get(encargo.nome) ?? 0) + encargo.valor);
+    }
+  }
+
+  return [...totais.entries()]
+    .map(([nome, total]) => ({ nome, total }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }

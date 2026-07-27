@@ -5,6 +5,7 @@ import { FolhaDetalheView } from "@/modules/rh/folha/components/folha-detalhe";
 import {
   buscarFolha,
   resumoPorCentroCusto,
+  resumoPorEncargo,
 } from "@/modules/rh/folha/queries";
 
 export default async function PaginaFolhaDetalhe({
@@ -22,6 +23,7 @@ export default async function PaginaFolhaDetalhe({
   if (!folha) notFound();
 
   const custosPorCentro = await resumoPorCentroCusto(id);
+  const resumoEncargos = await resumoPorEncargo(id);
 
   const podeCriar = temPermissao(usuario, "rh.folha", "criar");
   const podeEditar = temPermissao(usuario, "rh.folha", "editar");
@@ -30,6 +32,7 @@ export default async function PaginaFolhaDetalhe({
     <FolhaDetalheView
       folha={folha}
       custosPorCentro={custosPorCentro}
+      resumoEncargos={resumoEncargos}
       podeCriar={podeCriar}
       podeEditar={podeEditar}
     />
