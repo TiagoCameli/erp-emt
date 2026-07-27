@@ -35,12 +35,18 @@ const colunas: ColumnDef<UsuarioLista, unknown>[] = [
   {
     accessorKey: "ativo",
     header: "Status",
-    cell: ({ row }) =>
-      row.original.ativo ? (
-        <StatusBadge status="aprovado" rotulo="Ativo" />
-      ) : (
-        <StatusBadge status="rascunho" rotulo="Inativo" />
-      ),
+    cell: ({ row }) => (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {row.original.ativo ? (
+          <StatusBadge status="aprovado" rotulo="Ativo" />
+        ) : (
+          <StatusBadge status="rascunho" rotulo="Inativo" />
+        )}
+        {row.original.acessoPendente ? (
+          <StatusBadge status="pendente_aprovacao" rotulo="1º acesso pendente" />
+        ) : null}
+      </div>
+    ),
   },
   {
     accessorKey: "criadoEm",
