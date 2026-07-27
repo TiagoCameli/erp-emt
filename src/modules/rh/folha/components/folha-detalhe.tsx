@@ -349,7 +349,6 @@ export function FolhaDetalheView({
           aberto={drawerRegerar}
           onAbertoChange={setDrawerRegerar}
           competenciaInicial={folha.competencia.slice(0, 7)}
-          encargosInicial={String(folha.encargosPercentual).replace(".", ",")}
           onGerada={() => router.refresh()}
         />
       ) : null}

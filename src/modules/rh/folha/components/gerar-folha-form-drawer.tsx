@@ -31,7 +31,6 @@ function mesCorrente(): string {
 function valoresIniciais(competenciaInicial?: string): GerarFolhaFormInput {
   return {
     competencia: competenciaInicial ?? mesCorrente(),
-    encargosPercentual: "",
   };
 }
 
@@ -40,23 +39,21 @@ export interface GerarFolhaFormDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Competência pré-preenchida (yyyy-MM) ao regerar uma folha existente. */
   competenciaInicial?: string;
-  /** Percentual de encargos pré-preenchido ao regerar. */
-  encargosInicial?: string;
   /** Chamado com o id da folha gerada, para navegar ao detalhe. */
   onGerada?: (id: string) => void;
 }
 
 /**
- * Drawer de gerar folha gerencial: mês da competência + percentual de encargos.
- * Gerar consolida os colaboradores CLT ativos da competência em um rascunho;
- * regerar (mesma competência) substitui o rascunho. Fecha no sucesso e navega
- * para o detalhe.
+ * Drawer de gerar folha gerencial: só o mês da competência. Os encargos são
+ * discriminados pela config (folha_encargos ativos) dentro da fn_gerar_folha,
+ * não há mais % global digitado aqui. Gerar consolida os colaboradores CLT
+ * ativos da competência em um rascunho; regerar (mesma competência) substitui o
+ * rascunho. Fecha no sucesso e navega para o detalhe.
  */
 export function GerarFolhaFormDrawer({
   aberto,
   onAbertoChange,
   competenciaInicial,
-  encargosInicial,
   onGerada,
 }: GerarFolhaFormDrawerProps) {
   const form = useForm<GerarFolhaFormInput>({
@@ -68,10 +65,9 @@ export function GerarFolhaFormDrawer({
     if (aberto) {
       form.reset({
         competencia: competenciaInicial ?? mesCorrente(),
-        encargosPercentual: encargosInicial ?? "",
       });
     }
-  }, [aberto, competenciaInicial, encargosInicial, form]);
+  }, [aberto, competenciaInicial, form]);
 
   const salvando = form.formState.isSubmitting;
   const regerar = competenciaInicial !== undefined;
@@ -92,7 +88,7 @@ export function GerarFolhaFormDrawer({
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={regerar ? "Regerar folha" : "Gerar folha"}
-      descricao="Consolida os colaboradores CLT ativos da competência, com ponto, adiantamentos e encargos. Regerar substitui o rascunho da mesma competência."
+      descricao="Consolida os colaboradores CLT ativos da competência, com ponto e adiantamentos. Os encargos são discriminados automaticamente pela config. Regerar substitui o rascunho da mesma competência."
       rodape={
         <>
           <Button
@@ -129,21 +125,6 @@ export function GerarFolhaFormDrawer({
             type="month"
             disabled={regerar}
             {...form.register("competencia")}
-          />
-        </CampoFormulario>
-
-        <CampoFormulario
-          id="gerar-folha-encargos"
-          rotulo="Encargos (%)"
-          erro={form.formState.errors.encargosPercentual?.message}
-          ajuda="Percentual aplicado sobre salário e extras para estimar o custo da empresa."
-        >
-          <Input
-            id="gerar-folha-encargos"
-            inputMode="decimal"
-            placeholder="0"
-            className="text-right tabular-nums"
-            {...form.register("encargosPercentual")}
           />
         </CampoFormulario>
       </form>
