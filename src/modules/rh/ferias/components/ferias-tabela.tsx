@@ -251,6 +251,7 @@ export function FeriasTabela({
           <EmptyState
             icone={Palmtree}
             titulo="Nenhuma férias encontrada"
+            className="border-none bg-transparent"
             descricao="Registre os períodos aquisitivos e o gozo de férias por colaborador. O sistema alerta sobre férias vencidas e a vencer."
             acao={
               podeCriar ? (

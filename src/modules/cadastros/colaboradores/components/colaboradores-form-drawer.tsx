@@ -374,7 +374,7 @@ export function ColaboradoresFormDrawer({
         aberto={aberto}
         onAbertoChange={definirAberto}
         titulo={editando ? "Editar colaborador" : "Novo colaborador"}
-        descricao="Dados básicos do colaborador. O cadastro completo de RH chega na Fase 7"
+        descricao="Dados cadastrais do colaborador."
         rodape={
           <>
             <Button

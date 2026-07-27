@@ -5,6 +5,7 @@ import { TriangleAlert } from "lucide-react";
 
 import { EmptyState, KPICard, MoneyText, PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { formatarCompetencia } from "@/modules/rh/_shared/formato";
 import {
   comprasResumo,
   financeiroResumo,
@@ -135,7 +136,11 @@ export default async function GestaoPage() {
             <KPICard
               titulo="Custo da folha"
               valor={<MoneyText valor={d.folha.custoTotal} />}
-              detalhe={d.folha.competencia ?? "sem folha lançada"}
+              detalhe={
+                d.folha.competencia
+                  ? formatarCompetencia(d.folha.competencia)
+                  : "sem folha lançada"
+              }
             />
             <KPICard
               titulo="Apontamentos em aberto"

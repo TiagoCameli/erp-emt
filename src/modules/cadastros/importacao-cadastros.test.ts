@@ -194,3 +194,174 @@ describe("importação de fornecedores (colunas reais de produção)", () => {
     expect(valida.dados.uf).toBeNull();
   });
 });
+
+describe("normalização de fornecedores (CNPJ, razão social, traço)", () => {
+  it("mascara CNPJ e CPF crus na importação", async () => {
+    const arquivo = await montarXlsx(
+      ["Tipo", "Razao social", "CNPJ/CPF", "Cidade", "UF"],
+      [
+        ["pj", "Brita Acre LTDA", "00000000000100", "Rio Branco", "AC"],
+        ["pf", "Jose da Silva", "00000000000", "Rio Branco", "AC"],
+      ],
+    );
+
+    const resultado = await lerEValidarXlsx<FornecedorImportacao>(
+      arquivo,
+      COLUNAS_FORNECEDOR,
+    );
+
+    expect(resultado.validas).toHaveLength(2);
+    expect(resultado.validas[0].dados.cnpjCpf).toBe("00.000.000/0001-00");
+    expect(resultado.validas[1].dados.cnpjCpf).toBe("000.000.000-00");
+  });
+
+  it("rejeita CNPJ/CPF com contagem de dígitos inválida", async () => {
+    const arquivo = await montarXlsx(
+      ["Tipo", "Razao social", "CNPJ/CPF", "Cidade", "UF"],
+      [["pj", "Fornecedor CNPJ curto LTDA", "123", "Rio Branco", "AC"]],
+    );
+
+    const resultado = await lerEValidarXlsx<FornecedorImportacao>(
+      arquivo,
+      COLUNAS_FORNECEDOR,
+    );
+
+    expect(resultado.invalidas).toHaveLength(1);
+    expect(resultado.invalidas[0].erros).toContain(
+      "CNPJ/CPF deve ter 11 ou 14 dígitos",
+    );
+  });
+
+  it("rejeita razão social puramente numérica", async () => {
+    const arquivo = await montarXlsx(
+      ["Tipo", "Razao social", "CNPJ/CPF", "Cidade", "UF"],
+      [["pj", "12345678000199", "", "Rio Branco", "AC"]],
+    );
+
+    const resultado = await lerEValidarXlsx<FornecedorImportacao>(
+      arquivo,
+      COLUNAS_FORNECEDOR,
+    );
+
+    expect(resultado.invalidas).toHaveLength(1);
+    expect(resultado.invalidas[0].erros).toContain(
+      "Razão social não pode ser só números — confira se o CNPJ caiu na coluna errada",
+    );
+  });
+
+  it("remove prefixo de código legado da razão social", async () => {
+    const arquivo = await montarXlsx(
+      ["Tipo", "Razao social", "CNPJ/CPF", "Cidade", "UF"],
+      [["pj", "101 - XAPURI", "", "Rio Branco", "AC"]],
+    );
+
+    const resultado = await lerEValidarXlsx<FornecedorImportacao>(
+      arquivo,
+      COLUNAS_FORNECEDOR,
+    );
+
+    expect(resultado.validas).toHaveLength(1);
+    expect(resultado.validas[0].dados.razaoSocial).toBe("XAPURI");
+  });
+
+  it("trata traço isolado como campo vazio (null)", async () => {
+    const arquivo = await montarXlsx(
+      ["Tipo", "Razao social", "CNPJ/CPF", "Cidade", "UF"],
+      [["pj", "Fornecedor Traço LTDA", "-", "—", "AC"]],
+    );
+
+    const resultado = await lerEValidarXlsx<FornecedorImportacao>(
+      arquivo,
+      COLUNAS_FORNECEDOR,
+    );
+
+    expect(resultado.validas).toHaveLength(1);
+    expect(resultado.validas[0].dados.cnpjCpf).toBeNull();
+    expect(resultado.validas[0].dados.cidade).toBeNull();
+  });
+});
+
+// Réplica de colunasImportInsumo: a server action tem 'use server' e não é
+// importável, então reproduzimos aqui a mesma validação de nome de produção.
+interface LinhaImportInsumo {
+  codigo: string | null;
+  nome: string;
+  categoria: string;
+  unidade: string;
+}
+
+const COLUNAS_INSUMO: ColunaImportacao<LinhaImportInsumo>[] = [
+  { chave: "codigo", rotulo: "Codigo", exemplo: "MAT-001" },
+  {
+    chave: "nome",
+    rotulo: "Nome",
+    obrigatoria: true,
+    exemplo: "Brita 1",
+    validar: (valor, linha) => {
+      const nome = String(valor ?? "").trim();
+      const codigo = String(linha.codigo ?? "").trim();
+      if (/^\d+$/.test(nome) || (codigo !== "" && nome === codigo)) {
+        return "Nome do insumo não pode ser igual ao código nem ser só números";
+      }
+      return null;
+    },
+  },
+  {
+    chave: "categoria",
+    rotulo: "Categoria",
+    obrigatoria: true,
+    exemplo: "Materiais de construcao",
+  },
+  { chave: "unidade", rotulo: "Unidade", obrigatoria: true, exemplo: "m3" },
+];
+
+describe("importação de insumos (validação de nome)", () => {
+  it("rejeita nome puramente numérico", async () => {
+    const arquivo = await montarXlsx(
+      ["Codigo", "Nome", "Categoria", "Unidade"],
+      [["MAT-001", "12345", "Materiais de construcao", "m3"]],
+    );
+
+    const resultado = await lerEValidarXlsx<LinhaImportInsumo>(
+      arquivo,
+      COLUNAS_INSUMO,
+    );
+
+    expect(resultado.invalidas).toHaveLength(1);
+    expect(resultado.invalidas[0].erros).toContain(
+      "Nome do insumo não pode ser igual ao código nem ser só números",
+    );
+  });
+
+  it("rejeita nome igual ao código", async () => {
+    const arquivo = await montarXlsx(
+      ["Codigo", "Nome", "Categoria", "Unidade"],
+      [["MAT-001", "MAT-001", "Materiais de construcao", "m3"]],
+    );
+
+    const resultado = await lerEValidarXlsx<LinhaImportInsumo>(
+      arquivo,
+      COLUNAS_INSUMO,
+    );
+
+    expect(resultado.invalidas).toHaveLength(1);
+    expect(resultado.invalidas[0].erros).toContain(
+      "Nome do insumo não pode ser igual ao código nem ser só números",
+    );
+  });
+
+  it("aceita um nome descritivo normal", async () => {
+    const arquivo = await montarXlsx(
+      ["Codigo", "Nome", "Categoria", "Unidade"],
+      [["MAT-001", "Brita 1", "Materiais de construcao", "m3"]],
+    );
+
+    const resultado = await lerEValidarXlsx<LinhaImportInsumo>(
+      arquivo,
+      COLUNAS_INSUMO,
+    );
+
+    expect(resultado.validas).toHaveLength(1);
+    expect(resultado.validas[0].dados.nome).toBe("Brita 1");
+  });
+});

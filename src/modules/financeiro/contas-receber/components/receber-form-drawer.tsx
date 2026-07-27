@@ -48,7 +48,7 @@ export interface ReceberFormDrawerProps {
  * Drawer de criação de conta a receber. Caso simples: descrição, categoria de
  * receita, valor e vencimento, em parcela única e sem rateio. A action monta a
  * parcela única e chama fn_salvar_lancamento com tipo a_receber. Recebíveis
- * mais complexos (parcelado, rateado) virão das faturas de medição (Fase 6).
+ * mais complexos (parcelado, rateado) são montados manualmente aqui.
  */
 export function ReceberFormDrawer({
   aberto,
@@ -143,7 +143,7 @@ export function ReceberFormDrawer({
         >
           <Input
             id="receber-descricao"
-            placeholder="Medição 03 BR-364 Lote 09"
+            placeholder="Ex: Locação de equipamento - jan/2026"
             disabled={salvando}
             {...form.register("descricao")}
           />

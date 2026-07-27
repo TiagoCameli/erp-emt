@@ -2585,13 +2585,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "usuario_senha_provisoria_gerada_por_fkey"
-            columns: ["gerada_por"]
-            isOneToOne: false
-            referencedRelation: "usuarios"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "usuario_senha_provisoria_usuario_id_fkey"
             columns: ["usuario_id"]
             isOneToOne: true

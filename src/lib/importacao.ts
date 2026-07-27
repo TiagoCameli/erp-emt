@@ -60,8 +60,17 @@ function normalizarRotulo(rotulo: string): string {
   return rotulo.trim().toLowerCase();
 }
 
+/**
+ * Uma célula conta como vazia (nula) quando é null, string em branco ou um
+ * traço isolado ("-" ou "—"), que planilhas usam como marcador de "sem valor".
+ */
 function estaVazio(valor: ValorNormalizado): boolean {
-  return valor === null || (typeof valor === "string" && valor.trim() === "");
+  if (valor === null) return true;
+  if (typeof valor === "string") {
+    const limpo = valor.trim();
+    return limpo === "" || limpo === "-" || limpo === "—";
+  }
+  return false;
 }
 
 /**

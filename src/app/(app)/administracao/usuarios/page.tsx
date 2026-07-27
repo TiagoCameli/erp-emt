@@ -36,6 +36,7 @@ export default async function PaginaUsuarios() {
         perfis={perfis}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        usuarioLogadoId={usuario.id}
       />
     </>
   );

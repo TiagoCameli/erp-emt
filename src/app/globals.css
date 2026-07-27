@@ -185,3 +185,28 @@
     display: none !important;
   }
 }
+
+/*
+  Indicador de scroll horizontal persistente. No macOS a barra nativa se
+  auto-oculta e colunas/abas à direita parecem "cortadas". Uma barra fina
+  sempre visível (quando há overflow) sinaliza que dá para rolar.
+*/
+.barra-scroll-x,
+[data-slot="table-container"] {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 25%, transparent)
+    transparent;
+}
+.barra-scroll-x::-webkit-scrollbar,
+[data-slot="table-container"]::-webkit-scrollbar {
+  height: 8px;
+}
+.barra-scroll-x::-webkit-scrollbar-track,
+[data-slot="table-container"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+.barra-scroll-x::-webkit-scrollbar-thumb,
+[data-slot="table-container"]::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 25%, transparent);
+  border-radius: 9999px;
+}

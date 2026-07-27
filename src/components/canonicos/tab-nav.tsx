@@ -15,7 +15,7 @@ export function TabNav({ recursos, pathname }: TabNavProps) {
   return (
     <nav
       aria-label="Abas do módulo"
-      className="flex items-center overflow-x-auto border-b border-border"
+      className="barra-scroll-x flex items-center overflow-x-auto border-b border-border"
     >
       {recursos.map((recurso) => {
         const ativa = pathname.startsWith(recurso.rota);

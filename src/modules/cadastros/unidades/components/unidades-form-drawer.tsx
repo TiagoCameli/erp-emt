@@ -99,7 +99,7 @@ export function UnidadesFormDrawer({
       descricao={
         editando
           ? "Atualize os dados da unidade de medida"
-          : "Cadastre uma unidade para usar em insumos e medições"
+          : "Cadastre uma unidade para usar nos insumos"
       }
       rodape={
         <>

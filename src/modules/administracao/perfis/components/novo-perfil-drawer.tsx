@@ -98,7 +98,7 @@ export function NovoPerfilDrawer({
         >
           <Input
             id="perfil-nome"
-            placeholder="Ex: Comprador, Financeiro, Engenharia"
+            placeholder="Ex: Comprador, Financeiro, RH"
             disabled={enviando}
             autoFocus
             {...form.register("nome")}

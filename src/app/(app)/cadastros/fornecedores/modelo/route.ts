@@ -7,6 +7,7 @@ const COLUNAS_MODELO = [
   { rotulo: "Tipo", exemplo: "pj" },
   { rotulo: "Razao social", exemplo: "Brita Acre LTDA" },
   { rotulo: "CNPJ/CPF", exemplo: "00.000.000/0001-00" },
+  { rotulo: "Telefone", exemplo: "(68) 3322-1100" },
   { rotulo: "Cidade", exemplo: "Cruzeiro do Sul" },
   { rotulo: "UF", exemplo: "AC" },
 ];

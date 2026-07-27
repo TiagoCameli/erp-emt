@@ -8,9 +8,11 @@ import {
   DataTable,
   EmptyState,
   FilterBar,
+  FiltroBusca,
   FiltroSelect,
   MoneyText,
   StatusBadge,
+  useBuscaUrl,
   useFiltrosUrl,
 } from "@/components/canonicos";
 import { formatarData } from "@/lib/formatadores";
@@ -116,6 +118,7 @@ export interface LancamentosTabelaProps {
   tamanho: number;
   tipo: string;
   status: string;
+  busca: string;
 }
 
 /**
@@ -129,9 +132,11 @@ export function LancamentosTabela({
   tamanho,
   tipo,
   status,
+  busca: buscaUrl,
 }: LancamentosTabelaProps) {
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
+  const { busca, setBusca } = useBuscaUrl(buscaUrl);
 
   function aoMudarPaginacao(paginacao: PaginationState) {
     setMuitos({
@@ -143,6 +148,11 @@ export function LancamentosTabela({
   return (
     <div className="flex flex-col gap-2">
       <FilterBar>
+        <FiltroBusca
+          valor={busca}
+          onValorChange={setBusca}
+          placeholder="Buscar por número ou descrição"
+        />
         <FiltroSelect
           valor={tipo}
           onValorChange={(valor) =>

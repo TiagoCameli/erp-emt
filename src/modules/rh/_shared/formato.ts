@@ -44,3 +44,9 @@ export const ROTULO_VINCULO: Record<Vinculo, string> = {
   diarista: "Diarista",
   terceiro: "Terceiro",
 };
+
+/** Competência (yyyy-MM-01) como MM/AAAA. */
+export function formatarCompetencia(competencia: string): string {
+  const [ano, mes] = competencia.split("-");
+  return `${mes}/${ano}`;
+}

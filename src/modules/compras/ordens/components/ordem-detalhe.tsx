@@ -256,14 +256,16 @@ export function OrdemDetalheView({
         </div>
       </div>
 
-      <ApprovalBar
-        status={ordem.status}
-        podeAprovar={podeAprovar}
-        podeDesaprovar={podeDesaprovar}
-        onAprovar={aoAprovar}
-        onRejeitar={aoRejeitar}
-        onDesaprovar={aoDesaprovar}
-      />
+      {ordem.status === "pendente_aprovacao" || ordem.status === "aprovado" ? (
+        <ApprovalBar
+          status={ordem.status}
+          podeAprovar={podeAprovar}
+          podeDesaprovar={podeDesaprovar}
+          onAprovar={aoAprovar}
+          onRejeitar={aoRejeitar}
+          onDesaprovar={aoDesaprovar}
+        />
+      ) : null}
 
       {ordem.motivoRejeicao ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">

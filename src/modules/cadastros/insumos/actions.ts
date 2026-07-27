@@ -34,7 +34,20 @@ interface LinhaImportInsumo {
 /** Colunas da planilha de importação de insumos, usadas só dentro deste módulo. */
 const colunasImportInsumo: ColunaImportacao<LinhaImportInsumo>[] = [
   { chave: "codigo", rotulo: "Codigo", exemplo: "MAT-001" },
-  { chave: "nome", rotulo: "Nome", obrigatoria: true, exemplo: "Brita 1" },
+  {
+    chave: "nome",
+    rotulo: "Nome",
+    obrigatoria: true,
+    exemplo: "Brita 1",
+    validar: (valor, linha) => {
+      const nome = String(valor ?? "").trim();
+      const codigo = String(linha.codigo ?? "").trim();
+      if (/^\d+$/.test(nome) || (codigo !== "" && nome === codigo)) {
+        return "Nome do insumo não pode ser igual ao código nem ser só números";
+      }
+      return null;
+    },
+  },
   {
     chave: "categoria",
     rotulo: "Categoria",

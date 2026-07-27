@@ -1,3 +1,4 @@
+import { formatarCnpjCpf, validarCnpjCpf } from "@/lib/documentos";
 import type { ColunaImportacao } from "@/lib/importacao";
 import { TIPOS_FORNECEDOR } from "@/modules/cadastros/fornecedores/schemas";
 
@@ -6,6 +7,7 @@ export interface FornecedorImportacao {
   tipo: string;
   razaoSocial: string;
   cnpjCpf: string | null;
+  telefone: string | null;
   cidade: string | null;
   uf: string | null;
 }
@@ -37,12 +39,28 @@ export const COLUNAS_FORNECEDOR: ColunaImportacao<FornecedorImportacao>[] = [
     rotulo: "Razao social",
     obrigatoria: true,
     exemplo: "Brita Acre LTDA",
-    transformar: (valor) => String(valor).trim(),
+    // Remove prefixo de código legado no formato "101 - " e faz trim.
+    transformar: (valor) =>
+      String(valor).replace(/^\s*\d+\s*-\s*/, "").trim(),
+    validar: (valor) =>
+      /^\d+$/.test(String(valor ?? "").replace(/\s/g, ""))
+        ? "Razão social não pode ser só números — confira se o CNPJ caiu na coluna errada"
+        : null,
   },
   {
     chave: "cnpjCpf",
     rotulo: "CNPJ/CPF",
     exemplo: "00.000.000/0001-00",
+    transformar: (valor) => formatarCnpjCpf(String(valor ?? "")),
+    validar: (valor) =>
+      validarCnpjCpf(String(valor ?? ""))
+        ? null
+        : "CNPJ/CPF deve ter 11 ou 14 dígitos",
+  },
+  {
+    chave: "telefone",
+    rotulo: "Telefone",
+    exemplo: "(68) 3322-1100",
     transformar: textoOuNull,
   },
   {

@@ -42,6 +42,7 @@ export interface DetalheUsuarioDrawerProps {
   perfis: PerfilOpcao[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  usuarioLogadoId: string;
 }
 
 /**
@@ -58,6 +59,7 @@ export function DetalheUsuarioDrawer({
   perfis,
   podeEditar,
   podeExcluir,
+  usuarioLogadoId,
 }: DetalheUsuarioDrawerProps) {
   const [perfilSelecionado, setPerfilSelecionado] = React.useState<string>(
     usuario?.perfilId ?? "",
@@ -145,6 +147,8 @@ export function DetalheUsuarioDrawer({
   }
 
   if (!usuario) return null;
+
+  const ehVoceMesmo = usuario.id === usuarioLogadoId;
 
   return (
     <FormDrawer
@@ -255,61 +259,70 @@ export function DetalheUsuarioDrawer({
 
             <div className="flex flex-col gap-2">
               <p className="text-corpo font-medium">Acesso</p>
-              <p className="text-detalhe text-muted-foreground">
-                {usuario.acessoPendente
-                  ? "Aguardando o 1º acesso. A senha provisória abaixo vale até o usuário definir a própria."
-                  : "O usuário já definiu a própria senha. Redefina para gerar uma nova senha provisória."}
-              </p>
+              {ehVoceMesmo ? (
+                <p className="text-detalhe text-muted-foreground">
+                  Esta é a sua conta. Para trocar a sua senha, use Minha conta
+                  {" > "}Alterar senha.
+                </p>
+              ) : (
+                <>
+                  <p className="text-detalhe text-muted-foreground">
+                    {usuario.acessoPendente
+                      ? "Aguardando o 1º acesso. A senha provisória abaixo vale até o usuário definir a própria."
+                      : "O usuário já definiu a própria senha. Redefina para gerar uma nova senha provisória."}
+                  </p>
 
-              {senhaRevelada ? (
-                <span className="flex items-center gap-2">
-                  <code className="codigo-doc rounded-md border border-border bg-surface px-2 py-1">
-                    {senhaRevelada}
-                  </code>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={copiarSenha}
-                  >
-                    <Copy />
-                    Copiar
-                  </Button>
-                </span>
-              ) : null}
+                  {senhaRevelada ? (
+                    <span className="flex items-center gap-2">
+                      <code className="codigo-doc rounded-md border border-border bg-surface px-2 py-1">
+                        {senhaRevelada}
+                      </code>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={copiarSenha}
+                      >
+                        <Copy />
+                        Copiar
+                      </Button>
+                    </span>
+                  ) : null}
 
-              <div className="flex flex-wrap items-center gap-2">
-                {usuario.acessoPendente && !senhaRevelada ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={revelarSenha}
-                    disabled={carregandoSenha}
-                  >
-                    {carregandoSenha ? (
-                      <>
-                        <LoaderCircle className="animate-spin" />
-                        Carregando...
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound />
-                        Revelar senha provisória
-                      </>
-                    )}
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConfirmarReset(true)}
-                >
-                  <KeyRound />
-                  Redefinir senha
-                </Button>
-              </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {usuario.acessoPendente && !senhaRevelada ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={revelarSenha}
+                        disabled={carregandoSenha}
+                      >
+                        {carregandoSenha ? (
+                          <>
+                            <LoaderCircle className="animate-spin" />
+                            Carregando...
+                          </>
+                        ) : (
+                          <>
+                            <KeyRound />
+                            Revelar senha provisória
+                          </>
+                        )}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setConfirmarReset(true)}
+                    >
+                      <KeyRound />
+                      Redefinir senha
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
 
             <Separator />
@@ -328,7 +341,7 @@ export function DetalheUsuarioDrawer({
           />
         </div>
 
-        {podeExcluir ? (
+        {podeExcluir && !ehVoceMesmo ? (
           <>
             <Separator />
             <div className="flex items-center justify-between gap-3">

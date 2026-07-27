@@ -93,7 +93,7 @@ export function CategoriasFormDrawer({
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar categoria" : "Nova categoria"}
-      descricao="Categorias agrupam os insumos por natureza para custo e estoque"
+      descricao="Categorias agrupam os insumos por natureza para o custo"
       rodape={
         <>
           <Button
