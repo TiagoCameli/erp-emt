@@ -14,8 +14,10 @@ export interface OcorrenciaLista {
   id: string;
   colaboradorId: string;
   colaboradorNome: string;
-  /** Data da ocorrência (yyyy-MM-dd). */
+  /** Data da ocorrência (yyyy-MM-dd); para atestado, é o início do período. */
   data: string;
+  /** Fim do período do atestado (yyyy-MM-dd). Nulo nos demais tipos. */
+  dataFim: string | null;
   tipo: TipoOcorrencia;
   descricao: string;
   observacao: string | null;
@@ -34,7 +36,7 @@ export async function listarOcorrencias(
   let consulta = supabase
     .from("rh_ocorrencias")
     .select(
-      "id, colaborador_id, data, tipo, descricao, observacao, created_at, colaboradores(nome)",
+      "id, colaborador_id, data, data_fim, tipo, descricao, observacao, created_at, colaboradores(nome)",
     )
     .order("data", { ascending: false })
     .order("created_at", { ascending: false });
@@ -57,6 +59,7 @@ export async function listarOcorrencias(
     colaboradorId: linha.colaborador_id,
     colaboradorNome: linha.colaboradores?.nome ?? "",
     data: linha.data,
+    dataFim: linha.data_fim,
     tipo: linha.tipo as TipoOcorrencia,
     descricao: linha.descricao,
     observacao: linha.observacao,

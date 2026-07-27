@@ -21,7 +21,7 @@ export default async function PaginaPontoDetalhe({
   const ponto = await buscarPonto(id);
   if (!ponto) notFound();
 
-  const colaboradores = await listarColaboradoresComJornada();
+  const colaboradores = await listarColaboradoresComJornada(ponto.data);
 
   const podeEditar = temPermissao(usuario, "rh.apontamentos", "editar");
   const podeAprovar = temPermissao(usuario, "rh.apontamentos", "aprovar");

@@ -132,11 +132,17 @@ export function OcorrenciasTabela({
       {
         accessorKey: "data",
         header: "Data",
-        cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatarData(row.original.data)}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const { data, dataFim, tipo } = row.original;
+          const temPeriodo = tipo === "atestado" && dataFim && dataFim !== data;
+          return (
+            <span className="tabular-nums">
+              {temPeriodo
+                ? `${formatarData(data)} a ${formatarData(dataFim)}`
+                : formatarData(data)}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "tipo",
@@ -246,7 +252,9 @@ export function OcorrenciasTabela({
           colaboradores={colaboradores}
           ocorrencia={emEdicao}
           podeEditar={podeEditar}
-          anexosIniciais={emEdicao ? (anexosPorRegistro[emEdicao.id] ?? []) : undefined}
+          anexosIniciais={
+            emEdicao ? (anexosPorRegistro[emEdicao.id] ?? []) : undefined
+          }
         />
       ) : null}
 

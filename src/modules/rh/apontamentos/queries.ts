@@ -97,38 +97,67 @@ const JORNADA_ZERADA: JornadaHoras = {
   horasDomingo: 0,
 };
 
-/** Colaborador do ponto, com a jornada resolvida (própria ou o fallback). */
+/**
+ * Colaborador do ponto, com a jornada resolvida (própria ou o fallback) e a
+ * cobertura de atestado do dia do ponto (Bloco 5, Task 3).
+ */
 export interface ColaboradorComJornada extends ColaboradorOpcao {
   jornada: JornadaHoras;
+  /** true quando um atestado (rh_ocorrencias) cobre a data do ponto. */
+  temAtestado: boolean;
 }
 
 /**
- * Colaboradores ativos com a jornada de cada um, para o split normal/extra
- * do apontamento (Bloco 4, Task 4). A jornada resolvida (própria via
- * `jornada_id`, ou o fallback "Padrão EMT" quando `jornada_id` é null) vem da
- * fn `fn_jornadas_ponto` — uma função SECURITY DEFINER gateada por
- * `rh.apontamentos`, não por `cadastros.jornadas` (que os perfis do ponto,
- * Apontador e RH, não têm). Ler a jornada por embed `jornadas(...)` passava
- * pela RLS de `jornadas`: pra esses perfis voltava null e a jornada resolvia
- * pra zero, jogando 100% do total em horas extras. Ver
- * `20260725120001_fn_jornadas_ponto.sql`. Colaborador ausente do retorno da fn
- * (sem "Padrão EMT" no banco, p.ex.) cai numa jornada zerada: o form não
+ * Colaboradores ativos com a jornada de cada um (split normal/extra do
+ * apontamento, Bloco 4, Task 4) e a cobertura de atestado na data do ponto
+ * (`temAtestado`, Bloco 5, Task 3). `dataPonto` (yyyy-MM-dd) é a data do
+ * próprio ponto — quem chama (a página de detalhe) já a tem via
+ * `buscarPonto` (`ponto.data`) e a repassa aqui; é a mesma data usada no form
+ * pro split de jornada.
+ *
+ * A jornada resolvida (própria via `jornada_id`, ou o fallback "Padrão EMT"
+ * quando `jornada_id` é null) vem da fn `fn_jornadas_ponto` — uma função
+ * SECURITY DEFINER gateada por `rh.apontamentos`, não por `cadastros.jornadas`
+ * (que os perfis do ponto, Apontador e RH, não têm). Ler a jornada por embed
+ * `jornadas(...)` passava pela RLS de `jornadas`: pra esses perfis voltava
+ * null e a jornada resolvia pra zero, jogando 100% do total em horas extras.
+ * Ver `20260725120001_fn_jornadas_ponto.sql`. Colaborador ausente do retorno
+ * da fn (sem "Padrão EMT" no banco, p.ex.) cai numa jornada zerada: o form não
  * separa normal/extra errado, só deixa de sugerir automaticamente.
+ *
+ * `temAtestado` vem da fn `fn_atestados_ponto(p_data)` — mesmo padrão
+ * SECURITY DEFINER e mesmo motivo: ler `rh_ocorrencias` direto do ponto
+ * vazaria RLS-cross (Apontador/RH têm `rh.apontamentos` mas não
+ * necessariamente `rh.ocorrencias`; lendo a tabela direto, a RLS
+ * (`tem_permissao('rh.ocorrencias','ver')`) devolveria zero linhas pra eles →
+ * falso "sem atestado" → a falta seria cobrada indevidamente). Ver
+ * `20260727100002_fn_atestados_ponto.sql`. NUNCA ler `rh_ocorrencias` direto
+ * neste caminho.
  */
-export async function listarColaboradoresComJornada(): Promise<
-  ColaboradorComJornada[]
-> {
+export async function listarColaboradoresComJornada(
+  dataPonto: string,
+): Promise<ColaboradorComJornada[]> {
   const supabase = await createClient();
 
-  const { data: jornadasRaw, error: erroJornadas } =
-    await supabase.rpc("fn_jornadas_ponto");
+  const [
+    { data: jornadasRaw, error: erroJornadas },
+    { data: atestadosRaw, error: erroAtestados },
+  ] = await Promise.all([
+    supabase.rpc("fn_jornadas_ponto"),
+    supabase.rpc("fn_atestados_ponto", { p_data: dataPonto }),
+  ]);
 
   if (erroJornadas) throw new Error("Não foi possível carregar as jornadas");
+  if (erroAtestados) throw new Error("Não foi possível carregar os atestados");
 
   const jornadaPorColaborador = new Map<string, JornadaHoras>();
   for (const linha of jornadasRaw ?? []) {
     jornadaPorColaborador.set(linha.colaborador_id, paraJornadaHoras(linha));
   }
+
+  const colaboradoresComAtestado = new Set(
+    (atestadosRaw ?? []).map((linha) => linha.colaborador_id),
+  );
 
   const { data, error } = await supabase
     .from("colaboradores")
@@ -144,6 +173,7 @@ export async function listarColaboradoresComJornada(): Promise<
     funcao: colaborador.funcoes?.nome ?? null,
     vinculo: colaborador.vinculo,
     jornada: jornadaPorColaborador.get(colaborador.id) ?? JORNADA_ZERADA,
+    temAtestado: colaboradoresComAtestado.has(colaborador.id),
   }));
 }
 

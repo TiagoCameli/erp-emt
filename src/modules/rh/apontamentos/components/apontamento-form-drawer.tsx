@@ -13,6 +13,7 @@ import {
   Combobox,
   FormDrawer,
   LinhaCampos,
+  StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,6 +103,16 @@ export interface ApontamentoFormDrawerProps {
  * ajustar — e continuam sendo o que vai pro servidor: o total nunca é
  * enviado, nem entra no schema (`apontamentoSchema`/`apontamentoFormParaInput`
  * não mudam).
+ *
+ * Abate automático do atestado (Bloco 5, Task 3): `colaboradores` já vem com
+ * `temAtestado` resolvido pra data do ponto (`listarColaboradoresComJornada`,
+ * via `fn_atestados_ponto`). Ao ADICIONAR um colaborador com `temAtestado`,
+ * o form pré-marca tipo="atestado" e zera total/normais/extras (sem passar
+ * pelo split de jornada — atestado é 0h fixo) e mostra um aviso "Atestado
+ * neste dia"; o encarregado confirma ou troca o tipo livremente depois. Em
+ * modo de EDIÇÃO o form nunca pré-marca por conta própria (só reflete o que
+ * já foi salvo): se o apontamento salvo divergir do atestado (ex. tipo=normal
+ * com horas), o aviso avisa a divergência sem sobrescrever nada.
  */
 export function ApontamentoFormDrawer({
   aberto,
@@ -128,11 +139,62 @@ export function ApontamentoFormDrawer({
 
   const salvando = form.formState.isSubmitting;
 
+  const colaboradorIdSelecionado = form.watch("colaboradorId");
+  const colaboradorSelecionado = colaboradores.find(
+    (c) => c.id === colaboradorIdSelecionado,
+  );
+  const temAtestadoHoje = colaboradorSelecionado?.temAtestado ?? false;
+  /**
+   * O apontamento salvo (modo edição) diverge do atestado do dia: tipo
+   * diferente de "atestado" ou alguma hora lançada. Só sinaliza — nunca
+   * sobrescreve o que já foi salvo.
+   */
+  const apontamentoDivergente =
+    apontamento !== undefined &&
+    temAtestadoHoje &&
+    (apontamento.tipo !== "atestado" ||
+      apontamento.horasNormais !== 0 ||
+      apontamento.horasExtras !== 0);
+
+  /**
+   * Seleção do colaborador. Ao ADICIONAR (nunca em edição, que só reflete o
+   * apontamento já salvo), recomputa o estado do dia inteiro a partir do
+   * colaborador novo — nunca deixa resíduo do colaborador anterior:
+   * - Com `temAtestado`: pré-marca tipo="atestado" e zera total/normais/
+   *   extras direto — sem passar pelo split de jornada do Bloco 4, que não
+   *   se aplica a atestado (0h fixo).
+   * - Sem `temAtestado`: volta ao padrão de um lançamento novo (tipo
+   *   "normal", total/normais/extras vazios), pra não herdar o atestado do
+   *   colaborador anterior.
+   * O encarregado pode trocar o tipo ou as horas livremente depois.
+   */
+  function aoSelecionarColaborador(colaboradorId: string) {
+    form.setValue("colaboradorId", colaboradorId, { shouldValidate: true });
+
+    if (editando) return;
+
+    const colaborador = colaboradores.find((c) => c.id === colaboradorId);
+
+    if (colaborador?.temAtestado) {
+      setTotal("0");
+      form.setValue("tipo", "atestado", { shouldValidate: true });
+      form.setValue("horasNormais", "", { shouldValidate: true });
+      form.setValue("horasExtras", "", { shouldValidate: true });
+      return;
+    }
+
+    setTotal("");
+    form.setValue("tipo", "normal", { shouldValidate: true });
+    form.setValue("horasNormais", "", { shouldValidate: true });
+    form.setValue("horasExtras", "", { shouldValidate: true });
+  }
+
   /**
    * Ao mexer no total: separa em normais/extras pela jornada do colaborador
    * selecionado no dia do ponto, e sugere falta quando total é zero num dia
-   * de jornada > 0. Sem colaborador selecionado, ou total inválido, só
-   * atualiza o campo — não força split nenhum.
+   * de jornada > 0. Sem colaborador selecionado, tipo atestado (0h fixo, sem
+   * split de jornada) ou total inválido, só atualiza o campo — não força
+   * split nenhum.
    */
   function aoMudarTotal(valorTexto: string) {
     setTotal(valorTexto);
@@ -140,6 +202,8 @@ export function ApontamentoFormDrawer({
     const colaboradorId = form.getValues("colaboradorId");
     const colaborador = colaboradores.find((c) => c.id === colaboradorId);
     if (!colaborador) return;
+
+    if (form.getValues("tipo") === "atestado") return;
 
     const totalNumero = paraNumero(valorTexto);
     if (!Number.isFinite(totalNumero)) return;
@@ -212,10 +276,8 @@ export function ApontamentoFormDrawer({
           erro={form.formState.errors.colaboradorId?.message}
         >
           <Combobox
-            valor={form.watch("colaboradorId")}
-            onValorChange={(valor) =>
-              form.setValue("colaboradorId", valor, { shouldValidate: true })
-            }
+            valor={colaboradorIdSelecionado}
+            onValorChange={aoSelecionarColaborador}
             opcoes={colaboradores.map((colaborador) => ({
               valor: colaborador.id,
               rotulo: colaborador.funcao
@@ -227,6 +289,19 @@ export function ApontamentoFormDrawer({
             id="apontamento-colaborador"
           />
         </CampoFormulario>
+
+        {temAtestadoHoje ? (
+          <div className="flex items-start gap-2 rounded-md border border-status-pendente/30 bg-status-pendente/5 p-3">
+            <StatusBadge status="pendente_aprovacao" rotulo="Atestado neste dia" />
+            <p className="text-legenda text-muted-foreground">
+              {apontamentoDivergente
+                ? "O apontamento salvo diverge do atestado (tipo ou horas). Confira antes de salvar."
+                : editando
+                  ? "Este colaborador tem atestado neste dia."
+                  : "Colaborador com atestado cobrindo esta data. Tipo e horas vêm pré-marcados; confirme ou troque."}
+            </p>
+          </div>
+        ) : null}
 
         <CampoFormulario
           id="apontamento-total"

@@ -35,6 +35,8 @@ function paraRegistro(dados: OcorrenciaInput) {
   return {
     colaborador_id: dados.colaboradorId,
     data: dados.data,
+    // Fim do período só existe para atestado; nos demais tipos grava null.
+    data_fim: dados.tipo === "atestado" ? (dados.dataFim ?? null) : null,
     tipo: dados.tipo,
     descricao: dados.descricao,
     observacao: dados.observacao ?? null,
@@ -55,7 +57,9 @@ export async function criarOcorrencia(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from(TABELA).insert(paraRegistro(validado.data));
+  const { error } = await supabase
+    .from(TABELA)
+    .insert(paraRegistro(validado.data));
 
   if (error) {
     return erroAcao(
@@ -114,7 +118,10 @@ export async function removerOcorrencia(id: string): Promise<ResultadoAcao> {
   if (!idValido.success) return { erro: "Registro inválido" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from(TABELA).delete().eq("id", idValido.data);
+  const { error } = await supabase
+    .from(TABELA)
+    .delete()
+    .eq("id", idValido.data);
 
   if (error) {
     return erroAcao(

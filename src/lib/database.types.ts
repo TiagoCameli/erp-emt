@@ -2243,6 +2243,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           data: string
+          data_fim: string | null
           descricao: string
           id: string
           observacao: string | null
@@ -2254,6 +2255,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data?: string
+          data_fim?: string | null
           descricao: string
           id?: string
           observacao?: string | null
@@ -2265,6 +2267,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data?: string
+          data_fim?: string | null
           descricao?: string
           id?: string
           observacao?: string | null
@@ -2459,6 +2462,12 @@ export type Database = {
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: { Args: { p_parcela_id: string }; Returns: undefined }
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined }
+      fn_atestados_ponto: {
+        Args: { p_data: string }
+        Returns: {
+          colaborador_id: string
+        }[]
+      }
       fn_cancelar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string }
         Returns: undefined
