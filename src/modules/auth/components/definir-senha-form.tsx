@@ -4,10 +4,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
-import { CampoFormulario, classesFormulario } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  InputSenha,
+} from "@/components/canonicos";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { definirSenha } from "@/modules/auth/actions";
 import {
   definirSenhaSchema,
@@ -49,9 +52,8 @@ export function DefinirSenhaForm() {
         rotulo="Nova senha"
         erro={form.formState.errors.senha?.message}
       >
-        <Input
+        <InputSenha
           id="definir-senha-senha"
-          type="password"
           autoComplete="new-password"
           disabled={enviando}
           {...form.register("senha")}
@@ -63,9 +65,8 @@ export function DefinirSenhaForm() {
         rotulo="Confirme a senha"
         erro={form.formState.errors.confirmacao?.message}
       >
-        <Input
+        <InputSenha
           id="definir-senha-confirmacao"
-          type="password"
           autoComplete="new-password"
           disabled={enviando}
           {...form.register("confirmacao")}

@@ -12,6 +12,7 @@ export * from "./combobox-criavel";
 export * from "./data-table";
 export * from "./form-drawer";
 export * from "./campo-formulario";
+export * from "./input-senha";
 export * from "./linha-campos";
 export * from "./secao-formulario";
 export * from "./tabela-itens";
