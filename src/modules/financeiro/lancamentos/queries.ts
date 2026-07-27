@@ -19,6 +19,7 @@ export interface ListarLancamentosParams {
   tamanho: number;
   tipo?: TipoLancamento;
   status?: StatusLancamento;
+  busca?: string;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -142,6 +143,10 @@ export async function listarLancamentos(
 
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
+  if (params.busca?.trim()) {
+    const padrao = `%${params.busca.replace(/[,()"'\\]/g, "").trim()}%`;
+    consulta = consulta.or(`numero.ilike.${padrao},descricao.ilike.${padrao}`);
+  }
 
   const { data, error, count } = await consulta;
 

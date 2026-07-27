@@ -51,6 +51,7 @@ export default async function PaginaLancamentos({
   const params = await searchParams;
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
   const status = parametroValido(params.status, STATUS_VALIDOS);
+  const busca = typeof params.busca === "string" ? params.busca : "";
 
   const paginaParam = Number(params.pagina);
   const pagina =
@@ -63,7 +64,7 @@ export default async function PaginaLancamentos({
 
   const [{ itens, total }, categorias, fornecedores, centrosCusto] =
     await Promise.all([
-      listarLancamentos({ pagina, tamanho, tipo, status }),
+      listarLancamentos({ pagina, tamanho, tipo, status, busca }),
       listarCategorias(),
       listarFornecedores(),
       listarCentrosCusto(),
@@ -90,6 +91,7 @@ export default async function PaginaLancamentos({
         tamanho={tamanho}
         tipo={tipo ?? ""}
         status={status ?? ""}
+        busca={busca}
       />
     </>
   );
