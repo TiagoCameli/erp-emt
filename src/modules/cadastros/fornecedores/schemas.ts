@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { validarCnpjCpf } from "@/lib/documentos";
+
 /** Tipos de fornecedor: pessoa física ou jurídica. */
 export const TIPOS_FORNECEDOR = ["pf", "pj"] as const;
 export type TipoFornecedor = (typeof TIPOS_FORNECEDOR)[number];
@@ -21,7 +23,11 @@ export const fornecedorSchema = z.object({
     .string()
     .trim()
     .min(2, { error: "A razão social precisa ter pelo menos 2 caracteres" })
-    .max(255, { error: "Use no máximo 255 caracteres" }),
+    .max(255, { error: "Use no máximo 255 caracteres" })
+    .refine((valor) => !/^\d+$/.test(valor.replace(/\s/g, "")), {
+      error:
+        "Razão social não pode ser só números — confira se o CNPJ caiu na coluna errada",
+    }),
   nomeFantasia: z
     .string()
     .trim()
@@ -29,7 +35,10 @@ export const fornecedorSchema = z.object({
   cnpjCpf: z
     .string()
     .trim()
-    .max(255, { error: "Use no máximo 255 caracteres" }),
+    .max(255, { error: "Use no máximo 255 caracteres" })
+    .refine((valor) => validarCnpjCpf(valor), {
+      error: "CNPJ/CPF deve ter 11 ou 14 dígitos",
+    }),
   inscricaoEstadual: z
     .string()
     .trim()

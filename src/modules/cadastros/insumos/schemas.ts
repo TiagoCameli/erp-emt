@@ -11,7 +11,10 @@ export const insumoSchema = z.object({
   nome: z
     .string()
     .trim()
-    .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
+    .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" })
+    .refine((valor) => !/^\d+$/.test(valor), {
+      error: "Nome do insumo não pode ser só números",
+    }),
   categoriaId: z.uuid({ error: "Selecione uma categoria" }),
   unidadeId: z.uuid({ error: "Selecione uma unidade de medida" }),
   descricao: z.string().trim().optional().or(z.literal("")),

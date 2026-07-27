@@ -229,6 +229,7 @@ export async function importar(
       tipo,
       razao_social: dados.razaoSocial ?? "",
       cnpj_cpf: dados.cnpjCpf ?? null,
+      telefone: dados.telefone ?? null,
       cidade: dados.cidade ?? null,
       uf: dados.uf ?? null,
       ativo: true,
