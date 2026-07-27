@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { erroAcao } from "@/lib/erros";
+import { erroAcao, logErroServidor } from "@/lib/erros";
 import { createClient } from "@/lib/supabase/server";
 import {
   definirSenhaSchema,
@@ -87,6 +87,20 @@ export async function definirSenha(
       error,
       "Não foi possível definir a senha. Tente novamente",
     );
+  }
+
+  // Acesso deixou de ser pendente: some a provisória da visão do admin.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const { error: erroLimpeza } = await supabase
+      .from("usuario_senha_provisoria")
+      .delete()
+      .eq("usuario_id", user.id);
+    if (erroLimpeza) {
+      logErroServidor("auth.definir-senha.limpar-provisoria", erroLimpeza);
+    }
   }
 
   revalidatePath("/", "layout");
