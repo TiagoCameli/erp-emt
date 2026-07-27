@@ -1,10 +1,14 @@
 "use client";
 
+import { Printer } from "lucide-react";
+
 import { MoneyText } from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -53,7 +57,9 @@ export interface HoleriteDialogProps {
  * Holerite (contracheque) do colaborador na competência: proventos (salário),
  * descontos (INSS, IRRF, adiantamentos), líquido a receber, e o FGTS do mês
  * como informativo (depósito do empregador, não desconta do líquido). Só
- * exibe o que a folha já calculou; nenhum cálculo fiscal aqui.
+ * exibe o que a folha já calculou; nenhum cálculo fiscal aqui. O botão
+ * Imprimir usa a impressão do navegador (isolada via .holerite-print no CSS
+ * global) para salvar/imprimir como PDF e entregar ao funcionário.
  */
 export function HoleriteDialog({
   item,
@@ -71,46 +77,66 @@ export function HoleriteDialog({
   return (
     <Dialog open={aberto} onOpenChange={onAbertoChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{item.colaboradorNome}</DialogTitle>
-          <DialogDescription>
-            {(item.colaboradorFuncao ?? "Sem função") +
-              " · Competência " +
-              formatarCompetencia(competencia)}
-          </DialogDescription>
-        </DialogHeader>
+        <div className="holerite-print flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>{item.colaboradorNome}</DialogTitle>
+            <DialogDescription>
+              {(item.colaboradorFuncao ?? "Sem função") +
+                " · Competência " +
+                formatarCompetencia(competencia)}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="flex flex-col gap-4 text-detalhe">
-          <section>
-            <h3 className="mb-1 text-legenda font-medium text-muted-foreground uppercase">
-              Proventos
-            </h3>
-            <Linha rotulo="Salário" valor={item.salarioBase} />
-          </section>
+          <div className="flex flex-col gap-4 text-detalhe">
+            <section>
+              <h3 className="mb-1 text-legenda font-medium text-muted-foreground uppercase">
+                Proventos
+              </h3>
+              <Linha rotulo="Salário" valor={item.salarioBase} />
+            </section>
 
-          <section>
-            <h3 className="mb-1 text-legenda font-medium text-muted-foreground uppercase">
-              Descontos
-            </h3>
-            <Linha rotulo="INSS" valor={item.inss} />
-            <Linha rotulo="IRRF" valor={item.irrf} />
-            <Linha rotulo="Adiantamentos" valor={item.adiantamentos} />
-            <div className="mt-1 border-t border-border pt-1">
-              <Linha rotulo="Total de descontos" valor={totalDescontos} forte />
-            </div>
-          </section>
+            <section>
+              <h3 className="mb-1 text-legenda font-medium text-muted-foreground uppercase">
+                Descontos
+              </h3>
+              <Linha rotulo="INSS" valor={item.inss} />
+              <Linha rotulo="IRRF" valor={item.irrf} />
+              <Linha rotulo="Adiantamentos" valor={item.adiantamentos} />
+              <div className="mt-1 border-t border-border pt-1">
+                <Linha
+                  rotulo="Total de descontos"
+                  valor={totalDescontos}
+                  forte
+                />
+              </div>
+            </section>
 
-          <section className="rounded-md border border-border bg-surface p-3">
-            <Linha rotulo="Líquido a receber" valor={item.valorLiquido} forte />
-          </section>
+            <section className="rounded-md border border-border bg-surface p-3">
+              <Linha
+                rotulo="Líquido a receber"
+                valor={item.valorLiquido}
+                forte
+              />
+            </section>
 
-          <section>
-            <h3 className="mb-1 text-legenda font-medium text-muted-foreground uppercase">
-              Informativo
-            </h3>
-            <Linha rotulo="FGTS do mês (depósito, não desconta)" valor={fgts} />
-          </section>
+            <section>
+              <h3 className="mb-1 text-legenda font-medium text-muted-foreground uppercase">
+                Informativo
+              </h3>
+              <Linha
+                rotulo="FGTS do mês (depósito, não desconta)"
+                valor={fgts}
+              />
+            </section>
+          </div>
         </div>
+
+        <DialogFooter className="nao-imprime">
+          <Button type="button" variant="outline" onClick={() => window.print()}>
+            <Printer />
+            Imprimir
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
