@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Copy, KeyRound, LoaderCircle } from "lucide-react";
+import { Copy, KeyRound, LoaderCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   aplicarPerfilUsuario,
   editarUsuario,
+  excluirUsuario,
   obterSenhaProvisoria,
   redefinirSenhaUsuario,
 } from "@/modules/administracao/usuarios/actions";
@@ -40,6 +41,7 @@ export interface DetalheUsuarioDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   perfis: PerfilOpcao[];
   podeEditar: boolean;
+  podeExcluir: boolean;
 }
 
 /**
@@ -55,6 +57,7 @@ export function DetalheUsuarioDrawer({
   onAbertoChange,
   perfis,
   podeEditar,
+  podeExcluir,
 }: DetalheUsuarioDrawerProps) {
   const [perfilSelecionado, setPerfilSelecionado] = React.useState<string>(
     usuario?.perfilId ?? "",
@@ -64,6 +67,7 @@ export function DetalheUsuarioDrawer({
   const [senhaRevelada, setSenhaRevelada] = React.useState<string | null>(null);
   const [carregandoSenha, setCarregandoSenha] = React.useState(false);
   const [confirmarReset, setConfirmarReset] = React.useState(false);
+  const [confirmarExcluir, setConfirmarExcluir] = React.useState(false);
 
   const form = useForm<EditarUsuarioInput>({
     resolver: zodResolver(editarUsuarioSchema),
@@ -127,6 +131,17 @@ export function DetalheUsuarioDrawer({
     }
     setSenhaRevelada(resultado.senhaProvisoria);
     toast.success("Senha redefinida. Copie a nova senha provisória");
+  }
+
+  async function excluir() {
+    if (!usuario) return;
+    const resultado = await excluirUsuario(usuario.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Usuário excluído");
+    onAbertoChange(false);
   }
 
   if (!usuario) return null;
@@ -312,6 +327,30 @@ export function DetalheUsuarioDrawer({
             recarregar={versaoMatriz}
           />
         </div>
+
+        {podeExcluir ? (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col">
+                <p className="text-corpo font-medium">Excluir usuário</p>
+                <p className="text-detalhe text-muted-foreground">
+                  Some da lista e bloqueia o acesso. O nome continua nas ações
+                  que ele já fez.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmarExcluir(true)}
+              >
+                <Trash2 />
+                Excluir
+              </Button>
+            </div>
+          </>
+        ) : null}
       </div>
 
       <ConfirmDialog
@@ -321,6 +360,16 @@ export function DetalheUsuarioDrawer({
         descricao="Uma nova senha provisória será gerada. A senha atual do usuário deixa de valer e ele terá que definir uma nova no próximo acesso."
         textoConfirmar="Redefinir senha"
         onConfirmar={redefinirSenha}
+      />
+
+      <ConfirmDialog
+        aberto={confirmarExcluir}
+        onAbertoChange={setConfirmarExcluir}
+        titulo="Excluir este usuário?"
+        descricao="Ele some da lista e perde o acesso ao sistema. O nome continua aparecendo nas ações que ele já fez. Não dá para desfazer pela tela."
+        textoConfirmar="Excluir usuário"
+        variante="destrutivo"
+        onConfirmar={excluir}
       />
     </FormDrawer>
   );

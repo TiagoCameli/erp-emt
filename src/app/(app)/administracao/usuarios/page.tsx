@@ -22,6 +22,7 @@ export default async function PaginaUsuarios() {
 
   const podeCriar = temPermissao(usuario, "administracao.usuarios", "criar");
   const podeEditar = temPermissao(usuario, "administracao.usuarios", "editar");
+  const podeExcluir = temPermissao(usuario, "administracao.usuarios", "excluir");
 
   return (
     <>
@@ -34,6 +35,7 @@ export default async function PaginaUsuarios() {
         usuarios={usuarios}
         perfis={perfis}
         podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
       />
     </>
   );
