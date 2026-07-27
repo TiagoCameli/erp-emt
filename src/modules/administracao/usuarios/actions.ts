@@ -222,6 +222,57 @@ export async function redefinirSenhaUsuario(
 }
 
 /**
+ * Exclui um usuário (soft delete): some da lista e perde acesso, mas o
+ * registro fica para o nome persistir nas ações/auditoria. Bane na auth
+ * para bloquear login. Não é possível excluir a própria conta.
+ */
+export async function excluirUsuario(
+  usuarioId: string,
+): Promise<ResultadoAcao> {
+  const editor = await getUsuarioLogado();
+  if (!editor || !temPermissao(editor, RECURSO, "excluir")) {
+    return { erro: "Sem permissão para excluir usuários" };
+  }
+  const idValido = uuidSchema.safeParse(usuarioId);
+  if (!idValido.success) return { erro: "Usuário inválido" };
+  if (idValido.data === editor.id) {
+    return { erro: "Você não pode excluir a sua própria conta" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_excluir_usuario", {
+    p_id: idValido.data,
+  });
+  if (error) {
+    if (error.message.includes("propria conta")) {
+      return { erro: "Você não pode excluir a sua própria conta" };
+    }
+    return erroAcao(
+      "administracao.usuarios.excluir",
+      error,
+      "Não foi possível excluir o usuário. Tente novamente",
+    );
+  }
+
+  // Bloqueia login do excluído (a auth mantém o registro pro histórico).
+  const admin = createAdminClient();
+  const { error: erroBan } = await admin.auth.admin.updateUserById(
+    idValido.data,
+    { ban_duration: "87600h" },
+  );
+  if (erroBan) {
+    return erroAcao(
+      "administracao.usuarios.excluir",
+      erroBan,
+      "Usuário excluído, mas o bloqueio de login falhou. Tente excluir de novo",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
  * Atualiza nome e status (ativo) do usuário. RLS cobre o update.
  * Desativar também bane na auth (bloqueia login e refresh da sessão);
  * reativar remove o ban. O ativo=false já corta o acesso imediato via

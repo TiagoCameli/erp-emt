@@ -35,6 +35,7 @@ export async function listarUsuarios(): Promise<UsuarioLista[]> {
     .select(
       "id, nome, email, ativo, perfil_id, created_at, perfis(nome), usuario_senha_provisoria(usuario_id)",
     )
+    .is("excluido_em", null)
     .order("nome");
 
   if (error) {
