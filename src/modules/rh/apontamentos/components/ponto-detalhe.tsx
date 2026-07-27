@@ -95,6 +95,7 @@ export function PontoDetalheView({
   const [dialogReabrir, setDialogReabrir] = React.useState(false);
 
   const aceitaLancamentos = podeEditar && aberto;
+  const temApontamentos = ponto.apontamentos.length > 0;
   const podeAprovarAgora = podeAprovar && aberto;
   const podeReabrirAgora = podeAprovar && !aberto;
 
@@ -175,6 +176,12 @@ export function PontoDetalheView({
               type="button"
               size="sm"
               onClick={() => setDialogAprovar(true)}
+              disabled={!temApontamentos}
+              title={
+                temApontamentos
+                  ? undefined
+                  : "Adicione ao menos um colaborador para aprovar o dia."
+              }
             >
               <CheckCircle2 />
               Aprovar dia

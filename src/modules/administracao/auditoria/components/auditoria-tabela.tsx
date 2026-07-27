@@ -50,6 +50,67 @@ function BadgeAcao({ acao }: { acao: string }) {
   return <StatusBadge status={config.status} rotulo={config.rotulo} />;
 }
 
+/** Rótulos amigáveis para os nomes de tabela do banco na auditoria. */
+const ROTULO_TABELA: Record<string, string> = {
+  usuarios: "Usuários",
+  usuario_permissoes: "Permissões de usuário",
+  perfis: "Perfis",
+  perfil_permissoes: "Permissões de perfil",
+  ordens_compra: "Ordens de compra",
+  oc_itens: "Itens de OC",
+  cotacoes: "Cotações",
+  cotacao_fornecedores: "Fornecedores da cotação",
+  cotacao_itens: "Itens da cotação",
+  lancamentos: "Lançamentos",
+  lancamento_parcelas: "Parcelas do lançamento",
+  lancamento_rateios: "Rateios do lançamento",
+  contas_bancarias: "Contas bancárias",
+  categorias_financeiras: "Categorias financeiras",
+  condicoes_pagamento: "Condições de pagamento",
+  condicao_parcelas: "Parcelas da condição",
+  fornecedores: "Fornecedores",
+  clientes: "Clientes",
+  obras: "Obras",
+  insumos: "Insumos",
+  centros_custo: "Centros de custo",
+  colaboradores: "Colaboradores",
+  funcoes: "Funções",
+  jornadas: "Jornadas",
+  rh_pontos: "Ponto",
+  rh_apontamentos: "Apontamentos",
+  rh_diarias: "Diárias",
+  rh_adiantamentos: "Adiantamentos",
+  rh_ferias: "Férias",
+  rh_ocorrencias: "Ocorrências",
+  rh_epis: "EPIs",
+  rh_documentos: "Documentos de RH",
+  rh_dependentes: "Dependentes",
+  folhas: "Folhas",
+  folha_itens: "Itens da folha",
+  folha_encargos: "Encargos da folha",
+  folha_item_encargos: "Encargos por colaborador",
+  folha_inss_faixas: "Faixas de INSS",
+  folha_irrf_faixas: "Faixas de IRRF",
+  folha_parametros: "Parâmetros da folha",
+  recebimentos: "Recebimentos",
+  extratos_ofx: "Extratos OFX",
+  extrato_transacoes: "Transações do extrato",
+  unidades_medida: "Unidades de medida",
+  categorias_insumo: "Categorias de insumo",
+  configuracoes: "Configurações",
+  banco_horas_movimentos: "Banco de horas",
+  equipamentos: "Equipamentos",
+  equipamento_documentos: "Documentos de equipamento",
+  anexos: "Anexos",
+  lixeira: "Lixeira",
+};
+
+function rotuloTabela(tabela: string): string {
+  if (tabela in ROTULO_TABELA) return ROTULO_TABELA[tabela];
+  const espacos = tabela.replace(/^rh_/, "").replace(/_/g, " ");
+  return espacos.charAt(0).toUpperCase() + espacos.slice(1);
+}
+
 const colunas: ColumnDef<RegistroAuditoria, unknown>[] = [
   {
     accessorKey: "criadoEm",
@@ -67,7 +128,7 @@ const colunas: ColumnDef<RegistroAuditoria, unknown>[] = [
   {
     accessorKey: "tabela",
     header: "Tabela",
-    cell: ({ row }) => <span className="codigo-doc">{row.original.tabela}</span>,
+    cell: ({ row }) => <span>{rotuloTabela(row.original.tabela)}</span>,
   },
   {
     accessorKey: "registroId",
@@ -139,7 +200,10 @@ export function AuditoriaTabela({
           onValorChange={(valor) =>
             atualizarParams({ tabela: valor, pagina: null })
           }
-          opcoes={tabelas.map((tabela) => ({ valor: tabela, rotulo: tabela }))}
+          opcoes={tabelas.map((tabela) => ({
+            valor: tabela,
+            rotulo: rotuloTabela(tabela),
+          }))}
           todosRotulo="Todas as tabelas"
         />
         <FiltroSelect
@@ -222,7 +286,7 @@ export function AuditoriaTabela({
                 </div>
                 <div>
                   <span className="text-muted-foreground">Tabela: </span>
-                  <span className="codigo-doc">{selecionado.tabela}</span>
+                  <span>{rotuloTabela(selecionado.tabela)}</span>
                 </div>
                 <div className="min-w-0">
                   <span className="text-muted-foreground">Registro: </span>

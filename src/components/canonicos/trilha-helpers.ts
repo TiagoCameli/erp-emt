@@ -37,6 +37,8 @@ const CAMPOS: Record<string, MetaCampo> = {
   fornecedor_id: { rotulo: "Fornecedor", tipo: "fk", fkTabela: "fornecedores" },
   centro_custo_id: { rotulo: "Centro de custo", tipo: "fk", fkTabela: "centros_custo" },
   insumo_id: { rotulo: "Insumo", tipo: "fk", fkTabela: "insumos" },
+  vencedor_fornecedor_id: { rotulo: "Fornecedor vencedor", tipo: "fk", fkTabela: "fornecedores" },
+  motivo_selecao: { rotulo: "Motivo da seleção" },
   motivo_rejeicao: { rotulo: "Motivo" },
   observacoes: { rotulo: "Observações" },
   numero_nf: { rotulo: "Nota fiscal" },

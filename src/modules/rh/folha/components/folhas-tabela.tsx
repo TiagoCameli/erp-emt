@@ -89,6 +89,7 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
           <EmptyState
             icone={Calculator}
             titulo="Nenhuma folha gerada"
+            className="border-none bg-transparent"
             descricao="Gere a folha gerencial de uma competência para consolidar ponto, adiantamentos e encargos por colaborador."
             acao={
               podeCriar ? (
