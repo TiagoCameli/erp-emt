@@ -106,6 +106,12 @@ describe("formatarPercentual", () => {
     expect(formatarPercentual(Number.NaN)).toBe("0%");
     expect(formatarPercentual("")).toBe("0%");
   });
+
+  it("aceita maximoCasas para até 3 decimais (encargos da folha)", () => {
+    expect(formatarPercentual(5.833, 3)).toBe("5,833%");
+    expect(formatarPercentual(20, 3)).toBe("20%");
+    expect(formatarPercentual(0.2, 3)).toBe("0,2%");
+  });
 });
 
 describe("formatarData", () => {
