@@ -97,6 +97,11 @@ export function FolhaDetalheView({
 
   const rascunho = folha.status === "rascunho";
   const fechada = folha.status === "fechada";
+  // Sem faixas de INSS/IRRF cadastradas, todos os itens saem com desconto 0 e
+  // o líquido vira igual ao bruto; avisamos para não passar a impressão errada.
+  const semDescontosLegais =
+    folha.itens.length > 0 &&
+    folha.itens.every((item) => item.inss === 0 && item.irrf === 0);
 
   const [dialogFechar, setDialogFechar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
@@ -188,6 +193,16 @@ export function FolhaDetalheView({
         </div>
       </div>
 
+      {semDescontosLegais ? (
+        <div className="rounded-md border border-status-pendente/30 bg-status-pendente/5 px-4 py-3">
+          <p className="text-detalhe text-foreground">
+            Sem descontos legais aplicados (INSS e IRRF zerados). Cadastre as
+            faixas vigentes em Parâmetros da Folha para a folha calcular os
+            descontos.
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KPICard
           titulo="Bruto"
@@ -207,7 +222,11 @@ export function FolhaDetalheView({
         <KPICard
           titulo="Líquido"
           valor={<MoneyText valor={folha.valorLiquido} />}
-          detalhe="A receber (bruto − INSS − IRRF − adiantamentos)"
+          detalhe={
+            semDescontosLegais
+              ? "A receber (sem INSS/IRRF cadastrados)"
+              : "A receber (bruto − INSS − IRRF − adiantamentos)"
+          }
         />
       </div>
 

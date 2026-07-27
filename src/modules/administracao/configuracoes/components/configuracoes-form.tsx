@@ -35,12 +35,6 @@ const DEFINICOES: Record<string, DefinicaoConfig> = {
     min: 0,
     max: 100,
   },
-  encargos_estimados_percentual: {
-    rotulo: "Encargos estimados sobre salário (%)",
-    tipo: "percentual",
-    min: 0,
-    max: 300,
-  },
   banco_horas_ativo: {
     rotulo: "Banco de horas",
     tipo: "booleano",
@@ -240,6 +234,11 @@ export function ConfiguracoesForm({
   return (
     <div className={cn(classesFormulario, "max-w-2xl")}>
       {configuracoes.map((configuracao) => {
+        // Chave legada da folha gerencial: os encargos agora vêm de
+        // folha_encargos, então esta config não dirige mais nada. Escondida
+        // para não confundir (o valor não tinha efeito).
+        if (configuracao.chave === "encargos_estimados_percentual") return null;
+
         const definicao = DEFINICOES[configuracao.chave];
 
         if (definicao?.tipo === "percentual") {
