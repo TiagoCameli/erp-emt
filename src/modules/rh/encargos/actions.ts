@@ -12,7 +12,10 @@ import {
   COLUNAS_ENCARGO,
   type EncargoImportacao,
 } from "@/modules/rh/encargos/importacao";
-import { encargoSchema, type EncargoInput } from "@/modules/rh/encargos/schemas";
+import {
+  encargoSchema,
+  type EncargoInput,
+} from "@/modules/rh/encargos/schemas";
 
 const RECURSO = "rh.encargos" as const;
 const ROTA = "/rh/encargos";
@@ -180,7 +183,10 @@ export async function importar(
 
   let resultado;
   try {
-    resultado = await lerEValidarXlsx<EncargoImportacao>(buffer, COLUNAS_ENCARGO);
+    resultado = await lerEValidarXlsx<EncargoImportacao>(
+      buffer,
+      COLUNAS_ENCARGO,
+    );
   } catch (erro) {
     return erroAcao(
       "rh.encargos.importar",
