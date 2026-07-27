@@ -18,6 +18,12 @@ export interface FolhaLista {
   totalItens: number;
 }
 
+/** Uma linha de encargo aplicada a um item da folha (nome + valor em R$). */
+export interface EncargoDetalhe {
+  nome: string;
+  valor: number;
+}
+
 /** Item da folha por colaborador, com nome/função e centro de custo resolvidos. */
 export interface FolhaItem {
   id: string;
@@ -33,6 +39,12 @@ export interface FolhaItem {
   horasExtras: number;
   valorExtras: number;
   encargos: number;
+  /**
+   * Quebra do total de `encargos` por tipo (Bloco 6, Task 3/4), vinda de
+   * `folha_item_encargos`. Folhas geradas antes da Task 3 não têm essas
+   * linhas: nesse caso vem `[]` e a UI mostra só o total.
+   */
+  encargosDetalhe: EncargoDetalhe[];
   adiantamentos: number;
   custoTotal: number;
   valorLiquido: number;
@@ -59,6 +71,12 @@ export interface CustoCentroCusto {
   centroCustoNome: string | null;
   centroCustoCodigo: string | null;
   custoTotal: number;
+}
+
+/** Total por tipo de encargo, somado entre todos os colaboradores da folha. */
+export interface ResumoEncargo {
+  nome: string;
+  total: number;
 }
 
 /** Normaliza o status do banco (texto livre) para o domínio conhecido. */
@@ -126,7 +144,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
        horas_extras, valor_extras, encargos, adiantamentos, custo_total,
        valor_liquido,
        colaboradores(nome, funcoes(nome)),
-       centros_custo(nome, codigo)`,
+       centros_custo(nome, codigo),
+       folha_item_encargos(nome, valor)`,
     )
     .eq("folha_id", id);
 
@@ -148,11 +167,17 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       horasExtras: item.horas_extras,
       valorExtras: item.valor_extras,
       encargos: item.encargos,
+      // Folhas geradas antes da Task 3 (Bloco 6) não têm linhas aqui: [].
+      encargosDetalhe: (item.folha_item_encargos ?? [])
+        .map((encargo) => ({ nome: encargo.nome, valor: encargo.valor }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       adiantamentos: item.adiantamentos,
       custoTotal: item.custo_total,
       valorLiquido: item.valor_liquido,
     }))
-    .sort((a, b) => a.colaboradorNome.localeCompare(b.colaboradorNome, "pt-BR"));
+    .sort((a, b) =>
+      a.colaboradorNome.localeCompare(b.colaboradorNome, "pt-BR"),
+    );
 
   return {
     id: folha.id,
@@ -169,33 +194,6 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
   };
 }
 
-/**
- * Custo total da folha agrupado por centro de custo, somando o custo_total dos
- * itens. Itens sem centro de custo entram num grupo "Sem centro de custo".
- * Derivado em memória dos itens já carregados, ordenado por custo decrescente.
- */
-export async function resumoPorCentroCusto(
-  folhaId: string,
-): Promise<CustoCentroCusto[]> {
-  const folha = await buscarFolha(folhaId);
-  if (!folha) return [];
-
-  const grupos = new Map<string, CustoCentroCusto>();
-
-  for (const item of folha.itens) {
-    const chave = item.centroCustoId ?? "__sem_centro__";
-    const atual = grupos.get(chave);
-    if (atual) {
-      atual.custoTotal += item.custoTotal;
-    } else {
-      grupos.set(chave, {
-        centroCustoId: item.centroCustoId,
-        centroCustoNome: item.centroCustoNome,
-        centroCustoCodigo: item.centroCustoCodigo,
-        custoTotal: item.custoTotal,
-      });
-    }
-  }
-
-  return [...grupos.values()].sort((a, b) => b.custoTotal - a.custoTotal);
-}
+// `resumoPorCentroCusto` e `resumoPorEncargo` foram movidos para
+// `./calculo.ts`: são derivações puras dos itens já carregados aqui por
+// `buscarFolha`, sem precisar de uma 2ª/3ª leitura da folha no banco.

@@ -996,6 +996,68 @@ export type Database = {
           },
         ]
       }
+      folha_encargos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          percentual: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          percentual: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          percentual?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      folha_item_encargos: {
+        Row: {
+          folha_item_id: string
+          id: string
+          nome: string
+          percentual: number
+          valor: number
+        }
+        Insert: {
+          folha_item_id: string
+          id?: string
+          nome: string
+          percentual: number
+          valor: number
+        }
+        Update: {
+          folha_item_id?: string
+          id?: string
+          nome?: string
+          percentual?: number
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folha_item_encargos_folha_item_id_fkey"
+            columns: ["folha_item_id"]
+            isOneToOne: false
+            referencedRelation: "folha_itens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folha_itens: {
         Row: {
           adiantamentos: number

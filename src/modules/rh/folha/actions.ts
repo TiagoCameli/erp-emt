@@ -51,8 +51,9 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
 
 /**
  * Gera a folha gerencial da competência via fn_gerar_folha: cria (ou regenera)
- * o rascunho consolidando os colaboradores CLT ativos, aplicando o percentual
- * de encargos. Reaplicar regenera a folha em rascunho. Retorna o id da folha.
+ * o rascunho consolidando os colaboradores CLT ativos. Os encargos são
+ * discriminados pela config (folha_encargos ativos) dentro da fn, não mais por
+ * um % global digitado. Reaplicar regenera a folha em rascunho. Retorna o id.
  */
 export async function gerarFolha(
   dados: GerarFolhaInput,
@@ -69,7 +70,9 @@ export async function gerarFolha(
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_gerar_folha", {
     p_competencia: validado.data.competencia,
-    p_encargos_pct: validado.data.encargosPercentual,
+    // Legado: a fn ignora este arg (encargos vêm de folha_encargos). Mantido só
+    // para não quebrar a assinatura do RPC.
+    p_encargos_pct: 0,
   });
 
   if (error || !data) {

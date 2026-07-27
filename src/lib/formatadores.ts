@@ -35,18 +35,34 @@ export function formatarQuantidade(
   return formatadorQuantidade.format(numero);
 }
 
-const formatadorPercentual = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-});
+/** Um formatador por número de casas decimais, montado sob demanda e reaproveitado. */
+const formatadoresPercentual = new Map<number, Intl.NumberFormat>();
 
+function formatadorPercentual(maximoCasas: number): Intl.NumberFormat {
+  let formatador = formatadoresPercentual.get(maximoCasas);
+  if (!formatador) {
+    formatador = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: maximoCasas,
+    });
+    formatadoresPercentual.set(maximoCasas, formatador);
+  }
+  return formatador;
+}
+
+/**
+ * Formata um percentual em pt-BR com sufixo "%" (ex: "12,5%", "100%").
+ * `maximoCasas` (padrão 2) limita as casas decimais exibidas — os encargos
+ * da folha usam 3 (NUMERIC(6,3)), os demais percentuais do sistema usam 2.
+ */
 export function formatarPercentual(
   valor: number | string | null | undefined,
+  maximoCasas = 2,
 ): string {
   if (valor === null || valor === undefined || valor === "") return "0%";
   const numero = typeof valor === "string" ? Number(valor) : valor;
   if (Number.isNaN(numero)) return "0%";
-  return `${formatadorPercentual.format(numero)}%`;
+  return `${formatadorPercentual(maximoCasas).format(numero)}%`;
 }
 
 /** Strings date-only do Postgres (coluna `date`), ex: "2026-06-12". */

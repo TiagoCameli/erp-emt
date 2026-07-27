@@ -27,17 +27,12 @@ describe("apontamentoSchema", () => {
 });
 
 describe("gerarFolhaSchema", () => {
-  it("aceita encargos não negativos", () => {
-    expect(gerarFolhaSchema.safeParse({ competencia: "2026-06-01", encargosPercentual: 80 }).success).toBe(true);
-    expect(gerarFolhaSchema.safeParse({ competencia: "2026-06-01", encargosPercentual: 0 }).success).toBe(true);
-  });
-
-  it("recusa encargos negativos", () => {
-    expect(gerarFolhaSchema.safeParse({ competencia: "2026-06-01", encargosPercentual: -1 }).success).toBe(false);
+  it("aceita competência no formato yyyy-MM-01 (sem % de encargos: vem da config)", () => {
+    expect(gerarFolhaSchema.safeParse({ competencia: "2026-06-01" }).success).toBe(true);
   });
 
   it("recusa competência fora do formato yyyy-MM-01", () => {
-    expect(gerarFolhaSchema.safeParse({ competencia: "2026-06", encargosPercentual: 80 }).success).toBe(false);
+    expect(gerarFolhaSchema.safeParse({ competencia: "2026-06" }).success).toBe(false);
   });
 });
 

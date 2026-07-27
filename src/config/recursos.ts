@@ -263,6 +263,13 @@ export const RECURSOS = [
     acoes: ["ver", "criar", "editar"],
   },
   {
+    id: "rh.encargos",
+    nome: "Encargos da folha",
+    modulo: "rh",
+    rota: "/rh/encargos",
+    acoes: CRUD,
+  },
+  {
     id: "rh.ferias",
     nome: "Férias",
     modulo: "rh",
