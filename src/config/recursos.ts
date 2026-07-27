@@ -270,6 +270,13 @@ export const RECURSOS = [
     acoes: CRUD,
   },
   {
+    id: "rh.parametros-folha",
+    nome: "Parâmetros da folha",
+    modulo: "rh",
+    rota: "/rh/parametros-folha",
+    acoes: CRUD,
+  },
+  {
     id: "rh.ferias",
     nome: "Férias",
     modulo: "rh",

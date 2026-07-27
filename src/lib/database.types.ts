@@ -1026,6 +1026,63 @@ export type Database = {
         }
         Relationships: []
       }
+      folha_inss_faixas: {
+        Row: {
+          aliquota: number
+          created_at: string
+          created_by: string | null
+          id: string
+          limite_ate: number
+          updated_at: string
+        }
+        Insert: {
+          aliquota: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          limite_ate: number
+          updated_at?: string
+        }
+        Update: {
+          aliquota?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          limite_ate?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      folha_irrf_faixas: {
+        Row: {
+          aliquota: number
+          created_at: string
+          created_by: string | null
+          id: string
+          limite_ate: number
+          parcela_deduzir: number
+          updated_at: string
+        }
+        Insert: {
+          aliquota: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          limite_ate: number
+          parcela_deduzir: number
+          updated_at?: string
+        }
+        Update: {
+          aliquota?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          limite_ate?: number
+          parcela_deduzir?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       folha_item_encargos: {
         Row: {
           folha_item_id: string
@@ -1070,6 +1127,8 @@ export type Database = {
           horas_extras: number
           horas_normais: number
           id: string
+          inss: number
+          irrf: number
           salario_base: number
           valor_extras: number
           valor_liquido: number
@@ -1085,6 +1144,8 @@ export type Database = {
           horas_extras?: number
           horas_normais?: number
           id?: string
+          inss?: number
+          irrf?: number
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1100,6 +1161,8 @@ export type Database = {
           horas_extras?: number
           horas_normais?: number
           id?: string
+          inss?: number
+          irrf?: number
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1127,6 +1190,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      folha_parametros: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          fgts_percentual: number
+          id: number
+          irrf_deducao_por_dependente: number
+          irrf_desconto_simplificado: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          fgts_percentual?: number
+          id?: number
+          irrf_deducao_por_dependente?: number
+          irrf_desconto_simplificado?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          fgts_percentual?: number
+          id?: number
+          irrf_deducao_por_dependente?: number
+          irrf_desconto_simplificado?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       folhas: {
         Row: {
