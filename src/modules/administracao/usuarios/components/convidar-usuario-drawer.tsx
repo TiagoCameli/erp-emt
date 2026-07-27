@@ -31,14 +31,14 @@ export interface ConvidarUsuarioDrawerProps {
 }
 
 /**
- * Botão "Convidar usuário" + drawer com o formulário de convite.
- * Quando o email não sai (sem SMTP), mostra a senha temporária
- * uma única vez num alerta, com botão de copiar.
+ * Botão "Cadastrar usuário" + drawer com o formulário de cadastro.
+ * O sistema gera uma senha provisória e a mostra num alerta com botão
+ * de copiar, para o admin repassar. O usuário troca no primeiro acesso.
  */
 export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
   const [aberto, setAberto] = React.useState(false);
   const [perfilId, setPerfilId] = React.useState<string>(SEM_PERFIL);
-  const [senhaTemporaria, setSenhaTemporaria] = React.useState<string | null>(
+  const [senhaProvisoria, setSenhaProvisoria] = React.useState<string | null>(
     null,
   );
 
@@ -52,8 +52,7 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
   function aoMudarAberto(novoAberto: boolean) {
     setAberto(novoAberto);
     if (!novoAberto) {
-      // A senha temporária só aparece uma vez: fechou, sumiu.
-      setSenhaTemporaria(null);
+      setSenhaProvisoria(null);
       setPerfilId(SEM_PERFIL);
       form.reset();
     }
@@ -75,18 +74,13 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
       toast.warning(resultado.aviso);
     }
 
-    if (resultado.senhaTemporaria) {
-      setSenhaTemporaria(resultado.senhaTemporaria);
-      toast.success("Usuário criado com senha temporária");
-    } else {
-      toast.success(`Convite enviado para ${dados.email}`);
-      aoMudarAberto(false);
-    }
+    setSenhaProvisoria(resultado.senhaProvisoria);
+    toast.success("Usuário cadastrado");
   }
 
   async function copiarSenha() {
-    if (!senhaTemporaria) return;
-    await navigator.clipboard.writeText(senhaTemporaria);
+    if (!senhaProvisoria) return;
+    await navigator.clipboard.writeText(senhaProvisoria);
     toast.success("Senha copiada");
   }
 
@@ -94,16 +88,16 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
     <>
       <Button type="button" size="sm" onClick={() => setAberto(true)}>
         <UserPlus />
-        Convidar usuário
+        Cadastrar usuário
       </Button>
 
       <FormDrawer
         aberto={aberto}
         onAbertoChange={aoMudarAberto}
-        titulo="Convidar usuário"
-        descricao="O convidado recebe um email para definir a senha e entrar"
+        titulo="Cadastrar usuário"
+        descricao="O sistema gera uma senha provisória para você repassar. O usuário troca no primeiro acesso"
         rodape={
-          senhaTemporaria ? (
+          senhaProvisoria ? (
             <Button type="button" onClick={() => aoMudarAberto(false)}>
               Concluir
             </Button>
@@ -121,28 +115,29 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
                 {enviando ? (
                   <>
                     <LoaderCircle className="animate-spin" />
-                    Enviando...
+                    Cadastrando...
                   </>
                 ) : (
-                  "Enviar convite"
+                  "Cadastrar usuário"
                 )}
               </Button>
             </>
           )
         }
       >
-        {senhaTemporaria ? (
+        {senhaProvisoria ? (
           <Alert>
             <TriangleAlert />
-            <AlertTitle>Senha temporária gerada</AlertTitle>
+            <AlertTitle>Senha provisória gerada</AlertTitle>
             <AlertDescription className="flex flex-col gap-3">
               <span>
-                O email de convite não pôde ser enviado. Copie a senha abaixo e
-                repasse ao usuário. Ela não será exibida de novo.
+                Copie a senha abaixo e repasse ao usuário. Ela fica visível na
+                ficha do usuário (aba Administração) até ele definir a própria
+                senha no primeiro acesso.
               </span>
               <span className="flex items-center gap-2">
                 <code className="codigo-doc rounded-md border border-border bg-surface px-2 py-1">
-                  {senhaTemporaria}
+                  {senhaProvisoria}
                 </code>
                 <Button
                   type="button"
