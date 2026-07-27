@@ -11,6 +11,7 @@ export interface UsuarioLista {
   perfilId: string | null;
   perfilNome: string | null;
   criadoEm: string;
+  acessoPendente: boolean;
 }
 
 /** Par recurso + ação presente na matriz individual do usuário. */
@@ -31,22 +32,30 @@ export async function listarUsuarios(): Promise<UsuarioLista[]> {
 
   const { data, error } = await supabase
     .from("usuarios")
-    .select("id, nome, email, ativo, perfil_id, created_at, perfis(nome)")
+    .select(
+      "id, nome, email, ativo, perfil_id, created_at, perfis(nome), usuario_senha_provisoria(usuario_id)",
+    )
     .order("nome");
 
   if (error) {
     throw new Error("Não foi possível carregar os usuários");
   }
 
-  return (data ?? []).map((usuario) => ({
-    id: usuario.id,
-    nome: usuario.nome,
-    email: usuario.email,
-    ativo: usuario.ativo,
-    perfilId: usuario.perfil_id,
-    perfilNome: usuario.perfis?.nome ?? null,
-    criadoEm: usuario.created_at,
-  }));
+  return (data ?? []).map((usuario) => {
+    const provisoria = usuario.usuario_senha_provisoria;
+    return {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      ativo: usuario.ativo,
+      perfilId: usuario.perfil_id,
+      perfilNome: usuario.perfis?.nome ?? null,
+      criadoEm: usuario.created_at,
+      acessoPendente: Array.isArray(provisoria)
+        ? provisoria.length > 0
+        : provisoria != null,
+    };
+  });
 }
 
 /** Matriz individual do usuário: linhas de usuario_permissoes. */
