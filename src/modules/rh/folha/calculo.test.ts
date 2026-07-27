@@ -15,6 +15,8 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     horasNormais: 0,
     horasExtras: 0,
     valorExtras: 0,
+    inss: 0,
+    irrf: 0,
     encargos: 0,
     encargosDetalhe: [],
     adiantamentos: 0,

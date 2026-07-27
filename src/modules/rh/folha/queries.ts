@@ -38,6 +38,10 @@ export interface FolhaItem {
   horasNormais: number;
   horasExtras: number;
   valorExtras: number;
+  /** Desconto de INSS do colaborador (Bloco 6/7), usado no holerite. */
+  inss: number;
+  /** Desconto de IRRF do colaborador (Bloco 6/7), usado no holerite. */
+  irrf: number;
   encargos: number;
   /**
    * Quebra do total de `encargos` por tipo (Bloco 6, Task 3/4), vinda de
@@ -141,8 +145,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .from("folha_itens")
     .select(
       `id, colaborador_id, centro_custo_id, salario_base, horas_normais,
-       horas_extras, valor_extras, encargos, adiantamentos, custo_total,
-       valor_liquido,
+       horas_extras, valor_extras, inss, irrf, encargos, adiantamentos,
+       custo_total, valor_liquido,
        colaboradores(nome, funcoes(nome)),
        centros_custo(nome, codigo),
        folha_item_encargos(nome, valor)`,
@@ -166,6 +170,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       horasNormais: item.horas_normais,
       horasExtras: item.horas_extras,
       valorExtras: item.valor_extras,
+      inss: item.inss,
+      irrf: item.irrf,
       encargos: item.encargos,
       // Folhas geradas antes da Task 3 (Bloco 6) não têm linhas aqui: [].
       encargosDetalhe: (item.folha_item_encargos ?? [])
