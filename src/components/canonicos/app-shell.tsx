@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Circle,
   FolderOpen,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Settings,
@@ -135,6 +136,12 @@ export function AppShell({ usuario, modulos, children, onSair }: AppShellProps) 
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/conta">
+                  <KeyRound className="size-4" aria-hidden="true" />
+                  Minha conta
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={onSair}>
                 <LogOut className="size-4" aria-hidden="true" />
                 Sair

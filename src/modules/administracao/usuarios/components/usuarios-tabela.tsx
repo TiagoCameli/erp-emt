@@ -62,6 +62,7 @@ export interface UsuariosTabelaProps {
   perfis: PerfilOpcao[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  usuarioLogadoId: string;
 }
 
 /**
@@ -73,6 +74,7 @@ export function UsuariosTabela({
   perfis,
   podeEditar,
   podeExcluir,
+  usuarioLogadoId,
 }: UsuariosTabelaProps) {
   const [selecionadoId, setSelecionadoId] = React.useState<string | null>(null);
   const [detalheAberto, setDetalheAberto] = React.useState(false);
@@ -112,6 +114,7 @@ export function UsuariosTabela({
         perfis={perfis}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        usuarioLogadoId={usuarioLogadoId}
       />
     </>
   );

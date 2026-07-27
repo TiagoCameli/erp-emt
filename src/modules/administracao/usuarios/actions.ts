@@ -167,6 +167,11 @@ export async function redefinirSenhaUsuario(
   }
   const idValido = uuidSchema.safeParse(usuarioId);
   if (!idValido.success) return { erro: "Usuário inválido" };
+  if (idValido.data === editor.id) {
+    return {
+      erro: "Para trocar a sua própria senha, use Minha conta > Alterar senha.",
+    };
+  }
 
   const admin = createAdminClient();
 

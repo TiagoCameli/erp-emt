@@ -106,3 +106,54 @@ export async function definirSenha(
   revalidatePath("/", "layout");
   redirect("/");
 }
+
+/**
+ * Troca a senha do próprio usuário logado (self-service, sem deslogar e sem
+ * senha provisória). Diferente de definirSenha, não redireciona: devolve
+ * { ok } para a tela mostrar o sucesso e manter o usuário onde está.
+ */
+export async function alterarSenha(
+  dados: DefinirSenhaInput,
+): Promise<{ ok: true } | { erro: string }> {
+  const resultado = definirSenhaSchema.safeParse(dados);
+  if (!resultado.success) {
+    return { erro: resultado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.updateUser({
+    password: resultado.data.senha,
+    data: { senha_temporaria: false },
+  });
+
+  if (error) {
+    if (error.code === "same_password") {
+      return { erro: "A nova senha precisa ser diferente da atual" };
+    }
+    if (error.code === "weak_password") {
+      return { erro: "Senha muito fraca. Use uma combinação mais segura" };
+    }
+    return erroAcao(
+      "auth.alterar-senha",
+      error,
+      "Não foi possível alterar a senha. Tente novamente",
+    );
+  }
+
+  // Some com qualquer senha provisória pendente do próprio usuário.
+  if (user) {
+    const { error: erroLimpeza } = await supabase
+      .from("usuario_senha_provisoria")
+      .delete()
+      .eq("usuario_id", user.id);
+    if (erroLimpeza) {
+      logErroServidor("auth.alterar-senha.limpar-provisoria", erroLimpeza);
+    }
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
