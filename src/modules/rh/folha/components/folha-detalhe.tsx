@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ChevronDown,
+  FileText,
   Lock,
   RotateCcw,
   RefreshCw,
@@ -24,10 +25,12 @@ import { fecharFolha, reabrirFolha } from "@/modules/rh/folha/actions";
 import type {
   CustoCentroCusto,
   FolhaDetalhe,
+  FolhaItem,
   ResumoEncargo,
 } from "@/modules/rh/folha/queries";
 import { BotaoPlanilha } from "./botao-planilha";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
+import { HoleriteDialog } from "./holerite-dialog";
 
 /** Card de seção do detalhe (borda + superfície), com título e ação. */
 function Secao({
@@ -68,6 +71,8 @@ export interface FolhaDetalheViewProps {
   folha: FolhaDetalhe;
   custosPorCentro: CustoCentroCusto[];
   resumoEncargos: ResumoEncargo[];
+  /** % do FGTS (parâmetros da folha) para o informativo do holerite. */
+  fgtsPercentual: number;
   podeCriar: boolean;
   podeEditar: boolean;
 }
@@ -83,6 +88,7 @@ export function FolhaDetalheView({
   folha,
   custosPorCentro,
   resumoEncargos,
+  fgtsPercentual,
   podeCriar,
   podeEditar,
 }: FolhaDetalheViewProps) {
@@ -94,6 +100,7 @@ export function FolhaDetalheView({
 
   const [dialogFechar, setDialogFechar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
+  const [holeriteItem, setHoleriteItem] = React.useState<FolhaItem | null>(null);
 
   async function aoFechar() {
     const resultado = await fecharFolha(folha.id);
@@ -200,7 +207,7 @@ export function FolhaDetalheView({
         <KPICard
           titulo="Líquido"
           valor={<MoneyText valor={folha.valorLiquido} />}
-          detalhe="A receber (bruto − adiantamentos)"
+          detalhe="A receber (bruto − INSS − IRRF − adiantamentos)"
         />
       </div>
 
@@ -242,6 +249,9 @@ export function FolhaDetalheView({
                     Custo total
                   </th>
                   <th className="px-3 py-2 text-right font-medium">Líquido</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    <span className="sr-only">Holerite</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -319,6 +329,17 @@ export function FolhaDetalheView({
                         valor={item.valorLiquido}
                         className="font-medium"
                       />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHoleriteItem(item)}
+                      >
+                        <FileText />
+                        Holerite
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -429,6 +450,16 @@ export function FolhaDetalheView({
           onConfirmar={aoFechar}
         />
       ) : null}
+
+      <HoleriteDialog
+        item={holeriteItem}
+        competencia={folha.competencia}
+        fgtsPercentual={fgtsPercentual}
+        aberto={holeriteItem !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setHoleriteItem(null);
+        }}
+      />
     </div>
   );
 }
