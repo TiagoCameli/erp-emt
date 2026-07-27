@@ -158,10 +158,15 @@ export function ApontamentoFormDrawer({
 
   /**
    * Seleção do colaborador. Ao ADICIONAR (nunca em edição, que só reflete o
-   * apontamento já salvo) um colaborador com `temAtestado`, pré-marca
-   * tipo="atestado" e zera total/normais/extras direto — sem passar pelo
-   * split de jornada do Bloco 4, que não se aplica a atestado (0h fixo). O
-   * encarregado pode trocar o tipo ou as horas livremente depois.
+   * apontamento já salvo), recomputa o estado do dia inteiro a partir do
+   * colaborador novo — nunca deixa resíduo do colaborador anterior:
+   * - Com `temAtestado`: pré-marca tipo="atestado" e zera total/normais/
+   *   extras direto — sem passar pelo split de jornada do Bloco 4, que não
+   *   se aplica a atestado (0h fixo).
+   * - Sem `temAtestado`: volta ao padrão de um lançamento novo (tipo
+   *   "normal", total/normais/extras vazios), pra não herdar o atestado do
+   *   colaborador anterior.
+   * O encarregado pode trocar o tipo ou as horas livremente depois.
    */
   function aoSelecionarColaborador(colaboradorId: string) {
     form.setValue("colaboradorId", colaboradorId, { shouldValidate: true });
@@ -169,10 +174,17 @@ export function ApontamentoFormDrawer({
     if (editando) return;
 
     const colaborador = colaboradores.find((c) => c.id === colaboradorId);
-    if (!colaborador?.temAtestado) return;
 
-    setTotal("0");
-    form.setValue("tipo", "atestado", { shouldValidate: true });
+    if (colaborador?.temAtestado) {
+      setTotal("0");
+      form.setValue("tipo", "atestado", { shouldValidate: true });
+      form.setValue("horasNormais", "", { shouldValidate: true });
+      form.setValue("horasExtras", "", { shouldValidate: true });
+      return;
+    }
+
+    setTotal("");
+    form.setValue("tipo", "normal", { shouldValidate: true });
     form.setValue("horasNormais", "", { shouldValidate: true });
     form.setValue("horasExtras", "", { shouldValidate: true });
   }
@@ -284,7 +296,9 @@ export function ApontamentoFormDrawer({
             <p className="text-legenda text-muted-foreground">
               {apontamentoDivergente
                 ? "O apontamento salvo diverge do atestado (tipo ou horas). Confira antes de salvar."
-                : "Colaborador com atestado cobrindo esta data. Tipo e horas vêm pré-marcados; confirme ou troque."}
+                : editando
+                  ? "Este colaborador tem atestado neste dia."
+                  : "Colaborador com atestado cobrindo esta data. Tipo e horas vêm pré-marcados; confirme ou troque."}
             </p>
           </div>
         ) : null}
