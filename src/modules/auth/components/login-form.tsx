@@ -4,7 +4,11 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
-import { CampoFormulario, classesFormulario } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  InputSenha,
+} from "@/components/canonicos";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,9 +70,8 @@ export function LoginForm({ erroInicial }: LoginFormProps) {
         rotulo="Senha"
         erro={form.formState.errors.senha?.message}
       >
-        <Input
+        <InputSenha
           id="login-senha"
-          type="password"
           autoComplete="current-password"
           disabled={enviando}
           {...form.register("senha")}

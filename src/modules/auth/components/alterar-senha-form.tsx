@@ -5,9 +5,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { CampoFormulario, classesFormulario } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  InputSenha,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { alterarSenha } from "@/modules/auth/actions";
 import {
   definirSenhaSchema,
@@ -44,9 +47,8 @@ export function AlterarSenhaForm() {
         rotulo="Nova senha"
         erro={form.formState.errors.senha?.message}
       >
-        <Input
+        <InputSenha
           id="alterar-senha-senha"
-          type="password"
           autoComplete="new-password"
           disabled={enviando}
           {...form.register("senha")}
@@ -58,9 +60,8 @@ export function AlterarSenhaForm() {
         rotulo="Confirme a nova senha"
         erro={form.formState.errors.confirmacao?.message}
       >
-        <Input
+        <InputSenha
           id="alterar-senha-confirmacao"
-          type="password"
           autoComplete="new-password"
           disabled={enviando}
           {...form.register("confirmacao")}
