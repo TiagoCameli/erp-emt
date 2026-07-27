@@ -16,6 +16,9 @@ create table public.usuario_senha_provisoria (
 comment on table public.usuario_senha_provisoria is
   'Senha provisoria (texto puro) de acesso pendente. Visivel so para admin de usuarios via RLS. Removida quando o usuario define a propria senha. SEM auditoria de valor.';
 
+create index idx_usuario_senha_provisoria_gerada_por
+  on public.usuario_senha_provisoria (gerada_por);
+
 alter table public.usuario_senha_provisoria enable row level security;
 
 -- Leitura: so quem administra usuarios
