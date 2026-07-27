@@ -185,7 +185,7 @@ export function ContasReceberCliente({
     <>
       <PageHeader
         titulo="Contas a receber"
-        descricao="Recebíveis e suas parcelas. Faturas de medição entram aqui automaticamente"
+        descricao="Recebíveis e suas parcelas por cliente"
         acoes={
           podeCriar ? (
             <Button type="button" size="sm" onClick={() => setDrawerAberto(true)}>
@@ -231,7 +231,7 @@ export function ContasReceberCliente({
             <EmptyState
               icone={HandCoins}
               titulo="Nenhuma conta a receber"
-              descricao="Crie um recebível ou aguarde as faturas de medição"
+              descricao="Crie o primeiro recebível deste cliente para começar"
               className="border-none bg-transparent"
               acao={
                 podeCriar ? (

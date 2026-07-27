@@ -22,7 +22,7 @@ export default async function PaginaUnidades() {
     <>
       <PageHeader
         titulo="Unidades de medida"
-        descricao="Unidades usadas em insumos, medições e movimentações"
+        descricao="Unidades usadas nos insumos e itens de compra"
         acoes={<UnidadesAcoesCabecalho podeCriar={podeCriar} />}
       />
       <UnidadesLista
