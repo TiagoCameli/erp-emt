@@ -67,7 +67,7 @@ docs/                       PLANO-ERP-EMT.md, decisoes.md
 1. Registrar o recurso em `config/recursos.ts` com as ações que existem nela.
 2. Migration: tabelas com RLS, trigger de auditoria, soft delete se transacional.
 3. `schemas.ts` (Zod), `queries.ts` (leitura), `actions.ts` (mutações com checagem de permissão e transição de status).
-4. Tela: TabNav respeitando permissão de ver, FilterBar, DataTable, FormDrawer, ApprovalBar quando houver aprovação, Trilha no detalhe.
+4. Tela: FilterBar, DataTable, FormDrawer, ApprovalBar quando houver aprovação, Trilha no detalhe. **Não há barra de abas dentro da página**: a navegação entre as abas do módulo vive no submenu da sidebar, alimentado por `abasVisiveis(usuario, modulo)` (mesmo catálogo `RECURSOS`, mesmo filtro de permissão). Registrar a aba em `config/recursos.ts` é o que a faz aparecer no menu.
 5. Importação por planilha se for cadastro. Export Excel se for listagem gerencial.
 6. Testes: Vitest nas regras (status machine, cálculo), Playwright se o fluxo for crítico.
 7. Rodar advisors do Supabase. Atualizar `docs/decisoes.md` se algo estrutural foi decidido.
