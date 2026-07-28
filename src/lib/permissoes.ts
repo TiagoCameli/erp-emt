@@ -3,7 +3,12 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { MODULOS, recursosDoModulo } from "@/config/recursos";
-import type { Acao, RecursoId } from "@/config/recursos";
+import type {
+  Acao,
+  ModuloId,
+  RecursoDef,
+  RecursoId,
+} from "@/config/recursos";
 
 export interface PermissaoUsuario {
   recurso: string;
@@ -97,6 +102,20 @@ export function modulosVisiveis(
     recursosDoModulo(modulo.id).some((recurso) =>
       temPermissao(usuario, recurso.id as RecursoId, "ver"),
     ),
+  );
+}
+
+/**
+ * Abas de um módulo que o usuário pode ver, na ordem do catálogo (RECURSOS).
+ * Fonte única da navegação: alimenta as abas horizontais dentro do módulo e o
+ * submenu da sidebar, então as duas nunca divergem.
+ */
+export function abasVisiveis(
+  usuario: UsuarioLogado | null,
+  modulo: ModuloId,
+): readonly RecursoDef[] {
+  return recursosDoModulo(modulo).filter((recurso) =>
+    temPermissao(usuario, recurso.id as RecursoId, "ver"),
   );
 }
 

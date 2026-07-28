@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
 import { AppShell, type ModuloNavegacao } from "@/components/canonicos";
-import { getUsuarioLogado, modulosVisiveis } from "@/lib/permissoes";
+import { abasVisiveis, getUsuarioLogado, modulosVisiveis } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { sair } from "@/modules/auth/actions";
 
@@ -35,11 +35,19 @@ export default async function AppLayout({
     redirect("/definir-senha");
   }
 
+  // As abas de cada módulo alimentam o submenu da sidebar. Vêm do mesmo
+  // catálogo (RECURSOS) e do mesmo filtro de permissão que as abas
+  // horizontais dentro do módulo, então os dois nunca divergem.
   const modulos: ModuloNavegacao[] = modulosVisiveis(usuario).map((modulo) => ({
     id: modulo.id,
     nome: modulo.nome,
     rota: modulo.rota,
     icone: modulo.id,
+    abas: abasVisiveis(usuario, modulo.id).map((aba) => ({
+      id: aba.id,
+      nome: aba.nome,
+      rota: aba.rota,
+    })),
   }));
 
   return (

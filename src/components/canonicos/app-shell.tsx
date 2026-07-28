@@ -26,12 +26,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const MAPA_ICONES: Record<string, LucideIcon> = {
@@ -52,25 +46,27 @@ const COLUNAS_MOBILE: Record<number, string> = {
   6: "grid-cols-6",
 };
 
-/**
- * Largura da sidebar recolhida. É a mesma medida da caixa do ícone dentro de
- * cada item, então o ícone não anda um pixel quando a sidebar expande.
- */
-const LARGURA_RECOLHIDA = "w-14";
-const LARGURA_EXPANDIDA = "w-56";
-/** Caixa do ícone: casa com LARGURA_RECOLHIDA. */
-const CAIXA_ICONE = "w-14";
+/** Largura da sidebar. Fixa: ela nunca expande. */
+const LARGURA_SIDEBAR = "w-14";
+/** Atraso pra abrir o submenu: o mouse de passagem não abre nada. */
+const ATRASO_ABRIR_MS = 150;
+/** Atraso pra fechar: sair de raspão do painel não fecha na cara do usuário. */
+const ATRASO_FECHAR_MS = 220;
 
-/** Atraso antes de expandir: o mouse só de passagem não abre a sidebar. */
-const ATRASO_ABRIR_MS = 180;
-/** Atraso antes de recolher: sair de raspão não fecha na cara do usuário. */
-const ATRASO_FECHAR_MS = 260;
+/** Uma aba de módulo no submenu. */
+export interface AbaNavegacao {
+  id: string;
+  nome: string;
+  rota: string;
+}
 
 export interface ModuloNavegacao {
   id: string;
   nome: string;
   rota: string;
   icone?: string;
+  /** Abas visíveis do módulo, na ordem do catálogo, já filtradas por permissão. */
+  abas?: AbaNavegacao[];
 }
 
 export interface AppShellProps {
@@ -96,9 +92,21 @@ function iniciaisDoNome(nome: string): string {
 }
 
 /**
- * Itens do menu do usuário (Minha conta / Sair). Mesmo conteúdo no rodapé da
- * sidebar (desktop) e no topo (mobile).
+ * A aba atual é a de rota mais específica que casa com o pathname. Sem isso
+ * "/compras" marcaria como ativa qualquer aba do módulo.
  */
+function abaAtiva(abas: AbaNavegacao[], pathname: string): string | null {
+  let escolhida: AbaNavegacao | null = null;
+  for (const aba of abas) {
+    if (pathname === aba.rota || pathname.startsWith(`${aba.rota}/`)) {
+      if (!escolhida || aba.rota.length > escolhida.rota.length)
+        escolhida = aba;
+    }
+  }
+  return escolhida?.id ?? null;
+}
+
+/** Itens do menu do usuário. Mesmo conteúdo no rodapé (desktop) e no topo (mobile). */
 function ItensMenuUsuario({
   usuario,
   onSair,
@@ -130,13 +138,180 @@ function ItensMenuUsuario({
 }
 
 /**
- * Controla a expansão da sidebar por hover, com atraso nas duas pontas, e por
- * foco de teclado (Tab expande na hora, sem atraso). O menu do usuário aberto
- * segura a sidebar expandida: o mouse precisa sair dela para alcançar o menu.
+ * Um módulo na sidebar: o ícone e o submenu flutuante com as abas dele.
+ *
+ * O painel é filho do MESMO contêiner do ícone e começa exatamente na borda
+ * direita da sidebar (`left-full`, sem margem), então não existe vão entre os
+ * dois: o mouse atravessa do ícone pro painel sem passar por fora, e o
+ * fechamento fica preso ao contêiner inteiro. É a "ponte de hover", sem gap e
+ * sem flicker.
  */
-function useSidebarExpansivel(menuAberto: boolean) {
-  const [hover, setHover] = React.useState(false);
-  const [temFoco, setTemFoco] = React.useState(false);
+function ModuloSidebar({
+  modulo,
+  Icone,
+  moduloAtivo,
+  idAbaAtiva,
+  aberto,
+  onAbrir,
+  onFechar,
+  onFecharAgora,
+}: {
+  modulo: ModuloNavegacao;
+  /** Ícone já resolvido pelo chamador (componente não se cria dentro do render). */
+  Icone: LucideIcon;
+  moduloAtivo: boolean;
+  idAbaAtiva: string | null;
+  aberto: boolean;
+  onAbrir: () => void;
+  onFechar: () => void;
+  onFecharAgora: () => void;
+}) {
+  const abas = modulo.abas ?? [];
+  const gatilhoRef = React.useRef<HTMLAnchorElement>(null);
+  const painelRef = React.useRef<HTMLDivElement>(null);
+
+  /** Move o foco pro item do painel na posição pedida (com volta ao início/fim). */
+  function focarItem(posicao: number) {
+    const itens =
+      painelRef.current?.querySelectorAll<HTMLAnchorElement>(
+        '[role="menuitem"]',
+      );
+    if (!itens || itens.length === 0) return;
+    const indice = (posicao + itens.length) % itens.length;
+    itens[indice].focus();
+  }
+
+  function aoTeclarNoGatilho(evento: React.KeyboardEvent<HTMLAnchorElement>) {
+    if (abas.length === 0) return;
+    // Enter e setas abrem o submenu (a primeira aba é a mesma rota padrão do
+    // módulo, então nada fica inalcançável pelo teclado).
+    if (
+      evento.key === "Enter" ||
+      evento.key === "ArrowRight" ||
+      evento.key === "ArrowDown"
+    ) {
+      evento.preventDefault();
+      onAbrir();
+      requestAnimationFrame(() => focarItem(0));
+      return;
+    }
+    if (evento.key === "Escape") onFecharAgora();
+  }
+
+  function aoTeclarNoPainel(evento: React.KeyboardEvent<HTMLDivElement>) {
+    const itens = Array.from(
+      painelRef.current?.querySelectorAll<HTMLAnchorElement>(
+        '[role="menuitem"]',
+      ) ?? [],
+    );
+    const atual = itens.indexOf(document.activeElement as HTMLAnchorElement);
+
+    if (evento.key === "ArrowDown") {
+      evento.preventDefault();
+      focarItem(atual + 1);
+      return;
+    }
+    if (evento.key === "ArrowUp") {
+      evento.preventDefault();
+      focarItem(atual - 1);
+      return;
+    }
+    if (evento.key === "Home") {
+      evento.preventDefault();
+      focarItem(0);
+      return;
+    }
+    if (evento.key === "End") {
+      evento.preventDefault();
+      focarItem(itens.length - 1);
+      return;
+    }
+    if (evento.key === "Escape" || evento.key === "ArrowLeft") {
+      evento.preventDefault();
+      onFecharAgora();
+      gatilhoRef.current?.focus();
+    }
+  }
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={onAbrir}
+      onMouseLeave={onFechar}
+      onBlur={(evento) => {
+        // Foco saiu do módulo inteiro (ícone + painel): fecha.
+        if (
+          !evento.currentTarget.contains(evento.relatedTarget as Node | null)
+        ) {
+          onFecharAgora();
+        }
+      }}
+    >
+      <Link
+        ref={gatilhoRef}
+        href={modulo.rota}
+        aria-current={moduloAtivo ? "page" : undefined}
+        aria-label={modulo.nome}
+        aria-haspopup={abas.length > 0 ? "menu" : undefined}
+        aria-expanded={abas.length > 0 ? aberto : undefined}
+        onKeyDown={aoTeclarNoGatilho}
+        onFocus={onAbrir}
+        className={cn(
+          "flex h-11 items-center justify-center transition-colors",
+          moduloAtivo
+            ? "faixa-esquerda bg-sidebar-accent text-primary"
+            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        )}
+      >
+        <Icone className="size-5" aria-hidden="true" />
+      </Link>
+
+      {aberto && abas.length > 0 ? (
+        <div
+          ref={painelRef}
+          role="menu"
+          aria-label={modulo.nome}
+          onKeyDown={aoTeclarNoPainel}
+          className="absolute top-0 left-full z-50 max-h-[calc(100vh-1rem)] w-60 overflow-y-auto rounded-md border border-border bg-popover py-1 shadow-lg"
+        >
+          <p className="border-b border-border px-3 pb-1.5 text-legenda font-semibold tracking-wide text-muted-foreground uppercase">
+            {modulo.nome}
+          </p>
+          {abas.map((aba) => {
+            const ativa = aba.id === idAbaAtiva;
+            return (
+              <Link
+                key={aba.id}
+                role="menuitem"
+                href={aba.rota}
+                aria-current={ativa ? "page" : undefined}
+                onClick={onFecharAgora}
+                className={cn(
+                  "block px-3 py-1.5 text-detalhe outline-none transition-colors",
+                  ativa
+                    ? "bg-accent font-medium text-accent-foreground"
+                    : "text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent",
+                )}
+              >
+                {aba.nome}
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function AppShell({
+  usuario,
+  modulos,
+  children,
+  onSair,
+}: AppShellProps) {
+  const pathname = usePathname();
+  const modulosMobile = modulos.slice(0, 6);
+  const [moduloAberto, setModuloAberto] = React.useState<string | null>(null);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const limparTimer = React.useCallback(() => {
@@ -148,196 +323,90 @@ function useSidebarExpansivel(menuAberto: boolean) {
 
   React.useEffect(() => limparTimer, [limparTimer]);
 
-  const aoEntrarMouse = React.useCallback(() => {
-    limparTimer();
-    timer.current = setTimeout(() => setHover(true), ATRASO_ABRIR_MS);
-  }, [limparTimer]);
-
-  const aoSairMouse = React.useCallback(() => {
-    limparTimer();
-    timer.current = setTimeout(() => setHover(false), ATRASO_FECHAR_MS);
-  }, [limparTimer]);
-
-  const aoFocar = React.useCallback(() => {
-    limparTimer();
-    setTemFoco(true);
-  }, [limparTimer]);
-
-  const aoDesfocar = React.useCallback(
-    (evento: React.FocusEvent<HTMLElement>) => {
-      // Só recolhe quando o foco sai da sidebar inteira, não ao pular de um
-      // item para o vizinho.
-      if (evento.currentTarget.contains(evento.relatedTarget as Node | null)) {
-        return;
-      }
-      setTemFoco(false);
+  const abrirComAtraso = React.useCallback(
+    (id: string) => {
+      limparTimer();
+      timer.current = setTimeout(() => setModuloAberto(id), ATRASO_ABRIR_MS);
     },
-    [],
+    [limparTimer],
   );
 
-  return {
-    expandida: hover || temFoco || menuAberto,
-    aoEntrarMouse,
-    aoSairMouse,
-    aoFocar,
-    aoDesfocar,
-  };
-}
+  const fecharComAtraso = React.useCallback(() => {
+    limparTimer();
+    timer.current = setTimeout(() => setModuloAberto(null), ATRASO_FECHAR_MS);
+  }, [limparTimer]);
 
-export function AppShell({ usuario, modulos, children, onSair }: AppShellProps) {
-  const pathname = usePathname();
-  const modulosMobile = modulos.slice(0, 6);
-  const [menuUsuarioAberto, setMenuUsuarioAberto] = React.useState(false);
-  const { expandida, aoEntrarMouse, aoSairMouse, aoFocar, aoDesfocar } =
-    useSidebarExpansivel(menuUsuarioAberto);
-
-  /** Texto que só aparece com a sidebar expandida (some sem mexer no ícone). */
-  const classesTexto = cn(
-    "min-w-0 truncate pr-3 transition-opacity duration-200 ease-out",
-    expandida ? "opacity-100" : "opacity-0",
-  );
+  const fecharAgora = React.useCallback(() => {
+    limparTimer();
+    setModuloAberto(null);
+  }, [limparTimer]);
 
   return (
     <div className="flex h-screen overflow-hidden">
       {/*
-        Espaçador: reserva no fluxo apenas a largura RECOLHIDA. A sidebar em si
-        é fixed e expande por cima do conteúdo (overlay), então a área útil da
-        página nunca reflui quando o mouse passa.
+        Sidebar sempre recolhida: só ícones. O submenu de cada módulo escapa
+        pela direita (absolute), então nada aqui pode ter overflow escondido.
+        z-40 mantém os painéis acima do conteúdo.
       */}
-      <div
-        className={cn("hidden shrink-0 md:block", LARGURA_RECOLHIDA)}
-        aria-hidden="true"
-      />
-
-      <TooltipProvider delayDuration={300}>
-        <aside
-          onMouseEnter={aoEntrarMouse}
-          onMouseLeave={aoSairMouse}
-          onFocusCapture={aoFocar}
-          onBlurCapture={aoDesfocar}
-          data-expandida={expandida ? "true" : "false"}
-          className={cn(
-            "fixed inset-y-0 left-0 z-40 hidden flex-col overflow-hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out md:flex",
-            expandida ? cn(LARGURA_EXPANDIDA, "shadow-lg") : LARGURA_RECOLHIDA,
-          )}
+      <aside
+        className={cn(
+          "relative z-40 hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex",
+          LARGURA_SIDEBAR,
+        )}
+      >
+        <Link
+          href={modulos[0]?.rota ?? "/"}
+          className="flex h-12 shrink-0 items-center justify-center border-b border-sidebar-border"
+          aria-label="ERP EMT, ir para o início"
         >
-          {/* Marca: símbolo quando recolhida, nome completo quando expandida.
-              Leva ao primeiro módulo que ESTE usuário pode ver (a lista já vem
-              filtrada por permissão), nunca a uma rota que ele não acessa. */}
-          <Link
-            href={modulos[0]?.rota ?? "/"}
-            className="flex h-12 shrink-0 items-center border-b border-sidebar-border"
-            aria-label="ERP EMT, ir para o início"
-          >
-            <span
-              className={cn(
-                "flex shrink-0 items-center justify-center",
-                CAIXA_ICONE,
-              )}
-            >
-              <span className="flex size-7 items-center justify-center rounded-md bg-primary text-legenda font-semibold text-primary-foreground">
-                E
-              </span>
-            </span>
-            <span className={classesTexto}>
-              <span className="block text-detalhe font-semibold leading-tight">
-                EMT Construtora
-              </span>
-              <span className="block text-legenda text-muted-foreground">
-                ERP
-              </span>
-            </span>
-          </Link>
+          <span className="flex size-7 items-center justify-center rounded-md bg-primary text-legenda font-semibold text-primary-foreground">
+            E
+          </span>
+        </Link>
 
-          <nav className="flex-1 overflow-x-hidden overflow-y-auto py-1" aria-label="Módulos">
-            {modulos.map((modulo) => {
-              const Icone = iconeDoModulo(modulo);
-              const ativo = pathname.startsWith(modulo.rota);
-              return (
-                <Tooltip key={modulo.id}>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href={modulo.rota}
-                      aria-current={ativo ? "page" : undefined}
-                      aria-label={modulo.nome}
-                      className={cn(
-                        "flex h-9 items-center text-detalhe transition-colors",
-                        ativo
-                          ? "faixa-esquerda bg-sidebar-accent font-medium text-sidebar-foreground"
-                          : "text-muted-foreground hover:bg-sidebar-accent",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex shrink-0 items-center justify-center",
-                          CAIXA_ICONE,
-                        )}
-                      >
-                        <Icone className="size-4" aria-hidden="true" />
-                      </span>
-                      <span className={classesTexto}>{modulo.nome}</span>
-                    </Link>
-                  </TooltipTrigger>
-                  {/* Recolhida, o nome vive no tooltip; expandida, está na tela. */}
-                  {expandida ? null : (
-                    <TooltipContent side="right">{modulo.nome}</TooltipContent>
-                  )}
-                </Tooltip>
-              );
-            })}
-          </nav>
+        <nav className="flex-1 py-1" aria-label="Módulos">
+          {modulos.map((modulo) => (
+            <ModuloSidebar
+              key={modulo.id}
+              modulo={modulo}
+              Icone={iconeDoModulo(modulo)}
+              moduloAtivo={pathname.startsWith(modulo.rota)}
+              idAbaAtiva={abaAtiva(modulo.abas ?? [], pathname)}
+              aberto={moduloAberto === modulo.id}
+              onAbrir={() => abrirComAtraso(modulo.id)}
+              onFechar={fecharComAtraso}
+              onFecharAgora={fecharAgora}
+            />
+          ))}
+        </nav>
 
-          {/* Perfil no rodapé: avatar recolhido, avatar + nome + email expandido */}
-          <div className="shrink-0 border-t border-sidebar-border">
-            <DropdownMenu
-              open={menuUsuarioAberto}
-              onOpenChange={setMenuUsuarioAberto}
+        {/* Perfil fixo no rodapé */}
+        <div className="shrink-0 border-t border-sidebar-border">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="flex h-14 w-full items-center justify-center outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              aria-label={`Menu do usuário: ${usuario.nome}`}
             >
-              <DropdownMenuTrigger
-                className="flex h-14 w-full items-center outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                aria-label={`Menu do usuário: ${usuario.nome}`}
-              >
-                <span
-                  className={cn(
-                    "flex shrink-0 items-center justify-center",
-                    CAIXA_ICONE,
-                  )}
-                >
-                  <Avatar className="size-8">
-                    <AvatarFallback className="bg-accent text-legenda font-medium text-accent-foreground">
-                      {iniciaisDoNome(usuario.nome)}
-                    </AvatarFallback>
-                  </Avatar>
-                </span>
-                <span className={cn(classesTexto, "flex items-center gap-1")}>
-                  <span className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-detalhe font-medium">
-                      {usuario.nome}
-                    </span>
-                    <span className="block truncate text-legenda text-muted-foreground">
-                      {usuario.email}
-                    </span>
-                  </span>
-                  <ChevronsUpDown
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </span>
-              </DropdownMenuTrigger>
-              {/* Abre pra direita e pra cima, e o Radix desvia da borda da tela. */}
-              <DropdownMenuContent
-                side="right"
-                align="end"
-                sideOffset={8}
-                collisionPadding={12}
-                className="w-56"
-              >
-                <ItensMenuUsuario usuario={usuario} onSair={onSair} />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </aside>
-      </TooltipProvider>
+              <Avatar className="size-8">
+                <AvatarFallback className="bg-accent text-legenda font-medium text-accent-foreground">
+                  {iniciaisDoNome(usuario.nome)}
+                </AvatarFallback>
+              </Avatar>
+              <ChevronsUpDown className="sr-only" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            {/* Pra direita e pra cima, com desvio da borda da tela. */}
+            <DropdownMenuContent
+              side="right"
+              align="end"
+              sideOffset={8}
+              collisionPadding={12}
+              className="w-56"
+            >
+              <ItensMenuUsuario usuario={usuario} onSair={onSair} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/*
