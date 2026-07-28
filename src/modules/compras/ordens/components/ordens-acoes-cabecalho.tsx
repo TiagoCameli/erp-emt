@@ -9,6 +9,7 @@ import type {
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   CotacaoOpcao,
+  FormaPagamentoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
 } from "@/modules/compras/ordens/queries";
@@ -21,6 +22,7 @@ export interface OrdensAcoesCabecalhoProps {
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
 }
 
 /**
@@ -34,6 +36,7 @@ export function OrdensAcoesCabecalho({
   centrosCusto,
   cotacoes,
   condicoesPagamento,
+  formasPagamento,
 }: OrdensAcoesCabecalhoProps) {
   const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
@@ -57,6 +60,7 @@ export function OrdensAcoesCabecalho({
         centrosCusto={centrosCusto}
         cotacoes={cotacoes}
         condicoesPagamento={condicoesPagamento}
+        formasPagamento={formasPagamento}
         onCriada={(id) => router.push(`/compras/ordens/${id}`)}
       />
     </>

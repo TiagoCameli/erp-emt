@@ -64,6 +64,7 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
   return {
     fornecedor_id: dados.fornecedorId,
     condicao_pagamento_id: dados.condicaoPagamentoId,
+    forma_pagamento_id: dados.formaPagamentoId ?? null,
     cotacao_id: dados.cotacaoId ?? null,
     data_emissao: dados.dataEmissao,
     observacoes: dados.observacoes ?? null,

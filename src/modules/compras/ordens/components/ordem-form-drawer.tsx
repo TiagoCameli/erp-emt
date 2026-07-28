@@ -20,6 +20,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
+import {
+  criarCondicaoPagamento,
+  criarFormaPagamento,
+} from "@/modules/compras/_shared/pagamento-actions";
 import { criarOrdem, editarOrdem } from "@/modules/compras/ordens/actions";
 import {
   paraNumero,
@@ -35,6 +39,7 @@ import type {
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   CotacaoOpcao,
+  FormaPagamentoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
@@ -63,6 +68,7 @@ function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
     return {
       fornecedorId: ordem?.fornecedorId ?? "",
       condicaoPagamentoId: ordem?.condicaoPagamentoId ?? "",
+      formaPagamentoId: ordem?.formaPagamentoId ?? "",
       cotacaoId: ordem?.cotacaoId ?? undefined,
       dataEmissao: ordem?.dataEmissao ?? dataHojeISO(),
       observacoes: ordem?.observacoes ?? "",
@@ -73,6 +79,7 @@ function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
   return {
     fornecedorId: ordem.fornecedorId,
     condicaoPagamentoId: ordem.condicaoPagamentoId ?? "",
+    formaPagamentoId: ordem.formaPagamentoId ?? "",
     cotacaoId: ordem.cotacaoId ?? undefined,
     dataEmissao: ordem.dataEmissao,
     observacoes: ordem.observacoes ?? "",
@@ -90,6 +97,7 @@ export interface OrdemFormDrawerProps {
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
   /** Chamado depois de criar uma OC, com o id, para navegar ao detalhe. */
   onCriada?: (id: string) => void;
 }
@@ -108,6 +116,7 @@ export function OrdemFormDrawer({
   centrosCusto,
   cotacoes,
   condicoesPagamento,
+  formasPagamento,
   onCriada,
 }: OrdemFormDrawerProps) {
   const editando = ordem !== null;
@@ -155,6 +164,7 @@ export function OrdemFormDrawer({
     const dados = {
       fornecedorId: valores.fornecedorId,
       condicaoPagamentoId: valores.condicaoPagamentoId,
+      formaPagamentoId: valores.formaPagamentoId || undefined,
       cotacaoId: valores.cotacaoId,
       dataEmissao: valores.dataEmissao,
       observacoes: valores.observacoes,
@@ -184,6 +194,7 @@ export function OrdemFormDrawer({
 
   const fornecedorValor = form.watch("fornecedorId");
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId");
+  const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
   const cotacaoValor = form.watch("cotacaoId") ?? SEM_VINCULO;
   const erroCentros = form.formState.errors.centrosCusto;
   const erroCentrosMensagem =
@@ -281,6 +292,15 @@ export function OrdemFormDrawer({
                 valor: condicao.id,
                 rotulo: condicao.descricao,
               }))}
+              onCriar={async (texto) => {
+                const r = await criarCondicaoPagamento(texto);
+                if ("erro" in r) {
+                  toast.error(r.erro);
+                  return null;
+                }
+                toast.success("Condição criada");
+                return r.id;
+              }}
               placeholder="Selecione a condição de pagamento"
               disabled={salvando}
               id="oc-condicao"
@@ -301,6 +321,36 @@ export function OrdemFormDrawer({
             />
           </CampoFormulario>
         </LinhaCampos>
+
+        <CampoFormulario
+          id="oc-forma-pagamento"
+          rotulo="Forma de pagamento"
+          ajuda="Opcional: método usado no pagamento (PIX, boleto, TED...)"
+        >
+          <Combobox
+            valor={formaPagamentoValor}
+            onValorChange={(valor) =>
+              form.setValue("formaPagamentoId", valor)
+            }
+            opcoes={formasPagamento.map((forma) => ({
+              valor: forma.id,
+              rotulo: forma.nome,
+            }))}
+            onCriar={async (texto) => {
+              const r = await criarFormaPagamento(texto);
+              if ("erro" in r) {
+                toast.error(r.erro);
+                return null;
+              }
+              toast.success("Forma de pagamento criada");
+              return r.id;
+            }}
+            limpavel
+            placeholder="Selecione a forma de pagamento"
+            disabled={salvando}
+            id="oc-forma-pagamento"
+          />
+        </CampoFormulario>
 
         <CampoFormulario
           id="oc-cotacao"
