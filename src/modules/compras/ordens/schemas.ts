@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+import { paraNumero } from "@/modules/compras/ordens/calculo";
+
+/** R$ 1.234,56 para as mensagens de erro do formulário. */
+function formatarDiferenca(valor: number): string {
+  return `R$ ${valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 /**
  * Status de ordem de compra, igual ao check do banco. O app só transita
  * rascunho > pendente_aprovacao > aprovado/rejeitado e cancelado. `pago`
@@ -74,21 +81,83 @@ export const ocItemSchema = z.object({
 
 export type OcItemInput = z.infer<typeof ocItemSchema>;
 
-/** Schema da OC validado no servidor (criar e editar). */
-export const ordemCompraSchema = z.object({
-  fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
-  condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
-  cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
-  formaPagamentoId: z.uuid({ error: "Forma de pagamento inválida" }).optional(),
-  dataEmissao: z
+/** Data yyyy-mm-dd. */
+const dataSchema = (rotulo: string) =>
+  z
     .string()
     .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Data de emissão inválida" }),
-  observacoes: textoOpcional(2000),
-  itens: z
-    .array(ocItemSchema)
-    .min(1, { error: "Adicione ao menos um item à ordem de compra" }),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: rotulo });
+
+/**
+ * Parcela da OC validada no servidor. Valor NUMERIC(14,2) positivo, como a
+ * coluna e o check da tabela oc_parcelas. A numeração não vem daqui: quem
+ * numera é fn_salvar_parcelas_oc, pela ordem de vencimento.
+ */
+export const ocParcelaSchema = z.object({
+  dataVencimento: dataSchema("Informe a data de vencimento da parcela"),
+  valor: z
+    .number({ error: "Valor da parcela inválido" })
+    .positive({ error: "O valor da parcela precisa ser maior que zero" })
+    .max(999999999999.99, { error: "Valor de parcela acima do permitido" })
+    .refine((valor) => casasDecimais(valor) <= 2, {
+      error: "O valor da parcela aceita no máximo 2 casas decimais",
+    }),
 });
+
+export type OcParcelaInput = z.infer<typeof ocParcelaSchema>;
+
+/** Centavos inteiros: comparar dinheiro somado em float mente. */
+function emCentavos(valor: number): number {
+  return Math.round(valor * 100);
+}
+
+/** Schema da OC validado no servidor (criar e editar). */
+export const ordemCompraSchema = z
+  .object({
+    fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
+    condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
+    cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
+    formaPagamentoId: z
+      .uuid({ error: "Forma de pagamento inválida" })
+      .optional(),
+    dataEmissao: dataSchema("Data de emissão inválida"),
+    observacoes: textoOpcional(2000),
+    itens: z
+      .array(ocItemSchema)
+      .min(1, { error: "Adicione ao menos um item à ordem de compra" }),
+    /** Opcional: OC sem parcelas gera lançamento sem parcela definida. */
+    parcelas: z.array(ocParcelaSchema).default([]),
+  })
+  .superRefine((ordem, ctx) => {
+    if (ordem.parcelas.length === 0) return;
+
+    const total = ordem.itens.reduce(
+      (soma, item) => soma + emCentavos(item.quantidade * item.precoUnitario),
+      0,
+    );
+    const somaParcelas = ordem.parcelas.reduce(
+      (soma, parcela) => soma + emCentavos(parcela.valor),
+      0,
+    );
+
+    if (somaParcelas !== total) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A soma das parcelas precisa fechar com o total da ordem",
+        path: ["parcelas"],
+      });
+    }
+
+    ordem.parcelas.forEach((parcela, i) => {
+      if (parcela.dataVencimento < ordem.dataEmissao) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A parcela não pode vencer antes da emissão da ordem",
+          path: ["parcelas", i, "dataVencimento"],
+        });
+      }
+    });
+  });
 
 export type OrdemCompraInput = z.infer<typeof ordemCompraSchema>;
 
@@ -178,37 +247,119 @@ export type OcGrupoCentroCustoFormInput = z.infer<
  * custo; cada centro aparece uma única vez. No submit os grupos são achatados
  * na lista plana de itens que a action espera (ver ordemCompraSchema).
  */
-export const ordemCompraFormSchema = z.object({
-  fornecedorId: z.uuid({ error: "Selecione o fornecedor" }),
-  condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
-  cotacaoId: z.uuid().optional(),
-  formaPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
-  dataEmissao: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data de emissão" }),
-  observacoes: z
-    .string()
-    .trim()
-    .max(2000, { error: "Máximo de 2000 caracteres" }),
-  centrosCusto: z
-    .array(ocGrupoCentroCustoFormSchema)
-    .min(1, { error: "Adicione ao menos um centro de custo" })
-    .superRefine((grupos, ctx) => {
-      const vistos = new Set<string>();
-      grupos.forEach((grupo, i) => {
-        if (!grupo.centroCustoId) return;
-        if (vistos.has(grupo.centroCustoId)) {
-          ctx.addIssue({
-            code: "custom",
-            message: "Centro de custo repetido",
-            path: [i, "centroCustoId"],
-          });
-        }
-        vistos.add(grupo.centroCustoId);
+export const ordemCompraFormSchema = z
+  .object({
+    fornecedorId: z.uuid({ error: "Selecione o fornecedor" }),
+    condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
+    cotacaoId: z.uuid().optional(),
+    formaPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
+    dataEmissao: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data de emissão" }),
+    observacoes: z
+      .string()
+      .trim()
+      .max(2000, { error: "Máximo de 2000 caracteres" }),
+    centrosCusto: z
+      .array(ocGrupoCentroCustoFormSchema)
+      .min(1, { error: "Adicione ao menos um centro de custo" })
+      .superRefine((grupos, ctx) => {
+        const vistos = new Set<string>();
+        grupos.forEach((grupo, i) => {
+          if (!grupo.centroCustoId) return;
+          if (vistos.has(grupo.centroCustoId)) {
+            ctx.addIssue({
+              code: "custom",
+              message: "Centro de custo repetido",
+              path: [i, "centroCustoId"],
+            });
+          }
+          vistos.add(grupo.centroCustoId);
+        });
+      }),
+    /**
+     * Parcelas (client): opcional. Lista vazia significa "definir depois no
+     * lançamento". Com parcelas preenchidas, a soma precisa fechar com o total
+     * dos itens — a checagem está no superRefine do formulário inteiro, porque
+     * ela depende dos itens.
+     */
+    parcelas: z.array(
+      z.object({
+        dataVencimento: z
+          .string()
+          .trim()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe o vencimento" }),
+        valor: z
+          .string()
+          .trim()
+          .refine(
+            (valor) => {
+              const numero = Number(valor.replace(",", "."));
+              return valor !== "" && !Number.isNaN(numero) && numero > 0;
+            },
+            { error: "Informe um valor maior que zero" },
+          )
+          .refine((valor) => casasDecimaisTexto(valor) <= 2, {
+            error: "O valor aceita no máximo 2 casas decimais",
+          }),
+      }),
+    ),
+  })
+  .superRefine((form, ctx) => {
+    if (form.parcelas.length === 0) return;
+
+    // Total dos itens e soma das parcelas em centavos inteiros: comparar
+    // dinheiro somado em float acusaria diferença que não existe.
+    const emCentavosTexto = (texto: string) =>
+      Math.round(paraNumero(texto ?? "") * 100);
+
+    const total = form.centrosCusto.reduce(
+      (soma, grupo) =>
+        soma +
+        grupo.insumos.reduce(
+          (subtotal, insumo) =>
+            subtotal +
+            Math.round(
+              paraNumero(insumo.quantidade ?? "") *
+                paraNumero(insumo.precoUnitario ?? "") *
+                100,
+            ),
+          0,
+        ),
+      0,
+    );
+    const somaParcelas = form.parcelas.reduce(
+      (soma, parcela) => soma + emCentavosTexto(parcela.valor),
+      0,
+    );
+
+    if (somaParcelas !== total) {
+      const diferenca = (total - somaParcelas) / 100;
+      ctx.addIssue({
+        code: "custom",
+        message:
+          diferenca > 0
+            ? `Faltam ${formatarDiferenca(diferenca)} para as parcelas fecharem com o total`
+            : `As parcelas passam ${formatarDiferenca(-diferenca)} do total`,
+        path: ["parcelas"],
       });
-    }),
-});
+    }
+
+    form.parcelas.forEach((parcela, i) => {
+      if (
+        parcela.dataVencimento !== "" &&
+        form.dataEmissao !== "" &&
+        parcela.dataVencimento < form.dataEmissao
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Não pode vencer antes da emissão da ordem",
+          path: ["parcelas", i, "dataVencimento"],
+        });
+      }
+    });
+  });
 
 export type OrdemCompraFormInput = z.infer<typeof ordemCompraFormSchema>;
 
@@ -257,13 +408,16 @@ export const recebimentoFormSchema = z.object({
     .trim()
     .min(1, { error: "Informe o número da nota fiscal" })
     .max(60, { error: "Máximo de 60 caracteres" }),
-  valorNf: z.string().trim().refine(
-    (valor) => {
-      const numero = Number(valor.replace(",", "."));
-      return valor !== "" && !Number.isNaN(numero) && numero > 0;
-    },
-    { error: "Informe um valor de nota fiscal maior que zero" },
-  ),
+  valorNf: z
+    .string()
+    .trim()
+    .refine(
+      (valor) => {
+        const numero = Number(valor.replace(",", "."));
+        return valor !== "" && !Number.isNaN(numero) && numero > 0;
+      },
+      { error: "Informe um valor de nota fiscal maior que zero" },
+    ),
   dataRecebimento: z
     .string()
     .trim()

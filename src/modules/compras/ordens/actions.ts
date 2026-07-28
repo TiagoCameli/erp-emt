@@ -78,6 +78,39 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
  * "criado (total 0)" seguido de "editado"). Ver
  * supabase/migrations/20260722150004_fn_criar_ordem_compra.sql.
  */
+/**
+ * Parcelas no formato que fn_salvar_parcelas_oc espera. A numeração não vai:
+ * quem numera é a função, pela ordem de vencimento.
+ */
+function parcelasParaRegistro(parcelas: OrdemCompraInput["parcelas"]) {
+  return parcelas.map((parcela) => ({
+    data_vencimento: parcela.dataVencimento,
+    valor: parcela.valor,
+  }));
+}
+
+/**
+ * Grava as parcelas da OC numa chamada só (a função troca todas de uma vez e
+ * revalida soma, status e vencimento). Lista vazia limpa: a OC volta a ser
+ * "sem parcelas definidas" e o lançamento nascerá sem parcela.
+ *
+ * Roda DEPOIS do cabeçalho e dos itens, porque a função confere a soma contra
+ * o valor_total, que o trigger recalcula a partir dos itens.
+ */
+async function salvarParcelas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ordemId: string,
+  parcelas: OrdemCompraInput["parcelas"],
+): Promise<string | null> {
+  const { error } = await supabase.rpc("fn_salvar_parcelas_oc", {
+    p_oc_id: ordemId,
+    p_parcelas: parcelasParaRegistro(parcelas),
+  });
+  return error
+    ? (error.message ?? "Não foi possível salvar as parcelas")
+    : null;
+}
+
 export async function criarOrdem(
   dados: OrdemCompraInput,
 ): Promise<ResultadoCriacao> {
@@ -102,6 +135,20 @@ export async function criarOrdem(
       error,
       "Não foi possível salvar a ordem de compra. Tente novamente",
     );
+  }
+
+  const erroParcelas = await salvarParcelas(
+    supabase,
+    id,
+    validado.data.parcelas,
+  );
+  if (erroParcelas) {
+    // A OC existe (o RPC de criação é atômico); só as parcelas não entraram.
+    // Melhor dizer isso do que fingir que nada foi salvo.
+    revalidatePath(ROTA);
+    return {
+      erro: `A ordem foi criada, mas as parcelas não: ${erroParcelas}. Abra a ordem e ajuste as parcelas.`,
+    };
   }
 
   revalidatePath(ROTA);
@@ -202,8 +249,68 @@ export async function editarOrdem(
     );
   }
 
+  const erroParcelas = await salvarParcelas(
+    supabase,
+    idValido.data,
+    validado.data.parcelas,
+  );
+  if (erroParcelas) {
+    revalidatePath(ROTA);
+    return { erro: `As parcelas não foram salvas: ${erroParcelas}` };
+  }
+
   revalidatePath(ROTA);
   return { ok: true };
+}
+
+/**
+ * Sugestão de parcelas a partir da condição de pagamento da OC, para o botão
+ * "Gerar pela condição". A divisão é feita pela função do banco
+ * (fn_parcelas_da_condicao), que é a única implementação dessa matemática no
+ * sistema: percentual por parcela, vencimento = data base + dias e a sobra de
+ * centavos na última parcela.
+ */
+export async function sugerirParcelasPelaCondicao(
+  condicaoPagamentoId: string,
+  total: number,
+  dataBase: string,
+): Promise<
+  { parcelas: { dataVencimento: string; valor: number }[] } | { erro: string }
+> {
+  if (!(await checarPermissao("ver"))) {
+    return { erro: "Sem permissão para ver ordens de compra" };
+  }
+
+  const condicaoValida = uuidSchema.safeParse(condicaoPagamentoId);
+  if (!condicaoValida.success) {
+    return {
+      erro: "Escolha a condição de pagamento antes de gerar as parcelas",
+    };
+  }
+  if (!Number.isFinite(total) || total <= 0) {
+    return { erro: "Adicione itens à ordem antes de gerar as parcelas" };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataBase)) {
+    return { erro: "Informe a data de emissão antes de gerar as parcelas" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_parcelas_da_condicao", {
+    p_condicao_id: condicaoValida.data,
+    p_valor: total,
+    p_data_base: dataBase,
+  });
+
+  if (error) {
+    return { erro: error.message ?? "Não foi possível gerar as parcelas" };
+  }
+
+  return {
+    parcelas: (data ?? []).map((parcela) => ({
+      dataVencimento: parcela.data_vencimento,
+      valor: parcela.valor,
+    })),
+  };
 }
 
 /** Atualiza só o status da OC, com a guarda de transição esperada. */

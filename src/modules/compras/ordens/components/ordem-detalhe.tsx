@@ -14,7 +14,11 @@ import {
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { formatarBRL, formatarData, formatarQuantidade } from "@/lib/formatadores";
+import {
+  formatarBRL,
+  formatarData,
+  formatarQuantidade,
+} from "@/lib/formatadores";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
 import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
@@ -66,7 +70,13 @@ function infoLancamento(status: string): { rotulo: string; classes: string } {
 }
 
 /** Linha rotulada para os dados do cabeçalho. */
-function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+function Dado({
+  rotulo,
+  children,
+}: {
+  rotulo: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-legenda text-muted-foreground">{rotulo}</span>
@@ -74,7 +84,6 @@ function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode 
     </div>
   );
 }
-
 
 export interface OrdemDetalheViewProps {
   ordem: OrdemDetalhe;
@@ -214,7 +223,9 @@ export function OrdemDetalheView({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-titulo font-semibold">
-                <span className="codigo-doc">{ordem.numero ?? "Sem número"}</span>
+                <span className="codigo-doc">
+                  {ordem.numero ?? "Sem número"}
+                </span>
               </h1>
               <StatusBadge status={info.badge} rotulo={info.rotulo} />
             </div>
@@ -368,12 +379,17 @@ export function OrdemDetalheView({
                     </th>
                     <th className="px-3 py-2 text-right font-medium">Qtd.</th>
                     <th className="px-3 py-2 text-right font-medium">Preço</th>
-                    <th className="px-3 py-2 text-right font-medium">Subtotal</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      Subtotal
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {ordem.itens.map((item) => (
-                    <tr key={item.id} className="border-b border-border last:border-0">
+                    <tr
+                      key={item.id}
+                      className="border-b border-border last:border-0"
+                    >
                       <td className="px-3 py-2">
                         {item.insumoNome}
                         {item.unidade ? (
@@ -408,6 +424,64 @@ export function OrdemDetalheView({
                 </tfoot>
               </table>
             </div>
+          </SecaoDetalhe>
+
+          <SecaoDetalhe card titulo="Parcelas">
+            {ordem.parcelas.length === 0 ? (
+              <p className="text-detalhe text-muted-foreground">
+                Esta ordem não tem parcelas definidas. O lançamento financeiro
+                nasce sem parcelas e elas são definidas em Financeiro.
+              </p>
+            ) : (
+              <div className="overflow-hidden rounded-md border border-border bg-card">
+                <table className="w-full text-detalhe">
+                  <thead>
+                    <tr className="border-b border-border text-legenda text-muted-foreground">
+                      <th className="px-3 py-2 text-left font-medium">Nº</th>
+                      <th className="px-3 py-2 text-left font-medium">
+                        Vencimento
+                      </th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Valor
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordem.parcelas.map((parcela) => (
+                      <tr
+                        key={parcela.numeroParcela}
+                        className="border-b border-border last:border-b-0"
+                      >
+                        <td className="px-3 py-2 tabular-nums">
+                          {parcela.numeroParcela}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums">
+                          {formatarData(parcela.dataVencimento)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatarBRL(parcela.valor)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-surface font-semibold">
+                      <td className="px-3 py-2" colSpan={2}>
+                        Soma das parcelas
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {formatarBRL(
+                          ordem.parcelas.reduce(
+                            (soma, parcela) => soma + parcela.valor,
+                            0,
+                          ),
+                        )}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </SecaoDetalhe>
 
           <SecaoDetalhe card titulo="Anexos">

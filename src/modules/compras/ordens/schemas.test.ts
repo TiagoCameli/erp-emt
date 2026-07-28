@@ -176,6 +176,9 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     dataEmissao: "2026-06-18",
     observacoes: "",
     centrosCusto: [grupoValido],
+    // Parcelas são opcionais no produto (lista vazia = definir no lançamento),
+    // mas o campo é sempre enviado pelo formulário.
+    parcelas: [],
   };
 
   it("aceita OC com um centro de custo e um insumo", () => {
@@ -258,5 +261,150 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
       const paths = r.error.issues.map((issue) => issue.path.join("."));
       expect(paths).toContain("centrosCusto.0.insumos.1.insumoId");
     }
+  });
+});
+
+describe("parcelas da OC no formulário", () => {
+  const base = {
+    fornecedorId: FORNECEDOR,
+    condicaoPagamentoId: CONDICAO,
+    dataEmissao: "2026-06-18",
+    observacoes: "",
+    // 10 x 100,00 = 1.000,00 de total
+    centrosCusto: [
+      {
+        centroCustoId: CENTRO,
+        insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100" }],
+      },
+    ],
+  };
+
+  it("lista vazia é válida: parcelas são opcionais", () => {
+    expect(ordemCompraFormSchema.safeParse({ ...base, parcelas: [] }).success).toBe(
+      true,
+    );
+  });
+
+  it("aceita parcelas que fecham com o total", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...base,
+      parcelas: [
+        { dataVencimento: "2026-07-18", valor: "333,33" },
+        { dataVencimento: "2026-08-18", valor: "333,33" },
+        { dataVencimento: "2026-09-18", valor: "333,34" },
+      ],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("recusa soma divergente e diz quanto falta", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...base,
+      parcelas: [
+        { dataVencimento: "2026-07-18", valor: "500,00" },
+        { dataVencimento: "2026-08-18", valor: "488,00" },
+      ],
+    });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues.some((i) => i.message.includes("Faltam R$ 12,00"))).toBe(
+      true,
+    );
+  });
+
+  it("recusa soma que passa do total", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...base,
+      parcelas: [{ dataVencimento: "2026-07-18", valor: "1012,00" }],
+    });
+    expect(r.success).toBe(false);
+    expect(
+      r.error?.issues.some((i) => i.message.includes("passam R$ 12,00")),
+    ).toBe(true);
+  });
+
+  it("recusa vencimento antes da emissão, apontando a parcela", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...base,
+      parcelas: [
+        { dataVencimento: "2026-06-01", valor: "500,00" },
+        { dataVencimento: "2026-07-18", valor: "500,00" },
+      ],
+    });
+    expect(r.success).toBe(false);
+    expect(
+      r.error?.issues.some(
+        (i) =>
+          i.path.join(".") === "parcelas.0.dataVencimento" &&
+          i.message.includes("antes da emissão"),
+      ),
+    ).toBe(true);
+  });
+
+  it("vencimento no dia da emissão é aceito", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...base,
+      parcelas: [{ dataVencimento: "2026-06-18", valor: "1000,00" }],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("recusa parcela com valor zero", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...base,
+      parcelas: [
+        { dataVencimento: "2026-07-18", valor: "0" },
+        { dataVencimento: "2026-08-18", valor: "1000,00" },
+      ],
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("parcelas da OC no servidor", () => {
+  const baseServidor = {
+    fornecedorId: FORNECEDOR,
+    condicaoPagamentoId: CONDICAO,
+    dataEmissao: "2026-06-18",
+    itens: [
+      {
+        insumoId: INSUMO,
+        quantidade: 10,
+        precoUnitario: 100,
+        centroCustoId: CENTRO,
+      },
+    ],
+  };
+
+  it("sem parcelas passa e vira lista vazia", () => {
+    const r = ordemCompraSchema.safeParse(baseServidor);
+    expect(r.success).toBe(true);
+    expect(r.data?.parcelas).toEqual([]);
+  });
+
+  it("recusa soma divergente", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...baseServidor,
+      parcelas: [{ dataVencimento: "2026-07-18", valor: 999 }],
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("aceita soma exata", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...baseServidor,
+      parcelas: [
+        { dataVencimento: "2026-07-18", valor: 400 },
+        { dataVencimento: "2026-08-18", valor: 600 },
+      ],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("recusa vencimento antes da emissão", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...baseServidor,
+      parcelas: [{ dataVencimento: "2026-01-01", valor: 1000 }],
+    });
+    expect(r.success).toBe(false);
   });
 });
