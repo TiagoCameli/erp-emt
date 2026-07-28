@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Lock, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Lock, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -20,6 +20,7 @@ import {
   STATUS_LANCAMENTO,
   STATUS_PARCELA,
 } from "@/modules/financeiro/_shared/formato";
+import { DefinirParcelasDialog } from "./definir-parcelas-dialog";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
@@ -31,14 +32,20 @@ import type {
 /** Card de seção do detalhe (mesmo tratamento visual do detalhe da OC). */
 function Secao({
   titulo,
+  acao,
   children,
 }: {
   titulo: string;
+  /** Ação alinhada à direita do título (ex: definir parcelas). */
+  acao?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-md border border-border bg-surface p-4">
-      <h2 className="mb-3 text-secao font-semibold">{titulo}</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-secao font-semibold">{titulo}</h2>
+        {acao}
+      </div>
       {children}
     </section>
   );
@@ -86,6 +93,7 @@ export function LancamentoDetalheView({
 }: LancamentoDetalheViewProps) {
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
+  const [parcelasAberto, setParcelasAberto] = React.useState(false);
   const [confirmarExcluir, setConfirmarExcluir] = React.useState(false);
 
   async function handleExcluir() {
@@ -102,6 +110,15 @@ export function LancamentoDetalheView({
   const temParcelaPaga = lancamento.parcelas.some(
     (parcela) => parcela.status === "pago",
   );
+  // Sem parcela definida o lançamento não entra na fila de aprovação nem pode
+  // ser pago: é um estado a resolver, não um detalhe.
+  const semParcelas = lancamento.parcelas.length === 0;
+  const temParcelaFechada = lancamento.parcelas.some(
+    (parcela) => parcela.status === "aprovado" || parcela.status === "pago",
+  );
+  // Lançamento de origem tem o cabeçalho travado, mas as parcelas dele podem
+  // ser definidas aqui enquanto nenhuma foi aprovada ou paga.
+  const podeDefinirParcelas = podeEditar && !ehManual && !temParcelaFechada;
   const editavel = podeEditar && ehManual && !temParcelaPaga;
   const infoStatus = STATUS_LANCAMENTO[lancamento.status];
 
@@ -148,6 +165,9 @@ export function LancamentoDetalheView({
                 }
                 rotulo={ROTULO_TIPO_LANCAMENTO[lancamento.tipo]}
               />
+              {semParcelas ? (
+                <StatusBadge status="rejeitado" rotulo="Parcelas pendentes" />
+              ) : null}
             </div>
             <p className="text-detalhe text-muted-foreground">
               {lancamento.descricao}
@@ -192,7 +212,9 @@ export function LancamentoDetalheView({
               <Dado rotulo="Tipo">
                 {ROTULO_TIPO_LANCAMENTO[lancamento.tipo]}
               </Dado>
-              <Dado rotulo="Fornecedor">{lancamento.fornecedorNome ?? "-"}</Dado>
+              <Dado rotulo="Fornecedor">
+                {lancamento.fornecedorNome ?? "-"}
+              </Dado>
               <Dado rotulo="Categoria">{lancamento.categoriaNome ?? "-"}</Dado>
               <Dado rotulo="Competência">
                 {lancamento.competencia
@@ -213,70 +235,102 @@ export function LancamentoDetalheView({
             </div>
           </Secao>
 
-          <Secao titulo="Parcelas">
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-medium">#</th>
-                    <th className="px-3 py-2 text-left font-medium">
-                      Vencimento
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium">Conta</th>
-                    <th className="px-3 py-2 text-left font-medium">Pagamento</th>
-                    <th className="px-3 py-2 text-left font-medium">Status</th>
-                    <th className="px-3 py-2 text-right font-medium">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lancamento.parcelas.map((parcela) => {
-                    const infoParcela = STATUS_PARCELA[parcela.status];
-                    return (
-                      <tr
-                        key={parcela.id}
-                        className="border-b border-border last:border-0"
-                      >
-                        <td className="px-3 py-2 tabular-nums">
-                          {parcela.numeroParcela}
-                        </td>
-                        <td className="px-3 py-2 tabular-nums">
-                          {parcela.dataVencimento
-                            ? formatarData(parcela.dataVencimento)
-                            : "-"}
-                        </td>
-                        <td className="px-3 py-2">
-                          {parcela.contaBancariaNome ?? "-"}
-                        </td>
-                        <td className="px-3 py-2 tabular-nums">
-                          {parcela.dataPagamento
-                            ? formatarData(parcela.dataPagamento)
-                            : "-"}
-                        </td>
-                        <td className="px-3 py-2">
-                          <StatusBadge
-                            status={infoParcela.badge}
-                            rotulo={infoParcela.rotulo}
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {formatarBRL(parcela.valor)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="font-semibold">
-                    <td className="px-3 py-2" colSpan={5}>
-                      Total
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {formatarBRL(lancamento.valor)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+          <Secao
+            titulo="Parcelas"
+            acao={
+              podeDefinirParcelas ? (
+                <Button
+                  type="button"
+                  variant={semParcelas ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setParcelasAberto(true)}
+                >
+                  <CalendarClock />
+                  {semParcelas ? "Definir parcelas" : "Editar parcelas"}
+                </Button>
+              ) : undefined
+            }
+          >
+            {semParcelas ? (
+              <p className="rounded-md border border-dashed border-border bg-surface/50 px-3 py-3 text-detalhe text-muted-foreground">
+                Este lançamento não tem parcelas definidas. Enquanto estiver
+                assim, ele não entra na fila de aprovação de pagamentos e não
+                pode ser pago.
+                {podeDefinirParcelas
+                  ? " Use \u201cDefinir parcelas\u201d para resolver."
+                  : ""}
+              </p>
+            ) : (
+              <div className="overflow-x-auto rounded-md border border-border">
+                <table className="w-full text-detalhe">
+                  <thead>
+                    <tr className="border-b border-border text-legenda text-muted-foreground">
+                      <th className="px-3 py-2 text-left font-medium">#</th>
+                      <th className="px-3 py-2 text-left font-medium">
+                        Vencimento
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium">Conta</th>
+                      <th className="px-3 py-2 text-left font-medium">
+                        Pagamento
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium">
+                        Status
+                      </th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Valor
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lancamento.parcelas.map((parcela) => {
+                      const infoParcela = STATUS_PARCELA[parcela.status];
+                      return (
+                        <tr
+                          key={parcela.id}
+                          className="border-b border-border last:border-0"
+                        >
+                          <td className="px-3 py-2 tabular-nums">
+                            {parcela.numeroParcela}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {parcela.dataVencimento
+                              ? formatarData(parcela.dataVencimento)
+                              : "-"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {parcela.contaBancariaNome ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums">
+                            {parcela.dataPagamento
+                              ? formatarData(parcela.dataPagamento)
+                              : "-"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <StatusBadge
+                              status={infoParcela.badge}
+                              rotulo={infoParcela.rotulo}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {formatarBRL(parcela.valor)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-semibold">
+                      <td className="px-3 py-2" colSpan={5}>
+                        Total
+                      </td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {formatarBRL(lancamento.valor)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </Secao>
 
           <Secao titulo="Rateio por centro de custo">
@@ -288,7 +342,9 @@ export function LancamentoDetalheView({
                       <th className="px-3 py-2 text-left font-medium">
                         Centro de custo
                       </th>
-                      <th className="px-3 py-2 text-right font-medium">Valor</th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Valor
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -347,6 +403,23 @@ export function LancamentoDetalheView({
           categorias={categorias}
           fornecedores={fornecedores}
           centrosCusto={centrosCusto}
+        />
+      ) : null}
+
+      {podeDefinirParcelas ? (
+        <DefinirParcelasDialog
+          aberto={parcelasAberto}
+          onAbertoChange={(aberto) => {
+            setParcelasAberto(aberto);
+            if (!aberto) router.refresh();
+          }}
+          lancamentoId={lancamento.id}
+          valor={lancamento.valor}
+          parcelasAtuais={lancamento.parcelas.map((parcela) => ({
+            dataVencimento: parcela.dataVencimento,
+            valor: parcela.valor,
+          }))}
+          condicaoDescricao={lancamento.condicaoPagamentoDescricao}
         />
       ) : null}
 

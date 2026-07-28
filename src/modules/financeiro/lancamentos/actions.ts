@@ -163,3 +163,124 @@ export async function excluirLancamento(
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Definir parcelas de um lançamento que nasceu sem elas
+// ---------------------------------------------------------------------------
+// É o outro lado das parcelas manuais da OC: quando a ordem não define
+// parcelas, o lançamento nasce sem nenhuma e alguém precisa definir aqui.
+// fn_salvar_lancamento recusa lançamento de origem <> 'manual' de propósito (o
+// cabeçalho pertence à origem), então isso passa por uma função dedicada que só
+// mexe nas parcelas.
+
+/** Parcela definida na tela do lançamento. */
+const parcelaDefinidaSchema = z.object({
+  dataVencimento: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe o vencimento da parcela" }),
+  valor: z
+    .number({ error: "Valor da parcela inválido" })
+    .positive({ error: "O valor da parcela precisa ser maior que zero" }),
+});
+
+export type ParcelaDefinidaInput = z.infer<typeof parcelaDefinidaSchema>;
+
+/**
+ * Troca as parcelas de um lançamento. A função do banco valida o resto: soma
+ * igual ao valor do lançamento e nenhuma parcela já aprovada ou paga.
+ */
+export async function definirParcelasLancamento(
+  lancamentoId: string,
+  parcelas: ParcelaDefinidaInput[],
+): Promise<ResultadoExclusao> {
+  await exigirPermissao(RECURSO, "editar");
+
+  const idValido = uuidSchema.safeParse(lancamentoId);
+  if (!idValido.success) return { erro: "Lançamento inválido" };
+
+  const validado = z.array(parcelaDefinidaSchema).min(1).safeParse(parcelas);
+  if (!validado.success) {
+    return {
+      erro: validado.error.issues[0]?.message ?? "Informe ao menos uma parcela",
+    };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_definir_parcelas_lancamento", {
+    p_lanc_id: idValido.data,
+    p_parcelas: validado.data.map((parcela) => ({
+      data_vencimento: parcela.dataVencimento,
+      valor: parcela.valor,
+    })),
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.lancamentos.definirParcelas",
+      error,
+      error.message ?? "Não foi possível salvar as parcelas",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(`${ROTA}/${idValido.data}`);
+  return { ok: true };
+}
+
+/**
+ * Sugestão de parcelas para um lançamento de OC, pela condição de pagamento da
+ * ordem de origem (o lançamento não tem condição própria). A divisão é a função
+ * do banco, a mesma da OC. Data base: a emissão do lançamento.
+ */
+export async function sugerirParcelasDoLancamento(
+  lancamentoId: string,
+): Promise<
+  { parcelas: { dataVencimento: string; valor: number }[] } | { erro: string }
+> {
+  await exigirPermissao(RECURSO, "ver");
+
+  const idValido = uuidSchema.safeParse(lancamentoId);
+  if (!idValido.success) return { erro: "Lançamento inválido" };
+
+  const supabase = await createClient();
+  const { data: lancamento } = await supabase
+    .from("lancamentos")
+    .select("valor, data_emissao, origem, origem_id")
+    .eq("id", idValido.data)
+    .maybeSingle();
+
+  if (!lancamento) return { erro: "Lançamento não encontrado" };
+  if (lancamento.origem !== "oc" || !lancamento.origem_id) {
+    return {
+      erro: "Só dá para gerar pela condição em lançamento vindo de ordem de compra",
+    };
+  }
+
+  const { data: ordem } = await supabase
+    .from("ordens_compra")
+    .select("condicao_pagamento_id")
+    .eq("id", lancamento.origem_id)
+    .maybeSingle();
+
+  if (!ordem?.condicao_pagamento_id) {
+    return { erro: "A ordem de origem não tem condição de pagamento definida" };
+  }
+
+  const { data, error } = await supabase.rpc("fn_parcelas_da_condicao", {
+    p_condicao_id: ordem.condicao_pagamento_id,
+    p_valor: lancamento.valor,
+    p_data_base: lancamento.data_emissao,
+  });
+
+  if (error) {
+    return { erro: error.message ?? "Não foi possível gerar as parcelas" };
+  }
+
+  return {
+    parcelas: (data ?? []).map((parcela) => ({
+      dataVencimento: parcela.data_vencimento,
+      valor: parcela.valor,
+    })),
+  };
+}
