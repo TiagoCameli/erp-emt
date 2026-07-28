@@ -70,6 +70,7 @@ export interface OrdemDetalhe {
   fornecedorNome: string;
   condicaoPagamentoId: string | null;
   condicaoPagamentoDescricao: string | null;
+  formaPagamentoId: string | null;
   cotacaoId: string | null;
   cotacaoNumero: string | null;
   valorTotal: number;
@@ -111,6 +112,12 @@ export interface CotacaoOpcao {
 export interface CondicaoPagamentoOpcao {
   id: string;
   descricao: string;
+}
+
+/** Opção de forma de pagamento (método) ativa para o select da OC. */
+export interface FormaPagamentoOpcao {
+  id: string;
+  nome: string;
 }
 
 /** Parcela de uma condição de pagamento, para a prévia do recebimento. */
@@ -195,7 +202,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
   const { data: ordem, error } = await supabase
     .from("ordens_compra")
     .select(
-      `id, numero, fornecedor_id, condicao_pagamento_id, cotacao_id,
+      `id, numero, fornecedor_id, condicao_pagamento_id, forma_pagamento_id, cotacao_id,
        valor_total, status, motivo_rejeicao, data_emissao, observacoes,
        fornecedores(razao_social, nome_fantasia),
        cotacoes(numero),
@@ -241,6 +248,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
       : "-",
     condicaoPagamentoId: ordem.condicao_pagamento_id,
     condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
+    formaPagamentoId: ordem.forma_pagamento_id,
     cotacaoId: ordem.cotacao_id,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
     valorTotal: ordem.valor_total,

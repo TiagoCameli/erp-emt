@@ -41,6 +41,9 @@ export const fornecedorCotacaoSchema = z.object({
   condicaoPagamentoId: z
     .uuid({ error: "Condição de pagamento inválida" })
     .optional(),
+  formaPagamentoId: z
+    .uuid({ error: "Forma de pagamento inválida" })
+    .optional(),
   prazoEntregaDias: z
     .number({ error: "Prazo inválido" })
     .int({ error: "Prazo em dias inteiros" })
@@ -57,6 +60,9 @@ export const fornecedorCotacaoFormSchema = z.object({
   fornecedorId: z.uuid({ error: "Selecione um fornecedor" }),
   condicaoPagamentoId: z
     .uuid({ error: "Condição de pagamento inválida" })
+    .optional(),
+  formaPagamentoId: z
+    .uuid({ error: "Forma de pagamento inválida" })
     .optional(),
   prazoEntregaDias: z
     .string()

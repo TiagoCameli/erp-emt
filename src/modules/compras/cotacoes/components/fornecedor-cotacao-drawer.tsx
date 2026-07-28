@@ -16,6 +16,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { OpcaoPagamento } from "@/modules/compras/_shared/pagamento";
+import {
+  criarCondicaoPagamento,
+  criarFormaPagamento,
+} from "@/modules/compras/_shared/pagamento-actions";
 import { adicionarFornecedor } from "@/modules/compras/cotacoes/actions";
 import {
   fornecedorCotacaoFormSchema,
@@ -37,6 +42,7 @@ export interface FornecedorCotacaoDrawerProps {
   /** Ids de fornecedor já na cotação, para não oferecer de novo. */
   fornecedoresUsados: string[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
+  formasPagamento: OpcaoPagamento[];
 }
 
 /**
@@ -56,12 +62,14 @@ export function FornecedorCotacaoDrawer({
   fornecedores,
   fornecedoresUsados,
   condicoesPagamento,
+  formasPagamento,
 }: FornecedorCotacaoDrawerProps) {
   const form = useForm<FornecedorCotacaoFormInput>({
     resolver: zodResolver(fornecedorCotacaoFormSchema),
     defaultValues: {
       fornecedorId: "",
       condicaoPagamentoId: undefined,
+      formaPagamentoId: undefined,
       prazoEntregaDias: "",
       observacao: "",
     },
@@ -72,6 +80,7 @@ export function FornecedorCotacaoDrawer({
       form.reset({
         fornecedorId: "",
         condicaoPagamentoId: undefined,
+        formaPagamentoId: undefined,
         prazoEntregaDias: "",
         observacao: "",
       });
@@ -94,6 +103,7 @@ export function FornecedorCotacaoDrawer({
     const resultado = await adicionarFornecedor(cotacaoId, {
       fornecedorId: valores.fornecedorId,
       condicaoPagamentoId: valores.condicaoPagamentoId,
+      formaPagamentoId: valores.formaPagamentoId,
       prazoEntregaDias: prazo,
       observacao: valores.observacao,
     });
@@ -109,6 +119,7 @@ export function FornecedorCotacaoDrawer({
   const fornecedorValor = form.watch("fornecedorId");
   const condicaoPagamentoValor =
     form.watch("condicaoPagamentoId") ?? SEM_CONDICAO;
+  const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
 
   return (
     <FormDrawer
@@ -176,7 +187,7 @@ export function FornecedorCotacaoDrawer({
           />
         </CampoFormulario>
 
-        <LinhaCampos>
+        <LinhaCampos colunas={3}>
           <CampoFormulario
             id="fornecedor-condicao"
             rotulo="Condição de pagamento"
@@ -197,9 +208,51 @@ export function FornecedorCotacaoDrawer({
                   rotulo: condicao.descricao,
                 })),
               ]}
+              onCriar={async (texto) => {
+                const r = await criarCondicaoPagamento(texto);
+                if ("erro" in r) {
+                  toast.error(r.erro);
+                  return null;
+                }
+                toast.success("Condição criada");
+                return r.id;
+              }}
               placeholder="Selecione a condição de pagamento"
               disabled={salvando}
               id="fornecedor-condicao"
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="fornecedor-forma"
+            rotulo="Forma de pagamento"
+            erro={form.formState.errors.formaPagamentoId?.message}
+          >
+            <Combobox
+              valor={formaPagamentoValor}
+              onValorChange={(valor) =>
+                form.setValue(
+                  "formaPagamentoId",
+                  valor === "" ? undefined : valor,
+                )
+              }
+              opcoes={formasPagamento.map((forma) => ({
+                valor: forma.id,
+                rotulo: forma.nome,
+              }))}
+              onCriar={async (texto) => {
+                const r = await criarFormaPagamento(texto);
+                if ("erro" in r) {
+                  toast.error(r.erro);
+                  return null;
+                }
+                toast.success("Forma de pagamento criada");
+                return r.id;
+              }}
+              limpavel
+              placeholder="Selecione a forma de pagamento"
+              disabled={salvando}
+              id="fornecedor-forma"
             />
           </CampoFormulario>
 

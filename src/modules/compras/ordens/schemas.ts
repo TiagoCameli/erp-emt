@@ -79,6 +79,7 @@ export const ordemCompraSchema = z.object({
   fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
   condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
   cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
+  formaPagamentoId: z.uuid({ error: "Forma de pagamento inválida" }).optional(),
   dataEmissao: z
     .string()
     .trim()
@@ -181,6 +182,7 @@ export const ordemCompraFormSchema = z.object({
   fornecedorId: z.uuid({ error: "Selecione o fornecedor" }),
   condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
   cotacaoId: z.uuid().optional(),
+  formaPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
   dataEmissao: z
     .string()
     .trim()

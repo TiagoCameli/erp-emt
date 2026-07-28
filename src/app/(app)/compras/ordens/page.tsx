@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ROTULO_STATUS_OC, type StatusOC } from "@/modules/compras/_shared/formato";
+import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import {
   lerParametrosLista,
   parametroValido,
@@ -43,6 +44,7 @@ export default async function PaginaOrdens({
     centrosCusto,
     cotacoes,
     condicoesPagamento,
+    formasPagamento,
   ] = await Promise.all([
     listarOrdens({ pagina, tamanho, status, busca }),
     listarFornecedores(),
@@ -50,6 +52,7 @@ export default async function PaginaOrdens({
     listarCentrosCusto(),
     listarCotacoesFinalizadas(),
     listarCondicoesPagamento(),
+    listarFormasPagamento(),
   ]);
 
   return (
@@ -65,6 +68,7 @@ export default async function PaginaOrdens({
             centrosCusto={centrosCusto}
             cotacoes={cotacoes}
             condicoesPagamento={condicoesPagamento}
+            formasPagamento={formasPagamento}
           />
         }
       />

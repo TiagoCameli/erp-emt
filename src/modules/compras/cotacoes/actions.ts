@@ -181,6 +181,7 @@ export async function adicionarFornecedor(
     cotacao_id: idValido.data,
     fornecedor_id: validado.data.fornecedorId,
     condicao_pagamento_id: validado.data.condicaoPagamentoId ?? null,
+    forma_pagamento_id: validado.data.formaPagamentoId ?? null,
     prazo_entrega_dias: validado.data.prazoEntregaDias ?? null,
     observacao: validado.data.observacao ?? null,
   });

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexos } from "@/modules/compras/_shared/anexos-actions";
+import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import { OrdemDetalheView } from "@/modules/compras/ordens/components/ordem-detalhe";
 import {
   buscarOrdem,
@@ -35,6 +36,7 @@ export default async function PaginaOrdemDetalhe({
     centrosCusto,
     cotacoes,
     condicoesPagamento,
+    formasPagamento,
     parcelasCondicao,
     anexosIniciais,
   ] = await Promise.all([
@@ -44,6 +46,7 @@ export default async function PaginaOrdemDetalhe({
     listarCentrosCusto(),
     listarCotacoesFinalizadas(),
     listarCondicoesPagamento(),
+    listarFormasPagamento(),
     ordem.condicaoPagamentoId
       ? listarParcelasCondicao(ordem.condicaoPagamentoId)
       : Promise.resolve([]),
@@ -65,6 +68,7 @@ export default async function PaginaOrdemDetalhe({
       centrosCusto={centrosCusto}
       cotacoes={cotacoes}
       condicoesPagamento={condicoesPagamento}
+      formasPagamento={formasPagamento}
       parcelasCondicao={parcelasCondicao}
       anexosIniciais={anexosIniciais}
       podeEditar={podeEditar}

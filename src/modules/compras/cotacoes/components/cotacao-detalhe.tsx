@@ -17,6 +17,7 @@ import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
 import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { OpcaoPagamento } from "@/modules/compras/_shared/pagamento";
 import { infoStatusCotacao } from "@/modules/compras/_shared/formato";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
@@ -40,6 +41,7 @@ export interface CotacaoDetalheProps {
   insumos: InsumoOpcao[];
   trilha: EventoTrilha[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
+  formasPagamento: OpcaoPagamento[];
   anexosIniciais: AnexoResumo[];
   podeEditar: boolean;
   podeExcluir: boolean;
@@ -56,6 +58,7 @@ export function CotacaoDetalhe({
   insumos,
   trilha,
   condicoesPagamento,
+  formasPagamento,
   anexosIniciais,
   podeEditar,
   podeExcluir,
@@ -299,6 +302,7 @@ export function CotacaoDetalhe({
           fornecedores={fornecedores}
           fornecedoresUsados={fornecedoresUsados}
           condicoesPagamento={condicoesPagamento}
+          formasPagamento={formasPagamento}
         />
       ) : null}
 

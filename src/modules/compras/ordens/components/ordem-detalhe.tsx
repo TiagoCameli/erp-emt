@@ -31,6 +31,7 @@ import type {
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   CotacaoOpcao,
+  FormaPagamentoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
@@ -84,6 +85,7 @@ export interface OrdemDetalheViewProps {
   centrosCusto: CentroCustoOpcao[];
   cotacoes: CotacaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
   parcelasCondicao: ParcelaCondicaoOpcao[];
   anexosIniciais: AnexoResumo[];
   podeEditar: boolean;
@@ -106,6 +108,7 @@ export function OrdemDetalheView({
   centrosCusto,
   cotacoes,
   condicoesPagamento,
+  formasPagamento,
   parcelasCondicao,
   anexosIniciais,
   podeEditar,
@@ -440,6 +443,7 @@ export function OrdemDetalheView({
           centrosCusto={centrosCusto}
           cotacoes={cotacoes}
           condicoesPagamento={condicoesPagamento}
+          formasPagamento={formasPagamento}
         />
       ) : null}
 
