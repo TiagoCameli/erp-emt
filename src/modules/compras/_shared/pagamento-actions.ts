@@ -34,6 +34,17 @@ export async function criarCondicaoPagamento(
   const limpo = (nome ?? "").trim();
   if (limpo.length < 2) return { erro: "Informe um nome válido" };
   const supabase = await createClient();
+
+  // Não duplica: se já existe uma condição com esse nome, devolve a existente.
+  const { data: existentes } = await supabase
+    .from("condicoes_pagamento")
+    .select("id")
+    .ilike("descricao", limpo)
+    .limit(1);
+  if (existentes && existentes.length > 0) {
+    return { id: existentes[0].id };
+  }
+
   const { data, error } = await supabase.rpc("salvar_condicao", {
     p_id: null as unknown as string,
     p_descricao: limpo,

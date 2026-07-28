@@ -72,16 +72,23 @@ export function Combobox({
   const [aberto, setAberto] = React.useState(false);
   const [busca, setBusca] = React.useState("");
   const [criando, setCriando] = React.useState(false);
+  // Opções criadas inline nesta sessão (id -> rótulo digitado), para o nome
+  // aparecer na hora sem esperar o `opcoes` do servidor recarregar.
+  const [criadas, setCriadas] = React.useState<ComboboxOpcao[]>([]);
 
   const termo = busca.trim().toLowerCase();
 
-  // Garante que o valor atual apareça na lista mesmo se não estiver em `opcoes`.
+  // opcoes + criadas locais + garante o valor atual na lista (fallback ao id).
   const todasOpcoes = React.useMemo(() => {
-    if (valor && !opcoes.some((o) => o.valor === valor)) {
-      return [{ valor, rotulo: valor }, ...opcoes];
+    const base = [...opcoes];
+    for (const criada of criadas) {
+      if (!base.some((o) => o.valor === criada.valor)) base.push(criada);
     }
-    return opcoes;
-  }, [valor, opcoes]);
+    if (valor && !base.some((o) => o.valor === valor)) {
+      return [{ valor, rotulo: valor }, ...base];
+    }
+    return base;
+  }, [valor, opcoes, criadas]);
 
   const opcoesFiltradas = React.useMemo(
     () => todasOpcoes.filter((o) => o.rotulo.toLowerCase().includes(termo)),
@@ -111,8 +118,16 @@ export function Combobox({
     if (!onCriar || criando) return;
     setCriando(true);
     try {
-      const criado = await onCriar(buscaLimpa);
-      if (criado) selecionar(criado);
+      const rotulo = buscaLimpa;
+      const criado = await onCriar(rotulo);
+      if (criado) {
+        setCriadas((prev) =>
+          prev.some((o) => o.valor === criado)
+            ? prev
+            : [...prev, { valor: criado, rotulo }],
+        );
+        selecionar(criado);
+      }
     } finally {
       setCriando(false);
     }
