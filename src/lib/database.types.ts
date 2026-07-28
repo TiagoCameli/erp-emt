@@ -2598,7 +2598,7 @@ export type Database = {
           ativo: boolean
           created_at: string
           created_by: string | null
-          email: string
+          email: string | null
           excluido_em: string | null
           excluido_por: string | null
           id: string
@@ -2610,7 +2610,7 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           created_by?: string | null
-          email: string
+          email?: string | null
           excluido_em?: string | null
           excluido_por?: string | null
           id: string
@@ -2622,7 +2622,7 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           created_by?: string | null
-          email?: string
+          email?: string | null
           excluido_em?: string | null
           excluido_por?: string | null
           id?: string
@@ -2707,7 +2707,7 @@ export type Database = {
       }
       fn_excluir_usuario: {
         Args: { p_id: string }
-        Returns: undefined
+        Returns: boolean
       }
       fn_fechar_diarias: {
         Args: {

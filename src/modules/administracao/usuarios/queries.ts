@@ -47,7 +47,7 @@ export async function listarUsuarios(): Promise<UsuarioLista[]> {
     return {
       id: usuario.id,
       nome: usuario.nome,
-      email: usuario.email,
+      email: usuario.email ?? "",
       ativo: usuario.ativo,
       perfilId: usuario.perfil_id,
       perfilNome: usuario.perfis?.nome ?? null,
