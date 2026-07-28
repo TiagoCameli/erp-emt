@@ -60,22 +60,28 @@ export function DefinirParcelasDialog({
   parcelasAtuais,
   condicaoDescricao,
 }: DefinirParcelasDialogProps) {
-  const [parcelas, setParcelas] = React.useState<ParcelaForm[]>([]);
+  /** O que já existe no lançamento, ou uma linha em branco para começar. */
+  function parcelasIniciais(): ParcelaForm[] {
+    return parcelasAtuais.length > 0
+      ? parcelasAtuais.map((parcela) => ({
+          dataVencimento: parcela.dataVencimento ?? "",
+          valor: String(parcela.valor).replace(".", ","),
+        }))
+      : [{ dataVencimento: "", valor: "" }];
+  }
+
+  const [parcelas, setParcelas] = React.useState<ParcelaForm[]>(parcelasIniciais);
   const [salvando, setSalvando] = React.useState(false);
   const [gerando, setGerando] = React.useState(false);
 
-  // Ao abrir, carrega o que já existe (ou uma linha em branco para começar).
-  React.useEffect(() => {
-    if (!aberto) return;
-    setParcelas(
-      parcelasAtuais.length > 0
-        ? parcelasAtuais.map((parcela) => ({
-            dataVencimento: parcela.dataVencimento ?? "",
-            valor: String(parcela.valor).replace(".", ","),
-          }))
-        : [{ dataVencimento: "", valor: "" }],
-    );
-  }, [aberto, parcelasAtuais]);
+  // Recarrega ao abrir, ajustando o estado DURANTE a renderização (padrão
+  // recomendado pelo React para "estado derivado de prop que mudou"), em vez de
+  // um efeito com setState, que dispara render em cascata.
+  const [abertoAnterior, setAbertoAnterior] = React.useState(aberto);
+  if (aberto !== abertoAnterior) {
+    setAbertoAnterior(aberto);
+    if (aberto) setParcelas(parcelasIniciais());
+  }
 
   const soma = somarParcelas(parcelas);
   const diferenca = diferencaParaTotal(parcelas, valor);
