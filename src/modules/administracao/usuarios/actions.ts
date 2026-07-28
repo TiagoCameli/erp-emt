@@ -227,9 +227,9 @@ export async function redefinirSenhaUsuario(
 }
 
 /**
- * Exclui um usuário (soft delete): some da lista e perde acesso, mas o
- * registro fica para o nome persistir nas ações/auditoria. Bane na auth
- * para bloquear login. Não é possível excluir a própria conta.
+ * Exclui um usuário. Se ele nunca fez nada no app, apaga de vez (registro +
+ * login). Se já fez ações, guarda só id + nome (tombstone) para o histórico
+ * de auditoria não quebrar, e bane o login. Não dá para excluir a si mesmo.
  */
 export async function excluirUsuario(
   usuarioId: string,
@@ -245,9 +245,10 @@ export async function excluirUsuario(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_excluir_usuario", {
-    p_id: idValido.data,
-  });
+  const { data: apagarDeVez, error } = await supabase.rpc(
+    "fn_excluir_usuario",
+    { p_id: idValido.data },
+  );
   if (error) {
     if (error.message.includes("propria conta")) {
       return { erro: "Você não pode excluir a sua própria conta" };
@@ -259,18 +260,31 @@ export async function excluirUsuario(
     );
   }
 
-  // Bloqueia login do excluído (a auth mantém o registro pro histórico).
   const admin = createAdminClient();
-  const { error: erroBan } = await admin.auth.admin.updateUserById(
-    idValido.data,
-    { ban_duration: "87600h" },
-  );
-  if (erroBan) {
-    return erroAcao(
-      "administracao.usuarios.excluir",
-      erroBan,
-      "Usuário excluído, mas o bloqueio de login falhou. Tente excluir de novo",
+  if (apagarDeVez) {
+    // Nunca fez nada no app: apaga de vez. Remover o auth.user cascateia
+    // public.usuarios, permissões e a senha provisória.
+    const { error: erroDel } = await admin.auth.admin.deleteUser(idValido.data);
+    if (erroDel) {
+      return erroAcao(
+        "administracao.usuarios.excluir",
+        erroDel,
+        "Usuário limpo, mas a conta de login não foi removida. Tente excluir de novo",
+      );
+    }
+  } else {
+    // Fez ações: virou tombstone (só id + nome). Bane o login pra não entrar.
+    const { error: erroBan } = await admin.auth.admin.updateUserById(
+      idValido.data,
+      { ban_duration: "87600h" },
     );
+    if (erroBan) {
+      return erroAcao(
+        "administracao.usuarios.excluir",
+        erroBan,
+        "Usuário excluído, mas o bloqueio de login falhou. Tente excluir de novo",
+      );
+    }
   }
 
   revalidatePath(ROTA);
