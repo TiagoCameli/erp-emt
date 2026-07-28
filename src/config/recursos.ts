@@ -182,7 +182,7 @@ export const RECURSOS = [
     nome: "Pagamentos",
     modulo: "financeiro",
     rota: "/financeiro/pagamentos",
-    acoes: ["ver", "criar"],
+    acoes: ["ver", "criar", "excluir"],
   },
   {
     id: "financeiro.programados",

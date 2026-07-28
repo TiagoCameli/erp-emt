@@ -53,6 +53,7 @@ export default async function PaginaOrdemDetalhe({
   const podeEditar = temPermissao(usuario, "compras.ordens", "editar");
   const podeAprovar = temPermissao(usuario, "compras.ordens", "aprovar");
   const podeDesaprovar = temPermissao(usuario, "compras.ordens", "desaprovar");
+  const podeExcluir = temPermissao(usuario, "compras.ordens", "excluir");
   const podeReceber = podeAprovar;
 
   return (
@@ -69,6 +70,7 @@ export default async function PaginaOrdemDetalhe({
       podeEditar={podeEditar}
       podeAprovar={podeAprovar}
       podeDesaprovar={podeDesaprovar}
+      podeExcluir={podeExcluir}
       podeReceber={podeReceber}
     />
   );

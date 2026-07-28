@@ -427,3 +427,36 @@ export async function cancelarOrdem(
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+/**
+ * Exclui a OC via RPC: a função checa a permissão, barra se houver
+ * recebimento ou se o lançamento previsto tiver parcela paga/conciliada
+ * (levanta exceção com mensagem amigável) e apaga a OC, os itens e o
+ * lançamento previsto na mesma transação. A mensagem de erro do banco já
+ * vem amigável, então é repassada direto ao toast.
+ */
+export async function excluirOrdemCompra(id: string): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("excluir"))) {
+    return { erro: "Sem permissão para excluir ordens de compra" };
+  }
+
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Ordem de compra inválida" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_excluir_ordem_compra", {
+    p_id: idValido.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "compras.ordens.excluirOrdemCompra",
+      error,
+      error.message ||
+        "Não foi possível excluir a ordem de compra. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}

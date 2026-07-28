@@ -17,6 +17,8 @@ const ROTA = "/financeiro/lancamentos";
 
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
 
+export type ResultadoExclusao = { ok: true } | { erro: string };
+
 const uuidSchema = z.uuid();
 
 /** Cabeçalho do lançamento no formato que a RPC espera (p_dados). */
@@ -124,4 +126,40 @@ export async function salvarLancamento(
 
   revalidatePath(ROTA);
   return { ok: true, id: data };
+}
+
+/**
+ * Exclui um lançamento com suas parcelas e rateios via fn_excluir_lancamento.
+ * A RPC checa a permissão, recusa lançamentos de origem 'oc' ou 'diaria'
+ * (que devem ser excluídos pela origem) e lançamentos com parcela paga ou
+ * conciliada, sempre com uma mensagem amigável que repassamos direto ao toast.
+ */
+export async function excluirLancamento(
+  id: string,
+): Promise<ResultadoExclusao> {
+  try {
+    await exigirPermissao(RECURSO, "excluir");
+  } catch {
+    return { erro: "Sem permissão para excluir lançamentos" };
+  }
+
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Lançamento inválido" };
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("fn_excluir_lancamento", {
+    p_id: idValido.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.lancamentos.excluirLancamento",
+      error,
+      error.message || "Não foi possível excluir o lançamento. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
 }

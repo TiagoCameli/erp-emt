@@ -55,3 +55,41 @@ export async function programarPagamento(
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+/**
+ * Cancela o agendamento de uma parcela: tira ela da fila de programados
+ * limpando a data programada (a parcela continua no sistema, volta a ficar
+ * sem data programada). A regra de negócio (barrar parcela já paga) e a
+ * permissão são validadas no banco por `fn_cancelar_programacao`; a checagem
+ * aqui é a segunda camada (Server Action), a RLS/RPC no banco é a barreira
+ * final.
+ */
+export async function cancelarProgramacao(
+  parcelaId: string,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para cancelar agendamentos" };
+  }
+
+  const idValido = uuidSchema.safeParse(parcelaId);
+  if (!idValido.success) return { erro: "Parcela inválida" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_cancelar_programacao", {
+    p_parcela_id: idValido.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.programados.cancelarProgramacao",
+      error,
+      error.message ||
+        "Não foi possível cancelar o agendamento. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}

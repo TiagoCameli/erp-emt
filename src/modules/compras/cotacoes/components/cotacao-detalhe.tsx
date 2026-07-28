@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +21,7 @@ import { infoStatusCotacao } from "@/modules/compras/_shared/formato";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   cancelarCotacao,
+  excluirCotacao,
   removerFornecedor,
 } from "@/modules/compras/cotacoes/actions";
 import type {
@@ -40,6 +42,7 @@ export interface CotacaoDetalheProps {
   condicoesPagamento: CondicaoPagamentoOpcao[];
   anexosIniciais: AnexoResumo[];
   podeEditar: boolean;
+  podeExcluir: boolean;
 }
 
 /**
@@ -55,13 +58,16 @@ export function CotacaoDetalhe({
   condicoesPagamento,
   anexosIniciais,
   podeEditar,
+  podeExcluir,
 }: CotacaoDetalheProps) {
+  const router = useRouter();
   const editavel = podeEditar && cotacao.status === "aberta";
   const info = infoStatusCotacao(cotacao.status);
 
   const [drawerFornecedor, setDrawerFornecedor] = React.useState(false);
   const [finalizarAberto, setFinalizarAberto] = React.useState(false);
   const [cancelarAberto, setCancelarAberto] = React.useState(false);
+  const [excluirAberto, setExcluirAberto] = React.useState(false);
   const [removendo, setRemovendo] = React.useState<{
     id: string;
     nome: string;
@@ -91,6 +97,16 @@ export function CotacaoDetalhe({
     toast.success("Cotação cancelada");
   }
 
+  async function confirmarExclusao() {
+    const resultado = await excluirCotacao(cotacao.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Cotação excluída");
+    router.push("/compras/cotacoes");
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -106,25 +122,40 @@ export function CotacaoDetalhe({
           </p>
         </div>
 
-        {editavel ? (
+        {editavel || podeExcluir ? (
           <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setCancelarAberto(true)}
-            >
-              <XCircle />
-              Cancelar cotação
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setFinalizarAberto(true)}
-            >
-              <CheckCircle2 />
-              Finalizar e escolher vencedor
-            </Button>
+            {editavel ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCancelarAberto(true)}
+                >
+                  <XCircle />
+                  Cancelar cotação
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setFinalizarAberto(true)}
+                >
+                  <CheckCircle2 />
+                  Finalizar e escolher vencedor
+                </Button>
+              </>
+            ) : null}
+            {podeExcluir ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => setExcluirAberto(true)}
+              >
+                <Trash2 />
+                Excluir
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -304,6 +335,16 @@ export function CotacaoDetalhe({
         textoConfirmar="Remover fornecedor"
         variante="destrutivo"
         onConfirmar={confirmarRemocao}
+      />
+
+      <ConfirmDialog
+        aberto={excluirAberto}
+        onAbertoChange={setExcluirAberto}
+        titulo="Excluir cotação"
+        descricao="A cotação e todos os preços lançados são apagados de vez. Essa ação não pode ser desfeita."
+        textoConfirmar="Excluir cotação"
+        variante="destrutivo"
+        onConfirmar={confirmarExclusao}
       />
     </div>
   );
