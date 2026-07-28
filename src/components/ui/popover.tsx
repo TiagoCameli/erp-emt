@@ -21,10 +21,19 @@ function PopoverContent({
   className,
   align = "center",
   sideOffset = 4,
+  container,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+}: React.ComponentProps<typeof PopoverPrimitive.Content> & {
+  /**
+   * Nó onde o conteúdo é portalado. Quando o popover está dentro de um
+   * dialog/drawer, passe o conteúdo do dialog: assim o popover fica DENTRO do
+   * limite do react-remove-scroll (do Radix Dialog) e a lista rola. Sem valor,
+   * portala para o body (padrão, usado em páginas sem scroll-lock).
+   */
+  container?: HTMLElement | null
+}) {
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={container ?? undefined}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}
