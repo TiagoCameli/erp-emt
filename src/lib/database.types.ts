@@ -1861,6 +1861,44 @@ export type Database = {
           },
         ];
       };
+      oc_parcelas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data_vencimento: string;
+          id: string;
+          numero_parcela: number;
+          ordem_compra_id: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data_vencimento: string;
+          id?: string;
+          numero_parcela: number;
+          ordem_compra_id: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data_vencimento?: string;
+          id?: string;
+          numero_parcela?: number;
+          ordem_compra_id?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "oc_parcelas_ordem_compra_id_fkey";
+            columns: ["ordem_compra_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_compra";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ordens_compra: {
         Row: {
           aprovado_em: string | null;
@@ -2732,6 +2770,10 @@ export type Database = {
         Args: { p_cabecalho: Json; p_itens: Json };
         Returns: string;
       };
+      fn_definir_parcelas_lancamento: {
+        Args: { p_lanc_id: string; p_parcelas: Json };
+        Returns: undefined;
+      };
       fn_desaprovar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string };
         Returns: undefined;
@@ -2811,6 +2853,14 @@ export type Database = {
           p_parcela_id: string;
         };
         Returns: undefined;
+      };
+      fn_parcelas_da_condicao: {
+        Args: { p_condicao_id: string; p_data_base: string; p_valor: number };
+        Returns: {
+          data_vencimento: string;
+          numero_parcela: number;
+          valor: number;
+        }[];
       };
       fn_programar_pagamento: {
         Args: { p_data_programada: string; p_parcela_id: string };
@@ -2896,6 +2946,10 @@ export type Database = {
           p_rateios: Json;
         };
         Returns: string;
+      };
+      fn_salvar_parcelas_oc: {
+        Args: { p_oc_id: string; p_parcelas: Json };
+        Returns: undefined;
       };
       nomes_usuarios_auditoria: {
         Args: { p_ids: string[] };
