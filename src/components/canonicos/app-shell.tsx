@@ -255,7 +255,6 @@ function ModuloSidebar({
         aria-haspopup={abas.length > 0 ? "menu" : undefined}
         aria-expanded={abas.length > 0 ? aberto : undefined}
         onKeyDown={aoTeclarNoGatilho}
-        onFocus={onAbrir}
         className={cn(
           "flex h-11 items-center justify-center transition-colors",
           moduloAtivo
