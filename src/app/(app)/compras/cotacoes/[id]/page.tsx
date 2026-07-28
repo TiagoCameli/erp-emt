@@ -13,6 +13,7 @@ import {
   listarCondicoesPagamento,
   listarFornecedores,
   listarInsumos,
+  ordensDaCotacao,
   trilhaCotacao,
 } from "@/modules/compras/cotacoes/queries";
 
@@ -38,6 +39,7 @@ export default async function PaginaCotacaoDetalhe({
     condicoesPagamento,
     formasPagamento,
     anexosIniciais,
+    ordensGeradas,
   ] = await Promise.all([
     listarFornecedores(),
     listarInsumos(),
@@ -45,10 +47,12 @@ export default async function PaginaCotacaoDetalhe({
     listarCondicoesPagamento(),
     listarFormasPagamento(),
     listarAnexos("cotacoes", id),
+    ordensDaCotacao(id),
   ]);
 
   const podeEditar = temPermissao(usuario, "compras.cotacoes", "editar");
   const podeExcluir = temPermissao(usuario, "compras.cotacoes", "excluir");
+  const podeGerarOrdem = temPermissao(usuario, "compras.ordens", "criar");
 
   return (
     <>
@@ -74,6 +78,8 @@ export default async function PaginaCotacaoDetalhe({
         anexosIniciais={anexosIniciais}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        podeGerarOrdem={podeGerarOrdem}
+        ordensGeradas={ordensGeradas}
       />
     </>
   );

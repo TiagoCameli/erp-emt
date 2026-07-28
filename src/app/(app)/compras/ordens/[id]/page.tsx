@@ -8,7 +8,6 @@ import {
   buscarOrdem,
   listarCentrosCusto,
   listarCondicoesPagamento,
-  listarCotacoesFinalizadas,
   listarFornecedores,
   listarInsumos,
   listarParcelasCondicao,
@@ -34,7 +33,6 @@ export default async function PaginaOrdemDetalhe({
     fornecedores,
     insumos,
     centrosCusto,
-    cotacoes,
     condicoesPagamento,
     formasPagamento,
     parcelasCondicao,
@@ -44,7 +42,6 @@ export default async function PaginaOrdemDetalhe({
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
-    listarCotacoesFinalizadas(),
     listarCondicoesPagamento(),
     listarFormasPagamento(),
     ordem.condicaoPagamentoId
@@ -66,7 +63,6 @@ export default async function PaginaOrdemDetalhe({
       fornecedores={fornecedores}
       insumos={insumos}
       centrosCusto={centrosCusto}
-      cotacoes={cotacoes}
       condicoesPagamento={condicoesPagamento}
       formasPagamento={formasPagamento}
       parcelasCondicao={parcelasCondicao}

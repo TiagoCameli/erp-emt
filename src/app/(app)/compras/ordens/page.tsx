@@ -13,10 +13,10 @@ import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela"
 import {
   listarCentrosCusto,
   listarCondicoesPagamento,
-  listarCotacoesFinalizadas,
   listarFornecedores,
   listarInsumos,
   listarOrdens,
+  montarPrefillDaCotacao,
 } from "@/modules/compras/ordens/queries";
 
 const STATUS_VALIDOS = Object.keys(ROTULO_STATUS_OC) as StatusOC[];
@@ -37,22 +37,30 @@ export default async function PaginaOrdens({
   const { pagina, tamanho, busca } = lerParametrosLista(params);
   const status = parametroValido(params.status, STATUS_VALIDOS);
 
+  // "Gerar OC" numa cotação finalizada manda o usuário para cá com
+  // ?gerar=<cotacaoId>; montamos o prefill (fornecedor vencedor, condição/
+  // forma e itens) para o drawer abrir preenchido. Só com permissão de criar.
+  const gerarCotacaoId =
+    typeof params.gerar === "string" ? params.gerar : undefined;
+
   const [
     { itens, total },
     fornecedores,
     insumos,
     centrosCusto,
-    cotacoes,
     condicoesPagamento,
     formasPagamento,
+    prefill,
   ] = await Promise.all([
     listarOrdens({ pagina, tamanho, status, busca }),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
-    listarCotacoesFinalizadas(),
     listarCondicoesPagamento(),
     listarFormasPagamento(),
+    gerarCotacaoId && podeCriar
+      ? montarPrefillDaCotacao(gerarCotacaoId)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -66,9 +74,9 @@ export default async function PaginaOrdens({
             fornecedores={fornecedores}
             insumos={insumos}
             centrosCusto={centrosCusto}
-            cotacoes={cotacoes}
             condicoesPagamento={condicoesPagamento}
             formasPagamento={formasPagamento}
+            prefill={prefill}
           />
         }
       />

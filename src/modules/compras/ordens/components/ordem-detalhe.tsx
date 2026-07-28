@@ -30,7 +30,6 @@ import {
 import type {
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
-  CotacaoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
@@ -83,7 +82,6 @@ export interface OrdemDetalheViewProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
-  cotacoes: CotacaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
   parcelasCondicao: ParcelaCondicaoOpcao[];
@@ -106,7 +104,6 @@ export function OrdemDetalheView({
   fornecedores,
   insumos,
   centrosCusto,
-  cotacoes,
   condicoesPagamento,
   formasPagamento,
   parcelasCondicao,
@@ -441,7 +438,6 @@ export function OrdemDetalheView({
           fornecedores={fornecedores}
           insumos={insumos}
           centrosCusto={centrosCusto}
-          cotacoes={cotacoes}
           condicoesPagamento={condicoesPagamento}
           formasPagamento={formasPagamento}
         />
