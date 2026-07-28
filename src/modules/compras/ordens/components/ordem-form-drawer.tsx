@@ -11,6 +11,8 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputMoeda,
+  InputQuantidade,
   LinhaCampos,
   SecaoFormulario,
   TabelaItens,
@@ -121,6 +123,11 @@ function valoresIniciais(
   };
 }
 
+/** Nome de exibição de um centro de custo: "CÓDIGO Nome". */
+function rotuloCentro(centro: CentroCustoOpcao): string {
+  return `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`;
+}
+
 export interface OrdemFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
@@ -142,9 +149,10 @@ export interface OrdemFormDrawerProps {
 }
 
 /**
- * Drawer de criação e edição de OC. Os itens são organizados por centro de
- * custo (centro de custo > insumos), com subtotal por centro e total ao vivo.
- * No submit os grupos viram a lista plana de itens que a action grava.
+ * Drawer de criação e edição de OC, em seções: fornecedor e condições, itens
+ * (agrupados por centro de custo, com subtotal por linha e por centro), totais
+ * e observações. No submit os grupos viram a lista plana de itens que a action
+ * grava. Fechar com alteração pendente pede confirmação.
  */
 export function OrdemFormDrawer({
   aberto,
@@ -164,6 +172,8 @@ export function OrdemFormDrawer({
   const form = useForm<OrdemCompraFormInput>({
     resolver: zodResolver(ordemCompraFormSchema),
     defaultValues: valoresIniciais(ordem, prefillAtivo),
+    // Erro aparece ao sair do campo, não só no submit: a pessoa corrige na hora.
+    mode: "onBlur",
   });
 
   const {
@@ -199,6 +209,24 @@ export function OrdemFormDrawer({
   );
   const podeAdicionarGrupo =
     centrosCusto.length === 0 || centrosUsados.size < centrosCusto.length;
+
+  // Quebra dos totais por centro de custo, na ordem dos grupos da tela.
+  const totaisPorCentro = (gruposObservados ?? []).map((grupo, indice) => {
+    const centro = centrosCusto.find((c) => c.id === grupo.centroCustoId);
+    return {
+      indice,
+      rotulo: centro ? rotuloCentro(centro) : "Centro de custo não escolhido",
+      definido: centro !== undefined,
+      itens: (grupo.insumos ?? []).length,
+      total: totalOrdemCompra(
+        (grupo.insumos ?? []).map((insumo) => ({
+          quantidade: paraNumero(insumo.quantidade ?? ""),
+          precoUnitario: paraNumero(insumo.precoUnitario ?? ""),
+        })),
+      ),
+    };
+  });
+  const qtdItens = totaisPorCentro.reduce((soma, linha) => soma + linha.itens, 0);
 
   async function aoEnviar(valores: OrdemCompraFormInput) {
     const dados = {
@@ -258,11 +286,12 @@ export function OrdemFormDrawer({
             : "Emita a ordem de compra com fornecedor, condição de pagamento e itens"
       }
       larguraClassName="sm:max-w-[95vw]"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
-        <div className="flex w-full items-center justify-between gap-4">
+        <div className="flex w-full flex-wrap items-center justify-between gap-4">
           <div className="text-detalhe text-muted-foreground">
-            Total da prévia{" "}
-            <span className="font-semibold text-foreground tabular-nums">
+            Total da ordem{" "}
+            <span className="text-corpo font-semibold text-foreground tabular-nums">
               {formatarBRL(totalPrevia)}
             </span>
           </div>
@@ -297,115 +326,118 @@ export function OrdemFormDrawer({
         className={classesFormulario}
         noValidate
       >
-        <CampoFormulario
-          id="oc-fornecedor"
-          rotulo="Fornecedor"
-          obrigatorio
-          erro={form.formState.errors.fornecedorId?.message}
-        >
-          <Combobox
-            valor={fornecedorValor}
-            onValorChange={(valor) =>
-              form.setValue("fornecedorId", valor, { shouldValidate: true })
-            }
-            opcoes={fornecedores.map((fornecedor) => ({
-              valor: fornecedor.id,
-              rotulo: fornecedor.nome,
-            }))}
-            placeholder="Selecione o fornecedor"
-            disabled={salvando}
-            id="oc-fornecedor"
-          />
-        </CampoFormulario>
-
-        <LinhaCampos>
-          <CampoFormulario
-            id="oc-condicao"
-            rotulo="Condição de pagamento"
-            obrigatorio
-            erro={form.formState.errors.condicaoPagamentoId?.message}
-          >
-            <Combobox
-              valor={condicaoPagamentoValor}
-              onValorChange={(valor) =>
-                form.setValue("condicaoPagamentoId", valor, {
-                  shouldValidate: true,
-                })
-              }
-              opcoes={condicoesPagamento.map((condicao) => ({
-                valor: condicao.id,
-                rotulo: condicao.descricao,
-              }))}
-              onCriar={async (texto) => {
-                const r = await criarCondicaoPagamento(texto);
-                if ("erro" in r) {
-                  toast.error(r.erro);
-                  return null;
+        <SecaoFormulario titulo="Fornecedor e condições">
+          <LinhaCampos>
+            <CampoFormulario
+              id="oc-fornecedor"
+              rotulo="Fornecedor"
+              obrigatorio
+              erro={form.formState.errors.fornecedorId?.message}
+            >
+              <Combobox
+                valor={fornecedorValor}
+                onValorChange={(valor) =>
+                  form.setValue("fornecedorId", valor, { shouldValidate: true })
                 }
-                toast.success("Condição criada");
-                return r.id;
-              }}
-              placeholder="Selecione a condição de pagamento"
-              disabled={salvando}
-              id="oc-condicao"
-            />
-          </CampoFormulario>
+                opcoes={fornecedores.map((fornecedor) => ({
+                  valor: fornecedor.id,
+                  rotulo: fornecedor.nome,
+                }))}
+                placeholder="Selecione o fornecedor"
+                disabled={salvando}
+                id="oc-fornecedor"
+              />
+            </CampoFormulario>
 
-          <CampoFormulario
-            id="oc-data-emissao"
-            rotulo="Data de emissão"
-            obrigatorio
-            erro={form.formState.errors.dataEmissao?.message}
-          >
-            <Input
+            <CampoFormulario
               id="oc-data-emissao"
-              type="date"
-              disabled={salvando}
-              {...form.register("dataEmissao")}
-            />
-          </CampoFormulario>
-        </LinhaCampos>
+              rotulo="Data de emissão"
+              obrigatorio
+              largura="curto"
+              erro={form.formState.errors.dataEmissao?.message}
+            >
+              <Input
+                id="oc-data-emissao"
+                type="date"
+                className="tabular-nums"
+                disabled={salvando}
+                {...form.register("dataEmissao")}
+              />
+            </CampoFormulario>
+          </LinhaCampos>
 
-        <CampoFormulario
-          id="oc-forma-pagamento"
-          rotulo="Forma de pagamento"
-          ajuda="Opcional: método usado no pagamento (PIX, boleto, TED...)"
-        >
-          <Combobox
-            valor={formaPagamentoValor}
-            onValorChange={(valor) =>
-              form.setValue("formaPagamentoId", valor)
-            }
-            opcoes={formasPagamento.map((forma) => ({
-              valor: forma.id,
-              rotulo: forma.nome,
-            }))}
-            onCriar={async (texto) => {
-              const r = await criarFormaPagamento(texto);
-              if ("erro" in r) {
-                toast.error(r.erro);
-                return null;
-              }
-              toast.success("Forma de pagamento criada");
-              return r.id;
-            }}
-            limpavel
-            placeholder="Selecione a forma de pagamento"
-            disabled={salvando}
-            id="oc-forma-pagamento"
-          />
-        </CampoFormulario>
+          <LinhaCampos>
+            <CampoFormulario
+              id="oc-condicao"
+              rotulo="Condição de pagamento"
+              obrigatorio
+              ajuda="Define as parcelas geradas no recebimento"
+              erro={form.formState.errors.condicaoPagamentoId?.message}
+            >
+              <Combobox
+                valor={condicaoPagamentoValor}
+                onValorChange={(valor) =>
+                  form.setValue("condicaoPagamentoId", valor, {
+                    shouldValidate: true,
+                  })
+                }
+                opcoes={condicoesPagamento.map((condicao) => ({
+                  valor: condicao.id,
+                  rotulo: condicao.descricao,
+                }))}
+                onCriar={async (texto) => {
+                  const r = await criarCondicaoPagamento(texto);
+                  if ("erro" in r) {
+                    toast.error(r.erro);
+                    return null;
+                  }
+                  toast.success("Condição criada");
+                  return r.id;
+                }}
+                placeholder="Selecione a condição de pagamento"
+                disabled={salvando}
+                id="oc-condicao"
+              />
+            </CampoFormulario>
 
-        {origemNumero ? (
-          <div className="rounded-md border border-border bg-surface px-3 py-2.5">
-            <p className="text-legenda text-muted-foreground">
-              Cotação de origem
-            </p>
-            <p className="codigo-doc text-detalhe font-medium">
-              {origemNumero}
-            </p>
-          </div>
-        ) : null}
+            <CampoFormulario
+              id="oc-forma-pagamento"
+              rotulo="Forma de pagamento"
+              ajuda="Opcional: PIX, boleto, TED, dinheiro"
+            >
+              <Combobox
+                valor={formaPagamentoValor}
+                onValorChange={(valor) => form.setValue("formaPagamentoId", valor)}
+                opcoes={formasPagamento.map((forma) => ({
+                  valor: forma.id,
+                  rotulo: forma.nome,
+                }))}
+                onCriar={async (texto) => {
+                  const r = await criarFormaPagamento(texto);
+                  if ("erro" in r) {
+                    toast.error(r.erro);
+                    return null;
+                  }
+                  toast.success("Forma de pagamento criada");
+                  return r.id;
+                }}
+                limpavel
+                placeholder="Selecione a forma de pagamento"
+                disabled={salvando}
+                id="oc-forma-pagamento"
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+
+          {origemNumero ? (
+            <div className="w-fit rounded-md border border-border bg-surface px-3 py-2.5">
+              <p className="text-legenda text-muted-foreground">
+                Cotação de origem
+              </p>
+              <p className="codigo-doc text-detalhe font-medium">{origemNumero}</p>
+            </div>
+          ) : null}
+        </SecaoFormulario>
 
         <SecaoFormulario
           titulo="Itens"
@@ -457,19 +489,60 @@ export function OrdemFormDrawer({
           </div>
         </SecaoFormulario>
 
-        <CampoFormulario
-          id="oc-observacoes"
-          rotulo="Observações"
-          erro={form.formState.errors.observacoes?.message}
-        >
-          <Textarea
+        <SecaoFormulario titulo="Totais">
+          <div className="overflow-hidden rounded-md border border-border">
+            {totaisPorCentro.map((linha) => (
+              <div
+                key={linha.indice}
+                className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 text-detalhe"
+              >
+                <span
+                  className={
+                    linha.definido ? "truncate" : "truncate text-muted-foreground"
+                  }
+                >
+                  {linha.rotulo}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {linha.itens} {linha.itens === 1 ? "item" : "itens"}
+                  </span>
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {formatarBRL(linha.total)}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between gap-3 bg-surface px-3 py-2.5">
+              <span className="text-detalhe font-medium">
+                Total geral
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {qtdItens} {qtdItens === 1 ? "item" : "itens"}
+                </span>
+              </span>
+              <span className="text-corpo font-semibold tabular-nums">
+                {formatarBRL(totalPrevia)}
+              </span>
+            </div>
+          </div>
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Observações">
+          <CampoFormulario
             id="oc-observacoes"
-            rows={3}
-            placeholder="Anotações sobre a ordem"
-            disabled={salvando}
-            {...form.register("observacoes")}
-          />
-        </CampoFormulario>
+            rotulo="Observações"
+            ajuda="Aparecem no detalhe da ordem. Anexos são enviados depois de salvar."
+            erro={form.formState.errors.observacoes?.message}
+          >
+            <Textarea
+              id="oc-observacoes"
+              rows={3}
+              placeholder="Ex.: entrega no canteiro do km 120, falar com o encarregado"
+              disabled={salvando}
+              {...form.register("observacoes")}
+            />
+          </CampoFormulario>
+        </SecaoFormulario>
       </form>
     </FormDrawer>
   );
@@ -548,6 +621,7 @@ function GrupoCentroCusto({
             id={`oc-grupo-cc-${indice}`}
             rotulo="Centro de custo"
             obrigatorio
+            largura="longo"
             erro={errosGrupo?.centroCustoId?.message}
           >
             <Combobox
@@ -559,9 +633,9 @@ function GrupoCentroCusto({
               }
               opcoes={centrosDisponiveis.map((centro) => ({
                 valor: centro.id,
-                rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
+                rotulo: rotuloCentro(centro),
               }))}
-              placeholder="Selecione"
+              placeholder="Selecione o centro de custo"
               disabled={salvando}
               id={`oc-grupo-cc-${indice}`}
             />
@@ -633,30 +707,31 @@ function GrupoCentroCusto({
               );
             }
             if (chave === "quantidade") {
+              const campo = `centrosCusto.${indice}.insumos.${j}.quantidade` as const;
               return (
-                <Input
-                  aria-label="Quantidade"
-                  inputMode="decimal"
-                  placeholder="0,000"
-                  className="tabular-nums text-right"
+                <InputQuantidade
+                  valor={form.watch(campo) ?? ""}
+                  onValorChange={(valor) =>
+                    form.setValue(campo, valor, { shouldDirty: true })
+                  }
+                  onBlur={() => void form.trigger(campo)}
+                  ariaLabel="Quantidade"
                   disabled={salvando}
-                  {...form.register(
-                    `centrosCusto.${indice}.insumos.${j}.quantidade`,
-                  )}
                 />
               );
             }
             if (chave === "precoUnitario") {
+              const campo =
+                `centrosCusto.${indice}.insumos.${j}.precoUnitario` as const;
               return (
-                <Input
-                  aria-label="Preço unitário"
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  className="tabular-nums text-right"
+                <InputMoeda
+                  valor={form.watch(campo) ?? ""}
+                  onValorChange={(valor) =>
+                    form.setValue(campo, valor, { shouldDirty: true })
+                  }
+                  onBlur={() => void form.trigger(campo)}
+                  ariaLabel="Preço unitário"
                   disabled={salvando}
-                  {...form.register(
-                    `centrosCusto.${indice}.insumos.${j}.precoUnitario`,
-                  )}
                 />
               );
             }

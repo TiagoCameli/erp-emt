@@ -15,7 +15,22 @@ import type {
 } from "@/modules/compras/ordens/queries";
 import { OrdemFormDrawer } from "./ordem-form-drawer";
 
-export interface OrdensAcoesCabecalhoProps {
+interface ContextoNovaOrdem {
+  podeCriar: boolean;
+  abrir: () => void;
+}
+
+const Contexto = React.createContext<ContextoNovaOrdem | null>(null);
+
+/**
+ * Abre o formulário de nova OC de qualquer ponto da página (botão do cabeçalho,
+ * estado vazio da tabela). Devolve null fora do provider.
+ */
+export function useNovaOrdem(): ContextoNovaOrdem | null {
+  return React.useContext(Contexto);
+}
+
+export interface NovaOrdemProviderProps {
   podeCriar: boolean;
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
@@ -28,15 +43,18 @@ export interface OrdensAcoesCabecalhoProps {
    * abre em branco.
    */
   prefill?: PrefillOrdemCotacao | null;
+  children: React.ReactNode;
 }
 
 /**
- * Ações do cabeçalho de ordens: criar uma nova OC. Só renderiza quando o
- * usuário tem permissão de criar. Ao criar, navega para o detalhe da OC.
+ * Dono do formulário de nova OC na página de listagem. Existe UMA instância do
+ * drawer para os dois gatilhos (cabeçalho e estado vazio) — antes cada gatilho
+ * teria o seu, com estado próprio.
+ *
  * Quando a página recebe ?gerar=<cotacao> (botão "Gerar OC" na cotação
  * finalizada), o drawer abre preenchido com os dados do fornecedor vencedor.
  */
-export function OrdensAcoesCabecalho({
+export function NovaOrdemProvider({
   podeCriar,
   fornecedores,
   insumos,
@@ -44,7 +62,8 @@ export function OrdensAcoesCabecalho({
   condicoesPagamento,
   formasPagamento,
   prefill,
-}: OrdensAcoesCabecalhoProps) {
+  children,
+}: NovaOrdemProviderProps) {
   const router = useRouter();
   const pathname = usePathname();
   // "Gerar OC" chega aqui por uma navegação de rota (vinda de
@@ -56,7 +75,12 @@ export function OrdensAcoesCabecalho({
   const [prefillAtivo, setPrefillAtivo] =
     React.useState<PrefillOrdemCotacao | null>(prefill ?? null);
 
-  if (!podeCriar) return null;
+  const abrir = React.useCallback(() => {
+    setPrefillAtivo(null);
+    setAberto(true);
+  }, []);
+
+  const valor = React.useMemo(() => ({ podeCriar, abrir }), [podeCriar, abrir]);
 
   function fecharDrawer(novoAberto: boolean) {
     setAberto(novoAberto);
@@ -68,32 +92,36 @@ export function OrdensAcoesCabecalho({
   }
 
   return (
-    <>
-      <Button
-        type="button"
-        size="sm"
-        onClick={() => {
-          setPrefillAtivo(null);
-          setAberto(true);
-        }}
-      >
-        <Plus />
-        Nova ordem
-      </Button>
+    <Contexto.Provider value={valor}>
+      {children}
+      {podeCriar ? (
+        <OrdemFormDrawer
+          key={`${aberto ? "aberto" : "fechado"}-${prefillAtivo?.cotacaoId ?? "novo"}`}
+          aberto={aberto}
+          onAbertoChange={fecharDrawer}
+          ordem={null}
+          prefill={prefillAtivo}
+          fornecedores={fornecedores}
+          insumos={insumos}
+          centrosCusto={centrosCusto}
+          condicoesPagamento={condicoesPagamento}
+          formasPagamento={formasPagamento}
+          onCriada={(id) => router.push(`/compras/ordens/${id}`)}
+        />
+      ) : null}
+    </Contexto.Provider>
+  );
+}
 
-      <OrdemFormDrawer
-        key={`${aberto ? "aberto" : "fechado"}-${prefillAtivo?.cotacaoId ?? "novo"}`}
-        aberto={aberto}
-        onAbertoChange={fecharDrawer}
-        ordem={null}
-        prefill={prefillAtivo}
-        fornecedores={fornecedores}
-        insumos={insumos}
-        centrosCusto={centrosCusto}
-        condicoesPagamento={condicoesPagamento}
-        formasPagamento={formasPagamento}
-        onCriada={(id) => router.push(`/compras/ordens/${id}`)}
-      />
-    </>
+/** Botão primário do cabeçalho. Some sem permissão de criar. */
+export function BotaoNovaOrdem() {
+  const novaOrdem = useNovaOrdem();
+  if (!novaOrdem?.podeCriar) return null;
+
+  return (
+    <Button type="button" size="sm" onClick={novaOrdem.abrir}>
+      <Plus />
+      Nova ordem
+    </Button>
   );
 }

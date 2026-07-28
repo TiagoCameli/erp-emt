@@ -1,16 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 
-import { recursosDoModulo, type RecursoId } from "@/config/recursos";
-import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { abasVisiveis, getUsuarioLogado } from "@/lib/permissoes";
 
+/** A rota do módulo cai na primeira aba que este usuário pode ver. */
 export default async function CadastrosPage() {
   const usuario = await getUsuarioLogado();
 
-  const abasVisiveis = recursosDoModulo("cadastros").filter((recurso) =>
-    temPermissao(usuario, recurso.id as RecursoId, "ver"),
-  );
-
-  const primeiraAba = abasVisiveis[0];
+  const primeiraAba = abasVisiveis(usuario, "cadastros")[0];
   if (!primeiraAba) notFound();
 
   redirect(primeiraAba.rota);

@@ -9,6 +9,7 @@ import {
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import {
   idsFornecedoresPorNome,
+  inicioDoDiaISO,
   padraoBusca,
 } from "@/modules/compras/_shared/lista";
 import type { StatusCotacao } from "@/modules/compras/cotacoes/schemas";
@@ -19,9 +20,15 @@ export interface ListarCotacoesParams {
   tamanho: number;
   status?: StatusCotacao;
   busca?: string;
+  /** Período de criação (inclusive), yyyy-mm-dd. */
+  de?: string;
+  ate?: string;
 }
 
-/** Linha da listagem de cotações. */
+/**
+ * Linha da listagem de cotações. `observacoes` e `criadoPorNome` são colunas
+ * opcionais da tabela (nascem escondidas, o usuário liga no menu "Colunas").
+ */
 export interface CotacaoLista {
   id: string;
   numero: string | null;
@@ -29,6 +36,8 @@ export interface CotacaoLista {
   qtdFornecedores: number;
   vencedorNome: string | null;
   createdAt: string;
+  observacoes: string | null;
+  criadoPorNome: string | null;
 }
 
 /** Resultado paginado da listagem de cotações. */
@@ -110,6 +119,8 @@ interface LinhaListaCotacao {
   numero: string | null;
   status: string;
   created_at: string;
+  created_by: string | null;
+  observacoes: string | null;
   vencedor_fornecedor_id: string | null;
   cotacao_fornecedores: { count: number }[] | null;
   fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
@@ -129,8 +140,9 @@ function nomeFornecedor(
 /**
  * Lista as cotações com paginação server-side (range + count exact), a
  * contagem de fornecedores agregada no banco e o nome do vencedor (quando
- * finalizada). Aceita filtro por status e busca por número da cotação ou
- * nome do fornecedor vencedor.
+ * finalizada). Aceita filtro por status, período de criação e busca por número
+ * da cotação ou nome do fornecedor vencedor. Traz também observações e quem
+ * criou, que são as colunas opcionais da tabela.
  */
 export async function listarCotacoes(
   params: ListarCotacoesParams,
@@ -145,13 +157,21 @@ export async function listarCotacoes(
   let consulta = supabase
     .from("cotacoes")
     .select(
-      "id, numero, status, created_at, vencedor_fornecedor_id, cotacao_fornecedores(count), fornecedores(razao_social, nome_fantasia)",
+      `id, numero, status, created_at, created_by, observacoes,
+       vencedor_fornecedor_id, cotacao_fornecedores(count),
+       fornecedores(razao_social, nome_fantasia)`,
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
     .range(de, ate);
 
   if (params.status) consulta = consulta.eq("status", params.status);
+  // created_at é timestamptz: o dia final entra inteiro somando 1 dia e usando
+  // "menor que", senão a cotação criada às 14h do dia "ate" ficaria de fora.
+  if (params.de) consulta = consulta.gte("created_at", inicioDoDiaISO(params.de));
+  if (params.ate) {
+    consulta = consulta.lt("created_at", inicioDoDiaISO(params.ate, 1));
+  }
 
   if (params.busca) {
     const padrao = padraoBusca(params.busca);
@@ -169,18 +189,41 @@ export async function listarCotacoes(
     throw new Error("Não foi possível carregar as cotações");
   }
 
-  const itens: CotacaoLista[] = ((data ?? []) as LinhaListaCotacao[]).map(
-    (cotacao) => ({
-      id: cotacao.id,
-      numero: cotacao.numero,
-      status: cotacao.status as StatusCotacao,
-      qtdFornecedores: cotacao.cotacao_fornecedores?.[0]?.count ?? 0,
-      vencedorNome: cotacao.vencedor_fornecedor_id
-        ? nomeFornecedor(cotacao.fornecedores) || null
-        : null,
-      createdAt: cotacao.created_at,
-    }),
-  );
+  const linhas = (data ?? []) as LinhaListaCotacao[];
+
+  // Nome de quem criou vem pela RPC de auditoria (security definer): a tabela
+  // `usuarios` não é legível por quem só tem permissão de Compras.
+  const idsCriadores = [
+    ...new Set(
+      linhas
+        .map((cotacao) => cotacao.created_by)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const nomesCriadores = new Map<string, string>();
+  if (idsCriadores.length > 0) {
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_auditoria", {
+      p_ids: idsCriadores,
+    });
+    for (const usuario of usuarios ?? []) {
+      nomesCriadores.set(usuario.id, usuario.nome);
+    }
+  }
+
+  const itens: CotacaoLista[] = linhas.map((cotacao) => ({
+    id: cotacao.id,
+    numero: cotacao.numero,
+    status: cotacao.status as StatusCotacao,
+    qtdFornecedores: cotacao.cotacao_fornecedores?.[0]?.count ?? 0,
+    vencedorNome: cotacao.vencedor_fornecedor_id
+      ? nomeFornecedor(cotacao.fornecedores) || null
+      : null,
+    createdAt: cotacao.created_at,
+    observacoes: cotacao.observacoes,
+    criadoPorNome: cotacao.created_by
+      ? (nomesCriadores.get(cotacao.created_by) ?? null)
+      : null,
+  }));
 
   return { itens, total: count ?? 0 };
 }

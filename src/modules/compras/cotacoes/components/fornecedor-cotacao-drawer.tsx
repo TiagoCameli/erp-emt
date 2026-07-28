@@ -12,6 +12,7 @@ import {
   Combobox,
   FormDrawer,
   LinhaCampos,
+  SecaoFormulario,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,8 @@ export function FornecedorCotacaoDrawer({
 }: FornecedorCotacaoDrawerProps) {
   const form = useForm<FornecedorCotacaoFormInput>({
     resolver: zodResolver(fornecedorCotacaoFormSchema),
+    // Erro aparece ao sair do campo, não só no submit.
+    mode: "onBlur",
     defaultValues: {
       fornecedorId: "",
       condicaoPagamentoId: undefined,
@@ -127,7 +130,7 @@ export function FornecedorCotacaoDrawer({
       onAbertoChange={onAbertoChange}
       titulo="Adicionar fornecedor"
       descricao="Quem vai cotar os insumos desta cotação"
-      larguraClassName="sm:max-w-[95vw]"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button
@@ -161,130 +164,138 @@ export function FornecedorCotacaoDrawer({
         className={classesFormulario}
         noValidate
       >
-        <CampoFormulario
-          id="fornecedor-cotacao"
-          rotulo="Fornecedor"
-          obrigatorio
-          erro={form.formState.errors.fornecedorId?.message}
-        >
-          <Combobox
-            valor={fornecedorValor}
-            onValorChange={(valor) =>
-              form.setValue("fornecedorId", valor, { shouldValidate: true })
-            }
-            opcoes={disponiveis.map((fornecedor) => ({
-              valor: fornecedor.id,
-              rotulo: fornecedor.nome,
-            }))}
-            placeholder={
-              disponiveis.length === 0
-                ? "Todos os fornecedores já estão na cotação"
-                : "Escolha um fornecedor"
-            }
-            disabled={salvando || disponiveis.length === 0}
+        <SecaoFormulario titulo="Fornecedor">
+          <CampoFormulario
             id="fornecedor-cotacao"
-            className="w-full"
-          />
-        </CampoFormulario>
-
-        <LinhaCampos colunas={3}>
-          <CampoFormulario
-            id="fornecedor-condicao"
-            rotulo="Condição de pagamento"
-            erro={form.formState.errors.condicaoPagamentoId?.message}
+            rotulo="Fornecedor"
+            obrigatorio
+            erro={form.formState.errors.fornecedorId?.message}
           >
             <Combobox
-              valor={condicaoPagamentoValor}
+              valor={fornecedorValor}
               onValorChange={(valor) =>
-                form.setValue(
-                  "condicaoPagamentoId",
-                  valor === SEM_CONDICAO ? undefined : valor,
-                )
+                form.setValue("fornecedorId", valor, { shouldValidate: true })
               }
-              opcoes={[
-                { valor: SEM_CONDICAO, rotulo: "Sem condição informada" },
-                ...condicoesPagamento.map((condicao) => ({
-                  valor: condicao.id,
-                  rotulo: condicao.descricao,
-                })),
-              ]}
-              onCriar={async (texto) => {
-                const r = await criarCondicaoPagamento(texto);
-                if ("erro" in r) {
-                  toast.error(r.erro);
-                  return null;
-                }
-                toast.success("Condição criada");
-                return r.id;
-              }}
-              placeholder="Selecione a condição de pagamento"
-              disabled={salvando}
-              id="fornecedor-condicao"
-            />
-          </CampoFormulario>
-
-          <CampoFormulario
-            id="fornecedor-forma"
-            rotulo="Forma de pagamento"
-            erro={form.formState.errors.formaPagamentoId?.message}
-          >
-            <Combobox
-              valor={formaPagamentoValor}
-              onValorChange={(valor) =>
-                form.setValue(
-                  "formaPagamentoId",
-                  valor === "" ? undefined : valor,
-                )
-              }
-              opcoes={formasPagamento.map((forma) => ({
-                valor: forma.id,
-                rotulo: forma.nome,
+              opcoes={disponiveis.map((fornecedor) => ({
+                valor: fornecedor.id,
+                rotulo: fornecedor.nome,
               }))}
-              onCriar={async (texto) => {
-                const r = await criarFormaPagamento(texto);
-                if ("erro" in r) {
-                  toast.error(r.erro);
-                  return null;
+              placeholder={
+                disponiveis.length === 0
+                  ? "Todos os fornecedores já estão na cotação"
+                  : "Escolha um fornecedor"
+              }
+              disabled={salvando || disponiveis.length === 0}
+              id="fornecedor-cotacao"
+              className="w-full"
+            />
+          </CampoFormulario>
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Condições da proposta">
+          <LinhaCampos colunas={3}>
+            <CampoFormulario
+              id="fornecedor-condicao"
+              rotulo="Condição de pagamento"
+              erro={form.formState.errors.condicaoPagamentoId?.message}
+            >
+              <Combobox
+                valor={condicaoPagamentoValor}
+                onValorChange={(valor) =>
+                  form.setValue(
+                    "condicaoPagamentoId",
+                    valor === SEM_CONDICAO ? undefined : valor,
+                  )
                 }
-                toast.success("Forma de pagamento criada");
-                return r.id;
-              }}
-              limpavel
-              placeholder="Selecione a forma de pagamento"
-              disabled={salvando}
+                opcoes={[
+                  { valor: SEM_CONDICAO, rotulo: "Sem condição informada" },
+                  ...condicoesPagamento.map((condicao) => ({
+                    valor: condicao.id,
+                    rotulo: condicao.descricao,
+                  })),
+                ]}
+                onCriar={async (texto) => {
+                  const r = await criarCondicaoPagamento(texto);
+                  if ("erro" in r) {
+                    toast.error(r.erro);
+                    return null;
+                  }
+                  toast.success("Condição criada");
+                  return r.id;
+                }}
+                placeholder="Selecione a condição de pagamento"
+                disabled={salvando}
+                id="fornecedor-condicao"
+              />
+            </CampoFormulario>
+
+            <CampoFormulario
               id="fornecedor-forma"
-            />
-          </CampoFormulario>
+              rotulo="Forma de pagamento"
+              erro={form.formState.errors.formaPagamentoId?.message}
+            >
+              <Combobox
+                valor={formaPagamentoValor}
+                onValorChange={(valor) =>
+                  form.setValue(
+                    "formaPagamentoId",
+                    valor === "" ? undefined : valor,
+                  )
+                }
+                opcoes={formasPagamento.map((forma) => ({
+                  valor: forma.id,
+                  rotulo: forma.nome,
+                }))}
+                onCriar={async (texto) => {
+                  const r = await criarFormaPagamento(texto);
+                  if ("erro" in r) {
+                    toast.error(r.erro);
+                    return null;
+                  }
+                  toast.success("Forma de pagamento criada");
+                  return r.id;
+                }}
+                limpavel
+                placeholder="Selecione a forma de pagamento"
+                disabled={salvando}
+                id="fornecedor-forma"
+              />
+            </CampoFormulario>
 
-          <CampoFormulario
-            id="fornecedor-prazo"
-            rotulo="Prazo de entrega (dias)"
-            erro={form.formState.errors.prazoEntregaDias?.message}
-          >
-            <Input
+            <CampoFormulario
               id="fornecedor-prazo"
-              inputMode="numeric"
-              placeholder="7"
-              className="tabular-nums"
+              rotulo="Prazo de entrega (dias)"
+              largura="curto"
+              ajuda="Dias corridos após a compra"
+              erro={form.formState.errors.prazoEntregaDias?.message}
+            >
+              <Input
+                id="fornecedor-prazo"
+                inputMode="numeric"
+                placeholder="7"
+                className="tabular-nums"
+                disabled={salvando}
+                {...form.register("prazoEntregaDias")}
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Observação">
+          <CampoFormulario
+            id="fornecedor-observacao"
+            rotulo="Observação"
+            erro={form.formState.errors.observacao?.message}
+          >
+            <Textarea
+              id="fornecedor-observacao"
+              rows={2}
+              placeholder="Anotações sobre a proposta deste fornecedor"
               disabled={salvando}
-              {...form.register("prazoEntregaDias")}
+              {...form.register("observacao")}
             />
           </CampoFormulario>
-        </LinhaCampos>
-
-        <CampoFormulario
-          id="fornecedor-observacao"
-          rotulo="Observação"
-          erro={form.formState.errors.observacao?.message}
-        >
-          <Textarea
-            id="fornecedor-observacao"
-            rows={2}
-            placeholder="Anotações sobre a proposta deste fornecedor"
-            disabled={salvando}
-            {...form.register("observacao")}
-          />
-        </CampoFormulario>
+        </SecaoFormulario>
       </form>
     </FormDrawer>
   );

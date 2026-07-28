@@ -1,22 +1,17 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 
-import { TabNavAtivo } from "@/components/canonicos/tab-nav-client";
-import { recursosDoModulo, type RecursoId } from "@/config/recursos";
-import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { abasVisiveis, getUsuarioLogado } from "@/lib/permissoes";
 
+/**
+ * Portão de acesso ao módulo: sem nenhuma aba visível, a rota não existe para
+ * este usuário. A navegação entre as abas fica no submenu da sidebar (mesma
+ * fonte, `abasVisiveis`), não numa barra de abas dentro da página.
+ */
 export default async function RhLayout({ children }: { children: ReactNode }) {
   const usuario = await getUsuarioLogado();
 
-  const abasVisiveis = recursosDoModulo("rh").filter((recurso) =>
-    temPermissao(usuario, recurso.id as RecursoId, "ver"),
-  );
-  if (abasVisiveis.length === 0) notFound();
+  if (abasVisiveis(usuario, "rh").length === 0) notFound();
 
-  return (
-    <>
-      <TabNavAtivo recursos={abasVisiveis} />
-      <div className="mt-4">{children}</div>
-    </>
-  );
+  return <>{children}</>;
 }

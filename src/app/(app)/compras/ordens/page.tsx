@@ -8,7 +8,10 @@ import {
   lerParametrosLista,
   parametroValido,
 } from "@/modules/compras/_shared/lista";
-import { OrdensAcoesCabecalho } from "@/modules/compras/ordens/components/ordens-acoes-cabecalho";
+import {
+  BotaoNovaOrdem,
+  NovaOrdemProvider,
+} from "@/modules/compras/ordens/components/nova-ordem-provider";
 import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela";
 import {
   listarCentrosCusto,
@@ -34,7 +37,8 @@ export default async function PaginaOrdens({
   const podeCriar = temPermissao(usuario, "compras.ordens", "criar");
 
   const params = await searchParams;
-  const { pagina, tamanho, busca } = lerParametrosLista(params);
+  const { pagina, tamanho, busca, fornecedorId, de, ate } =
+    lerParametrosLista(params);
   const status = parametroValido(params.status, STATUS_VALIDOS);
 
   // "Gerar OC" numa cotação finalizada manda o usuário para cá com
@@ -52,7 +56,7 @@ export default async function PaginaOrdens({
     formasPagamento,
     prefill,
   ] = await Promise.all([
-    listarOrdens({ pagina, tamanho, status, busca }),
+    listarOrdens({ pagina, tamanho, status, busca, fornecedorId, de, ate }),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
@@ -64,21 +68,19 @@ export default async function PaginaOrdens({
   ]);
 
   return (
-    <>
+    <NovaOrdemProvider
+      podeCriar={podeCriar}
+      fornecedores={fornecedores}
+      insumos={insumos}
+      centrosCusto={centrosCusto}
+      condicoesPagamento={condicoesPagamento}
+      formasPagamento={formasPagamento}
+      prefill={prefill}
+    >
       <PageHeader
         titulo="Ordens de compra"
         descricao="Emita a OC, envie para aprovação e gere o lançamento financeiro previsto"
-        acoes={
-          <OrdensAcoesCabecalho
-            podeCriar={podeCriar}
-            fornecedores={fornecedores}
-            insumos={insumos}
-            centrosCusto={centrosCusto}
-            condicoesPagamento={condicoesPagamento}
-            formasPagamento={formasPagamento}
-            prefill={prefill}
-          />
-        }
+        acoes={<BotaoNovaOrdem />}
       />
       <OrdensTabela
         ordens={itens}
@@ -87,7 +89,12 @@ export default async function PaginaOrdens({
         tamanho={tamanho}
         status={status ?? ""}
         busca={busca ?? ""}
+        fornecedorId={fornecedorId ?? ""}
+        de={de ?? ""}
+        ate={ate ?? ""}
+        fornecedores={fornecedores}
+        idUsuario={usuario.id}
       />
-    </>
+    </NovaOrdemProvider>
   );
 }

@@ -65,6 +65,8 @@ interface FiltroSelectProps {
   opcoes: OpcaoFiltro[];
   placeholder?: string;
   todosRotulo?: string;
+  /** Classe extra no gatilho (ex.: limitar largura em lista de nome comprido). */
+  className?: string;
 }
 
 /**
@@ -77,6 +79,7 @@ export function FiltroSelect({
   opcoes,
   placeholder,
   todosRotulo = "Todos",
+  className,
 }: FiltroSelectProps) {
   return (
     <Combobox
@@ -87,8 +90,51 @@ export function FiltroSelect({
       opcoes={[{ valor: VALOR_TODOS, rotulo: todosRotulo }, ...opcoes]}
       placeholder={placeholder ?? todosRotulo}
       size="sm"
-      className="h-8 w-fit gap-1.5 text-detalhe"
+      className={cn("h-8 w-fit gap-1.5 text-detalhe", className)}
     />
+  );
+}
+
+interface FiltroPeriodoProps {
+  de: string;
+  ate: string;
+  /** Recebe as duas pontas juntas: uma navegação só, sem página intermediária. */
+  onPeriodoChange: (de: string, ate: string) => void;
+  /** Nome do que está sendo datado, ex. "Emissão". */
+  rotulo?: string;
+}
+
+/**
+ * Filtro de período com as duas pontas (de/até) em campos de data curtos.
+ * Data vazia significa sem limite naquela ponta.
+ */
+export function FiltroPeriodo({
+  de,
+  ate,
+  onPeriodoChange,
+  rotulo = "Período",
+}: FiltroPeriodoProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-detalhe text-muted-foreground">{rotulo}</span>
+      <Input
+        type="date"
+        value={de}
+        max={ate === "" ? undefined : ate}
+        onChange={(evento) => onPeriodoChange(evento.target.value, ate)}
+        aria-label={`${rotulo}: data inicial`}
+        className="h-8 w-[8.75rem] text-detalhe tabular-nums"
+      />
+      <span className="text-detalhe text-muted-foreground">até</span>
+      <Input
+        type="date"
+        value={ate}
+        min={de === "" ? undefined : de}
+        onChange={(evento) => onPeriodoChange(de, evento.target.value)}
+        aria-label={`${rotulo}: data final`}
+        className="h-8 w-[8.75rem] text-detalhe tabular-nums"
+      />
+    </div>
   );
 }
 
