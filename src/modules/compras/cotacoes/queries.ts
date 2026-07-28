@@ -341,6 +341,36 @@ export async function buscarCotacao(
   };
 }
 
+/** OC já gerada a partir de uma cotação (para link e aviso de duplicata). */
+export interface OrdemGerada {
+  id: string;
+  numero: string | null;
+}
+
+/**
+ * Ordens de compra geradas a partir desta cotação (ordens_compra.cotacao_id).
+ * Usado no detalhe da cotação finalizada para mostrar as OCs já geradas e
+ * evitar que o usuário gere uma OC duplicada sem perceber.
+ */
+export async function ordensDaCotacao(
+  cotacaoId: string,
+): Promise<OrdemGerada[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("ordens_compra")
+    .select("id, numero")
+    .eq("cotacao_id", cotacaoId)
+    .order("created_at", { ascending: false });
+
+  if (error) return [];
+
+  return (data ?? []).map((ordem) => ({
+    id: ordem.id,
+    numero: ordem.numero,
+  }));
+}
+
 /** Fornecedores ativos para o select, em ordem de exibição. */
 export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
   const supabase = await createClient();

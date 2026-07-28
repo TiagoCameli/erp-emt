@@ -38,18 +38,17 @@ import {
 import type {
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
-  CotacaoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
   OrdemDetalhe,
+  PrefillOrdemCotacao,
 } from "@/modules/compras/ordens/queries";
 import {
   ordemCompraFormSchema,
   type OrdemCompraFormInput,
 } from "@/modules/compras/ordens/schemas";
 
-const SEM_VINCULO = "sem-vinculo";
 const ID_FORM = "form-ordem-compra";
 
 /** Linha de insumo em branco. */
@@ -62,28 +61,63 @@ function grupoVazio(): GrupoForm {
   return { centroCustoId: "", insumos: [insumoVazio()] };
 }
 
-/** Valores iniciais do formulário, a partir de uma OC ou em branco. */
-function valoresIniciais(ordem: OrdemDetalhe | null): OrdemCompraFormInput {
-  if (!ordem || ordem.itens.length === 0) {
+/**
+ * Um grupo com os itens do prefill (todos sem centro de custo — o usuário
+ * atribui na tela). Quantidade/preço viram string com vírgula, no mesmo
+ * formato que a edição usa (ver agruparItensPorCentroCusto).
+ */
+function grupoDoPrefill(prefill: PrefillOrdemCotacao): GrupoForm {
+  return {
+    centroCustoId: "",
+    insumos: prefill.itens.map((item) => ({
+      insumoId: item.insumoId,
+      quantidade: String(item.quantidade).replace(".", ","),
+      precoUnitario: String(item.precoUnitario).replace(".", ","),
+    })),
+  };
+}
+
+/**
+ * Valores iniciais do formulário: a partir de uma OC (edição), de um prefill
+ * de cotação (Gerar OC) ou em branco (Nova ordem).
+ */
+function valoresIniciais(
+  ordem: OrdemDetalhe | null,
+  prefill: PrefillOrdemCotacao | null,
+): OrdemCompraFormInput {
+  if (ordem && ordem.itens.length > 0) {
     return {
-      fornecedorId: ordem?.fornecedorId ?? "",
-      condicaoPagamentoId: ordem?.condicaoPagamentoId ?? "",
-      formaPagamentoId: ordem?.formaPagamentoId ?? "",
-      cotacaoId: ordem?.cotacaoId ?? undefined,
-      dataEmissao: ordem?.dataEmissao ?? dataHojeISO(),
-      observacoes: ordem?.observacoes ?? "",
-      centrosCusto: [grupoVazio()],
+      fornecedorId: ordem.fornecedorId,
+      condicaoPagamentoId: ordem.condicaoPagamentoId ?? "",
+      formaPagamentoId: ordem.formaPagamentoId ?? "",
+      cotacaoId: ordem.cotacaoId ?? undefined,
+      dataEmissao: ordem.dataEmissao,
+      observacoes: ordem.observacoes ?? "",
+      centrosCusto: agruparItensPorCentroCusto(ordem.itens),
+    };
+  }
+
+  if (!ordem && prefill) {
+    return {
+      fornecedorId: prefill.fornecedorId,
+      condicaoPagamentoId: prefill.condicaoPagamentoId ?? "",
+      formaPagamentoId: prefill.formaPagamentoId ?? "",
+      cotacaoId: prefill.cotacaoId,
+      dataEmissao: dataHojeISO(),
+      observacoes: "",
+      centrosCusto:
+        prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
     };
   }
 
   return {
-    fornecedorId: ordem.fornecedorId,
-    condicaoPagamentoId: ordem.condicaoPagamentoId ?? "",
-    formaPagamentoId: ordem.formaPagamentoId ?? "",
-    cotacaoId: ordem.cotacaoId ?? undefined,
-    dataEmissao: ordem.dataEmissao,
-    observacoes: ordem.observacoes ?? "",
-    centrosCusto: agruparItensPorCentroCusto(ordem.itens),
+    fornecedorId: ordem?.fornecedorId ?? "",
+    condicaoPagamentoId: ordem?.condicaoPagamentoId ?? "",
+    formaPagamentoId: ordem?.formaPagamentoId ?? "",
+    cotacaoId: ordem?.cotacaoId ?? undefined,
+    dataEmissao: ordem?.dataEmissao ?? dataHojeISO(),
+    observacoes: ordem?.observacoes ?? "",
+    centrosCusto: [grupoVazio()],
   };
 }
 
@@ -95,9 +129,14 @@ export interface OrdemFormDrawerProps {
   fornecedores: FornecedorOpcao[];
   insumos: InsumoOpcao[];
   centrosCusto: CentroCustoOpcao[];
-  cotacoes: CotacaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
+  /**
+   * Preenchimento vindo de "Gerar OC" numa cotação finalizada. Só vale na
+   * criação (ordem === null): trava a cotação de origem e traz fornecedor,
+   * condição/forma e itens do vencedor.
+   */
+  prefill?: PrefillOrdemCotacao | null;
   /** Chamado depois de criar uma OC, com o id, para navegar ao detalhe. */
   onCriada?: (id: string) => void;
 }
@@ -114,16 +153,17 @@ export function OrdemFormDrawer({
   fornecedores,
   insumos,
   centrosCusto,
-  cotacoes,
   condicoesPagamento,
   formasPagamento,
+  prefill,
   onCriada,
 }: OrdemFormDrawerProps) {
   const editando = ordem !== null;
+  const prefillAtivo = editando ? null : (prefill ?? null);
 
   const form = useForm<OrdemCompraFormInput>({
     resolver: zodResolver(ordemCompraFormSchema),
-    defaultValues: valoresIniciais(ordem),
+    defaultValues: valoresIniciais(ordem, prefillAtivo),
   });
 
   const {
@@ -133,8 +173,8 @@ export function OrdemFormDrawer({
   } = useFieldArray({ control: form.control, name: "centrosCusto" });
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(ordem));
-  }, [aberto, ordem, form]);
+    if (aberto) form.reset(valoresIniciais(ordem, prefillAtivo));
+  }, [aberto, ordem, prefillAtivo, form]);
 
   const salvando = form.formState.isSubmitting;
 
@@ -195,7 +235,9 @@ export function OrdemFormDrawer({
   const fornecedorValor = form.watch("fornecedorId");
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId");
   const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
-  const cotacaoValor = form.watch("cotacaoId") ?? SEM_VINCULO;
+  // Cotação de origem só entra por "Gerar OC" (prefill) ou vem da OC em
+  // edição; nunca é escolhida à mão. Mostramos apenas como leitura.
+  const origemNumero = prefillAtivo?.cotacaoNumero ?? ordem?.cotacaoNumero ?? null;
   const erroCentros = form.formState.errors.centrosCusto;
   const erroCentrosMensagem =
     (typeof erroCentros?.message === "string" ? erroCentros.message : null) ??
@@ -211,7 +253,9 @@ export function OrdemFormDrawer({
       descricao={
         editando
           ? "Atualize os dados e os itens desta ordem"
-          : "Emita a ordem de compra com fornecedor, condição de pagamento e itens"
+          : prefillAtivo
+            ? "Vinda da cotação: revise os dados e atribua o centro de custo de cada item antes de criar"
+            : "Emita a ordem de compra com fornecedor, condição de pagamento e itens"
       }
       larguraClassName="sm:max-w-[95vw]"
       rodape={
@@ -352,31 +396,16 @@ export function OrdemFormDrawer({
           />
         </CampoFormulario>
 
-        <CampoFormulario
-          id="oc-cotacao"
-          rotulo="Cotação de origem"
-          ajuda="Opcional: vincule uma cotação finalizada"
-        >
-          <Combobox
-            valor={cotacaoValor}
-            onValorChange={(valor) =>
-              form.setValue(
-                "cotacaoId",
-                valor === SEM_VINCULO ? undefined : valor,
-              )
-            }
-            opcoes={[
-              { valor: SEM_VINCULO, rotulo: "Sem cotação" },
-              ...cotacoes.map((cotacao) => ({
-                valor: cotacao.id,
-                rotulo: cotacao.numero ?? "Sem número",
-              })),
-            ]}
-            placeholder="Sem cotação"
-            disabled={salvando}
-            id="oc-cotacao"
-          />
-        </CampoFormulario>
+        {origemNumero ? (
+          <div className="rounded-md border border-border bg-surface px-3 py-2.5">
+            <p className="text-legenda text-muted-foreground">
+              Cotação de origem
+            </p>
+            <p className="codigo-doc text-detalhe font-medium">
+              {origemNumero}
+            </p>
+          </div>
+        ) : null}
 
         <SecaoFormulario
           titulo="Itens"

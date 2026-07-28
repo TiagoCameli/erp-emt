@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Plus, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, FileOutput, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -30,6 +31,7 @@ import type {
   CotacaoDetalhe as CotacaoDetalheData,
   FornecedorOpcao,
   InsumoOpcao,
+  OrdemGerada,
 } from "@/modules/compras/cotacoes/queries";
 import { FinalizarCotacaoDialog } from "./finalizar-cotacao-dialog";
 import { FornecedorCotacaoDrawer } from "./fornecedor-cotacao-drawer";
@@ -45,6 +47,10 @@ export interface CotacaoDetalheProps {
   anexosIniciais: AnexoResumo[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Permissão de criar OC: habilita "Gerar ordem de compra". */
+  podeGerarOrdem: boolean;
+  /** OCs já geradas desta cotação, para link e aviso de duplicata. */
+  ordensGeradas: OrdemGerada[];
 }
 
 /**
@@ -62,9 +68,17 @@ export function CotacaoDetalhe({
   anexosIniciais,
   podeEditar,
   podeExcluir,
+  podeGerarOrdem,
+  ordensGeradas,
 }: CotacaoDetalheProps) {
   const router = useRouter();
   const editavel = podeEditar && cotacao.status === "aberta";
+  // Só cotação finalizada, com vencedor, e quem pode criar OC gera uma OC.
+  // É a única origem de cotação de uma OC (o form da OC não escolhe cotação).
+  const podeGerar =
+    podeGerarOrdem &&
+    cotacao.status === "finalizada" &&
+    Boolean(cotacao.vencedorFornecedorId);
   const info = infoStatusCotacao(cotacao.status);
 
   const [drawerFornecedor, setDrawerFornecedor] = React.useState(false);
@@ -125,7 +139,7 @@ export function CotacaoDetalhe({
           </p>
         </div>
 
-        {editavel || podeExcluir ? (
+        {editavel || podeExcluir || podeGerar ? (
           <div className="flex items-center gap-2">
             {editavel ? (
               <>
@@ -147,6 +161,18 @@ export function CotacaoDetalhe({
                   Finalizar e escolher vencedor
                 </Button>
               </>
+            ) : null}
+            {podeGerar ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  router.push(`/compras/ordens?gerar=${cotacao.id}`)
+                }
+              >
+                <FileOutput />
+                Gerar ordem de compra
+              </Button>
             ) : null}
             {podeExcluir ? (
               <Button
@@ -177,6 +203,24 @@ export function CotacaoDetalhe({
           {cotacao.motivoSelecao ? (
             <p className="text-detalhe text-muted-foreground">
               Motivo: {cotacao.motivoSelecao}
+            </p>
+          ) : null}
+          {ordensGeradas.length > 0 ? (
+            <p className="mt-1 text-legenda text-muted-foreground">
+              {ordensGeradas.length === 1
+                ? "Ordem gerada desta cotação: "
+                : "Ordens geradas desta cotação: "}
+              {ordensGeradas.map((ordem, indice) => (
+                <React.Fragment key={ordem.id}>
+                  {indice > 0 ? ", " : ""}
+                  <Link
+                    href={`/compras/ordens/${ordem.id}`}
+                    className="codigo-doc font-medium text-foreground underline underline-offset-2"
+                  >
+                    {ordem.numero ?? "Sem número"}
+                  </Link>
+                </React.Fragment>
+              ))}
             </p>
           ) : null}
         </div>

@@ -102,10 +102,19 @@ export interface CentroCustoOpcao {
   codigo: string | null;
 }
 
-/** Opção de cotação finalizada para vincular à OC. */
-export interface CotacaoOpcao {
-  id: string;
-  numero: string | null;
+/**
+ * Prefill de uma OC gerada a partir de uma cotação finalizada: fornecedor
+ * vencedor, condição/forma de pagamento dele e os itens que ele cotou. Não
+ * traz centro de custo (a cotação não tem): o usuário atribui na tela antes
+ * de criar a OC.
+ */
+export interface PrefillOrdemCotacao {
+  cotacaoId: string;
+  cotacaoNumero: string | null;
+  fornecedorId: string;
+  condicaoPagamentoId: string | null;
+  formaPagamentoId: string | null;
+  itens: { insumoId: string; quantidade: number; precoUnitario: number }[];
 }
 
 /** Opção de condição de pagamento ativa para o select da OC. */
@@ -382,24 +391,60 @@ export async function listarParcelasCondicao(
   }));
 }
 
-/** Cotações finalizadas para vincular à OC, mais recentes primeiro. */
-export async function listarCotacoesFinalizadas(): Promise<CotacaoOpcao[]> {
+/**
+ * Monta o prefill da OC a partir de uma cotação FINALIZADA: acha a linha do
+ * fornecedor vencedor em cotacao_fornecedores (a coluna vencedor_fornecedor_id
+ * da cotação guarda o fornecedores.id, então casamos por cotacao_id +
+ * fornecedor_id) e traz a condição/forma de pagamento dele e os itens que ele
+ * cotou. Retorna null se a cotação não existe, não está finalizada, não tem
+ * vencedor definido ou o vencedor não tem linha na cotação. É a única origem
+ * de cotação de uma OC: o formulário não deixa mais escolher cotação à mão.
+ */
+export async function montarPrefillDaCotacao(
+  cotacaoId: string,
+): Promise<PrefillOrdemCotacao | null> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  const { data: cotacao } = await supabase
     .from("cotacoes")
-    .select("id, numero")
-    .eq("status", "finalizada")
-    .order("created_at", { ascending: false });
+    .select("id, numero, status, vencedor_fornecedor_id")
+    .eq("id", cotacaoId)
+    .maybeSingle();
 
-  if (error) {
-    throw new Error("Não foi possível carregar as cotações");
+  if (
+    !cotacao ||
+    cotacao.status !== "finalizada" ||
+    !cotacao.vencedor_fornecedor_id
+  ) {
+    return null;
   }
 
-  return (data ?? []).map((cotacao) => ({
-    id: cotacao.id,
-    numero: cotacao.numero,
-  }));
+  const { data: vencedor } = await supabase
+    .from("cotacao_fornecedores")
+    .select("id, condicao_pagamento_id, forma_pagamento_id")
+    .eq("cotacao_id", cotacao.id)
+    .eq("fornecedor_id", cotacao.vencedor_fornecedor_id)
+    .maybeSingle();
+
+  if (!vencedor) return null;
+
+  const { data: itens } = await supabase
+    .from("cotacao_itens")
+    .select("insumo_id, quantidade, preco_unitario")
+    .eq("cotacao_fornecedor_id", vencedor.id);
+
+  return {
+    cotacaoId: cotacao.id,
+    cotacaoNumero: cotacao.numero,
+    fornecedorId: cotacao.vencedor_fornecedor_id,
+    condicaoPagamentoId: vencedor.condicao_pagamento_id,
+    formaPagamentoId: vencedor.forma_pagamento_id,
+    itens: (itens ?? []).map((item) => ({
+      insumoId: item.insumo_id,
+      quantidade: item.quantidade,
+      precoUnitario: item.preco_unitario,
+    })),
+  };
 }
 
 /** Linha do audit_log de lancamento_parcelas relevante pra um evento de pagamento. */
