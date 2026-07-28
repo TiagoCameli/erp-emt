@@ -7,6 +7,7 @@ import { CheckCircle2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  ConfirmDialog,
   DataTable,
   EmptyState,
   KPICard,
@@ -17,7 +18,10 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { STATUS_PARCELA } from "@/modules/financeiro/_shared/formato";
-import { buscarParcelasPagas } from "@/modules/financeiro/pagamentos/actions";
+import {
+  buscarParcelasPagas,
+  estornarPagamento,
+} from "@/modules/financeiro/pagamentos/actions";
 import type {
   ContaBancariaOpcao,
   ParcelaAprovada,
@@ -33,6 +37,7 @@ export interface PagamentosClienteProps {
   totalPagas: number;
   contas: ContaBancariaOpcao[];
   podePagar: boolean;
+  podeEstornar: boolean;
 }
 
 /** Número do lançamento + parcela para exibição (ex: LAN-0001 / 2). */
@@ -63,6 +68,7 @@ export function PagamentosCliente({
   totalPagas,
   contas,
   podePagar,
+  podeEstornar,
 }: PagamentosClienteProps) {
   const router = useRouter();
 
@@ -70,6 +76,27 @@ export function PagamentosCliente({
     null,
   );
   const [drawerAberto, setDrawerAberto] = React.useState(false);
+
+  const [parcelaEstorno, setParcelaEstorno] = React.useState<ParcelaPaga | null>(
+    null,
+  );
+  const [estornoAberto, setEstornoAberto] = React.useState(false);
+
+  function abrirEstorno(parcela: ParcelaPaga) {
+    setParcelaEstorno(parcela);
+    setEstornoAberto(true);
+  }
+
+  async function confirmarEstorno() {
+    if (!parcelaEstorno) return;
+    const resultado = await estornarPagamento(parcelaEstorno.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Pagamento estornado");
+    router.refresh();
+  }
 
   const totalAPagar = React.useMemo(
     () => aprovadas.reduce((soma, parcela) => soma + parcela.valor, 0),
@@ -193,8 +220,27 @@ export function PagamentosCliente({
         meta: { alinharDireita: true },
         cell: ({ row }) => <MoneyText valor={row.original.valor} />,
       },
+      ...(podeEstornar
+        ? [
+            {
+              id: "acoes",
+              header: "",
+              meta: { alinharDireita: true },
+              cell: ({ row }) => (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => abrirEstorno(row.original)}
+                >
+                  Estornar
+                </Button>
+              ),
+            } satisfies ColumnDef<ParcelaPaga, unknown>,
+          ]
+        : []),
     ],
-    [],
+    [podeEstornar],
   );
 
   // Histórico paginado no servidor: a primeira página vem do server component,
@@ -296,6 +342,16 @@ export function PagamentosCliente({
         parcela={parcelaAlvo}
         contas={contas}
         onPago={() => router.refresh()}
+      />
+
+      <ConfirmDialog
+        aberto={estornoAberto}
+        onAbertoChange={setEstornoAberto}
+        titulo="Estornar este pagamento?"
+        descricao="O valor volta para o saldo da conta bancária e a parcela retorna ao estado anterior ao pagamento."
+        textoConfirmar="Estornar"
+        variante="destrutivo"
+        onConfirmar={confirmarEstorno}
       />
     </div>
   );

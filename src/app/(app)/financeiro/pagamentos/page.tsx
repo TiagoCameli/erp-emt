@@ -18,6 +18,7 @@ export default async function PaginaPagamentos() {
   }
 
   const podePagar = temPermissao(usuario, "financeiro.pagamentos", "criar");
+  const podeEstornar = temPermissao(usuario, "financeiro.pagamentos", "excluir");
 
   const [aprovadas, pagas, contas] = await Promise.all([
     listarParcelasAprovadas(),
@@ -37,6 +38,7 @@ export default async function PaginaPagamentos() {
         totalPagas={pagas.total}
         contas={contas}
         podePagar={podePagar}
+        podeEstornar={podeEstornar}
       />
     </>
   );

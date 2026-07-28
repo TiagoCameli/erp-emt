@@ -489,3 +489,35 @@ export async function cancelarCotacao(
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+/**
+ * Exclui a cotação (itens e fornecedores caem junto). Toda a regra fica na
+ * fn_excluir_cotacao: ela checa a permissão de excluir, barra se já existe OC
+ * gerada da cotação e faz a remoção. A mensagem de erro do banco já é amigável,
+ * então é repassada direto para a UI.
+ */
+export async function excluirCotacao(id: string): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("excluir"))) {
+    return { erro: "Sem permissão para excluir cotações" };
+  }
+
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Cotação inválida" };
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("fn_excluir_cotacao", {
+    p_id: idValido.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "compras.cotacoes.excluirCotacao",
+      error,
+      error.message || "Não foi possível excluir a cotação. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}

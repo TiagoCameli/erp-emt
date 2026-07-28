@@ -32,6 +32,11 @@ export default async function PaginaLancamentoDetalhe({
   ]);
 
   const podeEditar = temPermissao(usuario, "financeiro.lancamentos", "editar");
+  const podeExcluir = temPermissao(
+    usuario,
+    "financeiro.lancamentos",
+    "excluir",
+  );
 
   return (
     <LancamentoDetalheView
@@ -41,6 +46,7 @@ export default async function PaginaLancamentoDetalhe({
       fornecedores={fornecedores}
       centrosCusto={centrosCusto}
       podeEditar={podeEditar}
+      podeExcluir={podeExcluir}
     />
   );
 }

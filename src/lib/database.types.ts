@@ -2705,6 +2705,26 @@ export type Database = {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
       }
+      fn_cancelar_programacao: {
+        Args: { p_parcela_id: string }
+        Returns: undefined
+      }
+      fn_estornar_pagamento: {
+        Args: { p_parcela_id: string }
+        Returns: undefined
+      }
+      fn_excluir_cotacao: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      fn_excluir_lancamento: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      fn_excluir_ordem_compra: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       fn_excluir_usuario: {
         Args: { p_id: string }
         Returns: boolean

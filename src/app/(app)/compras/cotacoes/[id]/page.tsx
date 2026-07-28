@@ -40,6 +40,7 @@ export default async function PaginaCotacaoDetalhe({
     ]);
 
   const podeEditar = temPermissao(usuario, "compras.cotacoes", "editar");
+  const podeExcluir = temPermissao(usuario, "compras.cotacoes", "excluir");
 
   return (
     <>
@@ -63,6 +64,7 @@ export default async function PaginaCotacaoDetalhe({
         condicoesPagamento={condicoesPagamento}
         anexosIniciais={anexosIniciais}
         podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
       />
     </>
   );

@@ -64,6 +64,41 @@ export async function pagarParcela(
 }
 
 /**
+ * Estorna o pagamento de uma parcela via RPC. O banco exige a parcela estar
+ * 'pago', barra quando conciliada e devolve a parcela ao estado anterior (o
+ * saldo da conta, que é derivado, se restaura sozinho). Repassa a mensagem de
+ * erro do banco direto para o toast.
+ */
+export async function estornarPagamento(
+  parcelaId: string,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "excluir");
+  } catch {
+    return { erro: "Sem permissão para estornar pagamentos" };
+  }
+
+  const idValido = uuidSchema.safeParse(parcelaId);
+  if (!idValido.success) return { erro: "Parcela inválida" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_estornar_pagamento", {
+    p_parcela_id: idValido.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.pagamentos.estornarPagamento",
+      error,
+      error.message || "Não foi possível estornar o pagamento. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
  * Página do histórico de pagamentos, para a paginação server-side da tabela
  * "Pagas". Exige só a permissão de ver (a RLS no banco é a barreira final).
  */

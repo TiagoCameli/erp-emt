@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Ban, Pencil, ReceiptText } from "lucide-react";
+import { ArrowLeft, Ban, Pencil, ReceiptText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -24,6 +24,7 @@ import {
   cancelarOrdem,
   desaprovarOrdem,
   enviarParaAprovacao,
+  excluirOrdemCompra,
   rejeitarOrdem,
 } from "@/modules/compras/ordens/actions";
 import type {
@@ -88,6 +89,7 @@ export interface OrdemDetalheViewProps {
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
+  podeExcluir: boolean;
   podeReceber: boolean;
 }
 
@@ -109,11 +111,13 @@ export function OrdemDetalheView({
   podeEditar,
   podeAprovar,
   podeDesaprovar,
+  podeExcluir,
   podeReceber,
 }: OrdemDetalheViewProps) {
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [dialogCancelar, setDialogCancelar] = React.useState(false);
+  const [dialogExcluir, setDialogExcluir] = React.useState(false);
   const [dialogRecebimento, setDialogRecebimento] = React.useState(false);
   const [enviando, setEnviando] = React.useState(false);
 
@@ -184,6 +188,16 @@ export function OrdemDetalheView({
     router.refresh();
   }
 
+  async function aoExcluir() {
+    const resultado = await excluirOrdemCompra(ordem.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Ordem de compra excluída");
+    router.push("/compras/ordens");
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -251,6 +265,17 @@ export function OrdemDetalheView({
             >
               <ReceiptText />
               Registrar recebimento
+            </Button>
+          ) : null}
+          {podeExcluir ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => setDialogExcluir(true)}
+            >
+              <Trash2 />
+              Excluir
             </Button>
           ) : null}
         </div>
@@ -427,6 +452,16 @@ export function OrdemDetalheView({
         variante="destrutivo"
         exigeMotivo
         onConfirmar={aoCancelar}
+      />
+
+      <ConfirmDialog
+        aberto={dialogExcluir}
+        onAbertoChange={setDialogExcluir}
+        titulo="Excluir ordem de compra"
+        descricao="Esta ação apaga a ordem de compra, os itens e o lançamento previsto. Não é possível desfazer."
+        textoConfirmar="Excluir"
+        variante="destrutivo"
+        onConfirmar={aoExcluir}
       />
 
       <RecebimentoDialog

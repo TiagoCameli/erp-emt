@@ -2,9 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Lock, Pencil } from "lucide-react";
+import { ArrowLeft, Lock, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
+  ConfirmDialog,
   MoneyText,
   StatusBadge,
   Trilha,
@@ -12,6 +14,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
+import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
 import {
   ROTULO_TIPO_LANCAMENTO,
   STATUS_LANCAMENTO,
@@ -64,6 +67,7 @@ export interface LancamentoDetalheViewProps {
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
   podeEditar: boolean;
+  podeExcluir: boolean;
 }
 
 /**
@@ -78,9 +82,21 @@ export function LancamentoDetalheView({
   fornecedores,
   centrosCusto,
   podeEditar,
+  podeExcluir,
 }: LancamentoDetalheViewProps) {
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
+  const [confirmarExcluir, setConfirmarExcluir] = React.useState(false);
+
+  async function handleExcluir() {
+    const resultado = await excluirLancamento(lancamento.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Lançamento excluído");
+    router.push("/financeiro/lancamentos");
+  }
 
   const ehManual = lancamento.origem === "manual";
   const temParcelaPaga = lancamento.parcelas.some(
@@ -154,6 +170,17 @@ export function LancamentoDetalheView({
               <Lock className="size-3.5" aria-hidden="true" />
               {motivoBloqueio}
             </span>
+          ) : null}
+          {podeExcluir ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => setConfirmarExcluir(true)}
+            >
+              <Trash2 />
+              Excluir
+            </Button>
           ) : null}
         </div>
       </div>
@@ -320,6 +347,18 @@ export function LancamentoDetalheView({
           categorias={categorias}
           fornecedores={fornecedores}
           centrosCusto={centrosCusto}
+        />
+      ) : null}
+
+      {podeExcluir ? (
+        <ConfirmDialog
+          aberto={confirmarExcluir}
+          onAbertoChange={setConfirmarExcluir}
+          titulo="Excluir lançamento"
+          descricao="O lançamento e suas parcelas e rateios serão excluídos. Esta ação não pode ser desfeita."
+          textoConfirmar="Excluir"
+          variante="destrutivo"
+          onConfirmar={handleExcluir}
         />
       ) : null}
     </div>
