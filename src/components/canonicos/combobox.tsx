@@ -72,6 +72,13 @@ export function Combobox({
   const [aberto, setAberto] = React.useState(false);
   const [busca, setBusca] = React.useState("");
   const [criando, setCriando] = React.useState(false);
+  // Ancora para descobrir, ao abrir, se estamos dentro de um dialog/drawer.
+  // Nesse caso o conteúdo é portalado PARA DENTRO do dialog, senão o scroll-lock
+  // do Radix Dialog (react-remove-scroll) bloqueia a rolagem da lista, que fica
+  // portalada no body, fora do limite dele. Fora de dialog, `container` fica
+  // null e o portal cai no body (padrão) — a lista já rola normalmente ali.
+  const anchorRef = React.useRef<HTMLSpanElement>(null);
+  const [container, setContainer] = React.useState<HTMLElement | null>(null);
   // Opções criadas inline nesta sessão (id -> rótulo digitado), para o nome
   // aparecer na hora sem esperar o `opcoes` do servidor recarregar.
   const [criadas, setCriadas] = React.useState<ComboboxOpcao[]>([]);
@@ -137,31 +144,43 @@ export function Combobox({
     <Popover
       open={aberto}
       onOpenChange={(estado) => {
+        // Ao abrir, resolve o dialog/drawer ancestral (se houver) para portalar
+        // o conteúdo dentro dele e a lista poder rolar.
+        if (estado) {
+          setContainer(
+            anchorRef.current?.closest<HTMLElement>(
+              '[role="dialog"],[role="alertdialog"]',
+            ) ?? null,
+          );
+        }
         setAberto(estado);
         if (!estado) setBusca("");
       }}
     >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size={size === "sm" ? "sm" : "default"}
-          role="combobox"
-          aria-expanded={aberto}
-          aria-label={ariaLabel}
-          disabled={disabled}
-          id={id}
-          className={cn("w-full justify-between font-normal", className)}
-        >
-          <span
-            className={cn("truncate", !rotuloSelecionado && "text-muted-foreground")}
+      <span ref={anchorRef} className="contents">
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size={size === "sm" ? "sm" : "default"}
+            role="combobox"
+            aria-expanded={aberto}
+            aria-label={ariaLabel}
+            disabled={disabled}
+            id={id}
+            className={cn("w-full justify-between font-normal", className)}
           >
-            {rotuloSelecionado || placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+            <span
+              className={cn("truncate", !rotuloSelecionado && "text-muted-foreground")}
+            >
+              {rotuloSelecionado || placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+      </span>
       <PopoverContent
+        container={container}
         className="w-(--radix-popover-trigger-width) min-w-[12rem] p-0"
         align="start"
       >
@@ -171,7 +190,12 @@ export function Combobox({
             value={busca}
             onValueChange={setBusca}
           />
-          <CommandList>
+          <CommandList
+            style={{
+              maxHeight:
+                "min(300px, var(--radix-popover-content-available-height, 300px))",
+            }}
+          >
             {semResultado ? (
               <div className="py-6 text-center text-detalhe text-muted-foreground">
                 {vazioTexto}
