@@ -24,7 +24,7 @@ export default async function PaginaCotacoes({
   }
 
   const params = await searchParams;
-  const { pagina, tamanho, busca } = lerParametrosLista(params);
+  const { pagina, tamanho, busca, de, ate } = lerParametrosLista(params);
   const status = parametroValido(params.status, STATUS_COTACAO);
 
   const { itens, total } = await listarCotacoes({
@@ -32,6 +32,8 @@ export default async function PaginaCotacoes({
     tamanho,
     status,
     busca,
+    de,
+    ate,
   });
 
   const podeCriar = temPermissao(usuario, "compras.cotacoes", "criar");
@@ -50,7 +52,10 @@ export default async function PaginaCotacoes({
         tamanho={tamanho}
         status={status ?? ""}
         busca={busca ?? ""}
+        de={de ?? ""}
+        ate={ate ?? ""}
         podeCriar={podeCriar}
+        idUsuario={usuario.id}
       />
     </>
   );

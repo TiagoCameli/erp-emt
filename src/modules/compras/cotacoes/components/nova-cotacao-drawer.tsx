@@ -61,7 +61,8 @@ export function NovaCotacaoDrawer({
       onAbertoChange={onAbertoChange}
       titulo="Nova cotação"
       descricao="Os fornecedores e preços você adiciona no detalhe"
-      larguraClassName="sm:max-w-[95vw]"
+      larguraClassName="sm:max-w-2xl"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !criando}
       rodape={
         <>
           <Button
@@ -99,7 +100,7 @@ export function NovaCotacaoDrawer({
           <Textarea
             id="cotacao-observacoes"
             rows={3}
-            placeholder="Anotações sobre a cotação"
+            placeholder="Ex.: cotação de brita e cimento para o canteiro do km 120"
             disabled={criando}
             {...form.register("observacoes")}
           />

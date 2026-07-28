@@ -23,9 +23,18 @@ export interface ListarOrdensParams {
   tamanho: number;
   status?: StatusOC;
   busca?: string;
+  /** Filtro por fornecedor. */
+  fornecedorId?: string;
+  /** Período de emissão (inclusive), yyyy-mm-dd. */
+  de?: string;
+  ate?: string;
 }
 
-/** Linha da listagem de ordens de compra. */
+/**
+ * Linha da listagem de ordens de compra. Os campos depois de `dataEmissao` são
+ * colunas opcionais da tabela: nascem escondidas e o usuário liga no menu
+ * "Colunas". Vêm no mesmo select (join barato), sem consulta extra por linha.
+ */
 export interface OrdemLista {
   id: string;
   numero: string | null;
@@ -33,6 +42,11 @@ export interface OrdemLista {
   valorTotal: number;
   status: string;
   dataEmissao: string;
+  condicaoPagamentoDescricao: string | null;
+  formaPagamentoNome: string | null;
+  cotacaoNumero: string | null;
+  criadoEm: string;
+  criadoPorNome: string | null;
 }
 
 /** Resultado paginado da listagem de ordens de compra. */
@@ -144,10 +158,34 @@ function nomeFornecedor(fornecedor: {
 }
 
 /**
+ * Nomes dos usuários que criaram os registros, pela RPC de auditoria
+ * (security definer): a tabela `usuarios` não é legível por quem só tem
+ * permissão de Compras. Uma chamada por página, não por linha.
+ */
+async function nomesDosCriadores(
+  supabase: SupabaseServerClient,
+  ids: (string | null)[],
+): Promise<Map<string, string>> {
+  const unicos = [...new Set(ids.filter((id): id is string => id !== null))];
+  const nomes = new Map<string, string>();
+  if (unicos.length === 0) return nomes;
+
+  const { data } = await supabase.rpc("nomes_usuarios_auditoria", {
+    p_ids: unicos,
+  });
+  for (const usuario of data ?? []) nomes.set(usuario.id, usuario.nome);
+  return nomes;
+}
+
+/**
  * Lista as ordens de compra com paginação server-side (range + count exact) e
- * o nome do fornecedor resolvido (join). Aceita filtro por status e busca por
- * número da OC ou nome do fornecedor. O valor_total vem do banco (trigger),
- * nunca recalculado no app.
+ * o nome do fornecedor resolvido (join). Aceita filtro por status, fornecedor,
+ * período de emissão e busca por número da OC ou nome do fornecedor. O
+ * valor_total vem do banco (trigger), nunca recalculado no app.
+ *
+ * O select também traz condição e forma de pagamento, cotação de origem e
+ * criação: são as colunas opcionais da tabela, todas por join no mesmo
+ * round-trip.
  */
 export async function listarOrdens(
   params: ListarOrdensParams,
@@ -162,7 +200,11 @@ export async function listarOrdens(
   let consulta = supabase
     .from("ordens_compra")
     .select(
-      "id, numero, valor_total, status, data_emissao, fornecedores(razao_social, nome_fantasia)",
+      `id, numero, valor_total, status, data_emissao, created_at, created_by,
+       fornecedores(razao_social, nome_fantasia),
+       condicoes_pagamento(descricao),
+       formas_pagamento(nome),
+       cotacoes(numero)`,
       { count: "exact" },
     )
     .order("data_emissao", { ascending: false })
@@ -170,6 +212,11 @@ export async function listarOrdens(
     .range(de, ate);
 
   if (params.status) consulta = consulta.eq("status", params.status);
+  if (params.fornecedorId) {
+    consulta = consulta.eq("fornecedor_id", params.fornecedorId);
+  }
+  if (params.de) consulta = consulta.gte("data_emissao", params.de);
+  if (params.ate) consulta = consulta.lte("data_emissao", params.ate);
 
   if (params.busca) {
     const padrao = padraoBusca(params.busca);
@@ -187,7 +234,13 @@ export async function listarOrdens(
     throw new Error("Não foi possível carregar as ordens de compra");
   }
 
-  const itens: OrdemLista[] = (data ?? []).map((ordem) => ({
+  const linhas = data ?? [];
+  const nomesCriadores = await nomesDosCriadores(
+    supabase,
+    linhas.map((ordem) => ordem.created_by),
+  );
+
+  const itens: OrdemLista[] = linhas.map((ordem) => ({
     id: ordem.id,
     numero: ordem.numero,
     fornecedorNome: ordem.fornecedores
@@ -196,6 +249,13 @@ export async function listarOrdens(
     valorTotal: ordem.valor_total,
     status: ordem.status,
     dataEmissao: ordem.data_emissao,
+    condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
+    formaPagamentoNome: ordem.formas_pagamento?.nome ?? null,
+    cotacaoNumero: ordem.cotacoes?.numero ?? null,
+    criadoEm: ordem.created_at,
+    criadoPorNome: ordem.created_by
+      ? (nomesCriadores.get(ordem.created_by) ?? null)
+      : null,
   }));
 
   return { itens, total: count ?? 0 };

@@ -1,7 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
+import { ConfirmDialog } from '@/components/canonicos/confirm-dialog';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,12 @@ export interface FormDrawerProps {
   descricao?: string;
   children: ReactNode;
   rodape?: ReactNode;
+  /**
+   * Há alteração não salva no formulário (normalmente `formState.isDirty`).
+   * Com isso ligado, fechar (X, Esc, clique fora) pede confirmação em vez de
+   * jogar o trabalho fora calado.
+   */
+  temAlteracoesNaoSalvas?: boolean;
   /**
    * Largura máxima da COLUNA DE CONTEÚDO. O form abre sempre em tela cheia;
    * isto só limita a largura útil dos campos (cabeçalho, corpo e rodapé ficam
@@ -42,12 +49,23 @@ export function FormDrawer({
   descricao,
   children,
   rodape,
+  temAlteracoesNaoSalvas = false,
   larguraClassName,
 }: FormDrawerProps) {
   const larguraConteudo = larguraClassName ?? 'max-w-4xl';
+  const [confirmandoDescarte, setConfirmandoDescarte] = useState(false);
+
+  function pedirTrocaDeEstado(proximoAberto: boolean) {
+    if (!proximoAberto && temAlteracoesNaoSalvas) {
+      setConfirmandoDescarte(true);
+      return;
+    }
+    onAbertoChange(proximoAberto);
+  }
 
   return (
-    <Dialog open={aberto} onOpenChange={onAbertoChange}>
+    <>
+    <Dialog open={aberto} onOpenChange={pedirTrocaDeEstado}>
       <DialogContent
         className={cn(
           // Tela cheia: sobrescreve o card centralizado do Dialog base.
@@ -86,5 +104,19 @@ export function FormDrawer({
         ) : null}
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog
+      aberto={confirmandoDescarte}
+      onAbertoChange={setConfirmandoDescarte}
+      titulo="Descartar as alterações?"
+      descricao="Você mexeu neste formulário e ainda não salvou. Fechar agora joga as alterações fora."
+      textoConfirmar="Descartar"
+      variante="destrutivo"
+      onConfirmar={() => {
+        setConfirmandoDescarte(false);
+        onAbertoChange(false);
+      }}
+    />
+    </>
   );
 }

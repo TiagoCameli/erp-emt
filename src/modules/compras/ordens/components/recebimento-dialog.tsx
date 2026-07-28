@@ -6,7 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { CampoFormulario, classesFormulario } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  InputMoeda,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -138,6 +142,7 @@ export function RecebimentoDialog({
           >
             <Input
               id="recebimento-numero-nf"
+              placeholder="Ex.: 123456"
               disabled={salvando}
               {...form.register("numeroNf")}
             />
@@ -147,13 +152,17 @@ export function RecebimentoDialog({
             id="recebimento-valor-nf"
             rotulo="Valor da nota fiscal"
             obrigatorio
+            largura="curto"
             erro={form.formState.errors.valorNf?.message}
           >
-            <Input
+            <InputMoeda
               id="recebimento-valor-nf"
-              inputMode="decimal"
+              valor={form.watch("valorNf") ?? ""}
+              onValorChange={(valor) =>
+                form.setValue("valorNf", valor, { shouldDirty: true })
+              }
+              onBlur={() => void form.trigger("valorNf")}
               disabled={salvando}
-              {...form.register("valorNf")}
             />
           </CampoFormulario>
 
@@ -161,11 +170,13 @@ export function RecebimentoDialog({
             id="recebimento-data"
             rotulo="Data do recebimento"
             obrigatorio
+            largura="curto"
             erro={form.formState.errors.dataRecebimento?.message}
           >
             <Input
               id="recebimento-data"
               type="date"
+              className="tabular-nums"
               disabled={salvando}
               {...form.register("dataRecebimento")}
             />

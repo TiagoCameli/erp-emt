@@ -4,9 +4,15 @@ import * as React from "react";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Combobox, EmptyState, MoneyText } from "@/components/canonicos";
+import {
+  CelulaVazia,
+  Combobox,
+  EmptyState,
+  InputMoeda,
+  InputQuantidade,
+  MoneyText,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -26,6 +32,13 @@ import type {
   CotacaoDetalhe,
   InsumoOpcao,
 } from "@/modules/compras/cotacoes/queries";
+
+/**
+ * Classes do cabeçalho do mapa. Fica fixo no topo enquanto a matriz rola, no
+ * mesmo padrão das listagens (DataTable com cabecalhoFixo).
+ */
+const CLASSES_CABECALHO =
+  "sticky top-0 z-10 h-9 bg-background px-3 text-detalhe font-medium text-muted-foreground shadow-[inset_0_-1px_0_var(--color-border)]";
 
 /** Estado editável de uma linha do mapa (um insumo). */
 interface LinhaEditavel {
@@ -148,11 +161,7 @@ export function MapaComparativo({
     );
   }
 
-  function alterarPreco(
-    insumoId: string,
-    fornecedorId: string,
-    valor: string,
-  ) {
+  function alterarPreco(insumoId: string, fornecedorId: string, valor: string) {
     setLinhas((atual) =>
       atual.map((linha) =>
         linha.insumoId === insumoId
@@ -235,25 +244,28 @@ export function MapaComparativo({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto rounded-md border border-border">
+      <div className="max-h-[calc(100vh-22rem)] overflow-auto rounded-md border border-border">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="h-9 px-3 text-detalhe font-medium text-muted-foreground">
-                Insumo
-              </TableHead>
-              <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
+              <TableHead className={CLASSES_CABECALHO}>Insumo</TableHead>
+              <TableHead className={cn(CLASSES_CABECALHO, "text-right")}>
                 Quantidade
               </TableHead>
               {fornecedores.map((fornecedor) => (
                 <TableHead
                   key={fornecedor.id}
-                  className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground"
+                  className={cn(CLASSES_CABECALHO, "text-right")}
+                  title={fornecedor.fornecedorNome}
                 >
-                  {fornecedor.fornecedorNome}
+                  <span className="block max-w-40 truncate">
+                    {fornecedor.fornecedorNome}
+                  </span>
                 </TableHead>
               ))}
-              {editavel ? <TableHead className="h-9 w-10 px-3" /> : null}
+              {editavel ? (
+                <TableHead className={cn(CLASSES_CABECALHO, "w-10")} />
+              ) : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -284,18 +296,14 @@ export function MapaComparativo({
                     <TableCell className="px-3 text-right text-detalhe">
                       {editavel ? (
                         <div className="flex items-center justify-end gap-1">
-                          <Input
-                            inputMode="decimal"
-                            value={linha.quantidade}
-                            onChange={(evento) =>
-                              alterarQuantidade(
-                                linha.insumoId,
-                                evento.target.value,
-                              )
+                          <InputQuantidade
+                            valor={linha.quantidade}
+                            onValorChange={(valor) =>
+                              alterarQuantidade(linha.insumoId, valor)
                             }
-                            className="h-8 w-24 text-right tabular-nums"
+                            className="h-8 w-24"
                             placeholder="0"
-                            aria-label={`Quantidade de ${linha.insumoNome}`}
+                            ariaLabel={`Quantidade de ${linha.insumoNome}`}
                           />
                           {linha.unidadeSigla ? (
                             <span className="text-legenda text-muted-foreground">
@@ -326,22 +334,20 @@ export function MapaComparativo({
                           )}
                         >
                           {editavel ? (
-                            <Input
-                              inputMode="decimal"
-                              value={precoTexto}
-                              onChange={(evento) =>
+                            <InputMoeda
+                              valor={precoTexto}
+                              onValorChange={(valor) =>
                                 alterarPreco(
                                   linha.insumoId,
                                   fornecedor.id,
-                                  evento.target.value,
+                                  valor,
                                 )
                               }
                               className={cn(
-                                "h-8 w-28 text-right tabular-nums",
+                                "h-8 w-28",
                                 ehMenor && "text-status-aprovado",
                               )}
-                              placeholder="0,00"
-                              aria-label={`Preço de ${linha.insumoNome} no fornecedor ${fornecedor.fornecedorNome}`}
+                              ariaLabel={`Preço de ${linha.insumoNome} no fornecedor ${fornecedor.fornecedorNome}`}
                             />
                           ) : preco > 0 ? (
                             <MoneyText
@@ -352,7 +358,7 @@ export function MapaComparativo({
                               )}
                             />
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                            <CelulaVazia />
                           )}
                         </TableCell>
                       );
@@ -375,15 +381,14 @@ export function MapaComparativo({
               })
             )}
 
-            <TableRow className="border-t border-border bg-surface hover:bg-surface">
+            <TableRow className="sticky bottom-0 border-t border-border bg-surface shadow-[inset_0_1px_0_var(--color-border)] hover:bg-surface">
               <TableCell className="px-3 text-detalhe font-medium">
                 Total
               </TableCell>
               <TableCell className="px-3" />
               {fornecedores.map((fornecedor) => {
                 const total = calc.totalPorFornecedor.get(fornecedor.id) ?? 0;
-                const ehMenorTotal =
-                  total > 0 && total === calc.menorTotal;
+                const ehMenorTotal = total > 0 && total === calc.menorTotal;
                 return (
                   <TableCell
                     key={fornecedor.id}

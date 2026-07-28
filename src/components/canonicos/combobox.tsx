@@ -18,6 +18,12 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+/**
+ * Quantos itens a lista desenha de uma vez. Acima disso o usuário refina a
+ * busca: lista de 3 mil linhas não é usável nem confiável no clique.
+ */
+const MAX_OPCOES_RENDERIZADAS = 100;
+
 export interface ComboboxOpcao {
   valor: string;
   rotulo: string;
@@ -101,6 +107,15 @@ export function Combobox({
     () => todasOpcoes.filter((o) => o.rotulo.toLowerCase().includes(termo)),
     [todasOpcoes, termo],
   );
+
+  // Teto de itens renderizados. Cadastros grandes do ERP (3 mil insumos, 600
+  // fornecedores) travavam a lista e, pior, o re-render entre apertar e soltar
+  // o mouse trocava o item embaixo do cursor: o clique selecionava o vizinho.
+  const opcoesVisiveis = React.useMemo(
+    () => opcoesFiltradas.slice(0, MAX_OPCOES_RENDERIZADAS),
+    [opcoesFiltradas],
+  );
+  const ocultas = opcoesFiltradas.length - opcoesVisiveis.length;
 
   const rotuloSelecionado =
     todasOpcoes.find((o) => o.valor === valor)?.rotulo ?? "";
@@ -202,24 +217,35 @@ export function Combobox({
               </div>
             ) : null}
 
-            {opcoesFiltradas.length > 0 ? (
+            {opcoesVisiveis.length > 0 ? (
               <CommandGroup>
-                {opcoesFiltradas.map((opcao) => (
+                {opcoesVisiveis.map((opcao) => (
                   <CommandItem
                     key={opcao.valor}
                     value={opcao.valor}
                     onSelect={() => selecionar(opcao.valor)}
+                    className={cn(
+                      valor === opcao.valor && "font-medium text-accent-foreground",
+                    )}
                   >
                     <Check
                       className={cn(
-                        "mr-2 size-4",
+                        "mr-2 size-4 shrink-0",
                         valor === opcao.valor ? "opacity-100" : "opacity-0",
                       )}
                     />
-                    {opcao.rotulo}
+                    <span className="truncate">{opcao.rotulo}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
+            ) : null}
+
+            {ocultas > 0 ? (
+              <div className="border-t border-border px-3 py-2 text-legenda text-muted-foreground">
+                Mostrando {opcoesVisiveis.length} de{" "}
+                {opcoesFiltradas.length.toLocaleString("pt-BR")}. Digite para
+                refinar a busca.
+              </div>
             ) : null}
 
             {podeCriar ? (

@@ -1,16 +1,56 @@
 import "server-only";
 
+import { TZDate } from "@date-fns/tz";
+
+import { TIMEZONE } from "@/lib/formatadores";
 import type { createClient } from "@/lib/supabase/server";
 
-/** Paginação e busca lidas dos searchParams de uma listagem de Compras. */
+/** Paginação, busca e filtros lidos dos searchParams de uma listagem de Compras. */
 export interface ParametrosLista {
   /** Página base 0 (na URL o parâmetro `pagina` é base 1). */
   pagina: number;
   tamanho: number;
   busca?: string;
+  /** Filtro por fornecedor (parâmetro `fornecedor`, uuid). */
+  fornecedorId?: string;
+  /** Início do período (parâmetro `de`, yyyy-mm-dd). */
+  de?: string;
+  /** Fim do período (parâmetro `ate`, yyyy-mm-dd). */
+  ate?: string;
 }
 
 const TAMANHO_PADRAO = 25;
+
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Data yyyy-mm-dd vinda da URL, ou undefined se não for uma data. */
+export function parametroData(
+  valor: string | string[] | undefined,
+): string | undefined {
+  if (typeof valor !== "string" || !DATA_ISO.test(valor)) return undefined;
+  return Number.isNaN(new Date(valor).getTime()) ? undefined : valor;
+}
+
+/** Uuid vindo da URL, ou undefined. Evita mandar lixo pro filtro do PostgREST. */
+export function parametroUuid(
+  valor: string | string[] | undefined,
+): string | undefined {
+  return typeof valor === "string" && UUID.test(valor) ? valor : undefined;
+}
+
+/**
+ * Instante UTC da meia-noite do dia informado, no fuso de exibição do sistema
+ * (Rio Branco). Filtro de período em coluna `timestamptz` precisa disso: o dia
+ * do usuário começa às 05:00 UTC, não às 00:00 UTC. Sem isso, um registro
+ * criado de manhã em Rio Branco cairia no dia anterior do filtro.
+ * Para coluna `date` (ex. data_emissao) não use: lá a string crua já basta.
+ */
+export function inicioDoDiaISO(data: string, deslocamentoDias = 0): string {
+  const [ano, mes, dia] = data.split("-").map(Number);
+  return new TZDate(ano, mes - 1, dia + deslocamentoDias, TIMEZONE).toISOString();
+}
 
 /** Lê e valida um parâmetro de filtro contra a lista de valores aceitos. */
 export function parametroValido<T extends string>(
@@ -23,7 +63,12 @@ export function parametroValido<T extends string>(
     : undefined;
 }
 
-/** Lê página (base 1 na URL), tamanho (padrão 25) e termo de busca. */
+/**
+ * Lê página (base 1 na URL), tamanho (padrão 25), termo de busca e os filtros
+ * de fornecedor e período. Parâmetro inválido é ignorado, nunca vai pro banco.
+ * Período invertido (de > ate) é trocado de lado, senão a lista vem vazia sem
+ * explicação nenhuma pro usuário.
+ */
 export function lerParametrosLista(
   params: Record<string, string | string[] | undefined>,
 ): ParametrosLista {
@@ -39,7 +84,18 @@ export function lerParametrosLista(
 
   const busca = typeof params.busca === "string" ? params.busca.trim() : "";
 
-  return { pagina, tamanho, busca: busca === "" ? undefined : busca };
+  let de = parametroData(params.de);
+  let ate = parametroData(params.ate);
+  if (de && ate && de > ate) [de, ate] = [ate, de];
+
+  return {
+    pagina,
+    tamanho,
+    busca: busca === "" ? undefined : busca,
+    fornecedorId: parametroUuid(params.fornecedor),
+    de,
+    ate,
+  };
 }
 
 /**
