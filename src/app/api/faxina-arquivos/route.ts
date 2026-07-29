@@ -74,9 +74,18 @@ export async function GET(request: Request) {
 
   await removerBinarios(apagados);
 
+  // Binário que subiu e nunca virou registro (falha entre o upload e o insert).
+  // A faxina antiga não via esses: sem linha em `arquivos`, ninguém os apagava.
+  const { data: semRegistro } = await admin.rpc("fn_binarios_sem_registro", {
+    p_carencia_horas: 24,
+  });
+  const soltos = (semRegistro ?? []).map((item) => item.path_storage);
+  await removerBinarios(soltos);
+
   return NextResponse.json({
     apagados: apagados.length,
     // Ganhou vínculo novo entre a listagem e a exclusão: fica.
     mantidos: mantidos.length,
+    semRegistro: soltos.length,
   });
 }

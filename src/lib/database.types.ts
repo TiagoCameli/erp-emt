@@ -2820,6 +2820,13 @@ export type Database = {
           colaborador_id: string;
         }[];
       };
+      fn_binarios_sem_registro: {
+        Args: { p_carencia_horas?: number };
+        Returns: {
+          criado_em: string;
+          path_storage: string;
+        }[];
+      };
       fn_cancelar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string };
         Returns: undefined;
