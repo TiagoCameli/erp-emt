@@ -6,9 +6,11 @@ import {
   importar,
   validarImport,
 } from "@/modules/cadastros/categorias/actions";
-import { CategoriasAcoesCabecalho } from "@/modules/cadastros/categorias/components/categorias-acoes-cabecalho";
 import { CategoriasTabela } from "@/modules/cadastros/categorias/components/categorias-tabela";
-import { listar } from "@/modules/cadastros/categorias/queries";
+import {
+  listarGrupos,
+  listarPorGrupo,
+} from "@/modules/cadastros/categorias/queries";
 import { ImportarCadastro } from "@/modules/cadastros/_shared/importar-cadastro";
 
 export default async function PaginaCategorias() {
@@ -17,7 +19,10 @@ export default async function PaginaCategorias() {
     notFound();
   }
 
-  const categorias = await listar();
+  const [grupos, opcoesGrupo] = await Promise.all([
+    listarPorGrupo(),
+    listarGrupos(),
+  ]);
 
   const podeCriar = temPermissao(usuario, "cadastros.categorias", "criar");
   const podeEditar = temPermissao(usuario, "cadastros.categorias", "editar");
@@ -27,23 +32,23 @@ export default async function PaginaCategorias() {
     <>
       <PageHeader
         titulo="Categorias"
-        descricao="Categorias de insumo para agrupar materiais, peças e serviços"
+        descricao="Dois níveis: 4 grupos fixos (Material, Mão de obra, Equipamentos, Outros) e as subcategorias dentro de cada um. O insumo aponta para a subcategoria."
         acoes={
           podeCriar ? (
             <>
               <ImportarCadastro
-                titulo="Importar categorias"
+                titulo="Importar subcategorias"
                 modeloHref="/cadastros/categorias/modelo"
                 validarAction={validarImport}
                 importarAction={importar}
               />
-              <CategoriasAcoesCabecalho />
             </>
           ) : undefined
         }
       />
       <CategoriasTabela
-        categorias={categorias}
+        grupos={grupos}
+        opcoesGrupo={opcoesGrupo}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}

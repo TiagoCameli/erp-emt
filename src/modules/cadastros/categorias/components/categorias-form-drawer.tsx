@@ -17,11 +17,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { criar, editar } from "@/modules/cadastros/categorias/actions";
-import type { CategoriaLista } from "@/modules/cadastros/categorias/queries";
+import type {
+  CategoriaLista,
+  GrupoOpcao,
+} from "@/modules/cadastros/categorias/queries";
 import {
   categoriaSchema,
-  ROTULO_TIPO_CATEGORIA,
-  TIPOS_CATEGORIA,
   type CategoriaInput,
 } from "@/modules/cadastros/categorias/schemas";
 
@@ -36,8 +37,12 @@ type CategoriaFormInput = z.input<typeof categoriaSchema>;
 export interface CategoriasFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
-  /** Categoria em edição. Ausente significa criar. */
+  /** Subcategoria em edição. Ausente significa criar. */
   categoria?: CategoriaLista | null;
+  /** Grupo já escolhido (o botão "Nova subcategoria" nasce dentro do grupo). */
+  grupoPadrao?: string | null;
+  /** Os 4 grupos fixos. */
+  grupos: GrupoOpcao[];
 }
 
 /**
@@ -48,12 +53,18 @@ export function CategoriasFormDrawer({
   aberto,
   onAbertoChange,
   categoria,
+  grupoPadrao,
+  grupos,
 }: CategoriasFormDrawerProps) {
   const editando = Boolean(categoria);
 
   const form = useForm<CategoriaFormInput, unknown, CategoriaInput>({
     resolver: zodResolver(categoriaSchema),
-    defaultValues: { nome: "", tipo: "material", ativo: true },
+    defaultValues: {
+      nome: "",
+      grupoId: grupoPadrao ?? grupos[0]?.id ?? "",
+      ativo: true,
+    },
   });
 
   // Sincroniza o formulário sempre que o drawer abre ou troca de categoria.
@@ -62,13 +73,17 @@ export function CategoriasFormDrawer({
     if (categoria) {
       form.reset({
         nome: categoria.nome,
-        tipo: categoria.tipo,
+        grupoId: categoria.grupoId,
         ativo: categoria.ativo,
       });
     } else {
-      form.reset({ nome: "", tipo: "material", ativo: true });
+      form.reset({
+        nome: "",
+        grupoId: grupoPadrao ?? grupos[0]?.id ?? "",
+        ativo: true,
+      });
     }
-  }, [aberto, categoria, form]);
+  }, [aberto, categoria, form, grupoPadrao, grupos]);
 
   const salvando = form.formState.isSubmitting;
 
@@ -86,14 +101,14 @@ export function CategoriasFormDrawer({
     onAbertoChange(false);
   }
 
-  const tipoValor = form.watch("tipo");
+  const grupoValor = form.watch("grupoId");
 
   return (
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
-      titulo={editando ? "Editar categoria" : "Nova categoria"}
-      descricao="Categorias agrupam os insumos por natureza para o custo"
+      titulo={editando ? "Editar subcategoria" : "Nova subcategoria"}
+      descricao="Subcategoria é o detalhe dentro de um dos 4 grupos, e é ela que o insumo aponta"
       rodape={
         <>
           <Button
@@ -108,7 +123,7 @@ export function CategoriasFormDrawer({
             {salvando ? (
               <LoaderCircle className="size-4 animate-spin" aria-hidden />
             ) : null}
-            {editando ? "Salvar categoria" : "Criar categoria"}
+            {editando ? "Salvar subcategoria" : "Criar subcategoria"}
           </Button>
         </>
       }
@@ -125,38 +140,38 @@ export function CategoriasFormDrawer({
         >
           <Input
             id="categoria-nome"
-            placeholder="Materiais de construção"
+            placeholder="Cimento, agregados e concreto"
             autoFocus
             {...form.register("nome")}
           />
         </CampoFormulario>
 
         <CampoFormulario
-          id="categoria-tipo"
-          rotulo="Tipo"
-          erro={form.formState.errors.tipo?.message}
+          id="categoria-grupo"
+          rotulo="Grupo"
+          obrigatorio
+          ajuda="Os 4 grupos são fixos: mudar o grupo de uma subcategoria muda em qual grupo o custo dela aparece nos relatórios"
+          erro={form.formState.errors.grupoId?.message}
         >
           <Combobox
-            valor={tipoValor}
+            valor={grupoValor}
             onValorChange={(valor) =>
-              form.setValue("tipo", valor as CategoriaInput["tipo"], {
-                shouldValidate: true,
-              })
+              form.setValue("grupoId", valor, { shouldValidate: true })
             }
-            opcoes={TIPOS_CATEGORIA.map((tipo) => ({
-              valor: tipo,
-              rotulo: ROTULO_TIPO_CATEGORIA[tipo],
+            opcoes={grupos.map((grupo) => ({
+              valor: grupo.id,
+              rotulo: grupo.nome,
             }))}
-            placeholder="Escolha o tipo"
+            placeholder="Escolha o grupo"
             className="w-full"
-            id="categoria-tipo"
+            id="categoria-grupo"
           />
         </CampoFormulario>
 
         <SelectAtivo
           value={form.watch("ativo") ?? true}
           onChange={(valor) => form.setValue("ativo", valor)}
-          ajuda="Categorias inativas somem das listas de seleção, mas continuam no histórico."
+          ajuda="Subcategorias inativas somem das listas de seleção, mas continuam no histórico."
         />
       </form>
     </FormDrawer>

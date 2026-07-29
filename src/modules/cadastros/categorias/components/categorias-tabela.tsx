@@ -22,32 +22,40 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  alternarAtivo,
-  excluir,
-} from "@/modules/cadastros/categorias/actions";
-import type { CategoriaLista } from "@/modules/cadastros/categorias/queries";
-import { ROTULO_TIPO_CATEGORIA } from "@/modules/cadastros/categorias/schemas";
+import { cn } from "@/lib/utils";
+import { CLASSE_COR_GRUPO } from "@/modules/cadastros/_shared/insumo-grupos";
+import { alternarAtivo, excluir } from "@/modules/cadastros/categorias/actions";
+import type {
+  CategoriaLista,
+  GrupoComCategorias,
+  GrupoOpcao,
+} from "@/modules/cadastros/categorias/queries";
 import { CategoriasFormDrawer } from "./categorias-form-drawer";
 
 export interface CategoriasTabelaProps {
-  categorias: CategoriaLista[];
+  grupos: GrupoComCategorias[];
+  opcoesGrupo: GrupoOpcao[];
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
 }
 
 const OPCOES_STATUS = [
-  { valor: "ativos", rotulo: "Ativos" },
-  { valor: "inativos", rotulo: "Inativos" },
+  { valor: "ativos", rotulo: "Ativas" },
+  { valor: "inativos", rotulo: "Inativas" },
 ];
 
 /**
- * Listagem de categorias de insumo: busca por nome, filtro de status,
- * criação e edição no drawer, ativar/desativar e exclusão para a lixeira.
+ * Categorias de insumo em 2 níveis: uma seção por grupo fixo, com as
+ * subcategorias dentro. Grupo não tem CRUD (é semeado no banco); o que se cria,
+ * edita e desativa é a subcategoria, sempre dentro de um grupo.
+ *
+ * A contagem de insumos por subcategoria fica visível porque é ela que diz se a
+ * exclusão vai passar: subcategoria com insumo vinculado é recusada pelo banco.
  */
 export function CategoriasTabela({
-  categorias,
+  grupos,
+  opcoesGrupo,
   podeCriar,
   podeEditar,
   podeExcluir,
@@ -57,16 +65,18 @@ export function CategoriasTabela({
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<CategoriaLista | null>(null);
-
+  const [grupoNovo, setGrupoNovo] = React.useState<string | null>(null);
   const [aExcluir, setAExcluir] = React.useState<CategoriaLista | null>(null);
 
-  function abrirNova() {
+  function abrirNova(grupoId: string) {
     setEmEdicao(null);
+    setGrupoNovo(grupoId);
     setDrawerAberto(true);
   }
 
   function abrirEdicao(categoria: CategoriaLista) {
     setEmEdicao(categoria);
+    setGrupoNovo(null);
     setDrawerAberto(true);
   }
 
@@ -76,52 +86,65 @@ export function CategoriasTabela({
       toast.error(resultado.erro);
       return;
     }
-    toast.success(categoria.ativo ? "Categoria desativada" : "Categoria ativada");
+    toast.success(
+      categoria.ativo ? "Subcategoria desativada" : "Subcategoria ativada",
+    );
   }
 
-  async function aoExcluir(motivo?: string) {
-    if (!aExcluir) return;
-    const resultado = await excluir(aExcluir.id, motivo ?? "");
+  async function aoExcluir(categoria: CategoriaLista, motivo: string) {
+    const resultado = await excluir(categoria.id, motivo);
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Categoria movida para a lixeira");
-    setAExcluir(null);
+    toast.success("Subcategoria movida para a lixeira");
   }
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return categorias.filter((categoria) => {
-      if (status === "ativos" && !categoria.ativo) return false;
-      if (status === "inativos" && categoria.ativo) return false;
-      if (termo && !categoria.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
-  }, [categorias, busca, status]);
+  const termo = busca.trim().toLowerCase();
+
+  const filtrados = React.useMemo(
+    () =>
+      grupos.map((grupo) => ({
+        ...grupo,
+        categorias: grupo.categorias.filter((categoria) => {
+          if (status === "ativos" && !categoria.ativo) return false;
+          if (status === "inativos" && categoria.ativo) return false;
+          if (termo && !categoria.nome.toLowerCase().includes(termo)) {
+            return false;
+          }
+          return true;
+        }),
+      })),
+    [grupos, status, termo],
+  );
 
   const colunas = React.useMemo<ColumnDef<CategoriaLista, unknown>[]>(() => {
     const base: ColumnDef<CategoriaLista, unknown>[] = [
       {
         accessorKey: "nome",
-        header: "Nome",
+        header: "Subcategoria",
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),
       },
       {
-        accessorKey: "tipo",
-        header: "Tipo",
-        cell: ({ row }) => ROTULO_TIPO_CATEGORIA[row.original.tipo],
+        accessorKey: "insumos",
+        header: "Insumos",
+        size: 110,
+        meta: { alinharDireita: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">{row.original.insumos}</span>
+        ),
       },
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
-            <StatusBadge status="aprovado" rotulo="Ativo" />
+            <StatusBadge status="aprovado" rotulo="Ativa" />
           ) : (
-            <StatusBadge status="rascunho" rotulo="Inativo" />
+            <StatusBadge status="rascunho" rotulo="Inativa" />
           ),
       },
     ];
@@ -131,6 +154,7 @@ export function CategoriasTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true },
       cell: ({ row }) => {
         const categoria = row.original;
@@ -152,7 +176,9 @@ export function CategoriasTabela({
                   <DropdownMenuItem onSelect={() => abrirEdicao(categoria)}>
                     Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => aoAlternarAtivo(categoria)}>
+                  <DropdownMenuItem
+                    onSelect={() => void aoAlternarAtivo(categoria)}
+                  >
                     {categoria.ativo ? "Desativar" : "Ativar"}
                   </DropdownMenuItem>
                 </>
@@ -181,63 +207,95 @@ export function CategoriasTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={setBusca}
-          placeholder="Buscar por nome"
+          placeholder="Buscar subcategoria"
         />
         <FiltroSelect
           valor={status === "todos" ? "" : status}
           onValorChange={(valor) => setStatus(valor === "" ? "todos" : valor)}
           opcoes={OPCOES_STATUS}
           placeholder="Status"
-          todosRotulo="Todos"
+          todosRotulo="Todas"
         />
       </FilterBar>
 
-      <DataTable
-        columns={colunas}
-        data={dados}
-        emptyState={
-          <EmptyState
-            icone={Tags}
-            titulo="Nenhuma categoria encontrada"
-            descricao="Cadastre categorias para agrupar os insumos por natureza."
-            acao={
-              podeCriar ? (
-                <Button type="button" size="sm" onClick={abrirNova}>
+      <div className="flex flex-col gap-6">
+        {filtrados.map((grupo) => (
+          <section key={grupo.id} className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "rounded-md px-2 py-0.5 text-legenda font-medium",
+                    CLASSE_COR_GRUPO[grupo.cor],
+                  )}
+                >
+                  {grupo.nome}
+                </span>
+                <span className="text-legenda text-muted-foreground">
+                  {grupo.categorias.length} subcategoria
+                  {grupo.categorias.length === 1 ? "" : "s"} · {grupo.insumos}{" "}
+                  insumo{grupo.insumos === 1 ? "" : "s"}
+                </span>
+              </div>
+              {podeCriar ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => abrirNova(grupo.id)}
+                >
                   <Plus />
-                  Nova categoria
+                  Nova subcategoria
                 </Button>
-              ) : undefined
-            }
-          />
-        }
-      />
+              ) : null}
+            </div>
 
-      {podeEditar || podeCriar ? (
+            <DataTable
+              columns={colunas}
+              data={grupo.categorias}
+              emptyState={
+                <EmptyState
+                  icone={Tags}
+                  titulo="Nenhuma subcategoria neste grupo"
+                  descricao="Ajuste os filtros ou cadastre uma subcategoria."
+                  className="border-none bg-transparent"
+                />
+              }
+            />
+          </section>
+        ))}
+      </div>
+
+      {podeCriar || podeEditar ? (
         <CategoriasFormDrawer
+          key={emEdicao?.id ?? grupoNovo ?? "nova"}
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           categoria={emEdicao}
+          grupoPadrao={grupoNovo}
+          grupos={opcoesGrupo}
         />
       ) : null}
 
-      {podeExcluir ? (
-        <ConfirmDialog
-          aberto={aExcluir !== null}
-          onAbertoChange={(aberto) => {
-            if (!aberto) setAExcluir(null);
-          }}
-          titulo="Excluir categoria"
-          descricao={
-            aExcluir
-              ? `A categoria ${aExcluir.nome} vai para a lixeira. Informe o motivo.`
-              : ""
-          }
-          textoConfirmar="Excluir categoria"
-          variante="destrutivo"
-          exigeMotivo
-          onConfirmar={aoExcluir}
-        />
-      ) : null}
+      <ConfirmDialog
+        aberto={aExcluir !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setAExcluir(null);
+        }}
+        titulo="Excluir subcategoria"
+        descricao={
+          aExcluir && aExcluir.insumos > 0
+            ? `Esta subcategoria tem ${aExcluir.insumos} insumo(s) vinculado(s) e o banco vai recusar a exclusão. Mova os insumos para outra subcategoria antes: lista de insumos, seleção múltipla, "Alterar categoria".`
+            : "A subcategoria vai para a lixeira e pode ser restaurada. Informe o motivo."
+        }
+        textoConfirmar="Excluir"
+        variante="destrutivo"
+        exigeMotivo
+        onConfirmar={async (motivo) => {
+          if (aExcluir) await aoExcluir(aExcluir, motivo ?? "");
+          setAExcluir(null);
+        }}
+      />
     </>
   );
 }

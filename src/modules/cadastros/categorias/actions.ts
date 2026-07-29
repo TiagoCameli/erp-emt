@@ -12,11 +12,12 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
 import {
+  SLUGS_GRUPO,
+  type SlugGrupo,
+} from "@/modules/cadastros/_shared/insumo-grupos";
+import {
   categoriaSchema,
-  ROTULO_TIPO_CATEGORIA,
-  TIPOS_CATEGORIA,
   type CategoriaInput,
-  type TipoCategoria,
 } from "@/modules/cadastros/categorias/schemas";
 
 const RECURSO = "cadastros.categorias" as const;
@@ -30,20 +31,27 @@ const uuidSchema = z.uuid();
 /** Linha esperada na planilha de importação de categorias. */
 interface LinhaImportCategoria {
   nome: string;
-  tipo: TipoCategoria;
+  grupo: SlugGrupo;
 }
 
-/** Aceita o tipo pelo valor canônico ou pelo rótulo em pt-BR. */
-function normalizarTipo(valor: unknown): TipoCategoria {
-  const texto = String(valor).trim().toLowerCase();
-  const porValor = TIPOS_CATEGORIA.find((tipo) => tipo === texto);
-  if (porValor) return porValor;
-  const porRotulo = TIPOS_CATEGORIA.find(
-    (tipo) => ROTULO_TIPO_CATEGORIA[tipo].toLowerCase() === texto,
-  );
-  if (porRotulo) return porRotulo;
+/**
+ * Aceita o grupo pelo slug ("material") ou pelo rótulo ("Material", "Mão de
+ * obra"). Grupo é fixo: planilha com grupo desconhecido é recusada, nunca cria.
+ */
+function normalizarGrupo(valor: unknown): SlugGrupo {
+  const texto = String(valor)
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  const porSlug = SLUGS_GRUPO.find((slug) => slug === texto.replace(/ /g, "_"));
+  if (porSlug) return porSlug;
+  if (texto.startsWith("mao")) return "mao_de_obra";
+  if (texto.startsWith("equip")) return "equipamentos";
+  if (texto.startsWith("mater")) return "material";
+  if (texto.startsWith("outro")) return "outros";
   throw new Error(
-    `tipo deve ser um de ${TIPOS_CATEGORIA.join(", ")}`,
+    "grupo deve ser um de: material, mao_de_obra, equipamentos, outros",
   );
 }
 
@@ -53,15 +61,15 @@ const COLUNAS_IMPORT: ColunaImportacao<LinhaImportCategoria>[] = [
     chave: "nome",
     rotulo: "Nome",
     obrigatoria: true,
-    exemplo: "Materiais de construcao",
+    exemplo: "Cimento, agregados e concreto",
     transformar: (valor) => String(valor).trim(),
   },
   {
-    chave: "tipo",
-    rotulo: "Tipo",
+    chave: "grupo",
+    rotulo: "Grupo",
     obrigatoria: true,
     exemplo: "material",
-    transformar: normalizarTipo,
+    transformar: normalizarGrupo,
   },
 ];
 
@@ -77,7 +85,7 @@ export async function criar(dados: CategoriaInput): Promise<ResultadoAcao> {
   const supabase = await createClient();
   const { error } = await supabase.from(TABELA).insert({
     nome: validado.data.nome,
-    tipo: validado.data.tipo,
+    grupo_id: validado.data.grupoId,
     ativo: validado.data.ativo,
   });
 
@@ -86,7 +94,7 @@ export async function criar(dados: CategoriaInput): Promise<ResultadoAcao> {
       return erroAcao(
         "cadastros.categorias.criar",
         error,
-        "Já existe uma categoria com este nome e tipo",
+        "Já existe uma subcategoria com este nome neste grupo",
       );
     }
     return erroAcao(
@@ -120,7 +128,7 @@ export async function editar(
     .from(TABELA)
     .update({
       nome: validado.data.nome,
-      tipo: validado.data.tipo,
+      grupo_id: validado.data.grupoId,
       ativo: validado.data.ativo,
     })
     .eq("id", idValido.data);
@@ -130,7 +138,7 @@ export async function editar(
       return erroAcao(
         "cadastros.categorias.editar",
         error,
-        "Já existe uma categoria com este nome e tipo",
+        "Já existe uma subcategoria com este nome neste grupo",
       );
     }
     return erroAcao(
@@ -263,13 +271,31 @@ export async function importar(
     return { erro: "Nenhuma linha válida para importar" };
   }
 
-  const linhas = resultado.validas.map((linha) => ({
-    nome: linha.dados.nome as string,
-    tipo: linha.dados.tipo as TipoCategoria,
-    ativo: true,
-  }));
-
   const supabase = await createClient();
+
+  // Grupo é fixo: a planilha traz o slug e aqui ele vira id. Slug desconhecido
+  // já foi recusado na validação da coluna, então aqui só resolve.
+  const { data: grupos } = await supabase
+    .from("insumo_grupos")
+    .select("id, slug");
+  const idPorSlug = new Map((grupos ?? []).map((g) => [g.slug, g.id]));
+
+  const linhas = resultado.validas.flatMap((linha) => {
+    const grupoId = idPorSlug.get(linha.dados.grupo as string);
+    if (!grupoId) return [];
+    return [
+      {
+        nome: linha.dados.nome as string,
+        grupo_id: grupoId,
+        ativo: true,
+      },
+    ];
+  });
+
+  if (linhas.length === 0) {
+    return { erro: "Nenhuma linha válida para importar" };
+  }
+
   const { error } = await supabase.from(TABELA).insert(linhas);
 
   if (error) {
@@ -277,7 +303,7 @@ export async function importar(
       return erroAcao(
         "cadastros.categorias.importar",
         error,
-        "A planilha tem categorias repetidas ou já cadastradas (nome e tipo)",
+        "A planilha tem subcategorias repetidas ou já cadastradas neste grupo",
       );
     }
     return erroAcao(
