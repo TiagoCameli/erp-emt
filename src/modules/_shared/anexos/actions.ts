@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   hashDoArquivo,
   pathNovo,
+  removerBinarios,
   subirBinario,
   urlAssinada,
   validarArquivo,
@@ -150,6 +151,10 @@ export async function enviarAnexos(
     });
 
     if (error) {
+      // O binário já subiu e o registro falhou: desfaz o upload em vez de
+      // deixar objeto sem dono no bucket (a faxina agora também acha esses,
+      // mas o certo é não criar o lixo).
+      await removerBinarios([path]);
       resultado.erros.push({
         nome: arquivo.name,
         erro: error.message ?? "Não foi possível registrar o arquivo",

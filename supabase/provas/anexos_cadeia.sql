@@ -33,7 +33,8 @@ truncate prova_anexos;
 do $prova$
 declare
   v_forn uuid; v_ins uuid; v_cc uuid; v_cond uuid; v_conta uuid;
-  v_cot uuid; v_oc uuid; v_lanc uuid; v_parcela uuid; v_arquivo uuid; v_arquivo2 uuid;
+  v_cot uuid; v_oc uuid; v_lanc uuid; v_parcela uuid;
+  v_arquivo uuid; v_arquivo2 uuid; v_reuso uuid;
   v_txt text; v_int int;
 begin
   select id into v_forn from public.fornecedores where ativo order by razao_social limit 1;
@@ -49,13 +50,19 @@ begin
   insert into public.cotacoes (status, observacoes)
   values ('aberta', '[PROVA-ANEXO] cotacao') returning id into v_cot;
 
-  -- Arquivo de prova: so o registro (o binario nao e necessario para a regra).
-  insert into public.arquivos (path_storage, nome_original, tipo_mime, tamanho_bytes, hash_sha256)
-  values ('arquivos/prova/' || gen_random_uuid() || '.pdf', 'nf.pdf', 'application/pdf', 999,
-          'prova-' || gen_random_uuid())
-  returning id into v_arquivo;
+  -- Usa fn_registrar_arquivo, que e o caminho que a TELA usa. A versao anterior
+  -- desta prova inseria em `arquivos` na mao e chamava so fn_vincular_arquivo:
+  -- testava em volta do caminho real, e por isso nao pegou o 42P10 que fazia
+  -- TODO upload falhar (ON CONFLICT nao inferia o indice parcial de dedup).
+  select public.fn_registrar_arquivo(
+    'arquivos/prova/' || gen_random_uuid() || '.pdf', 'nf.pdf', 'application/pdf', 999,
+    'prova-' || gen_random_uuid(), 'cotacao', v_cot
+  ) into v_arquivo;
 
-  perform public.fn_vincular_arquivo(v_arquivo, 'cotacao', v_cot, 'nf.pdf');
+  insert into prova_anexos (caso, obtido, passou) values (
+    'registrar arquivo pelo caminho da tela',
+    (select count(*)::text || ' vinculo' from public.anexo_vinculos where arquivo_id = v_arquivo),
+    (select count(*) = 1 from public.anexo_vinculos where arquivo_id = v_arquivo));
 
   select public.fn_criar_ordem_compra(
     jsonb_build_object('fornecedor_id', v_forn, 'condicao_pagamento_id', v_cond,
@@ -87,12 +94,11 @@ begin
   insert into prova_anexos (caso, obtido, passou) values (
     'um arquivo fisico para os 4 documentos', v_int || ' arquivo', v_int = 1);
 
-  -- Anexo tardio na OC desce para o que ja existe.
-  insert into public.arquivos (path_storage, nome_original, tipo_mime, tamanho_bytes, hash_sha256)
-  values ('arquivos/prova/' || gen_random_uuid() || '.pdf', 'boleto.pdf', 'application/pdf', 555,
-          'prova2-' || gen_random_uuid())
-  returning id into v_arquivo2;
-  perform public.fn_vincular_arquivo(v_arquivo2, 'ordem_compra', v_oc, 'boleto.pdf');
+  -- Anexo tardio na OC desce para o que ja existe (tambem pelo caminho da tela).
+  select public.fn_registrar_arquivo(
+    'arquivos/prova/' || gen_random_uuid() || '.pdf', 'boleto.pdf', 'application/pdf', 555,
+    'prova2-' || gen_random_uuid(), 'ordem_compra', v_oc
+  ) into v_arquivo2;
 
   select string_agg(entidade_tipo || '/' || origem, ' ' order by
     case entidade_tipo when 'ordem_compra' then 1 when 'lancamento' then 2 else 3 end)
@@ -101,14 +107,19 @@ begin
     'anexo tardio na OC desce a cadeia', v_txt,
     v_txt = 'ordem_compra/upload_direto lancamento/propagado pagamento/propagado');
 
-  -- Dedup: mesmo hash e tamanho nao entram duas vezes.
+  -- Dedup pelo caminho da tela: mesmo hash e tamanho em OUTRO documento reusa o
+  -- registro em vez de subir binario de novo.
   begin
-    insert into public.arquivos (path_storage, nome_original, tipo_mime, tamanho_bytes, hash_sha256)
-    select 'arquivos/prova/duplicata.pdf', 'copia.pdf', 'application/pdf', tamanho_bytes, hash_sha256
-    from public.arquivos where id = v_arquivo2;
-    insert into prova_anexos (caso, obtido, passou) values ('dedup por hash+tamanho', 'aceitou duplicata', false);
-  exception when unique_violation then
-    insert into prova_anexos (caso, obtido, passou) values ('dedup por hash+tamanho', 'unique bloqueou', true);
+    select public.fn_registrar_arquivo(
+      'arquivos/prova/duplicata.pdf', 'copia.pdf', 'application/pdf',
+      (select tamanho_bytes from public.arquivos where id = v_arquivo2),
+      (select hash_sha256 from public.arquivos where id = v_arquivo2),
+      'lancamento', v_lanc
+    ) into v_reuso;
+    insert into prova_anexos (caso, obtido, passou) values (
+      'dedup reusa o mesmo arquivo',
+      case when v_reuso = v_arquivo2 then 'mesmo id, sem binario novo' else 'criou outro registro' end,
+      v_reuso = v_arquivo2);
   end;
 
   -- Remover um vinculo nao mexe no arquivo compartilhado.
