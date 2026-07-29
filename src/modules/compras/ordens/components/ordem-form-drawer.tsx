@@ -5,10 +5,12 @@ import { useFieldArray, useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   LoaderCircle,
+  Paperclip,
   Plus,
   Sparkles,
   Trash2,
   TriangleAlert,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,6 +26,7 @@ import {
   TabelaItens,
   type ColunaItem,
 } from "@/components/canonicos";
+import { Anexos } from "@/components/canonicos/anexos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +35,8 @@ import {
   criarCondicaoPagamento,
   criarFormaPagamento,
 } from "@/modules/compras/_shared/pagamento-actions";
+import { enviarAnexos } from "@/modules/_shared/anexos/actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import {
   criarOrdem,
   editarOrdem,
@@ -169,6 +174,8 @@ export interface OrdemFormDrawerProps {
    * condição/forma e itens do vencedor.
    */
   prefill?: PrefillOrdemCotacao | null;
+  /** Anexos já vinculados (modo edição). Na criação a lista começa vazia. */
+  anexos?: AnexoDoDocumento[];
   /** Chamado depois de criar uma OC, com o id, para navegar ao detalhe. */
   onCriada?: (id: string) => void;
 }
@@ -189,10 +196,17 @@ export function OrdemFormDrawer({
   condicoesPagamento,
   formasPagamento,
   prefill,
+  anexos = [],
   onCriada,
 }: OrdemFormDrawerProps) {
   const editando = ordem !== null;
   const prefillAtivo = editando ? null : (prefill ?? null);
+
+  // Na criação a OC ainda não existe, e vínculo de anexo precisa de um
+  // documento. Então os arquivos esperam numa fila no navegador e sobem no
+  // instante seguinte à criação, sem OC fantasma no meio.
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
+  const [subindoAnexos, setSubindoAnexos] = React.useState(false);
 
   const form = useForm<OrdemCompraFormInput>({
     resolver: zodResolver(ordemCompraFormSchema),
@@ -287,7 +301,39 @@ export function OrdemFormDrawer({
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Ordem de compra criada");
+    // Sobe a fila de anexos agora que a OC existe.
+    if (filaAnexos.length > 0) {
+      setSubindoAnexos(true);
+      let falhas = 0;
+      for (const arquivo of filaAnexos) {
+        const dados = new FormData();
+        dados.append("entidade", "ordem_compra");
+        dados.append("entidadeId", resultado.id);
+        dados.append("arquivo", arquivo);
+        const envio = await enviarAnexos(dados);
+        if ("erro" in envio) {
+          falhas += 1;
+          toast.error(`${arquivo.name}: ${envio.erro}`);
+        } else {
+          falhas += envio.erros.length;
+          for (const falha of envio.erros) {
+            toast.error(`${falha.nome}: ${falha.erro}`);
+          }
+        }
+      }
+      setSubindoAnexos(false);
+      setFilaAnexos([]);
+      if (falhas === 0) {
+        toast.success(
+          filaAnexos.length === 1
+            ? "Ordem criada com o anexo"
+            : `Ordem criada com ${filaAnexos.length} anexos`,
+        );
+      }
+    } else {
+      toast.success("Ordem de compra criada");
+    }
+
     onAbertoChange(false);
     onCriada?.(resultado.id);
   }
@@ -574,11 +620,28 @@ export function OrdemFormDrawer({
           salvando={salvando}
         />
 
+        <SecaoFormulario titulo="Anexos">
+          {editando ? (
+            <Anexos
+              entidade="ordem_compra"
+              entidadeId={ordem.id}
+              anexos={anexos}
+              podeEditar
+            />
+          ) : (
+            <FilaAnexos
+              arquivos={filaAnexos}
+              onMudar={setFilaAnexos}
+              ocupado={salvando || subindoAnexos}
+            />
+          )}
+        </SecaoFormulario>
+
         <SecaoFormulario titulo="Observações">
           <CampoFormulario
             id="oc-observacoes"
             rotulo="Observações"
-            ajuda="Aparecem no detalhe da ordem. Anexos são enviados depois de salvar."
+            ajuda="Aparecem no detalhe da ordem."
             erro={form.formState.errors.observacoes?.message}
           >
             <Textarea
@@ -592,6 +655,114 @@ export function OrdemFormDrawer({
         </SecaoFormulario>
       </form>
     </FormDrawer>
+  );
+}
+
+/** Tamanho legível para a fila de anexos. */
+function tamanhoLegivel(bytes: number): string {
+  const mb = 1024 * 1024;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < mb) {
+    return `${(bytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} KB`;
+  }
+  return `${(bytes / mb).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+}
+
+/**
+ * Fila de anexos da OC ainda não criada. Só guarda os arquivos escolhidos e
+ * mostra o que vai subir; o upload acontece no submit, depois de a ordem existir
+ * (vínculo de anexo precisa de um documento para apontar).
+ */
+function FilaAnexos({
+  arquivos,
+  onMudar,
+  ocupado,
+}: {
+  arquivos: File[];
+  onMudar: (arquivos: File[]) => void;
+  ocupado: boolean;
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [arrastando, setArrastando] = React.useState(false);
+
+  function adicionar(novos: File[]) {
+    if (novos.length === 0) return;
+    onMudar([...arquivos, ...novos]);
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(evento) => {
+          adicionar(Array.from(evento.target.files ?? []));
+          evento.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        disabled={ocupado}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(evento) => {
+          evento.preventDefault();
+          setArrastando(true);
+        }}
+        onDragLeave={() => setArrastando(false)}
+        onDrop={(evento) => {
+          evento.preventDefault();
+          setArrastando(false);
+          adicionar(Array.from(evento.dataTransfer.files));
+        }}
+        className={
+          arrastando
+            ? "flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-faixa bg-accent/40 px-4 py-5 text-detalhe"
+            : "flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-border bg-surface/50 px-4 py-5 text-detalhe hover:bg-accent/20"
+        }
+      >
+        <Upload className="size-5 text-muted-foreground" aria-hidden="true" />
+        <span className="font-medium">
+          Arraste arquivos aqui ou clique para escolher
+        </span>
+        <span className="text-legenda text-muted-foreground">
+          Sobem junto quando você criar a ordem
+        </span>
+      </button>
+
+      {arquivos.length > 0 ? (
+        <ul className="flex flex-col gap-1.5">
+          {arquivos.map((arquivo, indice) => (
+            <li
+              key={`${arquivo.name}-${indice}`}
+              className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2"
+            >
+              <Paperclip
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1 truncate text-detalhe">
+                {arquivo.name}
+              </span>
+              <span className="shrink-0 text-legenda text-muted-foreground tabular-nums">
+                {tamanhoLegivel(arquivo.size)}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Tirar ${arquivo.name} da fila`}
+                disabled={ocupado}
+                onClick={() => onMudar(arquivos.filter((_, i) => i !== indice))}
+              >
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

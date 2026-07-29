@@ -504,6 +504,7 @@ export function OrdemDetalheView({
 
       {editavel ? (
         <OrdemFormDrawer
+          anexos={anexosIniciais}
           aberto={drawerAberto}
           onAbertoChange={(aberto) => {
             setDrawerAberto(aberto);
