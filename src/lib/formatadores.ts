@@ -109,3 +109,48 @@ export function formatarDataHora(
 export function dataHojeISO(): string {
   return format(new Date(), "yyyy-MM-dd", { in: tz(TIMEZONE) });
 }
+
+/**
+ * Mês de referência (competência) sempre viaja em dois formatos:
+ * "yyyy-MM" no input type="month" da tela e "yyyy-MM-01" no banco, que guarda
+ * DATE normalizado no dia 1. As duas conversões ficam aqui para nenhuma tela
+ * inventar a sua, e são puras (não dependem de fuso: só manipulam a string).
+ */
+
+/** "2026-07" -> "2026-07-01". String fora do formato volta vazia. */
+export function mesParaCompetencia(mes: string): string {
+  const limpo = (mes ?? "").trim();
+  return /^\d{4}-\d{2}$/.test(limpo) ? `${limpo}-01` : "";
+}
+
+/** "2026-07-01" -> "2026-07". String fora do formato volta vazia. */
+export function competenciaParaMes(competencia: string | null): string {
+  const limpo = (competencia ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(limpo) ? limpo.slice(0, 7) : "";
+}
+
+/** "2026-07-01" -> "07/2026", para exibir em tabela e detalhe. */
+export function formatarMesAno(competencia: string | null): string {
+  const mes = competenciaParaMes(competencia);
+  if (mes === "") return "";
+  return `${mes.slice(5, 7)}/${mes.slice(0, 4)}`;
+}
+
+/** Mês de hoje (yyyy-MM) no fuso de Rio Branco, para default de input month. */
+export function mesHojeISO(): string {
+  return format(new Date(), "yyyy-MM", { in: tz(TIMEZONE) });
+}
+
+/**
+ * Quantos dias atrás está uma data yyyy-MM-dd, contra hoje no fuso de Rio
+ * Branco. Negativo quando a data é no futuro. Comparação por string de data,
+ * sem hora, então não pula dia por fuso.
+ */
+export function diasAtras(data: string): number {
+  const limpo = (data ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(limpo)) return 0;
+  const umDia = 24 * 60 * 60 * 1000;
+  const alvo = Date.parse(`${limpo}T00:00:00Z`);
+  const hoje = Date.parse(`${dataHojeISO()}T00:00:00Z`);
+  return Math.round((hoje - alvo) / umDia);
+}

@@ -314,7 +314,7 @@ async function ConteudoExtratoFornecedor({
   return (
     <SecaoRelatorio
       titulo="Extrato por fornecedor"
-      descricao="Lançamentos a pagar do fornecedor selecionado, do mais recente ao mais antigo."
+      descricao="Lançamentos a pagar do fornecedor selecionado, do vencimento mais recente para o mais antigo. A coluna Mês de referência é o mês em que o custo entra."
       controles={
         <SeletorFornecedor
           fornecedores={fornecedores}
@@ -371,7 +371,7 @@ export default async function RelatoriosPage({
       {relatorio === "fluxo-caixa" ? (
         <SecaoRelatorio
           titulo="Fluxo de caixa"
-          descricao="Entradas e saídas por mês de vencimento, separando realizado de projetado."
+          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado). Não usa o mês de referência."
         >
           <ConteudoFluxoCaixa />
         </SecaoRelatorio>
@@ -380,7 +380,7 @@ export default async function RelatoriosPage({
       {relatorio === "dre" ? (
         <SecaoRelatorio
           titulo="DRE gerencial"
-          descricao="Receitas e despesas por categoria no mês de competência, com o resultado."
+          descricao="Regime de COMPETÊNCIA: receitas e despesas por categoria no MÊS DE REFERÊNCIA do lançamento, com o resultado."
           controles={<SeletorMes valor={mes} />}
         >
           <ConteudoDre mes={mes} />
@@ -390,7 +390,7 @@ export default async function RelatoriosPage({
       {relatorio === "aging" ? (
         <SecaoRelatorio
           titulo="Aging de vencimentos"
-          descricao="Parcelas em aberto por faixa de vencimento, a pagar e a receber."
+          descricao="Regime de CAIXA: parcelas em aberto por faixa de vencimento, a pagar e a receber."
         >
           <ConteudoAging />
         </SecaoRelatorio>

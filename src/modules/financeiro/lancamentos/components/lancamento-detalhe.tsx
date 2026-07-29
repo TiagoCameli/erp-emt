@@ -22,7 +22,8 @@ import {
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { formatarBRL, formatarData } from "@/lib/formatadores";
+import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
+import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
 import {
   ROTULO_TIPO_LANCAMENTO,
@@ -68,16 +69,22 @@ function Dado({
   rotulo,
   children,
   legenda,
+  acao,
 }: {
   rotulo: string;
   children: React.ReactNode;
   /** Linha extra abaixo do valor, para explicar o que aquele dado provoca. */
   legenda?: string | null;
+  /** Ação ao lado do valor (ex: alterar o mês de referência). */
+  acao?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-legenda text-muted-foreground">{rotulo}</span>
-      <span className="text-detalhe">{children}</span>
+      <span className="flex items-center gap-1.5 text-detalhe">
+        {children}
+        {acao}
+      </span>
       {legenda ? (
         <span className="text-legenda text-muted-foreground">{legenda}</span>
       ) : null}
@@ -148,6 +155,7 @@ export function LancamentoDetalheView({
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [parcelasAberto, setParcelasAberto] = React.useState(false);
   const [confirmarExcluir, setConfirmarExcluir] = React.useState(false);
+  const [dialogMes, setDialogMes] = React.useState(false);
 
   async function handleExcluir() {
     const resultado = await excluirLancamento(lancamento.id);
@@ -346,13 +354,30 @@ export function LancamentoDetalheView({
               >
                 {lancamento.formaPagamentoNome ?? "-"}
               </Dado>
-              <Dado rotulo="Competência">
-                {lancamento.competencia
-                  ? formatarData(lancamento.competencia)
-                  : "-"}
+              <Dado rotulo="Data da compra">
+                {formatarData(lancamento.dataCompra)}
               </Dado>
-              <Dado rotulo="Emissão">
-                {formatarData(lancamento.dataEmissao)}
+              <Dado
+                rotulo="Mês de referência"
+                legenda="Define em qual mês o custo entra"
+                acao={
+                  podeEditar ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Alterar mês de referência"
+                      onClick={() => setDialogMes(true)}
+                    >
+                      <Pencil />
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {formatarMesAno(lancamento.mesCompetencia)}
+              </Dado>
+              <Dado rotulo="Criado em">
+                {formatarData(lancamento.criadoEm)}
               </Dado>
               <Dado rotulo="Vencimento">
                 {lancamento.dataVencimento
@@ -545,6 +570,17 @@ export function LancamentoDetalheView({
           formasPagamento={formasPagamento}
           fornecedores={fornecedores}
           centrosCusto={centrosCusto}
+        />
+      ) : null}
+
+      {podeEditar ? (
+        <AlterarMesDialog
+          aberto={dialogMes}
+          onAbertoChange={setDialogMes}
+          entidade="lancamento"
+          id={lancamento.id}
+          mesAtual={lancamento.mesCompetencia}
+          documentoEspelho={lancamento.origemNumero}
         />
       ) : null}
 

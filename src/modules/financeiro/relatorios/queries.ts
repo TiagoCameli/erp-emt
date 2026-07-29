@@ -34,7 +34,7 @@ export {
  * no banco pelas RPCs fn_rel_* (security invoker: o RLS do usuário vale igual),
  * que devolvem só as linhas agregadas em vez das milhares de linhas brutas.
  *
- * Datas: as colunas usadas (competencia, data_vencimento, data_pagamento) são
+ * Datas: as colunas usadas (mes_competencia, data_vencimento, data_pagamento) são
  * `date` puro no Postgres (sem hora), então o mês de um registro é o prefixo
  * "YYYY-MM" da string, e o "hoje" para aging é dataHojeISO() (já no fuso de
  * Rio Branco). Sem timestamptz no caminho, sem risco de pular dia por fuso.
@@ -444,7 +444,8 @@ export interface ExtratoLancamento {
   numero: string | null;
   descricao: string;
   status: string;
-  competencia: string | null;
+  /** Mês de referência (dia 1): o mês em que este custo entra. */
+  mesCompetencia: string;
   dataVencimento: string | null;
   valor: number;
 }
@@ -493,7 +494,7 @@ export async function extratoPorFornecedor({
   let consulta = supabase
     .from("lancamentos")
     .select(
-      "id, numero, descricao, status, competencia, data_vencimento, valor",
+      "id, numero, descricao, status, mes_competencia, data_vencimento, valor",
     )
     .eq("tipo", "a_pagar")
     .neq("status", "cancelado");
@@ -515,7 +516,7 @@ export async function extratoPorFornecedor({
     numero: lancamento.numero,
     descricao: lancamento.descricao,
     status: lancamento.status,
-    competencia: lancamento.competencia,
+    mesCompetencia: lancamento.mes_competencia,
     dataVencimento: lancamento.data_vencimento,
     valor: lancamento.valor,
   }));

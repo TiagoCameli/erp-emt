@@ -69,7 +69,16 @@ export const receberSchema = z.object({
     .max(300, { error: "Máximo de 300 caracteres" }),
   categoriaId: z.uuid({ error: "Categoria inválida" }).optional(),
   valor: valorSchema,
-  competencia: dataOpcionalSchema,
+  /** O fato: data do documento (nota, medição, contrato). */
+  dataDocumento: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data do documento" }),
+  /** Mês de referência: DATE no dia 1, igual ao que o banco guarda. */
+  mesCompetencia: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-01$/, { error: "Informe o mês de referência" }),
   dataVencimento: dataOpcionalSchema,
   parcelas: z
     .array(receberParcelaSchema)
@@ -102,11 +111,15 @@ export const receberFormSchema = z.object({
       },
       { error: "Informe um valor maior que zero" },
     ),
-  competencia: z
+  dataDocumento: z
     .string()
     .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Data inválida" })
-    .or(z.literal("")),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data do documento" }),
+  /** Mês do input type="month" (yyyy-MM). Vira yyyy-MM-01 no servidor. */
+  mesCompetencia: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
   dataVencimento: z
     .string()
     .trim()

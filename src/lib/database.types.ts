@@ -1681,15 +1681,15 @@ export type Database = {
         Row: {
           categoria_id: string | null;
           centro_custo_id: string | null;
-          competencia: string | null;
           created_at: string;
           created_by: string | null;
-          data_emissao: string;
+          data_compra: string;
           data_vencimento: string | null;
           descricao: string;
           forma_pagamento_id: string | null;
           fornecedor_id: string | null;
           id: string;
+          mes_competencia: string;
           numero: string | null;
           origem: string;
           origem_id: string | null;
@@ -1701,15 +1701,15 @@ export type Database = {
         Insert: {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
-          competencia?: string | null;
           created_at?: string;
           created_by?: string | null;
-          data_emissao?: string;
+          data_compra?: string;
           data_vencimento?: string | null;
           descricao: string;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;
+          mes_competencia?: string;
           numero?: string | null;
           origem: string;
           origem_id?: string | null;
@@ -1721,15 +1721,15 @@ export type Database = {
         Update: {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
-          competencia?: string | null;
           created_at?: string;
           created_by?: string | null;
-          data_emissao?: string;
+          data_compra?: string;
           data_vencimento?: string | null;
           descricao?: string;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;
+          mes_competencia?: string;
           numero?: string | null;
           origem?: string;
           origem_id?: string | null;
@@ -1971,10 +1971,11 @@ export type Database = {
           cotacao_id: string | null;
           created_at: string;
           created_by: string | null;
-          data_emissao: string;
+          data_compra: string;
           forma_pagamento_id: string | null;
           fornecedor_id: string;
           id: string;
+          mes_competencia: string;
           motivo_rejeicao: string | null;
           numero: string | null;
           observacoes: string | null;
@@ -1989,10 +1990,11 @@ export type Database = {
           cotacao_id?: string | null;
           created_at?: string;
           created_by?: string | null;
-          data_emissao?: string;
+          data_compra?: string;
           forma_pagamento_id?: string | null;
           fornecedor_id: string;
           id?: string;
+          mes_competencia?: string;
           motivo_rejeicao?: string | null;
           numero?: string | null;
           observacoes?: string | null;
@@ -2007,10 +2009,11 @@ export type Database = {
           cotacao_id?: string | null;
           created_at?: string;
           created_by?: string | null;
-          data_emissao?: string;
+          data_compra?: string;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string;
           id?: string;
+          mes_competencia?: string;
           motivo_rejeicao?: string | null;
           numero?: string | null;
           observacoes?: string | null;
@@ -2803,6 +2806,10 @@ export type Database = {
     Functions: {
       aplicar_perfil: {
         Args: { p_perfil_id: string; p_usuario_id: string };
+        Returns: undefined;
+      };
+      fn_alterar_mes_competencia: {
+        Args: { p_entidade: string; p_id: string; p_mes: string };
         Returns: undefined;
       };
       fn_apagar_arquivo_orfao: {

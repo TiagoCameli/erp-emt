@@ -24,6 +24,8 @@ export interface ListarLancamentosParams {
   tipo?: TipoLancamento;
   status?: StatusLancamento;
   busca?: string;
+  /** Mês de referência exato (yyyy-MM-01). */
+  mesCompetencia?: string;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -39,6 +41,12 @@ export interface LancamentoLista {
   dataVencimento: string | null;
   status: StatusLancamento;
   qtdParcelas: number;
+  /** O fato: data da compra ou do documento. */
+  dataCompra: string;
+  /** Mês de referência (dia 1): em que mês o custo entra. */
+  mesCompetencia: string;
+  /** Data de sistema, imutável. */
+  criadoEm: string;
 }
 
 /** Resultado paginado da listagem. */
@@ -82,8 +90,12 @@ export interface LancamentoDetalhe {
   descricao: string;
   valor: number;
   status: StatusLancamento;
-  competencia: string | null;
-  dataEmissao: string;
+  /** Mês de referência (dia 1). Obrigatório: define em que mês o custo entra. */
+  mesCompetencia: string;
+  /** O fato: data da compra (herdada da OC) ou do documento. */
+  dataCompra: string;
+  /** Data de sistema (created_at), imutável: a tela mostra como texto. */
+  criadoEm: string;
   dataVencimento: string | null;
   parcelas: ParcelaLancamento[];
   rateios: RateioLancamento[];
@@ -180,17 +192,21 @@ export async function listarLancamentos(
     .from("lancamentos")
     .select(
       `id, numero, tipo, origem, descricao, valor, data_vencimento, status,
+       data_compra, mes_competencia, created_at,
        categorias_financeiras(nome),
        fornecedores(razao_social, nome_fantasia),
        lancamento_parcelas(count)`,
       { count: "exact" },
     )
-    .order("data_emissao", { ascending: false })
+    .order("data_compra", { ascending: false })
     .order("created_at", { ascending: false })
     .range(de, ate);
 
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
+  if (params.mesCompetencia) {
+    consulta = consulta.eq("mes_competencia", params.mesCompetencia);
+  }
   if (params.busca?.trim()) {
     const padrao = `%${params.busca.replace(/[,()"'\\]/g, "").trim()}%`;
     consulta = consulta.or(`numero.ilike.${padrao},descricao.ilike.${padrao}`);
@@ -220,6 +236,9 @@ export async function listarLancamentos(
       dataVencimento: lancamento.data_vencimento,
       status: lancamento.status as StatusLancamento,
       qtdParcelas: parcelas?.[0]?.count ?? 0,
+      dataCompra: lancamento.data_compra,
+      mesCompetencia: lancamento.mes_competencia,
+      criadoEm: lancamento.created_at,
     };
   });
 
@@ -241,7 +260,8 @@ export async function buscarLancamento(
     .select(
       `id, numero, tipo, origem, origem_id, fornecedor_id, categoria_id,
        forma_pagamento_id,
-       descricao, valor, status, competencia, data_emissao, data_vencimento,
+       descricao, valor, status, mes_competencia, data_compra, created_at,
+       data_vencimento,
        categorias_financeiras(nome),
        formas_pagamento(nome, tipo),
        fornecedores(razao_social, nome_fantasia),
@@ -321,8 +341,9 @@ export async function buscarLancamento(
     descricao: data.descricao,
     valor: data.valor,
     status: data.status as StatusLancamento,
-    competencia: data.competencia,
-    dataEmissao: data.data_emissao,
+    mesCompetencia: data.mes_competencia,
+    dataCompra: data.data_compra,
+    criadoEm: data.created_at,
     dataVencimento: data.data_vencimento,
     parcelas,
     rateios,

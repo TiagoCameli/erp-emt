@@ -13,6 +13,7 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroMes,
   FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
@@ -21,7 +22,11 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { formatarData, formatarDataHora } from "@/lib/formatadores";
+import {
+  formatarData,
+  formatarDataHora,
+  formatarMesAno,
+} from "@/lib/formatadores";
 import { infoStatusOC, ROTULO_STATUS_OC } from "@/modules/compras/_shared/formato";
 import type {
   FornecedorOpcao,
@@ -74,9 +79,13 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
       );
     },
   },
-  colunaData<OrdemLista>("dataEmissao", "Emissão", formatarData, {
-    size: 116,
+  colunaData<OrdemLista>("dataCompra", "Data da compra", formatarData, {
+    size: 140,
     meta: { esconderAte: "md" },
+  }),
+  colunaData<OrdemLista>("mesCompetencia", "Mês de referência", formatarMesAno, {
+    size: 150,
+    meta: { ocultaPorPadrao: true },
   }),
   colunaTexto<OrdemLista>("condicaoPagamentoDescricao", "Condição de pagamento", {
     size: 200,
@@ -116,6 +125,8 @@ export interface OrdensTabelaProps {
   fornecedorId: string;
   de: string;
   ate: string;
+  /** Mês de referência do filtro, no formato do input (yyyy-MM). */
+  mes: string;
   fornecedores: FornecedorOpcao[];
   /** Usuário logado: a personalização da tabela é lembrada por pessoa. */
   idUsuario: string;
@@ -137,6 +148,7 @@ export function OrdensTabela({
   fornecedorId,
   de,
   ate,
+  mes,
   fornecedores,
   idUsuario,
 }: OrdensTabelaProps) {
@@ -207,10 +219,16 @@ export function OrdensTabela({
             todosRotulo="Todos os fornecedores"
             className="max-w-56"
           />
+          <FiltroMes
+            valor={mes}
+            onValorChange={(novoMes) =>
+              setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
+            }
+          />
           <FiltroPeriodo
             de={de}
             ate={ate}
-            rotulo="Emissão"
+            rotulo="Compra"
             onPeriodoChange={(novoDe, novoAte) =>
               setMuitos({
                 de: novoDe === "" ? null : novoDe,

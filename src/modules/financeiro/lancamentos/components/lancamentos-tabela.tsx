@@ -9,13 +9,14 @@ import {
   EmptyState,
   FilterBar,
   FiltroBusca,
+  FiltroMes,
   FiltroSelect,
   MoneyText,
   StatusBadge,
   useBuscaUrl,
   useFiltrosUrl,
 } from "@/components/canonicos";
-import { formatarData } from "@/lib/formatadores";
+import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   ROTULO_TIPO_LANCAMENTO,
   STATUS_LANCAMENTO,
@@ -86,6 +87,24 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     cell: ({ row }) => <MoneyText valor={row.original.valor} />,
   },
   {
+    accessorKey: "dataCompra",
+    header: "Data da compra",
+    cell: ({ row }) => (
+      <span className="tabular-nums">
+        {formatarData(row.original.dataCompra)}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "mesCompetencia",
+    header: "Mês de referência",
+    cell: ({ row }) => (
+      <span className="tabular-nums">
+        {formatarMesAno(row.original.mesCompetencia)}
+      </span>
+    ),
+  },
+  {
     accessorKey: "dataVencimento",
     header: "Vencimento",
     cell: ({ row }) => (
@@ -129,6 +148,8 @@ export interface LancamentosTabelaProps {
   tipo: string;
   status: string;
   busca: string;
+  /** Mês de referência do filtro, no formato do input (yyyy-MM). */
+  mes: string;
 }
 
 /**
@@ -143,6 +164,7 @@ export function LancamentosTabela({
   tipo,
   status,
   busca: buscaUrl,
+  mes,
 }: LancamentosTabelaProps) {
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
@@ -180,6 +202,12 @@ export function LancamentosTabela({
           opcoes={OPCOES_STATUS}
           placeholder="Status"
           todosRotulo="Todos os status"
+        />
+        <FiltroMes
+          valor={mes}
+          onValorChange={(novoMes) =>
+            setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
+          }
         />
       </FilterBar>
 

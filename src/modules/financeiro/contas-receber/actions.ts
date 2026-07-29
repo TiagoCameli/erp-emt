@@ -43,7 +43,8 @@ function dadosParaRpc(dados: z.infer<typeof receberSchema>): Json {
     categoria_id: dados.categoriaId ?? null,
     descricao: dados.descricao,
     valor: dados.valor,
-    competencia: dados.competencia ?? null,
+    data_compra: dados.dataDocumento,
+    mes_competencia: dados.mesCompetencia,
     data_vencimento: dados.dataVencimento ?? null,
   };
 }

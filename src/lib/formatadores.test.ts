@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  competenciaParaMes,
   formatarBRL,
   formatarData,
   formatarDataHora,
+  formatarMesAno,
   formatarPercentual,
   formatarQuantidade,
+  mesParaCompetencia,
 } from "@/lib/formatadores";
 
 /**
@@ -166,5 +169,31 @@ describe("formatarDataHora", () => {
     expect(formatarDataHora(null)).toBe("");
     expect(formatarDataHora(undefined)).toBe("");
     expect(formatarDataHora("nao-e-data")).toBe("");
+  });
+});
+
+describe("mês de referência (competência)", () => {
+  it("mesParaCompetencia normaliza no dia 1", () => {
+    expect(mesParaCompetencia("2026-07")).toBe("2026-07-01");
+  });
+
+  it("mesParaCompetencia recusa o que não é mês", () => {
+    expect(mesParaCompetencia("2026-07-15")).toBe("");
+    expect(mesParaCompetencia("07/2026")).toBe("");
+    expect(mesParaCompetencia("")).toBe("");
+  });
+
+  it("competenciaParaMes volta para o input de mês", () => {
+    expect(competenciaParaMes("2026-07-01")).toBe("2026-07");
+    expect(competenciaParaMes(null)).toBe("");
+  });
+
+  it("ida e volta não perde nem inventa mês", () => {
+    expect(competenciaParaMes(mesParaCompetencia("2026-12"))).toBe("2026-12");
+  });
+
+  it("formatarMesAno exibe mm/aaaa", () => {
+    expect(formatarMesAno("2026-07-01")).toBe("07/2026");
+    expect(formatarMesAno(null)).toBe("");
   });
 });

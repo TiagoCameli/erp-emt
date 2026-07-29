@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
+import { mesParaCompetencia } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { LancamentosAcoesCabecalho } from "@/modules/financeiro/lancamentos/components/lancamentos-acoes-cabecalho";
 import { LancamentosTabela } from "@/modules/financeiro/lancamentos/components/lancamentos-tabela";
@@ -53,6 +54,8 @@ export default async function PaginaLancamentos({
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
   const status = parametroValido(params.status, STATUS_VALIDOS);
   const busca = typeof params.busca === "string" ? params.busca : "";
+  const mes = typeof params.mes === "string" ? params.mes : "";
+  const mesCompetencia = mesParaCompetencia(mes);
 
   const paginaParam = Number(params.pagina);
   const pagina =
@@ -70,7 +73,14 @@ export default async function PaginaLancamentos({
     centrosCusto,
     formasPagamento,
   ] = await Promise.all([
-    listarLancamentos({ pagina, tamanho, tipo, status, busca }),
+    listarLancamentos({
+      pagina,
+      tamanho,
+      tipo,
+      status,
+      busca,
+      mesCompetencia: mesCompetencia === "" ? undefined : mesCompetencia,
+    }),
     listarCategorias(),
     listarFornecedores(),
     listarCentrosCusto(),
@@ -100,6 +110,7 @@ export default async function PaginaLancamentos({
         tipo={tipo ?? ""}
         status={status ?? ""}
         busca={busca}
+        mes={mesParaCompetencia(mes) === "" ? "" : mes}
       />
     </>
   );

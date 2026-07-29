@@ -6,6 +6,7 @@ import { ArrowLeft, Ban, Pencil, ReceiptText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
+import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
 import {
   ApprovalBar,
   ConfirmDialog,
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import {
   formatarBRL,
   formatarData,
+  formatarMesAno,
   formatarQuantidade,
 } from "@/lib/formatadores";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
@@ -73,14 +75,20 @@ function infoLancamento(status: string): { rotulo: string; classes: string } {
 function Dado({
   rotulo,
   children,
+  acao,
 }: {
   rotulo: string;
   children: React.ReactNode;
+  /** Ação ao lado do valor (ex: alterar o mês de referência). */
+  acao?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-legenda text-muted-foreground">{rotulo}</span>
-      <span className="text-detalhe">{children}</span>
+      <span className="flex items-center gap-1.5 text-detalhe">
+        {children}
+        {acao}
+      </span>
     </div>
   );
 }
@@ -128,6 +136,7 @@ export function OrdemDetalheView({
   const [dialogCancelar, setDialogCancelar] = React.useState(false);
   const [dialogExcluir, setDialogExcluir] = React.useState(false);
   const [dialogRecebimento, setDialogRecebimento] = React.useState(false);
+  const [dialogMes, setDialogMes] = React.useState(false);
   const [enviando, setEnviando] = React.useState(false);
 
   const info = infoStatusOC(ordem.status);
@@ -317,7 +326,28 @@ export function OrdemDetalheView({
           <SecaoDetalhe card titulo="Dados da ordem">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Dado rotulo="Fornecedor">{ordem.fornecedorNome}</Dado>
-              <Dado rotulo="Emissão">{formatarData(ordem.dataEmissao)}</Dado>
+              <Dado rotulo="Data da compra">
+                {formatarData(ordem.dataCompra)}
+              </Dado>
+              <Dado
+                rotulo="Mês de referência"
+                acao={
+                  podeEditar ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Alterar mês de referência"
+                      onClick={() => setDialogMes(true)}
+                    >
+                      <Pencil />
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {formatarMesAno(ordem.mesCompetencia)}
+              </Dado>
+              <Dado rotulo="Criada em">{formatarData(ordem.criadoEm)}</Dado>
               <Dado rotulo="Condição de pagamento">
                 {ordem.condicaoPagamentoDescricao ?? "-"}
               </Dado>
@@ -538,6 +568,15 @@ export function OrdemDetalheView({
         textoConfirmar="Excluir"
         variante="destrutivo"
         onConfirmar={aoExcluir}
+      />
+
+      <AlterarMesDialog
+        aberto={dialogMes}
+        onAbertoChange={setDialogMes}
+        entidade="ordem_compra"
+        id={ordem.id}
+        mesAtual={ordem.mesCompetencia}
+        documentoEspelho={ordem.lancamento?.numero ?? null}
       />
 
       <RecebimentoDialog
