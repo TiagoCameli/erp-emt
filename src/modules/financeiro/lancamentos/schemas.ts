@@ -93,7 +93,16 @@ export const lancamentoSchema = z
     valor: valorSchema.refine((v) => v > 0, {
       error: "O valor precisa ser maior que zero",
     }),
-    competencia: dataOpcionalSchema,
+    /** O fato: data da compra (a pagar) ou do documento (a receber). */
+    dataCompra: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data da compra" }),
+    /** Mês de referência: DATE no dia 1, igual ao que o banco guarda. */
+    mesCompetencia: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-01$/, { error: "Informe o mês de referência" }),
     dataVencimento: dataOpcionalSchema,
     parcelas: z
       .array(parcelaSchema)
@@ -171,7 +180,15 @@ export const lancamentoFormSchema = z
       .refine((v) => valorStringValido(v) && paraNumero(v) > 0, {
         error: "Informe um valor maior que zero",
       }),
-    competencia: z.string().trim(),
+    dataCompra: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data da compra" }),
+    /** Mês do input type="month" (yyyy-MM). Vira yyyy-MM-01 no servidor. */
+    mesCompetencia: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     dataVencimento: z.string().trim(),
     parcelas: z
       .array(parcelaFormSchema)

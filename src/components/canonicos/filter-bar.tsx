@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
 import { cn } from "@/lib/utils";
@@ -203,4 +204,45 @@ export function useBuscaUrl(buscaInicial: string, chave = "busca") {
   }, [busca, buscaInicial, chave, setMuitos]);
 
   return { busca, setBusca };
+}
+
+interface FiltroMesProps {
+  /** Mês selecionado no formato do input (yyyy-MM). Vazio = todos. */
+  valor: string;
+  onValorChange: (mes: string) => void;
+  rotulo?: string;
+}
+
+/**
+ * Filtro por mês (competência). Um input type="month" só, com botão de limpar
+ * quando há mês escolhido: mês vazio significa "todos os meses".
+ */
+export function FiltroMes({
+  valor,
+  onValorChange,
+  rotulo = "Mês de referência",
+}: FiltroMesProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-detalhe text-muted-foreground">{rotulo}</span>
+      <Input
+        type="month"
+        value={valor}
+        onChange={(evento) => onValorChange(evento.target.value)}
+        aria-label={rotulo}
+        className="h-8 w-[9.5rem] text-detalhe tabular-nums"
+      />
+      {valor === "" ? null : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Limpar ${rotulo.toLowerCase()}`}
+          onClick={() => onValorChange("")}
+        >
+          <X />
+        </Button>
+      )}
+    </div>
+  );
 }

@@ -26,13 +26,15 @@ export interface ListarOrdensParams {
   busca?: string;
   /** Filtro por fornecedor. */
   fornecedorId?: string;
-  /** Período de emissão (inclusive), yyyy-mm-dd. */
+  /** Período da data da compra (inclusive), yyyy-mm-dd. */
   de?: string;
   ate?: string;
+  /** Mês de referência exato (yyyy-mm-01). */
+  mesCompetencia?: string;
 }
 
 /**
- * Linha da listagem de ordens de compra. Os campos depois de `dataEmissao` são
+ * Linha da listagem de ordens de compra. Os campos depois de `mesCompetencia` são
  * colunas opcionais da tabela: nascem escondidas e o usuário liga no menu
  * "Colunas". Vêm no mesmo select (join barato), sem consulta extra por linha.
  */
@@ -42,10 +44,14 @@ export interface OrdemLista {
   fornecedorNome: string;
   valorTotal: number;
   status: string;
-  dataEmissao: string;
+  /** O fato: quando a compra aconteceu. */
+  dataCompra: string;
+  /** Mês de referência (dia 1), que define em que mês o custo entra. */
+  mesCompetencia: string;
   condicaoPagamentoDescricao: string | null;
   formaPagamentoNome: string | null;
   cotacaoNumero: string | null;
+  /** Data de sistema, imutável. */
   criadoEm: string;
   criadoPorNome: string | null;
   /**
@@ -77,6 +83,7 @@ export interface OrdemItem {
 /** Lançamento financeiro vinculado à OC (origem='oc'). Read-only nas telas. */
 export interface LancamentoVinculado {
   id: string;
+  numero: string | null;
   status: string;
   valor: number;
   dataVencimento: string | null;
@@ -103,7 +110,10 @@ export interface OrdemDetalhe {
   valorTotal: number;
   status: string;
   motivoRejeicao: string | null;
-  dataEmissao: string;
+  dataCompra: string;
+  mesCompetencia: string;
+  /** Data de sistema (created_at), imutável: a tela mostra como texto. */
+  criadoEm: string;
   observacoes: string | null;
   itens: OrdemItem[];
   /** Vazio quando a OC não tem parcelas definidas (serão definidas no lançamento). */
@@ -247,14 +257,14 @@ export async function listarOrdens(
   let consulta = supabase
     .from("ordens_compra")
     .select(
-      `id, numero, valor_total, status, data_emissao, created_at, created_by,
+      `id, numero, valor_total, status, data_compra, mes_competencia, created_at, created_by,
        fornecedores(razao_social, nome_fantasia),
        condicoes_pagamento(descricao),
        formas_pagamento(nome),
        cotacoes(numero)`,
       { count: "exact" },
     )
-    .order("data_emissao", { ascending: false })
+    .order("data_compra", { ascending: false })
     .order("created_at", { ascending: false })
     .range(de, ate);
 
@@ -262,8 +272,11 @@ export async function listarOrdens(
   if (params.fornecedorId) {
     consulta = consulta.eq("fornecedor_id", params.fornecedorId);
   }
-  if (params.de) consulta = consulta.gte("data_emissao", params.de);
-  if (params.ate) consulta = consulta.lte("data_emissao", params.ate);
+  if (params.de) consulta = consulta.gte("data_compra", params.de);
+  if (params.ate) consulta = consulta.lte("data_compra", params.ate);
+  if (params.mesCompetencia) {
+    consulta = consulta.eq("mes_competencia", params.mesCompetencia);
+  }
 
   if (params.busca) {
     const padrao = padraoBusca(params.busca);
@@ -301,7 +314,8 @@ export async function listarOrdens(
       : "-",
     valorTotal: ordem.valor_total,
     status: ordem.status,
-    dataEmissao: ordem.data_emissao,
+    dataCompra: ordem.data_compra,
+    mesCompetencia: ordem.mes_competencia,
     condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
     formaPagamentoNome: ordem.formas_pagamento?.nome ?? null,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
@@ -326,7 +340,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     .from("ordens_compra")
     .select(
       `id, numero, fornecedor_id, condicao_pagamento_id, forma_pagamento_id, cotacao_id,
-       valor_total, status, motivo_rejeicao, data_emissao, observacoes,
+       valor_total, status, motivo_rejeicao, data_compra, mes_competencia,
+       created_at, observacoes,
        fornecedores(razao_social, nome_fantasia),
        cotacoes(numero),
        condicoes_pagamento(descricao),
@@ -344,7 +359,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
 
   const { data: lancamento } = await supabase
     .from("lancamentos")
-    .select("id, status, valor, data_vencimento")
+    .select("id, numero, status, valor, data_vencimento")
     .eq("origem", "oc")
     .eq("origem_id", id)
     .order("created_at", { ascending: false })
@@ -378,7 +393,9 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     valorTotal: ordem.valor_total,
     status: ordem.status,
     motivoRejeicao: ordem.motivo_rejeicao,
-    dataEmissao: ordem.data_emissao,
+    dataCompra: ordem.data_compra,
+    mesCompetencia: ordem.mes_competencia,
+    criadoEm: ordem.created_at,
     observacoes: ordem.observacoes,
     itens,
     parcelas: (ordem.oc_parcelas ?? [])
@@ -391,6 +408,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     lancamento: lancamento
       ? {
           id: lancamento.id,
+          numero: lancamento.numero,
           status: lancamento.status,
           valor: lancamento.valor,
           dataVencimento: lancamento.data_vencimento,

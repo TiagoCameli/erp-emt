@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { dataHojeISO } from "@/lib/formatadores";
 import { paraNumero } from "@/modules/compras/ordens/calculo";
 
 /** R$ 1.234,56 para as mensagens de erro do formulário. */
@@ -89,6 +90,15 @@ const dataSchema = (rotulo: string) =>
     .regex(/^\d{4}-\d{2}-\d{2}$/, { error: rotulo });
 
 /**
+ * Mês de referência no servidor: DATE normalizado no dia 1 (yyyy-MM-01), igual
+ * ao que o banco guarda e checa. Mesmo padrão da competência da folha (RH).
+ */
+const mesSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-01$/, { error: "Informe o mês de referência" });
+
+/**
  * Parcela da OC validada no servidor. Valor NUMERIC(14,2) positivo, como a
  * coluna e o check da tabela oc_parcelas. A numeração não vem daqui: quem
  * numera é fn_salvar_parcelas_oc, pela ordem de vencimento.
@@ -122,7 +132,10 @@ export const ordemCompraSchema = z
      * fila de aprovação, nasce aprovado (dinheiro) ou nasce quitado (cartão).
      */
     formaPagamentoId: z.uuid({ error: "Escolha a forma de pagamento" }),
-    dataEmissao: dataSchema("Data de emissão inválida"),
+    /** O fato: quando a compra aconteceu. A data de criação é do sistema. */
+    dataCompra: dataSchema("Data da compra inválida"),
+    /** Mês em que a obra usou o material: define em que mês o custo entra. */
+    mesCompetencia: mesSchema,
     observacoes: textoOpcional(2000),
     itens: z
       .array(ocItemSchema)
@@ -151,7 +164,7 @@ export const ordemCompraSchema = z
     }
 
     ordem.parcelas.forEach((parcela, i) => {
-      if (parcela.dataVencimento < ordem.dataEmissao) {
+      if (parcela.dataVencimento < ordem.dataCompra) {
         ctx.addIssue({
           code: "custom",
           message: "A parcela não pode vencer antes da emissão da ordem",
@@ -255,10 +268,18 @@ export const ordemCompraFormSchema = z
     condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
     cotacaoId: z.uuid().optional(),
     formaPagamentoId: z.uuid({ error: "Escolha a forma de pagamento" }),
-    dataEmissao: z
+    dataCompra: z
       .string()
       .trim()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data de emissão" }),
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data da compra" })
+      .refine((valor) => valor <= dataHojeISO(), {
+        error: "A data da compra não pode ser no futuro",
+      }),
+    /** Mês do input type="month" (yyyy-MM). Vira yyyy-MM-01 no servidor. */
+    mesCompetencia: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     observacoes: z
       .string()
       .trim()
@@ -351,12 +372,12 @@ export const ordemCompraFormSchema = z
     form.parcelas.forEach((parcela, i) => {
       if (
         parcela.dataVencimento !== "" &&
-        form.dataEmissao !== "" &&
-        parcela.dataVencimento < form.dataEmissao
+        form.dataCompra !== "" &&
+        parcela.dataVencimento < form.dataCompra
       ) {
         ctx.addIssue({
           code: "custom",
-          message: "Não pode vencer antes da emissão da ordem",
+          message: "Não pode vencer antes da data da compra",
           path: ["parcelas", i, "dataVencimento"],
         });
       }

@@ -15,6 +15,11 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  dataHojeISO,
+  mesHojeISO,
+  mesParaCompetencia,
+} from "@/lib/formatadores";
 import { criarReceber } from "@/modules/financeiro/contas-receber/actions";
 import type { CategoriaOpcao } from "@/modules/financeiro/contas-receber/queries";
 import {
@@ -31,7 +36,8 @@ function valoresIniciais(): ReceberFormInput {
     descricao: "",
     categoriaId: undefined,
     valor: "",
-    competencia: "",
+    dataDocumento: dataHojeISO(),
+    mesCompetencia: mesHojeISO(),
     dataVencimento: "",
   };
 }
@@ -71,15 +77,15 @@ export function ReceberFormDrawer({
     const valor = Number(valores.valor.replace(",", "."));
     const vencimento =
       valores.dataVencimento === "" ? undefined : valores.dataVencimento;
-    const competencia =
-      valores.competencia === "" ? undefined : valores.competencia;
+
 
     const resultado = await criarReceber(
       {
         descricao: valores.descricao,
         categoriaId: valores.categoriaId,
         valor,
-        competencia,
+        dataDocumento: valores.dataDocumento,
+        mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
         dataVencimento: vencimento,
         parcelas: [],
         rateios: [],
@@ -195,15 +201,34 @@ export function ReceberFormDrawer({
 
         <LinhaCampos>
           <CampoFormulario
-            id="receber-competencia"
-            rotulo="Competência"
-            erro={form.formState.errors.competencia?.message}
+            id="receber-data-documento"
+            rotulo="Data do documento"
+            obrigatorio
+            erro={form.formState.errors.dataDocumento?.message}
           >
             <Input
-              id="receber-competencia"
+              id="receber-data-documento"
               type="date"
+              max={dataHojeISO()}
+              className="tabular-nums"
               disabled={salvando}
-              {...form.register("competencia")}
+              {...form.register("dataDocumento")}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="receber-mes-competencia"
+            rotulo="Mês de referência"
+            obrigatorio
+            ajuda="Define em qual mês esta receita entra"
+            erro={form.formState.errors.mesCompetencia?.message}
+          >
+            <Input
+              id="receber-mes-competencia"
+              type="month"
+              className="tabular-nums"
+              disabled={salvando}
+              {...form.register("mesCompetencia")}
             />
           </CampoFormulario>
 

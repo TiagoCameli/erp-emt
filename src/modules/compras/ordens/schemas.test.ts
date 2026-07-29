@@ -26,7 +26,8 @@ const ocValida = {
   fornecedorId: FORNECEDOR,
   condicaoPagamentoId: CONDICAO,
   formaPagamentoId: FORMA,
-  dataEmissao: "2026-06-18",
+  dataCompra: "2026-06-18",
+  mesCompetencia: "2026-06-01",
   itens: [itemValido],
 };
 
@@ -114,18 +115,40 @@ describe("ordemCompraSchema", () => {
     }
   });
 
-  it("rejeita data de emissão em formato inválido", () => {
+  it("rejeita data da compra em formato inválido", () => {
     const r = ordemCompraSchema.safeParse({
       ...ocValida,
-      dataEmissao: "18/06/2026",
+      dataCompra: "18/06/2026",
     });
+    expect(r.success).toBe(false);
+  });
+
+  // O mês de referência é DATE no dia 1 no banco, com check. Mês solto ou dia
+  // diferente de 1 não pode passar do app para lá.
+  it("exige mês de referência normalizado no dia 1", () => {
+    expect(
+      ordemCompraSchema.safeParse({ ...ocValida, mesCompetencia: "2026-06" })
+        .success,
+    ).toBe(false);
+    expect(
+      ordemCompraSchema.safeParse({
+        ...ocValida,
+        mesCompetencia: "2026-06-18",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("exige mês de referência", () => {
+    const { mesCompetencia: _, ...semMes } = ocValida;
+    const r = ordemCompraSchema.safeParse(semMes);
     expect(r.success).toBe(false);
   });
 
   it("exige condição de pagamento", () => {
     const r = ordemCompraSchema.safeParse({
       fornecedorId: FORNECEDOR,
-      dataEmissao: "2026-06-18",
+      dataCompra: "2026-06-18",
+      mesCompetencia: "2026-06-01",
       itens: [itemValido],
     });
     expect(r.success).toBe(false);
@@ -187,7 +210,8 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     fornecedorId: FORNECEDOR,
     condicaoPagamentoId: CONDICAO,
     formaPagamentoId: FORMA,
-    dataEmissao: "2026-06-18",
+    dataCompra: "2026-06-18",
+    mesCompetencia: "2026-06",
     observacoes: "",
     centrosCusto: [grupoValido],
     // Parcelas são opcionais no produto (lista vazia = definir no lançamento),
@@ -199,6 +223,30 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     expect(ordemCompraFormSchema.safeParse(formValido).success).toBe(true);
   });
 
+  it("recusa data da compra no futuro", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...formValido,
+      dataCompra: "2099-01-01",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "A data da compra não pode ser no futuro",
+      );
+    }
+  });
+
+  it("exige o mês de referência no formulário, no formato do input month", () => {
+    const { mesCompetencia: _, ...semMes } = formValido;
+    expect(ordemCompraFormSchema.safeParse(semMes).success).toBe(false);
+    expect(
+      ordemCompraFormSchema.safeParse({
+        ...formValido,
+        mesCompetencia: "2026-06-01",
+      }).success,
+    ).toBe(false);
+  });
+
   it("exige forma de pagamento no formulário", () => {
     const { formaPagamentoId: _, ...semForma } = formValido;
     const r = ordemCompraFormSchema.safeParse(semForma);
@@ -208,7 +256,8 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
   it("exige condição de pagamento no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       fornecedorId: FORNECEDOR,
-      dataEmissao: "2026-06-18",
+      dataCompra: "2026-06-18",
+      mesCompetencia: "2026-06",
       observacoes: "",
       centrosCusto: [grupoValido],
     });
@@ -289,7 +338,8 @@ describe("parcelas da OC no formulário", () => {
     fornecedorId: FORNECEDOR,
     condicaoPagamentoId: CONDICAO,
     formaPagamentoId: FORMA,
-    dataEmissao: "2026-06-18",
+    dataCompra: "2026-06-18",
+    mesCompetencia: "2026-06",
     observacoes: "",
     // 10 x 100,00 = 1.000,00 de total
     centrosCusto: [
@@ -343,7 +393,7 @@ describe("parcelas da OC no formulário", () => {
     ).toBe(true);
   });
 
-  it("recusa vencimento antes da emissão, apontando a parcela", () => {
+  it("recusa vencimento antes da data da compra, apontando a parcela", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
       parcelas: [
@@ -356,12 +406,12 @@ describe("parcelas da OC no formulário", () => {
       r.error?.issues.some(
         (i) =>
           i.path.join(".") === "parcelas.0.dataVencimento" &&
-          i.message.includes("antes da emissão"),
+          i.message.includes("antes da data da compra"),
       ),
     ).toBe(true);
   });
 
-  it("vencimento no dia da emissão é aceito", () => {
+  it("vencimento no dia da compra é aceito", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
       parcelas: [{ dataVencimento: "2026-06-18", valor: "1000,00" }],
@@ -386,7 +436,8 @@ describe("parcelas da OC no servidor", () => {
     fornecedorId: FORNECEDOR,
     condicaoPagamentoId: CONDICAO,
     formaPagamentoId: FORMA,
-    dataEmissao: "2026-06-18",
+    dataCompra: "2026-06-18",
+    mesCompetencia: "2026-06-01",
     itens: [
       {
         insumoId: INSUMO,

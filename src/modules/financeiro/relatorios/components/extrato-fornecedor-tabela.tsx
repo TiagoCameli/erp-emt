@@ -9,7 +9,7 @@ import {
   EmptyState,
   StatusBadge,
 } from "@/components/canonicos";
-import { formatarData } from "@/lib/formatadores";
+import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   STATUS_LANCAMENTO,
   type StatusLancamento,
@@ -62,9 +62,9 @@ export function ExtratoFornecedorTabela({
         },
       },
       {
-        accessorKey: "competencia",
-        header: "Competência",
-        cell: ({ row }) => formatarData(row.original.competencia),
+        accessorKey: "mesCompetencia",
+        header: "Mês de referência",
+        cell: ({ row }) => formatarMesAno(row.original.mesCompetencia),
       },
       {
         accessorKey: "dataVencimento",

@@ -66,7 +66,8 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
     condicao_pagamento_id: dados.condicaoPagamentoId,
     forma_pagamento_id: dados.formaPagamentoId ?? null,
     cotacao_id: dados.cotacaoId ?? null,
-    data_emissao: dados.dataEmissao,
+    data_compra: dados.dataCompra,
+    mes_competencia: dados.mesCompetencia,
     observacoes: dados.observacoes ?? null,
   };
 }

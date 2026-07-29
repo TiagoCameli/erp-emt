@@ -2,7 +2,7 @@ import "server-only";
 
 import { TZDate } from "@date-fns/tz";
 
-import { TIMEZONE } from "@/lib/formatadores";
+import { mesParaCompetencia, TIMEZONE } from "@/lib/formatadores";
 import type { createClient } from "@/lib/supabase/server";
 
 /** Paginação, busca e filtros lidos dos searchParams de uma listagem de Compras. */
@@ -17,6 +17,8 @@ export interface ParametrosLista {
   de?: string;
   /** Fim do período (parâmetro `ate`, yyyy-mm-dd). */
   ate?: string;
+  /** Mês de referência (parâmetro `mes`, yyyy-MM na URL) como yyyy-MM-01. */
+  mesCompetencia?: string;
 }
 
 const TAMANHO_PADRAO = 25;
@@ -45,11 +47,20 @@ export function parametroUuid(
  * (Rio Branco). Filtro de período em coluna `timestamptz` precisa disso: o dia
  * do usuário começa às 05:00 UTC, não às 00:00 UTC. Sem isso, um registro
  * criado de manhã em Rio Branco cairia no dia anterior do filtro.
- * Para coluna `date` (ex. data_emissao) não use: lá a string crua já basta.
+ * Para coluna `date` (ex. data_compra) não use: lá a string crua já basta.
  */
 export function inicioDoDiaISO(data: string, deslocamentoDias = 0): string {
   const [ano, mes, dia] = data.split("-").map(Number);
   return new TZDate(ano, mes - 1, dia + deslocamentoDias, TIMEZONE).toISOString();
+}
+
+/** Mês do filtro (yyyy-MM na URL) como competência do banco (yyyy-MM-01). */
+export function parametroMes(
+  valor: string | string[] | undefined,
+): string | undefined {
+  if (typeof valor !== "string") return undefined;
+  const competencia = mesParaCompetencia(valor);
+  return competencia === "" ? undefined : competencia;
 }
 
 /** Lê e valida um parâmetro de filtro contra a lista de valores aceitos. */
@@ -95,6 +106,7 @@ export function lerParametrosLista(
     fornecedorId: parametroUuid(params.fornecedor),
     de,
     ate,
+    mesCompetencia: parametroMes(params.mes),
   };
 }
 

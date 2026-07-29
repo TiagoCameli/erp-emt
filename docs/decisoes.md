@@ -173,3 +173,23 @@ Módulo SOMENTE LEITURA: agrega os dados dos outros módulos, sem tabelas novas 
 **Prova:** `supabase/provas/pagamento_por_forma.sql`, 25 asserções contra o banco vivo (3 caminhos, lançamento incompleto, definir parcelas aplicando a regra, forma ausente caindo em bancário, recebimento de OC já quitada, divergência registrada sem reescrever parcela paga).
 
 **Pendência do dono, não do código:** todas as contas bancárias estão com saldo inicial R$ 0,00 e `fn_pagar_parcela` recusa pagamento que deixe saldo negativo. Sem lançar o saldo inicial, nenhum pagamento passa.
+
+## 2026-07-29 - Três datas com papéis distintos na OC e no lançamento (PR #32)
+
+**O problema.** Um campo `data_emissao` fazia dois papéis conflitantes: na OC era data digitada pelo usuário (o fato), no lançamento era `default now()` que ninguém escrevia (data de sistema). E `competencia` era data completa, opcional, preenchida com "hoje" na aprovação da OC, o que jogava o custo no mês da aprovação em vez do mês em que a obra usou o material.
+
+**O modelo agora.** `created_at` é "Criada em" (data de sistema, imutável por trigger `fn_fixa_created_at`, que ignora UPDATE); `data_compra` é o fato (editável, sem futuro, aviso acima de 90 dias); `mes_competencia` é o mês em que o custo entra, DATE normalizado no dia 1 com check `extract(day) = 1`. **Não criei `data_criacao`:** `created_at` já existia e já era auditado, e uma segunda fonte de verdade para a mesma coisa só cria divergência.
+
+**Migração sem cópia de dado.** `ordens_compra.data_emissao` foi RENOMEADA para `data_compra` (o valor digitado continua lá, sem janela de inconsistência); `lancamentos.data_compra` nasceu herdando a data da OC de origem; `lancamentos.competencia` foi renomeada para `mes_competencia` e normalizada no dia 1; `lancamentos.data_emissao` saiu (era data de sistema disfarçada de campo de negócio, e o valor foi preservado em data_compra).
+
+**O mês de referência é um só, visto de dois lugares.** `fn_alterar_mes_competencia(entidade, id, mes)` muda a OC e o lançamento dela juntos, nos dois sentidos (regra do Tiago: mudar no lançamento tem que refletir na OC). A tela confirma antes, porque isso move custo entre meses.
+
+**A trava é o pagamento, não o status da OC.** O mês de referência muda até o pagamento ser aprovado ou pago; depois disso a função recusa com a instrução exata ("Desaprove o pagamento antes" / "Estorne o pagamento antes"). Isso vale também no `fn_salvar_lancamento`. Consequência conhecida: forma dinheiro nasce aprovada e cartão nasce paga (ver 20260729140001), então nesses dois o mês já nasce travado e mexer nele exige desaprovar ou estornar.
+
+**Piso do vencimento das parcelas passou a ser `data_compra`** (era a data de emissão, que agora é data de sistema). Regime de caixa (fluxo de caixa, aging) continua por vencimento e pagamento; regime de competência (DRE) passou a usar só `mes_competencia`, sem o `coalesce(competencia, data_vencimento, data_emissao)` que misturava os dois quando a competência estava vazia. Cada relatório diz na descrição qual data usa.
+
+**Custo de obra = lançamentos.** Decisão do Tiago: como toda OC vira lançamento e existem lançamentos avulsos, o gasto da obra é o que está nos lançamentos (rateio por centro de custo, agrupado por `mes_competencia`). Isso substitui o modelo "base CONSUMO" da Fase 8, que dependia do módulo de Estoque (fora do escopo atual, então nunca teria dado de consumo). **O ajuste do painel de custos do módulo Gestão é o bloco 3 deste trabalho e ainda não foi feito.**
+
+**Prova:** `supabase/provas/datas_competencia.sql`, 17 asserções no banco vivo (imutabilidade da criação, normalização e check do dia 1, herança das duas datas, avulso exigindo, alteração nos dois sentidos, trava por aprovado e por pago, piso do vencimento, DRE pelo mês de referência). Rollback em `supabase/rollbacks/`.
+
+**Blocos pendentes:** 2) competência fechada (`competencias_fechadas`, trava nas funções de escrita, aba para fechar e reabrir); 3) relatórios e BI de custo por competência.

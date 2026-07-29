@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
+import { competenciaParaMes } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ROTULO_STATUS_OC, type StatusOC } from "@/modules/compras/_shared/formato";
 import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
@@ -37,7 +38,7 @@ export default async function PaginaOrdens({
   const podeCriar = temPermissao(usuario, "compras.ordens", "criar");
 
   const params = await searchParams;
-  const { pagina, tamanho, busca, fornecedorId, de, ate } =
+  const { pagina, tamanho, busca, fornecedorId, de, ate, mesCompetencia } =
     lerParametrosLista(params);
   const status = parametroValido(params.status, STATUS_VALIDOS);
 
@@ -56,7 +57,16 @@ export default async function PaginaOrdens({
     formasPagamento,
     prefill,
   ] = await Promise.all([
-    listarOrdens({ pagina, tamanho, status, busca, fornecedorId, de, ate }),
+    listarOrdens({
+      pagina,
+      tamanho,
+      status,
+      busca,
+      fornecedorId,
+      de,
+      ate,
+      mesCompetencia,
+    }),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
@@ -92,6 +102,7 @@ export default async function PaginaOrdens({
         fornecedorId={fornecedorId ?? ""}
         de={de ?? ""}
         ate={ate ?? ""}
+        mes={competenciaParaMes(mesCompetencia ?? "")}
         fornecedores={fornecedores}
         idUsuario={usuario.id}
       />

@@ -24,7 +24,13 @@ import {
 } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
+import {
+  competenciaParaMes,
+  dataHojeISO,
+  formatarBRL,
+  mesHojeISO,
+  mesParaCompetencia,
+} from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
@@ -106,7 +112,8 @@ function valoresIniciais(
       formaPagamentoId: "",
       descricao: "",
       valor: "",
-      competencia: "",
+      dataCompra: dataHojeISO(),
+      mesCompetencia: mesHojeISO(),
       dataVencimento: dataHojeISO(),
       parcelas: [parcelaVazia()],
       rateios: [],
@@ -119,7 +126,8 @@ function valoresIniciais(
     formaPagamentoId: lancamento.formaPagamentoId ?? "",
     descricao: lancamento.descricao,
     valor: String(lancamento.valor).replace(".", ","),
-    competencia: lancamento.competencia ?? "",
+    dataCompra: lancamento.dataCompra,
+    mesCompetencia: competenciaParaMes(lancamento.mesCompetencia),
     dataVencimento: lancamento.dataVencimento ?? "",
     parcelas:
       lancamento.parcelas.length > 0
@@ -248,7 +256,8 @@ export function LancamentoFormDrawer({
       formaPagamentoId: valores.formaPagamentoId || undefined,
       descricao: valores.descricao,
       valor: paraNumero(valores.valor),
-      competencia: valores.competencia,
+      dataCompra: valores.dataCompra,
+      mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       dataVencimento: valores.dataVencimento,
       parcelas: valores.parcelas.map((parcela, indice) => ({
         numeroParcela: indice + 1,
@@ -465,15 +474,34 @@ export function LancamentoFormDrawer({
 
         <LinhaCampos>
           <CampoFormulario
-            id="lan-competencia"
-            rotulo="Competência"
-            ajuda="Opcional"
+            id="lan-data-compra"
+            rotulo={tipoValor === "a_receber" ? "Data do documento" : "Data da compra"}
+            obrigatorio
+            erro={form.formState.errors.dataCompra?.message}
           >
             <Input
-              id="lan-competencia"
+              id="lan-data-compra"
               type="date"
+              max={dataHojeISO()}
+              className="tabular-nums"
               disabled={salvando}
-              {...form.register("competencia")}
+              {...form.register("dataCompra")}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="lan-mes-competencia"
+            rotulo="Mês de referência"
+            obrigatorio
+            ajuda="Define em qual mês este valor entra nos relatórios"
+            erro={form.formState.errors.mesCompetencia?.message}
+          >
+            <Input
+              id="lan-mes-competencia"
+              type="month"
+              className="tabular-nums"
+              disabled={salvando}
+              {...form.register("mesCompetencia")}
             />
           </CampoFormulario>
 

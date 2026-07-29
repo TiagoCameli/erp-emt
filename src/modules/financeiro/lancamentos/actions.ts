@@ -30,7 +30,8 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     forma_pagamento_id: dados.formaPagamentoId ?? null,
     descricao: dados.descricao,
     valor: dados.valor,
-    competencia: dados.competencia ?? null,
+    data_compra: dados.dataCompra,
+    mes_competencia: dados.mesCompetencia,
     data_vencimento: dados.dataVencimento ?? null,
   };
 }
@@ -247,7 +248,7 @@ export async function sugerirParcelasDoLancamento(
   const supabase = await createClient();
   const { data: lancamento } = await supabase
     .from("lancamentos")
-    .select("valor, data_emissao, origem, origem_id")
+    .select("valor, data_compra, origem, origem_id")
     .eq("id", idValido.data)
     .maybeSingle();
 
@@ -271,7 +272,8 @@ export async function sugerirParcelasDoLancamento(
   const { data, error } = await supabase.rpc("fn_parcelas_da_condicao", {
     p_condicao_id: ordem.condicao_pagamento_id,
     p_valor: lancamento.valor,
-    p_data_base: lancamento.data_emissao,
+    // A base das parcelas é a data da COMPRA, não a data de sistema.
+    p_data_base: lancamento.data_compra,
   });
 
   if (error) {

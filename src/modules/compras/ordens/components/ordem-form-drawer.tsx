@@ -34,7 +34,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
+import {
+  competenciaParaMes,
+  dataHojeISO,
+  diasAtras,
+  formatarBRL,
+  formatarData,
+  mesHojeISO,
+  mesParaCompetencia,
+} from "@/lib/formatadores";
 import {
   criarCondicaoPagamento,
   criarFormaPagamento,
@@ -118,7 +126,8 @@ function valoresIniciais(
       condicaoPagamentoId: ordem.condicaoPagamentoId ?? "",
       formaPagamentoId: ordem.formaPagamentoId ?? "",
       cotacaoId: ordem.cotacaoId ?? undefined,
-      dataEmissao: ordem.dataEmissao,
+      dataCompra: ordem.dataCompra,
+      mesCompetencia: competenciaParaMes(ordem.mesCompetencia),
       observacoes: ordem.observacoes ?? "",
       centrosCusto: agruparItensPorCentroCusto(ordem.itens),
       parcelas: ordem.parcelas.map((parcela) => ({
@@ -134,7 +143,8 @@ function valoresIniciais(
       condicaoPagamentoId: prefill.condicaoPagamentoId ?? "",
       formaPagamentoId: prefill.formaPagamentoId ?? "",
       cotacaoId: prefill.cotacaoId,
-      dataEmissao: dataHojeISO(),
+      dataCompra: dataHojeISO(),
+      mesCompetencia: mesHojeISO(),
       observacoes: "",
       centrosCusto:
         prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
@@ -147,7 +157,10 @@ function valoresIniciais(
     condicaoPagamentoId: ordem?.condicaoPagamentoId ?? "",
     formaPagamentoId: ordem?.formaPagamentoId ?? "",
     cotacaoId: ordem?.cotacaoId ?? undefined,
-    dataEmissao: ordem?.dataEmissao ?? dataHojeISO(),
+    dataCompra: ordem?.dataCompra ?? dataHojeISO(),
+    mesCompetencia: ordem
+      ? competenciaParaMes(ordem.mesCompetencia)
+      : mesHojeISO(),
     observacoes: ordem?.observacoes ?? "",
     centrosCusto: [grupoVazio()],
     parcelas:
@@ -281,7 +294,8 @@ export function OrdemFormDrawer({
       condicaoPagamentoId: valores.condicaoPagamentoId,
       formaPagamentoId: valores.formaPagamentoId,
       cotacaoId: valores.cotacaoId,
-      dataEmissao: valores.dataEmissao,
+      dataCompra: valores.dataCompra,
+      mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       observacoes: valores.observacoes,
       itens: achatarGruposEmItens(valores.centrosCusto),
       parcelas: valores.parcelas.map((parcela) => ({
@@ -333,6 +347,14 @@ export function OrdemFormDrawer({
 
   const fornecedorValor = form.watch("fornecedorId");
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId");
+  const dataCompraValor = form.watch("dataCompra") ?? "";
+  // Compra muito velha normalmente é digitação errada, mas às vezes é nota
+  // atrasada de verdade: avisa e deixa salvar.
+  const avisoDataAntiga =
+    dataCompraValor !== "" && diasAtras(dataCompraValor) > 90
+      ? `Essa compra tem ${diasAtras(dataCompraValor)} dias. Confirme se a data está certa.`
+      : undefined;
+
   const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
   // O tipo da forma escolhida decide o caminho do pagamento. A tela diz isso
   // aqui, antes de salvar, em vez de o usuário descobrir depois procurando a
@@ -428,21 +450,47 @@ export function OrdemFormDrawer({
             </CampoFormulario>
 
             <CampoFormulario
-              id="oc-data-emissao"
-              rotulo="Data de emissão"
+              id="oc-data-compra"
+              rotulo="Data da compra"
               obrigatorio
               largura="curto"
-              erro={form.formState.errors.dataEmissao?.message}
+              ajuda={avisoDataAntiga}
+              erro={form.formState.errors.dataCompra?.message}
             >
               <Input
-                id="oc-data-emissao"
+                id="oc-data-compra"
                 type="date"
+                max={dataHojeISO()}
                 className="tabular-nums"
                 disabled={salvando}
-                {...form.register("dataEmissao")}
+                {...form.register("dataCompra")}
+              />
+            </CampoFormulario>
+
+            <CampoFormulario
+              id="oc-mes-competencia"
+              rotulo="Mês de referência"
+              obrigatorio
+              largura="curto"
+              ajuda="Mês em que o material foi utilizado. Define em qual mês o custo entra."
+              erro={form.formState.errors.mesCompetencia?.message}
+            >
+              <Input
+                id="oc-mes-competencia"
+                type="month"
+                className="tabular-nums"
+                disabled={salvando}
+                {...form.register("mesCompetencia")}
               />
             </CampoFormulario>
           </LinhaCampos>
+
+          {editando && ordem ? (
+            <p className="text-legenda text-muted-foreground">
+              Criada em {formatarData(ordem.criadoEm)}. A data de criação é do
+              sistema e não muda.
+            </p>
+          ) : null}
 
           <LinhaCampos>
             <CampoFormulario
@@ -623,7 +671,7 @@ export function OrdemFormDrawer({
         <SecaoParcelas
           form={form}
           total={totalPrevia}
-          dataEmissao={form.watch("dataEmissao")}
+          dataCompra={form.watch("dataCompra")}
           condicaoPagamentoId={condicaoPagamentoValor}
           salvando={salvando}
         />
@@ -699,13 +747,13 @@ const COLUNAS_PARCELA: ColunaItem[] = [
 function SecaoParcelas({
   form,
   total,
-  dataEmissao,
+  dataCompra,
   condicaoPagamentoId,
   salvando,
 }: {
   form: UseFormReturn<OrdemCompraFormInput>;
   total: number;
-  dataEmissao: string;
+  dataCompra: string;
   condicaoPagamentoId: string;
   salvando: boolean;
 }) {
@@ -736,7 +784,7 @@ function SecaoParcelas({
     const resultado = await sugerirParcelasPelaCondicao(
       condicaoPagamentoId,
       total,
-      dataEmissao,
+      dataCompra,
     );
     setGerando(false);
 
@@ -779,7 +827,7 @@ function SecaoParcelas({
             size="sm"
             disabled={salvando}
             onClick={() =>
-              adicionarParcela({ dataVencimento: dataEmissao, valor: "" })
+              adicionarParcela({ dataVencimento: dataCompra, valor: "" })
             }
           >
             <Plus />
@@ -823,7 +871,7 @@ function SecaoParcelas({
                     type="date"
                     aria-label={`Vencimento da parcela ${indice + 1}`}
                     className="tabular-nums"
-                    min={dataEmissao || undefined}
+                    min={dataCompra || undefined}
                     disabled={salvando}
                     {...form.register(`parcelas.${indice}.dataVencimento`)}
                   />
