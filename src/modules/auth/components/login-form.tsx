@@ -40,6 +40,12 @@ export function LoginForm({ erroInicial }: LoginFormProps) {
 
   return (
     <form
+      // method="post" não é decoração: sem JS (hidratação falhou, extensão
+      // bloqueou o bundle, rede ruim) o navegador faz o submit nativo do form, e
+      // o padrão de um form sem method é GET. Isso manda email e SENHA na query
+      // string, que vaza para o histórico do navegador, para o log de acesso do
+      // servidor e para o header Referer. Com POST, o pior caso é não logar.
+      method="post"
       onSubmit={form.handleSubmit(aoEnviar)}
       className={classesFormulario}
       noValidate
