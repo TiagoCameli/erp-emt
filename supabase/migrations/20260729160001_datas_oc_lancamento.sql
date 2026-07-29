@@ -127,8 +127,8 @@ create index if not exists idx_ordens_compra_mes_competencia
   on public.ordens_compra (mes_competencia);
 create index if not exists idx_lancamentos_mes_competencia
   on public.lancamentos (mes_competencia);
-create index if not exists idx_lancamento_rateios_centro_custo
-  on public.lancamento_rateios (centro_custo_id);
+-- lancamento_rateios(centro_custo_id) JA tem indice (idx_lancamento_rateios_cc),
+-- entao nao crio outro: indice duplicado custa escrita e nao ganha leitura.
 
 -- 5. Criar OC: grava as duas datas do fato -----------------------------------
 
