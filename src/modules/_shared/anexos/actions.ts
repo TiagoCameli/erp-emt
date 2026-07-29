@@ -188,8 +188,7 @@ export async function urlDoAnexo(vinculoId: string): Promise<ResultadoUrl> {
     return { erro: "Sem permissão para ver este anexo" };
   }
 
-  const url = await urlAssinada(vinculo.arquivos.path_storage);
-  return url ? { url } : { erro: "Não foi possível gerar o link do arquivo" };
+  return urlAssinada(vinculo.arquivos.path_storage);
 }
 
 /**

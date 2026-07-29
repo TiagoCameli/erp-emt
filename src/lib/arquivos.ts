@@ -101,6 +101,23 @@ export function pathNovo(nome: string): string {
 }
 
 /**
+ * Mensagem única para a falta da chave de serviço. Sem ela, anexo não sobe nem
+ * abre, e o erro genérico ("não foi possível enviar") mandaria você debugar o
+ * lugar errado. Aqui o problema se identifica sozinho.
+ */
+const ERRO_SEM_CHAVE =
+  "Anexos indisponíveis: a variável SUPABASE_SERVICE_ROLE_KEY não está configurada no ambiente do servidor. Configure na Vercel (Settings > Environment Variables) e faça um novo deploy.";
+
+/** Client admin com erro falante quando a chave não existe no ambiente. */
+function clienteDoStorage(): ReturnType<typeof createAdminClient> | null {
+  try {
+    return createAdminClient();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Sobe o binário. Usa a chave de serviço porque o bucket não tem policy para
  * usuário logado: o servidor é o único que fala com o Storage, e a permissão
  * já foi checada antes de chegar aqui.
@@ -109,7 +126,9 @@ export async function subirBinario(
   path: string,
   arquivo: File,
 ): Promise<{ erro: string } | null> {
-  const admin = createAdminClient();
+  const admin = clienteDoStorage();
+  if (!admin) return { erro: ERRO_SEM_CHAVE };
+
   const { error } = await admin.storage
     .from(BUCKET_ARQUIVOS)
     .upload(path, arquivo, {
@@ -120,13 +139,24 @@ export async function subirBinario(
   return error ? { erro: "Não foi possível enviar o arquivo. Tente novamente" } : null;
 }
 
-/** URL assinada de curta duração (5 minutos) para baixar ou pré-visualizar. */
-export async function urlAssinada(path: string): Promise<string | null> {
-  const admin = createAdminClient();
+/**
+ * URL assinada de curta duração (5 minutos) para baixar ou pré-visualizar.
+ * Devolve o motivo em vez de só null: a falta da chave de serviço precisa se
+ * identificar, não virar "não foi possível gerar o link".
+ */
+export async function urlAssinada(
+  path: string,
+): Promise<{ url: string } | { erro: string }> {
+  const admin = clienteDoStorage();
+  if (!admin) return { erro: ERRO_SEM_CHAVE };
+
   const { data, error } = await admin.storage
     .from(BUCKET_ARQUIVOS)
     .createSignedUrl(path, SEGUNDOS_URL_ASSINADA);
-  return error || !data ? null : data.signedUrl;
+
+  return error || !data
+    ? { erro: "Não foi possível gerar o link do arquivo" }
+    : { url: data.signedUrl };
 }
 
 /**
@@ -136,6 +166,7 @@ export async function urlAssinada(path: string): Promise<string | null> {
  */
 export async function removerBinarios(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
-  const admin = createAdminClient();
+  const admin = clienteDoStorage();
+  if (!admin) return;
   await admin.storage.from(BUCKET_ARQUIVOS).remove(paths);
 }
