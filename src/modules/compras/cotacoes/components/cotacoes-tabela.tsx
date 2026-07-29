@@ -26,6 +26,7 @@ import {
   useBuscaUrl,
   useFiltrosUrl,
 } from "@/components/canonicos";
+import { subirFilaDeAnexos } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
@@ -92,15 +93,21 @@ function useCriarCotacao() {
   const [criando, setCriando] = React.useState(false);
 
   const aoCriar = React.useCallback(
-    async (observacoes: string) => {
+    async (observacoes: string, anexos: File[]) => {
       setCriando(true);
       const resultado = await criarCotacao({ observacoes });
-      setCriando(false);
 
       if ("erro" in resultado) {
+        setCriando(false);
         toast.error(resultado.erro);
         return;
       }
+
+      // A fila de anexos sobe agora que a cotação existe.
+      if (anexos.length > 0) {
+        await subirFilaDeAnexos("cotacao", resultado.id, anexos);
+      }
+      setCriando(false);
       toast.success("Cotação criada");
       setDrawerAberto(false);
       router.push(`/compras/cotacoes/${resultado.id}`);

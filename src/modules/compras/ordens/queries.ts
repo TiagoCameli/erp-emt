@@ -76,6 +76,13 @@ export interface LancamentoVinculado {
   dataVencimento: string | null;
 }
 
+/** Parcela definida na OC (tabela oc_parcelas). */
+export interface OrdemParcela {
+  numeroParcela: number;
+  dataVencimento: string;
+  valor: number;
+}
+
 /** OC completa para a tela de detalhe. */
 export interface OrdemDetalhe {
   id: string;
@@ -93,6 +100,8 @@ export interface OrdemDetalhe {
   dataEmissao: string;
   observacoes: string | null;
   itens: OrdemItem[];
+  /** Vazio quando a OC não tem parcelas definidas (serão definidas no lançamento). */
+  parcelas: OrdemParcela[];
   lancamento: LancamentoVinculado | null;
 }
 
@@ -280,7 +289,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
          id, insumo_id, quantidade, preco_unitario, centro_custo_id,
          insumos(nome, unidades_medida(sigla)),
          centros_custo(nome, codigo)
-       )`,
+       ),
+       oc_parcelas(numero_parcela, data_vencimento, valor)`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -326,6 +336,13 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     dataEmissao: ordem.data_emissao,
     observacoes: ordem.observacoes,
     itens,
+    parcelas: (ordem.oc_parcelas ?? [])
+      .map((parcela) => ({
+        numeroParcela: parcela.numero_parcela,
+        dataVencimento: parcela.data_vencimento,
+        valor: parcela.valor,
+      }))
+      .sort((a, b) => a.numeroParcela - b.numeroParcela),
     lancamento: lancamento
       ? {
           id: lancamento.id,

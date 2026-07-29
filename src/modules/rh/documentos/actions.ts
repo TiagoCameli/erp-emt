@@ -18,6 +18,9 @@ const TABELA = "rh_documentos" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
+/** Criação devolve o id: o formulário usa para subir a fila de anexos. */
+export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
+
 const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
@@ -33,7 +36,7 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
 /** Cria um documento. */
 export async function criarDocumento(
   dados: DocumentoInput,
-): Promise<ResultadoAcao> {
+): Promise<ResultadoCriacao> {
   if (!(await checarPermissao("criar"))) {
     return { erro: "Sem permissão para criar documentos" };
   }
@@ -44,14 +47,18 @@ export async function criarDocumento(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from(TABELA).insert({
+  const { data: criado, error } = await supabase
+    .from(TABELA)
+    .insert({
     colaborador_id: validado.data.colaboradorId,
     tipo: validado.data.tipo,
     descricao: validado.data.descricao,
     data_emissao: validado.data.dataEmissao ?? null,
     data_vencimento: validado.data.dataVencimento ?? null,
     observacao: validado.data.observacao ?? null,
-  });
+  })
+    .select("id")
+    .single();
 
   if (error) {
     return erroAcao(
@@ -62,7 +69,7 @@ export async function criarDocumento(
   }
 
   revalidatePath(ROTA);
-  return { ok: true };
+  return { ok: true, id: criado.id };
 }
 
 /** Edita um documento. */

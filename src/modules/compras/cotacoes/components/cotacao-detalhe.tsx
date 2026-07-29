@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, FileOutput, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { Anexos } from "@/components/canonicos/anexos";
 import {
   ConfirmDialog,
   MoneyText,
@@ -16,8 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
-import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import type { OpcaoPagamento } from "@/modules/compras/_shared/pagamento";
 import { infoStatusCotacao } from "@/modules/compras/_shared/formato";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
@@ -44,7 +44,7 @@ export interface CotacaoDetalheProps {
   trilha: EventoTrilha[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: OpcaoPagamento[];
-  anexosIniciais: AnexoResumo[];
+  anexosIniciais: AnexoDoDocumento[];
   podeEditar: boolean;
   podeExcluir: boolean;
   /** Permissão de criar OC: habilita "Gerar ordem de compra". */
@@ -326,11 +326,12 @@ export function CotacaoDetalhe({
       </SecaoDetalhe>
 
       <SecaoDetalhe titulo="Anexos">
-        <AnexosRegistro
-          tabela="cotacoes"
-          registroId={cotacao.id}
+        <Anexos
+          entidade="cotacao"
+          entidadeId={cotacao.id}
+          anexos={anexosIniciais}
           podeEditar={podeEditar}
-          anexosIniciais={anexosIniciais}
+          onMudou={() => router.refresh()}
         />
       </SecaoDetalhe>
 

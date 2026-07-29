@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarAnexosPorRegistro } from "@/modules/compras/_shared/anexos-actions";
+import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { EpisAcoesCabecalho } from "@/modules/rh/epis/components/epis-acoes-cabecalho";
 import { EpisTabela } from "@/modules/rh/epis/components/epis-tabela";
 import { listarEpis } from "@/modules/rh/epis/queries";
@@ -14,11 +14,17 @@ export default async function PaginaEpis() {
     notFound();
   }
 
-  const [epis, colaboradores, anexosPorRegistro] = await Promise.all([
+  const [epis, colaboradores] = await Promise.all([
     listarEpis(),
     listarColaboradores(),
-    listarAnexosPorRegistro("rh_epis"),
   ]);
+
+  // Anexos de todos os registros numa consulta só, para o drawer não buscar
+  // nada no client.
+  const anexosPorRegistro = await listarAnexosPorDocumento(
+    "rh_epi",
+    epis.map((registro) => registro.id),
+  );
 
   const podeCriar = temPermissao(usuario, "rh.epis", "criar");
   const podeEditar = temPermissao(usuario, "rh.epis", "editar");

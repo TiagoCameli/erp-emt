@@ -15,6 +15,7 @@ import {
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { STATUS_PARCELA } from "@/modules/financeiro/_shared/formato";
@@ -38,6 +39,8 @@ export interface PagamentosClienteProps {
   contas: ContaBancariaOpcao[];
   podePagar: boolean;
   podeEstornar: boolean;
+  /** Anexos por parcela, para o drawer de pagamento mostrar o comprovante. */
+  anexosPorParcela?: Record<string, AnexoDoDocumento[]>;
 }
 
 /** Número do lançamento + parcela para exibição (ex: LAN-0001 / 2). */
@@ -69,6 +72,7 @@ export function PagamentosCliente({
   contas,
   podePagar,
   podeEstornar,
+  anexosPorParcela = {},
 }: PagamentosClienteProps) {
   const router = useRouter();
 
@@ -341,6 +345,8 @@ export function PagamentosCliente({
         onAbertoChange={setDrawerAberto}
         parcela={parcelaAlvo}
         contas={contas}
+        anexos={parcelaAlvo ? (anexosPorParcela[parcelaAlvo.id] ?? []) : []}
+        podeAnexar={podePagar}
         onPago={() => router.refresh()}
       />
 

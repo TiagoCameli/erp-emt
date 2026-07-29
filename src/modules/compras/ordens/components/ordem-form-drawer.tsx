@@ -3,7 +3,15 @@
 import * as React from "react";
 import { useFieldArray, useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle, Plus, Trash2 } from "lucide-react";
+import {
+  LoaderCircle,
+  Paperclip,
+  Plus,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -18,6 +26,11 @@ import {
   TabelaItens,
   type ColunaItem,
 } from "@/components/canonicos";
+import { Anexos } from "@/components/canonicos/anexos";
+import {
+  FilaAnexos,
+  subirFilaDeAnexos,
+} from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,7 +39,18 @@ import {
   criarCondicaoPagamento,
   criarFormaPagamento,
 } from "@/modules/compras/_shared/pagamento-actions";
-import { criarOrdem, editarOrdem } from "@/modules/compras/ordens/actions";
+import { enviarAnexos } from "@/modules/_shared/anexos/actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import {
+  criarOrdem,
+  editarOrdem,
+  sugerirParcelasPelaCondicao,
+} from "@/modules/compras/ordens/actions";
+import {
+  diferencaParaTotal,
+  redistribuirProporcional,
+  somarParcelas,
+} from "@/modules/compras/ordens/calculo-parcelas";
 import {
   paraNumero,
   subtotalItem,
@@ -96,6 +120,10 @@ function valoresIniciais(
       dataEmissao: ordem.dataEmissao,
       observacoes: ordem.observacoes ?? "",
       centrosCusto: agruparItensPorCentroCusto(ordem.itens),
+      parcelas: ordem.parcelas.map((parcela) => ({
+        dataVencimento: parcela.dataVencimento,
+        valor: String(parcela.valor).replace(".", ","),
+      })),
     };
   }
 
@@ -109,6 +137,7 @@ function valoresIniciais(
       observacoes: "",
       centrosCusto:
         prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
+      parcelas: [],
     };
   }
 
@@ -120,6 +149,11 @@ function valoresIniciais(
     dataEmissao: ordem?.dataEmissao ?? dataHojeISO(),
     observacoes: ordem?.observacoes ?? "",
     centrosCusto: [grupoVazio()],
+    parcelas:
+      ordem?.parcelas.map((parcela) => ({
+        dataVencimento: parcela.dataVencimento,
+        valor: String(parcela.valor).replace(".", ","),
+      })) ?? [],
   };
 }
 
@@ -144,6 +178,8 @@ export interface OrdemFormDrawerProps {
    * condição/forma e itens do vencedor.
    */
   prefill?: PrefillOrdemCotacao | null;
+  /** Anexos já vinculados (modo edição). Na criação a lista começa vazia. */
+  anexos?: AnexoDoDocumento[];
   /** Chamado depois de criar uma OC, com o id, para navegar ao detalhe. */
   onCriada?: (id: string) => void;
 }
@@ -164,10 +200,17 @@ export function OrdemFormDrawer({
   condicoesPagamento,
   formasPagamento,
   prefill,
+  anexos = [],
   onCriada,
 }: OrdemFormDrawerProps) {
   const editando = ordem !== null;
   const prefillAtivo = editando ? null : (prefill ?? null);
+
+  // Na criação a OC ainda não existe, e vínculo de anexo precisa de um
+  // documento. Então os arquivos esperam numa fila no navegador e sobem no
+  // instante seguinte à criação, sem OC fantasma no meio.
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
+  const [subindoAnexos, setSubindoAnexos] = React.useState(false);
 
   const form = useForm<OrdemCompraFormInput>({
     resolver: zodResolver(ordemCompraFormSchema),
@@ -226,7 +269,10 @@ export function OrdemFormDrawer({
       ),
     };
   });
-  const qtdItens = totaisPorCentro.reduce((soma, linha) => soma + linha.itens, 0);
+  const qtdItens = totaisPorCentro.reduce(
+    (soma, linha) => soma + linha.itens,
+    0,
+  );
 
   async function aoEnviar(valores: OrdemCompraFormInput) {
     const dados = {
@@ -237,6 +283,10 @@ export function OrdemFormDrawer({
       dataEmissao: valores.dataEmissao,
       observacoes: valores.observacoes,
       itens: achatarGruposEmItens(valores.centrosCusto),
+      parcelas: valores.parcelas.map((parcela) => ({
+        dataVencimento: parcela.dataVencimento,
+        valor: paraNumero(parcela.valor),
+      })),
     };
 
     if (editando) {
@@ -255,7 +305,27 @@ export function OrdemFormDrawer({
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Ordem de compra criada");
+    // Sobe a fila de anexos agora que a OC existe.
+    if (filaAnexos.length > 0) {
+      setSubindoAnexos(true);
+      const falhas = await subirFilaDeAnexos(
+        "ordem_compra",
+        resultado.id,
+        filaAnexos,
+      );
+      setSubindoAnexos(false);
+      setFilaAnexos([]);
+      if (falhas === 0) {
+        toast.success(
+          filaAnexos.length === 1
+            ? "Ordem criada com o anexo"
+            : `Ordem criada com ${filaAnexos.length} anexos`,
+        );
+      }
+    } else {
+      toast.success("Ordem de compra criada");
+    }
+
     onAbertoChange(false);
     onCriada?.(resultado.id);
   }
@@ -265,7 +335,8 @@ export function OrdemFormDrawer({
   const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
   // Cotação de origem só entra por "Gerar OC" (prefill) ou vem da OC em
   // edição; nunca é escolhida à mão. Mostramos apenas como leitura.
-  const origemNumero = prefillAtivo?.cotacaoNumero ?? ordem?.cotacaoNumero ?? null;
+  const origemNumero =
+    prefillAtivo?.cotacaoNumero ?? ordem?.cotacaoNumero ?? null;
   const erroCentros = form.formState.errors.centrosCusto;
   const erroCentrosMensagem =
     (typeof erroCentros?.message === "string" ? erroCentros.message : null) ??
@@ -407,7 +478,9 @@ export function OrdemFormDrawer({
             >
               <Combobox
                 valor={formaPagamentoValor}
-                onValorChange={(valor) => form.setValue("formaPagamentoId", valor)}
+                onValorChange={(valor) =>
+                  form.setValue("formaPagamentoId", valor)
+                }
                 opcoes={formasPagamento.map((forma) => ({
                   valor: forma.id,
                   rotulo: forma.nome,
@@ -434,7 +507,9 @@ export function OrdemFormDrawer({
               <p className="text-legenda text-muted-foreground">
                 Cotação de origem
               </p>
-              <p className="codigo-doc text-detalhe font-medium">{origemNumero}</p>
+              <p className="codigo-doc text-detalhe font-medium">
+                {origemNumero}
+              </p>
             </div>
           ) : null}
         </SecaoFormulario>
@@ -498,7 +573,9 @@ export function OrdemFormDrawer({
               >
                 <span
                   className={
-                    linha.definido ? "truncate" : "truncate text-muted-foreground"
+                    linha.definido
+                      ? "truncate"
+                      : "truncate text-muted-foreground"
                   }
                 >
                   {linha.rotulo}
@@ -527,11 +604,37 @@ export function OrdemFormDrawer({
           </div>
         </SecaoFormulario>
 
+        <SecaoParcelas
+          form={form}
+          total={totalPrevia}
+          dataEmissao={form.watch("dataEmissao")}
+          condicaoPagamentoId={condicaoPagamentoValor}
+          salvando={salvando}
+        />
+
+        <SecaoFormulario titulo="Anexos">
+          {editando ? (
+            <Anexos
+              entidade="ordem_compra"
+              entidadeId={ordem.id}
+              anexos={anexos}
+              podeEditar
+            />
+          ) : (
+            <FilaAnexos
+              arquivos={filaAnexos}
+              onMudar={setFilaAnexos}
+              ocupado={salvando || subindoAnexos}
+              legenda="Sobem junto quando você criar a ordem"
+            />
+          )}
+        </SecaoFormulario>
+
         <SecaoFormulario titulo="Observações">
           <CampoFormulario
             id="oc-observacoes"
             rotulo="Observações"
-            ajuda="Aparecem no detalhe da ordem. Anexos são enviados depois de salvar."
+            ajuda="Aparecem no detalhe da ordem."
             erro={form.formState.errors.observacoes?.message}
           >
             <Textarea
@@ -548,9 +651,264 @@ export function OrdemFormDrawer({
   );
 }
 
+/** Colunas da tabela de parcelas: número, vencimento e valor. */
+const COLUNAS_PARCELA: ColunaItem[] = [
+  { chave: "numero", rotulo: "Nº", largura: "48px" },
+  {
+    chave: "vencimento",
+    rotulo: "Vencimento",
+    largura: "180px",
+    obrigatorio: true,
+  },
+  {
+    chave: "valor",
+    rotulo: "Valor",
+    largura: "minmax(0,1fr)",
+    alinhamento: "right",
+    obrigatorio: true,
+  },
+];
+
+/**
+ * Seção opcional de parcelas da OC.
+ *
+ * Sem parcelas aqui, o lançamento nasce sem parcela definida e alguém define
+ * depois no Financeiro. Com parcelas, o lançamento herda exatamente estas
+ * datas e valores, sem recalcular pela condição de pagamento.
+ *
+ * "Gerar pela condição" é sugestão: chama a função do banco (única
+ * implementação da divisão) e joga o resultado nos campos, que continuam
+ * editáveis.
+ */
+function SecaoParcelas({
+  form,
+  total,
+  dataEmissao,
+  condicaoPagamentoId,
+  salvando,
+}: {
+  form: UseFormReturn<OrdemCompraFormInput>;
+  total: number;
+  dataEmissao: string;
+  condicaoPagamentoId: string;
+  salvando: boolean;
+}) {
+  const {
+    fields: linhas,
+    append: adicionarParcela,
+    remove: removerParcela,
+    replace: trocarParcelas,
+  } = useFieldArray({ control: form.control, name: "parcelas" });
+  const [gerando, setGerando] = React.useState(false);
+
+  const parcelasObservadas = form.watch("parcelas") ?? [];
+  const soma = somarParcelas(parcelasObservadas);
+  const diferenca = diferencaParaTotal(parcelasObservadas, total);
+  const temParcelas = linhas.length > 0;
+  const fecha = diferenca === 0;
+
+  const errosParcelas = form.formState.errors.parcelas;
+  const erroGeral =
+    typeof errosParcelas?.message === "string"
+      ? errosParcelas.message
+      : typeof errosParcelas?.root?.message === "string"
+        ? errosParcelas.root.message
+        : null;
+
+  async function gerarPelaCondicao() {
+    setGerando(true);
+    const resultado = await sugerirParcelasPelaCondicao(
+      condicaoPagamentoId,
+      total,
+      dataEmissao,
+    );
+    setGerando(false);
+
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    trocarParcelas(
+      resultado.parcelas.map((parcela) => ({
+        dataVencimento: parcela.dataVencimento,
+        valor: String(parcela.valor).replace(".", ","),
+      })),
+    );
+    void form.trigger("parcelas");
+  }
+
+  function redistribuir() {
+    trocarParcelas(redistribuirProporcional(parcelasObservadas, total));
+    void form.trigger("parcelas");
+  }
+
+  return (
+    <SecaoFormulario
+      titulo="Parcelas"
+      acao={
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={salvando || gerando}
+            onClick={() => void gerarPelaCondicao()}
+          >
+            {gerando ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+            Gerar pela condição
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={salvando}
+            onClick={() =>
+              adicionarParcela({ dataVencimento: dataEmissao, valor: "" })
+            }
+          >
+            <Plus />
+            Adicionar parcela
+          </Button>
+        </div>
+      }
+    >
+      {!temParcelas ? (
+        <p className="rounded-md border border-dashed border-border bg-surface/50 px-3 py-3 text-detalhe text-muted-foreground">
+          Sem parcelas definidas aqui, o lançamento financeiro desta ordem nasce
+          sem parcelas e alguém precisa defini-las em Financeiro. Gere pela
+          condição de pagamento ou adicione na mão.
+        </p>
+      ) : (
+        <>
+          <TabelaItens
+            colunas={COLUNAS_PARCELA}
+            linhas={linhas}
+            chaveLinha={(linha) => linha.id}
+            onRemover={(indice) => removerParcela(indice)}
+            podeRemover={() => !salvando}
+            rotuloRemover="Remover parcela"
+            erroCelula={(chave, indice) => {
+              const erro = errosParcelas?.[indice];
+              if (chave === "vencimento") return erro?.dataVencimento?.message;
+              if (chave === "valor") return erro?.valor?.message;
+              return undefined;
+            }}
+            renderCelula={(chave, indice) => {
+              if (chave === "numero") {
+                return (
+                  <span className="text-detalhe text-muted-foreground tabular-nums">
+                    {indice + 1}
+                  </span>
+                );
+              }
+              if (chave === "vencimento") {
+                return (
+                  <Input
+                    type="date"
+                    aria-label={`Vencimento da parcela ${indice + 1}`}
+                    className="tabular-nums"
+                    min={dataEmissao || undefined}
+                    disabled={salvando}
+                    {...form.register(`parcelas.${indice}.dataVencimento`)}
+                  />
+                );
+              }
+              const campo = `parcelas.${indice}.valor` as const;
+              return (
+                <InputMoeda
+                  valor={form.watch(campo) ?? ""}
+                  onValorChange={(valor) =>
+                    form.setValue(campo, valor, { shouldDirty: true })
+                  }
+                  onBlur={() => void form.trigger("parcelas")}
+                  ariaLabel={`Valor da parcela ${indice + 1}`}
+                  disabled={salvando}
+                />
+              );
+            }}
+            rodape={
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <span className="text-detalhe text-muted-foreground">
+                  Soma das parcelas{" "}
+                  <span className="font-medium text-foreground tabular-nums">
+                    {formatarBRL(soma)}
+                  </span>
+                </span>
+                <span
+                  className={
+                    fecha
+                      ? "text-detalhe font-medium text-status-aprovado"
+                      : "text-detalhe font-medium text-destructive"
+                  }
+                >
+                  {fecha
+                    ? "Fecha com o total da ordem"
+                    : diferenca > 0
+                      ? `Faltam ${formatarBRL(diferenca)}`
+                      : `Passa ${formatarBRL(-diferenca)} do total`}
+                </span>
+              </div>
+            }
+          />
+
+          {!fecha ? (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2"
+            >
+              <span className="flex items-center gap-2 text-detalhe">
+                <TriangleAlert
+                  className="size-4 shrink-0 text-destructive"
+                  aria-hidden="true"
+                />
+                As parcelas não fecham com o total de {formatarBRL(total)}.
+              </span>
+              <span className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={salvando}
+                  onClick={redistribuir}
+                >
+                  Redistribuir proporcionalmente
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={salvando}
+                  onClick={() => trocarParcelas([])}
+                >
+                  Limpar parcelas
+                </Button>
+              </span>
+            </div>
+          ) : null}
+
+          {erroGeral ? (
+            <p className="text-legenda text-destructive" role="alert">
+              {erroGeral}
+            </p>
+          ) : null}
+
+          <p className="text-legenda text-muted-foreground">
+            A numeração é dada pela ordem de vencimento quando você salva.
+          </p>
+        </>
+      )}
+    </SecaoFormulario>
+  );
+}
+
 /** Colunas da tabela de insumos: insumo, quantidade, preço unitário e subtotal. */
 const COLUNAS_ITEM: ColunaItem[] = [
-  { chave: "insumo", rotulo: "Insumo", largura: "minmax(0,1fr)", obrigatorio: true },
+  {
+    chave: "insumo",
+    rotulo: "Insumo",
+    largura: "minmax(0,1fr)",
+    obrigatorio: true,
+  },
   {
     chave: "quantidade",
     rotulo: "Qtd",
@@ -565,7 +923,12 @@ const COLUNAS_ITEM: ColunaItem[] = [
     alinhamento: "right",
     obrigatorio: true,
   },
-  { chave: "subtotal", rotulo: "Subtotal", largura: "140px", alinhamento: "right" },
+  {
+    chave: "subtotal",
+    rotulo: "Subtotal",
+    largura: "140px",
+    alinhamento: "right",
+  },
 ];
 
 /** Um grupo de centro de custo com sua lista de insumos (field array próprio). */
@@ -606,9 +969,7 @@ function GrupoCentroCusto({
   );
 
   const insumosUsados = new Set(
-    (insumosObservados ?? [])
-      .map((insumo) => insumo.insumoId)
-      .filter(Boolean),
+    (insumosObservados ?? []).map((insumo) => insumo.insumoId).filter(Boolean),
   );
   const podeAdicionarInsumo =
     insumos.length === 0 || insumosUsados.size < insumos.length;
@@ -707,7 +1068,8 @@ function GrupoCentroCusto({
               );
             }
             if (chave === "quantidade") {
-              const campo = `centrosCusto.${indice}.insumos.${j}.quantidade` as const;
+              const campo =
+                `centrosCusto.${indice}.insumos.${j}.quantidade` as const;
               return (
                 <InputQuantidade
                   valor={form.watch(campo) ?? ""}

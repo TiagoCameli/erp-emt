@@ -15,6 +15,9 @@ const TABELA = "rh_epis" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
+/** Criação devolve o id: o formulário usa para subir a fila de anexos. */
+export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
+
 const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
@@ -42,7 +45,7 @@ function paraRegistro(dados: EpiInput) {
 }
 
 /** Cria um registro de EPI. */
-export async function criarEpi(dados: EpiInput): Promise<ResultadoAcao> {
+export async function criarEpi(dados: EpiInput): Promise<ResultadoCriacao> {
   if (!(await checarPermissao("criar"))) {
     return { erro: "Sem permissão para criar EPIs" };
   }
@@ -53,7 +56,11 @@ export async function criarEpi(dados: EpiInput): Promise<ResultadoAcao> {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from(TABELA).insert(paraRegistro(validado.data));
+  const { data: criado, error } = await supabase
+    .from(TABELA)
+    .insert(paraRegistro(validado.data))
+    .select("id")
+    .single();
 
   if (error) {
     return erroAcao(
@@ -64,7 +71,7 @@ export async function criarEpi(dados: EpiInput): Promise<ResultadoAcao> {
   }
 
   revalidatePath(ROTA);
-  return { ok: true };
+  return { ok: true, id: criado.id };
 }
 
 /** Edita um registro de EPI. */

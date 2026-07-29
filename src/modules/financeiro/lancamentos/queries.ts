@@ -83,6 +83,13 @@ export interface LancamentoDetalhe {
   dataVencimento: string | null;
   parcelas: ParcelaLancamento[];
   rateios: RateioLancamento[];
+  /**
+   * Condição de pagamento da ordem de origem (só quando origem='oc'). Serve ao
+   * "Gerar pela condição" na hora de definir as parcelas aqui: o lançamento em
+   * si não tem condição, ela vive na OC.
+   */
+  condicaoPagamentoId: string | null;
+  condicaoPagamentoDescricao: string | null;
 }
 
 /** Opção de categoria financeira para o select. */
@@ -223,6 +230,19 @@ export async function buscarLancamento(
     }))
     .sort((a, b) => a.numeroParcela - b.numeroParcela);
 
+  // Condição de pagamento da OC de origem: o lançamento não guarda condição.
+  let condicaoPagamentoId: string | null = null;
+  let condicaoPagamentoDescricao: string | null = null;
+  if (data.origem === "oc" && data.origem_id) {
+    const { data: ordem } = await supabase
+      .from("ordens_compra")
+      .select("condicao_pagamento_id, condicoes_pagamento(descricao)")
+      .eq("id", data.origem_id)
+      .maybeSingle();
+    condicaoPagamentoId = ordem?.condicao_pagamento_id ?? null;
+    condicaoPagamentoDescricao = ordem?.condicoes_pagamento?.descricao ?? null;
+  }
+
   const rateios: RateioLancamento[] = (data.lancamento_rateios ?? []).map(
     (rateio) => ({
       id: rateio.id,
@@ -251,6 +271,8 @@ export async function buscarLancamento(
     dataVencimento: data.data_vencimento,
     parcelas,
     rateios,
+    condicaoPagamentoId,
+    condicaoPagamentoDescricao,
   };
 }
 

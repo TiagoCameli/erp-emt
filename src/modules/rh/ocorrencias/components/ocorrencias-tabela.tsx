@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { removerOcorrencia } from "@/modules/rh/ocorrencias/actions";
 import type { OcorrenciaLista } from "@/modules/rh/ocorrencias/queries";
 import {
@@ -40,7 +40,7 @@ export interface OcorrenciasTabelaProps {
   podeEditar: boolean;
   podeExcluir: boolean;
   /** Anexos por ocorrência, pré-carregados no server, chaveados por id. */
-  anexosPorRegistro: Record<string, AnexoResumo[]>;
+  anexosPorRegistro: Record<string, AnexoDoDocumento[]>;
 }
 
 /** Status do badge por tipo de ocorrência (texto sempre vem do rótulo). */

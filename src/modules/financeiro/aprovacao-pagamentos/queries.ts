@@ -33,6 +33,10 @@ function nomeFornecedor(
  * a_pagar é feito via embed com `!inner` para descartar parcelas de
  * lançamentos a_receber.
  *
+ * Também exclui parcelas de lançamento 'previsto' (OC aprovada sem nota fiscal
+ * registrada): pagar antes do recebimento é furo de dinheiro, e o banco recusa
+ * pelo mesmo motivo em fn_aprovar_parcela.
+ *
  * Defesa em profundidade do bug #4 do QA: também exclui parcelas cujo
  * lançamento pai está `cancelado` (`lancamentos.status <> 'cancelado'`).
  * Cancelar a OC já cascateia o cancelamento pro lançamento e pras parcelas
@@ -56,6 +60,10 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     .eq("status", "pendente")
     .eq("lancamentos.tipo", "a_pagar")
     .neq("lancamentos.status", "cancelado")
+    // 'previsto' é OC aprovada cuja nota fiscal ainda não foi registrada:
+    // pagamento não entra na fila antes do recebimento. O banco também recusa
+    // (fn_aprovar_parcela), isto aqui é a mesma trava na consulta.
+    .neq("lancamentos.status", "previsto")
     .order("data_vencimento", { ascending: true, nullsFirst: false });
 
   if (error) {

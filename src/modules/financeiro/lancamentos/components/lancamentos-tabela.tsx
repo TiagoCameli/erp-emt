@@ -48,7 +48,9 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     header: "Tipo",
     cell: ({ row }) => (
       <StatusBadge
-        status={row.original.tipo === "a_receber" ? "aprovado" : "pendente_aprovacao"}
+        status={
+          row.original.tipo === "a_receber" ? "aprovado" : "pendente_aprovacao"
+        }
         rotulo={ROTULO_TIPO_LANCAMENTO[row.original.tipo]}
       />
     ),
@@ -102,11 +104,19 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
       // Todo lançamento nasce com status 'a_pagar' (em aberto); para um
       // recebível o rótulo correto é "A receber", não "A pagar".
       const rotulo =
-        row.original.status === "a_pagar" &&
-        row.original.tipo === "a_receber"
+        row.original.status === "a_pagar" && row.original.tipo === "a_receber"
           ? "A receber"
           : info.rotulo;
-      return <StatusBadge status={info.badge} rotulo={rotulo} />;
+      return (
+        <div className="flex flex-wrap items-center gap-1">
+          <StatusBadge status={info.badge} rotulo={rotulo} />
+          {/* Sem parcela definida o lançamento não entra na fila de aprovação
+              nem pode ser pago: precisa aparecer já na lista. */}
+          {row.original.qtdParcelas === 0 ? (
+            <StatusBadge status="rejeitado" rotulo="Parcelas pendentes" />
+          ) : null}
+        </div>
+      );
     },
   },
 ];

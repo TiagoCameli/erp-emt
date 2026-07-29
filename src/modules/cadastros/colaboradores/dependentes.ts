@@ -98,7 +98,7 @@ export async function listarDependentes(
 /**
  * Todos os dependentes de todos os colaboradores, agrupados por
  * `colaboradorId` — mesmo padrão de `listarAnexosPorRegistro`
- * (compras/_shared/anexos-actions.ts): a tabela de colaboradores usa isso
+ * (_shared/anexos/queries.ts): a tabela de colaboradores usa isso
  * pra já ter os dependentes de qualquer colaborador prontos quando o drawer
  * de edição abre, sem buscar no cliente (e sem travar em "Carregando").
  */

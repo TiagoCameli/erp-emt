@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import {
   listarContasBancarias,
@@ -26,6 +27,12 @@ export default async function PaginaPagamentos() {
     listarContasBancarias(),
   ]);
 
+  // Anexos das parcelas a pagar numa consulta só (o pagamento é a parcela).
+  const anexosPorParcela = await listarAnexosPorDocumento(
+    "pagamento",
+    aprovadas.map((parcela) => parcela.id),
+  );
+
   return (
     <>
       <PageHeader
@@ -39,6 +46,7 @@ export default async function PaginaPagamentos() {
         contas={contas}
         podePagar={podePagar}
         podeEstornar={podeEstornar}
+        anexosPorParcela={anexosPorParcela}
       />
     </>
   );

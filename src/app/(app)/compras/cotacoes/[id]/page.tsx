@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarAnexos } from "@/modules/compras/_shared/anexos-actions";
+import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import { CotacaoDetalhe } from "@/modules/compras/cotacoes/components/cotacao-detalhe";
 import {
@@ -46,7 +46,7 @@ export default async function PaginaCotacaoDetalhe({
     trilhaCotacao(id),
     listarCondicoesPagamento(),
     listarFormasPagamento(),
-    listarAnexos("cotacoes", id),
+    listarAnexosDoDocumento("cotacao", id),
     ordensDaCotacao(id),
   ]);
 

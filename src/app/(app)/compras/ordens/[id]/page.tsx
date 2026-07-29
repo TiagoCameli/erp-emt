@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarAnexos } from "@/modules/compras/_shared/anexos-actions";
+import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import { OrdemDetalheView } from "@/modules/compras/ordens/components/ordem-detalhe";
 import {
@@ -47,7 +47,7 @@ export default async function PaginaOrdemDetalhe({
     ordem.condicaoPagamentoId
       ? listarParcelasCondicao(ordem.condicaoPagamentoId)
       : Promise.resolve([]),
-    listarAnexos("ordens_compra", id),
+    listarAnexosDoDocumento("ordem_compra", id),
   ]);
 
   const podeEditar = temPermissao(usuario, "compras.ordens", "editar");

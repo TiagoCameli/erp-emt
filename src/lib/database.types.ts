@@ -14,38 +14,89 @@ export type Database = {
   };
   public: {
     Tables: {
-      anexos: {
+      anexo_vinculos: {
+        Row: {
+          arquivo_id: string;
+          created_at: string;
+          created_by: string | null;
+          entidade_id: string;
+          entidade_tipo: string;
+          id: string;
+          nome_exibicao: string | null;
+          origem: string;
+          vinculo_origem_id: string | null;
+        };
+        Insert: {
+          arquivo_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          entidade_id: string;
+          entidade_tipo: string;
+          id?: string;
+          nome_exibicao?: string | null;
+          origem?: string;
+          vinculo_origem_id?: string | null;
+        };
+        Update: {
+          arquivo_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          entidade_id?: string;
+          entidade_tipo?: string;
+          id?: string;
+          nome_exibicao?: string | null;
+          origem?: string;
+          vinculo_origem_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "anexo_vinculos_arquivo_id_fkey";
+            columns: ["arquivo_id"];
+            isOneToOne: false;
+            referencedRelation: "arquivos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "anexo_vinculos_vinculo_origem_id_fkey";
+            columns: ["vinculo_origem_id"];
+            isOneToOne: false;
+            referencedRelation: "anexo_vinculos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      arquivos: {
         Row: {
           created_at: string;
           created_by: string | null;
+          hash_sha256: string | null;
           id: string;
-          nome_arquivo: string;
+          nome_original: string;
+          orfao_em: string | null;
           path_storage: string;
-          registro_id: string;
-          tabela: string;
-          tamanho_bytes: number | null;
+          tamanho_bytes: number;
           tipo_mime: string | null;
         };
         Insert: {
           created_at?: string;
           created_by?: string | null;
+          hash_sha256?: string | null;
           id?: string;
-          nome_arquivo: string;
+          nome_original: string;
+          orfao_em?: string | null;
           path_storage: string;
-          registro_id: string;
-          tabela: string;
-          tamanho_bytes?: number | null;
+          tamanho_bytes: number;
           tipo_mime?: string | null;
         };
         Update: {
           created_at?: string;
           created_by?: string | null;
+          hash_sha256?: string | null;
           id?: string;
-          nome_arquivo?: string;
+          nome_original?: string;
+          orfao_em?: string | null;
           path_storage?: string;
-          registro_id?: string;
-          tabela?: string;
-          tamanho_bytes?: number | null;
+          tamanho_bytes?: number;
           tipo_mime?: string | null;
         };
         Relationships: [];
@@ -1861,6 +1912,44 @@ export type Database = {
           },
         ];
       };
+      oc_parcelas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data_vencimento: string;
+          id: string;
+          numero_parcela: number;
+          ordem_compra_id: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data_vencimento: string;
+          id?: string;
+          numero_parcela: number;
+          ordem_compra_id: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data_vencimento?: string;
+          id?: string;
+          numero_parcela?: number;
+          ordem_compra_id?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "oc_parcelas_ordem_compra_id_fkey";
+            columns: ["ordem_compra_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_compra";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ordens_compra: {
         Row: {
           aprovado_em: string | null;
@@ -2700,6 +2789,10 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string };
         Returns: undefined;
       };
+      fn_apagar_arquivo_orfao: {
+        Args: { p_arquivo_id: string; p_carencia_horas?: number };
+        Returns: boolean;
+      };
       fn_aprovar_ordem_compra: {
         Args: { p_oc_id: string };
         Returns: undefined;
@@ -2709,6 +2802,18 @@ export type Database = {
         Returns: undefined;
       };
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined };
+      fn_arquivo_por_hash: {
+        Args: { p_hash: string; p_tamanho: number };
+        Returns: string;
+      };
+      fn_arquivos_orfaos: {
+        Args: { p_carencia_horas?: number };
+        Returns: {
+          id: string;
+          orfao_em: string;
+          path_storage: string;
+        }[];
+      };
       fn_atestados_ponto: {
         Args: { p_data: string };
         Returns: {
@@ -2732,6 +2837,10 @@ export type Database = {
         Args: { p_cabecalho: Json; p_itens: Json };
         Returns: string;
       };
+      fn_definir_parcelas_lancamento: {
+        Args: { p_lanc_id: string; p_parcelas: Json };
+        Returns: undefined;
+      };
       fn_desaprovar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string };
         Returns: undefined;
@@ -2742,6 +2851,10 @@ export type Database = {
       };
       fn_desconciliar_transacao: {
         Args: { p_transacao_id: string };
+        Returns: undefined;
+      };
+      fn_desvincular_arquivo: {
+        Args: { p_vinculo_id: string };
         Returns: undefined;
       };
       fn_epis_a_recolher: {
@@ -2812,9 +2925,26 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_parcelas_da_condicao: {
+        Args: { p_condicao_id: string; p_data_base: string; p_valor: number };
+        Returns: {
+          data_vencimento: string;
+          numero_parcela: number;
+          valor: number;
+        }[];
+      };
       fn_programar_pagamento: {
         Args: { p_data_programada: string; p_parcela_id: string };
         Returns: undefined;
+      };
+      fn_propagar_anexos: {
+        Args: {
+          p_de_id: string;
+          p_de_tipo: string;
+          p_para_id: string;
+          p_para_tipo: string;
+        };
+        Returns: number;
       };
       fn_reabrir_folha: { Args: { p_folha: string }; Returns: undefined };
       fn_reabrir_ponto: { Args: { p_ponto: string }; Returns: undefined };
@@ -2822,9 +2952,20 @@ export type Database = {
         Args: { p_lanc_id: string };
         Returns: undefined;
       };
-      fn_recurso_do_anexo: { Args: { p_tabela: string }; Returns: string };
+      fn_recurso_da_entidade: { Args: { p_tipo: string }; Returns: string };
       fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string };
-      fn_recurso_do_path_anexo: { Args: { p_path: string }; Returns: string };
+      fn_registrar_arquivo: {
+        Args: {
+          p_entidade_id: string;
+          p_entidade_tipo: string;
+          p_hash: string;
+          p_mime: string;
+          p_nome: string;
+          p_path: string;
+          p_tamanho: number;
+        };
+        Returns: string;
+      };
       fn_registrar_recebimento: {
         Args: {
           p_data_recebimento: string;
@@ -2894,6 +3035,19 @@ export type Database = {
           p_id: string;
           p_parcelas: Json;
           p_rateios: Json;
+        };
+        Returns: string;
+      };
+      fn_salvar_parcelas_oc: {
+        Args: { p_oc_id: string; p_parcelas: Json };
+        Returns: undefined;
+      };
+      fn_vincular_arquivo: {
+        Args: {
+          p_arquivo_id: string;
+          p_entidade_id: string;
+          p_entidade_tipo: string;
+          p_nome_exibicao?: string;
         };
         Returns: string;
       };

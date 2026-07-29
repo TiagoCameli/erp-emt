@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { removerDocumento } from "@/modules/rh/documentos/actions";
 import type {
   DocumentoLista,
@@ -42,7 +42,7 @@ export interface DocumentosTabelaProps {
   podeEditar: boolean;
   podeExcluir: boolean;
   /** Anexos por documento, pré-carregados no server, chaveados por id. */
-  anexosPorRegistro: Record<string, AnexoResumo[]>;
+  anexosPorRegistro: Record<string, AnexoDoDocumento[]>;
 }
 
 /** Opções do filtro de situação. */
