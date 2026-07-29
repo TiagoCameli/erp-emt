@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarGrupos } from "@/modules/cadastros/categorias/queries";
 import { InsumosTabela } from "@/modules/cadastros/insumos/components/insumos-tabela";
 import {
   listar,
   listarCategorias,
   listarUnidades,
 } from "@/modules/cadastros/insumos/queries";
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const STATUS_VALIDOS = ["ativos", "inativos", "todos"] as const;
 const TAMANHO_PADRAO = 25;
@@ -34,6 +38,15 @@ export default async function PaginaInsumos({
   const params = await searchParams;
   const status = statusValido(params.status);
   const busca = typeof params.busca === "string" ? params.busca.trim() : "";
+  // Filtro inválido é ignorado, nunca vai para o banco.
+  const grupo =
+    typeof params.grupo === "string" && UUID.test(params.grupo)
+      ? params.grupo
+      : "";
+  const categoria =
+    typeof params.categoria === "string" && UUID.test(params.categoria)
+      ? params.categoria
+      : "";
 
   const paginaParam = Number(params.pagina);
   const pagina =
@@ -44,14 +57,17 @@ export default async function PaginaInsumos({
       ? tamanhoParam
       : TAMANHO_PADRAO;
 
-  const [{ itens, total }, categorias, unidades] = await Promise.all([
+  const [{ itens, total }, categorias, grupos, unidades] = await Promise.all([
     listar({
       pagina,
       tamanho,
       busca: busca === "" ? undefined : busca,
       ativo: status === "todos" ? undefined : status === "ativos",
+      grupoId: grupo === "" ? undefined : grupo,
+      categoriaId: categoria === "" ? undefined : categoria,
     }),
     listarCategorias(),
+    listarGrupos(),
     listarUnidades(),
   ]);
 
@@ -63,7 +79,10 @@ export default async function PaginaInsumos({
       tamanho={tamanho}
       busca={busca}
       status={status}
+      grupo={grupo}
+      categoria={categoria}
       categorias={categorias}
+      grupos={grupos}
       unidades={unidades}
       podeCriar={temPermissao(usuario, "cadastros.insumos", "criar")}
       podeEditar={temPermissao(usuario, "cadastros.insumos", "editar")}

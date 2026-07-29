@@ -3,6 +3,10 @@ import "server-only";
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import {
+  corGrupo,
+  type CorGrupo,
+} from "@/modules/cadastros/_shared/insumo-grupos";
+import {
   agregarAging,
   paraCentavos,
   paraReais,
@@ -545,4 +549,110 @@ export async function extratoPorFornecedor({
 /** Mês corrente "YYYY-MM" no fuso de Rio Branco, default do seletor do DRE. */
 export function mesCorrente(): string {
   return dataHojeISO().slice(0, 7);
+}
+
+// =====================================================================
+// 7. Custo por grupo de insumo (drill-down grupo -> subcategoria -> insumo)
+// =====================================================================
+
+export interface CustoSubcategoria {
+  categoriaId: string;
+  nome: string;
+  valor: number;
+}
+
+export interface CustoGrupo {
+  /** Nulo na linha "Sem insumo (lançamento avulso)". */
+  grupoId: string | null;
+  nome: string;
+  cor: CorGrupo;
+  valor: number;
+  /** Nível 2 do drill-down, já carregado (são poucas linhas). */
+  subcategorias: CustoSubcategoria[];
+}
+
+export interface CustoPorGrupo {
+  grupos: CustoGrupo[];
+  total: number;
+}
+
+/**
+ * Custo por grupo de insumo no mês de referência, com as subcategorias de cada
+ * grupo já carregadas (nível 3, o insumo, vem por ação sob demanda).
+ *
+ * A dimensão de insumo existe nos itens da OC, não no rateio, então lançamento
+ * avulso entra na linha "Sem insumo": é isso que faz a soma por grupo fechar com
+ * o custo total do mês.
+ */
+export async function custoPorGrupo(
+  periodo?: { inicio: string; fim: string },
+): Promise<CustoPorGrupo> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("fn_rel_custo_por_grupo", {
+    p_inicio: periodo?.inicio,
+    p_fim: periodo?.fim,
+  });
+
+  if (error) {
+    throw new Error("Não foi possível carregar o custo por grupo");
+  }
+
+  const linhas = data ?? [];
+
+  const subcategorias = await Promise.all(
+    linhas.map(async (linha) => {
+      if (!linha.grupo_id) return [] as CustoSubcategoria[];
+      const { data: subs } = await supabase.rpc(
+        "fn_rel_custo_por_subcategoria",
+        {
+          p_grupo_id: linha.grupo_id,
+          p_inicio: periodo?.inicio,
+          p_fim: periodo?.fim,
+        },
+      );
+      return (subs ?? []).map((sub) => ({
+        categoriaId: sub.categoria_id,
+        nome: sub.categoria_nome,
+        valor: paraReais(paraCentavos(sub.total)),
+      }));
+    }),
+  );
+
+  const grupos: CustoGrupo[] = linhas.map((linha, indice) => ({
+    grupoId: linha.grupo_id,
+    nome: linha.grupo_nome,
+    cor: corGrupo(linha.grupo_cor),
+    valor: paraReais(paraCentavos(linha.total)),
+    subcategorias: subcategorias[indice] ?? [],
+  }));
+
+  return {
+    grupos,
+    total: grupos.reduce((soma, grupo) => soma + grupo.valor, 0),
+  };
+}
+
+/** Nível 3 do drill-down: insumos de uma subcategoria no período. */
+export async function custoPorInsumo(
+  categoriaId: string,
+  periodo?: { inicio: string; fim: string },
+): Promise<{ nome: string; quantidade: number; valor: number }[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("fn_rel_custo_por_insumo", {
+    p_categoria_id: categoriaId,
+    p_inicio: periodo?.inicio,
+    p_fim: periodo?.fim,
+  });
+
+  if (error) {
+    throw new Error("Não foi possível carregar o custo por insumo");
+  }
+
+  return (data ?? []).map((linha) => ({
+    nome: linha.insumo_nome,
+    quantidade: Number(linha.quantidade ?? 0),
+    valor: paraReais(paraCentavos(linha.total)),
+  }));
 }

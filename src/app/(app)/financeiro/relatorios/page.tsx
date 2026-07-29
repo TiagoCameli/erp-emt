@@ -7,6 +7,7 @@ import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-g
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
 import { proximoMes } from "@/modules/financeiro/relatorios/calculo";
 import { CustoCcGrafico } from "@/modules/financeiro/relatorios/components/custo-cc-grafico";
+import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/custo-grupo-tabela";
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
@@ -22,6 +23,7 @@ import { SeletorMes } from "@/modules/financeiro/relatorios/components/seletor-m
 import {
   aging,
   custoPorCentroCusto,
+  custoPorGrupo,
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
@@ -295,6 +297,50 @@ async function ConteudoCustoCc({ mes }: { mes: string }) {
   );
 }
 
+async function ConteudoCustoGrupo({ mes }: { mes: string }) {
+  const custo = await custoPorGrupo({
+    inicio: `${mes}-01`,
+    fim: proximoMes(mes),
+  });
+
+  if (custo.grupos.length === 0) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Sem custo neste mês de referência"
+        descricao="Nenhum lançamento a pagar tem este mês de referência."
+      />
+    );
+  }
+
+  const maior = [...custo.grupos].sort((a, b) => b.valor - a.valor)[0];
+
+  return (
+    <>
+      <GradeKpis>
+        <KPICard
+          titulo="Custo total do mês"
+          valor={<MoneyText valor={custo.total} />}
+          detalhe="Soma dos 4 grupos, igual ao custo por centro de custo"
+        />
+        {maior ? (
+          <KPICard
+            titulo="Maior grupo"
+            valor={<MoneyText valor={maior.valor} />}
+            detalhe={maior.nome}
+          />
+        ) : null}
+        <KPICard
+          titulo="Grupos com custo"
+          valor={custo.grupos.length}
+          detalhe="Abra o grupo para ver subcategoria e insumo"
+        />
+      </GradeKpis>
+      <CustoGrupoTabela custo={custo} mes={mes} />
+    </>
+  );
+}
+
 async function ConteudoExtratoFornecedor({
   fornecedorId,
 }: {
@@ -388,6 +434,16 @@ export default async function RelatoriosPage({
           controles={<SeletorMes valor={mes} />}
         >
           <ConteudoDre mes={mes} />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "custo-grupo" ? (
+        <SecaoRelatorio
+          titulo="Custo por grupo de insumo"
+          descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo."
+          controles={<SeletorMes valor={mes} />}
+        >
+          <ConteudoCustoGrupo mes={mes} />
         </SecaoRelatorio>
       ) : null}
 

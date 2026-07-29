@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
-import { MoreHorizontal, Package, Plus } from "lucide-react";
+import { MoreHorizontal, Package, Plus, Tags } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -18,6 +18,7 @@ import {
   useFiltrosUrl,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,11 +26,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { ImportarCadastro } from "@/modules/cadastros/_shared/importar-cadastro";
+import {
+  CLASSE_COR_GRUPO,
+  SUBCATEGORIA_A_CLASSIFICAR,
+} from "@/modules/cadastros/_shared/insumo-grupos";
+import type { GrupoOpcao } from "@/modules/cadastros/categorias/queries";
 import {
   alternarAtivo,
   excluir,
   importar,
+  reclassificarEmLote,
   validarImport,
 } from "@/modules/cadastros/insumos/actions";
 import type {
@@ -38,6 +46,7 @@ import type {
   UnidadeOpcao,
 } from "@/modules/cadastros/insumos/queries";
 import { InsumosFormDrawer } from "./insumos-form-drawer";
+import { ReclassificarDialog } from "./reclassificar-dialog";
 
 const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
@@ -51,7 +60,12 @@ export interface InsumosTabelaProps {
   tamanho: number;
   busca: string;
   status: string;
+  /** Filtro por grupo (id) vindo da URL. */
+  grupo: string;
+  /** Filtro por subcategoria (id) vindo da URL. */
+  categoria: string;
   categorias: CategoriaOpcao[];
+  grupos: GrupoOpcao[];
   unidades: UnidadeOpcao[];
   podeCriar: boolean;
   podeEditar: boolean;
@@ -71,7 +85,10 @@ export function InsumosTabela({
   tamanho,
   busca: buscaInicial,
   status,
+  grupo,
+  categoria,
   categorias,
+  grupos,
   unidades,
   podeCriar,
   podeEditar,
@@ -84,6 +101,63 @@ export function InsumosTabela({
   const [emEdicao, setEmEdicao] = React.useState<InsumoLista | null>(null);
 
   const [excluindo, setExcluindo] = React.useState<InsumoLista | null>(null);
+
+  // Seleção múltipla para a reclassificação em lote. Vive por página: trocar de
+  // página ou de filtro zera, senão o usuário aplicaria a ação em linha que não
+  // está mais vendo.
+  const [selecionados, setSelecionados] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const [reclassificando, setReclassificando] = React.useState(false);
+
+  // Atalho para a fila de trabalho: a subcategoria "A classificar" do grupo
+  // Material é a maior (o resto da importação caiu ali).
+  const aClassificar =
+    categorias.find(
+      (c) =>
+        c.nome === SUBCATEGORIA_A_CLASSIFICAR &&
+        c.grupoNome.toLowerCase() === "material",
+    ) ?? categorias.find((c) => c.nome === SUBCATEGORIA_A_CLASSIFICAR);
+
+  const chaveDaPagina = `${pagina}|${status}|${grupo}|${categoria}|${buscaInicial}`;
+  const [chaveAnterior, setChaveAnterior] = React.useState(chaveDaPagina);
+  if (chaveDaPagina !== chaveAnterior) {
+    setChaveAnterior(chaveDaPagina);
+    if (selecionados.size > 0) setSelecionados(new Set());
+  }
+
+  const todosSelecionados =
+    insumos.length > 0 && insumos.every((i) => selecionados.has(i.id));
+
+  const alternarTodos = React.useCallback(() => {
+    setSelecionados(
+      todosSelecionados ? new Set() : new Set(insumos.map((i) => i.id)),
+    );
+  }, [insumos, todosSelecionados]);
+
+  function alternarUm(id: string) {
+    setSelecionados((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) proximo.delete(id);
+      else proximo.add(id);
+      return proximo;
+    });
+  }
+
+  async function aoReclassificar(categoriaId: string) {
+    const resultado = await reclassificarEmLote([...selecionados], categoriaId);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success(
+      resultado.alterados === 1
+        ? "1 insumo reclassificado"
+        : `${resultado.alterados} insumos reclassificados`,
+    );
+    setSelecionados(new Set());
+    setReclassificando(false);
+  }
 
   function abrirNovo() {
     setEmEdicao(null);
@@ -123,7 +197,32 @@ export function InsumosTabela({
   }
 
   const colunas: ColumnDef<InsumoLista, unknown>[] = React.useMemo(() => {
-    const base: ColumnDef<InsumoLista, unknown>[] = [
+    const base: ColumnDef<InsumoLista, unknown>[] = [];
+
+    if (podeEditar) {
+      base.push({
+        id: "selecao",
+        size: 44,
+        enableSorting: false,
+        meta: { fixa: true, rotulo: "Seleção" },
+        header: () => (
+          <Checkbox
+            checked={todosSelecionados}
+            onCheckedChange={alternarTodos}
+            aria-label="Selecionar todos os insumos desta página"
+          />
+        ),
+        cell: ({ row }) => (
+          <Checkbox
+            checked={selecionados.has(row.original.id)}
+            onCheckedChange={() => alternarUm(row.original.id)}
+            aria-label={`Selecionar ${row.original.nome}`}
+          />
+        ),
+      });
+    }
+
+    base.push(
       {
         accessorKey: "codigo",
         header: "Código",
@@ -142,10 +241,40 @@ export function InsumosTabela({
         ),
       },
       {
-        accessorKey: "categoriaNome",
-        header: "Categoria",
+        accessorKey: "grupoNome",
+        header: "Grupo",
+        size: 150,
+        meta: { naoTruncar: true },
         cell: ({ row }) =>
-          row.original.categoriaNome ?? (
+          row.original.grupoNome ? (
+            <span
+              className={cn(
+                "rounded-md px-2 py-0.5 text-legenda font-medium",
+                CLASSE_COR_GRUPO[row.original.grupoCor],
+              )}
+            >
+              {row.original.grupoNome}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          ),
+      },
+      {
+        accessorKey: "categoriaNome",
+        header: "Subcategoria",
+        size: 200,
+        cell: ({ row }) =>
+          row.original.categoriaNome ? (
+            <span
+              className={
+                row.original.categoriaNome === SUBCATEGORIA_A_CLASSIFICAR
+                  ? "text-status-pendente"
+                  : undefined
+              }
+            >
+              {row.original.categoriaNome}
+            </span>
+          ) : (
             <span className="text-muted-foreground">-</span>
           ),
       },
@@ -160,6 +289,7 @@ export function InsumosTabela({
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
             <StatusBadge status="aprovado" rotulo="Ativo" />
@@ -167,7 +297,7 @@ export function InsumosTabela({
             <StatusBadge status="rascunho" rotulo="Inativo" />
           ),
       },
-    ];
+    );
 
     if (!podeEditar && !podeExcluir) return base;
 
@@ -218,7 +348,7 @@ export function InsumosTabela({
     });
 
     return base;
-  }, [podeEditar, podeExcluir]);
+  }, [alternarTodos, podeEditar, podeExcluir, selecionados, todosSelecionados]);
 
   return (
     <>
@@ -258,7 +388,82 @@ export function InsumosTabela({
           placeholder="Status"
           todosRotulo="Todos"
         />
+        <FiltroSelect
+          valor={grupo}
+          onValorChange={(valor) =>
+            setMuitos({
+              grupo: valor === "" ? null : valor,
+              // Trocar o grupo derruba a subcategoria: ela pertence ao anterior.
+              categoria: null,
+              pagina: "1",
+            })
+          }
+          opcoes={grupos.map((g) => ({ valor: g.id, rotulo: g.nome }))}
+          placeholder="Grupo"
+          todosRotulo="Todos os grupos"
+        />
+        <FiltroSelect
+          valor={categoria}
+          onValorChange={(valor) =>
+            setMuitos({
+              categoria: valor === "" ? null : valor,
+              pagina: "1",
+            })
+          }
+          opcoes={categorias
+            .filter((c) => grupo === "" || c.grupoId === grupo)
+            .map((c) => ({ valor: c.id, rotulo: c.nome }))}
+          placeholder="Subcategoria"
+          todosRotulo="Todas as subcategorias"
+          className="max-w-60"
+        />
+        {aClassificar ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setMuitos({
+                grupo: null,
+                categoria: aClassificar.id,
+                status: "todos",
+                pagina: "1",
+              })
+            }
+          >
+            <Tags />
+            Ver &quot;A classificar&quot;
+          </Button>
+        ) : null}
       </FilterBar>
+
+      {selecionados.size > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2">
+          <span className="text-detalhe">
+            {selecionados.size === 1
+              ? "1 insumo selecionado"
+              : `${selecionados.size} insumos selecionados`}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelecionados(new Set())}
+            >
+              Limpar seleção
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setReclassificando(true)}
+            >
+              <Tags />
+              Alterar categoria
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <DataTable
         columns={colunas}
@@ -287,7 +492,17 @@ export function InsumosTabela({
         onAbertoChange={setDrawerAberto}
         insumo={emEdicao}
         categorias={categorias}
+        grupos={grupos}
         unidades={unidades}
+      />
+
+      <ReclassificarDialog
+        aberto={reclassificando}
+        onAbertoChange={setReclassificando}
+        quantidade={selecionados.size}
+        categorias={categorias}
+        grupos={grupos}
+        onConfirmar={aoReclassificar}
       />
 
       <ConfirmDialog

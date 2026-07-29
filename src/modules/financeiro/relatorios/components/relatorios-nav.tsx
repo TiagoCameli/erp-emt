@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Layers,
   Banknote,
   Building2,
   CalendarClock,
@@ -20,6 +21,7 @@ export type RelatorioId =
   | "aging"
   | "posicao-bancaria"
   | "custo-cc"
+  | "custo-grupo"
   | "extrato-fornecedor";
 
 export const RELATORIO_PADRAO: RelatorioId = "fluxo-caixa";
@@ -36,6 +38,7 @@ const ITENS: ItemRelatorio[] = [
   { id: "aging", rotulo: "Aging", icone: CalendarClock },
   { id: "posicao-bancaria", rotulo: "Posição bancária", icone: Banknote },
   { id: "custo-cc", rotulo: "Custo por centro de custo", icone: Building2 },
+  { id: "custo-grupo", rotulo: "Custo por grupo de insumo", icone: Layers },
   { id: "extrato-fornecedor", rotulo: "Extrato por fornecedor", icone: Users },
 ];
 

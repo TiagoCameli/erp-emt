@@ -6,7 +6,8 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 const COLUNAS_MODELO = [
   { rotulo: "Codigo", exemplo: "MAT-001" },
   { rotulo: "Nome", exemplo: "Brita 1" },
-  { rotulo: "Categoria", exemplo: "Materiais de construcao" },
+  { rotulo: "Grupo", exemplo: "material" },
+  { rotulo: "Categoria", exemplo: "Cimento, agregados e concreto" },
   { rotulo: "Unidade", exemplo: "m3" },
 ];
 
