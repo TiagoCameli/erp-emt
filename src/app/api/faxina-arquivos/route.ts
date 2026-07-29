@@ -37,8 +37,29 @@ export async function GET(request: Request) {
     console.error(
       "[faxina-arquivos] CRON_SECRET ausente no runtime. Se o painel mostra a variável, o build está velho: refaça o deploy SEM cache de build.",
     );
+    // DIAGNÓSTICO TEMPORÁRIO (sai no próximo commit): a variável está criada no
+    // painel e a função segue sem vê-la, e já erramos a causa duas vezes. Isto
+    // diz o que a função REALMENTE recebe. Não expõe valor de segredo nenhum:
+    // só se a chave existe, se veio vazia, e qual build está servindo.
+    const bruto = process.env["CRON_SECRET"];
     return NextResponse.json(
-      { erro: "CRON_SECRET não configurada no ambiente" },
+      {
+        erro: "CRON_SECRET não configurada no ambiente",
+        diagnostico: {
+          chavePresente: bruto !== undefined,
+          vazia: bruto !== undefined && bruto.trim() === "",
+          ambiente: process.env["VERCEL_ENV"] ?? null,
+          commit: (process.env["VERCEL_GIT_COMMIT_SHA"] ?? "").slice(0, 7) || null,
+          // Quantas variáveis do projeto a função enxerga, por prefixo. Nome
+          // nenhum, valor nenhum: só a contagem.
+          quantasSupabase: Object.keys(process.env).filter((k) =>
+            k.includes("SUPABASE"),
+          ).length,
+          quantasCron: Object.keys(process.env).filter((k) =>
+            k.includes("CRON"),
+          ).length,
+        },
+      },
       { status: 503 },
     );
   }
