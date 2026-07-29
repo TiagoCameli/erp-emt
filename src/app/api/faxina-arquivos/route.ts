@@ -16,9 +16,27 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * o Storage falhar, sobra binário sem referência (desperdício de espaço), nunca
  * referência sem binário (tela quebrada).
  */
+/**
+ * Lê o segredo em tempo de EXECUÇÃO. O acesso por colchete é de propósito:
+ * escrito como `process.env.CRON_SECRET`, o bundler pode substituir a
+ * referência pelo valor do momento do BUILD. Foi o que aconteceu aqui:
+ * a variável foi criada depois do build e o redeploy reaproveitou os artefatos,
+ * então a função continuava vendo indefinido por mais que o painel mostrasse a
+ * variável configurada.
+ */
+function segredoDoCron(): string | undefined {
+  const valor = process.env["CRON_SECRET"];
+  return valor && valor.trim() !== "" ? valor.trim() : undefined;
+}
+
 export async function GET(request: Request) {
-  const segredo = process.env.CRON_SECRET;
+  const segredo = segredoDoCron();
   if (!segredo) {
+    // Vai para os logs de runtime da Vercel, onde só o dono do projeto lê. A
+    // resposta pública continua sem detalhe de ambiente.
+    console.error(
+      "[faxina-arquivos] CRON_SECRET ausente no runtime. Se o painel mostra a variável, o build está velho: refaça o deploy SEM cache de build.",
+    );
     return NextResponse.json(
       { erro: "CRON_SECRET não configurada no ambiente" },
       { status: 503 },
