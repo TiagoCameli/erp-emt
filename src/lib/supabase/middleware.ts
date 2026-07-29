@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const ROTAS_PUBLICAS = ["/login", "/auth"];
+/**
+ * Rotas que não passam pela sessão do usuário.
+ *
+ * `/api/faxina-arquivos` é chamada pelo cron da Vercel, que manda
+ * `Authorization: Bearer`, não cookie de sessão: sem estar aqui, o middleware
+ * redirecionava para /login e a faxina nunca rodava. A própria rota exige o
+ * CRON_SECRET, então ficar fora da sessão não a deixa aberta.
+ */
+const ROTAS_PUBLICAS = ["/login", "/auth", "/api/faxina-arquivos"];
 
 /**
  * Renova a sessão a cada request e protege as rotas do app.
