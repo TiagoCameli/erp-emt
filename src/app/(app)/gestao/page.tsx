@@ -8,10 +8,12 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { formatarCompetencia } from "@/modules/rh/_shared/formato";
 import {
   comprasResumo,
+  custoPorGrupoDoMes,
   custoResumo,
   financeiroResumo,
   rhResumo,
   type ResumoCompras,
+  type CustoGrupoMes,
   type ResumoCusto,
   type ResumoFinanceiro,
   type ResumoRh,
@@ -71,9 +73,10 @@ export default async function GestaoPage() {
     notFound();
   }
 
-  const [compras, custo, financeiro, rh] = await Promise.allSettled([
+  const [compras, custo, custoGrupos, financeiro, rh] = await Promise.allSettled([
     comprasResumo(),
     custoResumo(),
+    custoPorGrupoDoMes(),
     financeiroResumo(),
     rhResumo(),
   ]);
@@ -134,6 +137,36 @@ export default async function GestaoPage() {
             />
           </>
         )}
+      </Secao>
+
+      {/* Custo do mês por grupo: a leitura que o dono quer ("quanto foi de
+          material, de mão de obra, de equipamento"). Mesma fonte do relatório. */}
+      <Secao<CustoGrupoMes[]>
+        titulo="Custo do mês por grupo"
+        rota="/financeiro/relatorios?rel=custo-grupo"
+        resultado={custoGrupos}
+        rotuloLink="Abrir custo por grupo"
+      >
+        {(grupos) =>
+          grupos.length === 0 ? (
+            <KPICard
+              titulo="Sem custo no mês"
+              valor={<MoneyText valor={0} />}
+              detalhe="Nenhum lançamento com este mês de referência"
+            />
+          ) : (
+            <>
+              {grupos.map((grupo) => (
+                <KPICard
+                  key={grupo.nome}
+                  titulo={grupo.nome}
+                  valor={<MoneyText valor={grupo.valor} />}
+                  detalhe="Mês de referência atual"
+                />
+              ))}
+            </>
+          )
+        }
       </Secao>
 
       <Secao<ResumoFinanceiro>

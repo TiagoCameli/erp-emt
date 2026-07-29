@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { criar, editar } from "@/modules/cadastros/insumos/actions";
+import type { GrupoOpcao } from "@/modules/cadastros/categorias/queries";
 import type {
   CategoriaOpcao,
   InsumoLista,
@@ -39,6 +40,7 @@ export interface InsumosFormDrawerProps {
   /** Insumo em edição. Null cria um novo. */
   insumo: InsumoLista | null;
   categorias: CategoriaOpcao[];
+  grupos: GrupoOpcao[];
   unidades: UnidadeOpcao[];
 }
 
@@ -48,9 +50,19 @@ export function InsumosFormDrawer({
   onAbertoChange,
   insumo,
   categorias,
+  grupos,
   unidades,
 }: InsumosFormDrawerProps) {
   const editando = insumo !== null;
+
+  // Grupo não é campo do insumo: é o filtro do segundo seletor. Começa no grupo
+  // da categoria atual (edição) ou no primeiro grupo (criação).
+  const [grupoId, setGrupoId] = React.useState(
+    () =>
+      categorias.find((c) => c.id === insumo?.categoriaId)?.grupoId ??
+      grupos[0]?.id ??
+      "",
+  );
 
   const form = useForm<InsumoFormInput, unknown, InsumoInput>({
     resolver: zodResolver(insumoSchema),
@@ -86,6 +98,9 @@ export function InsumosFormDrawer({
   }
 
   const categoriaValor = form.watch("categoriaId");
+  const categoriasDoGrupo = categorias.filter(
+    (categoria) => categoria.grupoId === grupoId,
+  );
   const unidadeValor = form.watch("unidadeId");
 
   return (
@@ -93,7 +108,7 @@ export function InsumosFormDrawer({
       aberto={aberto}
       onAbertoChange={aoMudarAberto}
       titulo={editando ? "Editar insumo" : "Novo insumo"}
-      descricao="Materiais, peças, óleos, combustíveis, betuminosos e serviços."
+      descricao="Escolha o grupo e depois a subcategoria dentro dele"
       rodape={
         <>
           <Button
@@ -154,8 +169,42 @@ export function InsumosFormDrawer({
         </CampoFormulario>
 
         <CampoFormulario
+          id="insumo-grupo"
+          rotulo="Grupo"
+          obrigatorio
+          ajuda="Define em qual grupo o custo deste insumo entra no relatório"
+        >
+          <Combobox
+            valor={grupoId}
+            onValorChange={(valor) => {
+              setGrupoId(valor);
+              // Trocar de grupo invalida a subcategoria escolhida: ela pertence
+              // ao grupo anterior.
+              const atual = categorias.find((c) => c.id === categoriaValor);
+              if (atual && atual.grupoId !== valor) {
+                form.setValue("categoriaId", "", { shouldValidate: false });
+              }
+            }}
+            opcoes={grupos.map((grupo) => ({
+              valor: grupo.id,
+              rotulo: grupo.nome,
+            }))}
+            placeholder="Selecione o grupo"
+            disabled={salvando}
+            className="w-full"
+            id="insumo-grupo"
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
           id="insumo-categoria"
-          rotulo="Categoria"
+          rotulo="Subcategoria"
+          obrigatorio
+          ajuda={
+            categoriasDoGrupo.length === 0
+              ? "Este grupo ainda não tem subcategoria ativa. Cadastre em Cadastros > Categorias."
+              : undefined
+          }
           erro={form.formState.errors.categoriaId?.message}
         >
           <Combobox
@@ -163,12 +212,12 @@ export function InsumosFormDrawer({
             onValorChange={(valor) =>
               form.setValue("categoriaId", valor, { shouldValidate: true })
             }
-            opcoes={categorias.map((categoria) => ({
+            opcoes={categoriasDoGrupo.map((categoria) => ({
               valor: categoria.id,
               rotulo: categoria.nome,
             }))}
-            placeholder="Selecione a categoria"
-            disabled={salvando}
+            placeholder="Selecione a subcategoria"
+            disabled={salvando || categoriasDoGrupo.length === 0}
             className="w-full"
             id="insumo-categoria"
           />

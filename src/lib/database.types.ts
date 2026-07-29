@@ -227,30 +227,38 @@ export type Database = {
           ativo: boolean;
           created_at: string;
           created_by: string | null;
+          grupo_id: string;
           id: string;
           nome: string;
-          tipo: string;
           updated_at: string;
         };
         Insert: {
           ativo?: boolean;
           created_at?: string;
           created_by?: string | null;
+          grupo_id: string;
           id?: string;
           nome: string;
-          tipo: string;
           updated_at?: string;
         };
         Update: {
           ativo?: boolean;
           created_at?: string;
           created_by?: string | null;
+          grupo_id?: string;
           id?: string;
           nome?: string;
-          tipo?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "categorias_insumo_grupo_id_fkey";
+            columns: ["grupo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumo_grupos";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       centros_custo: {
         Row: {
@@ -1529,6 +1537,36 @@ export type Database = {
           id?: string;
           nome?: string;
           salario_base?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      insumo_grupos: {
+        Row: {
+          cor: string;
+          created_at: string;
+          id: string;
+          nome: string;
+          ordem: number;
+          slug: string;
+          updated_at: string;
+        };
+        Insert: {
+          cor?: string;
+          created_at?: string;
+          id?: string;
+          nome: string;
+          ordem: number;
+          slug: string;
+          updated_at?: string;
+        };
+        Update: {
+          cor?: string;
+          created_at?: string;
+          id?: string;
+          nome?: string;
+          ordem?: number;
+          slug?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -3143,11 +3181,48 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_rel_custo_por_grupo: {
+        Args: { p_centro_custo?: string; p_fim?: string; p_inicio?: string };
+        Returns: {
+          grupo_cor: string;
+          grupo_id: string;
+          grupo_nome: string;
+          grupo_ordem: number;
+          total: number;
+        }[];
+      };
+      fn_rel_custo_por_insumo: {
+        Args: {
+          p_categoria_id: string;
+          p_centro_custo?: string;
+          p_fim?: string;
+          p_inicio?: string;
+        };
+        Returns: {
+          insumo_id: string;
+          insumo_nome: string;
+          quantidade: number;
+          total: number;
+        }[];
+      };
       fn_rel_custo_por_mes: {
         Args: { p_meses?: number };
         Returns: {
           lancamentos: number;
           mes: string;
+          total: number;
+        }[];
+      };
+      fn_rel_custo_por_subcategoria: {
+        Args: {
+          p_centro_custo?: string;
+          p_fim?: string;
+          p_grupo_id: string;
+          p_inicio?: string;
+        };
+        Returns: {
+          categoria_id: string;
+          categoria_nome: string;
           total: number;
         }[];
       };

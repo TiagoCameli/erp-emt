@@ -216,3 +216,38 @@ function mesAnteriorDe(competencia: string): string {
   const mesAnterior = mes === 1 ? 12 : mes - 1;
   return `${anoAnterior}-${String(mesAnterior).padStart(2, "0")}-01`;
 }
+
+/** Custo do mês corrente por grupo de insumo, para o painel. */
+export interface CustoGrupoMes {
+  nome: string;
+  valor: number;
+}
+
+/**
+ * Custo do mês corrente quebrado pelos 4 grupos de insumo. Mesma fonte do
+ * relatório (fn_rel_custo_por_grupo), então os números batem entre as telas.
+ */
+export async function custoPorGrupoDoMes(): Promise<CustoGrupoMes[]> {
+  const supabase = await createClient();
+
+  const mes = mesCompetenciaHoje();
+  const [ano, mesNumero] = [Number(mes.slice(0, 4)), Number(mes.slice(5, 7))];
+  const proximo =
+    mesNumero === 12
+      ? `${ano + 1}-01-01`
+      : `${ano}-${String(mesNumero + 1).padStart(2, "0")}-01`;
+
+  const { data, error } = await supabase.rpc("fn_rel_custo_por_grupo", {
+    p_inicio: mes,
+    p_fim: proximo,
+  });
+
+  if (error) {
+    throw new Error("Não foi possível carregar o custo por grupo");
+  }
+
+  return (data ?? []).map((linha) => ({
+    nome: linha.grupo_nome,
+    valor: Number(linha.total ?? 0),
+  }));
+}

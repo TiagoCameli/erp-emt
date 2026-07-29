@@ -12,10 +12,10 @@ export async function GET() {
 
   const buffer = await gerarModeloXlsx(
     [
-      { rotulo: "Nome", exemplo: "Materiais de construcao" },
-      { rotulo: "Tipo", exemplo: "material" },
+      { rotulo: "Nome", exemplo: "Cimento, agregados e concreto" },
+      { rotulo: "Grupo", exemplo: "material" },
     ],
-    "Categorias",
+    "Subcategorias",
   );
 
   return new Response(new Uint8Array(buffer), {

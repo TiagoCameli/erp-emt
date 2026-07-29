@@ -12,6 +12,10 @@ import {
 } from "@/lib/importacao";
 import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
 import {
+  SLUGS_GRUPO,
+  type SlugGrupo,
+} from "@/modules/cadastros/_shared/insumo-grupos";
+import {
   insumoSchema,
   type InsumoInput,
 } from "@/modules/cadastros/insumos/schemas";
@@ -27,6 +31,7 @@ const uuidSchema = z.uuid();
 interface LinhaImportInsumo {
   codigo: string | null;
   nome: string;
+  grupo: string;
   categoria: string;
   unidade: string;
 }
@@ -49,13 +54,40 @@ const colunasImportInsumo: ColunaImportacao<LinhaImportInsumo>[] = [
     },
   },
   {
+    chave: "grupo",
+    rotulo: "Grupo",
+    obrigatoria: true,
+    exemplo: "material",
+  },
+  {
     chave: "categoria",
     rotulo: "Categoria",
     obrigatoria: true,
-    exemplo: "Materiais de construcao",
+    exemplo: "Cimento, agregados e concreto",
   },
   { chave: "unidade", rotulo: "Unidade", obrigatoria: true, exemplo: "m3" },
 ];
+
+/**
+ * Aceita o grupo pelo slug ou pelo rótulo, sem acento. Grupo é fixo: valor
+ * desconhecido estoura e a importação recusa a linha inteira, em vez de criar
+ * grupo novo por erro de digitação.
+ */
+function normalizarGrupoImport(valor: unknown): SlugGrupo {
+  const texto = String(valor ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ /g, "_");
+  const porSlug = SLUGS_GRUPO.find((slug) => slug === texto);
+  if (porSlug) return porSlug;
+  if (texto.startsWith("mao")) return "mao_de_obra";
+  if (texto.startsWith("equip")) return "equipamentos";
+  if (texto.startsWith("mater")) return "material";
+  if (texto.startsWith("outro")) return "outros";
+  throw new Error("grupo invalido");
+}
 
 /** Converte o payload do form no insert da tabela insumos. */
 function montarRegistro(dados: InsumoInput) {
@@ -272,7 +304,10 @@ export async function importar(
   const supabase = await createClient();
 
   const [categorias, unidades] = await Promise.all([
-    supabase.from("categorias_insumo").select("id, nome").eq("ativo", true),
+    supabase
+      .from("categorias_insumo")
+      .select("id, nome, insumo_grupos!inner(slug, nome)")
+      .eq("ativo", true),
     supabase.from("unidades_medida").select("id, sigla").eq("ativo", true),
   ]);
 
@@ -284,19 +319,16 @@ export async function importar(
     );
   }
 
-  // categorias_insumo tem UNIQUE (nome, tipo): dá pra ter o mesmo nome com
-  // tipos diferentes. A planilha não tem coluna de tipo, então um nome repetido
-  // é ambíguo e não pode ser casado por adivinhação. Conta as ocorrências por
-  // nome e bloqueia o que colidir, em vez de a última entrada vencer no Map.
-  const categoriaPorNome = new Map<string, string>();
-  const categoriaNomeAmbiguo = new Set<string>();
+  // A subcategoria é única por (nome, grupo), então a chave de casamento é o par
+  // grupo + categoria. "A classificar" existe nos 4 grupos: sem o grupo na
+  // planilha, seria impossível saber para qual delas o insumo vai.
+  const categoriaPorGrupoNome = new Map<string, string>();
   for (const c of categorias.data ?? []) {
-    const chave = c.nome.trim().toLowerCase();
-    if (categoriaPorNome.has(chave)) {
-      categoriaNomeAmbiguo.add(chave);
-    } else {
-      categoriaPorNome.set(chave, c.id);
-    }
+    const slug = c.insumo_grupos?.slug ?? "";
+    categoriaPorGrupoNome.set(
+      `${slug}|${c.nome.trim().toLowerCase()}`,
+      c.id,
+    );
   }
   const unidadePorSigla = new Map(
     (unidades.data ?? []).map((u) => [u.sigla.trim().toLowerCase(), u.id]),
@@ -319,16 +351,23 @@ export async function importar(
       .trim()
       .toLowerCase();
 
-    if (categoriaNomeAmbiguo.has(categoriaNome)) {
+    let grupoSlug: SlugGrupo;
+    try {
+      grupoSlug = normalizarGrupoImport(linha.dados.grupo);
+    } catch {
       return {
-        erro: `Categoria "${linha.dados.categoria}" (linha ${linha.linha}) está cadastrada com mais de um tipo. Renomeie a categoria ou cadastre o insumo pela tela para escolher o tipo certo.`,
+        erro: `Grupo "${linha.dados.grupo}" (linha ${linha.linha}) não existe. Use material, mao_de_obra, equipamentos ou outros.`,
       };
     }
 
-    const categoriaId = categoriaPorNome.get(categoriaNome);
+    const categoriaId = categoriaPorGrupoNome.get(
+      `${grupoSlug}|${categoriaNome}`,
+    );
     if (!categoriaId) {
+      // Criar subcategoria na importação só com confirmação explícita: sem isso,
+      // um erro de digitação viraria subcategoria nova e ninguém veria.
       return {
-        erro: `Categoria "${linha.dados.categoria}" (linha ${linha.linha}) não encontrada. Cadastre a categoria antes de importar.`,
+        erro: `A subcategoria "${linha.dados.categoria}" não existe no grupo ${grupoSlug} (linha ${linha.linha}). Cadastre a subcategoria em Cadastros > Categorias antes de importar.`,
       };
     }
 
@@ -365,4 +404,46 @@ export async function importar(
 
   revalidatePath(ROTA);
   return { importadas: registros.length };
+}
+
+/**
+ * Reclassificação em lote: move os insumos selecionados para outra
+ * subcategoria. É a ferramenta que faz os 522 insumos em "A classificar"
+ * virarem trabalho de uma tarde em vez de 522 cliques.
+ *
+ * Um UPDATE só com `in (ids)`; a RLS de insumos cobre a permissão de editar.
+ */
+export async function reclassificarEmLote(
+  ids: string[],
+  categoriaId: string,
+): Promise<{ ok: true; alterados: number } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para editar insumos" };
+  }
+
+  const idsValidos = ids.filter((id) => uuidSchema.safeParse(id).success);
+  if (idsValidos.length === 0) return { erro: "Selecione ao menos um insumo" };
+
+  const categoriaValida = uuidSchema.safeParse(categoriaId);
+  if (!categoriaValida.success) return { erro: "Escolha a subcategoria" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("insumos")
+    .update({ categoria_id: categoriaValida.data })
+    .in("id", idsValidos)
+    .select("id");
+
+  if (error) {
+    return erroAcao(
+      "cadastros.insumos.reclassificarEmLote",
+      error,
+      "Não foi possível reclassificar os insumos. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true, alterados: data?.length ?? 0 };
 }
