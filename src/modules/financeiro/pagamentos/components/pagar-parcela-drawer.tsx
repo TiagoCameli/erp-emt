@@ -4,15 +4,18 @@ import * as React from "react";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { Anexos } from "@/components/canonicos/anexos";
 import {
   CampoFormulario,
   classesFormulario,
   Combobox,
   FormDrawer,
   MoneyText,
+  SecaoFormulario,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
 import { pagarParcela } from "@/modules/financeiro/pagamentos/actions";
@@ -31,6 +34,10 @@ export interface PagarParcelaDrawerProps {
   contas: ContaBancariaOpcao[];
   /** Chamado após o pagamento ser registrado com sucesso. */
   onPago?: () => void;
+  /** Anexos já vinculados a esta parcela (comprovante e o que veio da cadeia). */
+  anexos?: AnexoDoDocumento[];
+  /** Libera anexar o comprovante. */
+  podeAnexar?: boolean;
 }
 
 /** Rótulo da conta no select: nome + banco. */
@@ -41,14 +48,20 @@ function rotuloConta(conta: ContaBancariaOpcao): string {
 
 /**
  * Drawer de registro de pagamento de uma parcela aprovada: escolhe a conta
- * bancária e a data (default hoje em Rio Branco) e confirma. Sem anexo de
- * comprovante nesta fase.
+ * bancária e a data (default hoje em Rio Branco) e confirma. Aceita o anexo do
+ * comprovante antes de confirmar: o vínculo é feito na própria parcela, que é o
+ * que o sistema chama de pagamento.
+
+ * Ao pagar, fn_pagar_parcela propaga os anexos do lançamento para cá, então o
+ * pagamento termina com o comprovante e a papelada da cadeia.
  */
 export function PagarParcelaDrawer({
   aberto,
   onAbertoChange,
   parcela,
   contas,
+  anexos = [],
+  podeAnexar = false,
   onPago,
 }: PagarParcelaDrawerProps) {
   const [contaId, setContaId] = React.useState("");
@@ -168,6 +181,17 @@ export function PagarParcelaDrawer({
               </span>
             </div>
           </div>
+        ) : null}
+
+        {parcela ? (
+          <SecaoFormulario titulo="Comprovante e anexos">
+            <Anexos
+              entidade="pagamento"
+              entidadeId={parcela.id}
+              anexos={anexos}
+              podeEditar={podeAnexar}
+            />
+          </SecaoFormulario>
         ) : null}
 
         <CampoFormulario id="pagamento-conta" rotulo="Conta bancária" obrigatorio>

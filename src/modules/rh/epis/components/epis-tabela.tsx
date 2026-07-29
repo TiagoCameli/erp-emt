@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { removerEpi } from "@/modules/rh/epis/actions";
 import type { EpiLista } from "@/modules/rh/epis/queries";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
@@ -34,7 +34,7 @@ export interface EpisTabelaProps {
   podeEditar: boolean;
   podeExcluir: boolean;
   /** Anexos por EPI, pré-carregados no server, chaveados por id. */
-  anexosPorRegistro: Record<string, AnexoResumo[]>;
+  anexosPorRegistro: Record<string, AnexoDoDocumento[]>;
 }
 
 /**

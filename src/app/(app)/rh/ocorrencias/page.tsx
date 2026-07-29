@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarAnexosPorRegistro } from "@/modules/compras/_shared/anexos-actions";
+import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { OcorrenciasAcoesCabecalho } from "@/modules/rh/ocorrencias/components/ocorrencias-acoes-cabecalho";
 import { OcorrenciasTabela } from "@/modules/rh/ocorrencias/components/ocorrencias-tabela";
 import { listarOcorrencias } from "@/modules/rh/ocorrencias/queries";
@@ -14,11 +14,17 @@ export default async function PaginaOcorrencias() {
     notFound();
   }
 
-  const [ocorrencias, colaboradores, anexosPorRegistro] = await Promise.all([
+  const [ocorrencias, colaboradores] = await Promise.all([
     listarOcorrencias(),
     listarColaboradores(),
-    listarAnexosPorRegistro("rh_ocorrencias"),
   ]);
+
+  // Anexos de todos os registros numa consulta só, para o drawer não buscar
+  // nada no client.
+  const anexosPorRegistro = await listarAnexosPorDocumento(
+    "rh_ocorrencia",
+    ocorrencias.map((registro) => registro.id),
+  );
 
   const podeCriar = temPermissao(usuario, "rh.ocorrencias", "criar");
   const podeEditar = temPermissao(usuario, "rh.ocorrencias", "editar");

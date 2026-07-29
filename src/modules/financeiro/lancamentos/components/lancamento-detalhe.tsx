@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarClock, Lock, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Anexos } from "@/components/canonicos/anexos";
 import {
   ConfirmDialog,
   MoneyText,
@@ -20,6 +21,7 @@ import {
   STATUS_LANCAMENTO,
   STATUS_PARCELA,
 } from "@/modules/financeiro/_shared/formato";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { DefinirParcelasDialog } from "./definir-parcelas-dialog";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
@@ -74,6 +76,7 @@ export interface LancamentoDetalheViewProps {
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
   podeEditar: boolean;
+  anexos: AnexoDoDocumento[];
   podeExcluir: boolean;
 }
 
@@ -89,6 +92,7 @@ export function LancamentoDetalheView({
   fornecedores,
   centrosCusto,
   podeEditar,
+  anexos,
   podeExcluir,
 }: LancamentoDetalheViewProps) {
   const router = useRouter();
@@ -331,6 +335,16 @@ export function LancamentoDetalheView({
                 </table>
               </div>
             )}
+          </Secao>
+
+          <Secao titulo="Anexos">
+            <Anexos
+              entidade="lancamento"
+              entidadeId={lancamento.id}
+              anexos={anexos}
+              podeEditar={podeEditar}
+              onMudou={() => router.refresh()}
+            />
           </Secao>
 
           <Secao titulo="Rateio por centro de custo">

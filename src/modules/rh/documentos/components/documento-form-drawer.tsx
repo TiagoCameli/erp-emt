@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { Anexos } from "@/components/canonicos/anexos";
 import {
   CampoFormulario,
   classesFormulario,
@@ -17,8 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import {
   criarDocumento,
   editarDocumento,
@@ -55,7 +55,7 @@ export interface DocumentoFormDrawerProps {
   /** Libera anexar/remover arquivos (permissão de editar do recurso). */
   podeEditar?: boolean;
   /** Anexos do documento pré-carregados no server, para não travar em "Carregando". */
-  anexosIniciais?: AnexoResumo[];
+  anexosIniciais?: AnexoDoDocumento[];
 }
 
 /**
@@ -240,11 +240,11 @@ export function DocumentoFormDrawer({
       {documento ? (
         <div className="mt-6 border-t border-border pt-4">
           <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
-          <AnexosRegistro
-            tabela="rh_documentos"
-            registroId={documento.id}
+          <Anexos
+            entidade="rh_documento"
+            entidadeId={documento.id}
+            anexos={anexosIniciais ?? []}
             podeEditar={podeEditar}
-            anexosIniciais={anexosIniciais}
             onMudou={() => router.refresh()}
           />
         </div>

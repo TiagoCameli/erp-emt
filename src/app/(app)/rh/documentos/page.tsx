@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { KPICard, PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarAnexosPorRegistro } from "@/modules/compras/_shared/anexos-actions";
+import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { DocumentosAcoesCabecalho } from "@/modules/rh/documentos/components/acoes-cabecalho";
 import { DocumentosTabela } from "@/modules/rh/documentos/components/documentos-tabela";
 import { listarDocumentos } from "@/modules/rh/documentos/queries";
@@ -14,11 +14,17 @@ export default async function PaginaDocumentos() {
     notFound();
   }
 
-  const [documentos, colaboradores, anexosPorRegistro] = await Promise.all([
+  const [documentos, colaboradores] = await Promise.all([
     listarDocumentos(),
     listarColaboradores(),
-    listarAnexosPorRegistro("rh_documentos"),
   ]);
+
+  // Anexos de todos os registros numa consulta só, para o drawer não buscar
+  // nada no client.
+  const anexosPorRegistro = await listarAnexosPorDocumento(
+    "rh_documento",
+    documentos.map((registro) => registro.id),
+  );
 
   const podeCriar = temPermissao(usuario, "rh.documentos", "criar");
   const podeEditar = temPermissao(usuario, "rh.documentos", "editar");

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { Anexos } from "@/components/canonicos/anexos";
 import {
   CampoFormulario,
   classesFormulario,
@@ -18,8 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
-import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import {
   criarOcorrencia,
   editarOcorrencia,
@@ -56,7 +56,7 @@ export interface OcorrenciaFormDrawerProps {
   /** Libera anexar/remover arquivos (permissão de editar do recurso). */
   podeEditar?: boolean;
   /** Anexos da ocorrência pré-carregados no server, para não travar em "Carregando". */
-  anexosIniciais?: AnexoResumo[];
+  anexosIniciais?: AnexoDoDocumento[];
 }
 
 /**
@@ -251,11 +251,11 @@ export function OcorrenciaFormDrawer({
       {ocorrencia ? (
         <div className="mt-6 border-t border-border pt-4">
           <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
-          <AnexosRegistro
-            tabela="rh_ocorrencias"
-            registroId={ocorrencia.id}
+          <Anexos
+            entidade="rh_ocorrencia"
+            entidadeId={ocorrencia.id}
+            anexos={anexosIniciais ?? []}
             podeEditar={podeEditar}
-            anexosIniciais={anexosIniciais}
             onMudou={() => router.refresh()}
           />
         </div>

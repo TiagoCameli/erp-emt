@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { Anexos } from "@/components/canonicos/anexos";
 import {
   CampoFormulario,
   classesFormulario,
@@ -19,8 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { dataHojeISO } from "@/lib/formatadores";
-import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { criarEpi, editarEpi } from "@/modules/rh/epis/actions";
 import type { EpiLista } from "@/modules/rh/epis/queries";
 import {
@@ -54,7 +54,7 @@ export interface EpiFormDrawerProps {
   /** Libera anexar/remover arquivos (permissão de editar do recurso). */
   podeEditar?: boolean;
   /** Anexos do EPI pré-carregados no server, para não travar em "Carregando". */
-  anexosIniciais?: AnexoResumo[];
+  anexosIniciais?: AnexoDoDocumento[];
 }
 
 /**
@@ -258,11 +258,11 @@ export function EpiFormDrawer({
       {epi ? (
         <div className="mt-6 border-t border-border pt-4">
           <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
-          <AnexosRegistro
-            tabela="rh_epis"
-            registroId={epi.id}
+          <Anexos
+            entidade="rh_epi"
+            entidadeId={epi.id}
+            anexos={anexosIniciais ?? []}
             podeEditar={podeEditar}
-            anexosIniciais={anexosIniciais}
             onMudou={() => router.refresh()}
           />
         </div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Ban, Pencil, ReceiptText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Anexos } from "@/components/canonicos/anexos";
 import {
   ApprovalBar,
   ConfirmDialog,
@@ -19,8 +20,7 @@ import {
   formatarData,
   formatarQuantidade,
 } from "@/lib/formatadores";
-import { AnexosRegistro } from "@/modules/compras/_shared/anexos";
-import type { AnexoResumo } from "@/modules/compras/_shared/anexos-actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
@@ -94,7 +94,7 @@ export interface OrdemDetalheViewProps {
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
   parcelasCondicao: ParcelaCondicaoOpcao[];
-  anexosIniciais: AnexoResumo[];
+  anexosIniciais: AnexoDoDocumento[];
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
@@ -485,11 +485,12 @@ export function OrdemDetalheView({
           </SecaoDetalhe>
 
           <SecaoDetalhe card titulo="Anexos">
-            <AnexosRegistro
-              tabela="ordens_compra"
-              registroId={ordem.id}
+            <Anexos
+              entidade="ordem_compra"
+              entidadeId={ordem.id}
+              anexos={anexosIniciais}
               podeEditar={podeEditar}
-              anexosIniciais={anexosIniciais}
+              onMudou={() => router.refresh()}
             />
           </SecaoDetalhe>
         </div>

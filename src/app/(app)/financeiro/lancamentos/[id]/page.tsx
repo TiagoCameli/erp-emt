@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import { LancamentoDetalheView } from "@/modules/financeiro/lancamentos/components/lancamento-detalhe";
 import {
   buscarLancamento,
@@ -24,11 +25,12 @@ export default async function PaginaLancamentoDetalhe({
   const lancamento = await buscarLancamento(id);
   if (!lancamento) notFound();
 
-  const [trilha, categorias, fornecedores, centrosCusto] = await Promise.all([
+  const [trilha, categorias, fornecedores, centrosCusto, anexos] = await Promise.all([
     trilhaLancamento(id),
     listarCategorias(),
     listarFornecedores(),
     listarCentrosCusto(),
+    listarAnexosDoDocumento("lancamento", id),
   ]);
 
   const podeEditar = temPermissao(usuario, "financeiro.lancamentos", "editar");
@@ -42,6 +44,7 @@ export default async function PaginaLancamentoDetalhe({
     <LancamentoDetalheView
       lancamento={lancamento}
       trilha={trilha}
+      anexos={anexos}
       categorias={categorias}
       fornecedores={fornecedores}
       centrosCusto={centrosCusto}
