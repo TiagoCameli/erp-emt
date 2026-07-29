@@ -2,7 +2,7 @@ import "server-only";
 
 import { addDays, addMonths, format, parseISO } from "date-fns";
 
-import { dataHojeISO } from "@/lib/formatadores";
+import { dataHojeISO, mesHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 
 export interface ResumoCompras {
@@ -149,4 +149,70 @@ export async function rhResumo(): Promise<ResumoRh> {
     },
     apontamentosAbertos: apontamentos.count ?? 0,
   };
+}
+
+/** Custo por mês de referência, para o painel de custo da obra. */
+export interface CustoMes {
+  /** Primeiro dia do mês (yyyy-MM-01). */
+  mes: string;
+  total: number;
+  lancamentos: number;
+}
+
+export interface ResumoCusto {
+  /** Meses em ordem crescente, os últimos 6. */
+  meses: CustoMes[];
+  /** Mês corrente (pode não existir na lista se não houver custo). */
+  mesAtual: CustoMes | null;
+  /** Mês anterior, para a comparação. */
+  mesAnterior: CustoMes | null;
+}
+
+/**
+ * Custo por MÊS DE REFERÊNCIA (regime de competência), somando o rateio dos
+ * lançamentos a pagar por centro de custo.
+ *
+ * Este é o gasto da obra: como toda OC vira lançamento e existem lançamentos
+ * avulsos, o custo está nos lançamentos. Não usa data de pagamento (isso é
+ * caixa) nem data de criação.
+ */
+export async function custoResumo(): Promise<ResumoCusto> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("fn_rel_custo_por_mes", {
+    p_meses: 6,
+  });
+
+  if (error) {
+    throw new Error("Não foi possível carregar o custo por mês");
+  }
+
+  const meses: CustoMes[] = (data ?? []).map((linha) => ({
+    mes: linha.mes,
+    total: Number(linha.total ?? 0),
+    lancamentos: linha.lancamentos,
+  }));
+
+  const atual = mesCompetenciaHoje();
+  const anterior = mesAnteriorDe(atual);
+
+  return {
+    meses,
+    mesAtual: meses.find((m) => m.mes === atual) ?? null,
+    mesAnterior: meses.find((m) => m.mes === anterior) ?? null,
+  };
+}
+
+/** Primeiro dia do mês corrente no fuso de Rio Branco (yyyy-MM-01). */
+function mesCompetenciaHoje(): string {
+  return `${mesHojeISO()}-01`;
+}
+
+/** Primeiro dia do mês anterior a um yyyy-MM-01. */
+function mesAnteriorDe(competencia: string): string {
+  const ano = Number(competencia.slice(0, 4));
+  const mes = Number(competencia.slice(5, 7));
+  const anoAnterior = mes === 1 ? ano - 1 : ano;
+  const mesAnterior = mes === 1 ? 12 : mes - 1;
+  return `${anoAnterior}-${String(mesAnterior).padStart(2, "0")}-01`;
 }

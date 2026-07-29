@@ -537,6 +537,92 @@ export type Database = {
           },
         ];
       };
+      competencia_eventos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          entidade_id: string | null;
+          entidade_tipo: string | null;
+          id: string;
+          mes: string;
+          motivo: string | null;
+          tipo: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          entidade_id?: string | null;
+          entidade_tipo?: string | null;
+          id?: string;
+          mes: string;
+          motivo?: string | null;
+          tipo: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          entidade_id?: string | null;
+          entidade_tipo?: string | null;
+          id?: string;
+          mes?: string;
+          motivo?: string | null;
+          tipo?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "competencia_eventos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      competencias_fechadas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          fechado_em: string;
+          fechado_por: string | null;
+          id: string;
+          mes: string;
+          observacao: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          fechado_em?: string;
+          fechado_por?: string | null;
+          id?: string;
+          mes: string;
+          observacao?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          fechado_em?: string;
+          fechado_por?: string | null;
+          id?: string;
+          mes?: string;
+          observacao?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "competencias_fechadas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "competencias_fechadas_fechado_por_fkey";
+            columns: ["fechado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       condicao_parcelas: {
         Row: {
           condicao_id: string;
@@ -2862,6 +2948,22 @@ export type Database = {
         Args: { p_parcela_id: string };
         Returns: undefined;
       };
+      fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean };
+      fn_competencias_painel: {
+        Args: { p_meses?: number };
+        Returns: {
+          custo: number;
+          excecoes: number;
+          fechada: boolean;
+          fechado_em: string;
+          fechado_por: string;
+          incompletos: number;
+          lancamentos: number;
+          mes: string;
+          observacao: string;
+          reaberturas: number;
+        }[];
+      };
       fn_conciliar_transacao: {
         Args: { p_parcela_id: string; p_transacao_id: string };
         Returns: undefined;
@@ -2918,6 +3020,14 @@ export type Database = {
       fn_excluir_lancamento: { Args: { p_id: string }; Returns: undefined };
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined };
       fn_excluir_usuario: { Args: { p_id: string }; Returns: boolean };
+      fn_exigir_competencia_aberta: {
+        Args: { p_entidade: string; p_id: string; p_mes: string };
+        Returns: undefined;
+      };
+      fn_fechar_competencia: {
+        Args: { p_mes: string; p_observacao?: string };
+        Returns: undefined;
+      };
       fn_fechar_diarias: {
         Args: {
           p_colaborador: string;
@@ -2983,6 +3093,10 @@ export type Database = {
         };
         Returns: number;
       };
+      fn_reabrir_competencia: {
+        Args: { p_mes: string; p_motivo: string };
+        Returns: undefined;
+      };
       fn_reabrir_folha: { Args: { p_folha: string }; Returns: undefined };
       fn_reabrir_ponto: { Args: { p_ponto: string }; Returns: undefined };
       fn_recalcular_status_lancamento: {
@@ -3021,11 +3135,19 @@ export type Database = {
         }[];
       };
       fn_rel_custo_centro_custo: {
-        Args: never;
+        Args: { p_fim?: string; p_inicio?: string };
         Returns: {
           centro_custo_id: string;
           codigo: string;
           nome: string;
+          total: number;
+        }[];
+      };
+      fn_rel_custo_por_mes: {
+        Args: { p_meses?: number };
+        Returns: {
+          lancamentos: number;
+          mes: string;
           total: number;
         }[];
       };

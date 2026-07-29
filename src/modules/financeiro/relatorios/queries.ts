@@ -194,8 +194,8 @@ export async function dreGerencial({
   const inicio = `${mes}-01`;
   const fim = proximoMes(mes);
 
-  // Agregado no banco: uma linha por tipo/categoria do mês (a data efetiva
-  // competência -> vencimento -> emissão vive na fn_rel_dre).
+  // Agregado no banco: uma linha por tipo/categoria do mês, pelo MÊS DE
+  // REFERÊNCIA do lançamento (regime de competência; ver fn_rel_dre).
   const { data, error } = await supabase.rpc("fn_rel_dre", {
     p_inicio: inicio,
     p_fim: fim,
@@ -402,14 +402,23 @@ export interface CustoPorCentroCusto {
 }
 
 /**
- * Custo por centro de custo: soma dos rateios (lancamento_rateios) dos
- * lançamentos a_pagar não cancelados, com nome e código do CC resolvidos.
+ * Custo por centro de custo no MÊS DE REFERÊNCIA (regime de competência): soma
+ * dos rateios dos lançamentos a pagar não cancelados cujo mes_competencia cai no
+ * período. Sem período soma todos os meses (acumulado).
+ *
+ * É este o custo de obra: como toda OC vira lançamento e existem lançamentos
+ * avulsos, o gasto está nos lançamentos, não em consumo de estoque.
  */
-export async function custoPorCentroCusto(): Promise<CustoPorCentroCusto> {
+export async function custoPorCentroCusto(
+  periodo?: { inicio: string; fim: string },
+): Promise<CustoPorCentroCusto> {
   const supabase = await createClient();
 
   // Agregado no banco: uma linha por centro de custo, já com nome e código.
-  const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo");
+  const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo", {
+    p_inicio: periodo?.inicio,
+    p_fim: periodo?.fim,
+  });
 
   if (error) {
     throw new Error("Não foi possível carregar o custo por centro de custo");

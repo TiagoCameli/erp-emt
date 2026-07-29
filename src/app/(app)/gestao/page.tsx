@@ -8,9 +8,11 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { formatarCompetencia } from "@/modules/rh/_shared/formato";
 import {
   comprasResumo,
+  custoResumo,
   financeiroResumo,
   rhResumo,
   type ResumoCompras,
+  type ResumoCusto,
   type ResumoFinanceiro,
   type ResumoRh,
 } from "@/modules/gestao/queries";
@@ -69,8 +71,9 @@ export default async function GestaoPage() {
     notFound();
   }
 
-  const [compras, financeiro, rh] = await Promise.allSettled([
+  const [compras, custo, financeiro, rh] = await Promise.allSettled([
     comprasResumo(),
+    custoResumo(),
     financeiroResumo(),
     rhResumo(),
   ]);
@@ -96,6 +99,39 @@ export default async function GestaoPage() {
               detalhe={`${d.ocsAbertas.contagem} ordem(ns)`}
             />
             <KPICard titulo="Cotações em aberto" valor={d.cotacoesAbertas} />
+          </>
+        )}
+      </Secao>
+
+      {/* Custo por mês de REFERÊNCIA: é o gasto da obra no mês, não o que saiu
+          do caixa. Vive antes do financeiro porque é a pergunta do dono. */}
+      <Secao<ResumoCusto>
+        titulo="Custo por mês de referência"
+        rota="/financeiro/relatorios?rel=custo-cc"
+        resultado={custo}
+        rotuloLink="Abrir custo por centro de custo"
+      >
+        {(d) => (
+          <>
+            <KPICard
+              titulo="Custo do mês atual"
+              valor={<MoneyText valor={d.mesAtual?.total ?? 0} />}
+              detalhe={`${d.mesAtual?.lancamentos ?? 0} lançamento(s) com este mês de referência`}
+            />
+            <KPICard
+              titulo="Mês anterior"
+              valor={<MoneyText valor={d.mesAnterior?.total ?? 0} />}
+              detalhe={`${d.mesAnterior?.lancamentos ?? 0} lançamento(s)`}
+            />
+            <KPICard
+              titulo="Acumulado (6 meses)"
+              valor={
+                <MoneyText
+                  valor={d.meses.reduce((soma, m) => soma + m.total, 0)}
+                />
+              }
+              detalhe="Regime de competência, não de caixa"
+            />
           </>
         )}
       </Secao>

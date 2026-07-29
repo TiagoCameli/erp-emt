@@ -5,6 +5,7 @@ import { EmptyState, KPICard, MoneyText, PageHeader } from "@/components/canonic
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-grafico";
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
+import { proximoMes } from "@/modules/financeiro/relatorios/calculo";
 import { CustoCcGrafico } from "@/modules/financeiro/relatorios/components/custo-cc-grafico";
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
@@ -250,14 +251,17 @@ async function ConteudoPosicaoBancaria() {
   );
 }
 
-async function ConteudoCustoCc() {
-  const custo = await custoPorCentroCusto();
+async function ConteudoCustoCc({ mes }: { mes: string }) {
+  const custo = await custoPorCentroCusto({
+    inicio: `${mes}-01`,
+    fim: proximoMes(mes),
+  });
   if (custo.centros.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
-        titulo="Sem custos rateados"
-        descricao="Os rateios dos lançamentos a pagar aparecem aqui por centro de custo."
+        titulo="Sem custo neste mês de referência"
+        descricao="Nenhum lançamento a pagar tem este mês de referência. Troque o mês ou confira o mês de referência dos lançamentos."
       />
     );
   }
@@ -268,12 +272,12 @@ async function ConteudoCustoCc() {
         <KPICard
           titulo="Custo total"
           valor={<MoneyText valor={custo.total} />}
-          detalhe="Lançamentos a pagar rateados"
+          detalhe="Lançamentos a pagar com este mês de referência"
         />
         <KPICard
           titulo="Centros de custo"
           valor={custo.centros.length}
-          detalhe="Com custo no período"
+          detalhe="Com custo no mês"
         />
         {maior ? (
           <KPICard
@@ -408,9 +412,10 @@ export default async function RelatoriosPage({
       {relatorio === "custo-cc" ? (
         <SecaoRelatorio
           titulo="Custo por centro de custo"
-          descricao="Rateio dos lançamentos a pagar por centro de custo."
+          descricao="Regime de COMPETÊNCIA: custo por centro de custo pelo MÊS DE REFERÊNCIA do lançamento (é o gasto da obra no mês, não o que saiu do caixa)."
+          controles={<SeletorMes valor={mes} />}
         >
-          <ConteudoCustoCc />
+          <ConteudoCustoCc mes={mes} />
         </SecaoRelatorio>
       ) : null}
 

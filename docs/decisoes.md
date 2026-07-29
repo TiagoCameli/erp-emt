@@ -193,3 +193,17 @@ Módulo SOMENTE LEITURA: agrega os dados dos outros módulos, sem tabelas novas 
 **Prova:** `supabase/provas/datas_competencia.sql`, 17 asserções no banco vivo (imutabilidade da criação, normalização e check do dia 1, herança das duas datas, avulso exigindo, alteração nos dois sentidos, trava por aprovado e por pago, piso do vencimento, DRE pelo mês de referência). Rollback em `supabase/rollbacks/`.
 
 **Blocos pendentes:** 2) competência fechada (`competencias_fechadas`, trava nas funções de escrita, aba para fechar e reabrir); 3) relatórios e BI de custo por competência.
+
+## 2026-07-29 - Competência fechada e custo por competência (blocos 2 e 3, PR #35)
+
+**Bloco 2: fechamento de competência.** Fechar um mês congela o custo dele: sem isso, um lançamento criado depois com mês de referência antigo muda um relatório que já foi olhado. Tabela `competencias_fechadas` (uma linha por mês, dia 1) e a trava `fn_exigir_competencia_aberta` chamada nos cinco caminhos que escrevem mês de referência: criar OC, aprovar OC, salvar lançamento, alterar o mês e fechar diárias.
+
+**Quem lança em mês fechado.** Não existe flag de admin no projeto, existe permissão por recurso, então a exceção é de quem pode REABRIR o mês (`financeiro.competencias:desaprovar`). Ele passa, e a exceção fica registrada. Aba nova `financeiro.competencias` com ver/aprovar (fechar) /desaprovar (reabrir), semeada para quem já aprova pagamento.
+
+**A trilha ganhou tabela própria, e isso foi um erro corrigido pela prova.** A primeira versão gravava fechamento, reabertura e exceção no `audit_log` com ação própria; a prova estourou no primeiro lançamento em mês fechado porque `audit_log_acao_check` só aceita INSERT, UPDATE e DELETE. Em vez de afrouxar o check de uma tabela central, criei `competencia_eventos` (mes, tipo fechou/reabriu/excecao, motivo, documento), auditada normalmente. O painel mostra quantas exceções e reaberturas cada mês teve, porque mês fechado que mudou depois não pode ficar escondido.
+
+**Bloco 3: custo por competência.** `fn_rel_custo_centro_custo` ganhou período e passou a filtrar por `mes_competencia` (antes somava tudo, sem recorte de mês). `fn_rel_custo_por_mes` nova, para a série dos últimos meses. O relatório Custo por centro de custo ganhou seletor de mês, e o painel de Gestão ganhou a seção "Custo por mês de referência" (mês atual, mês anterior, acumulado de 6 meses).
+
+**Isso substitui formalmente o modelo "base CONSUMO" da Fase 8**, que somava consumo de estoque + folha + lançamentos de origem os/diaria/manual e deixava a compra de fora para não contar duas vezes. Com Estoque fora do escopo, nunca haveria consumo registrado e o custo apareceria menor que a realidade. Decisão do Tiago: o gasto da obra é o que está nos lançamentos, porque toda OC vira lançamento e existem lançamentos avulsos. Folha continua fora deste número (a folha é gerencial e não posta no financeiro): o custo de mão de obra própria aparece no painel de RH, não no custo por centro de custo.
+
+**Prova:** `supabase/provas/competencia_e_custo.sql`, 14 asserções no banco vivo (fechar, não duplicar, mês futuro, exceção registrada, barrar sem permissão, reabrir exigindo permissão e motivo, painel com exceções e reaberturas, custo pelo mês de referência e acumulado sem período).
