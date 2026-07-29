@@ -7,6 +7,10 @@ import {
 } from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import {
+  tipoFormaPagamento,
+  type TipoFormaPagamento,
+} from "@/modules/_shared/forma-pagamento";
 import type {
   StatusLancamento,
   StatusParcela,
@@ -90,6 +94,43 @@ export interface LancamentoDetalhe {
    */
   condicaoPagamentoId: string | null;
   condicaoPagamentoDescricao: string | null;
+  /** Forma de pagamento e o tipo dela, que decide o caminho do pagamento. */
+  formaPagamentoId: string | null;
+  formaPagamentoNome: string | null;
+  formaPagamentoTipo: TipoFormaPagamento | null;
+  /**
+   * Número da OC de origem (só quando origem='oc'), para o aviso apontar o
+   * documento em que a nota fiscal é registrada.
+   */
+  origemNumero: string | null;
+  /** Se a nota fiscal da OC de origem já foi registrada. */
+  notaRegistrada: boolean;
+}
+
+/** Opção de forma de pagamento ativa para o select do lançamento. */
+export interface FormaPagamentoOpcao {
+  id: string;
+  nome: string;
+  tipo: TipoFormaPagamento;
+}
+
+/**
+ * Formas de pagamento ativas. Consulta própria do financeiro em vez de
+ * importar a de compras: cada módulo lê o que precisa, sem depender do outro.
+ */
+export async function listarFormasPagamento(): Promise<FormaPagamentoOpcao[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("formas_pagamento")
+    .select("id, nome, tipo")
+    .eq("ativo", true)
+    .order("nome");
+  if (error) throw new Error("Não foi possível carregar as formas de pagamento");
+  return (data ?? []).map((forma) => ({
+    id: forma.id,
+    nome: forma.nome,
+    tipo: tipoFormaPagamento(forma.tipo),
+  }));
 }
 
 /** Opção de categoria financeira para o select. */
@@ -199,8 +240,10 @@ export async function buscarLancamento(
     .from("lancamentos")
     .select(
       `id, numero, tipo, origem, origem_id, fornecedor_id, categoria_id,
+       forma_pagamento_id,
        descricao, valor, status, competencia, data_emissao, data_vencimento,
        categorias_financeiras(nome),
+       formas_pagamento(nome, tipo),
        fornecedores(razao_social, nome_fantasia),
        lancamento_parcelas(
          id, numero_parcela, valor, data_vencimento, status,
@@ -230,17 +273,29 @@ export async function buscarLancamento(
     }))
     .sort((a, b) => a.numeroParcela - b.numeroParcela);
 
-  // Condição de pagamento da OC de origem: o lançamento não guarda condição.
+  // Condição de pagamento, número e nota da OC de origem: o lançamento não
+  // guarda condição, e o aviso de lançamento incompleto precisa apontar o
+  // documento certo.
   let condicaoPagamentoId: string | null = null;
   let condicaoPagamentoDescricao: string | null = null;
+  let origemNumero: string | null = null;
+  let notaRegistrada = false;
   if (data.origem === "oc" && data.origem_id) {
-    const { data: ordem } = await supabase
-      .from("ordens_compra")
-      .select("condicao_pagamento_id, condicoes_pagamento(descricao)")
-      .eq("id", data.origem_id)
-      .maybeSingle();
+    const [{ data: ordem }, { count }] = await Promise.all([
+      supabase
+        .from("ordens_compra")
+        .select("numero, condicao_pagamento_id, condicoes_pagamento(descricao)")
+        .eq("id", data.origem_id)
+        .maybeSingle(),
+      supabase
+        .from("recebimentos")
+        .select("id", { count: "exact", head: true })
+        .eq("ordem_compra_id", data.origem_id),
+    ]);
     condicaoPagamentoId = ordem?.condicao_pagamento_id ?? null;
     condicaoPagamentoDescricao = ordem?.condicoes_pagamento?.descricao ?? null;
+    origemNumero = ordem?.numero ?? null;
+    notaRegistrada = (count ?? 0) > 0;
   }
 
   const rateios: RateioLancamento[] = (data.lancamento_rateios ?? []).map(
@@ -273,6 +328,13 @@ export async function buscarLancamento(
     rateios,
     condicaoPagamentoId,
     condicaoPagamentoDescricao,
+    formaPagamentoId: data.forma_pagamento_id,
+    formaPagamentoNome: data.formas_pagamento?.nome ?? null,
+    formaPagamentoTipo: data.formas_pagamento
+      ? tipoFormaPagamento(data.formas_pagamento.tipo)
+      : null,
+    origemNumero,
+    notaRegistrada,
   };
 }
 

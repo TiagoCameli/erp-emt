@@ -13,6 +13,7 @@ const CENTRO = "33333333-3333-4333-8333-333333333333";
 const INSUMO2 = "44444444-4444-4444-8444-444444444444";
 const CENTRO2 = "55555555-5555-4555-8555-555555555555";
 const CONDICAO = "66666666-6666-4666-8666-666666666666";
+const FORMA = "77777777-7777-4777-8777-777777777777";
 
 const itemValido = {
   insumoId: INSUMO,
@@ -24,6 +25,7 @@ const itemValido = {
 const ocValida = {
   fornecedorId: FORNECEDOR,
   condicaoPagamentoId: CONDICAO,
+  formaPagamentoId: FORMA,
   dataEmissao: "2026-06-18",
   itens: [itemValido],
 };
@@ -89,6 +91,17 @@ describe("ordemCompraSchema", () => {
   it("exige fornecedor", () => {
     const r = ordemCompraSchema.safeParse({ ...ocValida, fornecedorId: "x" });
     expect(r.success).toBe(false);
+  });
+
+  // A forma de pagamento decide o caminho do pagamento (fila de aprovação,
+  // direto para Pagamentos ou já quitado no cartão), então virou obrigatória.
+  it("exige forma de pagamento", () => {
+    const { formaPagamentoId: _, ...semForma } = ocValida;
+    const r = ordemCompraSchema.safeParse(semForma);
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe("Escolha a forma de pagamento");
+    }
   });
 
   it("exige ao menos um item", () => {
@@ -173,6 +186,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
   const formValido = {
     fornecedorId: FORNECEDOR,
     condicaoPagamentoId: CONDICAO,
+    formaPagamentoId: FORMA,
     dataEmissao: "2026-06-18",
     observacoes: "",
     centrosCusto: [grupoValido],
@@ -183,6 +197,12 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
 
   it("aceita OC com um centro de custo e um insumo", () => {
     expect(ordemCompraFormSchema.safeParse(formValido).success).toBe(true);
+  });
+
+  it("exige forma de pagamento no formulário", () => {
+    const { formaPagamentoId: _, ...semForma } = formValido;
+    const r = ordemCompraFormSchema.safeParse(semForma);
+    expect(r.success).toBe(false);
   });
 
   it("exige condição de pagamento no formulário", () => {
@@ -268,6 +288,7 @@ describe("parcelas da OC no formulário", () => {
   const base = {
     fornecedorId: FORNECEDOR,
     condicaoPagamentoId: CONDICAO,
+    formaPagamentoId: FORMA,
     dataEmissao: "2026-06-18",
     observacoes: "",
     // 10 x 100,00 = 1.000,00 de total
@@ -364,6 +385,7 @@ describe("parcelas da OC no servidor", () => {
   const baseServidor = {
     fornecedorId: FORNECEDOR,
     condicaoPagamentoId: CONDICAO,
+    formaPagamentoId: FORMA,
     dataEmissao: "2026-06-18",
     itens: [
       {

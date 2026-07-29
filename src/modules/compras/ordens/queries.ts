@@ -8,6 +8,7 @@ import {
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
 import {
   idsFornecedoresPorNome,
@@ -47,6 +48,11 @@ export interface OrdemLista {
   cotacaoNumero: string | null;
   criadoEm: string;
   criadoPorNome: string | null;
+  /**
+   * OC aprovada cujo lançamento já está pago e que ainda não tem nota fiscal
+   * registrada (caso do cartão de crédito). Serve ao aviso na lista.
+   */
+  quitadaSemNota: boolean;
 }
 
 /** Resultado paginado da listagem de ordens de compra. */
@@ -146,10 +152,15 @@ export interface CondicaoPagamentoOpcao {
   descricao: string;
 }
 
-/** Opção de forma de pagamento (método) ativa para o select da OC. */
+/**
+ * Opção de forma de pagamento (método) ativa para o select da OC. Carrega o
+ * `tipo` porque é ele que decide o caminho do pagamento, e a tela avisa isso
+ * antes de salvar.
+ */
 export interface FormaPagamentoOpcao {
   id: string;
   nome: string;
+  tipo: TipoFormaPagamento;
 }
 
 /** Parcela de uma condição de pagamento, para a prévia do recebimento. */
@@ -184,6 +195,33 @@ async function nomesDosCriadores(
   });
   for (const usuario of data ?? []) nomes.set(usuario.id, usuario.nome);
   return nomes;
+}
+
+/**
+ * Das OCs aprovadas, quais já estão quitadas sem nota fiscal registrada. É o
+ * caso do cartão de crédito: o lançamento nasce pago na aprovação e a OC segue
+ * 'aprovado' até a nota chegar. Sem esse aviso na lista, a nota some no fim do
+ * mês. `lancamentos.origem_id` é polimórfico (não é FK), então não dá para
+ * embutir no select da OC: vem em uma consulta a mais, só com os ids da página.
+ */
+async function ordensQuitadasSemNota(
+  supabase: SupabaseServerClient,
+  ids: string[],
+): Promise<Set<string>> {
+  const quitadas = new Set<string>();
+  if (ids.length === 0) return quitadas;
+
+  const { data } = await supabase
+    .from("lancamentos")
+    .select("origem_id")
+    .eq("origem", "oc")
+    .eq("status", "pago")
+    .in("origem_id", ids);
+
+  for (const lancamento of data ?? []) {
+    if (lancamento.origem_id) quitadas.add(lancamento.origem_id);
+  }
+  return quitadas;
 }
 
 /**
@@ -244,10 +282,16 @@ export async function listarOrdens(
   }
 
   const linhas = data ?? [];
-  const nomesCriadores = await nomesDosCriadores(
-    supabase,
-    linhas.map((ordem) => ordem.created_by),
-  );
+  const [nomesCriadores, quitadasSemNota] = await Promise.all([
+    nomesDosCriadores(
+      supabase,
+      linhas.map((ordem) => ordem.created_by),
+    ),
+    ordensQuitadasSemNota(
+      supabase,
+      linhas.filter((ordem) => ordem.status === "aprovado").map((o) => o.id),
+    ),
+  ]);
 
   const itens: OrdemLista[] = linhas.map((ordem) => ({
     id: ordem.id,
@@ -265,6 +309,7 @@ export async function listarOrdens(
     criadoPorNome: ordem.created_by
       ? (nomesCriadores.get(ordem.created_by) ?? null)
       : null,
+    quitadaSemNota: quitadasSemNota.has(ordem.id),
   }));
 
   return { itens, total: count ?? 0 };

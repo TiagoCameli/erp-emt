@@ -26,11 +26,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
 import { salvarLancamento } from "@/modules/financeiro/lancamentos/actions";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  FormaPagamentoOpcao,
   FornecedorOpcao,
   LancamentoDetalhe,
 } from "@/modules/financeiro/lancamentos/queries";
@@ -101,6 +103,7 @@ function valoresIniciais(
       tipo: "a_pagar",
       fornecedorId: undefined,
       categoriaId: undefined,
+      formaPagamentoId: "",
       descricao: "",
       valor: "",
       competencia: "",
@@ -113,6 +116,7 @@ function valoresIniciais(
     tipo: lancamento.tipo,
     fornecedorId: lancamento.fornecedorId ?? undefined,
     categoriaId: lancamento.categoriaId ?? undefined,
+    formaPagamentoId: lancamento.formaPagamentoId ?? "",
     descricao: lancamento.descricao,
     valor: String(lancamento.valor).replace(".", ","),
     competencia: lancamento.competencia ?? "",
@@ -174,6 +178,7 @@ export interface LancamentoFormDrawerProps {
   /** Lançamento em edição, ou null para criar. */
   lancamento: LancamentoDetalhe | null;
   categorias: CategoriaOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
   /** Chamado depois de criar, com o id, para navegar ao detalhe. */
@@ -192,6 +197,7 @@ export function LancamentoFormDrawer({
   onAbertoChange,
   lancamento,
   categorias,
+  formasPagamento,
   fornecedores,
   centrosCusto,
   onSalvo,
@@ -227,6 +233,10 @@ export function LancamentoFormDrawer({
   const tipoValor = form.watch("tipo");
   const fornecedorValor = form.watch("fornecedorId") ?? SEM_VINCULO;
   const categoriaValor = form.watch("categoriaId") ?? SEM_VINCULO;
+  const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
+  const tipoFormaEscolhida = formasPagamento.find(
+    (forma) => forma.id === formaPagamentoValor,
+  )?.tipo;
   const erroParcelas = form.formState.errors.parcelas;
   const erroRateios = form.formState.errors.rateios;
 
@@ -235,6 +245,7 @@ export function LancamentoFormDrawer({
       tipo: valores.tipo,
       fornecedorId: valores.fornecedorId,
       categoriaId: valores.categoriaId,
+      formaPagamentoId: valores.formaPagamentoId || undefined,
       descricao: valores.descricao,
       valor: paraNumero(valores.valor),
       competencia: valores.competencia,
@@ -421,6 +432,36 @@ export function LancamentoFormDrawer({
             />
           </CampoFormulario>
         </LinhaCampos>
+
+        {tipoValor === "a_pagar" ? (
+          <LinhaCampos>
+            <CampoFormulario
+              id="lan-forma-pagamento"
+              rotulo="Forma de pagamento"
+              ajuda={
+                tipoFormaEscolhida
+                  ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
+                  : "Decide o caminho do pagamento: dinheiro e cartão de crédito não passam pela aprovação"
+              }
+              erro={form.formState.errors.formaPagamentoId?.message}
+            >
+              <Combobox
+                valor={formaPagamentoValor}
+                onValorChange={(valor) => {
+                  form.setValue("formaPagamentoId", valor);
+                  void form.trigger("formaPagamentoId");
+                }}
+                opcoes={formasPagamento.map((forma) => ({
+                  valor: forma.id,
+                  rotulo: forma.nome,
+                }))}
+                placeholder="Selecione a forma de pagamento"
+                disabled={salvando}
+                id="lan-forma-pagamento"
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+        ) : null}
 
         <LinhaCampos>
           <CampoFormulario

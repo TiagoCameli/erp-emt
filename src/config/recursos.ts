@@ -147,6 +147,15 @@ export const RECURSOS = [
     rota: "/cadastros/condicoes-pagamento",
     acoes: CRUD,
   },
+  {
+    id: "cadastros.formas-pagamento",
+    nome: "Formas de pagamento",
+    modulo: "cadastros",
+    rota: "/cadastros/formas-pagamento",
+    // Sem 'excluir': forma usada em OC e lançamento não sai do catálogo, ela
+    // é desativada (o histórico continua apontando para ela).
+    acoes: ["ver", "criar", "editar"],
+  },
   // Compras
   {
     id: "compras.cotacoes",

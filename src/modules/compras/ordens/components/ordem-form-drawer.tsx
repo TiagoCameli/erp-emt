@@ -41,6 +41,7 @@ import {
 } from "@/modules/compras/_shared/pagamento-actions";
 import { enviarAnexos } from "@/modules/_shared/anexos/actions";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import {
   criarOrdem,
   editarOrdem,
@@ -278,7 +279,7 @@ export function OrdemFormDrawer({
     const dados = {
       fornecedorId: valores.fornecedorId,
       condicaoPagamentoId: valores.condicaoPagamentoId,
-      formaPagamentoId: valores.formaPagamentoId || undefined,
+      formaPagamentoId: valores.formaPagamentoId,
       cotacaoId: valores.cotacaoId,
       dataEmissao: valores.dataEmissao,
       observacoes: valores.observacoes,
@@ -333,6 +334,12 @@ export function OrdemFormDrawer({
   const fornecedorValor = form.watch("fornecedorId");
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId");
   const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
+  // O tipo da forma escolhida decide o caminho do pagamento. A tela diz isso
+  // aqui, antes de salvar, em vez de o usuário descobrir depois procurando a
+  // parcela numa fila onde ela nunca vai aparecer.
+  const tipoFormaEscolhida = formasPagamento.find(
+    (forma) => forma.id === formaPagamentoValor,
+  )?.tipo;
   // Cotação de origem só entra por "Gerar OC" (prefill) ou vem da OC em
   // edição; nunca é escolhida à mão. Mostramos apenas como leitura.
   const origemNumero =
@@ -474,27 +481,36 @@ export function OrdemFormDrawer({
             <CampoFormulario
               id="oc-forma-pagamento"
               rotulo="Forma de pagamento"
-              ajuda="Opcional: PIX, boleto, TED, dinheiro"
+              ajuda={
+                tipoFormaEscolhida
+                  ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
+                  : "Decide o caminho do pagamento: dinheiro e cartão de crédito não passam pela aprovação"
+              }
+              erro={form.formState.errors.formaPagamentoId?.message}
             >
               <Combobox
                 valor={formaPagamentoValor}
-                onValorChange={(valor) =>
-                  form.setValue("formaPagamentoId", valor)
-                }
+                onValorChange={(valor) => {
+                  form.setValue("formaPagamentoId", valor);
+                  void form.trigger("formaPagamentoId");
+                }}
                 opcoes={formasPagamento.map((forma) => ({
                   valor: forma.id,
                   rotulo: forma.nome,
                 }))}
                 onCriar={async (texto) => {
-                  const r = await criarFormaPagamento(texto);
+                  // Nasce bancário: o default seguro é PASSAR pela aprovação.
+                  // Se for dinheiro ou cartão, o tipo se ajusta no cadastro.
+                  const r = await criarFormaPagamento(texto, "bancario");
                   if ("erro" in r) {
                     toast.error(r.erro);
                     return null;
                   }
-                  toast.success("Forma de pagamento criada");
+                  toast.success(
+                    "Forma criada como bancária: passa pela aprovação de pagamento. Se for dinheiro ou cartão, mude o tipo em Cadastros > Formas de pagamento.",
+                  );
                   return r.id;
                 }}
-                limpavel
                 placeholder="Selecione a forma de pagamento"
                 disabled={salvando}
                 id="oc-forma-pagamento"

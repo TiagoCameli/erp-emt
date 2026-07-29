@@ -117,9 +117,11 @@ export const ordemCompraSchema = z
     fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
     condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
     cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
-    formaPagamentoId: z
-      .uuid({ error: "Forma de pagamento inválida" })
-      .optional(),
+    /**
+     * Obrigatória: o tipo da forma é o que decide se o pagamento passa pela
+     * fila de aprovação, nasce aprovado (dinheiro) ou nasce quitado (cartão).
+     */
+    formaPagamentoId: z.uuid({ error: "Escolha a forma de pagamento" }),
     dataEmissao: dataSchema("Data de emissão inválida"),
     observacoes: textoOpcional(2000),
     itens: z
@@ -252,7 +254,7 @@ export const ordemCompraFormSchema = z
     fornecedorId: z.uuid({ error: "Selecione o fornecedor" }),
     condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
     cotacaoId: z.uuid().optional(),
-    formaPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
+    formaPagamentoId: z.uuid({ error: "Escolha a forma de pagamento" }),
     dataEmissao: z
       .string()
       .trim()

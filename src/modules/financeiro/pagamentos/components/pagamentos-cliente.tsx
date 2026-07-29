@@ -312,7 +312,7 @@ export function PagamentosCliente({
               <EmptyState
                 icone={Wallet}
                 titulo="Nenhuma parcela aprovada"
-                descricao="Parcelas a pagar aprovadas aparecem aqui, prontas para pagamento"
+                descricao="Parcelas aprovadas aparecem aqui, prontas para pagamento. Compra em dinheiro entra direto, sem passar pela aprovação; compra no cartão de crédito já nasce quitada e não aparece aqui."
                 className="border-none bg-transparent"
               />
             }

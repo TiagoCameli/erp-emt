@@ -2,7 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarClock, Lock, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  ExternalLink,
+  Lock,
+  Pencil,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
@@ -22,11 +30,13 @@ import {
   STATUS_PARCELA,
 } from "@/modules/financeiro/_shared/formato";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { DefinirParcelasDialog } from "./definir-parcelas-dialog";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  FormaPagamentoOpcao,
   FornecedorOpcao,
   LancamentoDetalhe,
 } from "@/modules/financeiro/lancamentos/queries";
@@ -57,14 +67,51 @@ function Secao({
 function Dado({
   rotulo,
   children,
+  legenda,
 }: {
   rotulo: string;
   children: React.ReactNode;
+  /** Linha extra abaixo do valor, para explicar o que aquele dado provoca. */
+  legenda?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-legenda text-muted-foreground">{rotulo}</span>
       <span className="text-detalhe">{children}</span>
+      {legenda ? (
+        <span className="text-legenda text-muted-foreground">{legenda}</span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Aviso do que está travando ou do que ainda falta neste lançamento. Existe
+ * porque tela muda é a pior parte de um ERP: o usuário procura a parcela numa
+ * fila onde ela nunca vai aparecer e não descobre o motivo.
+ */
+function Aviso({
+  titulo,
+  texto,
+  acao,
+}: {
+  titulo: string;
+  texto: string;
+  acao?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-status-pendente/30 bg-status-pendente/5 px-3 py-3">
+      <div className="flex items-start gap-2">
+        <TriangleAlert
+          className="mt-0.5 size-4 shrink-0 text-status-pendente"
+          aria-hidden="true"
+        />
+        <div>
+          <p className="text-detalhe font-medium">{titulo}</p>
+          <p className="text-legenda text-muted-foreground">{texto}</p>
+        </div>
+      </div>
+      {acao}
     </div>
   );
 }
@@ -75,6 +122,7 @@ export interface LancamentoDetalheViewProps {
   categorias: CategoriaOpcao[];
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
   podeEditar: boolean;
   anexos: AnexoDoDocumento[];
   podeExcluir: boolean;
@@ -91,6 +139,7 @@ export function LancamentoDetalheView({
   categorias,
   fornecedores,
   centrosCusto,
+  formasPagamento,
   podeEditar,
   anexos,
   podeExcluir,
@@ -125,6 +174,19 @@ export function LancamentoDetalheView({
   const podeDefinirParcelas = podeEditar && !ehManual && !temParcelaFechada;
   const editavel = podeEditar && ehManual && !temParcelaPaga;
   const infoStatus = STATUS_LANCAMENTO[lancamento.status];
+
+  // Caminho do pagamento: quem decide é o tipo da forma de pagamento, e é o que
+  // explica por que uma parcela nasceu aprovada, quitada, ou foi para a fila.
+  const quitadoNoCartao =
+    lancamento.formaPagamentoTipo === "cartao_credito" &&
+    lancamento.status === "pago";
+  const incompleto = lancamento.status === "previsto";
+  // Dinheiro e cartão pagam antes da nota chegar. Quitado sem nota registrada é
+  // documento faltando, e some no fim do mês se a tela não avisar.
+  const quitadoSemNota =
+    lancamento.origem === "oc" &&
+    lancamento.status === "pago" &&
+    !lancamento.notaRegistrada;
 
   const motivoBloqueio = !ehManual
     ? `Lançamento de origem ${lancamento.origem}. Edite na origem.`
@@ -161,16 +223,23 @@ export function LancamentoDetalheView({
                 status={infoStatus.badge}
                 rotulo={infoStatus.rotulo}
               />
+              {/* "Conta a pagar" e não "A pagar": 'a_pagar' também é nome de
+                  status, e os dois badges lado a lado se contradiziam. */}
               <StatusBadge
                 status={
                   lancamento.tipo === "a_receber"
                     ? "aprovado"
                     : "pendente_aprovacao"
                 }
-                rotulo={ROTULO_TIPO_LANCAMENTO[lancamento.tipo]}
+                rotulo={`Conta ${ROTULO_TIPO_LANCAMENTO[
+                  lancamento.tipo
+                ].toLowerCase()}`}
               />
               {semParcelas ? (
                 <StatusBadge status="rejeitado" rotulo="Parcelas pendentes" />
+              ) : null}
+              {quitadoNoCartao ? (
+                <StatusBadge status="pago" rotulo="Pago no cartão" />
               ) : null}
             </div>
             <p className="text-detalhe text-muted-foreground">
@@ -209,6 +278,53 @@ export function LancamentoDetalheView({
         </div>
       </div>
 
+      {incompleto ? (
+        <Aviso
+          titulo="Lançamento incompleto"
+          texto={`As parcelas precisam somar ${formatarBRL(
+            lancamento.valor,
+          )} para este lançamento entrar na fila de aprovação. Enquanto estiver assim, ele não é aprovado nem pago.`}
+          acao={
+            podeDefinirParcelas ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setParcelasAberto(true)}
+              >
+                <CalendarClock />
+                Definir parcelas
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
+
+      {quitadoSemNota ? (
+        <Aviso
+          titulo="Nota fiscal pendente"
+          texto={`Este lançamento já está quitado e a nota fiscal ${
+            lancamento.origemNumero
+              ? `da ${lancamento.origemNumero}`
+              : "da ordem de origem"
+          } ainda não foi registrada. Registre o recebimento na ordem para fechar o ciclo.`}
+          acao={
+            lancamento.origemId ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  router.push(`/compras/ordens/${lancamento.origemId}`)
+                }
+              >
+                <ExternalLink />
+                Abrir a ordem
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Secao titulo="Dados do lançamento">
@@ -220,6 +336,16 @@ export function LancamentoDetalheView({
                 {lancamento.fornecedorNome ?? "-"}
               </Dado>
               <Dado rotulo="Categoria">{lancamento.categoriaNome ?? "-"}</Dado>
+              <Dado
+                rotulo="Forma de pagamento"
+                legenda={
+                  lancamento.formaPagamentoTipo
+                    ? CAMINHO_DO_PAGAMENTO[lancamento.formaPagamentoTipo]
+                    : null
+                }
+              >
+                {lancamento.formaPagamentoNome ?? "-"}
+              </Dado>
               <Dado rotulo="Competência">
                 {lancamento.competencia
                   ? formatarData(lancamento.competencia)
@@ -416,6 +542,7 @@ export function LancamentoDetalheView({
           }}
           lancamento={lancamento}
           categorias={categorias}
+          formasPagamento={formasPagamento}
           fornecedores={fornecedores}
           centrosCusto={centrosCusto}
         />

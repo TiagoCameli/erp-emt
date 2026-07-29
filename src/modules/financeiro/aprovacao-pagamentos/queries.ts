@@ -16,6 +16,19 @@ export interface ParcelaPendente {
   lancamentoNumero: string | null;
   lancamentoDescricao: string;
   fornecedorNome: string;
+  /**
+   * Nota fiscal da OC de origem ainda não registrada. Não bloqueia a aprovação
+   * (a regra é por forma de pagamento, não pela nota), mas quem aprova precisa
+   * ver que está liberando dinheiro de uma compra sem nota.
+   */
+  semNota: boolean;
+}
+
+/** O que está fora da fila por lançamento incompleto, para o estado vazio. */
+export interface ParcelasIncompletas {
+  parcelas: number;
+  valor: number;
+  lancamentos: number;
 }
 
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
@@ -53,7 +66,7 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     .select(
       `id, numero_parcela, valor, data_vencimento, lancamento_id,
        lancamentos!inner(
-         numero, descricao, tipo, status,
+         numero, descricao, tipo, status, origem, origem_id,
          fornecedores(razao_social, nome_fantasia)
        )`,
     )
@@ -70,7 +83,17 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     throw new Error("Não foi possível carregar os pagamentos para aprovação");
   }
 
-  return (data ?? []).map((parcela) => ({
+  const linhas = data ?? [];
+  const semNota = await ocsSemNota(
+    supabase,
+    linhas.map((parcela) =>
+      parcela.lancamentos?.origem === "oc"
+        ? (parcela.lancamentos?.origem_id ?? null)
+        : null,
+    ),
+  );
+
+  return linhas.map((parcela) => ({
     id: parcela.id,
     numeroParcela: parcela.numero_parcela,
     valor: parcela.valor,
@@ -79,5 +102,55 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
     lancamentoDescricao: parcela.lancamentos?.descricao ?? "-",
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
+    semNota: Boolean(
+      parcela.lancamentos?.origem === "oc" &&
+        parcela.lancamentos?.origem_id &&
+        semNota.has(parcela.lancamentos.origem_id),
+    ),
   }));
+}
+
+/**
+ * Das OCs informadas, quais ainda não têm recebimento (nota fiscal) registrado.
+ * Uma consulta a mais, só com os ids da fila.
+ */
+async function ocsSemNota(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: (string | null)[],
+): Promise<Set<string>> {
+  const unicos = [...new Set(ids.filter((id): id is string => id !== null))];
+  if (unicos.length === 0) return new Set();
+
+  const { data } = await supabase
+    .from("recebimentos")
+    .select("ordem_compra_id")
+    .in("ordem_compra_id", unicos);
+
+  const comNota = new Set((data ?? []).map((r) => r.ordem_compra_id));
+  return new Set(unicos.filter((id) => !comNota.has(id)));
+}
+
+/**
+ * Quanto está fora da fila porque o lançamento está incompleto (previsto: sem
+ * parcela, ou parcelas que não somam o valor). É o que transforma um "nada
+ * aqui" em diagnóstico: o dinheiro existe, só não está aprovável ainda.
+ */
+export async function contarParcelasIncompletas(): Promise<ParcelasIncompletas> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("lancamento_parcelas")
+    .select(
+      `valor, lancamento_id,
+       lancamentos!inner(tipo, status)`,
+    )
+    .eq("status", "pendente")
+    .eq("lancamentos.tipo", "a_pagar")
+    .eq("lancamentos.status", "previsto");
+
+  const linhas = data ?? [];
+  const valor = linhas.reduce((total, parcela) => total + parcela.valor, 0);
+  const lancamentos = new Set(linhas.map((parcela) => parcela.lancamento_id));
+
+  return { parcelas: linhas.length, valor, lancamentos: lancamentos.size };
 }

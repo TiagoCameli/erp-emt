@@ -7,6 +7,7 @@ import {
   buscarLancamento,
   listarCategorias,
   listarCentrosCusto,
+  listarFormasPagamento,
   listarFornecedores,
   trilhaLancamento,
 } from "@/modules/financeiro/lancamentos/queries";
@@ -25,11 +26,19 @@ export default async function PaginaLancamentoDetalhe({
   const lancamento = await buscarLancamento(id);
   if (!lancamento) notFound();
 
-  const [trilha, categorias, fornecedores, centrosCusto, anexos] = await Promise.all([
+  const [
+    trilha,
+    categorias,
+    fornecedores,
+    centrosCusto,
+    formasPagamento,
+    anexos,
+  ] = await Promise.all([
     trilhaLancamento(id),
     listarCategorias(),
     listarFornecedores(),
     listarCentrosCusto(),
+    listarFormasPagamento(),
     listarAnexosDoDocumento("lancamento", id),
   ]);
 
@@ -48,6 +57,7 @@ export default async function PaginaLancamentoDetalhe({
       categorias={categorias}
       fornecedores={fornecedores}
       centrosCusto={centrosCusto}
+      formasPagamento={formasPagamento}
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
     />
