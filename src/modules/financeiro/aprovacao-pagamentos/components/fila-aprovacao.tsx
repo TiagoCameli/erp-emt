@@ -12,6 +12,7 @@ import {
   EmptyState,
   KPICard,
   MoneyText,
+  StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,12 +22,36 @@ import {
   aprovarParcelasEmLote,
   rejeitarParcela,
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
-import type { ParcelaPendente } from "@/modules/financeiro/aprovacao-pagamentos/queries";
+import type {
+  ParcelaPendente,
+  ParcelasIncompletas,
+} from "@/modules/financeiro/aprovacao-pagamentos/queries";
 
 export interface FilaAprovacaoProps {
   parcelas: ParcelaPendente[];
+  /** O que está fora da fila por lançamento incompleto (estado vazio honesto). */
+  incompletas: ParcelasIncompletas;
   podeAprovar: boolean;
   podeRejeitar: boolean;
+}
+
+/**
+ * Descrição do estado vazio. "Nada aqui" sozinho manda o usuário procurar um
+ * botão de "enviar para aprovação" que não existe: o que segura parcela fora da
+ * fila é lançamento incompleto, e é isso que a tela diz.
+ */
+function descricaoVazia(incompletas: ParcelasIncompletas): string {
+  if (incompletas.parcelas === 0) {
+    return "Parcelas de dinheiro e cartão de crédito não passam por aqui: elas vão direto para Pagamentos.";
+  }
+  const plural = incompletas.parcelas > 1;
+  return `${incompletas.parcelas} parcela${plural ? "s" : ""} de ${formatarBRL(
+    incompletas.valor,
+  )} está${plural ? "o" : ""} em ${
+    incompletas.lancamentos > 1
+      ? `${incompletas.lancamentos} lançamentos incompletos`
+      : "um lançamento incompleto"
+  }: as parcelas precisam somar o valor do lançamento para entrar na fila.`;
 }
 
 /** Soma o valor das parcelas, em centavos para não arrastar erro de float. */
@@ -54,6 +79,7 @@ function rotuloParcela(parcela: ParcelaPendente): string {
  */
 export function FilaAprovacao({
   parcelas,
+  incompletas,
   podeAprovar,
   podeRejeitar,
 }: FilaAprovacaoProps) {
@@ -184,7 +210,14 @@ export function FilaAprovacao({
         header: "Lançamento",
         cell: ({ row }) => (
           <div className="flex flex-col gap-0.5">
-            <span className="codigo-doc">{rotuloParcela(row.original)}</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="codigo-doc">{rotuloParcela(row.original)}</span>
+              {/* Não bloqueia aprovar: só mostra que a nota ainda não chegou,
+                  para a decisão ser consciente. */}
+              {row.original.semNota ? (
+                <StatusBadge status="pendente_aprovacao" rotulo="Sem nota" />
+              ) : null}
+            </div>
             <span className="text-legenda text-muted-foreground">
               {row.original.lancamentoDescricao}
             </span>
@@ -302,7 +335,7 @@ export function FilaAprovacao({
           <EmptyState
             icone={Inbox}
             titulo="Nenhum pagamento aguardando aprovação"
-            descricao="As parcelas a pagar enviadas para aprovação aparecem aqui"
+            descricao={descricaoVazia(incompletas)}
             className="border-none bg-transparent"
           />
         }

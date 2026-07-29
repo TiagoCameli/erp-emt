@@ -7,6 +7,7 @@ import { LancamentosTabela } from "@/modules/financeiro/lancamentos/components/l
 import {
   listarCategorias,
   listarCentrosCusto,
+  listarFormasPagamento,
   listarFornecedores,
   listarLancamentos,
 } from "@/modules/financeiro/lancamentos/queries";
@@ -62,13 +63,19 @@ export default async function PaginaLancamentos({
       ? tamanhoParam
       : TAMANHO_PADRAO;
 
-  const [{ itens, total }, categorias, fornecedores, centrosCusto] =
-    await Promise.all([
-      listarLancamentos({ pagina, tamanho, tipo, status, busca }),
-      listarCategorias(),
-      listarFornecedores(),
-      listarCentrosCusto(),
-    ]);
+  const [
+    { itens, total },
+    categorias,
+    fornecedores,
+    centrosCusto,
+    formasPagamento,
+  ] = await Promise.all([
+    listarLancamentos({ pagina, tamanho, tipo, status, busca }),
+    listarCategorias(),
+    listarFornecedores(),
+    listarCentrosCusto(),
+    listarFormasPagamento(),
+  ]);
 
   return (
     <>
@@ -81,6 +88,7 @@ export default async function PaginaLancamentos({
             categorias={categorias}
             fornecedores={fornecedores}
             centrosCusto={centrosCusto}
+            formasPagamento={formasPagamento}
           />
         }
       />

@@ -147,3 +147,29 @@ Módulo SOMENTE LEITURA: agrega os dados dos outros módulos, sem tabelas novas 
 **Folgas conhecidas:** custo de equipamento (manutenção + combustível) ainda NÃO é rateado pra obra (fica no painel de Equipamentos / CC de Manutenção); os grupos combustível/manutenção do painel por obra refletem só o que cai direto no CC da obra. os_mao_obra (mão de obra interna de OS) não entra no custo unificado (gerencial, fora de lançamento/folha/estoque). Drill-down dos painéis leva à lista do módulo de origem (ainda não abre a composição exata número a número). Alertas "inteligentes" do plano (margem caindo X pontos, custo sem medição no período) ficaram de fora; os alertas entregues são os concretos (estoque crítico, documentos/férias vencendo, faturas vencidas, OS abertas).
 
 **Onboarding por senha provisória (sem email).** O cadastro de usuário não depende mais de SMTP: o admin cria o usuário e o sistema gera uma senha provisória, guardada em `usuario_senha_provisoria` (texto puro) e visível SÓ para admin de `administracao.usuarios` via RLS. A flag `senha_temporaria` no metadata força a troca no 1º acesso (trava no layout do app); ao definir a própria senha, a linha da provisória é apagada. O admin pode redefinir a senha de qualquer usuário a qualquer momento (gera nova provisória). A senha DEFINITIVA nunca é armazenada nem exibida: é impossível (hash) e inseguro (impersonação por admin, vazamento expõe a senha real, reúso). **Exceção à auditoria universal:** `usuario_senha_provisoria` não tem trigger `fn_audit` para nunca gravar o valor da senha em `audit_log`; o evento de gerar/redefinir é auditado na ação sobre o usuário, sem o valor.
+
+## 2026-07-29 - Pagamento por forma de pagamento (a nota fiscal para de travar dinheiro)
+
+**A regra anterior estava errada para o negócio.** O lançamento de OC nascia `previsto` e só virava pagável no recebimento da nota fiscal (`fn_registrar_recebimento`). Na EMT isso não fecha: fornecedor de peça, pneu e material de fora do Acre cobra antes de entregar. Tiago definiu a regra nova: lançamento completo vai direto para a aprovação de pagamento, **exceto** dinheiro e cartão de crédito.
+
+**Quem decide o caminho é o TIPO da forma de pagamento, nunca o nome.** `formas_pagamento.tipo` (`bancario`, `dinheiro`, `cartao_credito`, `cheque`) é o classificador; o catálogo de nomes é livre (o usuário cria "PIX", "Cartão de Crédito") e amarrar regra em texto digitado quebra no primeiro sinônimo. A regra vive em UM lugar, `fn_aplicar_regra_pagamento(lancamento)`, chamada por `fn_aprovar_ordem_compra`, `fn_definir_parcelas_lancamento`, `fn_salvar_lancamento` e pelo recebimento:
+
+| Tipo | Lançamento | Parcelas | Onde aparece |
+|---|---|---|---|
+| bancario, cheque | `a_pagar` | `pendente` | Fila de aprovação |
+| dinheiro | `a_pagar` | `aprovado` | Direto em Pagamentos, sem fila |
+| cartao_credito | `pago` | `pago`, sem conta bancária | Histórico de pagas |
+
+`lancamentos.forma_pagamento_id` é novo: a forma só existia na OC, e sem ela no lançamento o financeiro não teria como aplicar a regra (e lançamento manual ficaria sem regra nenhuma). Herdada da OC na aprovação, escolhida no formulário manual.
+
+**Cartão de crédito não debita conta bancária** (`conta_bancaria_id` nulo, `data_pagamento` = emissão): o dinheiro sai na fatura, que este ERP ainda não controla. Debitar uma conta que não pagou nada falsificaria o saldo. Consequência aceita: compra em 3x no cartão aparece inteira no mês da compra.
+
+**`previsto` mudou de significado.** Era "esperando nota fiscal"; agora é "incompleto ou previsão" (sem parcela, ou parcelas que não somam o valor). A trava de `previsto` na fila e em `fn_aprovar_parcela` continua de pé — é o que garante que ninguém aprova pagamento de lançamento que não fecha.
+
+**A nota fiscal virou documento e controle de divergência.** `fn_registrar_recebimento` parou de exigir lançamento `previsto` (dinheiro e cartão já pagaram quando a nota chega, e a busca por status derrubava o recebimento), só promove status quando ainda é previsto, e **nunca reescreve parcela aprovada ou paga**: sem parcela em aberto para absorver a diferença, a divergência é gravada em `recebimentos.divergencia_valor`. Dinheiro que já saiu não se reescreve, se explica. OC quitada que recebe a nota fecha em `pago`.
+
+**Cadastro de formas de pagamento (aba nova, `cadastros.formas-pagamento`).** O tipo precisava de um lugar mantido pelo dono do processo — sem isso, corrigir um tipo errado exigiria migration. Escrita por `fn_salvar_forma_pagamento` (security definer, sem grant direto). Sem 'excluir': forma usada em documento é desativada, não apagada. Forma criada na hora pelo combobox da OC nasce `bancario` de propósito: o default seguro é PASSAR pela aprovação.
+
+**Prova:** `supabase/provas/pagamento_por_forma.sql`, 25 asserções contra o banco vivo (3 caminhos, lançamento incompleto, definir parcelas aplicando a regra, forma ausente caindo em bancário, recebimento de OC já quitada, divergência registrada sem reescrever parcela paga).
+
+**Pendência do dono, não do código:** todas as contas bancárias estão com saldo inicial R$ 0,00 e `fn_pagar_parcela` recusa pagamento que deixe saldo negativo. Sem lançar o saldo inicial, nenhum pagamento passa.

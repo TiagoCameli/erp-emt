@@ -58,11 +58,20 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
   {
     accessorKey: "status",
     header: "Status",
-    size: 170,
+    size: 230,
     meta: { naoTruncar: true },
     cell: ({ row }) => {
       const info = infoStatusOC(row.original.status);
-      return <StatusBadge status={info.badge} rotulo={info.rotulo} />;
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={info.badge} rotulo={info.rotulo} />
+          {/* Cartão de crédito quita na aprovação: a OC segue aprovada e a nota
+              fiscal ainda tem que ser registrada. Sem este aviso, a nota some. */}
+          {row.original.quitadaSemNota ? (
+            <StatusBadge status="rejeitado" rotulo="Pago sem nota" />
+          ) : null}
+        </div>
+      );
     },
   },
   colunaData<OrdemLista>("dataEmissao", "Emissão", formatarData, {

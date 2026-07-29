@@ -2,6 +2,10 @@
 
 import { logErroServidor } from "@/lib/erros";
 import { createClient } from "@/lib/supabase/server";
+import {
+  tipoFormaPagamento,
+  type TipoFormaPagamento,
+} from "@/modules/_shared/forma-pagamento";
 
 type CriarResultado = { id: string } | { erro: string };
 
@@ -63,12 +67,14 @@ export async function criarCondicaoPagamento(
 /** Cria uma forma de pagamento (método) na hora. */
 export async function criarFormaPagamento(
   nome: string,
+  tipo: TipoFormaPagamento = "bancario",
 ): Promise<CriarResultado> {
   const limpo = (nome ?? "").trim();
   if (limpo.length < 2) return { erro: "Informe um nome válido" };
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_criar_forma_pagamento", {
     p_nome: limpo,
+    p_tipo: tipoFormaPagamento(tipo),
   });
   if (error) {
     logErroServidor("compras.criar-forma", error);

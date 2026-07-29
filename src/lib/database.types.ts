@@ -1337,6 +1337,7 @@ export type Database = {
           created_by: string | null;
           id: string;
           nome: string;
+          tipo: string;
         };
         Insert: {
           ativo?: boolean;
@@ -1344,6 +1345,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           nome: string;
+          tipo?: string;
         };
         Update: {
           ativo?: boolean;
@@ -1351,6 +1353,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           nome?: string;
+          tipo?: string;
         };
         Relationships: [];
       };
@@ -1684,6 +1687,7 @@ export type Database = {
           data_emissao: string;
           data_vencimento: string | null;
           descricao: string;
+          forma_pagamento_id: string | null;
           fornecedor_id: string | null;
           id: string;
           numero: string | null;
@@ -1703,6 +1707,7 @@ export type Database = {
           data_emissao?: string;
           data_vencimento?: string | null;
           descricao: string;
+          forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;
           numero?: string | null;
@@ -1722,6 +1727,7 @@ export type Database = {
           data_emissao?: string;
           data_vencimento?: string | null;
           descricao?: string;
+          forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;
           numero?: string | null;
@@ -1745,6 +1751,13 @@ export type Database = {
             columns: ["centro_custo_id"];
             isOneToOne: false;
             referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamentos_forma_pagamento_id_fkey";
+            columns: ["forma_pagamento_id"];
+            isOneToOne: false;
+            referencedRelation: "formas_pagamento";
             referencedColumns: ["id"];
           },
           {
@@ -2110,6 +2123,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           data_recebimento: string;
+          divergencia_valor: number | null;
           id: string;
           lancamento_id: string;
           numero_nf: string;
@@ -2120,6 +2134,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data_recebimento: string;
+          divergencia_valor?: number | null;
           id?: string;
           lancamento_id: string;
           numero_nf: string;
@@ -2130,6 +2145,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data_recebimento?: string;
+          divergencia_valor?: number | null;
           id?: string;
           lancamento_id?: string;
           numero_nf?: string;
@@ -2793,6 +2809,10 @@ export type Database = {
         Args: { p_arquivo_id: string; p_carencia_horas?: number };
         Returns: boolean;
       };
+      fn_aplicar_regra_pagamento: {
+        Args: { p_lanc_id: string };
+        Returns: undefined;
+      };
       fn_aprovar_ordem_compra: {
         Args: { p_oc_id: string };
         Returns: undefined;
@@ -2839,7 +2859,10 @@ export type Database = {
         Args: { p_parcela_id: string; p_transacao_id: string };
         Returns: undefined;
       };
-      fn_criar_forma_pagamento: { Args: { p_nome: string }; Returns: string };
+      fn_criar_forma_pagamento: {
+        Args: { p_nome: string; p_tipo?: string };
+        Returns: string;
+      };
       fn_criar_ordem_compra: {
         Args: { p_cabecalho: Json; p_itens: Json };
         Returns: string;
@@ -3035,6 +3058,15 @@ export type Database = {
       fn_restaurar_cadastro: {
         Args: { p_lixeira_id: string };
         Returns: undefined;
+      };
+      fn_salvar_forma_pagamento: {
+        Args: {
+          p_ativo: boolean;
+          p_id: string;
+          p_nome: string;
+          p_tipo: string;
+        };
+        Returns: string;
       };
       fn_salvar_lancamento: {
         Args: {

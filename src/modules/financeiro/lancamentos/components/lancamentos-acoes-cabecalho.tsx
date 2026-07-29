@@ -9,6 +9,7 @@ import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  FormaPagamentoOpcao,
   FornecedorOpcao,
 } from "@/modules/financeiro/lancamentos/queries";
 
@@ -17,6 +18,7 @@ export interface LancamentosAcoesCabecalhoProps {
   categorias: CategoriaOpcao[];
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
 }
 
 /**
@@ -28,6 +30,7 @@ export function LancamentosAcoesCabecalho({
   categorias,
   fornecedores,
   centrosCusto,
+  formasPagamento,
 }: LancamentosAcoesCabecalhoProps) {
   const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
@@ -49,6 +52,7 @@ export function LancamentosAcoesCabecalho({
         categorias={categorias}
         fornecedores={fornecedores}
         centrosCusto={centrosCusto}
+        formasPagamento={formasPagamento}
         onSalvo={(id) => router.push(`/financeiro/lancamentos/${id}`)}
       />
     </>

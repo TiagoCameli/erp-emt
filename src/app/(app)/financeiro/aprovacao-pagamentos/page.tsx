@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { FilaAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/components/fila-aprovacao";
-import { listarParcelasPendentes } from "@/modules/financeiro/aprovacao-pagamentos/queries";
+import {
+  contarParcelasIncompletas,
+  listarParcelasPendentes,
+} from "@/modules/financeiro/aprovacao-pagamentos/queries";
 
 export default async function PaginaAprovacaoPagamentos() {
   const usuario = await getUsuarioLogado();
@@ -22,7 +25,10 @@ export default async function PaginaAprovacaoPagamentos() {
     "desaprovar",
   );
 
-  const parcelas = await listarParcelasPendentes();
+  const [parcelas, incompletas] = await Promise.all([
+    listarParcelasPendentes(),
+    contarParcelasIncompletas(),
+  ]);
 
   return (
     <>
@@ -32,6 +38,7 @@ export default async function PaginaAprovacaoPagamentos() {
       />
       <FilaAprovacao
         parcelas={parcelas}
+        incompletas={incompletas}
         podeAprovar={podeAprovar}
         podeRejeitar={podeRejeitar}
       />

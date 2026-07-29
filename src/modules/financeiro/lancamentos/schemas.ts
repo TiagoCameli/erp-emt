@@ -79,6 +79,12 @@ export const lancamentoSchema = z
     tipo: z.enum(["a_pagar", "a_receber"], { error: "Tipo inválido" }),
     fornecedorId: z.uuid({ error: "Fornecedor inválido" }).optional(),
     categoriaId: z.uuid({ error: "Categoria inválida" }).optional(),
+    /**
+     * Forma de pagamento: em conta a pagar é ela que decide o caminho (fila de
+     * aprovação, direto para Pagamentos ou já quitado no cartão). Opcional no
+     * schema porque conta a receber não usa; a tela exige em conta a pagar.
+     */
+    formaPagamentoId: z.uuid({ error: "Forma de pagamento inválida" }).optional(),
     descricao: z
       .string()
       .trim()
@@ -153,6 +159,7 @@ export const lancamentoFormSchema = z
     tipo: z.enum(["a_pagar", "a_receber"], { error: "Selecione o tipo" }),
     fornecedorId: z.uuid().optional(),
     categoriaId: z.uuid().optional(),
+    formaPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
     descricao: z
       .string()
       .trim()

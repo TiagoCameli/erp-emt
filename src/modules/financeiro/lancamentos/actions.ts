@@ -27,6 +27,7 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     tipo: dados.tipo,
     fornecedor_id: dados.fornecedorId ?? null,
     categoria_id: dados.categoriaId ?? null,
+    forma_pagamento_id: dados.formaPagamentoId ?? null,
     descricao: dados.descricao,
     valor: dados.valor,
     competencia: dados.competencia ?? null,
