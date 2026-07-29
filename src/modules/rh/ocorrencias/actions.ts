@@ -18,6 +18,9 @@ const TABELA = "rh_ocorrencias" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
+/** Criação devolve o id: o formulário usa para subir a fila de anexos. */
+export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
+
 const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
@@ -46,7 +49,7 @@ function paraRegistro(dados: OcorrenciaInput) {
 /** Cria uma ocorrência. */
 export async function criarOcorrencia(
   dados: OcorrenciaInput,
-): Promise<ResultadoAcao> {
+): Promise<ResultadoCriacao> {
   if (!(await checarPermissao("criar"))) {
     return { erro: "Sem permissão para criar ocorrências" };
   }
@@ -57,9 +60,11 @@ export async function criarOcorrencia(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: criado, error } = await supabase
     .from(TABELA)
-    .insert(paraRegistro(validado.data));
+    .insert(paraRegistro(validado.data))
+    .select("id")
+    .single();
 
   if (error) {
     return erroAcao(
@@ -70,7 +75,7 @@ export async function criarOcorrencia(
   }
 
   revalidatePath(ROTA);
-  return { ok: true };
+  return { ok: true, id: criado.id };
 }
 
 /** Edita uma ocorrência. */

@@ -9,6 +9,10 @@ import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  FilaAnexos,
+  subirFilaDeAnexos,
+} from "@/components/canonicos/fila-anexos";
+import {
   CampoFormulario,
   classesFormulario,
   Combobox,
@@ -96,6 +100,9 @@ export function DocumentoFormDrawer({
     }
   }, [aberto, documento, form]);
 
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
+  const [subindoAnexos, setSubindoAnexos] = React.useState(false);
+
   const salvando = form.formState.isSubmitting;
 
   async function aoEnviar(dados: DocumentoFormInput) {
@@ -110,6 +117,14 @@ export function DocumentoFormDrawer({
     }
 
     toast.success(editando ? "Documento salvo" : "Documento criado");
+
+    // A fila de anexos sobe agora que o registro existe.
+    if (!documento && filaAnexos.length > 0 && "id" in resultado) {
+      setSubindoAnexos(true);
+      await subirFilaDeAnexos("rh_documento", String(resultado.id), filaAnexos);
+      setSubindoAnexos(false);
+      setFilaAnexos([]);
+    }
     onAbertoChange(false);
   }
 
@@ -237,9 +252,9 @@ export function DocumentoFormDrawer({
         </CampoFormulario>
       </form>
 
-      {documento ? (
-        <div className="mt-6 border-t border-border pt-4">
-          <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+      <div className="border-t border-border pt-4">
+        <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+        {documento ? (
           <Anexos
             entidade="rh_documento"
             entidadeId={documento.id}
@@ -247,8 +262,15 @@ export function DocumentoFormDrawer({
             podeEditar={podeEditar}
             onMudou={() => router.refresh()}
           />
-        </div>
-      ) : null}
+        ) : (
+          <FilaAnexos
+            arquivos={filaAnexos}
+            onMudar={setFilaAnexos}
+            ocupado={salvando || subindoAnexos}
+            legenda="Sobem junto quando você salvar"
+          />
+        )}
+      </div>
     </FormDrawer>
   );
 }

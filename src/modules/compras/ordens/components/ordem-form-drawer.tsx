@@ -27,6 +27,10 @@ import {
   type ColunaItem,
 } from "@/components/canonicos";
 import { Anexos } from "@/components/canonicos/anexos";
+import {
+  FilaAnexos,
+  subirFilaDeAnexos,
+} from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -304,23 +308,11 @@ export function OrdemFormDrawer({
     // Sobe a fila de anexos agora que a OC existe.
     if (filaAnexos.length > 0) {
       setSubindoAnexos(true);
-      let falhas = 0;
-      for (const arquivo of filaAnexos) {
-        const dados = new FormData();
-        dados.append("entidade", "ordem_compra");
-        dados.append("entidadeId", resultado.id);
-        dados.append("arquivo", arquivo);
-        const envio = await enviarAnexos(dados);
-        if ("erro" in envio) {
-          falhas += 1;
-          toast.error(`${arquivo.name}: ${envio.erro}`);
-        } else {
-          falhas += envio.erros.length;
-          for (const falha of envio.erros) {
-            toast.error(`${falha.nome}: ${falha.erro}`);
-          }
-        }
-      }
+      const falhas = await subirFilaDeAnexos(
+        "ordem_compra",
+        resultado.id,
+        filaAnexos,
+      );
       setSubindoAnexos(false);
       setFilaAnexos([]);
       if (falhas === 0) {
@@ -633,6 +625,7 @@ export function OrdemFormDrawer({
               arquivos={filaAnexos}
               onMudar={setFilaAnexos}
               ocupado={salvando || subindoAnexos}
+              legenda="Sobem junto quando você criar a ordem"
             />
           )}
         </SecaoFormulario>
@@ -655,114 +648,6 @@ export function OrdemFormDrawer({
         </SecaoFormulario>
       </form>
     </FormDrawer>
-  );
-}
-
-/** Tamanho legível para a fila de anexos. */
-function tamanhoLegivel(bytes: number): string {
-  const mb = 1024 * 1024;
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < mb) {
-    return `${(bytes / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} KB`;
-  }
-  return `${(bytes / mb).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
-}
-
-/**
- * Fila de anexos da OC ainda não criada. Só guarda os arquivos escolhidos e
- * mostra o que vai subir; o upload acontece no submit, depois de a ordem existir
- * (vínculo de anexo precisa de um documento para apontar).
- */
-function FilaAnexos({
-  arquivos,
-  onMudar,
-  ocupado,
-}: {
-  arquivos: File[];
-  onMudar: (arquivos: File[]) => void;
-  ocupado: boolean;
-}) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
-  const [arrastando, setArrastando] = React.useState(false);
-
-  function adicionar(novos: File[]) {
-    if (novos.length === 0) return;
-    onMudar([...arquivos, ...novos]);
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(evento) => {
-          adicionar(Array.from(evento.target.files ?? []));
-          evento.target.value = "";
-        }}
-      />
-      <button
-        type="button"
-        disabled={ocupado}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(evento) => {
-          evento.preventDefault();
-          setArrastando(true);
-        }}
-        onDragLeave={() => setArrastando(false)}
-        onDrop={(evento) => {
-          evento.preventDefault();
-          setArrastando(false);
-          adicionar(Array.from(evento.dataTransfer.files));
-        }}
-        className={
-          arrastando
-            ? "flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-faixa bg-accent/40 px-4 py-5 text-detalhe"
-            : "flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-border bg-surface/50 px-4 py-5 text-detalhe hover:bg-accent/20"
-        }
-      >
-        <Upload className="size-5 text-muted-foreground" aria-hidden="true" />
-        <span className="font-medium">
-          Arraste arquivos aqui ou clique para escolher
-        </span>
-        <span className="text-legenda text-muted-foreground">
-          Sobem junto quando você criar a ordem
-        </span>
-      </button>
-
-      {arquivos.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
-          {arquivos.map((arquivo, indice) => (
-            <li
-              key={`${arquivo.name}-${indice}`}
-              className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2"
-            >
-              <Paperclip
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <span className="min-w-0 flex-1 truncate text-detalhe">
-                {arquivo.name}
-              </span>
-              <span className="shrink-0 text-legenda text-muted-foreground tabular-nums">
-                {tamanhoLegivel(arquivo.size)}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Tirar ${arquivo.name} da fila`}
-                disabled={ocupado}
-                onClick={() => onMudar(arquivos.filter((_, i) => i !== indice))}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
   );
 }
 

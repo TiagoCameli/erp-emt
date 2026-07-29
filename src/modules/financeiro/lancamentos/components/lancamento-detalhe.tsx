@@ -408,6 +408,7 @@ export function LancamentoDetalheView({
 
       {editavel ? (
         <LancamentoFormDrawer
+          anexos={anexos}
           aberto={drawerAberto}
           onAbertoChange={(aberto) => {
             setDrawerAberto(aberto);

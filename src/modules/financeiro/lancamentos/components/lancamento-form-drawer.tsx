@@ -16,6 +16,12 @@ import {
   TabelaItens,
   type ColunaItem,
 } from "@/components/canonicos";
+import { Anexos } from "@/components/canonicos/anexos";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import {
+  FilaAnexos,
+  subirFilaDeAnexos,
+} from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
@@ -87,7 +93,9 @@ const COLUNAS_RATEIO: ColunaItem[] = [
 ];
 
 /** Valores iniciais do formulário, a partir de um lançamento ou em branco. */
-function valoresIniciais(lancamento: LancamentoDetalhe | null): LancamentoFormInput {
+function valoresIniciais(
+  lancamento: LancamentoDetalhe | null,
+): LancamentoFormInput {
   if (!lancamento) {
     return {
       tipo: "a_pagar",
@@ -170,6 +178,8 @@ export interface LancamentoFormDrawerProps {
   centrosCusto: CentroCustoOpcao[];
   /** Chamado depois de criar, com o id, para navegar ao detalhe. */
   onSalvo?: (id: string) => void;
+  /** Anexos já vinculados (modo edição). Vem do servidor. */
+  anexos?: AnexoDoDocumento[];
 }
 
 /**
@@ -185,8 +195,11 @@ export function LancamentoFormDrawer({
   fornecedores,
   centrosCusto,
   onSalvo,
+  anexos = [],
 }: LancamentoFormDrawerProps) {
   const editando = lancamento !== null;
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
+  const [subindoAnexos, setSubindoAnexos] = React.useState(false);
 
   const form = useForm<LancamentoFormInput>({
     resolver: zodResolver(lancamentoFormSchema),
@@ -242,6 +255,14 @@ export function LancamentoFormDrawer({
       toast.error(resultado.erro);
       return;
     }
+    // A fila de anexos sobe agora que o lançamento existe.
+    if (!editando && filaAnexos.length > 0) {
+      setSubindoAnexos(true);
+      await subirFilaDeAnexos("lancamento", resultado.id, filaAnexos);
+      setSubindoAnexos(false);
+      setFilaAnexos([]);
+    }
+
     toast.success(editando ? "Lançamento salvo" : "Lançamento criado");
     onAbertoChange(false);
     if (!editando) onSalvo?.(resultado.id);
@@ -305,7 +326,10 @@ export function LancamentoFormDrawer({
               }
               opcoes={[
                 { valor: "a_pagar", rotulo: ROTULO_TIPO_LANCAMENTO.a_pagar },
-                { valor: "a_receber", rotulo: ROTULO_TIPO_LANCAMENTO.a_receber },
+                {
+                  valor: "a_receber",
+                  rotulo: ROTULO_TIPO_LANCAMENTO.a_receber,
+                },
               ]}
               placeholder="Selecione"
               disabled={salvando}
@@ -371,7 +395,11 @@ export function LancamentoFormDrawer({
             />
           </CampoFormulario>
 
-          <CampoFormulario id="lan-categoria" rotulo="Categoria" ajuda="Opcional">
+          <CampoFormulario
+            id="lan-categoria"
+            rotulo="Categoria"
+            ajuda="Opcional"
+          >
             <Combobox
               valor={categoriaValor}
               onValorChange={(valor) =>
@@ -589,6 +617,24 @@ export function LancamentoFormDrawer({
             <p className="text-detalhe text-muted-foreground">
               Sem rateio. O custo fica sem distribuição por centro de custo.
             </p>
+          )}
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Anexos">
+          {lancamento ? (
+            <Anexos
+              entidade="lancamento"
+              entidadeId={lancamento.id}
+              anexos={anexos}
+              podeEditar
+            />
+          ) : (
+            <FilaAnexos
+              arquivos={filaAnexos}
+              onMudar={setFilaAnexos}
+              ocupado={salvando || subindoAnexos}
+              legenda="Sobem junto quando você criar o lançamento"
+            />
           )}
         </SecaoFormulario>
       </form>

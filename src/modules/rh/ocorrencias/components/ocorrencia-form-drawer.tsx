@@ -9,6 +9,10 @@ import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  FilaAnexos,
+  subirFilaDeAnexos,
+} from "@/components/canonicos/fila-anexos";
+import {
   CampoFormulario,
   classesFormulario,
   Combobox,
@@ -97,6 +101,9 @@ export function OcorrenciaFormDrawer({
     }
   }, [aberto, ocorrencia, form]);
 
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
+  const [subindoAnexos, setSubindoAnexos] = React.useState(false);
+
   const salvando = form.formState.isSubmitting;
   const tipoAtual = form.watch("tipo");
   const ehAtestado = tipoAtual === "atestado";
@@ -113,6 +120,14 @@ export function OcorrenciaFormDrawer({
     }
 
     toast.success(editando ? "Ocorrência salva" : "Ocorrência criada");
+
+    // A fila de anexos sobe agora que o registro existe.
+    if (!ocorrencia && filaAnexos.length > 0 && "id" in resultado) {
+      setSubindoAnexos(true);
+      await subirFilaDeAnexos("rh_ocorrencia", String(resultado.id), filaAnexos);
+      setSubindoAnexos(false);
+      setFilaAnexos([]);
+    }
     onAbertoChange(false);
   }
 
@@ -248,9 +263,9 @@ export function OcorrenciaFormDrawer({
         </CampoFormulario>
       </form>
 
-      {ocorrencia ? (
-        <div className="mt-6 border-t border-border pt-4">
-          <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+      <div className="border-t border-border pt-4">
+        <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+        {ocorrencia ? (
           <Anexos
             entidade="rh_ocorrencia"
             entidadeId={ocorrencia.id}
@@ -258,8 +273,15 @@ export function OcorrenciaFormDrawer({
             podeEditar={podeEditar}
             onMudou={() => router.refresh()}
           />
-        </div>
-      ) : null}
+        ) : (
+          <FilaAnexos
+            arquivos={filaAnexos}
+            onMudar={setFilaAnexos}
+            ocupado={salvando || subindoAnexos}
+            legenda="Sobem junto quando você salvar"
+          />
+        )}
+      </div>
     </FormDrawer>
   );
 }

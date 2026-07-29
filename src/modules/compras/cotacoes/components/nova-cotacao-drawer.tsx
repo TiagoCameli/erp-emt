@@ -9,7 +9,9 @@ import {
   CampoFormulario,
   classesFormulario,
   FormDrawer,
+  SecaoFormulario,
 } from "@/components/canonicos";
+import { FilaAnexos } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -23,7 +25,8 @@ export interface NovaCotacaoDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   criando: boolean;
-  onCriar: (observacoes: string) => void;
+  /** Recebe as observações e os arquivos enfileirados (sobem após criar). */
+  onCriar: (observacoes: string, anexos: File[]) => void | Promise<void>;
 }
 
 /**
@@ -47,12 +50,22 @@ export function NovaCotacaoDrawer({
     defaultValues: { observacoes: "" },
   });
 
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
+
   React.useEffect(() => {
     if (aberto) form.reset({ observacoes: "" });
   }, [aberto, form]);
 
+  // Zera a fila ao abrir ajustando o estado durante a renderização (padrão do
+  // projeto), em vez de setState dentro de efeito, que dispara render em cascata.
+  const [abertoAnterior, setAbertoAnterior] = React.useState(aberto);
+  if (aberto !== abertoAnterior) {
+    setAbertoAnterior(aberto);
+    if (aberto && filaAnexos.length > 0) setFilaAnexos([]);
+  }
+
   function aoEnviar(valores: CotacaoFormInput) {
-    onCriar(valores.observacoes);
+    void onCriar(valores.observacoes, filaAnexos);
   }
 
   return (
@@ -105,6 +118,15 @@ export function NovaCotacaoDrawer({
             {...form.register("observacoes")}
           />
         </CampoFormulario>
+
+        <SecaoFormulario titulo="Anexos">
+          <FilaAnexos
+            arquivos={filaAnexos}
+            onMudar={setFilaAnexos}
+            ocupado={criando}
+            legenda="Sobem junto quando você criar a cotação"
+          />
+        </SecaoFormulario>
       </form>
     </FormDrawer>
   );

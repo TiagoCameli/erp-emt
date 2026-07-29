@@ -9,6 +9,10 @@ import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  FilaAnexos,
+  subirFilaDeAnexos,
+} from "@/components/canonicos/fila-anexos";
+import {
   CampoFormulario,
   classesFormulario,
   Combobox,
@@ -98,6 +102,9 @@ export function EpiFormDrawer({
     }
   }, [aberto, epi, form]);
 
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
+  const [subindoAnexos, setSubindoAnexos] = React.useState(false);
+
   const salvando = form.formState.isSubmitting;
 
   async function aoEnviar(dados: EpiFormInput) {
@@ -112,6 +119,14 @@ export function EpiFormDrawer({
     }
 
     toast.success(editando ? "EPI salvo" : "EPI criado");
+
+    // A fila de anexos sobe agora que o registro existe.
+    if (!epi && filaAnexos.length > 0 && "id" in resultado) {
+      setSubindoAnexos(true);
+      await subirFilaDeAnexos("rh_epi", String(resultado.id), filaAnexos);
+      setSubindoAnexos(false);
+      setFilaAnexos([]);
+    }
     onAbertoChange(false);
   }
 
@@ -255,9 +270,9 @@ export function EpiFormDrawer({
         </CampoFormulario>
       </form>
 
-      {epi ? (
-        <div className="mt-6 border-t border-border pt-4">
-          <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+      <div className="border-t border-border pt-4">
+        <h3 className="mb-3 text-detalhe font-medium">Anexos</h3>
+        {epi ? (
           <Anexos
             entidade="rh_epi"
             entidadeId={epi.id}
@@ -265,8 +280,15 @@ export function EpiFormDrawer({
             podeEditar={podeEditar}
             onMudou={() => router.refresh()}
           />
-        </div>
-      ) : null}
+        ) : (
+          <FilaAnexos
+            arquivos={filaAnexos}
+            onMudar={setFilaAnexos}
+            ocupado={salvando || subindoAnexos}
+            legenda="Sobem junto quando você salvar"
+          />
+        )}
+      </div>
     </FormDrawer>
   );
 }
