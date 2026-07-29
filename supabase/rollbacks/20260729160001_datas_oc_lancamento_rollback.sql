@@ -39,6 +39,7 @@ alter table public.lancamentos drop column if exists data_compra;
 
 drop index if exists public.idx_ordens_compra_mes_competencia;
 drop index if exists public.idx_lancamentos_mes_competencia;
+-- idx_lancamento_rateios_cc é anterior a esta migration: não mexer.
 
 -- 2. Trigger de imutabilidade -------------------------------------------------
 
