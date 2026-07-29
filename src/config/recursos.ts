@@ -194,6 +194,15 @@ export const RECURSOS = [
     acoes: ["ver", "criar", "excluir"],
   },
   {
+    id: "financeiro.competencias",
+    nome: "Fechamento de competência",
+    modulo: "financeiro",
+    rota: "/financeiro/competencias",
+    // 'aprovar' = fechar o mês, 'desaprovar' = reabrir (e é a permissão que
+    // libera lançar dentro de mês fechado, com registro na auditoria).
+    acoes: ["ver", "aprovar", "desaprovar"],
+  },
+  {
     id: "financeiro.programados",
     nome: "Programados",
     modulo: "financeiro",
