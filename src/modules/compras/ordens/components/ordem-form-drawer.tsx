@@ -496,7 +496,6 @@ export function OrdemFormDrawer({
               id="oc-condicao"
               rotulo="Condição de pagamento"
               obrigatorio
-              ajuda="Define as parcelas geradas no recebimento"
               erro={form.formState.errors.condicaoPagamentoId?.message}
             >
               <Combobox
@@ -531,7 +530,7 @@ export function OrdemFormDrawer({
               ajuda={
                 tipoFormaEscolhida
                   ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
-                  : "Decide o caminho do pagamento: dinheiro e cartão de crédito não passam pela aprovação"
+                  : undefined
               }
               erro={form.formState.errors.formaPagamentoId?.message}
             >
