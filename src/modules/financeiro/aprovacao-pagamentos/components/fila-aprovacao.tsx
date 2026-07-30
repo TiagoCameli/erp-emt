@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, CheckCheck, Inbox, X } from "lucide-react";
+import { Check, CheckCheck, Inbox, PenLine } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -20,20 +20,30 @@ import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   aprovarParcela,
   aprovarParcelasEmLote,
-  rejeitarParcela,
+  revisarParcela,
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
 import type {
   ParcelaPendente,
   ParcelasIncompletas,
+  ResumoFora,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
+import { AprovarDialog } from "./aprovar-dialog";
 
 export interface FilaAprovacaoProps {
   parcelas: ParcelaPendente[];
   /** O que está fora da fila por lançamento incompleto (estado vazio honesto). */
   incompletas: ParcelasIncompletas;
+  /** Parcelas devolvidas para ajuste: saíram da fila, seguem na previsão. */
+  emRevisao: ResumoFora;
+  /** Aprovadas cuja data autorizada ainda não chegou. */
+  aguardandoData: ResumoFora;
   podeAprovar: boolean;
-  podeRejeitar: boolean;
+  /** Permissão de desaprovar: é ela que libera mandar para revisão. */
+  podeRevisar: boolean;
 }
+
+/** O que está sendo aprovado: uma linha, ou a seleção inteira. */
+type Alvo = { tipo: "linha"; parcela: ParcelaPendente } | { tipo: "lote" };
 
 /**
  * Descrição do estado vazio. "Nada aqui" sozinho manda o usuário procurar um
@@ -72,22 +82,28 @@ function rotuloParcela(parcela: ParcelaPendente): string {
 }
 
 /**
- * Fila de aprovação de pagamentos: parcelas a pagar aguardando aval. Mostra o
- * total a aprovar no topo, permite aprovar em lote pela seleção e aprovar ou
- * rejeitar cada parcela individualmente. Toda ação passa por Server Action,
- * que chama a RPC e repassa o erro do banco ao toast.
+ * Fila de aprovação de pagamentos: parcelas a pagar aguardando aval.
+ *
+ * Aprovar abre o modal da data: aprovar é autorizar o pagamento para um dia, e
+ * sem escolha a data cai no vencimento da parcela. Revisar devolve a parcela
+ * para quem lançou, com motivo obrigatório, sem cancelar nada: o lançamento
+ * continua vivo e continua contando na previsão de caixa.
+ *
+ * Toda ação passa por Server Action, que chama a RPC e repassa o erro do banco
+ * ao toast. A trava de data e a exigência de motivo vivem no banco também.
  */
 export function FilaAprovacao({
   parcelas,
   incompletas,
+  emRevisao,
+  aguardandoData,
   podeAprovar,
-  podeRejeitar,
+  podeRevisar,
 }: FilaAprovacaoProps) {
   const router = useRouter();
   const [selecionadas, setSelecionadas] = React.useState<Set<string>>(new Set());
-  const [aprovandoLote, setAprovandoLote] = React.useState(false);
-  const [aprovandoId, setAprovandoId] = React.useState<string | null>(null);
-  const [parcelaRejeitar, setParcelaRejeitar] =
+  const [alvo, setAlvo] = React.useState<Alvo | null>(null);
+  const [parcelaRevisar, setParcelaRevisar] =
     React.useState<ParcelaPendente | null>(null);
 
   const totalAprovar = React.useMemo(() => somarValores(parcelas), [parcelas]);
@@ -118,11 +134,11 @@ export function FilaAprovacao({
     });
   }
 
-  async function aoAprovar(parcela: ParcelaPendente) {
-    if (aprovandoId !== null) return;
-    setAprovandoId(parcela.id);
-    try {
-      const resultado = await aprovarParcela(parcela.id);
+  async function confirmarAprovacao(dataProgramada: string | null) {
+    if (!alvo) return;
+
+    if (alvo.tipo === "linha") {
+      const resultado = await aprovarParcela(alvo.parcela.id, dataProgramada);
       if ("erro" in resultado) {
         toast.error(resultado.erro);
         return;
@@ -130,51 +146,44 @@ export function FilaAprovacao({
       toast.success("Pagamento aprovado");
       setSelecionadas((atual) => {
         const proxima = new Set(atual);
-        proxima.delete(parcela.id);
+        proxima.delete(alvo.parcela.id);
         return proxima;
       });
-      router.refresh();
-    } finally {
-      setAprovandoId(null);
-    }
-  }
-
-  async function aoAprovarLote() {
-    if (aprovandoLote || selecionadas.size === 0) return;
-    setAprovandoLote(true);
-    try {
-      const resultado = await aprovarParcelasEmLote([...selecionadas]);
+    } else {
+      const resultado = await aprovarParcelasEmLote(
+        [...selecionadas],
+        dataProgramada,
+      );
       if ("erro" in resultado) {
-        if (resultado.aprovadas > 0) {
-          toast.error(
-            `${resultado.aprovadas} pagamento(s) aprovado(s), mas parou: ${resultado.erro}`,
-          );
-        } else {
-          toast.error(resultado.erro);
-        }
+        toast.error(
+          resultado.aprovadas > 0
+            ? `${resultado.aprovadas} pagamento(s) aprovado(s), mas parou: ${resultado.erro}`
+            : resultado.erro,
+        );
         setSelecionadas(new Set());
+        setAlvo(null);
         router.refresh();
         return;
       }
       toast.success(`${resultado.aprovadas} pagamento(s) aprovado(s)`);
       setSelecionadas(new Set());
-      router.refresh();
-    } finally {
-      setAprovandoLote(false);
     }
+
+    setAlvo(null);
+    router.refresh();
   }
 
-  async function aoRejeitar(motivo?: string) {
-    if (!parcelaRejeitar) return;
-    const resultado = await rejeitarParcela(parcelaRejeitar.id, motivo ?? "");
+  async function aoRevisar(motivo?: string) {
+    if (!parcelaRevisar) return;
+    const resultado = await revisarParcela(parcelaRevisar.id, motivo ?? "");
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Pagamento rejeitado");
+    toast.success("Pagamento enviado para revisão");
     setSelecionadas((atual) => {
       const proxima = new Set(atual);
-      proxima.delete(parcelaRejeitar.id);
+      proxima.delete(parcelaRevisar.id);
       return proxima;
     });
     router.refresh();
@@ -215,7 +224,11 @@ export function FilaAprovacao({
               {/* Não bloqueia aprovar: só mostra que a nota ainda não chegou,
                   para a decisão ser consciente. */}
               {row.original.semNota ? (
-                <StatusBadge status="pendente_aprovacao" rotulo="Sem nota" />
+                <span
+                  title="A OC de origem ainda não tem nota fiscal registrada. Não impede aprovar: serve para você saber que está autorizando pagamento de uma compra sem nota."
+                >
+                  <StatusBadge status="pendente_aprovacao" rotulo="Sem nota" />
+                </span>
               ) : null}
             </div>
             <span className="text-legenda text-muted-foreground">
@@ -250,7 +263,7 @@ export function FilaAprovacao({
       },
     );
 
-    if (podeAprovar || podeRejeitar) {
+    if (podeAprovar || podeRevisar) {
       base.push({
         id: "acoes",
         header: "Ações",
@@ -262,23 +275,21 @@ export function FilaAprovacao({
               <Button
                 type="button"
                 size="sm"
-                disabled={aprovandoId === row.original.id || aprovandoLote}
-                onClick={() => aoAprovar(row.original)}
+                onClick={() => setAlvo({ tipo: "linha", parcela: row.original })}
               >
                 <Check />
                 Aprovar
               </Button>
             ) : null}
-            {podeRejeitar ? (
+            {podeRevisar ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => setParcelaRejeitar(row.original)}
+                onClick={() => setParcelaRevisar(row.original)}
               >
-                <X />
-                Rejeitar
+                <PenLine />
+                Revisar
               </Button>
             ) : null}
           </div>
@@ -288,14 +299,7 @@ export function FilaAprovacao({
 
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    podeAprovar,
-    podeRejeitar,
-    selecionadas,
-    todasSelecionadas,
-    aprovandoId,
-    aprovandoLote,
-  ]);
+  }, [podeAprovar, podeRevisar, selecionadas, todasSelecionadas]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -304,6 +308,16 @@ export function FilaAprovacao({
           titulo="Total a aprovar"
           valor={formatarBRL(totalAprovar)}
           detalhe={`${parcelas.length} pagamento(s) na fila`}
+        />
+        <KPICard
+          titulo="Em revisão"
+          valor={formatarBRL(emRevisao.valor)}
+          detalhe={`${emRevisao.parcelas} devolvido(s) para ajuste`}
+        />
+        <KPICard
+          titulo="Aprovado aguardando data"
+          valor={formatarBRL(aguardandoData.valor)}
+          detalhe={`${aguardandoData.parcelas} com data autorizada à frente`}
         />
       </div>
 
@@ -316,14 +330,9 @@ export function FilaAprovacao({
               · {formatarBRL(totalSelecionado)}
             </span>
           </p>
-          <Button
-            type="button"
-            size="sm"
-            disabled={aprovandoLote}
-            onClick={aoAprovarLote}
-          >
+          <Button type="button" size="sm" onClick={() => setAlvo({ tipo: "lote" })}>
             <CheckCheck />
-            {aprovandoLote ? "Aprovando..." : "Aprovar selecionados"}
+            Aprovar selecionados
           </Button>
         </div>
       ) : null}
@@ -341,17 +350,31 @@ export function FilaAprovacao({
         }
       />
 
-      <ConfirmDialog
-        aberto={parcelaRejeitar !== null}
+      <AprovarDialog
+        aberto={alvo !== null}
         onAbertoChange={(aberto) => {
-          if (!aberto) setParcelaRejeitar(null);
+          if (!aberto) setAlvo(null);
         }}
-        titulo="Rejeitar pagamento"
-        descricao="Informe o motivo da rejeição. Ele fica registrado na auditoria."
-        textoConfirmar="Rejeitar pagamento"
-        variante="destrutivo"
+        quantidade={alvo?.tipo === "linha" ? 1 : selecionadas.size}
+        valorTotal={
+          alvo?.tipo === "linha" ? alvo.parcela.valor : totalSelecionado
+        }
+        vencimento={
+          alvo?.tipo === "linha" ? alvo.parcela.dataVencimento : null
+        }
+        onConfirmar={confirmarAprovacao}
+      />
+
+      <ConfirmDialog
+        aberto={parcelaRevisar !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setParcelaRevisar(null);
+        }}
+        titulo="Enviar para revisão"
+        descricao="A parcela sai da fila e volta para quem lançou ajustar. Nada é cancelado: o lançamento continua valendo e continua na previsão de caixa. Informe o que precisa ser corrigido (ex.: valor divergente da NF, falta anexo, centro de custo errado)."
+        textoConfirmar="Enviar para revisão"
         exigeMotivo
-        onConfirmar={aoRejeitar}
+        onConfirmar={aoRevisar}
       />
     </div>
   );

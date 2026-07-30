@@ -1,5 +1,6 @@
 import "server-only";
 
+import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -29,6 +30,12 @@ export interface ParcelasIncompletas {
   parcelas: number;
   valor: number;
   lancamentos: number;
+}
+
+/** Contador de um grupo fora da fila (em revisão, aprovado aguardando a data). */
+export interface ResumoFora {
+  parcelas: number;
+  valor: number;
 }
 
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
@@ -153,4 +160,49 @@ export async function contarParcelasIncompletas(): Promise<ParcelasIncompletas> 
   const lancamentos = new Set(linhas.map((parcela) => parcela.lancamento_id));
 
   return { parcelas: linhas.length, valor, lancamentos: lancamentos.size };
+}
+
+/**
+ * Quanto está em revisão: saiu da fila esperando ajuste de quem lançou, e
+ * continua contando na previsão de caixa. Sem esse contador, mandar para revisão
+ * faria a parcela desaparecer da tela sem deixar rastro de para onde foi.
+ */
+export async function contarEmRevisao(): Promise<ResumoFora> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("lancamento_parcelas")
+    .select(`valor, lancamentos!inner(tipo, status)`)
+    .eq("status", "em_revisao")
+    .eq("lancamentos.tipo", "a_pagar")
+    .neq("lancamentos.status", "cancelado");
+
+  const linhas = data ?? [];
+  return {
+    parcelas: linhas.length,
+    valor: linhas.reduce((total, parcela) => total + parcela.valor, 0),
+  };
+}
+
+/**
+ * Quanto já foi aprovado e está esperando a data autorizada chegar. É o dinheiro
+ * que saiu da fila de aprovação e ainda não pode ser pago: nem pendência de
+ * quem aprova, nem disponível para quem paga.
+ */
+export async function contarAguardandoData(): Promise<ResumoFora> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("lancamento_parcelas")
+    .select(`valor, data_programada, lancamentos!inner(tipo, status)`)
+    .eq("status", "aprovado")
+    .eq("lancamentos.tipo", "a_pagar")
+    .neq("lancamentos.status", "cancelado")
+    .gt("data_programada", dataHojeISO());
+
+  const linhas = data ?? [];
+  return {
+    parcelas: linhas.length,
+    valor: linhas.reduce((total, parcela) => total + parcela.valor, 0),
+  };
 }

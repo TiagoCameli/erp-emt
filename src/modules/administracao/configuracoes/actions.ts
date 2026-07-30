@@ -28,12 +28,17 @@ const salvarConfiguracaoSchema = z.discriminatedUnion("chave", [
     chave: z.literal("banco_horas_ativo"),
     valor: z.boolean({ error: "Valor inválido" }),
   }),
+  z.object({
+    chave: z.literal("pagamento_janela"),
+    valor: z.enum(["exata", "a_partir"], { error: "Opção inválida" }),
+  }),
 ]);
 
 const CHAVES_CONHECIDAS = new Set<string>([
   "tolerancia_divergencia_nf_percentual",
   "encargos_estimados_percentual",
   "banco_horas_ativo",
+  "pagamento_janela",
 ]);
 
 /**
@@ -42,7 +47,7 @@ const CHAVES_CONHECIDAS = new Set<string>([
  */
 export async function salvarConfiguracao(
   chave: string,
-  valor: number | boolean,
+  valor: number | boolean | string,
 ): Promise<ResultadoAcao> {
   const usuario = await exigirPermissao("administracao.configuracoes", "editar");
 

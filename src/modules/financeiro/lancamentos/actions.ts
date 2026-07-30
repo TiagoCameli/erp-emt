@@ -287,3 +287,44 @@ export async function sugerirParcelasDoLancamento(
     })),
   };
 }
+
+/**
+ * Devolve para a fila de aprovação uma parcela que estava em revisão.
+ *
+ * Fica com quem edita o lançamento, não com quem aprova: é quem corrigiu o que
+ * foi apontado que reenvia. Sem isso, mandar para revisão seria beco sem saída.
+ * O motivo do pedido e este reenvio ficam na trilha da parcela (parcela_eventos).
+ */
+export async function reenviarParcela(
+  parcelaId: string,
+  observacao?: string,
+): Promise<ResultadoExclusao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para reenviar pagamentos para aprovação" };
+  }
+
+  const idValido = uuidSchema.safeParse(parcelaId);
+  if (!idValido.success) return { erro: "Parcela inválida" };
+
+  const texto = (observacao ?? "").trim();
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_reenviar_parcela", {
+    p_parcela_id: idValido.data,
+    p_observacao: texto === "" ? undefined : texto,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.lancamentos.reenviarParcela",
+      error,
+      error.message || "Não foi possível reenviar para aprovação",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath("/financeiro/aprovacao-pagamentos");
+  return { ok: true };
+}

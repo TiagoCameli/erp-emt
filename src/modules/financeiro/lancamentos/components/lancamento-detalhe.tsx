@@ -24,7 +24,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
 import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
-import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
+import {
+  excluirLancamento,
+  reenviarParcela,
+} from "@/modules/financeiro/lancamentos/actions";
 import {
   ROTULO_TIPO_LANCAMENTO,
   STATUS_LANCAMENTO,
@@ -154,6 +157,23 @@ export function LancamentoDetalheView({
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [parcelasAberto, setParcelasAberto] = React.useState(false);
+  const [reenviando, setReenviando] = React.useState<string | null>(null);
+
+  // Caminho de volta da revisão: quem corrigiu devolve a parcela para a fila.
+  async function aoReenviar(parcelaId: string) {
+    setReenviando(parcelaId);
+    try {
+      const resultado = await reenviarParcela(parcelaId);
+      if ("erro" in resultado) {
+        toast.error(resultado.erro);
+        return;
+      }
+      toast.success("Parcela reenviada para aprovação");
+      router.refresh();
+    } finally {
+      setReenviando(null);
+    }
+  }
   const [confirmarExcluir, setConfirmarExcluir] = React.useState(false);
   const [dialogMes, setDialogMes] = React.useState(false);
 
@@ -434,6 +454,7 @@ export function LancamentoDetalheView({
                       <th className="px-3 py-2 text-right font-medium">
                         Valor
                       </th>
+                      <th className="px-3 py-2 text-right font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -468,6 +489,21 @@ export function LancamentoDetalheView({
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">
                             {formatarBRL(parcela.valor)}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {parcela.status === "em_revisao" && podeEditar ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={reenviando === parcela.id}
+                                onClick={() => void aoReenviar(parcela.id)}
+                              >
+                                {reenviando === parcela.id
+                                  ? "Reenviando..."
+                                  : "Reenviar para aprovação"}
+                              </Button>
+                            ) : null}
                           </td>
                         </tr>
                       );
@@ -510,6 +546,7 @@ export function LancamentoDetalheView({
                       <th className="px-3 py-2 text-right font-medium">
                         Valor
                       </th>
+                      <th className="px-3 py-2 text-right font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
