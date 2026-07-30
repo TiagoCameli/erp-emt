@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Paperclip, Trash2, Upload } from "lucide-react";
+import { Download, Eye, Paperclip, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,20 @@ export function FilaAnexos({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [arrastando, setArrastando] = React.useState(false);
 
+  // URL local de cada arquivo da fila, para ver e baixar ANTES de subir. O
+  // documento ainda não existe, então não há URL no servidor: quem confere se
+  // anexou o arquivo certo precisa abrir o que está na mão.
+  const urls = React.useMemo(
+    () => arquivos.map((arquivo) => URL.createObjectURL(arquivo)),
+    [arquivos],
+  );
+
+  // Revoga na troca da fila e ao desmontar, senão o navegador segura os bytes.
+  React.useEffect(
+    () => () => urls.forEach((url) => URL.revokeObjectURL(url)),
+    [urls],
+  );
+
   function adicionar(novos: File[]) {
     if (novos.length === 0) return;
     onMudar([...arquivos, ...novos]);
@@ -142,6 +156,27 @@ export function FilaAnexos({
               <span className="shrink-0 text-legenda text-muted-foreground tabular-nums">
                 {tamanhoLegivel(arquivo.size)}
               </span>
+              <Button asChild variant="ghost" size="icon-sm">
+                <a
+                  href={urls[indice]}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Visualizar ${arquivo.name}`}
+                  title="Visualizar"
+                >
+                  <Eye aria-hidden="true" />
+                </a>
+              </Button>
+              <Button asChild variant="ghost" size="icon-sm">
+                <a
+                  href={urls[indice]}
+                  download={arquivo.name}
+                  aria-label={`Baixar ${arquivo.name}`}
+                  title="Baixar"
+                >
+                  <Download aria-hidden="true" />
+                </a>
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
