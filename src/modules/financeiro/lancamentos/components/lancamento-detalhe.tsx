@@ -35,6 +35,7 @@ import {
 } from "@/modules/financeiro/_shared/formato";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
+import { ROTULO_ORIGEM_DATA } from "@/modules/financeiro/_shared/janela-pagamento";
 import { DefinirParcelasDialog } from "./definir-parcelas-dialog";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
@@ -444,6 +445,9 @@ export function LancamentoDetalheView({
                       <th className="px-3 py-2 text-left font-medium">
                         Vencimento
                       </th>
+                      <th className="px-3 py-2 text-left font-medium">
+                        Data programada
+                      </th>
                       <th className="px-3 py-2 text-left font-medium">Conta</th>
                       <th className="px-3 py-2 text-left font-medium">
                         Pagamento
@@ -472,6 +476,26 @@ export function LancamentoDetalheView({
                             {parcela.dataVencimento
                               ? formatarData(parcela.dataVencimento)
                               : "-"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {parcela.dataProgramada ? (
+                              <span className="flex flex-col">
+                                <span className="tabular-nums">
+                                  {formatarData(parcela.dataProgramada)}
+                                </span>
+                                {parcela.dataProgramadaOrigem ? (
+                                  <span className="text-legenda text-muted-foreground">
+                                    {
+                                      ROTULO_ORIGEM_DATA[
+                                        parcela.dataProgramadaOrigem
+                                      ]
+                                    }
+                                  </span>
+                                ) : null}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             {parcela.contaBancariaNome ?? "-"}

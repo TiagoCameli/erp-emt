@@ -73,3 +73,23 @@ export const ROTULO_TIPO_LANCAMENTO: Record<TipoLancamento, string> = {
   a_pagar: "A pagar",
   a_receber: "A receber",
 };
+
+/**
+ * Rótulo canônico de uma parcela: "LAN-2026-0015 · parcela 1 de 3".
+ *
+ * Existe para todas as telas dizerem a mesma coisa. Antes, a fila de aprovação
+ * mostrava a primeira parcela só como "LAN-2026-0015" e as outras como
+ * "parcela 2", "parcela 3": quem batia a lista com o documento ficava sem saber
+ * se a primeira linha era a parcela 1 ou o lançamento inteiro.
+ *
+ * Lançamento de parcela única não ganha sufixo: ali "parcela 1 de 1" é ruído.
+ */
+export function rotuloParcela(
+  numeroDocumento: string | null,
+  numeroParcela: number,
+  totalParcelas: number,
+): string {
+  const documento = numeroDocumento ?? "Sem número";
+  if (totalParcelas <= 1) return documento;
+  return `${documento} · parcela ${numeroParcela} de ${totalParcelas}`;
+}
