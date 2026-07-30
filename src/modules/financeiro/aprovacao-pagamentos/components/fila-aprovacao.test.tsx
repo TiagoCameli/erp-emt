@@ -12,6 +12,15 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// O DataTable busca e salva a preferência de coluna por Server Action, e Server
+// Action usa cookies(), que não existe fora de uma requisição. Sem este mock o
+// render lança "cookies was called outside a request scope" como unhandled error.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
 vi.mock("@/modules/financeiro/aprovacao-pagamentos/actions", () => ({
   aprovarParcela: vi.fn(),
   aprovarParcelasEmLote: vi.fn(),
