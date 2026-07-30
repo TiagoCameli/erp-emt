@@ -25,6 +25,11 @@ const STATUS_VALIDOS: StatusLancamento[] = [
   "pago",
   "cancelado",
 ];
+/**
+ * Valor extra do filtro de status: não é status de lançamento, é "tem parcela
+ * em revisão". Viaja no mesmo parâmetro para a tela ter um seletor só.
+ */
+const FILTRO_EM_REVISAO = "em_revisao";
 const TAMANHO_PADRAO = 25;
 
 /** Lê e valida um parâmetro de filtro contra a lista de valores aceitos. */
@@ -53,6 +58,7 @@ export default async function PaginaLancamentos({
   const params = await searchParams;
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
   const status = parametroValido(params.status, STATUS_VALIDOS);
+  const emRevisao = params.status === FILTRO_EM_REVISAO;
   const busca = typeof params.busca === "string" ? params.busca : "";
   const mes = typeof params.mes === "string" ? params.mes : "";
   const mesCompetencia = mesParaCompetencia(mes);
@@ -80,6 +86,7 @@ export default async function PaginaLancamentos({
       status,
       busca,
       mesCompetencia: mesCompetencia === "" ? undefined : mesCompetencia,
+      emRevisao,
     }),
     listarCategorias(),
     listarFornecedores(),

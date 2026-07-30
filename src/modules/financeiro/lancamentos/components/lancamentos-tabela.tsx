@@ -29,9 +29,16 @@ const OPCOES_TIPO = (
   Object.keys(ROTULO_TIPO_LANCAMENTO) as TipoLancamento[]
 ).map((valor) => ({ valor, rotulo: ROTULO_TIPO_LANCAMENTO[valor] }));
 
-const OPCOES_STATUS = (
-  Object.keys(STATUS_LANCAMENTO) as StatusLancamento[]
-).map((valor) => ({ valor, rotulo: STATUS_LANCAMENTO[valor].rotulo }));
+const OPCOES_STATUS = [
+  ...(Object.keys(STATUS_LANCAMENTO) as StatusLancamento[]).map((valor) => ({
+    valor,
+    rotulo: STATUS_LANCAMENTO[valor].rotulo,
+  })),
+  // Não é status de lançamento: é "tem parcela em revisão". Fica no mesmo
+  // seletor porque para quem usa é a mesma pergunta ("o que está travado?"),
+  // e o rótulo diz que a revisão é da parcela para não virar ambiguidade.
+  { valor: "em_revisao", rotulo: "Com parcela em revisão" },
+];
 
 const colunas: ColumnDef<LancamentoLista, unknown>[] = [
   {

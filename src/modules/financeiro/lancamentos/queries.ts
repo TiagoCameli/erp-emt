@@ -7,6 +7,7 @@ import {
 } from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
 import {
   tipoFormaPagamento,
   type TipoFormaPagamento,
@@ -26,6 +27,13 @@ export interface ListarLancamentosParams {
   busca?: string;
   /** Mês de referência exato (yyyy-MM-01). */
   mesCompetencia?: string;
+  /**
+   * Só lançamentos com alguma parcela em revisão. É filtro de status de
+   * PARCELA numa lista de LANÇAMENTOS, então não entra no `status` acima: vem
+   * por uma consulta dos ids e um `in`, que é previsível. O conjunto é pequeno
+   * por natureza (é fila de trabalho, não histórico).
+   */
+  emRevisao?: boolean;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -62,6 +70,10 @@ export interface ParcelaLancamento {
   valor: number;
   dataVencimento: string | null;
   status: StatusParcela;
+  /** Data em que o pagamento está autorizado (definida na aprovação). */
+  dataProgramada: string | null;
+  /** De onde veio a data: vencimento (fallback), aprovacao ou reprogramacao. */
+  dataProgramadaOrigem: OrigemDataProgramada | null;
   contaBancariaId: string | null;
   contaBancariaNome: string | null;
   dataPagamento: string | null;
@@ -188,6 +200,21 @@ export async function listarLancamentos(
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
+  let idsEmRevisao: string[] | null = null;
+  if (params.emRevisao) {
+    const { data: parcelas } = await supabase
+      .from("lancamento_parcelas")
+      .select("lancamento_id")
+      .eq("status", "em_revisao");
+    idsEmRevisao = [
+      ...new Set((parcelas ?? []).map((parcela) => parcela.lancamento_id)),
+    ];
+    // Nenhum lançamento em revisão: devolve vazio sem ir buscar a lista toda.
+    if (idsEmRevisao.length === 0) {
+      return { itens: [], total: 0 };
+    }
+  }
+
   let consulta = supabase
     .from("lancamentos")
     .select(
@@ -202,6 +229,7 @@ export async function listarLancamentos(
     .order("created_at", { ascending: false })
     .range(de, ate);
 
+  if (idsEmRevisao) consulta = consulta.in("id", idsEmRevisao);
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
   if (params.mesCompetencia) {
@@ -267,6 +295,7 @@ export async function buscarLancamento(
        fornecedores(razao_social, nome_fantasia),
        lancamento_parcelas(
          id, numero_parcela, valor, data_vencimento, status,
+         data_programada, data_programada_origem,
          conta_bancaria_id, data_pagamento,
          contas_bancarias(nome)
        ),
@@ -287,6 +316,9 @@ export async function buscarLancamento(
       valor: parcela.valor,
       dataVencimento: parcela.data_vencimento,
       status: parcela.status as StatusParcela,
+      dataProgramada: parcela.data_programada,
+      dataProgramadaOrigem:
+        (parcela.data_programada_origem as OrigemDataProgramada | null) ?? null,
       contaBancariaId: parcela.conta_bancaria_id,
       contaBancariaNome: parcela.contas_bancarias?.nome ?? null,
       dataPagamento: parcela.data_pagamento,

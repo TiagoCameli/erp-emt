@@ -283,3 +283,47 @@ auditoria" e não ficava.
 **Prova:** `supabase/provas/revisao_e_janela_pagamento.sql`, 18 asserções em
 transação com rollback, incluindo o ciclo aprovar → desaprovar → reaprovar que
 faltava na prova de pagamento e deixou passar o bug do custo dobrado.
+
+## Fila de aprovação: colunas configuráveis e painel de conferência
+
+**Data:** 30/07/2026 · **Contexto:** blocos C e D da aba Aprovação de pagamentos
+
+**Decisões**
+
+1. **Rótulo da parcela virou função canônica** (`rotuloParcela` em
+   `financeiro/_shared/formato.ts`). A fila mostrava a primeira parcela só como
+   `LAN-2026-0015` e as outras como "parcela 2", "parcela 3": quem batia a lista
+   com o documento não sabia se a primeira linha era a parcela 1 ou o lançamento
+   inteiro. Agora é "LAN-2026-0015 · parcela 1 de 3" em todas, e parcela única
+   não ganha sufixo (ali "1 de 1" é ruído).
+
+2. **A consulta traz mais do que a tela mostra.** As colunas são configuráveis,
+   então o dado precisa existir para o usuário poder ligar a coluna. Continua
+   sendo consulta por página, não por linha: os complementos (número da OC,
+   contagem de anexos, total de parcelas) são consultas agregadas por lista de
+   ids, não N+1.
+
+3. **Sem embed cíclico.** Partindo de `lancamento_parcelas`, pedir
+   `lancamentos(lancamento_parcelas(...))` para contar as parcelas irmãs fecha um
+   ciclo na mesma tabela, e ciclo no PostgREST é convite para ambiguidade de
+   embed que só apareceria em produção com dado que a fila hoje não tem. Virou
+   consulta separada.
+
+4. **O painel de conferência é read-only por desenho, não por falta de tempo.**
+   Quem aprova precisa conferir sem risco de mexer no documento no meio da
+   conferência. Não há campo editável nem botão de salvar; as ações são as mesmas
+   da linha (Aprovar e Revisar) mais o atalho para o lançamento completo, para
+   quem tem permissão de editar. A carga é sob demanda: seriam N lançamentos
+   completos (parcelas, rateio, itens da OC, anexos e trilha) para uma fila em
+   que se abre um ou dois.
+
+5. **"Em revisão" na lista de Lançamentos é filtro de status de PARCELA numa
+   lista de LANÇAMENTOS.** Não cabia no `status` (que é do lançamento), então vem
+   por uma consulta dos ids e um `in`, previsível, e o rótulo diz "Com parcela em
+   revisão" para não virar ambiguidade. Fica no mesmo seletor porque para quem
+   usa é a mesma pergunta: o que está travado.
+
+6. **A procedência da data aparece no detalhe do lançamento**, junto da parcela
+   ("definida na aprovação", "vencimento da parcela", "reprogramada"), e não no
+   painel da fila: na fila a parcela ainda é `pendente` e a data só nasce na
+   aprovação, então ali o campo seria sempre o mesmo texto.
