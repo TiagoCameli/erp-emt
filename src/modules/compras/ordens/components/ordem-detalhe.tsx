@@ -1,8 +1,16 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Ban, Pencil, ReceiptText, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Ban,
+  ExternalLink,
+  Pencil,
+  ReceiptText,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
@@ -110,6 +118,12 @@ export interface OrdemDetalheViewProps {
   podeDesaprovar: boolean;
   podeExcluir: boolean;
   podeReceber: boolean;
+  /**
+   * Permissão de ver lançamentos. Sem ela o atalho para o lançamento gerado nem
+   * aparece: mostrar um botão que leva a uma tela que devolve 404 é pior que não
+   * mostrar nada.
+   */
+  podeVerLancamento: boolean;
 }
 
 /**
@@ -133,6 +147,7 @@ export function OrdemDetalheView({
   podeDesaprovar,
   podeExcluir,
   podeReceber,
+  podeVerLancamento,
 }: OrdemDetalheViewProps) {
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
@@ -398,10 +413,22 @@ export function OrdemDetalheView({
                       : "-"}
                   </span>
                 </div>
-                <MoneyText
-                  valor={ordem.lancamento.valor}
-                  className="font-semibold"
-                />
+                <div className="flex items-center gap-3">
+                  <MoneyText
+                    valor={ordem.lancamento.valor}
+                    className="font-semibold"
+                  />
+                  {podeVerLancamento ? (
+                    <Button asChild type="button" variant="outline" size="sm">
+                      <Link href={`/financeiro/lancamentos/${ordem.lancamento.id}`}>
+                        {ordem.lancamento.numero
+                          ? `Abrir ${ordem.lancamento.numero}`
+                          : "Abrir lançamento"}
+                        <ExternalLink />
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             ) : (
               <p className="text-detalhe text-muted-foreground">

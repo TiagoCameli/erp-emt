@@ -57,10 +57,16 @@ export default async function PaginaOrdemDetalhe({
   const podeAprovar = temPermissao(usuario, "compras.ordens", "aprovar");
   const podeDesaprovar = temPermissao(usuario, "compras.ordens", "desaprovar");
   const podeExcluir = temPermissao(usuario, "compras.ordens", "excluir");
+  const podeVerLancamento = temPermissao(
+    usuario,
+    "financeiro.lancamentos",
+    "ver",
+  );
   const podeReceber = podeAprovar;
 
   return (
     <OrdemDetalheView
+      podeVerLancamento={podeVerLancamento}
       ordem={ordem}
       trilha={trilha}
       fornecedores={fornecedores}
