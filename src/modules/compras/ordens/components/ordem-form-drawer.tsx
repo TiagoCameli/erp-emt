@@ -472,7 +472,6 @@ export function OrdemFormDrawer({
               rotulo="Mês de referência"
               obrigatorio
               largura="curto"
-              ajuda="Mês em que o material foi utilizado. Define em qual mês o custo entra."
               erro={form.formState.errors.mesCompetencia?.message}
             >
               <Input
