@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
+import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
@@ -40,6 +41,7 @@ export default async function PaginaPagamentos() {
         descricao="Pague as parcelas já aprovadas e acompanhe o histórico de pagamentos"
       />
       <PagamentosCliente
+        hoje={dataHojeISO()}
         aprovadas={aprovadas}
         pagas={pagas.itens}
         totalPagas={pagas.total}

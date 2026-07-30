@@ -366,3 +366,27 @@ só **chamar** através da fronteira falha).
 2. Teste guarda a invariante: o módulo não pode ganhar a diretiva `"use client"`.
 3. Varredura no app inteiro (189 módulos `"use client"`, 6 com export chamável em
    minúscula): nenhum outro arquivo de servidor importa função de módulo client.
+
+## A janela de pagamento tem que ser conferida contra hoje, não contra o campo
+
+**Data:** 30/07/2026 · **Contexto:** teste ponta a ponta em produção
+
+A primeira versão da trava comparava a data programada com a **data digitada** no
+campo "Data do pagamento". Bastava digitar a data autorizada para pagar hoje uma
+parcela liberada só para o mês seguinte, e o pagamento ficava registrado com
+`data_pagamento` no futuro: o dinheiro sai em julho e aparece como realizado em
+agosto no fluxo de caixa. Aconteceu de verdade no teste (parcela autorizada para
+27/08 paga em 30/07 com data 27/08).
+
+**Decisões**
+
+1. A janela é conferida contra **hoje** (America/Rio_Branco). O item 9 fala de
+   quando o pagamento acontece, não de um campo que o usuário preenche.
+2. `data_pagamento` no futuro é recusada: ninguém registra pagamento que ainda
+   não aconteceu. Data no passado continua valendo (pagou ontem, registra hoje).
+3. Parcela de lançamento **cancelado** não é pagável, nem no banco nem na lista.
+   A fila de aprovação já se defendia disso; a de pagamento não.
+4. A **data autorizada aparece na tela** de Pagamentos (coluna, com selo
+   "Aguarda" quando a data não chegou e "Vencida" quando passou) e no drawer de
+   pagamento. Sem isso, quem paga clica em Pagar e leva um bloqueio que não tinha
+   como prever, o que faz a trava parecer defeito.

@@ -180,6 +180,14 @@ export function PagarParcelaDrawer({
                   : "-"}
               </span>
             </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted-foreground">Data autorizada</span>
+              <span className="font-medium tabular-nums">
+                {parcela.dataProgramada
+                  ? formatarData(parcela.dataProgramada)
+                  : "-"}
+              </span>
+            </div>
           </div>
         ) : null}
 
