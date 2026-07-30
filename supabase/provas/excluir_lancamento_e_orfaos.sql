@@ -21,3 +21,12 @@
 -- O roteiro monta uma OC com DOIS lancamentos (o cenario que gerou os orfaos),
 -- aprova a parcela, tenta excluir, desaprova, exclui a ordem e confere que nao
 -- sobrou orfao. Depois cria um orfao solto e um orfao com pagamento aprovado.
+
+-- ---------------------------------------------------------------
+-- Desaprovar ordem apaga o lancamento (30/07/2026)
+-- ---------------------------------------------------------------
+--   1. desaprovar com pagamento aprovado
+--      "Esta ordem ja tem pagamento aprovado ou pago. Desaprove ou estorne o
+--       pagamento antes de desaprovar a ordem."
+--   2. desaprovar a ordem -> 0 lancamentos, OC volta para pendente_aprovacao
+--      (antes o lancamento ficava 'cancelado' na lista)
