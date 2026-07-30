@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
+import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
 import { LancamentoDetalheView } from "@/modules/financeiro/lancamentos/components/lancamento-detalhe";
 import {
   buscarLancamento,
@@ -33,6 +34,7 @@ export default async function PaginaLancamentoDetalhe({
     centrosCusto,
     formasPagamento,
     anexos,
+    contas,
   ] = await Promise.all([
     trilhaLancamento(id),
     listarCategorias(),
@@ -40,6 +42,7 @@ export default async function PaginaLancamentoDetalhe({
     listarCentrosCusto(),
     listarFormasPagamento(),
     listarAnexosDoDocumento("lancamento", id),
+    listarContasBancarias(),
   ]);
 
   const podeEditar = temPermissao(usuario, "financeiro.lancamentos", "editar");
@@ -58,6 +61,7 @@ export default async function PaginaLancamentoDetalhe({
       fornecedores={fornecedores}
       centrosCusto={centrosCusto}
       formasPagamento={formasPagamento}
+      contas={contas}
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
     />

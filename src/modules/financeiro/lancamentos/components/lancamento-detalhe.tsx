@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  Combobox,
   ConfirmDialog,
   MoneyText,
   StatusBadge,
@@ -25,9 +26,11 @@ import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
 import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
 import {
+  definirContaLancamento,
   excluirLancamento,
   reenviarParcela,
 } from "@/modules/financeiro/lancamentos/actions";
+import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import {
   ROTULO_TIPO_LANCAMENTO,
   STATUS_LANCAMENTO,
@@ -137,6 +140,8 @@ export interface LancamentoDetalheViewProps {
   podeEditar: boolean;
   anexos: AnexoDoDocumento[];
   podeExcluir: boolean;
+  /** Contas ativas, para a escolha que libera a aprovação do pagamento. */
+  contas: ContaBancariaOpcao[];
 }
 
 /**
@@ -154,11 +159,34 @@ export function LancamentoDetalheView({
   podeEditar,
   anexos,
   podeExcluir,
+  contas,
 }: LancamentoDetalheViewProps) {
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [parcelasAberto, setParcelasAberto] = React.useState(false);
   const [reenviando, setReenviando] = React.useState<string | null>(null);
+  const [salvandoConta, setSalvandoConta] = React.useState(false);
+
+  // A conta é a mesma para as parcelas não pagas do lançamento, então basta ler a
+  // primeira: quem muda escolhe para todas.
+  const contaAtual =
+    lancamento.parcelas.find((parcela) => parcela.status !== "pago")
+      ?.contaBancariaId ?? "";
+
+  async function aoDefinirConta(contaId: string) {
+    setSalvandoConta(true);
+    try {
+      const resultado = await definirContaLancamento(lancamento.id, contaId);
+      if ("erro" in resultado) {
+        toast.error(resultado.erro);
+        return;
+      }
+      toast.success("Conta bancária definida");
+      router.refresh();
+    } finally {
+      setSalvandoConta(false);
+    }
+  }
 
   // Caminho de volta da revisão: quem corrigiu devolve a parcela para a fila.
   async function aoReenviar(parcelaId: string) {
@@ -408,6 +436,36 @@ export function LancamentoDetalheView({
               <Dado rotulo="Valor">
                 <MoneyText valor={lancamento.valor} className="font-semibold" />
               </Dado>
+            </div>
+          </Secao>
+
+          <Secao titulo="Conta bancária do pagamento">
+            {/* Passo de revisão: sem conta escolhida a parcela não entra na fila
+                de aprovação, e o banco recusa aprovar. Escolher aqui é o que
+                libera o pagamento para ser aprovado. */}
+            <div className="flex flex-col gap-2">
+              <Combobox
+                id="lancamento-conta"
+                valor={contaAtual}
+                onValorChange={(valor) => void aoDefinirConta(valor)}
+                opcoes={contas.map((conta) => ({
+                  valor: conta.id,
+                  rotulo: conta.nome,
+                }))}
+                placeholder="Escolha a conta de onde o dinheiro sai"
+                disabled={!podeEditar || salvandoConta}
+                className="w-full max-w-md"
+              />
+              {contaAtual === "" ? (
+                <p className="flex items-start gap-1.5 text-legenda text-status-pendente">
+                  <TriangleAlert
+                    aria-hidden="true"
+                    className="mt-0.5 size-3.5 shrink-0"
+                  />
+                  Enquanto não houver conta escolhida, este pagamento não aparece
+                  na fila de aprovação.
+                </p>
+              ) : null}
             </div>
           </Secao>
 

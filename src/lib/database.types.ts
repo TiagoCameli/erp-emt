@@ -3029,7 +3029,11 @@ export type Database = {
         Returns: undefined;
       };
       fn_aprovar_parcela: {
-        Args: { p_data_programada?: string; p_parcela_id: string };
+        Args: {
+          p_conta_id?: string;
+          p_data_programada?: string;
+          p_parcela_id: string;
+        };
         Returns: undefined;
       };
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined };
@@ -3089,6 +3093,10 @@ export type Database = {
       fn_criar_ordem_compra: {
         Args: { p_cabecalho: Json; p_itens: Json };
         Returns: string;
+      };
+      fn_definir_conta_lancamento: {
+        Args: { p_conta_id: string; p_lanc_id: string };
+        Returns: undefined;
       };
       fn_definir_parcelas_lancamento: {
         Args: { p_lanc_id: string; p_parcelas: Json };
