@@ -13,40 +13,66 @@ import {
   EmptyState,
   FiltroBusca,
   FiltroMes,
+  FiltroPeriodo,
   FiltroSelect,
+  FiltroValor,
   MoneyText,
   StatusBadge,
   useBuscaUrl,
+  useFaixaUrl,
   useFiltrosUrl,
   type FiltroConfiguravel,
+  type OpcaoFiltro,
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
+  ROTULO_BANCO,
   ROTULO_TIPO_LANCAMENTO,
   STATUS_LANCAMENTO,
+  type BancoConta,
   type StatusLancamento,
   type TipoLancamento,
 } from "@/modules/financeiro/_shared/formato";
-import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
+import type {
+  CategoriaOpcao,
+  CentroCustoOpcao,
+  FormaPagamentoOpcao,
+  FornecedorOpcao,
+  LancamentoLista,
+} from "@/modules/financeiro/lancamentos/queries";
+import {
+  FILTROS_REVISAO,
+  ORIGENS_LANCAMENTO,
+  ROTULO_FILTRO_REVISAO,
+  ROTULO_ORIGEM_LANCAMENTO,
+} from "@/modules/financeiro/lancamentos/schemas";
+import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 
 const OPCOES_TIPO = (
   Object.keys(ROTULO_TIPO_LANCAMENTO) as TipoLancamento[]
 ).map((valor) => ({ valor, rotulo: ROTULO_TIPO_LANCAMENTO[valor] }));
 
-const OPCOES_STATUS = [
-  ...(Object.keys(STATUS_LANCAMENTO) as StatusLancamento[]).map((valor) => ({
-    valor,
-    rotulo: STATUS_LANCAMENTO[valor].rotulo,
-  })),
-  // Não é status de lançamento: é "tem parcela em revisão". Fica no mesmo
-  // seletor porque para quem usa é a mesma pergunta ("o que está travado?"),
-  // e o rótulo diz que a revisão é da parcela para não virar ambiguidade.
-  { valor: "em_revisao", rotulo: "Com parcela em revisão" },
-  // Fila de trabalho do operador financeiro: falta escolher a conta bancária.
-  { valor: "sem_conta", rotulo: "Sem conta bancária" },
-];
+// Só status de lançamento. A revisão da parcela saiu daqui e virou filtro
+// próprio: "Em revisão" e "Sem conta bancária" nunca foram status de
+// lançamento, e no mesmo seletor obrigavam a escolher entre as duas perguntas.
+const OPCOES_STATUS = (
+  Object.keys(STATUS_LANCAMENTO) as StatusLancamento[]
+).map((valor) => ({ valor, rotulo: STATUS_LANCAMENTO[valor].rotulo }));
+
+const OPCOES_REVISAO: OpcaoFiltro[] = FILTROS_REVISAO.map((valor) => ({
+  valor,
+  rotulo: ROTULO_FILTRO_REVISAO[valor],
+}));
+
+const OPCOES_ORIGEM: OpcaoFiltro[] = ORIGENS_LANCAMENTO.map((valor) => ({
+  valor,
+  rotulo: ROTULO_ORIGEM_LANCAMENTO[valor],
+}));
+
+/** Largura máxima do seletor de nome comprido (fornecedor, centro de custo). */
+const LARGURA_NOME = "max-w-[15rem]";
 
 const colunas: ColumnDef<LancamentoLista, unknown>[] = [
   {
@@ -173,43 +199,126 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
   },
 ];
 
+/**
+ * Valores atuais dos filtros, do jeito que vivem na URL (string vazia = sem
+ * filtro). Um objeto só em vez de vinte props soltas: a listagem tem muito
+ * filtro, e assim a assinatura não vira uma lista de vinte strings iguais.
+ */
+export interface ValoresFiltrosLancamentos {
+  busca: string;
+  tipo: string;
+  status: string;
+  /** Mês de referência, no formato do input (yyyy-MM). */
+  mes: string;
+  /** Estado da revisão (em_revisao, sem_conta, parcial, revisado). */
+  revisao: string;
+  origem: string;
+  fornecedor: string;
+  categoria: string;
+  centro: string;
+  conta: string;
+  forma: string;
+  valorDe: string;
+  valorAte: string;
+  vencDe: string;
+  vencAte: string;
+  compraDe: string;
+  compraAte: string;
+  criadoDe: string;
+  criadoAte: string;
+}
+
 export interface LancamentosTabelaProps {
   lancamentos: LancamentoLista[];
   total: number;
   pagina: number;
   tamanho: number;
-  tipo: string;
-  /**
-   * Valor cru do parâmetro `status` da URL. Inclui os valores que não são status
-   * de lançamento (em_revisao, sem_conta), porque o seletor é o mesmo.
-   */
-  status: string;
-  busca: string;
-  /** Mês de referência do filtro, no formato do input (yyyy-MM). */
-  mes: string;
+  valores: ValoresFiltrosLancamentos;
+  /** Opções dos seletores, já filtradas pelos cadastros ativos. */
+  categorias: CategoriaOpcao[];
+  fornecedores: FornecedorOpcao[];
+  centrosCusto: CentroCustoOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
+  contas: ContaBancariaOpcao[];
   /** Permissão de excluir: sem ela a ação não aparece na linha. */
   podeExcluir: boolean;
 }
 
 /**
- * Listagem de lançamentos com paginação server-side e filtros (tipo e status)
- * persistidos na URL. Clicar numa linha abre o detalhe.
+ * Listagem de lançamentos com paginação e filtros server-side, persistidos na
+ * URL. Todo filtro daqui vai ao banco: com paginação no servidor, filtrar só a
+ * página carregada faria a tela mentir sobre o que existe. Clicar numa linha
+ * abre o detalhe.
  */
 export function LancamentosTabela({
   lancamentos,
   total,
   pagina,
   tamanho,
-  tipo,
-  status,
-  busca: buscaUrl,
-  mes,
+  valores,
+  categorias,
+  fornecedores,
+  centrosCusto,
+  formasPagamento,
+  contas,
   podeExcluir,
 }: LancamentosTabelaProps) {
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
-  const { busca, setBusca } = useBuscaUrl(buscaUrl);
+  const { busca, setBusca } = useBuscaUrl(valores.busca);
+  // Faixa de valor é digitada dígito a dígito: vai pela URL com espera, senão
+  // cada tecla viraria uma consulta e o campo perderia caracteres.
+  const {
+    faixa: faixaValor,
+    setFaixa: setFaixaValor,
+    limpar: limparFaixaValor,
+  } = useFaixaUrl("valor_de", "valor_ate");
   const [aExcluir, setAExcluir] = React.useState<LancamentoLista | null>(null);
+
+  const opcoesFornecedor = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      fornecedores.map((fornecedor) => ({
+        valor: fornecedor.id,
+        rotulo: fornecedor.nome,
+      })),
+    [fornecedores],
+  );
+
+  const opcoesCategoria = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      categorias.map((categoria) => ({
+        valor: categoria.id,
+        rotulo: categoria.nome,
+      })),
+    [categorias],
+  );
+
+  const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      centrosCusto.map((centro) => ({
+        valor: centro.id,
+        rotulo: centro.codigo ? `${centro.codigo} - ${centro.nome}` : centro.nome,
+      })),
+    [centrosCusto],
+  );
+
+  const opcoesConta = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      contas.map((conta) => ({
+        valor: conta.id,
+        rotulo: `${conta.nome} - ${ROTULO_BANCO[conta.banco as BancoConta] ?? conta.banco}`,
+      })),
+    [contas],
+  );
+
+  const opcoesForma = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      formasPagamento.map((forma) => ({
+        valor: forma.id,
+        rotulo: forma.nome,
+      })),
+    [formasPagamento],
+  );
 
   // A regra de quem pode sair mora no banco (fn_excluir_lancamento): pagamento
   // aprovado ou pago não exclui, e lançamento de ordem viva sai pela ordem. Aqui
@@ -234,9 +343,85 @@ export function LancamentosTabela({
     });
   }
 
+  /**
+   * Seletor de valor único preso a um parâmetro da URL. Trocar o filtro zera a
+   * página: filtrar e cair numa página vazia parece lista sem resultado.
+   */
+  function selecao(config: {
+    chave: string;
+    rotulo: string;
+    valor: string;
+    opcoes: OpcaoFiltro[];
+    todosRotulo: string;
+    /** Filtro novo nasce escondido; os que já apareciam continuam visíveis. */
+    oculto?: boolean;
+    largura?: string;
+  }): FiltroConfiguravel {
+    return {
+      id: config.chave,
+      rotulo: config.rotulo,
+      ocultoPorPadrao: config.oculto,
+      temValor: config.valor !== "",
+      onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
+      elemento: (
+        <FiltroSelect
+          valor={config.valor}
+          onValorChange={(valor) =>
+            setMuitos({
+              [config.chave]: valor === "" ? null : valor,
+              pagina: "1",
+            })
+          }
+          opcoes={config.opcoes}
+          placeholder={config.rotulo}
+          todosRotulo={config.todosRotulo}
+          className={config.largura}
+        />
+      ),
+    };
+  }
+
+  /** Período (de/até) em duas chaves da URL, gravadas numa navegação só. */
+  function periodo(config: {
+    id: string;
+    /** Nome no menu "Filtros" (ex. "Período de vencimento"). */
+    rotulo: string;
+    /** Nome curto ao lado dos campos na barra (ex. "Vencimento"). */
+    campo: string;
+    chaveDe: string;
+    chaveAte: string;
+    de: string;
+    ate: string;
+  }): FiltroConfiguravel {
+    return {
+      id: config.id,
+      rotulo: config.rotulo,
+      ocultoPorPadrao: true,
+      temValor: config.de !== "" || config.ate !== "",
+      onLimpar: () =>
+        setMuitos({ [config.chaveDe]: null, [config.chaveAte]: null, pagina: "1" }),
+      elemento: (
+        <FiltroPeriodo
+          rotulo={config.campo}
+          de={config.de}
+          ate={config.ate}
+          onPeriodoChange={(de, ate) =>
+            setMuitos({
+              [config.chaveDe]: de === "" ? null : de,
+              [config.chaveAte]: ate === "" ? null : ate,
+              pagina: "1",
+            })
+          }
+        />
+      ),
+    };
+  }
+
   // Filtros declarados na DataTable (e não numa FilterBar solta) para entrarem
   // no menu "Filtros": cada usuário escolhe quais quer ver, e a escolha fica
-  // salva com as colunas dele.
+  // salva com as colunas dele. A barra nasce enxuta (busca, tipo, status e mês);
+  // o resto está no menu, porque quinze filtros abertos ao mesmo tempo são uma
+  // parede, não uma ferramenta.
   const filtros: FiltroConfiguravel[] = [
     {
       id: "busca",
@@ -250,54 +435,136 @@ export function LancamentosTabela({
         />
       ),
     },
-    {
-      id: "tipo",
+    selecao({
+      chave: "tipo",
       rotulo: "Tipo",
-      temValor: tipo !== "",
-      onLimpar: () => setMuitos({ tipo: null, pagina: "1" }),
-      elemento: (
-        <FiltroSelect
-          valor={tipo}
-          onValorChange={(valor) =>
-            setMuitos({ tipo: valor === "" ? null : valor, pagina: "1" })
-          }
-          opcoes={OPCOES_TIPO}
-          placeholder="Tipo"
-          todosRotulo="Todos os tipos"
-        />
-      ),
-    },
-    {
-      id: "status",
+      valor: valores.tipo,
+      opcoes: OPCOES_TIPO,
+      todosRotulo: "Todos os tipos",
+    }),
+    selecao({
+      chave: "status",
       rotulo: "Status",
-      temValor: status !== "",
-      onLimpar: () => setMuitos({ status: null, pagina: "1" }),
-      elemento: (
-        <FiltroSelect
-          valor={status}
-          onValorChange={(valor) =>
-            setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
-          }
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos os status"
-        />
-      ),
-    },
+      valor: valores.status,
+      opcoes: OPCOES_STATUS,
+      todosRotulo: "Todos os status",
+    }),
     {
       id: "mes",
       rotulo: "Mês de referência",
-      temValor: mes !== "",
+      temValor: valores.mes !== "",
       onLimpar: () => setMuitos({ mes: null, pagina: "1" }),
       elemento: (
         <FiltroMes
-          valor={mes}
+          valor={valores.mes}
           onValorChange={(novoMes) =>
             setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
           }
         />
       ),
     },
+    selecao({
+      chave: "revisao",
+      rotulo: "Revisão",
+      valor: valores.revisao,
+      opcoes: OPCOES_REVISAO,
+      todosRotulo: "Qualquer revisão",
+      oculto: true,
+    }),
+    selecao({
+      chave: "fornecedor",
+      rotulo: "Fornecedor",
+      valor: valores.fornecedor,
+      opcoes: opcoesFornecedor,
+      todosRotulo: "Todos os fornecedores",
+      oculto: true,
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      chave: "categoria",
+      rotulo: "Categoria",
+      valor: valores.categoria,
+      opcoes: opcoesCategoria,
+      todosRotulo: "Todas as categorias",
+      oculto: true,
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      chave: "centro",
+      rotulo: "Centro de custo",
+      valor: valores.centro,
+      opcoes: opcoesCentro,
+      todosRotulo: "Todos os centros de custo",
+      oculto: true,
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      chave: "conta",
+      rotulo: "Conta bancária",
+      valor: valores.conta,
+      opcoes: opcoesConta,
+      todosRotulo: "Todas as contas",
+      oculto: true,
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      chave: "forma",
+      rotulo: "Forma de pagamento",
+      valor: valores.forma,
+      opcoes: opcoesForma,
+      todosRotulo: "Todas as formas",
+      oculto: true,
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      chave: "origem",
+      rotulo: "Origem",
+      valor: valores.origem,
+      opcoes: OPCOES_ORIGEM,
+      todosRotulo: "Todas as origens",
+      oculto: true,
+    }),
+    {
+      id: "valor",
+      rotulo: "Faixa de valor",
+      ocultoPorPadrao: true,
+      temValor: faixaValor.de !== "" || faixaValor.ate !== "",
+      onLimpar: limparFaixaValor,
+      elemento: (
+        <FiltroValor
+          de={faixaValor.de}
+          ate={faixaValor.ate}
+          onValorChange={(de, ate) => setFaixaValor({ de, ate })}
+        />
+      ),
+    },
+    periodo({
+      id: "vencimento",
+      rotulo: "Período de vencimento",
+      campo: "Vencimento",
+      chaveDe: "venc_de",
+      chaveAte: "venc_ate",
+      de: valores.vencDe,
+      ate: valores.vencAte,
+    }),
+    periodo({
+      id: "compra",
+      rotulo: "Período da compra",
+      campo: "Compra",
+      chaveDe: "compra_de",
+      chaveAte: "compra_ate",
+      de: valores.compraDe,
+      ate: valores.compraAte,
+    }),
+    periodo({
+      id: "criado",
+      rotulo: "Período de criação",
+      campo: "Criado em",
+      chaveDe: "criado_de",
+      chaveAte: "criado_ate",
+      de: valores.criadoDe,
+      ate: valores.criadoAte,
+    }),
   ];
 
   return (

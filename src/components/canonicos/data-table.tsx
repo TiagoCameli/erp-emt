@@ -168,6 +168,12 @@ export interface FiltroConfiguravel {
   elemento: React.ReactNode;
   /** Filtro que não pode ser escondido (ex. a busca principal da tela). */
   fixo?: boolean;
+  /**
+   * Nasce escondido: o usuário liga no menu "Filtros" se quiser. É o padrão de
+   * todo filtro secundário, porque doze filtros abertos de uma vez é uma parede,
+   * não uma ferramenta. Ignorado quando `fixo`.
+   */
+  ocultoPorPadrao?: boolean;
   /** Tem valor escolhido agora? Usado para limpar ao esconder. */
   temValor?: boolean;
   /** Chamado quando o filtro é escondido com valor, para não filtrar às cegas. */
@@ -306,9 +312,34 @@ export function DataTable<TData>({
     () => (filtros ?? []).map((filtro) => filtro.id),
     [filtros],
   );
+
+  // Padrão da tela: só os filtros marcados `ocultoPorPadrao` nascem escondidos.
+  // `filtrosVisiveis` guarda apenas o que o usuário mudou, então restaurar o
+  // padrão é esvaziar o mapa, sem precisar reescrever a escolha da tela.
+  const filtrosOcultosPadrao = React.useMemo<Record<string, boolean>>(() => {
+    const padrao: Record<string, boolean> = {};
+    for (const filtro of filtros ?? []) {
+      if (filtro.ocultoPorPadrao === true && filtro.fixo !== true) {
+        padrao[filtro.id] = false;
+      }
+    }
+    return padrao;
+  }, [filtros]);
+
   const [ordemColunas, setOrdemColunas] = React.useState<ColumnOrderState>([]);
   const [larguras, setLarguras] = React.useState<ColumnSizingState>({});
   const [arrastando, setArrastando] = React.useState<string | null>(null);
+
+  function filtroVisivel(id: string): boolean {
+    // Filtro preenchido aparece sempre, mesmo se o padrão da tela ou a escolha
+    // do usuário o esconderia. É o caso do link compartilhado com filtro na
+    // URL: sem isso a tabela mostraria uma lista filtrada e ninguém veria por
+    // quê. Esconder na mão limpa o valor (ver alternarFiltro), então o filtro
+    // volta a obedecer o padrão no clique seguinte.
+    const filtro = (filtros ?? []).find((f) => f.id === id);
+    if (filtro?.temValor === true) return true;
+    return filtrosVisiveis[id] ?? filtrosOcultosPadrao[id] ?? true;
+  }
 
 
   // Hidrata a personalização depois da montagem. Vem do BANCO, por usuário, para
@@ -415,7 +446,7 @@ export function DataTable<TData>({
     const filtro = (filtros ?? []).find((f) => f.id === id);
     if (!filtro || filtro.fixo) return;
 
-    const visivelAgora = filtrosVisiveis[id] ?? true;
+    const visivelAgora = filtroVisivel(id);
     const proximos = { ...filtrosVisiveis, [id]: !visivelAgora };
     setFiltrosVisiveis(proximos);
     if (visivelAgora && filtro.temValor) filtro.onLimpar?.();
@@ -735,7 +766,7 @@ export function DataTable<TData>({
               </div>
             ) : null}
             {(filtros ?? [])
-              .filter((filtro) => filtrosVisiveis[filtro.id] ?? true)
+              .filter((filtro) => filtroVisivel(filtro.id))
               .map((filtro) => (
                 <React.Fragment key={filtro.id}>{filtro.elemento}</React.Fragment>
               ))}
@@ -748,7 +779,7 @@ export function DataTable<TData>({
                   id: filtro.id,
                   rotulo: filtro.rotulo,
                   fixo: filtro.fixo,
-                  visivel: filtrosVisiveis[filtro.id] ?? true,
+                  visivel: filtroVisivel(filtro.id),
                 }))}
                 onAlternar={alternarFiltro}
               />

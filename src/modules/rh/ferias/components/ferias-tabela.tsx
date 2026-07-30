@@ -10,6 +10,7 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
@@ -26,9 +27,18 @@ import type {
   FeriasLista,
   SituacaoFerias,
 } from "@/modules/rh/ferias/queries";
-import { ROTULO_STATUS_FERIAS } from "@/modules/rh/ferias/schemas";
+import {
+  ROTULO_STATUS_FERIAS,
+  STATUS_FERIAS,
+} from "@/modules/rh/ferias/schemas";
+import { noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { FeriasFormDrawer } from "./ferias-form-drawer";
+
+const OPCOES_STATUS = STATUS_FERIAS.map((status) => ({
+  valor: status,
+  rotulo: ROTULO_STATUS_FERIAS[status],
+}));
 
 export interface FeriasTabelaProps {
   ferias: FeriasLista[];
@@ -70,6 +80,12 @@ export function FeriasTabela({
 }: FeriasTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [situacao, setSituacao] = React.useState("");
+  const [colaboradorId, setColaboradorId] = React.useState("");
+  const [status, setStatus] = React.useState("");
+  const [gozoDe, setGozoDe] = React.useState("");
+  const [gozoAte, setGozoAte] = React.useState("");
+  const [limiteDe, setLimiteDe] = React.useState("");
+  const [limiteAte, setLimiteAte] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<FeriasLista | null>(null);
@@ -102,16 +118,34 @@ export function FeriasTabela({
     toast.success("Férias excluídas");
   }
 
+  // Filtro em memória: a tela carrega todos os períodos (sem paginação
+  // server-side), então o total exibido continua sendo o total real.
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return ferias.filter((item) => {
       if (situacao && item.situacao !== situacao) return false;
+      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
+      if (status && item.status !== status) return false;
+      // Período só programado (sem gozo marcado) sai da lista quando o usuário
+      // pede uma janela de gozo: sem data de início, não é resposta.
+      if (!noPeriodo(item.dataInicio, gozoDe, gozoAte)) return false;
+      if (!noPeriodo(item.limiteGozo, limiteDe, limiteAte)) return false;
       if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [ferias, busca, situacao]);
+  }, [
+    ferias,
+    busca,
+    situacao,
+    colaboradorId,
+    status,
+    gozoDe,
+    gozoAte,
+    limiteDe,
+    limiteAte,
+  ]);
 
   const podeAgir = podeEditar || podeExcluir;
 
@@ -261,6 +295,86 @@ export function FeriasTabela({
                 opcoes={OPCOES_SITUACAO}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
+              />
+            ),
+          },
+          {
+            id: "colaborador",
+            rotulo: "Colaborador",
+            ocultoPorPadrao: true,
+            temValor: colaboradorId !== "",
+            onLimpar: () => setColaboradorId(""),
+            elemento: (
+              <FiltroSelect
+                valor={colaboradorId}
+                onValorChange={setColaboradorId}
+                opcoes={colaboradores.map((colaborador) => ({
+                  valor: colaborador.id,
+                  rotulo: colaborador.nome,
+                }))}
+                placeholder="Colaborador"
+                todosRotulo="Todos os colaboradores"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status do registro",
+            ocultoPorPadrao: true,
+            temValor: status !== "",
+            onLimpar: () => setStatus(""),
+            elemento: (
+              <FiltroSelect
+                valor={status}
+                onValorChange={setStatus}
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos os status"
+              />
+            ),
+          },
+          {
+            // "periodoGozo" e não "gozo": já existe uma coluna com id "gozo", e
+            // ler a preferência salva fica mais fácil sem ids repetidos.
+            id: "periodoGozo",
+            rotulo: "Período de gozo",
+            ocultoPorPadrao: true,
+            temValor: gozoDe !== "" || gozoAte !== "",
+            onLimpar: () => {
+              setGozoDe("");
+              setGozoAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={gozoDe}
+                ate={gozoAte}
+                rotulo="Gozo"
+                onPeriodoChange={(de, ate) => {
+                  setGozoDe(de);
+                  setGozoAte(ate);
+                }}
+              />
+            ),
+          },
+          {
+            id: "limite",
+            rotulo: "Limite de gozo",
+            ocultoPorPadrao: true,
+            temValor: limiteDe !== "" || limiteAte !== "",
+            onLimpar: () => {
+              setLimiteDe("");
+              setLimiteAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={limiteDe}
+                ate={limiteAte}
+                rotulo="Limite"
+                onPeriodoChange={(de, ate) => {
+                  setLimiteDe(de);
+                  setLimiteAte(ate);
+                }}
               />
             ),
           },

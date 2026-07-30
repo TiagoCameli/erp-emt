@@ -11,6 +11,7 @@ import {
   EmptyState,
   FiltroBusca,
   FiltroSelect,
+  FiltroValor,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 import { formatarPercentual } from "@/lib/formatadores";
 import { removerEncargo } from "@/modules/rh/encargos/actions";
 import type { EncargoLista } from "@/modules/rh/encargos/queries";
+import { naFaixa } from "@/modules/rh/_shared/filtros";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -52,6 +54,8 @@ export function EncargosTabela({
 }: EncargosTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [percentualDe, setPercentualDe] = React.useState("");
+  const [percentualAte, setPercentualAte] = React.useState("");
   const [excluindo, setExcluindo] = React.useState<EncargoLista | null>(null);
 
   const filtrados = React.useMemo(() => {
@@ -59,10 +63,13 @@ export function EncargosTabela({
     return encargos.filter((encargo) => {
       if (status === "ativos" && !encargo.ativo) return false;
       if (status === "inativos" && encargo.ativo) return false;
+      if (!naFaixa(encargo.percentual, percentualDe, percentualAte)) {
+        return false;
+      }
       if (termo && !encargo.nome.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [encargos, busca, status]);
+  }, [encargos, busca, status, percentualDe, percentualAte]);
 
   async function aoConfirmarExclusao(motivo?: string) {
     if (!excluindo) return;
@@ -182,6 +189,27 @@ export function EncargosTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "percentual",
+            rotulo: "Percentual",
+            ocultoPorPadrao: true,
+            temValor: percentualDe !== "" || percentualAte !== "",
+            onLimpar: () => {
+              setPercentualDe("");
+              setPercentualAte("");
+            },
+            elemento: (
+              <FiltroValor
+                de={percentualDe}
+                ate={percentualAte}
+                rotulo="Percentual"
+                onValorChange={(de, ate) => {
+                  setPercentualDe(de);
+                  setPercentualAte(ate);
+                }}
               />
             ),
           },

@@ -8,7 +8,11 @@ import { toast } from "sonner";
 import {
   DataTable,
   EmptyState,
+  FiltroBusca,
+  FiltroPeriodo,
+  FiltroSelect,
   Trilha,
+  useBuscaUrl,
   useFiltrosUrl,
   type EventoTrilha,
 } from "@/components/canonicos";
@@ -32,7 +36,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatarDataHora } from "@/lib/formatadores";
-import type { ItemLixeira } from "@/modules/administracao/lixeira/queries";
+import type {
+  ItemLixeira,
+  UsuarioParaFiltro,
+} from "@/modules/administracao/lixeira/queries";
 
 interface LixeiraTabelaProps {
   itens: ItemLixeira[];
@@ -41,6 +48,20 @@ interface LixeiraTabelaProps {
   pagina: number;
   tamanho: number;
   mostrarRestaurados: boolean;
+  /** Tabela de origem filtrada, ou vazio. */
+  filtroTabela: string;
+  /** Id de quem excluiu, ou vazio. */
+  filtroPor: string;
+  /** Início do período de exclusão (yyyy-MM-dd) ou vazio. */
+  filtroDe: string;
+  /** Fim do período de exclusão (yyyy-MM-dd) ou vazio. */
+  filtroAte: string;
+  /** Termo procurado no motivo, ou vazio. */
+  filtroMotivo: string;
+  /** Tabelas presentes na lixeira, para as opções do filtro. */
+  tabelas: string[];
+  /** Usuários para as opções do filtro de quem excluiu. */
+  usuarios: UsuarioParaFiltro[];
   podeEditar: boolean;
 }
 
@@ -69,15 +90,33 @@ function eventosDoItem(item: ItemLixeira): EventoTrilha[] {
   return eventos;
 }
 
+/**
+ * Listagem da lixeira com filtros e paginação na URL: todo filtro é aplicado no
+ * banco pela query da página, porque a paginação é server-side e filtrar em
+ * memória mostraria um punhado de exclusões como se fossem todas.
+ */
 export function LixeiraTabela({
   itens,
   total,
   pagina,
   tamanho,
   mostrarRestaurados,
+  filtroTabela,
+  filtroPor,
+  filtroDe,
+  filtroAte,
+  filtroMotivo,
+  tabelas,
+  usuarios,
   podeEditar,
 }: LixeiraTabelaProps) {
   const { setMuitos: atualizarParams } = useFiltrosUrl();
+  // Digitar no motivo escreve na URL com debounce, como as buscas das outras
+  // listagens server-side.
+  const { busca: motivo, setBusca: setMotivo } = useBuscaUrl(
+    filtroMotivo,
+    "motivo",
+  );
   const [itemSelecionado, setItemSelecionado] =
     React.useState<ItemLixeira | null>(null);
   const [restaurando, setRestaurando] = React.useState(false);
@@ -189,6 +228,97 @@ export function LixeiraTabela({
                   Mostrar restaurados
                 </Label>
               </div>
+            ),
+          },
+          {
+            id: "tabela",
+            rotulo: "Tabela",
+            ocultoPorPadrao: true,
+            temValor: filtroTabela !== "",
+            onLimpar: () => atualizarParams({ tabela: null, pagina: null }),
+            elemento: (
+              <FiltroSelect
+                valor={filtroTabela}
+                onValorChange={(valor) =>
+                  atualizarParams({
+                    tabela: valor === "" ? null : valor,
+                    pagina: null,
+                  })
+                }
+                opcoes={tabelas.map((tabela) => ({
+                  valor: tabela,
+                  rotulo: tabela,
+                }))}
+                placeholder="Tabela"
+                todosRotulo="Todas as tabelas"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "por",
+            rotulo: "Quem excluiu",
+            ocultoPorPadrao: true,
+            temValor: filtroPor !== "",
+            onLimpar: () => atualizarParams({ por: null, pagina: null }),
+            elemento: (
+              <FiltroSelect
+                valor={filtroPor}
+                onValorChange={(valor) =>
+                  atualizarParams({
+                    por: valor === "" ? null : valor,
+                    pagina: null,
+                  })
+                }
+                opcoes={usuarios.map((usuario) => ({
+                  valor: usuario.id,
+                  rotulo: usuario.nome,
+                }))}
+                placeholder="Quem excluiu"
+                todosRotulo="Todos os usuários"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Período da exclusão",
+            ocultoPorPadrao: true,
+            temValor: filtroDe !== "" || filtroAte !== "",
+            onLimpar: () =>
+              atualizarParams({ de: null, ate: null, pagina: null }),
+            elemento: (
+              <FiltroPeriodo
+                de={filtroDe}
+                ate={filtroAte}
+                rotulo="Excluído em"
+                onPeriodoChange={(de, ate) =>
+                  atualizarParams({
+                    de: de === "" ? null : de,
+                    ate: ate === "" ? null : ate,
+                    pagina: null,
+                  })
+                }
+              />
+            ),
+          },
+          {
+            id: "motivo",
+            rotulo: "Motivo",
+            ocultoPorPadrao: true,
+            // O que está digitado conta, mesmo antes do debounce escrever na
+            // URL: esconder o filtro no meio da digitação tem que limpar.
+            temValor: motivo !== "" || filtroMotivo !== "",
+            onLimpar: () => {
+              setMotivo("");
+              atualizarParams({ motivo: null, pagina: null });
+            },
+            elemento: (
+              <FiltroBusca
+                valor={motivo}
+                onValorChange={setMotivo}
+                placeholder="Buscar no motivo"
+              />
             ),
           },
         ]}

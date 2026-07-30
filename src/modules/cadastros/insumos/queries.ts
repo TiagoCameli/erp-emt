@@ -53,6 +53,8 @@ export interface ListarInsumosParams {
   grupoId?: string;
   /** Filtro por subcategoria (id). */
   categoriaId?: string;
+  /** Filtro por unidade de medida (id). */
+  unidadeId?: string;
 }
 
 /** Resultado paginado da listagem de insumos. */
@@ -89,6 +91,7 @@ export async function listar(
     .range(de, ate);
 
   if (params.ativo !== undefined) consulta = consulta.eq("ativo", params.ativo);
+  if (params.unidadeId) consulta = consulta.eq("unidade_id", params.unidadeId);
   if (params.categoriaId) {
     consulta = consulta.eq("categoria_id", params.categoriaId);
   } else if (params.grupoId) {

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   lerParametrosLista,
+  parametroUuid,
   parametroValido,
 } from "@/modules/compras/_shared/lista";
 import {
@@ -13,8 +14,14 @@ import {
 import {
   listarCategoriasCusto,
   listarCotacoes,
+  listarFornecedores,
+  listarInsumos,
 } from "@/modules/compras/cotacoes/queries";
-import { STATUS_COTACAO } from "@/modules/compras/cotacoes/schemas";
+import {
+  AUTORIA_COTACAO,
+  OC_GERADA_COTACAO,
+  STATUS_COTACAO,
+} from "@/modules/compras/cotacoes/schemas";
 
 export default async function PaginaCotacoes({
   searchParams,
@@ -27,13 +34,41 @@ export default async function PaginaCotacoes({
   }
 
   const params = await searchParams;
-  const { pagina, tamanho, busca, de, ate } = lerParametrosLista(params);
+  const { pagina, tamanho, busca, fornecedorId, de, ate } =
+    lerParametrosLista(params);
   const status = parametroValido(params.status, STATUS_COTACAO);
+  const categoriaId = parametroUuid(params.categoria);
+  const vencedorId = parametroUuid(params.vencedor);
+  const insumoId = parametroUuid(params.insumo);
+  const autoria = parametroValido(params.autor, AUTORIA_COTACAO);
+  // Sem permissão de ver OC o filtro nem aparece na tela, então o parâmetro é
+  // descartado aqui também: URL colada na mão não vira lista errada.
+  const podeVerOrdens = temPermissao(usuario, "compras.ordens", "ver");
+  const ocGerada = podeVerOrdens
+    ? parametroValido(params.oc, OC_GERADA_COTACAO)
+    : undefined;
 
-  const [{ itens, total }, categorias] = await Promise.all([
-    listarCotacoes({ pagina, tamanho, status, busca, de, ate }),
-    listarCategoriasCusto(),
-  ]);
+  const [{ itens, total }, categorias, fornecedores, insumos] =
+    await Promise.all([
+      listarCotacoes({
+        pagina,
+        tamanho,
+        status,
+        busca,
+        de,
+        ate,
+        categoriaId,
+        fornecedorId,
+        vencedorId,
+        insumoId,
+        ocGerada,
+        autoria,
+        usuarioId: usuario.id,
+      }),
+      listarCategoriasCusto(),
+      listarFornecedores(),
+      listarInsumos(),
+    ]);
 
   const podeCriar = temPermissao(usuario, "compras.cotacoes", "criar");
 
@@ -58,8 +93,17 @@ export default async function PaginaCotacoes({
         busca={busca ?? ""}
         de={de ?? ""}
         ate={ate ?? ""}
+        categoriaId={categoriaId ?? ""}
+        fornecedorId={fornecedorId ?? ""}
+        vencedorId={vencedorId ?? ""}
+        insumoId={insumoId ?? ""}
+        ocGerada={ocGerada ?? ""}
+        autoria={autoria ?? ""}
         podeCriar={podeCriar}
+        podeVerOrdens={podeVerOrdens}
         categorias={categorias}
+        fornecedores={fornecedores}
+        insumos={insumos}
         idUsuario={usuario.id}
       />
     </>

@@ -4,7 +4,12 @@ import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
 
-import { DataTable, EmptyState } from "@/components/canonicos";
+import {
+  DataTable,
+  EmptyState,
+  FiltroBusca,
+  FiltroSelect,
+} from "@/components/canonicos";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import type { SaldoColaborador } from "@/modules/rh/banco-horas/queries";
@@ -12,6 +17,16 @@ import type { SaldoColaborador } from "@/modules/rh/banco-horas/queries";
 export interface SaldosPainelProps {
   saldos: SaldoColaborador[];
 }
+
+/**
+ * Sinal do saldo: é a pergunta operacional do painel ("quem está devendo
+ * horas?"). Faixa de valor não serve aqui, porque saldo é número com sinal.
+ */
+const OPCOES_SINAL = [
+  { valor: "negativo", rotulo: "Negativo" },
+  { valor: "positivo", rotulo: "Positivo" },
+  { valor: "zerado", rotulo: "Zerado" },
+];
 
 /** Saldo formatado com "h"; negativo em vermelho. */
 function SaldoHoras({ saldo }: { saldo: number }) {
@@ -30,8 +45,25 @@ function SaldoHoras({ saldo }: { saldo: number }) {
 /**
  * Painel de saldos do banco de horas: um saldo por colaborador (créditos menos
  * débitos). Saldo negativo aparece em vermelho.
+ *
+ * Filtros em memória: o painel recebe todos os saldos já agregados (um por
+ * colaborador com movimento), sem paginação server-side.
  */
 export function SaldosPainel({ saldos }: SaldosPainelProps) {
+  const [busca, setBusca] = React.useState("");
+  const [sinal, setSinal] = React.useState("");
+
+  const dados = React.useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return saldos.filter((item) => {
+      if (sinal === "negativo" && item.saldo >= 0) return false;
+      if (sinal === "positivo" && item.saldo <= 0) return false;
+      if (sinal === "zerado" && item.saldo !== 0) return false;
+      if (termo && !item.nome.toLowerCase().includes(termo)) return false;
+      return true;
+    });
+  }, [saldos, busca, sinal]);
+
   const colunas = React.useMemo<ColumnDef<SaldoColaborador, unknown>[]>(
     () => [
       {
@@ -55,7 +87,38 @@ export function SaldosPainel({ saldos }: SaldosPainelProps) {
     <DataTable
       idTabela="rh.banco-horas.saldos"
       columns={colunas}
-      data={saldos}
+      data={dados}
+      filtros={[
+        {
+          id: "busca",
+          rotulo: "Busca por colaborador",
+          // A busca é a porta de entrada do painel: não pode ser escondida.
+          fixo: true,
+          elemento: (
+            <FiltroBusca
+              valor={busca}
+              onValorChange={setBusca}
+              placeholder="Buscar por colaborador"
+            />
+          ),
+        },
+        {
+          id: "sinal",
+          rotulo: "Saldo",
+          ocultoPorPadrao: true,
+          temValor: sinal !== "",
+          onLimpar: () => setSinal(""),
+          elemento: (
+            <FiltroSelect
+              valor={sinal}
+              onValorChange={setSinal}
+              opcoes={OPCOES_SINAL}
+              placeholder="Saldo"
+              todosRotulo="Qualquer saldo"
+            />
+          ),
+        },
+      ]}
       emptyState={
         <EmptyState
           icone={Scale}

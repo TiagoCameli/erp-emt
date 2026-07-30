@@ -23,7 +23,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { alternarAtivo, excluir } from "@/modules/cadastros/unidades/actions";
 import type { UnidadeLista } from "@/modules/cadastros/unidades/queries";
-import { ROTULO_TIPO_UNIDADE } from "@/modules/cadastros/unidades/schemas";
+import {
+  ROTULO_TIPO_UNIDADE,
+  TIPOS_UNIDADE,
+} from "@/modules/cadastros/unidades/schemas";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -32,6 +35,11 @@ const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
   { valor: "inativos", rotulo: "Inativos" },
 ];
+
+const OPCOES_TIPO = TIPOS_UNIDADE.map((tipo) => ({
+  valor: tipo,
+  rotulo: ROTULO_TIPO_UNIDADE[tipo],
+}));
 
 export interface UnidadesTabelaProps {
   unidades: UnidadeLista[];
@@ -42,8 +50,10 @@ export interface UnidadesTabelaProps {
 }
 
 /**
- * Listagem de unidades de medida com busca por nome, filtro de status
+ * Listagem de unidades de medida com busca por nome, filtros de status e tipo
  * e ações por linha: editar, ativar/desativar e excluir (com motivo).
+ *
+ * A página carrega o catálogo inteiro, então filtrar em memória está correto.
  */
 export function UnidadesTabela({
   unidades,
@@ -53,6 +63,7 @@ export function UnidadesTabela({
 }: UnidadesTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [tipo, setTipo] = React.useState("");
   const [excluindo, setExcluindo] = React.useState<UnidadeLista | null>(null);
 
   const filtradas = React.useMemo(() => {
@@ -60,10 +71,11 @@ export function UnidadesTabela({
     return unidades.filter((unidade) => {
       if (status === "ativos" && !unidade.ativo) return false;
       if (status === "inativos" && unidade.ativo) return false;
+      if (tipo !== "" && unidade.tipo !== tipo) return false;
       if (termo && !unidade.nome.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [unidades, busca, status]);
+  }, [unidades, busca, status, tipo]);
 
   async function aoAlternarAtivo(unidade: UnidadeLista) {
     const resultado = await alternarAtivo(unidade.id, !unidade.ativo);
@@ -207,6 +219,22 @@ export function UnidadesTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo",
+            ocultoPorPadrao: true,
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={OPCOES_TIPO}
+                placeholder="Tipo"
+                todosRotulo="Todos os tipos"
               />
             ),
           },

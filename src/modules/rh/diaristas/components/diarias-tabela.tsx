@@ -10,7 +10,9 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
+  FiltroValor,
   MoneyText,
   StatusBadge,
 } from "@/components/canonicos";
@@ -25,11 +27,21 @@ import { formatarData } from "@/lib/formatadores";
 import { removerDiaria } from "@/modules/rh/diaristas/actions";
 import type { DiariaLista } from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
+import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type {
   DiaristaOpcao,
   ObraOpcao,
 } from "@/modules/rh/_shared/queries";
 import { DiariaFormDrawer } from "./diaria-form-drawer";
+
+/** Opções do filtro de situação: espelham a coluna Situação da tabela. */
+const OPCOES_SITUACAO = [
+  { valor: "aberto", rotulo: "Em aberto" },
+  { valor: "paga", rotulo: "Paga" },
+];
+
+/** Valor do filtro de obra para a diária lançada sem obra. */
+const SEM_OBRA = "sem-obra";
 
 export interface DiariasTabelaProps {
   diarias: DiariaLista[];
@@ -66,6 +78,13 @@ export function DiariasTabela({
 }: DiariasTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [competencia, setCompetencia] = React.useState("");
+  const [obraId, setObraId] = React.useState("");
+  const [colaboradorId, setColaboradorId] = React.useState("");
+  const [dataDe, setDataDe] = React.useState("");
+  const [dataAte, setDataAte] = React.useState("");
+  const [valorDe, setValorDe] = React.useState("");
+  const [valorAte, setValorAte] = React.useState("");
+  const [situacao, setSituacao] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<DiariaLista | null>(null);
@@ -103,16 +122,38 @@ export function DiariasTabela({
     [diarias],
   );
 
+  // Filtro em memória: a tela carrega todas as diárias (sem paginação
+  // server-side), então o total exibido continua sendo o total real.
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return diarias.filter((item) => {
       if (competencia && item.competencia !== competencia) return false;
+      if (obraId === SEM_OBRA && item.obraId !== null) return false;
+      if (obraId !== "" && obraId !== SEM_OBRA && item.obraId !== obraId) {
+        return false;
+      }
+      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
+      if (situacao === "paga" && !item.fechada) return false;
+      if (situacao === "aberto" && item.fechada) return false;
+      if (!noPeriodo(item.data, dataDe, dataAte)) return false;
+      if (!naFaixa(item.valor, valorDe, valorAte)) return false;
       if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [diarias, busca, competencia]);
+  }, [
+    diarias,
+    busca,
+    competencia,
+    obraId,
+    colaboradorId,
+    situacao,
+    dataDe,
+    dataAte,
+    valorDe,
+    valorAte,
+  ]);
 
   const colunas = React.useMemo<ColumnDef<DiariaLista, unknown>[]>(() => {
     const base: ColumnDef<DiariaLista, unknown>[] = [
@@ -248,6 +289,110 @@ export function DiariasTabela({
                 opcoes={opcoesMes}
                 placeholder="Competência"
                 todosRotulo="Todas as competências"
+              />
+            ),
+          },
+          {
+            id: "obra",
+            rotulo: "Obra",
+            ocultoPorPadrao: true,
+            temValor: obraId !== "",
+            onLimpar: () => setObraId(""),
+            elemento: (
+              <FiltroSelect
+                valor={obraId}
+                onValorChange={setObraId}
+                opcoes={[
+                  ...obras.map((obra) => ({
+                    valor: obra.id,
+                    rotulo: obra.lote
+                      ? `${obra.nome} (Lote ${obra.lote})`
+                      : obra.nome,
+                  })),
+                  // A diária pode ser lançada sem obra, e a coluna mostra
+                  // "Sem obra": sem essa opção não haveria como achá-las.
+                  { valor: SEM_OBRA, rotulo: "Sem obra" },
+                ]}
+                placeholder="Obra"
+                todosRotulo="Todas as obras"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "colaborador",
+            rotulo: "Diarista",
+            ocultoPorPadrao: true,
+            temValor: colaboradorId !== "",
+            onLimpar: () => setColaboradorId(""),
+            elemento: (
+              <FiltroSelect
+                valor={colaboradorId}
+                onValorChange={setColaboradorId}
+                opcoes={diaristas.map((diarista) => ({
+                  valor: diarista.id,
+                  rotulo: diarista.nome,
+                }))}
+                placeholder="Diarista"
+                todosRotulo="Todos os diaristas"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "situacao",
+            rotulo: "Situação",
+            ocultoPorPadrao: true,
+            temValor: situacao !== "",
+            onLimpar: () => setSituacao(""),
+            elemento: (
+              <FiltroSelect
+                valor={situacao}
+                onValorChange={setSituacao}
+                opcoes={OPCOES_SITUACAO}
+                placeholder="Situação"
+                todosRotulo="Todas as situações"
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Período da diária",
+            ocultoPorPadrao: true,
+            temValor: dataDe !== "" || dataAte !== "",
+            onLimpar: () => {
+              setDataDe("");
+              setDataAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={dataDe}
+                ate={dataAte}
+                rotulo="Data"
+                onPeriodoChange={(de, ate) => {
+                  setDataDe(de);
+                  setDataAte(ate);
+                }}
+              />
+            ),
+          },
+          {
+            id: "valor",
+            rotulo: "Faixa de valor",
+            ocultoPorPadrao: true,
+            temValor: valorDe !== "" || valorAte !== "",
+            onLimpar: () => {
+              setValorDe("");
+              setValorAte("");
+            },
+            elemento: (
+              <FiltroValor
+                de={valorDe}
+                ate={valorAte}
+                onValorChange={(de, ate) => {
+                  setValorDe(de);
+                  setValorAte(ate);
+                }}
               />
             ),
           },

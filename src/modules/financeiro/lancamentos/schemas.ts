@@ -224,3 +224,49 @@ export const lancamentoFormSchema = z
 export type LancamentoFormInput = z.infer<typeof lancamentoFormSchema>;
 
 export { TOLERANCIA as TOLERANCIA_SOMA };
+
+// ---------------------------------------------------------------------------
+// Valores de filtro da listagem (aqui, e não em queries.ts, porque a tabela é
+// Client Component e não pode importar de um arquivo "server-only")
+// ---------------------------------------------------------------------------
+
+/**
+ * Origens possíveis de um lançamento. Espelha o check do banco
+ * (lancamentos_origem_check): só 'oc', 'manual' e 'diaria' existem. Cotação não
+ * gera lançamento direto, ela vira ordem de compra primeiro.
+ */
+export const ORIGENS_LANCAMENTO = ["oc", "manual", "diaria"] as const;
+
+export type OrigemLancamento = (typeof ORIGENS_LANCAMENTO)[number];
+
+export const ROTULO_ORIGEM_LANCAMENTO: Record<OrigemLancamento, string> = {
+  oc: "Ordem de compra",
+  manual: "Manual",
+  diaria: "Diária",
+};
+
+/**
+ * Estado da revisão de um lançamento a pagar, como filtro próprio. Antes viajava
+ * dentro do filtro de status com os pseudo-valores 'em_revisao' e 'sem_conta',
+ * o que misturava duas perguntas diferentes ("em que ponto o lançamento está?" e
+ * "a conta bancária das parcelas já foi escolhida?") no mesmo seletor.
+ *
+ * em_revisao é status de parcela (voltou para ajuste); os outros três são
+ * derivados da conta bancária das parcelas ainda não pagas, iguais ao que a
+ * coluna "Revisão" da lista mostra.
+ */
+export const FILTROS_REVISAO = [
+  "em_revisao",
+  "sem_conta",
+  "parcial",
+  "revisado",
+] as const;
+
+export type FiltroRevisao = (typeof FILTROS_REVISAO)[number];
+
+export const ROTULO_FILTRO_REVISAO: Record<FiltroRevisao, string> = {
+  em_revisao: "Com parcela em revisão",
+  sem_conta: "Sem conta bancária",
+  parcial: "Conta parcial",
+  revisado: "Revisado",
+};

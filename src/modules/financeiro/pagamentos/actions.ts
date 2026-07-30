@@ -8,6 +8,7 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   listarParcelasPagas,
+  type FiltrosParcelasPagas,
   type ParcelasPagasPagina,
 } from "@/modules/financeiro/pagamentos/queries";
 
@@ -98,14 +99,49 @@ export async function estornarPagamento(
   return { ok: true };
 }
 
+/** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
+const VALOR_MAXIMO = 999999999999.99;
+
+const valorFiltroSchema = z.number().min(0).max(VALOR_MAXIMO).optional();
+
+/**
+ * Filtros do histórico vindos do cliente. Revalidados aqui mesmo já tendo sido
+ * validados na página: a action é porta de entrada pública, e filtro inválido
+ * não pode virar filtro do PostgREST.
+ */
+const filtrosPagasSchema = z.object({
+  busca: z.string().trim().max(120).optional(),
+  fornecedorId: z.uuid().optional(),
+  contaBancariaId: z.uuid().optional(),
+  valorDe: valorFiltroSchema,
+  valorAte: valorFiltroSchema,
+  vencimentoDe: z.iso.date().optional(),
+  vencimentoAte: z.iso.date().optional(),
+  programadaDe: z.iso.date().optional(),
+  programadaAte: z.iso.date().optional(),
+  pagamentoDe: z.iso.date().optional(),
+  pagamentoAte: z.iso.date().optional(),
+});
+
 /**
  * Página do histórico de pagamentos, para a paginação server-side da tabela
- * "Pagas". Exige só a permissão de ver (a RLS no banco é a barreira final).
+ * "Pagas". Exige só a permissão de ver (a RLS no banco é a barreira final). Os
+ * filtros vão para o banco: a aba é paginada no servidor, então filtrar em
+ * memória mostraria "3 resultados" quando existem trezentos.
  */
 export async function buscarParcelasPagas(
   pagina: number,
   tamanho: number,
+  filtros: FiltrosParcelasPagas = {},
 ): Promise<ParcelasPagasPagina> {
   await exigirPermissao(RECURSO, "ver");
-  return listarParcelasPagas({ pagina, tamanho });
+
+  const validados = filtrosPagasSchema.safeParse(filtros);
+  if (!validados.success) {
+    // Recusa em vez de ignorar: devolver a lista inteira com os filtros na tela
+    // faria o operador ler o histórico todo como se fosse o filtrado.
+    throw new Error("Filtro inválido no histórico de pagamentos");
+  }
+
+  return listarParcelasPagas({ pagina, tamanho, filtros: validados.data });
 }

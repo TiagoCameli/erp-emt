@@ -21,6 +21,7 @@ import {
 import {
   CAMINHO_DO_PAGAMENTO,
   ROTULO_TIPO_FORMA,
+  TIPOS_FORMA_PAGAMENTO,
 } from "@/modules/_shared/forma-pagamento";
 import type { FormaLista } from "@/modules/cadastros/formas-pagamento/queries";
 import { FormaFormDrawer } from "./forma-form-drawer";
@@ -30,6 +31,17 @@ type FiltroStatus = "ativos" | "inativos" | "todos";
 const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
   { valor: "inativos", rotulo: "Inativos" },
+];
+
+const OPCOES_TIPO = TIPOS_FORMA_PAGAMENTO.map((tipo) => ({
+  valor: tipo,
+  rotulo: ROTULO_TIPO_FORMA[tipo],
+}));
+
+/** Separar o que já roda do que nunca rodou é o que decide a desativação. */
+const OPCOES_USO = [
+  { valor: "usadas", rotulo: "Usadas em ordens" },
+  { valor: "sem-uso", rotulo: "Nunca usadas" },
 ];
 
 export interface FormasTabelaProps {
@@ -53,6 +65,8 @@ export function FormasTabela({
 }: FormasTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [tipo, setTipo] = React.useState("");
+  const [uso, setUso] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<FormaLista | null>(null);
@@ -72,10 +86,13 @@ export function FormasTabela({
     return formas.filter((forma) => {
       if (status === "ativos" && !forma.ativo) return false;
       if (status === "inativos" && forma.ativo) return false;
+      if (tipo !== "" && forma.tipo !== tipo) return false;
+      if (uso === "usadas" && forma.usoEmOrdens === 0) return false;
+      if (uso === "sem-uso" && forma.usoEmOrdens > 0) return false;
       if (termo && !forma.nome.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [formas, busca, status]);
+  }, [formas, busca, status, tipo, uso]);
 
   const colunas = React.useMemo<ColumnDef<FormaLista, unknown>[]>(() => {
     const base: ColumnDef<FormaLista, unknown>[] = [
@@ -193,6 +210,38 @@ export function FormasTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo",
+            ocultoPorPadrao: true,
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={OPCOES_TIPO}
+                placeholder="Tipo"
+                todosRotulo="Todos os tipos"
+              />
+            ),
+          },
+          {
+            id: "uso",
+            rotulo: "Uso em ordens",
+            ocultoPorPadrao: true,
+            temValor: uso !== "",
+            onLimpar: () => setUso(""),
+            elemento: (
+              <FiltroSelect
+                valor={uso}
+                onValorChange={setUso}
+                opcoes={OPCOES_USO}
+                placeholder="Uso"
+                todosRotulo="Usadas e não usadas"
               />
             ),
           },

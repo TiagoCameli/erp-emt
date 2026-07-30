@@ -22,6 +22,13 @@ export interface ParcelaProgramada {
   dataProgramada: string | null;
   dataEfetiva: string | null;
   fornecedorNome: string;
+  /**
+   * Conta de onde o dinheiro vai sair. Nunca é null aqui (o banco recusa
+   * aprovar parcela sem conta), mas a coluna é nullable e o tipo acompanha o
+   * banco em vez de mentir.
+   */
+  contaBancariaId: string | null;
+  contaBancariaNome: string | null;
 }
 
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
@@ -53,6 +60,8 @@ export async function listarProgramados(): Promise<ParcelaProgramada[]> {
     .from("lancamento_parcelas")
     .select(
       `id, numero_parcela, valor, data_vencimento, data_programada, lancamento_id,
+       conta_bancaria_id,
+       contas_bancarias(nome),
        lancamentos!inner(
          numero, descricao, tipo, status,
          categorias_financeiras(nome),
@@ -83,6 +92,8 @@ export async function listarProgramados(): Promise<ParcelaProgramada[]> {
       parcela.data_vencimento,
     ),
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
+    contaBancariaId: parcela.conta_bancaria_id,
+    contaBancariaNome: parcela.contas_bancarias?.nome ?? null,
   }));
 
   return itens.sort((a, b) => {

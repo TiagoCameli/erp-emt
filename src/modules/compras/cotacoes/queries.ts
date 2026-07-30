@@ -13,7 +13,11 @@ import {
   inicioDoDiaISO,
   padraoBusca,
 } from "@/modules/compras/_shared/lista";
-import type { StatusCotacao } from "@/modules/compras/cotacoes/schemas";
+import type {
+  AutoriaCotacao,
+  OcGeradaCotacao,
+  StatusCotacao,
+} from "@/modules/compras/cotacoes/schemas";
 
 /** Filtros e paginação da listagem de cotações. */
 export interface ListarCotacoesParams {
@@ -24,6 +28,20 @@ export interface ListarCotacoesParams {
   /** Período de criação (inclusive), yyyy-mm-dd. */
   de?: string;
   ate?: string;
+  /** Categoria do custo da cotação (categorias_financeiras.id). */
+  categoriaId?: string;
+  /** Fornecedor que participou da cotação (cotacao_fornecedores). */
+  fornecedorId?: string;
+  /** Fornecedor escolhido como vencedor. */
+  vencedorId?: string;
+  /** Insumo presente em algum item cotado. */
+  insumoId?: string;
+  /** Cotação com ou sem ordem de compra gerada a partir dela. */
+  ocGerada?: OcGeradaCotacao;
+  /** Autoria da cotação, relativa a quem está olhando a lista. */
+  autoria?: AutoriaCotacao;
+  /** Usuário logado: necessário para resolver o filtro de autoria. */
+  usuarioId?: string;
 }
 
 /**
@@ -151,11 +169,19 @@ function nomeFornecedor(
   return fornecedor.nome_fantasia ?? fornecedor.razao_social;
 }
 
+/** Colunas fixas da listagem, sem os embeds que só existem quando há filtro. */
+const SELECT_LISTA_COTACAO = `id, numero, status, created_at, created_by, descricao, observacoes,
+   vencedor_fornecedor_id, cotacao_fornecedores(count),
+   fornecedores(razao_social, nome_fantasia),
+   categorias_financeiras(nome)`;
+
 /**
  * Lista as cotações com paginação server-side (range + count exact), a
  * contagem de fornecedores agregada no banco e o nome do vencedor (quando
- * finalizada). Aceita filtro por status, período de criação e busca por número
- * da cotação ou nome do fornecedor vencedor. Traz também a descrição com o nome
+ * finalizada). Todo filtro é aplicado no banco, nunca na página carregada:
+ * status, categoria do custo, fornecedor participante, fornecedor vencedor,
+ * insumo cotado, existência de OC gerada, autoria, período de criação e busca
+ * por número, descrição ou nome do vencedor. Traz também a descrição com o nome
  * da categoria do custo, e observações e quem criou (colunas opcionais).
  */
 export async function listarCotacoes(
@@ -168,19 +194,57 @@ export async function listarCotacoes(
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
+  // Os embeds de filtro entram no select só quando o filtro está ligado: join a
+  // mais em toda listagem seria custo cobrado de quem nem usa o filtro.
+  //
+  // `participante` é apelido obrigatório porque `cotacao_fornecedores(count)` já
+  // ocupa o nome da relação, e a contagem tem que continuar somando TODOS os
+  // fornecedores da cotação, não só o que está sendo filtrado. Como cada embed
+  // é uma subconsulta lateral independente, o filtro do apelido não mexe no
+  // count e o `!inner` corta as cotações onde o fornecedor não cotou.
+  const partesSelect = [SELECT_LISTA_COTACAO];
+  if (params.fornecedorId) {
+    partesSelect.push("participante:cotacao_fornecedores!inner(fornecedor_id)");
+  }
+  if (params.insumoId) {
+    partesSelect.push("item:cotacao_itens!inner(insumo_id)");
+  }
+  // "Com OC" é join interno; "sem OC" é join à esquerda mais embed nulo, que é
+  // como o PostgREST expressa "não existe filho" (não há NOT EXISTS na API).
+  if (params.ocGerada === "com") partesSelect.push("ordens_compra!inner(id)");
+  if (params.ocGerada === "sem") partesSelect.push("ordens_compra!left(id)");
+
   let consulta = supabase
     .from("cotacoes")
-    .select(
-      `id, numero, status, created_at, created_by, descricao, observacoes,
-       vencedor_fornecedor_id, cotacao_fornecedores(count),
-       fornecedores(razao_social, nome_fantasia),
-       categorias_financeiras(nome)`,
-      { count: "exact" },
-    )
+    .select(partesSelect.join(", "), { count: "exact" })
     .order("created_at", { ascending: false })
     .range(de, ate);
 
   if (params.status) consulta = consulta.eq("status", params.status);
+  if (params.categoriaId) {
+    consulta = consulta.eq("categoria_id", params.categoriaId);
+  }
+  if (params.vencedorId) {
+    consulta = consulta.eq("vencedor_fornecedor_id", params.vencedorId);
+  }
+  if (params.fornecedorId) {
+    consulta = consulta.eq("participante.fornecedor_id", params.fornecedorId);
+  }
+  if (params.insumoId) {
+    consulta = consulta.eq("item.insumo_id", params.insumoId);
+  }
+  if (params.ocGerada === "sem") {
+    consulta = consulta.is("ordens_compra", null);
+  }
+  // Autoria só faz sentido com o usuário em mãos; sem ele o filtro é ignorado
+  // em vez de virar uma lista errada. "Criadas por outros" é `neq`, então
+  // cotação com autor nulo (carga antiga) fica fora das duas pontas.
+  if (params.autoria && params.usuarioId) {
+    consulta =
+      params.autoria === "eu"
+        ? consulta.eq("created_by", params.usuarioId)
+        : consulta.neq("created_by", params.usuarioId);
+  }
   // created_at é timestamptz: o dia final entra inteiro somando 1 dia e usando
   // "menor que", senão a cotação criada às 14h do dia "ate" ficaria de fora.
   if (params.de) consulta = consulta.gte("created_at", inicioDoDiaISO(params.de));
@@ -191,20 +255,22 @@ export async function listarCotacoes(
   if (params.busca) {
     const padrao = padraoBusca(params.busca);
     const idsVencedores = await idsFornecedoresPorNome(supabase, padrao);
-    const clausulas = [`numero.ilike.${padrao}`];
+    const clausulas = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
     if (idsVencedores.length > 0) {
       clausulas.push(`vencedor_fornecedor_id.in.(${idsVencedores.join(",")})`);
     }
     consulta = consulta.or(clausulas.join(","));
   }
 
-  const { data, error, count } = await consulta;
+  // `returns` explícito porque o select é montado em tempo de execução: sem
+  // string literal o supabase-js não tem o que inferir.
+  const { data, error, count } = await consulta.returns<LinhaListaCotacao[]>();
 
   if (error) {
     throw new Error("Não foi possível carregar as cotações");
   }
 
-  const linhas = (data ?? []) as LinhaListaCotacao[];
+  const linhas = data ?? [];
 
   // Nome de quem criou vem pela RPC de auditoria (security definer): a tabela
   // `usuarios` não é legível por quem só tem permissão de Compras.

@@ -3,18 +3,23 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
-import { HandCoins, Plus } from "lucide-react";
+import { Filter, HandCoins, Plus } from "lucide-react";
 
 import {
   CelulaDescricaoCategoria,
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroMes,
+  FiltroPeriodo,
   FiltroSelect,
+  FiltroValor,
   KPICard,
   MoneyText,
   PageHeader,
   StatusBadge,
+  useBuscaUrl,
+  useFaixaUrl,
   useFiltrosUrl,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
@@ -42,6 +47,17 @@ export interface ContasReceberClienteProps {
   pagina: number;
   tamanho: number;
   statusFiltro: string;
+  /** Filtros vindos da URL: todos são aplicados no banco (paginação server-side). */
+  buscaFiltro: string;
+  categoriaFiltro: string;
+  mesFiltro: string;
+  contaFiltro: string;
+  valorDeFiltro: string;
+  valorAteFiltro: string;
+  vencimentoDeFiltro: string;
+  vencimentoAteFiltro: string;
+  recebimentoDeFiltro: string;
+  recebimentoAteFiltro: string;
   contas: ContaBancariaOpcao[];
   categorias: CategoriaOpcao[];
   podeCriar: boolean;
@@ -49,10 +65,12 @@ export interface ContasReceberClienteProps {
 }
 
 /**
- * Tela de contas a receber: KPI do total em aberto, filtro por status,
- * tabela paginada das parcelas a receber e as ações de novo recebível e baixa
- * de recebimento. Paginação e filtro de status moram na URL (server-side); a
- * busca por texto filtra a página atual no client.
+ * Tela de contas a receber: KPI do total em aberto, tabela paginada das
+ * parcelas a receber e as ações de novo recebível e baixa de recebimento.
+ *
+ * Paginação e TODOS os filtros moram na URL e são aplicados no banco. Filtrar
+ * só a página carregada seria mentira numa listagem paginada server-side: a
+ * pessoa filtra, vê três linhas e conclui que só existem três.
  */
 export function ContasReceberCliente({
   linhas,
@@ -61,6 +79,16 @@ export function ContasReceberCliente({
   pagina,
   tamanho,
   statusFiltro,
+  buscaFiltro,
+  categoriaFiltro,
+  mesFiltro,
+  contaFiltro,
+  valorDeFiltro,
+  valorAteFiltro,
+  vencimentoDeFiltro,
+  vencimentoAteFiltro,
+  recebimentoDeFiltro,
+  recebimentoAteFiltro,
   contas,
   categorias,
   podeCriar,
@@ -69,7 +97,15 @@ export function ContasReceberCliente({
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
 
-  const [busca, setBusca] = React.useState("");
+  // Busca com debounce na URL: escrever o termo zera a página sozinho.
+  const { busca, setBusca } = useBuscaUrl(buscaFiltro);
+  // Faixa de valor é digitada dígito a dígito: vai pela URL com espera, senão
+  // cada tecla viraria uma consulta e o campo perderia caracteres.
+  const {
+    faixa: faixaValor,
+    setFaixa: setFaixaValor,
+    limpar: limparFaixaValor,
+  } = useFaixaUrl("valorDe", "valorAte");
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [parcelaEmBaixa, setParcelaEmBaixa] =
     React.useState<ContaReceberLinha | null>(null);
@@ -78,8 +114,16 @@ export function ContasReceberCliente({
     router.refresh();
   }
 
+  /**
+   * Escreve o filtro na URL e volta para a primeira página. Sem zerar a página,
+   * quem está na página 3 filtra e cai numa página vazia.
+   */
+  function aplicarFiltro(mudancas: Record<string, string | null>) {
+    setMuitos({ ...mudancas, pagina: null });
+  }
+
   function aoMudarStatus(novoStatus: string) {
-    setMuitos({ status: novoStatus || null, pagina: null });
+    aplicarFiltro({ status: novoStatus || null });
   }
 
   function aoMudarPaginacao(paginacao: PaginationState) {
@@ -93,15 +137,35 @@ export function ContasReceberCliente({
     });
   }
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    if (!termo) return linhas;
-    return linhas.filter((linha) => {
-      const alvo =
-        `${linha.lancamentoNumero ?? ""} ${linha.descricao}`.toLowerCase();
-      return alvo.includes(termo);
-    });
-  }, [linhas, busca]);
+  const opcoesCategoria = React.useMemo(
+    () =>
+      categorias.map((categoria) => ({
+        valor: categoria.id,
+        rotulo: categoria.nome,
+      })),
+    [categorias],
+  );
+
+  const opcoesConta = React.useMemo(
+    () => contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome })),
+    [contas],
+  );
+
+  // Sem filtro em memória: a lista já chega filtrada do banco.
+  const dados = linhas;
+
+  const filtrando =
+    buscaFiltro !== "" ||
+    statusFiltro !== "" ||
+    categoriaFiltro !== "" ||
+    contaFiltro !== "" ||
+    mesFiltro !== "" ||
+    valorDeFiltro !== "" ||
+    valorAteFiltro !== "" ||
+    vencimentoDeFiltro !== "" ||
+    vencimentoAteFiltro !== "" ||
+    recebimentoDeFiltro !== "" ||
+    recebimentoAteFiltro !== "";
 
   const colunas = React.useMemo<ColumnDef<ContaReceberLinha, unknown>[]>(
     () => [
@@ -189,7 +253,8 @@ export function ContasReceberCliente({
 
   // Filtros declarados na DataTable (e não numa FilterBar solta) para entrarem
   // no menu "Filtros": cada usuário escolhe quais quer ver, e a escolha fica
-  // salva com as colunas dele.
+  // salva com as colunas dele. Busca e status nascem visíveis; o resto a pessoa
+  // liga no menu, senão a barra vira uma parede de dez campos.
   const filtros: FiltroConfiguravel[] = [
     {
       id: "busca",
@@ -215,6 +280,101 @@ export function ContasReceberCliente({
           opcoes={OPCOES_STATUS}
           placeholder="Status"
           todosRotulo="Todos os status"
+        />
+      ),
+    },
+    {
+      id: "categoria",
+      rotulo: "Categoria",
+      ocultoPorPadrao: true,
+      temValor: categoriaFiltro !== "",
+      onLimpar: () => aplicarFiltro({ categoria: null }),
+      elemento: (
+        <FiltroSelect
+          valor={categoriaFiltro}
+          onValorChange={(valor) => aplicarFiltro({ categoria: valor || null })}
+          opcoes={opcoesCategoria}
+          placeholder="Categoria"
+          todosRotulo="Todas as categorias"
+          className="max-w-56"
+        />
+      ),
+    },
+    {
+      id: "conta",
+      rotulo: "Conta bancária",
+      ocultoPorPadrao: true,
+      temValor: contaFiltro !== "",
+      onLimpar: () => aplicarFiltro({ conta: null }),
+      elemento: (
+        <FiltroSelect
+          valor={contaFiltro}
+          onValorChange={(valor) => aplicarFiltro({ conta: valor || null })}
+          opcoes={opcoesConta}
+          placeholder="Conta do recebimento"
+          todosRotulo="Todas as contas"
+          className="max-w-56"
+        />
+      ),
+    },
+    {
+      id: "mes",
+      rotulo: "Mês de referência",
+      ocultoPorPadrao: true,
+      temValor: mesFiltro !== "",
+      onLimpar: () => aplicarFiltro({ mes: null }),
+      elemento: (
+        <FiltroMes
+          valor={mesFiltro}
+          onValorChange={(valor) => aplicarFiltro({ mes: valor || null })}
+        />
+      ),
+    },
+    {
+      id: "valor",
+      rotulo: "Faixa de valor",
+      ocultoPorPadrao: true,
+      temValor: faixaValor.de !== "" || faixaValor.ate !== "",
+      onLimpar: limparFaixaValor,
+      elemento: (
+        <FiltroValor
+          de={faixaValor.de}
+          ate={faixaValor.ate}
+          onValorChange={(de, ate) => setFaixaValor({ de, ate })}
+        />
+      ),
+    },
+    {
+      id: "vencimento",
+      rotulo: "Período de vencimento",
+      ocultoPorPadrao: true,
+      temValor: vencimentoDeFiltro !== "" || vencimentoAteFiltro !== "",
+      onLimpar: () => aplicarFiltro({ vencDe: null, vencAte: null }),
+      elemento: (
+        <FiltroPeriodo
+          de={vencimentoDeFiltro}
+          ate={vencimentoAteFiltro}
+          onPeriodoChange={(de, ate) =>
+            aplicarFiltro({ vencDe: de || null, vencAte: ate || null })
+          }
+          rotulo="Vencimento"
+        />
+      ),
+    },
+    {
+      id: "recebimento",
+      rotulo: "Período de recebimento",
+      ocultoPorPadrao: true,
+      temValor: recebimentoDeFiltro !== "" || recebimentoAteFiltro !== "",
+      onLimpar: () => aplicarFiltro({ recDe: null, recAte: null }),
+      elemento: (
+        <FiltroPeriodo
+          de={recebimentoDeFiltro}
+          ate={recebimentoAteFiltro}
+          onPeriodoChange={(de, ate) =>
+            aplicarFiltro({ recDe: de || null, recAte: ate || null })
+          }
+          rotulo="Recebimento"
         />
       ),
     },
@@ -258,24 +418,35 @@ export function ContasReceberCliente({
           pageSize={tamanho}
           onPaginationChange={aoMudarPaginacao}
           emptyState={
-            <EmptyState
-              icone={HandCoins}
-              titulo="Nenhuma conta a receber"
-              descricao="Crie o primeiro recebível deste cliente para começar"
-              className="border-none bg-transparent"
-              acao={
-                podeCriar ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => setDrawerAberto(true)}
-                  >
-                    <Plus />
-                    Novo a receber
-                  </Button>
-                ) : undefined
-              }
-            />
+            // Com filtro aplicado, "nenhuma conta a receber" seria mentira: pode
+            // ter muita coisa fora do filtro.
+            filtrando ? (
+              <EmptyState
+                icone={Filter}
+                titulo="Nenhuma conta a receber com esses filtros"
+                descricao="Ajuste ou limpe os filtros para ver o restante dos recebíveis."
+                className="border-none bg-transparent"
+              />
+            ) : (
+              <EmptyState
+                icone={HandCoins}
+                titulo="Nenhuma conta a receber"
+                descricao="Crie o primeiro recebível deste cliente para começar"
+                className="border-none bg-transparent"
+                acao={
+                  podeCriar ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setDrawerAberto(true)}
+                    >
+                      <Plus />
+                      Novo a receber
+                    </Button>
+                  ) : undefined
+                }
+              />
+            )
           }
         />
       </div>

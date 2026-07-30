@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { Copy, ExternalLink, Plus, ShoppingCart } from "lucide-react";
@@ -17,8 +18,10 @@ import {
   FiltroMes,
   FiltroPeriodo,
   FiltroSelect,
+  FiltroValor,
   StatusBadge,
   useBuscaUrl,
+  useFaixaUrl,
   useFiltrosUrl,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -29,8 +32,18 @@ import {
   formatarMesAno,
 } from "@/lib/formatadores";
 import { infoStatusOC, ROTULO_STATUS_OC } from "@/modules/compras/_shared/formato";
+import {
+  OPCOES_AUTORIA_OC,
+  OPCOES_NOTA_OC,
+  OPCOES_ORIGEM_OC,
+} from "@/modules/compras/ordens/filtros";
 import type {
+  CategoriaOpcao,
+  CentroCustoOpcao,
+  CondicaoPagamentoOpcao,
+  FormaPagamentoOpcao,
   FornecedorOpcao,
+  InsumoOpcao,
   OrdemLista,
 } from "@/modules/compras/ordens/queries";
 import { useNovaOrdem } from "./nova-ordem-provider";
@@ -120,6 +133,18 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
         <CelulaVazia />
       ),
   }),
+  // Existe para o filtro "Nota fiscal" ser conferível: filtrar por "sem nota" e
+  // não ter onde ver a nota das outras deixaria o usuário no escuro.
+  colunaTexto<OrdemLista>("notaFiscal", "Nota fiscal", {
+    size: 130,
+    meta: { ocultaPorPadrao: true },
+    cell: ({ row }) =>
+      row.original.notaFiscal ? (
+        <span className="codigo-doc">{row.original.notaFiscal}</span>
+      ) : (
+        <CelulaVazia />
+      ),
+  }),
   colunaData<OrdemLista>("criadoEm", "Criada em", formatarDataHora, {
     size: 150,
     meta: { ocultaPorPadrao: true },
@@ -142,16 +167,37 @@ export interface OrdensTabelaProps {
   ate: string;
   /** Mês de referência do filtro, no formato do input (yyyy-MM). */
   mes: string;
+  categoriaId: string;
+  formaPagamentoId: string;
+  condicaoPagamentoId: string;
+  /** Período de criação no sistema, yyyy-mm-dd. */
+  criadaDe: string;
+  criadaAte: string;
+  centroCustoId: string;
+  insumoId: string;
+  /** "com" ou "sem" nota fiscal registrada. Vazio = todas. */
+  nota: string;
+  /** "cotacao" ou "direta". Vazio = todas. */
+  origem: string;
+  /** "minhas" ou vazio. */
+  autoria: string;
   fornecedores: FornecedorOpcao[];
+  categorias: CategoriaOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
+  condicoesPagamento: CondicaoPagamentoOpcao[];
+  centrosCusto: CentroCustoOpcao[];
+  insumos: InsumoOpcao[];
   /** Usuário logado: a personalização da tabela é lembrada por pessoa. */
   idUsuario: string;
 }
 
 /**
- * Listagem das ordens de compra com paginação server-side e filtros (busca por
- * número ou fornecedor, status, fornecedor e período de emissão) persistidos na
- * URL. Clicar numa linha abre o detalhe; o menu "..." tem as ações secundárias.
- * Colunas, larguras e ordem são escolha do usuário, lembradas no navegador.
+ * Listagem das ordens de compra com paginação e filtros server-side,
+ * persistidos na URL. A tela declara todos os filtros que o dado da OC permite;
+ * o padrão visível continua enxuto (busca, status, fornecedor, mês e período da
+ * compra) e o resto o usuário liga no menu "Filtros", que lembra a escolha por
+ * pessoa. Clicar numa linha abre o detalhe; o menu "..." tem as ações
+ * secundárias. Colunas, larguras e ordem também são escolha do usuário.
  */
 export function OrdensTabela({
   ordens,
@@ -164,13 +210,37 @@ export function OrdensTabela({
   de,
   ate,
   mes,
+  categoriaId,
+  formaPagamentoId,
+  condicaoPagamentoId,
+  criadaDe,
+  criadaAte,
+  centroCustoId,
+  insumoId,
+  nota,
+  origem,
+  autoria,
   fornecedores,
+  categorias,
+  formasPagamento,
+  condicoesPagamento,
+  centrosCusto,
+  insumos,
   idUsuario,
 }: OrdensTabelaProps) {
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const novaOrdem = useNovaOrdem();
+
+  // A faixa de valor é digitada dígito a dígito, então vai para a URL com
+  // espera (o canônico cuida disso): escrevendo a cada tecla, o input voltaria
+  // do servidor no meio da digitação e perderia caracteres.
+  const {
+    faixa: faixaValor,
+    setFaixa: setFaixaValor,
+    limpar: limparFaixaValor,
+  } = useFaixaUrl("valorDe", "valorAte");
 
   function aoMudarPaginacao(paginacao: PaginationState) {
     setMuitos({
@@ -291,6 +361,214 @@ export function OrdensTabela({
                   pagina: "1",
                 })
               }
+            />
+          ),
+        },
+        {
+          id: "categoria",
+          rotulo: "Categoria do custo",
+          ocultoPorPadrao: true,
+          temValor: categoriaId !== "",
+          onLimpar: () => setMuitos({ categoria: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={categoriaId}
+              onValorChange={(valor) =>
+                setMuitos({
+                  categoria: valor === "" ? null : valor,
+                  pagina: "1",
+                })
+              }
+              opcoes={categorias.map((categoria) => ({
+                valor: categoria.id,
+                rotulo: categoria.nome,
+              }))}
+              placeholder="Categoria do custo"
+              todosRotulo="Todas as categorias"
+              className="max-w-56"
+            />
+          ),
+        },
+        {
+          id: "forma",
+          rotulo: "Forma de pagamento",
+          ocultoPorPadrao: true,
+          temValor: formaPagamentoId !== "",
+          onLimpar: () => setMuitos({ forma: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={formaPagamentoId}
+              onValorChange={(valor) =>
+                setMuitos({ forma: valor === "" ? null : valor, pagina: "1" })
+              }
+              opcoes={formasPagamento.map((forma) => ({
+                valor: forma.id,
+                rotulo: forma.nome,
+              }))}
+              placeholder="Forma"
+              todosRotulo="Todas as formas"
+            />
+          ),
+        },
+        {
+          id: "condicao",
+          rotulo: "Condição de pagamento",
+          ocultoPorPadrao: true,
+          temValor: condicaoPagamentoId !== "",
+          onLimpar: () => setMuitos({ condicao: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={condicaoPagamentoId}
+              onValorChange={(valor) =>
+                setMuitos({ condicao: valor === "" ? null : valor, pagina: "1" })
+              }
+              opcoes={condicoesPagamento.map((condicao) => ({
+                valor: condicao.id,
+                rotulo: condicao.descricao,
+              }))}
+              placeholder="Condição"
+              todosRotulo="Todas as condições"
+              className="max-w-56"
+            />
+          ),
+        },
+        {
+          id: "valor",
+          rotulo: "Faixa de valor",
+          ocultoPorPadrao: true,
+          temValor: faixaValor.de !== "" || faixaValor.ate !== "",
+          onLimpar: limparFaixaValor,
+          elemento: (
+            <FiltroValor
+              de={faixaValor.de}
+              ate={faixaValor.ate}
+              rotulo="Valor total"
+              onValorChange={(novoDe, novoAte) =>
+                setFaixaValor({ de: novoDe, ate: novoAte })
+              }
+            />
+          ),
+        },
+        {
+          id: "criacao",
+          rotulo: "Período de criação",
+          ocultoPorPadrao: true,
+          temValor: criadaDe !== "" || criadaAte !== "",
+          onLimpar: () =>
+            setMuitos({ criadaDe: null, criadaAte: null, pagina: "1" }),
+          elemento: (
+            <FiltroPeriodo
+              de={criadaDe}
+              ate={criadaAte}
+              rotulo="Criada"
+              onPeriodoChange={(novoDe, novoAte) =>
+                setMuitos({
+                  criadaDe: novoDe === "" ? null : novoDe,
+                  criadaAte: novoAte === "" ? null : novoAte,
+                  pagina: "1",
+                })
+              }
+            />
+          ),
+        },
+        {
+          id: "nota",
+          rotulo: "Nota fiscal",
+          ocultoPorPadrao: true,
+          temValor: nota !== "",
+          onLimpar: () => setMuitos({ nota: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={nota}
+              onValorChange={(valor) =>
+                setMuitos({ nota: valor === "" ? null : valor, pagina: "1" })
+              }
+              opcoes={OPCOES_NOTA_OC}
+              placeholder="Nota fiscal"
+              todosRotulo="Com e sem nota"
+            />
+          ),
+        },
+        {
+          id: "origem",
+          rotulo: "Origem",
+          ocultoPorPadrao: true,
+          temValor: origem !== "",
+          onLimpar: () => setMuitos({ origem: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={origem}
+              onValorChange={(valor) =>
+                setMuitos({ origem: valor === "" ? null : valor, pagina: "1" })
+              }
+              opcoes={OPCOES_ORIGEM_OC}
+              placeholder="Origem"
+              todosRotulo="Qualquer origem"
+            />
+          ),
+        },
+        {
+          id: "centro",
+          rotulo: "Centro de custo",
+          ocultoPorPadrao: true,
+          temValor: centroCustoId !== "",
+          onLimpar: () => setMuitos({ centro: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={centroCustoId}
+              onValorChange={(valor) =>
+                setMuitos({ centro: valor === "" ? null : valor, pagina: "1" })
+              }
+              // Mesmo rótulo "CÓDIGO Nome" que o formulário da OC usa.
+              opcoes={centrosCusto.map((centro) => ({
+                valor: centro.id,
+                rotulo: centro.codigo
+                  ? `${centro.codigo} ${centro.nome}`
+                  : centro.nome,
+              }))}
+              placeholder="Centro de custo"
+              todosRotulo="Todos os centros de custo"
+              className="max-w-56"
+            />
+          ),
+        },
+        {
+          id: "insumo",
+          rotulo: "Insumo comprado",
+          ocultoPorPadrao: true,
+          temValor: insumoId !== "",
+          onLimpar: () => setMuitos({ insumo: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={insumoId}
+              onValorChange={(valor) =>
+                setMuitos({ insumo: valor === "" ? null : valor, pagina: "1" })
+              }
+              opcoes={insumos.map((insumo) => ({
+                valor: insumo.id,
+                rotulo: insumo.nome,
+              }))}
+              placeholder="Insumo"
+              todosRotulo="Todos os insumos"
+              className="max-w-56"
+            />
+          ),
+        },
+        {
+          id: "autoria",
+          rotulo: "Autoria",
+          ocultoPorPadrao: true,
+          temValor: autoria !== "",
+          onLimpar: () => setMuitos({ autoria: null, pagina: "1" }),
+          elemento: (
+            <FiltroSelect
+              valor={autoria}
+              onValorChange={(valor) =>
+                setMuitos({ autoria: valor === "" ? null : valor, pagina: "1" })
+              }
+              opcoes={OPCOES_AUTORIA_OC}
+              placeholder="Autoria"
+              todosRotulo="Qualquer autor"
             />
           ),
         },

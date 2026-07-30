@@ -11,6 +11,7 @@ import {
   EmptyState,
   FiltroBusca,
   FiltroSelect,
+  FiltroValor,
   MoneyText,
   StatusBadge,
 } from "@/components/canonicos";
@@ -21,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
 import { removerFuncao } from "@/modules/cadastros/funcoes/actions";
 import type { FuncaoLista } from "@/modules/cadastros/funcoes/queries";
 
@@ -41,8 +43,10 @@ export interface FuncoesTabelaProps {
 }
 
 /**
- * Listagem de funções com busca por nome, filtro de status e ações por
- * linha: editar e excluir (com motivo, via lixeira).
+ * Listagem de funções com busca por nome, filtros de status, CBO e faixa de
+ * salário base, e ações por linha: editar e excluir (com motivo, via lixeira).
+ *
+ * A página carrega o catálogo inteiro, então filtrar em memória está correto.
  */
 export function FuncoesTabela({
   funcoes,
@@ -52,17 +56,41 @@ export function FuncoesTabela({
 }: FuncoesTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [cbo, setCbo] = React.useState("");
+  const [salarioDe, setSalarioDe] = React.useState("");
+  const [salarioAte, setSalarioAte] = React.useState("");
   const [excluindo, setExcluindo] = React.useState<FuncaoLista | null>(null);
+
+  // CBO é texto livre no cadastro: as opções são os códigos já usados.
+  const opcoesCbo = React.useMemo(
+    () => opcoesDistintas(funcoes.map((funcao) => funcao.cbo)),
+    [funcoes],
+  );
 
   const filtradas = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
+    const minimo = salarioDe === "" ? null : Number(salarioDe);
+    const maximo = salarioAte === "" ? null : Number(salarioAte);
     return funcoes.filter((funcao) => {
       if (status === "ativos" && !funcao.ativo) return false;
       if (status === "inativos" && funcao.ativo) return false;
+      if (cbo !== "" && funcao.cbo !== cbo) return false;
+      // Função sem salário base sai quando há faixa pedida: não há como dizer
+      // que ela cabe entre dois valores.
+      if (minimo !== null && Number.isFinite(minimo)) {
+        if (funcao.salarioBase === null || funcao.salarioBase < minimo) {
+          return false;
+        }
+      }
+      if (maximo !== null && Number.isFinite(maximo)) {
+        if (funcao.salarioBase === null || funcao.salarioBase > maximo) {
+          return false;
+        }
+      }
       if (termo && !funcao.nome.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [funcoes, busca, status]);
+  }, [funcoes, busca, status, cbo, salarioDe, salarioAte]);
 
   async function aoConfirmarExclusao(motivo?: string) {
     if (!excluindo) return;
@@ -188,6 +216,43 @@ export function FuncoesTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "cbo",
+            rotulo: "CBO",
+            ocultoPorPadrao: true,
+            temValor: cbo !== "",
+            onLimpar: () => setCbo(""),
+            elemento: (
+              <FiltroSelect
+                valor={cbo}
+                onValorChange={setCbo}
+                opcoes={opcoesCbo}
+                placeholder="CBO"
+                todosRotulo="Todos os CBOs"
+              />
+            ),
+          },
+          {
+            id: "salarioBase",
+            rotulo: "Faixa de salário base",
+            ocultoPorPadrao: true,
+            temValor: salarioDe !== "" || salarioAte !== "",
+            onLimpar: () => {
+              setSalarioDe("");
+              setSalarioAte("");
+            },
+            elemento: (
+              <FiltroValor
+                de={salarioDe}
+                ate={salarioAte}
+                rotulo="Salário base"
+                onValorChange={(novoDe, novoAte) => {
+                  setSalarioDe(novoDe);
+                  setSalarioAte(novoAte);
+                }}
               />
             ),
           },

@@ -13,13 +13,23 @@ import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
 import {
   idsFornecedoresPorNome,
+  inicioDoDiaISO,
   padraoBusca,
 } from "@/modules/compras/_shared/lista";
+import type {
+  FiltroAutoriaOC,
+  FiltroNotaOC,
+  FiltroOrigemOC,
+} from "@/modules/compras/ordens/filtros";
 
 /** Client de servidor (mesmo tipo que `createClient()` de `@/lib/supabase/server` devolve). */
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-/** Filtros e paginação da listagem de ordens de compra. */
+/**
+ * Filtros e paginação da listagem de ordens de compra. Todos os filtros são
+ * aplicados no banco: a paginação é server-side, então filtrar só a página
+ * carregada mostraria "3 resultados" quando existem trezentos.
+ */
 export interface ListarOrdensParams {
   pagina: number;
   tamanho: number;
@@ -32,6 +42,30 @@ export interface ListarOrdensParams {
   ate?: string;
   /** Mês de referência exato (yyyy-mm-01). */
   mesCompetencia?: string;
+  /** Categoria financeira do custo. */
+  categoriaId?: string;
+  /** Forma de pagamento (o método: PIX, boleto, cartão...). */
+  formaPagamentoId?: string;
+  /** Condição de pagamento (o prazo: à vista, 30/60...). */
+  condicaoPagamentoId?: string;
+  /** Faixa de valor total da OC, em reais (inclusive nas duas pontas). */
+  valorDe?: number;
+  valorAte?: number;
+  /** Período de criação no sistema (created_at), yyyy-mm-dd. */
+  criadaDe?: string;
+  criadaAte?: string;
+  /** Centro de custo de algum item da OC. */
+  centroCustoId?: string;
+  /** Insumo comprado em algum item da OC. */
+  insumoId?: string;
+  /** OC com ou sem nota fiscal registrada (recebimento). */
+  nota?: FiltroNotaOC;
+  /** OC gerada de cotação ou emitida direto. */
+  origem?: FiltroOrigemOC;
+  /** Recorte por autoria. Só vale junto com `usuarioLogadoId`. */
+  autoria?: FiltroAutoriaOC;
+  /** Quem está olhando a lista, para o filtro de autoria. */
+  usuarioLogadoId?: string;
 }
 
 /**
@@ -56,6 +90,8 @@ export interface OrdemLista {
   condicaoPagamentoDescricao: string | null;
   formaPagamentoNome: string | null;
   cotacaoNumero: string | null;
+  /** Número da nota fiscal do recebimento, quando já foi registrado. */
+  notaFiscal: string | null;
   /** Data de sistema, imutável. */
   criadoEm: string;
   criadoPorNome: string | null;
@@ -257,13 +293,20 @@ async function ordensQuitadasSemNota(
 
 /**
  * Lista as ordens de compra com paginação server-side (range + count exact) e
- * o nome do fornecedor resolvido (join). Aceita filtro por status, fornecedor,
- * período de emissão e busca por número da OC ou nome do fornecedor. O
- * valor_total vem do banco (trigger), nunca recalculado no app.
+ * o nome do fornecedor resolvido (join). Todos os filtros de
+ * `ListarOrdensParams` são aplicados aqui, no banco. O valor_total vem do banco
+ * (trigger), nunca recalculado no app.
  *
- * O select também traz condição e forma de pagamento, cotação de origem e
- * criação: são as colunas opcionais da tabela, todas por join no mesmo
+ * O select também traz condição e forma de pagamento, cotação de origem, nota
+ * fiscal e criação: são as colunas opcionais da tabela, todas por join no mesmo
  * round-trip.
+ *
+ * `oc_itens` e `recebimentos` entram no select sempre, mesmo sem filtro ligado,
+ * porque o PostgREST só aceita filtrar por um relacionamento que está no select
+ * (`oc_itens.centro_custo_id=eq...`, `recebimentos=is.null`). São embeds à
+ * esquerda e minúsculos, então não escondem nem duplicam linha: OC sem item
+ * continua aparecendo. Trocar o select conforme o filtro faria a inferência de
+ * tipo do supabase-js cair, e a lista da página tem 25 linhas.
  */
 export async function listarOrdens(
   params: ListarOrdensParams,
@@ -284,7 +327,9 @@ export async function listarOrdens(
        categorias_financeiras(nome),
        condicoes_pagamento(descricao),
        formas_pagamento(nome),
-       cotacoes(numero)`,
+       cotacoes(numero),
+       recebimentos(numero_nf),
+       oc_itens(id)`,
       { count: "exact" },
     )
     .order("data_compra", { ascending: false })
@@ -299,6 +344,54 @@ export async function listarOrdens(
   if (params.ate) consulta = consulta.lte("data_compra", params.ate);
   if (params.mesCompetencia) {
     consulta = consulta.eq("mes_competencia", params.mesCompetencia);
+  }
+  if (params.categoriaId) {
+    consulta = consulta.eq("categoria_id", params.categoriaId);
+  }
+  if (params.formaPagamentoId) {
+    consulta = consulta.eq("forma_pagamento_id", params.formaPagamentoId);
+  }
+  if (params.condicaoPagamentoId) {
+    consulta = consulta.eq("condicao_pagamento_id", params.condicaoPagamentoId);
+  }
+  if (params.valorDe !== undefined) {
+    consulta = consulta.gte("valor_total", params.valorDe);
+  }
+  if (params.valorAte !== undefined) {
+    consulta = consulta.lte("valor_total", params.valorAte);
+  }
+  // created_at é timestamptz: o dia do usuário começa às 05:00 UTC (Rio Branco),
+  // então a ponta final é `lt` da meia-noite do dia seguinte.
+  if (params.criadaDe) {
+    consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadaDe));
+  }
+  if (params.criadaAte) {
+    consulta = consulta.lt("created_at", inicioDoDiaISO(params.criadaAte, 1));
+  }
+  // Centro de custo e insumo vivem no item, não na OC: o filtro cai no embed e o
+  // `oc_itens=not.is.null` é o que descarta a OC sem nenhum item batendo (mesmo
+  // efeito de um !inner, sem precisar mudar o select).
+  if (params.centroCustoId) {
+    consulta = consulta.eq("oc_itens.centro_custo_id", params.centroCustoId);
+  }
+  if (params.insumoId) {
+    consulta = consulta.eq("oc_itens.insumo_id", params.insumoId);
+  }
+  if (params.centroCustoId || params.insumoId) {
+    consulta = consulta.not("oc_itens", "is", null);
+  }
+  // recebimentos tem unique(ordem_compra_id): o embed é 1-para-1, então nulo
+  // significa exatamente "nota fiscal ainda não registrada".
+  if (params.nota === "com") {
+    consulta = consulta.not("recebimentos", "is", null);
+  }
+  if (params.nota === "sem") consulta = consulta.is("recebimentos", null);
+  if (params.origem === "cotacao") {
+    consulta = consulta.not("cotacao_id", "is", null);
+  }
+  if (params.origem === "direta") consulta = consulta.is("cotacao_id", null);
+  if (params.autoria === "minhas" && params.usuarioLogadoId) {
+    consulta = consulta.eq("created_by", params.usuarioLogadoId);
   }
 
   if (params.busca) {
@@ -344,6 +437,7 @@ export async function listarOrdens(
     condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
     formaPagamentoNome: ordem.formas_pagamento?.nome ?? null,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
+    notaFiscal: ordem.recebimentos?.numero_nf ?? null,
     criadoEm: ordem.created_at,
     criadoPorNome: ordem.created_by
       ? (nomesCriadores.get(ordem.created_by) ?? null)

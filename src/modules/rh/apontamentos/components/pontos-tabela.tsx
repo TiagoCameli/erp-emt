@@ -5,15 +5,20 @@ import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { CalendarClock } from "lucide-react";
 
 import {
+  CelulaVazia,
   DataTable,
   EmptyState,
+  FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
   useFiltrosUrl,
 } from "@/components/canonicos";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { STATUS_PONTO, type StatusPonto } from "@/modules/rh/_shared/formato";
-import type { ObraOpcao } from "@/modules/rh/_shared/queries";
+import type {
+  ColaboradorOpcao,
+  ObraOpcao,
+} from "@/modules/rh/_shared/queries";
 import type { PontoLista } from "@/modules/rh/apontamentos/queries";
 
 const OPCOES_STATUS = (Object.keys(STATUS_PONTO) as StatusPonto[]).map(
@@ -51,6 +56,14 @@ const colunas: ColumnDef<PontoLista, unknown>[] = [
     },
   },
   {
+    accessorKey: "encarregadoNome",
+    header: "Encarregado",
+    // Secundária, mas existe para o filtro de encarregado não filtrar por um
+    // dado que a listagem nunca mostra.
+    meta: { ocultaPorPadrao: true },
+    cell: ({ row }) => row.original.encarregadoNome ?? <CelulaVazia />,
+  },
+  {
     accessorKey: "qtdColaboradores",
     header: "Colaboradores",
     meta: { alinharDireita: true },
@@ -77,12 +90,19 @@ export interface PontosTabelaProps {
   tamanho: number;
   obraId: string;
   status: string;
+  /** Início do período da data do ponto (yyyy-MM-dd) ou vazio. */
+  de: string;
+  /** Fim do período da data do ponto (yyyy-MM-dd) ou vazio. */
+  ate: string;
+  encarregadoId: string;
   obras: ObraOpcao[];
+  colaboradores: ColaboradorOpcao[];
 }
 
 /**
- * Listagem dos pontos do dia: filtros de obra e status na URL, paginação
- * server-side e clique na linha abre o detalhe.
+ * Listagem dos pontos do dia: filtros na URL, aplicados no banco pela query
+ * (a paginação é server-side, então filtrar em memória mentiria no total),
+ * e clique na linha abre o detalhe. Todo filtro zera a página.
  */
 export function PontosTabela({
   pontos,
@@ -91,7 +111,11 @@ export function PontosTabela({
   tamanho,
   obraId,
   status,
+  de,
+  ate,
+  encarregadoId,
   obras,
+  colaboradores,
 }: PontosTabelaProps) {
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
@@ -99,6 +123,11 @@ export function PontosTabela({
   const opcoesObra = obras.map((obra) => ({
     valor: obra.id,
     rotulo: obra.lote ? `${obra.nome} (Lote ${obra.lote})` : obra.nome,
+  }));
+
+  const opcoesColaborador = colaboradores.map((colaborador) => ({
+    valor: colaborador.id,
+    rotulo: colaborador.nome,
   }));
 
   function aoMudarPaginacao(paginacao: PaginationState) {
@@ -146,6 +175,49 @@ export function PontosTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos os status"
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Período do ponto",
+            ocultoPorPadrao: true,
+            temValor: de !== "" || ate !== "",
+            onLimpar: () => setMuitos({ de: null, ate: null, pagina: "1" }),
+            elemento: (
+              <FiltroPeriodo
+                de={de}
+                ate={ate}
+                rotulo="Data"
+                onPeriodoChange={(novoDe, novoAte) =>
+                  setMuitos({
+                    de: novoDe === "" ? null : novoDe,
+                    ate: novoAte === "" ? null : novoAte,
+                    pagina: "1",
+                  })
+                }
+              />
+            ),
+          },
+          {
+            id: "encarregado",
+            rotulo: "Encarregado",
+            ocultoPorPadrao: true,
+            temValor: encarregadoId !== "",
+            onLimpar: () => setMuitos({ encarregado: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={encarregadoId}
+                onValorChange={(valor) =>
+                  setMuitos({
+                    encarregado: valor === "" ? null : valor,
+                    pagina: "1",
+                  })
+                }
+                opcoes={opcoesColaborador}
+                placeholder="Encarregado"
+                todosRotulo="Todos os encarregados"
+                className="max-w-56"
               />
             ),
           },

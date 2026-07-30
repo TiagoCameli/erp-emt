@@ -12,6 +12,11 @@ import {
   listarFornecedores,
   listarLancamentos,
 } from "@/modules/financeiro/lancamentos/queries";
+import {
+  FILTROS_REVISAO,
+  ORIGENS_LANCAMENTO,
+} from "@/modules/financeiro/lancamentos/schemas";
+import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
 import type {
   StatusLancamento,
   TipoLancamento,
@@ -25,14 +30,13 @@ const STATUS_VALIDOS: StatusLancamento[] = [
   "pago",
   "cancelado",
 ];
-/**
- * Valor extra do filtro de status: não é status de lançamento, é "tem parcela
- * em revisão". Viaja no mesmo parâmetro para a tela ter um seletor só.
- */
-const FILTRO_EM_REVISAO = "em_revisao";
-/** Valor extra: "tem parcela sem conta bancária". */
-const FILTRO_SEM_CONTA = "sem_conta";
 const TAMANHO_PADRAO = 25;
+
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
+const VALOR_MAXIMO = 999999999999.99;
 
 /** Lê e valida um parâmetro de filtro contra a lista de valores aceitos. */
 function parametroValido<T extends string>(
@@ -43,6 +47,63 @@ function parametroValido<T extends string>(
   return (validos as readonly string[]).includes(valor)
     ? (valor as T)
     : undefined;
+}
+
+/** Uuid vindo da URL, ou undefined. Evita mandar lixo pro filtro do PostgREST. */
+function parametroUuid(
+  valor: string | string[] | undefined,
+): string | undefined {
+  return typeof valor === "string" && UUID.test(valor) ? valor : undefined;
+}
+
+/** Data yyyy-MM-dd vinda da URL, ou undefined se não for uma data. */
+function parametroData(
+  valor: string | string[] | undefined,
+): string | undefined {
+  if (typeof valor !== "string" || !DATA_ISO.test(valor)) return undefined;
+  return Number.isNaN(new Date(valor).getTime()) ? undefined : valor;
+}
+
+/** Valor monetário vindo da URL (não negativo, dentro da coluna do banco). */
+function parametroValor(
+  valor: string | string[] | undefined,
+): number | undefined {
+  if (typeof valor !== "string" || valor.trim() === "") return undefined;
+  const numero = Number(valor);
+  if (!Number.isFinite(numero) || numero < 0 || numero > VALOR_MAXIMO) {
+    return undefined;
+  }
+  return numero;
+}
+
+/**
+ * Período com as duas pontas na ordem certa. Período invertido (de > ate) é
+ * trocado de lado, senão a lista vem vazia sem explicação nenhuma.
+ */
+function periodo(
+  inicio: string | string[] | undefined,
+  fim: string | string[] | undefined,
+): { de?: string; ate?: string } {
+  let de = parametroData(inicio);
+  let ate = parametroData(fim);
+  if (de && ate && de > ate) [de, ate] = [ate, de];
+  return { de, ate };
+}
+
+/** Faixa de valor com as pontas na ordem certa, pelo mesmo motivo do período. */
+function faixaValor(
+  inicio: string | string[] | undefined,
+  fim: string | string[] | undefined,
+): { de?: number; ate?: number } {
+  let de = parametroValor(inicio);
+  let ate = parametroValor(fim);
+  if (de !== undefined && ate !== undefined && de > ate) [de, ate] = [ate, de];
+  return { de, ate };
+}
+
+/** Texto do filtro para a tela, só quando o parâmetro passou na validação. */
+function texto(valor: string | number | undefined): string {
+  return valor === undefined ? "" : String(valor);
 }
 
 export default async function PaginaLancamentos({
@@ -61,11 +122,20 @@ export default async function PaginaLancamentos({
   const params = await searchParams;
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
   const status = parametroValido(params.status, STATUS_VALIDOS);
-  const emRevisao = params.status === FILTRO_EM_REVISAO;
-  const semConta = params.status === FILTRO_SEM_CONTA;
+  const revisao = parametroValido(params.revisao, FILTROS_REVISAO);
+  const origem = parametroValido(params.origem, ORIGENS_LANCAMENTO);
   const busca = typeof params.busca === "string" ? params.busca : "";
   const mes = typeof params.mes === "string" ? params.mes : "";
   const mesCompetencia = mesParaCompetencia(mes);
+  const fornecedorId = parametroUuid(params.fornecedor);
+  const categoriaId = parametroUuid(params.categoria);
+  const centroCustoId = parametroUuid(params.centro);
+  const contaBancariaId = parametroUuid(params.conta);
+  const formaPagamentoId = parametroUuid(params.forma);
+  const valor = faixaValor(params.valor_de, params.valor_ate);
+  const vencimento = periodo(params.venc_de, params.venc_ate);
+  const compra = periodo(params.compra_de, params.compra_ate);
+  const criado = periodo(params.criado_de, params.criado_ate);
 
   const paginaParam = Number(params.pagina);
   const pagina =
@@ -82,6 +152,7 @@ export default async function PaginaLancamentos({
     fornecedores,
     centrosCusto,
     formasPagamento,
+    contas,
   ] = await Promise.all([
     listarLancamentos({
       pagina,
@@ -90,13 +161,27 @@ export default async function PaginaLancamentos({
       status,
       busca,
       mesCompetencia: mesCompetencia === "" ? undefined : mesCompetencia,
-      emRevisao,
-      semConta,
+      fornecedorId,
+      categoriaId,
+      centroCustoId,
+      contaBancariaId,
+      formaPagamentoId,
+      origem,
+      valorDe: valor.de,
+      valorAte: valor.ate,
+      vencimentoDe: vencimento.de,
+      vencimentoAte: vencimento.ate,
+      compraDe: compra.de,
+      compraAte: compra.ate,
+      criadoDe: criado.de,
+      criadoAte: criado.ate,
+      revisao,
     }),
     listarCategorias(),
     listarFornecedores(),
     listarCentrosCusto(),
     listarFormasPagamento(),
+    listarContasBancarias(),
   ]);
 
   return (
@@ -120,13 +205,34 @@ export default async function PaginaLancamentos({
         total={total}
         pagina={pagina}
         tamanho={tamanho}
-        tipo={tipo ?? ""}
-        // O seletor de status também oferece em_revisao e sem_conta, que não são
-        // status de lançamento. Vai o parâmetro cru para o filtro mostrar o que
-        // está filtrando e o menu "Filtros" saber que ele tem valor.
-        status={typeof params.status === "string" ? params.status : ""}
-        busca={busca}
-        mes={mesParaCompetencia(mes) === "" ? "" : mes}
+        // Só o que passou na validação chega na tela: filtro inválido na URL não
+        // pode aparecer preenchido na barra como se estivesse valendo.
+        valores={{
+          busca,
+          tipo: tipo ?? "",
+          status: status ?? "",
+          mes: mesCompetencia === "" ? "" : mes,
+          revisao: revisao ?? "",
+          origem: origem ?? "",
+          fornecedor: fornecedorId ?? "",
+          categoria: categoriaId ?? "",
+          centro: centroCustoId ?? "",
+          conta: contaBancariaId ?? "",
+          forma: formaPagamentoId ?? "",
+          valorDe: texto(valor.de),
+          valorAte: texto(valor.ate),
+          vencDe: texto(vencimento.de),
+          vencAte: texto(vencimento.ate),
+          compraDe: texto(compra.de),
+          compraAte: texto(compra.ate),
+          criadoDe: texto(criado.de),
+          criadoAte: texto(criado.ate),
+        }}
+        categorias={categorias}
+        fornecedores={fornecedores}
+        centrosCusto={centrosCusto}
+        formasPagamento={formasPagamento}
+        contas={contas}
       />
     </>
   );

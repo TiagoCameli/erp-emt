@@ -10,6 +10,7 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
@@ -74,6 +75,9 @@ export function OcorrenciasTabela({
 }: OcorrenciasTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [tipo, setTipo] = React.useState("");
+  const [colaboradorId, setColaboradorId] = React.useState("");
+  const [dataDe, setDataDe] = React.useState("");
+  const [dataAte, setDataAte] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<OcorrenciaLista | null>(null);
@@ -106,16 +110,28 @@ export function OcorrenciasTabela({
     toast.success("Ocorrência excluída");
   }
 
+  // Filtro em memória: a tela carrega todas as ocorrências (sem paginação
+  // server-side), então o total exibido continua sendo o total real.
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return ocorrencias.filter((item) => {
       if (tipo && item.tipo !== tipo) return false;
+      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
+      // Atestado com período (data a dataFim) entra se qualquer parte dele cai
+      // dentro da janela pedida: cortar pelo início esconderia o atestado que
+      // começou no mês passado e ainda cobre o dia procurado.
+      if (dataDe !== "" || dataAte !== "") {
+        const inicio = item.data;
+        const fim = item.dataFim ?? item.data;
+        if (dataDe !== "" && fim < dataDe) return false;
+        if (dataAte !== "" && inicio > dataAte) return false;
+      }
       if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [ocorrencias, busca, tipo]);
+  }, [ocorrencias, busca, tipo, colaboradorId, dataDe, dataAte]);
 
   const podeAgir = podeEditar || podeExcluir;
 
@@ -238,6 +254,47 @@ export function OcorrenciasTabela({
                 opcoes={OPCOES_TIPO}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
+              />
+            ),
+          },
+          {
+            id: "colaborador",
+            rotulo: "Colaborador",
+            ocultoPorPadrao: true,
+            temValor: colaboradorId !== "",
+            onLimpar: () => setColaboradorId(""),
+            elemento: (
+              <FiltroSelect
+                valor={colaboradorId}
+                onValorChange={setColaboradorId}
+                opcoes={colaboradores.map((colaborador) => ({
+                  valor: colaborador.id,
+                  rotulo: colaborador.nome,
+                }))}
+                placeholder="Colaborador"
+                todosRotulo="Todos os colaboradores"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Período da ocorrência",
+            ocultoPorPadrao: true,
+            temValor: dataDe !== "" || dataAte !== "",
+            onLimpar: () => {
+              setDataDe("");
+              setDataAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={dataDe}
+                ate={dataAte}
+                rotulo="Data"
+                onPeriodoChange={(de, ate) => {
+                  setDataDe(de);
+                  setDataAte(ate);
+                }}
               />
             ),
           },

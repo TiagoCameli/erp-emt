@@ -19,6 +19,8 @@ export interface PontoLista {
   obraLote: string | null;
   data: string;
   status: StatusPonto;
+  /** Nome do encarregado do dia, ou null quando o ponto não tem um. */
+  encarregadoNome: string | null;
   qtdColaboradores: number;
   totalHoras: number;
 }
@@ -182,13 +184,22 @@ export interface ListarPontosParams {
   tamanho: number;
   obraId?: string;
   status?: string;
+  /** Início do período da data do ponto (yyyy-MM-dd). */
+  de?: string;
+  /** Fim do período da data do ponto (yyyy-MM-dd). */
+  ate?: string;
+  encarregadoId?: string;
 }
 
 /**
  * Lista os pontos com paginação server-side (range + count exact), nome da obra
- * resolvido via join. Para cada ponto da página, agrega a contagem de
- * colaboradores e o total de horas (normais + extras) a partir dos apontamentos.
- * Filtros opcionais por obra e por status.
+ * e do encarregado resolvidos via join. Para cada ponto da página, agrega a
+ * contagem de colaboradores e o total de horas (normais + extras) a partir dos
+ * apontamentos.
+ *
+ * Todos os filtros (obra, status, período da data, encarregado) vão para o
+ * banco: com paginação server-side, filtrar só a página carregada mostraria
+ * "3 resultados" quando existem trezentos.
  */
 export async function listarPontos(
   params: ListarPontosParams,
@@ -202,13 +213,23 @@ export async function listarPontos(
 
   let consulta = supabase
     .from("rh_pontos")
-    .select(`id, data, status, obras(nome, lote)`, { count: "exact" })
+    .select(
+      `id, data, status, obras(nome, lote),
+       colaboradores!rh_pontos_encarregado_id_fkey(nome)`,
+      { count: "exact" },
+    )
     .order("data", { ascending: false })
     .order("created_at", { ascending: false })
     .range(de, ate);
 
   if (params.obraId) consulta = consulta.eq("obra_id", params.obraId);
   if (params.status) consulta = consulta.eq("status", params.status);
+  // `data` é DATE no banco: a string yyyy-MM-dd compara direto, sem fuso.
+  if (params.de) consulta = consulta.gte("data", params.de);
+  if (params.ate) consulta = consulta.lte("data", params.ate);
+  if (params.encarregadoId) {
+    consulta = consulta.eq("encarregado_id", params.encarregadoId);
+  }
 
   const { data, error, count } = await consulta;
 
@@ -251,6 +272,7 @@ export async function listarPontos(
       obraLote: ponto.obras?.lote ?? null,
       data: ponto.data,
       status: statusPonto(ponto.status),
+      encarregadoNome: ponto.colaboradores?.nome ?? null,
       qtdColaboradores: agregado.qtdColaboradores,
       totalHoras: agregado.totalHoras,
     };
@@ -355,6 +377,17 @@ export function uuidParam(
   )
     ? valor
     : undefined;
+}
+
+/**
+ * Lê uma data yyyy-MM-dd da query string (ignora qualquer outra coisa). Data
+ * inválida nunca vai para o filtro do PostgREST.
+ */
+export function dataParam(
+  valor: string | string[] | undefined,
+): string | undefined {
+  if (typeof valor !== "string") return undefined;
+  return /^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor : undefined;
 }
 
 /** Lê um status de ponto válido da query string (ignora fora do enum). */

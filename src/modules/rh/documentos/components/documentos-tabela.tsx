@@ -10,6 +10,7 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
@@ -31,6 +32,7 @@ import {
   ROTULO_TIPO_DOCUMENTO,
   TIPOS_DOCUMENTO,
 } from "@/modules/rh/documentos/schemas";
+import { noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { DocumentoFormDrawer } from "./documento-form-drawer";
 
@@ -81,6 +83,11 @@ export function DocumentosTabela({
   const [busca, setBusca] = React.useState("");
   const [tipo, setTipo] = React.useState("");
   const [situacao, setSituacao] = React.useState("");
+  const [colaboradorId, setColaboradorId] = React.useState("");
+  const [vencimentoDe, setVencimentoDe] = React.useState("");
+  const [vencimentoAte, setVencimentoAte] = React.useState("");
+  const [emissaoDe, setEmissaoDe] = React.useState("");
+  const [emissaoAte, setEmissaoAte] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<DocumentoLista | null>(null);
@@ -122,17 +129,36 @@ export function DocumentosTabela({
     [],
   );
 
+  // Filtro em memória: a tela carrega todos os documentos (sem paginação
+  // server-side), então o total exibido continua sendo o total real.
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return documentos.filter((item) => {
       if (tipo && item.tipo !== tipo) return false;
       if (situacao && item.situacao !== situacao) return false;
+      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
+      // Documento sem vencimento sai da lista quando o usuário pede uma janela
+      // de vencimento: sem data, não é resposta.
+      if (!noPeriodo(item.dataVencimento, vencimentoDe, vencimentoAte)) {
+        return false;
+      }
+      if (!noPeriodo(item.dataEmissao, emissaoDe, emissaoAte)) return false;
       if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [documentos, busca, tipo, situacao]);
+  }, [
+    documentos,
+    busca,
+    tipo,
+    situacao,
+    colaboradorId,
+    vencimentoDe,
+    vencimentoAte,
+    emissaoDe,
+    emissaoAte,
+  ]);
 
   const podeAgir = podeEditar || podeExcluir;
 
@@ -276,6 +302,68 @@ export function DocumentosTabela({
                 opcoes={OPCOES_SITUACAO}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
+              />
+            ),
+          },
+          {
+            id: "colaborador",
+            rotulo: "Colaborador",
+            ocultoPorPadrao: true,
+            temValor: colaboradorId !== "",
+            onLimpar: () => setColaboradorId(""),
+            elemento: (
+              <FiltroSelect
+                valor={colaboradorId}
+                onValorChange={setColaboradorId}
+                opcoes={colaboradores.map((colaborador) => ({
+                  valor: colaborador.id,
+                  rotulo: colaborador.nome,
+                }))}
+                placeholder="Colaborador"
+                todosRotulo="Todos os colaboradores"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "vencimento",
+            rotulo: "Período de vencimento",
+            ocultoPorPadrao: true,
+            temValor: vencimentoDe !== "" || vencimentoAte !== "",
+            onLimpar: () => {
+              setVencimentoDe("");
+              setVencimentoAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={vencimentoDe}
+                ate={vencimentoAte}
+                rotulo="Vencimento"
+                onPeriodoChange={(de, ate) => {
+                  setVencimentoDe(de);
+                  setVencimentoAte(ate);
+                }}
+              />
+            ),
+          },
+          {
+            id: "emissao",
+            rotulo: "Período de emissão",
+            ocultoPorPadrao: true,
+            temValor: emissaoDe !== "" || emissaoAte !== "",
+            onLimpar: () => {
+              setEmissaoDe("");
+              setEmissaoAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={emissaoDe}
+                ate={emissaoAte}
+                rotulo="Emissão"
+                onPeriodoChange={(de, ate) => {
+                  setEmissaoDe(de);
+                  setEmissaoAte(ate);
+                }}
               />
             ),
           },

@@ -33,6 +33,17 @@ export const DIAS_SEMANA: readonly DiaSemana[] = [
   { chave: "horasDomingo", rotulo: "Domingo", abreviacao: "Dom" },
 ] as const;
 
+/**
+ * Carga semanal da jornada: a soma dos 7 dias, arredondada em 2 casas.
+ *
+ * O arredondamento não é enfeite: somar decimais em float dá 43,99999999, e o
+ * filtro de faixa ("de 44 até 44") deixaria a jornada de 44h de fora.
+ */
+export function horasSemanais(jornada: JornadaHoras): number {
+  const total = DIAS_SEMANA.reduce((soma, dia) => soma + jornada[dia.chave], 0);
+  return Math.round(total * 100) / 100;
+}
+
 /** Formata horas como "8h" (inteiro) ou "8,5h" (decimal, vírgula pt-BR). */
 function formatarHoras(horas: number): string {
   const texto = Number.isInteger(horas)

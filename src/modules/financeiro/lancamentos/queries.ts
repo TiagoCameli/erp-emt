@@ -1,10 +1,13 @@
 import "server-only";
 
+import { TZDate } from "@date-fns/tz";
+
 import {
   eventosDoAuditLog,
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
+import { TIMEZONE } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
@@ -17,8 +20,19 @@ import type {
   StatusParcela,
   TipoLancamento,
 } from "@/modules/financeiro/_shared/formato";
+import type {
+  FiltroRevisao,
+  OrigemLancamento,
+} from "@/modules/financeiro/lancamentos/schemas";
 
-/** Filtros e paginação da listagem de lançamentos. */
+/** Cliente Supabase do servidor, para as consultas auxiliares de filtro. */
+type ClienteSupabase = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * Filtros e paginação da listagem de lançamentos. Todo filtro aqui é aplicado
+ * no banco: a paginação é server-side, e filtrar só a página carregada faria a
+ * tela mentir sobre quantos lançamentos existem.
+ */
 export interface ListarLancamentosParams {
   pagina: number;
   tamanho: number;
@@ -27,19 +41,42 @@ export interface ListarLancamentosParams {
   busca?: string;
   /** Mês de referência exato (yyyy-MM-01). */
   mesCompetencia?: string;
+  fornecedorId?: string;
+  /** Categoria do custo (categorias_financeiras). */
+  categoriaId?: string;
   /**
-   * Só lançamentos com alguma parcela em revisão. É filtro de status de
-   * PARCELA numa lista de LANÇAMENTOS, então não entra no `status` acima: vem
-   * por uma consulta dos ids e um `in`, que é previsível. O conjunto é pequeno
-   * por natureza (é fila de trabalho, não histórico).
+   * Centro de custo do rateio. Mora em lancamento_rateios (um lançamento pode
+   * ser rateado entre vários centros), então vira consulta de ids + `in`.
    */
-  emRevisao?: boolean;
+  centroCustoId?: string;
   /**
-   * Só lançamentos a pagar com alguma parcela sem conta bancária. É a fila de
-   * trabalho do operador financeiro: sem conta, o pagamento não chega na
-   * aprovação.
+   * Conta bancária de alguma parcela do lançamento (paga ou a pagar). Mora em
+   * lancamento_parcelas, então também vira consulta de ids + `in`.
    */
-  semConta?: boolean;
+  contaBancariaId?: string;
+  formaPagamentoId?: string;
+  origem?: OrigemLancamento;
+  /** Faixa de valor do lançamento, em reais (comparação gte/lte no banco). */
+  valorDe?: number;
+  valorAte?: number;
+  /** Período de vencimento do lançamento (data_vencimento, yyyy-MM-dd). */
+  vencimentoDe?: string;
+  vencimentoAte?: string;
+  /** Período da data da compra (data_compra, yyyy-MM-dd). */
+  compraDe?: string;
+  compraAte?: string;
+  /**
+   * Período de criação (created_at). A coluna é timestamptz, então o dia
+   * informado é convertido para o instante certo no fuso de Rio Branco.
+   */
+  criadoDe?: string;
+  criadoAte?: string;
+  /**
+   * Estado da revisão: parcela em revisão, ou a situação da conta bancária das
+   * parcelas ainda não pagas (sem conta, conta parcial, revisado). É derivado
+   * das parcelas, então vira consulta de ids + `in`.
+   */
+  revisao?: FiltroRevisao;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -200,10 +237,162 @@ function nomeFornecedor(fornecedor: {
   return fornecedor.nome_fantasia ?? fornecedor.razao_social;
 }
 
+/** Linhas lidas por página nas consultas auxiliares de filtro. */
+const PAGINA_IDS = 1000;
+/** Teto de páginas auxiliares, para uma consulta errada não varrer o banco. */
+const MAX_PAGINAS_IDS = 10;
+
+/**
+ * Lê uma consulta auxiliar em páginas, até acabar. Filtro que mora em tabela
+ * filha (parcela, rateio) precisa da lista completa de lancamento_id, e o
+ * PostgREST corta a resposta num teto invisível: sem paginar, o filtro perderia
+ * lançamentos sem avisar ninguém.
+ */
+async function lerEmPaginas<T>(
+  consultar: (
+    de: number,
+    ate: number,
+  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const linhas: T[] = [];
+  for (let pagina = 0; pagina < MAX_PAGINAS_IDS; pagina += 1) {
+    const inicio = pagina * PAGINA_IDS;
+    const { data, error } = await consultar(inicio, inicio + PAGINA_IDS - 1);
+    // Erro aqui não pode virar lista vazia: a tela mostraria "nenhum
+    // lançamento" para um filtro que na verdade não foi aplicado.
+    if (error) throw new Error("Não foi possível aplicar o filtro");
+    const lote = data ?? [];
+    linhas.push(...lote);
+    if (lote.length < PAGINA_IDS) break;
+  }
+  return linhas;
+}
+
+/** Ids de lançamentos com alguma parcela na conta bancária informada. */
+async function idsPorContaBancaria(
+  supabase: ClienteSupabase,
+  contaBancariaId: string,
+): Promise<string[]> {
+  // Vale parcela paga e a pagar: a pergunta de quem filtra é "o que passou por
+  // esta conta", não "o que ainda vai sair dela".
+  const parcelas = await lerEmPaginas((de, ate) =>
+    supabase
+      .from("lancamento_parcelas")
+      .select("lancamento_id")
+      .eq("conta_bancaria_id", contaBancariaId)
+      // Ordem estável (id como desempate) para a paginação não repetir nem
+      // pular linha entre uma página e a seguinte.
+      .order("lancamento_id")
+      .order("id")
+      .range(de, ate),
+  );
+  return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
+}
+
+/** Ids de lançamentos rateados no centro de custo informado. */
+async function idsPorCentroCusto(
+  supabase: ClienteSupabase,
+  centroCustoId: string,
+): Promise<string[]> {
+  // O centro de custo do lançamento vive no rateio, nunca na tabela mãe: um
+  // lançamento pode ser dividido entre várias obras.
+  const rateios = await lerEmPaginas((de, ate) =>
+    supabase
+      .from("lancamento_rateios")
+      .select("lancamento_id")
+      .eq("centro_custo_id", centroCustoId)
+      .order("lancamento_id")
+      .order("id")
+      .range(de, ate),
+  );
+  return [...new Set(rateios.map((rateio) => rateio.lancamento_id))];
+}
+
+/**
+ * Ids de lançamentos no estado de revisão pedido. `em_revisao` é status de
+ * parcela; os outros três são derivados da conta bancária das parcelas ainda
+ * não pagas, com a mesma regra que a coluna "Revisão" da lista usa (por isso
+ * só lançamentos a pagar entram: a receber não tem revisão de conta).
+ */
+async function idsPorRevisao(
+  supabase: ClienteSupabase,
+  revisao: FiltroRevisao,
+): Promise<string[]> {
+  if (revisao === "em_revisao") {
+    const parcelas = await lerEmPaginas((de, ate) =>
+      supabase
+        .from("lancamento_parcelas")
+        .select("lancamento_id")
+        .eq("status", "em_revisao")
+        .order("lancamento_id")
+        .order("id")
+        .range(de, ate),
+    );
+    return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
+  }
+
+  const parcelas = await lerEmPaginas((de, ate) =>
+    supabase
+      .from("lancamento_parcelas")
+      .select("lancamento_id, conta_bancaria_id, lancamentos!inner(tipo)")
+      .neq("status", "pago")
+      .eq("lancamentos.tipo", "a_pagar")
+      .order("lancamento_id")
+      .order("id")
+      .range(de, ate),
+  );
+
+  const contagem = new Map<string, { total: number; comConta: number }>();
+  for (const parcela of parcelas) {
+    const atual = contagem.get(parcela.lancamento_id) ?? {
+      total: 0,
+      comConta: 0,
+    };
+    atual.total += 1;
+    if (parcela.conta_bancaria_id !== null) atual.comConta += 1;
+    contagem.set(parcela.lancamento_id, atual);
+  }
+
+  const ids: string[] = [];
+  for (const [id, { total, comConta }] of contagem) {
+    const estado =
+      comConta === 0 ? "sem_conta" : comConta === total ? "revisado" : "parcial";
+    if (estado === revisao) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Interseção das listas de ids vindas dos filtros de tabela filha, para ir ao
+ * banco com um `in` só (dois `in` na mesma consulta já seriam AND, mas a lista
+ * menor deixa a URL da consulta menor).
+ */
+function intersecao(listas: string[][]): string[] {
+  const [primeira, ...resto] = listas;
+  return resto.reduce((acumulado, lista) => {
+    const atual = new Set(lista);
+    return acumulado.filter((id) => atual.has(id));
+  }, primeira);
+}
+
+/**
+ * Instante UTC da meia-noite do dia informado no fuso de exibição (Rio Branco).
+ * Filtro de período em coluna `timestamptz` (created_at) precisa disso: o dia do
+ * usuário começa às 05:00 UTC. Para coluna `date` (data_compra, data_vencimento)
+ * não use: lá a string crua já basta.
+ *
+ * Duplicado de propósito em relação ao helper de Compras: cada módulo lê o que
+ * precisa sem depender do outro.
+ */
+function inicioDoDiaISO(data: string, deslocamentoDias = 0): string {
+  const [ano, mes, dia] = data.split("-").map(Number);
+  return new TZDate(ano, mes - 1, dia + deslocamentoDias, TIMEZONE).toISOString();
+}
+
 /**
  * Lista os lançamentos com paginação server-side (count exato), o nome da
- * categoria e do fornecedor resolvidos e a contagem de parcelas. Aceita
- * filtro por tipo e por status.
+ * categoria e do fornecedor resolvidos e a contagem de parcelas. Todos os
+ * filtros de `ListarLancamentosParams` são aplicados no banco.
  */
 export async function listarLancamentos(
   params: ListarLancamentosParams,
@@ -215,34 +404,27 @@ export async function listarLancamentos(
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
-  let idsSemConta: string[] | null = null;
-  if (params.semConta) {
-    const { data: parcelas } = await supabase
-      .from("lancamento_parcelas")
-      .select("lancamento_id")
-      .neq("status", "pago")
-      .is("conta_bancaria_id", null);
-    idsSemConta = [
-      ...new Set((parcelas ?? []).map((parcela) => parcela.lancamento_id)),
-    ];
-    if (idsSemConta.length === 0) {
-      return { itens: [], total: 0 };
-    }
+  // Filtros que moram em tabela filha (parcela, rateio) viram lista de ids.
+  // Não dá para filtrar pelo join embutido no select: ele é o que alimenta a
+  // coluna "Revisão", e filtrá-lo esconderia parcelas do cálculo.
+  const listasDeIds: string[][] = [];
+  if (params.revisao) {
+    listasDeIds.push(await idsPorRevisao(supabase, params.revisao));
+  }
+  if (params.contaBancariaId) {
+    listasDeIds.push(
+      await idsPorContaBancaria(supabase, params.contaBancariaId),
+    );
+  }
+  if (params.centroCustoId) {
+    listasDeIds.push(await idsPorCentroCusto(supabase, params.centroCustoId));
   }
 
-  let idsEmRevisao: string[] | null = null;
-  if (params.emRevisao) {
-    const { data: parcelas } = await supabase
-      .from("lancamento_parcelas")
-      .select("lancamento_id")
-      .eq("status", "em_revisao");
-    idsEmRevisao = [
-      ...new Set((parcelas ?? []).map((parcela) => parcela.lancamento_id)),
-    ];
-    // Nenhum lançamento em revisão: devolve vazio sem ir buscar a lista toda.
-    if (idsEmRevisao.length === 0) {
-      return { itens: [], total: 0 };
-    }
+  let idsFiltrados: string[] | null = null;
+  if (listasDeIds.length > 0) {
+    idsFiltrados = intersecao(listasDeIds);
+    // Nenhum lançamento no filtro: devolve vazio sem ir buscar a lista toda.
+    if (idsFiltrados.length === 0) return { itens: [], total: 0 };
   }
 
   let consulta = supabase
@@ -259,12 +441,43 @@ export async function listarLancamentos(
     .order("created_at", { ascending: false })
     .range(de, ate);
 
-  if (idsEmRevisao) consulta = consulta.in("id", idsEmRevisao);
-  if (idsSemConta) consulta = consulta.in("id", idsSemConta);
+  if (idsFiltrados) consulta = consulta.in("id", idsFiltrados);
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
   if (params.mesCompetencia) {
     consulta = consulta.eq("mes_competencia", params.mesCompetencia);
+  }
+  if (params.fornecedorId) {
+    consulta = consulta.eq("fornecedor_id", params.fornecedorId);
+  }
+  if (params.categoriaId) {
+    consulta = consulta.eq("categoria_id", params.categoriaId);
+  }
+  if (params.formaPagamentoId) {
+    consulta = consulta.eq("forma_pagamento_id", params.formaPagamentoId);
+  }
+  if (params.origem) consulta = consulta.eq("origem", params.origem);
+  if (params.valorDe !== undefined) {
+    consulta = consulta.gte("valor", params.valorDe);
+  }
+  if (params.valorAte !== undefined) {
+    consulta = consulta.lte("valor", params.valorAte);
+  }
+  if (params.vencimentoDe) {
+    consulta = consulta.gte("data_vencimento", params.vencimentoDe);
+  }
+  if (params.vencimentoAte) {
+    consulta = consulta.lte("data_vencimento", params.vencimentoAte);
+  }
+  if (params.compraDe) consulta = consulta.gte("data_compra", params.compraDe);
+  if (params.compraAte) consulta = consulta.lte("data_compra", params.compraAte);
+  if (params.criadoDe) {
+    consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadoDe));
+  }
+  if (params.criadoAte) {
+    // Fim do dia = meia-noite do dia seguinte, exclusiva: `lte` na data crua
+    // deixaria de fora tudo que foi criado depois de 00:00 do último dia.
+    consulta = consulta.lt("created_at", inicioDoDiaISO(params.criadoAte, 1));
   }
   if (params.busca?.trim()) {
     const padrao = `%${params.busca.replace(/[,()"'\\]/g, "").trim()}%`;

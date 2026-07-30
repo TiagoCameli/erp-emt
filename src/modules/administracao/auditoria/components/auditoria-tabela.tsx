@@ -7,8 +7,11 @@ import { History } from "lucide-react";
 import {
   DataTable,
   EmptyState,
+  FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
+  useBuscaUrl,
   useFiltrosUrl,
 } from "@/components/canonicos";
 import {
@@ -167,6 +170,12 @@ export interface AuditoriaTabelaProps {
   filtroTabela: string;
   filtroUsuario: string;
   filtroAcao: string;
+  /** Início do período da alteração (yyyy-MM-dd) ou vazio. */
+  filtroDe: string;
+  /** Fim do período da alteração (yyyy-MM-dd) ou vazio. */
+  filtroAte: string;
+  /** Início do id do registro alterado, ou vazio. */
+  filtroRegistro: string;
   tabelas: string[];
   usuarios: UsuarioParaFiltro[];
   /** Nome resolvido (id -> nome) dos campos FK, pro diff exibir nome em vez de UUID. */
@@ -174,8 +183,9 @@ export interface AuditoriaTabelaProps {
 }
 
 /**
- * Listagem da auditoria com filtros e paginação na URL.
- * A página é Server Component e relê os searchParams a cada mudança.
+ * Listagem da auditoria com filtros e paginação na URL. A página é Server
+ * Component e relê os searchParams a cada mudança: todo filtro é aplicado no
+ * banco, não na página carregada, porque a paginação é server-side.
  */
 export function AuditoriaTabela({
   registros,
@@ -185,11 +195,20 @@ export function AuditoriaTabela({
   filtroTabela,
   filtroUsuario,
   filtroAcao,
+  filtroDe,
+  filtroAte,
+  filtroRegistro,
   tabelas,
   usuarios,
   nomes,
 }: AuditoriaTabelaProps) {
   const { setMuitos: atualizarParams } = useFiltrosUrl();
+  // Digitar id de registro escreve na URL com debounce, como as buscas das
+  // outras listagens server-side.
+  const { busca: registro, setBusca: setRegistro } = useBuscaUrl(
+    filtroRegistro,
+    "registro",
+  );
 
   const [selecionado, setSelecionado] =
     React.useState<RegistroAuditoria | null>(null);
@@ -252,6 +271,47 @@ export function AuditoriaTabela({
                 }
                 opcoes={OPCOES_ACAO_AUDITORIA}
                 todosRotulo="Todas as ações"
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Período da alteração",
+            ocultoPorPadrao: true,
+            temValor: filtroDe !== "" || filtroAte !== "",
+            onLimpar: () =>
+              atualizarParams({ de: null, ate: null, pagina: null }),
+            elemento: (
+              <FiltroPeriodo
+                de={filtroDe}
+                ate={filtroAte}
+                rotulo="Quando"
+                onPeriodoChange={(de, ate) =>
+                  atualizarParams({
+                    de: de === "" ? null : de,
+                    ate: ate === "" ? null : ate,
+                    pagina: null,
+                  })
+                }
+              />
+            ),
+          },
+          {
+            id: "registro",
+            rotulo: "Id do registro",
+            ocultoPorPadrao: true,
+            // O que está digitado conta, mesmo antes do debounce escrever na
+            // URL: esconder o filtro no meio da digitação tem que limpar.
+            temValor: registro !== "" || filtroRegistro !== "",
+            onLimpar: () => {
+              setRegistro("");
+              atualizarParams({ registro: null, pagina: null });
+            },
+            elemento: (
+              <FiltroBusca
+                valor={registro}
+                onValorChange={setRegistro}
+                placeholder="Id do registro"
               />
             ),
           },
