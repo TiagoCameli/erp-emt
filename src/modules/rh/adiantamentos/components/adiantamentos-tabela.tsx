@@ -10,7 +10,9 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
+  FiltroValor,
   MoneyText,
   StatusBadge,
 } from "@/components/canonicos";
@@ -24,8 +26,15 @@ import {
 import { formatarData } from "@/lib/formatadores";
 import { removerAdiantamento } from "@/modules/rh/adiantamentos/actions";
 import type { AdiantamentoLista } from "@/modules/rh/adiantamentos/queries";
+import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { AdiantamentoFormDrawer } from "./adiantamento-form-drawer";
+
+/** Opções do filtro de situação: espelham a coluna Situação da tabela. */
+const OPCOES_SITUACAO = [
+  { valor: "aberto", rotulo: "Em aberto" },
+  { valor: "folha", rotulo: "Na folha" },
+];
 
 export interface AdiantamentosTabelaProps {
   adiantamentos: AdiantamentoLista[];
@@ -68,6 +77,12 @@ export function AdiantamentosTabela({
 }: AdiantamentosTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [competencia, setCompetencia] = React.useState("");
+  const [colaboradorId, setColaboradorId] = React.useState("");
+  const [situacao, setSituacao] = React.useState("");
+  const [dataDe, setDataDe] = React.useState("");
+  const [dataAte, setDataAte] = React.useState("");
+  const [valorDe, setValorDe] = React.useState("");
+  const [valorAte, setValorAte] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<AdiantamentoLista | null>(
@@ -109,16 +124,33 @@ export function AdiantamentosTabela({
     [adiantamentos],
   );
 
+  // Filtro em memória: a tela carrega todos os adiantamentos (sem paginação
+  // server-side), então o total exibido continua sendo o total real.
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return adiantamentos.filter((item) => {
       if (competencia && item.competencia !== competencia) return false;
+      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
+      if (situacao === "folha" && !item.naFolha) return false;
+      if (situacao === "aberto" && item.naFolha) return false;
+      if (!noPeriodo(item.data, dataDe, dataAte)) return false;
+      if (!naFaixa(item.valor, valorDe, valorAte)) return false;
       if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [adiantamentos, busca, competencia]);
+  }, [
+    adiantamentos,
+    busca,
+    competencia,
+    colaboradorId,
+    situacao,
+    dataDe,
+    dataAte,
+    valorDe,
+    valorAte,
+  ]);
 
   const podeAgir = podeEditar || podeExcluir;
 
@@ -244,6 +276,83 @@ export function AdiantamentosTabela({
                 opcoes={opcoesMes}
                 placeholder="Competência"
                 todosRotulo="Todas as competências"
+              />
+            ),
+          },
+          {
+            id: "colaborador",
+            rotulo: "Colaborador",
+            ocultoPorPadrao: true,
+            temValor: colaboradorId !== "",
+            onLimpar: () => setColaboradorId(""),
+            elemento: (
+              <FiltroSelect
+                valor={colaboradorId}
+                onValorChange={setColaboradorId}
+                opcoes={colaboradores.map((colaborador) => ({
+                  valor: colaborador.id,
+                  rotulo: colaborador.nome,
+                }))}
+                placeholder="Colaborador"
+                todosRotulo="Todos os colaboradores"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "situacao",
+            rotulo: "Situação",
+            ocultoPorPadrao: true,
+            temValor: situacao !== "",
+            onLimpar: () => setSituacao(""),
+            elemento: (
+              <FiltroSelect
+                valor={situacao}
+                onValorChange={setSituacao}
+                opcoes={OPCOES_SITUACAO}
+                placeholder="Situação"
+                todosRotulo="Todas as situações"
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Período do adiantamento",
+            ocultoPorPadrao: true,
+            temValor: dataDe !== "" || dataAte !== "",
+            onLimpar: () => {
+              setDataDe("");
+              setDataAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={dataDe}
+                ate={dataAte}
+                rotulo="Data"
+                onPeriodoChange={(de, ate) => {
+                  setDataDe(de);
+                  setDataAte(ate);
+                }}
+              />
+            ),
+          },
+          {
+            id: "valor",
+            rotulo: "Faixa de valor",
+            ocultoPorPadrao: true,
+            temValor: valorDe !== "" || valorAte !== "",
+            onLimpar: () => {
+              setValorDe("");
+              setValorAte("");
+            },
+            elemento: (
+              <FiltroValor
+                de={valorDe}
+                ate={valorAte}
+                onValorChange={(de, ate) => {
+                  setValorDe(de);
+                  setValorAte(ate);
+                }}
               />
             ),
           },

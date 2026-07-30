@@ -10,6 +10,8 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
+  FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -23,8 +25,21 @@ import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { removerEpi } from "@/modules/rh/epis/actions";
 import type { EpiLista } from "@/modules/rh/epis/queries";
+import { noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { EpiFormDrawer } from "./epi-form-drawer";
+
+/** Situação do EPI entregue: ainda com o colaborador ou já devolvido. */
+const OPCOES_SITUACAO = [
+  { valor: "em_uso", rotulo: "Em uso" },
+  { valor: "devolvido", rotulo: "Devolvido" },
+];
+
+/** Termo de entrega assinado (a coluna "Termo assinado" da tabela). */
+const OPCOES_ASSINADO = [
+  { valor: "sim", rotulo: "Assinado" },
+  { valor: "nao", rotulo: "Não assinado" },
+];
 
 export interface EpisTabelaProps {
   epis: EpiLista[];
@@ -37,8 +52,9 @@ export interface EpisTabelaProps {
 }
 
 /**
- * Listagem de EPIs: busca por colaborador, criação, edição e exclusão no
- * drawer. Mostra o termo de entrega assinado como badge sim/não.
+ * Listagem de EPIs: busca por colaborador, nome do EPI ou CA, filtros de
+ * colaborador, situação, termo e períodos de entrega/devolução, criação, edição
+ * e exclusão no drawer. Mostra o termo de entrega assinado como badge sim/não.
  */
 export function EpisTabela({
   epis,
@@ -49,6 +65,13 @@ export function EpisTabela({
   anexosPorRegistro,
 }: EpisTabelaProps) {
   const [busca, setBusca] = React.useState("");
+  const [colaboradorId, setColaboradorId] = React.useState("");
+  const [situacao, setSituacao] = React.useState("");
+  const [assinado, setAssinado] = React.useState("");
+  const [entregaDe, setEntregaDe] = React.useState("");
+  const [entregaAte, setEntregaAte] = React.useState("");
+  const [devolucaoDe, setDevolucaoDe] = React.useState("");
+  const [devolucaoAte, setDevolucaoAte] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<EpiLista | null>(null);
@@ -81,13 +104,43 @@ export function EpisTabela({
     toast.success("EPI excluído");
   }
 
+  // Filtro em memória: a tela carrega todas as entregas (sem paginação
+  // server-side), então o total exibido continua sendo o total real.
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (!termo) return epis;
-    return epis.filter((item) =>
-      item.colaboradorNome.toLowerCase().includes(termo),
-    );
-  }, [epis, busca]);
+    return epis.filter((item) => {
+      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
+      if (situacao === "em_uso" && item.dataDevolucao !== null) return false;
+      if (situacao === "devolvido" && item.dataDevolucao === null) return false;
+      if (assinado === "sim" && !item.assinado) return false;
+      if (assinado === "nao" && item.assinado) return false;
+      if (!noPeriodo(item.dataEntrega, entregaDe, entregaAte)) return false;
+      // EPI ainda em uso (sem devolução) sai da lista quando o usuário pede uma
+      // janela de devolução: sem data, não é resposta.
+      if (!noPeriodo(item.dataDevolucao, devolucaoDe, devolucaoAte)) {
+        return false;
+      }
+      if (termo) {
+        // A busca cobre quem recebeu e o que recebeu: o nome do EPI e o CA são
+        // o jeito natural de achar "quem está com bota" ou um CA específico.
+        const alvo = [item.colaboradorNome, item.descricao, item.ca ?? ""]
+          .join(" ")
+          .toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      return true;
+    });
+  }, [
+    epis,
+    busca,
+    colaboradorId,
+    situacao,
+    assinado,
+    entregaDe,
+    entregaAte,
+    devolucaoDe,
+    devolucaoAte,
+  ]);
 
   const podeAgir = podeEditar || podeExcluir;
 
@@ -212,13 +265,107 @@ export function EpisTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por colaborador",
+            rotulo: "Busca por colaborador ou EPI",
             fixo: true,
             elemento: (
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por colaborador"
+                placeholder="Buscar por colaborador, EPI ou CA"
+              />
+            ),
+          },
+          {
+            id: "colaborador",
+            rotulo: "Colaborador",
+            ocultoPorPadrao: true,
+            temValor: colaboradorId !== "",
+            onLimpar: () => setColaboradorId(""),
+            elemento: (
+              <FiltroSelect
+                valor={colaboradorId}
+                onValorChange={setColaboradorId}
+                opcoes={colaboradores.map((colaborador) => ({
+                  valor: colaborador.id,
+                  rotulo: colaborador.nome,
+                }))}
+                placeholder="Colaborador"
+                todosRotulo="Todos os colaboradores"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "situacao",
+            rotulo: "Situação",
+            ocultoPorPadrao: true,
+            temValor: situacao !== "",
+            onLimpar: () => setSituacao(""),
+            elemento: (
+              <FiltroSelect
+                valor={situacao}
+                onValorChange={setSituacao}
+                opcoes={OPCOES_SITUACAO}
+                placeholder="Situação"
+                todosRotulo="Todas as situações"
+              />
+            ),
+          },
+          {
+            id: "assinado",
+            rotulo: "Termo assinado",
+            ocultoPorPadrao: true,
+            temValor: assinado !== "",
+            onLimpar: () => setAssinado(""),
+            elemento: (
+              <FiltroSelect
+                valor={assinado}
+                onValorChange={setAssinado}
+                opcoes={OPCOES_ASSINADO}
+                placeholder="Termo"
+                todosRotulo="Assinado ou não"
+              />
+            ),
+          },
+          {
+            id: "entrega",
+            rotulo: "Período de entrega",
+            ocultoPorPadrao: true,
+            temValor: entregaDe !== "" || entregaAte !== "",
+            onLimpar: () => {
+              setEntregaDe("");
+              setEntregaAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={entregaDe}
+                ate={entregaAte}
+                rotulo="Entrega"
+                onPeriodoChange={(de, ate) => {
+                  setEntregaDe(de);
+                  setEntregaAte(ate);
+                }}
+              />
+            ),
+          },
+          {
+            id: "devolucao",
+            rotulo: "Período de devolução",
+            ocultoPorPadrao: true,
+            temValor: devolucaoDe !== "" || devolucaoAte !== "",
+            onLimpar: () => {
+              setDevolucaoDe("");
+              setDevolucaoAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={devolucaoDe}
+                ate={devolucaoAte}
+                rotulo="Devolução"
+                onPeriodoChange={(de, ate) => {
+                  setDevolucaoDe(de);
+                  setDevolucaoAte(ate);
+                }}
               />
             ),
           },

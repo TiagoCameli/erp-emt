@@ -11,6 +11,7 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
@@ -32,7 +33,11 @@ import type {
   ColaboradorLista,
   OpcaoSelecao,
 } from "@/modules/cadastros/colaboradores/queries";
-import { ROTULO_VINCULO } from "@/modules/cadastros/colaboradores/schemas";
+import {
+  CNH_CATEGORIAS,
+  ROTULO_VINCULO,
+  VINCULOS,
+} from "@/modules/cadastros/colaboradores/schemas";
 import type { FuncaoAtiva } from "@/modules/cadastros/funcoes/queries";
 import type { JornadaAtiva } from "@/modules/cadastros/jornadas/queries";
 import { ColaboradoresFormDrawer } from "./colaboradores-form-drawer";
@@ -45,6 +50,17 @@ const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
   { valor: "inativos", rotulo: "Inativos" },
 ];
+
+const OPCOES_VINCULO = VINCULOS.map((vinculo) => ({
+  valor: vinculo,
+  rotulo: ROTULO_VINCULO[vinculo],
+}));
+
+/** Achar motorista habilitado para uma categoria é pergunta de rotina na obra. */
+const OPCOES_CNH = CNH_CATEGORIAS.map((categoria) => ({
+  valor: categoria,
+  rotulo: categoria,
+}));
 
 export interface ColaboradoresTabelaProps {
   colaboradores: ColaboradorLista[];
@@ -61,8 +77,12 @@ export interface ColaboradoresTabelaProps {
 }
 
 /**
- * Listagem de colaboradores com busca por nome, filtro de status, edição
+ * Listagem de colaboradores: busca por nome, status, função, obra, jornada,
+ * vínculo, centro de custo, período de admissão e categoria de CNH, com edição
  * em drawer, ativar/desativar e exclusão para a lixeira (com motivo).
+ *
+ * A página carrega a equipe inteira, então filtrar em memória está correto: o
+ * total da tabela é o total real, não o de uma página.
  */
 export function ColaboradoresTabela({
   colaboradores,
@@ -77,6 +97,14 @@ export function ColaboradoresTabela({
   const router = useRouter();
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [funcaoId, setFuncaoId] = React.useState("");
+  const [obraId, setObraId] = React.useState("");
+  const [jornadaId, setJornadaId] = React.useState("");
+  const [vinculo, setVinculo] = React.useState("");
+  const [centroCustoId, setCentroCustoId] = React.useState("");
+  const [admissaoDe, setAdmissaoDe] = React.useState("");
+  const [admissaoAte, setAdmissaoAte] = React.useState("");
+  const [cnh, setCnh] = React.useState("");
 
   const [emEdicao, setEmEdicao] = React.useState<ColaboradorLista | null>(null);
   const [edicaoAberta, setEdicaoAberta] = React.useState(false);
@@ -119,10 +147,48 @@ export function ColaboradoresTabela({
     return colaboradores.filter((colaborador) => {
       if (status === "ativos" && !colaborador.ativo) return false;
       if (status === "inativos" && colaborador.ativo) return false;
+      if (funcaoId !== "" && colaborador.funcaoId !== funcaoId) return false;
+      if (obraId !== "" && colaborador.obraId !== obraId) return false;
+      if (jornadaId !== "" && colaborador.jornadaId !== jornadaId) return false;
+      if (vinculo !== "" && colaborador.vinculo !== vinculo) return false;
+      if (
+        centroCustoId !== "" &&
+        colaborador.centroCustoId !== centroCustoId
+      ) {
+        return false;
+      }
+      if (cnh !== "" && colaborador.cnhCategoria !== cnh) return false;
+      // Datas em "YYYY-MM-DD": comparação de string já é cronológica. Sem data de
+      // admissão o colaborador sai quando o período está preenchido: não há como
+      // afirmar que ele cabe na janela pedida.
+      if (
+        admissaoDe !== "" &&
+        (!colaborador.dataAdmissao || colaborador.dataAdmissao < admissaoDe)
+      ) {
+        return false;
+      }
+      if (
+        admissaoAte !== "" &&
+        (!colaborador.dataAdmissao || colaborador.dataAdmissao > admissaoAte)
+      ) {
+        return false;
+      }
       if (termo && !colaborador.nome.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [colaboradores, busca, status]);
+  }, [
+    colaboradores,
+    busca,
+    status,
+    funcaoId,
+    obraId,
+    jornadaId,
+    vinculo,
+    centroCustoId,
+    cnh,
+    admissaoDe,
+    admissaoAte,
+  ]);
 
   const colunas = React.useMemo<ColumnDef<ColaboradorLista, unknown>[]>(() => {
     const base: ColumnDef<ColaboradorLista, unknown>[] = [
@@ -271,6 +337,139 @@ export function ColaboradoresTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "funcao",
+            rotulo: "Função",
+            ocultoPorPadrao: true,
+            temValor: funcaoId !== "",
+            onLimpar: () => setFuncaoId(""),
+            elemento: (
+              <FiltroSelect
+                valor={funcaoId}
+                onValorChange={setFuncaoId}
+                opcoes={funcoes.map((funcao) => ({
+                  valor: funcao.id,
+                  rotulo: funcao.nome,
+                }))}
+                placeholder="Função"
+                todosRotulo="Todas as funções"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "obra",
+            rotulo: "Obra",
+            ocultoPorPadrao: true,
+            temValor: obraId !== "",
+            onLimpar: () => setObraId(""),
+            elemento: (
+              <FiltroSelect
+                valor={obraId}
+                onValorChange={setObraId}
+                opcoes={obras.map((obra) => ({
+                  valor: obra.id,
+                  rotulo: obra.nome,
+                }))}
+                placeholder="Obra"
+                todosRotulo="Todas as obras"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "jornada",
+            rotulo: "Jornada",
+            ocultoPorPadrao: true,
+            temValor: jornadaId !== "",
+            onLimpar: () => setJornadaId(""),
+            elemento: (
+              <FiltroSelect
+                valor={jornadaId}
+                onValorChange={setJornadaId}
+                opcoes={jornadas.map((jornada) => ({
+                  valor: jornada.id,
+                  rotulo: jornada.nome,
+                }))}
+                placeholder="Jornada"
+                todosRotulo="Todas as jornadas"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "vinculo",
+            rotulo: "Vínculo",
+            ocultoPorPadrao: true,
+            temValor: vinculo !== "",
+            onLimpar: () => setVinculo(""),
+            elemento: (
+              <FiltroSelect
+                valor={vinculo}
+                onValorChange={setVinculo}
+                opcoes={OPCOES_VINCULO}
+                placeholder="Vínculo"
+                todosRotulo="Todos os vínculos"
+              />
+            ),
+          },
+          {
+            id: "centroCusto",
+            rotulo: "Centro de custo",
+            ocultoPorPadrao: true,
+            temValor: centroCustoId !== "",
+            onLimpar: () => setCentroCustoId(""),
+            elemento: (
+              <FiltroSelect
+                valor={centroCustoId}
+                onValorChange={setCentroCustoId}
+                opcoes={centrosCusto.map((centro) => ({
+                  valor: centro.id,
+                  rotulo: centro.nome,
+                }))}
+                placeholder="Centro de custo"
+                todosRotulo="Todos os centros"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "admissao",
+            rotulo: "Período de admissão",
+            ocultoPorPadrao: true,
+            temValor: admissaoDe !== "" || admissaoAte !== "",
+            onLimpar: () => {
+              setAdmissaoDe("");
+              setAdmissaoAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={admissaoDe}
+                ate={admissaoAte}
+                rotulo="Admissão"
+                onPeriodoChange={(novoDe, novoAte) => {
+                  setAdmissaoDe(novoDe);
+                  setAdmissaoAte(novoAte);
+                }}
+              />
+            ),
+          },
+          {
+            id: "cnh",
+            rotulo: "Categoria da CNH",
+            ocultoPorPadrao: true,
+            temValor: cnh !== "",
+            onLimpar: () => setCnh(""),
+            elemento: (
+              <FiltroSelect
+                valor={cnh}
+                onValorChange={setCnh}
+                opcoes={OPCOES_CNH}
+                placeholder="CNH"
+                todosRotulo="Todas as categorias"
               />
             ),
           },

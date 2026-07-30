@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -23,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { BarraFiltrosConfiguravel } from "@/modules/cadastros/_shared/barra-filtros-configuravel";
 import { CLASSE_COR_GRUPO } from "@/modules/cadastros/_shared/insumo-grupos";
 import { alternarAtivo, excluir } from "@/modules/cadastros/categorias/actions";
 import type {
@@ -46,6 +46,15 @@ const OPCOES_STATUS = [
 ];
 
 /**
+ * Subcategoria vazia é a que se pode apagar; subcategoria com insumo é a que o
+ * banco recusa apagar. Separar as duas é o filtro que a faxina do cadastro pede.
+ */
+const OPCOES_INSUMOS = [
+  { valor: "com", rotulo: "Com insumos" },
+  { valor: "sem", rotulo: "Sem insumos" },
+];
+
+/**
  * Categorias de insumo em 2 níveis: uma seção por grupo fixo, com as
  * subcategorias dentro. Grupo não tem CRUD (é semeado no banco); o que se cria,
  * edita e desativa é a subcategoria, sempre dentro de um grupo.
@@ -62,6 +71,8 @@ export function CategoriasTabela({
 }: CategoriasTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState("ativos");
+  const [grupoId, setGrupoId] = React.useState("");
+  const [comInsumos, setComInsumos] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<CategoriaLista | null>(null);
@@ -104,18 +115,24 @@ export function CategoriasTabela({
 
   const filtrados = React.useMemo(
     () =>
-      grupos.map((grupo) => ({
-        ...grupo,
-        categorias: grupo.categorias.filter((categoria) => {
-          if (status === "ativos" && !categoria.ativo) return false;
-          if (status === "inativos" && categoria.ativo) return false;
-          if (termo && !categoria.nome.toLowerCase().includes(termo)) {
-            return false;
-          }
-          return true;
-        }),
-      })),
-    [grupos, status, termo],
+      grupos
+        // Filtrar por grupo esconde a seção inteira: é o jeito de olhar um grupo
+        // sem as outras três seções no caminho.
+        .filter((grupo) => grupoId === "" || grupo.id === grupoId)
+        .map((grupo) => ({
+          ...grupo,
+          categorias: grupo.categorias.filter((categoria) => {
+            if (status === "ativos" && !categoria.ativo) return false;
+            if (status === "inativos" && categoria.ativo) return false;
+            if (comInsumos === "com" && categoria.insumos === 0) return false;
+            if (comInsumos === "sem" && categoria.insumos > 0) return false;
+            if (termo && !categoria.nome.toLowerCase().includes(termo)) {
+              return false;
+            }
+            return true;
+          }),
+        })),
+    [grupos, status, termo, grupoId, comInsumos],
   );
 
   const colunas = React.useMemo<ColumnDef<CategoriaLista, unknown>[]>(() => {
@@ -203,20 +220,78 @@ export function CategoriasTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar subcategoria"
-        />
-        <FiltroSelect
-          valor={status === "todos" ? "" : status}
-          onValorChange={(valor) => setStatus(valor === "" ? "todos" : valor)}
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todas"
-        />
-      </FilterBar>
+      {/* A tela tem uma tabela por grupo, então os filtros não cabem no
+          `filtros` de nenhum DataTable: ficam nesta barra, com o mesmo menu
+          "Filtros" e a mesma memória por usuário. */}
+      <BarraFiltrosConfiguravel
+        idTabela="cadastros.categorias.filtros"
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por subcategoria",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar subcategoria"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setStatus("ativos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "" : status}
+                onValorChange={(valor) =>
+                  setStatus(valor === "" ? "todos" : valor)
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todas"
+              />
+            ),
+          },
+          {
+            id: "grupo",
+            rotulo: "Grupo",
+            ocultoPorPadrao: true,
+            temValor: grupoId !== "",
+            onLimpar: () => setGrupoId(""),
+            elemento: (
+              <FiltroSelect
+                valor={grupoId}
+                onValorChange={setGrupoId}
+                opcoes={opcoesGrupo.map((grupo) => ({
+                  valor: grupo.id,
+                  rotulo: grupo.nome,
+                }))}
+                placeholder="Grupo"
+                todosRotulo="Todos os grupos"
+              />
+            ),
+          },
+          {
+            id: "insumos",
+            rotulo: "Uso em insumos",
+            ocultoPorPadrao: true,
+            temValor: comInsumos !== "",
+            onLimpar: () => setComInsumos(""),
+            elemento: (
+              <FiltroSelect
+                valor={comInsumos}
+                onValorChange={setComInsumos}
+                opcoes={OPCOES_INSUMOS}
+                placeholder="Insumos"
+                todosRotulo="Com e sem insumos"
+              />
+            ),
+          },
+        ]}
+      />
 
       <div className="flex flex-col gap-6">
         {filtrados.map((grupo) => (

@@ -14,6 +14,8 @@ export interface FolhaLista {
   valorAdiantamentos: number;
   valorLiquido: number;
   custoTotal: number;
+  /** Data de fechamento (yyyy-MM-dd) ou null se ainda em rascunho. */
+  dataFechamento: string | null;
   /** Quantidade de colaboradores na folha. */
   totalItens: number;
 }
@@ -101,7 +103,7 @@ export async function listarFolhas(): Promise<FolhaLista[]> {
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
        valor_encargos, valor_adiantamentos, valor_liquido, custo_total,
-       folha_itens(count)`,
+       data_fechamento, folha_itens(count)`,
     )
     .order("competencia", { ascending: false });
 
@@ -117,6 +119,7 @@ export async function listarFolhas(): Promise<FolhaLista[]> {
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
+    dataFechamento: folha.data_fechamento,
     totalItens: folha.folha_itens?.[0]?.count ?? 0,
   }));
 }

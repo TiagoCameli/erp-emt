@@ -20,7 +20,11 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
+  FiltroBusca,
+  FiltroMes,
+  FiltroPeriodo,
   FiltroSelect,
+  FiltroValor,
   KPICard,
   MoneyText,
   StatusBadge,
@@ -47,9 +51,28 @@ import type {
   ResumoFora,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
+import {
+  dentroDaFaixaValor,
+  dentroDoPeriodo,
+  mesmoMesReferencia,
+  opcoesDeNomes,
+  usePaginacaoCliente,
+} from "@/modules/financeiro/_shared/filtros-cliente";
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
 import { AprovarDialog } from "./aprovar-dialog";
 import { PainelConferencia } from "./painel-conferencia";
+
+/** Aviso de nota fiscal da OC de origem: não bloqueia aprovar, só informa. */
+const OPCOES_NOTA = [
+  { valor: "sem", rotulo: "Sem nota fiscal" },
+  { valor: "com", rotulo: "Com nota fiscal" },
+];
+
+/** Origem do lançamento: veio de uma ordem de compra ou foi lançado à mão. */
+const OPCOES_ORIGEM = [
+  { valor: "oc", rotulo: "Ordem de compra" },
+  { valor: "manual", rotulo: "Manual" },
+];
 
 export interface FilaAprovacaoProps {
   parcelas: ParcelaPendente[];
@@ -166,26 +189,106 @@ export function FilaAprovacao({
   const [alvoRevisao, setAlvoRevisao] = React.useState<Alvo | null>(null);
   const [emConferencia, setEmConferencia] =
     React.useState<ParcelaPendente | null>(null);
+  const [filtroBusca, setFiltroBusca] = React.useState("");
   const [filtroConta, setFiltroConta] = React.useState("");
   const [filtroCategoria, setFiltroCategoria] = React.useState("");
+  const [filtroFornecedor, setFiltroFornecedor] = React.useState("");
+  const [filtroCentroCusto, setFiltroCentroCusto] = React.useState("");
+  const [filtroForma, setFiltroForma] = React.useState("");
+  const [filtroOrigem, setFiltroOrigem] = React.useState("");
+  const [filtroNota, setFiltroNota] = React.useState("");
+  const [filtroMes, setFiltroMes] = React.useState("");
+  const [filtroValorDe, setFiltroValorDe] = React.useState("");
+  const [filtroValorAte, setFiltroValorAte] = React.useState("");
+  const [filtroVencDe, setFiltroVencDe] = React.useState("");
+  const [filtroVencAte, setFiltroVencAte] = React.useState("");
+  const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
-  const filtrando = filtroConta !== "" || filtroCategoria !== "";
+  const filtrando =
+    filtroBusca.trim() !== "" ||
+    filtroConta !== "" ||
+    filtroCategoria !== "" ||
+    filtroFornecedor !== "" ||
+    filtroCentroCusto !== "" ||
+    filtroForma !== "" ||
+    filtroOrigem !== "" ||
+    filtroNota !== "" ||
+    filtroMes !== "" ||
+    filtroValorDe !== "" ||
+    filtroValorAte !== "" ||
+    filtroVencDe !== "" ||
+    filtroVencAte !== "";
 
   /**
    * A fila depois dos filtros. Tudo o que é seleção, lote, KPI e navegação do
    * painel trabalha em cima desta lista: aprovar em lote não pode alcançar linha
    * que a pessoa não está vendo.
    */
-  const visiveis = React.useMemo(
-    () =>
-      parcelas.filter(
-        (parcela) =>
-          (filtroConta === "" || parcela.contaBancariaId === filtroConta) &&
-          (filtroCategoria === "" ||
-            (parcela.categoriaNome ?? "") === filtroCategoria),
-      ),
-    [parcelas, filtroConta, filtroCategoria],
-  );
+  const visiveis = React.useMemo(() => {
+    const termo = filtroBusca.trim().toLowerCase();
+    return parcelas.filter((parcela) => {
+      if (filtroConta !== "" && parcela.contaBancariaId !== filtroConta) {
+        return false;
+      }
+      if (
+        filtroCategoria !== "" &&
+        (parcela.categoriaNome ?? "") !== filtroCategoria
+      ) {
+        return false;
+      }
+      if (
+        filtroFornecedor !== "" &&
+        parcela.fornecedorNome !== filtroFornecedor
+      ) {
+        return false;
+      }
+      if (
+        filtroCentroCusto !== "" &&
+        !parcela.rateios.some((rateio) => rateio.nome === filtroCentroCusto)
+      ) {
+        return false;
+      }
+      if (
+        filtroForma !== "" &&
+        (parcela.formaPagamentoNome ?? "") !== filtroForma
+      ) {
+        return false;
+      }
+      if (filtroOrigem === "oc" && parcela.origem !== "oc") return false;
+      if (filtroOrigem === "manual" && parcela.origem === "oc") return false;
+      if (filtroNota === "sem" && !parcela.semNota) return false;
+      if (filtroNota === "com" && parcela.semNota) return false;
+      if (!mesmoMesReferencia(parcela.mesCompetencia, filtroMes)) return false;
+      if (!dentroDaFaixaValor(parcela.valor, filtroValorDe, filtroValorAte)) {
+        return false;
+      }
+      if (
+        !dentroDoPeriodo(parcela.dataVencimento, filtroVencDe, filtroVencAte)
+      ) {
+        return false;
+      }
+      if (termo !== "") {
+        const alvo = `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome} ${parcela.origemNumero ?? ""}`;
+        if (!alvo.toLowerCase().includes(termo)) return false;
+      }
+      return true;
+    });
+  }, [
+    parcelas,
+    filtroBusca,
+    filtroConta,
+    filtroCategoria,
+    filtroFornecedor,
+    filtroCentroCusto,
+    filtroForma,
+    filtroOrigem,
+    filtroNota,
+    filtroMes,
+    filtroValorDe,
+    filtroValorAte,
+    filtroVencDe,
+    filtroVencAte,
+  ]);
 
   const totalAprovar = React.useMemo(() => somarValores(visiveis), [visiveis]);
 
@@ -215,16 +318,26 @@ export function FilaAprovacao({
     );
   }
 
-  // Trocar filtro zera a seleção: seleção sobrevivente escondida pelo filtro
-  // viraria aprovação em lote de coisa que ninguém conferiu.
-  function trocarFiltroConta(valor: string) {
-    setFiltroConta(valor);
+  /**
+   * Todo filtro passa por aqui. Duas coisas obrigatórias:
+   *
+   * 1. Zera a seleção. Seleção sobrevivente escondida pelo filtro viraria
+   *    aprovação em lote de dinheiro que ninguém conferiu.
+   * 2. Volta para a primeira página, senão a pessoa filtra e cai numa página
+   *    vazia, concluindo que não existe pagamento com aquele critério.
+   */
+  function aoTrocarFiltro(aplicar: () => void) {
+    aplicar();
     setSelecionadas(new Set());
+    zerarPagina();
+  }
+
+  function trocarFiltroConta(valor: string) {
+    aoTrocarFiltro(() => setFiltroConta(valor));
   }
 
   function trocarFiltroCategoria(valor: string) {
-    setFiltroCategoria(valor);
-    setSelecionadas(new Set());
+    aoTrocarFiltro(() => setFiltroCategoria(valor));
   }
 
   function alternarUma(id: string) {
@@ -640,18 +753,50 @@ export function FilaAprovacao({
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
   }, [parcelas]);
 
-  const opcoesCategoria = React.useMemo(() => {
-    const nomes = new Set<string>();
-    for (const parcela of parcelas) {
-      if (parcela.categoriaNome) nomes.add(parcela.categoriaNome);
-    }
-    return [...nomes]
-      .sort((a, b) => a.localeCompare(b, "pt-BR"))
-      .map((nome) => ({ valor: nome, rotulo: nome }));
-  }, [parcelas]);
+  const opcoesCategoria = React.useMemo(
+    () => opcoesDeNomes(parcelas.map((parcela) => parcela.categoriaNome)),
+    [parcelas],
+  );
+
+  const opcoesFornecedor = React.useMemo(
+    () => opcoesDeNomes(parcelas.map((parcela) => parcela.fornecedorNome)),
+    [parcelas],
+  );
+
+  const opcoesForma = React.useMemo(
+    () => opcoesDeNomes(parcelas.map((parcela) => parcela.formaPagamentoNome)),
+    [parcelas],
+  );
+
+  // Um lançamento rateado aparece em vários centros: a opção sai de todos os
+  // rateios da fila, não de um centro por parcela.
+  const opcoesCentroCusto = React.useMemo(
+    () =>
+      opcoesDeNomes(
+        parcelas.flatMap((parcela) =>
+          parcela.rateios.map((rateio) => rateio.nome),
+        ),
+      ),
+    [parcelas],
+  );
 
   // Filtro com uma única opção não filtra nada: fica fora da barra.
-  const filtros: FiltroConfiguravel[] = [];
+  // Conta e categoria seguem visíveis (já eram); o resto nasce escondido, no
+  // menu "Filtros", para a barra não virar uma parede de doze campos.
+  const filtros: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      elemento: (
+        <FiltroBusca
+          valor={filtroBusca}
+          onValorChange={(valor) => aoTrocarFiltro(() => setFiltroBusca(valor))}
+          placeholder="Buscar por lançamento, descrição, fornecedor ou OC"
+        />
+      ),
+    },
+  ];
   if (opcoesConta.length > 1) {
     filtros.push({
       id: "conta",
@@ -686,6 +831,161 @@ export function FilaAprovacao({
       ),
     });
   }
+  if (opcoesFornecedor.length > 1) {
+    filtros.push({
+      id: "fornecedor",
+      rotulo: "Fornecedor",
+      ocultoPorPadrao: true,
+      temValor: filtroFornecedor !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroFornecedor("")),
+      elemento: (
+        <FiltroSelect
+          valor={filtroFornecedor}
+          onValorChange={(valor) =>
+            aoTrocarFiltro(() => setFiltroFornecedor(valor))
+          }
+          opcoes={opcoesFornecedor}
+          placeholder="Fornecedor"
+          todosRotulo="Todos os fornecedores"
+          className="max-w-56"
+        />
+      ),
+    });
+  }
+  if (opcoesCentroCusto.length > 1) {
+    filtros.push({
+      id: "centroCusto",
+      rotulo: "Centro de custo",
+      ocultoPorPadrao: true,
+      temValor: filtroCentroCusto !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroCentroCusto("")),
+      elemento: (
+        <FiltroSelect
+          valor={filtroCentroCusto}
+          onValorChange={(valor) =>
+            aoTrocarFiltro(() => setFiltroCentroCusto(valor))
+          }
+          opcoes={opcoesCentroCusto}
+          placeholder="Centro de custo"
+          todosRotulo="Todos os centros de custo"
+          className="max-w-56"
+        />
+      ),
+    });
+  }
+  if (opcoesForma.length > 1) {
+    filtros.push({
+      id: "forma",
+      rotulo: "Forma de pagamento",
+      ocultoPorPadrao: true,
+      temValor: filtroForma !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroForma("")),
+      elemento: (
+        <FiltroSelect
+          valor={filtroForma}
+          onValorChange={(valor) => aoTrocarFiltro(() => setFiltroForma(valor))}
+          opcoes={opcoesForma}
+          placeholder="Forma de pagamento"
+          todosRotulo="Todas as formas"
+          className="max-w-56"
+        />
+      ),
+    });
+  }
+  filtros.push(
+    {
+      id: "valor",
+      rotulo: "Faixa de valor",
+      ocultoPorPadrao: true,
+      temValor: filtroValorDe !== "" || filtroValorAte !== "",
+      onLimpar: () =>
+        aoTrocarFiltro(() => {
+          setFiltroValorDe("");
+          setFiltroValorAte("");
+        }),
+      elemento: (
+        <FiltroValor
+          de={filtroValorDe}
+          ate={filtroValorAte}
+          onValorChange={(de, ate) =>
+            aoTrocarFiltro(() => {
+              setFiltroValorDe(de);
+              setFiltroValorAte(ate);
+            })
+          }
+        />
+      ),
+    },
+    {
+      id: "vencimento",
+      rotulo: "Período de vencimento",
+      ocultoPorPadrao: true,
+      temValor: filtroVencDe !== "" || filtroVencAte !== "",
+      onLimpar: () =>
+        aoTrocarFiltro(() => {
+          setFiltroVencDe("");
+          setFiltroVencAte("");
+        }),
+      elemento: (
+        <FiltroPeriodo
+          de={filtroVencDe}
+          ate={filtroVencAte}
+          onPeriodoChange={(de, ate) =>
+            aoTrocarFiltro(() => {
+              setFiltroVencDe(de);
+              setFiltroVencAte(ate);
+            })
+          }
+          rotulo="Vencimento"
+        />
+      ),
+    },
+    {
+      id: "mes",
+      rotulo: "Mês de referência",
+      ocultoPorPadrao: true,
+      temValor: filtroMes !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroMes("")),
+      elemento: (
+        <FiltroMes
+          valor={filtroMes}
+          onValorChange={(valor) => aoTrocarFiltro(() => setFiltroMes(valor))}
+        />
+      ),
+    },
+    {
+      id: "nota",
+      rotulo: "Nota fiscal",
+      ocultoPorPadrao: true,
+      temValor: filtroNota !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroNota("")),
+      elemento: (
+        <FiltroSelect
+          valor={filtroNota}
+          onValorChange={(valor) => aoTrocarFiltro(() => setFiltroNota(valor))}
+          opcoes={OPCOES_NOTA}
+          placeholder="Nota fiscal"
+          todosRotulo="Com e sem nota"
+        />
+      ),
+    },
+    {
+      id: "origem",
+      rotulo: "Origem",
+      ocultoPorPadrao: true,
+      temValor: filtroOrigem !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroOrigem("")),
+      elemento: (
+        <FiltroSelect
+          valor={filtroOrigem}
+          onValorChange={(valor) => aoTrocarFiltro(() => setFiltroOrigem(valor))}
+          opcoes={OPCOES_ORIGEM}
+          placeholder="Origem"
+          todosRotulo="Todas as origens"
+        />
+      ),
+    },
+  );
 
   /**
    * A parcela do modal quando a aprovação é de uma só, seja pela linha, seja por
@@ -774,6 +1074,9 @@ export function FilaAprovacao({
           columns={colunas}
           data={visiveis}
           filtros={filtros}
+          pageIndex={paginacao.pageIndex}
+          pageSize={paginacao.pageSize}
+          onPaginationChange={setPaginacao}
           onRowClick={setEmConferencia}
           idTabela="financeiro.aprovacao-pagamentos"
           idUsuario={idUsuario}
@@ -785,7 +1088,7 @@ export function FilaAprovacao({
               <EmptyState
                 icone={Filter}
                 titulo="Nenhum pagamento com esses filtros"
-                descricao="A fila tem pagamentos, mas nenhum bate com a conta ou a categoria escolhida. Limpe os filtros para ver tudo."
+                descricao="A fila tem pagamentos, mas nenhum bate com os filtros escolhidos. Limpe os filtros para ver tudo."
                 className="border-none bg-transparent"
               />
             ) : (

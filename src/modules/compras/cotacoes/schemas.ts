@@ -5,6 +5,20 @@ export const STATUS_COTACAO = ["aberta", "finalizada", "cancelada"] as const;
 
 export type StatusCotacao = (typeof STATUS_COTACAO)[number];
 
+/**
+ * Valores do filtro "OC gerada" da listagem: a cotação já virou ordem de compra
+ * ou continua sem OC nenhuma. Vive aqui porque a página valida o parâmetro da
+ * URL contra esta lista antes de mandar qualquer coisa para o banco.
+ */
+export const OC_GERADA_COTACAO = ["com", "sem"] as const;
+
+export type OcGeradaCotacao = (typeof OC_GERADA_COTACAO)[number];
+
+/** Valores do filtro de autoria da listagem: minhas cotações ou dos outros. */
+export const AUTORIA_COTACAO = ["eu", "outros"] as const;
+
+export type AutoriaCotacao = (typeof AUTORIA_COTACAO)[number];
+
 /** Texto opcional: vazio vira undefined para não gravar string em branco. */
 function textoOpcional(maximo: number) {
   return z

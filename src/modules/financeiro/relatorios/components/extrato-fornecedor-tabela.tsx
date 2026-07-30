@@ -9,10 +9,20 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroMes,
+  FiltroPeriodo,
+  FiltroSelect,
+  FiltroValor,
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
+import {
+  dentroDaFaixaValor,
+  dentroDoPeriodo,
+  mesmoMesReferencia,
+  usePaginacaoCliente,
+} from "@/modules/financeiro/_shared/filtros-cliente";
 import {
   STATUS_LANCAMENTO,
   type StatusLancamento,
@@ -92,19 +102,88 @@ export function ExtratoFornecedorTabela({
     [],
   );
 
-  // O extrato vem inteiro do servidor, então a busca filtra no client. Está
-  // declarada em `filtros` (não no `searchKey` da tabela) para aparecer no menu
-  // "Filtros" junto de qualquer filtro futuro desta listagem.
+  // O extrato vem inteiro do servidor, então todos os filtros rodam em memória.
+  // Estão declarados em `filtros` (não no `searchKey` da tabela) para aparecerem
+  // no menu "Filtros", com a escolha salva junto das colunas do usuário. O
+  // fornecedor em si continua no seletor da seção, que recarrega o relatório.
+  const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
   const [busca, setBusca] = React.useState("");
+  const [status, setStatus] = React.useState("");
+  const [mes, setMes] = React.useState("");
+  const [valorDe, setValorDe] = React.useState("");
+  const [valorAte, setValorAte] = React.useState("");
+  const [vencimentoDe, setVencimentoDe] = React.useState("");
+  const [vencimentoAte, setVencimentoAte] = React.useState("");
+
+  // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
+  // numa página vazia.
+  function mudarBusca(valor: string) {
+    setBusca(valor);
+    zerarPagina();
+  }
+  function mudarStatus(valor: string) {
+    setStatus(valor);
+    zerarPagina();
+  }
+  function mudarMes(valor: string) {
+    setMes(valor);
+    zerarPagina();
+  }
+  function mudarValor(de: string, ate: string) {
+    setValorDe(de);
+    setValorAte(ate);
+    zerarPagina();
+  }
+  function mudarVencimento(de: string, ate: string) {
+    setVencimentoDe(de);
+    setVencimentoAte(ate);
+    zerarPagina();
+  }
+
+  // As opções de status saem do próprio extrato: oferecer "Pago" num extrato
+  // sem nada pago só devolve tabela vazia.
+  const opcoesStatus = React.useMemo(() => {
+    const presentes = new Set(lancamentos.map((lancamento) => lancamento.status));
+    return [...presentes]
+      .map((valor) => ({ valor, rotulo: formatoStatus(valor).rotulo }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }, [lancamentos]);
+
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (termo === "") return lancamentos;
-    return lancamentos.filter((lancamento) =>
-      `${lancamento.numero ?? ""} ${lancamento.descricao}`
-        .toLowerCase()
-        .includes(termo),
-    );
-  }, [lancamentos, busca]);
+    return lancamentos.filter((lancamento) => {
+      if (status !== "" && lancamento.status !== status) return false;
+      if (!mesmoMesReferencia(lancamento.mesCompetencia, mes)) return false;
+      if (!dentroDaFaixaValor(lancamento.valor, valorDe, valorAte)) return false;
+      if (
+        !dentroDoPeriodo(
+          lancamento.dataVencimento,
+          vencimentoDe,
+          vencimentoAte,
+        )
+      ) {
+        return false;
+      }
+      if (
+        termo !== "" &&
+        !`${lancamento.numero ?? ""} ${lancamento.descricao}`
+          .toLowerCase()
+          .includes(termo)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    lancamentos,
+    busca,
+    status,
+    mes,
+    valorDe,
+    valorAte,
+    vencimentoDe,
+    vencimentoAte,
+  ]);
 
   const filtros: FiltroConfiguravel[] = [
     {
@@ -114,12 +193,70 @@ export function ExtratoFornecedorTabela({
       elemento: (
         <FiltroBusca
           valor={busca}
-          onValorChange={setBusca}
+          onValorChange={mudarBusca}
           placeholder="Buscar por número ou descrição"
         />
       ),
     },
+    {
+      id: "status",
+      rotulo: "Status",
+      ocultoPorPadrao: true,
+      temValor: status !== "",
+      onLimpar: () => mudarStatus(""),
+      elemento: (
+        <FiltroSelect
+          valor={status}
+          onValorChange={mudarStatus}
+          opcoes={opcoesStatus}
+          placeholder="Status"
+          todosRotulo="Todos os status"
+        />
+      ),
+    },
+    {
+      id: "mes",
+      rotulo: "Mês de referência",
+      ocultoPorPadrao: true,
+      temValor: mes !== "",
+      onLimpar: () => mudarMes(""),
+      elemento: <FiltroMes valor={mes} onValorChange={mudarMes} />,
+    },
+    {
+      id: "vencimento",
+      rotulo: "Período de vencimento",
+      ocultoPorPadrao: true,
+      temValor: vencimentoDe !== "" || vencimentoAte !== "",
+      onLimpar: () => mudarVencimento("", ""),
+      elemento: (
+        <FiltroPeriodo
+          de={vencimentoDe}
+          ate={vencimentoAte}
+          onPeriodoChange={mudarVencimento}
+          rotulo="Vencimento"
+        />
+      ),
+    },
+    {
+      id: "valor",
+      rotulo: "Faixa de valor",
+      ocultoPorPadrao: true,
+      temValor: valorDe !== "" || valorAte !== "",
+      onLimpar: () => mudarValor("", ""),
+      elemento: (
+        <FiltroValor de={valorDe} ate={valorAte} onValorChange={mudarValor} />
+      ),
+    },
   ];
+
+  const filtrando =
+    busca.trim() !== "" ||
+    status !== "" ||
+    mes !== "" ||
+    valorDe !== "" ||
+    valorAte !== "" ||
+    vencimentoDe !== "" ||
+    vencimentoAte !== "";
 
   return (
     <DataTable
@@ -127,11 +264,21 @@ export function ExtratoFornecedorTabela({
       columns={colunas}
       data={dados}
       filtros={filtros}
+      pageIndex={paginacao.pageIndex}
+      pageSize={paginacao.pageSize}
+      onPaginationChange={setPaginacao}
       emptyState={
-        <EmptyState
-          titulo="Sem lançamentos"
-          descricao="Nenhum lançamento a pagar para este fornecedor."
-        />
+        filtrando && lancamentos.length > 0 ? (
+          <EmptyState
+            titulo="Nenhum lançamento com esses filtros"
+            descricao="O extrato tem lançamentos, mas nenhum bate com os filtros escolhidos."
+          />
+        ) : (
+          <EmptyState
+            titulo="Sem lançamentos"
+            descricao="Nenhum lançamento a pagar para este fornecedor."
+          />
+        )
       }
     />
   );

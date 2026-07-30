@@ -14,6 +14,13 @@ export interface ParcelaAprovada {
   /** Categoria financeira do lançamento, exibida junto da descrição. */
   categoriaNome: string | null;
   fornecedorNome: string;
+  /**
+   * Fornecedor e conta bancária como id, para os filtros da fila. Opcionais
+   * porque a interface também é o contrato de entrada do drawer de pagamento, e
+   * quem só quer abrir o drawer (aba Programados) não tem esses ids em mão.
+   */
+  fornecedorId?: string | null;
+  contaBancariaId?: string | null;
   dataVencimento: string | null;
   /** Data em que o pagamento está autorizado. É ela que a trava do banco usa. */
   dataProgramada: string | null;
@@ -34,6 +41,28 @@ export interface ParcelaPaga {
   contaNome: string;
   dataPagamento: string | null;
   valor: number;
+}
+
+/**
+ * Filtros do histórico de pagamentos. Todos vão ao banco: a paginação da aba
+ * "Pagas" é server-side, e filtrar só a página carregada faria a tela mentir
+ * sobre quantos pagamentos existem.
+ */
+export interface FiltrosParcelasPagas {
+  /** Número do lançamento, descrição ou nome do fornecedor. */
+  busca?: string;
+  fornecedorId?: string;
+  contaBancariaId?: string;
+  /** Faixa de valor da parcela, em reais (comparação gte/lte no banco). */
+  valorDe?: number;
+  valorAte?: number;
+  /** Períodos em yyyy-MM-dd; ponta vazia significa sem limite naquele lado. */
+  vencimentoDe?: string;
+  vencimentoAte?: string;
+  programadaDe?: string;
+  programadaAte?: string;
+  pagamentoDe?: string;
+  pagamentoAte?: string;
 }
 
 /** Histórico paginado de pagamentos. */
@@ -75,9 +104,9 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
     .from("lancamento_parcelas")
     .select(
       `id, numero_parcela, valor, data_vencimento, data_programada,
-       data_programada_origem, aprovado_em, lancamento_id,
+       data_programada_origem, aprovado_em, lancamento_id, conta_bancaria_id,
        lancamentos!inner(
-         numero, descricao, tipo,
+         numero, descricao, tipo, fornecedor_id,
          categorias_financeiras(nome),
          fornecedores(razao_social, nome_fantasia)
        )`,
@@ -101,7 +130,9 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
     numeroParcela: parcela.numero_parcela,
     descricao: parcela.lancamentos?.descricao ?? "-",
     categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
+    fornecedorId: parcela.lancamentos?.fornecedor_id ?? null,
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
+    contaBancariaId: parcela.conta_bancaria_id,
     dataVencimento: parcela.data_vencimento,
     dataProgramada: parcela.data_programada,
     dataProgramadaOrigem:
@@ -111,23 +142,54 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
   }));
 }
 
+/** Máximo de fornecedores resolvidos por nome numa busca (limite do filtro in). */
+const MAX_FORNECEDORES_BUSCA = 50;
+
+/**
+ * Padrão ilike (%termo%) do termo de busca. Remove os caracteres que quebram a
+ * sintaxe do or() do PostgREST (vírgula, parênteses, aspas, barra).
+ */
+function padraoBusca(termo: string): string {
+  return `%${termo.replace(/[,()"'\\]/g, "").trim()}%`;
+}
+
+/**
+ * Ids de fornecedores cujo nome bate com o padrão. A busca do histórico precisa
+ * achar por fornecedor, e o or() do PostgREST não mistura colunas de tabelas
+ * diferentes: os ids entram como mais um termo do or() em cima de lancamentos.
+ */
+async function idsFornecedoresPorNome(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  padrao: string,
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("fornecedores")
+    .select("id")
+    .or(`razao_social.ilike.${padrao},nome_fantasia.ilike.${padrao}`)
+    .limit(MAX_FORNECEDORES_BUSCA);
+  return (data ?? []).map((fornecedor) => fornecedor.id);
+}
+
 /**
  * Histórico paginado de parcelas pagas, mais recentes primeiro. Resolve a
- * conta bancária do pagamento e o fornecedor do lançamento via join.
+ * conta bancária do pagamento e o fornecedor do lançamento via join, e aplica
+ * todos os filtros no banco.
  */
 export async function listarParcelasPagas({
   pagina,
   tamanho,
+  filtros = {},
 }: {
   pagina: number;
   tamanho: number;
+  filtros?: FiltrosParcelasPagas;
 }): Promise<ParcelasPagasPagina> {
   const supabase = await createClient();
 
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
-  const { data, error, count } = await supabase
+  let consulta = supabase
     .from("lancamento_parcelas")
     .select(
       `id, numero_parcela, valor, data_pagamento,
@@ -143,6 +205,53 @@ export async function listarParcelasPagas({
     .order("data_pagamento", { ascending: false, nullsFirst: false })
     .order("pago_em", { ascending: false, nullsFirst: false })
     .range(de, ate);
+
+  if (filtros.contaBancariaId) {
+    consulta = consulta.eq("conta_bancaria_id", filtros.contaBancariaId);
+  }
+  if (filtros.valorDe !== undefined) {
+    consulta = consulta.gte("valor", filtros.valorDe);
+  }
+  if (filtros.valorAte !== undefined) {
+    consulta = consulta.lte("valor", filtros.valorAte);
+  }
+  if (filtros.vencimentoDe) {
+    consulta = consulta.gte("data_vencimento", filtros.vencimentoDe);
+  }
+  if (filtros.vencimentoAte) {
+    consulta = consulta.lte("data_vencimento", filtros.vencimentoAte);
+  }
+  if (filtros.programadaDe) {
+    consulta = consulta.gte("data_programada", filtros.programadaDe);
+  }
+  if (filtros.programadaAte) {
+    consulta = consulta.lte("data_programada", filtros.programadaAte);
+  }
+  if (filtros.pagamentoDe) {
+    consulta = consulta.gte("data_pagamento", filtros.pagamentoDe);
+  }
+  if (filtros.pagamentoAte) {
+    consulta = consulta.lte("data_pagamento", filtros.pagamentoAte);
+  }
+  // Fornecedor e busca moram no lançamento. O join já é !inner, então filtrar a
+  // tabela embutida filtra as parcelas de verdade (não só o que aparece nela).
+  if (filtros.fornecedorId) {
+    consulta = consulta.eq("lancamentos.fornecedor_id", filtros.fornecedorId);
+  }
+  const termo = filtros.busca?.trim() ?? "";
+  if (termo !== "") {
+    const padrao = padraoBusca(termo);
+    const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
+    const partes = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
+    if (idsFornecedores.length > 0) {
+      partes.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
+    }
+    consulta = consulta.or(partes.join(","), {
+      referencedTable: "lancamentos",
+    });
+  }
+
+  const { data, error, count } = await consulta;
 
   if (error) {
     throw new Error("Não foi possível carregar o histórico de pagamentos");

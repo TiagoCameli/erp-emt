@@ -10,6 +10,7 @@ import {
   EmptyState,
   FiltroBusca,
   FiltroSelect,
+  FiltroValor,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { opcoesNumericasDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
 import { desativarCondicao } from "@/modules/cadastros/condicoes-pagamento/actions";
 import type { CondicaoLista } from "@/modules/cadastros/condicoes-pagamento/queries";
 import { CondicaoFormDrawer } from "./condicao-form-drawer";
@@ -30,6 +32,17 @@ const OPCOES_STATUS = [
   { valor: "inativos", rotulo: "Inativos" },
 ];
 
+/**
+ * Prazo da condição: os dias da ÚLTIMA parcela, que é quando o dinheiro sai por
+ * inteiro. É essa a pergunta de quem negocia ("cabe em 60 dias?"), não a média.
+ */
+function prazoEmDias(condicao: CondicaoLista): number {
+  return condicao.parcelas.reduce(
+    (maior, parcela) => Math.max(maior, parcela.diasOffset),
+    0,
+  );
+}
+
 export interface CondicoesTabelaProps {
   condicoes: CondicaoLista[];
   podeCriar: boolean;
@@ -37,10 +50,13 @@ export interface CondicoesTabelaProps {
 }
 
 /**
- * Listagem de condições de pagamento: busca por descrição, filtro de status
- * e ações por linha (editar, desativar). "Desativar" é reversível: some das
- * opções de novos lançamentos, mas a condição continua no histórico e pode
- * voltar a ficar ativa editando o registro.
+ * Listagem de condições de pagamento: busca por descrição, filtros de status,
+ * número de parcelas e prazo em dias, e ações por linha (editar, desativar).
+ * "Desativar" é reversível: some das opções de novos lançamentos, mas a
+ * condição continua no histórico e pode voltar a ficar ativa editando o
+ * registro.
+ *
+ * A página carrega o catálogo inteiro, então filtrar em memória está correto.
  */
 export function CondicoesTabela({
   condicoes,
@@ -49,6 +65,9 @@ export function CondicoesTabela({
 }: CondicoesTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [qtdParcelas, setQtdParcelas] = React.useState("");
+  const [prazoDe, setPrazoDe] = React.useState("");
+  const [prazoAte, setPrazoAte] = React.useState("");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<CondicaoLista | null>(null);
@@ -72,17 +91,36 @@ export function CondicoesTabela({
     toast.success("Condição de pagamento desativada");
   }
 
+  const opcoesQtdParcelas = React.useMemo(
+    () => opcoesNumericasDistintas(condicoes.map((c) => c.qtdParcelas)),
+    [condicoes],
+  );
+
   const filtradas = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
+    const minimo = prazoDe === "" ? null : Number(prazoDe);
+    const maximo = prazoAte === "" ? null : Number(prazoAte);
     return condicoes.filter((condicao) => {
       if (status === "ativos" && !condicao.ativo) return false;
       if (status === "inativos" && condicao.ativo) return false;
+      if (qtdParcelas !== "" && String(condicao.qtdParcelas) !== qtdParcelas) {
+        return false;
+      }
+      if (minimo !== null || maximo !== null) {
+        const prazo = prazoEmDias(condicao);
+        if (minimo !== null && Number.isFinite(minimo) && prazo < minimo) {
+          return false;
+        }
+        if (maximo !== null && Number.isFinite(maximo) && prazo > maximo) {
+          return false;
+        }
+      }
       if (termo && !condicao.descricao.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [condicoes, busca, status]);
+  }, [condicoes, busca, status, qtdParcelas, prazoDe, prazoAte]);
 
   const colunas = React.useMemo<ColumnDef<CondicaoLista, unknown>[]>(() => {
     const base: ColumnDef<CondicaoLista, unknown>[] = [
@@ -195,6 +233,43 @@ export function CondicoesTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "qtdParcelas",
+            rotulo: "Número de parcelas",
+            ocultoPorPadrao: true,
+            temValor: qtdParcelas !== "",
+            onLimpar: () => setQtdParcelas(""),
+            elemento: (
+              <FiltroSelect
+                valor={qtdParcelas}
+                onValorChange={setQtdParcelas}
+                opcoes={opcoesQtdParcelas}
+                placeholder="Parcelas"
+                todosRotulo="Qualquer número"
+              />
+            ),
+          },
+          {
+            id: "prazo",
+            rotulo: "Prazo em dias",
+            ocultoPorPadrao: true,
+            temValor: prazoDe !== "" || prazoAte !== "",
+            onLimpar: () => {
+              setPrazoDe("");
+              setPrazoAte("");
+            },
+            elemento: (
+              <FiltroValor
+                de={prazoDe}
+                ate={prazoAte}
+                rotulo="Prazo (dias)"
+                onValorChange={(novoDe, novoAte) => {
+                  setPrazoDe(novoDe);
+                  setPrazoAte(novoAte);
+                }}
               />
             ),
           },

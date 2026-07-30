@@ -11,6 +11,7 @@ import {
   EmptyState,
   FiltroBusca,
   FiltroSelect,
+  FiltroValor,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { resumoHoras } from "@/modules/cadastros/jornadas/formato";
+import {
+  horasSemanais,
+  resumoHoras,
+} from "@/modules/cadastros/jornadas/formato";
 import { removerJornada } from "@/modules/cadastros/jornadas/actions";
 import type { JornadaLista } from "@/modules/cadastros/jornadas/queries";
 
@@ -32,6 +36,18 @@ const OPCOES_STATUS = [
   { valor: "inativos", rotulo: "Inativos" },
 ];
 
+/** "Trabalha nesse dia?" é hora maior que zero no dia. */
+const OPCOES_SIM_NAO = [
+  { valor: "sim", rotulo: "Sim" },
+  { valor: "nao", rotulo: "Não" },
+];
+
+/** Casa a resposta "sim"/"nao" do filtro com as horas do dia. */
+function casaDiaTrabalhado(escolha: string, horas: number): boolean {
+  if (escolha === "") return true;
+  return escolha === "sim" ? horas > 0 : horas === 0;
+}
+
 export interface JornadasTabelaProps {
   jornadas: JornadaLista[];
   podeEditar: boolean;
@@ -41,8 +57,11 @@ export interface JornadasTabelaProps {
 }
 
 /**
- * Listagem de jornadas com busca por nome, filtro de status e ações por
- * linha: editar e excluir (com motivo, via lixeira).
+ * Listagem de jornadas com busca por nome, filtros de status, carga semanal e
+ * trabalho em sábado e domingo, e ações por linha: editar e excluir (com
+ * motivo, via lixeira).
+ *
+ * A página carrega o catálogo inteiro, então filtrar em memória está correto.
  */
 export function JornadasTabela({
   jornadas,
@@ -52,17 +71,34 @@ export function JornadasTabela({
 }: JornadasTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [horasDe, setHorasDe] = React.useState("");
+  const [horasAte, setHorasAte] = React.useState("");
+  const [sabado, setSabado] = React.useState("");
+  const [domingo, setDomingo] = React.useState("");
   const [excluindo, setExcluindo] = React.useState<JornadaLista | null>(null);
 
   const filtradas = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
+    const minimo = horasDe === "" ? null : Number(horasDe);
+    const maximo = horasAte === "" ? null : Number(horasAte);
     return jornadas.filter((jornada) => {
       if (status === "ativos" && !jornada.ativo) return false;
       if (status === "inativos" && jornada.ativo) return false;
+      if (!casaDiaTrabalhado(sabado, jornada.horasSabado)) return false;
+      if (!casaDiaTrabalhado(domingo, jornada.horasDomingo)) return false;
+      if (minimo !== null || maximo !== null) {
+        const semana = horasSemanais(jornada);
+        if (minimo !== null && Number.isFinite(minimo) && semana < minimo) {
+          return false;
+        }
+        if (maximo !== null && Number.isFinite(maximo) && semana > maximo) {
+          return false;
+        }
+      }
       if (termo && !jornada.nome.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [jornadas, busca, status]);
+  }, [jornadas, busca, status, horasDe, horasAte, sabado, domingo]);
 
   async function aoConfirmarExclusao(motivo?: string) {
     if (!excluindo) return;
@@ -179,6 +215,59 @@ export function JornadasTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "horasSemanais",
+            rotulo: "Carga semanal",
+            ocultoPorPadrao: true,
+            temValor: horasDe !== "" || horasAte !== "",
+            onLimpar: () => {
+              setHorasDe("");
+              setHorasAte("");
+            },
+            elemento: (
+              <FiltroValor
+                de={horasDe}
+                ate={horasAte}
+                rotulo="Horas na semana"
+                onValorChange={(novoDe, novoAte) => {
+                  setHorasDe(novoDe);
+                  setHorasAte(novoAte);
+                }}
+              />
+            ),
+          },
+          {
+            id: "sabado",
+            rotulo: "Trabalha no sábado",
+            ocultoPorPadrao: true,
+            temValor: sabado !== "",
+            onLimpar: () => setSabado(""),
+            elemento: (
+              <FiltroSelect
+                valor={sabado}
+                onValorChange={setSabado}
+                opcoes={OPCOES_SIM_NAO}
+                placeholder="Sábado"
+                todosRotulo="Sábado: tanto faz"
+              />
+            ),
+          },
+          {
+            id: "domingo",
+            rotulo: "Trabalha no domingo",
+            ocultoPorPadrao: true,
+            temValor: domingo !== "",
+            onLimpar: () => setDomingo(""),
+            elemento: (
+              <FiltroSelect
+                valor={domingo}
+                onValorChange={setDomingo}
+                opcoes={OPCOES_SIM_NAO}
+                placeholder="Domingo"
+                todosRotulo="Domingo: tanto faz"
               />
             ),
           },

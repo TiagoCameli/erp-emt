@@ -63,6 +63,8 @@ export interface InsumosTabelaProps {
   grupo: string;
   /** Filtro por subcategoria (id) vindo da URL. */
   categoria: string;
+  /** Filtro por unidade de medida (id) vindo da URL. */
+  unidade: string;
   categorias: CategoriaOpcao[];
   grupos: GrupoOpcao[];
   unidades: UnidadeOpcao[];
@@ -72,10 +74,13 @@ export interface InsumosTabelaProps {
 }
 
 /**
- * Tela de insumos: cabeçalho com importar e novo, filtros de busca e status
- * persistidos na URL (resolvidos no servidor), tabela com paginação
- * server-side e ações de linha (editar, ativar/desativar, excluir) e o
- * drawer de criação e edição.
+ * Tela de insumos: cabeçalho com importar e novo, filtros persistidos na URL e
+ * resolvidos NO SERVIDOR (busca, status, grupo, subcategoria e unidade), tabela
+ * com paginação server-side e ações de linha (editar, ativar/desativar,
+ * excluir) e o drawer de criação e edição.
+ *
+ * Filtrar no servidor não é detalhe: a listagem é paginada, e filtrar só a
+ * página carregada mostraria 3 resultados de um universo de milhares.
  */
 export function InsumosTabela({
   insumos,
@@ -86,6 +91,7 @@ export function InsumosTabela({
   status,
   grupo,
   categoria,
+  unidade,
   categorias,
   grupos,
   unidades,
@@ -118,7 +124,7 @@ export function InsumosTabela({
         c.grupoNome.toLowerCase() === "material",
     ) ?? categorias.find((c) => c.nome === SUBCATEGORIA_A_CLASSIFICAR);
 
-  const chaveDaPagina = `${pagina}|${status}|${grupo}|${categoria}|${buscaInicial}`;
+  const chaveDaPagina = `${pagina}|${status}|${grupo}|${categoria}|${unidade}|${buscaInicial}`;
   const [chaveAnterior, setChaveAnterior] = React.useState(chaveDaPagina);
   if (chaveDaPagina !== chaveAnterior) {
     setChaveAnterior(chaveDaPagina);
@@ -490,6 +496,31 @@ export function InsumosTabela({
               />
             ),
           },
+          {
+            id: "unidade",
+            rotulo: "Unidade de medida",
+            ocultoPorPadrao: true,
+            temValor: unidade !== "",
+            onLimpar: () => setMuitos({ unidade: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={unidade}
+                onValorChange={(valor) =>
+                  setMuitos({
+                    unidade: valor === "" ? null : valor,
+                    pagina: "1",
+                  })
+                }
+                opcoes={unidades.map((u) => ({
+                  valor: u.id,
+                  rotulo: `${u.sigla} - ${u.nome}`,
+                }))}
+                placeholder="Unidade"
+                todosRotulo="Todas as unidades"
+                className="max-w-60"
+              />
+            ),
+          },
         ]}
         toolbar={
           aClassificar ? (
@@ -501,6 +532,9 @@ export function InsumosTabela({
                 setMuitos({
                   grupo: null,
                   categoria: aClassificar.id,
+                  // Limpa a unidade também: é um atalho para a fila de trabalho
+                  // inteira, não para um pedaço dela.
+                  unidade: null,
                   status: "todos",
                   pagina: "1",
                 })

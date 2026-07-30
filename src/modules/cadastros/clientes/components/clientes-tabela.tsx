@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
 import {
   alternarAtivo,
   excluir,
@@ -40,6 +41,12 @@ function rotuloTipo(tipo: string): string {
   return tipo === "pf" ? "Pessoa física" : "Pessoa jurídica";
 }
 
+/** Espelha o check de `clientes.tipo` no banco. */
+const OPCOES_TIPO = [
+  { valor: "pf", rotulo: rotuloTipo("pf") },
+  { valor: "pj", rotulo: rotuloTipo("pj") },
+];
+
 export interface ClientesTabelaProps {
   clientes: ClienteLista[];
   podeEditar: boolean;
@@ -47,8 +54,11 @@ export interface ClientesTabelaProps {
 }
 
 /**
- * Listagem de clientes com busca por nome, filtro de status e ações de
- * linha (editar, ativar/desativar, excluir). A criação fica no PageHeader.
+ * Listagem de clientes: busca por nome, status, tipo de pessoa, UF e cidade,
+ * com ações de linha (editar, ativar/desativar, excluir). A criação fica no
+ * PageHeader.
+ *
+ * A página carrega o cadastro inteiro, então filtrar em memória está correto.
  */
 export function ClientesTabela({
   clientes,
@@ -57,6 +67,9 @@ export function ClientesTabela({
 }: ClientesTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [tipo, setTipo] = React.useState("");
+  const [uf, setUf] = React.useState("");
+  const [cidade, setCidade] = React.useState("");
 
   const [edicaoCliente, setEdicaoCliente] = React.useState<ClienteLista | null>(
     null,
@@ -67,17 +80,36 @@ export function ClientesTabela({
     React.useState<ClienteLista | null>(null);
   const [exclusaoAberta, setExclusaoAberta] = React.useState(false);
 
+  const opcoesUf = React.useMemo(
+    () => opcoesDistintas(clientes.map((cliente) => cliente.uf)),
+    [clientes],
+  );
+
+  // Cidades da UF escolhida: a lista de cidade acompanha a UF do filtro.
+  const opcoesCidade = React.useMemo(
+    () =>
+      opcoesDistintas(
+        clientes
+          .filter((cliente) => uf === "" || cliente.uf === uf)
+          .map((cliente) => cliente.cidade),
+      ),
+    [clientes, uf],
+  );
+
   const filtrados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return clientes.filter((cliente) => {
       if (status === "ativos" && !cliente.ativo) return false;
       if (status === "inativos" && cliente.ativo) return false;
+      if (tipo !== "" && cliente.tipo !== tipo) return false;
+      if (uf !== "" && cliente.uf !== uf) return false;
+      if (cidade !== "" && cliente.cidade !== cidade) return false;
       if (termo.length > 0 && !cliente.nome.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [clientes, busca, status]);
+  }, [clientes, busca, status, tipo, uf, cidade]);
 
   function abrirEdicao(cliente: ClienteLista) {
     setEdicaoCliente(cliente);
@@ -254,6 +286,63 @@ export function ClientesTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Ativos"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo de pessoa",
+            ocultoPorPadrao: true,
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={OPCOES_TIPO}
+                placeholder="Tipo"
+                todosRotulo="Física e jurídica"
+              />
+            ),
+          },
+          {
+            id: "uf",
+            rotulo: "UF",
+            ocultoPorPadrao: true,
+            temValor: uf !== "",
+            // Soltar a UF solta a cidade: ela pertence à UF.
+            onLimpar: () => {
+              setUf("");
+              setCidade("");
+            },
+            elemento: (
+              <FiltroSelect
+                valor={uf}
+                onValorChange={(valor) => {
+                  setUf(valor);
+                  // Trocar a UF derruba a cidade: ela é da anterior.
+                  setCidade("");
+                }}
+                opcoes={opcoesUf}
+                placeholder="UF"
+                todosRotulo="Todas as UFs"
+              />
+            ),
+          },
+          {
+            id: "cidade",
+            rotulo: "Cidade",
+            ocultoPorPadrao: true,
+            temValor: cidade !== "",
+            onLimpar: () => setCidade(""),
+            elemento: (
+              <FiltroSelect
+                valor={cidade}
+                onValorChange={setCidade}
+                opcoes={opcoesCidade}
+                placeholder="Cidade"
+                todosRotulo="Todas as cidades"
+                className="max-w-56"
               />
             ),
           },

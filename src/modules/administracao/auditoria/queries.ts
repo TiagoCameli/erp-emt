@@ -4,6 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/database.types";
 import type { RegistroAuditLog } from "@/components/canonicos";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import { inicioDoDiaISO } from "@/modules/compras/_shared/lista";
+
+// As opções de usuário do filtro são as mesmas da lixeira: ficam no _shared de
+// Administração para as duas telas lerem a mesma coisa.
+export type { UsuarioParaFiltro } from "@/modules/administracao/_shared/queries";
+export { listarUsuariosParaFiltro } from "@/modules/administracao/_shared/queries";
 
 /** Ações gravadas pelos triggers de auditoria. */
 export type AcaoAuditoria = "INSERT" | "UPDATE" | "DELETE";
@@ -29,6 +35,12 @@ export interface FiltrosAuditoria {
   tabela?: string;
   usuarioId?: string;
   acao?: AcaoAuditoria;
+  /** Início do período da alteração (yyyy-MM-dd), pelo dia de Rio Branco. */
+  de?: string;
+  /** Fim do período da alteração (yyyy-MM-dd), inclusive. */
+  ate?: string;
+  /** Início do id do registro alterado, para caçar um registro específico. */
+  registro?: string;
 }
 
 export interface ResultadoAuditoria {
@@ -38,17 +50,27 @@ export interface ResultadoAuditoria {
   nomes: Record<string, string>;
 }
 
-export interface UsuarioParaFiltro {
-  id: string;
-  nome: string;
-}
-
 const NOME_SISTEMA = "Sistema";
 
 /**
+ * Padrão "começa com" do termo, sem os caracteres que quebram a sintaxe do
+ * PostgREST ou que virariam curinga de ilike. Termo que sobra vazio devolve
+ * null: sem isso o padrão viraria "%" e o filtro sumiria com as linhas sem
+ * registro_id, filtrando por nada.
+ */
+function padraoInicio(termo: string): string | null {
+  const limpo = termo.replace(/[,()"'\\%_]/g, "").trim();
+  return limpo === "" ? null : `${limpo}%`;
+}
+
+/**
  * Lista o audit_log paginado no servidor (count exato) com os filtros
- * opcionais de tabela, usuário e ação. Resolve os nomes dos usuários
- * envolvidos em uma segunda consulta (join manual via Map).
+ * opcionais de tabela, usuário, ação, período e id do registro. Resolve os
+ * nomes dos usuários envolvidos em uma segunda consulta (join manual via Map).
+ *
+ * Todo filtro vai para o banco: a paginação é server-side (o audit_log passa de
+ * 29 mil linhas), então filtrar só a página carregada mostraria um punhado de
+ * resultados e esconderia o resto.
  */
 export async function listarAuditoria(
   filtros: FiltrosAuditoria,
@@ -68,6 +90,21 @@ export async function listarAuditoria(
   if (filtros.tabela) consulta = consulta.eq("tabela", filtros.tabela);
   if (filtros.usuarioId) consulta = consulta.eq("usuario_id", filtros.usuarioId);
   if (filtros.acao) consulta = consulta.eq("acao", filtros.acao);
+  // `criado_em` é timestamptz: o dia do usuário começa 05:00 UTC (Rio Branco),
+  // e o fim do período entra pelo início do dia seguinte, para incluir o dia
+  // inteiro sem depender de hora.
+  if (filtros.de) {
+    consulta = consulta.gte("criado_em", inicioDoDiaISO(filtros.de));
+  }
+  if (filtros.ate) {
+    consulta = consulta.lt("criado_em", inicioDoDiaISO(filtros.ate, 1));
+  }
+  const padraoRegistro = filtros.registro
+    ? padraoInicio(filtros.registro)
+    : null;
+  if (padraoRegistro) {
+    consulta = consulta.ilike("registro_id", padraoRegistro);
+  }
 
   const { data, error, count } = await consulta
     .order("criado_em", { ascending: false })
@@ -151,24 +188,6 @@ export async function listarTabelasAuditadas(): Promise<string[]> {
 
   if (error) {
     throw new Error(`Falha ao listar as tabelas auditadas: ${error.message}`);
-  }
-
-  return data ?? [];
-}
-
-/** Usuários para o filtro da auditoria, em ordem alfabética. */
-export async function listarUsuariosParaFiltro(): Promise<UsuarioParaFiltro[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("usuarios")
-    .select("id, nome")
-    .order("nome", { ascending: true });
-
-  if (error) {
-    throw new Error(
-      `Falha ao listar os usuários para o filtro: ${error.message}`,
-    );
   }
 
   return data ?? [];

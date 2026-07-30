@@ -21,12 +21,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
 import {
   alternarAtivo,
   excluir,
 } from "@/modules/cadastros/fornecedores/actions";
 import type { FornecedorLista } from "@/modules/cadastros/fornecedores/queries";
-import { ROTULO_TIPO } from "@/modules/cadastros/fornecedores/schemas";
+import {
+  ROTULO_TIPO,
+  TIPOS_FORNECEDOR,
+} from "@/modules/cadastros/fornecedores/schemas";
 import { FornecedoresFormDrawer } from "./fornecedores-form-drawer";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -36,6 +40,11 @@ const OPCOES_STATUS = [
   { valor: "inativos", rotulo: "Inativos" },
   { valor: "todos", rotulo: "Todos" },
 ];
+
+const OPCOES_TIPO = TIPOS_FORNECEDOR.map((tipo) => ({
+  valor: tipo,
+  rotulo: ROTULO_TIPO[tipo],
+}));
 
 function StatusFornecedor({ ativo }: { ativo: boolean }) {
   return ativo ? (
@@ -52,9 +61,12 @@ export interface FornecedoresTabelaProps {
 }
 
 /**
- * Listagem de fornecedores: filtros de busca e status, tabela densa e
- * ações por linha (editar, ativar/desativar, excluir). A exclusão é
+ * Listagem de fornecedores: busca, status, tipo de pessoa, UF e cidade, tabela
+ * densa e ações por linha (editar, ativar/desativar, excluir). A exclusão é
  * física (move para a lixeira) e exige motivo.
+ *
+ * A página carrega o cadastro inteiro, então filtrar em memória está correto
+ * aqui: o total da tabela é o total real, não o de uma página.
  */
 export function FornecedoresTabela({
   fornecedores,
@@ -63,6 +75,9 @@ export function FornecedoresTabela({
 }: FornecedoresTabelaProps) {
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState<FiltroStatus>("ativos");
+  const [tipo, setTipo] = React.useState("");
+  const [uf, setUf] = React.useState("");
+  const [cidade, setCidade] = React.useState("");
 
   const [editarId, setEditarId] = React.useState<string | null>(null);
   const [drawerAberto, setDrawerAberto] = React.useState(false);
@@ -74,11 +89,31 @@ export function FornecedoresTabela({
   const emEdicao =
     fornecedores.find((fornecedor) => fornecedor.id === editarId) ?? null;
 
+  const opcoesUf = React.useMemo(
+    () => opcoesDistintas(fornecedores.map((f) => f.uf)),
+    [fornecedores],
+  );
+
+  // Cidades da UF escolhida: escolher UF primeiro e ver 200 cidades do país
+  // inteiro na lista não ajuda ninguém.
+  const opcoesCidade = React.useMemo(
+    () =>
+      opcoesDistintas(
+        fornecedores
+          .filter((f) => uf === "" || f.uf === uf)
+          .map((f) => f.cidade),
+      ),
+    [fornecedores, uf],
+  );
+
   const filtrados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return fornecedores.filter((fornecedor) => {
       if (status === "ativos" && !fornecedor.ativo) return false;
       if (status === "inativos" && fornecedor.ativo) return false;
+      if (tipo !== "" && fornecedor.tipo !== tipo) return false;
+      if (uf !== "" && fornecedor.uf !== uf) return false;
+      if (cidade !== "" && fornecedor.cidade !== cidade) return false;
       if (termo.length === 0) return true;
       const alvo = [
         fornecedor.razaoSocial,
@@ -90,7 +125,7 @@ export function FornecedoresTabela({
         .toLowerCase();
       return alvo.includes(termo);
     });
-  }, [fornecedores, busca, status]);
+  }, [fornecedores, busca, status, tipo, uf, cidade]);
 
   function abrirEdicao(fornecedor: FornecedorLista) {
     setEditarId(fornecedor.id);
@@ -280,6 +315,63 @@ export function FornecedoresTabela({
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo de pessoa",
+            ocultoPorPadrao: true,
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={OPCOES_TIPO}
+                placeholder="Tipo"
+                todosRotulo="Física e jurídica"
+              />
+            ),
+          },
+          {
+            id: "uf",
+            rotulo: "UF",
+            ocultoPorPadrao: true,
+            temValor: uf !== "",
+            // Soltar a UF solta a cidade: ela pertence à UF.
+            onLimpar: () => {
+              setUf("");
+              setCidade("");
+            },
+            elemento: (
+              <FiltroSelect
+                valor={uf}
+                onValorChange={(valor) => {
+                  setUf(valor);
+                  // Trocar a UF derruba a cidade: ela é da anterior.
+                  setCidade("");
+                }}
+                opcoes={opcoesUf}
+                placeholder="UF"
+                todosRotulo="Todas as UFs"
+              />
+            ),
+          },
+          {
+            id: "cidade",
+            rotulo: "Cidade",
+            ocultoPorPadrao: true,
+            temValor: cidade !== "",
+            onLimpar: () => setCidade(""),
+            elemento: (
+              <FiltroSelect
+                valor={cidade}
+                onValorChange={setCidade}
+                opcoes={opcoesCidade}
+                placeholder="Cidade"
+                todosRotulo="Todas as cidades"
+                className="max-w-56"
               />
             ),
           },

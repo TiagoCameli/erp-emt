@@ -206,6 +206,62 @@ export function useBuscaUrl(buscaInicial: string, chave = "busca") {
   return { busca, setBusca };
 }
 
+/**
+ * Faixa numérica (de/até) na URL com estado local e espera, para o FiltroValor
+ * de listagens com filtro server-side.
+ *
+ * Existe como canônico porque escrever direto na URL a cada tecla quebra o
+ * campo: o input é alimentado pelo valor que volta do servidor, então o usuário
+ * digita "1500" e vê "1". A comparação é feita contra o TEXTO CRU da URL (e não
+ * contra o número já validado pela página), senão "1000.50" viraria "1000.5",
+ * os dois nunca casariam e a tela renavegaria para sempre.
+ *
+ * Devolve `faixa` (para o FiltroValor), `setFaixa` (no onValorChange) e
+ * `limpar` (no onLimpar do filtro).
+ */
+export function useFaixaUrl(chaveDe: string, chaveAte: string) {
+  const { get, setMuitos } = useFiltrosUrl();
+  const urlDe = get(chaveDe) ?? "";
+  const urlAte = get(chaveAte) ?? "";
+
+  const [faixa, setFaixa] = React.useState({ de: urlDe, ate: urlAte });
+  // Último texto que ESTE hook escreveu na URL, para distinguir a volta da
+  // própria escrita de uma mudança de fora (link aberto, voltar do navegador).
+  const escritoPorNos = React.useRef({ de: urlDe, ate: urlAte });
+
+  React.useEffect(() => {
+    if (
+      urlDe === escritoPorNos.current.de &&
+      urlAte === escritoPorNos.current.ate
+    ) {
+      return;
+    }
+    escritoPorNos.current = { de: urlDe, ate: urlAte };
+    setFaixa({ de: urlDe, ate: urlAte });
+  }, [urlDe, urlAte]);
+
+  React.useEffect(() => {
+    if (faixa.de === urlDe && faixa.ate === urlAte) return;
+    const timer = setTimeout(() => {
+      escritoPorNos.current = faixa;
+      setMuitos({
+        [chaveDe]: faixa.de === "" ? null : faixa.de,
+        [chaveAte]: faixa.ate === "" ? null : faixa.ate,
+        pagina: "1",
+      });
+    }, DEBOUNCE_BUSCA_MS);
+    return () => clearTimeout(timer);
+  }, [faixa, urlDe, urlAte, chaveDe, chaveAte, setMuitos]);
+
+  const limpar = React.useCallback(() => {
+    escritoPorNos.current = { de: "", ate: "" };
+    setFaixa({ de: "", ate: "" });
+    setMuitos({ [chaveDe]: null, [chaveAte]: null, pagina: "1" });
+  }, [chaveDe, chaveAte, setMuitos]);
+
+  return { faixa, setFaixa, limpar };
+}
+
 interface FiltroMesProps {
   /** Mês selecionado no formato do input (yyyy-MM). Vazio = todos. */
   valor: string;
@@ -243,6 +299,59 @@ export function FiltroMes({
           <X />
         </Button>
       )}
+    </div>
+  );
+}
+
+interface FiltroValorProps {
+  /** Valor mínimo em reais, como string do input. Vazio = sem limite. */
+  de: string;
+  ate: string;
+  /** Recebe as duas pontas juntas: uma navegação só, sem página intermediária. */
+  onValorChange: (de: string, ate: string) => void;
+  rotulo?: string;
+}
+
+/**
+ * Filtro por faixa de valor, com as duas pontas. Ponta vazia significa sem
+ * limite naquele lado.
+ *
+ * Existe como canônico porque filtro de dinheiro aparece em quase toda listagem
+ * do Financeiro e de Compras, e cada tela inventando o seu daria formatação e
+ * comportamento diferentes na mesma pergunta ("quanto custou?").
+ */
+export function FiltroValor({
+  de,
+  ate,
+  onValorChange,
+  rotulo = "Valor",
+}: FiltroValorProps) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-detalhe text-muted-foreground">{rotulo}</span>
+      <Input
+        type="number"
+        inputMode="decimal"
+        step="0.01"
+        min="0"
+        value={de}
+        onChange={(evento) => onValorChange(evento.target.value, ate)}
+        aria-label={`${rotulo}: mínimo`}
+        placeholder="de"
+        className="h-8 w-[6.5rem] text-detalhe tabular-nums"
+      />
+      <span className="text-detalhe text-muted-foreground">até</span>
+      <Input
+        type="number"
+        inputMode="decimal"
+        step="0.01"
+        min="0"
+        value={ate}
+        onChange={(evento) => onValorChange(de, evento.target.value)}
+        aria-label={`${rotulo}: máximo`}
+        placeholder="até"
+        className="h-8 w-[6.5rem] text-detalhe tabular-nums"
+      />
     </div>
   );
 }

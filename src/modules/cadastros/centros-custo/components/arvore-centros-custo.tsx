@@ -15,10 +15,11 @@ import { toast } from "sonner";
 import {
   ConfirmDialog,
   EmptyState,
-  FilterBar,
   FiltroBusca,
+  FiltroSelect,
   MoneyText,
   StatusBadge,
+  type OpcaoFiltro,
 } from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,13 +37,32 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { BarraFiltrosConfiguravel } from "@/modules/cadastros/_shared/barra-filtros-configuravel";
 import { alternarAtivo } from "@/modules/cadastros/centros-custo/actions";
 import type { NoCentroCusto } from "@/modules/cadastros/centros-custo/queries";
 import {
   ROTULO_TIPO_CENTRO,
+  TIPOS_CENTRO,
   type TipoCentro,
 } from "@/modules/cadastros/centros-custo/schemas";
 import { NoFormDrawer, type ModoNo } from "./no-form-drawer";
+
+const OPCOES_STATUS = [
+  { valor: "ativos", rotulo: "Ativos" },
+  { valor: "inativos", rotulo: "Inativos" },
+];
+
+const OPCOES_TIPO = TIPOS_CENTRO.map((tipo) => ({
+  valor: tipo,
+  rotulo: ROTULO_TIPO_CENTRO[tipo],
+}));
+
+/** Os 3 níveis da árvore, nos nomes que a tela usa. */
+const OPCOES_NIVEL = [
+  { valor: "1", rotulo: "Centro" },
+  { valor: "2", rotulo: "Etapa" },
+  { valor: "3", rotulo: "Item" },
+];
 
 export interface ArvoreCentrosCustoProps {
   nos: NoCentroCusto[];
@@ -88,20 +108,67 @@ function montarArvore(nos: NoCentroCusto[]): NoArvore[] {
   return raizes;
 }
 
-/** Filtra a árvore por termo de busca, mantendo o ramo de quem casa. */
-function filtrarArvore(nos: NoArvore[], termo: string): NoArvore[] {
-  if (termo === "") return nos;
+/** Filtros que valem nó a nó, em qualquer nível da árvore. */
+interface FiltrosDeLinha {
+  /** Termo de busca já em minúsculas e sem espaço nas pontas. */
+  termo: string;
+  /** "todos" | "ativos" | "inativos". */
+  status: string;
+  /** "" | "1" | "2" | "3". */
+  nivel: string;
+}
+
+/** True quando nenhum filtro de linha está ativo: a árvore sai intocada. */
+function semFiltroDeLinha(filtros: FiltrosDeLinha): boolean {
+  return (
+    filtros.termo === "" && filtros.status === "todos" && filtros.nivel === ""
+  );
+}
+
+function noCasa(no: NoCentroCusto, filtros: FiltrosDeLinha): boolean {
+  if (filtros.status === "ativos" && !no.ativo) return false;
+  if (filtros.status === "inativos" && no.ativo) return false;
+  if (filtros.nivel !== "" && String(no.nivel) !== filtros.nivel) return false;
+  if (filtros.termo === "") return true;
+  return (
+    no.nome.toLowerCase().includes(filtros.termo) ||
+    (no.codigo?.toLowerCase().includes(filtros.termo) ?? false)
+  );
+}
+
+/**
+ * Filtra a árvore nó a nó, mantendo o ramo de quem casa: o nó fica quando ele
+ * mesmo casa ou quando algum descendente dele casou, senão o resultado
+ * apareceria solto, sem o centro e a etapa que dizem onde ele mora.
+ */
+function filtrarArvore(nos: NoArvore[], filtros: FiltrosDeLinha): NoArvore[] {
+  if (semFiltroDeLinha(filtros)) return nos;
   const resultado: NoArvore[] = [];
   for (const no of nos) {
-    const filhos = filtrarArvore(no.filhos, termo);
-    const casa =
-      no.nome.toLowerCase().includes(termo) ||
-      (no.codigo?.toLowerCase().includes(termo) ?? false);
-    if (casa || filhos.length > 0) {
+    const filhos = filtrarArvore(no.filhos, filtros);
+    if (noCasa(no, filtros) || filhos.length > 0) {
       resultado.push({ ...no, filhos });
     }
   }
   return resultado;
+}
+
+/**
+ * Tipo e obra são propriedade do nó de NÍVEL 1: o filtro derruba ou mantém o
+ * centro inteiro, com etapas e itens. Filtrar nó a nó daria resultado errado,
+ * porque etapa e item têm tipo e obra nulos e nunca casariam.
+ */
+function filtrarRaizes(
+  raizes: NoArvore[],
+  tipo: string,
+  obraId: string,
+): NoArvore[] {
+  if (tipo === "" && obraId === "") return raizes;
+  return raizes.filter((raiz) => {
+    if (tipo !== "" && raiz.tipo !== tipo) return false;
+    if (obraId !== "" && raiz.obra_id !== obraId) return false;
+    return true;
+  });
 }
 
 const INDENTACAO_PX = 24;
@@ -112,6 +179,12 @@ export function ArvoreCentrosCusto({
   podeEditar,
 }: ArvoreCentrosCustoProps) {
   const [busca, setBusca] = React.useState("");
+  // "todos" para não mudar o que a tela mostra hoje: a árvore sempre exibiu nó
+  // inativo (esmaecido), e ganhar um filtro não pode sumir com galho nenhum.
+  const [status, setStatus] = React.useState("todos");
+  const [tipo, setTipo] = React.useState("");
+  const [obraId, setObraId] = React.useState("");
+  const [nivel, setNivel] = React.useState("");
   const [expandidos, setExpandidos] = React.useState<Set<string>>(() => {
     // Centros (nível 1) começam expandidos para mostrar a estrutura.
     return new Set(nos.filter((no) => no.nivel === 1).map((no) => no.id));
@@ -123,13 +196,34 @@ export function ArvoreCentrosCusto({
 
   const termo = busca.trim().toLowerCase();
 
-  const arvore = React.useMemo(() => {
-    const completa = montarArvore(nos);
-    return filtrarArvore(completa, termo);
-  }, [nos, termo]);
+  // Obras vindas dos próprios centros: a raiz de obra espelha o nome da obra, e
+  // é ela que carrega o obra_id.
+  const opcoesObra = React.useMemo<OpcaoFiltro[]>(() => {
+    const porId = new Map<string, string>();
+    for (const no of nos) {
+      if (no.nivel === 1 && no.obra_id) porId.set(no.obra_id, no.nome);
+    }
+    return [...porId.entries()]
+      .map(([valor, rotulo]) => ({ valor, rotulo }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }, [nos]);
 
-  // Durante a busca, expande tudo para revelar os resultados.
-  const buscando = termo !== "";
+  const filtrosDeLinha = React.useMemo<FiltrosDeLinha>(
+    () => ({ termo, status, nivel }),
+    [termo, status, nivel],
+  );
+
+  const arvore = React.useMemo(() => {
+    const completa = filtrarRaizes(montarArvore(nos), tipo, obraId);
+    return filtrarArvore(completa, filtrosDeLinha);
+  }, [nos, tipo, obraId, filtrosDeLinha]);
+
+  // Com filtro de linha ativo, expande tudo para revelar os resultados.
+  const filtrando = !semFiltroDeLinha(filtrosDeLinha);
+  // Inclui tipo e obra: é o que decide se a árvore vazia é "não achou" ou
+  // "ainda não tem", e mandar "cadastre uma obra" para quem só filtrou errado
+  // seria mentira.
+  const algumFiltroAtivo = filtrando || tipo !== "" || obraId !== "";
 
   function alternarExpandido(id: string) {
     setExpandidos((atual) => {
@@ -177,7 +271,7 @@ export function ArvoreCentrosCusto({
 
   function renderNo(no: NoArvore, profundidade: number): React.ReactNode {
     const temFilhos = no.filhos.length > 0;
-    const aberto = buscando || expandidos.has(no.id);
+    const aberto = filtrando || expandidos.has(no.id);
     const gerido = ehGerido(no);
     const tipoCentro = no.nivel === 1 ? (no.tipo as TipoCentro | null) : null;
 
@@ -341,25 +435,105 @@ export function ArvoreCentrosCusto({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome ou código"
-        />
-      </FilterBar>
+      {/* A tela é uma árvore, não um DataTable, então os filtros não têm o
+          `filtros` da tabela onde morar: ficam nesta barra, com o mesmo menu
+          "Filtros" e a mesma memória por usuário. */}
+      <BarraFiltrosConfiguravel
+        idTabela="cadastros.centros-custo.filtros"
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome ou código",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome ou código"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            ocultoPorPadrao: true,
+            temValor: status !== "todos",
+            onLimpar: () => setStatus("todos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "" : status}
+                onValorChange={(valor) =>
+                  setStatus(valor === "" ? "todos" : valor)
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo de centro",
+            ocultoPorPadrao: true,
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={OPCOES_TIPO}
+                placeholder="Tipo"
+                todosRotulo="Todos os tipos"
+              />
+            ),
+          },
+          {
+            id: "obra",
+            rotulo: "Obra",
+            ocultoPorPadrao: true,
+            temValor: obraId !== "",
+            onLimpar: () => setObraId(""),
+            elemento: (
+              <FiltroSelect
+                valor={obraId}
+                onValorChange={setObraId}
+                opcoes={opcoesObra}
+                placeholder="Obra"
+                todosRotulo="Todas as obras"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "nivel",
+            rotulo: "Nível",
+            ocultoPorPadrao: true,
+            temValor: nivel !== "",
+            onLimpar: () => setNivel(""),
+            elemento: (
+              <FiltroSelect
+                valor={nivel}
+                onValorChange={setNivel}
+                opcoes={OPCOES_NIVEL}
+                placeholder="Nível"
+                todosRotulo="Todos os níveis"
+              />
+            ),
+          },
+        ]}
+      />
 
       {arvore.length === 0 ? (
         <EmptyState
-          icone={buscando ? ListTree : FolderTree}
+          icone={algumFiltroAtivo ? ListTree : FolderTree}
           titulo={
-            buscando
+            algumFiltroAtivo
               ? "Nenhum centro de custo encontrado"
               : "Nenhum centro de custo ainda"
           }
           descricao={
-            buscando
-              ? "Tente outro termo de busca."
+            algumFiltroAtivo
+              ? "Ajuste os filtros ou tente outro termo de busca."
               : "Centros nascem das obras e dos centros de sistema. Cadastre uma obra para ver a estrutura aqui."
           }
         />

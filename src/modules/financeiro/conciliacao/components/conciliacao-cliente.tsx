@@ -3,21 +3,37 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowDownRight, ArrowUpRight, Link2, Upload, X } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Filter,
+  Link2,
+  Upload,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
   DataTable,
   EmptyState,
+  FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
+  FiltroValor,
   KPICard,
   MoneyText,
   StatusBadge,
+  type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/canonicos";
 import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import {
+  dentroDaFaixaValor,
+  dentroDoPeriodo,
+  usePaginacaoCliente,
+} from "@/modules/financeiro/_shared/filtros-cliente";
 import {
   buscarSugestoes,
   desconciliar,
@@ -88,6 +104,14 @@ export function ConciliacaoCliente({
   const [desconciliarAlvo, setDesconciliarAlvo] =
     React.useState<TransacaoLista | null>(null);
   const [conciliacao, setConciliacao] = React.useState<FiltroConciliacao>("");
+  const [busca, setBusca] = React.useState("");
+  const [extratoId, setExtratoId] = React.useState("");
+  const [tipo, setTipo] = React.useState("");
+  const [dataDe, setDataDe] = React.useState("");
+  const [dataAte, setDataAte] = React.useState("");
+  const [valorDe, setValorDe] = React.useState("");
+  const [valorAte, setValorAte] = React.useState("");
+  const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
   const opcoesConta = React.useMemo(
     () =>
@@ -98,23 +122,122 @@ export function ConciliacaoCliente({
     [contas],
   );
 
+  // Só os extratos da conta em foco: oferecer extrato de outra conta devolveria
+  // tabela vazia, porque a listagem já vem filtrada por conta no servidor.
+  const opcoesExtrato = React.useMemo(
+    () =>
+      extratos
+        .filter(
+          (extrato) => contaId === "" || extrato.contaBancariaId === contaId,
+        )
+        .map((extrato) => ({
+          valor: extrato.id,
+          rotulo: [
+            extrato.nomeArquivo ?? extrato.contaBancariaNome,
+            extrato.periodoInicio && extrato.periodoFim
+              ? `${formatarData(extrato.periodoInicio)} a ${formatarData(extrato.periodoFim)}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })),
+    [extratos, contaId],
+  );
+
+  // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
+  // numa página vazia.
+  function mudarBusca(valor: string) {
+    setBusca(valor);
+    zerarPagina();
+  }
+  function mudarConciliacao(valor: string) {
+    setConciliacao(valor as FiltroConciliacao);
+    zerarPagina();
+  }
+  function mudarExtrato(valor: string) {
+    setExtratoId(valor);
+    zerarPagina();
+  }
+  function mudarTipo(valor: string) {
+    setTipo(valor);
+    zerarPagina();
+  }
+  function mudarPeriodo(de: string, ate: string) {
+    setDataDe(de);
+    setDataAte(ate);
+    zerarPagina();
+  }
+  function mudarValor(de: string, ate: string) {
+    setValorDe(de);
+    setValorAte(ate);
+    zerarPagina();
+  }
+
   const dados = React.useMemo(() => {
+    const termo = busca.trim().toLowerCase();
     return transacoes.filter((transacao) => {
       if (conciliacao === "conciliada" && !transacao.conciliada) return false;
       if (conciliacao === "pendente" && transacao.conciliada) return false;
+      if (extratoId !== "" && transacao.extratoId !== extratoId) return false;
+      if (tipo !== "" && transacao.tipo !== tipo) return false;
+      if (!dentroDoPeriodo(transacao.dataMovimento, dataDe, dataAte)) {
+        return false;
+      }
+      // Débito vem negativo do OFX: a faixa compara o módulo, que é o número
+      // que a pessoa lê na tela.
+      if (
+        !dentroDaFaixaValor(Math.abs(transacao.valor), valorDe, valorAte)
+      ) {
+        return false;
+      }
+      if (termo !== "") {
+        const parcela = transacao.parcela;
+        const alvo = `${transacao.memo ?? ""} ${parcela?.lancamentoNumero ?? ""} ${
+          parcela?.lancamentoDescricao ?? ""
+        } ${parcela?.fornecedorNome ?? ""}`;
+        if (!alvo.toLowerCase().includes(termo)) return false;
+      }
       return true;
     });
-  }, [transacoes, conciliacao]);
+  }, [
+    transacoes,
+    conciliacao,
+    extratoId,
+    tipo,
+    dataDe,
+    dataAte,
+    valorDe,
+    valorAte,
+    busca,
+  ]);
+
+  const filtrando =
+    contaId !== "" ||
+    conciliacao !== "" ||
+    extratoId !== "" ||
+    tipo !== "" ||
+    dataDe !== "" ||
+    dataAte !== "" ||
+    valorDe !== "" ||
+    valorAte !== "" ||
+    busca.trim() !== "";
 
   const totalTransacoes = transacoes.length;
   const totalConciliadas = transacoes.filter((t) => t.conciliada).length;
   const totalPendentes = totalTransacoes - totalConciliadas;
 
+  /**
+   * A conta é o único filtro server-side desta tela (a consulta traz só as
+   * transações dela). Trocar a conta larga o extrato escolhido, que pertence à
+   * conta antiga, e volta para a primeira página.
+   */
   function trocarConta(valor: string) {
     const params = new URLSearchParams(window.location.search);
     if (valor) params.set("conta", valor);
     else params.delete("conta");
     const query = params.toString();
+    setExtratoId("");
+    zerarPagina();
     router.replace(query ? `?${query}` : "?", { scroll: false });
   }
 
@@ -241,6 +364,125 @@ export function ConciliacaoCliente({
     [podeConciliar, podeDesconciliar],
   );
 
+  // Filtros declarados aqui (e não numa FilterBar solta) para entrarem no menu
+  // "Filtros" da tabela, junto com a personalização de colunas. Conta e situação
+  // seguem visíveis; a busca entra visível porque é a busca principal da tela, e
+  // extrato, tipo, período e valor nascem escondidos.
+  const filtros: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      elemento: (
+        <FiltroBusca
+          valor={busca}
+          onValorChange={mudarBusca}
+          placeholder="Buscar por histórico ou lançamento conciliado"
+        />
+      ),
+    },
+    {
+      id: "conta",
+      rotulo: "Conta bancária",
+      temValor: contaId !== "",
+      onLimpar: () => trocarConta(""),
+      elemento: (
+        <FiltroSelect
+          valor={contaId}
+          onValorChange={trocarConta}
+          opcoes={opcoesConta}
+          placeholder="Conta bancária"
+          todosRotulo="Todas as contas"
+          className="max-w-56"
+        />
+      ),
+    },
+    {
+      id: "situacao",
+      rotulo: "Situação",
+      temValor: conciliacao !== "",
+      onLimpar: () => mudarConciliacao(""),
+      elemento: (
+        <FiltroSelect
+          valor={conciliacao}
+          onValorChange={mudarConciliacao}
+          opcoes={[
+            { valor: "conciliada", rotulo: "Conciliadas" },
+            { valor: "pendente", rotulo: "Pendentes" },
+          ]}
+          placeholder="Situação"
+          todosRotulo="Todas as situações"
+        />
+      ),
+    },
+    {
+      id: "extrato",
+      rotulo: "Extrato importado",
+      ocultoPorPadrao: true,
+      temValor: extratoId !== "",
+      onLimpar: () => mudarExtrato(""),
+      elemento: (
+        <FiltroSelect
+          valor={extratoId}
+          onValorChange={mudarExtrato}
+          opcoes={opcoesExtrato}
+          placeholder="Extrato importado"
+          todosRotulo="Todos os extratos"
+          className="max-w-64"
+        />
+      ),
+    },
+    {
+      id: "tipo",
+      rotulo: "Crédito ou débito",
+      ocultoPorPadrao: true,
+      temValor: tipo !== "",
+      onLimpar: () => mudarTipo(""),
+      elemento: (
+        <FiltroSelect
+          valor={tipo}
+          onValorChange={mudarTipo}
+          opcoes={[
+            { valor: "credito", rotulo: "Créditos (entradas)" },
+            { valor: "debito", rotulo: "Débitos (saídas)" },
+          ]}
+          placeholder="Crédito ou débito"
+          todosRotulo="Créditos e débitos"
+        />
+      ),
+    },
+    {
+      id: "periodo",
+      rotulo: "Período do movimento",
+      ocultoPorPadrao: true,
+      temValor: dataDe !== "" || dataAte !== "",
+      onLimpar: () => mudarPeriodo("", ""),
+      elemento: (
+        <FiltroPeriodo
+          de={dataDe}
+          ate={dataAte}
+          onPeriodoChange={mudarPeriodo}
+          rotulo="Movimento"
+        />
+      ),
+    },
+    {
+      id: "valor",
+      rotulo: "Faixa de valor",
+      ocultoPorPadrao: true,
+      temValor: valorDe !== "" || valorAte !== "",
+      onLimpar: () => mudarValor("", ""),
+      elemento: (
+        <FiltroValor
+          de={valorDe}
+          ate={valorAte}
+          onValorChange={mudarValor}
+          rotulo="Valor"
+        />
+      ),
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -261,45 +503,10 @@ export function ConciliacaoCliente({
         idTabela="financeiro.conciliacao"
         columns={colunas}
         data={dados}
-        // Filtros declarados aqui (e não numa FilterBar solta) para entrarem no
-        // menu "Filtros" da tabela, junto com a personalização de colunas.
-        filtros={[
-          {
-            id: "conta",
-            rotulo: "Conta bancária",
-            temValor: contaId !== "",
-            onLimpar: () => trocarConta(""),
-            elemento: (
-              <FiltroSelect
-                valor={contaId}
-                onValorChange={trocarConta}
-                opcoes={opcoesConta}
-                placeholder="Conta bancária"
-                todosRotulo="Todas as contas"
-              />
-            ),
-          },
-          {
-            id: "situacao",
-            rotulo: "Situação",
-            temValor: conciliacao !== "",
-            onLimpar: () => setConciliacao(""),
-            elemento: (
-              <FiltroSelect
-                valor={conciliacao}
-                onValorChange={(valor) =>
-                  setConciliacao(valor as FiltroConciliacao)
-                }
-                opcoes={[
-                  { valor: "conciliada", rotulo: "Conciliadas" },
-                  { valor: "pendente", rotulo: "Pendentes" },
-                ]}
-                placeholder="Situação"
-                todosRotulo="Todas as situações"
-              />
-            ),
-          },
-        ]}
+        filtros={filtros}
+        pageIndex={paginacao.pageIndex}
+        pageSize={paginacao.pageSize}
+        onPaginationChange={setPaginacao}
         toolbar={
           podeImportar ? (
             <Button
@@ -313,32 +520,41 @@ export function ConciliacaoCliente({
           ) : undefined
         }
         emptyState={
-          <EmptyState
-            icone={Upload}
-            titulo={
-              extratos.length === 0
-                ? "Nenhum extrato importado"
-                : "Nenhuma transação nesta seleção"
-            }
-            descricao={
-              extratos.length === 0
-                ? "Importe um arquivo OFX do banco para começar a conciliar."
-                : "Ajuste os filtros de conta e situação para ver as transações."
-            }
-            acao={
-              podeImportar && extratos.length === 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setImportarAberto(true)}
-                >
-                  <Upload />
-                  Importar OFX
-                </Button>
-              ) : undefined
-            }
-            className="border-none bg-transparent"
-          />
+          extratos.length === 0 ? (
+            <EmptyState
+              icone={Upload}
+              titulo="Nenhum extrato importado"
+              descricao="Importe um arquivo OFX do banco para começar a conciliar."
+              acao={
+                podeImportar ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setImportarAberto(true)}
+                  >
+                    <Upload />
+                    Importar OFX
+                  </Button>
+                ) : undefined
+              }
+              className="border-none bg-transparent"
+            />
+          ) : (
+            <EmptyState
+              icone={filtrando ? Filter : Upload}
+              titulo={
+                filtrando
+                  ? "Nenhuma transação com esses filtros"
+                  : "Nenhuma transação neste extrato"
+              }
+              descricao={
+                filtrando
+                  ? "Ajuste ou limpe os filtros para ver o restante das transações."
+                  : "O extrato importado não tem transações."
+              }
+              className="border-none bg-transparent"
+            />
+          )
         }
       />
 

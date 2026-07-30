@@ -1,10 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, ShieldCheck } from "lucide-react";
 
-import { DataTable, EmptyState, PageHeader } from "@/components/canonicos";
+import {
+  DataTable,
+  EmptyState,
+  FiltroBusca,
+  FiltroSelect,
+  PageHeader,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import type {
   PerfilResumo,
@@ -57,7 +63,22 @@ const colunas: ColumnDef<PerfilResumo, unknown>[] = [
   },
 ];
 
-/** Conteúdo client da aba Perfis: listagem, criação e drawer de detalhe. */
+const OPCOES_USUARIOS = [
+  { valor: "com", rotulo: "Com usuários" },
+  { valor: "sem", rotulo: "Sem usuários" },
+];
+
+const OPCOES_PERMISSOES = [
+  { valor: "com", rotulo: "Com permissões" },
+  { valor: "sem", rotulo: "Sem permissões" },
+];
+
+/**
+ * Conteúdo client da aba Perfis: listagem, criação e drawer de detalhe.
+ *
+ * Filtros em memória: a tela carrega todos os perfis (meia dúzia, sem paginação
+ * server-side), então o total exibido é o total real.
+ */
 export function PerfisTab({
   perfis,
   permissoesPorPerfil,
@@ -68,8 +89,27 @@ export function PerfisTab({
   const [novoAberto, setNovoAberto] = useState(false);
   const [idSelecionado, setIdSelecionado] = useState<string | null>(null);
 
+  const [busca, setBusca] = useState("");
+  const [comUsuarios, setComUsuarios] = useState("");
+  const [comPermissoes, setComPermissoes] = useState("");
+
   const perfilSelecionado =
     perfis.find((perfil) => perfil.id === idSelecionado) ?? null;
+
+  const dados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return perfis.filter((perfil) => {
+      if (comUsuarios === "com" && perfil.totalUsuarios === 0) return false;
+      if (comUsuarios === "sem" && perfil.totalUsuarios > 0) return false;
+      if (comPermissoes === "com" && perfil.totalPermissoes === 0) return false;
+      if (comPermissoes === "sem" && perfil.totalPermissoes > 0) return false;
+      if (termo) {
+        const alvo = `${perfil.nome} ${perfil.descricao ?? ""}`.toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      return true;
+    });
+  }, [perfis, busca, comUsuarios, comPermissoes]);
 
   return (
     <>
@@ -89,9 +129,56 @@ export function PerfisTab({
       <DataTable
         idTabela="administracao.perfis"
         columns={colunas}
-        data={perfis}
-        searchKey="nome"
-        searchPlaceholder="Buscar por nome"
+        data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome ou descrição",
+            // A busca é a porta de entrada da tela: não pode ser escondida.
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome ou descrição"
+              />
+            ),
+          },
+          {
+            id: "usuarios",
+            rotulo: "Usuários vinculados",
+            ocultoPorPadrao: true,
+            temValor: comUsuarios !== "",
+            onLimpar: () => setComUsuarios(""),
+            elemento: (
+              <FiltroSelect
+                valor={comUsuarios}
+                onValorChange={setComUsuarios}
+                opcoes={OPCOES_USUARIOS}
+                placeholder="Usuários"
+                todosRotulo="Com ou sem usuários"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "permissoes",
+            rotulo: "Permissões",
+            ocultoPorPadrao: true,
+            temValor: comPermissoes !== "",
+            onLimpar: () => setComPermissoes(""),
+            elemento: (
+              <FiltroSelect
+                valor={comPermissoes}
+                onValorChange={setComPermissoes}
+                opcoes={OPCOES_PERMISSOES}
+                placeholder="Permissões"
+                todosRotulo="Com ou sem permissões"
+                className="max-w-56"
+              />
+            ),
+          },
+        ]}
         onRowClick={(perfil) => setIdSelecionado(perfil.id)}
         emptyState={
           <EmptyState

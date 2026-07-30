@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Filter } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -12,6 +12,9 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
+  FiltroSelect,
+  FiltroValor,
   KPICard,
   MoneyText,
   StatusBadge,
@@ -20,6 +23,12 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
+import {
+  dentroDaFaixaValor,
+  dentroDoPeriodo,
+  opcoesDeNomes,
+  usePaginacaoCliente,
+} from "@/modules/financeiro/_shared/filtros-cliente";
 import { PagarParcelaDrawer } from "@/modules/financeiro/pagamentos/components/pagar-parcela-drawer";
 import type {
   ContaBancariaOpcao,
@@ -42,6 +51,13 @@ const BUCKET_BADGE: Record<
   hoje: { rotulo: "Hoje", status: "pendente_aprovacao" },
   proxima: { rotulo: "Próxima", status: "rascunho" },
 };
+
+/** Opções do filtro de janela, na mesma regra do badge da coluna Situação. */
+const OPCOES_JANELA = [
+  { valor: "atrasada", rotulo: "Atrasadas" },
+  { valor: "hoje", rotulo: "Hoje" },
+  { valor: "proxima", rotulo: "Próximas" },
+];
 
 export interface ProgramadosTabelaProps {
   /** Parcelas da fila, já ordenadas pela data efetiva (calculo.ts/queries.ts). */
@@ -111,21 +127,153 @@ export function ProgramadosTabela({
 
   const semConta = contas.length === 0;
 
-  // A fila inteira vem do servidor (sem paginação), então a busca filtra no
-  // client. Os KPIs continuam somando a fila toda, não o que sobrou na busca.
+  // A fila inteira vem do servidor (sem paginação), então todos os filtros
+  // rodam em memória. Os KPIs continuam somando a fila toda, não o que sobrou
+  // dos filtros: eles respondem "quanto tem para pagar", não "quanto sobrou na
+  // tela".
+  const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
   const [busca, setBusca] = React.useState("");
+  const [janela, setJanela] = React.useState("");
+  const [fornecedor, setFornecedor] = React.useState("");
+  const [categoria, setCategoria] = React.useState("");
+  const [contaId, setContaId] = React.useState("");
+  const [valorDe, setValorDe] = React.useState("");
+  const [valorAte, setValorAte] = React.useState("");
+  const [programadaDe, setProgramadaDe] = React.useState("");
+  const [programadaAte, setProgramadaAte] = React.useState("");
+  const [vencimentoDe, setVencimentoDe] = React.useState("");
+  const [vencimentoAte, setVencimentoAte] = React.useState("");
+
+  // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
+  // numa página vazia.
+  function mudarBusca(valor: string) {
+    setBusca(valor);
+    zerarPagina();
+  }
+  function mudarJanela(valor: string) {
+    setJanela(valor);
+    zerarPagina();
+  }
+  function mudarFornecedor(valor: string) {
+    setFornecedor(valor);
+    zerarPagina();
+  }
+  function mudarCategoria(valor: string) {
+    setCategoria(valor);
+    zerarPagina();
+  }
+  function mudarConta(valor: string) {
+    setContaId(valor);
+    zerarPagina();
+  }
+  function mudarValor(de: string, ate: string) {
+    setValorDe(de);
+    setValorAte(ate);
+    zerarPagina();
+  }
+  function mudarProgramada(de: string, ate: string) {
+    setProgramadaDe(de);
+    setProgramadaAte(ate);
+    zerarPagina();
+  }
+  function mudarVencimento(de: string, ate: string) {
+    setVencimentoDe(de);
+    setVencimentoAte(ate);
+    zerarPagina();
+  }
+
+  // As opções saem da própria fila, não do cadastro: filtro que oferece
+  // fornecedor ou conta sem nenhuma parcela só devolve lista vazia.
+  const opcoesFornecedor = React.useMemo(
+    () => opcoesDeNomes(parcelas.map((parcela) => parcela.fornecedorNome)),
+    [parcelas],
+  );
+  const opcoesCategoria = React.useMemo(
+    () => opcoesDeNomes(parcelas.map((parcela) => parcela.categoriaNome)),
+    [parcelas],
+  );
+  const opcoesConta = React.useMemo(() => {
+    const porId = new Map<string, string>();
+    for (const parcela of parcelas) {
+      if (parcela.contaBancariaId) {
+        porId.set(
+          parcela.contaBancariaId,
+          parcela.contaBancariaNome ?? "Conta sem nome",
+        );
+      }
+    }
+    return [...porId]
+      .map(([valor, rotulo]) => ({ valor, rotulo }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }, [parcelas]);
+
+  const filtrando =
+    busca.trim() !== "" ||
+    janela !== "" ||
+    fornecedor !== "" ||
+    categoria !== "" ||
+    contaId !== "" ||
+    valorDe !== "" ||
+    valorAte !== "" ||
+    programadaDe !== "" ||
+    programadaAte !== "" ||
+    vencimentoDe !== "" ||
+    vencimentoAte !== "";
+
   const parcelasFiltradas = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (termo === "") return parcelas;
-    return parcelas.filter((parcela) =>
-      `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome}`
-        .toLowerCase()
-        .includes(termo),
-    );
-  }, [parcelas, busca]);
+    return parcelas.filter((parcela) => {
+      if (
+        termo !== "" &&
+        !`${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome}`
+          .toLowerCase()
+          .includes(termo)
+      ) {
+        return false;
+      }
+      if (janela !== "") {
+        if (!parcela.dataEfetiva) return false;
+        if (bucketProgramacao(parcela.dataEfetiva, hoje) !== janela) {
+          return false;
+        }
+      }
+      if (fornecedor !== "" && parcela.fornecedorNome !== fornecedor) {
+        return false;
+      }
+      if (categoria !== "" && (parcela.categoriaNome ?? "") !== categoria) {
+        return false;
+      }
+      if (contaId !== "" && parcela.contaBancariaId !== contaId) return false;
+      if (!dentroDaFaixaValor(parcela.valor, valorDe, valorAte)) return false;
+      if (!dentroDoPeriodo(parcela.dataEfetiva, programadaDe, programadaAte)) {
+        return false;
+      }
+      if (
+        !dentroDoPeriodo(parcela.dataVencimento, vencimentoDe, vencimentoAte)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    parcelas,
+    busca,
+    janela,
+    fornecedor,
+    categoria,
+    contaId,
+    valorDe,
+    valorAte,
+    programadaDe,
+    programadaAte,
+    vencimentoDe,
+    vencimentoAte,
+    hoje,
+  ]);
 
-  // Declarado em `filtros` (e não numa FilterBar solta) para o menu "Filtros"
-  // da tabela aparecer, com a escolha salva junto das colunas do usuário.
+  // Declarados em `filtros` (e não numa FilterBar solta) para o menu "Filtros"
+  // da tabela aparecer, com a escolha salva junto das colunas do usuário. Só a
+  // busca nasce visível: o resto a pessoa liga no menu quando precisa.
   const filtros: FiltroConfiguravel[] = [
     {
       id: "busca",
@@ -134,8 +282,120 @@ export function ProgramadosTabela({
       elemento: (
         <FiltroBusca
           valor={busca}
-          onValorChange={setBusca}
+          onValorChange={mudarBusca}
           placeholder="Buscar por lançamento, descrição ou fornecedor"
+        />
+      ),
+    },
+    {
+      id: "janela",
+      rotulo: "Situação",
+      ocultoPorPadrao: true,
+      temValor: janela !== "",
+      onLimpar: () => mudarJanela(""),
+      elemento: (
+        <FiltroSelect
+          valor={janela}
+          onValorChange={mudarJanela}
+          opcoes={OPCOES_JANELA}
+          placeholder="Situação"
+          todosRotulo="Todas as situações"
+        />
+      ),
+    },
+    {
+      id: "fornecedor",
+      rotulo: "Fornecedor",
+      ocultoPorPadrao: true,
+      temValor: fornecedor !== "",
+      onLimpar: () => mudarFornecedor(""),
+      elemento: (
+        <FiltroSelect
+          valor={fornecedor}
+          onValorChange={mudarFornecedor}
+          opcoes={opcoesFornecedor}
+          placeholder="Fornecedor"
+          todosRotulo="Todos os fornecedores"
+          className="max-w-56"
+        />
+      ),
+    },
+    {
+      id: "categoria",
+      rotulo: "Categoria",
+      ocultoPorPadrao: true,
+      temValor: categoria !== "",
+      onLimpar: () => mudarCategoria(""),
+      elemento: (
+        <FiltroSelect
+          valor={categoria}
+          onValorChange={mudarCategoria}
+          opcoes={opcoesCategoria}
+          placeholder="Categoria"
+          todosRotulo="Todas as categorias"
+          className="max-w-56"
+        />
+      ),
+    },
+    {
+      id: "conta",
+      rotulo: "Conta bancária",
+      ocultoPorPadrao: true,
+      temValor: contaId !== "",
+      onLimpar: () => mudarConta(""),
+      elemento: (
+        <FiltroSelect
+          valor={contaId}
+          onValorChange={mudarConta}
+          opcoes={opcoesConta}
+          placeholder="Conta bancária"
+          todosRotulo="Todas as contas"
+          className="max-w-56"
+        />
+      ),
+    },
+    {
+      id: "valor",
+      rotulo: "Faixa de valor",
+      ocultoPorPadrao: true,
+      temValor: valorDe !== "" || valorAte !== "",
+      onLimpar: () => mudarValor("", ""),
+      elemento: (
+        <FiltroValor
+          de={valorDe}
+          ate={valorAte}
+          onValorChange={mudarValor}
+          rotulo="Valor"
+        />
+      ),
+    },
+    {
+      id: "programada",
+      rotulo: "Período programado",
+      ocultoPorPadrao: true,
+      temValor: programadaDe !== "" || programadaAte !== "",
+      onLimpar: () => mudarProgramada("", ""),
+      elemento: (
+        <FiltroPeriodo
+          de={programadaDe}
+          ate={programadaAte}
+          onPeriodoChange={mudarProgramada}
+          rotulo="Programada"
+        />
+      ),
+    },
+    {
+      id: "vencimento",
+      rotulo: "Período de vencimento",
+      ocultoPorPadrao: true,
+      temValor: vencimentoDe !== "" || vencimentoAte !== "",
+      onLimpar: () => mudarVencimento("", ""),
+      elemento: (
+        <FiltroPeriodo
+          de={vencimentoDe}
+          ate={vencimentoAte}
+          onPeriodoChange={mudarVencimento}
+          rotulo="Vencimento"
         />
       ),
     },
@@ -263,13 +523,27 @@ export function ProgramadosTabela({
         columns={colunas}
         data={parcelasFiltradas}
         filtros={filtros}
+        pageIndex={paginacao.pageIndex}
+        pageSize={paginacao.pageSize}
+        onPaginationChange={setPaginacao}
         emptyState={
-          <EmptyState
-            icone={CalendarClock}
-            titulo="Nenhum pagamento na fila"
-            descricao="Parcelas aprovadas aparecem aqui, ordenadas pela data programada"
-            className="border-none bg-transparent"
-          />
+          // Fila cheia e nada na tela é filtro, não fila vazia: dizer
+          // "nenhum pagamento na fila" aqui seria mentira.
+          filtrando && parcelas.length > 0 ? (
+            <EmptyState
+              icone={Filter}
+              titulo="Nenhum pagamento com esses filtros"
+              descricao="A fila tem pagamentos, mas nenhum bate com os filtros escolhidos. Limpe os filtros para ver tudo."
+              className="border-none bg-transparent"
+            />
+          ) : (
+            <EmptyState
+              icone={CalendarClock}
+              titulo="Nenhum pagamento na fila"
+              descricao="Parcelas aprovadas aparecem aqui, ordenadas pela data programada"
+              className="border-none bg-transparent"
+            />
+          )
         }
       />
 

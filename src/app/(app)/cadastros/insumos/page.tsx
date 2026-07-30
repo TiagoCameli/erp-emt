@@ -47,6 +47,10 @@ export default async function PaginaInsumos({
     typeof params.categoria === "string" && UUID.test(params.categoria)
       ? params.categoria
       : "";
+  const unidade =
+    typeof params.unidade === "string" && UUID.test(params.unidade)
+      ? params.unidade
+      : "";
 
   const paginaParam = Number(params.pagina);
   const pagina =
@@ -65,6 +69,7 @@ export default async function PaginaInsumos({
       ativo: status === "todos" ? undefined : status === "ativos",
       grupoId: grupo === "" ? undefined : grupo,
       categoriaId: categoria === "" ? undefined : categoria,
+      unidadeId: unidade === "" ? undefined : unidade,
     }),
     listarCategorias(),
     listarGrupos(),
@@ -81,6 +86,7 @@ export default async function PaginaInsumos({
       status={status}
       grupo={grupo}
       categoria={categoria}
+      unidade={unidade}
       categorias={categorias}
       grupos={grupos}
       unidades={unidades}

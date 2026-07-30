@@ -9,8 +9,10 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroPeriodo,
   FiltroSelect,
   StatusBadge,
+  type OpcaoFiltro,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,15 +22,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarQuantidade } from "@/lib/formatadores";
+import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
 import { alternarAtivo } from "@/modules/cadastros/obras/actions";
 import type { ClienteOpcao, ObraLista } from "@/modules/cadastros/obras/queries";
-import { STATUS_OBRA_CONFIG } from "@/modules/cadastros/obras/schemas";
+import {
+  STATUS_OBRA,
+  STATUS_OBRA_CONFIG,
+} from "@/modules/cadastros/obras/schemas";
 import { ObrasFormDrawer } from "./obras-form-drawer";
 
 const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
   { valor: "inativos", rotulo: "Inativos" },
 ];
+
+/**
+ * Situação do contrato (coluna `obras.status`). É outra pergunta que o filtro
+ * "Status": ali é ativo/inativo no cadastro, aqui é em que pé está a obra.
+ */
+const OPCOES_SITUACAO = STATUS_OBRA.map((situacao) => ({
+  valor: situacao,
+  rotulo: STATUS_OBRA_CONFIG[situacao].rotulo,
+}));
 
 /** Texto "Rodovia / Lote" quando há os dois, senão o que existir. */
 function rodoviaLote(obra: ObraLista): string {
@@ -108,26 +123,104 @@ export interface ObrasTabelaProps {
 /**
  * Listagem de obras. Clicar numa linha abre o drawer de edição
  * quando o usuário tem permissão de editar.
+ *
+ * A página carrega todas as obras (dezenas de contratos, não milhares), então
+ * filtrar em memória está correto: o total da tabela é o total real.
  */
 export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
   const [busca, setBusca] = React.useState("");
   const [status, setStatus] = React.useState("ativos");
+  const [situacao, setSituacao] = React.useState("");
+  const [clienteId, setClienteId] = React.useState("");
+  const [uf, setUf] = React.useState("");
+  const [rodovia, setRodovia] = React.useState("");
+  const [lote, setLote] = React.useState("");
+  const [inicioDe, setInicioDe] = React.useState("");
+  const [inicioAte, setInicioAte] = React.useState("");
+  const [fimDe, setFimDe] = React.useState("");
+  const [fimAte, setFimAte] = React.useState("");
 
   // Deriva da prop pra refletir edições depois do revalidatePath.
   const obraSelecionada =
     obras.find((obra) => obra.id === selecionadaId) ?? null;
+
+  // Clientes vindos das próprias obras, não da lista de clientes ativos: cliente
+  // desativado continua tendo obra, e ela não pode ficar sem filtro.
+  const opcoesCliente = React.useMemo<OpcaoFiltro[]>(() => {
+    const porId = new Map<string, string>();
+    for (const obra of obras) {
+      if (obra.clienteId) {
+        porId.set(obra.clienteId, obra.clienteNome ?? "Cliente sem nome");
+      }
+    }
+    return [...porId.entries()]
+      .map(([valor, rotulo]) => ({ valor, rotulo }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }, [obras]);
+
+  const opcoesUf = React.useMemo(
+    () => opcoesDistintas(obras.map((obra) => obra.uf)),
+    [obras],
+  );
+  const opcoesRodovia = React.useMemo(
+    () => opcoesDistintas(obras.map((obra) => obra.rodovia)),
+    [obras],
+  );
+  const opcoesLote = React.useMemo(
+    () => opcoesDistintas(obras.map((obra) => obra.lote)),
+    [obras],
+  );
 
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return obras.filter((obra) => {
       if (status === "ativos" && !obra.ativo) return false;
       if (status === "inativos" && obra.ativo) return false;
+      if (situacao !== "" && obra.status !== situacao) return false;
+      if (clienteId !== "" && obra.clienteId !== clienteId) return false;
+      if (uf !== "" && obra.uf !== uf) return false;
+      if (rodovia !== "" && obra.rodovia !== rodovia) return false;
+      if (lote !== "" && obra.lote !== lote) return false;
+      // Datas em "YYYY-MM-DD": comparação de string já é cronológica. Obra sem
+      // data sai quando o período está preenchido, senão a linha entraria sem
+      // ninguém saber se ela cabe na janela pedida.
+      if (inicioDe !== "" && (!obra.dataInicio || obra.dataInicio < inicioDe)) {
+        return false;
+      }
+      if (
+        inicioAte !== "" &&
+        (!obra.dataInicio || obra.dataInicio > inicioAte)
+      ) {
+        return false;
+      }
+      if (fimDe !== "" && (!obra.dataFimPrevista || obra.dataFimPrevista < fimDe)) {
+        return false;
+      }
+      if (
+        fimAte !== "" &&
+        (!obra.dataFimPrevista || obra.dataFimPrevista > fimAte)
+      ) {
+        return false;
+      }
       if (termo && !obra.nome.toLowerCase().includes(termo)) return false;
       return true;
     });
-  }, [obras, busca, status]);
+  }, [
+    obras,
+    busca,
+    status,
+    situacao,
+    clienteId,
+    uf,
+    rodovia,
+    lote,
+    inicioDe,
+    inicioAte,
+    fimDe,
+    fimAte,
+  ]);
 
   const abrirEdicao = React.useCallback(
     (obra: ObraLista) => {
@@ -225,6 +318,129 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
                 opcoes={OPCOES_STATUS}
                 placeholder="Status"
                 todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "situacao",
+            rotulo: "Situação da obra",
+            ocultoPorPadrao: true,
+            temValor: situacao !== "",
+            onLimpar: () => setSituacao(""),
+            elemento: (
+              <FiltroSelect
+                valor={situacao}
+                onValorChange={setSituacao}
+                opcoes={OPCOES_SITUACAO}
+                placeholder="Situação"
+                todosRotulo="Todas as situações"
+              />
+            ),
+          },
+          {
+            id: "cliente",
+            rotulo: "Cliente",
+            ocultoPorPadrao: true,
+            temValor: clienteId !== "",
+            onLimpar: () => setClienteId(""),
+            elemento: (
+              <FiltroSelect
+                valor={clienteId}
+                onValorChange={setClienteId}
+                opcoes={opcoesCliente}
+                placeholder="Cliente"
+                todosRotulo="Todos os clientes"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "uf",
+            rotulo: "UF",
+            ocultoPorPadrao: true,
+            temValor: uf !== "",
+            onLimpar: () => setUf(""),
+            elemento: (
+              <FiltroSelect
+                valor={uf}
+                onValorChange={setUf}
+                opcoes={opcoesUf}
+                placeholder="UF"
+                todosRotulo="Todas as UFs"
+              />
+            ),
+          },
+          {
+            id: "rodovia",
+            rotulo: "Rodovia",
+            ocultoPorPadrao: true,
+            temValor: rodovia !== "",
+            onLimpar: () => setRodovia(""),
+            elemento: (
+              <FiltroSelect
+                valor={rodovia}
+                onValorChange={setRodovia}
+                opcoes={opcoesRodovia}
+                placeholder="Rodovia"
+                todosRotulo="Todas as rodovias"
+              />
+            ),
+          },
+          {
+            id: "lote",
+            rotulo: "Lote",
+            ocultoPorPadrao: true,
+            temValor: lote !== "",
+            onLimpar: () => setLote(""),
+            elemento: (
+              <FiltroSelect
+                valor={lote}
+                onValorChange={setLote}
+                opcoes={opcoesLote}
+                placeholder="Lote"
+                todosRotulo="Todos os lotes"
+              />
+            ),
+          },
+          {
+            id: "inicio",
+            rotulo: "Período de início",
+            ocultoPorPadrao: true,
+            temValor: inicioDe !== "" || inicioAte !== "",
+            onLimpar: () => {
+              setInicioDe("");
+              setInicioAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={inicioDe}
+                ate={inicioAte}
+                rotulo="Início"
+                onPeriodoChange={(novoDe, novoAte) => {
+                  setInicioDe(novoDe);
+                  setInicioAte(novoAte);
+                }}
+              />
+            ),
+          },
+          {
+            id: "fimPrevisto",
+            rotulo: "Período de fim previsto",
+            ocultoPorPadrao: true,
+            temValor: fimDe !== "" || fimAte !== "",
+            onLimpar: () => {
+              setFimDe("");
+              setFimAte("");
+            },
+            elemento: (
+              <FiltroPeriodo
+                de={fimDe}
+                ate={fimAte}
+                rotulo="Fim previsto"
+                onPeriodoChange={(novoDe, novoAte) => {
+                  setFimDe(novoDe);
+                  setFimAte(novoAte);
+                }}
               />
             ),
           },
