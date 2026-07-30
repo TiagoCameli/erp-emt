@@ -13,11 +13,11 @@ import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
+import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
   normalizarRelatorio,
-  RelatoriosNav,
   type RelatorioId,
-} from "@/modules/financeiro/relatorios/components/relatorios-nav";
+} from "@/modules/financeiro/relatorios/relatorios";
 import { SeletorFornecedor } from "@/modules/financeiro/relatorios/components/seletor-fornecedor";
 import { SeletorMes } from "@/modules/financeiro/relatorios/components/seletor-mes";
 import {

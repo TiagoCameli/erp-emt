@@ -327,3 +327,42 @@ faltava na prova de pagamento e deixou passar o bug do custo dobrado.
    ("definida na aprovação", "vencimento da parcela", "reprogramada"), e não no
    painel da fila: na fila a parcela ainda é `pendente` e a data só nasce na
    aprovação, então ali o campo seria sempre o mesmo texto.
+
+## Relatórios financeiros: função de módulo "use client" chamada do servidor
+
+**Data:** 30/07/2026 · **Contexto:** `/financeiro/relatorios` quebrada em produção
+
+A tela inteira de relatórios caía em produção, nos **sete** relatórios, com o mesmo
+digest (`2025016743`). A causa:
+
+```
+Attempted to call normalizarRelatorio() from the server but normalizarRelatorio
+is on the client. It's not possible to invoke a client function from the server.
+```
+
+`normalizarRelatorio` morava em `relatorios-nav.tsx`, que é `"use client"`, e a
+página (Server Component) **chamava** a função. Importar um client component do
+servidor é permitido para renderizar; chamar uma função exportada por ele não é.
+
+**Por que passou por tudo:** é violação de fronteira de **runtime**, não de tipo.
+tsc, lint, testes e build passaram limpos; a rota só quebra quando renderiza de
+verdade. Em produção o Next esconde a mensagem e mostra só o digest, e o digest
+do Next 16 não distingue erro (os sete relatórios, com queries completamente
+diferentes, davam o mesmo número), o que apontou para a direção errada por duas
+sessões.
+
+**O que fechou o diagnóstico:** uma página de diagnóstico local, pública e sem
+dado, que montava só as peças daquela tela e chamava as funções uma a uma. O erro
+acontece antes de qualquer consulta, então não precisava de sessão nem de dado.
+Antes disso eu havia eliminado, com medição: permissão do usuário, ACL das dez
+`fn_rel_*`, cache do PostgREST, prerender de build, duplicatas do iCloud e o
+grafo de imports (que sobe limpo em Node, porque **importar** o módulo é válido;
+só **chamar** através da fronteira falha).
+
+**Decisões**
+
+1. Ids, padrão e normalização foram para `relatorios/relatorios.ts`, módulo
+   neutro. O client component ficou só com rótulo, ícone e a navegação.
+2. Teste guarda a invariante: o módulo não pode ganhar a diretiva `"use client"`.
+3. Varredura no app inteiro (189 módulos `"use client"`, 6 com export chamável em
+   minúscula): nenhum outro arquivo de servidor importa função de módulo client.

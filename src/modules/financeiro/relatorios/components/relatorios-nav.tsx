@@ -13,50 +13,33 @@ import {
 
 import { useFiltrosUrl } from "@/components/canonicos";
 import { cn } from "@/lib/utils";
+import {
+  RELATORIOS,
+  type RelatorioId,
+} from "@/modules/financeiro/relatorios/relatorios";
 
-/** Identificador de cada relatório (também o valor do parâmetro `rel`). */
-export type RelatorioId =
-  | "fluxo-caixa"
-  | "dre"
-  | "aging"
-  | "posicao-bancaria"
-  | "custo-cc"
-  | "custo-grupo"
-  | "extrato-fornecedor";
-
-export const RELATORIO_PADRAO: RelatorioId = "fluxo-caixa";
-
-interface ItemRelatorio {
-  id: RelatorioId;
-  rotulo: string;
-  icone: LucideIcon;
-}
-
-const ITENS: ItemRelatorio[] = [
-  { id: "fluxo-caixa", rotulo: "Fluxo de caixa", icone: LineChart },
-  { id: "dre", rotulo: "DRE gerencial", icone: Scale },
-  { id: "aging", rotulo: "Aging", icone: CalendarClock },
-  { id: "posicao-bancaria", rotulo: "Posição bancária", icone: Banknote },
-  { id: "custo-cc", rotulo: "Custo por centro de custo", icone: Building2 },
-  { id: "custo-grupo", rotulo: "Custo por grupo de insumo", icone: Layers },
-  { id: "extrato-fornecedor", rotulo: "Extrato por fornecedor", icone: Users },
-];
-
-const IDS_VALIDOS = new Set<string>(ITENS.map((item) => item.id));
-
-/** Normaliza o parâmetro `rel` num RelatorioId, com fallback no padrão. */
-export function normalizarRelatorio(valor: string | undefined): RelatorioId {
-  return valor && IDS_VALIDOS.has(valor)
-    ? (valor as RelatorioId)
-    : RELATORIO_PADRAO;
-}
+/**
+ * Rótulo e ícone de cada relatório. Só isto vive aqui: os ids, o padrão e a
+ * normalização do parâmetro da URL estão em `relatorios/relatorios.ts`, módulo
+ * neutro, porque a página é Server Component e precisa chamar a normalização.
+ * Função exportada de módulo "use client" não pode ser chamada do servidor.
+ */
+const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> = {
+  "fluxo-caixa": { rotulo: "Fluxo de caixa", icone: LineChart },
+  dre: { rotulo: "DRE gerencial", icone: Scale },
+  aging: { rotulo: "Aging", icone: CalendarClock },
+  "posicao-bancaria": { rotulo: "Posição bancária", icone: Banknote },
+  "custo-cc": { rotulo: "Custo por centro de custo", icone: Building2 },
+  "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
+  "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
+};
 
 interface RelatoriosNavProps {
   ativo: RelatorioId;
 }
 
 /**
- * Navegação entre os seis relatórios. Troca o parâmetro `rel` na URL (replace),
+ * Navegação entre os relatórios. Troca o parâmetro `rel` na URL (replace),
  * o que faz o Server Component re-renderizar com os dados do relatório certo.
  */
 export function RelatoriosNav({ ativo }: RelatoriosNavProps) {
@@ -67,15 +50,15 @@ export function RelatoriosNav({ ativo }: RelatoriosNavProps) {
       aria-label="Relatórios financeiros"
       className="flex flex-wrap items-center gap-1"
     >
-      {ITENS.map((item) => {
-        const Icone = item.icone;
-        const selecionado = item.id === ativo;
+      {RELATORIOS.map((id) => {
+        const { rotulo, icone: Icone } = APRESENTACAO[id];
+        const selecionado = id === ativo;
         return (
           <button
-            key={item.id}
+            key={id}
             type="button"
             aria-current={selecionado ? "page" : undefined}
-            onClick={() => set("rel", item.id)}
+            onClick={() => set("rel", id)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-detalhe transition-colors",
               selecionado
@@ -84,7 +67,7 @@ export function RelatoriosNav({ ativo }: RelatoriosNavProps) {
             )}
           >
             <Icone className="size-4" aria-hidden="true" />
-            {item.rotulo}
+            {rotulo}
           </button>
         );
       })}
