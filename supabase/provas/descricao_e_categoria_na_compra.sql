@@ -1,0 +1,8 @@
+-- Prova de aceite: descricao e categoria da compra chegam no lancamento.
+-- Rodada em 30/07/2026 contra o banco de producao, em transacao com rollback:
+--
+--   1. OC com descricao e categoria -> o lancamento herdou
+--      descricao "REFERENTE PAGAMENTO DE PEDRAS OBRA BR 364 - Lote 09"
+--      categoria "Combustiveis e lubrificantes"
+--   2. OC sem descricao (legado) -> caiu em "Ordem de compra OC-2026-0045",
+--      igual antes, sem quebrar
