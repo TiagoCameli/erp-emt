@@ -88,7 +88,10 @@ export function BaixaRecebimentoDialog({
   }
 
   return (
-    <Dialog open={parcela !== null} onOpenChange={(aberto) => !aberto && onFechar()}>
+    <Dialog
+      open={parcela !== null}
+      onOpenChange={(aberto) => !aberto && onFechar()}
+    >
       <DialogContent showCloseButton={false} className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Registrar recebimento</DialogTitle>
@@ -96,7 +99,9 @@ export function BaixaRecebimentoDialog({
             {parcela
               ? `Baixa de ${parcela.descricao} no valor de`
               : "Selecione a conta que recebeu e a data"}{" "}
-            {parcela ? <MoneyText valor={parcela.valor} className="inline" /> : null}
+            {parcela ? (
+              <MoneyText valor={parcela.valor} className="inline" />
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 
@@ -152,10 +157,17 @@ export function BaixaRecebimentoDialog({
           >
             Cancelar
           </Button>
-          <Button type="submit" form="form-baixa-recebimento" disabled={salvando}>
+          <Button
+            type="submit"
+            form="form-baixa-recebimento"
+            disabled={salvando}
+          >
             {salvando ? (
               <>
-                <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                <LoaderCircle
+                  className="size-4 animate-spin"
+                  aria-hidden="true"
+                />
                 Registrando...
               </>
             ) : (

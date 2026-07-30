@@ -47,7 +47,10 @@ export interface PagamentosClienteProps {
 }
 
 /** Número do lançamento + parcela para exibição (ex: LAN-0001 / 2). */
-function rotuloParcela(numero: string | null, numeroParcela: number): React.ReactNode {
+function rotuloParcela(
+  numero: string | null,
+  numeroParcela: number,
+): React.ReactNode {
   if (!numero) {
     return (
       <span className="text-muted-foreground tabular-nums">
@@ -85,9 +88,8 @@ export function PagamentosCliente({
   );
   const [drawerAberto, setDrawerAberto] = React.useState(false);
 
-  const [parcelaEstorno, setParcelaEstorno] = React.useState<ParcelaPaga | null>(
-    null,
-  );
+  const [parcelaEstorno, setParcelaEstorno] =
+    React.useState<ParcelaPaga | null>(null);
   const [estornoAberto, setEstornoAberto] = React.useState(false);
 
   function abrirEstorno(parcela: ParcelaPaga) {
@@ -124,7 +126,10 @@ export function PagamentosCliente({
         accessorKey: "lancamentoNumero",
         header: "Lançamento",
         cell: ({ row }) =>
-          rotuloParcela(row.original.lancamentoNumero, row.original.numeroParcela),
+          rotuloParcela(
+            row.original.lancamentoNumero,
+            row.original.numeroParcela,
+          ),
       },
       {
         accessorKey: "descricao",
@@ -218,7 +223,10 @@ export function PagamentosCliente({
         accessorKey: "lancamentoNumero",
         header: "Lançamento",
         cell: ({ row }) =>
-          rotuloParcela(row.original.lancamentoNumero, row.original.numeroParcela),
+          rotuloParcela(
+            row.original.lancamentoNumero,
+            row.original.numeroParcela,
+          ),
       },
       {
         accessorKey: "descricao",
@@ -301,7 +309,10 @@ export function PagamentosCliente({
     setPaginacao(nova);
     setCarregandoPagas(true);
     try {
-      const resultado = await buscarParcelasPagas(nova.pageIndex, nova.pageSize);
+      const resultado = await buscarParcelasPagas(
+        nova.pageIndex,
+        nova.pageSize,
+      );
       setLinhasPagas(resultado.itens);
       setTotalRegistros(resultado.total);
     } catch {
@@ -335,6 +346,7 @@ export function PagamentosCliente({
 
         <TabsContent value="a-pagar">
           <DataTable
+            idTabela="financeiro.pagamentos.a-pagar"
             columns={colunasAprovadas}
             data={aprovadas}
             emptyState={
@@ -350,6 +362,7 @@ export function PagamentosCliente({
 
         <TabsContent value="pagas">
           <DataTable
+            idTabela="financeiro.pagamentos.pagas"
             columns={colunasPagas}
             data={linhasPagas}
             total={totalRegistros}

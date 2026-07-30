@@ -216,6 +216,7 @@ export function CategoriasTabela({
       </FilterBar>
 
       <DataTable
+        idTabela="financeiro.categorias"
         columns={colunas}
         data={dados}
         emptyState={

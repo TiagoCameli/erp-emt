@@ -24,15 +24,16 @@ import {
  * neutro, porque a página é Server Component e precisa chamar a normalização.
  * Função exportada de módulo "use client" não pode ser chamada do servidor.
  */
-const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> = {
-  "fluxo-caixa": { rotulo: "Fluxo de caixa", icone: LineChart },
-  dre: { rotulo: "DRE gerencial", icone: Scale },
-  aging: { rotulo: "Aging", icone: CalendarClock },
-  "posicao-bancaria": { rotulo: "Posição bancária", icone: Banknote },
-  "custo-cc": { rotulo: "Custo por centro de custo", icone: Building2 },
-  "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
-  "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
-};
+const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> =
+  {
+    "fluxo-caixa": { rotulo: "Fluxo de caixa", icone: LineChart },
+    dre: { rotulo: "DRE gerencial", icone: Scale },
+    aging: { rotulo: "Aging", icone: CalendarClock },
+    "posicao-bancaria": { rotulo: "Posição bancária", icone: Banknote },
+    "custo-cc": { rotulo: "Custo por centro de custo", icone: Building2 },
+    "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
+    "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
+  };
 
 interface RelatoriosNavProps {
   ativo: RelatorioId;

@@ -244,6 +244,7 @@ export function LancamentosTabela({
       </FilterBar>
 
       <DataTable
+        idTabela="financeiro.lancamentos"
         columns={colunas}
         data={lancamentos}
         total={total}

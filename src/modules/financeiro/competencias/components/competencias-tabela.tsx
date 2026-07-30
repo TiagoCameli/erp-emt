@@ -204,6 +204,7 @@ export function CompetenciasTabela({
   return (
     <>
       <DataTable
+        idTabela="financeiro.competencias"
         columns={colunas}
         data={competencias}
         emptyState={

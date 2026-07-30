@@ -164,8 +164,7 @@ export function PainelConferencia({
   }, [lancamentoId]);
 
   const carga = estado.id === lancamentoId ? estado.carga : null;
-  const carregando =
-    lancamentoId !== null && carga === null && !estado.falhou;
+  const carregando = lancamentoId !== null && carga === null && !estado.falhou;
 
   const lancamento = carga?.lancamento ?? null;
   const infoStatus = lancamento ? STATUS_LANCAMENTO[lancamento.status] : null;
@@ -491,7 +490,11 @@ export function PainelConferencia({
               </Button>
             ) : null}
             {podeAprovar && parcela ? (
-              <Button type="button" size="sm" onClick={() => onAprovar(parcela)}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onAprovar(parcela)}
+              >
                 <Check />
                 Aprovar
               </Button>

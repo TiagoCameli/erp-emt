@@ -188,7 +188,11 @@ export function ContasReceberCliente({
         descricao="Recebíveis e suas parcelas por cliente"
         acoes={
           podeCriar ? (
-            <Button type="button" size="sm" onClick={() => setDrawerAberto(true)}>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setDrawerAberto(true)}
+            >
               <Plus />
               Novo a receber
             </Button>
@@ -221,6 +225,7 @@ export function ContasReceberCliente({
         </FilterBar>
 
         <DataTable
+          idTabela="financeiro.contas-receber"
           columns={colunas}
           data={dados}
           total={total}

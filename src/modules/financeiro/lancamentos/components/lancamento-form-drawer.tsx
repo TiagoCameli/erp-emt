@@ -475,7 +475,9 @@ export function LancamentoFormDrawer({
         <LinhaCampos>
           <CampoFormulario
             id="lan-data-compra"
-            rotulo={tipoValor === "a_receber" ? "Data do documento" : "Data da compra"}
+            rotulo={
+              tipoValor === "a_receber" ? "Data do documento" : "Data da compra"
+            }
             obrigatorio
             erro={form.formState.errors.dataCompra?.message}
           >

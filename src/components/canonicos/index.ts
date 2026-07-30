@@ -13,6 +13,7 @@ export * from "./combobox-criavel";
 export * from "./data-table";
 export * from "./input-numerico";
 export * from "./menu-colunas";
+export * from "./menu-filtros";
 export * from "./preferencias-tabela";
 export * from "./form-drawer";
 export * from "./campo-formulario";

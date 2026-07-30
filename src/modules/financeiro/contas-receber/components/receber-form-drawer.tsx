@@ -78,7 +78,6 @@ export function ReceberFormDrawer({
     const vencimento =
       valores.dataVencimento === "" ? undefined : valores.dataVencimento;
 
-
     const resultado = await criarReceber(
       {
         descricao: valores.descricao,

@@ -154,7 +154,9 @@ export function CustoGrupoTabela({ custo, mes }: CustoGrupoTabelaProps) {
                                       ? `Fechar ${sub.nome}`
                                       : `Abrir ${sub.nome}`
                                   }
-                                  onClick={() => void alternarSub(sub.categoriaId)}
+                                  onClick={() =>
+                                    void alternarSub(sub.categoriaId)
+                                  }
                                 >
                                   {carregando === sub.categoriaId ? (
                                     <LoaderCircle className="animate-spin" />

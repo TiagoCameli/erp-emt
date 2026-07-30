@@ -51,6 +51,7 @@ describe("lerPreferenciasTabela", () => {
       visiveis: { status: false },
       ordem: ["status", "numero"],
       larguras: { numero: 120 },
+      filtros: {},
     });
 
     expect(lerPreferenciasTabela(salvo, IDS)).toEqual({
@@ -58,6 +59,7 @@ describe("lerPreferenciasTabela", () => {
       visiveis: { status: false },
       ordem: ["status", "numero"],
       larguras: { numero: 120 },
+      filtros: {},
     });
   });
 
@@ -67,6 +69,7 @@ describe("lerPreferenciasTabela", () => {
       visiveis: { colunaMorta: false, status: false },
       ordem: ["colunaMorta", "status"],
       larguras: { colunaMorta: 300, status: 100 },
+      filtros: {},
     });
 
     const lido = lerPreferenciasTabela(salvo, IDS);
@@ -89,6 +92,7 @@ describe("lerPreferenciasTabela", () => {
       visiveis: { status: false },
       ordem: [],
       larguras: {},
+      filtros: {},
     });
   });
 
@@ -148,5 +152,36 @@ describe("ordemEfetiva", () => {
       "fornecedor",
       "valorTotal",
     ]);
+  });
+});
+
+describe("filtros visíveis na preferência", () => {
+  it("guarda e sanea os filtros contra os ids que a tela tem hoje", () => {
+    const salvo = JSON.stringify({
+      versao: VERSAO_PREFERENCIAS,
+      visiveis: {},
+      ordem: [],
+      larguras: {},
+      filtros: { status: false, inventado: true, tipo: "sim" },
+    });
+
+    const lido = lerPreferenciasTabela(salvo, IDS, ["status", "tipo"]);
+
+    // "inventado" não existe mais na tela e "tipo" veio com tipo errado: nenhum
+    // dos dois pode sobrar, senão uma preferência velha esconde filtro que a
+    // pessoa não tem como trazer de volta.
+    expect(lido?.filtros).toEqual({ status: false });
+  });
+
+  it("sem lista de filtros, nada é aproveitado", () => {
+    const salvo = JSON.stringify({
+      versao: VERSAO_PREFERENCIAS,
+      visiveis: {},
+      ordem: [],
+      larguras: {},
+      filtros: { status: false },
+    });
+
+    expect(lerPreferenciasTabela(salvo, IDS)?.filtros).toEqual({});
   });
 });
