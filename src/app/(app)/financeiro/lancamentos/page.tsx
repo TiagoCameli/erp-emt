@@ -121,7 +121,10 @@ export default async function PaginaLancamentos({
         pagina={pagina}
         tamanho={tamanho}
         tipo={tipo ?? ""}
-        status={status ?? ""}
+        // O seletor de status também oferece em_revisao e sem_conta, que não são
+        // status de lançamento. Vai o parâmetro cru para o filtro mostrar o que
+        // está filtrando e o menu "Filtros" saber que ele tem valor.
+        status={typeof params.status === "string" ? params.status : ""}
         busca={busca}
         mes={mesParaCompetencia(mes) === "" ? "" : mes}
       />

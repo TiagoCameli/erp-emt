@@ -11,6 +11,8 @@ export interface ParcelaAprovada {
   lancamentoNumero: string | null;
   numeroParcela: number;
   descricao: string;
+  /** Categoria financeira do lançamento, exibida junto da descrição. */
+  categoriaNome: string | null;
   fornecedorNome: string;
   dataVencimento: string | null;
   /** Data em que o pagamento está autorizado. É ela que a trava do banco usa. */
@@ -26,6 +28,8 @@ export interface ParcelaPaga {
   lancamentoNumero: string | null;
   numeroParcela: number;
   descricao: string;
+  /** Categoria financeira do lançamento, exibida junto da descrição. */
+  categoriaNome: string | null;
   fornecedorNome: string;
   contaNome: string;
   dataPagamento: string | null;
@@ -74,6 +78,7 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
        data_programada_origem, aprovado_em, lancamento_id,
        lancamentos!inner(
          numero, descricao, tipo,
+         categorias_financeiras(nome),
          fornecedores(razao_social, nome_fantasia)
        )`,
     )
@@ -95,6 +100,7 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
     numeroParcela: parcela.numero_parcela,
     descricao: parcela.lancamentos?.descricao ?? "-",
+    categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
     dataVencimento: parcela.data_vencimento,
     dataProgramada: parcela.data_programada,
@@ -128,6 +134,7 @@ export async function listarParcelasPagas({
        contas_bancarias(nome, banco),
        lancamentos!inner(
          numero, descricao,
+         categorias_financeiras(nome),
          fornecedores(razao_social, nome_fantasia)
        )`,
       { count: "exact" },
@@ -146,6 +153,7 @@ export async function listarParcelasPagas({
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
     numeroParcela: parcela.numero_parcela,
     descricao: parcela.lancamentos?.descricao ?? "-",
+    categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
     contaNome: parcela.contas_bancarias
       ? rotuloConta(parcela.contas_bancarias.nome, parcela.contas_bancarias.banco)

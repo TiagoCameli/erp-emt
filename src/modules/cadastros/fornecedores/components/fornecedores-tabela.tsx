@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -160,6 +159,8 @@ export function FornecedoresTabela({
       {
         id: "localizacao",
         header: "Cidade/UF",
+        // Secundária: quem trabalha logística liga no menu "Colunas".
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => {
           const { cidade, uf } = row.original;
           const texto = [cidade, uf].filter(Boolean).join(" / ");
@@ -173,6 +174,7 @@ export function FornecedoresTabela({
       {
         accessorKey: "telefone",
         header: "Telefone",
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) =>
           row.original.telefone ? (
             <span className="tabular-nums">{row.original.telefone}</span>
@@ -192,7 +194,7 @@ export function FornecedoresTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const fornecedor = row.original;
         const alternando = alternandoId === fornecedor.id;
@@ -247,26 +249,41 @@ export function FornecedoresTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome ou documento"
-        />
-        <FiltroSelect
-          valor={status === "todos" ? "todos" : status}
-          onValorChange={(valor) =>
-            setStatus((valor === "" ? "todos" : valor) as FiltroStatus)
-          }
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="cadastros.fornecedores"
         columns={colunas}
         data={filtrados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome ou documento",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome ou documento"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setStatus("ativos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "todos" : status}
+                onValorChange={(valor) =>
+                  setStatus((valor === "" ? "todos" : valor) as FiltroStatus)
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={Truck}

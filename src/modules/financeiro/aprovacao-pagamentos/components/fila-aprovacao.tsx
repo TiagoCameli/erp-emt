@@ -8,6 +8,7 @@ import {
   Check,
   CheckCheck,
   ExternalLink,
+  Filter,
   Inbox,
   Paperclip,
   PenLine,
@@ -15,12 +16,15 @@ import {
 import { toast } from "sonner";
 
 import {
+  CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
   EmptyState,
+  FiltroSelect,
   KPICard,
   MoneyText,
   StatusBadge,
+  type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,6 +46,7 @@ import type {
   ParcelasIncompletas,
   ResumoFora,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
+import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
 import { AprovarDialog } from "./aprovar-dialog";
 import { PainelConferencia } from "./painel-conferencia";
@@ -56,6 +61,8 @@ export interface FilaAprovacaoProps {
   aguardandoData: ResumoFora;
   /** Fora da fila só porque ninguém escolheu a conta bancária ainda. */
   aguardandoConta: ResumoFora;
+  /** Contas ativas, para trocar a conta na hora de aprovar. */
+  contas: ContaBancariaOpcao[];
   podeAprovar: boolean;
   /** Permissão de desaprovar: é ela que libera mandar para revisão. */
   podeRevisar: boolean;
@@ -145,6 +152,7 @@ export function FilaAprovacao({
   emRevisao,
   aguardandoData,
   aguardandoConta,
+  contas,
   podeAprovar,
   podeRevisar,
   podeEditarLancamento,
@@ -158,12 +166,32 @@ export function FilaAprovacao({
   const [alvoRevisao, setAlvoRevisao] = React.useState<Alvo | null>(null);
   const [emConferencia, setEmConferencia] =
     React.useState<ParcelaPendente | null>(null);
+  const [filtroConta, setFiltroConta] = React.useState("");
+  const [filtroCategoria, setFiltroCategoria] = React.useState("");
 
-  const totalAprovar = React.useMemo(() => somarValores(parcelas), [parcelas]);
+  const filtrando = filtroConta !== "" || filtroCategoria !== "";
+
+  /**
+   * A fila depois dos filtros. Tudo o que é seleção, lote, KPI e navegação do
+   * painel trabalha em cima desta lista: aprovar em lote não pode alcançar linha
+   * que a pessoa não está vendo.
+   */
+  const visiveis = React.useMemo(
+    () =>
+      parcelas.filter(
+        (parcela) =>
+          (filtroConta === "" || parcela.contaBancariaId === filtroConta) &&
+          (filtroCategoria === "" ||
+            (parcela.categoriaNome ?? "") === filtroCategoria),
+      ),
+    [parcelas, filtroConta, filtroCategoria],
+  );
+
+  const totalAprovar = React.useMemo(() => somarValores(visiveis), [visiveis]);
 
   const selecionadasNaFila = React.useMemo(
-    () => parcelas.filter((parcela) => selecionadas.has(parcela.id)),
-    [parcelas, selecionadas],
+    () => visiveis.filter((parcela) => selecionadas.has(parcela.id)),
+    [visiveis, selecionadas],
   );
   const totalSelecionado = React.useMemo(
     () => somarValores(selecionadasNaFila),
@@ -171,20 +199,32 @@ export function FilaAprovacao({
   );
 
   const todasSelecionadas =
-    parcelas.length > 0 && selecionadas.size === parcelas.length;
+    visiveis.length > 0 && selecionadas.size === visiveis.length;
   const algumaSelecionada = selecionadas.size > 0;
 
   // Índice da parcela em conferência, para as setas do painel andarem na fila.
   const indiceConferencia = emConferencia
-    ? parcelas.findIndex((parcela) => parcela.id === emConferencia.id)
+    ? visiveis.findIndex((parcela) => parcela.id === emConferencia.id)
     : -1;
 
   function alternarTodas() {
     setSelecionadas((atual) =>
-      atual.size === parcelas.length
+      atual.size === visiveis.length
         ? new Set()
-        : new Set(parcelas.map((parcela) => parcela.id)),
+        : new Set(visiveis.map((parcela) => parcela.id)),
     );
+  }
+
+  // Trocar filtro zera a seleção: seleção sobrevivente escondida pelo filtro
+  // viraria aprovação em lote de coisa que ninguém conferiu.
+  function trocarFiltroConta(valor: string) {
+    setFiltroConta(valor);
+    setSelecionadas(new Set());
+  }
+
+  function trocarFiltroCategoria(valor: string) {
+    setFiltroCategoria(valor);
+    setSelecionadas(new Set());
   }
 
   function alternarUma(id: string) {
@@ -204,12 +244,19 @@ export function FilaAprovacao({
     });
   }
 
-  async function confirmarAprovacao(dataProgramada: string | null) {
+  async function confirmarAprovacao(
+    dataProgramada: string | null,
+    contaId: string | null,
+  ) {
     if (!alvoAprovacao) return;
 
     if (alvoAprovacao.tipo === "linha") {
       const parcela = alvoAprovacao.parcela;
-      const resultado = await aprovarParcela(parcela.id, dataProgramada);
+      const resultado = await aprovarParcela(
+        parcela.id,
+        dataProgramada,
+        contaId,
+      );
       if ("erro" in resultado) {
         toast.error(resultado.erro);
         return;
@@ -221,6 +268,7 @@ export function FilaAprovacao({
       const resultado = await aprovarParcelasEmLote(
         [...selecionadas],
         dataProgramada,
+        contaId,
       );
       if ("erro" in resultado) {
         toast.error(
@@ -312,37 +360,31 @@ export function FilaAprovacao({
         header: "Lançamento",
         size: 260,
         meta: { rotulo: "Lançamento", fixa: true, naoTruncar: true },
+        // A descrição saiu daqui: virou a coluna "Descrição e categoria", e
+        // repetir o mesmo texto duas vezes na linha só ocupa espaço.
         cell: ({ row }) => (
-          <div className="flex flex-col gap-0.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="codigo-doc">
-                {rotuloParcela(
-                  row.original.lancamentoNumero,
-                  row.original.numeroParcela,
-                  row.original.totalParcelas,
-                )}
-              </span>
-              {row.original.semNota ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">
-                      <StatusBadge
-                        status="pendente_aprovacao"
-                        rotulo="Sem nota"
-                      />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    A ordem de compra de origem ainda não tem nota fiscal
-                    registrada. Não impede aprovar: é aviso para a decisão ser
-                    consciente.
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
-            </div>
-            <span className="text-legenda text-muted-foreground">
-              {row.original.lancamentoDescricao}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="codigo-doc">
+              {rotuloParcela(
+                row.original.lancamentoNumero,
+                row.original.numeroParcela,
+                row.original.totalParcelas,
+              )}
             </span>
+            {row.original.semNota ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="cursor-help">
+                    <StatusBadge status="pendente_aprovacao" rotulo="Sem nota" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  A ordem de compra de origem ainda não tem nota fiscal
+                  registrada. Não impede aprovar: é aviso para a decisão ser
+                  consciente.
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
         ),
       },
@@ -378,11 +420,21 @@ export function FilaAprovacao({
         ),
       },
       {
+        // Descrição e categoria juntas: quem aprova precisa ler o que está sendo
+        // pago e em que custo isso cai sem abrir o painel nem ligar duas colunas.
+        // Id novo de propósito: a coluna "Descrição" solta nascia escondida, e
+        // quem já tinha preferência salva continuaria sem ver a descrição.
+        id: "descricaoCategoria",
         accessorKey: "lancamentoDescricao",
-        header: "Descrição",
-        size: 240,
-        meta: { rotulo: "Descrição", ocultaPorPadrao: true },
-        cell: ({ row }) => <span>{row.original.lancamentoDescricao}</span>,
+        header: "Descrição e categoria",
+        size: 280,
+        meta: { rotulo: "Descrição e categoria", naoTruncar: true },
+        cell: ({ row }) => (
+          <CelulaDescricaoCategoria
+            descricao={row.original.lancamentoDescricao}
+            categoriaNome={row.original.categoriaNome}
+          />
+        ),
       },
       {
         accessorKey: "categoriaNome",
@@ -465,6 +517,17 @@ export function FilaAprovacao({
         meta: { rotulo: "Forma de pagamento", ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span>{row.original.formaPagamentoNome ?? "-"}</span>
+        ),
+      },
+      {
+        // Escondida por padrão: a conta vem do lançamento e é igual para quase
+        // toda a fila. Quem confere de onde o dinheiro sai liga no menu "Colunas".
+        accessorKey: "contaBancariaNome",
+        header: "Conta bancária",
+        size: 180,
+        meta: { rotulo: "Conta bancária", ocultaPorPadrao: true },
+        cell: ({ row }) => (
+          <span>{row.original.contaBancariaNome ?? "-"}</span>
         ),
       },
       {
@@ -560,6 +623,82 @@ export function FilaAprovacao({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [podeAprovar, podeRevisar, selecionadas, todasSelecionadas]);
 
+  // As opções saem da própria fila, não do cadastro: filtro que oferece conta
+  // ou categoria sem nenhuma parcela só devolve lista vazia.
+  const opcoesConta = React.useMemo(() => {
+    const porId = new Map<string, string>();
+    for (const parcela of parcelas) {
+      if (parcela.contaBancariaId) {
+        porId.set(
+          parcela.contaBancariaId,
+          parcela.contaBancariaNome ?? "Conta sem nome",
+        );
+      }
+    }
+    return [...porId]
+      .map(([valor, rotulo]) => ({ valor, rotulo }))
+      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }, [parcelas]);
+
+  const opcoesCategoria = React.useMemo(() => {
+    const nomes = new Set<string>();
+    for (const parcela of parcelas) {
+      if (parcela.categoriaNome) nomes.add(parcela.categoriaNome);
+    }
+    return [...nomes]
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((nome) => ({ valor: nome, rotulo: nome }));
+  }, [parcelas]);
+
+  // Filtro com uma única opção não filtra nada: fica fora da barra.
+  const filtros: FiltroConfiguravel[] = [];
+  if (opcoesConta.length > 1) {
+    filtros.push({
+      id: "conta",
+      rotulo: "Conta bancária",
+      temValor: filtroConta !== "",
+      onLimpar: () => trocarFiltroConta(""),
+      elemento: (
+        <FiltroSelect
+          valor={filtroConta}
+          onValorChange={trocarFiltroConta}
+          opcoes={opcoesConta}
+          todosRotulo="Todas as contas"
+          className="max-w-56"
+        />
+      ),
+    });
+  }
+  if (opcoesCategoria.length > 1) {
+    filtros.push({
+      id: "categoria",
+      rotulo: "Categoria do custo",
+      temValor: filtroCategoria !== "",
+      onLimpar: () => trocarFiltroCategoria(""),
+      elemento: (
+        <FiltroSelect
+          valor={filtroCategoria}
+          onValorChange={trocarFiltroCategoria}
+          opcoes={opcoesCategoria}
+          todosRotulo="Todas as categorias"
+          className="max-w-56"
+        />
+      ),
+    });
+  }
+
+  /**
+   * A parcela do modal quando a aprovação é de uma só, seja pela linha, seja por
+   * um lote de uma. Lote com uma selecionada aparece no modal como parcela
+   * única, então vencimento e conta atual têm que vir dela.
+   */
+  const parcelaDaAprovacao =
+    alvoAprovacao?.tipo === "linha"
+      ? alvoAprovacao.parcela
+      : selecionadasNaFila.length === 1
+        ? selecionadasNaFila[0]
+        : null;
+
   const quantidadeRevisao =
     alvoRevisao?.tipo === "linha" ? 1 : selecionadas.size;
   const valorRevisao =
@@ -578,7 +717,11 @@ export function FilaAprovacao({
           <KPICard
             titulo="Total a aprovar"
             valor={formatarBRL(totalAprovar)}
-            detalhe={`${parcelas.length} pagamento(s) na fila`}
+            detalhe={
+              filtrando
+                ? `${visiveis.length} de ${parcelas.length} pagamento(s) da fila`
+                : `${parcelas.length} pagamento(s) na fila`
+            }
           />
           <KPICard
             titulo="Em revisão"
@@ -629,18 +772,30 @@ export function FilaAprovacao({
 
         <DataTable
           columns={colunas}
-          data={parcelas}
+          data={visiveis}
+          filtros={filtros}
           onRowClick={setEmConferencia}
           idTabela="financeiro.aprovacao-pagamentos"
           idUsuario={idUsuario}
           cabecalhoFixo
           emptyState={
-            <EmptyState
-              icone={Inbox}
-              titulo="Nenhum pagamento aguardando aprovação"
-              descricao={descricaoVazia(incompletas)}
-              className="border-none bg-transparent"
-            />
+            // Fila cheia e nada na tela é filtro, não fila vazia: dizer
+            // "nenhum pagamento aguardando aprovação" aqui seria mentira.
+            filtrando && parcelas.length > 0 ? (
+              <EmptyState
+                icone={Filter}
+                titulo="Nenhum pagamento com esses filtros"
+                descricao="A fila tem pagamentos, mas nenhum bate com a conta ou a categoria escolhida. Limpe os filtros para ver tudo."
+                className="border-none bg-transparent"
+              />
+            ) : (
+              <EmptyState
+                icone={Inbox}
+                titulo="Nenhum pagamento aguardando aprovação"
+                descricao={descricaoVazia(incompletas)}
+                className="border-none bg-transparent"
+              />
+            )
           }
         />
 
@@ -649,17 +804,17 @@ export function FilaAprovacao({
           onFechar={() => setEmConferencia(null)}
           posicao={
             indiceConferencia >= 0
-              ? { atual: indiceConferencia + 1, total: parcelas.length }
+              ? { atual: indiceConferencia + 1, total: visiveis.length }
               : null
           }
           onAnterior={
             indiceConferencia > 0
-              ? () => setEmConferencia(parcelas[indiceConferencia - 1])
+              ? () => setEmConferencia(visiveis[indiceConferencia - 1])
               : null
           }
           onProximo={
-            indiceConferencia >= 0 && indiceConferencia < parcelas.length - 1
-              ? () => setEmConferencia(parcelas[indiceConferencia + 1])
+            indiceConferencia >= 0 && indiceConferencia < visiveis.length - 1
+              ? () => setEmConferencia(visiveis[indiceConferencia + 1])
               : null
           }
           podeAprovar={podeAprovar}
@@ -680,11 +835,10 @@ export function FilaAprovacao({
               ? alvoAprovacao.parcela.valor
               : totalSelecionado
           }
-          vencimento={
-            alvoAprovacao?.tipo === "linha"
-              ? alvoAprovacao.parcela.dataVencimento
-              : null
-          }
+          vencimento={parcelaDaAprovacao?.dataVencimento ?? null}
+          contas={contas}
+          contaAtualId={parcelaDaAprovacao?.contaBancariaId ?? null}
+          contaAtualNome={parcelaDaAprovacao?.contaBancariaNome ?? null}
           onConfirmar={confirmarAprovacao}
         />
 

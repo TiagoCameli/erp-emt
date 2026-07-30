@@ -7,12 +7,15 @@ import { CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
   EmptyState,
+  FiltroBusca,
   KPICard,
   MoneyText,
   StatusBadge,
+  type FiltroConfiguravel,
   type StatusPadrao,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -61,6 +64,7 @@ function paraParcelaAprovada(parcela: ParcelaProgramada): ParcelaAprovada {
     lancamentoNumero: parcela.lancamentoNumero,
     numeroParcela: parcela.numeroParcela,
     descricao: parcela.lancamentoDescricao,
+    categoriaNome: parcela.categoriaNome,
     fornecedorNome: parcela.fornecedorNome,
     dataVencimento: parcela.dataVencimento,
     dataProgramada: parcela.dataProgramada,
@@ -107,6 +111,36 @@ export function ProgramadosTabela({
 
   const semConta = contas.length === 0;
 
+  // A fila inteira vem do servidor (sem paginação), então a busca filtra no
+  // client. Os KPIs continuam somando a fila toda, não o que sobrou na busca.
+  const [busca, setBusca] = React.useState("");
+  const parcelasFiltradas = React.useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (termo === "") return parcelas;
+    return parcelas.filter((parcela) =>
+      `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome}`
+        .toLowerCase()
+        .includes(termo),
+    );
+  }, [parcelas, busca]);
+
+  // Declarado em `filtros` (e não numa FilterBar solta) para o menu "Filtros"
+  // da tabela aparecer, com a escolha salva junto das colunas do usuário.
+  const filtros: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      elemento: (
+        <FiltroBusca
+          valor={busca}
+          onValorChange={setBusca}
+          placeholder="Buscar por lançamento, descrição ou fornecedor"
+        />
+      ),
+    },
+  ];
+
   const colunas = React.useMemo<ColumnDef<ParcelaProgramada, unknown>[]>(
     () => [
       {
@@ -115,11 +149,14 @@ export function ProgramadosTabela({
       },
       {
         accessorKey: "lancamentoDescricao",
-        header: "Descrição",
+        header: "Descrição e categoria",
+        size: 280,
+        meta: { rotulo: "Descrição e categoria", naoTruncar: true },
         cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.lancamentoDescricao}
-          </span>
+          <CelulaDescricaoCategoria
+            descricao={row.original.lancamentoDescricao}
+            categoriaNome={row.original.categoriaNome}
+          />
         ),
       },
       {
@@ -165,7 +202,7 @@ export function ProgramadosTabela({
       {
         id: "acoes",
         header: "",
-        meta: { alinharDireita: true },
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-2">
             {podeEditar ? (
@@ -224,7 +261,8 @@ export function ProgramadosTabela({
       <DataTable
         idTabela="financeiro.programados"
         columns={colunas}
-        data={parcelas}
+        data={parcelasFiltradas}
+        filtros={filtros}
         emptyState={
           <EmptyState
             icone={CalendarClock}

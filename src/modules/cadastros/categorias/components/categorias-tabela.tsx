@@ -155,7 +155,7 @@ export function CategoriasTabela({
       id: "acoes",
       header: "",
       size: 60,
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const categoria = row.original;
         return (
@@ -250,7 +250,11 @@ export function CategoriasTabela({
               ) : null}
             </div>
 
+            {/* Um idTabela só para as tabelas de todos os grupos: as colunas
+                são as mesmas, e quem arruma a largura numa espera ver igual
+                nas outras. */}
             <DataTable
+              idTabela="cadastros.categorias"
               columns={colunas}
               data={grupo.categorias}
               emptyState={

@@ -456,6 +456,8 @@ export interface ExtratoLancamento {
   id: string;
   numero: string | null;
   descricao: string;
+  /** Categoria financeira do lançamento, exibida junto da descrição. */
+  categoriaNome: string | null;
   status: string;
   /** Mês de referência (dia 1): o mês em que este custo entra. */
   mesCompetencia: string;
@@ -507,7 +509,8 @@ export async function extratoPorFornecedor({
   let consulta = supabase
     .from("lancamentos")
     .select(
-      "id, numero, descricao, status, mes_competencia, data_vencimento, valor",
+      `id, numero, descricao, status, mes_competencia, data_vencimento, valor,
+       categorias_financeiras(nome)`,
     )
     .eq("tipo", "a_pagar")
     .neq("status", "cancelado");
@@ -528,6 +531,7 @@ export async function extratoPorFornecedor({
     id: lancamento.id,
     numero: lancamento.numero,
     descricao: lancamento.descricao,
+    categoriaNome: lancamento.categorias_financeiras?.nome ?? null,
     status: lancamento.status,
     mesCompetencia: lancamento.mes_competencia,
     dataVencimento: lancamento.data_vencimento,

@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -126,7 +125,7 @@ export function CondicoesTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const condicao = row.original;
         return (
@@ -165,32 +164,49 @@ export function CondicoesTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por descrição"
-        />
-        <FiltroSelect
-          valor={status === "todos" ? "" : status}
-          onValorChange={(valor) =>
-            setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
-          }
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos"
-        />
-        {podeCriar ? (
-          <Button type="button" size="sm" className="ml-auto" onClick={abrirNova}>
-            <Plus />
-            Nova condição
-          </Button>
-        ) : null}
-      </FilterBar>
-
       <DataTable
+        idTabela="cadastros.condicoes-pagamento"
         columns={colunas}
         data={filtradas}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por descrição",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por descrição"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setStatus("ativos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "" : status}
+                onValorChange={(valor) =>
+                  setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos"
+              />
+            ),
+          },
+        ]}
+        toolbar={
+          podeCriar ? (
+            <Button type="button" size="sm" onClick={abrirNova}>
+              <Plus />
+              Nova condição
+            </Button>
+          ) : undefined
+        }
         emptyState={
           <EmptyState
             icone={CalendarClock}

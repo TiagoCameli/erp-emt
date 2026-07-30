@@ -76,7 +76,7 @@ export function FaixasIrrfTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const faixa = row.original;
         return (
@@ -117,6 +117,7 @@ export function FaixasIrrfTabela({
   return (
     <>
       <DataTable
+        idTabela="rh.parametros-folha.irrf"
         columns={colunas}
         data={faixas}
         emptyState={

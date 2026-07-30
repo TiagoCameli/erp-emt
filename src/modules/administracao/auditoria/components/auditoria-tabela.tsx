@@ -7,7 +7,6 @@ import { History } from "lucide-react";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroSelect,
   StatusBadge,
   useFiltrosUrl,
@@ -133,6 +132,9 @@ const colunas: ColumnDef<RegistroAuditoria, unknown>[] = [
   {
     accessorKey: "registroId",
     header: "Registro",
+    // Secundária: o UUID truncado só serve quando se está caçando um registro
+    // específico, e aí a pessoa liga a coluna no menu "Colunas".
+    meta: { ocultaPorPadrao: true },
     cell: ({ row }) => {
       const registroId = row.original.registroId;
       if (!registroId) {
@@ -194,42 +196,66 @@ export function AuditoriaTabela({
 
   return (
     <div className="flex flex-col gap-2">
-      <FilterBar>
-        <FiltroSelect
-          valor={filtroTabela}
-          onValorChange={(valor) =>
-            atualizarParams({ tabela: valor, pagina: null })
-          }
-          opcoes={tabelas.map((tabela) => ({
-            valor: tabela,
-            rotulo: rotuloTabela(tabela),
-          }))}
-          todosRotulo="Todas as tabelas"
-        />
-        <FiltroSelect
-          valor={filtroUsuario}
-          onValorChange={(valor) =>
-            atualizarParams({ usuario: valor, pagina: null })
-          }
-          opcoes={usuarios.map((usuario) => ({
-            valor: usuario.id,
-            rotulo: usuario.nome,
-          }))}
-          todosRotulo="Todos os usuários"
-        />
-        <FiltroSelect
-          valor={filtroAcao}
-          onValorChange={(valor) =>
-            atualizarParams({ acao: valor, pagina: null })
-          }
-          opcoes={OPCOES_ACAO_AUDITORIA}
-          todosRotulo="Todas as ações"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="administracao.auditoria"
         columns={colunas}
         data={registros}
+        filtros={[
+          {
+            id: "tabela",
+            rotulo: "Tabela",
+            // Filtro principal da tela: é por tabela que se investiga.
+            fixo: true,
+            elemento: (
+              <FiltroSelect
+                valor={filtroTabela}
+                onValorChange={(valor) =>
+                  atualizarParams({ tabela: valor, pagina: null })
+                }
+                opcoes={tabelas.map((tabela) => ({
+                  valor: tabela,
+                  rotulo: rotuloTabela(tabela),
+                }))}
+                todosRotulo="Todas as tabelas"
+              />
+            ),
+          },
+          {
+            id: "usuario",
+            rotulo: "Usuário",
+            temValor: filtroUsuario !== "",
+            onLimpar: () => atualizarParams({ usuario: null, pagina: null }),
+            elemento: (
+              <FiltroSelect
+                valor={filtroUsuario}
+                onValorChange={(valor) =>
+                  atualizarParams({ usuario: valor, pagina: null })
+                }
+                opcoes={usuarios.map((usuario) => ({
+                  valor: usuario.id,
+                  rotulo: usuario.nome,
+                }))}
+                todosRotulo="Todos os usuários"
+              />
+            ),
+          },
+          {
+            id: "acao",
+            rotulo: "Ação",
+            temValor: filtroAcao !== "",
+            onLimpar: () => atualizarParams({ acao: null, pagina: null }),
+            elemento: (
+              <FiltroSelect
+                valor={filtroAcao}
+                onValorChange={(valor) =>
+                  atualizarParams({ acao: valor, pagina: null })
+                }
+                opcoes={OPCOES_ACAO_AUDITORIA}
+                todosRotulo="Todas as ações"
+              />
+            ),
+          },
+        ]}
         total={total}
         pageIndex={pagina - 1}
         pageSize={tamanho}

@@ -15,6 +15,7 @@ import {
 } from "@/modules/compras/ordens/components/nova-ordem-provider";
 import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela";
 import {
+  listarCategoriasCusto,
   listarCentrosCusto,
   listarCondicoesPagamento,
   listarFornecedores,
@@ -55,6 +56,7 @@ export default async function PaginaOrdens({
     centrosCusto,
     condicoesPagamento,
     formasPagamento,
+    categorias,
     prefill,
   ] = await Promise.all([
     listarOrdens({
@@ -72,6 +74,7 @@ export default async function PaginaOrdens({
     listarCentrosCusto(),
     listarCondicoesPagamento(),
     listarFormasPagamento(),
+    listarCategoriasCusto(),
     gerarCotacaoId && podeCriar
       ? montarPrefillDaCotacao(gerarCotacaoId)
       : Promise.resolve(null),
@@ -85,6 +88,7 @@ export default async function PaginaOrdens({
       centrosCusto={centrosCusto}
       condicoesPagamento={condicoesPagamento}
       formasPagamento={formasPagamento}
+      categorias={categorias}
       prefill={prefill}
     >
       <PageHeader

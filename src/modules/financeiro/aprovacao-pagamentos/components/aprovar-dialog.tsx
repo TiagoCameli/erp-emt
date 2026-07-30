@@ -3,6 +3,7 @@
 import * as React from "react";
 import { CalendarClock, LoaderCircle, TriangleAlert } from "lucide-react";
 
+import { Combobox } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,6 +18,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { dataHojeISO, formatarBRL, formatarData } from "@/lib/formatadores";
 import { avisoFimDeSemana } from "@/modules/financeiro/_shared/janela-pagamento";
+import {
+  ROTULO_BANCO,
+  type BancoConta,
+} from "@/modules/financeiro/_shared/formato";
+import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 
 export interface AprovarDialogProps {
   aberto: boolean;
@@ -30,17 +36,43 @@ export interface AprovarDialogProps {
    * parcela tem o seu e o default é justamente respeitar o de cada uma.
    */
   vencimento?: string | null;
-  /** `null` significa "usa o vencimento de cada parcela" (o fallback do banco). */
-  onConfirmar: (dataProgramada: string | null) => Promise<void>;
+  /** Contas bancárias ativas, para trocar a conta na hora de aprovar. */
+  contas: ContaBancariaOpcao[];
+  /**
+   * Conta que veio do lançamento, quando é uma parcela só. No lote fica null:
+   * cada selecionada tem a sua, e o default é manter.
+   */
+  contaAtualId?: string | null;
+  /** Nome da conta atual, para ela aparecer no campo mesmo se estiver inativa. */
+  contaAtualNome?: string | null;
+  /**
+   * `dataProgramada` null significa "usa o vencimento de cada parcela" e
+   * `contaId` null significa "mantém a conta do lançamento": os dois fallbacks
+   * do banco.
+   */
+  onConfirmar: (
+    dataProgramada: string | null,
+    contaId: string | null,
+  ) => Promise<void>;
+}
+
+/** Rótulo da conta no campo: nome + banco, igual ao drawer de pagamento. */
+function rotuloConta(conta: ContaBancariaOpcao): string {
+  const banco = ROTULO_BANCO[conta.banco as BancoConta] ?? conta.banco;
+  return `${conta.nome} - ${banco}`;
 }
 
 /**
- * Modal de aprovação: aprovar é autorizar o pagamento para uma data.
+ * Modal de aprovação: aprovar é autorizar o pagamento de uma conta para uma data.
  *
- * O default é o vencimento (da parcela, ou de cada uma no lote), que é o mesmo
- * fallback que o banco aplica quando nenhuma data é enviada. Quem aprova só
+ * O default da data é o vencimento (da parcela, ou de cada uma no lote), que é o
+ * mesmo fallback que o banco aplica quando nenhuma data é enviada. Quem aprova só
  * digita data quando quer outra, e aí o sistema registra que a data foi escolhida
  * na aprovação, não herdada do vencimento.
+ *
+ * A conta vem escolhida do lançamento, que é o portão da aprovação: parcela sem
+ * conta não chega aqui. Trocar a conta no modal é exceção, vale só para o que está
+ * sendo aprovado, e sem mexer no campo nada muda.
  *
  * Fim de semana gera aviso, nunca bloqueio: pode existir motivo para programar
  * num sábado, e a decisão é de quem aprova. Feriado não é avisado porque o
@@ -52,10 +84,14 @@ export function AprovarDialog({
   quantidade,
   valorTotal,
   vencimento,
+  contas,
+  contaAtualId,
+  contaAtualNome,
   onConfirmar,
 }: AprovarDialogProps) {
   const [outraData, setOutraData] = React.useState(false);
   const [data, setData] = React.useState("");
+  const [conta, setConta] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
   // Reabrir começa limpo, no default, sem carregar a escolha da vez anterior.
@@ -65,16 +101,34 @@ export function AprovarDialog({
     if (aberto) {
       setOutraData(false);
       setData(vencimento ?? dataHojeISO());
+      setConta(contaAtualId ?? "");
     }
   }
 
   const aviso = outraData && data ? avisoFimDeSemana(data) : null;
   const lote = quantidade > 1;
 
+  // A conta atual entra na lista mesmo se não estiver entre as ativas: conta
+  // desativada depois do lançamento apareceria como um id cru no campo.
+  const opcoesConta = React.useMemo(() => {
+    const base = contas.map((c) => ({ valor: c.id, rotulo: rotuloConta(c) }));
+    if (contaAtualId && !base.some((opcao) => opcao.valor === contaAtualId)) {
+      return [
+        { valor: contaAtualId, rotulo: contaAtualNome ?? "Conta do lançamento" },
+        ...base,
+      ];
+    }
+    return base;
+  }, [contas, contaAtualId, contaAtualNome]);
+
+  const trocouConta = conta !== "" && conta !== (contaAtualId ?? "");
+
   async function confirmar() {
     setSalvando(true);
     try {
-      await onConfirmar(outraData ? data : null);
+      // Só manda a conta quando é troca de verdade: mandar a mesma de volta
+      // faria o banco revalidar uma conta que pode ter sido desativada depois.
+      await onConfirmar(outraData ? data : null, trocouConta ? conta : null);
     } finally {
       setSalvando(false);
     }
@@ -166,6 +220,35 @@ export function AprovarDialog({
               ) : null}
             </div>
           ) : null}
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="aprovar-conta">Conta bancária</Label>
+            <Combobox
+              id="aprovar-conta"
+              valor={conta}
+              onValorChange={setConta}
+              opcoes={opcoesConta}
+              placeholder={
+                lote
+                  ? "Manter a conta de cada pagamento"
+                  : "Selecione a conta bancária"
+              }
+              buscaPlaceholder="Buscar conta"
+              vazioTexto="Nenhuma conta bancária ativa"
+              limpavel={lote}
+              disabled={salvando}
+              className="w-full"
+            />
+            <p className="text-legenda text-muted-foreground">
+              {lote
+                ? conta === ""
+                  ? `Sem escolher, cada um dos ${quantidade} pagamentos sai da conta do próprio lançamento.`
+                  : `A conta escolhida vale para os ${quantidade} pagamentos selecionados, só nesta aprovação.`
+                : trocouConta
+                  ? "Trocar a conta aqui vale só para esta parcela: as outras do lançamento continuam na conta original."
+                  : "Conta que veio do lançamento. Trocar aqui vale só para esta parcela."}
+            </p>
+          </div>
         </div>
 
         <DialogFooter>

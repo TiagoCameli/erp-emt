@@ -63,15 +63,35 @@ function normalizarData(
 }
 
 /**
+ * Valida a conta bancária opcional da aprovação. Vazio significa "mantém a conta
+ * escolhida no lançamento", que é o fallback do banco: devolve `undefined` para o
+ * parâmetro sair da chamada e o default da RPC valer.
+ */
+function normalizarConta(
+  contaId: string | null | undefined,
+): { ok: true; valor: string | undefined } | { ok: false } {
+  if (contaId === null || contaId === undefined || contaId === "") {
+    return { ok: true, valor: undefined };
+  }
+  const valida = uuidSchema.safeParse(contaId);
+  return valida.success ? { ok: true, valor: valida.data } : { ok: false };
+}
+
+/**
  * Aprova uma parcela a pagar e autoriza o pagamento para uma data.
  *
  * Sem data informada, o banco grava a data programada = vencimento da parcela
  * (item 8): parcela aprovada nunca fica sem data autorizada, e o check da tabela
  * garante isso mesmo se alguém chamar a RPC por fora daqui.
+ *
+ * `contaId` só vem quando quem aprova troca a conta no modal, e a troca vale
+ * apenas para esta parcela: sem ele o banco mantém a conta que veio do
+ * lançamento, que é o portão da aprovação.
  */
 export async function aprovarParcela(
   id: string,
   dataProgramada?: string | null,
+  contaId?: string | null,
 ): Promise<ResultadoAcao> {
   if (!(await checarPermissao("aprovar"))) {
     return { erro: "Sem permissão para aprovar pagamentos" };
@@ -83,10 +103,14 @@ export async function aprovarParcela(
   const data = normalizarData(dataProgramada);
   if (!data.ok) return { erro: "Informe uma data programada válida" };
 
+  const conta = normalizarConta(contaId);
+  if (!conta.ok) return { erro: "Conta bancária inválida" };
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_aprovar_parcela", {
     p_parcela_id: idValido.data,
     p_data_programada: data.valor,
+    p_conta_id: conta.valor,
   });
 
   if (error) {
@@ -188,7 +212,9 @@ export async function reprogramarParcela(
 /**
  * Aprova várias parcelas de uma vez. `dataProgramada` nula aplica o vencimento
  * de cada parcela (o default); com data informada, todas ficam autorizadas para
- * a mesma data.
+ * a mesma data. `contaId` segue a mesma ideia: sem ele cada parcela mantém a
+ * conta do próprio lançamento, com ele todas as selecionadas passam a sair da
+ * mesma conta.
  *
  * Para cada parcela aprovada incrementa o contador; se alguma falhar, interrompe
  * e devolve a mensagem do banco junto da contagem do que já passou, para o toast
@@ -197,6 +223,7 @@ export async function reprogramarParcela(
 export async function aprovarParcelasEmLote(
   ids: string[],
   dataProgramada?: string | null,
+  contaId?: string | null,
 ): Promise<{ ok: true; aprovadas: number } | { erro: string; aprovadas: number }> {
   if (!(await checarPermissao("aprovar"))) {
     return { erro: "Sem permissão para aprovar pagamentos", aprovadas: 0 };
@@ -212,6 +239,11 @@ export async function aprovarParcelasEmLote(
     return { erro: "Informe uma data programada válida", aprovadas: 0 };
   }
 
+  const conta = normalizarConta(contaId);
+  if (!conta.ok) {
+    return { erro: "Conta bancária inválida", aprovadas: 0 };
+  }
+
   const supabase = await createClient();
   let aprovadas = 0;
 
@@ -219,6 +251,7 @@ export async function aprovarParcelasEmLote(
     const { error } = await supabase.rpc("fn_aprovar_parcela", {
       p_parcela_id: id,
       p_data_programada: data.valor,
+      p_conta_id: conta.valor,
     });
     if (error) {
       revalidar();

@@ -71,6 +71,7 @@ import {
   type GrupoForm,
 } from "@/modules/compras/ordens/form-mapeamento";
 import type {
+  CategoriaOpcao,
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
@@ -128,6 +129,8 @@ function valoresIniciais(
       cotacaoId: ordem.cotacaoId ?? undefined,
       dataCompra: ordem.dataCompra,
       mesCompetencia: competenciaParaMes(ordem.mesCompetencia),
+      descricao: ordem.descricao ?? "",
+      categoriaId: ordem.categoriaId ?? "",
       observacoes: ordem.observacoes ?? "",
       centrosCusto: agruparItensPorCentroCusto(ordem.itens),
       parcelas: ordem.parcelas.map((parcela) => ({
@@ -145,6 +148,10 @@ function valoresIniciais(
       cotacaoId: prefill.cotacaoId,
       dataCompra: dataHojeISO(),
       mesCompetencia: mesHojeISO(),
+      // Descrição e categoria vêm da cotação: é a mesma compra, redigitar só
+      // criaria divergência entre a cotação e a OC que saiu dela.
+      descricao: prefill.descricao ?? "",
+      categoriaId: prefill.categoriaId ?? "",
       observacoes: "",
       centrosCusto:
         prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
@@ -161,6 +168,8 @@ function valoresIniciais(
     mesCompetencia: ordem
       ? competenciaParaMes(ordem.mesCompetencia)
       : mesHojeISO(),
+    descricao: ordem?.descricao ?? "",
+    categoriaId: ordem?.categoriaId ?? "",
     observacoes: ordem?.observacoes ?? "",
     centrosCusto: [grupoVazio()],
     parcelas:
@@ -186,6 +195,8 @@ export interface OrdemFormDrawerProps {
   centrosCusto: CentroCustoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
+  /** Categorias de despesa para classificar o custo da compra. */
+  categorias: CategoriaOpcao[];
   /**
    * Preenchimento vindo de "Gerar OC" numa cotação finalizada. Só vale na
    * criação (ordem === null): trava a cotação de origem e traz fornecedor,
@@ -213,6 +224,7 @@ export function OrdemFormDrawer({
   centrosCusto,
   condicoesPagamento,
   formasPagamento,
+  categorias,
   prefill,
   anexos = [],
   onCriada,
@@ -296,6 +308,8 @@ export function OrdemFormDrawer({
       cotacaoId: valores.cotacaoId,
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
+      descricao: valores.descricao,
+      categoriaId: valores.categoriaId,
       observacoes: valores.observacoes,
       itens: achatarGruposEmItens(valores.centrosCusto),
       parcelas: valores.parcelas.map((parcela) => ({
@@ -346,6 +360,7 @@ export function OrdemFormDrawer({
   }
 
   const fornecedorValor = form.watch("fornecedorId");
+  const categoriaValor = form.watch("categoriaId") ?? "";
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId");
   const dataCompraValor = form.watch("dataCompra") ?? "";
   // Compra muito velha normalmente é digitação errada, mas às vezes é nota
@@ -490,6 +505,49 @@ export function OrdemFormDrawer({
               sistema e não muda.
             </p>
           ) : null}
+
+          {/* Descrição e categoria classificam a compra no DRE e descem para o
+              lançamento gerado na aprovação. Por isso são obrigatórias aqui, e
+              não no Financeiro depois. */}
+          <LinhaCampos>
+            <CampoFormulario
+              id="oc-descricao"
+              rotulo="Descrição da compra"
+              obrigatorio
+              ajuda="Em uma linha, o que está sendo comprado. Aparece no lançamento financeiro."
+              erro={form.formState.errors.descricao?.message}
+            >
+              <Textarea
+                id="oc-descricao"
+                rows={2}
+                maxLength={500}
+                placeholder="Ex.: brita 1 para a base do km 118"
+                disabled={salvando}
+                {...form.register("descricao")}
+              />
+            </CampoFormulario>
+
+            <CampoFormulario
+              id="oc-categoria"
+              rotulo="Categoria do custo"
+              obrigatorio
+              erro={form.formState.errors.categoriaId?.message}
+            >
+              <Combobox
+                valor={categoriaValor}
+                onValorChange={(valor) =>
+                  form.setValue("categoriaId", valor, { shouldValidate: true })
+                }
+                opcoes={categorias.map((categoria) => ({
+                  valor: categoria.id,
+                  rotulo: categoria.nome,
+                }))}
+                placeholder="Selecione a categoria do custo"
+                disabled={salvando}
+                id="oc-categoria"
+              />
+            </CampoFormulario>
+          </LinhaCampos>
 
           <LinhaCampos>
             <CampoFormulario

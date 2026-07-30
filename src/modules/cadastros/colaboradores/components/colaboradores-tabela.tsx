@@ -10,7 +10,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -145,6 +144,8 @@ export function ColaboradoresTabela({
       {
         accessorKey: "vinculo",
         header: "Vínculo",
+        // Secundária: quase todo mundo é CLT, quem precisa liga em "Colunas".
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => ROTULO_VINCULO[row.original.vinculo],
       },
       {
@@ -158,6 +159,7 @@ export function ColaboradoresTabela({
       {
         accessorKey: "dataAdmissao",
         header: "Admissão",
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataAdmissao
@@ -183,7 +185,7 @@ export function ColaboradoresTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const colaborador = row.original;
         return (
@@ -238,24 +240,41 @@ export function ColaboradoresTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome"
-        />
-        <FiltroSelect
-          valor={status}
-          onValorChange={(valor) => setStatus((valor || "todos") as FiltroStatus)}
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="cadastros.colaboradores"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setStatus("ativos"),
+            elemento: (
+              <FiltroSelect
+                valor={status}
+                onValorChange={(valor) =>
+                  setStatus((valor || "todos") as FiltroStatus)
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos"
+              />
+            ),
+          },
+        ]}
         onRowClick={(colaborador) =>
           router.push(`/cadastros/colaboradores/${colaborador.id}`)
         }

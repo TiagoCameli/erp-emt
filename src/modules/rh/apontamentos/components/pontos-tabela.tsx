@@ -7,7 +7,6 @@ import { CalendarClock } from "lucide-react";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroSelect,
   StatusBadge,
   useFiltrosUrl,
@@ -111,30 +110,46 @@ export function PontosTabela({
 
   return (
     <div className="flex flex-col gap-2">
-      <FilterBar>
-        <FiltroSelect
-          valor={obraId}
-          onValorChange={(valor) =>
-            setMuitos({ obra: valor === "" ? null : valor, pagina: "1" })
-          }
-          opcoes={opcoesObra}
-          placeholder="Obra"
-          todosRotulo="Todas as obras"
-        />
-        <FiltroSelect
-          valor={status}
-          onValorChange={(valor) =>
-            setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
-          }
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos os status"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.apontamentos"
         columns={colunas}
         data={pontos}
+        filtros={[
+          {
+            id: "obra",
+            rotulo: "Obra",
+            // Filtro principal da tela: ponto se trabalha por obra.
+            fixo: true,
+            elemento: (
+              <FiltroSelect
+                valor={obraId}
+                onValorChange={(valor) =>
+                  setMuitos({ obra: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={opcoesObra}
+                placeholder="Obra"
+                todosRotulo="Todas as obras"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "",
+            onLimpar: () => setMuitos({ status: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={status}
+                onValorChange={(valor) =>
+                  setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos os status"
+              />
+            ),
+          },
+        ]}
         total={total}
         pageIndex={pagina}
         pageSize={tamanho}

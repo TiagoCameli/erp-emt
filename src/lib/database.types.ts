@@ -878,8 +878,10 @@ export type Database = {
       };
       cotacoes: {
         Row: {
+          categoria_id: string | null;
           created_at: string;
           created_by: string | null;
+          descricao: string | null;
           id: string;
           motivo_selecao: string | null;
           numero: string | null;
@@ -889,8 +891,10 @@ export type Database = {
           vencedor_fornecedor_id: string | null;
         };
         Insert: {
+          categoria_id?: string | null;
           created_at?: string;
           created_by?: string | null;
+          descricao?: string | null;
           id?: string;
           motivo_selecao?: string | null;
           numero?: string | null;
@@ -900,8 +904,10 @@ export type Database = {
           vencedor_fornecedor_id?: string | null;
         };
         Update: {
+          categoria_id?: string | null;
           created_at?: string;
           created_by?: string | null;
+          descricao?: string | null;
           id?: string;
           motivo_selecao?: string | null;
           numero?: string | null;
@@ -911,6 +917,13 @@ export type Database = {
           vencedor_fornecedor_id?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "cotacoes_categoria_id_fkey";
+            columns: ["categoria_id"];
+            isOneToOne: false;
+            referencedRelation: "categorias_financeiras";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "cotacoes_vencedor_fornecedor_id_fkey";
             columns: ["vencedor_fornecedor_id"];
@@ -2094,11 +2107,13 @@ export type Database = {
         Row: {
           aprovado_em: string | null;
           aprovado_por: string | null;
+          categoria_id: string | null;
           condicao_pagamento_id: string;
           cotacao_id: string | null;
           created_at: string;
           created_by: string | null;
           data_compra: string;
+          descricao: string | null;
           forma_pagamento_id: string | null;
           fornecedor_id: string;
           id: string;
@@ -2113,11 +2128,13 @@ export type Database = {
         Insert: {
           aprovado_em?: string | null;
           aprovado_por?: string | null;
+          categoria_id?: string | null;
           condicao_pagamento_id: string;
           cotacao_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           data_compra?: string;
+          descricao?: string | null;
           forma_pagamento_id?: string | null;
           fornecedor_id: string;
           id?: string;
@@ -2132,11 +2149,13 @@ export type Database = {
         Update: {
           aprovado_em?: string | null;
           aprovado_por?: string | null;
+          categoria_id?: string | null;
           condicao_pagamento_id?: string;
           cotacao_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           data_compra?: string;
+          descricao?: string | null;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string;
           id?: string;
@@ -2154,6 +2173,13 @@ export type Database = {
             columns: ["aprovado_por"];
             isOneToOne: false;
             referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ordens_compra_categoria_id_fkey";
+            columns: ["categoria_id"];
+            isOneToOne: false;
+            referencedRelation: "categorias_financeiras";
             referencedColumns: ["id"];
           },
           {
