@@ -63,6 +63,8 @@ function paraParcelaAprovada(parcela: ParcelaProgramada): ParcelaAprovada {
     descricao: parcela.lancamentoDescricao,
     fornecedorNome: parcela.fornecedorNome,
     dataVencimento: parcela.dataVencimento,
+    dataProgramada: parcela.dataProgramada,
+    dataProgramadaOrigem: null,
     valor: parcela.valor,
     aprovadoEm: null,
   };

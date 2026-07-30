@@ -19,6 +19,7 @@ import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { STATUS_PARCELA } from "@/modules/financeiro/_shared/formato";
+import { programacaoVencida } from "@/modules/financeiro/_shared/janela-pagamento";
 import {
   buscarParcelasPagas,
   estornarPagamento,
@@ -39,6 +40,8 @@ export interface PagamentosClienteProps {
   contas: ContaBancariaOpcao[];
   podePagar: boolean;
   podeEstornar: boolean;
+  /** Hoje em "YYYY-MM-DD" (America/Rio_Branco), calculado no server component. */
+  hoje: string;
   /** Anexos por parcela, para o drawer de pagamento mostrar o comprovante. */
   anexosPorParcela?: Record<string, AnexoDoDocumento[]>;
 }
@@ -72,6 +75,7 @@ export function PagamentosCliente({
   contas,
   podePagar,
   podeEstornar,
+  hoje,
   anexosPorParcela = {},
 }: PagamentosClienteProps) {
   const router = useRouter();
@@ -144,6 +148,31 @@ export function PagamentosCliente({
               : "-"}
           </span>
         ),
+      },
+      {
+        // A data que a trava do banco usa. Sem ela na tela, quem paga clica em
+        // Pagar e leva um bloqueio que não tinha como prever.
+        accessorKey: "dataProgramada",
+        header: "Data autorizada",
+        meta: { alinharDireita: true, naoTruncar: true },
+        cell: ({ row }) => {
+          const autorizada = row.original.dataProgramada;
+          if (!autorizada) {
+            return <span className="text-muted-foreground">-</span>;
+          }
+          const vencida = programacaoVencida(autorizada, hoje);
+          const aindaNao = autorizada > hoje;
+          return (
+            <span className="inline-flex items-center justify-end gap-1.5">
+              <span className="tabular-nums">{formatarData(autorizada)}</span>
+              {vencida ? (
+                <StatusBadge status="rejeitado" rotulo="Vencida" />
+              ) : aindaNao ? (
+                <StatusBadge status="pendente_aprovacao" rotulo="Aguarda" />
+              ) : null}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "valor",

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
+import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
 
 /** Parcela a pagar já aprovada, pronta para registrar o pagamento. */
 export interface ParcelaAprovada {
@@ -12,6 +13,9 @@ export interface ParcelaAprovada {
   descricao: string;
   fornecedorNome: string;
   dataVencimento: string | null;
+  /** Data em que o pagamento está autorizado. É ela que a trava do banco usa. */
+  dataProgramada: string | null;
+  dataProgramadaOrigem: OrigemDataProgramada | null;
   valor: number;
   aprovadoEm: string | null;
 }
@@ -66,7 +70,8 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
   const { data, error } = await supabase
     .from("lancamento_parcelas")
     .select(
-      `id, numero_parcela, valor, data_vencimento, aprovado_em, lancamento_id,
+      `id, numero_parcela, valor, data_vencimento, data_programada,
+       data_programada_origem, aprovado_em, lancamento_id,
        lancamentos!inner(
          numero, descricao, tipo,
          fornecedores(razao_social, nome_fantasia)
@@ -74,6 +79,10 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
     )
     .eq("status", "aprovado")
     .eq("lancamentos.tipo", "a_pagar")
+    // Parcela de lançamento cancelado não é pagável. O banco recusa
+    // (fn_pagar_parcela), e ela também não aparece aqui: parcela de lançamento
+    // cancelado listada como "a pagar" é convite para pagar o que não existe.
+    .neq("lancamentos.status", "cancelado")
     .order("data_vencimento", { ascending: true, nullsFirst: false });
 
   if (error) {
@@ -88,6 +97,9 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
     descricao: parcela.lancamentos?.descricao ?? "-",
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
     dataVencimento: parcela.data_vencimento,
+    dataProgramada: parcela.data_programada,
+    dataProgramadaOrigem:
+      (parcela.data_programada_origem as OrigemDataProgramada | null) ?? null,
     valor: parcela.valor,
     aprovadoEm: parcela.aprovado_em,
   }));

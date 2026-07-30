@@ -388,3 +388,19 @@ $$;
 select passo, detalhe from prova_log order by passo;
 
 rollback;
+
+-- ---------------------------------------------------------------
+-- 19 a 22. Os dois furos achados no teste ponta a ponta em producao
+-- ---------------------------------------------------------------
+-- 19. Digitar a data autorizada para pagar hoje uma parcela liberada para o mes
+--     que vem (a janela era conferida contra a data DIGITADA, nao contra hoje).
+-- 20. Pagar hoje, antes da data autorizada.
+-- 21. Reprogramar para hoje e pagar.
+-- 22. Pagar parcela de lancamento CANCELADO.
+--
+-- Resultado (rodado em 30/07/2026 contra o banco de producao, em transacao com
+-- rollback):
+--   19: "A data do pagamento nao pode ser no futuro (hoje e 30/07/2026)."
+--   20: "Pagamento autorizado para 27/08/2026."
+--   21: pago
+--   22: "Este lancamento esta cancelado: nao da para pagar esta parcela"

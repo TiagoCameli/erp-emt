@@ -497,7 +497,7 @@ export function FilaAprovacao({
       {
         accessorKey: "valor",
         header: "Valor",
-        size: 130,
+        size: 140,
         meta: { rotulo: "Valor", alinharDireita: true },
         cell: ({ row }) => <MoneyText valor={row.original.valor} />,
       },
@@ -508,7 +508,10 @@ export function FilaAprovacao({
         id: "acoes",
         header: "Ações",
         enableSorting: false,
-        size: 190,
+        // Aprovar + Revisar com ícone passam de 190px e o conteúdo transbordava
+        // para a esquerda, cobrindo o valor. Valor escondido atrás de botão numa
+        // tela de aprovação de dinheiro não serve.
+        size: 240,
         meta: {
           rotulo: "Ações",
           fixa: true,
