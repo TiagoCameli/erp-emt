@@ -1682,6 +1682,7 @@ export type Database = {
           created_by: string | null;
           data_pagamento: string | null;
           data_programada: string | null;
+          data_programada_origem: string | null;
           data_vencimento: string | null;
           id: string;
           lancamento_id: string;
@@ -1700,6 +1701,7 @@ export type Database = {
           created_by?: string | null;
           data_pagamento?: string | null;
           data_programada?: string | null;
+          data_programada_origem?: string | null;
           data_vencimento?: string | null;
           id?: string;
           lancamento_id: string;
@@ -1718,6 +1720,7 @@ export type Database = {
           created_by?: string | null;
           data_pagamento?: string | null;
           data_programada?: string | null;
+          data_programada_origem?: string | null;
           data_vencimento?: string | null;
           id?: string;
           lancamento_id?: string;
@@ -2179,6 +2182,54 @@ export type Database = {
             columns: ["fornecedor_id"];
             isOneToOne: false;
             referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      parcela_eventos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data_de: string | null;
+          data_para: string | null;
+          id: string;
+          motivo: string | null;
+          parcela_id: string;
+          tipo: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data_de?: string | null;
+          data_para?: string | null;
+          id?: string;
+          motivo?: string | null;
+          parcela_id: string;
+          tipo: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data_de?: string | null;
+          data_para?: string | null;
+          id?: string;
+          motivo?: string | null;
+          parcela_id?: string;
+          tipo?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "parcela_eventos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "parcela_eventos_parcela_id_fkey";
+            columns: ["parcela_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamento_parcelas";
             referencedColumns: ["id"];
           },
         ];
@@ -2949,7 +3000,7 @@ export type Database = {
         Returns: undefined;
       };
       fn_aprovar_parcela: {
-        Args: { p_parcela_id: string };
+        Args: { p_data_programada?: string; p_parcela_id: string };
         Returns: undefined;
       };
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined };
@@ -2980,10 +3031,6 @@ export type Database = {
       };
       fn_cancelar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string };
-        Returns: undefined;
-      };
-      fn_cancelar_programacao: {
-        Args: { p_parcela_id: string };
         Returns: undefined;
       };
       fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean };
@@ -3089,6 +3136,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      fn_janela_pagamento: { Args: never; Returns: string };
       fn_jornadas_ponto: {
         Args: never;
         Returns: {
@@ -3118,10 +3166,6 @@ export type Database = {
           valor: number;
         }[];
       };
-      fn_programar_pagamento: {
-        Args: { p_data_programada: string; p_parcela_id: string };
-        Returns: undefined;
-      };
       fn_propagar_anexos: {
         Args: {
           p_de_id: string;
@@ -3143,6 +3187,10 @@ export type Database = {
       };
       fn_recurso_da_entidade: { Args: { p_tipo: string }; Returns: string };
       fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string };
+      fn_reenviar_parcela: {
+        Args: { p_observacao?: string; p_parcela_id: string };
+        Returns: undefined;
+      };
       fn_registrar_arquivo: {
         Args: {
           p_entidade_id: string;
@@ -3259,8 +3307,20 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_reprogramar_parcela: {
+        Args: {
+          p_data_programada: string;
+          p_motivo: string;
+          p_parcela_id: string;
+        };
+        Returns: undefined;
+      };
       fn_restaurar_cadastro: {
         Args: { p_lixeira_id: string };
+        Returns: undefined;
+      };
+      fn_revisar_parcela: {
+        Args: { p_motivo: string; p_parcela_id: string };
         Returns: undefined;
       };
       fn_salvar_forma_pagamento: {

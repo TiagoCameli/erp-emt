@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { FilaAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/components/fila-aprovacao";
 import {
+  contarAguardandoData,
+  contarEmRevisao,
   contarParcelasIncompletas,
   listarParcelasPendentes,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
@@ -19,28 +21,32 @@ export default async function PaginaAprovacaoPagamentos() {
     "financeiro.aprovacao-pagamentos",
     "aprovar",
   );
-  const podeRejeitar = temPermissao(
+  const podeRevisar = temPermissao(
     usuario,
     "financeiro.aprovacao-pagamentos",
     "desaprovar",
   );
 
-  const [parcelas, incompletas] = await Promise.all([
+  const [parcelas, incompletas, emRevisao, aguardandoData] = await Promise.all([
     listarParcelasPendentes(),
     contarParcelasIncompletas(),
+    contarEmRevisao(),
+    contarAguardandoData(),
   ]);
 
   return (
     <>
       <PageHeader
         titulo="Aprovação de pagamentos"
-        descricao="Aprove ou rejeite as parcelas a pagar antes que sigam para pagamento"
+        descricao="Aprovar autoriza o pagamento para uma data. O que precisa de ajuste vai para revisão, sem cancelar nada."
       />
       <FilaAprovacao
         parcelas={parcelas}
         incompletas={incompletas}
+        emRevisao={emRevisao}
+        aguardandoData={aguardandoData}
         podeAprovar={podeAprovar}
-        podeRejeitar={podeRejeitar}
+        podeRevisar={podeRevisar}
       />
     </>
   );

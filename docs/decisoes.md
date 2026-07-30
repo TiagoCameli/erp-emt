@@ -225,3 +225,61 @@ Módulo SOMENTE LEITURA: agrega os dados dos outros módulos, sem tabelas novas 
 **Achados do levantamento que não estavam no pedido:** a importação trouxe **136 nomes duplicados** (152 linhas excedentes, tipo `ARMADOR (HORISTA)` + `Armador (horista)_1` + `_2`), que é dedup e ficou fora deste bloco; e o "!EM PROCESSO DE DESATIVACAO!" era **1 insumo**, não uma praga (nome normalizado, e o `&quot;` da importação virou `"`).
 
 **Prova:** `supabase/provas/insumo_grupos.sql`, 12 asserções no banco vivo (4 grupos, criar e apagar grupo recusados, rótulo editável, nenhuma categoria sem grupo, nenhum insumo sem categoria, apagar categoria com vínculo recusado, "A classificar" nos 4, grupo por join, reclassificação trocando o grupo, soma por grupo igual ao custo total, nome sem marca de desativação).
+
+## Revisão no lugar de rejeição, e a data de pagamento definida na aprovação
+
+**Data:** 30/07/2026 · **Contexto:** aba Aprovação de pagamentos
+
+Ao ler o código para o pedido, apareceram dois defeitos no que estava sendo
+substituído. O botão "Rejeitar" **nunca funcionou**: a fila lista parcela
+`pendente` e a `fn_desaprovar_parcela` exige `aprovado`, então todo clique
+devolvia "So da para desaprovar uma parcela aprovada e ainda nao paga". E o
+motivo era **descartado**: a função validava que não estava vazio e não gravava
+em lugar nenhum, porque não existia coluna de motivo e o `audit_log` é diff de
+trigger, não aceita texto livre. O diálogo prometia "fica registrado na
+auditoria" e não ficava.
+
+**Decisões**
+
+1. **Não existia status "Rejeitado" para migrar.** O check da tabela sempre foi
+   `pendente, aprovado, pago, cancelado`. Entrou `em_revisao`; nenhuma linha
+   precisou de migração de dado.
+
+2. **Motivo, autor e data vão para `parcela_eventos`**, no padrão de
+   `competencia_eventos`. Coluna solta guarda o último motivo, não o ciclo, e o
+   que se quer é o ciclo (pedido, motivo, correção, reenvio, reprogramação).
+
+3. **"Programação vencida" é derivado, não status gravado**
+   (`aprovado` + `data_programada < hoje`). Status gravado precisaria de um job
+   para virar à meia-noite e sairia de sincronia com o banco. Só existe na janela
+   "exata": em "a partir da data", data passada é justamente o que libera pagar.
+
+4. **A invariante mora no banco**, não na tela: check
+   `status <> 'aprovado' or data_programada is not null`. Parcela aprovada é
+   parcela pagável, e pagável sem data autorizada é furo. Não vale para `pago`
+   porque parcela de cartão de crédito nasce paga sem nunca ter tido janela, e
+   inventar data para o histórico seria mentira.
+
+5. **`fn_cancelar_programacao` foi removida.** Ela zerava a data programada, o
+   que agora quebra a invariante. Virou "Reprogramar", com motivo obrigatório e
+   permissão de **aprovar pagamento** em vez de editar programados: a data deixou
+   de ser agendamento e passou a ser autorização, então mudá-la é mudar a
+   autorização.
+
+6. **Pagamento em dinheiro também nasce com data programada.** A
+   `fn_aplicar_regra_pagamento` põe a parcela de dinheiro direto em `aprovado`
+   sem passar pela aprovação; sem preencher a data ali, o check recusaria o
+   lançamento em dinheiro inteiro.
+
+7. **Feriado não é avisado.** Fim de semana é calculado; feriado exigiria
+   calendário que o sistema não tem, e chutar (só os fixos, sem Carnaval, Páscoa
+   e Corpus Christi, sem estadual e municipal) avisa errado em dia útil e cala em
+   feriado real. Fica para quando houver cadastro de feriados.
+
+8. **A projeção de caixa passou a usar a data programada** quando ela existe
+   (`fn_rel_fluxo_caixa`). Data autorizada é a melhor estimativa de quando o
+   dinheiro sai; vencimento é só o limite contratual.
+
+**Prova:** `supabase/provas/revisao_e_janela_pagamento.sql`, 18 asserções em
+transação com rollback, incluindo o ciclo aprovar → desaprovar → reaprovar que
+faltava na prova de pagamento e deixou passar o bug do custo dobrado.

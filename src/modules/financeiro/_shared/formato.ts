@@ -21,8 +21,17 @@ export type StatusLancamento =
   | "pago"
   | "cancelado";
 
-/** Status de uma parcela de lançamento. */
-export type StatusParcela = "pendente" | "aprovado" | "pago" | "cancelado";
+/**
+ * Status de uma parcela de lançamento. `em_revisao` não cancela nada: a parcela
+ * sai da fila de aprovação e volta para quem lançou ajustar, e o lançamento
+ * continua vivo e contando na previsão de caixa.
+ */
+export type StatusParcela =
+  | "pendente"
+  | "em_revisao"
+  | "aprovado"
+  | "pago"
+  | "cancelado";
 
 /** Banco de uma conta bancária. */
 export type BancoConta = "caixa" | "bb" | "sicredi" | "outro";
@@ -46,6 +55,8 @@ export const STATUS_LANCAMENTO: Record<StatusLancamento, FormatoStatus> = {
 
 export const STATUS_PARCELA: Record<StatusParcela, FormatoStatus> = {
   pendente: { rotulo: "Pendente", badge: "pendente_aprovacao" },
+  // Âmbar (atenção), não vermelho: revisão é pedido de ajuste, não recusa.
+  em_revisao: { rotulo: "Em revisão", badge: "pendente_aprovacao" },
   aprovado: { rotulo: "Aprovado", badge: "aprovado" },
   pago: { rotulo: "Pago", badge: "pago" },
   cancelado: { rotulo: "Cancelado", badge: "cancelado" },

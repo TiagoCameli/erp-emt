@@ -14,14 +14,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
-import { programarPagamento } from "@/modules/financeiro/programados/actions";
+import { reprogramarParcela } from "@/modules/financeiro/aprovacao-pagamentos/actions";
+import { avisoFimDeSemana } from "@/modules/financeiro/_shared/janela-pagamento";
 import type { ParcelaProgramada } from "@/modules/financeiro/programados/queries";
 import {
-  programarPagamentoFormSchema,
-  type ProgramarPagamentoFormInput,
+  reprogramarPagamentoFormSchema,
+  type ReprogramarPagamentoFormInput,
 } from "@/modules/financeiro/programados/schemas";
 
-const ID_FORM = "form-programar-pagamento";
+const ID_FORM = "form-reprogramar-pagamento";
 
 export interface ProgramarDialogProps {
   aberto: boolean;
@@ -32,18 +33,19 @@ export interface ProgramarDialogProps {
   onProgramado?: () => void;
 }
 
-/** Default do campo: a data efetiva atual da parcela (programada, ou vencimento na falta dela), ou hoje se nenhuma existir. */
+/** Default do campo: a data autorizada atual da parcela, ou hoje na falta dela. */
 function valoresIniciais(
   parcela: ParcelaProgramada | null,
-): ProgramarPagamentoFormInput {
-  return { data: parcela?.dataEfetiva ?? dataHojeISO() };
+): ReprogramarPagamentoFormInput {
+  return { data: parcela?.dataEfetiva ?? dataHojeISO(), motivo: "" };
 }
 
 /**
- * Dialog de programar (ou reprogramar) a data de pagamento de uma parcela
- * aprovada: um único campo de data, com default na data efetiva atual da
- * parcela. Chama `programarPagamento`, que passa pela RPC
- * `fn_programar_pagamento`.
+ * Dialog de reprogramar a data autorizada de pagamento de uma parcela aprovada.
+ *
+ * A data programada é autorização, não agendamento: por isso o motivo é
+ * obrigatório e a ação exige permissão de aprovar pagamento, não de editar
+ * programados. Avisa quando a data cai em fim de semana, sem bloquear.
  */
 export function ProgramarDialog({
   aberto,
@@ -51,12 +53,13 @@ export function ProgramarDialog({
   parcela,
   onProgramado,
 }: ProgramarDialogProps) {
-  const reprogramando = Boolean(parcela?.dataProgramada);
-
-  const form = useForm<ProgramarPagamentoFormInput>({
-    resolver: zodResolver(programarPagamentoFormSchema),
+  const form = useForm<ReprogramarPagamentoFormInput>({
+    resolver: zodResolver(reprogramarPagamentoFormSchema),
     defaultValues: valoresIniciais(parcela),
   });
+
+  const dataEscolhida = form.watch("data");
+  const aviso = dataEscolhida ? avisoFimDeSemana(dataEscolhida) : null;
 
   const salvando = form.formState.isSubmitting;
 
@@ -67,19 +70,21 @@ export function ProgramarDialog({
     form.reset(valoresIniciais(parcela));
   }, [aberto, parcela, form]);
 
-  async function aoEnviar(entrada: ProgramarPagamentoFormInput) {
+  async function aoEnviar(entrada: ReprogramarPagamentoFormInput) {
     if (!parcela) return;
 
-    const resultado = await programarPagamento(parcela.id, entrada.data);
+    const resultado = await reprogramarParcela(
+      parcela.id,
+      entrada.data,
+      entrada.motivo,
+    );
 
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
 
-    toast.success(
-      reprogramando ? "Pagamento reprogramado" : "Pagamento programado",
-    );
+    toast.success("Data de pagamento reprogramada");
     onAbertoChange(false);
     onProgramado?.();
   }
@@ -88,8 +93,8 @@ export function ProgramarDialog({
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
-      titulo={reprogramando ? "Reprogramar pagamento" : "Programar pagamento"}
-      descricao="Defina a data em que este pagamento deve entrar na fila"
+      titulo="Reprogramar data de pagamento"
+      descricao="Nova data em que este pagamento fica autorizado a sair"
       larguraClassName="max-w-lg"
       rodape={
         <>
@@ -107,10 +112,8 @@ export function ProgramarDialog({
                 <LoaderCircle className="animate-spin" />
                 Salvando...
               </>
-            ) : reprogramando ? (
-              "Salvar nova data"
             ) : (
-              "Programar"
+              "Salvar nova data"
             )}
           </Button>
         </>
@@ -160,12 +163,28 @@ export function ProgramarDialog({
           rotulo="Data programada"
           obrigatorio
           erro={form.formState.errors.data?.message}
+          ajuda={aviso ?? undefined}
         >
           <Input
             id="programar-data"
             type="date"
             disabled={salvando}
             {...form.register("data")}
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="programar-motivo"
+          rotulo="Motivo da reprogramação"
+          obrigatorio
+          erro={form.formState.errors.motivo?.message}
+          ajuda="Fica na trilha da parcela, com seu nome e a data."
+        >
+          <Input
+            id="programar-motivo"
+            disabled={salvando}
+            placeholder="Ex.: fornecedor pediu prorrogação"
+            {...form.register("motivo")}
           />
         </CampoFormulario>
       </form>

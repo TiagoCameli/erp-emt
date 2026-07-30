@@ -3,7 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 
-import { CampoFormulario, classesFormulario } from "@/components/canonicos";
+import { CampoFormulario, Combobox, classesFormulario } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +17,12 @@ import { Switch } from "@/components/ui/switch";
 import type { Json } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
 import { salvarConfiguracao } from "@/modules/administracao/configuracoes/actions";
+import {
+  AJUDA_JANELA,
+  JANELA_PADRAO,
+  ROTULO_JANELA,
+  type JanelaPagamento,
+} from "@/modules/financeiro/_shared/janela-pagamento";
 import type { Configuracao } from "@/modules/administracao/configuracoes/queries";
 
 interface ConfiguracoesFormProps {
@@ -26,7 +32,13 @@ interface ConfiguracoesFormProps {
 
 type DefinicaoConfig =
   | { rotulo: string; tipo: "percentual"; min: number; max: number }
-  | { rotulo: string; tipo: "booleano" };
+  | { rotulo: string; tipo: "booleano" }
+  | {
+      rotulo: string;
+      tipo: "opcao";
+      opcoes: { valor: string; rotulo: string; ajuda: string }[];
+      padrao: string;
+    };
 
 const DEFINICOES: Record<string, DefinicaoConfig> = {
   tolerancia_divergencia_nf_percentual: {
@@ -39,7 +51,102 @@ const DEFINICOES: Record<string, DefinicaoConfig> = {
     rotulo: "Banco de horas",
     tipo: "booleano",
   },
+  pagamento_janela: {
+    rotulo: "Janela de pagamento",
+    tipo: "opcao",
+    padrao: JANELA_PADRAO,
+    opcoes: (["exata", "a_partir"] satisfies JanelaPagamento[]).map((valor) => ({
+      valor,
+      rotulo: ROTULO_JANELA[valor],
+      ajuda: AJUDA_JANELA[valor],
+    })),
+  },
 };
+
+interface CartaoOpcaoProps {
+  chave: string;
+  rotulo: string;
+  descricao: string | null;
+  valorInicial: string;
+  opcoes: { valor: string; rotulo: string; ajuda: string }[];
+  podeEditar: boolean;
+}
+
+/**
+ * Configuração de escolha única. Usa o Combobox canônico (com busca), não o
+ * Select, e mostra embaixo a explicação da opção escolhida: aqui a diferença
+ * entre as opções muda quando o dinheiro pode sair, então o texto tem que estar
+ * na tela e não no manual.
+ */
+function CartaoOpcao({
+  chave,
+  rotulo,
+  descricao,
+  valorInicial,
+  opcoes,
+  podeEditar,
+}: CartaoOpcaoProps) {
+  const [valor, setValor] = React.useState(valorInicial);
+  const [valorBase, setValorBase] = React.useState(valorInicial);
+  const [pendente, startTransition] = React.useTransition();
+
+  // Reinicia o controle quando o valor salvo muda no servidor (revalidatePath).
+  if (valorBase !== valorInicial) {
+    setValorBase(valorInicial);
+    setValor(valorInicial);
+  }
+
+  const mudou = valor !== valorInicial;
+  const idCampo = `config-${chave}`;
+  const ajudaOpcao = opcoes.find((opcao) => opcao.valor === valor)?.ajuda;
+
+  function salvar() {
+    startTransition(async () => {
+      const resultado = await salvarConfiguracao(chave, valor);
+      if (resultado?.erro) toast.error(resultado.erro);
+      else toast.success("Configuração salva");
+    });
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <CampoFormulario
+          id={idCampo}
+          rotulo={rotulo}
+          ajuda={descricao ?? undefined}
+        >
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-4">
+              <Combobox
+                id={idCampo}
+                valor={valor}
+                onValorChange={setValor}
+                opcoes={opcoes.map((opcao) => ({
+                  valor: opcao.valor,
+                  rotulo: opcao.rotulo,
+                }))}
+                disabled={!podeEditar || pendente}
+                className="w-full max-w-sm"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={salvar}
+                disabled={!podeEditar || !mudou || pendente}
+              >
+                {pendente ? "Salvando" : "Salvar"}
+              </Button>
+            </div>
+            {ajudaOpcao ? (
+              <p className="text-legenda text-muted-foreground">{ajudaOpcao}</p>
+            ) : null}
+          </div>
+        </CampoFormulario>
+      </CardContent>
+    </Card>
+  );
+}
 
 interface CartaoPercentualProps {
   chave: string;
@@ -253,6 +360,24 @@ export function ConfiguracoesForm({
               valorInicial={valorNumero}
               min={definicao.min}
               max={definicao.max}
+              podeEditar={podeEditar}
+            />
+          );
+        }
+
+        if (definicao?.tipo === "opcao") {
+          const valorTexto =
+            typeof configuracao.valor === "string"
+              ? configuracao.valor
+              : definicao.padrao;
+          return (
+            <CartaoOpcao
+              key={configuracao.chave}
+              chave={configuracao.chave}
+              rotulo={definicao.rotulo}
+              descricao={configuracao.descricao}
+              valorInicial={valorTexto}
+              opcoes={definicao.opcoes}
               podeEditar={podeEditar}
             />
           );

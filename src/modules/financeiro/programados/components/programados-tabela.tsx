@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { PagarParcelaDrawer } from "@/modules/financeiro/pagamentos/components/pagar-parcela-drawer";
-import { cancelarProgramacao } from "@/modules/financeiro/programados/actions";
 import type {
   ContaBancariaOpcao,
   ParcelaAprovada,
@@ -93,10 +92,6 @@ export function ProgramadosTabela({
     React.useState<ParcelaProgramada | null>(null);
   const [dialogProgramarAberto, setDialogProgramarAberto] = React.useState(false);
 
-  const [parcelaCancelamento, setParcelaCancelamento] =
-    React.useState<ParcelaProgramada | null>(null);
-  const [dialogCancelarAberto, setDialogCancelarAberto] = React.useState(false);
-
   function abrirPagamento(parcela: ParcelaProgramada) {
     setParcelaPagamento(paraParcelaAprovada(parcela));
     setDrawerPagarAberto(true);
@@ -105,25 +100,6 @@ export function ProgramadosTabela({
   function abrirProgramacao(parcela: ParcelaProgramada) {
     setParcelaProgramacao(parcela);
     setDialogProgramarAberto(true);
-  }
-
-  function abrirCancelamento(parcela: ParcelaProgramada) {
-    setParcelaCancelamento(parcela);
-    setDialogCancelarAberto(true);
-  }
-
-  async function confirmarCancelamento() {
-    if (!parcelaCancelamento) return;
-
-    const resultado = await cancelarProgramacao(parcelaCancelamento.id);
-
-    if ("erro" in resultado) {
-      toast.error(resultado.erro);
-      return;
-    }
-
-    toast.success("Agendamento cancelado");
-    router.refresh();
   }
 
   const semConta = contas.length === 0;
@@ -194,18 +170,7 @@ export function ProgramadosTabela({
                 variant="outline"
                 onClick={() => abrirProgramacao(row.original)}
               >
-                {row.original.dataProgramada ? "Reprogramar" : "Programar"}
-              </Button>
-            ) : null}
-            {podeEditar && row.original.dataProgramada ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="text-destructive hover:text-destructive"
-                onClick={() => abrirCancelamento(row.original)}
-              >
-                Cancelar agendamento
+                Reprogramar
               </Button>
             ) : null}
             {podePagar ? (
@@ -279,20 +244,6 @@ export function ProgramadosTabela({
         onProgramado={() => router.refresh()}
       />
 
-      {podeEditar ? (
-        <ConfirmDialog
-          aberto={dialogCancelarAberto}
-          onAbertoChange={(aberto) => {
-            setDialogCancelarAberto(aberto);
-            if (!aberto) setParcelaCancelamento(null);
-          }}
-          titulo="Cancelar este agendamento?"
-          descricao="A parcela deixa de estar programada e volta a ficar sem data programada. Ela não é excluída e pode ser reprogramada quando você quiser."
-          textoConfirmar="Cancelar agendamento"
-          variante="destrutivo"
-          onConfirmar={confirmarCancelamento}
-        />
-      ) : null}
     </div>
   );
 }
