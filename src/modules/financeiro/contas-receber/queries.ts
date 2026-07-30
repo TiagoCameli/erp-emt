@@ -9,6 +9,8 @@ export interface ContaReceberLinha {
   lancamentoId: string;
   lancamentoNumero: string | null;
   descricao: string;
+  /** Categoria financeira do lançamento, exibida junto da descrição. */
+  categoriaNome: string | null;
   numeroParcela: number;
   dataVencimento: string | null;
   valor: number;
@@ -53,6 +55,7 @@ interface ParcelaComLancamento {
     numero: string | null;
     descricao: string;
     tipo: string;
+    categorias_financeiras: { nome: string } | null;
   } | null;
 }
 
@@ -89,7 +92,7 @@ export async function listarContasReceber({
     .from("lancamento_parcelas")
     .select(
       `id, numero_parcela, data_vencimento, valor, status, lancamento_id,
-       lancamentos!inner(numero, descricao, tipo)`,
+       lancamentos!inner(numero, descricao, tipo, categorias_financeiras(nome))`,
       { count: "exact" },
     )
     .eq("lancamentos.tipo", "a_receber");
@@ -114,6 +117,7 @@ export async function listarContasReceber({
     lancamentoId: parcela.lancamento_id,
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
     descricao: parcela.lancamentos?.descricao ?? "-",
+    categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
     numeroParcela: parcela.numero_parcela,
     dataVencimento: parcela.data_vencimento,
     valor: parcela.valor,

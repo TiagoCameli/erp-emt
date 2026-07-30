@@ -8,12 +8,14 @@ import { LoaderCircle } from "lucide-react";
 import {
   CampoFormulario,
   classesFormulario,
+  Combobox,
   FormDrawer,
   SecaoFormulario,
 } from "@/components/canonicos";
 import { FilaAnexos } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { CategoriaOpcao } from "@/modules/compras/cotacoes/queries";
 import {
   cotacaoFormSchema,
   type CotacaoFormInput,
@@ -21,39 +23,50 @@ import {
 
 const ID_FORM = "form-nova-cotacao";
 
+/** Formulário em branco: um só lugar para o estado inicial e o reset. */
+const VALORES_INICIAIS: CotacaoFormInput = {
+  descricao: "",
+  categoriaId: "",
+  observacoes: "",
+};
+
 export interface NovaCotacaoDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   criando: boolean;
-  /** Recebe as observações e os arquivos enfileirados (sobem após criar). */
-  onCriar: (observacoes: string, anexos: File[]) => void | Promise<void>;
+  categorias: CategoriaOpcao[];
+  /** Recebe o cabeçalho e os arquivos enfileirados (sobem após criar). */
+  onCriar: (dados: CotacaoFormInput, anexos: File[]) => void | Promise<void>;
 }
 
 /**
- * Drawer de nova cotação avulsa: só observações. A montagem do mapa de
- * preços acontece no detalhe.
+ * Drawer de nova cotação avulsa: descrição do que está sendo cotado, categoria
+ * do custo e observações. A montagem do mapa de preços acontece no detalhe.
  *
- * Kit canônico: só tem um campo, então usa apenas `CampoFormulario` +
- * `classesFormulario` (sem `LinhaCampos`/`SecaoFormulario`, que não têm o que
- * agrupar aqui). Este drawer não lista itens — a lista de insumos e preços da
- * cotação é editada em `mapa-comparativo.tsx`, uma matriz comparativa com uma
- * coluna por fornecedor (layout N×M), que não casa com a `TabelaItens`.
+ * Kit canônico: `CampoFormulario` + `classesFormulario`, e `SecaoFormulario`
+ * separando o cabeçalho dos anexos. Este drawer não lista itens: a lista de
+ * insumos e preços da cotação é editada em `mapa-comparativo.tsx`, uma matriz
+ * comparativa com uma coluna por fornecedor (layout N×M), que não casa com a
+ * `TabelaItens`.
  */
 export function NovaCotacaoDrawer({
   aberto,
   onAbertoChange,
   criando,
+  categorias,
   onCriar,
 }: NovaCotacaoDrawerProps) {
   const form = useForm<CotacaoFormInput>({
     resolver: zodResolver(cotacaoFormSchema),
-    defaultValues: { observacoes: "" },
+    defaultValues: VALORES_INICIAIS,
   });
 
   const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
 
+  const categoriaId = form.watch("categoriaId");
+
   React.useEffect(() => {
-    if (aberto) form.reset({ observacoes: "" });
+    if (aberto) form.reset(VALORES_INICIAIS);
   }, [aberto, form]);
 
   // Zera a fila ao abrir ajustando o estado durante a renderização (padrão do
@@ -65,7 +78,7 @@ export function NovaCotacaoDrawer({
   }
 
   function aoEnviar(valores: CotacaoFormInput) {
-    void onCriar(valores.observacoes, filaAnexos);
+    void onCriar(valores, filaAnexos);
   }
 
   return (
@@ -105,19 +118,63 @@ export function NovaCotacaoDrawer({
         className={classesFormulario}
         noValidate
       >
-        <CampoFormulario
-          id="cotacao-observacoes"
-          rotulo="Observações"
-          erro={form.formState.errors.observacoes?.message}
-        >
-          <Textarea
+        <SecaoFormulario titulo="Dados da cotação" className="gap-5">
+          <CampoFormulario
+            id="cotacao-descricao"
+            rotulo="Descrição"
+            obrigatorio
+            ajuda="Vai junto para a ordem de compra e para o lançamento financeiro"
+            erro={form.formState.errors.descricao?.message}
+          >
+            <Textarea
+              id="cotacao-descricao"
+              rows={2}
+              placeholder="Ex.: brita 1 e cimento para o canteiro do km 120"
+              disabled={criando}
+              {...form.register("descricao")}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="cotacao-categoria"
+            rotulo="Categoria do custo"
+            obrigatorio
+            erro={form.formState.errors.categoriaId?.message}
+          >
+            <Combobox
+              valor={categoriaId}
+              onValorChange={(valor) =>
+                form.setValue("categoriaId", valor, { shouldValidate: true })
+              }
+              opcoes={categorias.map((categoria) => ({
+                valor: categoria.id,
+                rotulo: categoria.nome,
+              }))}
+              placeholder={
+                categorias.length === 0
+                  ? "Nenhuma categoria ativa"
+                  : "Escolha a categoria"
+              }
+              disabled={criando || categorias.length === 0}
+              id="cotacao-categoria"
+              className="w-full"
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
             id="cotacao-observacoes"
-            rows={3}
-            placeholder="Ex.: cotação de brita e cimento para o canteiro do km 120"
-            disabled={criando}
-            {...form.register("observacoes")}
-          />
-        </CampoFormulario>
+            rotulo="Observações"
+            erro={form.formState.errors.observacoes?.message}
+          >
+            <Textarea
+              id="cotacao-observacoes"
+              rows={3}
+              placeholder="Ex.: entrega em duas etapas, conferir com o encarregado"
+              disabled={criando}
+              {...form.register("observacoes")}
+            />
+          </CampoFormulario>
+        </SecaoFormulario>
 
         <SecaoFormulario titulo="Anexos">
           <FilaAnexos

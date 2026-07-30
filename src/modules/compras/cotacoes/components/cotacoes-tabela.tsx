@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import {
+  CelulaDescricaoCategoria,
   CelulaVazia,
   colunaData,
   colunaNumero,
@@ -31,7 +32,11 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
 import { criarCotacao } from "@/modules/compras/cotacoes/actions";
-import type { CotacaoLista } from "@/modules/compras/cotacoes/queries";
+import type {
+  CategoriaOpcao,
+  CotacaoLista,
+} from "@/modules/compras/cotacoes/queries";
+import type { CotacaoFormInput } from "@/modules/compras/cotacoes/schemas";
 import {
   infoStatusCotacao,
   ROTULO_STATUS_COTACAO,
@@ -66,6 +71,20 @@ const colunas: ColumnDef<CotacaoLista, unknown>[] = [
       return <StatusBadge status={info.badge} rotulo={info.rotulo} />;
     },
   },
+  {
+    accessorKey: "descricao",
+    header: "Descrição e categoria",
+    size: 320,
+    // Célula de duas linhas: o truncamento padrão da tabela achataria tudo numa
+    // linha só, então o canônico trunca cada linha por conta própria.
+    meta: { naoTruncar: true },
+    cell: ({ row }) => (
+      <CelulaDescricaoCategoria
+        descricao={row.original.descricao}
+        categoriaNome={row.original.categoriaNome}
+      />
+    ),
+  },
   colunaNumero<CotacaoLista>("qtdFornecedores", "Fornecedores", { size: 130 }),
   colunaTexto<CotacaoLista>("vencedorNome", "Vencedor", { size: 260 }),
   colunaData<CotacaoLista>("createdAt", "Criada em", formatarData, {
@@ -93,9 +112,9 @@ function useCriarCotacao() {
   const [criando, setCriando] = React.useState(false);
 
   const aoCriar = React.useCallback(
-    async (observacoes: string, anexos: File[]) => {
+    async (dados: CotacaoFormInput, anexos: File[]) => {
       setCriando(true);
-      const resultado = await criarCotacao({ observacoes });
+      const resultado = await criarCotacao(dados);
 
       if ("erro" in resultado) {
         setCriando(false);
@@ -128,6 +147,8 @@ export interface CotacoesTabelaProps {
   de: string;
   ate: string;
   podeCriar: boolean;
+  /** Categorias financeiras ativas para o Combobox da nova cotação. */
+  categorias: CategoriaOpcao[];
   /** Usuário logado: a personalização da tabela é lembrada por pessoa. */
   idUsuario: string;
 }
@@ -148,6 +169,7 @@ export function CotacoesTabela({
   de,
   ate,
   podeCriar,
+  categorias,
   idUsuario,
 }: CotacoesTabelaProps) {
   const router = useRouter();
@@ -189,36 +211,58 @@ export function CotacoesTabela({
         idTabela="compras.cotacoes"
         idUsuario={idUsuario}
         cabecalhoFixo
-        toolbar={
-          <>
-            <FiltroBusca
-              valor={busca}
-              onValorChange={setBusca}
-              placeholder="Buscar por número ou vencedor"
-            />
-            <FiltroSelect
-              valor={status}
-              onValorChange={(valor) =>
-                setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={OPCOES_STATUS}
-              placeholder="Status"
-              todosRotulo="Todos os status"
-            />
-            <FiltroPeriodo
-              de={de}
-              ate={ate}
-              rotulo="Criação"
-              onPeriodoChange={(novoDe, novoAte) =>
-                setMuitos({
-                  de: novoDe === "" ? null : novoDe,
-                  ate: novoAte === "" ? null : novoAte,
-                  pagina: "1",
-                })
-              }
-            />
-          </>
-        }
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca",
+            // Busca principal da tela: fica sempre visível.
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por número ou vencedor"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "",
+            onLimpar: () => setMuitos({ status: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={status}
+                onValorChange={(valor) =>
+                  setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos os status"
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Criação",
+            temValor: de !== "" || ate !== "",
+            onLimpar: () => setMuitos({ de: null, ate: null, pagina: "1" }),
+            elemento: (
+              <FiltroPeriodo
+                de={de}
+                ate={ate}
+                rotulo="Criação"
+                onPeriodoChange={(novoDe, novoAte) =>
+                  setMuitos({
+                    de: novoDe === "" ? null : novoDe,
+                    ate: novoAte === "" ? null : novoAte,
+                    pagina: "1",
+                  })
+                }
+              />
+            ),
+          },
+        ]}
         acoesLinha={(cotacao) => (
           <>
             <DropdownMenuItem onSelect={() => abrir(cotacao)}>
@@ -265,6 +309,7 @@ export function CotacoesTabela({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           criando={criando}
+          categorias={categorias}
           onCriar={aoCriar}
         />
       ) : null}
@@ -273,7 +318,13 @@ export function CotacoesTabela({
 }
 
 /** Botão de nova cotação para o cabeçalho da página. */
-export function CotacoesAcoesCabecalho({ podeCriar }: { podeCriar: boolean }) {
+export function CotacoesAcoesCabecalho({
+  podeCriar,
+  categorias,
+}: {
+  podeCriar: boolean;
+  categorias: CategoriaOpcao[];
+}) {
   const { drawerAberto, setDrawerAberto, criando, aoCriar } = useCriarCotacao();
 
   if (!podeCriar) return null;
@@ -288,6 +339,7 @@ export function CotacoesAcoesCabecalho({ podeCriar }: { podeCriar: boolean }) {
         aberto={drawerAberto}
         onAbertoChange={setDrawerAberto}
         criando={criando}
+        categorias={categorias}
         onCriar={aoCriar}
       />
     </>

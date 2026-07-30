@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type {
+  CategoriaOpcao,
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
@@ -37,6 +38,7 @@ export interface NovaOrdemProviderProps {
   centrosCusto: CentroCustoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
+  categorias: CategoriaOpcao[];
   /**
    * Prefill vindo de "Gerar OC" numa cotação finalizada (URL ?gerar=<id>).
    * Quando presente, o drawer abre já preenchido; o botão "Nova ordem" sempre
@@ -61,6 +63,7 @@ export function NovaOrdemProvider({
   centrosCusto,
   condicoesPagamento,
   formasPagamento,
+  categorias,
   prefill,
   children,
 }: NovaOrdemProviderProps) {
@@ -106,6 +109,7 @@ export function NovaOrdemProvider({
           centrosCusto={centrosCusto}
           condicoesPagamento={condicoesPagamento}
           formasPagamento={formasPagamento}
+          categorias={categorias}
           onCriada={(id) => router.push(`/compras/ordens/${id}`)}
         />
       ) : null}

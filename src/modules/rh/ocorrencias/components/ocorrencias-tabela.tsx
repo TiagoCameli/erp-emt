@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -170,7 +169,7 @@ export function OcorrenciasTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const registro = row.original;
         return (
@@ -210,24 +209,39 @@ export function OcorrenciasTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por colaborador"
-        />
-        <FiltroSelect
-          valor={tipo}
-          onValorChange={setTipo}
-          opcoes={OPCOES_TIPO}
-          placeholder="Tipo"
-          todosRotulo="Todos os tipos"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.ocorrencias"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por colaborador",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por colaborador"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo",
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={OPCOES_TIPO}
+                placeholder="Tipo"
+                todosRotulo="Todos os tipos"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={ClipboardList}

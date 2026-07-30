@@ -35,6 +35,13 @@ export interface ParcelaPendente {
   origemNumero: string | null;
   categoriaNome: string | null;
   formaPagamentoNome: string | null;
+  /**
+   * Conta bancária escolhida no lançamento. Nunca é null aqui (sem conta a
+   * parcela não entra na fila), mas a coluna do banco é nullable: o tipo
+   * acompanha o banco em vez de mentir. Quem aprova pode trocar no modal.
+   */
+  contaBancariaId: string | null;
+  contaBancariaNome: string | null;
   dataCompra: string | null;
   mesCompetencia: string | null;
   /** Só existe depois da aprovação: na fila é sempre null. */
@@ -88,6 +95,8 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     .from("lancamento_parcelas")
     .select(
       `id, numero_parcela, valor, data_vencimento, data_programada, lancamento_id,
+       conta_bancaria_id,
+       contas_bancarias(nome),
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
          mes_competencia, data_compra,
@@ -151,6 +160,8 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
           : null,
       categoriaNome: lancamento?.categorias_financeiras?.nome ?? null,
       formaPagamentoNome: lancamento?.formas_pagamento?.nome ?? null,
+      contaBancariaId: parcela.conta_bancaria_id,
+      contaBancariaNome: parcela.contas_bancarias?.nome ?? null,
       dataCompra: lancamento?.data_compra ?? null,
       mesCompetencia: lancamento?.mes_competencia ?? null,
       rateios: (lancamento?.lancamento_rateios ?? []).map((rateio) => ({

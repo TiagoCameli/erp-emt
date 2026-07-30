@@ -7,7 +7,6 @@ import { MoreHorizontal, Plus, Wallet } from "lucide-react";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -111,7 +110,8 @@ export function FormasTabela({
         accessorKey: "usoEmOrdens",
         header: "Em ordens",
         size: 110,
-        meta: { alinharDireita: true },
+        // Secundária: contagem de uso serve para decidir desativação, não no dia a dia.
+        meta: { alinharDireita: true, ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span className="tabular-nums">{row.original.usoEmOrdens}</span>
         ),
@@ -135,7 +135,7 @@ export function FormasTabela({
       id: "acoes",
       header: "",
       size: 60,
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -162,37 +162,49 @@ export function FormasTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome"
-        />
-        <FiltroSelect
-          valor={status === "todos" ? "" : status}
-          onValorChange={(valor) =>
-            setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
-          }
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos"
-        />
-        {podeCriar ? (
-          <Button
-            type="button"
-            size="sm"
-            className="ml-auto"
-            onClick={abrirNova}
-          >
-            <Plus />
-            Nova forma
-          </Button>
-        ) : null}
-      </FilterBar>
-
       <DataTable
+        idTabela="cadastros.formas-pagamento"
         columns={colunas}
         data={filtradas}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setStatus("ativos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "" : status}
+                onValorChange={(valor) =>
+                  setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos"
+              />
+            ),
+          },
+        ]}
+        toolbar={
+          podeCriar ? (
+            <Button type="button" size="sm" onClick={abrirNova}>
+              <Plus />
+              Nova forma
+            </Button>
+          ) : undefined
+        }
         emptyState={
           <EmptyState
             icone={Wallet}

@@ -14,6 +14,8 @@ const INSUMO2 = "44444444-4444-4444-8444-444444444444";
 const CENTRO2 = "55555555-5555-4555-8555-555555555555";
 const CONDICAO = "66666666-6666-4666-8666-666666666666";
 const FORMA = "77777777-7777-4777-8777-777777777777";
+const CATEGORIA = "88888888-8888-4888-8888-888888888888";
+const DESCRICAO = "Brita 1 para a base do km 118";
 
 const itemValido = {
   insumoId: INSUMO,
@@ -28,6 +30,8 @@ const ocValida = {
   formaPagamentoId: FORMA,
   dataCompra: "2026-06-18",
   mesCompetencia: "2026-06-01",
+  descricao: DESCRICAO,
+  categoriaId: CATEGORIA,
   itens: [itemValido],
 };
 
@@ -161,6 +165,38 @@ describe("ordemCompraSchema", () => {
     });
     expect(r.success).toBe(false);
   });
+
+  // Descrição e categoria são o que classifica a compra no DRE: sem elas o
+  // lançamento gerado na aprovação nasce sem significado contábil.
+  it("exige descrição com ao menos 3 caracteres", () => {
+    expect(
+      ordemCompraSchema.safeParse({ ...ocValida, descricao: "  " }).success,
+    ).toBe(false);
+    const r = ordemCompraSchema.safeParse({ ...ocValida, descricao: "ab" });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "Descreva a compra em pelo menos 3 caracteres",
+      );
+    }
+  });
+
+  it("recusa descrição acima de 500 caracteres", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...ocValida,
+      descricao: "x".repeat(501),
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("exige categoria do custo", () => {
+    const { categoriaId: _, ...semCategoria } = ocValida;
+    const r = ordemCompraSchema.safeParse(semCategoria);
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe("Escolha a categoria do custo");
+    }
+  });
 });
 
 describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
@@ -212,6 +248,8 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     formaPagamentoId: FORMA,
     dataCompra: "2026-06-18",
     mesCompetencia: "2026-06",
+    descricao: DESCRICAO,
+    categoriaId: CATEGORIA,
     observacoes: "",
     centrosCusto: [grupoValido],
     // Parcelas são opcionais no produto (lista vazia = definir no lançamento),
@@ -251,6 +289,24 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     const { formaPagamentoId: _, ...semForma } = formValido;
     const r = ordemCompraFormSchema.safeParse(semForma);
     expect(r.success).toBe(false);
+  });
+
+  it("exige descrição e categoria no formulário", () => {
+    expect(
+      ordemCompraFormSchema.safeParse({ ...formValido, descricao: "" }).success,
+    ).toBe(false);
+    const r = ordemCompraFormSchema.safeParse({
+      ...formValido,
+      categoriaId: "",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(
+        r.error.issues.some(
+          (issue) => issue.message === "Selecione a categoria do custo",
+        ),
+      ).toBe(true);
+    }
   });
 
   it("exige condição de pagamento no formulário", () => {
@@ -340,6 +396,8 @@ describe("parcelas da OC no formulário", () => {
     formaPagamentoId: FORMA,
     dataCompra: "2026-06-18",
     mesCompetencia: "2026-06",
+    descricao: DESCRICAO,
+    categoriaId: CATEGORIA,
     observacoes: "",
     // 10 x 100,00 = 1.000,00 de total
     centrosCusto: [
@@ -438,6 +496,8 @@ describe("parcelas da OC no servidor", () => {
     formaPagamentoId: FORMA,
     dataCompra: "2026-06-18",
     mesCompetencia: "2026-06-01",
+    descricao: DESCRICAO,
+    categoriaId: CATEGORIA,
     itens: [
       {
         insumoId: INSUMO,

@@ -16,10 +16,17 @@ function textoOpcional(maximo: number) {
 }
 
 /**
- * Cabeçalho da cotação: sempre avulsa. Só observações são editáveis no
- * cabeçalho.
+ * Cabeçalho da cotação: sempre avulsa. Descrição e categoria do custo são
+ * obrigatórias porque a OC gerada da cotação as herda e leva até o lançamento
+ * financeiro: sem elas o custo chega no Financeiro sem classificação.
  */
 export const cotacaoSchema = z.object({
+  descricao: z
+    .string()
+    .trim()
+    .min(3, { error: "Descreva o que está sendo cotado (mínimo 3 caracteres)" })
+    .max(500, { error: "Máximo de 500 caracteres" }),
+  categoriaId: z.uuid({ error: "Selecione a categoria do custo" }),
   observacoes: textoOpcional(2000),
 });
 
@@ -27,6 +34,12 @@ export type CotacaoInput = z.infer<typeof cotacaoSchema>;
 
 /** Schema do formulário do cabeçalho (client). */
 export const cotacaoFormSchema = z.object({
+  descricao: z
+    .string()
+    .trim()
+    .min(3, { error: "Descreva o que está sendo cotado (mínimo 3 caracteres)" })
+    .max(500, { error: "Máximo de 500 caracteres" }),
+  categoriaId: z.uuid({ error: "Selecione a categoria do custo" }),
   observacoes: z
     .string()
     .trim()

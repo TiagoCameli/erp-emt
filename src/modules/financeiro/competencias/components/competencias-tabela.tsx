@@ -168,7 +168,7 @@ export function CompetenciasTabela({
       id: "acoes",
       header: "",
       size: 130,
-      meta: { alinharDireita: true, naoTruncar: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações", naoTruncar: true },
       cell: ({ row }) => {
         const mes = row.original;
         if (mes.fechada) {

@@ -32,6 +32,8 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
   {
     accessorKey: "tipo",
     header: "Tipo",
+    // Secundária: código, descrição e placa já identificam o equipamento.
+    meta: { ocultaPorPadrao: true },
     cell: ({ row }) =>
       row.original.tipo ? (
         <span>{row.original.tipo}</span>
@@ -95,6 +97,7 @@ export function EquipamentosTabela({
   return (
     <>
       <DataTable
+        idTabela="cadastros.equipamentos"
         columns={colunas}
         data={equipamentos}
         searchKey="descricao"

@@ -7,12 +7,15 @@ import { CheckCircle2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
   EmptyState,
+  FiltroBusca,
   KPICard,
   MoneyText,
   StatusBadge,
+  type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
@@ -113,6 +116,35 @@ export function PagamentosCliente({
     [aprovadas],
   );
 
+  // A fila de aprovadas vem inteira do servidor, então a busca filtra no client
+  // sem paginação para atrapalhar. O KPI continua somando a fila toda: ele é o
+  // total a pagar da empresa, não o total do que está na tela.
+  const [buscaAprovadas, setBuscaAprovadas] = React.useState("");
+  const aprovadasFiltradas = React.useMemo(() => {
+    const termo = buscaAprovadas.trim().toLowerCase();
+    if (termo === "") return aprovadas;
+    return aprovadas.filter((parcela) =>
+      `${parcela.lancamentoNumero ?? ""} ${parcela.descricao} ${parcela.fornecedorNome}`
+        .toLowerCase()
+        .includes(termo),
+    );
+  }, [aprovadas, buscaAprovadas]);
+
+  const filtrosAprovadas: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      elemento: (
+        <FiltroBusca
+          valor={buscaAprovadas}
+          onValorChange={setBuscaAprovadas}
+          placeholder="Buscar por lançamento, descrição ou fornecedor"
+        />
+      ),
+    },
+  ];
+
   function abrirPagamento(parcela: ParcelaAprovada) {
     setParcelaAlvo(parcela);
     setDrawerAberto(true);
@@ -133,9 +165,14 @@ export function PagamentosCliente({
       },
       {
         accessorKey: "descricao",
-        header: "Descrição",
+        header: "Descrição e categoria",
+        size: 280,
+        meta: { rotulo: "Descrição e categoria", naoTruncar: true },
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.descricao}</span>
+          <CelulaDescricaoCategoria
+            descricao={row.original.descricao}
+            categoriaNome={row.original.categoriaNome}
+          />
         ),
       },
       {
@@ -200,7 +237,7 @@ export function PagamentosCliente({
             {
               id: "acoes",
               header: "",
-              meta: { alinharDireita: true },
+              meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
               cell: ({ row }) => (
                 <Button
                   type="button"
@@ -230,9 +267,14 @@ export function PagamentosCliente({
       },
       {
         accessorKey: "descricao",
-        header: "Descrição",
+        header: "Descrição e categoria",
+        size: 280,
+        meta: { rotulo: "Descrição e categoria", naoTruncar: true },
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.descricao}</span>
+          <CelulaDescricaoCategoria
+            descricao={row.original.descricao}
+            categoriaNome={row.original.categoriaNome}
+          />
         ),
       },
       {
@@ -266,7 +308,7 @@ export function PagamentosCliente({
             {
               id: "acoes",
               header: "",
-              meta: { alinharDireita: true },
+              meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
               cell: ({ row }) => (
                 <Button
                   type="button"
@@ -348,7 +390,8 @@ export function PagamentosCliente({
           <DataTable
             idTabela="financeiro.pagamentos.a-pagar"
             columns={colunasAprovadas}
-            data={aprovadas}
+            data={aprovadasFiltradas}
+            filtros={filtrosAprovadas}
             emptyState={
               <EmptyState
                 icone={Wallet}

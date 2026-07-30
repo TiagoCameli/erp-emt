@@ -34,6 +34,7 @@ import {
   rejeitarOrdem,
 } from "@/modules/compras/ordens/actions";
 import type {
+  CategoriaOpcao,
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
@@ -101,6 +102,7 @@ export interface OrdemDetalheViewProps {
   centrosCusto: CentroCustoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
+  categorias: CategoriaOpcao[];
   parcelasCondicao: ParcelaCondicaoOpcao[];
   anexosIniciais: AnexoDoDocumento[];
   podeEditar: boolean;
@@ -123,6 +125,7 @@ export function OrdemDetalheView({
   centrosCusto,
   condicoesPagamento,
   formasPagamento,
+  categorias,
   parcelasCondicao,
   anexosIniciais,
   podeEditar,
@@ -348,6 +351,9 @@ export function OrdemDetalheView({
                 {formatarMesAno(ordem.mesCompetencia)}
               </Dado>
               <Dado rotulo="Criada em">{formatarData(ordem.criadoEm)}</Dado>
+              <Dado rotulo="Categoria do custo">
+                {ordem.categoriaNome ?? "-"}
+              </Dado>
               <Dado rotulo="Condição de pagamento">
                 {ordem.condicaoPagamentoDescricao ?? "-"}
               </Dado>
@@ -362,6 +368,13 @@ export function OrdemDetalheView({
                 <MoneyText valor={ordem.valorTotal} className="font-semibold" />
               </Dado>
             </div>
+            {/* A descrição fica fora do grid porque é texto corrido: numa
+                coluna estreita ela quebraria em quatro linhas. */}
+            {ordem.descricao ? (
+              <div className="mt-4">
+                <Dado rotulo="Descrição da compra">{ordem.descricao}</Dado>
+              </div>
+            ) : null}
             {ordem.observacoes ? (
               <div className="mt-4">
                 <Dado rotulo="Observações">{ordem.observacoes}</Dado>
@@ -546,6 +559,7 @@ export function OrdemDetalheView({
           centrosCusto={centrosCusto}
           condicoesPagamento={condicoesPagamento}
           formasPagamento={formasPagamento}
+          categorias={categorias}
         />
       ) : null}
 

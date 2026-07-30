@@ -6,6 +6,7 @@ import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import { OrdemDetalheView } from "@/modules/compras/ordens/components/ordem-detalhe";
 import {
   buscarOrdem,
+  listarCategoriasCusto,
   listarCentrosCusto,
   listarCondicoesPagamento,
   listarFornecedores,
@@ -35,6 +36,7 @@ export default async function PaginaOrdemDetalhe({
     centrosCusto,
     condicoesPagamento,
     formasPagamento,
+    categorias,
     parcelasCondicao,
     anexosIniciais,
   ] = await Promise.all([
@@ -44,6 +46,7 @@ export default async function PaginaOrdemDetalhe({
     listarCentrosCusto(),
     listarCondicoesPagamento(),
     listarFormasPagamento(),
+    listarCategoriasCusto(),
     ordem.condicaoPagamentoId
       ? listarParcelasCondicao(ordem.condicaoPagamentoId)
       : Promise.resolve([]),
@@ -65,6 +68,7 @@ export default async function PaginaOrdemDetalhe({
       centrosCusto={centrosCusto}
       condicoesPagamento={condicoesPagamento}
       formasPagamento={formasPagamento}
+      categorias={categorias}
       parcelasCondicao={parcelasCondicao}
       anexosIniciais={anexosIniciais}
       podeEditar={podeEditar}

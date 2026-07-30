@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -153,7 +152,8 @@ export function FeriasTabela({
       {
         accessorKey: "dias",
         header: "Dias",
-        meta: { alinharDireita: true },
+        // Secundária: quase sempre 30, e o gozo já mostra o intervalo real.
+        meta: { alinharDireita: true, ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span className="tabular-nums">{row.original.dias}</span>
         ),
@@ -170,6 +170,9 @@ export function FeriasTabela({
       {
         accessorKey: "status",
         header: "Status",
+        // Secundária: a coluna Situação já diz o que cobra ação (vencida, a
+        // vencer, em dia); o status é o estado do registro.
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span>{ROTULO_STATUS_FERIAS[row.original.status]}</span>
         ),
@@ -189,7 +192,7 @@ export function FeriasTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const registro = row.original;
         return (
@@ -229,24 +232,39 @@ export function FeriasTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por colaborador"
-        />
-        <FiltroSelect
-          valor={situacao}
-          onValorChange={setSituacao}
-          opcoes={OPCOES_SITUACAO}
-          placeholder="Situação"
-          todosRotulo="Todas as situações"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.ferias"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por colaborador",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por colaborador"
+              />
+            ),
+          },
+          {
+            id: "situacao",
+            rotulo: "Situação",
+            temValor: situacao !== "",
+            onLimpar: () => setSituacao(""),
+            elemento: (
+              <FiltroSelect
+                valor={situacao}
+                onValorChange={setSituacao}
+                opcoes={OPCOES_SITUACAO}
+                placeholder="Situação"
+                todosRotulo="Todas as situações"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={Palmtree}

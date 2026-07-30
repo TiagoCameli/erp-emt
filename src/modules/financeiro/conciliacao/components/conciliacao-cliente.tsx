@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroSelect,
   KPICard,
   MoneyText,
@@ -207,7 +206,7 @@ export function ConciliacaoCliente({
       {
         id: "acoes",
         header: "",
-        meta: { alinharDireita: true },
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) => {
           const transacao = row.original;
           if (transacao.conciliada) {
@@ -258,44 +257,61 @@ export function ConciliacaoCliente({
         <KPICard titulo="Pendentes" valor={totalPendentes} />
       </div>
 
-      <FilterBar className="justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <FiltroSelect
-            valor={contaId}
-            onValorChange={trocarConta}
-            opcoes={opcoesConta}
-            placeholder="Conta bancária"
-            todosRotulo="Todas as contas"
-          />
-          <FiltroSelect
-            valor={conciliacao}
-            onValorChange={(valor) =>
-              setConciliacao(valor as FiltroConciliacao)
-            }
-            opcoes={[
-              { valor: "conciliada", rotulo: "Conciliadas" },
-              { valor: "pendente", rotulo: "Pendentes" },
-            ]}
-            placeholder="Situação"
-            todosRotulo="Todas as situações"
-          />
-        </div>
-        {podeImportar ? (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setImportarAberto(true)}
-          >
-            <Upload />
-            Importar OFX
-          </Button>
-        ) : null}
-      </FilterBar>
-
       <DataTable
         idTabela="financeiro.conciliacao"
         columns={colunas}
         data={dados}
+        // Filtros declarados aqui (e não numa FilterBar solta) para entrarem no
+        // menu "Filtros" da tabela, junto com a personalização de colunas.
+        filtros={[
+          {
+            id: "conta",
+            rotulo: "Conta bancária",
+            temValor: contaId !== "",
+            onLimpar: () => trocarConta(""),
+            elemento: (
+              <FiltroSelect
+                valor={contaId}
+                onValorChange={trocarConta}
+                opcoes={opcoesConta}
+                placeholder="Conta bancária"
+                todosRotulo="Todas as contas"
+              />
+            ),
+          },
+          {
+            id: "situacao",
+            rotulo: "Situação",
+            temValor: conciliacao !== "",
+            onLimpar: () => setConciliacao(""),
+            elemento: (
+              <FiltroSelect
+                valor={conciliacao}
+                onValorChange={(valor) =>
+                  setConciliacao(valor as FiltroConciliacao)
+                }
+                opcoes={[
+                  { valor: "conciliada", rotulo: "Conciliadas" },
+                  { valor: "pendente", rotulo: "Pendentes" },
+                ]}
+                placeholder="Situação"
+                todosRotulo="Todas as situações"
+              />
+            ),
+          },
+        ]}
+        toolbar={
+          podeImportar ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setImportarAberto(true)}
+            >
+              <Upload />
+              Importar OFX
+            </Button>
+          ) : undefined
+        }
         emptyState={
           <EmptyState
             icone={Upload}

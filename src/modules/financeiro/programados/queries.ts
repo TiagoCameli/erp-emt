@@ -13,6 +13,8 @@ export interface ParcelaProgramada {
   lancamentoId: string;
   lancamentoNumero: string | null;
   lancamentoDescricao: string;
+  /** Categoria financeira do lançamento, exibida junto da descrição. */
+  categoriaNome: string | null;
   lancamentoTipo: string;
   numeroParcela: number;
   valor: number;
@@ -53,6 +55,7 @@ export async function listarProgramados(): Promise<ParcelaProgramada[]> {
       `id, numero_parcela, valor, data_vencimento, data_programada, lancamento_id,
        lancamentos!inner(
          numero, descricao, tipo, status,
+         categorias_financeiras(nome),
          fornecedores(razao_social, nome_fantasia)
        )`,
     )
@@ -69,6 +72,7 @@ export async function listarProgramados(): Promise<ParcelaProgramada[]> {
     lancamentoId: parcela.lancamento_id,
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
     lancamentoDescricao: parcela.lancamentos?.descricao ?? "-",
+    categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
     lancamentoTipo: parcela.lancamentos?.tipo ?? "-",
     numeroParcela: parcela.numero_parcela,
     valor: parcela.valor,

@@ -87,6 +87,7 @@ export function PerfisTab({
       />
 
       <DataTable
+        idTabela="administracao.perfis"
         columns={colunas}
         data={perfis}
         searchKey="nome"

@@ -189,6 +189,19 @@ export function CotacaoDetalhe({
         ) : null}
       </div>
 
+      {cotacao.descricao || cotacao.categoriaNome ? (
+        <div className="rounded-md border border-border bg-surface px-4 py-3">
+          {cotacao.descricao ? (
+            <p className="text-detalhe font-medium">{cotacao.descricao}</p>
+          ) : null}
+          {cotacao.categoriaNome ? (
+            <p className="text-legenda text-muted-foreground">
+              Categoria: {cotacao.categoriaNome}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {cotacao.observacoes ? (
         <p className="text-detalhe text-muted-foreground">
           {cotacao.observacoes}

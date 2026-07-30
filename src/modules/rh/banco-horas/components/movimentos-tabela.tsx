@@ -7,7 +7,6 @@ import { Clock, MoreHorizontal, Plus } from "lucide-react";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -134,7 +133,7 @@ export function MovimentosTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const movimento = row.original;
 
@@ -165,24 +164,39 @@ export function MovimentosTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por colaborador"
-        />
-        <FiltroSelect
-          valor={tipo}
-          onValorChange={setTipo}
-          opcoes={opcoesTipo}
-          placeholder="Tipo"
-          todosRotulo="Todos os tipos"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.banco-horas.movimentos"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por colaborador",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por colaborador"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo",
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={opcoesTipo}
+                placeholder="Tipo"
+                todosRotulo="Todos os tipos"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={Clock}

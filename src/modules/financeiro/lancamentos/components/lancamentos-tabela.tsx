@@ -7,10 +7,10 @@ import { Receipt, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroMes,
   FiltroSelect,
@@ -18,6 +18,7 @@ import {
   StatusBadge,
   useBuscaUrl,
   useFiltrosUrl,
+  type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
@@ -71,28 +72,23 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     ),
   },
   {
+    // Descrição e categoria numa coluna só: quem lê a lista quer as duas juntas
+    // ("o que é" e "onde entra"), e sobra largura para as colunas de dinheiro.
     accessorKey: "descricao",
-    header: "Descrição",
+    header: "Descrição e categoria",
+    size: 280,
+    meta: { rotulo: "Descrição e categoria", naoTruncar: true },
     cell: ({ row }) => (
-      <div className="min-w-0">
-        <span className="font-medium">{row.original.descricao}</span>
-        {row.original.origem !== "manual" ? (
-          <span className="ml-1.5 text-legenda text-muted-foreground">
-            (origem {row.original.origem})
-          </span>
-        ) : null}
-      </div>
+      <CelulaDescricaoCategoria
+        descricao={row.original.descricao}
+        categoriaNome={row.original.categoriaNome}
+        complemento={
+          row.original.origem === "manual"
+            ? null
+            : `(origem ${row.original.origem})`
+        }
+      />
     ),
-  },
-  {
-    accessorKey: "categoriaNome",
-    header: "Categoria",
-    cell: ({ row }) =>
-      row.original.categoriaNome ? (
-        <span>{row.original.categoriaNome}</span>
-      ) : (
-        <span className="text-muted-foreground">-</span>
-      ),
   },
   {
     accessorKey: "valor",
@@ -183,6 +179,10 @@ export interface LancamentosTabelaProps {
   pagina: number;
   tamanho: number;
   tipo: string;
+  /**
+   * Valor cru do parâmetro `status` da URL. Inclui os valores que não são status
+   * de lançamento (em_revisao, sem_conta), porque o seletor é o mesmo.
+   */
   status: string;
   busca: string;
   /** Mês de referência do filtro, no formato do input (yyyy-MM). */
@@ -234,14 +234,28 @@ export function LancamentosTabela({
     });
   }
 
-  return (
-    <div className="flex flex-col gap-2">
-      <FilterBar>
+  // Filtros declarados na DataTable (e não numa FilterBar solta) para entrarem
+  // no menu "Filtros": cada usuário escolhe quais quer ver, e a escolha fica
+  // salva com as colunas dele.
+  const filtros: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      elemento: (
         <FiltroBusca
           valor={busca}
           onValorChange={setBusca}
           placeholder="Buscar por número ou descrição"
         />
+      ),
+    },
+    {
+      id: "tipo",
+      rotulo: "Tipo",
+      temValor: tipo !== "",
+      onLimpar: () => setMuitos({ tipo: null, pagina: "1" }),
+      elemento: (
         <FiltroSelect
           valor={tipo}
           onValorChange={(valor) =>
@@ -251,6 +265,14 @@ export function LancamentosTabela({
           placeholder="Tipo"
           todosRotulo="Todos os tipos"
         />
+      ),
+    },
+    {
+      id: "status",
+      rotulo: "Status",
+      temValor: status !== "",
+      onLimpar: () => setMuitos({ status: null, pagina: "1" }),
+      elemento: (
         <FiltroSelect
           valor={status}
           onValorChange={(valor) =>
@@ -260,18 +282,31 @@ export function LancamentosTabela({
           placeholder="Status"
           todosRotulo="Todos os status"
         />
+      ),
+    },
+    {
+      id: "mes",
+      rotulo: "Mês de referência",
+      temValor: mes !== "",
+      onLimpar: () => setMuitos({ mes: null, pagina: "1" }),
+      elemento: (
         <FiltroMes
           valor={mes}
           onValorChange={(novoMes) =>
             setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
           }
         />
-      </FilterBar>
+      ),
+    },
+  ];
 
+  return (
+    <div className="flex flex-col gap-2">
       <DataTable
         idTabela="financeiro.lancamentos"
         columns={colunas}
         data={lancamentos}
+        filtros={filtros}
         total={total}
         pageIndex={pagina}
         pageSize={tamanho}

@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   PageHeader,
@@ -281,6 +280,8 @@ export function InsumosTabela({
       {
         accessorKey: "unidadeSigla",
         header: "Unidade",
+        // Secundária: só importa na hora de comprar, não na hora de achar.
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) =>
           row.original.unidadeSigla ?? (
             <span className="text-muted-foreground">-</span>
@@ -304,7 +305,7 @@ export function InsumosTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const insumo = row.original;
         return (
@@ -373,70 +374,6 @@ export function InsumosTabela({
         }
       />
 
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome ou código"
-        />
-        <FiltroSelect
-          valor={status === "todos" ? "" : status}
-          onValorChange={(valor) =>
-            setMuitos({ status: valor === "" ? "todos" : valor, pagina: "1" })
-          }
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos"
-        />
-        <FiltroSelect
-          valor={grupo}
-          onValorChange={(valor) =>
-            setMuitos({
-              grupo: valor === "" ? null : valor,
-              // Trocar o grupo derruba a subcategoria: ela pertence ao anterior.
-              categoria: null,
-              pagina: "1",
-            })
-          }
-          opcoes={grupos.map((g) => ({ valor: g.id, rotulo: g.nome }))}
-          placeholder="Grupo"
-          todosRotulo="Todos os grupos"
-        />
-        <FiltroSelect
-          valor={categoria}
-          onValorChange={(valor) =>
-            setMuitos({
-              categoria: valor === "" ? null : valor,
-              pagina: "1",
-            })
-          }
-          opcoes={categorias
-            .filter((c) => grupo === "" || c.grupoId === grupo)
-            .map((c) => ({ valor: c.id, rotulo: c.nome }))}
-          placeholder="Subcategoria"
-          todosRotulo="Todas as subcategorias"
-          className="max-w-60"
-        />
-        {aClassificar ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              setMuitos({
-                grupo: null,
-                categoria: aClassificar.id,
-                status: "todos",
-                pagina: "1",
-              })
-            }
-          >
-            <Tags />
-            Ver &quot;A classificar&quot;
-          </Button>
-        ) : null}
-      </FilterBar>
-
       {selecionados.size > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2">
           <span className="text-detalhe">
@@ -466,12 +403,114 @@ export function InsumosTabela({
       ) : null}
 
       <DataTable
+        idTabela="cadastros.insumos"
         columns={colunas}
         data={insumos}
         total={total}
         pageIndex={pagina}
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome ou código",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome ou código"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setMuitos({ status: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "" : status}
+                onValorChange={(valor) =>
+                  setMuitos({
+                    status: valor === "" ? "todos" : valor,
+                    pagina: "1",
+                  })
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos"
+              />
+            ),
+          },
+          {
+            id: "grupo",
+            rotulo: "Grupo",
+            temValor: grupo !== "",
+            // Soltar o grupo solta a subcategoria também: ela pertence ao grupo.
+            onLimpar: () =>
+              setMuitos({ grupo: null, categoria: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={grupo}
+                onValorChange={(valor) =>
+                  setMuitos({
+                    grupo: valor === "" ? null : valor,
+                    // Trocar o grupo derruba a subcategoria: ela é do anterior.
+                    categoria: null,
+                    pagina: "1",
+                  })
+                }
+                opcoes={grupos.map((g) => ({ valor: g.id, rotulo: g.nome }))}
+                placeholder="Grupo"
+                todosRotulo="Todos os grupos"
+              />
+            ),
+          },
+          {
+            id: "categoria",
+            rotulo: "Subcategoria",
+            temValor: categoria !== "",
+            onLimpar: () => setMuitos({ categoria: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={categoria}
+                onValorChange={(valor) =>
+                  setMuitos({
+                    categoria: valor === "" ? null : valor,
+                    pagina: "1",
+                  })
+                }
+                opcoes={categorias
+                  .filter((c) => grupo === "" || c.grupoId === grupo)
+                  .map((c) => ({ valor: c.id, rotulo: c.nome }))}
+                placeholder="Subcategoria"
+                todosRotulo="Todas as subcategorias"
+                className="max-w-60"
+              />
+            ),
+          },
+        ]}
+        toolbar={
+          aClassificar ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setMuitos({
+                  grupo: null,
+                  categoria: aClassificar.id,
+                  status: "todos",
+                  pagina: "1",
+                })
+              }
+            >
+              <Tags />
+              Ver &quot;A classificar&quot;
+            </Button>
+          ) : undefined
+        }
         emptyState={
           <EmptyState
             icone={Package}

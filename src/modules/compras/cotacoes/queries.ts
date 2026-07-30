@@ -34,6 +34,8 @@ export interface CotacaoLista {
   id: string;
   numero: string | null;
   status: StatusCotacao;
+  descricao: string | null;
+  categoriaNome: string | null;
   qtdFornecedores: number;
   vencedorNome: string | null;
   createdAt: string;
@@ -84,6 +86,9 @@ export interface CotacaoDetalhe {
   id: string;
   numero: string | null;
   status: StatusCotacao;
+  descricao: string | null;
+  categoriaId: string | null;
+  categoriaNome: string | null;
   motivoSelecao: string | null;
   observacoes: string | null;
   vencedorFornecedorId: string | null;
@@ -115,16 +120,24 @@ export interface CondicaoPagamentoOpcao {
   descricao: string;
 }
 
+/** Opção de categoria financeira para o Combobox de categoria do custo. */
+export interface CategoriaOpcao {
+  id: string;
+  nome: string;
+}
+
 interface LinhaListaCotacao {
   id: string;
   numero: string | null;
   status: string;
   created_at: string;
   created_by: string | null;
+  descricao: string | null;
   observacoes: string | null;
   vencedor_fornecedor_id: string | null;
   cotacao_fornecedores: { count: number }[] | null;
   fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
+  categorias_financeiras: { nome: string } | null;
 }
 
 /** Nome de exibição do fornecedor: nome fantasia quando há, senão razão social. */
@@ -142,8 +155,8 @@ function nomeFornecedor(
  * Lista as cotações com paginação server-side (range + count exact), a
  * contagem de fornecedores agregada no banco e o nome do vencedor (quando
  * finalizada). Aceita filtro por status, período de criação e busca por número
- * da cotação ou nome do fornecedor vencedor. Traz também observações e quem
- * criou, que são as colunas opcionais da tabela.
+ * da cotação ou nome do fornecedor vencedor. Traz também a descrição com o nome
+ * da categoria do custo, e observações e quem criou (colunas opcionais).
  */
 export async function listarCotacoes(
   params: ListarCotacoesParams,
@@ -158,9 +171,10 @@ export async function listarCotacoes(
   let consulta = supabase
     .from("cotacoes")
     .select(
-      `id, numero, status, created_at, created_by, observacoes,
+      `id, numero, status, created_at, created_by, descricao, observacoes,
        vencedor_fornecedor_id, cotacao_fornecedores(count),
-       fornecedores(razao_social, nome_fantasia)`,
+       fornecedores(razao_social, nome_fantasia),
+       categorias_financeiras(nome)`,
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -215,6 +229,8 @@ export async function listarCotacoes(
     id: cotacao.id,
     numero: cotacao.numero,
     status: cotacao.status as StatusCotacao,
+    descricao: cotacao.descricao,
+    categoriaNome: cotacao.categorias_financeiras?.nome ?? null,
     qtdFornecedores: cotacao.cotacao_fornecedores?.[0]?.count ?? 0,
     vencedorNome: cotacao.vencedor_fornecedor_id
       ? nomeFornecedor(cotacao.fornecedores) || null
@@ -265,7 +281,7 @@ export async function buscarCotacao(
   const { data: cotacao, error } = await supabase
     .from("cotacoes")
     .select(
-      "id, numero, status, motivo_selecao, observacoes, vencedor_fornecedor_id, created_at, fornecedores(razao_social, nome_fantasia)",
+      "id, numero, status, descricao, categoria_id, motivo_selecao, observacoes, vencedor_fornecedor_id, created_at, fornecedores(razao_social, nome_fantasia), categorias_financeiras(nome)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -372,6 +388,9 @@ export async function buscarCotacao(
     id: cotacao.id,
     numero: cotacao.numero,
     status: cotacao.status as StatusCotacao,
+    descricao: cotacao.descricao,
+    categoriaId: cotacao.categoria_id,
+    categoriaNome: cotacao.categorias_financeiras?.nome ?? null,
     motivoSelecao: cotacao.motivo_selecao,
     observacoes: cotacao.observacoes,
     vencedorFornecedorId: cotacao.vencedor_fornecedor_id,
@@ -482,6 +501,32 @@ export async function listarCondicoesPagamento(): Promise<
   return (data ?? []).map((condicao) => ({
     id: condicao.id,
     descricao: condicao.descricao,
+  }));
+}
+
+/**
+ * Categorias de despesa ativas para o Combobox de categoria do custo da
+ * cotação, em ordem alfabética. Só tipo 'despesa' e mesmo nome da query da
+ * ordem de compra: cotação e OC classificam o mesmo custo, e categoria de
+ * receita na lista só atrapalharia quem está cotando.
+ */
+export async function listarCategoriasCusto(): Promise<CategoriaOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("categorias_financeiras")
+    .select("id, nome")
+    .eq("ativo", true)
+    .eq("tipo", "despesa")
+    .order("nome", { ascending: true });
+
+  if (error) {
+    throw new Error("Não foi possível carregar as categorias do custo");
+  }
+
+  return (data ?? []).map((categoria) => ({
+    id: categoria.id,
+    nome: categoria.nome,
   }));
 }
 

@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   MoneyText,
@@ -173,7 +172,7 @@ export function AdiantamentosTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const adiantamento = row.original;
         // Travado na folha: sem ações de editar/excluir.
@@ -216,24 +215,39 @@ export function AdiantamentosTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por colaborador"
-        />
-        <FiltroSelect
-          valor={competencia}
-          onValorChange={setCompetencia}
-          opcoes={opcoesMes}
-          placeholder="Competência"
-          todosRotulo="Todas as competências"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.adiantamentos"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por colaborador",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por colaborador"
+              />
+            ),
+          },
+          {
+            id: "competencia",
+            rotulo: "Competência",
+            temValor: competencia !== "",
+            onLimpar: () => setCompetencia(""),
+            elemento: (
+              <FiltroSelect
+                valor={competencia}
+                onValorChange={setCompetencia}
+                opcoes={opcoesMes}
+                placeholder="Competência"
+                todosRotulo="Todas as competências"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={HandCoins}

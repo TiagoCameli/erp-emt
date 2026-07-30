@@ -68,6 +68,10 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
     cotacao_id: dados.cotacaoId ?? null,
     data_compra: dados.dataCompra,
     mes_competencia: dados.mesCompetencia,
+    // Descrição e categoria descem para o lançamento gerado na aprovação
+    // (fn_aprovar_ordem_compra): é o que classifica a compra no DRE.
+    descricao: dados.descricao,
+    categoria_id: dados.categoriaId,
     observacoes: dados.observacoes ?? null,
   };
 }

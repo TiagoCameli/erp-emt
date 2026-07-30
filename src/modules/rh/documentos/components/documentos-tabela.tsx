@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -159,6 +158,8 @@ export function DocumentosTabela({
       {
         accessorKey: "dataEmissao",
         header: "Emissão",
+        // Secundária: o que cobra ação é o vencimento, não a emissão.
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataEmissao
@@ -190,7 +191,7 @@ export function DocumentosTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const documento = row.original;
 
@@ -231,31 +232,54 @@ export function DocumentosTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por colaborador"
-        />
-        <FiltroSelect
-          valor={tipo}
-          onValorChange={setTipo}
-          opcoes={opcoesTipo}
-          placeholder="Tipo"
-          todosRotulo="Todos os tipos"
-        />
-        <FiltroSelect
-          valor={situacao}
-          onValorChange={setSituacao}
-          opcoes={OPCOES_SITUACAO}
-          placeholder="Situação"
-          todosRotulo="Todas as situações"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.documentos"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por colaborador",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por colaborador"
+              />
+            ),
+          },
+          {
+            id: "tipo",
+            rotulo: "Tipo",
+            temValor: tipo !== "",
+            onLimpar: () => setTipo(""),
+            elemento: (
+              <FiltroSelect
+                valor={tipo}
+                onValorChange={setTipo}
+                opcoes={opcoesTipo}
+                placeholder="Tipo"
+                todosRotulo="Todos os tipos"
+              />
+            ),
+          },
+          {
+            id: "situacao",
+            rotulo: "Situação",
+            temValor: situacao !== "",
+            onLimpar: () => setSituacao(""),
+            elemento: (
+              <FiltroSelect
+                valor={situacao}
+                onValorChange={setSituacao}
+                opcoes={OPCOES_SITUACAO}
+                placeholder="Situação"
+                todosRotulo="Todas as situações"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={FileText}

@@ -6,9 +6,9 @@ import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { HandCoins, Plus } from "lucide-react";
 
 import {
+  CelulaDescricaoCategoria,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   KPICard,
@@ -16,6 +16,7 @@ import {
   PageHeader,
   StatusBadge,
   useFiltrosUrl,
+  type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
@@ -116,16 +117,21 @@ export function ContasReceberCliente({
       },
       {
         accessorKey: "descricao",
-        header: "Descrição",
+        header: "Descrição e categoria",
+        size: 280,
+        meta: { rotulo: "Descrição e categoria", naoTruncar: true },
         cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.descricao}
-            {total > 0 && row.original.numeroParcela > 1 ? (
-              <span className="ml-1 text-detalhe text-muted-foreground tabular-nums">
-                ({row.original.numeroParcela}ª)
-              </span>
-            ) : null}
-          </span>
+          <CelulaDescricaoCategoria
+            descricao={row.original.descricao}
+            categoriaNome={row.original.categoriaNome}
+            complemento={
+              total > 0 && row.original.numeroParcela > 1 ? (
+                <span className="tabular-nums">
+                  ({row.original.numeroParcela}ª)
+                </span>
+              ) : null
+            }
+          />
         ),
       },
       {
@@ -157,7 +163,7 @@ export function ContasReceberCliente({
       {
         id: "acoes",
         header: "",
-        meta: { alinharDireita: true },
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) => {
           const parcela = row.original;
           const podeRegistrar =
@@ -180,6 +186,39 @@ export function ContasReceberCliente({
     ],
     [podeBaixar, total],
   );
+
+  // Filtros declarados na DataTable (e não numa FilterBar solta) para entrarem
+  // no menu "Filtros": cada usuário escolhe quais quer ver, e a escolha fica
+  // salva com as colunas dele.
+  const filtros: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      elemento: (
+        <FiltroBusca
+          valor={busca}
+          onValorChange={setBusca}
+          placeholder="Buscar por lançamento ou descrição"
+        />
+      ),
+    },
+    {
+      id: "status",
+      rotulo: "Status",
+      temValor: statusFiltro !== "",
+      onLimpar: () => aoMudarStatus(""),
+      elemento: (
+        <FiltroSelect
+          valor={statusFiltro}
+          onValorChange={aoMudarStatus}
+          opcoes={OPCOES_STATUS}
+          placeholder="Status"
+          todosRotulo="Todos os status"
+        />
+      ),
+    },
+  ];
 
   return (
     <>
@@ -209,25 +248,11 @@ export function ContasReceberCliente({
       </div>
 
       <div className="flex flex-col gap-2">
-        <FilterBar>
-          <FiltroBusca
-            valor={busca}
-            onValorChange={setBusca}
-            placeholder="Buscar por lançamento ou descrição"
-          />
-          <FiltroSelect
-            valor={statusFiltro}
-            onValorChange={aoMudarStatus}
-            opcoes={OPCOES_STATUS}
-            placeholder="Status"
-            todosRotulo="Todos os status"
-          />
-        </FilterBar>
-
         <DataTable
           idTabela="financeiro.contas-receber"
           columns={colunas}
           data={dados}
+          filtros={filtros}
           total={total}
           pageIndex={pagina}
           pageSize={tamanho}

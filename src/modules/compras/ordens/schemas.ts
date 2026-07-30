@@ -62,6 +62,17 @@ const precoSchema = z
     error: "O preço aceita no máximo 2 casas decimais",
   });
 
+/**
+ * Descrição da compra: obrigatória. É ela que vai para o lançamento financeiro
+ * e, junto com a categoria, classifica o custo no DRE. Sem descrição o
+ * relatório vira uma lista de "Ordem de compra OC-XXXX" sem significado.
+ */
+const descricaoSchema = z
+  .string()
+  .trim()
+  .min(3, { error: "Descreva a compra em pelo menos 3 caracteres" })
+  .max(500, { error: "A descrição aceita no máximo 500 caracteres" });
+
 /** Texto opcional: vazio vira undefined para não gravar string em branco. */
 function textoOpcional(maximo: number) {
   return z
@@ -136,6 +147,10 @@ export const ordemCompraSchema = z
     dataCompra: dataSchema("Data da compra inválida"),
     /** Mês em que a obra usou o material: define em que mês o custo entra. */
     mesCompetencia: mesSchema,
+    /** O que foi comprado, em uma linha. Vai para o lançamento financeiro. */
+    descricao: descricaoSchema,
+    /** Categoria financeira do custo: é ela que classifica a compra no DRE. */
+    categoriaId: z.uuid({ error: "Escolha a categoria do custo" }),
     observacoes: textoOpcional(2000),
     itens: z
       .array(ocItemSchema)
@@ -280,6 +295,9 @@ export const ordemCompraFormSchema = z
       .string()
       .trim()
       .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
+    /** Mesma trava do servidor: a descrição classifica a compra no DRE. */
+    descricao: descricaoSchema,
+    categoriaId: z.uuid({ error: "Selecione a categoria do custo" }),
     observacoes: z
       .string()
       .trim()

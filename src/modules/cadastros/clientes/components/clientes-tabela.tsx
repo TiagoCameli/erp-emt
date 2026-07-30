@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -174,7 +173,7 @@ export function ClientesTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const cliente = row.original;
         return (
@@ -224,26 +223,41 @@ export function ClientesTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome"
-        />
-        <FiltroSelect
-          valor={status === "ativos" ? "" : status}
-          onValorChange={(valor) =>
-            setStatus((valor === "" ? "ativos" : valor) as FiltroStatus)
-          }
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Ativos"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="cadastros.clientes"
         columns={colunas}
         data={filtrados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setStatus("ativos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "ativos" ? "" : status}
+                onValorChange={(valor) =>
+                  setStatus((valor === "" ? "ativos" : valor) as FiltroStatus)
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Ativos"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={Building2}

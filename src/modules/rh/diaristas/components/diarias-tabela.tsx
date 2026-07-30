@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   MoneyText,
@@ -150,6 +149,8 @@ export function DiariasTabela({
       {
         accessorKey: "competencia",
         header: "Competência",
+        // Secundária: já existe o filtro de competência acima da tabela.
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {formatarCompetencia(row.original.competencia)}
@@ -179,7 +180,7 @@ export function DiariasTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const diaria = row.original;
         // Travada quando fechada/paga: sem ações de editar/excluir.
@@ -218,24 +219,39 @@ export function DiariasTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por diarista"
-        />
-        <FiltroSelect
-          valor={competencia}
-          onValorChange={setCompetencia}
-          opcoes={opcoesMes}
-          placeholder="Competência"
-          todosRotulo="Todas as competências"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.diaristas"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por diarista",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por diarista"
+              />
+            ),
+          },
+          {
+            id: "competencia",
+            rotulo: "Competência",
+            temValor: competencia !== "",
+            onLimpar: () => setCompetencia(""),
+            elemento: (
+              <FiltroSelect
+                valor={competencia}
+                onValorChange={setCompetencia}
+                opcoes={opcoesMes}
+                placeholder="Competência"
+                todosRotulo="Todas as competências"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={CalendarClock}

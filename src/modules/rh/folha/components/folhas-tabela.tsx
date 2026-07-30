@@ -44,7 +44,8 @@ const colunas: ColumnDef<FolhaLista, unknown>[] = [
   {
     accessorKey: "encargosPercentual",
     header: "Encargos %",
-    meta: { alinharDireita: true },
+    // Secundária: o percentual está no detalhe da folha, aqui pesa o dinheiro.
+    meta: { alinharDireita: true, ocultaPorPadrao: true },
     cell: ({ row }) => (
       <span className="tabular-nums">
         {formatarQuantidade(row.original.encargosPercentual)}%
@@ -82,6 +83,7 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
   return (
     <>
       <DataTable
+        idTabela="rh.folha"
         columns={colunas}
         data={folhas}
         onRowClick={(folha) => router.push(`/rh/folha/${folha.id}`)}

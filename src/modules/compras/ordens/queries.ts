@@ -43,6 +43,10 @@ export interface OrdemLista {
   id: string;
   numero: string | null;
   fornecedorNome: string;
+  /** O que foi comprado, em uma linha. Nulo nas OCs anteriores ao campo. */
+  descricao: string | null;
+  /** Nome da categoria financeira do custo, resolvido por join. */
+  categoriaNome: string | null;
   valorTotal: number;
   status: string;
   /** O fato: quando a compra aconteceu. */
@@ -108,6 +112,10 @@ export interface OrdemDetalhe {
   formaPagamentoId: string | null;
   cotacaoId: string | null;
   cotacaoNumero: string | null;
+  /** O que foi comprado, em uma linha. Nulo nas OCs anteriores ao campo. */
+  descricao: string | null;
+  categoriaId: string | null;
+  categoriaNome: string | null;
   valorTotal: number;
   status: string;
   motivoRejeicao: string | null;
@@ -144,9 +152,9 @@ export interface CentroCustoOpcao {
 
 /**
  * Prefill de uma OC gerada a partir de uma cotação finalizada: fornecedor
- * vencedor, condição/forma de pagamento dele e os itens que ele cotou. Não
- * traz centro de custo (a cotação não tem): o usuário atribui na tela antes
- * de criar a OC.
+ * vencedor, condição/forma de pagamento dele, descrição e categoria do custo já
+ * classificadas na cotação, e os itens que ele cotou. Não traz centro de custo
+ * (a cotação não tem): o usuário atribui na tela antes de criar a OC.
  */
 export interface PrefillOrdemCotacao {
   cotacaoId: string;
@@ -154,7 +162,19 @@ export interface PrefillOrdemCotacao {
   fornecedorId: string;
   condicaoPagamentoId: string | null;
   formaPagamentoId: string | null;
+  /** Descrição da cotação: a compra é a mesma, não faz sentido redigitar. */
+  descricao: string | null;
+  categoriaId: string | null;
   itens: { insumoId: string; quantidade: number; precoUnitario: number }[];
+}
+
+/**
+ * Opção de categoria financeira para o select da OC. Declarada aqui, e não
+ * importada de Financeiro, para Compras não depender de outro módulo.
+ */
+export interface CategoriaOpcao {
+  id: string;
+  nome: string;
 }
 
 /** Opção de condição de pagamento ativa para o select da OC. */
@@ -258,8 +278,10 @@ export async function listarOrdens(
   let consulta = supabase
     .from("ordens_compra")
     .select(
-      `id, numero, valor_total, status, data_compra, mes_competencia, created_at, created_by,
+      `id, numero, descricao, valor_total, status, data_compra, mes_competencia,
+       created_at, created_by,
        fornecedores(razao_social, nome_fantasia),
+       categorias_financeiras(nome),
        condicoes_pagamento(descricao),
        formas_pagamento(nome),
        cotacoes(numero)`,
@@ -313,6 +335,8 @@ export async function listarOrdens(
     fornecedorNome: ordem.fornecedores
       ? nomeFornecedor(ordem.fornecedores)
       : "-",
+    descricao: ordem.descricao,
+    categoriaNome: ordem.categorias_financeiras?.nome ?? null,
     valorTotal: ordem.valor_total,
     status: ordem.status,
     dataCompra: ordem.data_compra,
@@ -341,9 +365,11 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     .from("ordens_compra")
     .select(
       `id, numero, fornecedor_id, condicao_pagamento_id, forma_pagamento_id, cotacao_id,
+       categoria_id, descricao,
        valor_total, status, motivo_rejeicao, data_compra, mes_competencia,
        created_at, observacoes,
        fornecedores(razao_social, nome_fantasia),
+       categorias_financeiras(nome),
        cotacoes(numero),
        condicoes_pagamento(descricao),
        oc_itens(
@@ -391,6 +417,9 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     formaPagamentoId: ordem.forma_pagamento_id,
     cotacaoId: ordem.cotacao_id,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
+    descricao: ordem.descricao,
+    categoriaId: ordem.categoria_id,
+    categoriaNome: ordem.categorias_financeiras?.nome ?? null,
     valorTotal: ordem.valor_total,
     status: ordem.status,
     motivoRejeicao: ordem.motivo_rejeicao,
@@ -487,6 +516,31 @@ export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
   }));
 }
 
+/**
+ * Categorias de despesa ativas para o select da OC, em ordem alfabética. Só
+ * tipo 'despesa': uma ordem de compra é sempre custo, então categoria de
+ * receita na lista só atrapalharia quem está classificando a compra.
+ */
+export async function listarCategoriasCusto(): Promise<CategoriaOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("categorias_financeiras")
+    .select("id, nome")
+    .eq("ativo", true)
+    .eq("tipo", "despesa")
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar as categorias do custo");
+  }
+
+  return (data ?? []).map((categoria) => ({
+    id: categoria.id,
+    nome: categoria.nome,
+  }));
+}
+
 /** Condições de pagamento ativas para o select da OC, em ordem alfabética. */
 export async function listarCondicoesPagamento(): Promise<
   CondicaoPagamentoOpcao[]
@@ -554,7 +608,9 @@ export async function montarPrefillDaCotacao(
 
   const { data: cotacao } = await supabase
     .from("cotacoes")
-    .select("id, numero, status, vencedor_fornecedor_id")
+    .select(
+      "id, numero, status, vencedor_fornecedor_id, descricao, categoria_id",
+    )
     .eq("id", cotacaoId)
     .maybeSingle();
 
@@ -586,6 +642,8 @@ export async function montarPrefillDaCotacao(
     fornecedorId: cotacao.vencedor_fornecedor_id,
     condicaoPagamentoId: vencedor.condicao_pagamento_id,
     formaPagamentoId: vencedor.forma_pagamento_id,
+    descricao: cotacao.descricao,
+    categoriaId: cotacao.categoria_id,
     itens: (itens ?? []).map((item) => ({
       insumoId: item.insumo_id,
       quantidade: item.quantidade,

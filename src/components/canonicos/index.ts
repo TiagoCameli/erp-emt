@@ -11,6 +11,7 @@ export * from "./skeleton-pagina";
 export * from "./combobox";
 export * from "./combobox-criavel";
 export * from "./data-table";
+export * from "./celula-descricao-categoria";
 export * from "./input-numerico";
 export * from "./menu-colunas";
 export * from "./menu-filtros";

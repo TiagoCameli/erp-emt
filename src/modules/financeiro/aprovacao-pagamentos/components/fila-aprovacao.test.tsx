@@ -69,6 +69,8 @@ function parcela(sobrescreve: Partial<ParcelaPendente> = {}): ParcelaPendente {
     dataCompra: "2026-07-30",
     mesCompetencia: "2026-07-01",
     dataProgramada: null,
+    contaBancariaId: "55555555-5555-4555-8555-555555555555",
+    contaBancariaNome: "Caixa 1234",
     rateios: [],
     anexos: 0,
     semNota: false,
@@ -81,6 +83,13 @@ const PADRAO = {
   emRevisao: { parcelas: 0, valor: 0 },
   aguardandoData: { parcelas: 0, valor: 0 },
   aguardandoConta: { parcelas: 0, valor: 0 },
+  contas: [
+    {
+      id: "55555555-5555-4555-8555-555555555555",
+      nome: "Caixa 1234",
+      banco: "caixa",
+    },
+  ],
   podeAprovar: true,
   podeRevisar: true,
   podeEditarLancamento: true,
@@ -132,6 +141,43 @@ describe("FilaAprovacao", () => {
     expect(
       screen.getByText("LAN-2026-0015 · parcela 1 de 3"),
     ).toBeInTheDocument();
+  });
+
+  it("mostra a descrição com a categoria embaixo, na mesma coluna", () => {
+    render(<FilaAprovacao parcelas={[parcela()]} {...PADRAO} />);
+    expect(screen.getByText("Compra de cimento")).toBeInTheDocument();
+    expect(screen.getByText("Categoria: Material")).toBeInTheDocument();
+  });
+
+  it("diz que a parcela está sem categoria em vez de deixar o traço", () => {
+    render(
+      <FilaAprovacao parcelas={[parcela({ categoriaNome: null })]} {...PADRAO} />,
+    );
+    expect(screen.getByText("Categoria: sem categoria")).toBeInTheDocument();
+  });
+
+  it("oferece o filtro de conta só quando a fila tem mais de uma conta", () => {
+    // Filtro com uma opção única não filtra nada, então nem aparece na barra.
+    const { unmount } = render(
+      <FilaAprovacao parcelas={[parcela()]} {...PADRAO} />,
+    );
+    expect(screen.queryByText("Todas as contas")).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <FilaAprovacao
+        parcelas={[
+          parcela(),
+          parcela({
+            id: "66666666-6666-4666-8666-666666666666",
+            contaBancariaId: "77777777-7777-4777-8777-777777777777",
+            contaBancariaNome: "BB 9876",
+          }),
+        ]}
+        {...PADRAO}
+      />,
+    );
+    expect(screen.getByText("Todas as contas")).toBeInTheDocument();
   });
 
   it("estado vazio explica que dinheiro e cartão não passam pela fila", () => {

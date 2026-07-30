@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   StatusBadge,
@@ -63,7 +62,8 @@ const colunas: ColumnDef<ObraLista, unknown>[] = [
   {
     id: "extensao",
     header: "Extensão",
-    meta: { alinharDireita: true },
+    // Secundária: quem precisa da quilometragem liga no menu "Colunas".
+    meta: { alinharDireita: true, ocultaPorPadrao: true },
     cell: ({ row }) =>
       row.original.extensaoKm !== null ? (
         <span className="tabular-nums">
@@ -157,7 +157,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
       {
         id: "acoes",
         header: "",
-        meta: { alinharDireita: true },
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) => {
           const obra = row.original;
           return (
@@ -194,24 +194,41 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome"
-        />
-        <FiltroSelect
-          valor={status === "todos" ? "" : status}
-          onValorChange={(valor) => setStatus(valor === "" ? "todos" : valor)}
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todos"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="cadastros.obras"
         columns={colunasComAcoes}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "ativos",
+            onLimpar: () => setStatus("ativos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "" : status}
+                onValorChange={(valor) =>
+                  setStatus(valor === "" ? "todos" : valor)
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos"
+              />
+            ),
+          },
+        ]}
         onRowClick={podeEditar ? abrirEdicao : undefined}
         emptyState={
           <EmptyState

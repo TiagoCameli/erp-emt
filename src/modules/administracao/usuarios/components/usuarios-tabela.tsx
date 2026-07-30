@@ -51,6 +51,8 @@ const colunas: ColumnDef<UsuarioLista, unknown>[] = [
   {
     accessorKey: "criadoEm",
     header: "Criado em",
+    // Secundária: data de cadastro só interessa em auditoria de acesso.
+    meta: { ocultaPorPadrao: true },
     cell: ({ row }) => (
       <span className="tabular-nums">{formatarData(row.original.criadoEm)}</span>
     ),
@@ -91,6 +93,7 @@ export function UsuariosTabela({
   return (
     <>
       <DataTable
+        idTabela="administracao.usuarios"
         columns={colunas}
         data={usuarios}
         searchKey="nome"

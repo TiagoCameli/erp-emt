@@ -7,7 +7,6 @@ import { Landmark } from "lucide-react";
 import {
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   FiltroSelect,
   MoneyText,
@@ -116,25 +115,43 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por nome"
-        />
-        <FiltroSelect
-          valor={status === "todos" ? "" : status}
-          onValorChange={(valor) => setStatus(valor === "" ? "todos" : valor)}
-          opcoes={OPCOES_STATUS}
-          placeholder="Status"
-          todosRotulo="Todas"
-        />
-      </FilterBar>
-
       <DataTable
         idTabela="financeiro.contas-bancarias"
         columns={colunas}
         data={dados}
+        // Filtros declarados aqui (e não numa FilterBar solta) para entrarem no
+        // menu "Filtros" da tabela, junto com a personalização de colunas.
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por nome",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por nome"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "todos",
+            onLimpar: () => setStatus("todos"),
+            elemento: (
+              <FiltroSelect
+                valor={status === "todos" ? "" : status}
+                onValorChange={(valor) =>
+                  setStatus(valor === "" ? "todos" : valor)
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todas"
+              />
+            ),
+          },
+        ]}
         onRowClick={podeEditar ? abrirEdicao : undefined}
         emptyState={
           <EmptyState

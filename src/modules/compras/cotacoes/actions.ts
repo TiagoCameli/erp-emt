@@ -63,9 +63,9 @@ async function exigirAberta(
 }
 
 /**
- * Cria uma cotação aberta avulsa. Grava só o cabeçalho (observações): os
- * insumos a cotar entram pelo mapa do detalhe, já que cotacao_itens exige um
- * fornecedor. RLS cobre o insert.
+ * Cria uma cotação aberta avulsa. Grava só o cabeçalho (descrição, categoria do
+ * custo e observações): os insumos a cotar entram pelo mapa do detalhe, já que
+ * cotacao_itens exige um fornecedor. RLS cobre o insert.
  */
 export async function criarCotacao(
   dados: CotacaoInput,
@@ -84,6 +84,8 @@ export async function criarCotacao(
   const { data: cotacao, error } = await supabase
     .from(TABELA)
     .insert({
+      descricao: validado.data.descricao,
+      categoria_id: validado.data.categoriaId,
       observacoes: validado.data.observacoes ?? null,
       status: "aberta",
     })
@@ -102,7 +104,10 @@ export async function criarCotacao(
   return { ok: true, id: cotacao.id };
 }
 
-/** Edita o cabeçalho da cotação (observações). Só com a cotação aberta. */
+/**
+ * Edita o cabeçalho da cotação (descrição, categoria e observações). Só com a
+ * cotação aberta.
+ */
 export async function editarCotacao(
   id: string,
   dados: CotacaoInput,
@@ -127,6 +132,8 @@ export async function editarCotacao(
   const { error } = await supabase
     .from(TABELA)
     .update({
+      descricao: validado.data.descricao,
+      categoria_id: validado.data.categoriaId,
       observacoes: validado.data.observacoes ?? null,
     })
     .eq("id", idValido.data);

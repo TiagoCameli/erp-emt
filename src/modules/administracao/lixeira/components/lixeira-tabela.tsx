@@ -115,6 +115,8 @@ export function LixeiraTabela({
       {
         accessorKey: "registroId",
         header: "Registro",
+        // Secundária: o UUID abreviado só serve para conferir um caso específico.
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span className="codigo-doc" title={row.original.registroId}>
             {row.original.registroId.slice(0, 8)}
@@ -157,25 +159,39 @@ export function LixeiraTabela({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-end gap-2">
-        <Switch
-          id="mostrar-restaurados"
-          checked={mostrarRestaurados}
-          onCheckedChange={(marcado) =>
-            atualizarParams({ restaurados: marcado ? "1" : null, pagina: null })
-          }
-        />
-        <Label
-          htmlFor="mostrar-restaurados"
-          className="text-detalhe text-muted-foreground"
-        >
-          Mostrar restaurados
-        </Label>
-      </div>
-
       <DataTable
+        idTabela="administracao.lixeira"
         columns={colunas}
         data={itens}
+        filtros={[
+          {
+            id: "restaurados",
+            rotulo: "Mostrar restaurados",
+            temValor: mostrarRestaurados,
+            onLimpar: () =>
+              atualizarParams({ restaurados: null, pagina: null }),
+            elemento: (
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="mostrar-restaurados"
+                  checked={mostrarRestaurados}
+                  onCheckedChange={(marcado) =>
+                    atualizarParams({
+                      restaurados: marcado ? "1" : null,
+                      pagina: null,
+                    })
+                  }
+                />
+                <Label
+                  htmlFor="mostrar-restaurados"
+                  className="text-detalhe text-muted-foreground"
+                >
+                  Mostrar restaurados
+                </Label>
+              </div>
+            ),
+          },
+        ]}
         total={total}
         pageIndex={pagina}
         pageSize={tamanho}

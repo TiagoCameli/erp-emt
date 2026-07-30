@@ -9,7 +9,6 @@ import {
   ConfirmDialog,
   DataTable,
   EmptyState,
-  FilterBar,
   FiltroBusca,
   StatusBadge,
 } from "@/components/canonicos";
@@ -109,6 +108,8 @@ export function EpisTabela({
       {
         accessorKey: "ca",
         header: "CA",
+        // Secundária: o certificado de aprovação só é conferido em auditoria.
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) =>
           row.original.ca ? (
             <span className="tabular-nums">{row.original.ca}</span>
@@ -164,7 +165,7 @@ export function EpisTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const registro = row.original;
         return (
@@ -204,17 +205,24 @@ export function EpisTabela({
 
   return (
     <>
-      <FilterBar>
-        <FiltroBusca
-          valor={busca}
-          onValorChange={setBusca}
-          placeholder="Buscar por colaborador"
-        />
-      </FilterBar>
-
       <DataTable
+        idTabela="rh.epis"
         columns={colunas}
         data={dados}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca por colaborador",
+            fixo: true,
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por colaborador"
+              />
+            ),
+          },
+        ]}
         emptyState={
           <EmptyState
             icone={HardHat}

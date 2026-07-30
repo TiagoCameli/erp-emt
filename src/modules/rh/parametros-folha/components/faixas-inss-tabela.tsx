@@ -75,7 +75,7 @@ export function FaixasInssTabela({
     base.push({
       id: "acoes",
       header: "",
-      meta: { alinharDireita: true },
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const faixa = row.original;
         return (
@@ -116,6 +116,7 @@ export function FaixasInssTabela({
   return (
     <>
       <DataTable
+        idTabela="rh.parametros-folha.inss"
         columns={colunas}
         data={faixas}
         emptyState={

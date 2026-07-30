@@ -10,6 +10,7 @@ import {
   contarParcelasIncompletas,
   listarParcelasPendentes,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
+import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
 
 export default async function PaginaAprovacaoPagamentos() {
   const usuario = await getUsuarioLogado();
@@ -36,14 +37,23 @@ export default async function PaginaAprovacaoPagamentos() {
     "editar",
   );
 
-  const [parcelas, incompletas, emRevisao, aguardandoData, aguardandoConta] =
-    await Promise.all([
-      listarParcelasPendentes(),
-      contarParcelasIncompletas(),
-      contarEmRevisao(),
-      contarAguardandoData(),
-      contarAguardandoConta(),
-    ]);
+  // As contas vêm junto porque a aprovação pode trocar a conta da parcela: é
+  // exceção, mas quando acontece o modal precisa da lista já na mão.
+  const [
+    parcelas,
+    incompletas,
+    emRevisao,
+    aguardandoData,
+    aguardandoConta,
+    contas,
+  ] = await Promise.all([
+    listarParcelasPendentes(),
+    contarParcelasIncompletas(),
+    contarEmRevisao(),
+    contarAguardandoData(),
+    contarAguardandoConta(),
+    listarContasBancarias(),
+  ]);
 
   return (
     <>
@@ -57,6 +67,7 @@ export default async function PaginaAprovacaoPagamentos() {
         emRevisao={emRevisao}
         aguardandoData={aguardandoData}
         aguardandoConta={aguardandoConta}
+        contas={contas}
         podeAprovar={podeAprovar}
         podeRevisar={podeRevisar}
         podeEditarLancamento={podeEditarLancamento}

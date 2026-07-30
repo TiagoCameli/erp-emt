@@ -53,6 +53,7 @@ export function SaldosPainel({ saldos }: SaldosPainelProps) {
 
   return (
     <DataTable
+      idTabela="rh.banco-horas.saldos"
       columns={colunas}
       data={saldos}
       emptyState={
