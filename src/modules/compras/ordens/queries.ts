@@ -7,6 +7,7 @@ import {
 } from "@/components/canonicos";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
@@ -441,17 +442,23 @@ export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
 export async function listarInsumos(): Promise<InsumoOpcao[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("insumos")
-    .select("id, nome, unidades_medida(sigla)")
-    .eq("ativo", true)
-    .order("nome");
+  // Pagina até o fim: o PostgREST corta em 1.000 e a EMT tem mais de 3 mil
+  // insumos ativos. Sem isto, o resto do catálogo não aparece na OC nem
+  // digitando, porque a busca do Combobox roda sobre o que chegou.
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("insumos")
+      .select("id, nome, unidades_medida(sigla)")
+      .eq("ativo", true)
+      .order("nome")
+      .range(de, ate),
+  );
 
-  if (error) {
+  if (erro) {
     throw new Error("Não foi possível carregar os insumos");
   }
 
-  return (data ?? []).map((insumo) => ({
+  return linhas.map((insumo) => ({
     id: insumo.id,
     nome: insumo.nome,
     unidade: insumo.unidades_medida?.sigla ?? null,

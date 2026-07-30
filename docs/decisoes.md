@@ -390,3 +390,24 @@ agosto no fluxo de caixa. Aconteceu de verdade no teste (parcela autorizada para
    "Aguarda" quando a data não chegou e "Vencida" quando passou) e no drawer de
    pagamento. Sem isso, quem paga clica em Pagar e leva um bloqueio que não tinha
    como prever, o que faz a trava parecer defeito.
+
+## Consulta sem `.limit()` não é consulta sem limite
+
+**Data:** 30/07/2026 · **Contexto:** Combobox de insumo na OC e na cotação
+
+O PostgREST corta a resposta em **1.000 linhas** por padrão (`db-max-rows`), e o
+corte é **silencioso**: a consulta não dá erro, só devolve menos. A EMT tem 3.349
+insumos ativos, então o Combobox da ordem de compra recebia 1.000 e os outros
+2.349 ficavam **inalcançáveis, nem digitando**, porque o filtro da tela roda sobre
+o que chegou. Na prática, 70% do catálogo não podia ser comprado.
+
+**Decisões**
+
+1. Helper `todasAsLinhas` em `lib/supabase/`: pagina de mil em mil até o lote vir
+   menor que a página, com trava de 100 páginas. Usado em insumos (OC e cotação).
+2. Lista com mais de mil linhas no cadastro passa a usar o helper por padrão.
+   Hoje só insumos passa de mil (fornecedores estão em 658), mas o teto vale para
+   qualquer uma, e o próximo a cruzar não vai avisar.
+3. O Combobox continua renderizando 100 opções por vez e dizendo "Mostrando 100
+   de 3.349. Digite para refinar a busca". Renderizar 3.349 nós de uma vez trava a
+   tela; o que estava errado era o universo ser 1.000, não a janela ser 100.

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   eventosDoAuditLog,
   type EventoTrilha,
@@ -440,17 +441,21 @@ export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
 export async function listarInsumos(): Promise<InsumoOpcao[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("insumos")
-    .select("id, nome, codigo, unidades_medida(sigla)")
-    .eq("ativo", true)
-    .order("nome", { ascending: true });
+  // Mesma paginação da OC: o PostgREST corta em 1.000 e há mais de 3 mil ativos.
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("insumos")
+      .select("id, nome, codigo, unidades_medida(sigla)")
+      .eq("ativo", true)
+      .order("nome", { ascending: true })
+      .range(de, ate),
+  );
 
-  if (error) {
+  if (erro) {
     throw new Error("Não foi possível carregar os insumos");
   }
 
-  return (data ?? []).map((insumo) => ({
+  return linhas.map((insumo) => ({
     id: insumo.id,
     nome: insumo.nome,
     codigo: insumo.codigo,
