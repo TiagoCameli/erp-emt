@@ -26,6 +26,11 @@ export default async function PaginaAprovacaoPagamentos() {
     "financeiro.aprovacao-pagamentos",
     "desaprovar",
   );
+  const podeEditarLancamento = temPermissao(
+    usuario,
+    "financeiro.lancamentos",
+    "editar",
+  );
 
   const [parcelas, incompletas, emRevisao, aguardandoData] = await Promise.all([
     listarParcelasPendentes(),
@@ -47,6 +52,8 @@ export default async function PaginaAprovacaoPagamentos() {
         aguardandoData={aguardandoData}
         podeAprovar={podeAprovar}
         podeRevisar={podeRevisar}
+        podeEditarLancamento={podeEditarLancamento}
+        idUsuario={usuario.id}
       />
     </>
   );

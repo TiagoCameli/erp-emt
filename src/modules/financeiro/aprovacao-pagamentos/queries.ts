@@ -3,20 +3,44 @@ import "server-only";
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 
+/** Um centro de custo do rateio, para a composição no tooltip. */
+export interface RateioResumo {
+  nome: string;
+  valor: number;
+}
+
 /**
  * Linha da fila de aprovação de pagamentos: uma parcela pendente de um
  * lançamento do tipo a_pagar, com o lançamento e o fornecedor resolvidos
  * via join. O valor vem do banco, nunca recalculado no app.
+ *
+ * Traz mais do que a tela mostra por padrão de propósito: as colunas são
+ * configuráveis pelo usuário, então o dado precisa estar aqui para ele poder
+ * ligar a coluna. É uma consulta por página, não por linha.
  */
 export interface ParcelaPendente {
   id: string;
   numeroParcela: number;
+  /** Total de parcelas do lançamento, para o rótulo "parcela N de M". */
+  totalParcelas: number;
   valor: number;
   dataVencimento: string | null;
   lancamentoId: string;
   lancamentoNumero: string | null;
   lancamentoDescricao: string;
   fornecedorNome: string;
+  /** 'oc' | 'cotacao' | 'manual': define se existe documento para linkar. */
+  origem: string;
+  origemId: string | null;
+  origemNumero: string | null;
+  categoriaNome: string | null;
+  formaPagamentoNome: string | null;
+  dataCompra: string | null;
+  mesCompetencia: string | null;
+  /** Só existe depois da aprovação: na fila é sempre null. */
+  dataProgramada: string | null;
+  rateios: RateioResumo[];
+  anexos: number;
   /**
    * Nota fiscal da OC de origem ainda não registrada. Não bloqueia a aprovação
    * (a regra é por forma de pagamento, não pela nota), mas quem aprova precisa
@@ -53,17 +77,9 @@ function nomeFornecedor(
  * a_pagar é feito via embed com `!inner` para descartar parcelas de
  * lançamentos a_receber.
  *
- * Também exclui parcelas de lançamento 'previsto' (OC aprovada sem nota fiscal
- * registrada): pagar antes do recebimento é furo de dinheiro, e o banco recusa
- * pelo mesmo motivo em fn_aprovar_parcela.
- *
- * Defesa em profundidade do bug #4 do QA: também exclui parcelas cujo
- * lançamento pai está `cancelado` (`lancamentos.status <> 'cancelado'`).
- * Cancelar a OC já cascateia o cancelamento pro lançamento e pras parcelas
- * não pagas (`fn_cancelar_ordem_compra`), então isso não deveria filtrar
- * nada em condições normais — mas se alguma parcela escapar da cascata (ex:
- * dado legado, outra origem de lançamento cancelado sem cascata), ela não
- * aparece na fila nem infla o "Total a aprovar".
+ * Também exclui parcelas de lançamento 'previsto' (lançamento incompleto: as
+ * parcelas não somam o valor), que o banco recusa pelo mesmo motivo em
+ * fn_aprovar_parcela, e parcelas cujo lançamento pai está `cancelado`.
  */
 export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
   const supabase = await createClient();
@@ -71,18 +87,19 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
   const { data, error } = await supabase
     .from("lancamento_parcelas")
     .select(
-      `id, numero_parcela, valor, data_vencimento, lancamento_id,
+      `id, numero_parcela, valor, data_vencimento, data_programada, lancamento_id,
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
-         fornecedores(razao_social, nome_fantasia)
+         mes_competencia, data_compra,
+         categorias_financeiras(nome),
+         formas_pagamento(nome),
+         fornecedores(razao_social, nome_fantasia),
+         lancamento_rateios(valor, centros_custo(nome))
        )`,
     )
     .eq("status", "pendente")
     .eq("lancamentos.tipo", "a_pagar")
     .neq("lancamentos.status", "cancelado")
-    // 'previsto' é OC aprovada cuja nota fiscal ainda não foi registrada:
-    // pagamento não entra na fila antes do recebimento. O banco também recusa
-    // (fn_aprovar_parcela), isto aqui é a mesma trava na consulta.
     .neq("lancamentos.status", "previsto")
     .order("data_vencimento", { ascending: true, nullsFirst: false });
 
@@ -91,30 +108,57 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
   }
 
   const linhas = data ?? [];
-  const semNota = await ocsSemNota(
-    supabase,
-    linhas.map((parcela) =>
-      parcela.lancamentos?.origem === "oc"
-        ? (parcela.lancamentos?.origem_id ?? null)
-        : null,
-    ),
+
+  const idsOc = linhas.map((parcela) =>
+    parcela.lancamentos?.origem === "oc"
+      ? (parcela.lancamentos?.origem_id ?? null)
+      : null,
   );
 
-  return linhas.map((parcela) => ({
-    id: parcela.id,
-    numeroParcela: parcela.numero_parcela,
-    valor: parcela.valor,
-    dataVencimento: parcela.data_vencimento,
-    lancamentoId: parcela.lancamento_id,
-    lancamentoNumero: parcela.lancamentos?.numero ?? null,
-    lancamentoDescricao: parcela.lancamentos?.descricao ?? "-",
-    fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
-    semNota: Boolean(
-      parcela.lancamentos?.origem === "oc" &&
-        parcela.lancamentos?.origem_id &&
-        semNota.has(parcela.lancamentos.origem_id),
-    ),
-  }));
+  const lancamentoIds = linhas.map((parcela) => parcela.lancamento_id);
+
+  const [semNota, numeroOc, anexosPorLancamento, parcelasPorLancamento] =
+    await Promise.all([
+      ocsSemNota(supabase, idsOc),
+      numerosDeOc(supabase, idsOc),
+      contarAnexos(supabase, lancamentoIds),
+      contarParcelas(supabase, lancamentoIds),
+    ]);
+
+  return linhas.map((parcela) => {
+    const lancamento = parcela.lancamentos;
+    const origemId = lancamento?.origem_id ?? null;
+    return {
+      id: parcela.id,
+      numeroParcela: parcela.numero_parcela,
+      totalParcelas: parcelasPorLancamento.get(parcela.lancamento_id) ?? 1,
+      valor: parcela.valor,
+      dataVencimento: parcela.data_vencimento,
+      dataProgramada: parcela.data_programada,
+      lancamentoId: parcela.lancamento_id,
+      lancamentoNumero: lancamento?.numero ?? null,
+      lancamentoDescricao: lancamento?.descricao ?? "-",
+      fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
+      origem: lancamento?.origem ?? "manual",
+      origemId,
+      origemNumero:
+        lancamento?.origem === "oc" && origemId
+          ? (numeroOc.get(origemId) ?? null)
+          : null,
+      categoriaNome: lancamento?.categorias_financeiras?.nome ?? null,
+      formaPagamentoNome: lancamento?.formas_pagamento?.nome ?? null,
+      dataCompra: lancamento?.data_compra ?? null,
+      mesCompetencia: lancamento?.mes_competencia ?? null,
+      rateios: (lancamento?.lancamento_rateios ?? []).map((rateio) => ({
+        nome: rateio.centros_custo?.nome ?? "-",
+        valor: rateio.valor,
+      })),
+      anexos: anexosPorLancamento.get(parcela.lancamento_id) ?? 0,
+      semNota: Boolean(
+        lancamento?.origem === "oc" && origemId && semNota.has(origemId),
+      ),
+    };
+  });
 }
 
 /**
@@ -135,6 +179,83 @@ async function ocsSemNota(
 
   const comNota = new Set((data ?? []).map((r) => r.ordem_compra_id));
   return new Set(unicos.filter((id) => !comNota.has(id)));
+}
+
+/** Número da OC de origem, para a coluna Origem virar link com rótulo. */
+async function numerosDeOc(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: (string | null)[],
+): Promise<Map<string, string>> {
+  const unicos = [...new Set(ids.filter((id): id is string => id !== null))];
+  if (unicos.length === 0) return new Map();
+
+  const { data } = await supabase
+    .from("ordens_compra")
+    .select("id, numero")
+    .in("id", unicos);
+
+  return new Map(
+    (data ?? [])
+      .filter((ordem): ordem is { id: string; numero: string } =>
+        Boolean(ordem.numero),
+      )
+      .map((ordem) => [ordem.id, ordem.numero]),
+  );
+}
+
+/**
+ * Quantas parcelas cada lançamento da fila tem, para o rótulo "parcela N de M".
+ *
+ * Consulta separada em vez de embed aninhado: partindo de lancamento_parcelas,
+ * pedir lancamentos(lancamento_parcelas(...)) fecha um ciclo na mesma tabela, e
+ * ciclo no PostgREST é convite para ambiguidade de embed. Uma consulta a mais,
+ * previsível, vale mais que uma economizada que pode estourar em produção com
+ * dado que hoje não existe na fila.
+ */
+async function contarParcelas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lancamentoIds: string[],
+): Promise<Map<string, number>> {
+  const unicos = [...new Set(lancamentoIds)];
+  if (unicos.length === 0) return new Map();
+
+  const { data } = await supabase
+    .from("lancamento_parcelas")
+    .select("lancamento_id")
+    .in("lancamento_id", unicos);
+
+  const contagem = new Map<string, number>();
+  for (const parcela of data ?? []) {
+    contagem.set(
+      parcela.lancamento_id,
+      (contagem.get(parcela.lancamento_id) ?? 0) + 1,
+    );
+  }
+  return contagem;
+}
+
+/** Quantos anexos cada lançamento da fila tem (contador da coluna Anexos). */
+async function contarAnexos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lancamentoIds: string[],
+): Promise<Map<string, number>> {
+  const unicos = [...new Set(lancamentoIds)];
+  if (unicos.length === 0) return new Map();
+
+  const { data } = await supabase
+    .from("anexo_vinculos")
+    .select("entidade_id")
+    .eq("entidade_tipo", "lancamento")
+    .in("entidade_id", unicos);
+
+  const contagem = new Map<string, number>();
+  for (const vinculo of data ?? []) {
+    contagem.set(
+      vinculo.entidade_id,
+      (contagem.get(vinculo.entidade_id) ?? 0) + 1,
+    );
+  }
+  return contagem;
 }
 
 /**
