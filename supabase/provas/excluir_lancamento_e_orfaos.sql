@@ -1,0 +1,23 @@
+-- Prova de aceite: exclusao de OC leva os lancamentos, e exclusao de lancamento
+-- respeita a regra do pagamento.
+--
+-- Roda em transacao e termina em ROLLBACK. Rodada em 30/07/2026 contra o banco
+-- de producao, resultado:
+--
+--   1. excluir lancamento de OC viva
+--      "Nao da para excluir aqui: este lancamento e de uma ordem de compra.
+--       Exclua pela ordem de compra"
+--   2. excluir OC com pagamento aprovado
+--      "Nao da para excluir: o pagamento desta ordem ja foi aprovado ou pago.
+--       Desaprove ou estorne o pagamento antes"
+--   3. excluir OC leva TODOS os lancamentos -> 0 orfaos
+--      (com o `limit 1` antigo sobrava lancamento sem ordem)
+--   4. excluir lancamento orfao (ordem nao existe mais) -> excluido
+--   5. excluir lancamento com pagamento aprovado
+--      "Nao da para excluir: o pagamento deste lancamento ja foi aprovado ou
+--       pago. Desaprove ou estorne o pagamento antes"
+--   6. excluir lancamento manual pendente -> excluido
+--
+-- O roteiro monta uma OC com DOIS lancamentos (o cenario que gerou os orfaos),
+-- aprova a parcela, tenta excluir, desaprova, exclui a ordem e confere que nao
+-- sobrou orfao. Depois cria um orfao solto e um orfao com pagamento aprovado.

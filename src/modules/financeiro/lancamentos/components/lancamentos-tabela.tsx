@@ -1,10 +1,13 @@
 "use client";
 
+import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
-import { Receipt } from "lucide-react";
+import { Receipt, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FilterBar,
@@ -16,6 +19,8 @@ import {
   useBuscaUrl,
   useFiltrosUrl,
 } from "@/components/canonicos";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   ROTULO_TIPO_LANCAMENTO,
@@ -157,6 +162,8 @@ export interface LancamentosTabelaProps {
   busca: string;
   /** Mês de referência do filtro, no formato do input (yyyy-MM). */
   mes: string;
+  /** Permissão de excluir: sem ela a ação não aparece na linha. */
+  podeExcluir: boolean;
 }
 
 /**
@@ -172,10 +179,28 @@ export function LancamentosTabela({
   status,
   busca: buscaUrl,
   mes,
+  podeExcluir,
 }: LancamentosTabelaProps) {
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(buscaUrl);
+  const [aExcluir, setAExcluir] = React.useState<LancamentoLista | null>(null);
+
+  // A regra de quem pode sair mora no banco (fn_excluir_lancamento): pagamento
+  // aprovado ou pago não exclui, e lançamento de ordem viva sai pela ordem. Aqui
+  // a mensagem do banco vai direto para o toast, para a tela não inventar regra
+  // paralela que possa divergir dela.
+  async function aoExcluir() {
+    if (!aExcluir) return;
+    const resultado = await excluirLancamento(aExcluir.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Lançamento excluído");
+    setAExcluir(null);
+    router.refresh();
+  }
 
   function aoMudarPaginacao(paginacao: PaginationState) {
     setMuitos({
@@ -228,6 +253,19 @@ export function LancamentosTabela({
         onRowClick={(lancamento) =>
           router.push(`/financeiro/lancamentos/${lancamento.id}`)
         }
+        acoesLinha={
+          podeExcluir
+            ? (lancamento) => (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setAExcluir(lancamento)}
+                >
+                  <Trash2 />
+                  Excluir
+                </DropdownMenuItem>
+              )
+            : undefined
+        }
         emptyState={
           <EmptyState
             icone={Receipt}
@@ -236,6 +274,22 @@ export function LancamentosTabela({
             className="border-none bg-transparent"
           />
         }
+      />
+
+      <ConfirmDialog
+        aberto={aExcluir !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setAExcluir(null);
+        }}
+        titulo="Excluir lançamento"
+        descricao={
+          aExcluir
+            ? `${aExcluir.numero ?? "Este lançamento"} sai do sistema. Só dá para excluir enquanto o pagamento não foi aprovado nem pago: se já foi, desaprove ou estorne antes.`
+            : ""
+        }
+        textoConfirmar="Excluir"
+        variante="destrutivo"
+        onConfirmar={aoExcluir}
       />
     </div>
   );

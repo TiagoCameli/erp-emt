@@ -411,3 +411,31 @@ o que chegou. Na prática, 70% do catálogo não podia ser comprado.
 3. O Combobox continua renderizando 100 opções por vez e dizendo "Mostrando 100
    de 3.349. Digite para refinar a busca". Renderizar 3.349 nós de uma vez trava a
    tela; o que estava errado era o universo ser 1.000, não a janela ser 100.
+
+## Excluir ordem de compra tem que levar todos os lançamentos dela
+
+**Data:** 30/07/2026 · **Contexto:** lançamentos órfãos aparecendo na lista
+
+`fn_excluir_ordem_compra` pegava o lançamento da ordem com **`limit 1`**. A
+OC-2026-0032 tinha quatro lançamentos (herança do bug de duplicação de 29/07,
+quando desaprovar deixava o lançamento vivo e reaprovar criava outro), então
+excluir a ordem levou um e deixou **três órfãos** apontando para uma ordem que não
+existe mais. Na tela eles apareciam como "Cancelado" e "Previsto", sem ordem e sem
+como sair: `fn_excluir_lancamento` recusava qualquer lançamento de origem `oc`
+dizendo "exclua pela ordem de compra", e a ordem já tinha ido.
+
+**Decisões**
+
+1. Excluir ordem apaga **todos** os lançamentos dela, não o primeiro.
+2. A regra de exclusão passou a ser a que o Tiago definiu: **pagamento aprovado
+   ou pago não exclui**. Antes o guard olhava só `pago`, ou seja, dava para
+   apagar dinheiro que já estava autorizado a sair.
+3. Lançamento de ordem **viva** continua saindo pela ordem: excluir só o
+   lançamento deixaria a ordem aprovada sem registro financeiro e sem como
+   regerar. Se a ordem não existe mais, o lançamento é órfão e sai por ele mesmo.
+   É o que destrava o caso que apareceu.
+4. Ação "Excluir" na **lista** de lançamentos (o detalhe já tinha), com a mensagem
+   do banco indo direto para o toast: a tela não repete a regra, para não existir
+   uma segunda versão dela que possa divergir.
+5. Os três órfãos foram apagados na própria migração, conferindo por número, que
+   a ordem sumiu, que não havia parcela paga e que nada estava conciliado.
