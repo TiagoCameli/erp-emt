@@ -450,7 +450,7 @@ export function LancamentoFormDrawer({
               ajuda={
                 tipoFormaEscolhida
                   ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
-                  : "Decide o caminho do pagamento: dinheiro e cartão de crédito não passam pela aprovação"
+                  : undefined
               }
               erro={form.formState.errors.formaPagamentoId?.message}
             >
