@@ -1,0 +1,10 @@
+-- Prova de aceite: conta bancaria como portao da aprovacao.
+-- Rodada em 30/07/2026 contra o banco de producao, em transacao com rollback:
+--
+--   1. aprovar sem conta bancaria
+--      "Este lancamento esta sem conta bancaria: escolha a conta no lancamento
+--       antes de aprovar o pagamento"
+--   2. definir conta e aprovar -> status=aprovado, conta preenchida
+--   3. aprovar com conta e data no modal -> origem da data = aprovacao
+--   4. dinheiro SEM conta -> parcela fica pendente, nao nasce aprovada
+--   5. dinheiro COM conta -> parcela vira aprovado na hora

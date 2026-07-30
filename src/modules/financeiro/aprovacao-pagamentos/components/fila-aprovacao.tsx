@@ -54,6 +54,8 @@ export interface FilaAprovacaoProps {
   emRevisao: ResumoFora;
   /** Aprovadas cuja data autorizada ainda não chegou. */
   aguardandoData: ResumoFora;
+  /** Fora da fila só porque ninguém escolheu a conta bancária ainda. */
+  aguardandoConta: ResumoFora;
   podeAprovar: boolean;
   /** Permissão de desaprovar: é ela que libera mandar para revisão. */
   podeRevisar: boolean;
@@ -142,6 +144,7 @@ export function FilaAprovacao({
   incompletas,
   emRevisao,
   aguardandoData,
+  aguardandoConta,
   podeAprovar,
   podeRevisar,
   podeEditarLancamento,

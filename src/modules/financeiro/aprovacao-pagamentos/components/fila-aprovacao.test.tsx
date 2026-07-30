@@ -80,6 +80,7 @@ const PADRAO = {
   incompletas: { parcelas: 0, valor: 0, lancamentos: 0 },
   emRevisao: { parcelas: 0, valor: 0 },
   aguardandoData: { parcelas: 0, valor: 0 },
+  aguardandoConta: { parcelas: 0, valor: 0 },
   podeAprovar: true,
   podeRevisar: true,
   podeEditarLancamento: true,

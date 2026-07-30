@@ -328,3 +328,45 @@ export async function reenviarParcela(
   revalidatePath("/financeiro/aprovacao-pagamentos");
   return { ok: true };
 }
+
+/**
+ * Define a conta bancária do lançamento, propagando para as parcelas não pagas.
+ *
+ * É o passo de revisão antes da aprovação: parcela sem conta não entra na fila e
+ * o banco recusa aprovar (fn_aprovar_parcela). Escolher a conta aqui é o que
+ * libera o pagamento para ser aprovado.
+ */
+export async function definirContaLancamento(
+  lancamentoId: string,
+  contaId: string,
+): Promise<ResultadoExclusao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para editar lançamentos" };
+  }
+
+  const idValido = uuidSchema.safeParse(lancamentoId);
+  if (!idValido.success) return { erro: "Lançamento inválido" };
+
+  const contaValida = uuidSchema.safeParse(contaId);
+  if (!contaValida.success) return { erro: "Selecione a conta bancária" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_definir_conta_lancamento", {
+    p_lanc_id: idValido.data,
+    p_conta_id: contaValida.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.lancamentos.definirContaLancamento",
+      error,
+      error.message || "Não foi possível definir a conta bancária",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath("/financeiro/aprovacao-pagamentos");
+  return { ok: true };
+}

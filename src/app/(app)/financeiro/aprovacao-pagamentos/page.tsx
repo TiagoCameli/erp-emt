@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { FilaAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/components/fila-aprovacao";
 import {
+  contarAguardandoConta,
   contarAguardandoData,
   contarEmRevisao,
   contarParcelasIncompletas,
@@ -12,7 +13,10 @@ import {
 
 export default async function PaginaAprovacaoPagamentos() {
   const usuario = await getUsuarioLogado();
-  if (!usuario || !temPermissao(usuario, "financeiro.aprovacao-pagamentos", "ver")) {
+  if (
+    !usuario ||
+    !temPermissao(usuario, "financeiro.aprovacao-pagamentos", "ver")
+  ) {
     notFound();
   }
 
@@ -32,12 +36,14 @@ export default async function PaginaAprovacaoPagamentos() {
     "editar",
   );
 
-  const [parcelas, incompletas, emRevisao, aguardandoData] = await Promise.all([
-    listarParcelasPendentes(),
-    contarParcelasIncompletas(),
-    contarEmRevisao(),
-    contarAguardandoData(),
-  ]);
+  const [parcelas, incompletas, emRevisao, aguardandoData, aguardandoConta] =
+    await Promise.all([
+      listarParcelasPendentes(),
+      contarParcelasIncompletas(),
+      contarEmRevisao(),
+      contarAguardandoData(),
+      contarAguardandoConta(),
+    ]);
 
   return (
     <>
@@ -50,6 +56,7 @@ export default async function PaginaAprovacaoPagamentos() {
         incompletas={incompletas}
         emRevisao={emRevisao}
         aguardandoData={aguardandoData}
+        aguardandoConta={aguardandoConta}
         podeAprovar={podeAprovar}
         podeRevisar={podeRevisar}
         podeEditarLancamento={podeEditarLancamento}

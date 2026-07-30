@@ -101,6 +101,10 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     .eq("lancamentos.tipo", "a_pagar")
     .neq("lancamentos.status", "cancelado")
     .neq("lancamentos.status", "previsto")
+    // Sem conta bancária escolhida o pagamento não entra na fila: a conta é o
+    // passo de revisão do lançamento, e o banco recusa aprovar sem ela
+    // (fn_aprovar_parcela). Aqui é a mesma trava na consulta.
+    .not("conta_bancaria_id", "is", null)
     .order("data_vencimento", { ascending: true, nullsFirst: false });
 
   if (error) {
@@ -281,6 +285,30 @@ export async function contarParcelasIncompletas(): Promise<ParcelasIncompletas> 
   const lancamentos = new Set(linhas.map((parcela) => parcela.lancamento_id));
 
   return { parcelas: linhas.length, valor, lancamentos: lancamentos.size };
+}
+
+/**
+ * Quanto está fora da fila só porque ninguém escolheu a conta bancária ainda.
+ * Sem esse contador o dinheiro fica invisível: some da fila e nada na tela diz
+ * que ele existe nem o que falta para ele aparecer.
+ */
+export async function contarAguardandoConta(): Promise<ResumoFora> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("lancamento_parcelas")
+    .select(`valor, lancamentos!inner(tipo, status)`)
+    .eq("status", "pendente")
+    .eq("lancamentos.tipo", "a_pagar")
+    .neq("lancamentos.status", "cancelado")
+    .neq("lancamentos.status", "previsto")
+    .is("conta_bancaria_id", null);
+
+  const linhas = data ?? [];
+  return {
+    parcelas: linhas.length,
+    valor: linhas.reduce((total, parcela) => total + parcela.valor, 0),
+  };
 }
 
 /**
