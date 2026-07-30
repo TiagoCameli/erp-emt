@@ -54,6 +54,7 @@ export default async function PaginaLancamentos({
   }
 
   const podeCriar = temPermissao(usuario, "financeiro.lancamentos", "criar");
+  const podeExcluir = temPermissao(usuario, "financeiro.lancamentos", "excluir");
 
   const params = await searchParams;
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
@@ -110,6 +111,7 @@ export default async function PaginaLancamentos({
         }
       />
       <LancamentosTabela
+        podeExcluir={podeExcluir}
         lancamentos={itens}
         total={total}
         pagina={pagina}
