@@ -27,6 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
@@ -147,7 +148,9 @@ export function FilaAprovacao({
   idUsuario,
 }: FilaAprovacaoProps) {
   const router = useRouter();
-  const [selecionadas, setSelecionadas] = React.useState<Set<string>>(new Set());
+  const [selecionadas, setSelecionadas] = React.useState<Set<string>>(
+    new Set(),
+  );
   const [alvoAprovacao, setAlvoAprovacao] = React.useState<Alvo | null>(null);
   const [alvoRevisao, setAlvoRevisao] = React.useState<Alvo | null>(null);
   const [emConferencia, setEmConferencia] =
@@ -383,9 +386,7 @@ export function FilaAprovacao({
         header: "Categoria do custo",
         size: 180,
         meta: { rotulo: "Categoria do custo", ocultaPorPadrao: true },
-        cell: ({ row }) => (
-          <span>{row.original.categoriaNome ?? "-"}</span>
-        ),
+        cell: ({ row }) => <span>{row.original.categoriaNome ?? "-"}</span>,
       },
       {
         id: "centroCusto",
@@ -475,7 +476,10 @@ export function FilaAprovacao({
         },
         cell: ({ row }) => (
           <span className="inline-flex items-center gap-1 tabular-nums">
-            <Paperclip className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <Paperclip
+              className="size-3.5 text-muted-foreground"
+              aria-hidden="true"
+            />
             {row.original.anexos}
           </span>
         ),
@@ -505,7 +509,12 @@ export function FilaAprovacao({
         header: "Ações",
         enableSorting: false,
         size: 190,
-        meta: { rotulo: "Ações", fixa: true, alinharDireita: true, naoTruncar: true },
+        meta: {
+          rotulo: "Ações",
+          fixa: true,
+          alinharDireita: true,
+          naoTruncar: true,
+        },
         cell: ({ row }) => (
           <div
             className="flex items-center justify-end gap-1"
@@ -548,149 +557,155 @@ export function FilaAprovacao({
   const quantidadeRevisao =
     alvoRevisao?.tipo === "linha" ? 1 : selecionadas.size;
   const valorRevisao =
-    alvoRevisao?.tipo === "linha" ? alvoRevisao.parcela.valor : totalSelecionado;
+    alvoRevisao?.tipo === "linha"
+      ? alvoRevisao.parcela.valor
+      : totalSelecionado;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <KPICard
-          titulo="Total a aprovar"
-          valor={formatarBRL(totalAprovar)}
-          detalhe={`${parcelas.length} pagamento(s) na fila`}
+    // Um provider para a tela inteira: o Tooltip do projeto é o Radix cru, sem
+    // provider embutido, e sem ancestral ele lança no cliente na hora em que a
+    // primeira linha com tooltip monta ("Sem nota" ou centro de custo rateado).
+    // Com a fila vazia nada disso renderiza, então a falta passa despercebida.
+    <TooltipProvider>
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <KPICard
+            titulo="Total a aprovar"
+            valor={formatarBRL(totalAprovar)}
+            detalhe={`${parcelas.length} pagamento(s) na fila`}
+          />
+          <KPICard
+            titulo="Em revisão"
+            valor={formatarBRL(emRevisao.valor)}
+            detalhe={`${emRevisao.parcelas} devolvido(s) para ajuste`}
+          />
+          <KPICard
+            titulo="Aprovado aguardando data"
+            valor={formatarBRL(aguardandoData.valor)}
+            detalhe={`${aguardandoData.parcelas} com data autorizada à frente`}
+          />
+        </div>
+
+        {algumaSelecionada ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-2.5">
+            <p className="text-detalhe text-foreground">
+              {selecionadas.size} selecionado(s)
+              <span className="text-muted-foreground">
+                {" "}
+                · {formatarBRL(totalSelecionado)}
+              </span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {podeRevisar ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAlvoRevisao({ tipo: "lote" })}
+                >
+                  <PenLine />
+                  Enviar selecionados para revisão
+                </Button>
+              ) : null}
+              {podeAprovar ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setAlvoAprovacao({ tipo: "lote" })}
+                >
+                  <CheckCheck />
+                  Aprovar selecionados
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        <DataTable
+          columns={colunas}
+          data={parcelas}
+          onRowClick={setEmConferencia}
+          idTabela="financeiro.aprovacao-pagamentos"
+          idUsuario={idUsuario}
+          cabecalhoFixo
+          emptyState={
+            <EmptyState
+              icone={Inbox}
+              titulo="Nenhum pagamento aguardando aprovação"
+              descricao={descricaoVazia(incompletas)}
+              className="border-none bg-transparent"
+            />
+          }
         />
-        <KPICard
-          titulo="Em revisão"
-          valor={formatarBRL(emRevisao.valor)}
-          detalhe={`${emRevisao.parcelas} devolvido(s) para ajuste`}
+
+        <PainelConferencia
+          parcela={emConferencia}
+          onFechar={() => setEmConferencia(null)}
+          posicao={
+            indiceConferencia >= 0
+              ? { atual: indiceConferencia + 1, total: parcelas.length }
+              : null
+          }
+          onAnterior={
+            indiceConferencia > 0
+              ? () => setEmConferencia(parcelas[indiceConferencia - 1])
+              : null
+          }
+          onProximo={
+            indiceConferencia >= 0 && indiceConferencia < parcelas.length - 1
+              ? () => setEmConferencia(parcelas[indiceConferencia + 1])
+              : null
+          }
+          podeAprovar={podeAprovar}
+          podeRevisar={podeRevisar}
+          podeEditarLancamento={podeEditarLancamento}
+          onAprovar={(parcela) => setAlvoAprovacao({ tipo: "linha", parcela })}
+          onRevisar={(parcela) => setAlvoRevisao({ tipo: "linha", parcela })}
         />
-        <KPICard
-          titulo="Aprovado aguardando data"
-          valor={formatarBRL(aguardandoData.valor)}
-          detalhe={`${aguardandoData.parcelas} com data autorizada à frente`}
+
+        <AprovarDialog
+          aberto={alvoAprovacao !== null}
+          onAbertoChange={(aberto) => {
+            if (!aberto) setAlvoAprovacao(null);
+          }}
+          quantidade={alvoAprovacao?.tipo === "linha" ? 1 : selecionadas.size}
+          valorTotal={
+            alvoAprovacao?.tipo === "linha"
+              ? alvoAprovacao.parcela.valor
+              : totalSelecionado
+          }
+          vencimento={
+            alvoAprovacao?.tipo === "linha"
+              ? alvoAprovacao.parcela.dataVencimento
+              : null
+          }
+          onConfirmar={confirmarAprovacao}
+        />
+
+        <ConfirmDialog
+          aberto={alvoRevisao !== null}
+          onAbertoChange={(aberto) => {
+            if (!aberto) setAlvoRevisao(null);
+          }}
+          titulo={
+            quantidadeRevisao > 1
+              ? `Enviar ${quantidadeRevisao} pagamentos para revisão`
+              : "Enviar para revisão"
+          }
+          descricao={`${formatarBRL(valorRevisao)}${
+            quantidadeRevisao > 1 ? ` em ${quantidadeRevisao} parcelas` : ""
+          }. ${
+            quantidadeRevisao > 1 ? "As parcelas saem" : "A parcela sai"
+          } da fila e ${
+            quantidadeRevisao > 1 ? "voltam" : "volta"
+          } para quem lançou ajustar. Nada é cancelado: o lançamento continua valendo e continua na previsão de caixa. O motivo vale para ${
+            quantidadeRevisao > 1 ? "todas" : "a parcela"
+          } (ex.: valor divergente da NF, falta anexo, centro de custo errado).`}
+          textoConfirmar="Enviar para revisão"
+          exigeMotivo
+          onConfirmar={confirmarRevisao}
         />
       </div>
-
-      {algumaSelecionada ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-2.5">
-          <p className="text-detalhe text-foreground">
-            {selecionadas.size} selecionado(s)
-            <span className="text-muted-foreground">
-              {" "}
-              · {formatarBRL(totalSelecionado)}
-            </span>
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            {podeRevisar ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setAlvoRevisao({ tipo: "lote" })}
-              >
-                <PenLine />
-                Enviar selecionados para revisão
-              </Button>
-            ) : null}
-            {podeAprovar ? (
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => setAlvoAprovacao({ tipo: "lote" })}
-              >
-                <CheckCheck />
-                Aprovar selecionados
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <DataTable
-        columns={colunas}
-        data={parcelas}
-        onRowClick={setEmConferencia}
-        idTabela="financeiro.aprovacao-pagamentos"
-        idUsuario={idUsuario}
-        cabecalhoFixo
-        emptyState={
-          <EmptyState
-            icone={Inbox}
-            titulo="Nenhum pagamento aguardando aprovação"
-            descricao={descricaoVazia(incompletas)}
-            className="border-none bg-transparent"
-          />
-        }
-      />
-
-      <PainelConferencia
-        parcela={emConferencia}
-        onFechar={() => setEmConferencia(null)}
-        posicao={
-          indiceConferencia >= 0
-            ? { atual: indiceConferencia + 1, total: parcelas.length }
-            : null
-        }
-        onAnterior={
-          indiceConferencia > 0
-            ? () => setEmConferencia(parcelas[indiceConferencia - 1])
-            : null
-        }
-        onProximo={
-          indiceConferencia >= 0 && indiceConferencia < parcelas.length - 1
-            ? () => setEmConferencia(parcelas[indiceConferencia + 1])
-            : null
-        }
-        podeAprovar={podeAprovar}
-        podeRevisar={podeRevisar}
-        podeEditarLancamento={podeEditarLancamento}
-        onAprovar={(parcela) => setAlvoAprovacao({ tipo: "linha", parcela })}
-        onRevisar={(parcela) => setAlvoRevisao({ tipo: "linha", parcela })}
-      />
-
-      <AprovarDialog
-        aberto={alvoAprovacao !== null}
-        onAbertoChange={(aberto) => {
-          if (!aberto) setAlvoAprovacao(null);
-        }}
-        quantidade={
-          alvoAprovacao?.tipo === "linha" ? 1 : selecionadas.size
-        }
-        valorTotal={
-          alvoAprovacao?.tipo === "linha"
-            ? alvoAprovacao.parcela.valor
-            : totalSelecionado
-        }
-        vencimento={
-          alvoAprovacao?.tipo === "linha"
-            ? alvoAprovacao.parcela.dataVencimento
-            : null
-        }
-        onConfirmar={confirmarAprovacao}
-      />
-
-      <ConfirmDialog
-        aberto={alvoRevisao !== null}
-        onAbertoChange={(aberto) => {
-          if (!aberto) setAlvoRevisao(null);
-        }}
-        titulo={
-          quantidadeRevisao > 1
-            ? `Enviar ${quantidadeRevisao} pagamentos para revisão`
-            : "Enviar para revisão"
-        }
-        descricao={`${formatarBRL(valorRevisao)}${
-          quantidadeRevisao > 1 ? ` em ${quantidadeRevisao} parcelas` : ""
-        }. ${
-          quantidadeRevisao > 1 ? "As parcelas saem" : "A parcela sai"
-        } da fila e ${
-          quantidadeRevisao > 1 ? "voltam" : "volta"
-        } para quem lançou ajustar. Nada é cancelado: o lançamento continua valendo e continua na previsão de caixa. O motivo vale para ${
-          quantidadeRevisao > 1 ? "todas" : "a parcela"
-        } (ex.: valor divergente da NF, falta anexo, centro de custo errado).`}
-        textoConfirmar="Enviar para revisão"
-        exigeMotivo
-        onConfirmar={confirmarRevisao}
-      />
-    </div>
+    </TooltipProvider>
   );
 }
