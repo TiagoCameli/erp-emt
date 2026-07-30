@@ -693,20 +693,21 @@ export function OrdemFormDrawer({
         </SecaoFormulario>
 
         <SecaoFormulario titulo="Observações">
-          <CampoFormulario
+          {/* Sem CampoFormulario aqui: o título da seção já é o rótulo, e
+              "Observações" duas vezes seguidas era ruído. */}
+          <Textarea
             id="oc-observacoes"
-            rotulo="Observações"
-            ajuda="Aparecem no detalhe da ordem."
-            erro={form.formState.errors.observacoes?.message}
-          >
-            <Textarea
-              id="oc-observacoes"
-              rows={3}
-              placeholder="Ex.: entrega no canteiro do km 120, falar com o encarregado"
-              disabled={salvando}
-              {...form.register("observacoes")}
-            />
-          </CampoFormulario>
+            rows={3}
+            aria-label="Observações"
+            placeholder="Ex.: entrega no canteiro do km 120, falar com o encarregado"
+            disabled={salvando}
+            {...form.register("observacoes")}
+          />
+          {form.formState.errors.observacoes?.message ? (
+            <p className="text-legenda text-destructive">
+              {form.formState.errors.observacoes.message}
+            </p>
+          ) : null}
         </SecaoFormulario>
       </form>
     </FormDrawer>
