@@ -1,7 +1,7 @@
 /**
- * Preferências de exibição de uma tabela (colunas visíveis, ordem e larguras),
- * guardadas no navegador do usuário. Funções puras: o DataTable cuida do
- * localStorage e da hidratação, aqui só tem serialização e saneamento.
+ * Preferências de exibição de uma tabela (colunas visíveis, ordem, larguras e
+ * filtros visíveis), guardadas no banco por usuário. Funções puras: o DataTable
+ * cuida de buscar, salvar e hidratar; aqui só tem serialização e saneamento.
  *
  * Saneamento é obrigatório na leitura: o JSON vem do navegador do usuário e as
  * colunas da tela mudam com o tempo (coluna renomeada, removida, nova). Uma
@@ -10,7 +10,9 @@
  */
 
 /** Versão do formato. Subir invalida tudo que está salvo (migração descartável). */
-export const VERSAO_PREFERENCIAS = 1;
+// v2: entrou `filtros`. Subir a versão descarta o que estava salvo no formato
+// antigo, inclusive o que ficou no localStorage antes de ir para o banco.
+export const VERSAO_PREFERENCIAS = 2;
 
 /** Largura mínima de uma coluna, em px. Abaixo disso o conteúdo desaparece. */
 export const LARGURA_MINIMA = 60;
@@ -26,16 +28,26 @@ export interface PreferenciasTabela {
   ordem: string[];
   /** id da coluna -> largura em px. */
   larguras: Record<string, number>;
+  /** id do filtro -> visível. Filtro ausente segue o padrão da tela. */
+  filtros: Record<string, boolean>;
 }
 
 /** Preferência neutra: nada escondido, nada reordenado, nada redimensionado. */
 export function preferenciasVazias(): PreferenciasTabela {
-  return { versao: VERSAO_PREFERENCIAS, visiveis: {}, ordem: [], larguras: {} };
+  return {
+    versao: VERSAO_PREFERENCIAS,
+    visiveis: {},
+    ordem: [],
+    larguras: {},
+    filtros: {},
+  };
 }
 
 /**
- * Chave do localStorage. Inclui o usuário porque duas pessoas podem usar o
- * mesmo navegador (máquina compartilhada de escritório é comum na EMT).
+ * Chave antiga do localStorage. Mantida só para o teste que garante o formato;
+ * a preferência agora vive no banco, por usuário, e segue a pessoa em qualquer
+ * máquina (o localStorage morria ao trocar de navegador ou limpar cache, e
+ * máquina compartilhada de escritório é comum na EMT).
  */
 export function chavePreferenciasTabela(
   idTabela: string,
@@ -95,6 +107,7 @@ function saneiaLarguras(
 export function lerPreferenciasTabela(
   bruto: string | null | undefined,
   idsValidos: string[],
+  idsFiltros: string[] = [],
 ): PreferenciasTabela | null {
   if (!bruto) return null;
 
@@ -114,6 +127,7 @@ export function lerPreferenciasTabela(
     visiveis: saneiaVisiveis(dados.visiveis, validos),
     ordem: saneiaOrdem(dados.ordem, validos),
     larguras: saneiaLarguras(dados.larguras, validos),
+    filtros: saneiaVisiveis(dados.filtros, new Set(idsFiltros)),
   };
 }
 

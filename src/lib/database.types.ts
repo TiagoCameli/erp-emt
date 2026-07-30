@@ -2296,6 +2296,35 @@ export type Database = {
         };
         Relationships: [];
       };
+      preferencias_tabela: {
+        Row: {
+          preferencia: Json;
+          tabela: string;
+          updated_at: string;
+          usuario_id: string;
+        };
+        Insert: {
+          preferencia: Json;
+          tabela: string;
+          updated_at?: string;
+          usuario_id: string;
+        };
+        Update: {
+          preferencia?: Json;
+          tabela?: string;
+          updated_at?: string;
+          usuario_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "preferencias_tabela_usuario_id_fkey";
+            columns: ["usuario_id"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       recebimentos: {
         Row: {
           created_at: string;
@@ -3150,6 +3179,10 @@ export type Database = {
           horas_terca: number;
         }[];
       };
+      fn_limpar_preferencia_tabela: {
+        Args: { p_tabela: string };
+        Returns: undefined;
+      };
       fn_pagar_parcela: {
         Args: {
           p_conta_id: string;
@@ -3343,6 +3376,10 @@ export type Database = {
       };
       fn_salvar_parcelas_oc: {
         Args: { p_oc_id: string; p_parcelas: Json };
+        Returns: undefined;
+      };
+      fn_salvar_preferencia_tabela: {
+        Args: { p_preferencia: Json; p_tabela: string };
         Returns: undefined;
       };
       fn_vincular_arquivo: {

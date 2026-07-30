@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
  * gráfico (h-80) pra não pular layout.
  */
 export const FluxoCaixaGrafico = dynamic(
-  () => import("./fluxo-caixa-grafico-impl").then((mod) => mod.FluxoCaixaGrafico),
+  () =>
+    import("./fluxo-caixa-grafico-impl").then((mod) => mod.FluxoCaixaGrafico),
   {
     ssr: false,
     loading: () => <Skeleton className="h-80 w-full" />,

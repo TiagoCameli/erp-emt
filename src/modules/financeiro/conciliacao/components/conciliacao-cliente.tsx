@@ -184,7 +184,10 @@ export function ConciliacaoCliente({
           const transacao = row.original;
           if (!transacao.conciliada || !transacao.parcela) {
             return (
-              <StatusBadge status="pendente_aprovacao" rotulo="Não conciliada" />
+              <StatusBadge
+                status="pendente_aprovacao"
+                rotulo="Não conciliada"
+              />
             );
           }
           const parcela = transacao.parcela;
@@ -192,7 +195,9 @@ export function ConciliacaoCliente({
             <div className="flex flex-col gap-0.5">
               <StatusBadge status="aprovado" rotulo="Conciliada" />
               <span className="text-legenda text-muted-foreground">
-                {parcela.lancamentoNumero ? `${parcela.lancamentoNumero} · ` : ""}
+                {parcela.lancamentoNumero
+                  ? `${parcela.lancamentoNumero} · `
+                  : ""}
                 {parcela.lancamentoDescricao} (parcela {parcela.numeroParcela})
               </span>
             </div>
@@ -276,7 +281,11 @@ export function ConciliacaoCliente({
           />
         </div>
         {podeImportar ? (
-          <Button type="button" size="sm" onClick={() => setImportarAberto(true)}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setImportarAberto(true)}
+          >
             <Upload />
             Importar OFX
           </Button>
@@ -284,6 +293,7 @@ export function ConciliacaoCliente({
       </FilterBar>
 
       <DataTable
+        idTabela="financeiro.conciliacao"
         columns={colunas}
         data={dados}
         emptyState={

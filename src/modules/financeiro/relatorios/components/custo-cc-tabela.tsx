@@ -71,7 +71,9 @@ export function CustoCcTabela({ custo }: CustoCcTabelaProps) {
               />
             </TableCell>
             <TableCell className="py-2 text-right text-detalhe tabular-nums text-muted-foreground">
-              {custo.centros.length > 0 ? formatarPercentual(100) : formatarPercentual(0)}
+              {custo.centros.length > 0
+                ? formatarPercentual(100)
+                : formatarPercentual(0)}
             </TableCell>
           </TableRow>
         </TableBody>

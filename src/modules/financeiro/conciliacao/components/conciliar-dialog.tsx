@@ -175,7 +175,11 @@ export function ConciliarDialog({
             onClick={() => void confirmar()}
             disabled={conciliando || !selecionada}
           >
-            {conciliando ? <LoaderCircle className="animate-spin" /> : <Link2 />}
+            {conciliando ? (
+              <LoaderCircle className="animate-spin" />
+            ) : (
+              <Link2 />
+            )}
             Conciliar
           </Button>
         </DialogFooter>

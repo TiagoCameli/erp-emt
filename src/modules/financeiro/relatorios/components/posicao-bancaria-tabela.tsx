@@ -7,7 +7,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
+import {
+  ROTULO_BANCO,
+  type BancoConta,
+} from "@/modules/financeiro/_shared/formato";
 import type { PosicaoBancaria } from "../queries";
 
 interface PosicaoBancariaTabelaProps {
@@ -58,7 +61,10 @@ export function PosicaoBancariaTabela({ posicao }: PosicaoBancariaTabelaProps) {
                 {rotuloBanco(conta.banco)}
               </TableCell>
               <TableCell className="py-2 text-right">
-                <MoneyText valor={conta.saldoInicial} className="text-detalhe" />
+                <MoneyText
+                  valor={conta.saldoInicial}
+                  className="text-detalhe"
+                />
               </TableCell>
               <TableCell className="py-2 text-right">
                 <MoneyText valor={conta.entradas} className="text-detalhe" />

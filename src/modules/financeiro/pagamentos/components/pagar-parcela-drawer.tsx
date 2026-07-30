@@ -17,7 +17,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
-import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
+import {
+  ROTULO_BANCO,
+  type BancoConta,
+} from "@/modules/financeiro/_shared/formato";
 import { pagarParcela } from "@/modules/financeiro/pagamentos/actions";
 import type {
   ContaBancariaOpcao,
@@ -126,7 +129,11 @@ export function PagarParcelaDrawer({
             >
               Cancelar
             </Button>
-            <Button type="submit" form={ID_FORM} disabled={salvando || !parcela}>
+            <Button
+              type="submit"
+              form={ID_FORM}
+              disabled={salvando || !parcela}
+            >
               {salvando ? (
                 <>
                   <LoaderCircle className="animate-spin" />
@@ -160,7 +167,9 @@ export function PagarParcelaDrawer({
             </div>
             <div className="flex items-start justify-between gap-4">
               <span className="text-muted-foreground">Descrição</span>
-              <span className="text-right font-medium">{parcela.descricao}</span>
+              <span className="text-right font-medium">
+                {parcela.descricao}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">Fornecedor</span>
@@ -202,7 +211,11 @@ export function PagarParcelaDrawer({
           </SecaoFormulario>
         ) : null}
 
-        <CampoFormulario id="pagamento-conta" rotulo="Conta bancária" obrigatorio>
+        <CampoFormulario
+          id="pagamento-conta"
+          rotulo="Conta bancária"
+          obrigatorio
+        >
           <Combobox
             valor={contaId}
             onValorChange={setContaId}

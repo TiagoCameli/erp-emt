@@ -77,7 +77,11 @@ export function FluxoCaixaGrafico({ meses }: FluxoCaixaGraficoProps) {
           data={meses}
           margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="var(--border)"
+            vertical={false}
+          />
           <XAxis
             dataKey="rotulo"
             tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
@@ -91,7 +95,10 @@ export function FluxoCaixaGrafico({ meses }: FluxoCaixaGraficoProps) {
             axisLine={false}
             width={72}
           />
-          <Tooltip content={<ConteudoTooltip />} cursor={{ fill: "var(--muted)" }} />
+          <Tooltip
+            content={<ConteudoTooltip />}
+            cursor={{ fill: "var(--muted)" }}
+          />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar
             dataKey="entradasRealizado"

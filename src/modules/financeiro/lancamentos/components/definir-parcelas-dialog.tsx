@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { LoaderCircle, Plus, Sparkles, Trash2, TriangleAlert } from "lucide-react";
+import {
+  LoaderCircle,
+  Plus,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { InputMoeda } from "@/components/canonicos";
@@ -70,7 +76,8 @@ export function DefinirParcelasDialog({
       : [{ dataVencimento: "", valor: "" }];
   }
 
-  const [parcelas, setParcelas] = React.useState<ParcelaForm[]>(parcelasIniciais);
+  const [parcelas, setParcelas] =
+    React.useState<ParcelaForm[]>(parcelasIniciais);
   const [salvando, setSalvando] = React.useState(false);
   const [gerando, setGerando] = React.useState(false);
 

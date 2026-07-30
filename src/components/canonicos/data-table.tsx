@@ -39,8 +39,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
 import { MenuColunas, type ColunaAlternavel } from "@/components/canonicos/menu-colunas";
+import { MenuFiltros } from "@/components/canonicos/menu-filtros";
 import {
-  chavePreferenciasTabela,
+  buscarPreferenciaTabela,
+  limparPreferenciaTabela,
+  salvarPreferenciaTabela,
+} from "@/modules/_shared/preferencias-tabela/actions";
+import {
   escreverPreferenciasTabela,
   LARGURA_MAXIMA,
   LARGURA_MINIMA,
@@ -126,7 +131,13 @@ export interface DataTableProps<TData> {
    * como sempre — é o que mantém as outras listagens do app intactas.
    */
   idTabela?: string;
-  /** Usuário logado, para a memória não vazar entre pessoas no mesmo navegador. */
+  /**
+   * Não é mais necessário: a preferência é gravada em `auth.uid()` pelo banco, e
+   * a RLS já garante que ninguém lê nem escreve a do outro. Mantido só para as
+   * telas que ainda passam, e ignorado.
+   *
+   * @deprecated
+   */
   idUsuario?: string;
   /** Cabeçalho fixo ao rolar. A tabela ganha rolagem própria (ver alturaMaxima). */
   cabecalhoFixo?: boolean;
@@ -140,6 +151,27 @@ export interface DataTableProps<TData> {
    * dispara o onRowClick.
    */
   acoesLinha?: (registro: TData) => React.ReactNode;
+  /**
+   * Filtros da listagem que o usuário pode mostrar ou esconder, com a escolha
+   * guardada junto das colunas. Passe por aqui em vez de `toolbar` para o filtro
+   * entrar no menu "Filtros".
+   */
+  filtros?: FiltroConfiguravel[];
+}
+
+/** Um filtro que o usuário pode ligar ou desligar no menu "Filtros". */
+export interface FiltroConfiguravel {
+  /** Identificador estável, usado na preferência salva (ex. "status"). */
+  id: string;
+  /** Nome no menu. */
+  rotulo: string;
+  elemento: React.ReactNode;
+  /** Filtro que não pode ser escondido (ex. a busca principal da tela). */
+  fixo?: boolean;
+  /** Tem valor escolhido agora? Usado para limpar ao esconder. */
+  temValor?: boolean;
+  /** Chamado quando o filtro é escondido com valor, para não filtrar às cegas. */
+  onLimpar?: () => void;
 }
 
 function IconeOrdenacao({ direcao }: { direcao: false | "asc" | "desc" }) {
@@ -190,11 +222,11 @@ export function DataTable<TData>({
   isLoading = false,
   exportar,
   idTabela,
-  idUsuario,
   cabecalhoFixo = false,
   alturaMaxima,
   toolbar,
   acoesLinha,
+  filtros,
 }: DataTableProps<TData>) {
   const modoServidor = total !== undefined && onPaginationChange !== undefined;
   const personalizavel = idTabela !== undefined;
@@ -267,31 +299,41 @@ export function DataTable<TData>({
   );
   const [visibilidade, setVisibilidade] =
     React.useState<VisibilityState>(visibilidadePadrao);
+  const [filtrosVisiveis, setFiltrosVisiveis] = React.useState<
+    Record<string, boolean>
+  >({});
+  const idsFiltros = React.useMemo(
+    () => (filtros ?? []).map((filtro) => filtro.id),
+    [filtros],
+  );
   const [ordemColunas, setOrdemColunas] = React.useState<ColumnOrderState>([]);
   const [larguras, setLarguras] = React.useState<ColumnSizingState>({});
   const [arrastando, setArrastando] = React.useState<string | null>(null);
 
-  const chaveMemoria = personalizavel
-    ? chavePreferenciasTabela(idTabela, idUsuario)
-    : null;
 
-  // Hidrata a personalização do navegador depois da montagem (o servidor
-  // renderiza o padrão da tela; ler no primeiro render daria mismatch).
+  // Hidrata a personalização depois da montagem. Vem do BANCO, por usuário, para
+  // seguir a pessoa em qualquer máquina (o localStorage morria ao trocar de
+  // navegador, e máquina compartilhada de escritório é comum na EMT).
   React.useEffect(() => {
-    if (!chaveMemoria) return;
-    const salvo = lerPreferenciasTabela(
-      window.localStorage.getItem(chaveMemoria),
-      idsColunas,
-    );
-    if (!salvo) return;
-    setVisibilidade({ ...visibilidadePadrao, ...salvo.visiveis });
-    setOrdemColunas(
-      salvo.ordem.length > 0 ? ordemEfetiva(salvo.ordem, idsColunas) : [],
-    );
-    setLarguras(salvo.larguras);
-    // idsColunas/visibilidadePadrao são estáveis por tela; a memória é lida uma vez.
+    if (!idTabela || !personalizavel) return;
+    let ativo = true;
+    void buscarPreferenciaTabela(idTabela).then((bruto) => {
+      if (!ativo) return;
+      const salvo = lerPreferenciasTabela(bruto, idsColunas, idsFiltros);
+      if (!salvo) return;
+      setVisibilidade({ ...visibilidadePadrao, ...salvo.visiveis });
+      setOrdemColunas(
+        salvo.ordem.length > 0 ? ordemEfetiva(salvo.ordem, idsColunas) : [],
+      );
+      setLarguras(salvo.larguras);
+      setFiltrosVisiveis(salvo.filtros);
+    });
+    return () => {
+      ativo = false;
+    };
+    // idsColunas/idsFiltros/visibilidadePadrao são estáveis por tela; lê uma vez.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveMemoria]);
+  }, [idTabela, personalizavel]);
 
   const foraDoPadrao =
     Object.keys(larguras).length > 0 ||
@@ -306,19 +348,21 @@ export function DataTable<TData>({
       proximaVisibilidade: VisibilityState,
       proximaOrdem: ColumnOrderState,
       proximasLarguras: ColumnSizingState,
+      proximosFiltros: Record<string, boolean>,
     ) => {
-      if (!chaveMemoria) return;
-      window.localStorage.setItem(
-        chaveMemoria,
+      if (!idTabela || !personalizavel) return;
+      void salvarPreferenciaTabela(
+        idTabela,
         escreverPreferenciasTabela({
           versao: VERSAO_PREFERENCIAS,
           visiveis: proximaVisibilidade as Record<string, boolean>,
           ordem: proximaOrdem,
           larguras: proximasLarguras,
+          filtros: proximosFiltros,
         }),
       );
     },
-    [chaveMemoria],
+    [idTabela, personalizavel],
   );
 
   const paginacao: PaginationState = onPaginationChange
@@ -344,21 +388,38 @@ export function DataTable<TData>({
     const nova =
       typeof atualizador === "function" ? atualizador(visibilidade) : atualizador;
     setVisibilidade(nova);
-    gravar(nova, ordemColunas, larguras);
+    gravar(nova, ordemColunas, larguras, filtrosVisiveis);
   };
 
   const aoMudarLarguras: OnChangeFn<ColumnSizingState> = (atualizador) => {
     const nova =
       typeof atualizador === "function" ? atualizador(larguras) : atualizador;
     setLarguras(nova);
-    gravar(visibilidade, ordemColunas, nova);
+    gravar(visibilidade, ordemColunas, nova, filtrosVisiveis);
   };
 
   function restaurarPadrao() {
     setVisibilidade(visibilidadePadrao);
     setOrdemColunas([]);
     setLarguras({});
-    if (chaveMemoria) window.localStorage.removeItem(chaveMemoria);
+    setFiltrosVisiveis({});
+    if (idTabela && personalizavel) void limparPreferenciaTabela(idTabela);
+  }
+
+  /**
+   * Liga ou desliga um filtro. Desligar filtro com valor LIMPA o valor: filtro
+   * ativo e invisível é a pior combinação possível, porque a tabela mostra uma
+   * lista filtrada e ninguém vê por quê.
+   */
+  function alternarFiltro(id: string) {
+    const filtro = (filtros ?? []).find((f) => f.id === id);
+    if (!filtro || filtro.fixo) return;
+
+    const visivelAgora = filtrosVisiveis[id] ?? true;
+    const proximos = { ...filtrosVisiveis, [id]: !visivelAgora };
+    setFiltrosVisiveis(proximos);
+    if (visivelAgora && filtro.temValor) filtro.onLimpar?.();
+    gravar(visibilidade, ordemColunas, larguras, proximos);
   }
 
   function reordenar(idOrigem: string, idDestino: string) {
@@ -368,7 +429,7 @@ export function DataTable<TData>({
     const posicao = proxima.indexOf(idDestino);
     proxima.splice(posicao < 0 ? proxima.length : posicao, 0, idOrigem);
     setOrdemColunas(proxima);
-    gravar(visibilidade, proxima, larguras);
+    gravar(visibilidade, proxima, larguras, filtrosVisiveis);
   }
 
   const table = useReactTable({
@@ -673,9 +734,25 @@ export function DataTable<TData>({
                 />
               </div>
             ) : null}
+            {(filtros ?? [])
+              .filter((filtro) => filtrosVisiveis[filtro.id] ?? true)
+              .map((filtro) => (
+                <React.Fragment key={filtro.id}>{filtro.elemento}</React.Fragment>
+              ))}
             {toolbar}
           </div>
           <div className="flex items-center gap-2">
+            {personalizavel && (filtros ?? []).length > 0 && (
+              <MenuFiltros
+                filtros={(filtros ?? []).map((filtro) => ({
+                  id: filtro.id,
+                  rotulo: filtro.rotulo,
+                  fixo: filtro.fixo,
+                  visivel: filtrosVisiveis[filtro.id] ?? true,
+                }))}
+                onAlternar={alternarFiltro}
+              />
+            )}
             {personalizavel && (
               <MenuColunas
                 colunas={colunasDoMenu}

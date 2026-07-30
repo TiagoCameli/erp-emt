@@ -39,9 +39,7 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
   {
     accessorKey: "nome",
     header: "Nome",
-    cell: ({ row }) => (
-      <span className="font-medium">{row.original.nome}</span>
-    ),
+    cell: ({ row }) => <span className="font-medium">{row.original.nome}</span>,
   },
   {
     accessorKey: "banco",
@@ -134,6 +132,7 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
       </FilterBar>
 
       <DataTable
+        idTabela="financeiro.contas-bancarias"
         columns={colunas}
         data={dados}
         onRowClick={podeEditar ? abrirEdicao : undefined}

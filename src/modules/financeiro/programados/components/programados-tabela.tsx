@@ -92,7 +92,8 @@ export function ProgramadosTabela({
 
   const [parcelaProgramacao, setParcelaProgramacao] =
     React.useState<ParcelaProgramada | null>(null);
-  const [dialogProgramarAberto, setDialogProgramarAberto] = React.useState(false);
+  const [dialogProgramarAberto, setDialogProgramarAberto] =
+    React.useState(false);
 
   function abrirPagamento(parcela: ParcelaProgramada) {
     setParcelaPagamento(paraParcelaAprovada(parcela));
@@ -116,7 +117,9 @@ export function ProgramadosTabela({
         accessorKey: "lancamentoDescricao",
         header: "Descrição",
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.lancamentoDescricao}</span>
+          <span className="font-medium">
+            {row.original.lancamentoDescricao}
+          </span>
         ),
       },
       {
@@ -219,6 +222,7 @@ export function ProgramadosTabela({
       ) : null}
 
       <DataTable
+        idTabela="financeiro.programados"
         columns={colunas}
         data={parcelas}
         emptyState={
@@ -245,7 +249,6 @@ export function ProgramadosTabela({
         parcela={parcelaProgramacao}
         onProgramado={() => router.refresh()}
       />
-
     </div>
   );
 }

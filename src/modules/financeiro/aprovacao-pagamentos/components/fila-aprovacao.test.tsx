@@ -85,7 +85,9 @@ describe("FilaAprovacao", () => {
     // Com a fila vazia nada disso renderiza, e a falta passa despercebida: foi
     // exatamente assim que subiu para produção.
     expect(() =>
-      render(<FilaAprovacao parcelas={[parcela({ semNota: true })]} {...PADRAO} />),
+      render(
+        <FilaAprovacao parcelas={[parcela({ semNota: true })]} {...PADRAO} />,
+      ),
     ).not.toThrow();
 
     expect(screen.getByText("Sem nota")).toBeInTheDocument();
