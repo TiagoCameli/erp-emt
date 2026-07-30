@@ -43,6 +43,8 @@ const OPCOES_STATUS = [
   // seletor porque para quem usa é a mesma pergunta ("o que está travado?"),
   // e o rótulo diz que a revisão é da parcela para não virar ambiguidade.
   { valor: "em_revisao", rotulo: "Com parcela em revisão" },
+  // Fila de trabalho do operador financeiro: falta escolher a conta bancária.
+  { valor: "sem_conta", rotulo: "Sem conta bancária" },
 ];
 
 const colunas: ColumnDef<LancamentoLista, unknown>[] = [
@@ -126,6 +128,29 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
           : "-"}
       </span>
     ),
+  },
+  {
+    // O que o operador financeiro precisa ver para trabalhar a fila: falta conta
+    // bancária neste lançamento? Sem conta ele não chega na aprovação.
+    id: "revisao",
+    header: "Revisão",
+    enableSorting: false,
+    meta: { rotulo: "Revisão", naoTruncar: true },
+    cell: ({ row }) => {
+      const estado = row.original.revisao;
+      if (estado === "nao-se-aplica") {
+        return <span className="text-muted-foreground">-</span>;
+      }
+      if (estado === "revisado") {
+        return <StatusBadge status="aprovado" rotulo="Revisado" />;
+      }
+      return (
+        <StatusBadge
+          status="pendente_aprovacao"
+          rotulo={estado === "parcial" ? "Conta parcial" : "Sem conta"}
+        />
+      );
+    },
   },
   {
     accessorKey: "status",

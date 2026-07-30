@@ -34,6 +34,12 @@ export interface ListarLancamentosParams {
    * por natureza (é fila de trabalho, não histórico).
    */
   emRevisao?: boolean;
+  /**
+   * Só lançamentos a pagar com alguma parcela sem conta bancária. É a fila de
+   * trabalho do operador financeiro: sem conta, o pagamento não chega na
+   * aprovação.
+   */
+  semConta?: boolean;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -55,6 +61,15 @@ export interface LancamentoLista {
   mesCompetencia: string;
   /** Data de sistema, imutável. */
   criadoEm: string;
+  /**
+   * Estado da revisão do lançamento, derivado da conta bancária das parcelas
+   * ainda não pagas. Não é um marcador que alguém liga na mão de propósito: selo
+   * dizendo "revisado" com a conta vazia seria mentira, e um flag manual sairia
+   * de sincronia com o que o banco exige para aprovar.
+   *
+   * nao-se-aplica: a receber, ou sem parcela ainda.
+   */
+  revisao: "sem-conta" | "parcial" | "revisado" | "nao-se-aplica";
 }
 
 /** Resultado paginado da listagem. */
@@ -200,6 +215,21 @@ export async function listarLancamentos(
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
+  let idsSemConta: string[] | null = null;
+  if (params.semConta) {
+    const { data: parcelas } = await supabase
+      .from("lancamento_parcelas")
+      .select("lancamento_id")
+      .neq("status", "pago")
+      .is("conta_bancaria_id", null);
+    idsSemConta = [
+      ...new Set((parcelas ?? []).map((parcela) => parcela.lancamento_id)),
+    ];
+    if (idsSemConta.length === 0) {
+      return { itens: [], total: 0 };
+    }
+  }
+
   let idsEmRevisao: string[] | null = null;
   if (params.emRevisao) {
     const { data: parcelas } = await supabase
@@ -222,7 +252,7 @@ export async function listarLancamentos(
        data_compra, mes_competencia, created_at,
        categorias_financeiras(nome),
        fornecedores(razao_social, nome_fantasia),
-       lancamento_parcelas(count)`,
+       lancamento_parcelas(status, conta_bancaria_id)`,
       { count: "exact" },
     )
     .order("data_compra", { ascending: false })
@@ -230,6 +260,7 @@ export async function listarLancamentos(
     .range(de, ate);
 
   if (idsEmRevisao) consulta = consulta.in("id", idsEmRevisao);
+  if (idsSemConta) consulta = consulta.in("id", idsSemConta);
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
   if (params.mesCompetencia) {
@@ -247,10 +278,23 @@ export async function listarLancamentos(
   }
 
   const itens: LancamentoLista[] = (data ?? []).map((lancamento) => {
-    const parcelas = lancamento.lancamento_parcelas as
-      | { count: number }[]
-      | null;
+    const parcelas = lancamento.lancamento_parcelas ?? [];
+    const aRevisar = parcelas.filter((parcela) => parcela.status !== "pago");
+    const comConta = aRevisar.filter(
+      (parcela) => parcela.conta_bancaria_id !== null,
+    ).length;
+
+    const revisao: LancamentoLista["revisao"] =
+      lancamento.tipo !== "a_pagar" || aRevisar.length === 0
+        ? "nao-se-aplica"
+        : comConta === 0
+          ? "sem-conta"
+          : comConta === aRevisar.length
+            ? "revisado"
+            : "parcial";
+
     return {
+      revisao,
       id: lancamento.id,
       numero: lancamento.numero,
       tipo: lancamento.tipo as TipoLancamento,
@@ -263,7 +307,7 @@ export async function listarLancamentos(
       valor: lancamento.valor,
       dataVencimento: lancamento.data_vencimento,
       status: lancamento.status as StatusLancamento,
-      qtdParcelas: parcelas?.[0]?.count ?? 0,
+      qtdParcelas: parcelas.length,
       dataCompra: lancamento.data_compra,
       mesCompetencia: lancamento.mes_competencia,
       criadoEm: lancamento.created_at,

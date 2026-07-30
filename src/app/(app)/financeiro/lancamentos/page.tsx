@@ -30,6 +30,8 @@ const STATUS_VALIDOS: StatusLancamento[] = [
  * em revisão". Viaja no mesmo parâmetro para a tela ter um seletor só.
  */
 const FILTRO_EM_REVISAO = "em_revisao";
+/** Valor extra: "tem parcela sem conta bancária". */
+const FILTRO_SEM_CONTA = "sem_conta";
 const TAMANHO_PADRAO = 25;
 
 /** Lê e valida um parâmetro de filtro contra a lista de valores aceitos. */
@@ -60,6 +62,7 @@ export default async function PaginaLancamentos({
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
   const status = parametroValido(params.status, STATUS_VALIDOS);
   const emRevisao = params.status === FILTRO_EM_REVISAO;
+  const semConta = params.status === FILTRO_SEM_CONTA;
   const busca = typeof params.busca === "string" ? params.busca : "";
   const mes = typeof params.mes === "string" ? params.mes : "";
   const mesCompetencia = mesParaCompetencia(mes);
@@ -88,6 +91,7 @@ export default async function PaginaLancamentos({
       busca,
       mesCompetencia: mesCompetencia === "" ? undefined : mesCompetencia,
       emRevisao,
+      semConta,
     }),
     listarCategorias(),
     listarFornecedores(),
