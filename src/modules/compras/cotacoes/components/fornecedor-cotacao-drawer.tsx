@@ -18,10 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { OpcaoPagamento } from "@/modules/compras/_shared/pagamento";
-import {
-  criarCondicaoPagamento,
-  criarFormaPagamento,
-} from "@/modules/compras/_shared/pagamento-actions";
+import { criarFormaPagamento } from "@/modules/compras/_shared/pagamento-actions";
+import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import { adicionarFornecedor } from "@/modules/compras/cotacoes/actions";
 import {
   fornecedorCotacaoFormSchema,

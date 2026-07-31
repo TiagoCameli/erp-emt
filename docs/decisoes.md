@@ -552,3 +552,45 @@ conserto.
    decisão anterior já registrada no código: a regra de quem pode sair mora em
    `fn_excluir_lancamento`, e a mensagem dela vai direto ao toast para a tela não
    manter uma regra paralela que possa divergir.
+
+## Condição de pagamento é um catálogo só, criável de qualquer tela
+
+**Data:** 31/07/2026 · **Contexto:** o campo do lançamento avulso prometia mais do que fazia
+
+O Combobox de condição de pagamento do lançamento avulso não recebia `onCriar`.
+O canônico mostra o placeholder "Buscar ou digitar" sempre, então o campo
+convidava a digitar e digitar não criava nada: só a OC e a cotação criavam. E a
+lista vinha de uma **terceira cópia** da mesma consulta (`compras/ordens`,
+`compras/cotacoes` e `financeiro/lancamentos` tinham uma cada, idênticas), o que
+mantinha as três telas iguais só enquanto ninguém filtrasse diferente num lado.
+
+**Decisões**
+
+1. O catálogo é um só: `condicoes_pagamento` já era a mesma tabela para OC,
+   cotação e lançamento, então a leitura passou a ser uma só função em
+   `src/modules/_shared/condicao-pagamento/queries.ts`. Os três módulos
+   **reexportam** ela, então as páginas seguem importando do próprio módulo e
+   nenhum módulo passou a depender do outro (Financeiro não importa de Compras).
+   Três consultas iguais não são redundância inofensiva: são três lugares para
+   divergir sem ninguém perceber, e o pedido era justamente "mostra as mesmas que
+   mostram na OC".
+2. `criarCondicaoPagamento` saiu de `compras/_shared/pagamento-actions.ts` para
+   `_shared/condicao-pagamento/actions.ts`, com a heurística `parcelasDoNome`
+   junto. Criar do lançamento e criar da OC passam pelo mesmo código, mesma
+   dedução de parcelas pelo nome e mesmo `ilike` que devolve a existente em vez de
+   duplicar.
+3. `criarFormaPagamento` **ficou** em Compras: `fn_criar_forma_pagamento` exige
+   permissão de criar em `compras.ordens` ou `compras.cotacoes`, então mover para
+   `_shared` faria parecer neutro o que não é.
+4. A permissão de criar condição é do cadastro, não do módulo:
+   `salvar_condicao` exige `cadastros.condicoes-pagamento / criar`, e é o banco
+   que recusa (provado). Quem não tem o cadastro continua escolhendo da lista, só
+   não cria, e recebe a mensagem do banco no toast. Nenhuma migration foi
+   necessária.
+5. `parcelasDoNome` ganhou teste (`regras.test.ts`) porque agora serve três
+   telas e porque o risco real dela é aritmético: `salvar_condicao` recusa se a
+   soma não fechar 100,00 exatos, e "30/60/90" daria 99,99 se a última parcela não
+   absorvesse a sobra. A prova
+   `supabase/provas/condicao_pagamento_catalogo_unico.sql` testa os dois lados: a
+   soma quebrada é recusada pelo banco (caso 7) e a que a heurística gera é aceita
+   (caso 8).

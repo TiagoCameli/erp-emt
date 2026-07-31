@@ -132,11 +132,9 @@ export interface InsumoOpcao {
   unidadeSigla: string | null;
 }
 
-/** Opção de condição de pagamento ativa para o select do fornecedor da cotação. */
-export interface CondicaoPagamentoOpcao {
-  id: string;
-  descricao: string;
-}
+/** Mesmo catálogo compartilhado que a OC e o lançamento usam. */
+export type { CondicaoPagamentoOpcao } from "@/modules/_shared/condicao-pagamento/regras";
+export { listarCondicoesPagamento } from "@/modules/_shared/condicao-pagamento/queries";
 
 /** Opção de categoria financeira para o Combobox de categoria do custo. */
 export interface CategoriaOpcao {
@@ -545,28 +543,6 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
     nome: insumo.nome,
     codigo: insumo.codigo,
     unidadeSigla: insumo.unidades_medida?.sigla ?? null,
-  }));
-}
-
-/** Condições de pagamento ativas para o select do fornecedor, em ordem alfabética. */
-export async function listarCondicoesPagamento(): Promise<
-  CondicaoPagamentoOpcao[]
-> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("condicoes_pagamento")
-    .select("id, descricao")
-    .eq("ativo", true)
-    .order("descricao", { ascending: true });
-
-  if (error) {
-    throw new Error("Não foi possível carregar as condições de pagamento");
-  }
-
-  return (data ?? []).map((condicao) => ({
-    id: condicao.id,
-    descricao: condicao.descricao,
   }));
 }
 

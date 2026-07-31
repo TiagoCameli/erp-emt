@@ -212,34 +212,16 @@ export async function listarFormasPagamento(): Promise<FormaPagamentoOpcao[]> {
   }));
 }
 
-/** Opção de condição de pagamento para o select do lançamento. */
-export interface CondicaoPagamentoOpcao {
-  id: string;
-  descricao: string;
-}
-
 /**
- * Condições de pagamento ativas. Consulta própria do Financeiro em vez de
- * importar a de Compras, pelo mesmo motivo das formas de pagamento: cada módulo
- * lê o que precisa, sem criar dependência de um no outro.
+ * Condição de pagamento vem do catálogo compartilhado, não de uma consulta
+ * própria do Financeiro. O lançamento avulso escolhe da MESMA lista da OC e cria
+ * na mesma tabela: era o que o Tiago pediu, e cópia da consulta em cada módulo
+ * só garantia isso enquanto ninguém filtrasse diferente num dos lados.
+ *
+ * Nem Financeiro importa de Compras nem o contrário: os dois leem de `_shared`.
  */
-export async function listarCondicoesPagamento(): Promise<
-  CondicaoPagamentoOpcao[]
-> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("condicoes_pagamento")
-    .select("id, descricao")
-    .eq("ativo", true)
-    .order("descricao");
-  if (error) {
-    throw new Error("Não foi possível carregar as condições de pagamento");
-  }
-  return (data ?? []).map((condicao) => ({
-    id: condicao.id,
-    descricao: condicao.descricao,
-  }));
-}
+export type { CondicaoPagamentoOpcao } from "@/modules/_shared/condicao-pagamento/regras";
+export { listarCondicoesPagamento } from "@/modules/_shared/condicao-pagamento/queries";
 
 /** Opção de categoria financeira para o select. */
 export interface CategoriaOpcao {
