@@ -46,6 +46,21 @@ export function paraNumero(valor: string): number {
   return Number(limpo);
 }
 
+/**
+ * Texto livre opcional, com teto de caracteres. Vazio vira undefined para o
+ * banco gravar null em vez de uma observação em branco. Mesma regra que a OC
+ * usa nas observações dela, declarada aqui para o Financeiro não depender de
+ * Compras.
+ */
+function textoOpcional(maximo: number) {
+  return z
+    .string()
+    .trim()
+    .max(maximo, { error: `Máximo de ${maximo} caracteres` })
+    .optional()
+    .transform((valor) => (valor === "" ? undefined : valor));
+}
+
 // ---------------------------------------------------------------------------
 // Schemas de servidor (tipos coeridos, validados na action)
 // ---------------------------------------------------------------------------
@@ -85,6 +100,14 @@ export const lancamentoSchema = z
      * schema porque conta a receber não usa; a tela exige em conta a pagar.
      */
     formaPagamentoId: z.uuid({ error: "Forma de pagamento inválida" }).optional(),
+    /**
+     * Condição de pagamento: opcional, é ela que define as parcelas quando o
+     * usuário manda gerar. Lançamento sem condição continua válido (parcela
+     * única digitada na mão é o caso mais comum).
+     */
+    condicaoPagamentoId: z
+      .uuid({ error: "Condição de pagamento inválida" })
+      .optional(),
     descricao: z
       .string()
       .trim()
@@ -104,6 +127,8 @@ export const lancamentoSchema = z
       .trim()
       .regex(/^\d{4}-\d{2}-01$/, { error: "Informe o mês de referência" }),
     dataVencimento: dataOpcionalSchema,
+    /** Texto livre: o combinado, o que a nota não diz. Só no detalhe. */
+    observacoes: textoOpcional(2000),
     parcelas: z
       .array(parcelaSchema)
       .min(1, { error: "Adicione ao menos uma parcela" }),
@@ -169,6 +194,8 @@ export const lancamentoFormSchema = z
     fornecedorId: z.uuid().optional(),
     categoriaId: z.uuid().optional(),
     formaPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
+    /** Vazio = sem condição, igual ao Combobox quando nada foi escolhido. */
+    condicaoPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
     descricao: z
       .string()
       .trim()
@@ -190,6 +217,10 @@ export const lancamentoFormSchema = z
       .trim()
       .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     dataVencimento: z.string().trim(),
+    observacoes: z
+      .string()
+      .trim()
+      .max(2000, { error: "Máximo de 2000 caracteres" }),
     parcelas: z
       .array(parcelaFormSchema)
       .min(1, { error: "Adicione ao menos uma parcela" }),

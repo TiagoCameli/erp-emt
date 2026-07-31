@@ -44,6 +44,7 @@ import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
   LancamentoDetalhe,
@@ -137,6 +138,7 @@ export interface LancamentoDetalheViewProps {
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
+  condicoesPagamento: CondicaoPagamentoOpcao[];
   podeEditar: boolean;
   anexos: AnexoDoDocumento[];
   podeExcluir: boolean;
@@ -156,6 +158,7 @@ export function LancamentoDetalheView({
   fornecedores,
   centrosCusto,
   formasPagamento,
+  condicoesPagamento,
   podeEditar,
   anexos,
   podeExcluir,
@@ -402,6 +405,19 @@ export function LancamentoDetalheView({
                 }
               >
                 {lancamento.formaPagamentoNome ?? "-"}
+              </Dado>
+              {/* Vale para os dois casos: no avulso a condição é a do próprio
+                  lançamento, no de OC é a da ordem de origem. A legenda diz de
+                  onde ela vem para ninguém procurar no lugar errado. */}
+              <Dado
+                rotulo="Condição de pagamento"
+                legenda={
+                  lancamento.condicaoPagamentoDescricao && !ehManual
+                    ? "Vem da ordem de origem"
+                    : null
+                }
+              >
+                {lancamento.condicaoPagamentoDescricao ?? "-"}
               </Dado>
               <Dado rotulo="Data da compra">
                 {formatarData(lancamento.dataCompra)}
@@ -667,6 +683,17 @@ export function LancamentoDetalheView({
               </p>
             )}
           </Secao>
+
+          {/* Só aparece quando existe: seção vazia em detalhe de ERP é ruído.
+              whitespace-pre-line porque o texto foi escrito num textarea, e as
+              quebras de linha que a pessoa deu fazem parte do recado. */}
+          {lancamento.observacoes ? (
+            <Secao titulo="Observações">
+              <p className="whitespace-pre-line text-detalhe">
+                {lancamento.observacoes}
+              </p>
+            </Secao>
+          ) : null}
         </div>
 
         <div className="lg:col-span-1">
@@ -687,6 +714,7 @@ export function LancamentoDetalheView({
           lancamento={lancamento}
           categorias={categorias}
           formasPagamento={formasPagamento}
+          condicoesPagamento={condicoesPagamento}
           fornecedores={fornecedores}
           centrosCusto={centrosCusto}
         />

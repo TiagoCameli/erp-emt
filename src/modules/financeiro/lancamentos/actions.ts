@@ -28,11 +28,13 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     fornecedor_id: dados.fornecedorId ?? null,
     categoria_id: dados.categoriaId ?? null,
     forma_pagamento_id: dados.formaPagamentoId ?? null,
+    condicao_pagamento_id: dados.condicaoPagamentoId ?? null,
     descricao: dados.descricao,
     valor: dados.valor,
     data_compra: dados.dataCompra,
     mes_competencia: dados.mesCompetencia,
     data_vencimento: dados.dataVencimento ?? null,
+    observacoes: dados.observacoes ?? null,
   };
 }
 
@@ -230,50 +232,54 @@ export async function definirParcelasLancamento(
   return { ok: true };
 }
 
+/** Parcelas sugeridas pela condição de pagamento, ou o motivo de não dar. */
+export type ResultadoParcelasSugeridas =
+  | { parcelas: { dataVencimento: string; valor: number }[] }
+  | { erro: string };
+
 /**
- * Sugestão de parcelas para um lançamento de OC, pela condição de pagamento da
- * ordem de origem (o lançamento não tem condição própria). A divisão é a função
- * do banco, a mesma da OC. Data base: a emissão do lançamento.
+ * Divide um valor pela condição de pagamento escolhida, sem o lançamento
+ * precisar existir. É o que o FORMULÁRIO usa: o "Gerar pela condição" roda com
+ * o valor e a data da compra que já estão na tela, antes de salvar, igual ao
+ * que a OC faz no formulário dela.
+ *
+ * A divisão inteira (percentual por parcela, dias de vencimento, ajuste do
+ * centavo na última) é a função do banco, única implementação do cálculo.
+ *
+ * Permissão de 'ver': nada é gravado aqui, é só a sugestão. Quem não pode ver
+ * lançamento também não vê a divisão; gravar as parcelas ainda passa por
+ * criar/editar em salvarLancamento.
  */
-export async function sugerirParcelasDoLancamento(
-  lancamentoId: string,
-): Promise<
-  { parcelas: { dataVencimento: string; valor: number }[] } | { erro: string }
-> {
-  await exigirPermissao(RECURSO, "ver");
+export async function parcelasDaCondicaoLancamento(
+  condicaoId: string,
+  valor: number,
+  dataBase: string,
+): Promise<ResultadoParcelasSugeridas> {
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para ver lançamentos" };
+  }
 
-  const idValido = uuidSchema.safeParse(lancamentoId);
-  if (!idValido.success) return { erro: "Lançamento inválido" };
-
-  const supabase = await createClient();
-  const { data: lancamento } = await supabase
-    .from("lancamentos")
-    .select("valor, data_compra, origem, origem_id")
-    .eq("id", idValido.data)
-    .maybeSingle();
-
-  if (!lancamento) return { erro: "Lançamento não encontrado" };
-  if (lancamento.origem !== "oc" || !lancamento.origem_id) {
+  const condicaoValida = uuidSchema.safeParse(condicaoId);
+  if (!condicaoValida.success) {
     return {
-      erro: "Só dá para gerar pela condição em lançamento vindo de ordem de compra",
+      erro: "Escolha a condição de pagamento antes de gerar as parcelas",
     };
   }
-
-  const { data: ordem } = await supabase
-    .from("ordens_compra")
-    .select("condicao_pagamento_id")
-    .eq("id", lancamento.origem_id)
-    .maybeSingle();
-
-  if (!ordem?.condicao_pagamento_id) {
-    return { erro: "A ordem de origem não tem condição de pagamento definida" };
+  if (!Number.isFinite(valor) || valor <= 0) {
+    return { erro: "Informe o valor do lançamento antes de gerar as parcelas" };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataBase)) {
+    return { erro: "Informe a data da compra antes de gerar as parcelas" };
   }
 
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_parcelas_da_condicao", {
-    p_condicao_id: ordem.condicao_pagamento_id,
-    p_valor: lancamento.valor,
+    p_condicao_id: condicaoValida.data,
+    p_valor: valor,
     // A base das parcelas é a data da COMPRA, não a data de sistema.
-    p_data_base: lancamento.data_compra,
+    p_data_base: dataBase,
   });
 
   if (error) {
@@ -286,6 +292,65 @@ export async function sugerirParcelasDoLancamento(
       valor: parcela.valor,
     })),
   };
+}
+
+/**
+ * Sugestão de parcelas para um lançamento que já existe (o "Gerar pela
+ * condição" do detalhe). De onde sai a condição depende da origem:
+ *
+ * - origem 'oc': a condição é a da ordem de origem. Ela pertence ao documento
+ *   de origem e não é copiada para o lançamento.
+ * - avulso: a condição gravada no próprio lançamento.
+ *
+ * Data base: a data da compra, não a data de sistema.
+ */
+export async function sugerirParcelasDoLancamento(
+  lancamentoId: string,
+): Promise<ResultadoParcelasSugeridas> {
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para ver lançamentos" };
+  }
+
+  const idValido = uuidSchema.safeParse(lancamentoId);
+  if (!idValido.success) return { erro: "Lançamento inválido" };
+
+  const supabase = await createClient();
+  const { data: lancamento } = await supabase
+    .from("lancamentos")
+    .select("valor, data_compra, origem, origem_id, condicao_pagamento_id")
+    .eq("id", idValido.data)
+    .maybeSingle();
+
+  if (!lancamento) return { erro: "Lançamento não encontrado" };
+
+  const veioDeOrdem = lancamento.origem === "oc" && lancamento.origem_id;
+  let condicaoId: string | null = lancamento.condicao_pagamento_id;
+  if (veioDeOrdem) {
+    const { data: ordem } = await supabase
+      .from("ordens_compra")
+      .select("condicao_pagamento_id")
+      .eq("id", lancamento.origem_id as string)
+      .maybeSingle();
+    condicaoId = ordem?.condicao_pagamento_id ?? null;
+  }
+
+  // Sem condição em nenhum dos dois lugares a mensagem diz onde resolver, senão
+  // o usuário fica clicando num botão que nunca funciona.
+  if (!condicaoId) {
+    return {
+      erro: veioDeOrdem
+        ? "A ordem de origem não tem condição de pagamento. Defina a condição na ordem de compra e gere as parcelas de novo."
+        : "Este lançamento não tem condição de pagamento. Edite o lançamento, escolha a condição de pagamento e salve para gerar as parcelas por ela.",
+    };
+  }
+
+  return parcelasDaCondicaoLancamento(
+    condicaoId,
+    lancamento.valor,
+    lancamento.data_compra,
+  );
 }
 
 /**

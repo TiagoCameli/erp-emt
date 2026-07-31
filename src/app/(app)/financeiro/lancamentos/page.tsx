@@ -8,6 +8,7 @@ import { LancamentosTabela } from "@/modules/financeiro/lancamentos/components/l
 import {
   listarCategorias,
   listarCentrosCusto,
+  listarCondicoesPagamento,
   listarFormasPagamento,
   listarFornecedores,
   listarLancamentos,
@@ -152,6 +153,7 @@ export default async function PaginaLancamentos({
     fornecedores,
     centrosCusto,
     formasPagamento,
+    condicoesPagamento,
     contas,
   ] = await Promise.all([
     listarLancamentos({
@@ -181,6 +183,7 @@ export default async function PaginaLancamentos({
     listarFornecedores(),
     listarCentrosCusto(),
     listarFormasPagamento(),
+    listarCondicoesPagamento(),
     listarContasBancarias(),
   ]);
 
@@ -196,6 +199,7 @@ export default async function PaginaLancamentos({
             fornecedores={fornecedores}
             centrosCusto={centrosCusto}
             formasPagamento={formasPagamento}
+            condicoesPagamento={condicoesPagamento}
           />
         }
       />

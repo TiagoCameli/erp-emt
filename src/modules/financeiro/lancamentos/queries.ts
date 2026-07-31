@@ -161,12 +161,15 @@ export interface LancamentoDetalhe {
   /** Data de sistema (created_at), imutável: a tela mostra como texto. */
   criadoEm: string;
   dataVencimento: string | null;
+  /** Texto livre do lançamento. Só aparece no detalhe, nunca na lista. */
+  observacoes: string | null;
   parcelas: ParcelaLancamento[];
   rateios: RateioLancamento[];
   /**
-   * Condição de pagamento da ordem de origem (só quando origem='oc'). Serve ao
-   * "Gerar pela condição" na hora de definir as parcelas aqui: o lançamento em
-   * si não tem condição, ela vive na OC.
+   * Condição de pagamento que vale para este lançamento, e é o que o "Gerar
+   * pela condição" usa. Em lançamento de OC ela vem da ordem de origem (a
+   * condição pertence ao documento de origem); em lançamento avulso é a que
+   * está gravada no próprio lançamento.
    */
   condicaoPagamentoId: string | null;
   condicaoPagamentoDescricao: string | null;
@@ -206,6 +209,35 @@ export async function listarFormasPagamento(): Promise<FormaPagamentoOpcao[]> {
     id: forma.id,
     nome: forma.nome,
     tipo: tipoFormaPagamento(forma.tipo),
+  }));
+}
+
+/** Opção de condição de pagamento para o select do lançamento. */
+export interface CondicaoPagamentoOpcao {
+  id: string;
+  descricao: string;
+}
+
+/**
+ * Condições de pagamento ativas. Consulta própria do Financeiro em vez de
+ * importar a de Compras, pelo mesmo motivo das formas de pagamento: cada módulo
+ * lê o que precisa, sem criar dependência de um no outro.
+ */
+export async function listarCondicoesPagamento(): Promise<
+  CondicaoPagamentoOpcao[]
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("condicoes_pagamento")
+    .select("id, descricao")
+    .eq("ativo", true)
+    .order("descricao");
+  if (error) {
+    throw new Error("Não foi possível carregar as condições de pagamento");
+  }
+  return (data ?? []).map((condicao) => ({
+    id: condicao.id,
+    descricao: condicao.descricao,
   }));
 }
 
@@ -544,10 +576,11 @@ export async function buscarLancamento(
     .from("lancamentos")
     .select(
       `id, numero, tipo, origem, origem_id, fornecedor_id, categoria_id,
-       forma_pagamento_id,
-       descricao, valor, status, mes_competencia, data_compra, created_at,
-       data_vencimento,
+       forma_pagamento_id, condicao_pagamento_id,
+       descricao, observacoes, valor, status, mes_competencia, data_compra,
+       created_at, data_vencimento,
        categorias_financeiras(nome),
+       condicoes_pagamento(descricao),
        formas_pagamento(nome, tipo),
        fornecedores(razao_social, nome_fantasia),
        lancamento_parcelas(
@@ -582,11 +615,14 @@ export async function buscarLancamento(
     }))
     .sort((a, b) => a.numeroParcela - b.numeroParcela);
 
-  // Condição de pagamento, número e nota da OC de origem: o lançamento não
-  // guarda condição, e o aviso de lançamento incompleto precisa apontar o
-  // documento certo.
-  let condicaoPagamentoId: string | null = null;
-  let condicaoPagamentoDescricao: string | null = null;
+  // Condição de pagamento do lançamento avulso: é a coluna do próprio
+  // lançamento. Em lançamento de OC ela é substituída logo abaixo pela da ordem,
+  // que é a dona da condição naquele caminho.
+  let condicaoPagamentoId: string | null = data.condicao_pagamento_id;
+  let condicaoPagamentoDescricao: string | null =
+    data.condicoes_pagamento?.descricao ?? null;
+  // Número e nota da OC de origem: o aviso de lançamento incompleto precisa
+  // apontar o documento certo.
   let origemNumero: string | null = null;
   let notaRegistrada = false;
   if (data.origem === "oc" && data.origem_id) {
@@ -634,6 +670,7 @@ export async function buscarLancamento(
     dataCompra: data.data_compra,
     criadoEm: data.created_at,
     dataVencimento: data.data_vencimento,
+    observacoes: data.observacoes,
     parcelas,
     rateios,
     condicaoPagamentoId,

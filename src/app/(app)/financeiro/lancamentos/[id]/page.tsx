@@ -8,6 +8,7 @@ import {
   buscarLancamento,
   listarCategorias,
   listarCentrosCusto,
+  listarCondicoesPagamento,
   listarFormasPagamento,
   listarFornecedores,
   trilhaLancamento,
@@ -33,6 +34,7 @@ export default async function PaginaLancamentoDetalhe({
     fornecedores,
     centrosCusto,
     formasPagamento,
+    condicoesPagamento,
     anexos,
     contas,
   ] = await Promise.all([
@@ -41,6 +43,7 @@ export default async function PaginaLancamentoDetalhe({
     listarFornecedores(),
     listarCentrosCusto(),
     listarFormasPagamento(),
+    listarCondicoesPagamento(),
     listarAnexosDoDocumento("lancamento", id),
     listarContasBancarias(),
   ]);
@@ -61,6 +64,7 @@ export default async function PaginaLancamentoDetalhe({
       fornecedores={fornecedores}
       centrosCusto={centrosCusto}
       formasPagamento={formasPagamento}
+      condicoesPagamento={condicoesPagamento}
       contas={contas}
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
