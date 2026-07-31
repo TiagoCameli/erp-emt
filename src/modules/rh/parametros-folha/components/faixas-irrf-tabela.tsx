@@ -68,7 +68,11 @@ export function FaixasIrrfTabela({
           </span>
         ),
       },
-      colunaDinheiro<FaixaIrrfLista>("parcelaDeduzir", "Parcela a deduzir"),
+      // Largura pelo cabeçalho: "Parcela a deduzir" não cabe nos 140 do helper
+      // de dinheiro, e o rótulo truncado é o que identifica a coluna.
+      colunaDinheiro<FaixaIrrfLista>("parcelaDeduzir", "Parcela a deduzir", {
+        size: 170,
+      }),
     ];
 
     if (!podeEditar && !podeExcluir) return base;

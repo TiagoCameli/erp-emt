@@ -476,7 +476,9 @@ export function FilaAprovacao({
         // A descrição saiu daqui: virou a coluna "Descrição e categoria", e
         // repetir o mesmo texto duas vezes na linha só ocupa espaço.
         cell: ({ row }) => (
-          <div className="flex flex-wrap items-center gap-1.5">
+          // justify-center porque flex não herda o text-center da célula: sem
+          // isso o número encosta na esquerda e desalinha do cabeçalho.
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
             <span className="codigo-doc">
               {rotuloParcela(
                 row.original.lancamentoNumero,

@@ -777,6 +777,10 @@ const COLUNAS_PARCELA: ColunaItem[] = [
     chave: "vencimento",
     rotulo: "Vencimento",
     largura: "180px",
+    // O campo de data ocupa a coluna inteira e escreve na esquerda, e texto
+    // dentro de Input não se centraliza. Rótulo à esquerda para ele ficar em
+    // cima da data que a pessoa digita.
+    alinhamento: "left",
     obrigatorio: true,
   },
   {
@@ -1026,6 +1030,9 @@ const COLUNAS_ITEM: ColunaItem[] = [
     chave: "insumo",
     rotulo: "Insumo",
     largura: "minmax(0,1fr)",
+    // Combobox de largura cheia, com o nome do insumo na esquerda: o rótulo
+    // acompanha o texto em vez de ficar sozinho no meio da coluna.
+    alinhamento: "left",
     obrigatorio: true,
   },
   {

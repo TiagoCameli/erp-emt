@@ -16,11 +16,14 @@ describe("MoneyText", () => {
     expect(span?.textContent).toMatch(/^R\$\s1\.234,56$/u);
   });
 
-  it("tem a classe tabular-nums e alinhamento à direita", () => {
+  it("tem tabular-nums e NÃO carrega alinhamento próprio", () => {
+    // O span é inline: `text-right` nele não alinha nada e brigava com a tela que
+    // usa dinheiro fora de tabela. Quem alinha é o contêiner (na tabela, a célula
+    // com `meta.alinharDireita`). Devolver a classe aqui é regressão.
     const { container } = render(<MoneyText valor={10} />);
     const span = container.querySelector("span");
     expect(span).toHaveClass("tabular-nums");
-    expect(span).toHaveClass("text-right");
+    expect(span).not.toHaveClass("text-right");
   });
 
   it("valor nulo ou indefinido vira R$ 0,00", () => {

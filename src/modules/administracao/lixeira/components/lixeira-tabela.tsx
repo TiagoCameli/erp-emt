@@ -165,11 +165,8 @@ export function LixeiraTabela({
       {
         accessorKey: "motivo",
         header: "Motivo",
-        cell: ({ row }) => (
-          <span className="block max-w-md truncate" title={row.original.motivo}>
-            {row.original.motivo}
-          </span>
-        ),
+        // Sem célula própria: a DataTable já trunca com tooltip nativo, e a
+        // largura máxima que estava aqui prendia o texto à esquerda da coluna.
       },
       {
         accessorKey: "excluidoPorNome",

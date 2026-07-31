@@ -23,7 +23,10 @@ export interface ColunaAlternavel {
 
 export interface MenuColunasProps {
   colunas: ColunaAlternavel[];
-  /** Volta colunas, ordem e larguras ao padrão da tela. */
+  /**
+   * Volta ao padrão da tela tudo que o usuário personalizou na tabela: colunas
+   * visíveis, ordem, larguras, filtros visíveis e altura das linhas.
+   */
   onRestaurarPadrao: () => void;
   /** Habilita o "Restaurar padrão" só quando há algo fora do padrão. */
   foraDoPadrao: boolean;

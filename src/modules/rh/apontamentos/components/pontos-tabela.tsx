@@ -6,6 +6,7 @@ import { CalendarClock } from "lucide-react";
 
 import {
   CelulaVazia,
+  colunaNumero,
   DataTable,
   EmptyState,
   FiltroPeriodo,
@@ -63,14 +64,10 @@ const colunas: ColumnDef<PontoLista, unknown>[] = [
     meta: { ocultaPorPadrao: true },
     cell: ({ row }) => row.original.encarregadoNome ?? <CelulaVazia />,
   },
-  {
-    accessorKey: "qtdColaboradores",
-    header: "Colaboradores",
-    meta: { alinharDireita: true },
-    cell: ({ row }) => (
-      <span className="tabular-nums">{row.original.qtdColaboradores}</span>
-    ),
-  },
+  // Largura acima do padrão do helper: "Colaboradores" é cabeçalho longo para
+  // uma coluna de contagem, e truncar o título esconde do que é a coluna. 140
+  // não bastava: o rótulo pede 99px e sobram 98 depois do padding e do ícone.
+  colunaNumero<PontoLista>("qtdColaboradores", "Colaboradores", { size: 150 }),
   {
     accessorKey: "totalHoras",
     header: "Total de horas",

@@ -159,13 +159,26 @@ export function FornecedoresTabela({
       {
         accessorKey: "razaoSocial",
         header: "Razão social",
+        // Célula de duas linhas: sem `naoTruncar` a DataTable embrulha as duas
+        // num truncate de uma linha só, que corta no seco e esconde a fantasia
+        // quando a altura da linha é fixa. O corte passa a ser linha a linha,
+        // com o texto inteiro no tooltip, como na CelulaDescricaoCategoria.
+        meta: { naoTruncar: true },
         cell: ({ row }) => (
-          <div className="flex flex-col">
-            <span className="font-medium">{row.original.razaoSocial}</span>
+          <div className="min-w-0">
+            <div
+              className="truncate font-medium"
+              title={row.original.razaoSocial}
+            >
+              {row.original.razaoSocial}
+            </div>
             {row.original.nomeFantasia ? (
-              <span className="text-detalhe text-muted-foreground">
+              <div
+                className="truncate text-detalhe text-muted-foreground"
+                title={row.original.nomeFantasia}
+              >
                 {row.original.nomeFantasia}
-              </span>
+              </div>
             ) : null}
           </div>
         ),

@@ -7,15 +7,56 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
+/** Alinhamento do conteúdo de uma coluna. */
+export type AlinhamentoColuna = "left" | "center" | "right";
+
 /** Uma coluna da tabela de itens. `largura` é um trilho de grid CSS. */
 export interface ColunaItem {
   chave: string;
   rotulo: string;
   /** Trilho de grid no desktop, ex.: "1fr", "120px", "140px". */
   largura: string;
-  alinhamento?: "left" | "right";
+  /**
+   * Padrão "center", igual às listagens do app: item de formulário e item de
+   * listagem ficam alinhados na mesma tela. "right" é a exceção de dinheiro,
+   * quantidade, total e percentual. "left" é para a célula que é um campo de
+   * largura cheia com o texto na esquerda (data, Combobox): centralizar dentro
+   * do campo está descartado, então quem vai para a esquerda é o rótulo, para
+   * ele ficar em cima do texto e não de um vão vazio.
+   */
+  alinhamento?: AlinhamentoColuna;
   obrigatorio?: boolean;
 }
+
+/** Alinhamento do rótulo no cabeçalho (que só existe no desktop). */
+const CLASSE_CABECALHO: Record<AlinhamentoColuna, string> = {
+  left: "text-left",
+  center: "text-center",
+  right: "text-right",
+};
+
+/**
+ * Alinhamento do conteúdo da célula no desktop. Centralizar e alinhar à
+ * esquerda mexem no BLOCO (`items-*`), não no `text-align`: `text-align` é
+ * herdado, e centralizar a célula centralizaria também o texto dentro de um
+ * `Input`, jogando o cursor de quem digita para o meio do campo. À direita
+ * mantém o `text-align` porque é o que os campos numéricos já fazem
+ * (`InputMoeda` e `InputQuantidade` nascem `text-right`) e porque valor que
+ * quebra em duas linhas continua alinhado pela direita.
+ */
+const CLASSE_CELULA: Record<AlinhamentoColuna, string> = {
+  left: "sm:items-start",
+  center: "sm:items-center",
+  right: "sm:items-end sm:text-right",
+};
+
+/**
+ * Trilho da lixeira. Fixo na largura do botão (`icon-sm` é `size-8`) em vez de
+ * `auto` porque o cabeçalho põe um vão vazio nesse trilho: com `auto` ele
+ * mediria 0 no cabeçalho e 32px na linha, e cada rótulo terminava deslocado da
+ * sua coluna.
+ */
+const TRILHO_REMOVER = "2rem";
 
 export interface TabelaItensProps<L> {
   colunas: ColunaItem[];
@@ -48,8 +89,8 @@ export function TabelaItens<L>({
   rodape,
   className,
 }: TabelaItensProps<L>) {
-  // trilhos das colunas + coluna auto pra lixeira
-  const template = `${colunas.map((c) => c.largura).join(" ")} auto`;
+  // trilhos das colunas + trilho da lixeira
+  const template = `${colunas.map((c) => c.largura).join(" ")} ${TRILHO_REMOVER}`;
   const estiloGrid = { "--cols-itens": template } as CSSProperties;
 
   return (
@@ -65,7 +106,7 @@ export function TabelaItens<L>({
             key={coluna.chave}
             className={cn(
               "text-legenda font-medium text-muted-foreground",
-              coluna.alinhamento === "right" && "text-right",
+              CLASSE_CABECALHO[coluna.alinhamento ?? "center"],
             )}
           >
             {coluna.rotulo}
@@ -97,8 +138,10 @@ export function TabelaItens<L>({
                     {coluna.rotulo}
                   </Label>
                   <div
+                    data-testid="tabela-itens-celula"
                     className={cn(
-                      coluna.alinhamento === "right" && "sm:text-right",
+                      "flex flex-col",
+                      CLASSE_CELULA[coluna.alinhamento ?? "center"],
                     )}
                   >
                     {renderCelula(coluna.chave, indice)}

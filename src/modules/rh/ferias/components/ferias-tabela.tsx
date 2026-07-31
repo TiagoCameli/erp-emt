@@ -6,6 +6,7 @@ import { MoreHorizontal, Palmtree, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  colunaNumero,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -183,15 +184,10 @@ export function FeriasTabela({
             <span className="text-muted-foreground">A programar</span>
           ),
       },
-      {
-        accessorKey: "dias",
-        header: "Dias",
-        // Secundária: quase sempre 30, e o gozo já mostra o intervalo real.
-        meta: { alinharDireita: true, ocultaPorPadrao: true },
-        cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.dias}</span>
-        ),
-      },
+      // Secundária: quase sempre 30, e o gozo já mostra o intervalo real.
+      colunaNumero<FeriasLista>("dias", "Dias", {
+        meta: { ocultaPorPadrao: true },
+      }),
       {
         accessorKey: "limiteGozo",
         header: "Limite de gozo",

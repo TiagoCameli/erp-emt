@@ -66,7 +66,7 @@ function ValorMovimento({ transacao }: { transacao: TransacaoLista }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-end gap-1 tabular-nums",
+        "inline-flex items-center gap-1 tabular-nums",
         credito ? "text-status-aprovado" : "text-status-rejeitado",
       )}
     >
@@ -288,7 +288,7 @@ export function ConciliacaoCliente({
         accessorKey: "memo",
         header: "Histórico",
         cell: ({ row }) => (
-          <span className="block max-w-md truncate">
+          <span className="mx-auto block max-w-md truncate">
             {row.original.memo ?? "-"}
           </span>
         ),
@@ -302,6 +302,12 @@ export function ConciliacaoCliente({
       {
         id: "conciliada",
         header: "Conciliada",
+        // Duas linhas na mesma célula: sem `naoTruncar` a DataTable embrulha
+        // tudo num `truncate`, e é a segunda linha, o lançamento conciliado,
+        // que o Tiago perde. Quem corta o texto longo é a legenda, abaixo.
+        // A largura acompanha o conteúdo, que é mais largo que o cabeçalho.
+        size: 260,
+        meta: { naoTruncar: true },
         cell: ({ row }) => {
           const transacao = row.original;
           if (!transacao.conciliada || !transacao.parcela) {
@@ -313,14 +319,21 @@ export function ConciliacaoCliente({
             );
           }
           const parcela = transacao.parcela;
+          const referencia = `${
+            parcela.lancamentoNumero ? `${parcela.lancamentoNumero} · ` : ""
+          }${parcela.lancamentoDescricao} (parcela ${parcela.numeroParcela})`;
           return (
-            <div className="flex flex-col gap-0.5">
+            // items-center porque o badge é w-fit: sem isso ele encosta na
+            // esquerda e desalinha do cabeçalho centralizado.
+            <div className="flex flex-col items-center gap-0.5">
               <StatusBadge status="aprovado" rotulo="Conciliada" />
-              <span className="text-legenda text-muted-foreground">
-                {parcela.lancamentoNumero
-                  ? `${parcela.lancamentoNumero} · `
-                  : ""}
-                {parcela.lancamentoDescricao} (parcela {parcela.numeroParcela})
+              {/* A descrição do lançamento é texto livre, então o corte com
+                  reticências mora aqui, e o texto inteiro fica no tooltip. */}
+              <span
+                className="max-w-full truncate text-legenda text-muted-foreground"
+                title={referencia}
+              >
+                {referencia}
               </span>
             </div>
           );

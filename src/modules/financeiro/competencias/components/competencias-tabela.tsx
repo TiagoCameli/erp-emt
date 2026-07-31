@@ -7,13 +7,14 @@ import { CalendarCheck, Filter, Lock, LockOpen } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  colunaDinheiro,
+  colunaNumero,
   ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroMes,
   FiltroSelect,
   FiltroValor,
-  MoneyText,
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
@@ -248,22 +249,12 @@ export function CompetenciasTabela({
             <StatusBadge status="rascunho" rotulo="Aberta" />
           ),
       },
-      {
-        accessorKey: "custo",
-        header: "Custo do mês",
-        size: 150,
-        meta: { alinharDireita: true },
-        cell: ({ row }) => <MoneyText valor={row.original.custo} />,
-      },
-      {
-        accessorKey: "lancamentos",
-        header: "Lançamentos",
-        size: 120,
-        meta: { alinharDireita: true },
-        cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.lancamentos}</span>
-        ),
-      },
+      // Dinheiro e contagem pelos helpers canônicos: o alinhamento à direita
+      // com tabular-nums vem de lá e não se perde numa edição futura.
+      colunaDinheiro<CompetenciaMes>("custo", "Custo do mês", { size: 150 }),
+      // 140 e não os 120 de antes: em 120 o próprio cabeçalho "Lançamentos"
+      // truncava, porque o rótulo é mais largo que a contagem que ele nomeia.
+      colunaNumero<CompetenciaMes>("lancamentos", "Lançamentos", { size: 140 }),
       {
         accessorKey: "incompletos",
         header: "Incompletos",
