@@ -3,7 +3,13 @@
 import * as React from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, LoaderCircle, Plus, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  LoaderCircle,
+  Plus,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -24,6 +30,7 @@ import {
 } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   competenciaParaMes,
   dataHojeISO,
@@ -34,10 +41,14 @@ import {
 import { cn } from "@/lib/utils";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
-import { salvarLancamento } from "@/modules/financeiro/lancamentos/actions";
+import {
+  parcelasDaCondicaoLancamento,
+  salvarLancamento,
+} from "@/modules/financeiro/lancamentos/actions";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
   LancamentoDetalhe,
@@ -70,9 +81,17 @@ function rateioVazio(): LancamentoFormInput["rateios"][number] {
   return { centroCustoId: "", valor: "" };
 }
 
-/** Colunas da tabela de parcelas: número (exibição), valor e vencimento. */
+/**
+ * Colunas da tabela de parcelas: número (exibição), vencimento e valor. A ordem
+ * é a mesma da OC de propósito: quem trabalha nas duas telas lê a parcela sempre
+ * no mesmo lugar.
+ */
 const COLUNAS_PARCELA: ColunaItem[] = [
-  { chave: "numero", rotulo: "#", largura: "48px" },
+  { chave: "numero", rotulo: "Nº", largura: "48px" },
+  // Vencimento sem asterisco de propósito: diferente da OC, o lançamento aceita
+  // parcela sem data (fn_salvar_lancamento grava null), então marcar como
+  // obrigatório aqui seria mentir para quem preenche.
+  { chave: "dataVencimento", rotulo: "Vencimento", largura: "180px" },
   {
     chave: "valor",
     rotulo: "Valor",
@@ -80,7 +99,6 @@ const COLUNAS_PARCELA: ColunaItem[] = [
     alinhamento: "right",
     obrigatorio: true,
   },
-  { chave: "dataVencimento", rotulo: "Vencimento", largura: "160px" },
 ];
 
 /** Colunas da tabela de rateio: centro de custo e valor. */
@@ -110,11 +128,13 @@ function valoresIniciais(
       fornecedorId: undefined,
       categoriaId: undefined,
       formaPagamentoId: "",
+      condicaoPagamentoId: "",
       descricao: "",
       valor: "",
       dataCompra: dataHojeISO(),
       mesCompetencia: mesHojeISO(),
       dataVencimento: dataHojeISO(),
+      observacoes: "",
       parcelas: [parcelaVazia()],
       rateios: [],
     };
@@ -124,11 +144,18 @@ function valoresIniciais(
     fornecedorId: lancamento.fornecedorId ?? undefined,
     categoriaId: lancamento.categoriaId ?? undefined,
     formaPagamentoId: lancamento.formaPagamentoId ?? "",
+    // Em lançamento de OC a condição vem da ordem e o cabeçalho é somente
+    // leitura, então o campo só carrega valor no lançamento manual.
+    condicaoPagamentoId:
+      lancamento.origem === "manual"
+        ? (lancamento.condicaoPagamentoId ?? "")
+        : "",
     descricao: lancamento.descricao,
     valor: String(lancamento.valor).replace(".", ","),
     dataCompra: lancamento.dataCompra,
     mesCompetencia: competenciaParaMes(lancamento.mesCompetencia),
     dataVencimento: lancamento.dataVencimento ?? "",
+    observacoes: lancamento.observacoes ?? "",
     parcelas:
       lancamento.parcelas.length > 0
         ? lancamento.parcelas.map((parcela) => ({
@@ -143,7 +170,13 @@ function valoresIniciais(
   };
 }
 
-/** Indicador visual de soma batendo (verde) ou não (âmbar) com o valor. */
+/**
+ * Indicador de fechamento da soma com o valor do lançamento.
+ *
+ * Fecha: confirmação em verde, a mesma que a OC dá ("Fecha com o total"), para
+ * quem preenche não ficar na dúvida se pode salvar. Não fecha: quanto falta ou
+ * quanto passou, que a OC não mostra e é o que a pessoa precisa para corrigir.
+ */
 function IndicadorSoma({
   soma,
   valor,
@@ -158,7 +191,7 @@ function IndicadorSoma({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-detalhe",
+        "flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-detalhe",
         bate
           ? "border-status-aprovado/30 bg-status-aprovado/5 text-status-aprovado"
           : "border-status-pendente/30 bg-status-pendente/5 text-status-pendente",
@@ -170,11 +203,18 @@ function IndicadorSoma({
         ) : (
           <TriangleAlert className="size-4" aria-hidden="true" />
         )}
-        {rotulo}
+        {rotulo}{" "}
+        <span className="tabular-nums">
+          {formatarBRL(soma)}
+          {bate ? "" : ` de ${formatarBRL(valor)}`}
+        </span>
       </span>
-      <span className="tabular-nums">
-        {formatarBRL(soma)} de {formatarBRL(valor)}
-        {bate ? "" : ` (faltam ${formatarBRL(Math.abs(diferenca))})`}
+      <span className="font-medium">
+        {bate
+          ? "Fecha com o total do lançamento"
+          : diferenca > 0
+            ? `Faltam ${formatarBRL(diferenca)}`
+            : `Passa ${formatarBRL(-diferenca)} do total`}
       </span>
     </div>
   );
@@ -187,6 +227,7 @@ export interface LancamentoFormDrawerProps {
   lancamento: LancamentoDetalhe | null;
   categorias: CategoriaOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
+  condicoesPagamento: CondicaoPagamentoOpcao[];
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
   /** Chamado depois de criar, com o id, para navegar ao detalhe. */
@@ -206,6 +247,7 @@ export function LancamentoFormDrawer({
   lancamento,
   categorias,
   formasPagamento,
+  condicoesPagamento,
   fornecedores,
   centrosCusto,
   onSalvo,
@@ -214,6 +256,7 @@ export function LancamentoFormDrawer({
   const editando = lancamento !== null;
   const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
   const [subindoAnexos, setSubindoAnexos] = React.useState(false);
+  const [gerandoParcelas, setGerandoParcelas] = React.useState(false);
 
   const form = useForm<LancamentoFormInput>({
     resolver: zodResolver(lancamentoFormSchema),
@@ -242,11 +285,44 @@ export function LancamentoFormDrawer({
   const fornecedorValor = form.watch("fornecedorId") ?? SEM_VINCULO;
   const categoriaValor = form.watch("categoriaId") ?? SEM_VINCULO;
   const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
+  const condicaoPagamentoValor = form.watch("condicaoPagamentoId") ?? "";
+  const dataCompraValor = form.watch("dataCompra") ?? "";
   const tipoFormaEscolhida = formasPagamento.find(
     (forma) => forma.id === formaPagamentoValor,
   )?.tipo;
   const erroParcelas = form.formState.errors.parcelas;
   const erroRateios = form.formState.errors.rateios;
+  // Sem condição escolhida ou sem valor não há o que dividir, e a action
+  // recusaria com um toast. Melhor o botão já nascer desabilitado.
+  const podeGerarParcelas =
+    condicaoPagamentoValor !== "" && valorAlvo > 0 && dataCompraValor !== "";
+
+  /**
+   * Gera as parcelas pela condição de pagamento com o que está NO FORMULÁRIO
+   * (valor e data da compra), sem o lançamento precisar existir, igual à OC. O
+   * resultado substitui as parcelas e continua editável.
+   */
+  async function gerarParcelasPelaCondicao() {
+    setGerandoParcelas(true);
+    const resultado = await parcelasDaCondicaoLancamento(
+      condicaoPagamentoValor,
+      valorAlvo,
+      dataCompraValor,
+    );
+    setGerandoParcelas(false);
+
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    parcelas.replace(
+      resultado.parcelas.map((parcela) => ({
+        valor: String(parcela.valor).replace(".", ","),
+        dataVencimento: parcela.dataVencimento,
+      })),
+    );
+    void form.trigger("parcelas");
+  }
 
   async function aoEnviar(valores: LancamentoFormInput) {
     const dados = {
@@ -254,11 +330,13 @@ export function LancamentoFormDrawer({
       fornecedorId: valores.fornecedorId,
       categoriaId: valores.categoriaId,
       formaPagamentoId: valores.formaPagamentoId || undefined,
+      condicaoPagamentoId: valores.condicaoPagamentoId || undefined,
       descricao: valores.descricao,
       valor: paraNumero(valores.valor),
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       dataVencimento: valores.dataVencimento,
+      observacoes: valores.observacoes || undefined,
       parcelas: valores.parcelas.map((parcela, indice) => ({
         numeroParcela: indice + 1,
         valor: paraNumero(parcela.valor),
@@ -442,8 +520,38 @@ export function LancamentoFormDrawer({
           </CampoFormulario>
         </LinhaCampos>
 
-        {tipoValor === "a_pagar" ? (
-          <LinhaCampos>
+        <LinhaCampos>
+          {/* Condição de pagamento: opcional aqui (diferente da OC, onde é
+              obrigatória). É ela que o "Gerar pela condição" das parcelas usa. */}
+          <CampoFormulario
+            id="lan-condicao"
+            rotulo="Condição de pagamento"
+            ajuda="Opcional. Define as parcelas quando você gerar por ela"
+            erro={form.formState.errors.condicaoPagamentoId?.message}
+          >
+            <Combobox
+              valor={condicaoPagamentoValor}
+              onValorChange={(valor) =>
+                form.setValue(
+                  "condicaoPagamentoId",
+                  valor === SEM_VINCULO ? "" : valor,
+                  { shouldValidate: true },
+                )
+              }
+              opcoes={[
+                { valor: SEM_VINCULO, rotulo: "Sem condição" },
+                ...condicoesPagamento.map((condicao) => ({
+                  valor: condicao.id,
+                  rotulo: condicao.descricao,
+                })),
+              ]}
+              placeholder="Sem condição"
+              disabled={salvando}
+              id="lan-condicao"
+            />
+          </CampoFormulario>
+
+          {tipoValor === "a_pagar" ? (
             <CampoFormulario
               id="lan-forma-pagamento"
               rotulo="Forma de pagamento"
@@ -469,8 +577,8 @@ export function LancamentoFormDrawer({
                 id="lan-forma-pagamento"
               />
             </CampoFormulario>
-          </LinhaCampos>
-        ) : null}
+          ) : null}
+        </LinhaCampos>
 
         <LinhaCampos>
           <CampoFormulario
@@ -521,23 +629,55 @@ export function LancamentoFormDrawer({
           </CampoFormulario>
         </LinhaCampos>
 
-        {/* Parcelas: colunas homogêneas (valor/vencimento), mesmo padrão de
-            tabela de itens usado na OC. */}
+        {/* Parcelas: mesmo padrão de tabela de itens da OC, na mesma ordem de
+            colunas (número, vencimento, valor) e com o mesmo par de ações
+            (gerar pela condição, adicionar na mão). */}
         <SecaoFormulario
           titulo="Parcelas"
           acao={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={salvando}
-              onClick={() => parcelas.append(parcelaVazia())}
-            >
-              <Plus />
-              Adicionar parcela
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={salvando || gerandoParcelas || !podeGerarParcelas}
+                onClick={() => void gerarParcelasPelaCondicao()}
+              >
+                {gerandoParcelas ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <Sparkles />
+                )}
+                Gerar pela condição
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={salvando}
+                onClick={() =>
+                  parcelas.append({
+                    valor: "",
+                    dataVencimento: dataCompraValor,
+                  })
+                }
+              >
+                <Plus />
+                Adicionar parcela
+              </Button>
+            </div>
           }
         >
+          {/* Diferente da OC, aqui a numeração NÃO é recalculada por vencimento
+              no salvamento: fn_salvar_lancamento grava o número que a tela manda,
+              que é a posição da linha. Dizer "pela ordem de vencimento", como a
+              OC diz, seria mentira nesta tela. */}
+          <p className="text-legenda text-muted-foreground">
+            A numeração segue a ordem das linhas desta tabela. Gere pela
+            condição de pagamento ou preencha na mão; a soma precisa fechar com
+            o valor.
+          </p>
+
           {typeof erroParcelas?.message === "string" ? (
             <p className="text-legenda text-destructive" role="alert">
               {erroParcelas.message}
@@ -707,6 +847,25 @@ export function LancamentoFormDrawer({
               legenda="Sobem junto quando você criar o lançamento"
             />
           )}
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Observações">
+          {/* Sem CampoFormulario aqui: o título da seção já é o rótulo, e
+              "Observações" duas vezes seguidas era ruído. Mesmo tratamento da
+              OC, que já foi corrigida assim. */}
+          <Textarea
+            id="lan-observacoes"
+            rows={3}
+            aria-label="Observações"
+            placeholder="Ex.: acerto combinado com o fornecedor, o que a nota não diz"
+            disabled={salvando}
+            {...form.register("observacoes")}
+          />
+          {form.formState.errors.observacoes?.message ? (
+            <p className="text-legenda text-destructive">
+              {form.formState.errors.observacoes.message}
+            </p>
+          ) : null}
         </SecaoFormulario>
       </form>
     </FormDrawer>

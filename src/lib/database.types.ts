@@ -1821,6 +1821,7 @@ export type Database = {
         Row: {
           categoria_id: string | null;
           centro_custo_id: string | null;
+          condicao_pagamento_id: string | null;
           created_at: string;
           created_by: string | null;
           data_compra: string;
@@ -1831,6 +1832,7 @@ export type Database = {
           id: string;
           mes_competencia: string;
           numero: string | null;
+          observacoes: string | null;
           origem: string;
           origem_id: string | null;
           status: string;
@@ -1841,6 +1843,7 @@ export type Database = {
         Insert: {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
+          condicao_pagamento_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           data_compra?: string;
@@ -1851,6 +1854,7 @@ export type Database = {
           id?: string;
           mes_competencia?: string;
           numero?: string | null;
+          observacoes?: string | null;
           origem: string;
           origem_id?: string | null;
           status?: string;
@@ -1861,6 +1865,7 @@ export type Database = {
         Update: {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
+          condicao_pagamento_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           data_compra?: string;
@@ -1871,6 +1876,7 @@ export type Database = {
           id?: string;
           mes_competencia?: string;
           numero?: string | null;
+          observacoes?: string | null;
           origem?: string;
           origem_id?: string | null;
           status?: string;
@@ -1891,6 +1897,13 @@ export type Database = {
             columns: ["centro_custo_id"];
             isOneToOne: false;
             referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamentos_condicao_pagamento_id_fkey";
+            columns: ["condicao_pagamento_id"];
+            isOneToOne: false;
+            referencedRelation: "condicoes_pagamento";
             referencedColumns: ["id"];
           },
           {
