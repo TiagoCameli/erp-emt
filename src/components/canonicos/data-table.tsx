@@ -1036,9 +1036,15 @@ export function DataTable<TData>({
           // abre o registro: soltar o arraste não pode navegar.
           onClick={(evento) => evento.stopPropagation()}
           className={cn(
-            "absolute bottom-0 left-0 z-10 h-1 w-full cursor-row-resize select-none",
-            "bg-faixa/40 opacity-0 group-hover/linha:opacity-100",
-            arrastandoEsta && "bg-faixa opacity-100",
+            // A área de pegar (8px, montada na borda: -bottom-1 h-2) é o dobro da
+            // faixa que se vê. Com 4px só dentro da linha, mirar na borda pegava o
+            // texto da célula e virava seleção de texto em vez de arraste: testado
+            // no navegador, errar por 1px é o caso comum, não o raro. A parte
+            // visível continua fina por dentro do gradiente.
+            "absolute -bottom-1 left-0 z-10 h-2 w-full cursor-row-resize select-none",
+            "bg-linear-to-b from-transparent from-25% via-faixa/40 via-50% to-transparent to-75%",
+            "opacity-0 group-hover/linha:opacity-100",
+            arrastandoEsta && "via-faixa opacity-100",
           )}
         />
         {arrastandoEsta && alturaEmArraste !== null ? (
