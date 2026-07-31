@@ -36,12 +36,14 @@ const dataOpcionalSchema = z
   .optional()
   .or(z.literal("").transform(() => undefined));
 
-/** Parcela validada no servidor: tipos já coeridos. */
+/**
+ * Parcela validada no servidor: tipos já coeridos.
+ *
+ * Sem número da parcela: quem numera é fn_salvar_lancamento, que renumera por
+ * vencimento (parcela 1 é a que vence primeiro). Vale também para o a receber,
+ * que passa pela mesma função.
+ */
 export const receberParcelaSchema = z.object({
-  numeroParcela: z
-    .number({ error: "Número da parcela inválido" })
-    .int({ error: "Número da parcela inválido" })
-    .positive({ error: "Número da parcela inválido" }),
   valor: valorSchema,
   dataVencimento: dataOpcionalSchema,
 });

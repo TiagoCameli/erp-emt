@@ -34,10 +34,16 @@ const dataOpcionalSchema = z
   .string()
   .trim()
   .optional()
-  .refine((valor) => valor === undefined || valor === "" || /^\d{4}-\d{2}-\d{2}$/.test(valor), {
-    error: "Data inválida",
-  })
-  .transform((valor) => (valor === undefined || valor === "" ? undefined : valor));
+  .refine(
+    (valor) =>
+      valor === undefined || valor === "" || /^\d{4}-\d{2}-\d{2}$/.test(valor),
+    {
+      error: "Data inválida",
+    },
+  )
+  .transform((valor) =>
+    valor === undefined || valor === "" ? undefined : valor,
+  );
 
 /** Converte string do form ("1.234,56") em número, ou NaN se inválida. */
 export function paraNumero(valor: string): number {
@@ -65,12 +71,15 @@ function textoOpcional(maximo: number) {
 // Schemas de servidor (tipos coeridos, validados na action)
 // ---------------------------------------------------------------------------
 
-/** Parcela validada no servidor. */
+/**
+ * Parcela validada no servidor.
+ *
+ * Sem número da parcela de propósito: quem numera é o banco. fn_salvar_lancamento
+ * renumera por vencimento (parcela 1 é a que vence primeiro, desempate por
+ * valor), igual à ordem de compra e ao diálogo "Definir parcelas". A posição da
+ * linha no formulário não decide nada, então nem viaja até o banco.
+ */
 export const parcelaSchema = z.object({
-  numeroParcela: z
-    .number({ error: "Número da parcela inválido" })
-    .int({ error: "Número da parcela inválido" })
-    .min(1, { error: "Número da parcela inválido" }),
   valor: valorSchema,
   dataVencimento: dataOpcionalSchema,
 });
@@ -99,7 +108,9 @@ export const lancamentoSchema = z
      * aprovação, direto para Pagamentos ou já quitado no cartão). Opcional no
      * schema porque conta a receber não usa; a tela exige em conta a pagar.
      */
-    formaPagamentoId: z.uuid({ error: "Forma de pagamento inválida" }).optional(),
+    formaPagamentoId: z
+      .uuid({ error: "Forma de pagamento inválida" })
+      .optional(),
     /**
      * Condição de pagamento: opcional, é ela que define as parcelas quando o
      * usuário manda gerar. Lançamento sem condição continua válido (parcela
@@ -139,7 +150,10 @@ export const lancamentoSchema = z
       const soma = dados.parcelas.reduce((total, p) => total + p.valor, 0);
       return Math.abs(soma - dados.valor) <= TOLERANCIA;
     },
-    { error: "A soma das parcelas precisa ser igual ao valor", path: ["parcelas"] },
+    {
+      error: "A soma das parcelas precisa ser igual ao valor",
+      path: ["parcelas"],
+    },
   )
   .refine(
     (dados) => {
@@ -162,12 +176,17 @@ function valorStringValido(valor: string): boolean {
   return valor.trim() !== "" && !Number.isNaN(numero) && numero >= 0;
 }
 
-/** Parcela no formulário. Valor como string; vencimento opcional. */
+/**
+ * Parcela no formulário. Valor como string; vencimento opcional.
+ *
+ * O valor pode chegar vazio aqui de propósito: com UMA parcela a tabela não
+ * aparece na tela e quem manda são os campos Valor e Vencimento do cabeçalho,
+ * então a linha escondida fica sem preencher. Com duas ou mais, a exigência de
+ * valor volta, e ela mora no superRefine do formulário, que é quem sabe quantas
+ * parcelas existem e consegue apontar o erro na linha certa da tabela.
+ */
 export const parcelaFormSchema = z.object({
-  valor: z
-    .string()
-    .trim()
-    .refine(valorStringValido, { error: "Informe um valor válido" }),
+  valor: z.string().trim(),
   dataVencimento: z.string().trim(),
 });
 
@@ -226,25 +245,50 @@ export const lancamentoFormSchema = z
       .min(1, { error: "Adicione ao menos uma parcela" }),
     rateios: z.array(rateioFormSchema),
   })
-  .refine(
-    (dados) => {
-      const valor = paraNumero(dados.valor);
-      if (Number.isNaN(valor)) return true;
-      const soma = dados.parcelas.reduce(
-        (total, p) => total + (Number.isNaN(paraNumero(p.valor)) ? 0 : paraNumero(p.valor)),
-        0,
-      );
-      return Math.abs(soma - valor) <= TOLERANCIA;
-    },
-    { error: "A soma das parcelas precisa ser igual ao valor", path: ["parcelas"] },
-  )
+  /**
+   * Parcelas: só há o que conferir a partir de DUAS.
+   *
+   * Com uma parcela, a tabela nem aparece no formulário e a parcela é montada no
+   * envio a partir do cabeçalho (valor total e campo Vencimento), então a soma
+   * fecha por construção e a linha escondida não precisa de valor. Exigir valor
+   * nela travaria o formulário num campo que ninguém vê.
+   */
+  .superRefine((dados, ctx) => {
+    if (dados.parcelas.length < 2) return;
+
+    dados.parcelas.forEach((parcela, indice) => {
+      if (!valorStringValido(parcela.valor)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Informe um valor válido",
+          path: ["parcelas", indice, "valor"],
+        });
+      }
+    });
+
+    const valor = paraNumero(dados.valor);
+    if (Number.isNaN(valor)) return;
+    const soma = dados.parcelas.reduce(
+      (total, p) =>
+        total + (Number.isNaN(paraNumero(p.valor)) ? 0 : paraNumero(p.valor)),
+      0,
+    );
+    if (Math.abs(soma - valor) > TOLERANCIA) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A soma das parcelas precisa ser igual ao valor",
+        path: ["parcelas"],
+      });
+    }
+  })
   .refine(
     (dados) => {
       if (dados.rateios.length === 0) return true;
       const valor = paraNumero(dados.valor);
       if (Number.isNaN(valor)) return true;
       const soma = dados.rateios.reduce(
-        (total, r) => total + (Number.isNaN(paraNumero(r.valor)) ? 0 : paraNumero(r.valor)),
+        (total, r) =>
+          total + (Number.isNaN(paraNumero(r.valor)) ? 0 : paraNumero(r.valor)),
         0,
       );
       return Math.abs(soma - valor) <= TOLERANCIA;

@@ -439,3 +439,77 @@ dizendo "exclua pela ordem de compra", e a ordem já tinha ido.
    uma segunda versão dela que possa divergir.
 5. Os três órfãos foram apagados na própria migração, conferindo por número, que
    a ordem sumiu, que não havia parcela paga e que nada estava conciliado.
+
+## A parcela 1 é sempre a de vencimento mais próximo, em todos os caminhos
+
+**Data:** 31/07/2026 · **Contexto:** o mesmo lançamento tinha duas numerações
+
+Três funções gravam parcela e só duas numeravam igual. `fn_salvar_parcelas_oc` e
+`fn_definir_parcelas_lancamento` renumeram por `row_number() over (order by
+data_vencimento, valor)`. `fn_salvar_lancamento`, que é o formulário de novo
+lançamento, gravava `coalesce((p->>'numero_parcela'), 1)`, e o app mandava
+`indice + 1`: o número era a **posição da linha no formulário**. Quem digitasse
+30/09 na primeira linha ficava com a parcela 1 vencendo depois da parcela 2, e o
+mesmo lançamento trocava de numeração ao ser reaberto no diálogo "Definir
+parcelas", que renumera.
+
+**Decisões**
+
+1. `fn_salvar_lancamento` renumera por vencimento, com o critério **copiado tal e
+   qual** das outras duas (`order by data_vencimento, valor`), em vez de inventar
+   um terceiro. Vale para criar e para editar, e vale também para o a receber, que
+   passa pela mesma função.
+2. Única diferença, obrigatória: `nulls last`. A OC e o diálogo exigem vencimento
+   em toda parcela; este caminho aceita parcela sem vencimento
+   (`lancamento_parcelas.data_vencimento` é nullable e o formulário deixa o campo
+   em branco). Parcela sem data vai para o **fim** da numeração, quem tem data é
+   que disputa o número 1.
+3. Quem numera é o banco, então o app **parou de mandar** `numero_parcela`
+   (Financeiro > Lançamentos e Financeiro > Contas a receber), e o campo saiu dos
+   schemas de servidor. Mandar a posição da linha seria ruído que faria alguém
+   achar que a ordem em que as parcelas foram digitadas decide a numeração.
+4. O desempate por valor ordena o valor como **texto** (`x->>'valor'`), herança de
+   `fn_salvar_parcelas_oc`: no mesmo vencimento, R$ 500,00 vem antes de R$ 90,00.
+   Foi copiado assim de propósito, porque o objetivo era ter **um** critério nos
+   três caminhos e o desempate só decide a ordem entre parcelas que vencem no
+   mesmo dia. Trocar para ordenação numérica é uma mudança das três funções de uma
+   vez, não desta.
+
+## Vencimento e Parcelas são excludentes no formulário de lançamento
+
+**Data:** 31/07/2026 · **Contexto:** print com "Vencimento 31/07" no topo e parcela sem data embaixo
+
+O formulário mostrava ao mesmo tempo o campo "Vencimento" (nível do lançamento,
+marcado como opcional) e a tabela de Parcelas com o vencimento de cada uma. Duas
+fontes de verdade para a mesma informação, e elas divergiam na cara do usuário.
+
+**Decisões**
+
+1. Quem decide qual dos dois aparece é a **quantidade de parcelas no formulário**,
+   sem campo novo de "número de parcelas": 0 ou 1 mostra o Vencimento e esconde a
+   tabela; 2 ou mais mostram a tabela e escondem o Vencimento.
+2. Com uma parcela, **quem manda é o cabeçalho**: a parcela é montada no envio a
+   partir dos campos Valor e Vencimento. Isso é o que garante que a soma feche por
+   construção e que não exista mais parcela com data vazia embaixo de um cabeçalho
+   com data.
+3. Os dois controles (`Adicionar parcela` e `Gerar pela condição`) vivem no
+   cabeçalho da seção, que continua visível em parcela única. Escondendo a seção
+   inteira, quem começasse com uma parcela ficaria preso nela.
+4. Nas transições a informação não se perde: indo de uma para várias, a primeira
+   linha da tabela nasce com o valor e a data do cabeçalho; voltando para uma, a
+   data da parcela que sobrou sobe para o cabeçalho. O valor da linha que sobra é
+   descartado de propósito, porque com uma parcela ela vale o total.
+5. `lancamentos.data_vencimento` passou a acompanhar as parcelas: com uma, é o
+   campo do cabeçalho; com várias, é o vencimento **mais próximo**, que é a parcela
+   1 depois da renumeração. A lista nunca mais mostra um vencimento que não existe
+   em parcela nenhuma. Continua sendo o formulário que manda esse valor, então
+   `fn_definir_parcelas_lancamento` (que recalcula o mínimo no banco) segue sendo o
+   outro caminho, e os dois agora concordam.
+6. A validação do cliente acompanhou: com menos de duas parcelas o schema não
+   cobre a soma nem exige valor na linha, porque a linha está escondida e é
+   derivada. Com duas ou mais, as duas exigências voltam, a de valor apontando a
+   linha errada da tabela. Coberto por teste em `schemas.test.ts`.
+7. Condição de pagamento "Boleto 30 dias" **desativada** (`ativo = false`), a
+   pedido do Tiago. Não foi apagada: `condicoes_pagamento` é referenciada por
+   ordens, cotações, lançamentos e pela própria divisão em parcelas, e desativada
+   ela sai dos dropdowns (todos filtram `ativo = true`) sem levar histórico junto.
