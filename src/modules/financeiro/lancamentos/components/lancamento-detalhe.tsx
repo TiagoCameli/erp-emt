@@ -149,7 +149,8 @@ export interface LancamentoDetalheViewProps {
 /**
  * Detalhe do lançamento: cabeçalho, dados, parcelas com status, rateio por
  * centro de custo e trilha. A edição é bloqueada para lançamentos de origem
- * diferente de 'manual' (ex: vindos de uma OC) ou com alguma parcela paga.
+ * diferente de 'manual' (ex: vindos de uma OC) ou com alguma parcela já
+ * aprovada ou paga: aprovado se edita desaprovando primeiro.
  */
 export function LancamentoDetalheView({
   lancamento,
@@ -223,16 +224,21 @@ export function LancamentoDetalheView({
   const temParcelaPaga = lancamento.parcelas.some(
     (parcela) => parcela.status === "pago",
   );
+  const temParcelaAprovada = lancamento.parcelas.some(
+    (parcela) => parcela.status === "aprovado",
+  );
   // Sem parcela definida o lançamento não entra na fila de aprovação nem pode
   // ser pago: é um estado a resolver, não um detalhe.
   const semParcelas = lancamento.parcelas.length === 0;
-  const temParcelaFechada = lancamento.parcelas.some(
-    (parcela) => parcela.status === "aprovado" || parcela.status === "pago",
-  );
+  const temParcelaFechada = temParcelaAprovada || temParcelaPaga;
   // Lançamento de origem tem o cabeçalho travado, mas as parcelas dele podem
   // ser definidas aqui enquanto nenhuma foi aprovada ou paga.
   const podeDefinirParcelas = podeEditar && !ehManual && !temParcelaFechada;
-  const editavel = podeEditar && ehManual && !temParcelaPaga;
+  // Aprovado também tranca a edição, não só pago: editar regrava as parcelas do
+  // zero, e isso apagaria a aprovação (data programada, conta e quem aprovou).
+  // Quem precisa mudar desaprova o pagamento primeiro. A trava final é o banco
+  // (fn_salvar_lancamento recusa), aqui é para ninguém tentar em vão.
+  const editavel = podeEditar && ehManual && !temParcelaFechada;
   const infoStatus = STATUS_LANCAMENTO[lancamento.status];
 
   // Caminho do pagamento: quem decide é o tipo da forma de pagamento, e é o que
@@ -248,11 +254,16 @@ export function LancamentoDetalheView({
     lancamento.status === "pago" &&
     !lancamento.notaRegistrada;
 
+  // Pago vem antes de aprovado porque é o bloqueio mais duro: com parcela paga
+  // não há caminho de volta pela desaprovação, e é o que o banco responde
+  // primeiro. Cada texto diz o que fazer, não só o que travou.
   const motivoBloqueio = !ehManual
     ? `Lançamento de origem ${lancamento.origem}. Edite na origem.`
     : temParcelaPaga
       ? "Tem parcela paga. Não dá para editar."
-      : null;
+      : temParcelaAprovada
+        ? "Pagamento aprovado. Desaprove o pagamento para editar."
+        : null;
 
   const somaRateios = lancamento.rateios.reduce(
     (total, rateio) => total + rateio.valor,

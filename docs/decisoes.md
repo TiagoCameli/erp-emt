@@ -513,3 +513,42 @@ fontes de verdade para a mesma informação, e elas divergiam na cara do usuári
    pedido do Tiago. Não foi apagada: `condicoes_pagamento` é referenciada por
    ordens, cotações, lançamentos e pela própria divisão em parcelas, e desativada
    ela sai dos dropdowns (todos filtram `ativo = true`) sem levar histórico junto.
+
+## Editar lançamento com pagamento aprovado é recusado
+
+**Data:** 31/07/2026 · **Contexto:** a edição apagava a aprovação em silêncio
+
+No caminho de edição, `fn_salvar_lancamento` apaga e regrava **todas** as
+parcelas. As guardas eram duas e deixavam um furo no meio: recusava se alguma
+parcela estava `pago`, e recusava mudança do mês de referência se alguma estava
+`aprovado` ou `pago`. Com uma parcela `aprovado` e o mês **inalterado**, a edição
+passava: as parcelas eram recriadas como `pendente` e `aprovado_por`,
+`aprovado_em`, `data_programada`, `data_programada_origem` e `conta_bancaria_id`
+iam embora sem aviso. Dinheiro já autorizado a sair voltava a não aprovado sem
+ninguém pedir, e a parcela reaparecia na fila de aprovação. A prova
+`supabase/provas/editar_lancamento_aprovado_recusado.sql` reproduz o furo (caso 6,
+que reconstrói a versão antiga a partir da definição viva) antes de provar o
+conserto.
+
+**Decisões**
+
+1. Vale a regra 8 da status machine, que já estava escrita: **editar aprovado é
+   proibido, desaprova, edita, reaprova**. Nada de regra nova. A guarda de `pago`
+   ganhou a irmã de `aprovado`, e a mensagem diz o caminho de volta: "Desaprove o
+   pagamento em Financeiro > Aprovação de pagamentos, edite e aprove de novo."
+2. A guarda de mudança de mês **fica onde está**, mesmo virando redundante para
+   `aprovado`: ela é a que cobre `pago` com mês diferente e a que dá a mensagem
+   específica do mês. Guarda de dinheiro não se apaga por economia de linha.
+3. A trava é dupla, como manda a regra da permissão tripla: o banco recusa
+   (barreira final) e o detalhe do lançamento deixa de oferecer o botão Editar
+   quando há parcela aprovada, com o texto dizendo o que fazer. `editavel` passou
+   a usar `temParcelaFechada` (aprovado **ou** pago), o mesmo critério que
+   `podeDefinirParcelas` já usava.
+4. Não foi preciso mexer nos outros dois caminhos, e isso foi verificado, não
+   suposto: `fn_definir_parcelas_lancamento` (diálogo "Definir parcelas") já
+   recusava `aprovado` e `pago` juntos, sem depender do mês, e
+   `fn_excluir_lancamento` também. Contas a receber só cria, não edita.
+5. O botão Excluir continua aparecendo e a recusa continua vindo do banco, por
+   decisão anterior já registrada no código: a regra de quem pode sair mora em
+   `fn_excluir_lancamento`, e a mensagem dela vai direto ao toast para a tela não
+   manter uma regra paralela que possa divergir.
