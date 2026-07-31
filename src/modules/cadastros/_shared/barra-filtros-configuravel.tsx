@@ -6,7 +6,7 @@ import {
   escreverPreferenciasTabela,
   lerPreferenciasTabela,
   MenuFiltros,
-  VERSAO_PREFERENCIAS,
+  preferenciasVazias,
 } from "@/components/canonicos";
 import {
   buscarPreferenciaTabela,
@@ -123,15 +123,12 @@ export function BarraFiltrosConfiguravel({
       void limparPreferenciaTabela(idTabela);
       return;
     }
+    // Parte da preferência neutra do canônico e só troca os filtros: a barra não
+    // tem coluna nem linha para guardar, e campo novo do formato (altura de
+    // linha, por exemplo) entra aqui pelo padrão, sem esta tela precisar saber.
     void salvarPreferenciaTabela(
       idTabela,
-      escreverPreferenciasTabela({
-        versao: VERSAO_PREFERENCIAS,
-        visiveis: {},
-        ordem: [],
-        larguras: {},
-        filtros: proximos,
-      }),
+      escreverPreferenciasTabela({ ...preferenciasVazias(), filtros: proximos }),
     );
   }
 

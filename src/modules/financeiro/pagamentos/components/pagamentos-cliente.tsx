@@ -523,7 +523,6 @@ export function PagamentosCliente({
       {
         accessorKey: "dataVencimento",
         header: "Vencimento",
-        meta: { alinharDireita: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataVencimento
@@ -537,7 +536,7 @@ export function PagamentosCliente({
         // Pagar e leva um bloqueio que não tinha como prever.
         accessorKey: "dataProgramada",
         header: "Data autorizada",
-        meta: { alinharDireita: true, naoTruncar: true },
+        meta: { naoTruncar: true },
         cell: ({ row }) => {
           const autorizada = row.original.dataProgramada;
           if (!autorizada) {
@@ -546,7 +545,7 @@ export function PagamentosCliente({
           const vencida = programacaoVencida(autorizada, hoje);
           const aindaNao = autorizada > hoje;
           return (
-            <span className="inline-flex items-center justify-end gap-1.5">
+            <span className="inline-flex items-center gap-1.5">
               <span className="tabular-nums">{formatarData(autorizada)}</span>
               {vencida ? (
                 <StatusBadge status="rejeitado" rotulo="Vencida" />
@@ -629,7 +628,6 @@ export function PagamentosCliente({
       {
         accessorKey: "dataPagamento",
         header: "Pagamento",
-        meta: { alinharDireita: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataPagamento

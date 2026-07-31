@@ -6,6 +6,7 @@ import { MoreHorizontal, Plus, Tags } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  colunaNumero,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -144,15 +145,8 @@ export function CategoriasTabela({
           <span className="font-medium">{row.original.nome}</span>
         ),
       },
-      {
-        accessorKey: "insumos",
-        header: "Insumos",
-        size: 110,
-        meta: { alinharDireita: true },
-        cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.insumos}</span>
-        ),
-      },
+      // Contagem: o helper canônico é quem declara direita + tabular-nums.
+      colunaNumero<CategoriaLista>("insumos", "Insumos"),
       {
         accessorKey: "ativo",
         header: "Status",

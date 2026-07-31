@@ -1,7 +1,8 @@
 /**
- * Preferências de exibição de uma tabela (colunas visíveis, ordem, larguras e
- * filtros visíveis), guardadas no banco por usuário. Funções puras: o DataTable
- * cuida de buscar, salvar e hidratar; aqui só tem serialização e saneamento.
+ * Preferências de exibição de uma tabela (colunas visíveis, ordem, larguras,
+ * filtros visíveis e altura da linha), guardadas no banco por usuário. Funções
+ * puras: o DataTable cuida de buscar, salvar e hidratar; aqui só tem
+ * serialização e saneamento.
  *
  * Saneamento é obrigatório na leitura: o JSON vem do navegador do usuário e as
  * colunas da tela mudam com o tempo (coluna renomeada, removida, nova). Uma
@@ -12,6 +13,12 @@
 /** Versão do formato. Subir invalida tudo que está salvo (migração descartável). */
 // v2: entrou `filtros`. Subir a versão descarta o que estava salvo no formato
 // antigo, inclusive o que ficou no localStorage antes de ir para o banco.
+//
+// `alturaLinha` entrou DEPOIS do v2 e de propósito NÃO subiu a versão: campo
+// opcional se resolve na leitura (ausente = automático), e subir invalidaria as
+// colunas, larguras e filtros que todo mundo já configurou. Campo novo que só
+// acrescenta nunca precisa de versão nova; só mude a versão se o significado de
+// um campo existente mudar.
 export const VERSAO_PREFERENCIAS = 2;
 
 /** Largura mínima de uma coluna, em px. Abaixo disso o conteúdo desaparece. */
@@ -19,6 +26,24 @@ export const LARGURA_MINIMA = 60;
 
 /** Largura máxima de uma coluna, em px. */
 export const LARGURA_MAXIMA = 800;
+
+/**
+ * Altura mínima de linha, em px.
+ *
+ * 34 = 32 do botão + 2 de folga de borda. Os 32 são a altura real dos botões que
+ * moram DENTRO da linha: o `⋮` de ações é `size="icon-sm"` (size-8) e os botões
+ * Aprovar/Revisar da fila de aprovação são `size="sm"` (h-8). Com altura fixa o
+ * conteúdo da célula entra num contêiner com `maxHeight` e `overflow-hidden`, e
+ * um mínimo menor que o botão o decepa em TODA listagem do app, porque o preset
+ * "Compacta" usa exatamente este valor.
+ *
+ * Não baixe para 28 achando que "cabe uma linha de texto": texto cabe, botão
+ * não, e é o botão que manda aqui.
+ */
+export const ALTURA_LINHA_MINIMA = 34;
+
+/** Altura máxima de linha, em px. Acima disso a tabela vira uma lista de cards. */
+export const ALTURA_LINHA_MAXIMA = 160;
 
 export interface PreferenciasTabela {
   versao: number;
@@ -30,6 +55,12 @@ export interface PreferenciasTabela {
   larguras: Record<string, number>;
   /** id do filtro -> visível. Filtro ausente segue o padrão da tela. */
   filtros: Record<string, boolean>;
+  /**
+   * Altura de toda linha da tabela, em px. `null` = automática: a linha tem
+   * altura mínima e cresce com o conteúdo (é o padrão, e o que mantém visível a
+   * segunda linha das células de duas linhas).
+   */
+  alturaLinha: number | null;
 }
 
 /** Preferência neutra: nada escondido, nada reordenado, nada redimensionado. */
@@ -40,6 +71,7 @@ export function preferenciasVazias(): PreferenciasTabela {
     ordem: [],
     larguras: {},
     filtros: {},
+    alturaLinha: null,
   };
 }
 
@@ -100,6 +132,19 @@ function saneiaLarguras(
 }
 
 /**
+ * Altura da linha salva. Qualquer coisa que não seja número utilizável cai em
+ * `null` (automática), que é o comportamento padrão da tabela: preferência velha
+ * ou corrompida nunca pode clipar o conteúdo de quem nunca pediu isso.
+ */
+function saneiaAlturaLinha(bruto: unknown): number | null {
+  if (typeof bruto !== "number" || !Number.isFinite(bruto)) return null;
+  return Math.min(
+    ALTURA_LINHA_MAXIMA,
+    Math.max(ALTURA_LINHA_MINIMA, Math.round(bruto)),
+  );
+}
+
+/**
  * Interpreta o que estava salvo. Devolve null quando não há nada aproveitável
  * (ausente, JSON inválido, versão antiga, formato estranho) — nesse caso a tela
  * usa o padrão dela. `idsValidos` são as colunas que a tela tem hoje.
@@ -128,6 +173,9 @@ export function lerPreferenciasTabela(
     ordem: saneiaOrdem(dados.ordem, validos),
     larguras: saneiaLarguras(dados.larguras, validos),
     filtros: saneiaVisiveis(dados.filtros, new Set(idsFiltros)),
+    // Blob gravado antes da altura existir não tem o campo: lê como automática,
+    // sem perder o resto da configuração.
+    alturaLinha: saneiaAlturaLinha(dados.alturaLinha),
   };
 }
 

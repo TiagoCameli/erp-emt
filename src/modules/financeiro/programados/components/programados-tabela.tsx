@@ -428,7 +428,6 @@ export function ProgramadosTabela({
       {
         accessorKey: "dataVencimento",
         header: "Vencimento",
-        meta: { alinharDireita: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataVencimento
@@ -440,7 +439,6 @@ export function ProgramadosTabela({
       {
         accessorKey: "dataEfetiva",
         header: "Data programada",
-        meta: { alinharDireita: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataEfetiva

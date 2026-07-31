@@ -594,3 +594,48 @@ mantinha as três telas iguais só enquanto ninguém filtrasse diferente num lad
    `supabase/provas/condicao_pagamento_catalogo_unico.sql` testa os dois lados: a
    soma quebrada é recusada pelo banco (caso 7) e a que a heurística gera é aceita
    (caso 8).
+
+## Tabela centralizada, dinheiro à direita, altura de linha por usuário
+
+**Data:** 31/07/2026 · **Contexto:** o pedido foi "centraliza o texto de todas as tabelas" e "deixa eu ajustar a altura das linhas"
+
+O DataTable canônico passou a nascer centralizado (cabeçalho e célula) e ganhou
+altura de linha ajustável por arraste e por preset, guardada por usuário no mesmo
+blob de preferência das colunas. As duas coisas têm exceção deliberada, e é a
+exceção que precisa ficar registrada: quem vier depois vai olhar "centralizado é
+o padrão" e achar que dinheiro e altura fixa foram esquecidos.
+
+**Decisões**
+
+1. **Dinheiro, quantidade e contagem continuam à direita, com `tabular-nums`.**
+   Centralizar tudo era o pedido literal; o Tiago viu o mockup lado a lado e
+   escolheu manter a coluna de valor à direita, porque é a vírgula embaixo da
+   vírgula que faz "R$ 512.340,00" saltar aos olhos ao lado de "R$ 1.940,50".
+   Coluna centralizada embaralha a ordem de grandeza justamente na tela em que ela
+   é a informação. Isso não é preferência estética, é a regra 3 do CLAUDE.md
+   (dinheiro alinhado à direita) e vale também para quantidade, percentual, horas
+   e contagem. O mecanismo é um só: `meta.alinharDireita: true` na coluna, que os
+   helpers `colunaDinheiro` e `colunaNumero` já declaram. Nenhuma tela alinha na
+   mão: `text-right` dentro de `cell` foi varrido do app e só sobrou em coluna de
+   ação (o menu ⋮), onde não é alinhamento de texto e sim posição de botão.
+   Centralizar valor monetário depois disso é regressão, não melhoria, e existe
+   teste em `data-table.test.tsx` cuja função é ficar vermelho se alguém tentar.
+2. **A altura padrão é automática (`alturaLinha: null`), não uma altura fixa.**
+   "Todas as linhas iguais" só se consegue clipando: altura em `<tr>` funciona
+   como mínimo, então a célula alta continuaria empurrando a linha, e por isso o
+   conteúdo passa a ser limitado por `maxHeight` + `overflow-hidden` dentro da
+   célula quando há altura escolhida. Isso corta a segunda linha das células de
+   duas linhas (`CelulaDescricaoCategoria`: descrição em cima, categoria embaixo,
+   em oito listagens). Cortar é aceitável quando a pessoa pediu; não é aceitável
+   como padrão para 20 a 30 usuários que nunca pediram nada. Então automática é o
+   estado inicial, é o que a preferência antiga lê, é o que uma preferência
+   corrompida lê, e é um item nomeado "Automática" no menu "Altura" para existir
+   caminho de volta. O menu existe além do arraste porque arrastar não funciona no
+   teclado: sem ele, quem clipou por acidente sem mouse ficaria preso.
+3. **Campo novo no formato da preferência NÃO sobe `VERSAO_PREFERENCIAS`.** Ela
+   continua 2, com teste travando o número. `lerPreferenciasTabela` descarta tudo
+   quando a versão não bate, então subir de 2 para 3 apagaria colunas visíveis,
+   ordem, larguras e filtros de todos os usuários para acrescentar um campo
+   opcional. Compatibilidade nos dois lados resolve sozinha: blob v2 sem
+   `alturaLinha` lê como automática, e blob novo lido por código velho tem o campo
+   ignorado. Só mude a versão se o significado de um campo existente mudar.

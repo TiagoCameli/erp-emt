@@ -96,7 +96,9 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
     cell: ({ row }) => {
       const info = infoStatusOC(row.original.status);
       return (
-        <div className="flex flex-wrap items-center gap-1.5">
+        // Flex não herda o text-align da célula: sem justify-center os badges
+        // ficariam à esquerda enquanto o resto da tabela vem centralizado.
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
           <StatusBadge status={info.badge} rotulo={info.rotulo} />
           {/* Cartão de crédito quita na aprovação: a OC segue aprovada e a nota
               fiscal ainda tem que ser registrada. Sem este aviso, a nota some. */}

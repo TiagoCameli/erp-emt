@@ -55,8 +55,18 @@ const colunas: ColumnDef<UsuarioLista, unknown>[] = [
   {
     accessorKey: "ativo",
     header: "Status",
+    // Cabe o badge mais largo desta tela ("1º acesso pendente", ~125px com o
+    // px-2 do Badge) em uma linha, mais o px-3 da célula. Quando os dois badges
+    // aparecem juntos ("Inativo" + "1º acesso pendente") o flex-wrap põe o
+    // segundo na linha de baixo, e o naoTruncar garante que ele apareça inteiro
+    // em vez de ser cortado: é ele que diz que o convite não foi aceito. Era 230
+    // (largura dos dois badges lado a lado), que é caro por uma linha a menos.
+    size: 160,
+    meta: { naoTruncar: true },
     cell: ({ row }) => (
-      <div className="flex flex-wrap items-center gap-1.5">
+      // Flex não herda o text-align da célula: sem justify-center os badges
+      // ficariam à esquerda enquanto o resto da tabela vem centralizado.
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
         {row.original.ativo ? (
           <StatusBadge status="aprovado" rotulo="Ativo" />
         ) : (

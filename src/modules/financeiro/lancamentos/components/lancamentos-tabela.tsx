@@ -177,6 +177,14 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
   {
     accessorKey: "status",
     header: "Status",
+    // Cabe o badge mais largo desta tela ("Parcelas pendentes", ~122px com o
+    // px-2 do Badge) em uma linha, mais o px-3 da célula. Com os dois badges o
+    // flex-wrap manda o aviso para a linha de baixo, e o naoTruncar garante que
+    // ele apareça inteiro em vez de ser cortado. Era 230 (os dois lado a lado):
+    // esta é a listagem com mais coluna do app, e 70px por coluna gorda é o que
+    // antecipa o scroll horizontal na tela que o financeiro usa todo dia.
+    size: 160,
+    meta: { naoTruncar: true },
     cell: ({ row }) => {
       const info = STATUS_LANCAMENTO[row.original.status];
       // Todo lançamento nasce com status 'a_pagar' (em aberto); para um
@@ -186,7 +194,9 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
           ? "A receber"
           : info.rotulo;
       return (
-        <div className="flex flex-wrap items-center gap-1">
+        // justify-center porque flex não herda o text-center da célula: sem
+        // isso os badges encostam na esquerda e desalinham do cabeçalho.
+        <div className="flex flex-wrap items-center justify-center gap-1">
           <StatusBadge status={info.badge} rotulo={rotulo} />
           {/* Sem parcela definida o lançamento não entra na fila de aprovação
               nem pode ser pago: precisa aparecer já na lista. */}

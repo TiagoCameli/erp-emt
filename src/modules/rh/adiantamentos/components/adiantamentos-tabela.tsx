@@ -6,6 +6,7 @@ import { HandCoins, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  colunaDinheiro,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -13,7 +14,6 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
-  MoneyText,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -172,12 +172,7 @@ export function AdiantamentosTabela({
           </span>
         ),
       },
-      {
-        accessorKey: "valor",
-        header: "Valor",
-        meta: { alinharDireita: true },
-        cell: ({ row }) => <MoneyText valor={row.original.valor} />,
-      },
+      colunaDinheiro<AdiantamentoLista>("valor", "Valor"),
       {
         accessorKey: "data",
         header: "Data",

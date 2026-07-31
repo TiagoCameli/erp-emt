@@ -201,7 +201,6 @@ export function ContasReceberCliente({
       {
         accessorKey: "dataVencimento",
         header: "Vencimento",
-        meta: { alinharDireita: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataVencimento

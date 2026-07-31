@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Plus, Wallet } from "lucide-react";
 
 import {
+  colunaNumero,
   DataTable,
   EmptyState,
   FiltroBusca,
@@ -123,16 +124,13 @@ export function FormasTabela({
           </span>
         ),
       },
-      {
-        accessorKey: "usoEmOrdens",
-        header: "Em ordens",
-        size: 110,
-        // Secundária: contagem de uso serve para decidir desativação, não no dia a dia.
-        meta: { alinharDireita: true, ocultaPorPadrao: true },
-        cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.usoEmOrdens}</span>
-        ),
-      },
+      // Contagem: direita e tabular-nums vêm do helper canônico. Secundária,
+      // porque uso serve para decidir desativação, não no dia a dia. 120 porque
+      // "Em ordens" não cabe nos 110 do helper e o cabeçalho truncava.
+      colunaNumero<FormaLista>("usoEmOrdens", "Em ordens", {
+        size: 120,
+        meta: { ocultaPorPadrao: true },
+      }),
       {
         accessorKey: "ativo",
         header: "Status",

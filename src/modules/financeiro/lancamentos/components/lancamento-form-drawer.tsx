@@ -91,8 +91,15 @@ const COLUNAS_PARCELA: ColunaItem[] = [
   { chave: "numero", rotulo: "Nº", largura: "48px" },
   // Vencimento sem asterisco de propósito: diferente da OC, o lançamento aceita
   // parcela sem data (fn_salvar_lancamento grava null), então marcar como
-  // obrigatório aqui seria mentir para quem preenche.
-  { chave: "dataVencimento", rotulo: "Vencimento", largura: "180px" },
+  // obrigatório aqui seria mentir para quem preenche. À esquerda porque o campo
+  // de data ocupa a coluna toda e escreve na esquerda: rótulo centralizado
+  // apontaria para um vão vazio, e texto dentro de Input não se centraliza.
+  {
+    chave: "dataVencimento",
+    rotulo: "Vencimento",
+    largura: "180px",
+    alinhamento: "left",
+  },
   {
     chave: "valor",
     rotulo: "Valor",
@@ -108,6 +115,9 @@ const COLUNAS_RATEIO: ColunaItem[] = [
     chave: "centroCusto",
     rotulo: "Centro de custo",
     largura: "minmax(0,2fr)",
+    // Combobox de largura cheia, com o nome do centro na esquerda: o rótulo
+    // acompanha o texto, igual à coluna Insumo da OC.
+    alinhamento: "left",
     obrigatorio: true,
   },
   {

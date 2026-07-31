@@ -6,6 +6,7 @@ import { Filter, FolderTree, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  colunaNumero,
   DataTable,
   EmptyState,
   FiltroBusca,
@@ -206,14 +207,12 @@ export function CategoriasTabela({
             <span className="text-muted-foreground">-</span>
           ),
       },
-      {
-        accessorKey: "usos",
-        header: "Lançamentos",
-        meta: { alinharDireita: true },
-        cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.usos}</span>
-        ),
-      },
+      // Contagem pelo helper canônico: alinhamento à direita e tabular-nums
+      // vêm de lá e não se perdem numa edição futura. Largura acima do padrão
+      // do helper porque "Lançamentos" é mais largo que o número que ele rotula.
+      colunaNumero<CategoriaFinanceiraLista>("usos", "Lançamentos", {
+        size: 140,
+      }),
       {
         accessorKey: "ativo",
         header: "Status",

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALTURA_LINHA_MAXIMA,
+  ALTURA_LINHA_MINIMA,
   chavePreferenciasTabela,
   escreverPreferenciasTabela,
   LARGURA_MAXIMA,
@@ -52,6 +54,7 @@ describe("lerPreferenciasTabela", () => {
       ordem: ["status", "numero"],
       larguras: { numero: 120 },
       filtros: {},
+      alturaLinha: null,
     });
 
     expect(lerPreferenciasTabela(salvo, IDS)).toEqual({
@@ -60,6 +63,7 @@ describe("lerPreferenciasTabela", () => {
       ordem: ["status", "numero"],
       larguras: { numero: 120 },
       filtros: {},
+      alturaLinha: null,
     });
   });
 
@@ -70,6 +74,7 @@ describe("lerPreferenciasTabela", () => {
       ordem: ["colunaMorta", "status"],
       larguras: { colunaMorta: 300, status: 100 },
       filtros: {},
+      alturaLinha: null,
     });
 
     const lido = lerPreferenciasTabela(salvo, IDS);
@@ -93,6 +98,7 @@ describe("lerPreferenciasTabela", () => {
       ordem: [],
       larguras: {},
       filtros: {},
+      alturaLinha: null,
     });
   });
 
@@ -183,5 +189,92 @@ describe("filtros visíveis na preferência", () => {
     });
 
     expect(lerPreferenciasTabela(salvo, IDS)?.filtros).toEqual({});
+  });
+});
+
+describe("altura da linha na preferência", () => {
+  function lerAltura(alturaLinha: unknown): number | null | undefined {
+    const salvo = JSON.stringify({ versao: VERSAO_PREFERENCIAS, alturaLinha });
+    return lerPreferenciasTabela(salvo, IDS)?.alturaLinha;
+  }
+
+  it("trava no mínimo e no máximo, e arredonda", () => {
+    expect(lerAltura(1)).toBe(ALTURA_LINHA_MINIMA);
+    expect(lerAltura(-40)).toBe(ALTURA_LINHA_MINIMA);
+    expect(lerAltura(99999)).toBe(ALTURA_LINHA_MAXIMA);
+    expect(lerAltura(40.6)).toBe(41);
+  });
+
+  it("aceita valor dentro dos limites como está", () => {
+    expect(lerAltura(ALTURA_LINHA_MINIMA)).toBe(ALTURA_LINHA_MINIMA);
+    expect(lerAltura(52)).toBe(52);
+    expect(lerAltura(ALTURA_LINHA_MAXIMA)).toBe(ALTURA_LINHA_MAXIMA);
+  });
+
+  it("ignora valor absurdo e cai em automática", () => {
+    // Tudo que não é número utilizável tem que virar automática, nunca uma
+    // altura inventada: altura fixa errada CLIPA o conteúdo da pessoa.
+    expect(lerAltura("alta")).toBeNull();
+    expect(lerAltura(Number.NaN)).toBeNull();
+    expect(lerAltura(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(lerAltura(true)).toBeNull();
+    expect(lerAltura({ px: 40 })).toBeNull();
+    expect(lerAltura([40])).toBeNull();
+  });
+
+  it("null sobrevive à ida e à volta", () => {
+    const salvo = escreverPreferenciasTabela({
+      ...preferenciasVazias(),
+      larguras: { numero: 120 },
+      alturaLinha: null,
+    });
+
+    expect(lerPreferenciasTabela(salvo, IDS)?.alturaLinha).toBeNull();
+  });
+
+  it("altura escolhida sobrevive à ida e à volta", () => {
+    const salvo = escreverPreferenciasTabela({
+      ...preferenciasVazias(),
+      alturaLinha: 52,
+    });
+
+    expect(lerPreferenciasTabela(salvo, IDS)?.alturaLinha).toBe(52);
+  });
+
+  it("blob v2 sem alturaLinha continua sendo lido inteiro", () => {
+    // ESTE é o teste que protege a configuração de todo mundo: a altura entrou
+    // sem subir VERSAO_PREFERENCIAS, então o que foi salvo antes dela existir
+    // tem que continuar valendo. Se alguém subir a versão, isto quebra primeiro.
+    const salvoAntesDaAltura = JSON.stringify({
+      versao: 2,
+      visiveis: { status: false },
+      ordem: ["status", "numero", "fornecedor", "valorTotal"],
+      larguras: { numero: 120, fornecedor: 240 },
+      filtros: { status: false },
+    });
+
+    const lido = lerPreferenciasTabela(salvoAntesDaAltura, IDS, ["status"]);
+
+    expect(lido).toEqual({
+      versao: 2,
+      visiveis: { status: false },
+      ordem: ["status", "numero", "fornecedor", "valorTotal"],
+      larguras: { numero: 120, fornecedor: 240 },
+      filtros: { status: false },
+      alturaLinha: null,
+    });
+  });
+
+  it("a versão do formato continua 2: subir apaga a configuração de todo mundo", () => {
+    expect(VERSAO_PREFERENCIAS).toBe(2);
+  });
+
+  it("o mínimo é 34, a altura do botão de ação da linha", () => {
+    // 32 do botão + 2 de folga de borda. Os 32 são o `size="icon-sm"` do `⋮` e o
+    // `size="sm"` dos botões Aprovar/Revisar, que moram DENTRO da linha. O preset
+    // "Compacta" usa exatamente este mínimo, então baixar para 28 volta a decepar
+    // esses botões em toda listagem do app. Não é detalhe de gosto.
+    expect(ALTURA_LINHA_MINIMA).toBe(34);
+    expect(ALTURA_LINHA_MINIMA).toBeGreaterThanOrEqual(32);
   });
 });

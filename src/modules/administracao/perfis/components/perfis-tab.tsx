@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, ShieldCheck } from "lucide-react";
 
 import {
+  colunaNumero,
   DataTable,
   EmptyState,
   FiltroBusca,
@@ -39,28 +40,20 @@ const colunas: ColumnDef<PerfilResumo, unknown>[] = [
   {
     accessorKey: "descricao",
     header: "Descrição",
+    // Só a cor secundária: o truncamento e o tooltip são da própria DataTable, e
+    // uma largura máxima aqui prenderia o texto à esquerda da coluna.
     cell: ({ row }) => (
-      <span className="block max-w-md truncate text-muted-foreground">
+      <span className="text-muted-foreground">
         {row.original.descricao ?? ""}
       </span>
     ),
   },
-  {
-    accessorKey: "totalPermissoes",
-    header: "Permissões",
-    meta: { alinharDireita: true },
-    cell: ({ row }) => (
-      <span className="tabular-nums">{row.original.totalPermissoes}</span>
-    ),
-  },
-  {
-    accessorKey: "totalUsuarios",
-    header: "Usuários",
-    meta: { alinharDireita: true },
-    cell: ({ row }) => (
-      <span className="tabular-nums">{row.original.totalUsuarios}</span>
-    ),
-  },
+  // Contagens seguem à direita, com tabular-nums, pelo helper canônico. Aqui
+  // quem manda na largura é o cabeçalho, não o número: "Permissões" pede 78px e
+  // os 110 do helper só sobram 68 depois do padding e do ícone de ordenação, e
+  // cabeçalho truncado esconde do que é a coluna. "Usuários" cabe nos 110.
+  colunaNumero<PerfilResumo>("totalPermissoes", "Permissões", { size: 130 }),
+  colunaNumero<PerfilResumo>("totalUsuarios", "Usuários"),
 ];
 
 const OPCOES_USUARIOS = [
