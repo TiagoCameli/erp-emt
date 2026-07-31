@@ -39,6 +39,7 @@ import {
   mesParaCompetencia,
 } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
 import {
@@ -623,8 +624,10 @@ export function LancamentoFormDrawer({
         </LinhaCampos>
 
         <LinhaCampos>
-          {/* Condição de pagamento: opcional aqui (diferente da OC, onde é
-              obrigatória). É ela que o "Gerar pela condição" das parcelas usa. */}
+          {/* Condição de pagamento: mesmo catálogo da OC, e dá para criar na hora
+              igual lá (o campo dizia "Buscar ou digitar" e digitar não criava
+              nada). Só a obrigatoriedade difere: aqui é opcional. É ela que o
+              "Gerar pela condição" das parcelas usa. */}
           <CampoFormulario
             id="lan-condicao"
             rotulo="Condição de pagamento"
@@ -647,6 +650,15 @@ export function LancamentoFormDrawer({
                   rotulo: condicao.descricao,
                 })),
               ]}
+              onCriar={async (texto) => {
+                const r = await criarCondicaoPagamento(texto);
+                if ("erro" in r) {
+                  toast.error(r.erro);
+                  return null;
+                }
+                toast.success("Condição criada");
+                return r.id;
+              }}
               placeholder="Sem condição"
               disabled={salvando}
               id="lan-condicao"

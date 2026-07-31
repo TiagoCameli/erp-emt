@@ -213,11 +213,12 @@ export interface CategoriaOpcao {
   nome: string;
 }
 
-/** Opção de condição de pagamento ativa para o select da OC. */
-export interface CondicaoPagamentoOpcao {
-  id: string;
-  descricao: string;
-}
+/**
+ * Condição de pagamento vem do catálogo compartilhado: a lista da OC é
+ * exatamente a mesma da cotação e do lançamento avulso, por construção.
+ */
+export type { CondicaoPagamentoOpcao } from "@/modules/_shared/condicao-pagamento/regras";
+export { listarCondicoesPagamento } from "@/modules/_shared/condicao-pagamento/queries";
 
 /**
  * Opção de forma de pagamento (método) ativa para o select da OC. Carrega o
@@ -632,28 +633,6 @@ export async function listarCategoriasCusto(): Promise<CategoriaOpcao[]> {
   return (data ?? []).map((categoria) => ({
     id: categoria.id,
     nome: categoria.nome,
-  }));
-}
-
-/** Condições de pagamento ativas para o select da OC, em ordem alfabética. */
-export async function listarCondicoesPagamento(): Promise<
-  CondicaoPagamentoOpcao[]
-> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("condicoes_pagamento")
-    .select("id, descricao")
-    .eq("ativo", true)
-    .order("descricao", { ascending: true });
-
-  if (error) {
-    throw new Error("Não foi possível carregar as condições de pagamento");
-  }
-
-  return (data ?? []).map((condicao) => ({
-    id: condicao.id,
-    descricao: condicao.descricao,
   }));
 }
 
