@@ -89,7 +89,7 @@ export function ReceberFormDrawer({
         parcelas: [],
         rateios: [],
       },
-      [{ numeroParcela: 1, valor, dataVencimento: vencimento }],
+      [{ valor, dataVencimento: vencimento }],
       [],
     );
 

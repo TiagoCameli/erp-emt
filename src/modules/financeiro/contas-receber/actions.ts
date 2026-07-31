@@ -49,10 +49,14 @@ function dadosParaRpc(dados: z.infer<typeof receberSchema>): Json {
   };
 }
 
-/** Monta o payload `p_parcelas` para a RPC. */
+/**
+ * Monta o payload `p_parcelas` para a RPC.
+ *
+ * Sem numero_parcela: fn_salvar_lancamento renumera por vencimento na hora de
+ * gravar, então o número não sai daqui.
+ */
 function parcelasParaRpc(parcelas: ReceberParcelaInput[]): Json {
   return parcelas.map((parcela) => ({
-    numero_parcela: parcela.numeroParcela,
     valor: parcela.valor,
     data_vencimento: parcela.dataVencimento ?? null,
   }));

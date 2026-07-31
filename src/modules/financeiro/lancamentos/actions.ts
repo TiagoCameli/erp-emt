@@ -38,10 +38,17 @@ function dadosParaRpc(dados: LancamentoInput): Json {
   };
 }
 
-/** Parcelas no formato que a RPC espera (p_parcelas). */
+/**
+ * Parcelas no formato que a RPC espera (p_parcelas).
+ *
+ * Sem numero_parcela: o número é do banco. fn_salvar_lancamento renumera por
+ * vencimento (parcela 1 é a de vencimento mais próximo, desempate por valor),
+ * o mesmo critério de fn_salvar_parcelas_oc e de fn_definir_parcelas_lancamento.
+ * Mandar a posição da linha do formulário só faria alguém achar que a ordem em
+ * que as parcelas foram digitadas decide a numeração, e não decide.
+ */
 function parcelasParaRpc(dados: LancamentoInput): Json {
   return dados.parcelas.map((parcela) => ({
-    numero_parcela: parcela.numeroParcela,
     valor: parcela.valor,
     data_vencimento: parcela.dataVencimento ?? null,
   }));

@@ -154,7 +154,14 @@ function valoresIniciais(
     valor: String(lancamento.valor).replace(".", ","),
     dataCompra: lancamento.dataCompra,
     mesCompetencia: competenciaParaMes(lancamento.mesCompetencia),
-    dataVencimento: lancamento.dataVencimento ?? "",
+    // Com uma parcela só, o campo Vencimento do cabeçalho É o vencimento dela: a
+    // parcela é o fato financeiro e lancamentos.data_vencimento é derivado dela.
+    // Semear do cabeçalho nesse caso faria uma edição que nem toca em data mudar
+    // a data da parcela nos lançamentos antigos, onde as duas podem divergir.
+    dataVencimento:
+      lancamento.parcelas.length === 1
+        ? (lancamento.parcelas[0]?.dataVencimento ?? "")
+        : (lancamento.dataVencimento ?? ""),
     observacoes: lancamento.observacoes ?? "",
     parcelas:
       lancamento.parcelas.length > 0
@@ -292,6 +299,15 @@ export function LancamentoFormDrawer({
   )?.tipo;
   const erroParcelas = form.formState.errors.parcelas;
   const erroRateios = form.formState.errors.rateios;
+  /**
+   * Vencimento e Parcelas são excludentes, e a quantidade de parcelas é que
+   * decide qual dos dois aparece: uma parcela mostra o campo Vencimento do
+   * cabeçalho e esconde a tabela; duas ou mais mostram a tabela (cada parcela com
+   * a sua data) e escondem o campo do cabeçalho. Sem isso a mesma informação
+   * tinha dois lugares na tela e eles podiam divergir, que foi como apareceu um
+   * lançamento com "Vencimento 31/07" no topo e parcela sem data embaixo.
+   */
+  const parcelaUnica = parcelas.fields.length <= 1;
   // Sem condição escolhida ou sem valor não há o que dividir, e a action
   // recusaria com um toast. Melhor o botão já nascer desabilitado.
   const podeGerarParcelas =
@@ -321,10 +337,100 @@ export function LancamentoFormDrawer({
         dataVencimento: parcela.dataVencimento,
       })),
     );
+    // Condição de uma parcela só (à vista, 30 dias): a tabela não vai aparecer,
+    // então a data gerada sobe para o campo Vencimento, que é quem manda nesse
+    // estado. Sem isso a data calculada ficaria escondida numa linha invisível.
+    const primeira = resultado.parcelas[0];
+    if (resultado.parcelas.length === 1 && primeira) {
+      form.setValue("dataVencimento", primeira.dataVencimento, {
+        shouldValidate: true,
+      });
+    }
     void form.trigger("parcelas");
   }
 
+  /**
+   * Adiciona uma parcela.
+   *
+   * Saindo de parcela única, a linha que estava escondida assume o valor e o
+   * vencimento do cabeçalho antes de a tabela aparecer: senão a tabela nasceria
+   * com a primeira linha em branco e o que a pessoa digitou no topo sumiria da
+   * tela, que é o oposto de dividir o que já estava lá.
+   */
+  function adicionarParcela() {
+    if (parcelas.fields.length <= 1) {
+      parcelas.replace([
+        {
+          valor: form.getValues("valor"),
+          dataVencimento: form.getValues("dataVencimento"),
+        },
+        { valor: "", dataVencimento: dataCompraValor },
+      ]);
+      return;
+    }
+    parcelas.append({ valor: "", dataVencimento: dataCompraValor });
+  }
+
+  /**
+   * Remove uma parcela.
+   *
+   * Sobrando uma só, a tabela desaparece e o campo Vencimento do cabeçalho volta
+   * a mandar, então a data da parcela que sobrou sobe para ele: sem isso a data
+   * iria embora junto com a tabela. O valor da linha que sobra não é aproveitado
+   * de propósito, porque com uma parcela ela vale o total do lançamento, e é o
+   * total que o banco exige que feche.
+   */
+  function removerParcela(indice: number) {
+    const restantes = (form.getValues("parcelas") ?? []).filter(
+      (_, posicao) => posicao !== indice,
+    );
+    parcelas.remove(indice);
+    const unica = restantes.length === 1 ? restantes[0] : undefined;
+    if (unica?.dataVencimento) {
+      form.setValue("dataVencimento", unica.dataVencimento, {
+        shouldValidate: true,
+      });
+    }
+  }
+
   async function aoEnviar(valores: LancamentoFormInput) {
+    /**
+     * Com uma parcela a tabela não está na tela, então a parcela é montada aqui
+     * a partir do cabeçalho: o valor total e o campo Vencimento. É isso que
+     * garante que a soma feche com o valor e que a parcela não vá com data vazia
+     * enquanto o topo mostra uma data, que era exatamente o que acontecia antes.
+     */
+    const parcelasParaSalvar =
+      valores.parcelas.length <= 1
+        ? [
+            {
+              valor: paraNumero(valores.valor),
+              dataVencimento: valores.dataVencimento,
+            },
+          ]
+        : // A ordem das linhas na tela não vira número de parcela: o banco
+          // renumera por vencimento na hora de gravar.
+          valores.parcelas.map((parcela) => ({
+            valor: paraNumero(parcela.valor),
+            dataVencimento: parcela.dataVencimento,
+          }));
+
+    /**
+     * O vencimento do lançamento acompanha as parcelas: com uma, é o campo do
+     * cabeçalho; com várias, é o vencimento mais próximo, que é a parcela 1
+     * depois da renumeração do banco. Assim a lista nunca mostra um vencimento
+     * que não existe em parcela nenhuma. Datas ISO ordenam por texto na ordem
+     * cronológica, e parcela sem data fica fora da conta do mínimo.
+     */
+    const vencimentosDasParcelas = parcelasParaSalvar
+      .map((parcela) => parcela.dataVencimento)
+      .filter((data) => data !== "")
+      .sort();
+    const vencimentoDoLancamento =
+      parcelasParaSalvar.length === 1
+        ? valores.dataVencimento
+        : (vencimentosDasParcelas[0] ?? "");
+
     const dados = {
       tipo: valores.tipo,
       fornecedorId: valores.fornecedorId,
@@ -335,13 +441,9 @@ export function LancamentoFormDrawer({
       valor: paraNumero(valores.valor),
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
-      dataVencimento: valores.dataVencimento,
+      dataVencimento: vencimentoDoLancamento,
       observacoes: valores.observacoes || undefined,
-      parcelas: valores.parcelas.map((parcela, indice) => ({
-        numeroParcela: indice + 1,
-        valor: paraNumero(parcela.valor),
-        dataVencimento: parcela.dataVencimento,
-      })),
+      parcelas: parcelasParaSalvar,
       rateios: valores.rateios.map((rateio) => ({
         centroCustoId: rateio.centroCustoId,
         valor: paraNumero(rateio.valor),
@@ -615,18 +717,24 @@ export function LancamentoFormDrawer({
             />
           </CampoFormulario>
 
-          <CampoFormulario
-            id="lan-vencimento"
-            rotulo="Vencimento"
-            ajuda="Opcional"
-          >
-            <Input
+          {/* Só com parcela única: a partir de duas parcelas quem tem data é
+              cada parcela, e este campo sairia de cena para não competir com
+              elas. */}
+          {parcelaUnica ? (
+            <CampoFormulario
               id="lan-vencimento"
-              type="date"
-              disabled={salvando}
-              {...form.register("dataVencimento")}
-            />
-          </CampoFormulario>
+              rotulo="Vencimento"
+              ajuda="Opcional. É o vencimento da parcela única"
+            >
+              <Input
+                id="lan-vencimento"
+                type="date"
+                className="tabular-nums"
+                disabled={salvando}
+                {...form.register("dataVencimento")}
+              />
+            </CampoFormulario>
+          ) : null}
         </LinhaCampos>
 
         {/* Parcelas: mesmo padrão de tabela de itens da OC, na mesma ordem de
@@ -655,12 +763,7 @@ export function LancamentoFormDrawer({
                 variant="outline"
                 size="sm"
                 disabled={salvando}
-                onClick={() =>
-                  parcelas.append({
-                    valor: "",
-                    dataVencimento: dataCompraValor,
-                  })
-                }
+                onClick={adicionarParcela}
               >
                 <Plus />
                 Adicionar parcela
@@ -668,15 +771,23 @@ export function LancamentoFormDrawer({
             </div>
           }
         >
-          {/* Diferente da OC, aqui a numeração NÃO é recalculada por vencimento
-              no salvamento: fn_salvar_lancamento grava o número que a tela manda,
-              que é a posição da linha. Dizer "pela ordem de vencimento", como a
-              OC diz, seria mentira nesta tela. */}
-          <p className="text-legenda text-muted-foreground">
-            A numeração segue a ordem das linhas desta tabela. Gere pela
-            condição de pagamento ou preencha na mão; a soma precisa fechar com
-            o valor.
-          </p>
+          {/* Os dois botões ficam no cabeçalho da seção, fora do que se esconde:
+              é o que mantém "Adicionar parcela" e "Gerar pela condição"
+              alcançáveis em parcela única. Escondendo a seção inteira, quem
+              começasse com uma parcela ficaria preso nela. */}
+          {parcelaUnica ? (
+            <p className="text-legenda text-muted-foreground">
+              Parcela única: o valor e o vencimento são os dos campos Valor e
+              Vencimento acima. Adicione uma parcela para dividir em duas ou
+              mais, e aí cada uma passa a ter a sua data.
+            </p>
+          ) : (
+            <p className="text-legenda text-muted-foreground">
+              A numeração é dada pela ordem de vencimento quando você salva.
+              Gere pela condição de pagamento ou preencha na mão; a soma precisa
+              fechar com o valor.
+            </p>
+          )}
 
           {typeof erroParcelas?.message === "string" ? (
             <p className="text-legenda text-destructive" role="alert">
@@ -684,58 +795,60 @@ export function LancamentoFormDrawer({
             </p>
           ) : null}
 
-          <TabelaItens
-            colunas={COLUNAS_PARCELA}
-            linhas={parcelas.fields}
-            chaveLinha={(linha) => linha.id}
-            onRemover={(indice) => parcelas.remove(indice)}
-            podeRemover={() => !salvando && parcelas.fields.length > 1}
-            rotuloRemover="Remover parcela"
-            erroCelula={(chave, indice) => {
-              const errosParcela = form.formState.errors.parcelas?.[indice];
-              if (chave === "valor") return errosParcela?.valor?.message;
-              return undefined;
-            }}
-            renderCelula={(chave, indice) => {
-              if (chave === "numero") {
-                return (
-                  <span className="text-detalhe text-muted-foreground tabular-nums">
-                    {indice + 1}
-                  </span>
-                );
-              }
-              if (chave === "valor") {
+          {parcelaUnica ? null : (
+            <TabelaItens
+              colunas={COLUNAS_PARCELA}
+              linhas={parcelas.fields}
+              chaveLinha={(linha) => linha.id}
+              onRemover={removerParcela}
+              podeRemover={() => !salvando && parcelas.fields.length > 1}
+              rotuloRemover="Remover parcela"
+              erroCelula={(chave, indice) => {
+                const errosParcela = form.formState.errors.parcelas?.[indice];
+                if (chave === "valor") return errosParcela?.valor?.message;
+                return undefined;
+              }}
+              renderCelula={(chave, indice) => {
+                if (chave === "numero") {
+                  return (
+                    <span className="text-detalhe text-muted-foreground tabular-nums">
+                      {indice + 1}
+                    </span>
+                  );
+                }
+                if (chave === "valor") {
+                  return (
+                    <Input
+                      id={`lan-parcela-valor-${indice}`}
+                      aria-label="Valor"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      className="tabular-nums text-right"
+                      disabled={salvando}
+                      {...form.register(`parcelas.${indice}.valor`)}
+                    />
+                  );
+                }
+                // dataVencimento
                 return (
                   <Input
-                    id={`lan-parcela-valor-${indice}`}
-                    aria-label="Valor"
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    className="tabular-nums text-right"
+                    id={`lan-parcela-venc-${indice}`}
+                    aria-label="Vencimento"
+                    type="date"
                     disabled={salvando}
-                    {...form.register(`parcelas.${indice}.valor`)}
+                    {...form.register(`parcelas.${indice}.dataVencimento`)}
                   />
                 );
-              }
-              // dataVencimento
-              return (
-                <Input
-                  id={`lan-parcela-venc-${indice}`}
-                  aria-label="Vencimento"
-                  type="date"
-                  disabled={salvando}
-                  {...form.register(`parcelas.${indice}.dataVencimento`)}
+              }}
+              rodape={
+                <IndicadorSoma
+                  soma={somaParcelas}
+                  valor={valorAlvo}
+                  rotulo="Soma das parcelas"
                 />
-              );
-            }}
-            rodape={
-              <IndicadorSoma
-                soma={somaParcelas}
-                valor={valorAlvo}
-                rotulo="Soma das parcelas"
-              />
-            }
-          />
+              }
+            />
+          )}
         </SecaoFormulario>
 
         {/* Rateio por centro de custo: colunas homogêneas (centro/valor),
