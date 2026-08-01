@@ -190,6 +190,7 @@ export default async function PaginaLancamentos({
   return (
     <>
       <PageHeader
+        modulo="Financeiro"
         titulo="Lançamentos"
         descricao="Registre lançamentos a pagar e a receber, com parcelas e rateio por centro de custo"
         acoes={

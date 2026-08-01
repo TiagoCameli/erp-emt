@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { EmptyState, KPICard, PageHeader, StatusBadge } from "@/components/canonicos";
+import { EmptyState, GradeKpis, KPICard, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { contarPorUrgencia, corKpi, type ContagemUrgencia } from "@/modules/rh/alertas/calculo";
@@ -112,11 +112,6 @@ export function PainelAlertas({ documentos, ferias, epis, cadastros }: PainelAle
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader
-        titulo="Alertas de RH"
-        descricao="Documentos, férias, EPI e cadastro que precisam de atenção"
-      />
-
       {totalGeral === 0 ? (
         <EmptyState
           icone={CheckCircle2}
@@ -125,7 +120,10 @@ export function PainelAlertas({ documentos, ferias, epis, cadastros }: PainelAle
         />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Grade canônica: a quantidade de cartões varia com a permissão de
+              cada categoria, e num grid fixo quem via só uma ficava com a linha
+              vazia do lado. */}
+          <GradeKpis>
             {contagemDocumentos ? (
               <KPICard
                 titulo="Documentos"
@@ -177,7 +175,7 @@ export function PainelAlertas({ documentos, ferias, epis, cadastros }: PainelAle
                 href="/cadastros/colaboradores"
               />
             ) : null}
-          </div>
+          </GradeKpis>
 
           <div className="grid gap-4 lg:grid-cols-2">
             {documentos ? (

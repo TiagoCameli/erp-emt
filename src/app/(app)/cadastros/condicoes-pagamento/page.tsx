@@ -30,6 +30,7 @@ export default async function PaginaCondicoesPagamento() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Condições de pagamento"
         descricao="Prazos e parcelamento usados em cotações e ordens de compra"
       />

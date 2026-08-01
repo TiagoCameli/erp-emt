@@ -102,6 +102,7 @@ export function UnidadesTabela({
       {
         accessorKey: "sigla",
         header: "Sigla",
+        size: 100,
         cell: ({ row }) => (
           <span className="codigo-doc font-medium">{row.original.sigla}</span>
         ),
@@ -109,6 +110,7 @@ export function UnidadesTabela({
       {
         accessorKey: "nome",
         header: "Nome",
+        size: 320,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),
@@ -116,6 +118,7 @@ export function UnidadesTabela({
       {
         accessorKey: "tipo",
         header: "Tipo",
+        size: 160,
         cell: ({ row }) => (
           <Badge variant="outline">
             {ROTULO_TIPO_UNIDADE[row.original.tipo]}
@@ -125,6 +128,7 @@ export function UnidadesTabela({
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
             <StatusBadge status="aprovado" rotulo="Ativo" />
@@ -139,6 +143,7 @@ export function UnidadesTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const unidade = row.original;

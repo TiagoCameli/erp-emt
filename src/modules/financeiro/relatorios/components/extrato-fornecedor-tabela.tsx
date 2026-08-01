@@ -88,7 +88,8 @@ export function ExtratoFornecedorTabela({
       {
         accessorKey: "mesCompetencia",
         header: "Mês de referência",
-        size: 150,
+        // O rótulo é mais largo que o conteúdo (mm/aaaa): com 150 saía cortado.
+        size: 176,
         cell: ({ row }) => formatarMesAno(row.original.mesCompetencia),
       },
       {

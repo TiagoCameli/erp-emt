@@ -21,6 +21,7 @@ export default async function PaginaFornecedores() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Fornecedores"
         descricao="Fornecedores de materiais, peças, combustíveis, serviços e fretes"
         acoes={<FornecedoresAcoesCabecalho podeCriar={podeCriar} />}

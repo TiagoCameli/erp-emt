@@ -30,6 +30,7 @@ export default async function PaginaDiaristas() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Diaristas"
         descricao="Diárias por diarista. O fechamento da competência gera um lançamento a pagar no financeiro"
         acoes={
@@ -40,7 +41,7 @@ export default async function PaginaDiaristas() {
       />
 
       {podeCriar ? (
-        <section className="flex flex-col gap-3">
+        <section className="mb-6 flex flex-col gap-3">
           <h2 className="text-secao font-semibold">A fechar</h2>
           <FechamentosPainel fechamentos={fechamentos} />
         </section>

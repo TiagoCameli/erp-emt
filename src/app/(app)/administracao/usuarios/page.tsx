@@ -27,6 +27,7 @@ export default async function PaginaUsuarios() {
   return (
     <>
       <PageHeader
+        modulo="Administração"
         titulo="Usuários e permissões"
         descricao="Quem acessa o sistema e o que cada um pode fazer"
         acoes={podeCriar ? <ConvidarUsuarioDrawer perfis={perfis} /> : undefined}

@@ -134,6 +134,9 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
   {
     accessorKey: "mesCompetencia",
     header: "Mês de referência",
+    // O rótulo é mais largo que o conteúdo (mm/aaaa): na largura padrão de
+    // 150px o cabeçalho saía cortado em "Mês de referê...".
+    size: 176,
     cell: ({ row }) => (
       <span className="tabular-nums">
         {formatarMesAno(row.original.mesCompetencia)}

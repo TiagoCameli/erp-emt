@@ -21,6 +21,7 @@ export default async function PaginaFuncoes() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Funções"
         descricao="Cargos usados no cadastro de colaboradores, com salário base e CBO"
         acoes={<FuncoesAcoesCabecalho podeCriar={podeCriar} />}

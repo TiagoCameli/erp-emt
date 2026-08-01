@@ -6,6 +6,7 @@ import { HardHat, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  CelulaVazia,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -164,10 +165,11 @@ export function EpisTabela({
         // Secundária: o certificado de aprovação só é conferido em auditoria.
         meta: { ocultaPorPadrao: true },
         cell: ({ row }) =>
+          // CA é código de documento: mono, como placa e número de OC.
           row.original.ca ? (
-            <span className="tabular-nums">{row.original.ca}</span>
+            <span className="codigo-doc">{row.original.ca}</span>
           ) : (
-            <span className="text-muted-foreground">-</span>
+            <CelulaVazia />
           ),
       },
       {

@@ -29,6 +29,7 @@ export default async function PaginaBancoHoras() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Banco de horas"
         descricao="Créditos e débitos de horas por colaborador, com saldo acumulado"
         acoes={
@@ -43,13 +44,15 @@ export default async function PaginaBancoHoras() {
         compensação de jornada. Crédito soma e débito subtrai do saldo.
       </p>
 
+      {/* text-secao font-semibold é o título de seção do resto do app; aqui
+          estava um passo abaixo, e as duas seções pareciam legenda. */}
       <section className="mb-6">
-        <h2 className="mb-2 text-corpo font-medium">Saldos por colaborador</h2>
+        <h2 className="mb-2 text-secao font-semibold">Saldos por colaborador</h2>
         <SaldosPainel saldos={saldos} />
       </section>
 
       <section>
-        <h2 className="mb-2 text-corpo font-medium">Movimentos</h2>
+        <h2 className="mb-2 text-secao font-semibold">Movimentos</h2>
         <MovimentosTabela
           movimentos={movimentos}
           colaboradores={colaboradores}

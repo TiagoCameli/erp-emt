@@ -14,6 +14,7 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
+  GradeKpis,
   KPICard,
   MoneyText,
   PageHeader,
@@ -382,6 +383,7 @@ export function ContasReceberCliente({
   return (
     <>
       <PageHeader
+        modulo="Financeiro"
         titulo="Contas a receber"
         descricao="Recebíveis e suas parcelas por cliente"
         acoes={
@@ -398,13 +400,13 @@ export function ContasReceberCliente({
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <GradeKpis className="mb-4">
         <KPICard
           titulo="Total a receber"
           valor={formatarBRL(totalEmAberto)}
           detalhe="Parcelas pendentes e aprovadas em aberto"
         />
-      </div>
+      </GradeKpis>
 
       <div className="flex flex-col gap-2">
         <DataTable

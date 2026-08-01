@@ -31,6 +31,7 @@ export default async function PaginaCategorias() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Categorias"
         descricao="Dois níveis: 4 grupos fixos (Material, Mão de obra, Equipamentos, Outros) e as subcategorias dentro de cada um. O insumo aponta para a subcategoria."
         acoes={

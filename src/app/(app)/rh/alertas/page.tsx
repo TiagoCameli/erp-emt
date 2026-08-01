@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { PainelAlertas } from "@/modules/rh/alertas/components/painel-alertas";
 import {
@@ -36,11 +37,20 @@ export default async function PaginaAlertasRh() {
   ]);
 
   return (
-    <PainelAlertas
-      documentos={documentos}
-      ferias={ferias}
-      epis={epis}
-      cadastros={cadastros}
-    />
+    <>
+      {/* Cabeçalho na rota, como nas outras abas do módulo: o título não precisa
+          mais dizer "de RH" porque a sobrancelha já diz de onde a aba é. */}
+      <PageHeader
+        modulo="RH"
+        titulo="Alertas"
+        descricao="Documentos, férias, EPI e cadastro que precisam de atenção"
+      />
+      <PainelAlertas
+        documentos={documentos}
+        ferias={ferias}
+        epis={epis}
+        cadastros={cadastros}
+      />
+    </>
   );
 }

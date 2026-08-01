@@ -34,6 +34,7 @@ export default async function PaginaProgramados() {
   return (
     <>
       <PageHeader
+        modulo="Financeiro"
         titulo="Programados"
         descricao="Agenda de pagamentos aprovados: acompanhe os prazos e reprograme datas"
       />

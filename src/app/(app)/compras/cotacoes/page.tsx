@@ -75,6 +75,7 @@ export default async function PaginaCotacoes({
   return (
     <>
       <PageHeader
+        modulo="Compras"
         titulo="Cotações"
         descricao="Compare preços de fornecedores e escolha o vencedor"
         acoes={

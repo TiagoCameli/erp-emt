@@ -108,6 +108,7 @@ export function FuncoesTabela({
       {
         accessorKey: "nome",
         header: "Nome",
+        size: 320,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),
@@ -115,6 +116,7 @@ export function FuncoesTabela({
       {
         accessorKey: "salarioBase",
         header: "Salário base",
+        size: 150,
         meta: { alinharDireita: true },
         cell: ({ row }) =>
           row.original.salarioBase !== null ? (
@@ -126,11 +128,13 @@ export function FuncoesTabela({
       {
         accessorKey: "cbo",
         header: "CBO",
+        size: 120,
         cell: ({ row }) => row.original.cbo ?? "-",
       },
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
             <StatusBadge status="aprovado" rotulo="Ativo" />
@@ -145,6 +149,7 @@ export function FuncoesTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const funcao = row.original;

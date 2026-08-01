@@ -41,6 +41,7 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
   {
     accessorKey: "codigo",
     header: "Código",
+    size: 130,
     cell: ({ row }) =>
       row.original.codigo ? (
         <span className="codigo-doc">{row.original.codigo}</span>
@@ -51,6 +52,7 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
   {
     accessorKey: "descricao",
     header: "Descrição",
+    size: 340,
     cell: ({ row }) => (
       <span className="font-medium">{row.original.descricao}</span>
     ),
@@ -58,6 +60,7 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
   {
     accessorKey: "tipo",
     header: "Tipo",
+    size: 170,
     // Secundária: código, descrição e placa já identificam o equipamento.
     meta: { ocultaPorPadrao: true },
     cell: ({ row }) =>
@@ -70,6 +73,7 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
   {
     accessorKey: "placa",
     header: "Placa",
+    size: 130,
     cell: ({ row }) =>
       row.original.placa ? (
         <span className="codigo-doc">{row.original.placa}</span>
@@ -80,6 +84,7 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
   {
     accessorKey: "ativo",
     header: "Ativo",
+    size: 110,
     cell: ({ row }) =>
       row.original.ativo ? (
         <StatusBadge status="aprovado" rotulo="Ativo" />

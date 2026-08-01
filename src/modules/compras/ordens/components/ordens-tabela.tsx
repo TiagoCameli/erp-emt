@@ -109,12 +109,15 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
       );
     },
   },
+  // As larguras destas três nascem do cabeçalho, não do dado: a célula é curta
+  // (uma data, um nome de forma), mas o rótulo mais a seta de ordenação
+  // truncavam no tamanho antigo e a coluna virava "Mês de referê...".
   colunaData<OrdemLista>("dataCompra", "Data da compra", formatarData, {
-    size: 140,
+    size: 160,
     meta: { esconderAte: "md" },
   }),
   colunaData<OrdemLista>("mesCompetencia", "Mês de referência", formatarMesAno, {
-    size: 150,
+    size: 180,
     meta: { ocultaPorPadrao: true },
   }),
   colunaTexto<OrdemLista>("condicaoPagamentoDescricao", "Condição de pagamento", {
@@ -122,7 +125,7 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
     meta: { ocultaPorPadrao: true },
   }),
   colunaTexto<OrdemLista>("formaPagamentoNome", "Forma de pagamento", {
-    size: 170,
+    size: 190,
     meta: { ocultaPorPadrao: true },
   }),
   colunaTexto<OrdemLista>("cotacaoNumero", "Cotação de origem", {

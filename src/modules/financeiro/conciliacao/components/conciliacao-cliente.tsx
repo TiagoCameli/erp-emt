@@ -14,12 +14,14 @@ import {
 import { toast } from "sonner";
 
 import {
+  CelulaVazia,
   DataTable,
   EmptyState,
   FiltroBusca,
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
+  GradeKpis,
   KPICard,
   MoneyText,
   StatusBadge,
@@ -278,6 +280,7 @@ export function ConciliacaoCliente({
       {
         accessorKey: "dataMovimento",
         header: "Data",
+        size: 120,
         cell: ({ row }) => (
           <span className="tabular-nums">
             {formatarData(row.original.dataMovimento)}
@@ -285,17 +288,19 @@ export function ConciliacaoCliente({
         ),
       },
       {
+        // O histórico é o texto que identifica a transação no extrato: é a
+        // coluna mais larga da tela. Quem corta com reticências e põe o texto
+        // inteiro no tooltip é a DataTable, então a célula devolve o texto cru
+        // (o `max-w-md` que estava aqui não valia nada: a coluna tinha 150px).
         accessorKey: "memo",
         header: "Histórico",
-        cell: ({ row }) => (
-          <span className="mx-auto block max-w-md truncate">
-            {row.original.memo ?? "-"}
-          </span>
-        ),
+        size: 380,
+        cell: ({ row }) => row.original.memo ?? <CelulaVazia />,
       },
       {
         accessorKey: "valor",
         header: "Valor",
+        size: 140,
         meta: { alinharDireita: true },
         cell: ({ row }) => <ValorMovimento transacao={row.original} />,
       },
@@ -342,6 +347,7 @@ export function ConciliacaoCliente({
       {
         id: "acoes",
         header: "",
+        size: 150,
         meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) => {
           const transacao = row.original;
@@ -498,7 +504,7 @@ export function ConciliacaoCliente({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <GradeKpis>
         <KPICard titulo="Transações" valor={totalTransacoes} />
         <KPICard
           titulo="Conciliadas"
@@ -510,7 +516,7 @@ export function ConciliacaoCliente({
           }
         />
         <KPICard titulo="Pendentes" valor={totalPendentes} />
-      </div>
+      </GradeKpis>
 
       <DataTable
         idTabela="financeiro.conciliacao"

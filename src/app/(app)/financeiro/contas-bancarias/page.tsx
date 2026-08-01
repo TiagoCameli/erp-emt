@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { KPICard, MoneyText, PageHeader } from "@/components/canonicos";
+import { GradeKpis, KPICard, MoneyText, PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ContasAcoesCabecalho } from "@/modules/financeiro/contas-bancarias/components/contas-acoes-cabecalho";
 import { ContasTabela } from "@/modules/financeiro/contas-bancarias/components/contas-tabela";
@@ -33,18 +33,19 @@ export default async function PaginaContasBancarias() {
   return (
     <>
       <PageHeader
+        modulo="Financeiro"
         titulo="Contas bancárias"
         descricao="Contas e caixas da empresa, com o saldo atualizado pelas parcelas pagas"
         acoes={<ContasAcoesCabecalho podeCriar={podeCriar} />}
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <GradeKpis className="mb-4">
         <KPICard
           titulo="Total em contas"
           valor={<MoneyText valor={totalEmContas} />}
           detalhe={`${contas.length} ${contas.length === 1 ? "conta" : "contas"} cadastradas`}
         />
-      </div>
+      </GradeKpis>
 
       <ContasTabela contas={contas} podeEditar={podeEditar} />
     </>

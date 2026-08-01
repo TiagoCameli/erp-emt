@@ -5,6 +5,7 @@ export * from "./page-header";
 export * from "./money-text";
 export * from "./status-badge";
 export * from "./kpi-card";
+export * from "./grade-kpis";
 export * from "./empty-state";
 export * from "./estado-erro";
 export * from "./skeleton-pagina";

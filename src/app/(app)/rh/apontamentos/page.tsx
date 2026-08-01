@@ -54,6 +54,7 @@ export default async function PaginaApontamentos({
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Ponto e apontamentos"
         descricao="Ponto diário por obra: lance as horas da equipe e aprove o dia para travar os apontamentos."
         acoes={

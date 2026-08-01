@@ -6,6 +6,7 @@ import { FileText, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  CelulaVazia,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -64,7 +65,7 @@ function SituacaoBadge({ situacao }: { situacao: SituacaoDocumento }) {
     case "ok":
       return <StatusBadge status="aprovado" rotulo="Em dia" />;
     default:
-      return <span className="text-muted-foreground">-</span>;
+      return <CelulaVazia />;
   }
 }
 

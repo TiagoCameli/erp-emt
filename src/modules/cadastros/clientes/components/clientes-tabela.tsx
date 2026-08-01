@@ -145,6 +145,7 @@ export function ClientesTabela({
       {
         accessorKey: "nome",
         header: "Nome",
+        size: 340,
         // Célula de duas linhas: sem `naoTruncar` a DataTable embrulha as duas
         // num truncate de uma linha só, que corta no seco e esconde a fantasia
         // quando a altura da linha é fixa. O corte passa a ser linha a linha,
@@ -169,6 +170,7 @@ export function ClientesTabela({
       {
         accessorKey: "tipo",
         header: "Tipo",
+        size: 130,
         cell: ({ row }) => (
           <span className="text-muted-foreground">
             {rotuloTipo(row.original.tipo)}
@@ -178,6 +180,7 @@ export function ClientesTabela({
       {
         accessorKey: "cpfCnpj",
         header: "CPF/CNPJ",
+        size: 170,
         cell: ({ row }) =>
           row.original.cpfCnpj ? (
             <span className="codigo-doc tabular-nums">
@@ -190,6 +193,7 @@ export function ClientesTabela({
       {
         accessorKey: "cidade",
         header: "Cidade",
+        size: 200,
         cell: ({ row }) => {
           const { cidade, uf } = row.original;
           if (!cidade && !uf) {
@@ -201,6 +205,7 @@ export function ClientesTabela({
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
             <StatusBadge status="aprovado" rotulo="Ativo" />
@@ -215,6 +220,7 @@ export function ClientesTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const cliente = row.original;

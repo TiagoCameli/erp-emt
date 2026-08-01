@@ -51,6 +51,7 @@ export default async function PaginaColaboradores() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Colaboradores"
         descricao="Equipe de campo e escritório, com vínculo, obra e centro de custo"
         acoes={

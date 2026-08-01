@@ -63,6 +63,36 @@ const DEFINICOES: Record<string, DefinicaoConfig> = {
   },
 };
 
+/**
+ * Salvar de uma configuração. Enquanto nada mudou o botão fica cinza, e não
+ * âmbar esmaecido: primária com opacidade vira um tom que não existe no design
+ * system e o botão parece quebrado em vez de desabilitado. Só ganha a cor de
+ * ação quando existe alteração para salvar.
+ */
+function BotaoSalvar({
+  mudou,
+  pendente,
+  podeEditar,
+  onSalvar,
+}: {
+  mudou: boolean;
+  pendente: boolean;
+  podeEditar: boolean;
+  onSalvar: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={mudou ? "default" : "secondary"}
+      onClick={onSalvar}
+      disabled={!podeEditar || !mudou || pendente}
+    >
+      {pendente ? "Salvando" : "Salvar"}
+    </Button>
+  );
+}
+
 interface CartaoOpcaoProps {
   chave: string;
   rotulo: string;
@@ -129,14 +159,12 @@ function CartaoOpcao({
                 disabled={!podeEditar || pendente}
                 className="w-full max-w-sm"
               />
-              <Button
-                type="button"
-                size="sm"
-                onClick={salvar}
-                disabled={!podeEditar || !mudou || pendente}
-              >
-                {pendente ? "Salvando" : "Salvar"}
-              </Button>
+              <BotaoSalvar
+                mudou={mudou}
+                pendente={pendente}
+                podeEditar={podeEditar}
+                onSalvar={salvar}
+              />
             </div>
             {ajudaOpcao ? (
               <p className="text-legenda text-muted-foreground">{ajudaOpcao}</p>
@@ -219,14 +247,12 @@ function CartaoPercentual({
                 %
               </span>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={salvar}
-              disabled={!podeEditar || !mudou || pendente}
-            >
-              {pendente ? "Salvando" : "Salvar"}
-            </Button>
+            <BotaoSalvar
+              mudou={mudou}
+              pendente={pendente}
+              podeEditar={podeEditar}
+              onSalvar={salvar}
+            />
           </div>
         </CampoFormulario>
       </CardContent>
@@ -290,14 +316,12 @@ function CartaoBooleano({
                 {ativo ? "Ativado" : "Desativado"}
               </span>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={salvar}
-              disabled={!podeEditar || !mudou || pendente}
-            >
-              {pendente ? "Salvando" : "Salvar"}
-            </Button>
+            <BotaoSalvar
+              mudou={mudou}
+              pendente={pendente}
+              podeEditar={podeEditar}
+              onSalvar={salvar}
+            />
           </div>
         </CampoFormulario>
       </CardContent>
@@ -339,7 +363,12 @@ export function ConfiguracoesForm({
   podeEditar,
 }: ConfiguracoesFormProps) {
   return (
-    <div className={cn(classesFormulario, "max-w-2xl")}>
+    // Coluna única e não grade: cada configuração é uma linha "o que é" à
+    // esquerda e "como muda" à direita, que só funciona se a linha for larga.
+    // Em duas colunas o rótulo colaria no controle e a última linha ficaria com
+    // um buraco. A largura sobe de 42rem para 56rem, que enche a tela sem
+    // esticar o campo: acima disso o Salvar fica longe demais do controle.
+    <div className={cn(classesFormulario, "max-w-4xl")}>
       {configuracoes.map((configuracao) => {
         // Chave legada da folha gerencial: os encargos agora vêm de
         // folha_encargos, então esta config não dirige mais nada. Escondida

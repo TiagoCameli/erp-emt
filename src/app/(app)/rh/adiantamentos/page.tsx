@@ -25,6 +25,7 @@ export default async function PaginaAdiantamentos() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Adiantamentos"
         descricao="Adiantamentos por colaborador e competência, descontados na folha gerencial"
         acoes={

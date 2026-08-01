@@ -30,24 +30,30 @@ export default async function PaginaParametrosFolha() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Parâmetros da folha"
         descricao="Faixas de INSS e IRRF e os parâmetros usados no cálculo da folha de pagamento"
       />
 
       <div className="flex flex-col gap-8">
-        <FaixasInssSecao
-          faixas={faixasInss}
-          podeCriar={podeCriar}
-          podeEditar={podeEditar}
-          podeExcluir={podeExcluir}
-        />
+        {/* INSS e IRRF lado a lado: são tabelas de 2 e 3 colunas estreitas, e
+            empilhadas deixavam meia tela vazia à direita e empurravam os
+            parâmetros para fora da dobra. */}
+        <div className="grid gap-8 lg:grid-cols-2 [&>*]:min-w-0">
+          <FaixasInssSecao
+            faixas={faixasInss}
+            podeCriar={podeCriar}
+            podeEditar={podeEditar}
+            podeExcluir={podeExcluir}
+          />
 
-        <FaixasIrrfSecao
-          faixas={faixasIrrf}
-          podeCriar={podeCriar}
-          podeEditar={podeEditar}
-          podeExcluir={podeExcluir}
-        />
+          <FaixasIrrfSecao
+            faixas={faixasIrrf}
+            podeCriar={podeCriar}
+            podeEditar={podeEditar}
+            podeExcluir={podeExcluir}
+          />
+        </div>
 
         <ParametrosForm parametros={parametros} podeEditar={podeEditar} />
       </div>

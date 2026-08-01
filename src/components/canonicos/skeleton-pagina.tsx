@@ -13,7 +13,11 @@ const LINHAS = 8;
 export function SkeletonPagina() {
   return (
     <div className="flex flex-col gap-4">
+      {/* Três linhas porque o cabeçalho real tem três: sobrancelha do módulo,
+          título e descrição. Sem a primeira, o conteúdo pulava 18px para baixo
+          quando os dados chegavam, em todas as rotas com loading.tsx. */}
       <div className="space-y-2">
+        <Skeleton className="h-4 w-24" />
         <Skeleton className="h-7 w-56" />
         <Skeleton className="h-4 w-80" />
       </div>

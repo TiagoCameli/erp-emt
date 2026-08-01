@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { KPICard, PageHeader } from "@/components/canonicos";
+import { GradeKpis, KPICard, PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { FeriasAcoesCabecalho } from "@/modules/rh/ferias/components/ferias-acoes-cabecalho";
 import { FeriasTabela } from "@/modules/rh/ferias/components/ferias-tabela";
@@ -28,6 +28,7 @@ export default async function PaginaFerias() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Férias"
         descricao="Períodos aquisitivos e gozo de férias por colaborador, com alerta de vencimento"
         acoes={
@@ -37,7 +38,8 @@ export default async function PaginaFerias() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* mb-4 porque a grade encostava na tabela: o main não tem gap. */}
+      <GradeKpis className="mb-4">
         <KPICard
           titulo="Férias vencidas"
           valor={vencidas}
@@ -48,7 +50,7 @@ export default async function PaginaFerias() {
           valor={aVencer}
           detalhe="Faltam 60 dias ou menos para o limite"
         />
-      </div>
+      </GradeKpis>
 
       <FeriasTabela
         ferias={ferias}

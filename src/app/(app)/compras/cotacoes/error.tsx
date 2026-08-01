@@ -6,6 +6,7 @@ export default function ErroCotacoes({ reset }: { reset: () => void }) {
   return (
     <>
       <PageHeader
+        modulo="Compras"
         titulo="Cotações"
         descricao="Compare preços de fornecedores e escolha o vencedor"
       />

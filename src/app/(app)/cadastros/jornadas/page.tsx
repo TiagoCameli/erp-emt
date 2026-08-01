@@ -21,6 +21,7 @@ export default async function PaginaJornadas() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Jornadas"
         descricao="Horas por dia da semana usadas no cadastro de colaboradores e no ponto"
         acoes={<JornadasAcoesCabecalho podeCriar={podeCriar} />}

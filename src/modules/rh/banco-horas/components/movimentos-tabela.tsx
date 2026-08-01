@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Clock, MoreHorizontal, Plus } from "lucide-react";
 
 import {
+  CelulaVazia,
   DataTable,
   EmptyState,
   FiltroBusca,
@@ -143,10 +144,7 @@ export function MovimentosTabela({
       {
         accessorKey: "motivo",
         header: "Motivo",
-        cell: ({ row }) =>
-          row.original.motivo ?? (
-            <span className="text-muted-foreground">-</span>
-          ),
+        cell: ({ row }) => row.original.motivo ?? <CelulaVazia />,
       },
     ];
 

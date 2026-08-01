@@ -639,3 +639,59 @@ o padrão" e achar que dinheiro e altura fixa foram esquecidos.
    opcional. Compatibilidade nos dois lados resolve sozinha: blob v2 sem
    `alturaLinha` lê como automática, e blob novo lido por código velho tem o campo
    ignorado. Só mude a versão se o significado de um campo existente mudar.
+
+## Cabeçalho com o módulo e painel de Gestão que responde perguntas
+
+**Data:** 31/07/2026 · **Contexto:** varredura das 51 telas no navegador, com o pedido "a UI tem que estar toda em um padrão premium, veja se os painéis estão bons e também cabeçalho de todas as abas"
+
+Duas mudanças estruturais saíram dessa varredura: o `PageHeader` passou a dizer de
+que módulo a aba é, e a única tela de Gestão deixou de ser uma parede de KPIs para
+virar um painel com gráficos, tabela e estados vazios que ensinam.
+
+**Decisões**
+
+1. **A sobrancelha do módulo mora no `PageHeader`, não num breadcrumb novo.** A
+   sidebar é só de ícones e o submenu de cada módulo é um flyout que só existe
+   enquanto o mouse está em cima: parada numa aba qualquer, a pessoa não tem
+   nenhuma pista permanente de onde está, e "Lançamentos", "Categorias" e
+   "Relatórios" existem em mais de um módulo. Em vez de inventar uma trilha, o
+   canônico ganhou um `<p>` acima do `<h1>` com a pele do rótulo do KPICard
+   (`text-legenda`, caixa alta, `tracking-wide`, cor secundária), que informa sem
+   competir com o título. O texto vem de `MODULOS` em `config/recursos.ts`, o mesmo
+   catálogo que alimenta a sidebar: se a sidebar diz "RH", a sobrancelha diz "RH",
+   e nunca "Recursos humanos".
+2. **A prop `modulo` é opcional de propósito, e isso não é preguiça de migração.**
+   Nem toda tela que usa o `PageHeader` é aba de módulo: "Minha conta" não pertence
+   a módulo nenhum, e a ficha do colaborador e os detalhes de OC, lançamento, ponto
+   e folha são telas de registro, onde o cabeçalho já carrega botão de voltar e
+   status. Tornar a prop obrigatória forçaria essas telas a inventar um valor. O
+   contrato ficou: **toda aba registrada em `RECURSOS` passa `modulo`; tela de
+   detalhe e tela fora de módulo não passam.** As 43 abas do catálogo já passam.
+3. **Título da aba é o `nome` do recurso, sem repetir o módulo.** Com a sobrancelha
+   existindo, "Conciliação bancária" embaixo de "FINANCEIRO" e "Relatórios
+   financeiros" embaixo de "FINANCEIRO" passaram a dizer a mesma coisa duas vezes,
+   e ainda discordam do rótulo do menu. Quem encurtar esses dois títulos precisa
+   encurtar junto o `nome` em `config/recursos.ts`, num diff só, senão o item do
+   menu e o `<h1>` divergem.
+4. **Grade de KPI é `GradeKpis`, não `grid-cols-3`.** Num grid de colunas fixas o
+   cartão solitário fica pendurado com dois terços da linha vazios, que era o que
+   se via em Pagamentos, Contas a receber e Contas bancárias. A grade canônica é
+   flex-wrap com base de 16rem e `flex-1`: um cartão ocupa a linha, dois dividem,
+   três ou quatro viram grade, e o que não cabe quebra e volta a preencher. Não
+   existe mais motivo para uma tela montar grade de KPI na mão.
+5. **O painel de Gestão passou a responder perguntas, não a listar números.** Antes
+   eram doze KPIs soltos. Agora são cinco KPIs de decisão do dia (custo do mês, a
+   pagar em aberto, vencendo em 7 dias, pagamentos a aprovar, pago no mês) e cinco
+   blocos que respondem, nesta ordem: **quanto a obra custou por mês**, **quanto o
+   caixa precisa suportar por prazo de vencimento**, **para qual centro de custo o
+   dinheiro foi**, **em que grupo de insumo ele virou custo** e **quais foram os
+   maiores lançamentos**. Cada bloco traz o total âncora, o link para a tela do
+   detalhe e um estado vazio que diz o que precisa acontecer para encher.
+6. **Um painel, uma janela.** Os quatro cortes de custo usam a mesma janela de seis
+   meses de competência (`janelaPainel`), com `fim` exclusivo (primeiro dia do mês
+   seguinte), que é a mesma semântica do `mes_competencia < p_fim` das RPCs
+   `fn_rel_*`. É isso que faz os totais dos blocos fecharem entre si na tela; sem
+   isso o painel mostra três números diferentes para a mesma pergunta e perde a
+   confiança do leitor. O contrato compartilhado entre Gestão e os relatórios do
+   Financeiro é a função do banco, não o TypeScript: os dois módulos calculam por
+   conta própria em cima das mesmas RPCs.

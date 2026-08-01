@@ -231,7 +231,8 @@ export function CompetenciasTabela({
       {
         accessorKey: "mes",
         header: "Mês de referência",
-        size: 150,
+        // O rótulo é mais largo que o conteúdo (mm/aaaa): com 150 saía cortado.
+        size: 176,
         cell: ({ row }) => (
           <span className="font-medium tabular-nums">
             {formatarMesAno(row.original.mes)}

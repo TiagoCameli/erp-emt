@@ -1,70 +1,82 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TriangleAlert } from "lucide-react";
+import { BarChart3, CalendarClock, Layers, Receipt, Wallet } from "lucide-react";
 
-import { EmptyState, KPICard, MoneyText, PageHeader } from "@/components/canonicos";
+import {
+  EmptyState,
+  GradeKpis,
+  KPICard,
+  MoneyText,
+  PageHeader,
+} from "@/components/canonicos";
+import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { formatarCompetencia } from "@/modules/rh/_shared/formato";
+import { rotuloMesCurto } from "@/modules/gestao/calculo";
+import { ComposicaoGrupos } from "@/modules/gestao/components/composicao-grupos";
 import {
+  CustoCentroGrafico,
+  CustoMesGrafico,
+  VencimentosGrafico,
+} from "@/modules/gestao/components/graficos";
+import { MaioresCustosTabela } from "@/modules/gestao/components/maiores-custos-tabela";
+import { Painel, PainelComFalha } from "@/modules/gestao/components/painel";
+import {
+  aPagarPorVencimento,
   comprasResumo,
-  custoPorGrupoDoMes,
-  custoResumo,
+  custoPorCentroCusto,
+  custoPorGrupo,
+  custoPorMes,
   financeiroResumo,
+  janelaDoPainel,
+  maioresCustos,
   rhResumo,
-  type ResumoCompras,
-  type CustoGrupoMes,
-  type ResumoCusto,
-  type ResumoFinanceiro,
-  type ResumoRh,
 } from "@/modules/gestao/queries";
 
 export const metadata = {
   title: "Gestão",
 };
 
-function Secao<T>({
-  titulo,
-  rota,
-  resultado,
-  children,
-  rotuloLink,
-}: {
-  titulo: string;
-  rota: string;
-  resultado: PromiseSettledResult<T>;
-  children: (dados: T) => ReactNode;
-  rotuloLink?: string;
-}) {
-  if (resultado.status === "rejected") {
-    console.error(`[gestao] falha ao carregar a seção ${titulo}:`, resultado.reason);
-  }
+/**
+ * Lê o valor de um bloco que pode ter falhado. O painel carrega tudo em
+ * paralelo e cada bloco vive por conta própria: um erro no RH não pode apagar
+ * o custo da obra da tela.
+ */
+function ler<T>(
+  resultado: PromiseSettledResult<T>,
+  conteudo: (dados: T) => ReactNode,
+): ReactNode {
+  return resultado.status === "fulfilled" ? conteudo(resultado.value) : "—";
+}
 
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-corpo font-semibold">{titulo}</h2>
-        <Link
-          href={rota}
-          className="text-detalhe text-muted-foreground hover:text-foreground hover:underline"
-        >
-          {rotuloLink ?? `Abrir ${titulo.toLowerCase()}`}
-        </Link>
-      </div>
-      {resultado.status === "fulfilled" ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {children(resultado.value)}
-        </div>
-      ) : (
-        <EmptyState
-          icone={TriangleAlert}
-          titulo="Não foi possível carregar esta seção"
-          descricao="Recarregue a página. Se continuar, avise o administrador."
-          acao={<Link href="/gestao" className="text-detalhe text-muted-foreground hover:text-foreground hover:underline">Recarregar</Link>}
-        />
-      )}
-    </section>
-  );
+/** Registra a falha uma vez, para o erro não sumir silenciosamente. */
+function registrarFalhas(blocos: Record<string, PromiseSettledResult<unknown>>) {
+  for (const [nome, resultado] of Object.entries(blocos)) {
+    if (resultado.status === "rejected") {
+      console.error(`[gestao] falha ao carregar ${nome}:`, resultado.reason);
+    }
+  }
+}
+
+/**
+ * "+12% vs jul/26". O percentual só aparece quando os dois meses têm custo:
+ * comparar com zero dá "+100%" e o mês corrente zerado dá "-100%", que no dia
+ * 1 do mês assusta sem informar. Nesses casos mostramos o número do mês
+ * anterior, que é a informação de verdade.
+ */
+function textoVariacao(
+  variacao: number | null,
+  atual: number,
+  anterior: number,
+  mesAnterior: string,
+): string {
+  const rotulo = rotuloMesCurto(mesAnterior);
+  if (anterior === 0) return `Sem custo em ${rotulo}`;
+  if (atual === 0) return `Nada lançado ainda. ${rotulo}: ${formatarBRL(anterior)}`;
+  if (variacao === null) return `Mês anterior ${formatarBRL(anterior)}`;
+  const sinal = variacao > 0 ? "+" : "";
+  return `${sinal}${formatarPercentual(variacao, 0)} vs ${rotulo}`;
 }
 
 export default async function GestaoPage() {
@@ -73,151 +85,307 @@ export default async function GestaoPage() {
     notFound();
   }
 
-  const [compras, custo, custoGrupos, financeiro, rh] = await Promise.allSettled([
-    comprasResumo(),
-    custoResumo(),
-    custoPorGrupoDoMes(),
-    financeiroResumo(),
-    rhResumo(),
-  ]);
+  const janela = janelaDoPainel();
+  const periodo = `${rotuloMesCurto(janela.meses[0])} a ${rotuloMesCurto(
+    janela.meses[janela.meses.length - 1],
+  )}`;
+
+  const [compras, custo, centros, grupos, vencimentos, maiores, financeiro, rh] =
+    await Promise.allSettled([
+      comprasResumo(),
+      custoPorMes(),
+      custoPorCentroCusto(),
+      custoPorGrupo(),
+      aPagarPorVencimento(),
+      maioresCustos(),
+      financeiroResumo(),
+      rhResumo(),
+    ]);
+
+  registrarFalhas({
+    compras,
+    custo,
+    "custo por centro de custo": centros,
+    "custo por grupo": grupos,
+    vencimentos,
+    "maiores custos": maiores,
+    financeiro,
+    RH: rh,
+  });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
-        titulo="Gestão"
-        descricao="Visão geral de Compras, Financeiro e RH"
+        modulo="Gestão"
+        titulo="Painel"
+        descricao={`Custo, caixa e pendências da EMT. Custo por mês de referência, ${periodo}.`}
       />
 
-      <Secao<ResumoCompras> titulo="Compras" rota="/compras" resultado={compras}>
-        {(d) => (
-          <>
-            <KPICard
-              titulo="OCs a aprovar"
-              valor={d.ocsAprovar.contagem}
-              detalhe={<MoneyText valor={d.ocsAprovar.valor} />}
-            />
-            <KPICard
-              titulo="OCs abertas"
-              valor={<MoneyText valor={d.ocsAbertas.valor} />}
-              detalhe={`${d.ocsAbertas.contagem} ordem(ns)`}
-            />
-            <KPICard titulo="Cotações em aberto" valor={d.cotacoesAbertas} />
-          </>
-        )}
-      </Secao>
+      {/* Os números que decidem o dia: o que a obra custou, o que o caixa tem
+          pela frente, o que está parado esperando alguém e o que já saiu. */}
+      <GradeKpis>
+        <KPICard
+          titulo="Custo do mês"
+          valor={ler(custo, (d) => <MoneyText valor={d.mesAtual.valor} />)}
+          detalhe={ler(custo, (d) =>
+            textoVariacao(
+              d.variacao,
+              d.mesAtual.valor,
+              d.mesAnterior.valor,
+              d.mesAnterior.mes,
+            ),
+          )}
+          href="/financeiro/relatorios?rel=custo-cc"
+        />
+        <KPICard
+          titulo="A pagar em aberto"
+          valor={ler(vencimentos, (d) => <MoneyText valor={d.total} />)}
+          detalhe={ler(vencimentos, (d) =>
+            d.vencido > 0 ? (
+              <>
+                Vencido <MoneyText valor={d.vencido} />
+              </>
+            ) : (
+              "Nada vencido"
+            ),
+          )}
+          href="/financeiro/pagamentos"
+        />
+        <KPICard
+          titulo="Vence em até 7 dias"
+          valor={ler(financeiro, (d) => <MoneyText valor={d.aPagar.valor} />)}
+          detalhe={ler(
+            financeiro,
+            (d) =>
+              `${d.aPagar.contagem} parcela(s) aprovada(s), ${d.aPagar.vencidas} vencida(s)`,
+          )}
+          href="/financeiro/pagamentos"
+        />
+        <KPICard
+          titulo="Pagamentos a aprovar"
+          valor={ler(financeiro, (d) => d.aAprovar.contagem)}
+          detalhe={ler(financeiro, (d) => <MoneyText valor={d.aAprovar.valor} />)}
+          href="/financeiro/aprovacao-pagamentos"
+        />
+        <KPICard
+          titulo="Pago no mês"
+          valor={ler(financeiro, (d) => <MoneyText valor={d.pagoNoMes.valor} />)}
+          detalhe={ler(
+            financeiro,
+            (d) => `${d.pagoNoMes.contagem} pagamento(s) no caixa`,
+          )}
+          href="/financeiro/pagamentos"
+        />
+      </GradeKpis>
 
-      {/* Custo por mês de REFERÊNCIA: é o gasto da obra no mês, não o que saiu
-          do caixa. Vive antes do financeiro porque é a pergunta do dono. */}
-      <Secao<ResumoCusto>
-        titulo="Custo por mês de referência"
-        rota="/financeiro/relatorios?rel=custo-cc"
-        resultado={custo}
-        rotuloLink="Abrir custo por centro de custo"
-      >
-        {(d) => (
-          <>
-            <KPICard
-              titulo="Custo do mês atual"
-              valor={<MoneyText valor={d.mesAtual?.total ?? 0} />}
-              detalhe={`${d.mesAtual?.lancamentos ?? 0} lançamento(s) com este mês de referência`}
-            />
-            <KPICard
-              titulo="Mês anterior"
-              valor={<MoneyText valor={d.mesAnterior?.total ?? 0} />}
-              detalhe={`${d.mesAnterior?.lancamentos ?? 0} lançamento(s)`}
-            />
-            <KPICard
-              titulo="Acumulado (6 meses)"
-              valor={
-                <MoneyText
-                  valor={d.meses.reduce((soma, m) => soma + m.total, 0)}
-                />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Painel
+          titulo="Custo por mês de referência"
+          descricao={`Regime de competência, ${periodo}. O mês corrente ainda está em curso.`}
+          destaque={ler(custo, (d) => <MoneyText valor={d.total} />)}
+          rotuloDestaque="Total do período"
+          link={{
+            href: "/financeiro/relatorios?rel=custo-cc",
+            rotulo: "Abrir relatório",
+          }}
+        >
+          {custo.status === "rejected" ? (
+            <PainelComFalha titulo="o custo por mês" />
+          ) : custo.value.total === 0 ? (
+            <EmptyState
+              icone={BarChart3}
+              titulo="Sem custo nos últimos meses"
+              descricao="O custo aparece aqui quando um lançamento a pagar recebe mês de referência. Aprovar uma ordem de compra já gera esse lançamento."
+              acao={
+                <Link
+                  href="/financeiro/lancamentos"
+                  className="text-detalhe text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Abrir lançamentos
+                </Link>
               }
-              detalhe="Regime de competência, não de caixa"
-            />
-          </>
-        )}
-      </Secao>
-
-      {/* Custo do mês por grupo: a leitura que o dono quer ("quanto foi de
-          material, de mão de obra, de equipamento"). Mesma fonte do relatório. */}
-      <Secao<CustoGrupoMes[]>
-        titulo="Custo do mês por grupo"
-        rota="/financeiro/relatorios?rel=custo-grupo"
-        resultado={custoGrupos}
-        rotuloLink="Abrir custo por grupo"
-      >
-        {(grupos) =>
-          grupos.length === 0 ? (
-            <KPICard
-              titulo="Sem custo no mês"
-              valor={<MoneyText valor={0} />}
-              detalhe="Nenhum lançamento com este mês de referência"
             />
           ) : (
-            <>
-              {grupos.map((grupo) => (
-                <KPICard
-                  key={grupo.nome}
-                  titulo={grupo.nome}
-                  valor={<MoneyText valor={grupo.valor} />}
-                  detalhe="Mês de referência atual"
-                />
-              ))}
-            </>
-          )
-        }
-      </Secao>
+            <CustoMesGrafico meses={custo.value.meses} />
+          )}
+        </Painel>
 
-      <Secao<ResumoFinanceiro>
-        titulo="Financeiro"
-        rota="/financeiro"
-        resultado={financeiro}
-      >
-        {(d) => (
-          <>
-            <KPICard
-              titulo="A pagar (até 7 dias)"
-              valor={<MoneyText valor={d.aPagar.valor} />}
-              detalhe={`${d.aPagar.contagem} parcela(s), ${d.aPagar.vencidas} vencida(s)`}
-            />
-            <KPICard
-              titulo="Pagamentos a aprovar"
-              valor={d.aAprovar.contagem}
-              detalhe={<MoneyText valor={d.aAprovar.valor} />}
-            />
-            <KPICard
-              titulo="Pago no mês"
-              valor={<MoneyText valor={d.pagoNoMes.valor} />}
-              detalhe={`${d.pagoNoMes.contagem} pagamento(s)`}
-            />
-          </>
-        )}
-      </Secao>
-
-      <Secao<ResumoRh> titulo="RH" rota="/rh" resultado={rh} rotuloLink="Abrir RH">
-        {(d) => (
-          <>
-            <KPICard
-              titulo="Colaboradores ativos"
-              valor={d.colaboradoresAtivos}
-            />
-            <KPICard
-              titulo="Custo da folha"
-              valor={<MoneyText valor={d.folha.custoTotal} />}
-              detalhe={
-                d.folha.competencia
-                  ? formatarCompetencia(d.folha.competencia)
-                  : "sem folha lançada"
+        <Painel
+          titulo="A pagar por prazo de vencimento"
+          descricao="Parcelas em aberto pelo prazo até o vencimento. É o que o caixa precisa suportar."
+          destaque={ler(vencimentos, (d) => <MoneyText valor={d.total} />)}
+          rotuloDestaque="Em aberto"
+          link={{ href: "/financeiro/pagamentos", rotulo: "Abrir pagamentos" }}
+        >
+          {vencimentos.status === "rejected" ? (
+            <PainelComFalha titulo="os vencimentos" />
+          ) : vencimentos.value.total === 0 ? (
+            <EmptyState
+              icone={CalendarClock}
+              titulo="Nenhuma parcela em aberto"
+              descricao="As parcelas entram aqui quando um lançamento a pagar é criado com vencimento e ainda não foi pago."
+              acao={
+                <Link
+                  href="/financeiro/lancamentos"
+                  className="text-detalhe text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Abrir lançamentos
+                </Link>
               }
             />
-            <KPICard
-              titulo="Apontamentos em aberto"
-              valor={d.apontamentosAbertos}
+          ) : (
+            <VencimentosGrafico faixas={vencimentos.value.faixas} />
+          )}
+        </Painel>
+
+        <Painel
+          titulo="Custo por centro de custo"
+          descricao={`Onde o dinheiro está indo, ${periodo}. Maiores primeiro.`}
+          destaque={ler(centros, (d) => `${d.quantidade}`)}
+          rotuloDestaque="Centros com gasto"
+          link={{
+            href: "/financeiro/relatorios?rel=custo-cc",
+            rotulo: "Abrir relatório",
+          }}
+        >
+          {centros.status === "rejected" ? (
+            <PainelComFalha titulo="o custo por centro de custo" />
+          ) : centros.value.centros.length === 0 ? (
+            <EmptyState
+              icone={Wallet}
+              titulo="Nenhum centro de custo com gasto"
+              descricao="Todo lançamento a pagar é rateado em centro de custo. Sem lançamento no período, não há o que ratear."
+              acao={
+                <Link
+                  href="/cadastros/centros-custo"
+                  className="text-detalhe text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Ver centros de custo
+                </Link>
+              }
             />
-          </>
+          ) : (
+            <CustoCentroGrafico centros={centros.value.centros} />
+          )}
+        </Painel>
+
+        <Painel
+          titulo="Custo por grupo de insumo"
+          descricao={`Quanto foi material, mão de obra, equipamento e serviço, ${periodo}.`}
+          destaque={ler(grupos, (d) => <MoneyText valor={d.total} />)}
+          rotuloDestaque="Total do período"
+          link={{
+            href: "/financeiro/relatorios?rel=custo-grupo",
+            rotulo: "Abrir relatório",
+          }}
+        >
+          {grupos.status === "rejected" ? (
+            <PainelComFalha titulo="o custo por grupo" />
+          ) : grupos.value.grupos.length === 0 ? (
+            <EmptyState
+              icone={Layers}
+              titulo="Sem custo por grupo no período"
+              descricao="O grupo vem do insumo dos itens da ordem de compra. Lançamento avulso, sem insumo, aparece na linha própria assim que existir."
+              acao={
+                <Link
+                  href="/compras/ordens"
+                  className="text-detalhe text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Abrir ordens de compra
+                </Link>
+              }
+            />
+          ) : (
+            <ComposicaoGrupos grupos={grupos.value.grupos} />
+          )}
+        </Painel>
+      </div>
+
+      <Painel
+        titulo="Maiores custos do período"
+        descricao={`Os lançamentos a pagar de maior valor, ${periodo}.`}
+        link={{
+          href: "/financeiro/lancamentos",
+          rotulo: "Abrir lançamentos",
+        }}
+      >
+        {maiores.status === "rejected" ? (
+          <PainelComFalha titulo="os maiores custos" />
+        ) : maiores.value.length === 0 ? (
+          <EmptyState
+            icone={Receipt}
+            titulo="Nenhum lançamento no período"
+            descricao="Assim que houver lançamento a pagar com mês de referência no período, os maiores aparecem aqui."
+          />
+        ) : (
+          <MaioresCustosTabela custos={maiores.value} />
         )}
-      </Secao>
+      </Painel>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Painel
+          titulo="Compras"
+          descricao="O que está parado esperando decisão."
+          link={{ href: "/compras/ordens", rotulo: "Abrir compras" }}
+        >
+          {compras.status === "rejected" ? (
+            <PainelComFalha titulo="o resumo de Compras" />
+          ) : (
+            <GradeKpis>
+              <KPICard
+                titulo="OCs a aprovar"
+                valor={compras.value.ocsAprovar.contagem}
+                detalhe={<MoneyText valor={compras.value.ocsAprovar.valor} />}
+                href="/compras/ordens"
+              />
+              <KPICard
+                titulo="OCs aprovadas"
+                valor={<MoneyText valor={compras.value.ocsAbertas.valor} />}
+                detalhe={`${compras.value.ocsAbertas.contagem} ordem(ns)`}
+                href="/compras/ordens"
+              />
+              <KPICard
+                titulo="Cotações em aberto"
+                valor={compras.value.cotacoesAbertas}
+                href="/compras/cotacoes"
+              />
+            </GradeKpis>
+          )}
+        </Painel>
+
+        <Painel
+          titulo="RH"
+          descricao="Equipe e folha do mês."
+          link={{ href: "/rh/folha", rotulo: "Abrir RH" }}
+        >
+          {rh.status === "rejected" ? (
+            <PainelComFalha titulo="o resumo do RH" />
+          ) : (
+            <GradeKpis>
+              <KPICard
+                titulo="Colaboradores ativos"
+                valor={rh.value.colaboradoresAtivos}
+                href="/cadastros/colaboradores"
+              />
+              <KPICard
+                titulo="Custo da folha"
+                valor={<MoneyText valor={rh.value.folha.custoTotal} />}
+                detalhe={
+                  rh.value.folha.competencia
+                    ? formatarCompetencia(rh.value.folha.competencia)
+                    : "Sem folha lançada"
+                }
+                href="/rh/folha"
+              />
+              <KPICard
+                titulo="Apontamentos em aberto"
+                valor={rh.value.apontamentosAbertos}
+                href="/rh/apontamentos"
+              />
+            </GradeKpis>
+          )}
+        </Painel>
+      </div>
     </div>
   );
 }

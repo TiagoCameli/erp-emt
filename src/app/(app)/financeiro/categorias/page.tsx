@@ -26,6 +26,7 @@ export default async function PaginaCategoriasFinanceiras() {
   return (
     <>
       <PageHeader
+        modulo="Financeiro"
         titulo="Categorias"
         descricao="Plano de contas gerencial de receitas e despesas"
         acoes={

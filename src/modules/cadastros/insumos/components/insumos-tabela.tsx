@@ -231,6 +231,7 @@ export function InsumosTabela({
       {
         accessorKey: "codigo",
         header: "Código",
+        size: 130,
         cell: ({ row }) =>
           row.original.codigo ? (
             <span className="codigo-doc">{row.original.codigo}</span>
@@ -239,8 +240,15 @@ export function InsumosTabela({
           ),
       },
       {
+        // A tabela é table-fixed e a sobra de largura é repartida na PROPORÇÃO
+        // das larguras declaradas, então o que decide o tamanho na tela é a
+        // relação entre as colunas, não o número absoluto. Nome é a única forma
+        // de identificar a peça entre 2.349 insumos ("295/80R22.5 LISO RODA
+        // GL2..." não diz nada cortado), então leva a maior fatia; coluna sem
+        // `size` cairia no padrão de 150 do TanStack e disputaria de igual.
         accessorKey: "nome",
         header: "Nome",
+        size: 420,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),
@@ -248,7 +256,7 @@ export function InsumosTabela({
       {
         accessorKey: "grupoNome",
         header: "Grupo",
-        size: 150,
+        size: 130,
         meta: { naoTruncar: true },
         cell: ({ row }) =>
           row.original.grupoNome ? (
@@ -286,6 +294,7 @@ export function InsumosTabela({
       {
         accessorKey: "unidadeSigla",
         header: "Unidade",
+        size: 100,
         // Secundária: só importa na hora de comprar, não na hora de achar.
         meta: { ocultaPorPadrao: true },
         cell: ({ row }) =>
@@ -311,6 +320,9 @@ export function InsumosTabela({
     base.push({
       id: "acoes",
       header: "",
+      // Cabe só o botão "⋮". Sem `size` ela nasceria com os mesmos 150 das
+      // outras e viraria o vazio à direita da tabela.
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const insumo = row.original;
@@ -360,6 +372,7 @@ export function InsumosTabela({
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Insumos"
         descricao="Materiais, peças, óleos, combustíveis, betuminosos e serviços"
         acoes={
