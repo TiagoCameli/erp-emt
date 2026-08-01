@@ -13,7 +13,7 @@ import {
   variacaoPercentual,
   type FaixaVencimento,
   type JanelaPainel,
-  type ParcelaPrazo,
+  type LinhaFaixaPrazo,
   type PontoMes,
 } from "@/modules/gestao/calculo";
 
@@ -32,10 +32,10 @@ import {
  *
  * O teto de 1000 vale para RPC também: uma função que devolvesse mais de mil
  * linhas seria cortada do mesmo jeito. As daqui devolvem uma linha (resumos),
- * uma por mês, uma por centro de custo ou uma por grupo. A exceção a vigiar é
- * `fn_rel_aging`, que devolve uma linha por data de vencimento em aberto: o dia
- * em que a EMT tiver mais de mil vencimentos distintos em aberto, ela precisa
- * agregar por faixa no banco em vez de por data.
+ * uma por mês, uma por centro de custo, uma por grupo ou uma por faixa de
+ * vencimento. Nenhuma delas devolve uma linha por documento ou por data, que é
+ * o que faz o número de linhas crescer com o tamanho da empresa: essa é a regra
+ * para qualquer RPC nova daqui.
  *
  * Todos os cortes de custo usam a MESMA janela de competência (janelaPainel),
  * então o total do gráfico por mês fecha com o de centro de custo e com o de
@@ -359,24 +359,28 @@ export interface APagarPorVencimento {
  * Parcelas a pagar em aberto (pendente, em revisão ou aprovada) distribuídas
  * pelo prazo até o vencimento. Diferente do aging do Financeiro, que olha para
  * trás: aqui a pergunta é quanto o caixa precisa suportar nas próximas semanas.
+ *
+ * A faixa vem pronta do banco (coluna faixa_prazo), uma linha por faixa. Antes
+ * a RPC devolvia uma linha por data de vencimento e o prazo era calculado aqui:
+ * bastaria a EMT ter mais de mil datas distintas em aberto para o teto do
+ * PostgREST cortar o resto e o gráfico mostrar menos dívida do que existe.
  */
 export async function aPagarPorVencimento(): Promise<APagarPorVencimento> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("fn_rel_aging");
+  const { data, error } = await supabase.rpc("fn_rel_aging", {
+    p_hoje: dataHojeISO(),
+  });
 
   if (error) {
     throw new Error("Não foi possível carregar os vencimentos a pagar");
   }
 
-  const parcelas: ParcelaPrazo[] = (data ?? [])
+  const linhas: LinhaFaixaPrazo[] = (data ?? [])
     .filter((linha) => linha.tipo !== "a_receber")
-    .map((linha) => ({
-      valor: linha.total,
-      dataVencimento: linha.data_vencimento,
-    }));
+    .map((linha) => ({ faixa: linha.faixa_prazo, valor: linha.total }));
 
-  const faixas = agregarPorPrazo(parcelas, dataHojeISO());
+  const faixas = agregarPorPrazo(linhas);
   const valorDa = (faixa: string) =>
     faixas.find((f) => f.faixa === faixa)?.valor ?? 0;
 

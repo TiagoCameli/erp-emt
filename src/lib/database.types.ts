@@ -3293,9 +3293,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_rel_aging: {
-        Args: never;
+        Args: { p_hoje?: string };
         Returns: {
-          data_vencimento: string;
+          faixa_aging: string;
+          faixa_prazo: string;
           tipo: string;
           total: number;
         }[];

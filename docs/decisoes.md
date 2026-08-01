@@ -695,3 +695,40 @@ virar um painel com gráficos, tabela e estados vazios que ensinam.
    confiança do leitor. O contrato compartilhado entre Gestão e os relatórios do
    Financeiro é a função do banco, não o TypeScript: os dois módulos calculam por
    conta própria em cima das mesmas RPCs.
+
+## O teto de 1.000 linhas vale para RPC, e agregar por faixa é o que o resolve
+
+**Data:** 01/08/2026 · **Contexto:** `fn_rel_aging`, gráfico do painel de Gestão e
+relatório de Aging do Financeiro
+
+A decisão de 30/07 ("Consulta sem `.limit()` não é consulta sem limite") tratou de
+tabela. O mesmo teto de 1.000 linhas do PostgREST vale para **RPC**, e ali ele é
+mais traiçoeiro: a função "já agrega", então parece imune. `fn_rel_aging` agregava
+por `(tipo, data_vencimento)`, ou seja, devolvia **uma linha por data de vencimento
+em aberto**. Parcela de OC e de lançamento avulso se acumulam ano a ano; passando
+de mil datas distintas, as duas telas passariam a mostrar menos dívida do que
+existe, caladas. Com 1.201 datas na prova, R$ 20.100,00 sumiram do caminho antigo.
+
+**Decisões**
+
+1. **A pergunta certa não é "a RPC agrega?", é "o número de linhas cresce com o
+   tamanho da empresa?".** Uma linha por documento, por data ou por parcela cresce;
+   uma linha por mês, por centro de custo, por grupo ou por faixa não. Toda `fn_rel_*`
+   nova tem que cair no segundo grupo, e o teto deixa de existir como assunto.
+2. **`fn_rel_aging` agrega por faixa, e devolve as DUAS faixas na mesma linha.** As
+   duas telas usam recortes diferentes da mesma base: `faixa_prazo` olha para a
+   frente (quanto o caixa precisa suportar: vencido, até 7, 8-15, 16-30, 31-60,
+   +60, sem vencimento) e `faixa_aging` olha para trás (há quanto tempo venceu: a
+   vencer, 1-7, 8-15, 16-30, 31-60, +60). Os dois recortes se encaixam ("vencido" é
+   a união das cinco faixas de atraso), então uma linha por combinação serve as
+   duas exatamente, sem nenhuma delas reclassificar a faixa da outra. São no máximo
+   11 linhas por tipo.
+3. **Classificação por data mora no banco, não no TypeScript.** `classificarPrazo`,
+   `classificarFaixa`, `faixaDaParcela`, `diasAte` e `diasEntre` saíram: com o banco
+   classificando, mantê-las seria duas definições de borda esperando divergir. O que
+   ficou em `calculo.ts` é montar a lista ordenada com rótulo e zero onde falta.
+   Faixa desconhecida vinda do banco **lança erro**: somar na faixa errada ou
+   descartar a linha é o mesmo dinheiro sumindo em silêncio que se veio consertar.
+4. **A data de corte é o hoje de America/Rio_Branco, e a tela manda a dela.** `p_hoje`
+   nulo cai no fuso de Rio Branco, nunca no UTC do servidor, que às 21h locais já é
+   o dia seguinte e mudaria a faixa de tudo que vence amanhã.

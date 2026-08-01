@@ -19,7 +19,7 @@ import {
   type AgingFaixa,
   type DreLinha,
   type LancamentoCategoria,
-  type ParcelaAging,
+  type LinhaFaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
 
 // Reexporta a API pública dos relatórios (tipos e tabelas de faixa) para que os
@@ -40,11 +40,14 @@ export {
  *
  * Datas: as colunas usadas (mes_competencia, data_vencimento, data_pagamento) são
  * `date` puro no Postgres (sem hora), então o mês de um registro é o prefixo
- * "YYYY-MM" da string, e o "hoje" para aging é dataHojeISO() (já no fuso de
- * Rio Branco). Sem timestamptz no caminho, sem risco de pular dia por fuso.
+ * "YYYY-MM" da string, e o "hoje" do aging vai para o banco como dataHojeISO()
+ * (já no fuso de Rio Branco). Sem timestamptz no caminho, sem risco de pular
+ * dia por fuso.
  *
- * Valores e regras puras (faixa de aging, soma por categoria) vivem em
- * calculo.ts, testadas isoladas. Aqui só buscamos e delegamos.
+ * As regras puras que sobraram (montar a lista de faixas, somar por categoria)
+ * vivem em calculo.ts, testadas isoladas. A classificação por faixa de aging
+ * saiu daqui para dentro de fn_rel_aging: era o único ponto em que o número de
+ * linhas devolvidas crescia com o número de vencimentos em aberto.
  */
 
 // =====================================================================
@@ -263,24 +266,26 @@ export interface Aging {
  */
 export async function aging(): Promise<Aging> {
   const supabase = await createClient();
-  const hoje = dataHojeISO();
 
-  // Agregado no banco: uma linha por tipo/data de vencimento. A classificação
-  // em faixas continua no agregarAging (puro e testado), que agora recebe uma
-  // linha por data distinta em vez de uma por parcela.
-  const { data, error } = await supabase.rpc("fn_rel_aging");
+  // Agregado no banco por tipo E por faixa: uma linha por faixa, não mais uma
+  // por data de vencimento. Com uma linha por data, bastaria a EMT ter mais de
+  // mil datas distintas em aberto para o teto de 1000 linhas do PostgREST
+  // cortar o resto sem erro, e o relatório mostrar menos dívida do que existe.
+  const { data, error } = await supabase.rpc("fn_rel_aging", {
+    p_hoje: dataHojeISO(),
+  });
 
   if (error) {
     throw new Error("Não foi possível carregar o aging");
   }
 
-  const aPagar: ParcelaAging[] = [];
-  const aReceber: ParcelaAging[] = [];
+  const aPagar: LinhaFaixaAging[] = [];
+  const aReceber: LinhaFaixaAging[] = [];
 
   for (const linha of data ?? []) {
-    const item: ParcelaAging = {
+    const item: LinhaFaixaAging = {
+      faixa: linha.faixa_aging,
       valor: linha.total,
-      dataVencimento: linha.data_vencimento,
     };
     if (linha.tipo === "a_receber") {
       aReceber.push(item);
@@ -289,8 +294,8 @@ export async function aging(): Promise<Aging> {
     }
   }
 
-  const listaAPagar = agregarAging(aPagar, hoje);
-  const listaAReceber = agregarAging(aReceber, hoje);
+  const listaAPagar = agregarAging(aPagar);
+  const listaAReceber = agregarAging(aReceber);
 
   return {
     aPagar: listaAPagar,

@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregarPorPrazo,
-  classificarPrazo,
-  diasAte,
   janelaPainel,
   participacao,
   rotuloMesCurto,
@@ -97,33 +95,11 @@ describe("variacaoPercentual", () => {
   });
 });
 
-describe("diasAte e classificarPrazo", () => {
-  it("conta os dias nos dois sentidos", () => {
-    expect(diasAte("2026-08-08", "2026-08-01")).toBe(7);
-    expect(diasAte("2026-07-30", "2026-08-01")).toBe(-2);
-    expect(diasAte("2026-08-01", "2026-08-01")).toBe(0);
-  });
-
-  it("põe a borda na faixa de baixo e o que vence hoje em até 7 dias", () => {
-    expect(classificarPrazo(-1)).toBe("vencido");
-    expect(classificarPrazo(0)).toBe("ate_7");
-    expect(classificarPrazo(7)).toBe("ate_7");
-    expect(classificarPrazo(8)).toBe("d_8_15");
-    expect(classificarPrazo(15)).toBe("d_8_15");
-    expect(classificarPrazo(16)).toBe("d_16_30");
-    expect(classificarPrazo(30)).toBe("d_16_30");
-    expect(classificarPrazo(31)).toBe("d_31_60");
-    expect(classificarPrazo(60)).toBe("d_31_60");
-    expect(classificarPrazo(61)).toBe("acima_60");
-  });
-});
-
 describe("agregarPorPrazo", () => {
+  // A faixa chega classificada do banco (fn_rel_aging.faixa_prazo): o que se
+  // testa aqui é a montagem da lista, não mais o cálculo de dias.
   it("devolve as seis faixas na ordem, com zero onde não há parcela", () => {
-    const faixas = agregarPorPrazo(
-      [{ valor: "1199.88", dataVencimento: "2026-08-14" }],
-      "2026-08-01",
-    );
+    const faixas = agregarPorPrazo([{ faixa: "d_8_15", valor: "1199.88" }]);
     expect(faixas.map((f) => f.faixa)).toEqual([
       "vencido",
       "ate_7",
@@ -136,30 +112,29 @@ describe("agregarPorPrazo", () => {
     expect(faixas[0].valor).toBe(0);
   });
 
-  it("soma parcelas da mesma faixa em centavos", () => {
-    const faixas = agregarPorPrazo(
-      [
-        { valor: "1199.88", dataVencimento: "2026-08-14" },
-        { valor: "0.12", dataVencimento: "2026-08-10" },
-      ],
-      "2026-08-01",
-    );
+  it("soma linhas da mesma faixa em centavos", () => {
+    const faixas = agregarPorPrazo([
+      { faixa: "d_8_15", valor: "1199.88" },
+      { faixa: "d_8_15", valor: "0.12" },
+    ]);
     expect(faixas[2].valor).toBe(1200);
   });
 
   it("só mostra 'sem vencimento' quando existe parcela sem data", () => {
-    const semData = agregarPorPrazo(
-      [{ valor: 500, dataVencimento: null }],
-      "2026-08-01",
-    );
+    const semData = agregarPorPrazo([{ faixa: "sem_data", valor: 500 }]);
     expect(semData).toHaveLength(7);
     expect(semData[6]).toMatchObject({ faixa: "sem_data", valor: 500 });
 
-    const comData = agregarPorPrazo(
-      [{ valor: 500, dataVencimento: "2026-08-02" }],
-      "2026-08-01",
-    );
+    const comData = agregarPorPrazo([{ faixa: "ate_7", valor: 500 }]);
     expect(comData).toHaveLength(6);
+  });
+
+  it("falha alto se o banco mandar faixa que o TypeScript não conhece", () => {
+    // Descartar ou somar na faixa errada seria dinheiro sumindo calado, que é
+    // o defeito que a agregação no banco veio consertar.
+    expect(() => agregarPorPrazo([{ faixa: "d_61_90", valor: 500 }])).toThrow(
+      /Faixa de prazo desconhecida/,
+    );
   });
 });
 

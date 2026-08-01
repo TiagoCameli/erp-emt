@@ -2,9 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   agregarAging,
-  classificarFaixa,
-  diasEntre,
-  faixaDaParcela,
   paraCentavos,
   proximoMes,
   somarPorCategoria,
@@ -34,90 +31,11 @@ describe("paraCentavos", () => {
   });
 });
 
-describe("diasEntre", () => {
-  it("conta dias inteiros entre duas datas", () => {
-    expect(diasEntre("2026-06-01", "2026-06-08")).toBe(7);
-  });
-
-  it("é negativo quando a data final é anterior", () => {
-    expect(diasEntre("2026-06-10", "2026-06-01")).toBe(-9);
-  });
-
-  it("atravessa virada de mês sem erro de fuso", () => {
-    expect(diasEntre("2026-01-31", "2026-02-01")).toBe(1);
-  });
-
-  it("atravessa ano bissexto corretamente", () => {
-    // 2028 é bissexto: 28 -> 29 de fevereiro existe.
-    expect(diasEntre("2028-02-28", "2028-03-01")).toBe(2);
-  });
-});
-
-describe("classificarFaixa (bordas)", () => {
-  it("hoje e futuro são a vencer", () => {
-    expect(classificarFaixa(0)).toBe("a_vencer");
-    expect(classificarFaixa(-5)).toBe("a_vencer");
-  });
-
-  it("1 dia vencido entra em v_1_7", () => {
-    expect(classificarFaixa(1)).toBe("v_1_7");
-  });
-
-  it("7 dias é o teto de v_1_7 e 8 já é v_8_15", () => {
-    expect(classificarFaixa(7)).toBe("v_1_7");
-    expect(classificarFaixa(8)).toBe("v_8_15");
-  });
-
-  it("15 fecha v_8_15, 16 abre v_16_30", () => {
-    expect(classificarFaixa(15)).toBe("v_8_15");
-    expect(classificarFaixa(16)).toBe("v_16_30");
-  });
-
-  it("30 fecha v_16_30, 31 abre v_31_60", () => {
-    expect(classificarFaixa(30)).toBe("v_16_30");
-    expect(classificarFaixa(31)).toBe("v_31_60");
-  });
-
-  it("60 fecha v_31_60, 61 vira v_60_mais", () => {
-    expect(classificarFaixa(60)).toBe("v_31_60");
-    expect(classificarFaixa(61)).toBe("v_60_mais");
-  });
-});
-
-describe("faixaDaParcela", () => {
-  const hoje = "2026-06-15";
-
-  it("vencimento no futuro é a vencer", () => {
-    expect(faixaDaParcela("2026-06-20", hoje)).toBe("a_vencer");
-  });
-
-  it("vence exatamente hoje ainda é a vencer", () => {
-    expect(faixaDaParcela("2026-06-15", hoje)).toBe("a_vencer");
-  });
-
-  it("vencido há 1 dia (data limítrofe) é v_1_7", () => {
-    expect(faixaDaParcela("2026-06-14", hoje)).toBe("v_1_7");
-  });
-
-  it("vencido há exatamente 7 dias ainda é v_1_7", () => {
-    expect(faixaDaParcela("2026-06-08", hoje)).toBe("v_1_7");
-  });
-
-  it("vencido há 8 dias já é v_8_15", () => {
-    expect(faixaDaParcela("2026-06-07", hoje)).toBe("v_8_15");
-  });
-
-  it("parcela sem vencimento conta como a vencer", () => {
-    expect(faixaDaParcela(null, hoje)).toBe("a_vencer");
-    expect(faixaDaParcela(undefined, hoje)).toBe("a_vencer");
-  });
-});
-
 describe("agregarAging", () => {
-  const hoje = "2026-06-15";
-
+  // A faixa chega classificada do banco (fn_rel_aging.faixa_aging): o que se
+  // testa aqui é a montagem da lista, não mais o cálculo de dias de atraso.
   it("sempre devolve as seis faixas na ordem fixa", () => {
-    const lista = agregarAging([], hoje);
+    const lista = agregarAging([]);
     expect(lista.map((f) => f.faixa)).toEqual([
       "a_vencer",
       "v_1_7",
@@ -129,28 +47,22 @@ describe("agregarAging", () => {
     expect(lista.every((f) => f.valor === 0)).toBe(true);
   });
 
-  it("soma parcelas dentro da mesma faixa", () => {
-    const lista = agregarAging(
-      [
-        { valor: 100, dataVencimento: "2026-06-14" }, // 1 dia: v_1_7
-        { valor: 50.5, dataVencimento: "2026-06-09" }, // 6 dias: v_1_7
-      ],
-      hoje,
-    );
+  it("soma linhas dentro da mesma faixa", () => {
+    const lista = agregarAging([
+      { faixa: "v_1_7", valor: 100 },
+      { faixa: "v_1_7", valor: 50.5 },
+    ]);
     const faixa = lista.find((f) => f.faixa === "v_1_7");
     expect(faixa?.valor).toBe(150.5);
   });
 
-  it("distribui parcelas pelas faixas certas e devolve reais", () => {
-    const lista = agregarAging(
-      [
-        { valor: 1000, dataVencimento: "2026-06-30" }, // futuro: a_vencer
-        { valor: 200, dataVencimento: "2026-06-10" }, // 5 dias: v_1_7
-        { valor: 300, dataVencimento: "2026-05-15" }, // 31 dias: v_31_60
-        { valor: 400, dataVencimento: "2026-01-01" }, // >60: v_60_mais
-      ],
-      hoje,
-    );
+  it("distribui as linhas pelas faixas certas e devolve reais", () => {
+    const lista = agregarAging([
+      { faixa: "a_vencer", valor: 1000 },
+      { faixa: "v_1_7", valor: 200 },
+      { faixa: "v_31_60", valor: 300 },
+      { faixa: "v_60_mais", valor: 400 },
+    ]);
     const valor = (faixa: AgingFaixa["faixa"]) =>
       lista.find((f) => f.faixa === faixa)?.valor;
     expect(valor("a_vencer")).toBe(1000);
@@ -161,27 +73,27 @@ describe("agregarAging", () => {
   });
 
   it("não acumula erro de ponto flutuante somando centavos", () => {
-    const lista = agregarAging(
-      [
-        { valor: 0.1, dataVencimento: "2026-06-14" },
-        { valor: 0.2, dataVencimento: "2026-06-14" },
-      ],
-      hoje,
-    );
+    const lista = agregarAging([
+      { faixa: "v_1_7", valor: 0.1 },
+      { faixa: "v_1_7", valor: 0.2 },
+    ]);
     expect(lista.find((f) => f.faixa === "v_1_7")?.valor).toBe(0.3);
+  });
+
+  it("falha alto se o banco mandar faixa que o TypeScript não conhece", () => {
+    // Descartar ou somar na faixa errada seria dinheiro sumindo calado.
+    expect(() => agregarAging([{ faixa: "v_61_90", valor: 500 }])).toThrow(
+      /Faixa de aging desconhecida/,
+    );
   });
 });
 
 describe("totalAging e vencidoAging", () => {
-  const hoje = "2026-06-15";
-  const lista = agregarAging(
-    [
-      { valor: 1000, dataVencimento: "2026-06-30" }, // a_vencer
-      { valor: 200, dataVencimento: "2026-06-10" }, // v_1_7
-      { valor: 300, dataVencimento: "2026-05-15" }, // v_31_60
-    ],
-    hoje,
-  );
+  const lista = agregarAging([
+    { faixa: "a_vencer", valor: 1000 },
+    { faixa: "v_1_7", valor: 200 },
+    { faixa: "v_31_60", valor: 300 },
+  ]);
 
   it("total soma todas as faixas", () => {
     expect(totalAging(lista)).toBe(1500);
