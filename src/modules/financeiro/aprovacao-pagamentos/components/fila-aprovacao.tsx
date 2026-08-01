@@ -25,6 +25,7 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
+  GradeKpis,
   KPICard,
   MoneyText,
   StatusBadge,
@@ -586,7 +587,9 @@ export function FilaAprovacao({
       {
         accessorKey: "mesCompetencia",
         header: "Mês de referência",
-        size: 150,
+        // O rótulo é mais largo que o conteúdo (mm/aaaa): com 150 o cabeçalho
+        // saía cortado em "Mês de referê...".
+        size: 176,
         meta: { rotulo: "Mês de referência" },
         cell: ({ row }) => (
           <span className="tabular-nums">
@@ -628,7 +631,8 @@ export function FilaAprovacao({
       {
         accessorKey: "formaPagamentoNome",
         header: "Forma de pagamento",
-        size: 170,
+        // Mesmo caso do mês: quem manda na largura aqui é o rótulo.
+        size: 184,
         meta: { rotulo: "Forma de pagamento", ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span>{row.original.formaPagamentoNome ?? "-"}</span>
@@ -1015,7 +1019,7 @@ export function FilaAprovacao({
     // Com a fila vazia nada disso renderiza, então a falta passa despercebida.
     <TooltipProvider>
       <div className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <GradeKpis>
           <KPICard
             titulo="Total a aprovar"
             valor={formatarBRL(totalAprovar)}
@@ -1035,7 +1039,15 @@ export function FilaAprovacao({
             valor={formatarBRL(aguardandoData.valor)}
             detalhe={`${aguardandoData.parcelas} com data autorizada à frente`}
           />
-        </div>
+          {/* Este número já vinha do servidor e não aparecia em lugar nenhum.
+              É o que segura pagamento fora da fila por um motivo que se
+              resolve em um clique: escolher a conta no lançamento. */}
+          <KPICard
+            titulo="Aguardando conta bancária"
+            valor={formatarBRL(aguardandoConta.valor)}
+            detalhe={`${aguardandoConta.parcelas} sem conta escolhida no lançamento`}
+          />
+        </GradeKpis>
 
         {algumaSelecionada ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-2.5">

@@ -34,6 +34,7 @@ export default async function PaginaEquipamentos() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Equipamentos"
         descricao="Frota e maquinário. Cada equipamento vira uma etapa do centro de custo de Manutenção"
         acoes={<EquipamentosAcoesCabecalho podeCriar={podeCriar} />}

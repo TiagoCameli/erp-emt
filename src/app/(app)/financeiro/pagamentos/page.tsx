@@ -153,6 +153,7 @@ export default async function PaginaPagamentos({
   return (
     <>
       <PageHeader
+        modulo="Financeiro"
         titulo="Pagamentos"
         descricao="Pague as parcelas já aprovadas e acompanhe o histórico de pagamentos"
       />

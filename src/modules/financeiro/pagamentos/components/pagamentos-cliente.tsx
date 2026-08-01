@@ -15,6 +15,7 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
+  GradeKpis,
   KPICard,
   MoneyText,
   StatusBadge,
@@ -493,11 +494,16 @@ export function PagamentosCliente({
 
   const semConta = contas.length === 0;
 
+  // As larguras são declaradas coluna a coluna porque o padrão de 150px em
+  // todas somava mais que a área útil da tela: a tabela ganhava rolagem
+  // horizontal e, com a fila vazia, o estado vazio (que ocupa a linha inteira)
+  // nascia centralizado fora da tela, com o texto da regra cortado à direita.
   const colunasAprovadas = React.useMemo<ColumnDef<ParcelaAprovada, unknown>[]>(
     () => [
       {
         accessorKey: "lancamentoNumero",
         header: "Lançamento",
+        size: 120,
         cell: ({ row }) =>
           rotuloParcela(
             row.original.lancamentoNumero,
@@ -507,7 +513,7 @@ export function PagamentosCliente({
       {
         accessorKey: "descricao",
         header: "Descrição e categoria",
-        size: 280,
+        size: 240,
         meta: { rotulo: "Descrição e categoria", naoTruncar: true },
         cell: ({ row }) => (
           <CelulaDescricaoCategoria
@@ -519,10 +525,12 @@ export function PagamentosCliente({
       {
         accessorKey: "fornecedorNome",
         header: "Fornecedor",
+        size: 170,
       },
       {
         accessorKey: "dataVencimento",
         header: "Vencimento",
+        size: 120,
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataVencimento
@@ -536,6 +544,8 @@ export function PagamentosCliente({
         // Pagar e leva um bloqueio que não tinha como prever.
         accessorKey: "dataProgramada",
         header: "Data autorizada",
+        // Cabe a data mais o badge "Vencida"/"Aguarda" na mesma linha.
+        size: 180,
         meta: { naoTruncar: true },
         cell: ({ row }) => {
           const autorizada = row.original.dataProgramada;
@@ -559,12 +569,14 @@ export function PagamentosCliente({
       {
         accessorKey: "valor",
         header: "Valor",
+        size: 130,
         meta: { alinharDireita: true },
         cell: ({ row }) => <MoneyText valor={row.original.valor} />,
       },
       {
         id: "status",
         header: "Status",
+        size: 110,
         cell: () => (
           <StatusBadge
             status={STATUS_PARCELA.aprovado.badge}
@@ -577,6 +589,7 @@ export function PagamentosCliente({
             {
               id: "acoes",
               header: "",
+              size: 100,
               meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
               cell: ({ row }) => (
                 <Button
@@ -594,11 +607,14 @@ export function PagamentosCliente({
     [podePagar],
   );
 
+  // Mesma régua de largura da aba "A pagar": a soma cabe na tela, então a
+  // tabela não ganha rolagem horizontal nem empurra o estado vazio para fora.
   const colunasPagas = React.useMemo<ColumnDef<ParcelaPaga, unknown>[]>(
     () => [
       {
         accessorKey: "lancamentoNumero",
         header: "Lançamento",
+        size: 120,
         cell: ({ row }) =>
           rotuloParcela(
             row.original.lancamentoNumero,
@@ -608,7 +624,7 @@ export function PagamentosCliente({
       {
         accessorKey: "descricao",
         header: "Descrição e categoria",
-        size: 280,
+        size: 240,
         meta: { rotulo: "Descrição e categoria", naoTruncar: true },
         cell: ({ row }) => (
           <CelulaDescricaoCategoria
@@ -620,14 +636,17 @@ export function PagamentosCliente({
       {
         accessorKey: "fornecedorNome",
         header: "Fornecedor",
+        size: 170,
       },
       {
         accessorKey: "contaNome",
         header: "Conta",
+        size: 160,
       },
       {
         accessorKey: "dataPagamento",
         header: "Pagamento",
+        size: 120,
         cell: ({ row }) => (
           <span className="tabular-nums">
             {row.original.dataPagamento
@@ -639,6 +658,7 @@ export function PagamentosCliente({
       {
         accessorKey: "valor",
         header: "Valor",
+        size: 130,
         meta: { alinharDireita: true },
         cell: ({ row }) => <MoneyText valor={row.original.valor} />,
       },
@@ -647,6 +667,7 @@ export function PagamentosCliente({
             {
               id: "acoes",
               header: "",
+              size: 120,
               meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
               cell: ({ row }) => (
                 <Button
@@ -708,13 +729,13 @@ export function PagamentosCliente({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <GradeKpis>
         <KPICard
           titulo="Total a pagar aprovado"
           valor={formatarBRL(totalAPagar)}
           detalhe={`${aprovadas.length} ${aprovadas.length === 1 ? "parcela aprovada" : "parcelas aprovadas"}`}
         />
-      </div>
+      </GradeKpis>
 
       {podePagar && semConta ? (
         <p className="rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-muted-foreground">

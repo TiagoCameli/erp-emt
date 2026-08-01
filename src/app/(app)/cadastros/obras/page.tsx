@@ -23,6 +23,7 @@ export default async function PaginaObras() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Obras"
         descricao="Contratos de obra. Cada obra gera o centro de custo raiz dela"
         acoes={<ObrasAcoesCabecalho clientes={clientes} podeCriar={podeCriar} />}

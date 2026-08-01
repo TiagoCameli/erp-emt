@@ -85,6 +85,7 @@ export default async function LixeiraPage({ searchParams }: LixeiraPageProps) {
   return (
     <div>
       <PageHeader
+        modulo="Administração"
         titulo="Lixeira"
         descricao="Registros excluídos com motivo, restauráveis por permissão"
       />

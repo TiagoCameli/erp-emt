@@ -57,6 +57,7 @@ export default async function PaginaCotacaoDetalhe({
   return (
     <>
       <PageHeader
+        modulo="Compras"
         titulo={cotacao.numero ?? "Cotação"}
         descricao="Mapa comparativo de preços por fornecedor"
         acoes={

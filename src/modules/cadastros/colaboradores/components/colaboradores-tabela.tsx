@@ -195,6 +195,7 @@ export function ColaboradoresTabela({
       {
         accessorKey: "nome",
         header: "Nome",
+        size: 320,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),
@@ -202,6 +203,7 @@ export function ColaboradoresTabela({
       {
         accessorKey: "funcao",
         header: "Função",
+        size: 200,
         cell: ({ row }) =>
           row.original.funcao ?? (
             <span className="text-muted-foreground">-</span>
@@ -210,6 +212,7 @@ export function ColaboradoresTabela({
       {
         accessorKey: "vinculo",
         header: "Vínculo",
+        size: 130,
         // Secundária: quase todo mundo é CLT, quem precisa liga em "Colunas".
         meta: { ocultaPorPadrao: true },
         cell: ({ row }) => ROTULO_VINCULO[row.original.vinculo],
@@ -217,6 +220,7 @@ export function ColaboradoresTabela({
       {
         accessorKey: "obraNome",
         header: "Obra",
+        size: 220,
         cell: ({ row }) =>
           row.original.obraNome ?? (
             <span className="text-muted-foreground">-</span>
@@ -225,6 +229,7 @@ export function ColaboradoresTabela({
       {
         accessorKey: "dataAdmissao",
         header: "Admissão",
+        size: 120,
         meta: { ocultaPorPadrao: true },
         cell: ({ row }) => (
           <span className="tabular-nums">
@@ -237,6 +242,7 @@ export function ColaboradoresTabela({
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
             <StatusBadge status="aprovado" rotulo="Ativo" />
@@ -251,6 +257,7 @@ export function ColaboradoresTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const colaborador = row.original;

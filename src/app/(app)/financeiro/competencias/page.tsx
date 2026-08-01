@@ -23,6 +23,7 @@ export default async function PaginaCompetencias() {
   return (
     <>
       <PageHeader
+        modulo="Financeiro"
         titulo="Fechamento de competência"
         descricao="Fechar um mês congela o custo dele: depois disso, lançar com aquele mês de referência exige reabrir a competência, e a exceção fica registrada na auditoria"
       />

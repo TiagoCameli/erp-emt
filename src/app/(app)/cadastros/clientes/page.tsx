@@ -23,6 +23,7 @@ export default async function PaginaClientes() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Clientes"
         descricao="Órgãos e empresas que contratam as obras"
         acoes={

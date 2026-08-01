@@ -116,6 +116,7 @@ export function JornadasTabela({
       {
         accessorKey: "nome",
         header: "Nome",
+        size: 320,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),
@@ -123,6 +124,7 @@ export function JornadasTabela({
       {
         id: "horas",
         header: "Horas",
+        size: 200,
         cell: ({ row }) => (
           <span className="text-detalhe">{resumoHoras(row.original)}</span>
         ),
@@ -130,6 +132,7 @@ export function JornadasTabela({
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
             <StatusBadge status="aprovado" rotulo="Ativa" />
@@ -144,6 +147,7 @@ export function JornadasTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const jornada = row.original;

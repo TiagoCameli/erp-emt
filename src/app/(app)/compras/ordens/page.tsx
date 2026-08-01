@@ -130,6 +130,7 @@ export default async function PaginaOrdens({
       prefill={prefill}
     >
       <PageHeader
+        modulo="Compras"
         titulo="Ordens de compra"
         descricao="Emita a OC, envie para aprovação e gere o lançamento financeiro previsto"
         acoes={<BotaoNovaOrdem />}

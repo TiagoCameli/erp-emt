@@ -33,6 +33,7 @@ export default async function PaginaOcorrencias() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Ausências e ocorrências"
         descricao="Advertências, suspensões, atestados, acidentes e elogios por colaborador"
         acoes={

@@ -107,6 +107,7 @@ export function PerfisTab({
   return (
     <>
       <PageHeader
+        modulo="Administração"
         titulo="Perfis"
         descricao="Conjuntos de permissões prontos para aplicar aos usuários"
         acoes={

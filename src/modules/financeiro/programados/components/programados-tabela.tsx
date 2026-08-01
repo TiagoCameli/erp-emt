@@ -4,17 +4,16 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarClock, Filter } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   CelulaDescricaoCategoria,
-  ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroBusca,
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
+  GradeKpis,
   KPICard,
   MoneyText,
   StatusBadge,
@@ -492,7 +491,7 @@ export function ProgramadosTabela({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <GradeKpis>
         <KPICard
           titulo="Atrasado"
           valor={<MoneyText valor={resumo.atrasado} />}
@@ -508,7 +507,7 @@ export function ProgramadosTabela({
           valor={<MoneyText valor={resumo.proximos7} />}
           detalhe={`${resumo.quantidade.proximos7} ${resumo.quantidade.proximos7 === 1 ? "parcela" : "parcelas"}`}
         />
-      </div>
+      </GradeKpis>
 
       {podePagar && semConta ? (
         <p className="rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-muted-foreground">

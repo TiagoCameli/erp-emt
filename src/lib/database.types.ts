@@ -3379,6 +3379,28 @@ export type Database = {
           nome: string;
         }[];
       };
+      fn_rel_gestao_compras_resumo: {
+        Args: never;
+        Returns: {
+          cotacoes_abertas: number;
+          ocs_abertas_contagem: number;
+          ocs_abertas_valor: number;
+          ocs_aprovar_contagem: number;
+          ocs_aprovar_valor: number;
+        }[];
+      };
+      fn_rel_gestao_financeiro_resumo: {
+        Args: { p_hoje?: string };
+        Returns: {
+          a_aprovar_contagem: number;
+          a_aprovar_valor: number;
+          a_pagar_contagem: number;
+          a_pagar_valor: number;
+          a_pagar_vencidas: number;
+          pago_mes_contagem: number;
+          pago_mes_valor: number;
+        }[];
+      };
       fn_rel_posicao_bancaria: {
         Args: never;
         Returns: {

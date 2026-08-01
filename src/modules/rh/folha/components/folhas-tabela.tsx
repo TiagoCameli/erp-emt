@@ -22,16 +22,14 @@ import {
   formatarQuantidade,
   mesParaCompetencia,
 } from "@/lib/formatadores";
-import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
+import {
+  formatarCompetencia,
+  STATUS_FOLHA,
+  type StatusFolha,
+} from "@/modules/rh/_shared/formato";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { FolhaLista } from "@/modules/rh/folha/queries";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
-
-/** Competência (yyyy-MM-01) como MM/AAAA. */
-function formatarCompetencia(competencia: string): string {
-  const [ano, mes] = competencia.split("-");
-  return `${mes}/${ano}`;
-}
 
 const OPCOES_STATUS = (Object.keys(STATUS_FOLHA) as StatusFolha[]).map(
   (valor) => ({ valor, rotulo: STATUS_FOLHA[valor].rotulo }),

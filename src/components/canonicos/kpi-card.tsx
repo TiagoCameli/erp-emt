@@ -14,6 +14,7 @@ interface KPICardProps {
 /**
  * Card canônico de KPI com a Faixa (barra âmbar de 3px na borda esquerda).
  * Com href vira link clicável com hover; sem href é só exibição.
+ * Use dentro de GradeKpis: é ela que resolve a largura conforme a quantidade.
  */
 export function KPICard({
   titulo,
@@ -25,7 +26,9 @@ export function KPICard({
   const conteudo = (
     <div
       className={cn(
-        "faixa-esquerda rounded-lg border border-border bg-card p-4",
+        // h-full para os cartões da mesma linha terminarem na mesma altura
+        // mesmo quando um tem detalhe de duas linhas e o outro não tem detalhe.
+        "faixa-esquerda h-full rounded-lg border border-border bg-card p-4",
         href && "transition-colors hover:bg-surface",
         className,
       )}
@@ -46,7 +49,7 @@ export function KPICard({
     return (
       <Link
         href={href}
-        className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="block h-full rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         {conteudo}
       </Link>

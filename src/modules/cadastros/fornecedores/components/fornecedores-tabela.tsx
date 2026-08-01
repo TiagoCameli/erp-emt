@@ -159,6 +159,7 @@ export function FornecedoresTabela({
       {
         accessorKey: "razaoSocial",
         header: "Razão social",
+        size: 340,
         // Célula de duas linhas: sem `naoTruncar` a DataTable embrulha as duas
         // num truncate de uma linha só, que corta no seco e esconde a fantasia
         // quando a altura da linha é fixa. O corte passa a ser linha a linha,
@@ -186,6 +187,7 @@ export function FornecedoresTabela({
       {
         accessorKey: "tipo",
         header: "Tipo",
+        size: 130,
         cell: ({ row }) => (
           <span className="text-muted-foreground">
             {ROTULO_TIPO[row.original.tipo]}
@@ -195,6 +197,7 @@ export function FornecedoresTabela({
       {
         accessorKey: "cnpjCpf",
         header: "CNPJ/CPF",
+        size: 170,
         cell: ({ row }) =>
           row.original.cnpjCpf ? (
             <span className="codigo-doc tabular-nums">
@@ -207,6 +210,7 @@ export function FornecedoresTabela({
       {
         id: "localizacao",
         header: "Cidade/UF",
+        size: 170,
         // Secundária: quem trabalha logística liga no menu "Colunas".
         meta: { ocultaPorPadrao: true },
         cell: ({ row }) => {
@@ -222,6 +226,7 @@ export function FornecedoresTabela({
       {
         accessorKey: "telefone",
         header: "Telefone",
+        size: 150,
         meta: { ocultaPorPadrao: true },
         cell: ({ row }) =>
           row.original.telefone ? (
@@ -233,6 +238,7 @@ export function FornecedoresTabela({
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) => <StatusFornecedor ativo={row.original.ativo} />,
       },
     ];
@@ -242,6 +248,7 @@ export function FornecedoresTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const fornecedor = row.original;

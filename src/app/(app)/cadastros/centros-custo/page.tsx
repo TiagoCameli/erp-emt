@@ -24,6 +24,7 @@ export default async function PaginaCentrosCusto() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Centros de custo"
         descricao="A árvore Obra, Etapa e Item que organiza todo o custo do sistema"
         acoes={

@@ -84,6 +84,7 @@ export default async function AuditoriaPage({
   return (
     <>
       <PageHeader
+        modulo="Administração"
         titulo="Auditoria"
         descricao="Trilha de criações, edições e exclusões em todos os registros do sistema"
       />

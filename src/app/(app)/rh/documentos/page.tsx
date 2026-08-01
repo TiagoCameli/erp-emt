@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { KPICard, PageHeader } from "@/components/canonicos";
+import { GradeKpis, KPICard, PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { DocumentosAcoesCabecalho } from "@/modules/rh/documentos/components/acoes-cabecalho";
@@ -36,6 +36,7 @@ export default async function PaginaDocumentos() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="Documentos e ASO"
         descricao="Documentos por colaborador, com alerta de vencimento de ASO e demais documentos"
         acoes={
@@ -45,10 +46,18 @@ export default async function PaginaDocumentos() {
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2">
-        <KPICard titulo="Documentos vencidos" valor={qtdVencidos} />
-        <KPICard titulo="A vencer em 30 dias" valor={qtdAVencer} />
-      </div>
+      <GradeKpis className="mb-4">
+        <KPICard
+          titulo="Documentos vencidos"
+          valor={qtdVencidos}
+          detalhe="Passaram da data de vencimento"
+        />
+        <KPICard
+          titulo="A vencer em 30 dias"
+          valor={qtdAVencer}
+          detalhe="Vencem nos próximos 30 dias"
+        />
+      </GradeKpis>
 
       <DocumentosTabela
         documentos={documentos}

@@ -40,30 +40,39 @@ function agenciaConta(conta: ContaLista): React.ReactNode {
   return <span className="codigo-doc">{partes.join(" • ")}</span>;
 }
 
+// O nome da conta é texto livre e comprido ("Banco do Brasil 1197-5 Amapá"):
+// com a largura padrão de 150px ele saía cortado enquanto sobrava espaço à
+// direita da tabela. As larguras abaixo dão o espaço ao nome e deixam as
+// colunas curtas (tipo, situação) do tamanho do que mostram.
 const colunas: ColumnDef<ContaLista, unknown>[] = [
   {
     accessorKey: "nome",
     header: "Nome",
+    size: 300,
     cell: ({ row }) => <span className="font-medium">{row.original.nome}</span>,
   },
   {
     accessorKey: "banco",
     header: "Banco",
+    size: 180,
     cell: ({ row }) => ROTULO_BANCO[row.original.banco],
   },
   {
     id: "agenciaConta",
     header: "Agência / Conta",
+    size: 220,
     cell: ({ row }) => agenciaConta(row.original),
   },
   {
     accessorKey: "tipo",
     header: "Tipo",
+    size: 150,
     cell: ({ row }) => ROTULO_TIPO_CONTA[row.original.tipo],
   },
   {
     accessorKey: "saldoAtual",
     header: "Saldo atual",
+    size: 150,
     meta: { alinharDireita: true },
     cell: ({ row }) => (
       <MoneyText
@@ -75,6 +84,8 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
   {
     accessorKey: "ativo",
     header: "Ativa",
+    size: 110,
+    meta: { naoTruncar: true },
     cell: ({ row }) =>
       row.original.ativo ? (
         <StatusBadge status="aprovado" rotulo="Ativa" />

@@ -39,7 +39,8 @@ export default async function PaginaConciliacao({
   return (
     <>
       <PageHeader
-        titulo="Conciliação bancária"
+        modulo="Financeiro"
+        titulo="Conciliação"
         descricao="Importe o extrato OFX e case cada transação com a parcela paga correspondente"
       />
       <ConciliacaoCliente

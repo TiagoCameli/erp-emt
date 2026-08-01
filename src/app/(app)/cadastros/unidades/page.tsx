@@ -21,6 +21,7 @@ export default async function PaginaUnidades() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Unidades de medida"
         descricao="Unidades usadas nos insumos e itens de compra"
         acoes={<UnidadesAcoesCabecalho podeCriar={podeCriar} />}

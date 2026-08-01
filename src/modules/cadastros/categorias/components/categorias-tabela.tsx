@@ -141,6 +141,7 @@ export function CategoriasTabela({
       {
         accessorKey: "nome",
         header: "Subcategoria",
+        size: 340,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),

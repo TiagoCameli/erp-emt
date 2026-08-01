@@ -57,11 +57,13 @@ const colunas: ColumnDef<ObraLista, unknown>[] = [
   {
     accessorKey: "nome",
     header: "Nome",
+    size: 320,
     cell: ({ row }) => <span className="font-medium">{row.original.nome}</span>,
   },
   {
     accessorKey: "numeroContrato",
     header: "Contrato",
+    size: 160,
     cell: ({ row }) =>
       row.original.numeroContrato ? (
         <span className="codigo-doc">{row.original.numeroContrato}</span>
@@ -72,11 +74,13 @@ const colunas: ColumnDef<ObraLista, unknown>[] = [
   {
     id: "rodoviaLote",
     header: "Rodovia / Lote",
+    size: 190,
     cell: ({ row }) => rodoviaLote(row.original),
   },
   {
     id: "extensao",
     header: "Extensão",
+    size: 120,
     // Secundária: quem precisa da quilometragem liga no menu "Colunas".
     meta: { alinharDireita: true, ocultaPorPadrao: true },
     cell: ({ row }) =>
@@ -91,6 +95,7 @@ const colunas: ColumnDef<ObraLista, unknown>[] = [
   {
     accessorKey: "status",
     header: "Status",
+    size: 130,
     cell: ({ row }) => {
       const config = STATUS_OBRA_CONFIG[row.original.status];
       return (
@@ -105,6 +110,7 @@ const colunas: ColumnDef<ObraLista, unknown>[] = [
   {
     accessorKey: "ativo",
     header: "Ativo",
+    size: 110,
     cell: ({ row }) =>
       row.original.ativo ? (
         <StatusBadge status="aprovado" rotulo="Ativo" />
@@ -250,6 +256,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
       {
         id: "acoes",
         header: "",
+        size: 60,
         meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) => {
           const obra = row.original;

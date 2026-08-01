@@ -1,7 +1,13 @@
 import { notFound } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 
-import { EmptyState, KPICard, MoneyText, PageHeader } from "@/components/canonicos";
+import {
+  EmptyState,
+  GradeKpis,
+  KPICard,
+  MoneyText,
+  PageHeader,
+} from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-grafico";
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
@@ -71,14 +77,6 @@ function SecaoRelatorio({
       </div>
       {children}
     </section>
-  );
-}
-
-function GradeKpis({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {children}
-    </div>
   );
 }
 
@@ -412,7 +410,8 @@ export default async function RelatoriosPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        titulo="Relatórios financeiros"
+        modulo="Financeiro"
+        titulo="Relatórios"
         descricao="Como está o caixa: fluxo, DRE, aging, posição bancária, custo por centro de custo e extrato por fornecedor."
       />
 

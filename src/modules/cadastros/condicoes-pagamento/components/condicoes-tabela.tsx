@@ -127,6 +127,7 @@ export function CondicoesTabela({
       {
         accessorKey: "descricao",
         header: "Descrição",
+        size: 320,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.descricao}</span>
         ),
@@ -134,6 +135,7 @@ export function CondicoesTabela({
       {
         accessorKey: "resumoParcelas",
         header: "Parcelas",
+        size: 240,
         cell: ({ row }) => (
           <span className="tabular-nums">{row.original.resumoParcelas}</span>
         ),
@@ -141,6 +143,7 @@ export function CondicoesTabela({
       {
         accessorKey: "qtdParcelas",
         header: "Nº parcelas",
+        size: 130,
         meta: { alinharDireita: true },
         cell: ({ row }) => (
           <span className="tabular-nums">{row.original.qtdParcelas}</span>
@@ -149,6 +152,7 @@ export function CondicoesTabela({
       {
         accessorKey: "ativo",
         header: "Status",
+        size: 110,
         cell: ({ row }) =>
           row.original.ativo ? (
             <StatusBadge status="aprovado" rotulo="Ativo" />
@@ -163,6 +167,7 @@ export function CondicoesTabela({
     base.push({
       id: "acoes",
       header: "",
+      size: 60,
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const condicao = row.original;

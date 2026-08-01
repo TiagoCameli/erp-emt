@@ -115,8 +115,10 @@ export function FaixasInssTabela({
 
   return (
     <>
+      {/* Sem `idTabela` de propósito: personalizar esconder/reordenar duas
+          colunas não vale a barra de "Altura" e "Colunas", que aparecia
+          repetida nas duas tabelas de faixa da mesma tela. */}
       <DataTable
-        idTabela="rh.parametros-folha.inss"
         columns={colunas}
         data={faixas}
         emptyState={

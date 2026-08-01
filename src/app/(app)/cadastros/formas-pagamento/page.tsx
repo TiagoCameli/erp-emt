@@ -23,6 +23,7 @@ export default async function PaginaFormasPagamento() {
   return (
     <>
       <PageHeader
+        modulo="Cadastros"
         titulo="Formas de pagamento"
         descricao="O tipo de cada forma decide o caminho do pagamento: bancário e cheque passam pela aprovação, dinheiro vai direto para Pagamentos e cartão de crédito nasce quitado"
       />

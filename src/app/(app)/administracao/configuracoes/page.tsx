@@ -16,6 +16,7 @@ export default async function ConfiguracoesPage() {
   return (
     <div>
       <PageHeader
+        modulo="Administração"
         titulo="Configurações"
         descricao="Parâmetros gerais que afetam as regras do sistema"
       />

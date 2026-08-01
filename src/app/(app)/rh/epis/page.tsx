@@ -33,6 +33,7 @@ export default async function PaginaEpis() {
   return (
     <>
       <PageHeader
+        modulo="RH"
         titulo="EPI"
         descricao="Entrega de equipamentos de proteção individual por colaborador"
         acoes={
