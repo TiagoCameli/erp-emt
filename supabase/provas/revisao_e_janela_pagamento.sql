@@ -38,6 +38,8 @@ declare
   v_n int;
   v_de date;
   v_para date;
+  v_aging_antes numeric;
+  v_aging_depois numeric;
 
   procedure_falhou boolean;
 begin
@@ -205,6 +207,10 @@ begin
   -- ---------------------------------------------------------------
   -- 10. Revisar tira da fila sem cancelar nada, com motivo na trilha
   -- ---------------------------------------------------------------
+  -- Total do aging ANTES de revisar, para o passo 12 comparar.
+  select coalesce(sum(a.total), 0) into v_aging_antes
+  from public.fn_rel_aging() a where a.tipo = 'a_pagar';
+
   perform public.fn_revisar_parcela(v_p2, 'falta anexo da nota');
 
   select status into v_status from public.lancamento_parcelas where id = v_p2;
@@ -240,13 +246,19 @@ begin
   -- ---------------------------------------------------------------
   -- 12. Em revisao continua contando no aging (nao sai da previsao)
   -- ---------------------------------------------------------------
-  select count(*) into v_n
-  from public.fn_rel_aging() a
-  where a.tipo = 'a_pagar' and a.data_vencimento = v_venc;
-  if v_n = 0 then
-    raise exception 'PROVA 12: parcela em revisao sumiu do aging';
+  -- Desde 01/08/2026 fn_rel_aging agrega por FAIXA, nao por data (migration
+  -- 20260801160001), entao nao da mais para procurar a linha do v_venc. A
+  -- pergunta continua a mesma e a resposta ficou mais forte: o total a pagar
+  -- nao pode ter caido ao revisar. Se em_revisao saisse do aging, sumiriam os
+  -- R$ 100,00 da p2.
+  select coalesce(sum(a.total), 0) into v_aging_depois
+  from public.fn_rel_aging() a where a.tipo = 'a_pagar';
+  if v_aging_depois <> v_aging_antes then
+    raise exception 'PROVA 12: revisar mexeu no aging (antes %, depois %)',
+      v_aging_antes, v_aging_depois;
   end if;
-  insert into prova_log values ('12. em revisao no aging', 'presente');
+  insert into prova_log values ('12. em revisao no aging',
+    'total a pagar inalterado: ' || v_aging_depois);
 
   -- ---------------------------------------------------------------
   -- 13. Reenviar devolve para a fila

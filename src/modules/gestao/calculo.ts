@@ -174,53 +174,49 @@ export const ORDEM_FAIXA_PRAZO: FaixaPrazo[] = [
   "acima_60",
 ];
 
-/** Dias de `hoje` até `data` (negativo quando já passou). Ambas "yyyy-MM-dd". */
-export function diasAte(data: string, hoje: string): number {
-  const [ay, am, ad] = data.split("-").map(Number);
-  const [hy, hm, hd] = hoje.split("-").map(Number);
-  return Math.round((Date.UTC(ay, am - 1, ad) - Date.UTC(hy, hm - 1, hd)) / 86_400_000);
-}
-
-/**
- * Faixa pelo prazo até o vencimento. Vencer hoje (0 dia) entra em "até 7 dias":
- * ainda dá para pagar. As bordas pertencem à faixa de baixo.
- */
-export function classificarPrazo(diasAteVencer: number): FaixaPrazo {
-  if (diasAteVencer < 0) return "vencido";
-  if (diasAteVencer <= 7) return "ate_7";
-  if (diasAteVencer <= 15) return "d_8_15";
-  if (diasAteVencer <= 30) return "d_16_30";
-  if (diasAteVencer <= 60) return "d_31_60";
-  return "acima_60";
-}
-
 export interface FaixaVencimento {
   faixa: FaixaPrazo;
   rotulo: string;
   valor: number;
 }
 
-export interface ParcelaPrazo {
+/** Uma faixa já classificada e somada pelo banco (fn_rel_aging.faixa_prazo). */
+export interface LinhaFaixaPrazo {
+  faixa: string;
   valor: number | string | null | undefined;
-  dataVencimento: string | null | undefined;
 }
 
 /**
- * Soma as parcelas em aberto por faixa de prazo, sempre devolvendo as seis
- * faixas na ordem (zero onde não há nada). "Sem vencimento" só entra na lista
- * quando existe de fato, para não poluir o gráfico com uma coluna morta.
+ * A faixa vem do banco como texto livre. Faixa que esta lista não conhece é
+ * contrato quebrado entre fn_rel_aging e o TypeScript, e o único desfecho
+ * aceitável é falhar: somar em silêncio na faixa errada, ou descartar a linha,
+ * é dinheiro sumindo da tela sem aviso, que é exatamente o defeito que a
+ * agregação no banco veio consertar.
  */
-export function agregarPorPrazo(
-  parcelas: ParcelaPrazo[],
-  hoje: string,
-): FaixaVencimento[] {
+function comoFaixaPrazo(faixa: string): FaixaPrazo {
+  if (!(faixa in ROTULO_FAIXA_PRAZO)) {
+    throw new Error(`Faixa de prazo desconhecida vinda do banco: ${faixa}`);
+  }
+  return faixa as FaixaPrazo;
+}
+
+/**
+ * Soma por faixa de prazo o que o banco já classificou, sempre devolvendo as
+ * seis faixas na ordem (zero onde não há nada). "Sem vencimento" só entra na
+ * lista quando existe de fato, para não poluir o gráfico com uma coluna morta.
+ *
+ * A classificação em si (quantos dias até vencer cai em qual faixa) mora em
+ * fn_rel_aging, não aqui: é o que permite a RPC devolver meia dúzia de linhas
+ * em vez de uma por data de vencimento, e assim nunca esbarrar no teto de 1000
+ * linhas do PostgREST. As bordas continuam iguais, e a prova
+ * supabase/provas/aging_agregado_por_faixa.sql confere isso dia a dia.
+ */
+export function agregarPorPrazo(linhas: LinhaFaixaPrazo[]): FaixaVencimento[] {
   const porFaixa = new Map<FaixaPrazo, number>();
 
-  for (const parcela of parcelas) {
-    const faixa = parcela.dataVencimento
-      ? classificarPrazo(diasAte(parcela.dataVencimento, hoje))
-      : "sem_data";
-    porFaixa.set(faixa, (porFaixa.get(faixa) ?? 0) + paraCentavos(parcela.valor));
+  for (const linha of linhas) {
+    const faixa = comoFaixaPrazo(linha.faixa);
+    porFaixa.set(faixa, (porFaixa.get(faixa) ?? 0) + paraCentavos(linha.valor));
   }
 
   const lista: FaixaPrazo[] = [...ORDEM_FAIXA_PRAZO];

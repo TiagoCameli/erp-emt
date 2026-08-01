@@ -1,10 +1,14 @@
 /**
  * Regras puras dos relatórios financeiros. Sem React, sem Supabase, sem fuso.
  *
- * A query (queries.ts) busca as linhas no banco e delega aqui a classificação
- * por faixa de aging e a soma por categoria. Mantendo essas regras puras dá
- * para testá-las isoladas, sem mockar o banco, e garante que tabela e gráfico
- * usem exatamente a mesma conta.
+ * A query (queries.ts) busca as linhas já agregadas no banco e delega aqui a
+ * montagem da lista de faixas e a soma por categoria. Mantendo essas regras
+ * puras dá para testá-las isoladas, sem mockar o banco, e garante que tabela e
+ * gráfico usem exatamente a mesma conta.
+ *
+ * O que NÃO mora mais aqui é a classificação por faixa de aging: ela é do
+ * fn_rel_aging, que agrega por faixa em vez de por data para não depender do
+ * número de vencimentos em aberto.
  *
  * Dinheiro: NUMERIC(14,2) chega como number pelo supabase-js. Somamos em
  * centavos (inteiro) para não acumular erro de ponto flutuante e dividimos por
@@ -50,15 +54,6 @@ export function proximoMes(anoMes: string): string {
   return `${proximoAno}-${String(proximo).padStart(2, "0")}-01`;
 }
 
-/** Diferença em dias entre duas datas "YYYY-MM-DD" (ate - de), só pela data. */
-export function diasEntre(de: string, ate: string): number {
-  const [ay, am, ad] = de.split("-").map(Number);
-  const [by, bm, bd] = ate.split("-").map(Number);
-  const aUtc = Date.UTC(ay, am - 1, ad);
-  const bUtc = Date.UTC(by, bm - 1, bd);
-  return Math.round((bUtc - aUtc) / 86_400_000);
-}
-
 // =====================================================================
 // Aging (idade dos vencimentos)
 // =====================================================================
@@ -89,57 +84,47 @@ export const ORDEM_FAIXA_AGING: FaixaAging[] = [
   "v_60_mais",
 ];
 
-/**
- * Classifica pela quantidade de dias vencido (hoje - vencimento). Zero ou
- * negativo (vence hoje ou no futuro) é "a vencer"; daí as faixas 1-7, 8-15,
- * 16-30, 31-60 e acima de 60. As bordas pertencem à faixa de baixo: 7 dias é
- * v_1_7, 8 dias é v_8_15.
- */
-export function classificarFaixa(diasVencido: number): FaixaAging {
-  if (diasVencido <= 0) return "a_vencer";
-  if (diasVencido <= 7) return "v_1_7";
-  if (diasVencido <= 15) return "v_8_15";
-  if (diasVencido <= 30) return "v_16_30";
-  if (diasVencido <= 60) return "v_31_60";
-  return "v_60_mais";
-}
-
-/**
- * Faixa de aging de uma parcela pela data de vencimento contra hoje (ambas
- * "YYYY-MM-DD"). Parcela sem vencimento conta como "a vencer".
- */
-export function faixaDaParcela(
-  dataVencimento: string | null | undefined,
-  hoje: string,
-): FaixaAging {
-  if (!dataVencimento) return "a_vencer";
-  return classificarFaixa(diasEntre(dataVencimento, hoje));
-}
-
 export interface AgingFaixa {
   faixa: FaixaAging;
   rotulo: string;
   valor: number;
 }
 
-/** Parcela mínima para agrupar no aging. */
-export interface ParcelaAging {
+/** Uma faixa já classificada e somada pelo banco (fn_rel_aging.faixa_aging). */
+export interface LinhaFaixaAging {
+  faixa: string;
   valor: number | string | null | undefined;
-  dataVencimento: string | null | undefined;
 }
 
 /**
- * Soma as parcelas por faixa de aging, sempre devolvendo as seis faixas na
- * ordem fixa (zero quando não há parcela). `hoje` em "YYYY-MM-DD".
+ * A faixa vem do banco como texto livre. Faixa que esta lista não conhece é
+ * contrato quebrado entre fn_rel_aging e o TypeScript, e o único desfecho
+ * aceitável é falhar: somar em silêncio na faixa errada, ou descartar a linha,
+ * é dinheiro sumindo da tela sem aviso.
  */
-export function agregarAging(
-  parcelas: ParcelaAging[],
-  hoje: string,
-): AgingFaixa[] {
+function comoFaixaAging(faixa: string): FaixaAging {
+  if (!(faixa in ROTULO_FAIXA_AGING)) {
+    throw new Error(`Faixa de aging desconhecida vinda do banco: ${faixa}`);
+  }
+  return faixa as FaixaAging;
+}
+
+/**
+ * Soma por faixa de aging o que o banco já classificou, sempre devolvendo as
+ * seis faixas na ordem fixa (zero quando não há parcela).
+ *
+ * A classificação em si (quantos dias de atraso caem em qual faixa) mora em
+ * fn_rel_aging, não aqui: é o que permite a RPC devolver meia dúzia de linhas
+ * em vez de uma por data de vencimento, e assim nunca esbarrar no teto de 1000
+ * linhas do PostgREST. Parcela sem vencimento continua contando como "a
+ * vencer", e as bordas continuam iguais: a prova
+ * supabase/provas/aging_agregado_por_faixa.sql confere isso dia a dia.
+ */
+export function agregarAging(linhas: LinhaFaixaAging[]): AgingFaixa[] {
   const porFaixa = new Map<FaixaAging, number>();
-  for (const parcela of parcelas) {
-    const faixa = faixaDaParcela(parcela.dataVencimento, hoje);
-    porFaixa.set(faixa, (porFaixa.get(faixa) ?? 0) + paraCentavos(parcela.valor));
+  for (const linha of linhas) {
+    const faixa = comoFaixaAging(linha.faixa);
+    porFaixa.set(faixa, (porFaixa.get(faixa) ?? 0) + paraCentavos(linha.valor));
   }
   return ORDEM_FAIXA_AGING.map((faixa) => ({
     faixa,
