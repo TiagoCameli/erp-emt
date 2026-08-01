@@ -51,6 +51,7 @@ import type {
   ParcelasIncompletas,
   ResumoFora,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
+import { CONFERENCIA } from "@/modules/financeiro/aprovacao-pagamentos/rotulos";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import {
   dentroDaFaixaValor,
@@ -106,7 +107,7 @@ type Alvo = { tipo: "linha"; parcela: ParcelaPendente } | { tipo: "lote" };
  */
 function descricaoVazia(incompletas: ParcelasIncompletas): string {
   if (incompletas.parcelas === 0) {
-    return "Parcelas de dinheiro e cartão de crédito não passam por aqui: elas vão direto para Pagamentos.";
+    return `Parcelas de dinheiro e cartão de crédito não passam por aqui: elas vão direto para Pagamentos e ficam na aba "${CONFERENCIA.aba}", só para conferência.`;
   }
   const plural = incompletas.parcelas > 1;
   return `${incompletas.parcelas} parcela${plural ? "s" : ""} de ${formatarBRL(

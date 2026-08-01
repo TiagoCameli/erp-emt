@@ -2,12 +2,13 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { FilaAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/components/fila-aprovacao";
+import { AprovacaoCliente } from "@/modules/financeiro/aprovacao-pagamentos/components/aprovacao-cliente";
 import {
   contarAguardandoConta,
   contarAguardandoData,
   contarEmRevisao,
   contarParcelasIncompletas,
+  listarPagamentosDiretos,
   listarParcelasPendentes,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
@@ -36,6 +37,11 @@ export default async function PaginaAprovacaoPagamentos() {
     "financeiro.lancamentos",
     "editar",
   );
+  const podeVerLancamento = temPermissao(
+    usuario,
+    "financeiro.lancamentos",
+    "ver",
+  );
 
   // As contas vêm junto porque a aprovação pode trocar a conta da parcela: é
   // exceção, mas quando acontece o modal precisa da lista já na mão.
@@ -46,6 +52,7 @@ export default async function PaginaAprovacaoPagamentos() {
     aguardandoData,
     aguardandoConta,
     contas,
+    diretos,
   ] = await Promise.all([
     listarParcelasPendentes(),
     contarParcelasIncompletas(),
@@ -53,6 +60,7 @@ export default async function PaginaAprovacaoPagamentos() {
     contarAguardandoData(),
     contarAguardandoConta(),
     listarContasBancarias(),
+    listarPagamentosDiretos(),
   ]);
 
   return (
@@ -60,19 +68,28 @@ export default async function PaginaAprovacaoPagamentos() {
       <PageHeader
         modulo="Financeiro"
         titulo="Aprovação de pagamentos"
-        descricao="Aprovar autoriza o pagamento para uma data. O que precisa de ajuste vai para revisão, sem cancelar nada."
+        descricao="Aprovar autoriza o pagamento para uma data. O que precisa de ajuste vai para revisão, sem cancelar nada. Dinheiro e cartão não passam por aqui: ficam na aba ao lado, só para conferência."
       />
-      <FilaAprovacao
-        parcelas={parcelas}
-        incompletas={incompletas}
-        emRevisao={emRevisao}
-        aguardandoData={aguardandoData}
-        aguardandoConta={aguardandoConta}
-        contas={contas}
-        podeAprovar={podeAprovar}
-        podeRevisar={podeRevisar}
-        podeEditarLancamento={podeEditarLancamento}
-        idUsuario={usuario.id}
+      <AprovacaoCliente
+        fila={{
+          parcelas,
+          incompletas,
+          emRevisao,
+          aguardandoData,
+          aguardandoConta,
+          contas,
+          podeAprovar,
+          podeRevisar,
+          podeEditarLancamento,
+          idUsuario: usuario.id,
+        }}
+        diretos={{
+          pagamentos: diretos,
+          // A mesma permissão de aprovar pagamento: é a mesma pessoa e a mesma
+          // responsabilidade. A action e o banco recusam de novo.
+          podeRevisar: podeAprovar,
+          podeVerLancamento,
+        }}
       />
     </>
   );

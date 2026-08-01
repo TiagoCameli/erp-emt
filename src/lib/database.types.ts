@@ -1702,6 +1702,8 @@ export type Database = {
           numero_parcela: number;
           pago_em: string | null;
           pago_por: string | null;
+          revisado_em: string | null;
+          revisado_por: string | null;
           status: string;
           updated_at: string;
           valor: number;
@@ -1721,6 +1723,8 @@ export type Database = {
           numero_parcela?: number;
           pago_em?: string | null;
           pago_por?: string | null;
+          revisado_em?: string | null;
+          revisado_por?: string | null;
           status?: string;
           updated_at?: string;
           valor: number;
@@ -1740,6 +1744,8 @@ export type Database = {
           numero_parcela?: number;
           pago_em?: string | null;
           pago_por?: string | null;
+          revisado_em?: string | null;
+          revisado_por?: string | null;
           status?: string;
           updated_at?: string;
           valor?: number;
@@ -1769,6 +1775,13 @@ export type Database = {
           {
             foreignKeyName: "lancamento_parcelas_pago_por_fkey";
             columns: ["pago_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamento_parcelas_revisado_por_fkey";
+            columns: ["revisado_por"];
             isOneToOne: false;
             referencedRelation: "usuarios";
             referencedColumns: ["id"];
@@ -3228,6 +3241,10 @@ export type Database = {
       };
       fn_limpar_preferencia_tabela: {
         Args: { p_tabela: string };
+        Returns: undefined;
+      };
+      fn_marcar_parcela_revisada: {
+        Args: { p_parcela_id: string; p_revisado?: boolean };
         Returns: undefined;
       };
       fn_pagar_parcela: {
