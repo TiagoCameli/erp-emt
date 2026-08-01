@@ -324,6 +324,100 @@ export async function revisarParcelasEmLote(
 }
 
 /**
+ * Marca (ou desmarca) uma parcela de dinheiro ou cartão como revisada.
+ *
+ * Carimbo de conferência, não etapa de processo. Não muda status, não libera e
+ * não trava pagamento nenhum: dinheiro continua indo direto para Pagamentos e
+ * cartão continua nascendo quitado, revisado ou não. Serve para quem responde
+ * pela aprovação registrar que conferiu um pagamento que nunca passou pela
+ * fila, quase sempre depois de já pago.
+ *
+ * Permissão de aprovar, a mesma de aprovar pagamento: é a mesma pessoa e a
+ * mesma responsabilidade. O banco recusa de novo por dentro da RPC.
+ */
+export async function marcarParcelaRevisada(
+  id: string,
+  revisado: boolean,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("aprovar"))) {
+    return { erro: "Sem permissão para marcar pagamentos como revisados" };
+  }
+
+  const idValido = uuidSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Parcela inválida" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_marcar_parcela_revisada", {
+    // Sempre explícito nos dois sentidos: o toggle não pode depender do default
+    // da função no banco.
+    p_parcela_id: idValido.data,
+    p_revisado: revisado,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.aprovacao-pagamentos.marcarParcelaRevisada",
+      error,
+      error.message || "Não foi possível registrar a revisão",
+    );
+  }
+
+  // Só esta tela muda. Revalidar Pagamentos, Programados ou Lançamentos daria a
+  // entender que a revisão mexe no caminho do dinheiro, e ela não mexe.
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Marca ou desmarca várias parcelas de uma vez, mesmo contrato dos outros lotes
+ * da tela: para na primeira que falhar e devolve quantas passaram, para o toast
+ * dizer o parcial em vez de mentir "tudo certo".
+ */
+export async function marcarParcelasRevisadasEmLote(
+  ids: string[],
+  revisado: boolean,
+): Promise<
+  { ok: true; marcadas: number } | { erro: string; marcadas: number }
+> {
+  if (!(await checarPermissao("aprovar"))) {
+    return {
+      erro: "Sem permissão para marcar pagamentos como revisados",
+      marcadas: 0,
+    };
+  }
+
+  const idsValidos = z.array(uuidSchema).min(1).safeParse(ids);
+  if (!idsValidos.success) {
+    return { erro: "Selecione ao menos um pagamento", marcadas: 0 };
+  }
+
+  const supabase = await createClient();
+  let marcadas = 0;
+
+  for (const id of idsValidos.data) {
+    const { error } = await supabase.rpc("fn_marcar_parcela_revisada", {
+      p_parcela_id: id,
+      p_revisado: revisado,
+    });
+    if (error) {
+      revalidatePath(ROTA);
+      logErroServidor(
+        "financeiro.aprovacao-pagamentos.marcarParcelasRevisadasEmLote",
+        error,
+      );
+      return {
+        erro: error.message || "Não foi possível registrar a revisão",
+        marcadas,
+      };
+    }
+    marcadas += 1;
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true, marcadas };
+}
+
+/**
  * Carrega o lançamento inteiro para o painel de conferência da fila, sob
  * demanda: só quando alguém clica na linha.
  *

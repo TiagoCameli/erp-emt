@@ -2,6 +2,11 @@ import "server-only";
 
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
+import {
+  tipoFormaPagamento,
+  type TipoFormaPagamento,
+} from "@/modules/_shared/forma-pagamento";
+import type { StatusParcela } from "@/modules/financeiro/_shared/formato";
 
 /** Um centro de custo do rateio, para a composição no tooltip. */
 export interface RateioResumo {
@@ -342,6 +347,179 @@ export async function contarEmRevisao(): Promise<ResumoFora> {
     parcelas: linhas.length,
     valor: linhas.reduce((total, parcela) => total + parcela.valor, 0),
   };
+}
+
+/**
+ * Uma parcela de dinheiro ou cartão de crédito: pagamento que nunca passa pela
+ * fila de aprovação (dinheiro vai direto para Pagamentos, cartão nasce quitado)
+ * e que o responsável pela aprovação confere depois, sem travar nada.
+ *
+ * Traz mais do que a tela mostra por padrão pelo mesmo motivo da fila: as
+ * colunas são configuráveis, então o dado precisa estar aqui.
+ */
+export interface PagamentoDireto {
+  id: string;
+  numeroParcela: number;
+  totalParcelas: number;
+  valor: number;
+  dataVencimento: string | null;
+  /** Quando o dinheiro saiu de fato. Cartão já nasce com ela preenchida. */
+  dataPagamento: string | null;
+  status: StatusParcela;
+  lancamentoId: string;
+  lancamentoNumero: string | null;
+  lancamentoDescricao: string;
+  fornecedorNome: string;
+  origem: string;
+  origemId: string | null;
+  origemNumero: string | null;
+  categoriaNome: string | null;
+  formaPagamentoNome: string | null;
+  /** 'dinheiro' ou 'cartao_credito': é o tipo que define quem entra na aba. */
+  formaPagamentoTipo: TipoFormaPagamento;
+  contaBancariaId: string | null;
+  contaBancariaNome: string | null;
+  dataCompra: string | null;
+  mesCompetencia: string | null;
+  rateios: RateioResumo[];
+  anexos: number;
+  semNota: boolean;
+  /**
+   * Carimbo da conferência. `null` significa que ninguém marcou ainda, e só
+   * isso: não é pendência, não segura pagamento nenhum. Quem marcou e quando
+   * andam juntos por check no banco, então testar um dos dois basta.
+   */
+  revisadoEm: string | null;
+  revisadoPorNome: string | null;
+}
+
+/** Garante que o status vindo do banco é um StatusParcela conhecido. */
+function comoStatusParcela(status: string): StatusParcela {
+  switch (status) {
+    case "pendente":
+    case "em_revisao":
+    case "aprovado":
+    case "pago":
+    case "cancelado":
+      return status;
+    default:
+      return "pendente";
+  }
+}
+
+/**
+ * Lista as parcelas a pagar cuja forma de pagamento é dinheiro ou cartão de
+ * crédito. É o oposto da fila: nada aqui espera aval, e a listagem existe para
+ * o responsável pela aprovação conferir o que já seguiu sozinho.
+ *
+ * Sem filtro de status de propósito: parcela paga é o caso principal da aba
+ * (cartão nasce quitado e dinheiro costuma ser pago antes de alguém olhar).
+ * Ordena do vencimento mais novo para o mais antigo, ao contrário da fila: aqui
+ * ninguém está correndo contra o vencimento, o que interessa é o que aconteceu
+ * agora.
+ */
+export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
+  const supabase = await createClient();
+
+  // O embed de quem revisou leva o nome da constraint: lancamento_parcelas tem
+  // três FKs para usuarios (aprovou, pagou, revisou) e sem a dica o PostgREST
+  // devolve erro de ambiguidade em vez de escolher uma.
+  const { data, error } = await supabase
+    .from("lancamento_parcelas")
+    .select(
+      `id, numero_parcela, valor, data_vencimento, data_pagamento, status,
+       lancamento_id, conta_bancaria_id, revisado_em,
+       usuarios!lancamento_parcelas_revisado_por_fkey(nome),
+       contas_bancarias(nome),
+       lancamentos!inner(
+         numero, descricao, tipo, status, origem, origem_id,
+         mes_competencia, data_compra,
+         categorias_financeiras(nome),
+         formas_pagamento!inner(nome, tipo),
+         fornecedores(razao_social, nome_fantasia),
+         lancamento_rateios(valor, centros_custo(nome))
+       )`,
+    )
+    .eq("lancamentos.tipo", "a_pagar")
+    .neq("lancamentos.status", "cancelado")
+    .in("lancamentos.formas_pagamento.tipo", ["dinheiro", "cartao_credito"])
+    .order("data_vencimento", { ascending: false, nullsFirst: false });
+
+  if (error) {
+    throw new Error(
+      "Não foi possível carregar os pagamentos em dinheiro e cartão",
+    );
+  }
+
+  // Segunda tranca no tipo, do lado do app. O filtro de cima atravessa dois
+  // níveis de embed (parcela > lançamento > forma), e é o único lugar do projeto
+  // que faz isso: se o PostgREST não aplicar o `in` como esperado, uma parcela
+  // bancária apareceria numa aba que diz "não passa pela aprovação". O default
+  // de tipoFormaPagamento é 'bancario', então o desconhecido também fica fora.
+  const linhas = (data ?? []).filter((parcela) => {
+    const tipo = tipoFormaPagamento(
+      parcela.lancamentos?.formas_pagamento?.tipo,
+    );
+    return tipo === "dinheiro" || tipo === "cartao_credito";
+  });
+
+  const idsOc = linhas.map((parcela) =>
+    parcela.lancamentos?.origem === "oc"
+      ? (parcela.lancamentos?.origem_id ?? null)
+      : null,
+  );
+  const lancamentoIds = linhas.map((parcela) => parcela.lancamento_id);
+
+  const [semNota, numeroOc, anexosPorLancamento, parcelasPorLancamento] =
+    await Promise.all([
+      ocsSemNota(supabase, idsOc),
+      numerosDeOc(supabase, idsOc),
+      contarAnexos(supabase, lancamentoIds),
+      contarParcelas(supabase, lancamentoIds),
+    ]);
+
+  return linhas.map((parcela) => {
+    const lancamento = parcela.lancamentos;
+    const origemId = lancamento?.origem_id ?? null;
+    return {
+      id: parcela.id,
+      numeroParcela: parcela.numero_parcela,
+      totalParcelas: parcelasPorLancamento.get(parcela.lancamento_id) ?? 1,
+      valor: parcela.valor,
+      dataVencimento: parcela.data_vencimento,
+      dataPagamento: parcela.data_pagamento,
+      status: comoStatusParcela(parcela.status),
+      lancamentoId: parcela.lancamento_id,
+      lancamentoNumero: lancamento?.numero ?? null,
+      lancamentoDescricao: lancamento?.descricao ?? "-",
+      fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
+      origem: lancamento?.origem ?? "manual",
+      origemId,
+      origemNumero:
+        lancamento?.origem === "oc" && origemId
+          ? (numeroOc.get(origemId) ?? null)
+          : null,
+      categoriaNome: lancamento?.categorias_financeiras?.nome ?? null,
+      formaPagamentoNome: lancamento?.formas_pagamento?.nome ?? null,
+      formaPagamentoTipo: tipoFormaPagamento(
+        lancamento?.formas_pagamento?.tipo,
+      ),
+      contaBancariaId: parcela.conta_bancaria_id,
+      contaBancariaNome: parcela.contas_bancarias?.nome ?? null,
+      dataCompra: lancamento?.data_compra ?? null,
+      mesCompetencia: lancamento?.mes_competencia ?? null,
+      rateios: (lancamento?.lancamento_rateios ?? []).map((rateio) => ({
+        nome: rateio.centros_custo?.nome ?? "-",
+        valor: rateio.valor,
+      })),
+      anexos: anexosPorLancamento.get(parcela.lancamento_id) ?? 0,
+      semNota: Boolean(
+        lancamento?.origem === "oc" && origemId && semNota.has(origemId),
+      ),
+      revisadoEm: parcela.revisado_em,
+      revisadoPorNome: parcela.usuarios?.nome ?? null,
+    };
+  });
 }
 
 /**
