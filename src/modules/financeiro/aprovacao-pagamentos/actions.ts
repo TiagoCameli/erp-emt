@@ -324,46 +324,49 @@ export async function revisarParcelasEmLote(
 }
 
 /**
- * Marca (ou desmarca) uma parcela de dinheiro ou cartão como revisada.
+ * Marca (ou desmarca) uma parcela de dinheiro ou cartão como conferida.
  *
  * Carimbo de conferência, não etapa de processo. Não muda status, não libera e
  * não trava pagamento nenhum: dinheiro continua indo direto para Pagamentos e
- * cartão continua nascendo quitado, revisado ou não. Serve para quem responde
+ * cartão continua nascendo quitado, conferido ou não. Serve para quem responde
  * pela aprovação registrar que conferiu um pagamento que nunca passou pela
  * fila, quase sempre depois de já pago.
+ *
+ * Não confundir com `revisarParcela` deste mesmo arquivo: lá "revisão" é
+ * DEVOLVER a parcela para ajuste, o oposto disto.
  *
  * Permissão de aprovar, a mesma de aprovar pagamento: é a mesma pessoa e a
  * mesma responsabilidade. O banco recusa de novo por dentro da RPC.
  */
-export async function marcarParcelaRevisada(
+export async function marcarParcelaConferida(
   id: string,
-  revisado: boolean,
+  conferido: boolean,
 ): Promise<ResultadoAcao> {
   if (!(await checarPermissao("aprovar"))) {
-    return { erro: "Sem permissão para marcar pagamentos como revisados" };
+    return { erro: "Sem permissão para marcar pagamentos como conferidos" };
   }
 
   const idValido = uuidSchema.safeParse(id);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_marcar_parcela_revisada", {
+  const { error } = await supabase.rpc("fn_marcar_parcela_conferida", {
     // Sempre explícito nos dois sentidos: o toggle não pode depender do default
     // da função no banco.
     p_parcela_id: idValido.data,
-    p_revisado: revisado,
+    p_conferido: conferido,
   });
 
   if (error) {
     return erroAcao(
-      "financeiro.aprovacao-pagamentos.marcarParcelaRevisada",
+      "financeiro.aprovacao-pagamentos.marcarParcelaConferida",
       error,
-      error.message || "Não foi possível registrar a revisão",
+      error.message || "Não foi possível registrar a conferência",
     );
   }
 
   // Só esta tela muda. Revalidar Pagamentos, Programados ou Lançamentos daria a
-  // entender que a revisão mexe no caminho do dinheiro, e ela não mexe.
+  // entender que a conferência mexe no caminho do dinheiro, e ela não mexe.
   revalidatePath(ROTA);
   return { ok: true };
 }
@@ -373,15 +376,15 @@ export async function marcarParcelaRevisada(
  * da tela: para na primeira que falhar e devolve quantas passaram, para o toast
  * dizer o parcial em vez de mentir "tudo certo".
  */
-export async function marcarParcelasRevisadasEmLote(
+export async function marcarParcelasConferidasEmLote(
   ids: string[],
-  revisado: boolean,
+  conferido: boolean,
 ): Promise<
   { ok: true; marcadas: number } | { erro: string; marcadas: number }
 > {
   if (!(await checarPermissao("aprovar"))) {
     return {
-      erro: "Sem permissão para marcar pagamentos como revisados",
+      erro: "Sem permissão para marcar pagamentos como conferidos",
       marcadas: 0,
     };
   }
@@ -395,18 +398,18 @@ export async function marcarParcelasRevisadasEmLote(
   let marcadas = 0;
 
   for (const id of idsValidos.data) {
-    const { error } = await supabase.rpc("fn_marcar_parcela_revisada", {
+    const { error } = await supabase.rpc("fn_marcar_parcela_conferida", {
       p_parcela_id: id,
-      p_revisado: revisado,
+      p_conferido: conferido,
     });
     if (error) {
       revalidatePath(ROTA);
       logErroServidor(
-        "financeiro.aprovacao-pagamentos.marcarParcelasRevisadasEmLote",
+        "financeiro.aprovacao-pagamentos.marcarParcelasConferidasEmLote",
         error,
       );
       return {
-        erro: error.message || "Não foi possível registrar a revisão",
+        erro: error.message || "Não foi possível registrar a conferência",
         marcadas,
       };
     }

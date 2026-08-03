@@ -1690,6 +1690,8 @@ export type Database = {
         Row: {
           aprovado_em: string | null;
           aprovado_por: string | null;
+          conferido_em: string | null;
+          conferido_por: string | null;
           conta_bancaria_id: string | null;
           created_at: string;
           created_by: string | null;
@@ -1711,6 +1713,8 @@ export type Database = {
         Insert: {
           aprovado_em?: string | null;
           aprovado_por?: string | null;
+          conferido_em?: string | null;
+          conferido_por?: string | null;
           conta_bancaria_id?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -1732,6 +1736,8 @@ export type Database = {
         Update: {
           aprovado_em?: string | null;
           aprovado_por?: string | null;
+          conferido_em?: string | null;
+          conferido_por?: string | null;
           conta_bancaria_id?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -1754,6 +1760,13 @@ export type Database = {
           {
             foreignKeyName: "lancamento_parcelas_aprovado_por_fkey";
             columns: ["aprovado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamento_parcelas_conferido_por_fkey";
+            columns: ["conferido_por"];
             isOneToOne: false;
             referencedRelation: "usuarios";
             referencedColumns: ["id"];
@@ -3241,6 +3254,10 @@ export type Database = {
       };
       fn_limpar_preferencia_tabela: {
         Args: { p_tabela: string };
+        Returns: undefined;
+      };
+      fn_marcar_parcela_conferida: {
+        Args: { p_conferido?: boolean; p_parcela_id: string };
         Returns: undefined;
       };
       fn_marcar_parcela_revisada: {

@@ -34,24 +34,24 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
 // Tipadas com os argumentos reais para o teste conferir o que a tela mandou:
 // marcar e desmarcar são a mesma chamada com o booleano trocado, então o
 // booleano é a parte que importa.
-const marcarParcelaRevisada =
-  vi.fn<(id: string, revisado: boolean) => Promise<{ ok: true }>>();
-const marcarParcelasRevisadasEmLote =
+const marcarParcelaConferida =
+  vi.fn<(id: string, conferido: boolean) => Promise<{ ok: true }>>();
+const marcarParcelasConferidasEmLote =
   vi.fn<
     (
       ids: string[],
-      revisado: boolean,
+      conferido: boolean,
     ) => Promise<{ ok: true; marcadas: number }>
   >();
 
-marcarParcelaRevisada.mockResolvedValue({ ok: true });
-marcarParcelasRevisadasEmLote.mockResolvedValue({ ok: true, marcadas: 1 });
+marcarParcelaConferida.mockResolvedValue({ ok: true });
+marcarParcelasConferidasEmLote.mockResolvedValue({ ok: true, marcadas: 1 });
 
 vi.mock("@/modules/financeiro/aprovacao-pagamentos/actions", () => ({
-  marcarParcelaRevisada: (id: string, revisado: boolean) =>
-    marcarParcelaRevisada(id, revisado),
-  marcarParcelasRevisadasEmLote: (ids: string[], revisado: boolean) =>
-    marcarParcelasRevisadasEmLote(ids, revisado),
+  marcarParcelaConferida: (id: string, conferido: boolean) =>
+    marcarParcelaConferida(id, conferido),
+  marcarParcelasConferidasEmLote: (ids: string[], conferido: boolean) =>
+    marcarParcelasConferidasEmLote(ids, conferido),
 }));
 
 // A DataTable guarda a personalização de colunas no localStorage, que o jsdom
@@ -106,13 +106,13 @@ function pagamento(
     rateios: [],
     anexos: 0,
     semNota: false,
-    revisadoEm: null,
-    revisadoPorNome: null,
+    conferidoEm: null,
+    conferidoPorNome: null,
     ...sobrescreve,
   };
 }
 
-const PADRAO = { podeRevisar: true, podeVerLancamento: true };
+const PADRAO = { podeConferir: true, podeVerLancamento: true };
 
 /** Clique que espera a Server Action (mockada) resolver antes de seguir. */
 async function clicar(elemento: HTMLElement) {
@@ -159,26 +159,26 @@ describe("PagamentosDiretos", () => {
     expect(screen.getByText("Pago")).toBeInTheDocument();
     await clicar(screen.getByRole("button", { name: CONFERENCIA.acaoMarcar }));
 
-    expect(marcarParcelaRevisada).toHaveBeenCalledWith(
+    expect(marcarParcelaConferida).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       true,
     );
   });
 
-  it("mostra quem revisou e quando, e oferece desmarcar na mesma linha", async () => {
+  it("mostra quem conferiu e quando, e oferece desmarcar na mesma linha", async () => {
     render(
       <PagamentosDiretos
         pagamentos={[
           pagamento({
-            revisadoEm: "2026-08-20T14:30:00Z",
-            revisadoPorNome: "Tiago Cameli",
+            conferidoEm: "2026-08-20T14:30:00Z",
+            conferidoPorNome: "Tiago Cameli",
           }),
         ]}
         {...PADRAO}
       />,
     );
 
-    // Dentro da tabela: "Revisado" também é título de KPI e opção de filtro.
+    // Dentro da tabela: "Conferido" também é título de KPI e opção de filtro.
     const tabela = screen.getByRole("table");
     expect(within(tabela).getByText(CONFERENCIA.marcado)).toBeInTheDocument();
     expect(within(tabela).getByText(/Tiago Cameli/)).toBeInTheDocument();
@@ -189,13 +189,13 @@ describe("PagamentosDiretos", () => {
     await clicar(
       screen.getByRole("button", { name: CONFERENCIA.acaoDesmarcar }),
     );
-    expect(marcarParcelaRevisada).toHaveBeenCalledWith(
+    expect(marcarParcelaConferida).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       false,
     );
   });
 
-  it("diz 'Não revisado' sem badge de pendência quando ninguém marcou", () => {
+  it("diz 'Não conferido' sem badge de pendência quando ninguém marcou", () => {
     render(<PagamentosDiretos pagamentos={[pagamento()]} {...PADRAO} />);
     // A palavra aparece na célula da linha (o filtro também tem a opção, por
     // isso a busca é dentro da tabela).
@@ -214,7 +214,7 @@ describe("PagamentosDiretos", () => {
     await clicar(
       screen.getByRole("button", { name: CONFERENCIA.acaoMarcarLote }),
     );
-    expect(marcarParcelasRevisadasEmLote).toHaveBeenCalledWith(
+    expect(marcarParcelasConferidasEmLote).toHaveBeenCalledWith(
       ["11111111-1111-4111-8111-111111111111"],
       true,
     );
@@ -224,7 +224,7 @@ describe("PagamentosDiretos", () => {
     render(
       <PagamentosDiretos
         pagamentos={[pagamento()]}
-        podeRevisar={false}
+        podeConferir={false}
         podeVerLancamento
       />,
     );
