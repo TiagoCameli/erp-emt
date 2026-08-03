@@ -9,6 +9,7 @@ import {
   getSortedRowModel,
   useReactTable,
   type Cell,
+  type Column,
   type ColumnDef,
   type ColumnOrderState,
   type ColumnSizingState,
@@ -104,6 +105,76 @@ const ALTURA_MAXIMA_PADRAO = "calc(100vh - 20rem)";
 const ESPERA_GRAVACAO_MS = 400;
 
 /**
+ * Passo do teclado na largura da coluna, em px, e o passo do Shift.
+ *
+ * 8px porque a seta tem que dar para ajuste FINO (chegar em "cabe o texto e mais
+ * nada") e 48px porque atravessar 800px de largura de 8 em 8 seriam 100 toques.
+ * Ambos batem com o que a mão faz no arraste: um empurrãozinho e um puxão.
+ */
+const PASSO_LARGURA_TECLADO = 8;
+const PASSO_LARGURA_TECLADO_GRANDE = 48;
+
+/**
+ * Faixa do GANHO do arraste de largura: quantos pixels a borda da coluna anda NA
+ * TELA por pixel somado na largura DECLARADA (ver iniciarArrasteLargura, que mede
+ * isso a cada movimento). O gesto divide o passo do mouse pelo ganho, então a
+ * faixa é o quanto a largura declarada pode acelerar (4x) ou frear (1/4) para a
+ * borda acompanhar o cursor.
+ *
+ * Existe porque a conta é uma divisão: ganho perto de zero (dragging na borda de
+ * uma coluna que quase não move a divisória) jogaria a coluna no máximo em um
+ * movimento, e ganho absurdamente alto travaria a coluna. 4x é o teto porque
+ * exige contêiner mais de 4 vezes maior que a soma das larguras, que é tabela de
+ * três colunas mínimas numa tela larga.
+ */
+const GANHO_MINIMO = 0.25;
+const GANHO_MAXIMO = 4;
+
+/**
+ * Perturbação da sonda que mede o ganho no mousedown, em px de largura declarada.
+ *
+ * 2px é grande o bastante para a medida não virar ruído de subpixel e pequeno o
+ * bastante para não aparecer: a sonda escreve a largura, mede a borda e devolve a
+ * largura original dentro da MESMA tarefa, e o navegador só pinta no fim dela.
+ * Sem a sonda o primeiro movimento do gesto andaria com ganho 1 (sem compensar),
+ * e num arraste rápido esse primeiro movimento é um pulo de 40 a 60px, ou seja um
+ * atraso permanente de vários pixels entre o cursor e a borda.
+ */
+const SONDA_GANHO = 2;
+
+/**
+ * O arraste de largura em andamento, visto de fora do gesto. Tudo que o gesto usa
+ * para trabalhar (largura ao vivo, âncora do mouse, ganho medido, as `th` da
+ * coluna) fica fechado dentro dele, e daqui só sai o que o componente precisa:
+ * redesenhar a guia quando ela finalmente monta e tirar os ouvintes no desmonte.
+ */
+interface GestoLargura {
+  idColuna: string;
+  /** Repõe guia e etiqueta na largura em que o gesto está agora. */
+  redesenhar: () => void;
+  /** Passa a contar o movimento a partir deste x (ver o segundo mousedown). */
+  reancorar: (clienteX: number) => void;
+  /** Fecha o gesto: grava a largura onde a mão parou e sai da tela. */
+  soltar: () => void;
+  /** Tira os ouvintes de janela deste gesto. */
+  encerrar: () => void;
+}
+
+/**
+ * Folga do "ajustar ao conteúdo": o `px-3` dos dois lados da célula (12 + 12).
+ * Sem ela a coluna fica exatamente do tamanho do texto e o texto encosta na
+ * divisória, o que na tela lê como conteúdo cortado.
+ */
+const FOLGA_CELULA = 24;
+
+/**
+ * Folga extra no cabeçalho de coluna ordenável: o ícone de ordenação (`size-3.5`
+ * = 14px) mais o `gap-1` (4px) mais 2 de respiro. O ícone é irmão do texto no
+ * botão, então ele não entra na medida do texto, mas ocupa lugar de verdade.
+ */
+const FOLGA_ICONE_ORDENACAO = 20;
+
+/**
  * Altura natural da linha hoje, em px: o `h-9` do modo automático. NÃO é preset
  * do menu (ver ALTURAS_PRESET); serve de altura de partida do arraste quando não
  * há como medir a linha na tela.
@@ -148,6 +219,47 @@ function limitarAltura(altura: number): number {
     ALTURA_LINHA_MAXIMA,
     Math.max(ALTURA_LINHA_MINIMA, Math.round(altura)),
   );
+}
+
+/**
+ * Presa a largura nos limites da coluna. Respeita `minSize`/`maxSize` da coluna
+ * quando a tela declarou (a coluna de ações é travada em 52), e cai nos limites
+ * gerais quando não declarou. É a MESMA conta que o saneamento da preferência
+ * faz na leitura, então nada que sai daqui é descartado ao voltar do banco.
+ */
+function limitarLargura<TData>(
+  coluna: Column<TData, unknown>,
+  largura: number,
+): number {
+  const minima = coluna.columnDef.minSize ?? LARGURA_MINIMA;
+  const maxima = coluna.columnDef.maxSize ?? LARGURA_MAXIMA;
+  return Math.min(maxima, Math.max(minima, Math.round(largura)));
+}
+
+/**
+ * A coluna (ou a tabela) está escondida pelo CSS? Olha `display:none` no próprio
+ * elemento e em cada ancestral até `limite` (exclusive; `null` vai até o topo).
+ *
+ * Existe porque visibilidade do TanStack e visibilidade do CSS são duas coisas
+ * diferentes: coluna com `meta.esconderAte` continua "visível" para o TanStack
+ * (aparece no menu, entra na preferência) e está `display:none` abaixo do
+ * breakpoint. Ela mede ZERO, e medida zero viraria o mínimo (60px) gravado na
+ * preferência do usuário.
+ *
+ * Percorre os ancestrais porque contêiner escondido esconde a célula sem que o
+ * `getComputedStyle` DELA acuse nada: o `display` computado de um filho de
+ * `display:none` continua sendo o dele (`table-cell`), não `none`.
+ */
+function ocultoPeloCss(
+  elemento: HTMLElement,
+  limite: HTMLElement | null,
+): boolean {
+  let no: HTMLElement | null = elemento;
+  while (no !== null && no !== limite) {
+    if (window.getComputedStyle(no).display === "none") return true;
+    no = no.parentElement;
+  }
+  return false;
 }
 
 /**
@@ -674,6 +786,25 @@ export function DataTable<TData>({
     clienteY: number;
     alturaBase: number;
   } | null>(null);
+  /**
+   * Arraste de largura em andamento, só o que a RENDERIZAÇÃO precisa saber: qual
+   * coluna pintar de âmbar, o cursor da tabela e a existência da guia. O gesto em
+   * si (largura ao vivo, âncora, ganho) mora em ref e não aqui, senão a tabela
+   * inteira re-renderizava por pixel.
+   */
+  const [arrasteLargura, setArrasteLargura] = React.useState<{
+    idColuna: string;
+  } | null>(null);
+
+  const refTabela = React.useRef<HTMLTableElement | null>(null);
+  const refGuia = React.useRef<HTMLDivElement | null>(null);
+  const refRotuloGuia = React.useRef<HTMLSpanElement | null>(null);
+  /**
+   * O gesto de largura vivo. Fica em ref porque quem passa a escutar a janela é o
+   * PRÓPRIO mousedown (ver iniciarArrasteLargura): ref é o que já está lá na hora
+   * do clique, sem esperar renderização nem efeito.
+   */
+  const refGesto = React.useRef<GestoLargura | null>(null);
 
   function filtroVisivel(id: string): boolean {
     // Filtro preenchido aparece sempre, mesmo se o padrão da tela ou a escolha
@@ -928,6 +1059,559 @@ export function DataTable<TData>({
     };
   }, [arrasteAltura, aplicarAltura]);
 
+  /**
+   * Grava largura de coluna. Lê o mapa da entrada COMPARTILHADA (e não o
+   * `larguras` desta renderização) porque quem chama vem de gesto: o valor tem
+   * que se somar ao que a instância irmã acabou de mudar, não substituir.
+   */
+  const definirLarguras = React.useCallback(
+    (novas: Record<string, number>) => {
+      const entrada = obterEntrada(chaveEstado, estadoInicial);
+      definirEstado(entrada, {
+        larguras: { ...entrada.estado.larguras, ...novas },
+      });
+      agendarGravacao(entrada);
+    },
+    [agendarGravacao, chaveEstado, estadoInicial],
+  );
+
+  /** As células (cabeçalho e corpo) de uma coluna nesta instância da tabela. */
+  function celulasDaColuna(idColuna: string): HTMLElement[] {
+    const raiz = refTabela.current;
+    if (raiz === null) return [];
+    return Array.from(
+      raiz.querySelectorAll<HTMLElement>("[data-coluna]"),
+    ).filter((celula) => celula.dataset.coluna === idColuna);
+  }
+
+  /**
+   * O que medir dentro de uma célula: o `[data-medir]` quando existe, senão o
+   * primeiro elemento de conteúdo. As ALÇAS são puladas de propósito: elas moram
+   * dentro da célula (a de largura no cabeçalho, a de altura na primeira célula da
+   * linha) e seriam o "primeiro elemento" de uma célula cujo conteúdo é só texto.
+   * Medir a alça daria 12px em toda coluna e o ajuste ao conteúdo viraria "encolhe
+   * tudo para o mínimo".
+   */
+  function conteudoMedivel(celula: HTMLElement): HTMLElement | null {
+    const marcado = celula.querySelector<HTMLElement>("[data-medir]");
+    if (marcado !== null) return marcado;
+    for (const filho of celula.children) {
+      if (filho instanceof HTMLElement && filho.dataset.alca === undefined) {
+        return filho;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Largura que cada coluna precisa para caber o conteúdo que está NA TELA (o
+   * maior entre o cabeçalho e as células da página), presa entre o mínimo e o
+   * máximo. É o duplo clique na divisória e o "Ajustar ao conteúdo" do menu.
+   *
+   * Medir exige soltar a largura do elemento antes: célula truncada tem retângulo
+   * do tamanho da CÉLULA, então sem `max-content` a medida nunca encolheria uma
+   * coluna larga demais, que é justo o caso que dói ("Descrição e categoria" com
+   * 2.349 linhas). As fases são de propósito: primeiro joga fora o que o CSS
+   * escondeu (só leitura), depois escreve em todos, DEPOIS lê todos, DEPOIS devolve
+   * o estilo — assim o navegador faz um recálculo de layout por gesto, e não um por
+   * célula.
+   *
+   * Coluna com `naoTruncar` (data, número, badge) não tem o `[data-medir]`; nela a
+   * medida cai no primeiro elemento da célula. Isso mede certo TAMBÉM na célula
+   * montada de várias linhas, e o caso que importa é a "Descrição e categoria"
+   * (`CelulaDescricaoCategoria`: um `div.min-w-0` com dois `div.truncate`
+   * dentro). O `max-content` do div de fora é o MAIOR max-content dos filhos, e
+   * `white-space: nowrap` é herdado pelos dois, então a medida sai como a mais
+   * larga das duas linhas em uma linha só — ela ENCOLHE a coluna quando o texto
+   * é curto, não devolve a largura atual. O que não mede certo é descendente com
+   * largura em porcentagem (`w-full` e afins), que se resolve contra o pai
+   * `max-content` e trava a medida na largura de agora; nenhuma célula do app
+   * está nesse caso hoje.
+   */
+  function medirLarguras(ids: string[]): Record<string, number> {
+    const raiz = refTabela.current;
+    if (raiz === null) return {};
+    // Tabela inteira fora da tela: não há o que medir, e medir zero gravaria o
+    // mínimo em TODAS as colunas de uma vez.
+    if (ocultoPeloCss(raiz, null)) return {};
+
+    // Fase 0, só leitura de estilo: agrupa as células por coluna e descarta a
+    // coluna que o CSS escondeu (`esconderAte` abaixo do breakpoint, hoje em
+    // Ordens de compra e Cotações). Coluna não renderizada mede zero e sairia com
+    // 60px gravado NA PREFERÊNCIA: quem clica no ajuste com a janela estreita
+    // acharia a coluna esmagada ao abrir a mesma tela num monitor grande, e a
+    // única saída seria o "Restaurar padrão", que joga fora ordem e visibilidade
+    // também. Coluna que não está na tela de verdade fica INTACTA: nem medida,
+    // nem gravada.
+    //
+    // Esta leitura vem toda ANTES das escritas de estilo pelo mesmo motivo das
+    // três fases seguintes: `getComputedStyle` intercalado com escrita custaria um
+    // recálculo de estilo por célula.
+    const porColuna = new Map<string, HTMLElement[]>();
+    for (const celula of raiz.querySelectorAll<HTMLElement>("[data-coluna]")) {
+      const id = celula.dataset.coluna;
+      if (id === undefined || !ids.includes(id)) continue;
+      const lista = porColuna.get(id);
+      if (lista === undefined) porColuna.set(id, [celula]);
+      else lista.push(celula);
+    }
+    const celulasNaTela: { id: string; celula: HTMLElement }[] = [];
+    for (const [id, celulasDaColuna] of porColuna) {
+      if (ocultoPeloCss(celulasDaColuna[0], raiz)) continue;
+      for (const celula of celulasDaColuna) celulasNaTela.push({ id, celula });
+    }
+
+    const alvos: {
+      id: string;
+      no: HTMLElement;
+      ehCabecalho: boolean;
+      largura: string;
+      espacoBranco: string;
+      larguraMaxima: string;
+      encolher: string;
+    }[] = [];
+
+    for (const { id, celula } of celulasNaTela) {
+      const alvo = conteudoMedivel(celula);
+      if (alvo === null) continue;
+      alvos.push({
+        id,
+        no: alvo,
+        ehCabecalho: celula.tagName === "TH",
+        largura: alvo.style.width,
+        espacoBranco: alvo.style.whiteSpace,
+        larguraMaxima: alvo.style.maxWidth,
+        encolher: alvo.style.flexShrink,
+      });
+      alvo.style.width = "max-content";
+      alvo.style.whiteSpace = "nowrap";
+      alvo.style.maxWidth = "none";
+      // O texto do cabeçalho é item flex ao lado do ícone de ordenação, e item
+      // flex ENCOLHE mesmo com `max-content`: sem travar o encolhimento, a medida
+      // do cabeçalho nunca passaria da largura atual da coluna.
+      alvo.style.flexShrink = "0";
+    }
+
+    const maiores = new Map<string, number>();
+    for (const alvo of alvos) {
+      const coluna = table.getColumn(alvo.id);
+      const folgaIcone =
+        alvo.ehCabecalho && coluna?.getCanSort() === true
+          ? FOLGA_ICONE_ORDENACAO
+          : 0;
+      const medida = alvo.no.getBoundingClientRect().width + folgaIcone;
+      maiores.set(alvo.id, Math.max(maiores.get(alvo.id) ?? 0, medida));
+    }
+
+    for (const alvo of alvos) {
+      alvo.no.style.width = alvo.largura;
+      alvo.no.style.whiteSpace = alvo.espacoBranco;
+      alvo.no.style.maxWidth = alvo.larguraMaxima;
+      alvo.no.style.flexShrink = alvo.encolher;
+    }
+
+    const larguras: Record<string, number> = {};
+    for (const [id, medida] of maiores) {
+      const coluna = table.getColumn(id);
+      if (!coluna) continue;
+      larguras[id] = limitarLargura(coluna, Math.ceil(medida) + FOLGA_CELULA);
+    }
+    return larguras;
+  }
+
+  /** Ajusta ao conteúdo as colunas pedidas. Nada medido, nada mudado. */
+  function ajustarAoConteudo(ids: string[]) {
+    const medidas = medirLarguras(ids);
+    if (Object.keys(medidas).length > 0) definirLarguras(medidas);
+  }
+
+  /** "Ajustar ao conteúdo" do menu Colunas: todas as visíveis que dão para mexer. */
+  function ajustarTodasAoConteudo() {
+    ajustarAoConteudo(
+      table
+        .getVisibleLeafColumns()
+        .filter((coluna) => coluna.getCanResize())
+        .map((coluna) => coluna.id),
+    );
+  }
+
+  /**
+   * O gesto de largura, do mousedown ao mouseup. `clienteX` vem do mouse ou do
+   * dedo.
+   *
+   * Os ouvintes de janela nascem AQUI, na mesma tarefa do mousedown, e não num
+   * efeito que reage a estado. O mouse sai do cabeçalho no meio do arraste, então
+   * quem escuta tem que ser a janela, mas registrar isso num efeito abria uma
+   * janela cega entre o clique e o React rodar o efeito (que é depois da pintura):
+   * movimento que caía ali era perdido, e o gesto que cabia todo ali simplesmente
+   * não acontecia. Não é hipótese de teste: um arraste real disparado pela
+   * automação do Chrome (eventos de entrada do sistema, os mesmos de uma pessoa)
+   * não redimensionava nada. Na mão vira "às vezes o arraste não pega".
+   *
+   * A alça de ALTURA nunca sofreu disso mesmo escutando por efeito porque a conta
+   * dela é ABSOLUTA (`alturaBase + (clientY - clienteY)`): perder os primeiros
+   * movimentos não muda o resultado, basta UM movimento chegar depois. O gesto de
+   * largura soma PASSOS (é o que faz o limite não acumular excedente) e desenha já
+   * no clique, então movimento perdido é largura perdida.
+   *
+   * O outro ponto principal: o gesto NÃO passa pelo estado do React enquanto a mão
+   * anda. Escreve a largura direto na `th` (com `table-fixed` é ela que manda na
+   * coluna), move a linha guia e troca o texto da etiqueta de px. O estado só
+   * marca QUE existe um gesto, para a guia montar e a alça acender.
+   *
+   * A guia e a etiqueta saem de uma MEDIDA da `th` a cada movimento (ver
+   * medirNaTela), não de uma conta sobre a largura declarada: é um recálculo de
+   * layout por movimento do mouse, e nenhuma renderização de célula. A mesma
+   * medida serve para a borda ACOMPANHAR O CURSOR 1 para 1 (ver o ganho, em
+   * desenhar e em mover), que é o que faz o gesto parecer planilha.
+   *
+   * Medido nesta suíte com 25 linhas e 15 colunas: com `columnResizeMode:
+   * "onChange"` um arraste de 20 passos custava 7.875 renderizações de célula
+   * (375 por pixel andado). Aqui custa ZERO durante o gesto e uma renderização no
+   * fim, quando o valor final vira preferência.
+   */
+  function iniciarArrasteLargura(
+    coluna: Column<TData, unknown>,
+    clienteX: number,
+  ) {
+    const idColuna = coluna.id;
+    const gestoVivo = refGesto.current;
+    if (gestoVivo !== null) {
+      // Chegar um mousedown com gesto de pé acontece em dois casos: tela híbrida,
+      // que manda touchstart E mousedown no mesmo toque, e mouseup perdido (mão
+      // solta fora da janela, sobre o devtools ou um menu nativo), que sem saída
+      // deixaria a alça morta até a tela desmontar.
+      //
+      // Na MESMA coluna o certo é CONTINUAR o gesto, só mudando a âncora para o
+      // clique de agora. Recomeçar leria a largura de partida do TanStack, que
+      // ainda é a de antes do arraste (o valor só é gravado no soltar), e a coluna
+      // daria um pulo para trás. Em coluna diferente, o gesto antigo é fechado (ele
+      // grava a largura que está na tela, então nada se perde) e o novo começa
+      // limpo, porque a largura declarada da OUTRA coluna está em dia.
+      if (gestoVivo.idColuna === idColuna) {
+        gestoVivo.reancorar(clienteX);
+        return;
+      }
+      gestoVivo.soltar();
+    }
+
+    const larguraBase = Math.round(coluna.getSize());
+    const minima = coluna.columnDef.minSize ?? LARGURA_MINIMA;
+    const maxima = coluna.columnDef.maxSize ?? LARGURA_MAXIMA;
+    const cabecalhos = celulasDaColuna(idColuna).filter(
+      (celula) => celula.tagName === "TH",
+    );
+    const tabela = refTabela.current;
+    // A `th` desta coluna nesta instância: é dela que sai toda a medida do gesto.
+    const cabecalhoDaColuna: HTMLElement | null = cabecalhos[0] ?? null;
+    // Onde a divisória está agora, em px a partir da borda esquerda da tabela: é
+    // daqui que a linha guia sai quando NÃO dá para medir (ver medirNaTela).
+    const bordaInicial =
+      cabecalhoDaColuna !== null && tabela !== null
+        ? cabecalhoDaColuna.getBoundingClientRect().right -
+          tabela.getBoundingClientRect().left
+        : 0;
+    /** A largura DECLARADA que está escrita na `th` agora, e que o soltar grava. */
+    let larguraAtual = larguraBase;
+    /**
+     * A mesma largura declarada, COM FRAÇÃO. O gesto acumula aqui e só arredonda
+     * para escrever no DOM: com a escala compensada 1px de mouse pode valer 0,7px
+     * de largura declarada, e arredondar a cada movimento comeria o resto de cada
+     * passo, deixando a borda para trás do cursor num arraste lento.
+     */
+    let larguraExata = larguraBase;
+    /**
+     * De onde o PRÓXIMO movimento conta. Anda a cada movimento em vez de ficar
+     * fixa no mousedown porque o gesto soma PASSOS: assim o que passou do limite
+     * de largura não fica guardado em lugar nenhum, e inverter a mão no fim do
+     * curso volta a andar na hora. Guardar o deslocamento bruto desde o clique é o
+     * erro clássico aqui: a coluna fica parada no limite acumulando 300px de mouse
+     * e dispara quando a mão volta.
+     */
+    let ancoraX = clienteX;
+    /**
+     * Quantos pixels a BORDA anda na tela por pixel somado na largura DECLARADA.
+     * O gesto converte o passo do mouse em largura dividindo por ele, e é isso que
+     * faz a borda acompanhar o dedo em tabela que escala.
+     *
+     * Por que não basta o fator `larguraNaTela / larguraDeclarada`: numa tabela
+     * `w-full table-fixed` com a soma das declaradas MENOR que o contêiner, o
+     * navegador reparte a sobra proporcionalmente, ou seja cada coluna rende
+     * `declarada x contêiner / soma`. Engordar ESTA coluna aumenta a soma, então o
+     * fator de todas cai no mesmo movimento, e a borda também depende das colunas à
+     * ESQUERDA, que encolhem junto. O efeito líquido é a borda andar MENOS que a
+     * largura declarada (medido em Cadastros > Formas de pagamento e Financeiro >
+     * Contas bancárias: 100px de mouse moviam a borda 86), enquanto o fator
+     * `naTela/declarada` (1,31 naquelas telas) diria para andar MENOS ainda e
+     * pioraria o atraso. Por isso o ganho é MEDIDO, não deduzido: a borda medida
+     * antes e depois de cada escrita entrega a conta real do navegador, sem a
+     * gente depender de como ele reparte a sobra.
+     *
+     * 1 é o valor honesto sem medida (jsdom, tabela oculta) e é exatamente o que a
+     * tabela que já rola na horizontal faz de verdade: ali declarada e tela
+     * coincidem e o gesto sempre foi 1 para 1.
+     */
+    let ganho = 1;
+    /** Último par (declarada, borda) medido: é dele que sai o ganho do próximo passo. */
+    let amostra: { declarada: number; borda: number } | null = null;
+
+    /**
+     * Onde a divisória está e que largura a coluna tem AGORA NA TELA, medidos da
+     * `th`, mais a linha de baixo do cabeçalho visível. `null` = não há layout
+     * para ler (jsdom no teste, tabela oculta): rect zerado é "não deu para
+     * medir", não coluna de 0px.
+     *
+     * Medir é obrigatório porque a tabela é `w-full table-fixed`: quando a soma
+     * das larguras DECLARADAS é menor que o contêiner, o navegador escala todas as
+     * colunas proporcionalmente para preencher, e aí somar 100px na largura
+     * declarada não move a borda 100px na tela. Medido em Cadastros > Formas de
+     * pagamento e Financeiro > Contas bancárias (~1.110px declarados num contêiner
+     * de ~1.450px): a borda anda 85 a 96px enquanto a conta declarada andava 100, e
+     * numa coluna gorda a guia descolava ~14px da divisória. Nas telas que já rolam
+     * na horizontal (Lançamentos, fila de aprovação) as duas contas coincidem, e é
+     * por isso que o erro passou.
+     */
+    function medirNaTela(): {
+      borda: number;
+      largura: number;
+      baseDoCabecalho: number;
+    } | null {
+      if (cabecalhoDaColuna === null || tabela === null) return null;
+      const retCabecalho = cabecalhoDaColuna.getBoundingClientRect();
+      if (retCabecalho.width === 0) return null;
+      const retTabela = tabela.getBoundingClientRect();
+      return {
+        borda: retCabecalho.right - retTabela.left,
+        largura: Math.round(retCabecalho.width),
+        // Com `cabecalhoFixo` a `th` é sticky, então o rect dela acompanha a
+        // rolagem: a etiqueta sai daqui para ficar colada no cabeçalho que está À
+        // VISTA. Antes ela morava no topo do CONTEÚDO e, com meia tela rolada,
+        // ficava fora de vista em Ordens, Cotações, Aprovação de pagamentos e
+        // Pagamentos diretos, justo as quatro de cabeçalho fixo.
+        baseDoCabecalho: retCabecalho.bottom - retTabela.top,
+      };
+    }
+
+    function desenhar(declarada: number) {
+      larguraExata = declarada;
+      // A `th` só recebe px inteiro: é o número que a preferência vai guardar e
+      // que o TanStack devolve em `getSize()`, então a tela não pode mostrar uma
+      // largura que a próxima visita não reproduz.
+      const largura = Math.round(declarada);
+      larguraAtual = largura;
+      for (const celula of cabecalhos) {
+        celula.style.width = `${largura}px`;
+      }
+      // Ler DEPOIS de escrever, no mesmo movimento do mouse: é UM recálculo de
+      // layout por movimento, e é o preço de a guia e a etiqueta dizerem a verdade
+      // do que está na tela. Continua sem re-renderizar célula nenhuma.
+      const naTela = medirNaTela();
+      if (naTela !== null) {
+        // O ganho sai de duas medidas consecutivas da MESMA borda, uma antes e
+        // outra depois desta escrita. Medir a cada movimento (em vez de fixar no
+        // mousedown) é obrigatório: a escala muda conforme a soma das larguras
+        // muda, e num arraste longo o ganho caminha (nas telas que escalam ele sobe
+        // até 1 quando a soma alcança o contêiner e a tabela passa a rolar). Fixar
+        // no clique deixaria o gesto elástico justo no fim do curso.
+        if (amostra !== null) {
+          const passoDeclarado = largura - amostra.declarada;
+          // Passo declarado menor que 1px não mede nada (é o arredondamento do
+          // DOM), e dividir por ele é justamente a divisão por zero: mantém o ganho
+          // que já estava valendo.
+          if (Math.abs(passoDeclarado) >= 1) {
+            const medido = (naTela.borda - amostra.borda) / passoDeclarado;
+            // Borda que não andou (ou andou para o lado errado) não é escala: é
+            // borda presa, o caso da última coluna de uma tabela que escala, cuja
+            // borda direita é a do contêiner e nenhuma largura declarada move. Ali
+            // o ganho 1 é a única saída sã, senão dividir por quase zero jogava a
+            // coluna no máximo num piscar. Ganho medido de verdade entra preso na
+            // faixa (ver GANHO_MINIMO): fora dela o gesto ficaria elástico.
+            ganho =
+              Number.isFinite(medido) && medido > 0
+                ? Math.min(GANHO_MAXIMO, Math.max(GANHO_MINIMO, medido))
+                : 1;
+          }
+        }
+        amostra = { declarada: largura, borda: naTela.borda };
+      }
+      // A guia só entra no DOM na renderização que este mousedown dispara, então
+      // no clique (e num movimento que chegue antes dela) não há o que mover: quem
+      // a põe no lugar assim que ela monta é o efeito que chama `redesenhar`.
+      if (refGuia.current !== null) {
+        refGuia.current.style.left = `${
+          naTela === null ? bordaInicial + (largura - larguraBase) : naTela.borda
+        }px`;
+      }
+      if (refRotuloGuia.current !== null) {
+        // A etiqueta mostra a largura REAL na tela, que com o escalonamento do
+        // `table-fixed` pode ser ~30% maior que a declarada. Quem lê "240 px"
+        // precisa achar 240px de coluna, não o número que o TanStack guarda.
+        refRotuloGuia.current.textContent = `${naTela?.largura ?? largura} px`;
+        refRotuloGuia.current.style.top = `${(naTela?.baseDoCabecalho ?? 0) + 4}px`;
+      }
+    }
+
+    /**
+     * Converte o passo do mouse em largura declarada e desenha. Dividir pelo ganho
+     * é o que faz a borda (e a guia, que sai dela) acompanhar o cursor 1 para 1 nas
+     * duas direções, tanto na tabela que escala quanto na que já rola.
+     *
+     * O limite é aplicado na largura DECLARADA, que é o que LARGURA_MINIMA e
+     * LARGURA_MAXIMA querem dizer. Chegando lá a borda para e o cursor segue
+     * sozinho; como a âncora andou, nada do excedente fica guardado e a volta
+     * começa a andar no primeiro pixel.
+     */
+    function mover(clienteAtual: number) {
+      const passoMouse = clienteAtual - ancoraX;
+      ancoraX = clienteAtual;
+      if (passoMouse === 0) return;
+      desenhar(
+        Math.min(maxima, Math.max(minima, larguraExata + passoMouse / ganho)),
+      );
+    }
+
+    function aoMoverMouse(evento: MouseEvent) {
+      mover(evento.clientX);
+    }
+    function aoMoverDedo(evento: TouchEvent) {
+      const toque = evento.touches[0];
+      if (toque === undefined) return;
+      // Sem isto o dedo arrasta a coluna E rola a página junto.
+      if (evento.cancelable) evento.preventDefault();
+      mover(toque.clientX);
+    }
+    function encerrar() {
+      window.removeEventListener("mousemove", aoMoverMouse);
+      window.removeEventListener("mouseup", soltar);
+      window.removeEventListener("touchmove", aoMoverDedo);
+      window.removeEventListener("touchend", soltar);
+      window.removeEventListener("touchcancel", soltar);
+    }
+    function soltar() {
+      // O gesto tira os próprios ouvintes: eles não são mais de um efeito, então
+      // não existe cleanup de efeito para fazer isso no fim do arraste.
+      encerrar();
+      refGesto.current = null;
+      // Grava a largura DECLARADA (`larguraAtual`), nunca a que a guia e a etiqueta
+      // mostraram: é a declarada que o TanStack consome e devolve em
+      // `column.getSize()`, e é ela que a preferência tem que reproduzir na próxima
+      // visita. A largura na tela é consequência do `table-fixed` escalando as
+      // colunas para preencher o contêiner (ver medirNaTela) e muda com o tamanho
+      // da janela, então guardar aquele número faria a coluna crescer a cada
+      // recarregamento numa tela larga.
+      //
+      // Uma gravação por gesto, com o valor onde a mão parou. Clique na divisória
+      // sem andar não é gesto nenhum: gravar ali criaria preferência de largura do
+      // nada (e acenderia o "Restaurar padrão") num clique que não mudou nada.
+      if (larguraAtual !== larguraBase) {
+        definirLarguras({ [idColuna]: larguraAtual });
+      }
+      setArrasteLargura(null);
+    }
+
+    // Escutar ANTES de qualquer outra coisa é o conserto: daqui para frente não
+    // existe movimento que o gesto não veja, nem que ele dependa de renderização.
+    window.addEventListener("mousemove", aoMoverMouse);
+    window.addEventListener("mouseup", soltar);
+    window.addEventListener("touchmove", aoMoverDedo, { passive: false });
+    window.addEventListener("touchend", soltar);
+    window.addEventListener("touchcancel", soltar);
+    refGesto.current = {
+      idColuna,
+      redesenhar: () => desenhar(larguraExata),
+      reancorar: (clienteAtual: number) => {
+        ancoraX = clienteAtual;
+      },
+      soltar,
+      encerrar,
+    };
+
+    // Sonda de 2px: escreve, mede a borda e volta para a largura de partida, tudo
+    // na mesma tarefa, sem pintar nada. É o par de medidas que dá o ganho ANTES do
+    // primeiro movimento, senão o primeiro passo (que num arraste rápido já é um
+    // pulo de dezenas de pixels) andaria sem compensar e o atraso ficaria até o
+    // fim do gesto. Se a largura de partida já está no teto, a sonda vai para
+    // baixo: escrever acima do máximo, mesmo por um instante, é largura que a
+    // coluna não pode ter.
+    desenhar(
+      larguraBase + SONDA_GANHO <= maxima
+        ? larguraBase + SONDA_GANHO
+        : larguraBase - SONDA_GANHO,
+    );
+    desenhar(larguraBase);
+
+    // Só o que RENDERIZA: a guia entra na tela, a alça acende e o cursor da tabela
+    // vira col-resize. O gesto já está de pé sem depender desta renderização.
+    setArrasteLargura({ idColuna });
+  }
+
+  /**
+   * A guia e a etiqueta só existem no DOM depois da renderização que o mousedown
+   * disparou, então o desenho feito no clique não as alcança: este efeito é o que
+   * as põe na borda medida assim que elas montam. É desenho, não gesto: o arraste
+   * funciona igual se este efeito atrasar (ver iniciarArrasteLargura).
+   */
+  React.useEffect(() => {
+    if (arrasteLargura === null) return;
+    const gesto = refGesto.current;
+    if (gesto === null) return;
+    const tabela = refTabela.current;
+    if (refGuia.current !== null && tabela !== null) {
+      // A guia desce a tabela inteira, e a altura só existe em px: dentro de um
+      // contêiner que rola, `bottom-0` mediria a janela visível, não a tabela.
+      refGuia.current.style.height = `${tabela.offsetHeight}px`;
+    }
+    gesto.redesenhar();
+  }, [arrasteLargura]);
+
+  // Nada de ouvinte órfão: os ouvintes do gesto não são mais de um efeito, então
+  // quem garante a saída deles quando a tela desmonta no meio do arraste é este
+  // cleanup. Sem ele, trocar de rota com o botão do mouse apertado deixaria um
+  // mousemove vivo escrevendo em `th` que não está mais na tela.
+  React.useEffect(() => {
+    return () => {
+      refGesto.current?.encerrar();
+      refGesto.current = null;
+    };
+  }, []);
+
+  /**
+   * Teclado na alça: seta ajusta fino, Shift+seta ajusta grosso, Home e End vão
+   * para o mínimo e o máximo, Enter ajusta ao conteúdo. Sem isto largura de coluna
+   * não existe para quem não usa mouse, e a definição de pronto do projeto exige
+   * a tela usável sem mouse.
+   */
+  function aoTeclarNaAlca(
+    evento: React.KeyboardEvent<HTMLElement>,
+    coluna: Column<TData, unknown>,
+  ) {
+    if (evento.key === "Enter") {
+      evento.preventDefault();
+      evento.stopPropagation();
+      ajustarAoConteudo([coluna.id]);
+      return;
+    }
+    const passo = evento.shiftKey
+      ? PASSO_LARGURA_TECLADO_GRANDE
+      : PASSO_LARGURA_TECLADO;
+    const atual = Math.round(coluna.getSize());
+    let proxima: number | null = null;
+    if (evento.key === "ArrowRight") proxima = atual + passo;
+    else if (evento.key === "ArrowLeft") proxima = atual - passo;
+    else if (evento.key === "Home") proxima = LARGURA_MINIMA;
+    else if (evento.key === "End") proxima = LARGURA_MAXIMA;
+    if (proxima === null) return;
+    evento.preventDefault();
+    // A linha da tabela também escuta tecla (Enter abre o registro): ajustar
+    // largura não pode navegar para outra tela.
+    evento.stopPropagation();
+    const limitada = limitarLargura(coluna, proxima);
+    // Seta no limite não grava de novo o mesmo valor: quem segura a tecla no fim
+    // do curso mandaria uma gravação por repetição do teclado.
+    if (limitada === Math.round(coluna.getSize())) return;
+    definirLarguras({ [coluna.id]: limitada });
+  }
+
   const table = useReactTable({
     data,
     columns: colunasComAcoes,
@@ -951,7 +1635,10 @@ export function DataTable<TData>({
           onColumnVisibilityChange: aoMudarVisibilidade,
           onColumnSizingChange: aoMudarLarguras,
           enableColumnResizing: true,
-          columnResizeMode: "onChange" as const,
+          // Sem `columnResizeMode: "onChange"`: o arraste é nosso (ver o efeito do
+          // arraste de largura) e não passa pelo estado do TanStack a cada pixel,
+          // que era o que re-renderizava a tabela inteira por movimento do mouse.
+          // `enableColumnResizing` fica porque é ele que responde `getCanResize()`.
           defaultColumn: { minSize: LARGURA_MINIMA, maxSize: LARGURA_MAXIMA },
         }
       : { enableColumnResizing: false }),
@@ -1030,6 +1717,9 @@ export function DataTable<TData>({
       <>
         <span
           aria-hidden="true"
+          // Marca de alça: o "ajustar ao conteúdo" não pode medir ela achando que
+          // é o conteúdo da célula (ver conteudoMedivel).
+          data-alca="altura"
           title="Arraste para mudar a altura de todas as linhas"
           onMouseDown={(evento) => iniciarArrasteAltura(evento, idLinha)}
           // Mousedown e mouseup na alça viram clique na linha, e clique na linha
@@ -1048,7 +1738,10 @@ export function DataTable<TData>({
           )}
         />
         {arrastandoEsta && alturaEmArraste !== null ? (
-          <span className="pointer-events-none absolute right-2 bottom-1 z-20 rounded bg-foreground px-1.5 py-0.5 text-legenda font-medium text-background tabular-nums">
+          <span
+            data-alca="altura"
+            className="pointer-events-none absolute right-2 bottom-1 z-20 rounded bg-foreground px-1.5 py-0.5 text-legenda font-medium text-background tabular-nums"
+          >
             {alturaEmArraste} px
           </span>
         ) : null}
@@ -1056,11 +1749,15 @@ export function DataTable<TData>({
     );
   }
 
+  /** Última coluna visível: a alça dela não pode transbordar para fora da tabela. */
+  const idUltimaColuna =
+    colunasVisiveis[colunasVisiveis.length - 1]?.id ?? undefined;
+
   const cabecalho = (
     <TableHeader>
       {table.getHeaderGroups().map((grupo) => (
-        <TableRow key={grupo.id} className="hover:bg-transparent">
-          {grupo.headers.map((header) => {
+        <TableRow key={grupo.id} className="group/cabecalho hover:bg-transparent">
+          {grupo.headers.map((header, indiceHeader) => {
             const alinharDireita =
               header.column.columnDef.meta?.alinharDireita === true;
             const podeReordenar =
@@ -1068,7 +1765,22 @@ export function DataTable<TData>({
             return (
               <TableHead
                 key={header.id}
-                style={personalizavel ? { width: header.getSize() } : undefined}
+                data-coluna={header.column.id}
+                style={
+                  personalizavel
+                    ? {
+                        width: header.getSize(),
+                        // Pilha DECRESCENTE da esquerda para a direita. A alça de
+                        // largura é montada sobre a divisória e transborda 6px para
+                        // dentro do cabeçalho vizinho; com `cabecalhoFixo` cada
+                        // `th` é sticky com z-index próprio, e sem esta pilha o
+                        // vizinho (que vem depois no DOM) pintaria em cima dessa
+                        // metade e ela perderia o CLIQUE, não só a cor. Fica acima
+                        // de 10 para o cabeçalho fixo continuar por cima do corpo.
+                        zIndex: 10 + (grupo.headers.length - indiceHeader),
+                      }
+                    : undefined
+                }
                 draggable={podeReordenar}
                 onDragStart={
                   podeReordenar
@@ -1118,7 +1830,7 @@ export function DataTable<TData>({
                       alinharDireita && "flex-row-reverse"
                     )}
                   >
-                    <span className="truncate">
+                    <span data-medir className="truncate">
                       {flexRender(
                         header.column.columnDef.header,
                         header.getContext()
@@ -1134,18 +1846,78 @@ export function DataTable<TData>({
                   <span
                     role="separator"
                     aria-orientation="vertical"
-                    aria-label={`Redimensionar coluna ${rotuloColuna(
+                    // Marca de alça: o "ajustar ao conteúdo" não mede a alça (ver
+                    // conteudoMedivel), senão cabeçalho de texto puro mediria 12px.
+                    data-alca="largura"
+                    aria-label={`Largura da coluna ${rotuloColuna(
                       header.column.id,
                       header.column.columnDef.header,
                       header.column.columnDef.meta,
                     )}`}
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
+                    // Leitor de tela anuncia a largura ao focar e a cada seta.
+                    aria-valuenow={Math.round(header.getSize())}
+                    aria-valuemin={header.column.columnDef.minSize ?? LARGURA_MINIMA}
+                    aria-valuemax={header.column.columnDef.maxSize ?? LARGURA_MAXIMA}
+                    aria-valuetext={`${Math.round(header.getSize())} pixels`}
+                    // Foco de teclado é obrigatório: a alça é a única forma de
+                    // mudar largura, e sem mouse ela não existia.
+                    tabIndex={0}
+                    title="Arraste para mudar a largura. Duplo clique ajusta ao conteúdo."
+                    onMouseDown={(evento) => {
+                      // preventDefault mata duas coisas: a seleção de texto do
+                      // cabeçalho e o arraste NATIVO de reordenar (a `th` é
+                      // `draggable`), que roubaria o gesto de redimensionar.
+                      evento.preventDefault();
+                      evento.stopPropagation();
+                      iniciarArrasteLargura(header.column, evento.clientX);
+                    }}
+                    onTouchStart={(evento) => {
+                      evento.stopPropagation();
+                      const toque = evento.touches[0];
+                      if (toque === undefined) return;
+                      iniciarArrasteLargura(header.column, toque.clientX);
+                    }}
+                    // Cinto e suspensório do preventDefault acima: se o navegador
+                    // iniciar o drag de reordenar mesmo assim, ele para aqui.
+                    draggable={false}
+                    onDragStart={(evento) => {
+                      evento.preventDefault();
+                      evento.stopPropagation();
+                    }}
+                    onDoubleClick={(evento) => {
+                      evento.preventDefault();
+                      evento.stopPropagation();
+                      ajustarAoConteudo([header.column.id]);
+                    }}
                     onClick={(evento) => evento.stopPropagation()}
+                    onKeyDown={(evento) => aoTeclarNaAlca(evento, header.column)}
                     className={cn(
-                      "absolute top-0 right-0 h-full w-1.5 cursor-col-resize touch-none select-none",
-                      "hover:bg-faixa/60",
-                      header.column.getIsResizing() && "bg-faixa"
+                      // 12px de área de pega (`w-3`) montada SOBRE a divisória
+                      // (`-right-1.5`): 6px de cada lado, com a linha que a pessoa
+                      // mira no CENTRO da área, não na borda dela. É o mesmo
+                      // conserto que a alça de ALTURA levou (`-bottom-1 h-2`)
+                      // depois de escapar com 4px presos dentro da linha: mirando
+                      // na linha, errar por 1px é o caso comum, não o raro. O que
+                      // se VÊ continua fino, pelo gradiente de 40% a 60%.
+                      "absolute top-0 h-full w-3 cursor-col-resize touch-none select-none",
+                      "bg-linear-to-r from-transparent from-40% via-50% to-transparent to-60%",
+                      // Foco de teclado precisa de marca própria: 2px de linha
+                      // âmbar num vão de 12px ninguém acha na tela.
+                      "focus-visible:outline-2 focus-visible:outline-ring",
+                      // Na última coluna a alça fica DENTRO: transbordar ali sobra
+                      // para fora da tabela e inventa 6px de rolagem horizontal.
+                      header.column.id === idUltimaColuna
+                        ? "right-0"
+                        : "-right-1.5",
+                      arrasteLargura?.idColuna === header.column.id
+                        ? "via-faixa opacity-100"
+                        : cn(
+                            // Passar o mouse pelo cabeçalho já mostra onde ficam as
+                            // divisórias (discreto), e a que está sob o mouse ou
+                            // com foco de teclado acende em âmbar.
+                            "via-border opacity-0 group-hover/cabecalho:opacity-100",
+                            "hover:via-faixa focus-visible:via-faixa focus-visible:opacity-100",
+                          ),
                     )}
                   />
                 ) : null}
@@ -1229,6 +2001,9 @@ export function DataTable<TData>({
               return (
                 <TableCell
                   key={celula.id}
+                  // Marca a coluna na célula: é por aqui que o "ajustar ao
+                  // conteúdo" acha o que medir.
+                  data-coluna={celula.column.id}
                   className={cn(
                     "px-3 text-center text-detalhe",
                     alinharDireita && "text-right",
@@ -1246,6 +2021,8 @@ export function DataTable<TData>({
                     conteudo
                   ) : (
                     <div
+                      // O que o "ajustar ao conteúdo" mede nesta coluna.
+                      data-medir
                       // Altura fixa na `tr` funciona como MÍNIMO, não como
                       // máximo: sem limitar a altura aqui dentro, a célula de
                       // duas linhas continuaria empurrando a linha e nada ficaria
@@ -1284,6 +2061,7 @@ export function DataTable<TData>({
 
   const tabela = (
     <table
+      ref={refTabela}
       data-slot="table"
       className={cn(
         "w-full caption-bottom text-sm",
@@ -1295,13 +2073,52 @@ export function DataTable<TData>({
     </table>
   );
 
+  /**
+   * Linha guia do arraste de largura: desce a tabela inteira mostrando onde a
+   * divisória vai cair, com a largura em px na etiqueta. É o retorno que faltava
+   * (antes só a tira de 6px pintava de âmbar) e o mesmo que a alça de ALTURA já
+   * dava, para o app não ter dois pesos.
+   *
+   * `left`, `height`, o texto da etiqueta e o `top` dela são escritos pelo GESTO,
+   * direto no DOM: é o que mantém o gesto sem re-renderizar a tabela. A guia sai da
+   * borda MEDIDA da `th` e a etiqueta gruda no cabeçalho que está à vista (ver
+   * medirNaTela). Nasce com altura 0 para não piscar no lugar errado antes do
+   * primeiro desenho (o gesto começa antes de ela existir, então quem a posiciona
+   * na montagem é o efeito que chama `redesenhar`). Não rouba
+   * gesto de ninguém (nem da alça de altura, que fica na borda de baixo da linha)
+   * porque é `pointer-events-none`.
+   */
+  const guiaLargura =
+    arrasteLargura !== null ? (
+      <div
+        ref={refGuia}
+        aria-hidden="true"
+        // Marca para o teste achar a guia e a etiqueta: linha guia não tem papel
+        // acessível nenhum (é decoração do gesto, por isso `aria-hidden`), então
+        // não há role nem nome por onde pegá-la.
+        data-guia="largura"
+        style={{ left: 0, height: 0 }}
+        className="pointer-events-none absolute top-0 z-30 w-px bg-faixa"
+      >
+        <span
+          ref={refRotuloGuia}
+          data-guia="rotulo"
+          // `top-1` é só o lugar de partida: o efeito roda depois da pintura e é
+          // ele que gruda a etiqueta embaixo do cabeçalho visível. Sem isto a
+          // etiqueta apareceria um quadro no topo da tabela.
+          className="absolute top-1 left-1 rounded bg-foreground px-1.5 py-0.5 text-legenda font-medium whitespace-nowrap text-background tabular-nums"
+        />
+      </div>
+    ) : null;
+
   return (
     <div
       className={cn(
         "flex flex-col gap-2",
-        // Enquanto arrasta a altura, o cursor não muda de cara ao sair da alça e
-        // o texto da tabela não é selecionado sem querer.
+        // Enquanto arrasta, o cursor não muda de cara ao sair da alça e o texto da
+        // tabela não é selecionado sem querer.
         arrasteAltura !== null && "cursor-row-resize select-none",
+        arrasteLargura !== null && "cursor-col-resize select-none",
       )}
     >
       {temBarra && (
@@ -1345,6 +2162,7 @@ export function DataTable<TData>({
                 colunas={colunasDoMenu}
                 onRestaurarPadrao={restaurarPadrao}
                 foraDoPadrao={foraDoPadrao}
+                onAjustarLarguras={ajustarTodasAoConteudo}
               />
             )}
             {exportar && (
@@ -1358,16 +2176,20 @@ export function DataTable<TData>({
       )}
 
       {cabecalhoFixo ? (
+        // `relative` é o que dá à linha guia do arraste um lugar de onde sair (a
+        // guia mede em px a partir da borda esquerda da tabela).
         <div
-          className="overflow-auto rounded-md border border-border"
+          className="relative overflow-auto rounded-md border border-border"
           style={{ maxHeight: alturaMaxima ?? ALTURA_MAXIMA_PADRAO }}
         >
           {tabela}
+          {guiaLargura}
         </div>
       ) : (
         <div className="overflow-hidden rounded-md border border-border">
           <div data-slot="table-container" className="relative w-full overflow-x-auto">
             {tabela}
+            {guiaLargura}
           </div>
         </div>
       )}

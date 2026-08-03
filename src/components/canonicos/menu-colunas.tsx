@@ -1,6 +1,6 @@
 "use client";
 
-import { Columns3, RotateCcw } from "lucide-react";
+import { Columns3, MoveHorizontal, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,13 @@ export interface MenuColunasProps {
   onRestaurarPadrao: () => void;
   /** Habilita o "Restaurar padrão" só quando há algo fora do padrão. */
   foraDoPadrao: boolean;
+  /**
+   * Ajusta a largura de todas as colunas visíveis ao conteúdo que está na tela. É
+   * o mesmo que o duplo clique na divisória faz, coluna por coluna, e existe aqui
+   * porque acertar quinze larguras uma a uma ninguém faz. Ausente = item não
+   * aparece (tabela não personalizável).
+   */
+  onAjustarLarguras?: () => void;
 }
 
 /**
@@ -41,6 +48,7 @@ export function MenuColunas({
   colunas,
   onRestaurarPadrao,
   foraDoPadrao,
+  onAjustarLarguras,
 }: MenuColunasProps) {
   const visiveis = colunas.filter((coluna) => coluna.visivel).length;
 
@@ -70,6 +78,15 @@ export function MenuColunas({
           </DropdownMenuCheckboxItem>
         ))}
         <DropdownMenuSeparator />
+        {onAjustarLarguras ? (
+          <DropdownMenuItem
+            onSelect={() => onAjustarLarguras()}
+            className="text-detalhe"
+          >
+            <MoveHorizontal />
+            Ajustar largura ao conteúdo
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           disabled={!foraDoPadrao}
           onSelect={() => onRestaurarPadrao()}
