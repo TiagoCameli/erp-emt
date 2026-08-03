@@ -46,8 +46,8 @@ import {
 } from "@/lib/formatadores";
 import { ROTULO_TIPO_FORMA } from "@/modules/_shared/forma-pagamento";
 import {
-  marcarParcelaRevisada,
-  marcarParcelasRevisadasEmLote,
+  marcarParcelaConferida,
+  marcarParcelasConferidasEmLote,
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
 import type { PagamentoDireto } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 import { CONFERENCIA } from "@/modules/financeiro/aprovacao-pagamentos/rotulos";
@@ -65,13 +65,13 @@ import {
 
 /**
  * Explicação da aba. É o texto mais importante da tela: sem ele alguém lê
- * "não revisado" como pagamento preso esperando alguém liberar.
+ * "não conferido" como pagamento preso esperando alguém liberar.
  */
 const EXPLICACAO =
-  "Dinheiro sai direto do caixa e cartão de crédito já nasce quitado: nenhum dos dois passa pela aprovação. Marcar como revisado é só o registro de que você conferiu, e pode ser feito depois de pago. Nada aqui prende, libera nem muda pagamento.";
+  "Dinheiro sai direto do caixa e cartão de crédito já nasce quitado: nenhum dos dois passa pela aprovação. Marcar como conferido é só o registro de que você conferiu, e pode ser feito depois de pago. Nada aqui prende, libera nem muda pagamento.";
 
 /** Filtro pelo estado da conferência: é para isso que a aba existe. */
-const OPCOES_REVISAO = [
+const OPCOES_CONFERENCIA = [
   { valor: "nao", rotulo: CONFERENCIA.naoMarcado },
   { valor: "sim", rotulo: CONFERENCIA.marcado },
 ];
@@ -84,8 +84,12 @@ const OPCOES_NOTA = [
 
 export interface PagamentosDiretosProps {
   pagamentos: PagamentoDireto[];
-  /** Permissão de aprovar: é ela que libera carimbar a conferência. */
-  podeRevisar: boolean;
+  /**
+   * Permissão de aprovar: é ela que libera carimbar a conferência. Nome
+   * diferente do `podeRevisar` da fila ao lado de propósito: lá é a permissão de
+   * DEVOLVER a parcela para ajuste, que é outra coisa.
+   */
+  podeConferir: boolean;
   /** Libera o link da linha para a tela do lançamento. */
   podeVerLancamento: boolean;
 }
@@ -137,8 +141,8 @@ function CelulaCentroCusto({ pagamento }: { pagamento: PagamentoDireto }) {
  * badge nenhum: badge âmbar ou vermelho aqui faria a linha parecer pendência
  * travando pagamento, e o pagamento já foi.
  */
-function CelulaRevisao({ pagamento }: { pagamento: PagamentoDireto }) {
-  if (!pagamento.revisadoEm) {
+function CelulaConferencia({ pagamento }: { pagamento: PagamentoDireto }) {
+  if (!pagamento.conferidoEm) {
     return (
       <span className="text-muted-foreground">{CONFERENCIA.naoMarcado}</span>
     );
@@ -151,9 +155,9 @@ function CelulaRevisao({ pagamento }: { pagamento: PagamentoDireto }) {
         className="w-fit"
       />
       <span className="text-legenda text-muted-foreground">
-        {pagamento.revisadoPorNome ?? "-"} ·{" "}
+        {pagamento.conferidoPorNome ?? "-"} ·{" "}
         <span className="tabular-nums">
-          {formatarDataHora(pagamento.revisadoEm)}
+          {formatarDataHora(pagamento.conferidoEm)}
         </span>
       </span>
     </div>
@@ -171,7 +175,7 @@ function CelulaRevisao({ pagamento }: { pagamento: PagamentoDireto }) {
  */
 export function PagamentosDiretos({
   pagamentos,
-  podeRevisar,
+  podeConferir,
   podeVerLancamento,
 }: PagamentosDiretosProps) {
   const router = useRouter();
@@ -180,7 +184,7 @@ export function PagamentosDiretos({
   );
   const [emAndamento, setEmAndamento] = React.useState(false);
   const [filtroBusca, setFiltroBusca] = React.useState("");
-  const [filtroRevisao, setFiltroRevisao] = React.useState("");
+  const [filtroConferencia, setFiltroConferencia] = React.useState("");
   const [filtroSituacao, setFiltroSituacao] = React.useState("");
   const [filtroForma, setFiltroForma] = React.useState("");
   const [filtroCategoria, setFiltroCategoria] = React.useState("");
@@ -199,7 +203,7 @@ export function PagamentosDiretos({
 
   const filtrando =
     filtroBusca.trim() !== "" ||
-    filtroRevisao !== "" ||
+    filtroConferencia !== "" ||
     filtroSituacao !== "" ||
     filtroForma !== "" ||
     filtroCategoria !== "" ||
@@ -219,9 +223,9 @@ export function PagamentosDiretos({
   const visiveis = React.useMemo(() => {
     const termo = filtroBusca.trim().toLowerCase();
     return pagamentos.filter((pagamento) => {
-      const revisado = pagamento.revisadoEm !== null;
-      if (filtroRevisao === "sim" && !revisado) return false;
-      if (filtroRevisao === "nao" && revisado) return false;
+      const conferido = pagamento.conferidoEm !== null;
+      if (filtroConferencia === "sim" && !conferido) return false;
+      if (filtroConferencia === "nao" && conferido) return false;
       if (filtroSituacao !== "" && pagamento.status !== filtroSituacao) {
         return false;
       }
@@ -278,7 +282,7 @@ export function PagamentosDiretos({
   }, [
     pagamentos,
     filtroBusca,
-    filtroRevisao,
+    filtroConferencia,
     filtroSituacao,
     filtroForma,
     filtroCategoria,
@@ -296,12 +300,12 @@ export function PagamentosDiretos({
   ]);
 
   const total = React.useMemo(() => somarValores(visiveis), [visiveis]);
-  const revisados = React.useMemo(
-    () => visiveis.filter((pagamento) => pagamento.revisadoEm !== null),
+  const conferidos = React.useMemo(
+    () => visiveis.filter((pagamento) => pagamento.conferidoEm !== null),
     [visiveis],
   );
-  const naoRevisados = React.useMemo(
-    () => visiveis.filter((pagamento) => pagamento.revisadoEm === null),
+  const naoConferidos = React.useMemo(
+    () => visiveis.filter((pagamento) => pagamento.conferidoEm === null),
     [visiveis],
   );
 
@@ -346,29 +350,29 @@ export function PagamentosDiretos({
     zerarPagina();
   }
 
-  /** Marca ou desmarca, na linha ou no lote. `revisado` é sempre explícito. */
-  async function alternarRevisao(alvo: Alvo, revisado: boolean) {
+  /** Marca ou desmarca, na linha ou no lote. `conferido` é sempre explícito. */
+  async function alternarConferencia(alvo: Alvo, conferido: boolean) {
     if (emAndamento) return;
     setEmAndamento(true);
     try {
       if (alvo.tipo === "linha") {
-        const resultado = await marcarParcelaRevisada(
+        const resultado = await marcarParcelaConferida(
           alvo.pagamento.id,
-          revisado,
+          conferido,
         );
         if ("erro" in resultado) {
           toast.error(resultado.erro);
           return;
         }
         toast.success(
-          revisado
-            ? "Pagamento marcado como revisado"
-            : "Marca de revisão retirada",
+          conferido
+            ? "Pagamento marcado como conferido"
+            : "Marca de conferência retirada",
         );
       } else {
-        const resultado = await marcarParcelasRevisadasEmLote(
+        const resultado = await marcarParcelasConferidasEmLote(
           [...selecionados],
-          revisado,
+          conferido,
         );
         if ("erro" in resultado) {
           toast.error(
@@ -378,9 +382,9 @@ export function PagamentosDiretos({
           );
         } else {
           toast.success(
-            revisado
-              ? `${resultado.marcadas} pagamento(s) marcado(s) como revisado(s)`
-              : `${resultado.marcadas} pagamento(s) sem a marca de revisão`,
+            conferido
+              ? `${resultado.marcadas} pagamento(s) marcado(s) como conferido(s)`
+              : `${resultado.marcadas} pagamento(s) sem a marca de conferência`,
           );
         }
         setSelecionados(new Set());
@@ -394,7 +398,7 @@ export function PagamentosDiretos({
   const colunas = React.useMemo<ColumnDef<PagamentoDireto, unknown>[]>(() => {
     const base: ColumnDef<PagamentoDireto, unknown>[] = [];
 
-    if (podeRevisar) {
+    if (podeConferir) {
       base.push({
         id: "selecao",
         enableSorting: false,
@@ -646,12 +650,15 @@ export function PagamentosDiretos({
         },
       },
       {
-        id: "revisao",
-        accessorKey: "revisadoEm",
+        // Id novo junto com a palavra nova. Quem tinha escondido a coluna antiga
+        // ("revisao") volta a ver esta: preferência de coluna com id que não
+        // existe mais é ignorada, e ver a coluna é o padrão da aba.
+        id: "conferencia",
+        accessorKey: "conferidoEm",
         header: CONFERENCIA.coluna,
         size: 220,
         meta: { rotulo: CONFERENCIA.coluna, naoTruncar: true },
-        cell: ({ row }) => <CelulaRevisao pagamento={row.original} />,
+        cell: ({ row }) => <CelulaConferencia pagamento={row.original} />,
       },
       {
         accessorKey: "valor",
@@ -662,7 +669,7 @@ export function PagamentosDiretos({
       },
     );
 
-    if (podeRevisar) {
+    if (podeConferir) {
       base.push({
         id: "acoes",
         header: "Ações",
@@ -679,7 +686,7 @@ export function PagamentosDiretos({
             className="flex items-center justify-end gap-1"
             onClick={(evento) => evento.stopPropagation()}
           >
-            {row.original.revisadoEm ? (
+            {row.original.conferidoEm ? (
               // Desmarcar fica na própria linha, sem menu escondido: quem
               // clicou errado tem que desfazer no lugar em que errou.
               <Button
@@ -688,7 +695,7 @@ export function PagamentosDiretos({
                 size="sm"
                 disabled={emAndamento}
                 onClick={() =>
-                  alternarRevisao(
+                  alternarConferencia(
                     { tipo: "linha", pagamento: row.original },
                     false,
                   )
@@ -703,7 +710,7 @@ export function PagamentosDiretos({
                 size="sm"
                 disabled={emAndamento}
                 onClick={() =>
-                  alternarRevisao(
+                  alternarConferencia(
                     { tipo: "linha", pagamento: row.original },
                     true,
                   )
@@ -721,7 +728,7 @@ export function PagamentosDiretos({
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    podeRevisar,
+    podeConferir,
     podeVerLancamento,
     selecionados,
     todosSelecionados,
@@ -790,19 +797,19 @@ export function PagamentosDiretos({
     {
       // Visível por padrão: separar o que já foi conferido do que não foi é o
       // trabalho da aba.
-      id: "revisao",
+      id: "conferencia",
       rotulo: CONFERENCIA.coluna,
-      temValor: filtroRevisao !== "",
-      onLimpar: () => aoTrocarFiltro(() => setFiltroRevisao("")),
+      temValor: filtroConferencia !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroConferencia("")),
       elemento: (
         <FiltroSelect
-          valor={filtroRevisao}
+          valor={filtroConferencia}
           onValorChange={(valor) =>
-            aoTrocarFiltro(() => setFiltroRevisao(valor))
+            aoTrocarFiltro(() => setFiltroConferencia(valor))
           }
-          opcoes={OPCOES_REVISAO}
+          opcoes={OPCOES_CONFERENCIA}
           placeholder={CONFERENCIA.coluna}
-          todosRotulo="Revisados e não revisados"
+          todosRotulo="Conferidos e não conferidos"
           className="max-w-56"
         />
       ),
@@ -1030,11 +1037,11 @@ export function PagamentosDiretos({
     },
   );
 
-  const algumSelecionadoRevisado = selecionadosVisiveis.some(
-    (pagamento) => pagamento.revisadoEm !== null,
+  const algumSelecionadoConferido = selecionadosVisiveis.some(
+    (pagamento) => pagamento.conferidoEm !== null,
   );
-  const algumSelecionadoNaoRevisado = selecionadosVisiveis.some(
-    (pagamento) => pagamento.revisadoEm === null,
+  const algumSelecionadoNaoConferido = selecionadosVisiveis.some(
+    (pagamento) => pagamento.conferidoEm === null,
   );
 
   return (
@@ -1060,13 +1067,13 @@ export function PagamentosDiretos({
           />
           <KPICard
             titulo={CONFERENCIA.kpiMarcado}
-            valor={formatarBRL(somarValores(revisados))}
-            detalhe={`${revisados.length} com conferência registrada`}
+            valor={formatarBRL(somarValores(conferidos))}
+            detalhe={`${conferidos.length} com conferência registrada`}
           />
           <KPICard
             titulo={CONFERENCIA.kpiNaoMarcado}
-            valor={formatarBRL(somarValores(naoRevisados))}
-            detalhe={`${naoRevisados.length} sem registro de conferência. O pagamento não espera por ela.`}
+            valor={formatarBRL(somarValores(naoConferidos))}
+            detalhe={`${naoConferidos.length} sem registro de conferência. O pagamento não espera por ela.`}
           />
         </GradeKpis>
 
@@ -1080,24 +1087,24 @@ export function PagamentosDiretos({
               </span>
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              {podeRevisar && algumSelecionadoRevisado ? (
+              {podeConferir && algumSelecionadoConferido ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   disabled={emAndamento}
-                  onClick={() => alternarRevisao({ tipo: "lote" }, false)}
+                  onClick={() => alternarConferencia({ tipo: "lote" }, false)}
                 >
                   <Undo2 />
                   {CONFERENCIA.acaoDesmarcarLote}
                 </Button>
               ) : null}
-              {podeRevisar && algumSelecionadoNaoRevisado ? (
+              {podeConferir && algumSelecionadoNaoConferido ? (
                 <Button
                   type="button"
                   size="sm"
                   disabled={emAndamento}
-                  onClick={() => alternarRevisao({ tipo: "lote" }, true)}
+                  onClick={() => alternarConferencia({ tipo: "lote" }, true)}
                 >
                   <BadgeCheck />
                   {CONFERENCIA.acaoMarcarLote}

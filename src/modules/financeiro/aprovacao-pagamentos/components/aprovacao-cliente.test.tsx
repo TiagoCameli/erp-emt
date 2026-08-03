@@ -27,8 +27,8 @@ vi.mock("@/modules/financeiro/aprovacao-pagamentos/actions", () => ({
   aprovarParcelasEmLote: vi.fn(),
   revisarParcela: vi.fn(),
   revisarParcelasEmLote: vi.fn(),
-  marcarParcelaRevisada: vi.fn(),
-  marcarParcelasRevisadasEmLote: vi.fn(),
+  marcarParcelaConferida: vi.fn(),
+  marcarParcelasConferidasEmLote: vi.fn(),
   detalheDaFila: vi.fn(),
 }));
 
@@ -99,8 +99,8 @@ const direto: PagamentoDireto = {
   rateios: [],
   anexos: 0,
   semNota: false,
-  revisadoEm: null,
-  revisadoPorNome: null,
+  conferidoEm: null,
+  conferidoPorNome: null,
 };
 
 function renderizar() {
@@ -126,7 +126,7 @@ function renderizar() {
       }}
       diretos={{
         pagamentos: [direto],
-        podeRevisar: true,
+        podeConferir: true,
         podeVerLancamento: true,
       }}
     />,

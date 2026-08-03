@@ -86,8 +86,10 @@ export default async function PaginaAprovacaoPagamentos() {
         diretos={{
           pagamentos: diretos,
           // A mesma permissão de aprovar pagamento: é a mesma pessoa e a mesma
-          // responsabilidade. A action e o banco recusam de novo.
-          podeRevisar: podeAprovar,
+          // responsabilidade. A action e o banco recusam de novo. Nome diferente
+          // do podeRevisar da fila (que é desaprovar) porque é outra coisa:
+          // aqui é carimbar conferência, lá é devolver para ajuste.
+          podeConferir: podeAprovar,
           podeVerLancamento,
         }}
       />

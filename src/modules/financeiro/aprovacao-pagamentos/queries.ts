@@ -389,8 +389,8 @@ export interface PagamentoDireto {
    * isso: não é pendência, não segura pagamento nenhum. Quem marcou e quando
    * andam juntos por check no banco, então testar um dos dois basta.
    */
-  revisadoEm: string | null;
-  revisadoPorNome: string | null;
+  conferidoEm: string | null;
+  conferidoPorNome: string | null;
 }
 
 /** Garante que o status vindo do banco é um StatusParcela conhecido. */
@@ -421,15 +421,16 @@ function comoStatusParcela(status: string): StatusParcela {
 export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
   const supabase = await createClient();
 
-  // O embed de quem revisou leva o nome da constraint: lancamento_parcelas tem
-  // três FKs para usuarios (aprovou, pagou, revisou) e sem a dica o PostgREST
-  // devolve erro de ambiguidade em vez de escolher uma.
+  // O embed de quem conferiu leva o nome da constraint: lancamento_parcelas tem
+  // várias FKs para usuarios (aprovou, pagou, conferiu) e sem a dica o PostgREST
+  // devolve erro de ambiguidade em vez de escolher uma. O nome tem que ser o do
+  // banco letra por letra: errar aqui derruba a tela inteira, não só a coluna.
   const { data, error } = await supabase
     .from("lancamento_parcelas")
     .select(
       `id, numero_parcela, valor, data_vencimento, data_pagamento, status,
-       lancamento_id, conta_bancaria_id, revisado_em,
-       usuarios!lancamento_parcelas_revisado_por_fkey(nome),
+       lancamento_id, conta_bancaria_id, conferido_em,
+       usuarios!lancamento_parcelas_conferido_por_fkey(nome),
        contas_bancarias(nome),
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
@@ -516,8 +517,8 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
       semNota: Boolean(
         lancamento?.origem === "oc" && origemId && semNota.has(origemId),
       ),
-      revisadoEm: parcela.revisado_em,
-      revisadoPorNome: parcela.usuarios?.nome ?? null,
+      conferidoEm: parcela.conferido_em,
+      conferidoPorNome: parcela.usuarios?.nome ?? null,
     };
   });
 }

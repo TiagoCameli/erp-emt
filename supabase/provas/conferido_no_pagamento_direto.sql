@@ -1,5 +1,19 @@
--- Prova de aceite do "marcar como revisado" no pagamento que nao passa pela
+-- Prova de aceite do "marcar como conferido" no pagamento que nao passa pela
 -- fila de aprovacao (dinheiro e cartao de credito).
+--
+-- QUANDO RODAR: depois de aplicar a fase A
+-- (20260803120001_conferido_no_pagamento_direto.sql). Antes dela
+-- fn_marcar_parcela_conferida e conferido_por/conferido_em nao existem e a prova
+-- estoura na primeira chamada. Rodar antes do deploy do codigo novo e' de
+-- proposito: e' esta prova que autoriza o deploy.
+--
+-- Substitui revisado_no_pagamento_direto.sql, que testava a RPC e as colunas de
+-- nome antigo (derrubadas na fase B). Mesmos casos, palavra nova.
+--
+-- O caso 4 continua sendo a rede de seguranca da transicao: ele compara a linha
+-- inteira antes e depois, entao se a conferencia nova escrevesse tambem no par
+-- antigo (revisado_por/revisado_em, que a fase A deixa vivo), o diff apareceria
+-- e a prova falharia.
 --
 -- Roda contra o banco vivo. Toda a massa nasce e morre dentro de uma
 -- transacao de prova (o bloco `begin ... exception ... end` do plpgsql, que e'
@@ -13,23 +27,23 @@
 --   2. marcar e desmarcar funciona, e desmarcar limpa quem e quando
 --   3. quem nao tem financeiro.aprovacao-pagamentos:aprovar e' recusado pelo
 --      banco (usuario sem cadastro e usuario real sem a acao)
---   4. a revisao nao muda mais nada: a linha inteira da parcela e a linha do
+--   4. a conferencia nao muda mais nada: a linha inteira da parcela e a linha do
 --      lancamento ficam identicas, fora os proprios campos da conferencia
---   5. pagar continua funcionando sem revisao nenhuma, e aprovar tambem: a
+--   5. pagar continua funcionando sem conferencia nenhuma, e aprovar tambem: a
 --      prova de que nao nasceu um portao novo
 --   6. depois do rollback, nada sobrou em producao
 --
 -- Os ids da massa sao fixos de proposito: o caso 6 precisa procurar por eles
 -- depois que a transacao ja morreu.
 
-create temp table if not exists prova_revisado (
+create temp table if not exists prova_conferido (
   ordem int generated always as identity,
   caso text,
   esperado text,
   obtido text,
   passou boolean
 );
-truncate prova_revisado;
+truncate prova_conferido;
 
 do $prova$
 declare
@@ -79,16 +93,16 @@ begin
     -- e um lancamento em dinheiro de R$ 300,00 em tres parcelas, uma em cada
     -- estado que interessa: paga, aprovada e pendente.
     insert into public.contas_bancarias (id, nome, saldo_inicial, ativo)
-    values (k_conta, '[PROVA-REVISADO] conta', 1000.00, true);
+    values (k_conta, '[PROVA-CONFERIDO] conta', 1000.00, true);
 
     insert into public.lancamentos (
       id, tipo, origem, descricao, valor, status, forma_pagamento_id,
       data_vencimento, mes_competencia, data_compra, observacoes
     )
     values (
-      k_lanc, 'a_pagar', 'manual', '[PROVA-REVISADO] pagamento em dinheiro',
+      k_lanc, 'a_pagar', 'manual', '[PROVA-CONFERIDO] pagamento em dinheiro',
       300.00, 'a_pagar', v_forma,
-      v_hoje, date_trunc('month', v_hoje)::date, v_hoje, '[PROVA-REVISADO]'
+      v_hoje, date_trunc('month', v_hoje)::date, v_hoje, '[PROVA-CONFERIDO]'
     );
 
     insert into public.lancamento_parcelas (
@@ -110,17 +124,17 @@ begin
     select to_jsonb(lp) into v_antes from public.lancamento_parcelas lp where lp.id = k_p1;
     select to_jsonb(l) into v_antes_lanc from public.lancamentos l where l.id = k_lanc;
 
-    perform public.fn_marcar_parcela_revisada(k_p1);
+    perform public.fn_marcar_parcela_conferida(k_p1);
 
-    select lp.revisado_por, lp.revisado_em, lp.status
+    select lp.conferido_por, lp.conferido_em, lp.status
     into v_uuid, v_ts, v_txt
     from public.lancamento_parcelas lp where lp.id = k_p1;
 
     v_prova := v_prova || jsonb_build_object(
-      'caso', '1. parcela paga: revisao registra QUEM',
+      'caso', '1. parcela paga: conferencia registra QUEM',
       'esperado', v_usuario::text, 'obtido', coalesce(v_uuid::text, 'nulo'));
     v_prova := v_prova || jsonb_build_object(
-      'caso', '1b. parcela paga: revisao registra QUANDO',
+      'caso', '1b. parcela paga: conferencia registra QUANDO',
       'esperado', 'sim', 'obtido', case when v_ts is not null then 'sim' else 'nao' end);
     v_prova := v_prova || jsonb_build_object(
       'caso', '1c. parcela paga continua paga',
@@ -132,18 +146,18 @@ begin
     where a.tabela = 'lancamento_parcelas'
       and a.registro_id = k_p1::text
       and a.acao = 'UPDATE'
-      and a.dados_antes ->> 'revisado_por' is null
-      and a.dados_depois ->> 'revisado_por' = v_usuario::text;
+      and a.dados_antes ->> 'conferido_por' is null
+      and a.dados_depois ->> 'conferido_por' = v_usuario::text;
     v_prova := v_prova || jsonb_build_object(
-      'caso', '1d. auditoria gravou a revisao (UPDATE com antes/depois)',
+      'caso', '1d. auditoria gravou a conferencia (UPDATE com antes/depois)',
       'esperado', '1', 'obtido', v_int::text);
 
     -- -----------------------------------------------------------------
-    -- 4. a revisao nao muda mais nada
+    -- 4. a conferencia nao muda mais nada
     -- -----------------------------------------------------------------
     -- Compara a linha inteira, coluna por coluna, fora updated_at:
     -- trg_lancamento_parcelas_updated_at carimba QUALQUER update da tabela, e'
-    -- comportamento padrao e nao efeito da revisao (dentro desta transacao ele
+    -- comportamento padrao e nao efeito da conferencia (dentro desta transacao ele
     -- nem chega a diferir, porque now() e' fixo na transacao). Status, data
     -- programada, conta, valor, datas e o resto tem que ficar identicos.
     select to_jsonb(lp) into v_depois from public.lancamento_parcelas lp where lp.id = k_p1;
@@ -156,7 +170,7 @@ begin
     ) x;
     v_prova := v_prova || jsonb_build_object(
       'caso', '4. so os campos da conferencia mudaram na parcela',
-      'esperado', 'revisado_em, revisado_por', 'obtido', v_txt);
+      'esperado', 'conferido_em, conferido_por', 'obtido', v_txt);
 
     select to_jsonb(l) into v_depois_lanc from public.lancamentos l where l.id = k_lanc;
     v_prova := v_prova || jsonb_build_object(
@@ -167,22 +181,22 @@ begin
     -- -----------------------------------------------------------------
     -- 2. marcar e desmarcar
     -- -----------------------------------------------------------------
-    perform public.fn_marcar_parcela_revisada(k_p3, true);
+    perform public.fn_marcar_parcela_conferida(k_p3, true);
 
-    select coalesce(lp.revisado_por::text, 'nulo')
+    select coalesce(lp.conferido_por::text, 'nulo')
            || ' / '
-           || case when lp.revisado_em is not null then 'com data' else 'nulo' end
+           || case when lp.conferido_em is not null then 'com data' else 'nulo' end
     into v_txt
     from public.lancamento_parcelas lp where lp.id = k_p3;
     v_prova := v_prova || jsonb_build_object(
       'caso', '2. marcar preenche quem e quando',
       'esperado', v_usuario::text || ' / com data', 'obtido', v_txt);
 
-    perform public.fn_marcar_parcela_revisada(k_p3, false);
+    perform public.fn_marcar_parcela_conferida(k_p3, false);
 
-    select coalesce(lp.revisado_por::text, 'nulo')
+    select coalesce(lp.conferido_por::text, 'nulo')
            || ' / '
-           || coalesce(lp.revisado_em::text, 'nulo')
+           || coalesce(lp.conferido_em::text, 'nulo')
     into v_txt
     from public.lancamento_parcelas lp where lp.id = k_p3;
     v_prova := v_prova || jsonb_build_object(
@@ -200,7 +214,7 @@ begin
     perform set_config('request.jwt.claims',
       json_build_object('sub', '00000000-0000-4000-8000-0000000000ff')::text, true);
     begin
-      perform public.fn_marcar_parcela_revisada(k_p1, true);
+      perform public.fn_marcar_parcela_conferida(k_p1, true);
       v_txt := 'aceitou';
     exception when others then
       v_txt := 'recusado';
@@ -218,7 +232,7 @@ begin
 
     perform set_config('request.jwt.claims', json_build_object('sub', v_usuario)::text, true);
     begin
-      perform public.fn_marcar_parcela_revisada(k_p3, true);
+      perform public.fn_marcar_parcela_conferida(k_p3, true);
       v_txt := 'aceitou';
     exception when others then
       v_txt := 'recusado';
@@ -231,13 +245,13 @@ begin
     values (v_usuario, 'financeiro.aprovacao-pagamentos', 'aprovar');
 
     -- -----------------------------------------------------------------
-    -- 5. pagar sem revisao nenhuma continua funcionando
+    -- 5. pagar sem conferencia nenhuma continua funcionando
     -- -----------------------------------------------------------------
-    select lp.revisado_em into v_ts from public.lancamento_parcelas lp where lp.id = k_p2;
+    select lp.conferido_em into v_ts from public.lancamento_parcelas lp where lp.id = k_p2;
     v_prova := v_prova || jsonb_build_object(
-      'caso', '5. parcela a pagar entra no teste sem revisao',
-      'esperado', 'nao revisada',
-      'obtido', case when v_ts is null then 'nao revisada' else 'revisada' end);
+      'caso', '5. parcela a pagar entra no teste sem conferencia',
+      'esperado', 'nao conferida',
+      'obtido', case when v_ts is null then 'nao conferida' else 'conferida' end);
 
     begin
       perform public.fn_pagar_parcela(k_p2, k_conta, v_hoje);
@@ -246,17 +260,17 @@ begin
       v_txt := left(sqlerrm, 70);
     end;
     v_prova := v_prova || jsonb_build_object(
-      'caso', '5b. fn_pagar_parcela nao exige revisao',
+      'caso', '5b. fn_pagar_parcela nao exige conferencia',
       'esperado', 'pagou', 'obtido', v_txt);
 
-    select lp.status, lp.revisado_em into v_txt, v_ts
+    select lp.status, lp.conferido_em into v_txt, v_ts
     from public.lancamento_parcelas lp where lp.id = k_p2;
     v_prova := v_prova || jsonb_build_object(
-      'caso', '5c. parcela ficou paga sem nunca ter sido revisada',
-      'esperado', 'pago / nao revisada',
-      'obtido', v_txt || ' / ' || case when v_ts is null then 'nao revisada' else 'revisada' end);
+      'caso', '5c. parcela ficou paga sem nunca ter sido conferida',
+      'esperado', 'pago / nao conferida',
+      'obtido', v_txt || ' / ' || case when v_ts is null then 'nao conferida' else 'conferida' end);
 
-    -- e a fila de aprovacao tambem nao virou portao: p3 esta sem revisao
+    -- e a fila de aprovacao tambem nao virou portao: p3 esta sem conferencia
     -- (foi marcada e desmarcada no caso 2) e tem que aprovar assim mesmo
     begin
       perform public.fn_aprovar_parcela(k_p3, v_hoje, k_conta);
@@ -265,7 +279,7 @@ begin
       v_txt := left(sqlerrm, 70);
     end;
     v_prova := v_prova || jsonb_build_object(
-      'caso', '5d. fn_aprovar_parcela tambem nao exige revisao',
+      'caso', '5d. fn_aprovar_parcela tambem nao exige conferencia',
       'esperado', 'aprovou', 'obtido', v_txt);
 
     -- fim da transacao da prova: desfaz tudo
@@ -276,7 +290,7 @@ begin
     end if;
   end;
 
-  insert into prova_revisado (caso, esperado, obtido, passou)
+  insert into prova_conferido (caso, esperado, obtido, passou)
   select e ->> 'caso', e ->> 'esperado', e ->> 'obtido',
          (e ->> 'esperado') is not distinct from (e ->> 'obtido')
   from jsonb_array_elements(v_prova) e;
@@ -284,7 +298,7 @@ end $prova$;
 
 -- 6. depois do rollback, nada sobrou em producao. Le o banco de verdade pelos
 -- ids fixos da massa, incluindo o audit_log que a propria prova gerou.
-insert into prova_revisado (caso, esperado, obtido, passou)
+insert into prova_conferido (caso, esperado, obtido, passou)
 select '6. depois do rollback, nada sobrou em producao', '0', total::text, total = 0
 from (
   select
@@ -306,16 +320,16 @@ from (
         'aa000000-0000-4000-8000-000000000003',
         'aa000000-0000-4000-8000-000000000004',
         'aa000000-0000-4000-8000-000000000005'))
-  + (select count(*) from public.lancamentos where observacoes = '[PROVA-REVISADO]')
+  + (select count(*) from public.lancamentos where observacoes = '[PROVA-CONFERIDO]')
   as total
 ) t;
 
--- 6b. e a revisao nao vazou para nenhuma parcela de verdade
-insert into prova_revisado (caso, esperado, obtido, passou)
+-- 6b. e a conferencia nao vazou para nenhuma parcela de verdade
+insert into prova_conferido (caso, esperado, obtido, passou)
 select '6b. nenhuma parcela real ficou marcada pela prova', '0', c::text, c = 0
 from (
   select count(*) as c from public.lancamento_parcelas
-  where revisado_em >= now() - interval '10 minutes'
+  where conferido_em >= now() - interval '10 minutes'
 ) t;
 
 select
@@ -323,5 +337,5 @@ select
   esperado,
   obtido,
   case when passou then 'PASSOU' else 'FALHOU' end as resultado
-from prova_revisado
+from prova_conferido
 order by ordem;
