@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import {
+  CelulaVazia,
   ConfirmDialog,
   KPICard,
   MoneyText,
@@ -240,12 +241,15 @@ export function FolhaDetalheView({
           <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full text-detalhe">
               <thead>
+                {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+                    dinheiro, quantidade, total, percentual e horas vão à
+                    direita. */}
                 <tr className="border-b border-border text-legenda text-muted-foreground">
-                  <th className="px-3 py-2 text-left font-medium">
+                  <th className="px-3 py-2 text-center font-medium">
                     Colaborador
                   </th>
-                  <th className="px-3 py-2 text-left font-medium">Função</th>
-                  <th className="px-3 py-2 text-left font-medium">
+                  <th className="px-3 py-2 text-center font-medium">Função</th>
+                  <th className="px-3 py-2 text-center font-medium">
                     Centro de custo
                   </th>
                   <th className="px-3 py-2 text-right font-medium">
@@ -279,13 +283,13 @@ export function FolhaDetalheView({
                     key={item.id}
                     className="border-b border-border last:border-0"
                   >
-                    <td className="px-3 py-2 font-medium">
+                    <td className="px-3 py-2 text-center font-medium">
                       {item.colaboradorNome}
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {item.colaboradorFuncao ?? "-"}
+                    <td className="px-3 py-2 text-center text-muted-foreground">
+                      {item.colaboradorFuncao ?? <CelulaVazia />}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-center">
                       {item.centroCustoNome ? (
                         <span>
                           {item.centroCustoCodigo ? (
@@ -296,7 +300,7 @@ export function FolhaDetalheView({
                           {item.centroCustoNome}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <CelulaVazia />
                       )}
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -378,7 +382,7 @@ export function FolhaDetalheView({
             <table className="w-full text-detalhe">
               <thead>
                 <tr className="border-b border-border text-legenda text-muted-foreground">
-                  <th className="px-3 py-2 text-left font-medium">
+                  <th className="px-3 py-2 text-center font-medium">
                     Centro de custo
                   </th>
                   <th className="px-3 py-2 text-right font-medium">
@@ -392,14 +396,16 @@ export function FolhaDetalheView({
                     key={grupo.centroCustoId ?? "__sem_centro__"}
                     className="border-b border-border last:border-0"
                   >
-                    <td className="px-3 py-2">{rotuloCentroCusto(grupo)}</td>
+                    <td className="px-3 py-2 text-center">
+                      {rotuloCentroCusto(grupo)}
+                    </td>
                     <td className="px-3 py-2 text-right">
                       <MoneyText valor={grupo.custoTotal} />
                     </td>
                   </tr>
                 ))}
                 <tr className="border-t border-border">
-                  <td className="px-3 py-2 font-semibold">Total</td>
+                  <td className="px-3 py-2 text-center font-semibold">Total</td>
                   <td className="px-3 py-2 text-right">
                     <MoneyText
                       valor={folha.custoTotal}
@@ -419,7 +425,7 @@ export function FolhaDetalheView({
             <table className="w-full text-detalhe">
               <thead>
                 <tr className="border-b border-border text-legenda text-muted-foreground">
-                  <th className="px-3 py-2 text-left font-medium">Encargo</th>
+                  <th className="px-3 py-2 text-center font-medium">Encargo</th>
                   <th className="px-3 py-2 text-right font-medium">Total</th>
                 </tr>
               </thead>
@@ -429,14 +435,14 @@ export function FolhaDetalheView({
                     key={encargo.nome}
                     className="border-b border-border last:border-0"
                   >
-                    <td className="px-3 py-2">{encargo.nome}</td>
+                    <td className="px-3 py-2 text-center">{encargo.nome}</td>
                     <td className="px-3 py-2 text-right">
                       <MoneyText valor={encargo.total} />
                     </td>
                   </tr>
                 ))}
                 <tr className="border-t border-border">
-                  <td className="px-3 py-2 font-semibold">Total</td>
+                  <td className="px-3 py-2 text-center font-semibold">Total</td>
                   <td className="px-3 py-2 text-right">
                     <MoneyText
                       valor={folha.valorEncargos}

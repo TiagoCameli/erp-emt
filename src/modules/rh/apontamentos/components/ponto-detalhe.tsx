@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { ConfirmDialog, StatusBadge } from "@/components/canonicos";
+import { CelulaVazia, ConfirmDialog, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import {
@@ -214,9 +214,7 @@ export function PontoDetalheView({
           <Dado rotulo="Obra">{ponto.obraNome}</Dado>
           <Dado rotulo="Data">{formatarData(ponto.data)}</Dado>
           <Dado rotulo="Encarregado">
-            {ponto.encarregadoNome ?? (
-              <span className="text-muted-foreground">-</span>
-            )}
+            {ponto.encarregadoNome ?? <CelulaVazia />}
           </Dado>
           <Dado rotulo="Total de horas">
             <span className="tabular-nums">
@@ -324,8 +322,11 @@ export function PontoDetalheView({
             <div className="hidden overflow-x-auto rounded-md border border-border sm:block">
               <table className="w-full text-detalhe">
                 <thead>
+                  {/* Centralizado é o padrão de tabela do app (ver DataTable);
+                      só dinheiro, quantidade, total, percentual e horas vão à
+                      direita. */}
                   <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-medium">
+                    <th className="px-3 py-2 text-center font-medium">
                       Colaborador
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
@@ -334,7 +335,7 @@ export function PontoDetalheView({
                     <th className="px-3 py-2 text-right font-medium">
                       Horas extras
                     </th>
-                    <th className="px-3 py-2 text-left font-medium">Tipo</th>
+                    <th className="px-3 py-2 text-center font-medium">Tipo</th>
                     {aceitaLancamentos ? (
                       <th className="px-3 py-2 text-right font-medium" />
                     ) : null}
@@ -346,7 +347,7 @@ export function PontoDetalheView({
                       key={linha.id}
                       className="border-b border-border last:border-0"
                     >
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-center">
                         {linha.colaboradorNome}
                         {linha.colaboradorFuncao ? (
                           <span className="text-muted-foreground">
@@ -361,7 +362,7 @@ export function PontoDetalheView({
                       <td className="px-3 py-2 text-right tabular-nums">
                         {formatarQuantidade(linha.horasExtras)}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-center">
                         <StatusBadge
                           status="rascunho"
                           rotulo={ROTULO_TIPO_APONTAMENTO[linha.tipo]}

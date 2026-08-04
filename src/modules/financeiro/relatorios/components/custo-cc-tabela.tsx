@@ -1,4 +1,4 @@
-import { MoneyText } from "@/components/canonicos";
+import { CelulaVazia, MoneyText } from "@/components/canonicos";
 import {
   Table,
   TableBody,
@@ -24,10 +24,12 @@ export function CustoCcTabela({ custo }: CustoCcTabelaProps) {
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="h-9 px-3 text-detalhe font-medium text-muted-foreground">
+            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+                dinheiro, quantidade, total, percentual e horas vão à direita. */}
+            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
               Código
             </TableHead>
-            <TableHead className="h-9 px-3 text-detalhe font-medium text-muted-foreground">
+            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
               Centro de custo
             </TableHead>
             <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
@@ -41,10 +43,17 @@ export function CustoCcTabela({ custo }: CustoCcTabelaProps) {
         <TableBody className="[&_td]:px-3">
           {custo.centros.map((centro) => (
             <TableRow key={centro.centroCustoId}>
-              <TableCell className="py-2 font-mono text-detalhe text-muted-foreground">
-                {centro.codigo ?? "-"}
+              {/* `text-detalhe` fica na célula, e não no `span`: o `codigo-doc`
+                  já traz o tamanho dele, e é a CelulaVazia que precisaria
+                  herdar o tamanho certo da tabela. */}
+              <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
+                {centro.codigo ? (
+                  <span className="codigo-doc">{centro.codigo}</span>
+                ) : (
+                  <CelulaVazia />
+                )}
               </TableCell>
-              <TableCell className="py-2 text-detalhe text-foreground">
+              <TableCell className="py-2 text-center text-detalhe text-foreground">
                 {centro.nome}
               </TableCell>
               <TableCell className="py-2 text-right">
@@ -60,7 +69,7 @@ export function CustoCcTabela({ custo }: CustoCcTabelaProps) {
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
             <TableCell
               colSpan={2}
-              className="py-2 text-detalhe font-semibold text-foreground"
+              className="py-2 text-center text-detalhe font-semibold text-foreground"
             >
               Total
             </TableCell>

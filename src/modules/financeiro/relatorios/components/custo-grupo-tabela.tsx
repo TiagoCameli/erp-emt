@@ -81,6 +81,11 @@ export function CustoGrupoTabela({ custo, mes }: CustoGrupoTabelaProps) {
       <table className="w-full text-detalhe">
         <thead className="bg-surface">
           <tr className="border-b border-border text-legenda text-muted-foreground">
+            {/* A ÚNICA coluna do app que continua à esquerda, e é de propósito:
+                aqui o recuo (pl-12 na subcategoria, pl-24 no insumo) é o que diz
+                de quem a linha é filha. Centralizar centraliza dentro do recuo e
+                a hierarquia do drill-down desaparece. As colunas de percentual e
+                de dinheiro seguem à direita, como no resto do app. */}
             <th className="px-3 py-2 text-left font-medium">
               Grupo, subcategoria e insumo
             </th>

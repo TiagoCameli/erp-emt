@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import {
   CelulaDescricaoCategoria,
+  CelulaVazia,
   colunaDinheiro,
   DataTable,
   EmptyState,
@@ -58,11 +59,12 @@ export function ExtratoFornecedorTabela({
         accessorKey: "numero",
         header: "Número",
         size: 120,
-        cell: ({ row }) => (
-          <span className="font-mono text-detalhe">
-            {row.original.numero ?? "-"}
-          </span>
-        ),
+        cell: ({ row }) =>
+          row.original.numero ? (
+            <span className="codigo-doc">{row.original.numero}</span>
+          ) : (
+            <CelulaVazia />
+          ),
       },
       {
         accessorKey: "descricao",

@@ -14,7 +14,6 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -245,10 +244,21 @@ export function MapaComparativo({
   return (
     <div className="flex flex-col gap-3">
       <div className="max-h-[calc(100vh-22rem)] overflow-auto rounded-md border border-border">
-        <Table>
+        {/* `table` cru, e não o `Table` do shadcn, pelo mesmo motivo que a
+            DataTable com cabecalhoFixo faz assim: o `Table` embrulha a tabela
+            num `div` com `overflow-x: auto`, e overflow em um eixo obriga o
+            outro a virar `auto` também. Esse div passa a ser o contêiner de
+            rolagem mais próximo do `sticky`, e como a altura dele não é
+            limitada (o `max-h` está no div de fora) ele nunca rola: o cabeçalho
+            e a linha de Total ficavam `sticky` sem nada para grudar. */}
+        <table className="w-full caption-bottom text-sm">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className={CLASSES_CABECALHO}>Insumo</TableHead>
+              {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+                  dinheiro, quantidade, total, percentual e horas vão à direita. */}
+              <TableHead className={cn(CLASSES_CABECALHO, "text-center")}>
+                Insumo
+              </TableHead>
               <TableHead className={cn(CLASSES_CABECALHO, "text-right")}>
                 Quantidade
               </TableHead>
@@ -258,7 +268,10 @@ export function MapaComparativo({
                   className={cn(CLASSES_CABECALHO, "text-right")}
                   title={fornecedor.fornecedorNome}
                 >
-                  <span className="block max-w-40 truncate">
+                  {/* `ml-auto` porque `block` não obedece ao `text-right` da
+                      célula: o nome ficava colado na borda ESQUERDA da coluna,
+                      desalinhado dos preços que ele encabeça. */}
+                  <span className="ml-auto block max-w-40 truncate">
                     {fornecedor.fornecedorNome}
                   </span>
                 </TableHead>
@@ -285,7 +298,7 @@ export function MapaComparativo({
                 const menorLinha = calc.menorPorLinha.get(linha.insumoId);
                 return (
                   <TableRow key={linha.insumoId} className="hover:bg-muted/50">
-                    <TableCell className="px-3 text-detalhe">
+                    <TableCell className="px-3 text-center text-detalhe">
                       <span className="font-medium">{linha.insumoNome}</span>
                       {linha.insumoCodigo ? (
                         <span className="ml-2 codigo-doc text-muted-foreground">
@@ -382,7 +395,7 @@ export function MapaComparativo({
             )}
 
             <TableRow className="sticky bottom-0 border-t border-border bg-surface shadow-[inset_0_1px_0_var(--color-border)] hover:bg-surface">
-              <TableCell className="px-3 text-detalhe font-medium">
+              <TableCell className="px-3 text-center text-detalhe font-medium">
                 Total
               </TableCell>
               <TableCell className="px-3" />
@@ -415,7 +428,7 @@ export function MapaComparativo({
               {editavel ? <TableCell className="px-3" /> : null}
             </TableRow>
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       {editavel ? (

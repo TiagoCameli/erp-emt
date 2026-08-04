@@ -17,6 +17,7 @@ import { Anexos } from "@/components/canonicos/anexos";
 import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
 import {
   ApprovalBar,
+  CelulaVazia,
   ConfirmDialog,
   MoneyText,
   StatusBadge,
@@ -25,7 +26,6 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
-  formatarBRL,
   formatarData,
   formatarMesAno,
   formatarQuantidade,
@@ -367,16 +367,16 @@ export function OrdemDetalheView({
               </Dado>
               <Dado rotulo="Criada em">{formatarData(ordem.criadoEm)}</Dado>
               <Dado rotulo="Categoria do custo">
-                {ordem.categoriaNome ?? "-"}
+                {ordem.categoriaNome ?? <CelulaVazia />}
               </Dado>
               <Dado rotulo="Condição de pagamento">
-                {ordem.condicaoPagamentoDescricao ?? "-"}
+                {ordem.condicaoPagamentoDescricao ?? <CelulaVazia />}
               </Dado>
               <Dado rotulo="Cotação de origem">
                 {ordem.cotacaoNumero ? (
                   <span className="codigo-doc">{ordem.cotacaoNumero}</span>
                 ) : (
-                  "-"
+                  <CelulaVazia />
                 )}
               </Dado>
               <Dado rotulo="Valor total">
@@ -408,9 +408,11 @@ export function OrdemDetalheView({
                   />
                   <span className="text-legenda text-muted-foreground">
                     Vence em{" "}
-                    {ordem.lancamento.dataVencimento
-                      ? formatarData(ordem.lancamento.dataVencimento)
-                      : "-"}
+                    {ordem.lancamento.dataVencimento ? (
+                      formatarData(ordem.lancamento.dataVencimento)
+                    ) : (
+                      <CelulaVazia />
+                    )}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -442,9 +444,12 @@ export function OrdemDetalheView({
             <div className="overflow-hidden rounded-md border border-border">
               <table className="w-full text-detalhe">
                 <thead>
+                  {/* Centralizado é o padrão de tabela do app (ver DataTable);
+                      só dinheiro, quantidade, total, percentual e horas vão à
+                      direita. */}
                   <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-medium">Insumo</th>
-                    <th className="px-3 py-2 text-left font-medium">
+                    <th className="px-3 py-2 text-center font-medium">Insumo</th>
+                    <th className="px-3 py-2 text-center font-medium">
                       Centro de custo
                     </th>
                     <th className="px-3 py-2 text-right font-medium">Qtd.</th>
@@ -460,7 +465,7 @@ export function OrdemDetalheView({
                       key={item.id}
                       className="border-b border-border last:border-0"
                     >
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-center">
                         {item.insumoNome}
                         {item.unidade ? (
                           <span className="text-muted-foreground">
@@ -469,26 +474,28 @@ export function OrdemDetalheView({
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2">{item.centroCustoNome}</td>
+                      <td className="px-3 py-2 text-center">
+                        {item.centroCustoNome}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {formatarQuantidade(item.quantidade)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarBRL(item.precoUnitario)}
+                      <td className="px-3 py-2 text-right">
+                        <MoneyText valor={item.precoUnitario} />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarBRL(item.subtotal)}
+                      <td className="px-3 py-2 text-right">
+                        <MoneyText valor={item.subtotal} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td className="px-3 py-2" colSpan={4}>
+                    <td className="px-3 py-2 text-center" colSpan={4}>
                       Total
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {formatarBRL(ordem.valorTotal)}
+                    <td className="px-3 py-2 text-right">
+                      <MoneyText valor={ordem.valorTotal} />
                     </td>
                   </tr>
                 </tfoot>
@@ -507,8 +514,8 @@ export function OrdemDetalheView({
                 <table className="w-full text-detalhe">
                   <thead>
                     <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-left font-medium">Nº</th>
-                      <th className="px-3 py-2 text-left font-medium">
+                      <th className="px-3 py-2 text-center font-medium">Nº</th>
+                      <th className="px-3 py-2 text-center font-medium">
                         Vencimento
                       </th>
                       <th className="px-3 py-2 text-right font-medium">
@@ -522,30 +529,30 @@ export function OrdemDetalheView({
                         key={parcela.numeroParcela}
                         className="border-b border-border last:border-b-0"
                       >
-                        <td className="px-3 py-2 tabular-nums">
+                        <td className="px-3 py-2 text-center tabular-nums">
                           {parcela.numeroParcela}
                         </td>
-                        <td className="px-3 py-2 tabular-nums">
+                        <td className="px-3 py-2 text-center tabular-nums">
                           {formatarData(parcela.dataVencimento)}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {formatarBRL(parcela.valor)}
+                        <td className="px-3 py-2 text-right">
+                          <MoneyText valor={parcela.valor} />
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="bg-surface font-semibold">
-                      <td className="px-3 py-2" colSpan={2}>
+                      <td className="px-3 py-2 text-center" colSpan={2}>
                         Soma das parcelas
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarBRL(
-                          ordem.parcelas.reduce(
+                      <td className="px-3 py-2 text-right">
+                        <MoneyText
+                          valor={ordem.parcelas.reduce(
                             (soma, parcela) => soma + parcela.valor,
                             0,
-                          ),
-                        )}
+                          )}
+                        />
                       </td>
                     </tr>
                   </tfoot>

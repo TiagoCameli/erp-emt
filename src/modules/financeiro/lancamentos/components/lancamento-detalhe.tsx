@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  CelulaVazia,
   Combobox,
   ConfirmDialog,
   MoneyText,
@@ -404,9 +405,9 @@ export function LancamentoDetalheView({
                 {ROTULO_TIPO_LANCAMENTO[lancamento.tipo]}
               </Dado>
               <Dado rotulo="Fornecedor">
-                {lancamento.fornecedorNome ?? "-"}
+                {lancamento.fornecedorNome ?? <CelulaVazia />}
               </Dado>
-              <Dado rotulo="Categoria">{lancamento.categoriaNome ?? "-"}</Dado>
+              <Dado rotulo="Categoria">{lancamento.categoriaNome ?? <CelulaVazia />}</Dado>
               <Dado
                 rotulo="Forma de pagamento"
                 legenda={
@@ -415,7 +416,7 @@ export function LancamentoDetalheView({
                     : null
                 }
               >
-                {lancamento.formaPagamentoNome ?? "-"}
+                {lancamento.formaPagamentoNome ?? <CelulaVazia />}
               </Dado>
               {/* Vale para os dois casos: no avulso a condição é a do próprio
                   lançamento, no de OC é a da ordem de origem. A legenda diz de
@@ -428,7 +429,7 @@ export function LancamentoDetalheView({
                     : null
                 }
               >
-                {lancamento.condicaoPagamentoDescricao ?? "-"}
+                {lancamento.condicaoPagamentoDescricao ?? <CelulaVazia />}
               </Dado>
               <Dado rotulo="Data da compra">
                 {formatarData(lancamento.dataCompra)}
@@ -456,9 +457,11 @@ export function LancamentoDetalheView({
                 {formatarData(lancamento.criadoEm)}
               </Dado>
               <Dado rotulo="Vencimento">
-                {lancamento.dataVencimento
-                  ? formatarData(lancamento.dataVencimento)
-                  : "-"}
+                {lancamento.dataVencimento ? (
+                  formatarData(lancamento.dataVencimento)
+                ) : (
+                  <CelulaVazia />
+                )}
               </Dado>
               <Dado rotulo="Valor">
                 <MoneyText valor={lancamento.valor} className="font-semibold" />
@@ -525,19 +528,24 @@ export function LancamentoDetalheView({
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="w-full text-detalhe">
                   <thead>
+                    {/* Centralizado é o padrão de tabela do app (ver
+                        DataTable); só dinheiro, quantidade, total, percentual e
+                        horas vão à direita. */}
                     <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-left font-medium">#</th>
-                      <th className="px-3 py-2 text-left font-medium">
+                      <th className="px-3 py-2 text-center font-medium">#</th>
+                      <th className="px-3 py-2 text-center font-medium">
                         Vencimento
                       </th>
-                      <th className="px-3 py-2 text-left font-medium">
+                      <th className="px-3 py-2 text-center font-medium">
                         Data programada
                       </th>
-                      <th className="px-3 py-2 text-left font-medium">Conta</th>
-                      <th className="px-3 py-2 text-left font-medium">
+                      <th className="px-3 py-2 text-center font-medium">
+                        Conta
+                      </th>
+                      <th className="px-3 py-2 text-center font-medium">
                         Pagamento
                       </th>
-                      <th className="px-3 py-2 text-left font-medium">
+                      <th className="px-3 py-2 text-center font-medium">
                         Status
                       </th>
                       <th className="px-3 py-2 text-right font-medium">
@@ -554,15 +562,17 @@ export function LancamentoDetalheView({
                           key={parcela.id}
                           className="border-b border-border last:border-0"
                         >
-                          <td className="px-3 py-2 tabular-nums">
+                          <td className="px-3 py-2 text-center tabular-nums">
                             {parcela.numeroParcela}
                           </td>
-                          <td className="px-3 py-2 tabular-nums">
-                            {parcela.dataVencimento
-                              ? formatarData(parcela.dataVencimento)
-                              : "-"}
+                          <td className="px-3 py-2 text-center tabular-nums">
+                            {parcela.dataVencimento ? (
+                              formatarData(parcela.dataVencimento)
+                            ) : (
+                              <CelulaVazia />
+                            )}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 text-center">
                             {parcela.dataProgramada ? (
                               <span className="flex flex-col">
                                 <span className="tabular-nums">
@@ -579,25 +589,27 @@ export function LancamentoDetalheView({
                                 ) : null}
                               </span>
                             ) : (
-                              <span className="text-muted-foreground">-</span>
+                              <CelulaVazia />
                             )}
                           </td>
-                          <td className="px-3 py-2">
-                            {parcela.contaBancariaNome ?? "-"}
+                          <td className="px-3 py-2 text-center">
+                            {parcela.contaBancariaNome ?? <CelulaVazia />}
                           </td>
-                          <td className="px-3 py-2 tabular-nums">
-                            {parcela.dataPagamento
-                              ? formatarData(parcela.dataPagamento)
-                              : "-"}
+                          <td className="px-3 py-2 text-center tabular-nums">
+                            {parcela.dataPagamento ? (
+                              formatarData(parcela.dataPagamento)
+                            ) : (
+                              <CelulaVazia />
+                            )}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 text-center">
                             <StatusBadge
                               status={infoParcela.badge}
                               rotulo={infoParcela.rotulo}
                             />
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {formatarBRL(parcela.valor)}
+                          <td className="px-3 py-2 text-right">
+                            <MoneyText valor={parcela.valor} />
                           </td>
                           <td className="px-3 py-2 text-right">
                             {parcela.status === "em_revisao" && podeEditar ? (
@@ -620,12 +632,17 @@ export function LancamentoDetalheView({
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold">
-                      <td className="px-3 py-2" colSpan={5}>
+                      {/* colSpan 6: são 8 colunas (#, vencimento, programada,
+                          conta, pagamento, status, valor, ação). Com 5 o total
+                          caía embaixo de "Status", uma coluna à esquerda do
+                          dinheiro que ele soma. */}
+                      <td className="px-3 py-2 text-center" colSpan={6}>
                         Total
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarBRL(lancamento.valor)}
+                      <td className="px-3 py-2 text-right">
+                        <MoneyText valor={lancamento.valor} />
                       </td>
+                      <td className="px-3 py-2" />
                     </tr>
                   </tfoot>
                 </table>
@@ -649,13 +666,12 @@ export function LancamentoDetalheView({
                 <table className="w-full text-detalhe">
                   <thead>
                     <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-left font-medium">
+                      <th className="px-3 py-2 text-center font-medium">
                         Centro de custo
                       </th>
                       <th className="px-3 py-2 text-right font-medium">
                         Valor
                       </th>
-                      <th className="px-3 py-2 text-right font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -664,7 +680,7 @@ export function LancamentoDetalheView({
                         key={rateio.id}
                         className="border-b border-border last:border-0"
                       >
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 text-center">
                           {rateio.centroCustoCodigo ? (
                             <span className="codigo-doc mr-1.5">
                               {rateio.centroCustoCodigo}
@@ -672,17 +688,19 @@ export function LancamentoDetalheView({
                           ) : null}
                           {rateio.centroCustoNome}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {formatarBRL(rateio.valor)}
+                        <td className="px-3 py-2 text-right">
+                          <MoneyText valor={rateio.valor} />
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold">
-                      <td className="px-3 py-2">Total do rateio</td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarBRL(somaRateios)}
+                      <td className="px-3 py-2 text-center">
+                        Total do rateio
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <MoneyText valor={somaRateios} />
                       </td>
                     </tr>
                   </tfoot>
