@@ -6,6 +6,7 @@ import { MoreHorizontal, Plus, Tags } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  BarraFiltrosConfiguravel,
   colunaNumero,
   ConfirmDialog,
   DataTable,
@@ -23,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { BarraFiltrosConfiguravel } from "@/modules/cadastros/_shared/barra-filtros-configuravel";
 import { CLASSE_COR_GRUPO } from "@/modules/cadastros/_shared/insumo-grupos";
 import { alternarAtivo, excluir } from "@/modules/cadastros/categorias/actions";
 import type {

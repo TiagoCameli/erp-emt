@@ -30,7 +30,7 @@ function SecaoDre({
       <TableRow className="bg-surface hover:bg-surface">
         <TableCell
           colSpan={2}
-          className="py-2 text-detalhe font-semibold text-foreground uppercase tracking-wide"
+          className="py-2 text-center text-detalhe font-semibold text-foreground uppercase tracking-wide"
         >
           {titulo}
         </TableCell>
@@ -38,7 +38,7 @@ function SecaoDre({
       {linhas.length > 0 ? (
         linhas.map((linha) => (
           <TableRow key={`${titulo}-${linha.categoriaId ?? "sem"}`}>
-            <TableCell className="py-2 text-detalhe text-foreground">
+            <TableCell className="py-2 text-center text-detalhe text-foreground">
               {linha.categoria}
             </TableCell>
             <TableCell className="py-2 text-right">
@@ -50,14 +50,14 @@ function SecaoDre({
         <TableRow>
           <TableCell
             colSpan={2}
-            className="py-2 text-detalhe text-muted-foreground"
+            className="py-2 text-center text-detalhe text-muted-foreground"
           >
             Sem lançamentos no mês
           </TableCell>
         </TableRow>
       )}
       <TableRow className="border-t hover:bg-transparent">
-        <TableCell className="py-2 text-detalhe font-medium text-foreground">
+        <TableCell className="py-2 text-center text-detalhe font-medium text-foreground">
           {rotuloTotal}
         </TableCell>
         <TableCell className="py-2 text-right">
@@ -80,7 +80,9 @@ export function DreTabela({ dre }: DreTabelaProps) {
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="h-9 px-3 text-detalhe font-medium text-muted-foreground">
+            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+                dinheiro, quantidade, total, percentual e horas vão à direita. */}
+            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
               Categoria
             </TableHead>
             <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
@@ -102,7 +104,7 @@ export function DreTabela({ dre }: DreTabelaProps) {
             rotuloTotal="Total de despesas"
           />
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell className="py-2.5 text-corpo font-semibold text-foreground">
+            <TableCell className="py-2.5 text-center text-corpo font-semibold text-foreground">
               Resultado do mês
             </TableCell>
             <TableCell className="py-2.5 text-right">

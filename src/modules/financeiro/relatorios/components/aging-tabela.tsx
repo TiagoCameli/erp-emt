@@ -20,7 +20,9 @@ export function AgingTabela({ aging }: AgingTabelaProps) {
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="h-9 px-3 text-detalhe font-medium text-muted-foreground">
+            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+                dinheiro, quantidade, total, percentual e horas vão à direita. */}
+            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
               Faixa de vencimento
             </TableHead>
             <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
@@ -34,7 +36,7 @@ export function AgingTabela({ aging }: AgingTabelaProps) {
         <TableBody className="[&_td]:px-3">
           {aging.aPagar.map((faixa, indice) => (
             <TableRow key={faixa.faixa}>
-              <TableCell className="py-2 text-detalhe text-foreground">
+              <TableCell className="py-2 text-center text-detalhe text-foreground">
                 {faixa.rotulo}
               </TableCell>
               <TableCell className="py-2 text-right">
@@ -49,7 +51,7 @@ export function AgingTabela({ aging }: AgingTabelaProps) {
             </TableRow>
           ))}
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell className="py-2 text-detalhe font-semibold text-foreground">
+            <TableCell className="py-2 text-center text-detalhe font-semibold text-foreground">
               Total
             </TableCell>
             <TableCell className="py-2 text-right">

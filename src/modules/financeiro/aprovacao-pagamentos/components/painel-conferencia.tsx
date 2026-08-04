@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  CelulaVazia,
   MoneyText,
   StatusBadge,
   Trilha,
@@ -29,7 +30,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  formatarBRL,
   formatarData,
   formatarDataHora,
   formatarMesAno,
@@ -251,11 +251,11 @@ export function PainelConferencia({
                     )}
                   </Linha>
                   <Linha rotulo="Fornecedor">
-                    {lancamento.fornecedorNome ?? "-"}
+                    {lancamento.fornecedorNome ?? <CelulaVazia />}
                   </Linha>
                   <Linha rotulo="Descrição">{lancamento.descricao}</Linha>
                   <Linha rotulo="Categoria do custo">
-                    {lancamento.categoriaNome ?? "-"}
+                    {lancamento.categoriaNome ?? <CelulaVazia />}
                   </Linha>
                   <Linha rotulo="Valor do lançamento">
                     <MoneyText valor={lancamento.valor} />
@@ -284,19 +284,25 @@ export function PainelConferencia({
                     {formatarDataHora(lancamento.criadoEm)}
                   </Linha>
                   <Linha rotulo="Data da compra / NF">
-                    {lancamento.dataCompra
-                      ? formatarData(lancamento.dataCompra)
-                      : "-"}
+                    {lancamento.dataCompra ? (
+                      formatarData(lancamento.dataCompra)
+                    ) : (
+                      <CelulaVazia />
+                    )}
                   </Linha>
                   <Linha rotulo="Mês de referência">
-                    {lancamento.mesCompetencia
-                      ? formatarMesAno(lancamento.mesCompetencia)
-                      : "-"}
+                    {lancamento.mesCompetencia ? (
+                      formatarMesAno(lancamento.mesCompetencia)
+                    ) : (
+                      <CelulaVazia />
+                    )}
                   </Linha>
                   <Linha rotulo="Vencimento desta parcela">
-                    {parcela.dataVencimento
-                      ? formatarData(parcela.dataVencimento)
-                      : "-"}
+                    {parcela.dataVencimento ? (
+                      formatarData(parcela.dataVencimento)
+                    ) : (
+                      <CelulaVazia />
+                    )}
                   </Linha>
                   <Linha rotulo="Data programada">
                     {parcela.dataProgramada
@@ -309,10 +315,10 @@ export function PainelConferencia({
               <Secao titulo="Pagamento">
                 <div className="rounded-md border border-border bg-surface px-3 py-2">
                   <Linha rotulo="Forma">
-                    {parcela.formaPagamentoNome ?? "-"}
+                    {parcela.formaPagamentoNome ?? <CelulaVazia />}
                   </Linha>
                   <Linha rotulo="Condição">
-                    {lancamento.condicaoPagamentoDescricao ?? "-"}
+                    {lancamento.condicaoPagamentoDescricao ?? <CelulaVazia />}
                   </Linha>
                 </div>
               </Secao>
@@ -321,12 +327,17 @@ export function PainelConferencia({
                 <div className="overflow-hidden rounded-md border border-border">
                   <table className="w-full text-detalhe">
                     <thead className="bg-surface">
+                      {/* Centralizado é o padrão de tabela do app (ver
+                          DataTable); só dinheiro, quantidade, total, percentual
+                          e horas vão à direita. */}
                       <tr className="border-b border-border text-legenda text-muted-foreground">
-                        <th className="px-3 py-1.5 text-left font-medium">#</th>
-                        <th className="px-3 py-1.5 text-left font-medium">
+                        <th className="px-3 py-1.5 text-center font-medium">
+                          #
+                        </th>
+                        <th className="px-3 py-1.5 text-center font-medium">
                           Vencimento
                         </th>
-                        <th className="px-3 py-1.5 text-left font-medium">
+                        <th className="px-3 py-1.5 text-center font-medium">
                           Status
                         </th>
                         <th className="px-3 py-1.5 text-right font-medium">
@@ -347,7 +358,7 @@ export function PainelConferencia({
                                 : "border-b border-border last:border-0"
                             }
                           >
-                            <td className="px-3 py-1.5 tabular-nums">
+                            <td className="px-3 py-1.5 text-center tabular-nums">
                               {linha.numeroParcela}
                               {ehEsta ? (
                                 <span className="ml-1.5 text-legenda text-primary">
@@ -355,19 +366,21 @@ export function PainelConferencia({
                                 </span>
                               ) : null}
                             </td>
-                            <td className="px-3 py-1.5 tabular-nums">
-                              {linha.dataVencimento
-                                ? formatarData(linha.dataVencimento)
-                                : "-"}
+                            <td className="px-3 py-1.5 text-center tabular-nums">
+                              {linha.dataVencimento ? (
+                                formatarData(linha.dataVencimento)
+                              ) : (
+                                <CelulaVazia />
+                              )}
                             </td>
-                            <td className="px-3 py-1.5">
+                            <td className="px-3 py-1.5 text-center">
                               <StatusBadge
                                 status={info.badge}
                                 rotulo={info.rotulo}
                               />
                             </td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">
-                              {formatarBRL(linha.valor)}
+                            <td className="px-3 py-1.5 text-right">
+                              <MoneyText valor={linha.valor} />
                             </td>
                           </tr>
                         );
@@ -406,7 +419,7 @@ export function PainelConferencia({
                     <table className="w-full text-detalhe">
                       <thead className="bg-surface">
                         <tr className="border-b border-border text-legenda text-muted-foreground">
-                          <th className="px-3 py-1.5 text-left font-medium">
+                          <th className="px-3 py-1.5 text-center font-medium">
                             Insumo
                           </th>
                           <th className="px-3 py-1.5 text-right font-medium">
@@ -426,7 +439,7 @@ export function PainelConferencia({
                             key={item.id}
                             className="border-b border-border last:border-0"
                           >
-                            <td className="px-3 py-1.5">
+                            <td className="px-3 py-1.5 text-center">
                               {item.insumoNome}
                               <span className="block text-legenda text-muted-foreground">
                                 {item.centroCustoNome}
@@ -436,11 +449,11 @@ export function PainelConferencia({
                               {formatarQuantidade(item.quantidade)}
                               {item.unidade ? ` ${item.unidade}` : ""}
                             </td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">
-                              {formatarBRL(item.precoUnitario)}
+                            <td className="px-3 py-1.5 text-right">
+                              <MoneyText valor={item.precoUnitario} />
                             </td>
-                            <td className="px-3 py-1.5 text-right tabular-nums">
-                              {formatarBRL(item.subtotal)}
+                            <td className="px-3 py-1.5 text-right">
+                              <MoneyText valor={item.subtotal} />
                             </td>
                           </tr>
                         ))}

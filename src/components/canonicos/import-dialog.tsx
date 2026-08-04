@@ -289,20 +289,25 @@ export function ImportDialog({
                 <div className="max-h-56 overflow-y-auto rounded-md border border-border">
                   <Table>
                     <TableHeader>
+                      {/* Centralizado é o padrão de tabela do app (ver
+                          DataTable); só dinheiro, quantidade, total, percentual
+                          e horas vão à direita, e aqui não há nenhum deles. */}
                       <TableRow>
-                        <TableHead className="h-8 w-20 text-legenda">
+                        <TableHead className="h-8 w-20 text-center text-legenda">
                           Linha
                         </TableHead>
-                        <TableHead className="h-8 text-legenda">Erros</TableHead>
+                        <TableHead className="h-8 text-center text-legenda">
+                          Erros
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {validacao.invalidas.map((linhaInvalida) => (
                         <TableRow key={linhaInvalida.linha}>
-                          <TableCell className="py-1.5 font-mono text-legenda tabular-nums">
+                          <TableCell className="py-1.5 text-center font-mono text-legenda tabular-nums">
                             {linhaInvalida.linha}
                           </TableCell>
-                          <TableCell className="py-1.5 text-legenda text-destructive">
+                          <TableCell className="py-1.5 text-center text-legenda text-destructive">
                             {linhaInvalida.erros.join("; ")}
                           </TableCell>
                         </TableRow>

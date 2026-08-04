@@ -58,8 +58,11 @@ export function MatrizRecursosAcoes({
     >
       <table className="w-full border-collapse text-detalhe">
         <thead className="sticky top-0 z-10 bg-surface">
+          {/* Centralizado é o padrão de tabela do app (ver DataTable); aqui não
+              há dinheiro, quantidade, total, percentual nem horas, então nada
+              vai à direita. */}
           <tr>
-            <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+            <th className="px-3 py-2 text-center font-medium text-muted-foreground">
               Recurso
             </th>
             {ACOES.map((acao) => (
@@ -78,14 +81,14 @@ export function MatrizRecursosAcoes({
               <tr className="border-t border-border bg-surface/60">
                 <td
                   colSpan={ACOES.length + 1}
-                  className="px-3 py-1.5 text-legenda font-semibold tracking-wide text-muted-foreground uppercase"
+                  className="px-3 py-1.5 text-center text-legenda font-semibold tracking-wide text-muted-foreground uppercase"
                 >
                   {modulo.nome}
                 </td>
               </tr>
               {recursosDoModulo(modulo.id).map((recurso) => (
                 <tr key={recurso.id} className="border-t border-border">
-                  <td className="px-3 py-1.5 whitespace-nowrap">
+                  <td className="px-3 py-1.5 text-center whitespace-nowrap">
                     {recurso.nome}
                   </td>
                   {ACOES.map((acao) => {
@@ -104,11 +107,15 @@ export function MatrizRecursosAcoes({
                             aria-label={`${recurso.nome}: ${ROTULOS_ACOES[acao]}`}
                           />
                         ) : (
+                          // Mesmo travessão da CelulaVazia, mas sem o
+                          // aria-label dela: aqui o vazio não é "não
+                          // informado", é "essa ação não existe nesse
+                          // recurso", e são dezenas de células por tela.
                           <span
                             className="text-muted-foreground/40"
                             aria-hidden="true"
                           >
-                            -
+                            —
                           </span>
                         )}
                       </td>

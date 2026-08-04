@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import {
+  BarraFiltrosConfiguravel,
   ConfirmDialog,
   EmptyState,
   FiltroBusca,
@@ -37,7 +38,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { BarraFiltrosConfiguravel } from "@/modules/cadastros/_shared/barra-filtros-configuravel";
 import { alternarAtivo } from "@/modules/cadastros/centros-custo/actions";
 import type { NoCentroCusto } from "@/modules/cadastros/centros-custo/queries";
 import {

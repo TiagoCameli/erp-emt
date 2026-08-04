@@ -91,7 +91,15 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
   {
     accessorKey: "status",
     header: "Status",
-    size: 230,
+    // Cabe o badge mais largo desta tela em uma linha, mais o px-3 da célula:
+    // "Pendente de aprovação" mede 154px com o px-2 do Badge, então 154 + 24 =
+    // 178. Mesma régua de Usuários e de Lançamentos, que chegaram em 160 porque
+    // o badge mais largo delas mede 131; aqui dá 180 porque o rótulo desta
+    // status machine é o mais comprido do app. Era 230, a largura dos DOIS
+    // badges lado a lado, numa tabela que já rola na horizontal. Com os dois o
+    // flex-wrap manda "Pago sem nota" para a linha de baixo, e o naoTruncar
+    // garante que ele apareça inteiro: é ele que diz que falta a nota fiscal.
+    size: 180,
     meta: { naoTruncar: true },
     cell: ({ row }) => {
       const info = infoStatusOC(row.original.status);
@@ -129,7 +137,11 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
     meta: { ocultaPorPadrao: true },
   }),
   colunaTexto<OrdemLista>("cotacaoNumero", "Cotação de origem", {
-    size: 160,
+    // Cabeçalho de novo, e o mais apertado deles: "Cotação de origem" (118) mais
+    // a seta (14), o gap (4) e o px-3 (24) pede 160,2px. Em 160 faltava esse
+    // décimo de pixel e o Chrome já elidia dois caracteres: a coluna dizia
+    // "Cotação de orig..." enquanto a célula (COT-2026-0001, 124) sobrava espaço.
+    size: 170,
     meta: { ocultaPorPadrao: true },
     cell: ({ row }) =>
       row.original.cotacaoNumero ? (

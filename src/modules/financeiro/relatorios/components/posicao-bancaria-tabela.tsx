@@ -31,10 +31,12 @@ export function PosicaoBancariaTabela({ posicao }: PosicaoBancariaTabelaProps) {
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="h-9 px-3 text-detalhe font-medium text-muted-foreground">
+            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+                dinheiro, quantidade, total, percentual e horas vão à direita. */}
+            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
               Conta
             </TableHead>
-            <TableHead className="h-9 px-3 text-detalhe font-medium text-muted-foreground">
+            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
               Banco
             </TableHead>
             <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
@@ -54,10 +56,10 @@ export function PosicaoBancariaTabela({ posicao }: PosicaoBancariaTabelaProps) {
         <TableBody className="[&_td]:px-3">
           {posicao.contas.map((conta) => (
             <TableRow key={conta.contaId}>
-              <TableCell className="py-2 text-detalhe text-foreground">
+              <TableCell className="py-2 text-center text-detalhe text-foreground">
                 {conta.nome}
               </TableCell>
-              <TableCell className="py-2 text-detalhe text-muted-foreground">
+              <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
                 {rotuloBanco(conta.banco)}
               </TableCell>
               <TableCell className="py-2 text-right">
@@ -83,7 +85,7 @@ export function PosicaoBancariaTabela({ posicao }: PosicaoBancariaTabelaProps) {
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
             <TableCell
               colSpan={2}
-              className="py-2 text-detalhe font-semibold text-foreground"
+              className="py-2 text-center text-detalhe font-semibold text-foreground"
             >
               Total
             </TableCell>

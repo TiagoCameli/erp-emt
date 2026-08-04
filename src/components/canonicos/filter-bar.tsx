@@ -7,6 +7,17 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
+import { MenuFiltros } from "@/components/canonicos/menu-filtros";
+import {
+  escreverPreferenciasTabela,
+  lerPreferenciasTabela,
+  preferenciasVazias,
+} from "@/components/canonicos/preferencias-tabela";
+import {
+  buscarPreferenciaTabela,
+  limparPreferenciaTabela,
+  salvarPreferenciaTabela,
+} from "@/modules/_shared/preferencias-tabela/actions";
 import { cn } from "@/lib/utils";
 
 /** Sentinela interna do Radix Select para a opção "todos" (valor vazio é proibido). */
@@ -352,6 +363,183 @@ export function FiltroValor({
         placeholder="até"
         className="h-8 w-[6.5rem] text-detalhe tabular-nums"
       />
+    </div>
+  );
+}
+
+/**
+ * Um filtro da BarraFiltrosConfiguravel. Mesmo contrato do `filtros` do
+ * DataTable (`FiltroConfiguravel`), de propósito: a tela que troca de layout não
+ * reescreve a lista de filtros.
+ */
+export interface FiltroDaBarra {
+  /** Identificador estável, usado na preferência salva (ex. "tipo"). */
+  id: string;
+  /** Nome no menu "Filtros". */
+  rotulo: string;
+  elemento: React.ReactNode;
+  /** Filtro que não pode ser escondido (a busca principal da tela). */
+  fixo?: boolean;
+  /** Nasce escondido: o usuário liga no menu "Filtros" se quiser. */
+  ocultoPorPadrao?: boolean;
+  /** Tem valor escolhido agora? Usado para limpar ao esconder. */
+  temValor?: boolean;
+  /** Chamado quando o filtro é escondido com valor, para não filtrar às cegas. */
+  onLimpar?: () => void;
+}
+
+export interface BarraFiltrosConfiguravelProps {
+  /**
+   * Identifica a barra na preferência do usuário. Use um id PRÓPRIO, diferente
+   * do `idTabela` de qualquer DataTable da mesma tela: a preferência é um
+   * registro só por chave, e compartilhar a chave apagaria as colunas salvas
+   * (esta barra grava a partir de `preferenciasVazias()`, ver alternar).
+   */
+  idTabela: string;
+  filtros: FiltroDaBarra[];
+}
+
+/**
+ * Barra de filtros com menu "Filtros" para a tela que NÃO tem um DataTable onde
+ * o `filtros` da tabela possa morar: a árvore de centros de custo (não é tabela)
+ * e as categorias (uma tabela por grupo de insumo, então nenhuma delas é "a"
+ * tabela da tela). Sem isto o filtro novo nasceria visível nessas duas, e doze
+ * filtros abertos de uma vez é uma parede, não uma ferramenta.
+ *
+ * Mesmo contrato, mesmo menu e mesma persistência do DataTable: a escolha de
+ * quem mostra e quem esconde vive no banco, por usuário, e esconder filtro
+ * preenchido limpa o valor dele. Tela com um DataTable só continua passando os
+ * filtros pelo `filtros` dele; esta barra é para as outras duas.
+ */
+export function BarraFiltrosConfiguravel({
+  idTabela,
+  filtros,
+}: BarraFiltrosConfiguravelProps) {
+  const [escolha, setEscolha] = React.useState<Record<string, boolean>>({});
+
+  const idsFiltros = React.useMemo(
+    () => filtros.map((filtro) => filtro.id),
+    [filtros],
+  );
+
+  /**
+   * Fila das chamadas de servidor, para o save do "esconder" e o delete do
+   * "voltou ao padrão" não correrem soltos. Dois cliques seguidos no menu (que
+   * fica aberto de propósito) disparam os dois: sem ordem, o delete pode chegar
+   * antes do save e a preferência que a pessoa acabou de desfazer volta viva no
+   * próximo carregamento. É a mesma garantia que o DataTable dá com a fila dele.
+   */
+  const refFila = React.useRef<Promise<void> | null>(null);
+
+  const enfileirar = React.useCallback((tarefa: () => Promise<void>) => {
+    const anterior = refFila.current;
+    const emVoo = anterior === null ? tarefa() : anterior.then(tarefa, tarefa);
+    // Falha de gravação não pode virar unhandled rejection nem travar a fila: a
+    // preferência é conforto, e a Server Action já loga o erro no servidor.
+    const encerrada: Promise<void> = emVoo
+      .catch(() => undefined)
+      .then(() => {
+        // Só a última da fila libera, senão a próxima acha a fila vazia e
+        // atropela uma tarefa que ainda está no ar.
+        if (refFila.current === encerrada) refFila.current = null;
+      });
+    refFila.current = encerrada;
+  }, []);
+
+  // Só o que está marcado nasce escondido; o resto segue visível.
+  const ocultosPorPadrao = React.useMemo<Record<string, boolean>>(() => {
+    const padrao: Record<string, boolean> = {};
+    for (const filtro of filtros) {
+      if (filtro.ocultoPorPadrao === true && filtro.fixo !== true) {
+        padrao[filtro.id] = false;
+      }
+    }
+    return padrao;
+  }, [filtros]);
+
+  // Hidrata depois da montagem. Vem do banco, por usuário, para seguir a pessoa
+  // em qualquer máquina (máquina compartilhada de escritório é comum na EMT).
+  React.useEffect(() => {
+    let ativo = true;
+    void buscarPreferenciaTabela(idTabela).then((bruto) => {
+      if (!ativo) return;
+      const salvo = lerPreferenciasTabela(bruto, [], idsFiltros);
+      if (!salvo) return;
+      setEscolha(salvo.filtros);
+    });
+    return () => {
+      ativo = false;
+    };
+    // idsFiltros é estável por tela; lê uma vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idTabela]);
+
+  function visivel(id: string): boolean {
+    // Mesma regra do DataTable: filtro preenchido aparece sempre, mesmo se o
+    // padrão da tela ou a escolha do usuário o esconderia (link compartilhado
+    // com filtro na URL). Esconder na mão limpa o valor, então o filtro volta a
+    // obedecer o padrão no clique seguinte.
+    const filtro = filtros.find((f) => f.id === id);
+    if (filtro?.temValor === true) return true;
+    return escolha[id] ?? ocultosPorPadrao[id] ?? true;
+  }
+
+  /**
+   * Liga ou desliga um filtro. Desligar filtro com valor LIMPA o valor: filtro
+   * ativo e invisível é a pior combinação possível, porque a lista aparece
+   * filtrada e ninguém vê por quê.
+   */
+  function alternar(id: string) {
+    const filtro = filtros.find((f) => f.id === id);
+    if (!filtro || filtro.fixo) return;
+
+    const visivelAgora = visivel(id);
+    const proximos = { ...escolha, [id]: !visivelAgora };
+    setEscolha(proximos);
+    if (visivelAgora && filtro.temValor) filtro.onLimpar?.();
+
+    // Volta ao padrão da tela quando nada mais diverge: não deixa lixo salvo.
+    const divergentes = Object.entries(proximos).filter(
+      ([chave, valor]) => valor !== (ocultosPorPadrao[chave] ?? true),
+    );
+    if (divergentes.length === 0) {
+      enfileirar(() => limparPreferenciaTabela(idTabela));
+      return;
+    }
+    // Parte da preferência neutra do canônico e só troca os filtros: a barra não
+    // tem coluna nem linha para guardar, e campo novo do formato (altura de
+    // linha, por exemplo) entra aqui pelo padrão, sem esta tela precisar saber.
+    enfileirar(() =>
+      salvarPreferenciaTabela(
+        idTabela,
+        escreverPreferenciasTabela({
+          ...preferenciasVazias(),
+          filtros: proximos,
+        }),
+      ),
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+      <div className="flex flex-1 flex-wrap items-center gap-2">
+        {filtros
+          .filter((filtro) => visivel(filtro.id))
+          .map((filtro) => (
+            <React.Fragment key={filtro.id}>{filtro.elemento}</React.Fragment>
+          ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <MenuFiltros
+          filtros={filtros.map((filtro) => ({
+            id: filtro.id,
+            rotulo: filtro.rotulo,
+            fixo: filtro.fixo,
+            visivel: visivel(filtro.id),
+          }))}
+          onAlternar={alternar}
+        />
+      </div>
     </div>
   );
 }
