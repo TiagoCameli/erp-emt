@@ -610,6 +610,24 @@ export function LancamentoDetalheView({
                           </td>
                           <td className="px-3 py-2 text-right">
                             <MoneyText valor={parcela.valor} />
+                            {/* Desconto só aparece quando existe: linha extra em
+                                toda parcela viraria ruído numa coluna de
+                                dinheiro. Mostra a conta feita porque é o líquido
+                                que saiu da conta bancária. */}
+                            {parcela.desconto > 0 ? (
+                              <span className="block text-legenda text-muted-foreground">
+                                desconto{" "}
+                                <MoneyText
+                                  valor={parcela.desconto}
+                                  className="inline"
+                                />
+                                , líquido{" "}
+                                <MoneyText
+                                  valor={parcela.valorLiquido}
+                                  className="inline"
+                                />
+                              </span>
+                            ) : null}
                           </td>
                           <td className="px-3 py-2 text-right">
                             {parcela.status === "em_revisao" && podeEditar ? (

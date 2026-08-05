@@ -381,6 +381,23 @@ export function PainelConferencia({
                             </td>
                             <td className="px-3 py-1.5 text-right">
                               <MoneyText valor={linha.valor} />
+                              {/* Só quando houve desconto: em parcela paga com
+                                  abatimento, o valor da linha não é o que saiu
+                                  da conta, e quem confere precisa ver os dois. */}
+                              {linha.desconto > 0 ? (
+                                <span className="block text-legenda text-muted-foreground">
+                                  desconto{" "}
+                                  <MoneyText
+                                    valor={linha.desconto}
+                                    className="inline"
+                                  />
+                                  , líquido{" "}
+                                  <MoneyText
+                                    valor={linha.valorLiquido}
+                                    className="inline"
+                                  />
+                                </span>
+                              ) : null}
                             </td>
                           </tr>
                         );

@@ -21,14 +21,28 @@ const uuidSchema = z.uuid();
 const dataSchema = z.iso.date();
 
 /**
+ * Desconto do pagamento: dinheiro, então nunca negativo e no teto do
+ * NUMERIC(14,2). O "não pode passar do valor da parcela" NÃO é checado aqui de
+ * propósito: quem sabe o valor da parcela é o banco (a Server Action não pode
+ * confiar no valor que o cliente mandou), e lá existem as duas barreiras, a
+ * recusa da fn_pagar_parcela e o check da tabela.
+ */
+const descontoSchema = z.number().min(0).max(999999999999.99);
+
+/**
  * Registra o pagamento de uma parcela via RPC. A_pagar exige parcela já
  * aprovada (a regra é validada no banco). Repassa a mensagem de erro do
  * banco direto para o toast. Sem anexo de comprovante nesta fase.
+ *
+ * `desconto` é o abatimento concedido pelo credor no ato do pagamento, em
+ * reais: sai do valor que a conta bancária paga, sem mexer no valor devido da
+ * parcela. Omitido ou zero, o pagamento é exatamente o de antes.
  */
 export async function pagarParcela(
   id: string,
   contaBancariaId: string,
   dataPagamento: string,
+  desconto = 0,
 ): Promise<ResultadoAcao> {
   try {
     await exigirPermissao(RECURSO, "criar");
@@ -45,11 +59,15 @@ export async function pagarParcela(
   const dataValida = dataSchema.safeParse(dataPagamento);
   if (!dataValida.success) return { erro: "Informe a data do pagamento" };
 
+  const descontoValido = descontoSchema.safeParse(desconto);
+  if (!descontoValido.success) return { erro: "Desconto inválido" };
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_pagar_parcela", {
     p_parcela_id: idValido.data,
     p_conta_id: contaValida.data,
     p_data_pagamento: dataValida.data,
+    p_desconto: descontoValido.data,
   });
 
   if (error) {

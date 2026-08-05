@@ -10,6 +10,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputMoeda,
   MoneyText,
   SecaoFormulario,
 } from "@/components/canonicos";
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
+import { paraNumero } from "@/modules/financeiro/lancamentos/schemas";
 import {
   ROTULO_BANCO,
   type BancoConta,
@@ -57,6 +59,10 @@ function rotuloConta(conta: ContaBancariaOpcao): string {
 
  * Ao pagar, fn_pagar_parcela propaga os anexos do lançamento para cá, então o
  * pagamento termina com o comprovante e a papelada da cadeia.
+ *
+ * Desconto é opcional e sai do que a conta bancária paga, sem mexer no valor
+ * devido da parcela. O rodapé mostra o líquido ANTES de confirmar, porque é ele
+ * que vai bater com o extrato do banco.
  */
 export function PagarParcelaDrawer({
   aberto,
@@ -69,19 +75,33 @@ export function PagarParcelaDrawer({
 }: PagarParcelaDrawerProps) {
   const [contaId, setContaId] = React.useState("");
   const [dataPagamento, setDataPagamento] = React.useState(dataHojeISO());
+  const [desconto, setDesconto] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
-  // Ao abrir o drawer, zera a conta e volta a data para hoje. Ajuste de estado
-  // durante o render (padrão React) na transição de fechado para aberto, sem
-  // efeito: o reset acontece antes da pintura, sem render em cascata.
+  // Ao abrir o drawer, zera a conta e o desconto e volta a data para hoje.
+  // Ajuste de estado durante o render (padrão React) na transição de fechado
+  // para aberto, sem efeito: o reset acontece antes da pintura, sem render em
+  // cascata. Zerar o desconto aqui é obrigatório: desconto de um pagamento
+  // vazando para o próximo tiraria dinheiro que ninguém abateu.
   const [estavaAberto, setEstavaAberto] = React.useState(aberto);
   if (aberto && !estavaAberto) {
     setEstavaAberto(true);
     setContaId("");
     setDataPagamento(dataHojeISO());
+    setDesconto("");
   } else if (!aberto && estavaAberto) {
     setEstavaAberto(false);
   }
+
+  // Campo vazio é desconto zero, não erro: ele é opcional.
+  const descontoInformado = desconto.trim() !== "";
+  const descontoNumero = descontoInformado ? paraNumero(desconto) : 0;
+  const descontoValido =
+    Number.isFinite(descontoNumero) &&
+    descontoNumero >= 0 &&
+    (parcela === null || descontoNumero <= parcela.valor);
+  const liquido =
+    parcela && descontoValido ? parcela.valor - descontoNumero : null;
 
   async function aoEnviar(evento: React.FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -92,8 +112,26 @@ export function PagarParcelaDrawer({
       return;
     }
 
+    if (descontoInformado && !Number.isFinite(descontoNumero)) {
+      toast.error("Informe o desconto como número (ex: 24.600,00)");
+      return;
+    }
+    if (descontoNumero < 0) {
+      toast.error("O desconto não pode ser negativo");
+      return;
+    }
+    if (descontoNumero > parcela.valor) {
+      toast.error("O desconto não pode ser maior que o valor da parcela");
+      return;
+    }
+
     setSalvando(true);
-    const resultado = await pagarParcela(parcela.id, contaId, dataPagamento);
+    const resultado = await pagarParcela(
+      parcela.id,
+      contaId,
+      dataPagamento,
+      descontoNumero,
+    );
     setSalvando(false);
 
     if ("erro" in resultado) {
@@ -114,11 +152,28 @@ export function PagarParcelaDrawer({
       descricao="Informe a conta bancária e a data do pagamento desta parcela"
       rodape={
         <div className="flex w-full items-center justify-between gap-4">
+          {/* O que o operador precisa ver antes de confirmar: sem desconto, o
+              valor; com desconto, a conta feita, porque é o líquido que vai
+              sair da conta e bater com o extrato do banco. */}
           <div className="text-detalhe text-muted-foreground">
-            Valor{" "}
-            <span className="font-semibold text-foreground">
-              <MoneyText valor={parcela?.valor ?? null} className="inline" />
-            </span>
+            {descontoNumero > 0 && liquido !== null ? (
+              <>
+                Valor{" "}
+                <MoneyText valor={parcela?.valor ?? null} className="inline" />{" "}
+                menos desconto{" "}
+                <MoneyText valor={descontoNumero} className="inline" /> ={" "}
+                <span className="font-semibold text-foreground">
+                  <MoneyText valor={liquido} className="inline" />
+                </span>
+              </>
+            ) : (
+              <>
+                Valor{" "}
+                <span className="font-semibold text-foreground">
+                  <MoneyText valor={parcela?.valor ?? null} className="inline" />
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -132,7 +187,7 @@ export function PagarParcelaDrawer({
             <Button
               type="submit"
               form={ID_FORM}
-              disabled={salvando || !parcela}
+              disabled={salvando || !parcela || !descontoValido}
             >
               {salvando ? (
                 <>
@@ -240,6 +295,29 @@ export function PagarParcelaDrawer({
             type="date"
             value={dataPagamento}
             onChange={(evento) => setDataPagamento(evento.target.value)}
+            disabled={salvando}
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="pagamento-desconto"
+          rotulo="Desconto"
+          largura="medio"
+          ajuda="Abatimento concedido pelo credor neste pagamento. Deixe vazio se não houve. Não altera o valor devido da parcela."
+          erro={
+            descontoInformado && !descontoValido
+              ? !Number.isFinite(descontoNumero)
+                ? "Informe um número (ex: 24.600,00)"
+                : descontoNumero < 0
+                  ? "O desconto não pode ser negativo"
+                  : "O desconto não pode ser maior que o valor da parcela"
+              : undefined
+          }
+        >
+          <InputMoeda
+            id="pagamento-desconto"
+            valor={desconto}
+            onValorChange={setDesconto}
             disabled={salvando}
           />
         </CampoFormulario>

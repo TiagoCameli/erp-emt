@@ -1,6 +1,10 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  movimentoPorContaEmCentavos,
+  saldoAtualDaConta,
+} from "@/modules/financeiro/contas-bancarias/saldo";
 import type {
   BancoConta,
   TipoConta,
@@ -26,71 +30,71 @@ export interface ContaLista {
  * Cálculo do saldo atual de cada conta:
  *   saldoAtual = saldo_inicial + soma do movimento das parcelas PAGAS desta conta
  *
- * Uma parcela entra no cálculo quando, e só quando:
- *   - status = 'pago'
- *   - conta_bancaria_id aponta para esta conta
+ * A soma sai do BANCO, agregada por `fn_rel_posicao_bancaria`, nunca de uma
+ * varredura das parcelas somada aqui. Isso não é preferência de estilo: o
+ * PostgREST corta a resposta em 1.000 linhas SEM ERRO NENHUM, e a carga da
+ * BR-364 cria 1.696 parcelas pagas. Somando no Node, a coluna "Saldo atual"
+ * ignoraria em silêncio umas 696 saídas, mostraria saldo MAIS ALTO do que a
+ * conta tem e discordaria de Relatórios > Posição bancária. É justamente esta
+ * coluna que é conferida contra o extrato do banco.
  *
- * O sinal do movimento vem do tipo do lançamento dono da parcela:
- *   - a_receber: entra somando   (+valor)  dinheiro que entrou na conta
- *   - a_pagar:   entra subtraindo (-valor)  dinheiro que saiu da conta
+ * A RPC devolve no máximo duas linhas por conta (uma por tipo de lançamento),
+ * então o volume de linhas não cresce com o número de pagamentos e o teto de
+ * 1.000 nunca é alcançado. É a mesma função que Posição bancária lê, e é a
+ * função do banco (não o TypeScript) o contrato compartilhado entre as duas
+ * telas: elas não têm como divergir.
  *
- * Parcela sem conta_bancaria_id ou em qualquer status diferente de 'pago'
- * não afeta saldo nenhum. Os valores do banco são NUMERIC(14,2); somamos em
- * centavos (inteiros) para não acumular erro de ponto flutuante e só dividimos
- * por 100 no fim.
+ * O que a RPC soma é `valor_liquido` (valor menos desconto), nunca `valor`: de
+ * uma parcela paga com desconto só saiu da conta o líquido. Ela também deixa
+ * fora lançamento cancelado, com o mesmo critério das outras fn_rel_*.
+ *
+ * O sinal do movimento vem do tipo do lançamento: a_receber soma (entrou),
+ * a_pagar subtrai (saiu). Parcela sem conta_bancaria_id ou em qualquer status
+ * diferente de 'pago' não entra na RPC e não afeta saldo nenhum.
+ *
+ * A listagem traz conta ativa e inativa, porque dinheiro parado em conta
+ * desativada continua existindo; a RPC cobre as duas do mesmo jeito. O sinal e
+ * a aritmética em centavos moram em ./saldo.ts, que tem teste.
  */
 export async function listarContas(): Promise<ContaLista[]> {
   const supabase = await createClient();
 
-  const [contasResultado, parcelasResultado] = await Promise.all([
+  const [contasResultado, movimentosResultado] = await Promise.all([
     supabase
       .from("contas_bancarias")
       .select("id, nome, banco, agencia, conta, tipo, saldo_inicial, ativo")
       .order("nome"),
-    supabase
-      .from("lancamento_parcelas")
-      .select("conta_bancaria_id, valor, lancamentos(tipo)")
-      .eq("status", "pago")
-      .not("conta_bancaria_id", "is", null),
+    supabase.rpc("fn_rel_posicao_bancaria"),
   ]);
 
   if (contasResultado.error) {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
-  if (parcelasResultado.error) {
+  if (movimentosResultado.error) {
     throw new Error("Não foi possível calcular o saldo das contas");
   }
 
-  // Movimento por conta, somado em centavos para precisão exata.
-  const movimentoCentavos = new Map<string, number>();
-  for (const parcela of parcelasResultado.data ?? []) {
-    const contaId = parcela.conta_bancaria_id;
-    const tipo = parcela.lancamentos?.tipo;
-    if (!contaId || !tipo) continue;
+  // Movimento por conta, em centavos, a partir das linhas já agregadas.
+  const movimentoCentavos = movimentoPorContaEmCentavos(
+    (movimentosResultado.data ?? []).map((linha) => ({
+      contaBancariaId: linha.conta_bancaria_id,
+      tipo: linha.tipo,
+      total: linha.total,
+    })),
+  );
 
-    const sinal = tipo === "a_receber" ? 1 : -1;
-    const centavos = Math.round(Number(parcela.valor) * 100) * sinal;
-    movimentoCentavos.set(
-      contaId,
-      (movimentoCentavos.get(contaId) ?? 0) + centavos,
-    );
-  }
-
-  return (contasResultado.data ?? []).map((conta) => {
-    const inicialCentavos = Math.round(Number(conta.saldo_inicial) * 100);
-    const atualCentavos =
-      inicialCentavos + (movimentoCentavos.get(conta.id) ?? 0);
-
-    return {
-      id: conta.id,
-      nome: conta.nome,
-      banco: conta.banco as BancoConta,
-      agencia: conta.agencia,
-      conta: conta.conta,
-      tipo: conta.tipo as TipoConta,
-      saldoInicial: Number(conta.saldo_inicial),
-      saldoAtual: atualCentavos / 100,
-      ativo: conta.ativo,
-    };
-  });
+  return (contasResultado.data ?? []).map((conta) => ({
+    id: conta.id,
+    nome: conta.nome,
+    banco: conta.banco as BancoConta,
+    agencia: conta.agencia,
+    conta: conta.conta,
+    tipo: conta.tipo as TipoConta,
+    saldoInicial: Number(conta.saldo_inicial),
+    saldoAtual: saldoAtualDaConta(
+      conta.saldo_inicial,
+      movimentoCentavos.get(conta.id) ?? 0,
+    ),
+    ativo: conta.ativo,
+  }));
 }

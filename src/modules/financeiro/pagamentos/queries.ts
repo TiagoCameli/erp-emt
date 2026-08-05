@@ -40,7 +40,12 @@ export interface ParcelaPaga {
   fornecedorNome: string;
   contaNome: string;
   dataPagamento: string | null;
+  /** Valor devido da parcela. O desconto não o reescreve. */
   valor: number;
+  /** Desconto concedido no pagamento. Zero quando não houve. */
+  desconto: number;
+  /** Valor menos desconto: o que saiu da conta bancária. */
+  valorLiquido: number;
 }
 
 /**
@@ -192,7 +197,7 @@ export async function listarParcelasPagas({
   let consulta = supabase
     .from("lancamento_parcelas")
     .select(
-      `id, numero_parcela, valor, data_pagamento,
+      `id, numero_parcela, valor, desconto, valor_liquido, data_pagamento,
        contas_bancarias(nome, banco),
        lancamentos!inner(
          numero, descricao,
@@ -269,6 +274,8 @@ export async function listarParcelasPagas({
       : "-",
     dataPagamento: parcela.data_pagamento,
     valor: parcela.valor,
+    desconto: parcela.desconto ?? 0,
+    valorLiquido: parcela.valor_liquido ?? parcela.valor,
   }));
 
   return { itens, total: count ?? 0 };
