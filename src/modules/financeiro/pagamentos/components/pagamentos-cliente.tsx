@@ -660,7 +660,25 @@ export function PagamentosCliente({
         header: "Valor",
         size: 130,
         meta: { alinharDireita: true },
-        cell: ({ row }) => <MoneyText valor={row.original.valor} />,
+        // O desconto entra como linha extra DENTRO da célula de valor, e só
+        // quando existe. Coluna própria apareceria vazia em quase todo
+        // pagamento e mexeria no conjunto de colunas salvo nas preferências.
+        cell: ({ row }) => (
+          <>
+            <MoneyText valor={row.original.valor} />
+            {row.original.desconto > 0 ? (
+              <span className="block text-legenda text-muted-foreground">
+                desconto{" "}
+                <MoneyText valor={row.original.desconto} className="inline" />,
+                líquido{" "}
+                <MoneyText
+                  valor={row.original.valorLiquido}
+                  className="inline"
+                />
+              </span>
+            ) : null}
+          </>
+        ),
       },
       ...(podeEstornar
         ? [
@@ -803,7 +821,11 @@ export function PagamentosCliente({
         aberto={estornoAberto}
         onAbertoChange={setEstornoAberto}
         titulo="Estornar este pagamento?"
-        descricao="O valor volta para o saldo da conta bancária e a parcela retorna ao estado anterior ao pagamento."
+        descricao={
+          parcelaEstorno && parcelaEstorno.desconto > 0
+            ? `O líquido de ${formatarBRL(parcelaEstorno.valorLiquido)} volta para o saldo da conta bancária, o desconto de ${formatarBRL(parcelaEstorno.desconto)} é apagado e a parcela volta a valer ${formatarBRL(parcelaEstorno.valor)} em aberto.`
+            : "O valor volta para o saldo da conta bancária e a parcela retorna ao estado anterior ao pagamento."
+        }
         textoConfirmar="Estornar"
         variante="destrutivo"
         onConfirmar={confirmarEstorno}

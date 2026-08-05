@@ -1699,6 +1699,7 @@ export type Database = {
           data_programada: string | null
           data_programada_origem: string | null
           data_vencimento: string | null
+          desconto: number
           id: string
           lancamento_id: string
           numero_parcela: number
@@ -1707,6 +1708,7 @@ export type Database = {
           status: string
           updated_at: string
           valor: number
+          valor_liquido: number
         }
         Insert: {
           aprovado_em?: string | null
@@ -1720,6 +1722,7 @@ export type Database = {
           data_programada?: string | null
           data_programada_origem?: string | null
           data_vencimento?: string | null
+          desconto?: number
           id?: string
           lancamento_id: string
           numero_parcela?: number
@@ -1741,6 +1744,7 @@ export type Database = {
           data_programada?: string | null
           data_programada_origem?: string | null
           data_vencimento?: string | null
+          desconto?: number
           id?: string
           lancamento_id?: string
           numero_parcela?: number
@@ -3248,6 +3252,7 @@ export type Database = {
         Args: {
           p_conta_id: string
           p_data_pagamento: string
+          p_desconto?: number
           p_parcela_id: string
         }
         Returns: undefined

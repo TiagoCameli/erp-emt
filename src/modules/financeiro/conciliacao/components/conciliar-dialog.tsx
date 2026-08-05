@@ -40,9 +40,12 @@ export interface ConciliarDialogProps {
 
 /**
  * Escolha da parcela paga para conciliar com a transação selecionada. As
- * sugestões (mesma conta, mesmo valor, data de pagamento próxima) são buscadas
- * pelo pai e recebidas por prop; aqui o usuário escolhe uma e concilia,
+ * sugestões (mesma conta, mesmo valor LÍQUIDO, data de pagamento próxima) são
+ * buscadas pelo pai e recebidas por prop; aqui o usuário escolhe uma e concilia,
  * repassando o erro do banco ao toast quando falhar.
+ *
+ * O número em destaque de cada sugestão é o líquido (valor menos desconto), que
+ * é o que o extrato do banco mostra e o que o banco de dados compara.
  */
 export function ConciliarDialog({
   aberto,
@@ -114,7 +117,7 @@ export function ConciliarDialog({
           <EmptyState
             icone={Link2}
             titulo="Nenhuma parcela compatível"
-            descricao="Não há parcela paga na mesma conta, com o mesmo valor e data de pagamento próxima. Confira se a parcela já foi paga no financeiro."
+            descricao="Não há parcela paga na mesma conta, com o mesmo valor líquido (valor menos desconto) e data de pagamento próxima. Confira se a parcela já foi paga no financeiro."
             className="border-none bg-transparent"
           />
         ) : (
@@ -152,9 +155,22 @@ export function ConciliarDialog({
                         ? ` · paga em ${formatarData(parcela.dataPagamento)}`
                         : ""}
                     </p>
+                    {/* Com desconto, o valor da parcela não é o que o banco
+                        debitou. Sem esta linha, uma parcela de R$ 500.000,00
+                        sugerida para um débito de R$ 475.400,00 pareceria erro
+                        de sugestão. */}
+                    {parcela.desconto > 0 ? (
+                      <p className="text-legenda text-muted-foreground">
+                        valor{" "}
+                        <MoneyText valor={parcela.valor} className="inline" />{" "}
+                        menos desconto{" "}
+                        <MoneyText valor={parcela.desconto} className="inline" />
+                      </p>
+                    ) : null}
                   </div>
+                  {/* O líquido, que é o número que casou com o extrato. */}
                   <MoneyText
-                    valor={parcela.valor}
+                    valor={parcela.valorLiquido}
                     className="shrink-0 text-detalhe font-medium"
                   />
                 </button>

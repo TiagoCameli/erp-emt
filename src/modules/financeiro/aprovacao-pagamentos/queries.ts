@@ -362,6 +362,10 @@ export interface PagamentoDireto {
   numeroParcela: number;
   totalParcelas: number;
   valor: number;
+  /** Desconto concedido no pagamento. Zero quando não houve. */
+  desconto: number;
+  /** Valor menos desconto: o que saiu da conta bancária. */
+  valorLiquido: number;
   dataVencimento: string | null;
   /** Quando o dinheiro saiu de fato. Cartão já nasce com ela preenchida. */
   dataPagamento: string | null;
@@ -428,7 +432,8 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
   const { data, error } = await supabase
     .from("lancamento_parcelas")
     .select(
-      `id, numero_parcela, valor, data_vencimento, data_pagamento, status,
+      `id, numero_parcela, valor, desconto, valor_liquido,
+       data_vencimento, data_pagamento, status,
        lancamento_id, conta_bancaria_id, conferido_em,
        usuarios!lancamento_parcelas_conferido_por_fkey(nome),
        contas_bancarias(nome),
@@ -487,6 +492,8 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
       numeroParcela: parcela.numero_parcela,
       totalParcelas: parcelasPorLancamento.get(parcela.lancamento_id) ?? 1,
       valor: parcela.valor,
+      desconto: parcela.desconto ?? 0,
+      valorLiquido: parcela.valor_liquido ?? parcela.valor,
       dataVencimento: parcela.data_vencimento,
       dataPagamento: parcela.data_pagamento,
       status: comoStatusParcela(parcela.status),

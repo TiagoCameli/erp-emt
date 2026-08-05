@@ -79,6 +79,8 @@ const direto: PagamentoDireto = {
   numeroParcela: 1,
   totalParcelas: 1,
   valor: 250.5,
+  desconto: 0,
+  valorLiquido: 250.5,
   dataVencimento: "2026-08-14",
   dataPagamento: "2026-08-14",
   status: "pago",

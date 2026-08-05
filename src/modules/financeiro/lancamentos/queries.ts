@@ -120,6 +120,10 @@ export interface ParcelaLancamento {
   id: string;
   numeroParcela: number;
   valor: number;
+  /** Desconto concedido no pagamento. Zero quando não houve. */
+  desconto: number;
+  /** Valor menos desconto: o que saiu da conta bancária. */
+  valorLiquido: number;
   dataVencimento: string | null;
   status: StatusParcela;
   /** Data em que o pagamento está autorizado (definida na aprovação). */
@@ -566,7 +570,8 @@ export async function buscarLancamento(
        formas_pagamento(nome, tipo),
        fornecedores(razao_social, nome_fantasia),
        lancamento_parcelas(
-         id, numero_parcela, valor, data_vencimento, status,
+         id, numero_parcela, valor, desconto, valor_liquido,
+         data_vencimento, status,
          data_programada, data_programada_origem,
          conta_bancaria_id, data_pagamento,
          contas_bancarias(nome)
@@ -586,6 +591,8 @@ export async function buscarLancamento(
       id: parcela.id,
       numeroParcela: parcela.numero_parcela,
       valor: parcela.valor,
+      desconto: parcela.desconto ?? 0,
+      valorLiquido: parcela.valor_liquido ?? parcela.valor,
       dataVencimento: parcela.data_vencimento,
       status: parcela.status as StatusParcela,
       dataProgramada: parcela.data_programada,

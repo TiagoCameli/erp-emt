@@ -86,6 +86,8 @@ function pagamento(
     numeroParcela: 1,
     totalParcelas: 1,
     valor: 250.5,
+    desconto: 0,
+    valorLiquido: 250.5,
     dataVencimento: "2026-08-14",
     dataPagamento: "2026-08-14",
     status: "pago",
@@ -145,6 +147,37 @@ describe("PagamentosDiretos", () => {
     ).not.toThrow();
 
     expect(screen.getByText("Diesel do caminhão pipa")).toBeInTheDocument();
+  });
+
+  it("mostra desconto e líquido só quando houve desconto", () => {
+    // Parcela paga com abatimento: quem confere precisa ver que o valor da
+    // parcela não foi o que saiu da conta, senão a conciliação com o extrato
+    // parece divergência.
+    render(
+      <PagamentosDiretos
+        pagamentos={[
+          pagamento({ valor: 500000, desconto: 24600, valorLiquido: 475400 }),
+        ]}
+        {...PADRAO}
+      />,
+    );
+
+    const linha = screen.getByText("Diesel do caminhão pipa").closest("tr");
+    expect(linha).toHaveTextContent("desconto");
+    expect(linha).toHaveTextContent("24.600,00");
+    expect(linha).toHaveTextContent("475.400,00");
+  });
+
+  it("não escreve desconto quando não houve", () => {
+    render(
+      <PagamentosDiretos
+        pagamentos={[pagamento({ valor: 250.5, desconto: 0, valorLiquido: 250.5 })]}
+        {...PADRAO}
+      />,
+    );
+
+    const linha = screen.getByText("Diesel do caminhão pipa").closest("tr");
+    expect(linha).not.toHaveTextContent("desconto");
   });
 
   it("deixa marcar uma parcela JÁ PAGA, que é o caso principal da aba", async () => {

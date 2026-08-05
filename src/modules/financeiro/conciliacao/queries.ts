@@ -21,6 +21,13 @@ export interface ParcelaVinculada {
   fornecedorNome: string | null;
   numeroParcela: number;
   valor: number;
+  /** Desconto concedido no pagamento. Zero quando não houve. */
+  desconto: number;
+  /**
+   * Valor menos desconto: é ESTE número que o extrato do banco mostra, e é por
+   * ele que a conciliação casa. Igual a `valor` quando não houve desconto.
+   */
+  valorLiquido: number;
   dataPagamento: string | null;
   dataVencimento: string | null;
 }
@@ -92,6 +99,8 @@ interface ParcelaJoin {
   id: string;
   numero_parcela: number;
   valor: number;
+  desconto: number;
+  valor_liquido: number;
   data_pagamento: string | null;
   data_vencimento: string | null;
   lancamentos: {
@@ -123,6 +132,8 @@ function paraParcelaVinculada(parcela: ParcelaJoin): ParcelaVinculada {
     fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
     numeroParcela: parcela.numero_parcela,
     valor: parcela.valor,
+    desconto: parcela.desconto ?? 0,
+    valorLiquido: parcela.valor_liquido ?? parcela.valor,
     dataPagamento: parcela.data_pagamento,
     dataVencimento: parcela.data_vencimento,
   };
@@ -130,7 +141,7 @@ function paraParcelaVinculada(parcela: ParcelaJoin): ParcelaVinculada {
 
 /** Colunas da parcela usadas no select embutido das transações. */
 const SELECT_PARCELA =
-  "id, numero_parcela, valor, data_pagamento, data_vencimento, lancamentos(id, numero, descricao, tipo, fornecedores(razao_social, nome_fantasia))";
+  "id, numero_parcela, valor, desconto, valor_liquido, data_pagamento, data_vencimento, lancamentos(id, numero, descricao, tipo, fornecedores(razao_social, nome_fantasia))";
 
 /**
  * Lista os extratos OFX importados, com a conta, o período e a contagem de
@@ -223,10 +234,16 @@ function diferencaDias(dataA: string, dataB: string): number {
 
 /**
  * Sugere parcelas pagas para conciliar com a transação: mesma conta bancária,
- * valor igual em módulo, sentido coerente (crédito casa com a_receber, débito
+ * LÍQUIDO igual em módulo, sentido coerente (crédito casa com a_receber, débito
  * com a_pagar), pagas (status pago) e ainda não vinculadas a nenhuma
  * transação, com data de pagamento dentro de +/- 3 dias do movimento. Ordena
  * pela proximidade da data de pagamento.
+ *
+ * O casamento é por `valor_liquido`, e não por `valor`, porque é o líquido que
+ * o banco debitou: uma parcela de R$ 500.000,00 paga com R$ 24.600,00 de
+ * desconto aparece no extrato como R$ 475.400,00. Filtrar pelo valor cheio
+ * deixaria essa parcela sem nenhuma sugestão para sempre, e fn_conciliar_transacao
+ * recusaria o vínculo manual dizendo que "o valor diverge".
  */
 export async function sugerirParcelas(
   transacao: Pick<TransacaoLista, "contaBancariaId" | "valor" | "dataMovimento">,
@@ -243,7 +260,7 @@ export async function sugerirParcelas(
     .select(SELECT_PARCELA)
     .eq("status", "pago")
     .eq("conta_bancaria_id", transacao.contaBancariaId)
-    .eq("valor", valorAbsoluto)
+    .eq("valor_liquido", valorAbsoluto)
     .eq("lancamentos.tipo", tipoEsperado)
     .not("data_pagamento", "is", null);
 

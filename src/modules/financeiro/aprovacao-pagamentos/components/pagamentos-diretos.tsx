@@ -665,7 +665,25 @@ export function PagamentosDiretos({
         header: "Valor",
         size: 140,
         meta: { rotulo: "Valor", alinharDireita: true },
-        cell: ({ row }) => <MoneyText valor={row.original.valor} />,
+        // Desconto entra na própria célula do valor e só quando existe: coluna
+        // separada ficaria vazia em quase todo pagamento e mexeria no conjunto
+        // de colunas salvo nas preferências da tabela.
+        cell: ({ row }) => (
+          <>
+            <MoneyText valor={row.original.valor} />
+            {row.original.desconto > 0 ? (
+              <span className="block text-legenda text-muted-foreground">
+                desconto{" "}
+                <MoneyText valor={row.original.desconto} className="inline" />,
+                líquido{" "}
+                <MoneyText
+                  valor={row.original.valorLiquido}
+                  className="inline"
+                />
+              </span>
+            ) : null}
+          </>
+        ),
       },
     );
 
