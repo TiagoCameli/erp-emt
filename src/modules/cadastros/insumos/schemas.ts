@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Schema do formulário de insumo (criação e edição). */
 export const insumoSchema = z.object({
   codigo: z
@@ -15,8 +17,8 @@ export const insumoSchema = z.object({
     .refine((valor) => !/^\d+$/.test(valor), {
       error: "Nome do insumo não pode ser só números",
     }),
-  categoriaId: z.uuid({ error: "Selecione uma categoria" }),
-  unidadeId: z.uuid({ error: "Selecione uma unidade de medida" }),
+  categoriaId: idSchemaCom("Selecione uma categoria"),
+  unidadeId: idSchemaCom("Selecione uma unidade de medida"),
   descricao: z.string().trim().optional().or(z.literal("")),
   ativo: z.boolean().default(true),
 });

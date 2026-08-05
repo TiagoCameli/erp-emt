@@ -1,18 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
 import { mesParaCompetencia } from "@/lib/formatadores";
+import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 
 export type EntidadeCompetencia = "ordem_compra" | "lancamento";
 
 export type ResultadoCompetencia = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /**
  * Altera o mês de referência da OC e do lançamento dela ao mesmo tempo: é um
@@ -27,7 +25,7 @@ export async function alterarMesCompetencia(
   id: string,
   mes: string,
 ): Promise<ResultadoCompetencia> {
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Documento inválido" };
 
   const competencia = /^\d{4}-\d{2}-01$/.test(mes)

@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -17,8 +17,6 @@ const ROTA = "/financeiro/contas-bancarias";
 const TABELA = "contas_bancarias" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
@@ -82,7 +80,7 @@ export async function editarConta(
     return { erro: "Sem permissão para editar contas bancárias" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Conta inválida" };
 
   const validado = contaSchema.safeParse(dados);
@@ -120,7 +118,7 @@ export async function alternarAtivo(
     return { erro: "Sem permissão para editar contas bancárias" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Conta inválida" };
 
   const supabase = await createClient();

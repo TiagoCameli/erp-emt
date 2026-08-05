@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Tipos válidos de categoria financeira (plano de contas gerencial). */
 export const TIPOS_CATEGORIA_FINANCEIRA = ["receita", "despesa"] as const;
 
@@ -23,7 +25,7 @@ export const categoriaFinanceiraSchema = z.object({
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" })
     .max(120, { error: "O nome pode ter no máximo 120 caracteres" }),
   tipo: z.enum(TIPOS_CATEGORIA_FINANCEIRA, { error: "Escolha um tipo válido" }),
-  paiId: z.uuid({ error: "Categoria pai inválida" }).nullable().default(null),
+  paiId: idSchemaCom("Categoria pai inválida").nullable().default(null),
   ativo: z.boolean().default(true),
 });
 

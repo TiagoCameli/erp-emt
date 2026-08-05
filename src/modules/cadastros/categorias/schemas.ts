@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /**
  * Schema da subcategoria de insumo. O tipo antigo (material/peca/oleo/...) saiu
  * com a migration 20260729200001: quem agrupa agora é o grupo, e categoria é a
@@ -11,7 +13,7 @@ export const categoriaSchema = z.object({
     .trim()
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" })
     .max(80, { error: "O nome pode ter no máximo 80 caracteres" }),
-  grupoId: z.uuid({ error: "Escolha o grupo" }),
+  grupoId: idSchemaCom("Escolha o grupo"),
   ativo: z.boolean().default(true),
 });
 

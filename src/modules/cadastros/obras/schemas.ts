@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Status possíveis de uma obra. Igual ao default/check do banco. */
 export const STATUS_OBRA = [
   "planejamento",
@@ -74,7 +76,7 @@ export const obraSchema = z.object({
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" })
     .max(200, { error: "Máximo de 200 caracteres" }),
   numeroContrato: textoOpcional(60),
-  clienteId: z.uuid({ error: "Cliente inválido" }).optional(),
+  clienteId: idSchemaCom("Cliente inválido").optional(),
   rodovia: textoOpcional(40),
   lote: textoOpcional(20),
   uf: ufSchema.optional().or(z.literal("").transform(() => undefined)),
@@ -104,7 +106,7 @@ export const obraFormSchema = z.object({
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" })
     .max(200, { error: "Máximo de 200 caracteres" }),
   numeroContrato: z.string().trim().max(60, { error: "Máximo de 60 caracteres" }),
-  clienteId: z.uuid({ error: "Cliente inválido" }).optional(),
+  clienteId: idSchemaCom("Cliente inválido").optional(),
   rodovia: z.string().trim().max(40, { error: "Máximo de 40 caracteres" }),
   lote: z.string().trim().max(20, { error: "Máximo de 20 caracteres" }),
   uf: z

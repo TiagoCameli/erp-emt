@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -16,8 +16,6 @@ const ROTA = "/cadastros/formas-pagamento";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 const ERRO_NOME_DUPLICADO = "Já existe uma forma de pagamento com este nome";
 
@@ -81,7 +79,7 @@ export async function editarForma(
     return { erro: "Sem permissão para editar formas de pagamento" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Forma de pagamento inválida" };
 
   const validado = formaPagamentoSchema.safeParse(dados);

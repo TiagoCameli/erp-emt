@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -24,8 +24,6 @@ function rotaDetalhe(id: string): string {
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Código do Postgres para violação de unique constraint. */
 const ERRO_UNIQUE = "23505";
@@ -115,7 +113,7 @@ export async function editarPonto(
     return { erro: "Sem permissão para editar pontos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ponto inválido" };
 
   const validado = pontoSchema.safeParse(dados);
@@ -164,7 +162,7 @@ export async function adicionarApontamento(
     return { erro: "Sem permissão para lançar apontamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(pontoId);
+  const idValido = idSchema.safeParse(pontoId);
   if (!idValido.success) return { erro: "Ponto inválido" };
 
   const validado = apontamentoSchema.safeParse(dados);
@@ -211,8 +209,8 @@ export async function editarApontamento(
     return { erro: "Sem permissão para editar apontamentos" };
   }
 
-  const pontoValido = uuidSchema.safeParse(pontoId);
-  const idValido = uuidSchema.safeParse(apontamentoId);
+  const pontoValido = idSchema.safeParse(pontoId);
+  const idValido = idSchema.safeParse(apontamentoId);
   if (!pontoValido.success || !idValido.success) {
     return { erro: "Registro inválido" };
   }
@@ -262,8 +260,8 @@ export async function removerApontamento(
     return { erro: "Sem permissão para remover apontamentos" };
   }
 
-  const pontoValido = uuidSchema.safeParse(pontoId);
-  const idValido = uuidSchema.safeParse(apontamentoId);
+  const pontoValido = idSchema.safeParse(pontoId);
+  const idValido = idSchema.safeParse(apontamentoId);
   if (!pontoValido.success || !idValido.success) {
     return { erro: "Registro inválido" };
   }
@@ -300,7 +298,7 @@ export async function aprovarPonto(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para aprovar pontos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ponto inválido" };
 
   const supabase = await createClient();
@@ -327,7 +325,7 @@ export async function reabrirPonto(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para reabrir pontos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ponto inválido" };
 
   const supabase = await createClient();

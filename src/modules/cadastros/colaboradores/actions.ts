@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -21,8 +21,6 @@ const RECURSO = "cadastros.colaboradores" as const;
 const ROTA = "/cadastros/colaboradores";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /**
  * Converte o ColaboradorInput validado nas colunas da tabela colaboradores.
@@ -105,7 +103,7 @@ export async function editar(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Colaborador inválido" };
 
   const validado = colaboradorSchema.safeParse(dados);
@@ -138,7 +136,7 @@ export async function alternarAtivo(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Colaborador inválido" };
 
   const supabase = await createClient();
@@ -166,7 +164,7 @@ export async function excluir(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "excluir");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Colaborador inválido" };
 
   const motivoLimpo = motivo.trim();

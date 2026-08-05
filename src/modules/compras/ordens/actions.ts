@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -20,8 +20,6 @@ const TABELA = "ordens_compra" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Status em que a OC ainda é editável (sem efeito financeiro). */
 const STATUS_EDITAVEIS = new Set(["rascunho", "pendente_aprovacao"]);
@@ -173,7 +171,7 @@ export async function editarOrdem(
     return { erro: "Sem permissão para editar ordens de compra" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ordem de compra inválida" };
 
   const validado = ordemCompraSchema.safeParse(dados);
@@ -286,7 +284,7 @@ export async function sugerirParcelasPelaCondicao(
     return { erro: "Sem permissão para ver ordens de compra" };
   }
 
-  const condicaoValida = uuidSchema.safeParse(condicaoPagamentoId);
+  const condicaoValida = idSchema.safeParse(condicaoPagamentoId);
   if (!condicaoValida.success) {
     return {
       erro: "Escolha a condição de pagamento antes de gerar as parcelas",
@@ -330,7 +328,7 @@ async function transicionarStatus(
     return { erro: `Sem permissão para esta ação em ordens de compra` };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ordem de compra inválida" };
 
   const supabase = await createClient();
@@ -384,7 +382,7 @@ export async function aprovarOrdem(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para aprovar ordens de compra" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ordem de compra inválida" };
 
   const supabase = await createClient();
@@ -421,7 +419,7 @@ export async function registrarRecebimento(
     };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ordem de compra inválida" };
 
   const validado = recebimentoSchema.safeParse(dados);
@@ -474,7 +472,7 @@ export async function desaprovarOrdem(
     return { erro: "Sem permissão para desaprovar ordens de compra" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ordem de compra inválida" };
 
   const motivoLimpo = motivo.trim();
@@ -516,7 +514,7 @@ export async function cancelarOrdem(
     return { erro: "Sem permissão para cancelar ordens de compra" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ordem de compra inválida" };
 
   const motivoLimpo = motivo.trim();
@@ -553,7 +551,7 @@ export async function excluirOrdemCompra(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para excluir ordens de compra" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Ordem de compra inválida" };
 
   const supabase = await createClient();

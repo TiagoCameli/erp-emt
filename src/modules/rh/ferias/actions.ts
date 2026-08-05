@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { feriasSchema, type FeriasInput } from "@/modules/rh/ferias/schemas";
@@ -14,8 +14,6 @@ const ROTA = "/rh/ferias";
 const TABELA = "rh_ferias" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
@@ -76,7 +74,7 @@ export async function editarFerias(
     return { erro: "Sem permissão para editar férias" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Registro inválido" };
 
   const validado = feriasSchema.safeParse(dados);
@@ -108,7 +106,7 @@ export async function removerFerias(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para excluir férias" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Registro inválido" };
 
   const supabase = await createClient();

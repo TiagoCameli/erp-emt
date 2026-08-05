@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Data, yyyy-MM-dd. */
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -20,7 +22,7 @@ export const ROTULO_STATUS_FERIAS: Record<StatusFerias, string> = {
  */
 export const feriasSchema = z
   .object({
-    colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+    colaboradorId: idSchemaCom("Selecione o colaborador"),
     periodoAquisitivoInicio: z
       .string()
       .trim()
@@ -70,7 +72,7 @@ export type FeriasInput = z.infer<typeof feriasSchema>;
  * react-hook-form; a coerção real é no submit.
  */
 export const feriasFormSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   periodoAquisitivoInicio: z
     .string()
     .trim()

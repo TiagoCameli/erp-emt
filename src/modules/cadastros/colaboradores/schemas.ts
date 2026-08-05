@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Vínculos aceitos no cadastro de colaboradores (RH completo vem na Fase 7). */
 export const VINCULOS = ["clt", "diarista", "terceiro"] as const;
 export type Vinculo = (typeof VINCULOS)[number];
@@ -176,15 +178,15 @@ export const colaboradorSchema = z.object({
     .trim()
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
   cpf: textoOpcional,
-  funcaoId: z.uuid({ error: "Função inválida" }).nullable(),
+  funcaoId: idSchemaCom("Função inválida").nullable(),
   /**
    * Jornada de trabalho (Bloco 4, Task 3). Null = usa a jornada "Padrão EMT"
    * automaticamente, mesmo padrão de nullable de `funcaoId` acima.
    */
-  jornadaId: z.uuid({ error: "Jornada inválida" }).nullable(),
+  jornadaId: idSchemaCom("Jornada inválida").nullable(),
   vinculo: z.enum(VINCULOS, { error: "Selecione um vínculo" }),
-  obraId: z.uuid({ error: "Obra inválida" }).nullable(),
-  centroCustoId: z.uuid({ error: "Centro de custo inválido" }).nullable(),
+  obraId: idSchemaCom("Obra inválida").nullable(),
+  centroCustoId: idSchemaCom("Centro de custo inválido").nullable(),
   dataAdmissao: textoOpcional,
   telefone: textoOpcional,
   ativo: z.boolean().default(true),

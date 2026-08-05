@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { RECURSOS, type Acao } from "@/config/recursos";
 import { erroAcao, logErroServidor } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import {
   exigirPermissao,
   getUsuarioLogado,
@@ -44,8 +44,6 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
     return false;
   }
 }
-
-const uuidSchema = z.uuid();
 
 /**
  * Cadastra um usuário sem depender de email: cria na auth com uma senha
@@ -134,7 +132,7 @@ export async function obterSenhaProvisoria(
   if (!(await checarPermissao("ver"))) {
     return { erro: "Sem permissão para ver a senha provisória" };
   }
-  const idValido = uuidSchema.safeParse(usuarioId);
+  const idValido = idSchema.safeParse(usuarioId);
   if (!idValido.success) return { erro: "Usuário inválido" };
 
   const supabase = await createClient();
@@ -165,7 +163,7 @@ export async function redefinirSenhaUsuario(
   if (!editor || !temPermissao(editor, RECURSO, "editar")) {
     return { erro: "Sem permissão para redefinir senhas" };
   }
-  const idValido = uuidSchema.safeParse(usuarioId);
+  const idValido = idSchema.safeParse(usuarioId);
   if (!idValido.success) return { erro: "Usuário inválido" };
   if (idValido.data === editor.id) {
     return {
@@ -238,7 +236,7 @@ export async function excluirUsuario(
   if (!editor || !temPermissao(editor, RECURSO, "excluir")) {
     return { erro: "Sem permissão para excluir usuários" };
   }
-  const idValido = uuidSchema.safeParse(usuarioId);
+  const idValido = idSchema.safeParse(usuarioId);
   if (!idValido.success) return { erro: "Usuário inválido" };
   if (idValido.data === editor.id) {
     return { erro: "Você não pode excluir a sua própria conta" };
@@ -306,7 +304,7 @@ export async function editarUsuario(
     return { erro: "Sem permissão para editar usuários" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Usuário inválido" };
 
   const validado = editarUsuarioSchema.safeParse(dados);
@@ -359,8 +357,8 @@ export async function aplicarPerfilUsuario(
     return { erro: "Sem permissão para editar usuários" };
   }
 
-  const usuarioValido = uuidSchema.safeParse(usuarioId);
-  const perfilValido = uuidSchema.safeParse(perfilId);
+  const usuarioValido = idSchema.safeParse(usuarioId);
+  const perfilValido = idSchema.safeParse(perfilId);
   if (!usuarioValido.success || !perfilValido.success) {
     return { erro: "Usuário ou perfil inválido" };
   }
@@ -397,7 +395,7 @@ export async function salvarMatrizUsuario(
     return { erro: "Sem permissão para editar usuários" };
   }
 
-  const usuarioValido = uuidSchema.safeParse(usuarioId);
+  const usuarioValido = idSchema.safeParse(usuarioId);
   if (!usuarioValido.success) return { erro: "Usuário inválido" };
 
   const validado = matrizSchema.safeParse(permissoes);

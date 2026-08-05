@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -20,7 +21,6 @@ const TABELA = "funcoes" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
-const uuidSchema = z.uuid();
 const motivoSchema = z.string().trim().min(1);
 
 /** Cria ou edita uma função (cargo). A presença de `id` decide a operação. */
@@ -49,7 +49,7 @@ export async function salvarFuncao(
   const supabase = await createClient();
 
   if (id) {
-    const idValido = uuidSchema.safeParse(id);
+    const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Função inválida" };
 
     const { error } = await supabase
@@ -97,7 +97,7 @@ export async function removerFuncao(
     return { erro: "Sem permissão para excluir funções" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Função inválida" };
 
   const motivoValido = motivoSchema.safeParse(motivo);

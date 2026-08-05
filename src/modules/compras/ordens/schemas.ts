@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { dataHojeISO } from "@/lib/formatadores";
+import { idSchema, idSchemaCom } from "@/lib/id";
 import { paraNumero } from "@/modules/compras/ordens/calculo";
 
 /** R$ 1.234,56 para as mensagens de erro do formulário. */
@@ -85,10 +86,10 @@ function textoOpcional(maximo: number) {
 
 /** Item da OC validado no servidor: tipos já coeridos. */
 export const ocItemSchema = z.object({
-  insumoId: z.uuid({ error: "Insumo inválido" }),
+  insumoId: idSchemaCom("Insumo inválido"),
   quantidade: quantidadeSchema,
   precoUnitario: precoSchema,
-  centroCustoId: z.uuid({ error: "Centro de custo inválido" }),
+  centroCustoId: idSchemaCom("Centro de custo inválido"),
 });
 
 export type OcItemInput = z.infer<typeof ocItemSchema>;
@@ -135,14 +136,14 @@ function emCentavos(valor: number): number {
 /** Schema da OC validado no servidor (criar e editar). */
 export const ordemCompraSchema = z
   .object({
-    fornecedorId: z.uuid({ error: "Fornecedor inválido" }),
-    condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
-    cotacaoId: z.uuid({ error: "Cotação inválida" }).optional(),
+    fornecedorId: idSchemaCom("Fornecedor inválido"),
+    condicaoPagamentoId: idSchemaCom("Escolha a condição de pagamento"),
+    cotacaoId: idSchemaCom("Cotação inválida").optional(),
     /**
      * Obrigatória: o tipo da forma é o que decide se o pagamento passa pela
      * fila de aprovação, nasce aprovado (dinheiro) ou nasce quitado (cartão).
      */
-    formaPagamentoId: z.uuid({ error: "Escolha a forma de pagamento" }),
+    formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
     /** O fato: quando a compra aconteceu. A data de criação é do sistema. */
     dataCompra: dataSchema("Data da compra inválida"),
     /** Mês em que a obra usou o material: define em que mês o custo entra. */
@@ -150,7 +151,7 @@ export const ordemCompraSchema = z
     /** O que foi comprado, em uma linha. Vai para o lançamento financeiro. */
     descricao: descricaoSchema,
     /** Categoria financeira do custo: é ela que classifica a compra no DRE. */
-    categoriaId: z.uuid({ error: "Escolha a categoria do custo" }),
+    categoriaId: idSchemaCom("Escolha a categoria do custo"),
     observacoes: textoOpcional(2000),
     itens: z
       .array(ocItemSchema)
@@ -211,7 +212,7 @@ function casasDecimaisTexto(valor: string): number {
  * que aqui já na tela, antes de bater no servidor.
  */
 export const ocInsumoFormSchema = z.object({
-  insumoId: z.uuid({ error: "Selecione o insumo" }),
+  insumoId: idSchemaCom("Selecione o insumo"),
   quantidade: z
     .string()
     .trim()
@@ -248,7 +249,7 @@ export type OcInsumoFormInput = z.infer<typeof ocInsumoFormSchema>;
  */
 export const ocGrupoCentroCustoFormSchema = z
   .object({
-    centroCustoId: z.uuid({ error: "Selecione o centro de custo" }),
+    centroCustoId: idSchemaCom("Selecione o centro de custo"),
     insumos: z
       .array(ocInsumoFormSchema)
       .min(1, { error: "Adicione ao menos um insumo neste centro de custo" }),
@@ -279,10 +280,10 @@ export type OcGrupoCentroCustoFormInput = z.infer<
  */
 export const ordemCompraFormSchema = z
   .object({
-    fornecedorId: z.uuid({ error: "Selecione o fornecedor" }),
-    condicaoPagamentoId: z.uuid({ error: "Escolha a condição de pagamento" }),
-    cotacaoId: z.uuid().optional(),
-    formaPagamentoId: z.uuid({ error: "Escolha a forma de pagamento" }),
+    fornecedorId: idSchemaCom("Selecione o fornecedor"),
+    condicaoPagamentoId: idSchemaCom("Escolha a condição de pagamento"),
+    cotacaoId: idSchema.optional(),
+    formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
     dataCompra: z
       .string()
       .trim()
@@ -297,7 +298,7 @@ export const ordemCompraFormSchema = z
       .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     /** Mesma trava do servidor: a descrição classifica a compra no DRE. */
     descricao: descricaoSchema,
-    categoriaId: z.uuid({ error: "Selecione a categoria do custo" }),
+    categoriaId: idSchemaCom("Selecione a categoria do custo"),
     observacoes: z
       .string()
       .trim()

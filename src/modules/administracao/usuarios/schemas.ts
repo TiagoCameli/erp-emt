@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { idSchemaCom } from "@/lib/id";
+
 import { ACOES } from "@/config/recursos";
 
 /** Schema do convite de novo usuário. */
@@ -8,7 +10,7 @@ export const convidarUsuarioSchema = z.object({
     .trim()
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
   email: z.email({ error: "Informe um email válido" }),
-  perfilId: z.uuid({ error: "Perfil inválido" }).optional(),
+  perfilId: idSchemaCom("Perfil inválido").optional(),
 });
 
 export type ConvidarUsuarioInput = z.infer<typeof convidarUsuarioSchema>;

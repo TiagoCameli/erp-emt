@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao, logErroServidor } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import type { EventoTrilha } from "@/components/canonicos";
@@ -30,7 +31,6 @@ const ROTAS_AFETADAS = [
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
-const uuidSchema = z.uuid();
 const dataSchema = z.iso.date();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
@@ -73,7 +73,7 @@ function normalizarConta(
   if (contaId === null || contaId === undefined || contaId === "") {
     return { ok: true, valor: undefined };
   }
-  const valida = uuidSchema.safeParse(contaId);
+  const valida = idSchema.safeParse(contaId);
   return valida.success ? { ok: true, valor: valida.data } : { ok: false };
 }
 
@@ -97,7 +97,7 @@ export async function aprovarParcela(
     return { erro: "Sem permissão para aprovar pagamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
   const data = normalizarData(dataProgramada);
@@ -141,7 +141,7 @@ export async function revisarParcela(
     return { erro: "Sem permissão para enviar pagamentos para revisão" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
   const motivoLimpo = motivo.trim();
@@ -181,7 +181,7 @@ export async function reprogramarParcela(
     return { erro: "Sem permissão para reprogramar a data de pagamento" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
   const dataValida = dataSchema.safeParse(dataProgramada);
@@ -229,7 +229,7 @@ export async function aprovarParcelasEmLote(
     return { erro: "Sem permissão para aprovar pagamentos", aprovadas: 0 };
   }
 
-  const idsValidos = z.array(uuidSchema).min(1).safeParse(ids);
+  const idsValidos = z.array(idSchema).min(1).safeParse(ids);
   if (!idsValidos.success) {
     return { erro: "Selecione ao menos um pagamento", aprovadas: 0 };
   }
@@ -287,7 +287,7 @@ export async function revisarParcelasEmLote(
     };
   }
 
-  const idsValidos = z.array(uuidSchema).min(1).safeParse(ids);
+  const idsValidos = z.array(idSchema).min(1).safeParse(ids);
   if (!idsValidos.success) {
     return { erro: "Selecione ao menos um pagamento", revisadas: 0 };
   }
@@ -346,7 +346,7 @@ export async function marcarParcelaConferida(
     return { erro: "Sem permissão para marcar pagamentos como conferidos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
   const supabase = await createClient();
@@ -389,7 +389,7 @@ export async function marcarParcelasConferidasEmLote(
     };
   }
 
-  const idsValidos = z.array(uuidSchema).min(1).safeParse(ids);
+  const idsValidos = z.array(idSchema).min(1).safeParse(ids);
   if (!idsValidos.success) {
     return { erro: "Selecione ao menos um pagamento", marcadas: 0 };
   }
@@ -441,7 +441,7 @@ export async function detalheDaFila(lancamentoId: string): Promise<
     return { erro: "Sem permissão para ver a aprovação de pagamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(lancamentoId);
+  const idValido = idSchema.safeParse(lancamentoId);
   if (!idValido.success) return { erro: "Lançamento inválido" };
 
   const lancamento = await buscarLancamento(idValido.data);

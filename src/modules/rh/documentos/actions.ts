@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -20,8 +20,6 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 
 /** Criação devolve o id: o formulário usa para subir a fila de anexos. */
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
@@ -81,7 +79,7 @@ export async function editarDocumento(
     return { erro: "Sem permissão para editar documentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Documento inválido" };
 
   const validado = documentoSchema.safeParse(dados);
@@ -120,7 +118,7 @@ export async function removerDocumento(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para excluir documentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Documento inválido" };
 
   const supabase = await createClient();

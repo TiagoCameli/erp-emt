@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -22,8 +22,6 @@ const TABELA = "cotacoes" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
@@ -116,7 +114,7 @@ export async function editarCotacao(
     return { erro: "Sem permissão para editar cotações" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Cotação inválida" };
 
   const validado = cotacaoSchema.safeParse(dados);
@@ -159,7 +157,7 @@ export async function adicionarFornecedor(
     return { erro: "Sem permissão para editar cotações" };
   }
 
-  const idValido = uuidSchema.safeParse(cotacaoId);
+  const idValido = idSchema.safeParse(cotacaoId);
   if (!idValido.success) return { erro: "Cotação inválida" };
 
   const validado = fornecedorCotacaoSchema.safeParse(dados);
@@ -216,7 +214,7 @@ export async function removerFornecedor(
     return { erro: "Sem permissão para editar cotações" };
   }
 
-  const idValido = uuidSchema.safeParse(cotacaoFornecedorId);
+  const idValido = idSchema.safeParse(cotacaoFornecedorId);
   if (!idValido.success) return { erro: "Fornecedor da cotação inválido" };
 
   const supabase = await createClient();
@@ -262,7 +260,7 @@ export async function salvarPrecos(
     return { erro: "Sem permissão para editar cotações" };
   }
 
-  const idValido = uuidSchema.safeParse(cotacaoId);
+  const idValido = idSchema.safeParse(cotacaoId);
   if (!idValido.success) return { erro: "Cotação inválida" };
 
   const validado = salvarPrecosSchema.safeParse(precos);
@@ -360,10 +358,10 @@ export async function finalizarCotacao(
     return { erro: "Sem permissão para finalizar cotações" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Cotação inválida" };
 
-  const vencedorValido = uuidSchema.safeParse(vencedorFornecedorId);
+  const vencedorValido = idSchema.safeParse(vencedorFornecedorId);
   if (!vencedorValido.success) {
     return { erro: "Selecione o fornecedor vencedor" };
   }
@@ -468,7 +466,7 @@ export async function cancelarCotacao(
     return { erro: "Sem permissão para cancelar cotações" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Cotação inválida" };
 
   const motivoLimpo = motivo.trim();
@@ -509,7 +507,7 @@ export async function excluirCotacao(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para excluir cotações" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Cotação inválida" };
 
   const supabase = await createClient();

@@ -1,12 +1,11 @@
 "use server";
 
-import { z } from "zod";
 
+import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { proximoMes } from "@/modules/financeiro/relatorios/calculo";
 import { custoPorInsumo } from "@/modules/financeiro/relatorios/queries";
 
-const uuidSchema = z.uuid();
 const MES = /^\d{4}-\d{2}$/;
 
 /**
@@ -25,7 +24,7 @@ export async function insumosDaSubcategoria(
     return { erro: "Sem permissão para ver relatórios" };
   }
 
-  const idValido = uuidSchema.safeParse(categoriaId);
+  const idValido = idSchema.safeParse(categoriaId);
   if (!idValido.success) return { erro: "Subcategoria inválida" };
   if (!MES.test(mes)) return { erro: "Mês inválido" };
 

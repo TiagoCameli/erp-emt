@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { numeroPositivo, paraNumero, valorValido } from "./numero";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Competência completa: 1o dia do mês, yyyy-MM-01. */
 const COMPETENCIA_REGEX = /^\d{4}-\d{2}-01$/;
 /** Data da diária, yyyy-MM-dd. */
@@ -24,8 +26,8 @@ export function formatarCompetencia(competencia: string): string {
  * aqui só confirmamos o formato. Obra é opcional.
  */
 export const diariaSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o diarista" }),
-  obraId: z.uuid({ error: "Obra inválida" }).optional(),
+  colaboradorId: idSchemaCom("Selecione o diarista"),
+  obraId: idSchemaCom("Obra inválida").optional(),
   data: z.string().trim().regex(DATA_REGEX, { error: "Data inválida" }),
   competencia: z
     .string()
@@ -52,7 +54,7 @@ export type DiariaInput = z.infer<typeof diariaSchema>;
  * real é no submit. A competência é derivada da data no submit.
  */
 export const diariaFormSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o diarista" }),
+  colaboradorId: idSchemaCom("Selecione o diarista"),
   obraId: z.string().trim(),
   data: z.string().trim().regex(DATA_REGEX, { error: "Informe a data" }),
   valor: z
@@ -84,7 +86,7 @@ const VENC_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * diárias em aberto do colaborador na competência. Vencimento é opcional.
  */
 export const fecharSchema = z.object({
-  colaboradorId: z.uuid({ error: "Diarista inválido" }),
+  colaboradorId: idSchemaCom("Diarista inválido"),
   competencia: z
     .string()
     .trim()

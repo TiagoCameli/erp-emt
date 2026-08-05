@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { lerEValidarXlsx, type ColunaImportacao } from "@/lib/importacao";
@@ -20,8 +20,6 @@ const ROTA = "/cadastros/clientes";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoImport = { importadas: number } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Linha lida da planilha de importação de clientes. */
 interface LinhaImportCliente {
@@ -133,7 +131,7 @@ export async function editar(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Cliente inválido" };
 
   const validado = clienteSchema.safeParse(dados);
@@ -166,7 +164,7 @@ export async function alternarAtivo(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Cliente inválido" };
 
   const supabase = await createClient();
@@ -194,7 +192,7 @@ export async function excluir(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "excluir");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Cliente inválido" };
 
   const motivoLimpo = motivo.trim();

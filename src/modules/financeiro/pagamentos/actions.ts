@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -17,7 +18,6 @@ const ROTA = "/financeiro/pagamentos";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
-const uuidSchema = z.uuid();
 const dataSchema = z.iso.date();
 
 /**
@@ -50,10 +50,10 @@ export async function pagarParcela(
     return { erro: "Sem permissão para registrar pagamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
-  const contaValida = uuidSchema.safeParse(contaBancariaId);
+  const contaValida = idSchema.safeParse(contaBancariaId);
   if (!contaValida.success) return { erro: "Selecione a conta bancária" };
 
   const dataValida = dataSchema.safeParse(dataPagamento);
@@ -97,7 +97,7 @@ export async function estornarPagamento(
     return { erro: "Sem permissão para estornar pagamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(parcelaId);
+  const idValido = idSchema.safeParse(parcelaId);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
   const supabase = await createClient();
@@ -129,8 +129,8 @@ const valorFiltroSchema = z.number().min(0).max(VALOR_MAXIMO).optional();
  */
 const filtrosPagasSchema = z.object({
   busca: z.string().trim().max(120).optional(),
-  fornecedorId: z.uuid().optional(),
-  contaBancariaId: z.uuid().optional(),
+  fornecedorId: idSchema.optional(),
+  contaBancariaId: idSchema.optional(),
   valorDe: valorFiltroSchema,
   valorAte: valorFiltroSchema,
   vencimentoDe: z.iso.date().optional(),

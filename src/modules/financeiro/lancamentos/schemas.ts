@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchema, idSchemaCom } from "@/lib/id";
+
 /**
  * Schemas do lançamento financeiro manual (a pagar / a receber), com parcelas
  * e rateio por centro de custo.
@@ -88,7 +90,7 @@ export type ParcelaInput = z.infer<typeof parcelaSchema>;
 
 /** Rateio por centro de custo validado no servidor. */
 export const rateioSchema = z.object({
-  centroCustoId: z.uuid({ error: "Centro de custo inválido" }),
+  centroCustoId: idSchemaCom("Centro de custo inválido"),
   valor: valorSchema,
 });
 
@@ -101,24 +103,20 @@ export type RateioInput = z.infer<typeof rateioSchema>;
 export const lancamentoSchema = z
   .object({
     tipo: z.enum(["a_pagar", "a_receber"], { error: "Tipo inválido" }),
-    fornecedorId: z.uuid({ error: "Fornecedor inválido" }).optional(),
-    categoriaId: z.uuid({ error: "Categoria inválida" }).optional(),
+    fornecedorId: idSchemaCom("Fornecedor inválido").optional(),
+    categoriaId: idSchemaCom("Categoria inválida").optional(),
     /**
      * Forma de pagamento: em conta a pagar é ela que decide o caminho (fila de
      * aprovação, direto para Pagamentos ou já quitado no cartão). Opcional no
      * schema porque conta a receber não usa; a tela exige em conta a pagar.
      */
-    formaPagamentoId: z
-      .uuid({ error: "Forma de pagamento inválida" })
-      .optional(),
+    formaPagamentoId: idSchemaCom("Forma de pagamento inválida").optional(),
     /**
      * Condição de pagamento: opcional, é ela que define as parcelas quando o
      * usuário manda gerar. Lançamento sem condição continua válido (parcela
      * única digitada na mão é o caso mais comum).
      */
-    condicaoPagamentoId: z
-      .uuid({ error: "Condição de pagamento inválida" })
-      .optional(),
+    condicaoPagamentoId: idSchemaCom("Condição de pagamento inválida").optional(),
     descricao: z
       .string()
       .trim()
@@ -194,7 +192,7 @@ export type ParcelaFormInput = z.infer<typeof parcelaFormSchema>;
 
 /** Rateio no formulário. Centro de custo + valor como string. */
 export const rateioFormSchema = z.object({
-  centroCustoId: z.uuid({ error: "Selecione o centro de custo" }),
+  centroCustoId: idSchemaCom("Selecione o centro de custo"),
   valor: z
     .string()
     .trim()
@@ -210,11 +208,11 @@ export type RateioFormInput = z.infer<typeof rateioFormSchema>;
 export const lancamentoFormSchema = z
   .object({
     tipo: z.enum(["a_pagar", "a_receber"], { error: "Selecione o tipo" }),
-    fornecedorId: z.uuid().optional(),
-    categoriaId: z.uuid().optional(),
-    formaPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
+    fornecedorId: idSchema.optional(),
+    categoriaId: idSchema.optional(),
+    formaPagamentoId: z.union([z.literal(""), idSchema]).optional(),
     /** Vazio = sem condição, igual ao Combobox quando nada foi escolhido. */
-    condicaoPagamentoId: z.union([z.literal(""), z.uuid()]).optional(),
+    condicaoPagamentoId: z.union([z.literal(""), idSchema]).optional(),
     descricao: z
       .string()
       .trim()

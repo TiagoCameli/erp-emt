@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -24,7 +25,6 @@ const TABELA = "unidades_medida" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
-const uuidSchema = z.uuid();
 const motivoSchema = z.string().trim().min(1);
 
 /** Cria uma unidade de medida. */
@@ -74,7 +74,7 @@ export async function editar(
     return { erro: "Sem permissão para editar unidades de medida" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Unidade inválida" };
 
   const validado = unidadeSchema.safeParse(dados);
@@ -119,7 +119,7 @@ export async function alternarAtivo(
     return { erro: "Sem permissão para editar unidades de medida" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Unidade inválida" };
 
   const supabase = await createClient();
@@ -151,7 +151,7 @@ export async function excluir(
     return { erro: "Sem permissão para excluir unidades de medida" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Unidade inválida" };
 
   const motivoValido = motivoSchema.safeParse(motivo);

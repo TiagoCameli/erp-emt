@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 import type { TipoApontamento } from "@/modules/rh/_shared/formato";
 import {
   numeroOpcionalNaoNegativo,
@@ -44,9 +46,9 @@ const observacaoSchema = z
 
 /** Schema de servidor da criação/edição do ponto. */
 export const pontoSchema = z.object({
-  obraId: z.uuid({ error: "Selecione a obra" }),
+  obraId: idSchemaCom("Selecione a obra"),
   data: dataSchema,
-  encarregadoId: z.uuid({ error: "Encarregado inválido" }).optional(),
+  encarregadoId: idSchemaCom("Encarregado inválido").optional(),
   observacao: observacaoSchema,
 });
 
@@ -54,7 +56,7 @@ export type PontoInput = z.infer<typeof pontoSchema>;
 
 /** Schema do formulário do ponto (client). Encarregado vazio = sem encarregado. */
 export const pontoFormSchema = z.object({
-  obraId: z.uuid({ error: "Selecione a obra" }),
+  obraId: idSchemaCom("Selecione a obra"),
   data: dataSchema,
   encarregadoId: z.string().trim(),
   observacao: z
@@ -84,7 +86,7 @@ export function pontoFormParaInput(dados: PontoFormInput): PontoInput {
 
 /** Schema de servidor do apontamento (tipos já coeridos). */
 export const apontamentoSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   horasNormais: z
     .number({ error: "Horas inválidas" })
     .refine(horasValidas, { error: "As horas normais vão de 0 a 24" }),
@@ -99,7 +101,7 @@ export type ApontamentoInput = z.infer<typeof apontamentoSchema>;
 
 /** Schema do formulário do apontamento (client): horas como string pt-BR. */
 export const apontamentoFormSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   horasNormais: z
     .string()
     .trim()

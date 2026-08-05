@@ -1,6 +1,5 @@
 "use server";
 
-import { z } from "zod";
 
 import {
   hashDoArquivo,
@@ -11,6 +10,7 @@ import {
   validarArquivo,
 } from "@/lib/arquivos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -22,8 +22,6 @@ import {
   listarAnexosDoDocumento,
   type AnexoDoDocumento,
 } from "@/modules/_shared/anexos/queries";
-
-const uuidSchema = z.uuid();
 
 export type ResultadoAnexo = { ok: true } | { erro: string };
 export type ResultadoUrl = { url: string } | { erro: string };
@@ -60,7 +58,7 @@ export async function anexosDoDocumento(
   if (!ehEntidadeAnexo(entidade)) return [];
   const usuario = await getUsuarioLogado();
   if (!temPermissao(usuario, recursoDaEntidade(entidade), "ver")) return [];
-  const idValido = uuidSchema.safeParse(entidadeId);
+  const idValido = idSchema.safeParse(entidadeId);
   if (!idValido.success) return [];
   return listarAnexosDoDocumento(entidade, idValido.data);
 }
@@ -82,7 +80,7 @@ export async function enviarAnexos(
   const entidadeId = String(formData.get("entidadeId") ?? "");
 
   if (!ehEntidadeAnexo(entidade)) return { erro: "Documento inválido" };
-  const idValido = uuidSchema.safeParse(entidadeId);
+  const idValido = idSchema.safeParse(entidadeId);
   if (!idValido.success) return { erro: "Documento inválido" };
   if (!(await podeMexer(entidade, "anexar"))) {
     return { erro: "Sem permissão para anexar neste documento" };
@@ -173,7 +171,7 @@ export async function enviarAnexos(
  * serviço: o bucket não é acessível por client nenhum.
  */
 export async function urlDoAnexo(vinculoId: string): Promise<ResultadoUrl> {
-  const idValido = uuidSchema.safeParse(vinculoId);
+  const idValido = idSchema.safeParse(vinculoId);
   if (!idValido.success) return { erro: "Anexo inválido" };
 
   const supabase = await createClient();
@@ -204,7 +202,7 @@ export async function urlDoAnexo(vinculoId: string): Promise<ResultadoUrl> {
 export async function removerAnexo(
   vinculoId: string,
 ): Promise<ResultadoAnexo> {
-  const idValido = uuidSchema.safeParse(vinculoId);
+  const idValido = idSchema.safeParse(vinculoId);
   if (!idValido.success) return { erro: "Anexo inválido" };
 
   const supabase = await createClient();
