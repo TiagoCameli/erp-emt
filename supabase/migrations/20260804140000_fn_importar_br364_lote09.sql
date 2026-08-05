@@ -26,6 +26,15 @@
 -- uma linha de resumo (tabela='importacao_br364_lote09') com o relatorio
 -- inteiro em dados_depois, para a importacao ter um registro unico e achavel.
 --
+-- DESCONTO (decisao do Tiago, depois de 20260805120001_desconto_no_pagamento):
+-- a parcela paga entra pelo valor CHEIO da planilha (Valor da Parcela) e o
+-- abatimento vai na coluna `desconto`. O que saiu da conta continua sendo o
+-- liquido, agora lido de `valor_liquido` (coluna gerada = valor - desconto), e
+-- por isso os cinco saldos iniciais nao mudam. Sao 5 parcelas com desconto,
+-- R$ 24.615,23 no total, R$ 24.600,00 numa unica de R$ 500.000,00: e esse o
+-- valor a mais que a SOMA DOS VALORES de parcela passa a ter em relacao ao que
+-- de fato foi pago.
+--
 -- Idempotencia: o id de cada lancamento, parcela e rateio e derivado por md5 do
 -- indice da planilha. Rodar duas vezes nao duplica: a segunda passada nao acha
 -- linha nova para inserir.
@@ -88,6 +97,7 @@ declare
   v_orfaos jsonb;
   v_sem_forma jsonb;
   v_desconto jsonb;
+  v_parc_desconto jsonb;
   v_contas jsonb;
   v_banco jsonb;
 begin
@@ -111,8 +121,9 @@ begin
   -- schema temporario: sem isso, "pg_temp." nao resolve na primeira chamada.
   if pg_catalog.pg_my_temp_schema() <> 0 then
     execute 'drop table if exists pg_temp.wrk_lanc, pg_temp.wrk_pag, pg_temp.wrk_slot,'
-         || ' pg_temp.wrk_par, pg_temp.wrk_orfao, pg_temp.wrk_forn, pg_temp.wrk_cat,'
-         || ' pg_temp.wrk_forma, pg_temp.wrk_conta, pg_temp.wrk_imp, pg_temp.wrk_parcela';
+         || ' pg_temp.wrk_par, pg_temp.wrk_orfao, pg_temp.wrk_apelido, pg_temp.wrk_forn,'
+         || ' pg_temp.wrk_cat, pg_temp.wrk_forma, pg_temp.wrk_conta, pg_temp.wrk_imp,'
+         || ' pg_temp.wrk_parcela';
   end if;
 
   select id into v_centro_id
@@ -332,8 +343,33 @@ begin
   end if;
 
   -- --------------------------------------------------------- 6. fornecedores
-  -- Casa por documento (so digitos) e depois por nome normalizado. Nao achou,
-  -- cria. Um nome por fornecedor: a planilha nao tem dois documentos para o
+  -- De-para de nome, decisao do Tiago: a planilha escreve "CBAA ASFALTOS" e o
+  -- ERP tem "CBAA ASFALTOS LTDA", que e o MESMO fornecedor (R$ 1.045.544,85 na
+  -- planilha). Como a planilha nao traz o CNPJ dessa linha e o casamento por
+  -- nome exige nome normalizado identico, sem este de-para a importacao abriria
+  -- um cadastro novo de CBAA e o maior fornecedor da obra ficaria com o
+  -- historico partido em dois. E lista fechada e nominal de proposito: relaxar a
+  -- regra de nome (cortar "LTDA", casar por prefixo) juntaria fornecedor
+  -- diferente por conta propria, e neste lote existem casos vizinhos que NAO sao
+  -- a mesma pessoa (ANTONIO JOSE NILTON x ANTONIO JOSE LIMA DA SILVA, AUTO POSTO
+  -- SANTANA x sete outros AUTO POSTO com CNPJ proprio).
+  create temp table wrk_apelido on commit drop as
+  select * from (values
+    ('cbaa asfaltos', 'CBAA ASFALTOS LTDA')
+  ) as a(chave_planilha, razao_social_erp);
+
+  -- O de-para aponta para cadastro que tem de existir. Se o nome do ERP tiver
+  -- mudado, a importacao para: cair no caminho normal criaria em silencio o
+  -- cadastro duplicado que este bloco existe para impedir.
+  select string_agg(a.razao_social_erp, ', ') into v_txt
+  from pg_temp.wrk_apelido a
+  where not exists (select 1 from public.fornecedores f where f.razao_social = a.razao_social_erp);
+  if v_txt is not null then
+    raise exception 'De-para de fornecedor aponta para cadastro que nao existe mais: %.', v_txt;
+  end if;
+
+  -- Casa pelo de-para, depois por documento (so digitos) e depois por nome
+  -- normalizado. Nao achou, cria. Um nome por fornecedor: a planilha nao tem dois documentos para o
   -- mesmo nome nem dois nomes para o mesmo documento (conferido).
   -- So os fornecedores das linhas que vao entrar. Sem o filtro de Quem Paga, a
   -- importacao cadastraria fornecedor que aparece unicamente em linha de
@@ -357,6 +393,11 @@ begin
     n.forn_nome,
     n.forn_doc,
     coalesce(
+      -- o de-para vem primeiro: e decisao tomada, nao heuristica
+      (select f.id from public.fornecedores f
+        join pg_temp.wrk_apelido a on a.razao_social_erp = f.razao_social
+        where a.chave_planilha = n.forn_chave
+        order by f.created_at, f.id limit 1),
       (select f.id from public.fornecedores f
         where n.forn_doc is not null
           and regexp_replace(coalesce(f.cnpj_cpf, ''), '\D', '', 'g') = n.forn_doc
@@ -534,9 +575,14 @@ begin
   end if;
 
   -- --------------------------------------------------------- 10. as parcelas
-  -- Valor da parcela paga = Valor Total Pago (o que de fato saiu da conta), e
-  -- nao Valor da Parcela: e assim que o saldo da conta fecha no que o Tiago
-  -- mandou lancar. A diferenca (desconto) vai para as observacoes.
+  -- Valor da parcela paga = Valor da Parcela da planilha (o valor CHEIO, o que
+  -- se devia), e o abatimento vai no campo proprio `desconto`. O que saiu da
+  -- conta e a coluna gerada `valor_liquido` (valor - desconto), que e a
+  -- definicao unica de saldo derivado no ERP desde
+  -- 20260805120001_desconto_no_pagamento. Antes desse campo existir esta funcao
+  -- gravava a parcela ja pelo liquido para o saldo fechar: dava saldo certo e
+  -- parcela divergente da nota, e todo relatorio de "em aberto = valor menos
+  -- parcelas" mostrava residuo em parcela quitada.
   -- Valor da parcela em ABERTO = o que sobra do valor do lancamento depois de
   -- tirar o valor BRUTO (Valor da Parcela) das pagas, dividido pelas abertas.
   -- Bruto e nao liquido de proposito: o desconto ja obtido nao aumenta o que
@@ -559,21 +605,25 @@ begin
     md5(c_marca || ':parc:' || indice || ':' || k::text)::uuid as parcela_id,
     lanc_id, k::smallint as numero_parcela, data_vencimento, pag_linha,
     case
-      when pag_linha is not null then valor_total_pago
+      when pag_linha is not null then valor_parcela
       -- ultima aberta absorve a diferenca de arredondamento para a soma das
       -- parcelas fechar exatamente no residuo
       when rn_aberta < abertas then round(residuo / abertas, 2)
       else residuo - round(residuo / abertas, 2) * (abertas - 1)
     end as valor,
-    data_pagamento, pag_conta, descontos, valor_parcela
+    -- Parcela aberta nao tem desconto (o desconto nasce no ato do pagamento),
+    -- e o left join do casamento deixaria null: coalesce para o insert nao
+    -- violar o "not null default 0" da coluna.
+    coalesce(descontos, 0) as descontos,
+    data_pagamento, pag_conta, valor_parcela
   from base
   union all
-  -- parcela unica dos orfaos: paga, no valor que saiu da conta
+  -- parcela unica dos orfaos: paga, no valor cheio, com o desconto no campo
   select
     md5(c_marca || ':parc-orfao:' || o.indice || ':1')::uuid,
     md5(c_marca || ':pag-orfao:' || o.indice)::uuid,
     1::smallint, o.data_vencimento, o.linha_planilha,
-    o.valor_total_pago, o.data_pagamento, o.conta_nome, o.descontos, o.valor_parcela
+    o.valor_parcela, o.descontos, o.data_pagamento, o.conta_nome, o.valor_parcela
   from pg_temp.wrk_orfao o
   where p_criar_lancamento_orfao and o.quem_paga = 'Empresa';
 
@@ -610,10 +660,14 @@ begin
            then 'Conta indicada na planilha: ' || i.conta_nome end,
       case when i.condicao <> 'À Vista' then 'Condicao na planilha de origem: ' || i.condicao ||
         ' (importado sem condicao de pagamento, com as datas reais de vencimento)' end,
+      -- O desconto agora tem campo proprio na parcela (e a coluna gerada
+      -- valor_liquido). Esta linha de observacao continua porque ela cita as
+      -- tres colunas da planilha de origem juntas, que e o que se confere com o
+      -- extrato quando alguem perguntar por que sairam R$ 24.600,00 a menos.
       (select string_agg('Desconto de R$ ' || to_char(p.descontos, 'FM999999990.00') ||
                          ' na parcela ' || p.numero_parcela::text ||
                          ' (Valor da Parcela R$ ' || to_char(p.valor_parcela, 'FM999999990.00') ||
-                         ', Valor Total Pago R$ ' || to_char(p.valor, 'FM999999990.00') || ')',
+                         ', Valor Total Pago R$ ' || to_char(p.valor - p.descontos, 'FM999999990.00') || ')',
                          E'\n' order by p.numero_parcela)
          from pg_temp.wrk_parcela p
         where p.lanc_id = i.lanc_id and p.descontos <> 0),
@@ -637,11 +691,16 @@ begin
   on conflict (id) do nothing;
 
   insert into public.lancamento_parcelas (
-    id, lancamento_id, numero_parcela, valor, data_vencimento, status,
+    id, lancamento_id, numero_parcela, valor, desconto, data_vencimento, status,
     conta_bancaria_id, data_pagamento, data_programada, data_programada_origem,
     pago_por, pago_em, created_by)
   select
-    p.parcela_id, p.lanc_id, p.numero_parcela, p.valor, p.data_vencimento,
+    p.parcela_id, p.lanc_id, p.numero_parcela, p.valor,
+    -- Desconto so em parcela paga: em aberto ele seria abatimento prometido, e
+    -- o check da tabela (desconto <= valor) e a regra de fn_pagar_parcela dizem
+    -- que desconto nasce no ato do pagamento.
+    case when p.pag_linha is not null then p.descontos else 0 end,
+    p.data_vencimento,
     case when p.pag_linha is not null then 'pago' else 'pendente' end,
     case when p.pag_linha is not null then ct.conta_id end,
     p.data_pagamento,
@@ -680,7 +739,10 @@ begin
       -- Todas as contas que aparecem na planilha, inclusive a que nao teve
       -- saida nenhuma (AMAZONIA, cujos pagamentos sao todos do Cliente): ela
       -- tem de ficar em 0,00 explicitamente, e nao "no que estava antes".
-      select k.conta_id, coalesce(sum(p.valor), 0) as saiu
+      -- valor MENOS desconto: o que saiu da conta e o liquido. Somar o valor
+      -- cheio poria na conta R$ 24.615,23 que o banco nunca debitou e as cinco
+      -- contas nao fechariam em R$ 0,00.
+      select k.conta_id, coalesce(sum(p.valor - p.descontos), 0) as saiu
       from pg_temp.wrk_conta k
       left join pg_temp.wrk_parcela p
         on p.pag_conta = k.conta_nome and p.pag_linha is not null
@@ -691,20 +753,24 @@ begin
 
   -- --------------------------------------------------------- 13. relatorio
   -- saldo_final sai da TABELA, com a mesma formula que fn_pagar_parcela usa
-  -- para conferir saldo (saldo_inicial + recebido - pago). Assim o "fecha em
-  -- R$ 0,00" e medido no banco depois da gravacao, e nao no meu rascunho: se
-  -- houver qualquer outra parcela paga naquela conta, aparece aqui.
+  -- para conferir saldo (saldo_inicial + recebido - pago, sempre pelo
+  -- valor_liquido). Assim o "fecha em R$ 0,00" e medido no banco depois da
+  -- gravacao, e nao no meu rascunho: se houver qualquer outra parcela paga
+  -- naquela conta, aparece aqui.
   select jsonb_agg(jsonb_build_object(
            'conta', c.nome,
            'parcelas_importadas', coalesce(t.qtd, 0),
            'saiu_na_importacao', coalesce(t.saiu, 0),
+           'desconto_na_importacao', coalesce(t.desconto, 0),
            'saldo_inicial', c.saldo_inicial,
            'saldo_final', c.saldo_inicial + coalesce(m.mov, 0))
          order by c.nome)
   into v_contas
   from public.contas_bancarias c
   left join (
-    select ct.conta_id, count(*) as qtd, sum(p.valor) as saiu
+    select ct.conta_id, count(*) as qtd,
+           sum(p.valor - p.descontos) as saiu,
+           sum(p.descontos) as desconto
     from pg_temp.wrk_parcela p
     join pg_temp.wrk_conta ct on ct.conta_nome = p.pag_conta
     where p.pag_linha is not null
@@ -712,7 +778,7 @@ begin
   ) t on t.conta_id = c.id
   left join (
     select p.conta_bancaria_id,
-           sum(case when l.tipo = 'a_receber' then p.valor else -p.valor end) as mov
+           sum(case when l.tipo = 'a_receber' then p.valor_liquido else -p.valor_liquido end) as mov
     from public.lancamento_parcelas p
     join public.lancamentos l on l.id = p.lancamento_id
     where p.status = 'pago'
@@ -722,7 +788,8 @@ begin
   select jsonb_agg(jsonb_build_object(
            'pagamentos_linha', o.linha_planilha, 'indice', o.indice,
            'fornecedor', o.forn_nome, 'vencimento', o.data_vencimento,
-           'pago_em', o.data_pagamento, 'valor', o.valor_total_pago,
+           'pago_em', o.data_pagamento, 'valor', o.valor_parcela,
+           'desconto', o.descontos, 'pago', o.valor_total_pago,
            'conta', o.conta_nome) order by o.linha_planilha)
   into v_orfaos
   from pg_temp.wrk_orfao o where o.quem_paga = 'Empresa';
@@ -742,15 +809,37 @@ begin
   from pg_temp.wrk_pag p
   where p.dados_bancarios is not null and p.quem_paga = 'Empresa';
 
+  -- Com o desconto no campo proprio, a soma das parcelas tem de fechar EXATO no
+  -- valor do lancamento em todos eles (as pagas entram pelo valor cheio e as
+  -- abertas absorvem o residuo). Esta lista, portanto, tem de sair vazia: se
+  -- vier alguma linha, a planilha tem lancamento cujas parcelas nao somam o
+  -- proprio valor e isso e para o Tiago decidir, nao para arredondar.
   select jsonb_agg(jsonb_build_object(
            'lancamento_indice', i.indice, 'lancamentos_linha', i.linha_planilha,
            'valor_lancamento', i.valor,
            'soma_parcelas', (select sum(p.valor) from pg_temp.wrk_parcela p where p.lanc_id = i.lanc_id),
-           'desconto', i.valor - (select sum(p.valor) from pg_temp.wrk_parcela p where p.lanc_id = i.lanc_id))
+           'diferenca', i.valor - (select sum(p.valor) from pg_temp.wrk_parcela p where p.lanc_id = i.lanc_id))
          order by i.linha_planilha)
   into v_desconto
   from pg_temp.wrk_imp i
   where i.valor <> (select coalesce(sum(p.valor), 0) from pg_temp.wrk_parcela p where p.lanc_id = i.lanc_id);
+
+  -- As parcelas que entram com desconto, uma por uma: sao poucas e sao o motivo
+  -- de existir o campo, entao ficam nominais no relatorio e no audit_log.
+  select jsonb_agg(jsonb_build_object(
+           'pagamentos_linha', p.pag_linha,
+           'lancamento_indice', i.indice,
+           'parcela', p.numero_parcela,
+           'valor_parcela', p.valor,
+           'desconto', p.descontos,
+           'pago', p.valor - p.descontos,
+           'conta', p.pag_conta,
+           'pago_em', p.data_pagamento)
+         order by p.pag_linha)
+  into v_parc_desconto
+  from pg_temp.wrk_parcela p
+  join pg_temp.wrk_imp i on i.lanc_id = p.lanc_id
+  where p.descontos <> 0;
 
   v_rel := jsonb_build_object(
     'obra', c_centro,
@@ -775,7 +864,12 @@ begin
       'presentes_no_banco', (select count(*) from public.lancamentos l join pg_temp.wrk_imp i on i.lanc_id = l.id)),
     'parcelas', jsonb_build_object(
       'pagas', (select count(*) from pg_temp.wrk_parcela where pag_linha is not null),
-      'valor_pago', (select coalesce(sum(valor), 0) from pg_temp.wrk_parcela where pag_linha is not null),
+      -- tres numeros e nao um: valor cheio (a divida), desconto (o abatimento) e
+      -- pago (o que saiu da conta). Antes do campo de desconto existir os tres
+      -- eram o mesmo numero e o desconto so aparecia no texto de observacoes.
+      'valor_bruto', (select coalesce(sum(valor), 0) from pg_temp.wrk_parcela where pag_linha is not null),
+      'desconto', (select coalesce(sum(descontos), 0) from pg_temp.wrk_parcela where pag_linha is not null),
+      'valor_pago', (select coalesce(sum(valor - descontos), 0) from pg_temp.wrk_parcela where pag_linha is not null),
       'em_aberto', (select count(*) from pg_temp.wrk_parcela where pag_linha is null),
       'valor_em_aberto', (select coalesce(sum(valor), 0) from pg_temp.wrk_parcela where pag_linha is null),
       'total', (select count(*) from pg_temp.wrk_parcela),
@@ -794,6 +888,8 @@ begin
     'cadastros', jsonb_build_object(
       'fornecedores_planilha', (select count(*) from pg_temp.wrk_forn),
       'fornecedores_casados_por_documento', (select count(*) from pg_temp.wrk_forn where casou_doc),
+      'fornecedores_casados_por_de_para', (select count(*) from pg_temp.wrk_forn w
+        join pg_temp.wrk_apelido a on a.chave_planilha = w.forn_chave),
       'fornecedores_criados', coalesce(jsonb_array_length(v_forn_novos), 0),
       'categorias_planilha', (select count(*) from pg_temp.wrk_cat),
       'categorias_criadas', coalesce(jsonb_array_length(v_cat_novas), 0),
@@ -804,7 +900,8 @@ begin
     'categorias_criadas', v_cat_novas,
     'pagamentos_sem_lancamento', v_orfaos,
     'lancamentos_sem_forma_pagamento', v_sem_forma,
-    'lancamentos_com_desconto', v_desconto,
+    'parcelas_com_desconto', v_parc_desconto,
+    'lancamentos_com_soma_de_parcela_divergente', v_desconto,
     'dados_bancarios_sem_campo_no_erp', v_banco
   );
 

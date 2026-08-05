@@ -222,6 +222,28 @@ function limitarAltura(altura: number): number {
 }
 
 /**
+ * A altura fixa das linhas desta tabela, em px, ou `null` na automática.
+ *
+ * Existe porque quem corta o texto é a CÉLULA, não a tabela: a "Descrição e
+ * categoria" precisa saber quantas linhas de texto cabem para quebrar o texto e
+ * pôr reticências na última linha que couber (ver `CelulaDescricaoCategoria`). A
+ * tabela sabe a altura e não sabe o que a célula desenha; a célula sabe o que
+ * desenha e não sabia a altura.
+ *
+ * `null` fora de uma DataTable é o padrão certo: sem altura fixa, texto inteiro.
+ */
+const ContextoAlturaLinha = React.createContext<number | null>(null);
+
+/**
+ * Altura fixa das linhas da tabela em volta, em px, ou `null` quando a altura é
+ * automática (o padrão) e a linha pode crescer com o conteúdo. Para a célula que
+ * precisa clipar o próprio conteúdo com o espaço que tem.
+ */
+export function useAlturaLinhaTabela(): number | null {
+  return React.useContext(ContextoAlturaLinha);
+}
+
+/**
  * Presa a largura nos limites da coluna. Respeita `minSize`/`maxSize` da coluna
  * quando a tela declarou (a coluna de ações é travada em 52), e cai nos limites
  * gerais quando não declarou. É a MESMA conta que o saneamento da preferência
@@ -1119,12 +1141,14 @@ export function DataTable<TData>({
    * Coluna com `naoTruncar` (data, número, badge) não tem o `[data-medir]`; nela a
    * medida cai no primeiro elemento da célula. Isso mede certo TAMBÉM na célula
    * montada de várias linhas, e o caso que importa é a "Descrição e categoria"
-   * (`CelulaDescricaoCategoria`: um `div.min-w-0` com dois `div.truncate`
+   * (`CelulaDescricaoCategoria`: um `div.min-w-0` com a descrição e a categoria
    * dentro). O `max-content` do div de fora é o MAIOR max-content dos filhos, e
-   * `white-space: nowrap` é herdado pelos dois, então a medida sai como a mais
-   * larga das duas linhas em uma linha só — ela ENCOLHE a coluna quando o texto
-   * é curto, não devolve a largura atual. O que não mede certo é descendente com
-   * largura em porcentagem (`w-full` e afins), que se resolve contra o pai
+   * nenhum dos dois declara `white-space`, então o `nowrap` daqui é herdado pelos
+   * dois e a medida sai como a mais larga das duas linhas em uma linha só — ela
+   * ENCOLHE a coluna quando o texto é curto, não devolve a largura atual. Vale
+   * também com a descrição quebrando em várias linhas: `max-content` ignora as
+   * quebras de linha opcionais por definição. O que não mede certo é descendente
+   * com largura em porcentagem (`w-full` e afins), que se resolve contra o pai
    * `max-content` e trava a medida na largura de agora; nenhuma célula do app
    * está nesse caso hoje.
    */
@@ -2060,17 +2084,22 @@ export function DataTable<TData>({
   );
 
   const tabela = (
-    <table
-      ref={refTabela}
-      data-slot="table"
-      className={cn(
-        "w-full caption-bottom text-sm",
-        personalizavel && "table-fixed",
-      )}
-    >
-      {cabecalho}
-      {corpo}
-    </table>
+    // A altura desce por contexto porque o corte do texto é decidido dentro da
+    // célula, e a célula é montada pela TELA (columnDef.cell): não há por onde
+    // passar prop daqui até lá (ver useAlturaLinhaTabela).
+    <ContextoAlturaLinha.Provider value={alturaLinha}>
+      <table
+        ref={refTabela}
+        data-slot="table"
+        className={cn(
+          "w-full caption-bottom text-sm",
+          personalizavel && "table-fixed",
+        )}
+      >
+        {cabecalho}
+        {corpo}
+      </table>
+    </ContextoAlturaLinha.Provider>
   );
 
   /**
