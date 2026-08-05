@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchema, idSchemaCom } from "@/lib/id";
+
 /** Tamanho padrão de página da listagem de contas a receber. */
 export const TAMANHO_PAGINA_PADRAO = 25;
 
@@ -52,7 +54,7 @@ export type ReceberParcelaInput = z.infer<typeof receberParcelaSchema>;
 
 /** Rateio por centro de custo validado no servidor. */
 export const receberRateioSchema = z.object({
-  centroCustoId: z.uuid({ error: "Centro de custo inválido" }),
+  centroCustoId: idSchemaCom("Centro de custo inválido"),
   valor: valorSchema,
 });
 
@@ -69,7 +71,7 @@ export const receberSchema = z.object({
     .trim()
     .min(1, { error: "Descreva o recebível" })
     .max(300, { error: "Máximo de 300 caracteres" }),
-  categoriaId: z.uuid({ error: "Categoria inválida" }).optional(),
+  categoriaId: idSchemaCom("Categoria inválida").optional(),
   valor: valorSchema,
   /** O fato: data do documento (nota, medição, contrato). */
   dataDocumento: z
@@ -102,7 +104,7 @@ export const receberFormSchema = z.object({
     .trim()
     .min(1, { error: "Descreva o recebível" })
     .max(300, { error: "Máximo de 300 caracteres" }),
-  categoriaId: z.uuid().optional(),
+  categoriaId: idSchema.optional(),
   valor: z
     .string()
     .trim()
@@ -133,7 +135,7 @@ export type ReceberFormInput = z.infer<typeof receberFormSchema>;
 
 /** Schema do formulário de baixa de recebimento (client). */
 export const baixaRecebimentoFormSchema = z.object({
-  contaId: z.uuid({ error: "Selecione a conta bancária" }),
+  contaId: idSchemaCom("Selecione a conta bancária"),
   dataRecebimento: z
     .string()
     .trim()

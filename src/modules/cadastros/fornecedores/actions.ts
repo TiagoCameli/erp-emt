@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -18,8 +19,6 @@ const RECURSO = "cadastros.fornecedores" as const;
 const ROTA = "/cadastros/fornecedores";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** String vazia ou só espaços vira null; o resto vem com trim. */
 function ouNull(valor: string): string | null {
@@ -79,7 +78,7 @@ export async function editar(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Fornecedor inválido" };
 
   const validado = fornecedorSchema.safeParse(dados);
@@ -112,7 +111,7 @@ export async function alternarAtivo(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Fornecedor inválido" };
 
   const supabase = await createClient();
@@ -140,7 +139,7 @@ export async function excluir(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "excluir");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Fornecedor inválido" };
 
   const motivoLimpo = motivo.trim();

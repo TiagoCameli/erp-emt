@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
@@ -21,7 +22,6 @@ const ROTA = "/rh/parametros-folha";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
-const uuidSchema = z.uuid();
 const motivoSchema = z.string().trim().min(1);
 
 /** Cria ou edita uma faixa de INSS. A presença de `id` decide a operação. */
@@ -50,7 +50,7 @@ export async function salvarFaixaInss(
   const supabase = await createClient();
 
   if (id) {
-    const idValido = uuidSchema.safeParse(id);
+    const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Faixa inválida" };
 
     const { error } = await supabase
@@ -92,7 +92,7 @@ export async function removerFaixaInss(
     return { erro: "Sem permissão para excluir faixas de INSS" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Faixa inválida" };
 
   const motivoValido = motivoSchema.safeParse(motivo);
@@ -148,7 +148,7 @@ export async function salvarFaixaIrrf(
   const supabase = await createClient();
 
   if (id) {
-    const idValido = uuidSchema.safeParse(id);
+    const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Faixa inválida" };
 
     const { error } = await supabase
@@ -190,7 +190,7 @@ export async function removerFaixaIrrf(
     return { erro: "Sem permissão para excluir faixas de IRRF" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Faixa inválida" };
 
   const motivoValido = motivoSchema.safeParse(motivo);

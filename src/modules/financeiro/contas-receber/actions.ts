@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Acao } from "@/config/recursos";
 import type { Json } from "@/lib/database.types";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -20,7 +21,6 @@ const ROTA = "/financeiro/contas-receber";
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
 
-const uuidSchema = z.uuid();
 const dataSchema = z
   .string()
   .trim()
@@ -123,10 +123,10 @@ export async function baixarRecebimento(
     return { erro: "Sem permissão para registrar recebimentos" };
   }
 
-  const parcelaValida = uuidSchema.safeParse(parcelaId);
+  const parcelaValida = idSchema.safeParse(parcelaId);
   if (!parcelaValida.success) return { erro: "Parcela inválida" };
 
-  const contaValida = uuidSchema.safeParse(contaId);
+  const contaValida = idSchema.safeParse(contaId);
   if (!contaValida.success) return { erro: "Selecione a conta bancária" };
 
   const dataValida = dataSchema.safeParse(data);

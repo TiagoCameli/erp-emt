@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { RECURSOS, type Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -15,8 +15,6 @@ import {
 } from "@/modules/administracao/perfis/schemas";
 
 const ROTA_PERFIS = "/administracao/perfis";
-
-const uuidSchema = z.uuid();
 
 type ResultadoAcao = { erro: string } | undefined;
 
@@ -55,7 +53,7 @@ export async function editarPerfil(
   id: string,
   dados: PerfilInput,
 ): Promise<ResultadoAcao> {
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Perfil inválido" };
 
   const resultado = perfilSchema.safeParse(dados);
@@ -103,7 +101,7 @@ export async function excluirPerfil(
   id: string,
   motivo: string,
 ): Promise<ResultadoAcao> {
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Perfil inválido" };
 
   if (!motivo.trim()) {
@@ -149,7 +147,7 @@ export async function salvarPermissoesPerfil(
   perfilId: string,
   permissoes: PermissaoPerfilInput[],
 ): Promise<ResultadoAcao> {
-  const perfilValido = uuidSchema.safeParse(perfilId);
+  const perfilValido = idSchema.safeParse(perfilId);
   if (!perfilValido.success) return { erro: "Perfil inválido" };
 
   const resultado = permissoesPerfilSchema.safeParse(permissoes);

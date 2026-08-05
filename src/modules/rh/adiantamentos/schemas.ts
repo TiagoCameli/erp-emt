@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { numeroPositivo, paraNumero, valorValido } from "./numero";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Competência completa: 1o dia do mês, yyyy-MM-01. */
 const COMPETENCIA_REGEX = /^\d{4}-\d{2}-01$/;
 /** Mês do formulário, yyyy-MM (input month). */
@@ -24,7 +26,7 @@ export function competenciaParaMes(competencia: string): string {
  * antes de gravar. Competência é sempre o 1o dia do mês.
  */
 export const adiantamentoSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   competencia: z
     .string()
     .trim()
@@ -49,7 +51,7 @@ export type AdiantamentoInput = z.infer<typeof adiantamentoSchema>;
  * no submit.
  */
 export const adiantamentoFormSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   competencia: z
     .string()
     .trim()

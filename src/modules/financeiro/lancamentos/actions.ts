@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { Json } from "@/lib/database.types";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -18,8 +19,6 @@ const ROTA = "/financeiro/lancamentos";
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
 
 export type ResultadoExclusao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Cabeçalho do lançamento no formato que a RPC espera (p_dados). */
 function dadosParaRpc(dados: LancamentoInput): Json {
@@ -91,7 +90,7 @@ export async function salvarLancamento(
   const supabase = await createClient();
 
   if (id !== null) {
-    const idValido = uuidSchema.safeParse(id);
+    const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Lançamento inválido" };
 
     // Só lançamento manual se edita aqui. OC e outras origens editam-se na
@@ -154,7 +153,7 @@ export async function excluirLancamento(
     return { erro: "Sem permissão para excluir lançamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Lançamento inválido" };
 
   const supabase = await createClient();
@@ -207,7 +206,7 @@ export async function definirParcelasLancamento(
 ): Promise<ResultadoExclusao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(lancamentoId);
+  const idValido = idSchema.safeParse(lancamentoId);
   if (!idValido.success) return { erro: "Lançamento inválido" };
 
   const validado = z.array(parcelaDefinidaSchema).min(1).safeParse(parcelas);
@@ -268,7 +267,7 @@ export async function parcelasDaCondicaoLancamento(
     return { erro: "Sem permissão para ver lançamentos" };
   }
 
-  const condicaoValida = uuidSchema.safeParse(condicaoId);
+  const condicaoValida = idSchema.safeParse(condicaoId);
   if (!condicaoValida.success) {
     return {
       erro: "Escolha a condição de pagamento antes de gerar as parcelas",
@@ -320,7 +319,7 @@ export async function sugerirParcelasDoLancamento(
     return { erro: "Sem permissão para ver lançamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(lancamentoId);
+  const idValido = idSchema.safeParse(lancamentoId);
   if (!idValido.success) return { erro: "Lançamento inválido" };
 
   const supabase = await createClient();
@@ -377,7 +376,7 @@ export async function reenviarParcela(
     return { erro: "Sem permissão para reenviar pagamentos para aprovação" };
   }
 
-  const idValido = uuidSchema.safeParse(parcelaId);
+  const idValido = idSchema.safeParse(parcelaId);
   if (!idValido.success) return { erro: "Parcela inválida" };
 
   const texto = (observacao ?? "").trim();
@@ -418,10 +417,10 @@ export async function definirContaLancamento(
     return { erro: "Sem permissão para editar lançamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(lancamentoId);
+  const idValido = idSchema.safeParse(lancamentoId);
   if (!idValido.success) return { erro: "Lançamento inválido" };
 
-  const contaValida = uuidSchema.safeParse(contaId);
+  const contaValida = idSchema.safeParse(contaId);
   if (!contaValida.success) return { erro: "Selecione a conta bancária" };
 
   const supabase = await createClient();

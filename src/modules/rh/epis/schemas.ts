@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Data, yyyy-MM-dd. */
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -9,7 +11,7 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  */
 export const epiSchema = z
   .object({
-    colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+    colaboradorId: idSchemaCom("Selecione o colaborador"),
     descricao: z
       .string()
       .trim()
@@ -52,7 +54,7 @@ export type EpiInput = z.infer<typeof epiSchema>;
 
 /** Schema do formulário (client). Quantidade como string; assinado booleano. */
 export const epiFormSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   descricao: z
     .string()
     .trim()

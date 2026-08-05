@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Tipos válidos de documento de colaborador. */
 export const TIPOS_DOCUMENTO = [
   "aso",
@@ -34,7 +36,7 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * antes de gravar. Emissão e vencimento são opcionais.
  */
 export const documentoSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   tipo: z.enum(TIPOS_DOCUMENTO, { error: "Escolha um tipo válido" }),
   descricao: z
     .string()
@@ -66,7 +68,7 @@ export type DocumentoInput = z.infer<typeof documentoSchema>;
  * submit.
  */
 export const documentoFormSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   tipo: z.enum(TIPOS_DOCUMENTO, { error: "Escolha um tipo válido" }),
   descricao: z
     .string()

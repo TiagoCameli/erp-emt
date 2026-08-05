@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -22,8 +22,6 @@ const RECURSO = "cadastros.colaboradores" as const;
 const ROTA = "/cadastros/colaboradores";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Dependente do colaborador, para a ficha e o formulário (#Task 3). */
 export interface Dependente {
@@ -179,7 +177,7 @@ export async function salvarDependente(
 export async function removerDependente(id: string): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "excluir");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Dependente inválido" };
 
   const supabase = await createClient();

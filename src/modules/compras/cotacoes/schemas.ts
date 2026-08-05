@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Status possíveis de uma cotação. Igual ao check do banco. */
 export const STATUS_COTACAO = ["aberta", "finalizada", "cancelada"] as const;
 
@@ -40,7 +42,7 @@ export const cotacaoSchema = z.object({
     .trim()
     .min(3, { error: "Descreva o que está sendo cotado (mínimo 3 caracteres)" })
     .max(500, { error: "Máximo de 500 caracteres" }),
-  categoriaId: z.uuid({ error: "Selecione a categoria do custo" }),
+  categoriaId: idSchemaCom("Selecione a categoria do custo"),
   observacoes: textoOpcional(2000),
 });
 
@@ -53,7 +55,7 @@ export const cotacaoFormSchema = z.object({
     .trim()
     .min(3, { error: "Descreva o que está sendo cotado (mínimo 3 caracteres)" })
     .max(500, { error: "Máximo de 500 caracteres" }),
-  categoriaId: z.uuid({ error: "Selecione a categoria do custo" }),
+  categoriaId: idSchemaCom("Selecione a categoria do custo"),
   observacoes: z
     .string()
     .trim()
@@ -64,13 +66,9 @@ export type CotacaoFormInput = z.infer<typeof cotacaoFormSchema>;
 
 /** Dados de um fornecedor que entra na cotação. */
 export const fornecedorCotacaoSchema = z.object({
-  fornecedorId: z.uuid({ error: "Selecione um fornecedor" }),
-  condicaoPagamentoId: z
-    .uuid({ error: "Condição de pagamento inválida" })
-    .optional(),
-  formaPagamentoId: z
-    .uuid({ error: "Forma de pagamento inválida" })
-    .optional(),
+  fornecedorId: idSchemaCom("Selecione um fornecedor"),
+  condicaoPagamentoId: idSchemaCom("Condição de pagamento inválida").optional(),
+  formaPagamentoId: idSchemaCom("Forma de pagamento inválida").optional(),
   prazoEntregaDias: z
     .number({ error: "Prazo inválido" })
     .int({ error: "Prazo em dias inteiros" })
@@ -84,13 +82,9 @@ export type FornecedorCotacaoInput = z.infer<typeof fornecedorCotacaoSchema>;
 
 /** Schema do formulário de fornecedor (client). Campos texto como string. */
 export const fornecedorCotacaoFormSchema = z.object({
-  fornecedorId: z.uuid({ error: "Selecione um fornecedor" }),
-  condicaoPagamentoId: z
-    .uuid({ error: "Condição de pagamento inválida" })
-    .optional(),
-  formaPagamentoId: z
-    .uuid({ error: "Forma de pagamento inválida" })
-    .optional(),
+  fornecedorId: idSchemaCom("Selecione um fornecedor"),
+  condicaoPagamentoId: idSchemaCom("Condição de pagamento inválida").optional(),
+  formaPagamentoId: idSchemaCom("Forma de pagamento inválida").optional(),
   prazoEntregaDias: z
     .string()
     .trim()
@@ -115,8 +109,8 @@ export type FornecedorCotacaoFormInput = z.infer<
  * fornecedor para aquele insumo. A tela salva o mapa inteiro de uma vez.
  */
 export const precoCotacaoSchema = z.object({
-  cotacaoFornecedorId: z.uuid({ error: "Fornecedor da cotação inválido" }),
-  insumoId: z.uuid({ error: "Insumo inválido" }),
+  cotacaoFornecedorId: idSchemaCom("Fornecedor da cotação inválido"),
+  insumoId: idSchemaCom("Insumo inválido"),
   quantidade: z
     .number({ error: "Quantidade inválida" })
     .gt(0, { error: "A quantidade precisa ser maior que zero" })
@@ -140,7 +134,7 @@ export type SalvarPrecosInput = z.infer<typeof salvarPrecosSchema>;
  * negócio precisa ser justificada).
  */
 export const finalizarCotacaoSchema = z.object({
-  vencedorFornecedorId: z.uuid({ error: "Selecione o fornecedor vencedor" }),
+  vencedorFornecedorId: idSchemaCom("Selecione o fornecedor vencedor"),
   motivoSelecao: textoOpcional(1000),
 });
 

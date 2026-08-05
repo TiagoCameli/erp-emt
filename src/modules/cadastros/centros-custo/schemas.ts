@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /**
  * Tipos de nível 1 (CENTRO) da árvore de centros de custo.
  * Etapas (nível 2) e itens (nível 3) têm tipo null.
@@ -37,12 +39,12 @@ const orcamentoSchema = z
   .max(99_999_999_999.99, { error: "O orçamento é alto demais" })
   .optional();
 
-const uuidSchema = z.uuid({ error: "Registro inválido" });
+const idRegistroSchema = idSchemaCom("Registro inválido");
 
 /** Criar uma etapa (nível 2) sob um centro (nível 1). */
 export const criarEtapaSchema = z.object({
   nome: nomeSchema,
-  pai_id: uuidSchema,
+  pai_id: idRegistroSchema,
   orcamento: orcamentoSchema,
 });
 
@@ -51,7 +53,7 @@ export type CriarEtapaInput = z.infer<typeof criarEtapaSchema>;
 /** Criar um item (nível 3) sob uma etapa (nível 2). */
 export const criarItemSchema = z.object({
   nome: nomeSchema,
-  pai_id: uuidSchema,
+  pai_id: idRegistroSchema,
   orcamento: orcamentoSchema,
 });
 

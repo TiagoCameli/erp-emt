@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -24,8 +24,6 @@ const RECURSO = "cadastros.insumos" as const;
 const ROTA = "/cadastros/insumos";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Forma de cada linha lida da planilha de importação. */
 interface LinhaImportInsumo {
@@ -144,7 +142,7 @@ export async function editar(
     return { erro: "Sem permissão para editar insumos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Insumo inválido" };
 
   const validado = insumoSchema.safeParse(dados);
@@ -181,7 +179,7 @@ export async function alternarAtivo(
     return { erro: "Sem permissão para editar insumos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Insumo inválido" };
 
   const supabase = await createClient();
@@ -213,7 +211,7 @@ export async function excluir(
     return { erro: "Sem permissão para excluir insumos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Insumo inválido" };
 
   const supabase = await createClient();
@@ -423,10 +421,10 @@ export async function reclassificarEmLote(
     return { erro: "Sem permissão para editar insumos" };
   }
 
-  const idsValidos = ids.filter((id) => uuidSchema.safeParse(id).success);
+  const idsValidos = ids.filter((id) => idSchema.safeParse(id).success);
   if (idsValidos.length === 0) return { erro: "Selecione ao menos um insumo" };
 
-  const categoriaValida = uuidSchema.safeParse(categoriaId);
+  const categoriaValida = idSchema.safeParse(categoriaId);
   if (!categoriaValida.success) return { erro: "Escolha a subcategoria" };
 
   const supabase = await createClient();

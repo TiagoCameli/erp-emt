@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import ExcelJS from "exceljs";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -32,8 +32,6 @@ export type ResultadoGeracao = { ok: true; id: string } | { erro: string };
 export type ResultadoPlanilha =
   | { ok: true; base64: string; nomeArquivo: string }
   | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
@@ -98,7 +96,7 @@ export async function fecharFolha(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para fechar folhas" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Folha inválida" };
 
   const supabase = await createClient();
@@ -125,7 +123,7 @@ export async function reabrirFolha(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para reabrir folhas" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Folha inválida" };
 
   const supabase = await createClient();
@@ -181,7 +179,7 @@ export async function gerarPlanilhaFolha(
     return { erro: "Sem permissão para exportar a folha" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Folha inválida" };
 
   const folha = await buscarFolha(idValido.data);

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Como o equipamento controla uso/horas. Igual ao default/check do banco. */
 export const CONTROLE_POR = ["horimetro", "km", "nenhum"] as const;
 
@@ -90,7 +92,7 @@ export type EquipamentoFormInput = z.infer<typeof equipamentoFormSchema>;
 
 /** Schema do documento do equipamento, usado ao adicionar no drawer (servidor). */
 export const documentoSchema = z.object({
-  equipamentoId: z.uuid({ error: "Equipamento inválido" }),
+  equipamentoId: idSchemaCom("Equipamento inválido"),
   tipo: z
     .string()
     .trim()

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Data, yyyy-MM-dd. */
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,7 +34,7 @@ export const ROTULO_TIPO_OCORRENCIA: Record<TipoOcorrencia, string> = {
  */
 export const ocorrenciaSchema = z
   .object({
-    colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+    colaboradorId: idSchemaCom("Selecione o colaborador"),
     data: z.string().trim().regex(DATA_REGEX, { error: "Data inválida" }),
     dataFim: z
       .string()
@@ -61,7 +63,7 @@ export type OcorrenciaInput = z.infer<typeof ocorrenciaSchema>;
 /** Schema do formulário (client). Observação e fim como string sempre presentes. */
 export const ocorrenciaFormSchema = z
   .object({
-    colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+    colaboradorId: idSchemaCom("Selecione o colaborador"),
     data: z.string().trim().regex(DATA_REGEX, { error: "Informe a data" }),
     dataFim: z.string().trim(),
     tipo: z.enum(TIPOS_OCORRENCIA, { error: "Selecione o tipo" }),

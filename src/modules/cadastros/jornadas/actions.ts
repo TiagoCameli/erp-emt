@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -20,7 +21,6 @@ const TABELA = "jornadas" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
-const uuidSchema = z.uuid();
 const motivoSchema = z.string().trim().min(1);
 
 /** Cria ou edita uma jornada (horas por dia da semana). A presença de `id` decide a operação. */
@@ -54,7 +54,7 @@ export async function salvarJornada(
   const supabase = await createClient();
 
   if (id) {
-    const idValido = uuidSchema.safeParse(id);
+    const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Jornada inválida" };
 
     const { error } = await supabase
@@ -102,7 +102,7 @@ export async function removerJornada(
     return { erro: "Sem permissão para excluir jornadas" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Jornada inválida" };
 
   const motivoValido = motivoSchema.safeParse(motivo);

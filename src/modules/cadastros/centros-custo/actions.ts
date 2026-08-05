@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao, logErroServidor } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import {
   lerEValidarXlsx,
   type ColunaImportacao,
@@ -24,8 +24,6 @@ const ROTA = "/cadastros/centros-custo";
 const TABELA = "centros_custo" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Campos que governam as travas: sistema, equipamento e obra são geridos pelo banco. */
 interface NoTravas {
@@ -149,7 +147,7 @@ export async function editarNo(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Centro de custo inválido" };
 
   const validado = editarNoSchema.safeParse(dados);
@@ -201,7 +199,7 @@ export async function alternarAtivo(
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Centro de custo inválido" };
 
   const supabase = await createClient();

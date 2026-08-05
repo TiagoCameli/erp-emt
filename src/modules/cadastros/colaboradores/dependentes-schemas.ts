@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Parentesco do dependente do colaborador (RH, Bloco 2). */
 export const PARENTESCOS = [
   "conjuge",
@@ -52,8 +54,8 @@ const textoOpcional = z
  * folha vão consumir depois (dependenteIrrf, dependenteSalarioFamilia).
  */
 export const dependenteSchema = z.object({
-  id: z.uuid({ error: "Dependente inválido" }).optional(),
-  colaboradorId: z.uuid({ error: "Colaborador inválido" }),
+  id: idSchemaCom("Dependente inválido").optional(),
+  colaboradorId: idSchemaCom("Colaborador inválido"),
   nome: z
     .string()
     .trim()

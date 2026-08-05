@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -23,7 +24,6 @@ const TABELA = "folha_encargos" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
-const uuidSchema = z.uuid();
 const motivoSchema = z.string().trim().min(1);
 
 /** Cria ou edita um encargo da folha (nome + alíquota). A presença de `id` decide a operação. */
@@ -51,7 +51,7 @@ export async function salvarEncargo(
   const supabase = await createClient();
 
   if (id) {
-    const idValido = uuidSchema.safeParse(id);
+    const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Encargo inválido" };
 
     const { error } = await supabase
@@ -99,7 +99,7 @@ export async function removerEncargo(
     return { erro: "Sem permissão para excluir encargos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Encargo inválido" };
 
   const motivoValido = motivoSchema.safeParse(motivo);

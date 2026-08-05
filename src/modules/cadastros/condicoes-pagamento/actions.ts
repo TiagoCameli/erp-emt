@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -17,8 +17,6 @@ const TABELA = "condicoes_pagamento" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 const ERRO_DESCRICAO_DUPLICADA =
   "Já existe uma condição de pagamento com esta descrição";
@@ -97,7 +95,7 @@ export async function editarCondicao(
     return { erro: "Sem permissão para editar condições de pagamento" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Condição de pagamento inválida" };
 
   const validado = condicaoPagamentoSchema.safeParse(dados);
@@ -141,7 +139,7 @@ export async function desativarCondicao(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para desativar condições de pagamento" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Condição de pagamento inválida" };
 
   const supabase = await createClient();

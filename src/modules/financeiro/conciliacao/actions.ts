@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { Json } from "@/lib/database.types";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import { parseOfx } from "@/lib/ofx";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -20,8 +21,6 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoImportacao =
   | { ok: true; inseridas: number; ignoradas: number }
   | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Transação no formato que a RPC fn_importar_extrato espera no jsonb. */
 interface TransacaoImportacao {
@@ -52,7 +51,7 @@ export async function importarOfx(
   }
 
   const contaId = formData.get("contaId");
-  if (typeof contaId !== "string" || !uuidSchema.safeParse(contaId).success) {
+  if (typeof contaId !== "string" || !idSchema.safeParse(contaId).success) {
     return { erro: "Selecione a conta bancária do extrato" };
   }
 
@@ -147,7 +146,7 @@ export async function buscarSugestoes(transacao: {
     return { erro: "Sem permissão para ver as transações" };
   }
 
-  if (!uuidSchema.safeParse(transacao.contaBancariaId).success) {
+  if (!idSchema.safeParse(transacao.contaBancariaId).success) {
     return { erro: "Conta bancária inválida" };
   }
 
@@ -174,10 +173,10 @@ export async function conciliar(
     return { erro: "Sem permissão para conciliar transações" };
   }
 
-  if (!uuidSchema.safeParse(transacaoId).success) {
+  if (!idSchema.safeParse(transacaoId).success) {
     return { erro: "Transação inválida" };
   }
-  if (!uuidSchema.safeParse(parcelaId).success) {
+  if (!idSchema.safeParse(parcelaId).success) {
     return { erro: "Parcela inválida" };
   }
 
@@ -209,7 +208,7 @@ export async function desconciliar(
     return { erro: "Sem permissão para desconciliar transações" };
   }
 
-  if (!uuidSchema.safeParse(transacaoId).success) {
+  if (!idSchema.safeParse(transacaoId).success) {
     return { erro: "Transação inválida" };
   }
 

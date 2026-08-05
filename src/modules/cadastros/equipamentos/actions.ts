@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { idSchema } from "@/lib/id";
 import {
   lerEValidarXlsx,
   type ColunaImportacao,
@@ -28,8 +28,6 @@ const TABELA_DOCUMENTOS = "equipamento_documentos" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; aviso: string } | { erro: string };
-
-const uuidSchema = z.uuid();
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
@@ -102,7 +100,7 @@ export async function editarEquipamento(
     return { erro: "Sem permissão para editar equipamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Equipamento inválido" };
 
   const validado = equipamentoSchema.safeParse(dados);
@@ -140,7 +138,7 @@ export async function alternarAtivo(
     return { erro: "Sem permissão para editar equipamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Equipamento inválido" };
 
   const supabase = await createClient();
@@ -209,7 +207,7 @@ export async function removerDocumento(id: string): Promise<ResultadoAcao> {
     return { erro: "Sem permissão para editar equipamentos" };
   }
 
-  const idValido = uuidSchema.safeParse(id);
+  const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Documento inválido" };
 
   const supabase = await createClient();

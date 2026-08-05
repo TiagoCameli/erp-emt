@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { horasValidas, numeroPositivo, paraNumero } from "./numero";
 
+import { idSchemaCom } from "@/lib/id";
+
 /** Tipos de movimento do banco de horas. */
 export const TIPOS_MOVIMENTO = ["credito", "debito"] as const;
 
@@ -21,7 +23,7 @@ const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * antes de gravar. Horas sempre maior que zero (o sinal vem do tipo).
  */
 export const movimentoSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   data: z.string().trim().regex(DATA_REGEX, { error: "Data inválida" }),
   tipo: z.enum(TIPOS_MOVIMENTO, { error: "Escolha um tipo válido" }),
   horas: z
@@ -47,7 +49,7 @@ export type MovimentoInput = z.infer<typeof movimentoSchema>;
  * do react-hook-form; a coerção real é no submit.
  */
 export const movimentoFormSchema = z.object({
-  colaboradorId: z.uuid({ error: "Selecione o colaborador" }),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
   data: z.string().trim().regex(DATA_REGEX, { error: "Informe a data" }),
   tipo: z.enum(TIPOS_MOVIMENTO, { error: "Escolha um tipo válido" }),
   horas: z
