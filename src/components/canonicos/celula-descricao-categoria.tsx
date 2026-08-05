@@ -108,10 +108,16 @@ export function CelulaDescricaoCategoria({
   return (
     <div className="min-w-0">
       <div
-        // `break-words` porque, sem o `truncate` de antes, nada mais segura
-        // dentro da coluna um texto sem espaço (código de nota, chave de acesso,
-        // URL): ele vazaria por cima da coluna vizinha.
-        className="font-medium break-words"
+        // `whitespace-normal` é obrigatório e é o que faltava: a TableCell do
+        // shadcn tem `whitespace-nowrap` fixo, e ele é HERDADO. Tirar o `truncate`
+        // sem desfazer o nowrap não fez o texto quebrar, fez ele virar uma linha só
+        // SEM corte (o truncate ao menos trazia o overflow:hidden junto), vazando
+        // por cima de Valor, Data e Vencimento. Medido na tela: nowrap na td, na
+        // wrapper e na descrição, com overflow visible.
+        //
+        // `break-words` para o texto sem espaço (código de nota, chave de acesso,
+        // URL), que quebra linha nenhuma resolve.
+        className="font-medium break-words whitespace-normal"
         style={corte}
         // Tooltip só onde pode ter sobrado texto fora da tela. Na altura
         // automática o texto está todo aí, e tooltip repetindo o que se lê é
