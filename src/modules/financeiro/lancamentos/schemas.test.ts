@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  FILTROS_REVISAO,
+  ROTULO_FILTRO_REVISAO,
   lancamentoFormSchema,
   lancamentoSchema,
 } from "@/modules/financeiro/lancamentos/schemas";
@@ -150,5 +152,34 @@ describe("lancamentoSchema, servidor", () => {
       rateios: [{ centroCustoId: CENTRO, valor: 900 }],
     });
     expect(r.success).toBe(false);
+  });
+});
+
+/**
+ * O filtro de revisão é de escolha única, então "revisado" sem o complemento
+ * deixava a pergunta mais frequente do dia ("o que ainda falta escolher conta?")
+ * sem resposta em uma passada: era preciso olhar "sem conta" e depois "conta
+ * parcial". Estes casos travam o par e o rótulo de cada opção.
+ */
+describe("filtro de revisão", () => {
+  it("tem o par revisado e não revisado, além dos estados granulares", () => {
+    expect(FILTROS_REVISAO).toContain("revisado");
+    expect(FILTROS_REVISAO).toContain("nao_revisado");
+    expect(FILTROS_REVISAO).toContain("sem_conta");
+    expect(FILTROS_REVISAO).toContain("parcial");
+    expect(FILTROS_REVISAO).toContain("em_revisao");
+  });
+
+  it("toda opção tem rótulo, senão o select mostra o valor cru", () => {
+    for (const valor of FILTROS_REVISAO) {
+      expect(ROTULO_FILTRO_REVISAO[valor]).toBeTruthy();
+      // Valor cru é snake_case; rótulo é texto para gente ler.
+      expect(ROTULO_FILTRO_REVISAO[valor]).not.toContain("_");
+    }
+  });
+
+  it("não revisado e revisado são rótulos distintos e opostos", () => {
+    expect(ROTULO_FILTRO_REVISAO.revisado).toBe("Revisado");
+    expect(ROTULO_FILTRO_REVISAO.nao_revisado).toBe("Não revisado");
   });
 });

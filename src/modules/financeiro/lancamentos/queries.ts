@@ -99,12 +99,15 @@ export interface LancamentoLista {
   /** Data de sistema, imutável. */
   criadoEm: string;
   /**
-   * Estado da revisão do lançamento, derivado da conta bancária das parcelas
-   * ainda não pagas. Não é um marcador que alguém liga na mão de propósito: selo
-   * dizendo "revisado" com a conta vazia seria mentira, e um flag manual sairia
-   * de sincronia com o que o banco exige para aprovar.
+   * Estado da revisão do lançamento, derivado da conta bancária das parcelas.
+   * Não é um marcador que alguém liga na mão de propósito: selo dizendo
+   * "revisado" com a conta vazia seria mentira, e um flag manual sairia de
+   * sincronia com o que o banco exige para aprovar.
    *
-   * nao-se-aplica: a receber, ou sem parcela ainda.
+   * Parcela PAGA conta como resolvida, porque pagar exige conta bancária. Logo
+   * lançamento quitado é `revisado`, e é o caso mais resolvido que existe.
+   *
+   * nao-se-aplica: a receber, ou sem parcela nenhuma.
    */
   revisao: "sem-conta" | "parcial" | "revisado" | "nao-se-aplica";
 }
@@ -349,11 +352,15 @@ async function idsPorRevisao(
     return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
   }
 
+  // Parcela PAGA entra na conta, e conta como resolvida: pagar exige conta
+  // bancária (fn_pagar_parcela recusa sem ela), então parcela paga é o caso mais
+  // resolvido que existe. Antes elas eram excluídas pela consulta, e o efeito era
+  // o contrário do esperado: lançamento quitado ficava fora do filtro "Revisado" e
+  // aparecia com "-" na coluna, como se a pergunta não valesse para ele.
   const parcelas = await lerEmPaginas((de, ate) =>
     supabase
       .from("lancamento_parcelas")
-      .select("lancamento_id, conta_bancaria_id, lancamentos!inner(tipo)")
-      .neq("status", "pago")
+      .select("lancamento_id, conta_bancaria_id, status, lancamentos!inner(tipo)")
       .eq("lancamentos.tipo", "a_pagar")
       .order("lancamento_id")
       .order("id")
@@ -367,7 +374,9 @@ async function idsPorRevisao(
       comConta: 0,
     };
     atual.total += 1;
-    if (parcela.conta_bancaria_id !== null) atual.comConta += 1;
+    if (parcela.status === "pago" || parcela.conta_bancaria_id !== null) {
+      atual.comConta += 1;
+    }
     contagem.set(parcela.lancamento_id, atual);
   }
 
@@ -375,7 +384,13 @@ async function idsPorRevisao(
   for (const [id, { total, comConta }] of contagem) {
     const estado =
       comConta === 0 ? "sem_conta" : comConta === total ? "revisado" : "parcial";
-    if (estado === revisao) ids.push(id);
+    // `nao_revisado` é o complemento de `revisado`: sem conta nenhuma ou conta em
+    // parte. Lançamento quitado NÃO entra aqui, porque parcela paga conta como
+    // resolvida (ver o comentário da contagem acima): quitado é revisado, não
+    // pendência.
+    const casa =
+      revisao === "nao_revisado" ? estado !== "revisado" : estado === revisao;
+    if (casa) ids.push(id);
   }
   return ids;
 }
@@ -510,17 +525,23 @@ export async function listarLancamentos(
 
   const itens: LancamentoLista[] = (data ?? []).map((lancamento) => {
     const parcelas = lancamento.lancamento_parcelas ?? [];
-    const aRevisar = parcelas.filter((parcela) => parcela.status !== "pago");
-    const comConta = aRevisar.filter(
-      (parcela) => parcela.conta_bancaria_id !== null,
+    // Parcela PAGA conta como resolvida: pagar exige conta bancária, então ela é o
+    // caso mais resolvido que existe. Antes as pagas eram descartadas aqui, e o
+    // lançamento quitado caía em "não se aplica" mostrando "-" na coluna, como se a
+    // pergunta não valesse para ele, justamente no caso em que a resposta é o
+    // melhor possível. Tem que casar com `idsPorRevisao`, senão o filtro traz um
+    // conjunto e a coluna mostra outro.
+    const comConta = parcelas.filter(
+      (parcela) =>
+        parcela.status === "pago" || parcela.conta_bancaria_id !== null,
     ).length;
 
     const revisao: LancamentoLista["revisao"] =
-      lancamento.tipo !== "a_pagar" || aRevisar.length === 0
+      lancamento.tipo !== "a_pagar" || parcelas.length === 0
         ? "nao-se-aplica"
         : comConta === 0
           ? "sem-conta"
-          : comConta === aRevisar.length
+          : comConta === parcelas.length
             ? "revisado"
             : "parcial";
 

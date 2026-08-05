@@ -335,6 +335,7 @@ export const FILTROS_REVISAO = [
   "sem_conta",
   "parcial",
   "revisado",
+  "nao_revisado",
 ] as const;
 
 export type FiltroRevisao = (typeof FILTROS_REVISAO)[number];
@@ -344,4 +345,12 @@ export const ROTULO_FILTRO_REVISAO: Record<FiltroRevisao, string> = {
   sem_conta: "Sem conta bancária",
   parcial: "Conta parcial",
   revisado: "Revisado",
+  // O complemento de "revisado", que é a pergunta que se faz mais vezes por dia:
+  // "o que ainda falta escolher conta?". Sem ele, responder isso exigia olhar
+  // "sem conta" e "conta parcial" em duas passadas, e o filtro é de escolha única.
+  //
+  // Não inclui lançamento sem nenhuma parcela a pagar (já quitado): ele não está
+  // revisado, mas também não está esperando nada, e apareceria só para atrapalhar
+  // quem está atrás de pendência.
+  nao_revisado: "Não revisado",
 };
