@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -9,6 +9,7 @@ import {
   classesFormulario,
   InputSenha,
 } from "@/components/canonicos";
+import { limparFiltrosSessao } from "@/components/canonicos/filtros-sessao";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,19 @@ interface LoginFormProps {
 
 export function LoginForm({ erroInicial }: LoginFormProps) {
   const [erro, setErro] = useState<string | null>(erroInicial ?? null);
+
+  /**
+   * Zera o filtro lembrado de todas as listagens ao chegar no login.
+   *
+   * O logout é Server Action com redirect e não alcança o armazenamento do
+   * navegador, e a aba segue aberta com o `sessionStorage` intacto. Sem isto, na
+   * máquina compartilhada do escritório a próxima pessoa a entrar herdaria os
+   * filtros de quem saiu. Passar pelo login é o único caminho que toda troca de
+   * usuário percorre, inclusive quando a sessão expira sozinha.
+   */
+  useEffect(() => {
+    limparFiltrosSessao();
+  }, []);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),

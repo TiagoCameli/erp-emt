@@ -24,6 +24,7 @@ import {
   CONTROLE_POR_CONFIG,
 } from "@/modules/cadastros/equipamentos/schemas";
 import { EquipamentosFormDrawer } from "./equipamentos-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -115,14 +116,14 @@ export function EquipamentosTabela({
 }: EquipamentosTabelaProps) {
   const [selecionadoId, setSelecionadoId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
-  const [busca, setBusca] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
   // "todos" para não mudar o que a tela mostra hoje: a listagem nunca escondeu
   // equipamento inativo, e ganhar um filtro não pode sumir com linha nenhuma.
-  const [status, setStatus] = React.useState<FiltroStatus>("todos");
-  const [tipo, setTipo] = React.useState("");
-  const [marca, setMarca] = React.useState("");
-  const [controle, setControle] = React.useState("");
-  const [ano, setAno] = React.useState("");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "todos", ["ativos", "inativos", "todos"]);
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [marca, setMarca] = useFiltroSessao("marca", "");
+  const [controle, setControle] = useFiltroSessao("controle", "");
+  const [ano, setAno] = useFiltroSessao("ano", "");
 
   // Deriva da prop pra refletir edições depois do revalidatePath.
   const equipamentoSelecionado =

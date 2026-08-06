@@ -32,6 +32,7 @@ import {
 } from "@/modules/rh/ocorrencias/schemas";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { OcorrenciaFormDrawer } from "./ocorrencia-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface OcorrenciasTabelaProps {
   ocorrencias: OcorrenciaLista[];
@@ -73,11 +74,11 @@ export function OcorrenciasTabela({
   podeExcluir,
   anexosPorRegistro,
 }: OcorrenciasTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [tipo, setTipo] = React.useState("");
-  const [colaboradorId, setColaboradorId] = React.useState("");
-  const [dataDe, setDataDe] = React.useState("");
-  const [dataAte, setDataAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [dataDe, setDataDe] = useFiltroSessao("dataDe", "");
+  const [dataAte, setDataAte] = useFiltroSessao("dataAte", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<OcorrenciaLista | null>(null);

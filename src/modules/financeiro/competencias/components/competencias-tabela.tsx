@@ -30,6 +30,7 @@ import {
   reabrirCompetencia,
 } from "@/modules/financeiro/competencias/actions";
 import type { CompetenciaMes } from "@/modules/financeiro/competencias/queries";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface CompetenciasTabelaProps {
   competencias: CompetenciaMes[];
@@ -71,12 +72,12 @@ export function CompetenciasTabela({
 
   // A lista de meses vem inteira do servidor, então os filtros rodam em memória.
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
-  const [mes, setMes] = React.useState("");
-  const [situacao, setSituacao] = React.useState("");
-  const [incompletos, setIncompletos] = React.useState("");
-  const [excecoes, setExcecoes] = React.useState("");
-  const [custoDe, setCustoDe] = React.useState("");
-  const [custoAte, setCustoAte] = React.useState("");
+  const [mes, setMes] = useFiltroSessao("mes", "");
+  const [situacao, setSituacao] = useFiltroSessao("situacao", "");
+  const [incompletos, setIncompletos] = useFiltroSessao("incompletos", "");
+  const [excecoes, setExcecoes] = useFiltroSessao("excecoes", "");
+  const [custoDe, setCustoDe] = useFiltroSessao("custoDe", "");
+  const [custoAte, setCustoAte] = useFiltroSessao("custoAte", "");
 
   // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
   // numa página vazia.

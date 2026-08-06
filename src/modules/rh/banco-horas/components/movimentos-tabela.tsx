@@ -30,6 +30,7 @@ import {
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { MovimentoFormDrawer } from "./movimento-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface MovimentosTabelaProps {
   movimentos: MovimentoLista[];
@@ -48,13 +49,13 @@ export function MovimentosTabela({
   podeCriar,
   podeEditar,
 }: MovimentosTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [tipo, setTipo] = React.useState("");
-  const [colaboradorId, setColaboradorId] = React.useState("");
-  const [dataDe, setDataDe] = React.useState("");
-  const [dataAte, setDataAte] = React.useState("");
-  const [horasDe, setHorasDe] = React.useState("");
-  const [horasAte, setHorasAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [dataDe, setDataDe] = useFiltroSessao("dataDe", "");
+  const [dataAte, setDataAte] = useFiltroSessao("dataAte", "");
+  const [horasDe, setHorasDe] = useFiltroSessao("horasDe", "");
+  const [horasAte, setHorasAte] = useFiltroSessao("horasAte", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<MovimentoLista | null>(null);

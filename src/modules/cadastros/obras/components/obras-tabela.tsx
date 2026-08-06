@@ -30,6 +30,7 @@ import {
   STATUS_OBRA_CONFIG,
 } from "@/modules/cadastros/obras/schemas";
 import { ObrasFormDrawer } from "./obras-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
@@ -136,17 +137,17 @@ export interface ObrasTabelaProps {
 export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState("ativos");
-  const [situacao, setSituacao] = React.useState("");
-  const [clienteId, setClienteId] = React.useState("");
-  const [uf, setUf] = React.useState("");
-  const [rodovia, setRodovia] = React.useState("");
-  const [lote, setLote] = React.useState("");
-  const [inicioDe, setInicioDe] = React.useState("");
-  const [inicioAte, setInicioAte] = React.useState("");
-  const [fimDe, setFimDe] = React.useState("");
-  const [fimAte, setFimAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao("status", "ativos");
+  const [situacao, setSituacao] = useFiltroSessao("situacao", "");
+  const [clienteId, setClienteId] = useFiltroSessao("clienteId", "");
+  const [uf, setUf] = useFiltroSessao("uf", "");
+  const [rodovia, setRodovia] = useFiltroSessao("rodovia", "");
+  const [lote, setLote] = useFiltroSessao("lote", "");
+  const [inicioDe, setInicioDe] = useFiltroSessao("inicioDe", "");
+  const [inicioAte, setInicioAte] = useFiltroSessao("inicioAte", "");
+  const [fimDe, setFimDe] = useFiltroSessao("fimDe", "");
+  const [fimAte, setFimAte] = useFiltroSessao("fimAte", "");
 
   // Deriva da prop pra refletir edições depois do revalidatePath.
   const obraSelecionada =

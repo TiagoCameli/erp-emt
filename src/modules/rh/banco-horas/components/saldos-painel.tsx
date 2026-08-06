@@ -13,6 +13,7 @@ import {
 import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import type { SaldoColaborador } from "@/modules/rh/banco-horas/queries";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface SaldosPainelProps {
   saldos: SaldoColaborador[];
@@ -50,8 +51,8 @@ function SaldoHoras({ saldo }: { saldo: number }) {
  * colaborador com movimento), sem paginação server-side.
  */
 export function SaldosPainel({ saldos }: SaldosPainelProps) {
-  const [busca, setBusca] = React.useState("");
-  const [sinal, setSinal] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [sinal, setSinal] = useFiltroSessao("sinal", "");
 
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();

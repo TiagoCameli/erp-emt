@@ -63,6 +63,7 @@ import {
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
 import { AprovarDialog } from "./aprovar-dialog";
 import { PainelConferencia } from "./painel-conferencia";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Aviso de nota fiscal da OC de origem: não bloqueia aprovar, só informa. */
 const OPCOES_NOTA = [
@@ -191,19 +192,19 @@ export function FilaAprovacao({
   const [alvoRevisao, setAlvoRevisao] = React.useState<Alvo | null>(null);
   const [emConferencia, setEmConferencia] =
     React.useState<ParcelaPendente | null>(null);
-  const [filtroBusca, setFiltroBusca] = React.useState("");
-  const [filtroConta, setFiltroConta] = React.useState("");
-  const [filtroCategoria, setFiltroCategoria] = React.useState("");
-  const [filtroFornecedor, setFiltroFornecedor] = React.useState("");
-  const [filtroCentroCusto, setFiltroCentroCusto] = React.useState("");
-  const [filtroForma, setFiltroForma] = React.useState("");
-  const [filtroOrigem, setFiltroOrigem] = React.useState("");
-  const [filtroNota, setFiltroNota] = React.useState("");
-  const [filtroMes, setFiltroMes] = React.useState("");
-  const [filtroValorDe, setFiltroValorDe] = React.useState("");
-  const [filtroValorAte, setFiltroValorAte] = React.useState("");
-  const [filtroVencDe, setFiltroVencDe] = React.useState("");
-  const [filtroVencAte, setFiltroVencAte] = React.useState("");
+  const [filtroBusca, setFiltroBusca] = useFiltroSessao("filtroBusca", "");
+  const [filtroConta, setFiltroConta] = useFiltroSessao("filtroConta", "");
+  const [filtroCategoria, setFiltroCategoria] = useFiltroSessao("filtroCategoria", "");
+  const [filtroFornecedor, setFiltroFornecedor] = useFiltroSessao("filtroFornecedor", "");
+  const [filtroCentroCusto, setFiltroCentroCusto] = useFiltroSessao("filtroCentroCusto", "");
+  const [filtroForma, setFiltroForma] = useFiltroSessao("filtroForma", "");
+  const [filtroOrigem, setFiltroOrigem] = useFiltroSessao("filtroOrigem", "");
+  const [filtroNota, setFiltroNota] = useFiltroSessao("filtroNota", "");
+  const [filtroMes, setFiltroMes] = useFiltroSessao("filtroMes", "");
+  const [filtroValorDe, setFiltroValorDe] = useFiltroSessao("filtroValorDe", "");
+  const [filtroValorAte, setFiltroValorAte] = useFiltroSessao("filtroValorAte", "");
+  const [filtroVencDe, setFiltroVencDe] = useFiltroSessao("filtroVencDe", "");
+  const [filtroVencAte, setFiltroVencAte] = useFiltroSessao("filtroVencAte", "");
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
   const filtrando =

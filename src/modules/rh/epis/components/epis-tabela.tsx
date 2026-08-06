@@ -29,6 +29,7 @@ import type { EpiLista } from "@/modules/rh/epis/queries";
 import { noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { EpiFormDrawer } from "./epi-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Situação do EPI entregue: ainda com o colaborador ou já devolvido. */
 const OPCOES_SITUACAO = [
@@ -65,14 +66,14 @@ export function EpisTabela({
   podeExcluir,
   anexosPorRegistro,
 }: EpisTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [colaboradorId, setColaboradorId] = React.useState("");
-  const [situacao, setSituacao] = React.useState("");
-  const [assinado, setAssinado] = React.useState("");
-  const [entregaDe, setEntregaDe] = React.useState("");
-  const [entregaAte, setEntregaAte] = React.useState("");
-  const [devolucaoDe, setDevolucaoDe] = React.useState("");
-  const [devolucaoAte, setDevolucaoAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [situacao, setSituacao] = useFiltroSessao("situacao", "");
+  const [assinado, setAssinado] = useFiltroSessao("assinado", "");
+  const [entregaDe, setEntregaDe] = useFiltroSessao("entregaDe", "");
+  const [entregaAte, setEntregaAte] = useFiltroSessao("entregaAte", "");
+  const [devolucaoDe, setDevolucaoDe] = useFiltroSessao("devolucaoDe", "");
+  const [devolucaoAte, setDevolucaoAte] = useFiltroSessao("devolucaoAte", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<EpiLista | null>(null);

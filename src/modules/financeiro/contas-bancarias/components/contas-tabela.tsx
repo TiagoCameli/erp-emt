@@ -22,6 +22,7 @@ import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
 import type { ContaLista } from "@/modules/financeiro/contas-bancarias/queries";
 import { ROTULO_TIPO_CONTA } from "@/modules/financeiro/contas-bancarias/schemas";
 import { ContasFormDrawer } from "./contas-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativas" },
@@ -108,12 +109,12 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
-  const [busca, setBusca] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = React.useState("ativos");
-  const [banco, setBanco] = React.useState("");
-  const [tipo, setTipo] = React.useState("");
-  const [saldoDe, setSaldoDe] = React.useState("");
-  const [saldoAte, setSaldoAte] = React.useState("");
+  const [banco, setBanco] = useFiltroSessao("banco", "");
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [saldoDe, setSaldoDe] = useFiltroSessao("saldoDe", "");
+  const [saldoAte, setSaldoAte] = useFiltroSessao("saldoAte", "");
 
   // Deriva da prop pra refletir edições depois do revalidatePath.
   const contaSelecionada =

@@ -19,6 +19,7 @@ import type {
 } from "@/modules/administracao/perfis/queries";
 import { DetalhePerfilDrawer } from "./detalhe-perfil-drawer";
 import { NovoPerfilDrawer } from "./novo-perfil-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface PerfisTabProps {
   perfis: PerfilResumo[];
@@ -82,9 +83,9 @@ export function PerfisTab({
   const [novoAberto, setNovoAberto] = useState(false);
   const [idSelecionado, setIdSelecionado] = useState<string | null>(null);
 
-  const [busca, setBusca] = useState("");
-  const [comUsuarios, setComUsuarios] = useState("");
-  const [comPermissoes, setComPermissoes] = useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [comUsuarios, setComUsuarios] = useFiltroSessao("comUsuarios", "");
+  const [comPermissoes, setComPermissoes] = useFiltroSessao("comPermissoes", "");
 
   const perfilSelecionado =
     perfis.find((perfil) => perfil.id === idSelecionado) ?? null;

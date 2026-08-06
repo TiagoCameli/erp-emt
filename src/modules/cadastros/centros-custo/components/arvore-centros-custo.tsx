@@ -46,6 +46,7 @@ import {
   type TipoCentro,
 } from "@/modules/cadastros/centros-custo/schemas";
 import { NoFormDrawer, type ModoNo } from "./no-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
@@ -178,13 +179,13 @@ export function ArvoreCentrosCusto({
   podeCriar,
   podeEditar,
 }: ArvoreCentrosCustoProps) {
-  const [busca, setBusca] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
   // "todos" para não mudar o que a tela mostra hoje: a árvore sempre exibiu nó
   // inativo (esmaecido), e ganhar um filtro não pode sumir com galho nenhum.
-  const [status, setStatus] = React.useState("todos");
-  const [tipo, setTipo] = React.useState("");
-  const [obraId, setObraId] = React.useState("");
-  const [nivel, setNivel] = React.useState("");
+  const [status, setStatus] = useFiltroSessao("status", "todos");
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [obraId, setObraId] = useFiltroSessao("obraId", "");
+  const [nivel, setNivel] = useFiltroSessao("nivel", "");
   const [expandidos, setExpandidos] = React.useState<Set<string>>(() => {
     // Centros (nível 1) começam expandidos para mostrar a estrutura.
     return new Set(nos.filter((no) => no.nivel === 1).map((no) => no.id));

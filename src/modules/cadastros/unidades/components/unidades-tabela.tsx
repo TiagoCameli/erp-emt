@@ -27,6 +27,7 @@ import {
   ROTULO_TIPO_UNIDADE,
   TIPOS_UNIDADE,
 } from "@/modules/cadastros/unidades/schemas";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -61,9 +62,9 @@ export function UnidadesTabela({
   podeExcluir,
   onEditar,
 }: UnidadesTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [tipo, setTipo] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
   const [excluindo, setExcluindo] = React.useState<UnidadeLista | null>(null);
 
   const filtradas = React.useMemo(() => {

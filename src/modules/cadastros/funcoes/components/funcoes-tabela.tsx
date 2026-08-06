@@ -25,6 +25,7 @@ import {
 import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
 import { removerFuncao } from "@/modules/cadastros/funcoes/actions";
 import type { FuncaoLista } from "@/modules/cadastros/funcoes/queries";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -54,11 +55,11 @@ export function FuncoesTabela({
   podeExcluir,
   onEditar,
 }: FuncoesTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [cbo, setCbo] = React.useState("");
-  const [salarioDe, setSalarioDe] = React.useState("");
-  const [salarioAte, setSalarioAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [cbo, setCbo] = useFiltroSessao("cbo", "");
+  const [salarioDe, setSalarioDe] = useFiltroSessao("salarioDe", "");
+  const [salarioAte, setSalarioAte] = useFiltroSessao("salarioAte", "");
   const [excluindo, setExcluindo] = React.useState<FuncaoLista | null>(null);
 
   // CBO é texto livre no cadastro: as opções são os códigos já usados.
