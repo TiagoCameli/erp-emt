@@ -24,6 +24,7 @@ import type {
   FiltroRevisao,
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
+import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
 
 /** Cliente Supabase do servidor, para as consultas auxiliares de filtro. */
 type ClienteSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -814,4 +815,28 @@ export async function trilhaLancamento(id: string): Promise<EventoTrilha[]> {
 
   const nomes = await resolverNomesAuditLog(supabase, registros);
   return eventosDoAuditLog(registros, { nomes, entidade: "Lançamento", genero: "m" });
+}
+
+/**
+ * Só os ids do conjunto filtrado, para o "selecionar todos do filtro" da tela.
+ *
+ * Reusa `listarLancamentos` de propósito, em vez de montar uma segunda consulta
+ * com os mesmos filtros. Duas montagens de filtro divergem no primeiro filtro
+ * novo que alguém acrescenta, e aí o "selecionar todos" passa a marcar um
+ * conjunto diferente do que está na tela — que é o pior defeito possível numa
+ * ação em massa. O preço é buscar as linhas inteiras e jogar tudo fora menos o
+ * id, e é um preço barato: isto roda num clique, não no caminho quente da tela.
+ *
+ * Busca `LIMITE_LOTE + 1` de propósito: com um a mais que o teto, a tela sabe
+ * dizer "o filtro achou mais que o limite, refine" sem precisar contar tudo.
+ */
+export async function listarIdsLancamentosFiltrados(
+  params: Omit<ListarLancamentosParams, "pagina" | "tamanho">,
+): Promise<string[]> {
+  const pagina = await listarLancamentos({
+    ...params,
+    pagina: 0,
+    tamanho: LIMITE_LOTE + 1,
+  });
+  return pagina.itens.map((item) => item.id);
 }

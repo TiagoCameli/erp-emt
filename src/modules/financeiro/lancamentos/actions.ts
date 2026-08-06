@@ -12,6 +12,10 @@ import {
   lancamentoSchema,
   type LancamentoInput,
 } from "@/modules/financeiro/lancamentos/schemas";
+import {
+  LIMITE_LOTE,
+  type ResumoLote,
+} from "@/modules/financeiro/lancamentos/lote";
 
 const RECURSO = "financeiro.lancamentos" as const;
 const ROTA = "/financeiro/lancamentos";
@@ -440,4 +444,75 @@ export async function definirContaLancamento(
   revalidatePath(ROTA);
   revalidatePath("/financeiro/aprovacao-pagamentos");
   return { ok: true };
+}
+
+/**
+ * Define a mesma conta bancária em vários lançamentos, numa transação.
+ *
+ * Recebe IDS e não o filtro, de propósito: o que o usuário viu na tela é o que
+ * muda, e lançamento criado entre o clique e a execução não entra de carona. O
+ * preço é a lista poder envelhecer, e a resposta então diz quantos não foram
+ * encontrados em vez de fingir sucesso.
+ *
+ * Só PREENCHE VAZIO: quem já tem conta é pulado e contado. A trava de verdade
+ * está no `where` da função do banco (`conta_bancaria_id is null`); aqui é
+ * validação de entrada e tradução do resumo.
+ */
+export async function definirContaLancamentosLote(
+  ids: string[],
+  contaId: string,
+): Promise<{ ok: true; resumo: ResumoLote } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para editar lançamentos" };
+  }
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { erro: "Selecione ao menos um lançamento" };
+  }
+
+  // Deduplica antes de contar: id repetido não pode consumir o teto nem inflar o
+  // número que aparece para o usuário.
+  const unicos = [...new Set(ids)];
+  if (unicos.length > LIMITE_LOTE) {
+    return {
+      erro: `Selecione no máximo ${LIMITE_LOTE} lançamentos por vez (você selecionou ${unicos.length})`,
+    };
+  }
+  if (unicos.some((id) => !idSchema.safeParse(id).success)) {
+    return { erro: "Seleção inválida" };
+  }
+
+  const contaValida = idSchema.safeParse(contaId);
+  if (!contaValida.success) return { erro: "Selecione a conta bancária" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc(
+    "fn_definir_conta_lancamentos_lote",
+    { p_lanc_ids: unicos, p_conta_id: contaValida.data },
+  );
+
+  if (error) {
+    return erroAcao(
+      "financeiro.lancamentos.definirContaLancamentosLote",
+      error,
+      error.message || "Não foi possível definir a conta bancária",
+    );
+  }
+
+  // O jsonb do banco vem em snake_case. Traduzido UMA vez, aqui: daqui para a
+  // tela o contrato é o ResumoLote em camelCase.
+  const bruto = (data ?? {}) as Record<string, number>;
+  revalidatePath(ROTA);
+  revalidatePath("/financeiro/aprovacao-pagamentos");
+  return {
+    ok: true,
+    resumo: {
+      definidos: bruto.definidos ?? 0,
+      puladosComConta: bruto.pulados_com_conta ?? 0,
+      puladosSemParcelaPendente: bruto.pulados_sem_parcela_pendente ?? 0,
+      naoEncontrados: bruto.nao_encontrados ?? 0,
+    },
+  };
 }

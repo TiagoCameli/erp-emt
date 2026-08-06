@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       anexo_vinculos: {
@@ -1708,7 +1733,7 @@ export type Database = {
           status: string
           updated_at: string
           valor: number
-          valor_liquido: number
+          valor_liquido: number | null
         }
         Insert: {
           aprovado_em?: string | null
@@ -1731,6 +1756,7 @@ export type Database = {
           status?: string
           updated_at?: string
           valor: number
+          valor_liquido?: number | null
         }
         Update: {
           aprovado_em?: string | null
@@ -1753,6 +1779,7 @@ export type Database = {
           status?: string
           updated_at?: string
           valor?: number
+          valor_liquido?: number | null
         }
         Relationships: [
           {
@@ -3119,6 +3146,7 @@ export type Database = {
         Args: { p_motivo: string; p_oc_id: string }
         Returns: undefined
       }
+      fn_chave_nome: { Args: { p_texto: string }; Returns: string }
       fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean }
       fn_competencias_painel: {
         Args: { p_meses?: number }
@@ -3150,6 +3178,10 @@ export type Database = {
       fn_definir_conta_lancamento: {
         Args: { p_conta_id: string; p_lanc_id: string }
         Returns: undefined
+      }
+      fn_definir_conta_lancamentos_lote: {
+        Args: { p_conta_id: string; p_lanc_ids: string[] }
+        Returns: Json
       }
       fn_definir_parcelas_lancamento: {
         Args: { p_lanc_id: string; p_parcelas: Json }
@@ -3215,6 +3247,14 @@ export type Database = {
       fn_gerar_folha: {
         Args: { p_competencia: string; p_encargos_pct?: number }
         Returns: string
+      }
+      fn_importar_br364_lote09: {
+        Args: {
+          p_ajustar_saldo_conta?: boolean
+          p_criar_lancamento_orfao?: boolean
+          p_usuario_id?: string
+        }
+        Returns: Json
       }
       fn_importar_extrato: {
         Args: {
@@ -3639,6 +3679,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
