@@ -27,7 +27,10 @@ begin;
 select set_config(
   'request.jwt.claims',
   json_build_object(
-    'sub', (select id::text from public.usuarios where ativo order by created_at limit 1),
+    -- Usuario que REALMENTE tem a permissao: com um qualquer, a prova falharia
+    -- por permissao e nao pelo que ela quer medir.
+    'sub', (select usuario_id::text from public.usuario_permissoes
+            where recurso = 'financeiro.lancamentos' and acao = 'editar' limit 1),
     'role', 'authenticated'
   )::text,
   true
@@ -49,40 +52,39 @@ insert into t_ids (chave, id) values
 create or replace function pg_temp.id(p_chave text) returns uuid
 language sql stable as $$ select id from t_ids where chave = p_chave $$;
 
-insert into public.contas_bancarias (id, nome, banco, agencia, conta, saldo_inicial, ativo)
-values
-  (pg_temp.id('conta_nova'), 'PROVA LOTE nova', '001', '0001', '111111', 0, true),
-  (pg_temp.id('conta_velha'), 'PROVA LOTE velha', '237', '0002', '222222', 0, true);
+insert into public.contas_bancarias (id, nome, ativo) values
+  (pg_temp.id('conta_nova'), 'PROVA LOTE nova', true),
+  (pg_temp.id('conta_velha'), 'PROVA LOTE velha', true);
 
 -- Lancamentos minimos, do jeito que a carga da BR-364 deixou: a pagar, sem conta.
-insert into public.lancamentos (id, tipo, descricao, valor, data_vencimento, status)
-select x.id, 'a_pagar', 'PROVA LOTE ' || x.chave, 1000, current_date + 30, 'a_pagar'
+insert into public.lancamentos (id, tipo, origem, descricao, valor, status)
+select x.id, 'a_pagar', 'manual', 'PROVA LOTE ' || x.chave, 1000, 'a_pagar'
 from t_ids x where x.chave in ('lanc_a', 'lanc_b', 'lanc_c', 'lanc_d');
 
 -- A: duas parcelas em aberto, sem conta
 insert into public.lancamento_parcelas
-  (lancamento_id, numero, valor, data_vencimento, status, conta_bancaria_id)
+  (lancamento_id, numero_parcela, valor, data_vencimento, status, conta_bancaria_id)
 values
-  (pg_temp.id('lanc_a'), 1, 500, current_date + 30, 'a_pagar', null),
-  (pg_temp.id('lanc_a'), 2, 500, current_date + 60, 'a_pagar', null);
+  (pg_temp.id('lanc_a'), 1, 500, current_date + 30, 'pendente', null),
+  (pg_temp.id('lanc_a'), 2, 500, current_date + 60, 'pendente', null);
 
 -- B: parcial (uma com conta velha, uma sem)
 insert into public.lancamento_parcelas
-  (lancamento_id, numero, valor, data_vencimento, status, conta_bancaria_id)
+  (lancamento_id, numero_parcela, valor, data_vencimento, status, conta_bancaria_id)
 values
-  (pg_temp.id('lanc_b'), 1, 500, current_date + 30, 'a_pagar', pg_temp.id('conta_velha')),
-  (pg_temp.id('lanc_b'), 2, 500, current_date + 60, 'a_pagar', null);
+  (pg_temp.id('lanc_b'), 1, 500, current_date + 30, 'pendente', pg_temp.id('conta_velha')),
+  (pg_temp.id('lanc_b'), 2, 500, current_date + 60, 'pendente', null);
 
 -- C: as duas ja com conta velha
 insert into public.lancamento_parcelas
-  (lancamento_id, numero, valor, data_vencimento, status, conta_bancaria_id)
+  (lancamento_id, numero_parcela, valor, data_vencimento, status, conta_bancaria_id)
 values
-  (pg_temp.id('lanc_c'), 1, 500, current_date + 30, 'a_pagar', pg_temp.id('conta_velha')),
-  (pg_temp.id('lanc_c'), 2, 500, current_date + 60, 'a_pagar', pg_temp.id('conta_velha'));
+  (pg_temp.id('lanc_c'), 1, 500, current_date + 30, 'pendente', pg_temp.id('conta_velha')),
+  (pg_temp.id('lanc_c'), 2, 500, current_date + 60, 'pendente', pg_temp.id('conta_velha'));
 
 -- D: paga, sem conta. Parcela paga nunca pode ser tocada.
 insert into public.lancamento_parcelas
-  (lancamento_id, numero, valor, data_vencimento, status, conta_bancaria_id)
+  (lancamento_id, numero_parcela, valor, data_vencimento, status, conta_bancaria_id)
 values
   (pg_temp.id('lanc_d'), 1, 1000, current_date - 10, 'pago', null);
 
@@ -212,3 +214,13 @@ begin
 end $$;
 
 rollback;
+
+-- RODADA CONFERIDA em 06/08/2026 contra o banco vivo (vsesgvqjgqpapoxhnbqx):
+-- as 8 afirmacoes passaram, e o resumo veio
+-- {"definidos": 2, "pulados_com_conta": 1, "pulados_sem_parcela_pendente": 1,
+--  "nao_encontrados": 1}, exatamente o esperado.
+--
+-- Dois nomes que esta prova aprendeu na primeira rodada e que valem para quem
+-- escrever a proxima: a coluna e `numero_parcela`, nao `numero`, e o status de
+-- PARCELA e `pendente`, nao `a_pagar` (`a_pagar` e status de LANCAMENTO). A
+-- funcao ja estava certa porque testa `status <> 'pago'`, que cobre os dois.
