@@ -1,14 +1,37 @@
 name: CI
 
+# Repo privado tem cota mensal de minutos de Actions, e em 06/08/2026 ela
+# estourou: uma rodada travada queimou 15 minutos sozinha, PR só de documentação
+# rodou o build inteiro, e commit novo em PR aberto deixava a rodada velha
+# terminar à toa. Cada guarda abaixo existe por um desses.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "supabase/provas/**"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "supabase/provas/**"
+
+# Commit novo na mesma referência cancela a rodada anterior. Sem isto, empurrar o
+# segundo commit de um PR deixava a primeira rodada correr até o fim para um
+# resultado que ninguém ia ler.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verificar:
     name: Typecheck, lint, testes e build
     runs-on: ubuntu-latest
+    # Teto duro. O portão local inteiro roda em ~1 minuto nesta base, e a rodada
+    # típica aqui leva 2. Passar de 10 significa que algo travou, e travado tem
+    # que morrer rápido em vez de consumir a cota do mês.
+    timeout-minutes: 10
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
@@ -22,6 +45,17 @@ jobs:
 
       - name: Instalar dependencias
         run: npm ci
+
+      # Cache do compilador do Next. Sem ele o build refaz tudo do zero em toda
+      # rodada, que é a parte mais lenta do portão.
+      - name: Cache do build do Next
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**') }}
+          restore-keys: |
+            next-${{ hashFiles('package-lock.json') }}-
+            next-
 
       - name: Typecheck
         run: npx tsc --noEmit
