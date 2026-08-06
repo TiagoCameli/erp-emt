@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { LoaderCircle, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import {
   DataTable,

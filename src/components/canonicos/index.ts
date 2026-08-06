@@ -29,6 +29,7 @@ export * from "./filter-bar";
 export * from "./filtros-sessao";
 export * from "./use-filtro-sessao";
 export * from "./use-restaurar-filtros";
+export { DURACAO_TOAST } from "./toast";
 export * from "./tab-nav";
 export * from "./trilha";
 export * from "./trilha-helpers";

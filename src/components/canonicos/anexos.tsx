@@ -13,7 +13,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { ConfirmDialog } from "@/components/canonicos/confirm-dialog";
 import { Badge } from "@/components/ui/badge";

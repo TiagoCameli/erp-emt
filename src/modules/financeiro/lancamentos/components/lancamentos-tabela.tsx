@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { Receipt, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import {
   CelulaDescricaoCategoria,

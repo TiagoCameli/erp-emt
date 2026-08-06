@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import {
   CampoFormulario,

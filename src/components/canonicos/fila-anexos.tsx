@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Download, Eye, Paperclip, Trash2, Upload } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

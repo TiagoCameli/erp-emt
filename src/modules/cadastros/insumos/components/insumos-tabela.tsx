@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
 import { MoreHorizontal, Package, Plus, Tags } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import {
   ConfirmDialog,

@@ -10,7 +10,7 @@ import {
   LoaderCircle,
   PenLine,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
