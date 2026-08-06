@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { CelulaVazia, ConfirmDialog, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";

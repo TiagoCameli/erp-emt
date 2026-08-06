@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { FileSpreadsheet, LoaderCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { Button } from "@/components/ui/button";
 import { gerarPlanilhaFolha } from "@/modules/rh/folha/actions";

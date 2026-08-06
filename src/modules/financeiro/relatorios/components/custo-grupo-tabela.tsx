@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ChevronDown, ChevronRight, LoaderCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";

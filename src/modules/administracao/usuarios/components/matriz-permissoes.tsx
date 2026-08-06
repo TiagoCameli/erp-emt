@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { LoaderCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

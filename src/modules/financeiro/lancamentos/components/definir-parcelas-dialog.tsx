@@ -8,7 +8,7 @@ import {
   Trash2,
   TriangleAlert,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import { InputMoeda } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
