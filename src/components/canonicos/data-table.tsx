@@ -71,6 +71,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { MoneyText } from "./money-text";
+import { Checkbox } from "@/components/ui/checkbox";
 
 declare module "@tanstack/react-table" {
   // Os parâmetros precisam espelhar a declaração original do TanStack.
@@ -447,6 +448,90 @@ const CLASSES_ESCONDER: Record<Breakpoint, string> = {
   xl: "hidden xl:table-cell",
 };
 
+/** Id da coluna de checkbox. Fixo, e fora da personalização do usuário. */
+const ID_COLUNA_SELECAO = "__selecao__";
+
+export interface SelecaoDataTable<TData> {
+  /** Chave estável da linha. */
+  idDaLinha: (linha: TData) => string;
+  selecionados: string[];
+  onSelecionadosChange: (ids: string[]) => void;
+  /**
+   * Desabilita o checkbox de certas linhas. A tela de lançamentos NÃO usa: linha
+   * cinza sem explicação vira charada, e quem diz o que entrou e o que foi pulado
+   * é a confirmação antes e o resumo depois.
+   */
+  habilitada?: (linha: TData) => boolean;
+}
+
+/**
+ * Coluna de checkbox, prependada só quando a prop `selecao` existe.
+ *
+ * Fica FORA da personalização (não entra no menu "Colunas", não reordena, não
+ * redimensiona): esconder o checkbox por preferência deixaria a barra de lote sem
+ * como marcar nada, e o usuário sem entender por quê.
+ */
+function colunaSelecao<TData>(
+  selecao: SelecaoDataTable<TData>,
+  linhasDaPagina: TData[],
+): ColumnDef<TData, unknown> {
+  const idsDaPagina = linhasDaPagina
+    .filter((linha) => selecao.habilitada?.(linha) ?? true)
+    .map(selecao.idDaLinha);
+  const marcados = new Set(selecao.selecionados);
+  const todosDaPagina =
+    idsDaPagina.length > 0 && idsDaPagina.every((id) => marcados.has(id));
+
+  return {
+    id: ID_COLUNA_SELECAO,
+    enableHiding: false,
+    enableResizing: false,
+    enableSorting: false,
+    size: 44,
+    header: () => (
+      <Checkbox
+        checked={todosDaPagina}
+        aria-label="Selecionar todos desta página"
+        onCheckedChange={() => {
+          if (todosDaPagina) {
+            // Só a página sai. Seleção feita em outra página é preservada.
+            const daPagina = new Set(idsDaPagina);
+            selecao.onSelecionadosChange(
+              selecao.selecionados.filter((id) => !daPagina.has(id)),
+            );
+            return;
+          }
+          selecao.onSelecionadosChange([
+            ...new Set([...selecao.selecionados, ...idsDaPagina]),
+          ]);
+        }}
+      />
+    ),
+    cell: ({ row }) => {
+      const linha = row.original;
+      if (!(selecao.habilitada?.(linha) ?? true)) return null;
+      const id = selecao.idDaLinha(linha);
+      const marcado = marcados.has(id);
+      return (
+        <Checkbox
+          checked={marcado}
+          aria-label={`Selecionar ${id}`}
+          // Sem isto, marcar o checkbox dispara o onRowClick da linha e navega
+          // para o detalhe no meio da seleção.
+          onClick={(evento) => evento.stopPropagation()}
+          onCheckedChange={() => {
+            selecao.onSelecionadosChange(
+              marcado
+                ? selecao.selecionados.filter((outro) => outro !== id)
+                : [...selecao.selecionados, id],
+            );
+          }}
+        />
+      );
+    },
+  };
+}
+
 export interface DataTableProps<TData> {
   columns: ColumnDef<TData, unknown>[];
   data: TData[];
@@ -492,6 +577,15 @@ export interface DataTableProps<TData> {
   alturaMaxima?: string;
   /** Filtros e busca da listagem, na mesma barra dos botões da tabela. */
   toolbar?: React.ReactNode;
+  /**
+   * Liga a seleção de linha por checkbox. **Opt-in**: sem esta prop a tabela não
+   * renderiza checkbox nenhum, e é isso que mantém as outras listagens do app
+   * exatamente como sempre foram.
+   *
+   * O estado da seleção mora em QUEM CHAMA, de propósito: só a tela sabe o que é
+   * elegível e o que fazer com o que está marcado.
+   */
+  selecao?: SelecaoDataTable<TData>;
   /**
    * Ações secundárias da linha, num menu "..." na última coluna. Devolva
    * DropdownMenuItem (de @/components/ui/dropdown-menu). Clique no menu não
@@ -645,6 +739,7 @@ export function DataTable<TData>({
   toolbar,
   acoesLinha,
   filtros,
+  selecao,
 }: DataTableProps<TData>) {
   const modoServidor = total !== undefined && onPaginationChange !== undefined;
   const personalizavel = idTabela !== undefined;
@@ -1636,16 +1731,44 @@ export function DataTable<TData>({
     definirLarguras({ [coluna.id]: limitada });
   }
 
+  /**
+   * Colunas que a tabela realmente renderiza.
+   *
+   * A seleção entra aqui e NÃO em `colunasComAcoes`, porque aquele array é o que
+   * alimenta a personalização do usuário (menu "Colunas", ordem e largura
+   * salvas). Checkbox não é coluna de dado e não pode virar preferência.
+   */
+  const colunasFinais = React.useMemo<ColumnDef<TData, unknown>[]>(
+    () =>
+      selecao ? [colunaSelecao(selecao, data), ...colunasComAcoes] : colunasComAcoes,
+    [selecao, data, colunasComAcoes],
+  );
+
+  /**
+   * Ordem final das colunas.
+   *
+   * Prepender o id da seleção é obrigatório: com `columnOrder` ligado (tabela
+   * personalizável), o TanStack coloca no FIM toda coluna que não está na lista,
+   * e o checkbox apareceria na ponta direita da tabela.
+   */
+  const ordemFinal = React.useMemo(
+    () =>
+      selecao && ordemColunas.length > 0
+        ? [ID_COLUNA_SELECAO, ...ordemColunas]
+        : ordemColunas,
+    [selecao, ordemColunas],
+  );
+
   const table = useReactTable({
     data,
-    columns: colunasComAcoes,
+    columns: colunasFinais,
     state: {
       pagination: paginacao,
       sorting: ordenacao,
       ...(personalizavel
         ? {
             columnVisibility: visibilidade,
-            columnOrder: ordemColunas.length > 0 ? ordemColunas : undefined,
+            columnOrder: ordemFinal.length > 0 ? ordemFinal : undefined,
             columnSizing: larguras,
           }
         : {}),
