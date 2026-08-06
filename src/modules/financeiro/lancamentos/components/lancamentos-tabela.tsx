@@ -49,6 +49,8 @@ import {
   ROTULO_ORIGEM_LANCAMENTO,
 } from "@/modules/financeiro/lancamentos/schemas";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
+import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
+import { ehElegivelParaLote } from "@/modules/financeiro/lancamentos/lote";
 
 const OPCOES_TIPO = (
   Object.keys(ROTULO_TIPO_LANCAMENTO) as TipoLancamento[]
@@ -287,6 +289,36 @@ export function LancamentosTabela({
     limpar: limparFaixaValor,
   } = useFaixaUrl("valor_de", "valor_ate");
   const [aExcluir, setAExcluir] = React.useState<LancamentoLista | null>(null);
+
+  /**
+   * Lançamentos marcados para a ação em lote.
+   *
+   * Mora aqui e não no DataTable porque só a tela sabe o que é elegível e o que
+   * fazer com o que está marcado. E NÃO usa `useFiltroSessao`: seleção lembrada
+   * entre visitas faria o usuário aplicar lote numa lista que ele não está mais
+   * olhando.
+   */
+  const [marcados, setSelecionados] = React.useState<string[]>([]);
+
+  /**
+   * Só vale o que está à vista.
+   *
+   * A seleção é DERIVADA da lista da página, e não zerada por efeito: id que
+   * saiu da tela (troca de filtro ou de página) deixa de contar sozinho. Zerar
+   * num `useEffect` fazia a mesma coisa, mas com `setState` dentro de efeito, o
+   * que dispara render em cascata (e o lint do projeto barra, com razão).
+   *
+   * O que isto protege: marcar 3 na página 1, trocar o filtro e aplicar gravaria
+   * em lançamento que o usuário não está mais olhando.
+   */
+  const idsVisiveis = React.useMemo(
+    () => new Set(lancamentos.map((lancamento) => lancamento.id)),
+    [lancamentos],
+  );
+  const selecionados = React.useMemo(
+    () => marcados.filter((id) => idsVisiveis.has(id)),
+    [marcados, idsVisiveis],
+  );
 
   const opcoesFornecedor = React.useMemo<OpcaoFiltro[]>(
     () =>
@@ -580,8 +612,27 @@ export function LancamentosTabela({
     }),
   ];
 
+  const selecionadosNaPagina = lancamentos.filter((lancamento) =>
+    selecionados.includes(lancamento.id),
+  );
+
   return (
     <div className="flex flex-col gap-2">
+      <LoteContaBancaria
+        selecionados={selecionados}
+        valorSelecionado={selecionadosNaPagina.reduce(
+          (soma, lancamento) => soma + lancamento.valor,
+          0,
+        )}
+        jaComConta={
+          selecionadosNaPagina.filter(
+            (lancamento) => !ehElegivelParaLote(lancamento),
+          ).length
+        }
+        contas={opcoesConta}
+        onLimparSelecao={() => setSelecionados([])}
+        onConcluido={() => router.refresh()}
+      />
       <DataTable
         idTabela="financeiro.lancamentos"
         columns={colunas}
@@ -591,6 +642,11 @@ export function LancamentosTabela({
         pageIndex={pagina}
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
+        selecao={{
+          idDaLinha: (lancamento) => lancamento.id,
+          selecionados,
+          onSelecionadosChange: setSelecionados,
+        }}
         onRowClick={(lancamento) =>
           router.push(`/financeiro/lancamentos/${lancamento.id}`)
         }

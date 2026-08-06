@@ -8,7 +8,7 @@ import {
 
 describe("ehElegivelParaLote", () => {
   it("sem conta e conta parcial entram", () => {
-    expect(ehElegivelParaLote({ revisao: "sem_conta" })).toBe(true);
+    expect(ehElegivelParaLote({ revisao: "sem-conta" })).toBe(true);
     // Parcial é lançamento quebrado (a conta deveria ser a mesma em todas as
     // parcelas pendentes) e o lote completa as vazias.
     expect(ehElegivelParaLote({ revisao: "parcial" })).toBe(true);
@@ -18,10 +18,9 @@ describe("ehElegivelParaLote", () => {
     expect(ehElegivelParaLote({ revisao: "revisado" })).toBe(false);
   });
 
-  it("parcela em revisão não é assunto do lote", () => {
-    // "em_revisao" é outra pergunta (parcela devolvida pelo aprovador). O lote
-    // não sabe nada sobre isso, e não pode adivinhar que tem conta.
-    expect(ehElegivelParaLote({ revisao: "em_revisao" })).toBe(false);
+  it("nao-se-aplica não entra: a receber, ou sem parcela nenhuma", () => {
+    // Não há conta de pagamento para definir.
+    expect(ehElegivelParaLote({ revisao: "nao-se-aplica" })).toBe(false);
   });
 });
 

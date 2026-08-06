@@ -7,7 +7,20 @@
  * lançamento, é o atrito que isto remove.
  */
 
-import type { FiltroRevisao } from "@/modules/financeiro/lancamentos/schemas";
+/**
+ * Estado de revisão de uma LINHA da listagem.
+ *
+ * Não confundir com o `FiltroRevisao` de `schemas.ts`: são duas enumerações
+ * diferentes de propósito, e escrevem diferente. A do filtro usa underscore
+ * (`sem_conta`) e tem `em_revisao` e `nao_revisado`; a da linha usa hífen
+ * (`sem-conta`) e tem `nao-se-aplica`. Trocar uma pela outra compila em nenhum
+ * lugar, e foi o TypeScript que pegou isso aqui.
+ */
+export type RevisaoDaLinha =
+  | "sem-conta"
+  | "parcial"
+  | "revisado"
+  | "nao-se-aplica";
 
 /**
  * Teto de lançamentos por chamada.
@@ -36,11 +49,13 @@ export interface ResumoLote {
  * `parcial` entra: é um estado quebrado (a conta deveria ser a mesma em todas as
  * parcelas pendentes) e o lote completa as vazias sem tocar na que já tem conta.
  *
- * `em_revisao` não entra: é outra pergunta (parcela devolvida pelo aprovador), e
- * o lote não pode adivinhar se ela já tem conta ou não.
+ * `nao-se-aplica` não entra: é lançamento a receber, ou sem parcela nenhuma. Não
+ * há conta de pagamento para definir.
  */
-export function ehElegivelParaLote(linha: { revisao: FiltroRevisao }): boolean {
-  return linha.revisao === "sem_conta" || linha.revisao === "parcial";
+export function ehElegivelParaLote(linha: {
+  revisao: RevisaoDaLinha;
+}): boolean {
+  return linha.revisao === "sem-conta" || linha.revisao === "parcial";
 }
 
 function plural(n: number, singular: string, plural_: string): string {
