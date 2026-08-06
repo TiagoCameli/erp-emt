@@ -25,7 +25,7 @@ vi.mock("@/modules/financeiro/lancamentos/actions", () => ({
 }));
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
-vi.mock("sonner", () => ({ toast: toastMock }));
+vi.mock("@/components/canonicos/toast", () => ({ toast: toastMock }));
 
 /**
  * O Combobox canônico é virtualizado, e o jsdom não faz layout: offsetHeight e
