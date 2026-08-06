@@ -32,6 +32,7 @@ import type {
   GrupoOpcao,
 } from "@/modules/cadastros/categorias/queries";
 import { CategoriasFormDrawer } from "./categorias-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface CategoriasTabelaProps {
   grupos: GrupoComCategorias[];
@@ -70,10 +71,10 @@ export function CategoriasTabela({
   podeEditar,
   podeExcluir,
 }: CategoriasTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState("ativos");
-  const [grupoId, setGrupoId] = React.useState("");
-  const [comInsumos, setComInsumos] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao("status", "ativos");
+  const [grupoId, setGrupoId] = useFiltroSessao("grupoId", "");
+  const [comInsumos, setComInsumos] = useFiltroSessao("comInsumos", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<CategoriaLista | null>(null);

@@ -40,6 +40,7 @@ import {
 } from "@/modules/financeiro/programados/calculo";
 import type { ParcelaProgramada } from "@/modules/financeiro/programados/queries";
 import { ProgramarDialog } from "./programar-dialog";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Rótulo + cor (StatusPadrao canônico) de cada bucket da fila. */
 const BUCKET_BADGE: Record<
@@ -131,17 +132,17 @@ export function ProgramadosTabela({
   // dos filtros: eles respondem "quanto tem para pagar", não "quanto sobrou na
   // tela".
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
-  const [busca, setBusca] = React.useState("");
-  const [janela, setJanela] = React.useState("");
-  const [fornecedor, setFornecedor] = React.useState("");
-  const [categoria, setCategoria] = React.useState("");
-  const [contaId, setContaId] = React.useState("");
-  const [valorDe, setValorDe] = React.useState("");
-  const [valorAte, setValorAte] = React.useState("");
-  const [programadaDe, setProgramadaDe] = React.useState("");
-  const [programadaAte, setProgramadaAte] = React.useState("");
-  const [vencimentoDe, setVencimentoDe] = React.useState("");
-  const [vencimentoAte, setVencimentoAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [janela, setJanela] = useFiltroSessao("janela", "");
+  const [fornecedor, setFornecedor] = useFiltroSessao("fornecedor", "");
+  const [categoria, setCategoria] = useFiltroSessao("categoria", "");
+  const [contaId, setContaId] = useFiltroSessao("contaId", "");
+  const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
+  const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
+  const [programadaDe, setProgramadaDe] = useFiltroSessao("programadaDe", "");
+  const [programadaAte, setProgramadaAte] = useFiltroSessao("programadaAte", "");
+  const [vencimentoDe, setVencimentoDe] = useFiltroSessao("vencimentoDe", "");
+  const [vencimentoAte, setVencimentoAte] = useFiltroSessao("vencimentoAte", "");
 
   // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
   // numa página vazia.

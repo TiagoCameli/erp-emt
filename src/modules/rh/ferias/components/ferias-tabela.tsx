@@ -35,6 +35,7 @@ import {
 import { noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { FeriasFormDrawer } from "./ferias-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 const OPCOES_STATUS = STATUS_FERIAS.map((status) => ({
   valor: status,
@@ -79,14 +80,14 @@ export function FeriasTabela({
   podeEditar,
   podeExcluir,
 }: FeriasTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [situacao, setSituacao] = React.useState("");
-  const [colaboradorId, setColaboradorId] = React.useState("");
-  const [status, setStatus] = React.useState("");
-  const [gozoDe, setGozoDe] = React.useState("");
-  const [gozoAte, setGozoAte] = React.useState("");
-  const [limiteDe, setLimiteDe] = React.useState("");
-  const [limiteAte, setLimiteAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [situacao, setSituacao] = useFiltroSessao("situacao", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [status, setStatus] = useFiltroSessao("status", "");
+  const [gozoDe, setGozoDe] = useFiltroSessao("gozoDe", "");
+  const [gozoAte, setGozoAte] = useFiltroSessao("gozoAte", "");
+  const [limiteDe, setLimiteDe] = useFiltroSessao("limiteDe", "");
+  const [limiteAte, setLimiteAte] = useFiltroSessao("limiteAte", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<FeriasLista | null>(null);

@@ -27,6 +27,7 @@ import {
 } from "@/modules/cadastros/jornadas/formato";
 import { removerJornada } from "@/modules/cadastros/jornadas/actions";
 import type { JornadaLista } from "@/modules/cadastros/jornadas/queries";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -69,12 +70,12 @@ export function JornadasTabela({
   podeExcluir,
   onEditar,
 }: JornadasTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [horasDe, setHorasDe] = React.useState("");
-  const [horasAte, setHorasAte] = React.useState("");
-  const [sabado, setSabado] = React.useState("");
-  const [domingo, setDomingo] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [horasDe, setHorasDe] = useFiltroSessao("horasDe", "");
+  const [horasAte, setHorasAte] = useFiltroSessao("horasAte", "");
+  const [sabado, setSabado] = useFiltroSessao("sabado", "");
+  const [domingo, setDomingo] = useFiltroSessao("domingo", "");
   const [excluindo, setExcluindo] = React.useState<JornadaLista | null>(null);
 
   const filtradas = React.useMemo(() => {

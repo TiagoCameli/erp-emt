@@ -33,6 +33,7 @@ import type {
   ObraOpcao,
 } from "@/modules/rh/_shared/queries";
 import { DiariaFormDrawer } from "./diaria-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Opções do filtro de situação: espelham a coluna Situação da tabela. */
 const OPCOES_SITUACAO = [
@@ -76,15 +77,15 @@ export function DiariasTabela({
   podeCriar,
   podeEditar,
 }: DiariasTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [competencia, setCompetencia] = React.useState("");
-  const [obraId, setObraId] = React.useState("");
-  const [colaboradorId, setColaboradorId] = React.useState("");
-  const [dataDe, setDataDe] = React.useState("");
-  const [dataAte, setDataAte] = React.useState("");
-  const [valorDe, setValorDe] = React.useState("");
-  const [valorAte, setValorAte] = React.useState("");
-  const [situacao, setSituacao] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [competencia, setCompetencia] = useFiltroSessao("competencia", "");
+  const [obraId, setObraId] = useFiltroSessao("obraId", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [dataDe, setDataDe] = useFiltroSessao("dataDe", "");
+  const [dataAte, setDataAte] = useFiltroSessao("dataAte", "");
+  const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
+  const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
+  const [situacao, setSituacao] = useFiltroSessao("situacao", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<DiariaLista | null>(null);

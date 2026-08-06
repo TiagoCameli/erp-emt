@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
+import { salvarQuerySessao } from "@/components/canonicos/filtros-sessao";
 import {
   escreverPreferenciasTabela,
   lerPreferenciasTabela,
@@ -176,6 +177,10 @@ export function useFiltrosUrl() {
         }
       }
       const query = params.toString();
+      // Funil único de toda escrita de filtro que vive na URL, então é aqui que
+      // a escolha fica lembrada para a volta. Query vazia é gravada de
+      // propósito: significa "eu limpei", e tem que ganhar do padrão da tela.
+      salvarQuerySessao(pathname, query);
       router.replace(query ? `${pathname}?${query}` : pathname, {
         scroll: false,
       });

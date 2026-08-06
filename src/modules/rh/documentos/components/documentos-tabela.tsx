@@ -36,6 +36,7 @@ import {
 import { noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { DocumentoFormDrawer } from "./documento-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface DocumentosTabelaProps {
   documentos: DocumentoLista[];
@@ -81,14 +82,14 @@ export function DocumentosTabela({
   podeExcluir,
   anexosPorRegistro,
 }: DocumentosTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [tipo, setTipo] = React.useState("");
-  const [situacao, setSituacao] = React.useState("");
-  const [colaboradorId, setColaboradorId] = React.useState("");
-  const [vencimentoDe, setVencimentoDe] = React.useState("");
-  const [vencimentoAte, setVencimentoAte] = React.useState("");
-  const [emissaoDe, setEmissaoDe] = React.useState("");
-  const [emissaoAte, setEmissaoAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [situacao, setSituacao] = useFiltroSessao("situacao", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [vencimentoDe, setVencimentoDe] = useFiltroSessao("vencimentoDe", "");
+  const [vencimentoAte, setVencimentoAte] = useFiltroSessao("vencimentoAte", "");
+  const [emissaoDe, setEmissaoDe] = useFiltroSessao("emissaoDe", "");
+  const [emissaoAte, setEmissaoAte] = useFiltroSessao("emissaoAte", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<DocumentoLista | null>(null);

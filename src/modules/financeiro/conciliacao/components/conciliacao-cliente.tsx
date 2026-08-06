@@ -48,6 +48,7 @@ import type {
 } from "@/modules/financeiro/conciliacao/queries";
 import { ConciliarDialog } from "./conciliar-dialog";
 import { ImportarOfxDialog } from "./importar-ofx-dialog";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroConciliacao = "" | "conciliada" | "pendente";
 
@@ -106,13 +107,13 @@ export function ConciliacaoCliente({
   const [desconciliarAlvo, setDesconciliarAlvo] =
     React.useState<TransacaoLista | null>(null);
   const [conciliacao, setConciliacao] = React.useState<FiltroConciliacao>("");
-  const [busca, setBusca] = React.useState("");
-  const [extratoId, setExtratoId] = React.useState("");
-  const [tipo, setTipo] = React.useState("");
-  const [dataDe, setDataDe] = React.useState("");
-  const [dataAte, setDataAte] = React.useState("");
-  const [valorDe, setValorDe] = React.useState("");
-  const [valorAte, setValorAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [extratoId, setExtratoId] = useFiltroSessao("extratoId", "");
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [dataDe, setDataDe] = useFiltroSessao("dataDe", "");
+  const [dataAte, setDataAte] = useFiltroSessao("dataAte", "");
+  const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
+  const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
   const opcoesConta = React.useMemo(

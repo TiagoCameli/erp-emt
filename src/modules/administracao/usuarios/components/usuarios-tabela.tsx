@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatarData } from "@/lib/formatadores";
 import type { PerfilOpcao, UsuarioLista } from "@/modules/administracao/usuarios/queries";
 import { DetalheUsuarioDrawer } from "./detalhe-usuario-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Valor do filtro de perfil para "quem ainda não tem perfil aplicado". */
 const SEM_PERFIL = "sem-perfil";
@@ -115,12 +116,12 @@ export function UsuariosTabela({
   const [selecionadoId, setSelecionadoId] = React.useState<string | null>(null);
   const [detalheAberto, setDetalheAberto] = React.useState(false);
 
-  const [busca, setBusca] = React.useState("");
-  const [perfilId, setPerfilId] = React.useState("");
-  const [status, setStatus] = React.useState("");
-  const [acesso, setAcesso] = React.useState("");
-  const [criadoDe, setCriadoDe] = React.useState("");
-  const [criadoAte, setCriadoAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [perfilId, setPerfilId] = useFiltroSessao("perfilId", "");
+  const [status, setStatus] = useFiltroSessao("status", "");
+  const [acesso, setAcesso] = useFiltroSessao("acesso", "");
+  const [criadoDe, setCriadoDe] = useFiltroSessao("criadoDe", "");
+  const [criadoAte, setCriadoAte] = useFiltroSessao("criadoAte", "");
 
   // Deriva da prop pra refletir edições depois do revalidatePath.
   const usuarioSelecionado =

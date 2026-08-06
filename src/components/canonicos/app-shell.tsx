@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useRestaurarFiltrosDaSessao } from "@/components/canonicos/use-restaurar-filtros";
 import { cn } from "@/lib/utils";
 
 const MAPA_ICONES: Record<string, LucideIcon> = {
@@ -309,6 +310,7 @@ export function AppShell({
   onSair,
 }: AppShellProps) {
   const pathname = usePathname();
+  useRestaurarFiltrosDaSessao(pathname);
   const modulosMobile = modulos.slice(0, 6);
   const [moduloAberto, setModuloAberto] = React.useState<string | null>(null);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);

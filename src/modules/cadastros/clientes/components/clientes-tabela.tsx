@@ -28,6 +28,7 @@ import {
 } from "@/modules/cadastros/clientes/actions";
 import type { ClienteLista } from "@/modules/cadastros/clientes/queries";
 import { ClientesFormDrawer } from "./clientes-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -65,11 +66,11 @@ export function ClientesTabela({
   podeEditar,
   podeExcluir,
 }: ClientesTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [tipo, setTipo] = React.useState("");
-  const [uf, setUf] = React.useState("");
-  const [cidade, setCidade] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [uf, setUf] = useFiltroSessao("uf", "");
+  const [cidade, setCidade] = useFiltroSessao("cidade", "");
 
   const [edicaoCliente, setEdicaoCliente] = React.useState<ClienteLista | null>(
     null,

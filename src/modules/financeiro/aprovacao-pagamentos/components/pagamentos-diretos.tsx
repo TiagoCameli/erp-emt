@@ -62,6 +62,7 @@ import {
   rotuloParcela,
   STATUS_PARCELA,
 } from "@/modules/financeiro/_shared/formato";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /**
  * Explicação da aba. É o texto mais importante da tela: sem ele alguém lê
@@ -183,22 +184,22 @@ export function PagamentosDiretos({
     new Set(),
   );
   const [emAndamento, setEmAndamento] = React.useState(false);
-  const [filtroBusca, setFiltroBusca] = React.useState("");
-  const [filtroConferencia, setFiltroConferencia] = React.useState("");
-  const [filtroSituacao, setFiltroSituacao] = React.useState("");
-  const [filtroForma, setFiltroForma] = React.useState("");
-  const [filtroCategoria, setFiltroCategoria] = React.useState("");
-  const [filtroFornecedor, setFiltroFornecedor] = React.useState("");
-  const [filtroCentroCusto, setFiltroCentroCusto] = React.useState("");
-  const [filtroConta, setFiltroConta] = React.useState("");
-  const [filtroNota, setFiltroNota] = React.useState("");
-  const [filtroMes, setFiltroMes] = React.useState("");
-  const [filtroValorDe, setFiltroValorDe] = React.useState("");
-  const [filtroValorAte, setFiltroValorAte] = React.useState("");
-  const [filtroVencDe, setFiltroVencDe] = React.useState("");
-  const [filtroVencAte, setFiltroVencAte] = React.useState("");
-  const [filtroPagoDe, setFiltroPagoDe] = React.useState("");
-  const [filtroPagoAte, setFiltroPagoAte] = React.useState("");
+  const [filtroBusca, setFiltroBusca] = useFiltroSessao("filtroBusca", "");
+  const [filtroConferencia, setFiltroConferencia] = useFiltroSessao("filtroConferencia", "");
+  const [filtroSituacao, setFiltroSituacao] = useFiltroSessao("filtroSituacao", "");
+  const [filtroForma, setFiltroForma] = useFiltroSessao("filtroForma", "");
+  const [filtroCategoria, setFiltroCategoria] = useFiltroSessao("filtroCategoria", "");
+  const [filtroFornecedor, setFiltroFornecedor] = useFiltroSessao("filtroFornecedor", "");
+  const [filtroCentroCusto, setFiltroCentroCusto] = useFiltroSessao("filtroCentroCusto", "");
+  const [filtroConta, setFiltroConta] = useFiltroSessao("filtroConta", "");
+  const [filtroNota, setFiltroNota] = useFiltroSessao("filtroNota", "");
+  const [filtroMes, setFiltroMes] = useFiltroSessao("filtroMes", "");
+  const [filtroValorDe, setFiltroValorDe] = useFiltroSessao("filtroValorDe", "");
+  const [filtroValorAte, setFiltroValorAte] = useFiltroSessao("filtroValorAte", "");
+  const [filtroVencDe, setFiltroVencDe] = useFiltroSessao("filtroVencDe", "");
+  const [filtroVencAte, setFiltroVencAte] = useFiltroSessao("filtroVencAte", "");
+  const [filtroPagoDe, setFiltroPagoDe] = useFiltroSessao("filtroPagoDe", "");
+  const [filtroPagoAte, setFiltroPagoAte] = useFiltroSessao("filtroPagoAte", "");
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
   const filtrando =

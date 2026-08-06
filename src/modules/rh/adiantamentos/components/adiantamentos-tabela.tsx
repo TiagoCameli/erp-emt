@@ -29,6 +29,7 @@ import type { AdiantamentoLista } from "@/modules/rh/adiantamentos/queries";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { AdiantamentoFormDrawer } from "./adiantamento-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Opções do filtro de situação: espelham a coluna Situação da tabela. */
 const OPCOES_SITUACAO = [
@@ -75,14 +76,14 @@ export function AdiantamentosTabela({
   podeEditar,
   podeExcluir,
 }: AdiantamentosTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [competencia, setCompetencia] = React.useState("");
-  const [colaboradorId, setColaboradorId] = React.useState("");
-  const [situacao, setSituacao] = React.useState("");
-  const [dataDe, setDataDe] = React.useState("");
-  const [dataAte, setDataAte] = React.useState("");
-  const [valorDe, setValorDe] = React.useState("");
-  const [valorAte, setValorAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [competencia, setCompetencia] = useFiltroSessao("competencia", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [situacao, setSituacao] = useFiltroSessao("situacao", "");
+  const [dataDe, setDataDe] = useFiltroSessao("dataDe", "");
+  const [dataAte, setDataAte] = useFiltroSessao("dataAte", "");
+  const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
+  const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<AdiantamentoLista | null>(

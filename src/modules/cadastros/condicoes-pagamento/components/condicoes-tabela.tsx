@@ -24,6 +24,7 @@ import { opcoesNumericasDistintas } from "@/modules/cadastros/_shared/opcoes-fil
 import { desativarCondicao } from "@/modules/cadastros/condicoes-pagamento/actions";
 import type { CondicaoLista } from "@/modules/cadastros/condicoes-pagamento/queries";
 import { CondicaoFormDrawer } from "./condicao-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -63,11 +64,11 @@ export function CondicoesTabela({
   podeCriar,
   podeEditar,
 }: CondicoesTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [qtdParcelas, setQtdParcelas] = React.useState("");
-  const [prazoDe, setPrazoDe] = React.useState("");
-  const [prazoAte, setPrazoAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [qtdParcelas, setQtdParcelas] = useFiltroSessao("qtdParcelas", "");
+  const [prazoDe, setPrazoDe] = useFiltroSessao("prazoDe", "");
+  const [prazoAte, setPrazoAte] = useFiltroSessao("prazoAte", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<CondicaoLista | null>(null);

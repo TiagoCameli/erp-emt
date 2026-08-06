@@ -41,6 +41,7 @@ import {
 import type { FuncaoAtiva } from "@/modules/cadastros/funcoes/queries";
 import type { JornadaAtiva } from "@/modules/cadastros/jornadas/queries";
 import { ColaboradoresFormDrawer } from "./colaboradores-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -95,16 +96,16 @@ export function ColaboradoresTabela({
   dependentesPorColaborador,
 }: ColaboradoresTabelaProps) {
   const router = useRouter();
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [funcaoId, setFuncaoId] = React.useState("");
-  const [obraId, setObraId] = React.useState("");
-  const [jornadaId, setJornadaId] = React.useState("");
-  const [vinculo, setVinculo] = React.useState("");
-  const [centroCustoId, setCentroCustoId] = React.useState("");
-  const [admissaoDe, setAdmissaoDe] = React.useState("");
-  const [admissaoAte, setAdmissaoAte] = React.useState("");
-  const [cnh, setCnh] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [funcaoId, setFuncaoId] = useFiltroSessao("funcaoId", "");
+  const [obraId, setObraId] = useFiltroSessao("obraId", "");
+  const [jornadaId, setJornadaId] = useFiltroSessao("jornadaId", "");
+  const [vinculo, setVinculo] = useFiltroSessao("vinculo", "");
+  const [centroCustoId, setCentroCustoId] = useFiltroSessao("centroCustoId", "");
+  const [admissaoDe, setAdmissaoDe] = useFiltroSessao("admissaoDe", "");
+  const [admissaoAte, setAdmissaoAte] = useFiltroSessao("admissaoAte", "");
+  const [cnh, setCnh] = useFiltroSessao("cnh", "");
 
   const [emEdicao, setEmEdicao] = React.useState<ColaboradorLista | null>(null);
   const [edicaoAberta, setEdicaoAberta] = React.useState(false);

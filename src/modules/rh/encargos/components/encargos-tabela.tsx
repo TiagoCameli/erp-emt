@@ -25,6 +25,7 @@ import { formatarPercentual } from "@/lib/formatadores";
 import { removerEncargo } from "@/modules/rh/encargos/actions";
 import type { EncargoLista } from "@/modules/rh/encargos/queries";
 import { naFaixa } from "@/modules/rh/_shared/filtros";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -52,10 +53,10 @@ export function EncargosTabela({
   podeExcluir,
   onEditar,
 }: EncargosTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [percentualDe, setPercentualDe] = React.useState("");
-  const [percentualAte, setPercentualAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [percentualDe, setPercentualDe] = useFiltroSessao("percentualDe", "");
+  const [percentualAte, setPercentualAte] = useFiltroSessao("percentualAte", "");
   const [excluindo, setExcluindo] = React.useState<EncargoLista | null>(null);
 
   const filtrados = React.useMemo(() => {

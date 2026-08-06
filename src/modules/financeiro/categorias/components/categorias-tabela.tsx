@@ -33,6 +33,7 @@ import {
   type TipoCategoriaFinanceira,
 } from "@/modules/financeiro/categorias/schemas";
 import { CategoriasFormDrawer } from "./categorias-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface CategoriasTabelaProps {
   categorias: CategoriaFinanceiraLista[];
@@ -84,12 +85,12 @@ export function CategoriasTabela({
   podeEditar,
 }: CategoriasTabelaProps) {
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
-  const [busca, setBusca] = React.useState("");
-  const [tipo, setTipo] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
   const [status, setStatus] = React.useState("ativos");
-  const [paiId, setPaiId] = React.useState("");
-  const [nivel, setNivel] = React.useState("");
-  const [uso, setUso] = React.useState("");
+  const [paiId, setPaiId] = useFiltroSessao("paiId", "");
+  const [nivel, setNivel] = useFiltroSessao("nivel", "");
+  const [uso, setUso] = useFiltroSessao("uso", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] =

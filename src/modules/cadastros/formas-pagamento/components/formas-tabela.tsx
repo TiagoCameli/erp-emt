@@ -26,6 +26,7 @@ import {
 } from "@/modules/_shared/forma-pagamento";
 import type { FormaLista } from "@/modules/cadastros/formas-pagamento/queries";
 import { FormaFormDrawer } from "./forma-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
 
@@ -64,10 +65,10 @@ export function FormasTabela({
   podeCriar,
   podeEditar,
 }: FormasTabelaProps) {
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState<FiltroStatus>("ativos");
-  const [tipo, setTipo] = React.useState("");
-  const [uso, setUso] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
+  const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [uso, setUso] = useFiltroSessao("uso", "");
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<FormaLista | null>(null);

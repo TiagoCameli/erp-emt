@@ -29,6 +29,7 @@ import {
   type StatusLancamento,
 } from "@/modules/financeiro/_shared/formato";
 import type { ExtratoLancamento } from "../queries";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 interface ExtratoFornecedorTabelaProps {
   lancamentos: ExtratoLancamento[];
@@ -110,13 +111,13 @@ export function ExtratoFornecedorTabela({
   // no menu "Filtros", com a escolha salva junto das colunas do usuário. O
   // fornecedor em si continua no seletor da seção, que recarrega o relatório.
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
-  const [busca, setBusca] = React.useState("");
-  const [status, setStatus] = React.useState("");
-  const [mes, setMes] = React.useState("");
-  const [valorDe, setValorDe] = React.useState("");
-  const [valorAte, setValorAte] = React.useState("");
-  const [vencimentoDe, setVencimentoDe] = React.useState("");
-  const [vencimentoAte, setVencimentoAte] = React.useState("");
+  const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [status, setStatus] = useFiltroSessao("status", "");
+  const [mes, setMes] = useFiltroSessao("mes", "");
+  const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
+  const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
+  const [vencimentoDe, setVencimentoDe] = useFiltroSessao("vencimentoDe", "");
+  const [vencimentoAte, setVencimentoAte] = useFiltroSessao("vencimentoAte", "");
 
   // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
   // numa página vazia.

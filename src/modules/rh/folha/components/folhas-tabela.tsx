@@ -30,6 +30,7 @@ import {
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { FolhaLista } from "@/modules/rh/folha/queries";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 const OPCOES_STATUS = (Object.keys(STATUS_FOLHA) as StatusFolha[]).map(
   (valor) => ({ valor, rotulo: STATUS_FOLHA[valor].rotulo }),
@@ -100,14 +101,14 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
 
-  const [mes, setMes] = React.useState("");
-  const [status, setStatus] = React.useState("");
-  const [fechamentoDe, setFechamentoDe] = React.useState("");
-  const [fechamentoAte, setFechamentoAte] = React.useState("");
-  const [custoDe, setCustoDe] = React.useState("");
-  const [custoAte, setCustoAte] = React.useState("");
-  const [liquidoDe, setLiquidoDe] = React.useState("");
-  const [liquidoAte, setLiquidoAte] = React.useState("");
+  const [mes, setMes] = useFiltroSessao("mes", "");
+  const [status, setStatus] = useFiltroSessao("status", "");
+  const [fechamentoDe, setFechamentoDe] = useFiltroSessao("fechamentoDe", "");
+  const [fechamentoAte, setFechamentoAte] = useFiltroSessao("fechamentoAte", "");
+  const [custoDe, setCustoDe] = useFiltroSessao("custoDe", "");
+  const [custoAte, setCustoAte] = useFiltroSessao("custoAte", "");
+  const [liquidoDe, setLiquidoDe] = useFiltroSessao("liquidoDe", "");
+  const [liquidoAte, setLiquidoAte] = useFiltroSessao("liquidoAte", "");
 
   const dados = React.useMemo(() => {
     const competencia = mesParaCompetencia(mes);
