@@ -670,12 +670,17 @@ on conflict (usuario_id, recurso, acao) do nothing;
 
 - [ ] **Step 2: Aplicar a migration**
 
-Preferencial (CLI, se o projeto estiver linkado):
+> **NÃO SIGA O PASSO ABAIXO COMO ESTÁ ESCRITO. Corrigido em 06/08/2026: `supabase
+> db push` é PROIBIDO neste projeto e derruba produção.** Medição: o ledger tem
+> 331 linhas e só 12 nos dois lados, então o push tentaria aplicar 155 migrations
+> cujo efeito já está no banco. O caminho certo é o que este plano chamava de
+> "alternativa", o MCP `apply_migration`, que virou o único. Ver `docs/decisoes.md`,
+> entrada de 06/08/2026, e a regra 5 do `CLAUDE.md`.
 
-Run: `npx supabase db push`
+~~Preferencial (CLI, se o projeto estiver linkado): `npx supabase db push`~~
+
+Aplicar o SQL via MCP do Supabase (`apply_migration`, name `gestao_painel_permissoes`, project_id `vsesgvqjgqpapoxhnbqx`).
 Expected: aplica `20260721120001_gestao_painel_permissoes.sql` sem erro.
-
-Alternativa (ambiente sem CLI linkado): aplicar o mesmo SQL via MCP do Supabase (`apply_migration`, name `gestao_painel_permissoes`, project_id `vsesgvqjgqpapoxhnbqx`).
 
 - [ ] **Step 3: Verificar que o Admin ganhou a permissão efetiva**
 
