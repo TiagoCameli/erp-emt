@@ -732,3 +732,44 @@ existe, caladas. Com 1.201 datas na prova, R$ 20.100,00 sumiram do caminho antig
 4. **A data de corte é o hoje de America/Rio_Branco, e a tela manda a dela.** `p_hoje`
    nulo cai no fuso de Rio Branco, nunca no UTC do servidor, que às 21h locais já é
    o dia seguinte e mudaria a faixa de tudo que vence amanhã.
+
+---
+
+## 2026-08-06 - `supabase db push` é proibido, e o motivo é medido
+
+O `CLAUDE.md` dizia "migrations versionadas via Supabase CLI", o que convida ao
+`db push`. Rodar `db push` aqui derruba o banco de produção. Medição de
+06/08/2026, com `supabase migration list --linked` contra o projeto
+`vsesgvqjgqpapoxhnbqx`:
+
+| | linhas |
+|---|---|
+| total no ledger | 331 |
+| nos dois lados (arquivo no repo E versão no banco) | **12** |
+| só no repo, o banco não registra | **155** |
+| só no banco, sem arquivo no repo | **164** |
+
+**Decisões**
+
+1. **Aplicar migration é pelo MCP `apply_migration`, nunca por `db push`.** O
+   ledger do banco (`supabase_migrations.schema_migrations`) não é o índice dos
+   arquivos do repo: o `apply_migration` grava uma versão própria, com o
+   timestamp de quando rodou, e não o nome do arquivo. Por isso 155 arquivos
+   aparecem como "não aplicados" quando o efeito deles está no banco há semanas.
+   Um `db push` leria esses 155 como pendentes e tentaria aplicar tudo de novo:
+   `create table` em tabela que existe, índice duplicado, trigger recriado,
+   `revoke` reaplicado. Não é conflito de merge, é incidente de produção.
+2. **O ledger não é fonte de verdade sobre o schema. O schema é.** Antes de mexer
+   em função, policy ou grant, ler a definição real no banco
+   (`pg_get_functiondef`, `information_schema`), não o `.sql` do repo. Os 164
+   registros que existem só no banco são a prova de que o repo não conta a
+   história inteira.
+3. **A rota de leitura do banco por CLI é `supabase migration list --linked`.**
+   Conecta direto e **não precisa de Docker**. Já `supabase db dump` roda
+   `pg_dump` em container e **exige Docker**, que não existe na máquina do Tiago:
+   dump de schema ou de grant por CLI não é opção aqui, é MCP ou nada.
+4. **Migration que mexe em privilégio termina com trava `do $$` fail-closed.**
+   Foi o que permitiu conferir o revoke de TRUNCATE (versão `20260805205011`)
+   sem ler grant: a trava estoura exceção se sobrar privilégio, exceção aborta a
+   transação, e transação abortada não grava versão no ledger. Logo, versão no
+   ledger = trava passou. Padrão a repetir em toda migration de privilégio.

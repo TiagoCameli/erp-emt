@@ -16,7 +16,7 @@ Você está construindo o ERP-EMT: sistema de gestão integrada da EMT Construto
 2. **Permissão tripla**: RLS no banco (função `tem_permissao(recurso, acao)`), checagem na Server Action, UI esconde o que o usuário não pode ver. As três sempre.
 3. **Dinheiro é NUMERIC(14,2), quantidade NUMERIC(14,3).** Float é proibido para valores. Exibição BRL: R$ 1.234,56, alinhado à direita, `tabular-nums`.
 4. **Timezone America/Rio_Branco** na exibição. Banco guarda timestamptz em UTC.
-5. **Migrations versionadas** em `supabase/migrations/` via Supabase CLI. Proibido alterar schema pelo dashboard. Após cada migration, rodar os advisors do Supabase (security e performance) e corrigir o que aparecer.
+5. **Migrations versionadas** em `supabase/migrations/`, aplicadas pelo **MCP do Supabase (`apply_migration`)** no projeto vivo. Proibido alterar schema pelo dashboard. **`supabase db push` é PROIBIDO neste projeto** (o porquê está em `docs/decisoes.md`, e é destrutivo, não é preferência). Após cada migration, rodar os advisors do Supabase (security e performance) e corrigir o que aparecer.
 6. **Auditoria universal**: toda tabela transacional tem trigger gravando em `audit_log` (usuário, ação, registro, valores antes/depois).
 7. **Soft delete** em transacionais: excluir move para lixeira com motivo, restaurável por permissão.
 8. **Status machine padrão**: rascunho > pendente_aprovacao > aprovado > efeito (recebido/pago/faturado/executado), com rejeitado e cancelado. Desaprovar exige motivo e é bloqueado se houver efeito posterior. Editar aprovado é proibido: desaprova, edita, reaprova.
