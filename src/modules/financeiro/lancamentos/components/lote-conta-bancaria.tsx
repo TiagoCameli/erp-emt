@@ -85,7 +85,24 @@ export function LoteContaBancaria({
         </span>
       ) : (
         <>
-          <div className="w-64">
+          {/*
+            Largura pensada para o rótulo INTEIRO caber, não para caber na tela.
+            O rótulo é `${nome} - ${banco}` e o mais longo do cadastro hoje
+            ("BANCO DO BRASIL 1197-5 AMAZÔNIA - Banco do Brasil") mede 371px em
+            Inter 14px; somando o cromo (px-3 do gatilho + chevron, ou check +
+            gaps na linha da lista, 48px nos dois casos) dá 419px, e 27rem = 432px
+            cobre com folga.
+
+            Não é capricho: o painel do Combobox herda a largura do gatilho
+            (`w-(--radix-popover-trigger-width)`), então gatilho estreito trunca
+            também a LISTA. Com w-64 as três contas do Banco do Brasil apareciam
+            como "BANCO DO BRASIL 102.124-...", "BANCO DO BRASIL 1197-5 A..." e
+            "BANCO DO BRASIL 30.893-5...", cortando exatamente o número que as
+            distingue. Numa barra que define a conta de vários lançamentos de
+            uma vez, escolher a conta errada por causa de reticências é o defeito
+            que essa medida existe para impedir.
+          */}
+          <div className="w-[27rem]">
             <Combobox
               valor={conta}
               onValorChange={setConta}
