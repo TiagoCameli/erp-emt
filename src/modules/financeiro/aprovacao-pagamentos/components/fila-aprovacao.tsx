@@ -695,10 +695,13 @@ export function FilaAprovacao({
         id: "acoes",
         header: "Ações",
         enableSorting: false,
-        // Aprovar + Revisar com ícone passam de 190px e o conteúdo transbordava
-        // para a esquerda, cobrindo o valor. Valor escondido atrás de botão numa
-        // tela de aprovação de dinheiro não serve.
-        size: 240,
+        // Só os dois ícones: 32 + 32 do botão, 4 do gap e 24 do padding da
+        // célula dão 92px. 100 fecha com folga. Era 240 quando os botões
+        // tinham texto ("Aprovar" + "Revisar" passavam de 190px e transbordavam
+        // para a esquerda, cobrindo o valor). Manter 240 aqui devolveria o
+        // problema ao contrário: 150px de vazio empurrando as colunas que
+        // interessam para fora da tela.
+        size: 100,
         meta: {
           rotulo: "Ações",
           fixa: true,
@@ -710,29 +713,38 @@ export function FilaAprovacao({
             className="flex items-center justify-end gap-1"
             onClick={(evento) => evento.stopPropagation()}
           >
+            {/*
+              Só o ícone. O `aria-label` carrega o número da parcela porque, sem
+              o texto, "Aprovar" repetido 25 vezes é o que um leitor de tela
+              anunciaria em toda linha, sem dizer de qual. O `title` é o tooltip
+              de quem usa o mouse e não reconhece o ícone: sem um dos dois, um
+              botão que autoriza pagamento vira adivinhação.
+            */}
             {podeAprovar ? (
               <Button
                 type="button"
-                size="sm"
+                size="icon-sm"
+                aria-label={`Aprovar ${row.original.lancamentoNumero}`}
+                title="Aprovar"
                 onClick={() =>
                   setAlvoAprovacao({ tipo: "linha", parcela: row.original })
                 }
               >
                 <Check />
-                Aprovar
               </Button>
             ) : null}
             {podeRevisar ? (
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
+                size="icon-sm"
+                aria-label={`Revisar ${row.original.lancamentoNumero}`}
+                title="Revisar"
                 onClick={() =>
                   setAlvoRevisao({ tipo: "linha", parcela: row.original })
                 }
               >
                 <PenLine />
-                Revisar
               </Button>
             ) : null}
           </div>
