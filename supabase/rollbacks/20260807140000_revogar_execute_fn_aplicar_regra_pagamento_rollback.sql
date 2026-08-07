@@ -1,0 +1,22 @@
+-- Rollback de 20260807140000_revogar_execute_fn_aplicar_regra_pagamento.
+--
+-- LEIA ANTES DE RODAR: isto REABRE um furo de autorização. Devolve a
+-- `authenticated` o EXECUTE em fn_aplicar_regra_pagamento, que é SECURITY
+-- DEFINER e não checa tem_permissao — ou seja, qualquer usuário com sessão
+-- volta a poder aprovar parcelas ('dinheiro') e marcá-las como pagas
+-- ('cartao_credito') sem ter a permissão para isso.
+--
+-- Só existe um motivo legítimo para rodar: se o revoke tiver quebrado algum
+-- fluxo que ninguém previu. Nesse caso o certo é rodar isto para destravar a
+-- operação e, em seguida, corrigir de verdade adicionando o gate
+-- `tem_permissao('financeiro.aprovacao-pagamentos', 'aprovar')` DENTRO da
+-- função — não deixar o grant aberto.
+--
+-- O revoke original não deveria quebrar nada: as 7 chamadoras são SECURITY
+-- DEFINER com owner postgres e chamada interna roda com o privilégio do owner.
+grant execute on function public.fn_aplicar_regra_pagamento(uuid) to authenticated;
+
+-- `anon` e `public` NÃO são restaurados de propósito: eles nunca tiveram o
+-- grant (medido antes da migration, só `authenticated` e o owner `postgres`
+-- apareciam em information_schema.routine_privileges). Devolver a eles seria
+-- conceder acesso novo, não desfazer o que foi feito.
