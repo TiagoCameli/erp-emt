@@ -449,6 +449,101 @@ describe("DataTable: alinhamento do texto", () => {
   });
 });
 
+/**
+ * A caixa que o DataTable põe dentro da célula e que carrega o corte. Nas colunas
+ * comuns é o `[data-medir]`; na coluna que monta o próprio layout (`naoTruncar`)
+ * é o primeiro filho.
+ */
+function caixaDaCelula(celula: HTMLElement): HTMLElement {
+  const medir = celula.querySelector<HTMLElement>("[data-medir]");
+  if (medir) return medir;
+  const primeiro = celula.firstElementChild;
+  if (!(primeiro instanceof HTMLElement)) {
+    throw new Error("A célula não tem caixa interna");
+  }
+  return primeiro;
+}
+
+describe("DataTable: texto quebra, número não", () => {
+  it("deixa a coluna de texto quebrar em linha, sem reticências de uma linha", () => {
+    // ESTE TESTE PROTEGE UMA DECISÃO, NÃO UM DETALHE. Antes toda célula sem
+    // `naoTruncar` ia num `truncate`, que é `white-space: nowrap`: nome de
+    // fornecedor virava "AUTO POSTO PROGRESS..." e aumentar a altura da linha não
+    // adiantava nada, porque nowrap não quebra por mais alta que a linha esteja.
+    // Voltar a truncar texto em uma linha é regressão.
+    renderizar();
+    for (const celula of celulas("Número")) {
+      const caixa = caixaDaCelula(celula);
+      expect(caixa).toHaveClass("whitespace-normal");
+      expect(caixa).toHaveClass("break-words");
+      expect(caixa).not.toHaveClass("truncate");
+    }
+  });
+
+  it("contém toda célula, para nenhuma escrever por cima da coluna vizinha", () => {
+    // ESTE TESTE PROTEGE UMA DECISÃO, NÃO UM DETALHE. `naoTruncar` desligava o
+    // corte, e quem trazia o `overflow: hidden` era justamente o corte: o centro
+    // de custo "009 - Manutenção da Rodovia BR-364/AC - Lote 09" saía escrito por
+    // cima do "Mês de referência" da coluna do lado. `min-w-0` anda junto porque
+    // sem ele o overflow não segura nada: a caixa tem largura mínima automática
+    // igual ao conteúdo e cresceria em vez de cortar.
+    renderizar();
+    for (const rotulo of ["Número", "Descrição", "Valor", "Parcelas"]) {
+      for (const celula of celulas(rotulo)) {
+        const caixa = caixaDaCelula(celula);
+        expect(caixa).toHaveClass("overflow-hidden");
+        expect(caixa).toHaveClass("min-w-0");
+      }
+    }
+  });
+
+  it("mantém dinheiro e contagem em uma linha só", () => {
+    // ESTE TESTE PROTEGE UMA DECISÃO, NÃO UM DETALHE. "R$ 100.000,00" partido em
+    // duas linhas destrói a leitura de uma coluna de valores alinhada à direita,
+    // que é o motivo de a regra 3 do CLAUDE.md pedir tabular-nums. Dinheiro, data
+    // e contagem cortam com reticências; só o texto quebra.
+    renderizar();
+    for (const rotulo of ["Valor", "Parcelas"]) {
+      for (const celula of celulas(rotulo)) {
+        const caixa = caixaDaCelula(celula);
+        expect(caixa).toHaveClass("truncate");
+        expect(caixa).not.toHaveClass("whitespace-normal");
+      }
+    }
+  });
+
+  it("segura em uma linha o número montado à mão, sem a coluna pedir nada", () => {
+    // A tela que monta a coluna de data na mão (fila de aprovação, extrato) não
+    // marca `atomico`, e obrigar cada uma a lembrar disso seria esquecer em
+    // alguma. O gancho é o `tabular-nums`, que a convenção do app já usa em
+    // dinheiro e data.
+    renderizar();
+    for (const celula of celulas("Número")) {
+      const caixa = caixaDaCelula(celula);
+      expect(caixa.className).toContain("[&_.tabular-nums]:truncate");
+    }
+  });
+
+  it("corta o texto ENTRE linhas quando a altura é fixa", async () => {
+    // Só `maxHeight` com overflow hidden fatiaria a última linha no meio da
+    // altura da letra, deixando meia palavra à mostra. `-webkit-line-clamp` corta
+    // entre linhas e põe as reticências, que é o que a Descrição já fazia.
+    await renderizarComAlturaSalva(60);
+    for (const celula of celulas("Número")) {
+      const caixa = caixaDaCelula(celula);
+      expect(caixa.style.webkitLineClamp).toBe("3");
+      expect(caixa.style.display).toBe("-webkit-box");
+    }
+  });
+
+  it("não põe corte por linha em dinheiro, que já é de uma linha", async () => {
+    await renderizarComAlturaSalva(60);
+    for (const celula of celulas("Valor")) {
+      expect(caixaDaCelula(celula).style.webkitLineClamp).toBe("");
+    }
+  });
+});
+
 describe("DataTable: altura automática é o padrão", () => {
   it("não fixa altura em nenhuma linha", () => {
     renderizar();
