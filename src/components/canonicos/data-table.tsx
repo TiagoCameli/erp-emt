@@ -87,8 +87,22 @@ declare module "@tanstack/react-table" {
     ocultaPorPadrao?: boolean;
     /** Some abaixo deste breakpoint, para não estourar scroll horizontal. */
     esconderAte?: Breakpoint;
-    /** Desliga o truncamento (célula com badge, botão, conteúdo montado). */
+    /**
+     * A célula monta o próprio layout (badge, botão, várias linhas) e não quer o
+     * corte padrão por cima. Continua ganhando contenção: sem ela o conteúdo
+     * vazava por cima da coluna vizinha, porque quem trazia o `overflow: hidden`
+     * era justamente o corte que esta flag desliga.
+     */
     naoTruncar?: boolean;
+    /**
+     * Conteúdo indivisível: dinheiro, data, número, checkbox. Fica em UMA linha e
+     * corta com reticências quando não cabe, em vez de quebrar.
+     *
+     * Existe porque "R$ 100.000,00" partido em duas linhas destrói a leitura de
+     * uma coluna de valores alinhada à direita, e a regra 3 do CLAUDE.md pede
+     * dinheiro alinhado com tabular-nums. Só o texto quebra.
+     */
+    atomico?: boolean;
   }
 }
 
@@ -701,6 +715,45 @@ function rotuloColuna(
   if (meta?.rotulo) return meta.rotulo;
   if (typeof header === "string") return header;
   return id;
+}
+
+/**
+ * Line-height do texto da célula, em px: `text-detalhe` é 13/20. Ver
+ * `--text-detalhe--line-height` em globals.css — mexer no token lá obriga a
+ * mexer aqui.
+ *
+ * É número em JS, e não conta em CSS, porque `-webkit-line-clamp` só aceita
+ * inteiro e o número de linhas precisa existir antes de o navegador desenhar.
+ */
+const ALTURA_LINHA_TEXTO = 20;
+
+/**
+ * Quantas linhas de texto cabem numa linha de tabela de `altura` px. Nunca menos
+ * de uma: a linha fina demais para duas (a Compacta, 34px) volta a ser uma linha
+ * com reticências. Sobra é ignorada de propósito — 3,4 linhas rendem 3, porque a
+ * quarta cortada pela metade é justo o que a altura fixa não pode mostrar.
+ */
+export function linhasNaAltura(altura: number): number {
+  return Math.max(1, Math.floor(altura / ALTURA_LINHA_TEXTO));
+}
+
+/**
+ * Corte multilinha com reticências na última linha. É `-webkit-line-clamp`
+ * porque é o único corte com reticências que funciona em várias linhas (o
+ * `text-overflow` só sabe cortar uma linha que não quebra) e porque ele corta
+ * ENTRE linhas, nunca no meio da letra.
+ *
+ * Sai em style, e não em classe do Tailwind (`line-clamp-3`), porque o número de
+ * linhas é calculado em runtime: a altura pode ser qualquer valor entre 34 e 160
+ * pelo arraste, e classe do Tailwind precisa existir literal no fonte.
+ */
+export function corteEmLinhas(linhas: number): React.CSSProperties {
+  return {
+    display: "-webkit-box",
+    WebkitBoxOrient: "vertical",
+    WebkitLineClamp: linhas,
+    overflow: "hidden",
+  };
 }
 
 /** Texto do title (tooltip nativo) quando o conteúdo da célula é texto puro. */
@@ -2145,6 +2198,7 @@ export function DataTable<TData>({
               );
               const naoTruncar =
                 celula.column.columnDef.meta?.naoTruncar === true;
+              const atomico = celula.column.columnDef.meta?.atomico === true;
               return (
                 <TableCell
                   key={celula.id}
@@ -2165,7 +2219,25 @@ export function DataTable<TData>({
                     ? alcaAltura(linha.id)
                     : null}
                   {naoTruncar && alturaLinha === null ? (
-                    conteudo
+                    // Célula que monta o próprio layout, na altura automática:
+                    // ela decide como cortar. Ganha três coisas que faltavam.
+                    //
+                    // `overflow-hidden` + `min-w-0`: era a AUSÊNCIA disso que
+                    // fazia o conteúdo vazar por cima da coluna vizinha. Só o
+                    // overflow não bastaria — item de grid/flex tem largura
+                    // mínima automática igual ao conteúdo, então a caixa cresceria
+                    // junto em vez de cortar.
+                    //
+                    // `whitespace-normal break-words`: desfaz o `nowrap` que a
+                    // `TableCell` do shadcn fixa e que é HERDADO. Sem isso, uma
+                    // coluna de TEXTO que só queria escapar do corte de uma linha
+                    // (Centro de custo, Lançamento) pararia de vazar mas continuaria
+                    // sem quebrar nunca. Quem não pode quebrar pede `atomico`.
+                    // Célula que impõe o próprio `white-space` por dentro
+                    // (CelulaDescricaoCategoria) não é afetada: o dela ganha.
+                    <div className="min-w-0 overflow-hidden whitespace-normal break-words [&_.tabular-nums]:inline-block [&_.tabular-nums]:max-w-full [&_.tabular-nums]:truncate">
+                      {conteudo}
+                    </div>
                   ) : (
                     <div
                       // O que o "ajustar ao conteúdo" mede nesta coluna.
@@ -2177,13 +2249,57 @@ export function DataTable<TData>({
                       style={
                         alturaLinha === null
                           ? undefined
-                          : { maxHeight: alturaLinha }
+                          : atomico
+                            ? { maxHeight: alturaLinha }
+                            : {
+                                maxHeight: alturaLinha,
+                                // Corte ENTRE linhas com reticências, o mesmo que
+                                // a Descrição faz. Só `maxHeight` + overflow
+                                // hidden fatiaria a última linha no meio da
+                                // altura da letra, deixando meia palavra visível.
+                                ...corteEmLinhas(linhasNaAltura(alturaLinha)),
+                              }
                       }
                       className={cn(
-                        !naoTruncar && "truncate",
-                        alturaLinha !== null && "overflow-hidden",
+                        // Atômico (dinheiro, data, número, checkbox) é o único
+                        // que fica em uma linha: `truncate` traz nowrap +
+                        // reticências + overflow hidden de uma vez.
+                        atomico && "truncate",
+                        // Texto quebra. `whitespace-normal` é obrigatório porque
+                        // a `TableCell` do shadcn tem `whitespace-nowrap` fixo e
+                        // ele é HERDADO: sem desfazer aqui, tirar o truncate não
+                        // faz o texto quebrar, faz virar uma linha só SEM corte,
+                        // vazando por cima da coluna do lado. `break-words` é
+                        // para o texto sem espaço (chave de acesso, URL), que
+                        // quebra nenhuma resolve.
+                        !atomico && "whitespace-normal break-words",
+                        // Dinheiro, data e número não quebram nem quando a
+                        // coluna aperta: cortam com reticências. Achados pelo
+                        // `tabular-nums`, que a regra 3 do CLAUDE.md já obriga
+                        // em dinheiro e que as datas do app seguem — assim vale
+                        // para as colunas montadas à mão, sem depender de cada
+                        // tela lembrar de marcar `atomico`. Código de documento
+                        // usa `codigo-doc`, não `tabular-nums`, e segue
+                        // quebrando (é onde "LAN-2026-0263 · parcela 2 de 6"
+                        // precisa de duas linhas).
+                        //
+                        // `inline-block` + `max-w-full` porque `text-overflow`
+                        // não corta elemento inline: sem isso o número passaria
+                        // reto por baixo do overflow, sem as reticências.
+                        !atomico &&
+                          "[&_.tabular-nums]:inline-block [&_.tabular-nums]:max-w-full [&_.tabular-nums]:truncate",
+                        // Contenção vale sempre, não só na altura fixa: é ela
+                        // que impede o vazamento na altura automática.
+                        "min-w-0 overflow-hidden",
                       )}
-                      title={naoTruncar ? undefined : tituloDaCelula(celula)}
+                      // Tooltip só onde pode ter sobrado texto escondido. Com o
+                      // texto quebrando na altura automática ele está todo à
+                      // vista, e tooltip repetindo o que se lê é ruído.
+                      title={
+                        atomico || alturaLinha !== null
+                          ? tituloDaCelula(celula)
+                          : undefined
+                      }
                     >
                       {conteudo}
                     </div>
@@ -2430,7 +2546,7 @@ export function colunaDinheiro<TData>(
       );
     },
     ...extra,
-    meta: { alinharDireita: true, ...extra?.meta },
+    meta: { alinharDireita: true, atomico: true, ...extra?.meta },
   };
 }
 
@@ -2460,11 +2576,11 @@ export function colunaData<TData>(
       );
     },
     ...extra,
-    meta: { naoTruncar: true, ...extra?.meta },
+    meta: { atomico: true, ...extra?.meta },
   };
 }
 
-/** Helper para coluna de texto: trunca com tooltip nativo e travessão no vazio. */
+/** Helper para coluna de texto: quebra em linha, com travessão no vazio. */
 export function colunaTexto<TData>(
   accessorKey: string,
   header: string,
@@ -2499,6 +2615,6 @@ export function colunaNumero<TData>(
       return <span className="tabular-nums">{valor}</span>;
     },
     ...extra,
-    meta: { alinharDireita: true, naoTruncar: true, ...extra?.meta },
+    meta: { alinharDireita: true, atomico: true, ...extra?.meta },
   };
 }
