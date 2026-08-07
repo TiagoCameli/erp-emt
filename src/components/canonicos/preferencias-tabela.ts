@@ -31,8 +31,8 @@ export const LARGURA_MAXIMA = 800;
  * Altura mínima de linha, em px.
  *
  * 34 = 32 do botão + 2 de folga de borda. Os 32 são a altura real dos botões que
- * moram DENTRO da linha: o `⋮` de ações é `size="icon-sm"` (size-8) e os botões
- * Aprovar/Revisar da fila de aprovação são `size="sm"` (h-8). Com altura fixa o
+ * moram DENTRO da linha: o `⋮` de ações e os de aprovar/revisar da fila de
+ * aprovação são todos `size="icon-sm"` (size-8, 32px). Com altura fixa o
  * conteúdo da célula entra num contêiner com `maxHeight` e `overflow-hidden`, e
  * um mínimo menor que o botão o decepa em TODA listagem do app, porque o preset
  * "Compacta" usa exatamente este valor.
