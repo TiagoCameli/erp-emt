@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { apontamentoSchema } from "@/modules/rh/apontamentos/schemas";
 import { gerarFolhaSchema } from "@/modules/rh/folha/schemas";
 import { diariaSchema } from "@/modules/rh/diaristas/schemas";
+import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
 
 const UUID_A = "11111111-1111-4111-8111-111111111111";
 const UUID_B = "22222222-2222-4222-8222-222222222222";
@@ -49,5 +50,27 @@ describe("diariaSchema", () => {
   it("recusa valor negativo e data inválida", () => {
     expect(diariaSchema.safeParse({ colaboradorId: UUID_A, data: "2026-06-05", competencia: "2026-06-01", valor: -1 }).success).toBe(false);
     expect(diariaSchema.safeParse({ colaboradorId: UUID_A, data: "05/06/2026", competencia: "2026-06-01", valor: 150 }).success).toBe(false);
+  });
+});
+
+describe("status da folha", () => {
+  it("tem os três status da máquina de aprovação e não tem 'fechada'", () => {
+    expect(Object.keys(STATUS_FOLHA).sort()).toEqual([
+      "aprovado",
+      "pendente_aprovacao",
+      "rascunho",
+    ]);
+  });
+
+  it("usa 'aprovado' no masculino para casar com o StatusPadrao canônico", () => {
+    // O ApprovalBar compara com 'aprovado' literal: 'aprovada' sumiria com o
+    // botão de desaprovar.
+    const status: StatusFolha = "aprovado";
+    expect(STATUS_FOLHA[status].badge).toBe("aprovado");
+  });
+
+  it("mostra rótulo feminino na UI sem mudar o valor do banco", () => {
+    expect(STATUS_FOLHA.aprovado.rotulo).toBe("Aprovada");
+    expect(STATUS_FOLHA.pendente_aprovacao.rotulo).toBe("Pendente de aprovação");
   });
 });

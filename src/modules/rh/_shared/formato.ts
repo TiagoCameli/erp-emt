@@ -9,7 +9,7 @@ import type { StatusPadrao } from "@/components/canonicos";
 export type StatusPonto = "aberto" | "aprovado";
 
 /** Status da folha gerencial. */
-export type StatusFolha = "rascunho" | "fechada";
+export type StatusFolha = "rascunho" | "pendente_aprovacao" | "aprovado";
 
 /** Tipo de apontamento do dia. */
 export type TipoApontamento = "normal" | "falta" | "atestado" | "folga";
@@ -29,7 +29,11 @@ export const STATUS_PONTO: Record<StatusPonto, FormatoBadge> = {
 
 export const STATUS_FOLHA: Record<StatusFolha, FormatoBadge> = {
   rascunho: { rotulo: "Rascunho", badge: "rascunho" },
-  fechada: { rotulo: "Fechada", badge: "aprovado" },
+  pendente_aprovacao: {
+    rotulo: "Pendente de aprovação",
+    badge: "pendente_aprovacao",
+  },
+  aprovado: { rotulo: "Aprovada", badge: "aprovado" },
 };
 
 export const ROTULO_TIPO_APONTAMENTO: Record<TipoApontamento, string> = {
