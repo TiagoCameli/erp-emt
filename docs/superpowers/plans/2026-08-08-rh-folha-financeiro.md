@@ -13,6 +13,8 @@
 ## Global Constraints
 
 - **Projeto Supabase vivo:** `vsesgvqjgqpapoxhnbqx`. Migration **só** por MCP `apply_migration`. **`supabase db push` é PROIBIDO** (`docs/decisoes.md`, 2026-08-06: é destrutivo aqui, não é preferência).
+- **Toda migration aplicada também vira arquivo em `supabase/migrations/`**, nomeado com a versão exata que o `apply_migration` gravou no ledger do banco (`supabase/migrations/<versao>_<nome>.sql`), com o mesmo SQL. A regra de ouro 5 do `CLAUDE.md` pede as duas coisas: versionada no repo E aplicada pelo MCP. Aplicar sem versionar é o que produziu as 164 versões que existem só no banco. O arquivo é rastro e revisão, nunca fonte de reaplicação: `db push` segue proibido.
+- **`grant update` em tabela existente é por coluna, nunca a tabela inteira.** O precedente do projeto é `rh_pontos` (`supabase/migrations/20260621110001_rh_espinha_estrutura.sql:41-42`): `grant update (encarregado_id, observacao)`. Valor consolidado e rastro de aprovação só se escrevem por função definer, então não entram no grant. Grant de tabela inteira numa tabela cujos totais viram dinheiro é buraco de alçada, mesmo com policy e trigger no lugar.
 - **O ledger de migrations não é fonte de verdade sobre o schema.** Antes de alterar função, policy ou grant, ler a definição real no banco (`pg_get_functiondef`, `information_schema`), nunca o `.sql` do repo.
 - **RLS em 100% das tabelas, grants explícitos.** Tabela nova não herda privilégio: a migration declara `grant` para `authenticated` só do que as policies permitem. Sem policy de DELETE = sem grant de DELETE. `anon` nunca recebe nada.
 - **Permissão tripla:** RLS no banco (`tem_permissao(recurso, acao)`), checagem na Server Action, UI esconde o que não pode.

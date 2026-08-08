@@ -22,7 +22,15 @@ export interface FolhaLista {
   custoTotal: number;
   /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
   aprovadoEm: string | null;
-  /** Nome de quem aprovou, via join com usuarios. Null se não aprovada. */
+  /**
+   * Nome de quem aprovou, via join com `usuarios`. Vem null se a folha não
+   * foi aprovada. Também vem null (mesmo com a folha aprovada) para quem
+   * está vendo não é o próprio aprovador e não tem
+   * `administracao.usuarios:ver`: a policy `usuarios_select` só libera a
+   * própria linha (`id = auth.uid()`) ou quem tem essa permissão, então o
+   * embed barra e a query não distingue os dois motivos — a tela mostra
+   * "aprovada em ..." sem o "por quem", calada.
+   */
   aprovadoPorNome: string | null;
   /** Motivo da última rejeição, mostrado enquanto a folha volta pra rascunho. */
   motivoRejeicao: string | null;
@@ -79,7 +87,15 @@ export interface FolhaDetalhe {
   custoTotal: number;
   /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
   aprovadoEm: string | null;
-  /** Nome de quem aprovou, via join com usuarios. Null se não aprovada. */
+  /**
+   * Nome de quem aprovou, via join com `usuarios`. Vem null se a folha não
+   * foi aprovada. Também vem null (mesmo com a folha aprovada) para quem
+   * está vendo não é o próprio aprovador e não tem
+   * `administracao.usuarios:ver`: a policy `usuarios_select` só libera a
+   * própria linha (`id = auth.uid()`) ou quem tem essa permissão, então o
+   * embed barra e a query não distingue os dois motivos — a tela mostra
+   * "aprovada em ..." sem o "por quem", calada.
+   */
   aprovadoPorNome: string | null;
   /** Motivo da última rejeição, mostrado enquanto a folha volta pra rascunho. */
   motivoRejeicao: string | null;

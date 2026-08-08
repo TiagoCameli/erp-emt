@@ -13,7 +13,7 @@ import {
   formatarDataHora,
   formatarQuantidade,
 } from "@/lib/formatadores";
-import { STATUS_FOLHA } from "@/modules/rh/_shared/formato";
+import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
 import { buscarFolha } from "@/modules/rh/folha/queries";
 import {
   gerarFolhaSchema,
@@ -92,6 +92,65 @@ export async function gerarFolha(
 /* ------------------------------------------------------------------ */
 
 /**
+ * Atualiza status (e motivo_rejeicao opcional) da folha via UPDATE direto,
+ * lendo o status atual antes de escrever. Sem essa leitura, um UPDATE com
+ * `.eq("status", statusEsperado)` que não bate nenhuma linha (a folha já
+ * mudou de status por outra aba/usuário) não é erro no PostgREST: a action
+ * devolveria sucesso falso, e a tela daria o toast de sucesso sobre uma
+ * transição que não aconteceu. Espelha transicionarStatus da OC
+ * (src/modules/compras/ordens/actions.ts).
+ */
+async function transicionarStatusFolha(
+  id: string,
+  acao: Acao,
+  statusEsperado: StatusFolha,
+  novoStatus: StatusFolha,
+  extra: { motivo_rejeicao?: string | null } = {},
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao(acao))) {
+    return { erro: "Sem permissão para esta ação na folha" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Folha inválida" };
+
+  const supabase = await createClient();
+  const { data: atual, error: erroBusca } = await supabase
+    .from("folhas")
+    .select("status")
+    .eq("id", idValido.data)
+    .single();
+
+  if (erroBusca || !atual) {
+    return erroAcao(
+      "rh.folha.transicionarStatus",
+      erroBusca,
+      "Folha não encontrada",
+    );
+  }
+  if (atual.status !== statusEsperado) {
+    return { erro: "A folha não está no status esperado para esta ação" };
+  }
+
+  const { error } = await supabase
+    .from("folhas")
+    .update({ status: novoStatus, ...extra })
+    .eq("id", idValido.data);
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.transicionarStatus",
+      error,
+      "Não foi possível atualizar a folha. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idValido.data));
+  return { ok: true };
+}
+
+/**
  * Envia a folha de rascunho para aprovação. UPDATE direto pela RLS, guardado
  * pelo trigger fn_guarda_status_folha (que também recusa folha vazia). Limpa o
  * motivo da rejeição anterior, igual a OC faz.
@@ -99,31 +158,9 @@ export async function gerarFolha(
 export async function enviarFolhaParaAprovacao(
   id: string,
 ): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("editar"))) {
-    return { erro: "Sem permissão para enviar a folha para aprovação" };
-  }
-
-  const idValido = idSchema.safeParse(id);
-  if (!idValido.success) return { erro: "Folha inválida" };
-
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("folhas")
-    .update({ status: "pendente_aprovacao", motivo_rejeicao: null })
-    .eq("id", idValido.data)
-    .eq("status", "rascunho");
-
-  if (error) {
-    return erroAcao(
-      "rh.folha.enviarParaAprovacao",
-      error,
-      error.message || "Não foi possível enviar a folha para aprovação",
-    );
-  }
-
-  revalidatePath(ROTA);
-  revalidatePath(rotaDetalhe(idValido.data));
-  return { ok: true };
+  return transicionarStatusFolha(id, "editar", "rascunho", "pendente_aprovacao", {
+    motivo_rejeicao: null,
+  });
 }
 
 /**
@@ -162,34 +199,12 @@ export async function rejeitarFolha(
   id: string,
   motivo: string,
 ): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("aprovar"))) {
-    return { erro: "Sem permissão para rejeitar a folha" };
-  }
-
-  const idValido = idSchema.safeParse(id);
-  if (!idValido.success) return { erro: "Folha inválida" };
-
   const motivoLimpo = motivo.trim();
   if (motivoLimpo === "") return { erro: "Informe o motivo da rejeição" };
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("folhas")
-    .update({ status: "rascunho", motivo_rejeicao: motivoLimpo })
-    .eq("id", idValido.data)
-    .eq("status", "pendente_aprovacao");
-
-  if (error) {
-    return erroAcao(
-      "rh.folha.rejeitar",
-      error,
-      error.message || "Não foi possível rejeitar a folha",
-    );
-  }
-
-  revalidatePath(ROTA);
-  revalidatePath(rotaDetalhe(idValido.data));
-  return { ok: true };
+  return transicionarStatusFolha(id, "aprovar", "pendente_aprovacao", "rascunho", {
+    motivo_rejeicao: motivoLimpo,
+  });
 }
 
 /**

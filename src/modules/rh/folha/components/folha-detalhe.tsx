@@ -30,6 +30,7 @@ import type {
   FolhaItem,
   ResumoEncargo,
 } from "@/modules/rh/folha/queries";
+import { podeTransicionar } from "@/modules/rh/folha/transicoes";
 import { BotaoPlanilha } from "./botao-planilha";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
 import { HoleriteDialog } from "./holerite-dialog";
@@ -104,6 +105,16 @@ export function FolhaDetalheView({
   const info = STATUS_FOLHA[folha.status];
 
   const rascunho = folha.status === "rascunho";
+  // Enviar só existe de rascunho pra pendente_aprovacao: podeTransicionar é a
+  // mesma fonte que o trigger do banco espelha, então a UI habilita exatamente
+  // o que o UPDATE direto vai aceitar.
+  const podeEnviar = podeTransicionar(folha.status, "pendente_aprovacao");
+  // ApprovalBar cobre aprovar/rejeitar (a partir de pendente_aprovacao) e
+  // desaprovar (a partir de aprovado) — os dois únicos status com alguma
+  // transição de saída que não seja "enviar".
+  const mostrarApprovalBar =
+    podeTransicionar(folha.status, "aprovado") ||
+    podeTransicionar(folha.status, "rascunho");
   // Sem faixas de INSS/IRRF cadastradas, todos os itens saem com desconto 0 e
   // o líquido vira igual ao bruto; avisamos para não passar a impressão errada.
   const semDescontosLegais =
@@ -199,7 +210,7 @@ export function FolhaDetalheView({
               Regerar
             </Button>
           ) : null}
-          {podeEditar && rascunho && folha.itens.length > 0 ? (
+          {podeEditar && podeEnviar && folha.itens.length > 0 ? (
             <Button
               type="button"
               size="sm"
@@ -212,9 +223,10 @@ export function FolhaDetalheView({
         </div>
       </div>
 
-      {folha.status === "pendente_aprovacao" || folha.status === "aprovado" ? (
+      {mostrarApprovalBar ? (
         <ApprovalBar
           status={folha.status}
+          rotulo={info.rotulo}
           podeAprovar={podeAprovar}
           podeDesaprovar={podeDesaprovar}
           onAprovar={aoAprovar}
@@ -509,7 +521,7 @@ export function FolhaDetalheView({
         />
       ) : null}
 
-      {podeEditar && rascunho && folha.itens.length > 0 ? (
+      {podeEditar && podeEnviar && folha.itens.length > 0 ? (
         <ConfirmDialog
           aberto={dialogEnviar}
           onAbertoChange={setDialogEnviar}

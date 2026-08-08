@@ -111,6 +111,23 @@ export function dataHojeISO(): string {
 }
 
 /**
+ * Data (yyyy-MM-dd) no fuso de Rio Branco a partir de um timestamptz (ou
+ * `Date`/string date-only). Usada para comparar uma coluna `timestamptz` (ex:
+ * `aprovado_em`) contra um filtro de período que pensa em dia local, com
+ * `noPeriodo` (`@/modules/rh/_shared/filtros`): sem essa conversão, um evento
+ * às 19h+ em Rio Branco (já no dia seguinte em UTC) cairia no dia errado do
+ * filtro, embora a coluna exibida (via `formatarData`) mostre o dia certo.
+ */
+export function dataLocalISO(
+  data: Date | string | null | undefined,
+): string | null {
+  if (!data) return null;
+  const d = paraDate(data);
+  if (Number.isNaN(d.getTime())) return null;
+  return format(d, "yyyy-MM-dd", { in: tz(TIMEZONE) });
+}
+
+/**
  * Mês de referência (competência) sempre viaja em dois formatos:
  * "yyyy-MM" no input type="month" da tela e "yyyy-MM-01" no banco, que guarda
  * DATE normalizado no dia 1. As duas conversões ficam aqui para nenhuma tela

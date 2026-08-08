@@ -18,6 +18,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
+  dataLocalISO,
   formatarData,
   formatarQuantidade,
   mesParaCompetencia,
@@ -115,7 +116,14 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
     return folhas.filter((folha) => {
       if (competencia !== "" && folha.competencia !== competencia) return false;
       if (status !== "" && folha.status !== status) return false;
-      if (!noPeriodo(folha.aprovadoEm, aprovacaoDe, aprovacaoAte)) {
+      // aprovado_em é timestamptz (UTC); noPeriodo compara string de dia, então
+      // precisa do dia LOCAL (Rio Branco), não o dia cru do ISO em UTC — senão
+      // uma folha aprovada às 19h+ locais (já no dia seguinte em UTC) some do
+      // filtro de período, e depois das 19h a coluna exibida (formatarData, já
+      // em fuso local) divergiria do dia que o filtro considerou.
+      if (
+        !noPeriodo(dataLocalISO(folha.aprovadoEm), aprovacaoDe, aprovacaoAte)
+      ) {
         return false;
       }
       if (!naFaixa(folha.custoTotal, custoDe, custoAte)) return false;
