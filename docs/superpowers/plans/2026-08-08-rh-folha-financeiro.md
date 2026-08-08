@@ -26,7 +26,8 @@
 - **Definição de pronto de cada task:** `npx tsc --noEmit` limpo, `npm run lint` sem erro, `npx vitest run` verde, sem `any` novo, sem `console.log`.
 - **iCloud duplica arquivos.** Antes de rodar `tsc`, apagar duplicatas: `find src supabase -name "* [0-9].*" -delete`. Elas quebram o typecheck e não estão no git.
 - **Commits em português**, imperativo, escopo entre parênteses. Terminar com `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
-- **Trabalho direto em `main`** (memória do projeto: erp-emt commita feature em branch e faz merge; este bloco segue branch `feat-rh-folha-financeiro`).
+- **Branch `feat-rh-folha-financeiro`, sem git worktree.** O erp-emt roda no diretório principal (worktree foi removido em 07/08/2026 porque travava o merge). Feature vai em branch e faz merge em `main` no fim.
+- **As funções de dinheiro nascem em duas etapas.** `fn_aprovar_folha` e `fn_desaprovar_folha` são criadas na Task 1 fazendo **só a transição de status**, e as Tasks 4 e 5 as substituem por `create or replace` acrescentando o efeito financeiro. Sem isso a Task 2 chamaria uma RPC que não existe em `database.types.ts` e o `tsc` dela quebraria.
 
 ## Arquivos: o que cada um passa a ser responsável por
 
@@ -62,7 +63,7 @@
 
 **Interfaces:**
 - Consumes: `public.tem_permissao(recurso, acao)`, padrão de `fn_guarda_status_oc`.
-- Produces: `folhas.status in ('rascunho','pendente_aprovacao','aprovado')`; colunas `folhas.aprovado_por uuid`, `folhas.aprovado_em timestamptz`, `folhas.motivo_rejeicao text`; trigger `fn_guarda_status_folha`; ações `rh.folha:aprovar` e `rh.folha:desaprovar`; tipo TS `StatusFolha = "rascunho" | "pendente_aprovacao" | "aprovado"`.
+- Produces: `folhas.status in ('rascunho','pendente_aprovacao','aprovado')`; colunas `folhas.aprovado_por uuid`, `folhas.aprovado_em timestamptz`, `folhas.motivo_rejeicao text`; trigger `fn_guarda_status_folha`; ações `rh.folha:aprovar` e `rh.folha:desaprovar`; `fn_aprovar_folha(p_folha uuid)` e `fn_desaprovar_folha(p_folha uuid, p_motivo text)` fazendo só a transição de status (as Tasks 4 e 5 acrescentam o dinheiro por `create or replace`, sem mudar assinatura); tipo TS `StatusFolha = "rascunho" | "pendente_aprovacao" | "aprovado"`.
 
 - [ ] **Step 1: Ler o estado vivo antes de escrever a migration**
 
@@ -164,6 +165,75 @@ create trigger trg_guarda_status_folha
 -- Step 8, junto com a reescrita dela para o snapshot do grupo.
 drop function public.fn_fechar_folha(uuid);
 drop function public.fn_reabrir_folha(uuid);
+
+-- As duas RPCs de aprovação nascem aqui fazendo SÓ a transição de status, para
+-- que existam em database.types.ts quando a Task 2 escrever as actions. As
+-- Tasks 4 e 5 substituem por create or replace acrescentando o dinheiro.
+create or replace function public.fn_aprovar_folha(p_folha uuid)
+returns void
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare v_status text; v_comp date; v_uid uuid := (select auth.uid());
+begin
+  if not public.tem_permissao('rh.folha', 'aprovar') then
+    raise exception 'Sem permissao para aprovar a folha';
+  end if;
+
+  select status, competencia into v_status, v_comp
+  from public.folhas where id = p_folha for update;
+
+  if v_status is null then raise exception 'Folha nao encontrada'; end if;
+  if v_status <> 'pendente_aprovacao' then
+    raise exception 'A folha de %/% esta em "%": só da para aprovar o que esta pendente de aprovacao.',
+      to_char(v_comp, 'MM'), to_char(v_comp, 'YYYY'), v_status;
+  end if;
+  if not exists (select 1 from public.folha_itens where folha_id = p_folha) then
+    raise exception 'A folha esta vazia';
+  end if;
+
+  update public.folhas
+  set status = 'aprovado', aprovado_por = v_uid, aprovado_em = now(), motivo_rejeicao = null
+  where id = p_folha;
+end;
+$function$;
+
+create or replace function public.fn_desaprovar_folha(p_folha uuid, p_motivo text)
+returns void
+language plpgsql
+security definer
+set search_path to ''
+as $function$
+declare v_status text; v_comp date;
+begin
+  if not public.tem_permissao('rh.folha', 'desaprovar') then
+    raise exception 'Sem permissao para desaprovar a folha';
+  end if;
+  if p_motivo is null or length(btrim(p_motivo)) = 0 then
+    raise exception 'Informe o motivo da desaprovacao';
+  end if;
+
+  select status, competencia into v_status, v_comp
+  from public.folhas where id = p_folha for update;
+
+  if v_status is null then raise exception 'Folha nao encontrada'; end if;
+  if v_status <> 'aprovado' then
+    raise exception 'A folha de %/% esta em "%": só da para desaprovar folha aprovada.',
+      to_char(v_comp, 'MM'), to_char(v_comp, 'YYYY'), v_status;
+  end if;
+
+  update public.folhas
+  set status = 'rascunho', aprovado_por = null, aprovado_em = null,
+      motivo_rejeicao = btrim(p_motivo)
+  where id = p_folha;
+end;
+$function$;
+
+revoke all on function public.fn_aprovar_folha(uuid) from public;
+revoke all on function public.fn_desaprovar_folha(uuid, text) from public;
+grant execute on function public.fn_aprovar_folha(uuid) to authenticated;
+grant execute on function public.fn_desaprovar_folha(uuid, text) to authenticated;
 ```
 
 - [ ] **Step 3: Conferir no banco que a migration pegou**
@@ -177,9 +247,13 @@ select tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid
 where c.relname='folhas' and tgname='trg_guarda_status_folha';
 select proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
 where n.nspname='public' and proname in ('fn_fechar_folha','fn_reabrir_folha');
+
+select proname, pg_get_function_identity_arguments(p.oid) as args
+from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and proname in ('fn_aprovar_folha','fn_desaprovar_folha');
 ```
 
-Esperado: check com os três status; três colunas presentes e `data_fechamento` ausente; trigger presente; **zero linha** na última consulta.
+Esperado: check com os três status; três colunas presentes e `data_fechamento` ausente; trigger presente; **zero linha** na consulta das funções antigas; e as duas novas presentes com assinaturas `p_folha uuid` e `p_folha uuid, p_motivo text` (as Tasks 4 e 5 dependem dessas assinaturas exatas).
 
 - [ ] **Step 4: Semear as permissões novas (migration separada, com trava fail-closed)**
 
@@ -538,7 +612,7 @@ export async function desaprovarFolha(
 }
 ```
 
-**Nota:** `fn_aprovar_folha` e `fn_desaprovar_folha` só existem no banco a partir das Tasks 4 e 5. Até lá as duas actions vão dar erro de RPC inexistente em runtime, e isso é aceitável porque a UI delas nasce nesta task mas o caminho feliz só fecha na Task 5. O tipo do `supabase.rpc` vem de `database.types.ts`: regenerar os tipos (MCP `generate_typescript_types`) **depois** da Task 5, não agora.
+**Nota:** as duas RPCs já existem no banco desde a Task 1, fazendo só a transição de status. Regenerar `src/lib/database.types.ts` via MCP `generate_typescript_types` **no começo desta task**, antes de escrever as actions, senão o `supabase.rpc("fn_aprovar_folha", ...)` não tipa. O efeito financeiro entra nelas nas Tasks 4 e 5, sem mudar assinatura, então a tela não muda depois.
 
 - [ ] **Step 6: Corrigir a planilha, que usa `"fechada"` e `dataFechamento`**
 
@@ -1710,5 +1784,5 @@ Atualizar `.superpowers/sdd/progress.md`: marcar o Bloco 7 como deployado (o led
 
 1. **A ordem dos deletes na Task 5 depende da FK de `folha_guias.lancamento_id`.** Se ela não for `on delete set null`, apagar o lançamento antes da linha da guia viola a FK. O Step 1 manda conferir no banco e corrigir por migration nova, nunca editando uma já aplicada.
 2. **`fn_gerar_folha` é reescrita inteira na Task 4 Step 8.** É a função de dinheiro mais crítica do RH. O plano manda copiar a definição viva antes e diffar depois, esperando exatamente três mudanças.
-3. **As actions da Task 2 chamam RPCs que só existem na Task 4 e 5.** Aceitável em sequência, mas o preview não fecha o caminho feliz antes da Task 5.
+3. **As RPCs de aprovação nascem em duas etapas** (transição na Task 1, dinheiro nas Tasks 4 e 5). Depois da Task 2 o preview já aprova e desaprova de verdade, só não gera lançamento. Quem implementar as Tasks 4 e 5 tem que usar `create or replace` **preservando a assinatura**, senão a action da Task 2 quebra.
 4. **Zero colaborador em produção.** A prova de aceite monta o cenário em transação com rollback. Nada disso valida contra caso real: isso depende das pendências do Tiago.
