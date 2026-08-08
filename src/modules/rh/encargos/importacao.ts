@@ -5,6 +5,8 @@ export interface EncargoImportacao {
   nome: string;
   percentual: number;
   ativo: boolean;
+  /** Grupo de recolhimento (guia do Financeiro). Vazio: o encargo não vira guia. */
+  grupoRecolhimento: string | null;
 }
 
 /** Converte texto pt-BR (ponto = milhar, vírgula = decimal) em número. */
@@ -79,5 +81,20 @@ export const COLUNAS_ENCARGO: ColunaImportacao<EncargoImportacao>[] = [
       const texto = String(valor).trim().toLowerCase();
       return !VALORES_ATIVO_NAO.includes(texto);
     },
+  },
+  {
+    chave: "grupoRecolhimento",
+    rotulo: "Grupo de recolhimento",
+    exemplo: "INSS",
+    // Opcional: célula vazia não passa por transformar (fica null), e o
+    // encargo simplesmente não vira guia — não é erro de importação.
+    transformar: (valor) => {
+      const texto = String(valor).trim();
+      return texto.length > 0 ? texto : null;
+    },
+    validar: (valor) =>
+      valor === null || String(valor).length <= 60
+        ? null
+        : "Grupo de recolhimento pode ter no máximo 60 caracteres",
   },
 ];

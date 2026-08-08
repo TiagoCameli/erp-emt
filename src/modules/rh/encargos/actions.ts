@@ -46,6 +46,7 @@ export async function salvarEncargo(
     nome: validado.data.nome,
     percentual: validado.data.percentual,
     ativo: validado.data.ativo,
+    grupo_recolhimento: validado.data.grupoRecolhimento ?? null,
   };
 
   const supabase = await createClient();
@@ -203,6 +204,7 @@ export async function importar(
     nome: String(linha.dados.nome),
     percentual: linha.dados.percentual ?? 0,
     ativo: linha.dados.ativo ?? true,
+    grupo_recolhimento: linha.dados.grupoRecolhimento ?? null,
   }));
 
   const supabase = await createClient();

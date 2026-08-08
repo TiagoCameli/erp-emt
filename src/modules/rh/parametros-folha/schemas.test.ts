@@ -229,6 +229,43 @@ describe("parametrosSchema", () => {
   });
 });
 
+describe("parametrosSchema — pagamento e recolhimento", () => {
+  it("aceita dia de pagamento e dia das guias entre 1 e 31", () => {
+    const r = parametrosSchema.safeParse({
+      irrfDeducaoPorDependente: 0,
+      irrfDescontoSimplificado: 0,
+      fgtsPercentual: 8,
+      diaPagamentoSalario: 5,
+      diaVencimentoGuias: 20,
+      grupoRecolhimentoInss: "INSS",
+      grupoRecolhimentoIrrf: "IRRF",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("recusa dia 0 e dia 32", () => {
+    for (const dia of [0, 32]) {
+      const r = parametrosSchema.safeParse({
+        irrfDeducaoPorDependente: 0,
+        irrfDescontoSimplificado: 0,
+        fgtsPercentual: 8,
+        diaPagamentoSalario: dia,
+        diaVencimentoGuias: 20,
+      });
+      expect(r.success).toBe(false);
+    }
+  });
+
+  it("aceita config vazia: sem dia e sem grupo (deploy seguro)", () => {
+    const r = parametrosSchema.safeParse({
+      irrfDeducaoPorDependente: 0,
+      irrfDescontoSimplificado: 0,
+      fgtsPercentual: 0,
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
 describe("parametrosSchema — reparse (idempotência)", () => {
   it("reparse do resultado já convertido continua válido", () => {
     const primeiro = parametrosSchema.safeParse({

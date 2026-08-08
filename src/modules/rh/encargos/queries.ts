@@ -8,6 +8,8 @@ export interface EncargoLista {
   nome: string;
   percentual: number;
   ativo: boolean;
+  /** Grupo de recolhimento (guia do Financeiro). Nulo: o encargo não vira guia. */
+  grupoRecolhimento: string | null;
 }
 
 /** Lista todos os encargos, ordenados por nome. Excluídos via lixeira já saem da tabela. */
@@ -16,14 +18,20 @@ export async function listarEncargos(): Promise<EncargoLista[]> {
 
   const { data, error } = await supabase
     .from("folha_encargos")
-    .select("id, nome, percentual, ativo")
+    .select("id, nome, percentual, ativo, grupo_recolhimento")
     .order("nome");
 
   if (error) {
     throw new Error("Não foi possível carregar os encargos");
   }
 
-  return data ?? [];
+  return (data ?? []).map((linha) => ({
+    id: linha.id,
+    nome: linha.nome,
+    percentual: linha.percentual,
+    ativo: linha.ativo,
+    grupoRecolhimento: linha.grupo_recolhimento,
+  }));
 }
 
 /** Encargo ativo, enxuto — para o cálculo/detalhe da folha. */

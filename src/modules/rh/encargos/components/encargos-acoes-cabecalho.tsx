@@ -10,6 +10,8 @@ import { EncargoFormDrawer } from "./encargo-form-drawer";
 
 export interface EncargosAcoesCabecalhoProps {
   podeCriar: boolean;
+  /** Grupos de recolhimento já cadastrados, para o Combobox do drawer de criação. */
+  grupos: string[];
 }
 
 /**
@@ -18,6 +20,7 @@ export interface EncargosAcoesCabecalhoProps {
  */
 export function EncargosAcoesCabecalho({
   podeCriar,
+  grupos,
 }: EncargosAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
@@ -35,7 +38,11 @@ export function EncargosAcoesCabecalho({
         <Plus />
         Novo encargo
       </Button>
-      <EncargoFormDrawer aberto={aberto} onAbertoChange={setAberto} />
+      <EncargoFormDrawer
+        aberto={aberto}
+        onAbertoChange={setAberto}
+        grupos={grupos}
+      />
     </>
   );
 }

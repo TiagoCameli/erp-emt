@@ -1169,6 +1169,7 @@ export type Database = {
           ativo: boolean
           created_at: string
           created_by: string | null
+          grupo_recolhimento: string | null
           id: string
           nome: string
           percentual: number
@@ -1178,6 +1179,7 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           created_by?: string | null
+          grupo_recolhimento?: string | null
           id?: string
           nome: string
           percentual: number
@@ -1187,6 +1189,7 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           created_by?: string | null
+          grupo_recolhimento?: string | null
           id?: string
           nome?: string
           percentual?: number
@@ -1254,6 +1257,7 @@ export type Database = {
       folha_item_encargos: {
         Row: {
           folha_item_id: string
+          grupo_recolhimento: string | null
           id: string
           nome: string
           percentual: number
@@ -1261,6 +1265,7 @@ export type Database = {
         }
         Insert: {
           folha_item_id: string
+          grupo_recolhimento?: string | null
           id?: string
           nome: string
           percentual: number
@@ -1268,6 +1273,7 @@ export type Database = {
         }
         Update: {
           folha_item_id?: string
+          grupo_recolhimento?: string | null
           id?: string
           nome?: string
           percentual?: number
@@ -1363,7 +1369,11 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          dia_pagamento_salario: number | null
+          dia_vencimento_guias: number | null
           fgts_percentual: number
+          grupo_recolhimento_inss: string | null
+          grupo_recolhimento_irrf: string | null
           id: number
           irrf_deducao_por_dependente: number
           irrf_desconto_simplificado: number
@@ -1372,7 +1382,11 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          dia_pagamento_salario?: number | null
+          dia_vencimento_guias?: number | null
           fgts_percentual?: number
+          grupo_recolhimento_inss?: string | null
+          grupo_recolhimento_irrf?: string | null
           id?: number
           irrf_deducao_por_dependente?: number
           irrf_desconto_simplificado?: number
@@ -1381,7 +1395,11 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          dia_pagamento_salario?: number | null
+          dia_vencimento_guias?: number | null
           fgts_percentual?: number
+          grupo_recolhimento_inss?: string | null
+          grupo_recolhimento_irrf?: string | null
           id?: number
           irrf_deducao_por_dependente?: number
           irrf_desconto_simplificado?: number

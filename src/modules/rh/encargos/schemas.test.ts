@@ -107,3 +107,35 @@ describe("encargoSchema — ativo", () => {
     if (r.success) expect(r.data.ativo).toBe(false);
   });
 });
+
+describe("encargoSchema — grupoRecolhimento", () => {
+  it("aceita encargo sem grupo de recolhimento (não vira guia)", () => {
+    const r = encargoSchema.safeParse({
+      nome: "FGTS",
+      percentual: 8,
+      ativo: true,
+      grupoRecolhimento: undefined,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("normaliza o grupo cortando espaço nas pontas", () => {
+    const r = encargoSchema.safeParse({
+      nome: "INSS patronal",
+      percentual: 20,
+      ativo: true,
+      grupoRecolhimento: "  INSS  ",
+    });
+    expect(r.success && r.data.grupoRecolhimento).toBe("INSS");
+  });
+
+  it("recusa grupo com mais de 60 caracteres", () => {
+    const r = encargoSchema.safeParse({
+      nome: "RAT",
+      percentual: 3,
+      ativo: true,
+      grupoRecolhimento: "x".repeat(61),
+    });
+    expect(r.success).toBe(false);
+  });
+});

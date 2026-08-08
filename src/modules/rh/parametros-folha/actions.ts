@@ -244,6 +244,10 @@ export async function salvarParametros(
     irrf_deducao_por_dependente: validado.data.irrfDeducaoPorDependente,
     irrf_desconto_simplificado: validado.data.irrfDescontoSimplificado,
     fgts_percentual: validado.data.fgtsPercentual,
+    dia_pagamento_salario: validado.data.diaPagamentoSalario ?? null,
+    dia_vencimento_guias: validado.data.diaVencimentoGuias ?? null,
+    grupo_recolhimento_inss: validado.data.grupoRecolhimentoInss ?? null,
+    grupo_recolhimento_irrf: validado.data.grupoRecolhimentoIrrf ?? null,
   });
 
   if (error) {
