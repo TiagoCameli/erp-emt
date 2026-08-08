@@ -864,3 +864,128 @@ de custo" como espinha dorsal, e o painel de Gestão sub-reporta esse valor.
    folha não passa por esses dois schemas. (O relatório de revisão chamou o
    segundo de `lancamentoEdicaoSchema`; esse nome não existe no arquivo, os
    exports são `lancamentoSchema` e `lancamentoFormSchema`.)
+
+## 2026-08-08 - Fechamento do Bloco 8a: portão de competência de mão única, tela de RH que lê tabela do Financeiro, e adiantamento congelado
+
+Três achados do Bloco 8a (aprovação da folha e a ponte com o Financeiro) que não são
+sobre folha: valem para o projeto inteiro.
+
+### 1. O portão de competência contábil está montado só na entrada
+
+`fn_exigir_competencia_aberta` é a trava que impede lançar dinheiro em mês fechado.
+Medido no banco vivo em 08/08/2026, lendo `pg_proc.prosrc`:
+
+| chama `fn_exigir_competencia_aberta` | funções |
+|---|---|
+| **sim (7)** | `fn_alterar_mes_competencia`, `fn_aprovar_folha`, `fn_aprovar_ordem_compra`, `fn_criar_ordem_compra`, `fn_fechar_diarias`, `fn_registrar_adiantamento`, `fn_salvar_lancamento` |
+| **não, e apagam `lancamentos` (4)** | `fn_desaprovar_folha`, `fn_desaprovar_ordem_compra`, `fn_excluir_lancamento`, `fn_excluir_ordem_compra` |
+
+As 7 que chamam são, todas, caminho de **criar ou mover** dinheiro. As 4 que **apagam**
+lançamento não chamam nenhuma. (A sétima entrou neste bloco: `fn_registrar_adiantamento`.
+Até a Task 6 eram 6.)
+
+Efeito reproduzido pela revisão da Task 5: quem tem `rh.folha:desaprovar` **sem**
+`financeiro.competencias:desaprovar` apaga as contas a pagar de um mês já fechado, sem
+gerar uma linha em `competencia_eventos`, **e não consegue recolocá-las**, porque a
+aprovação chama o portão e barra lançar em mês fechado. É porta de mão única: o mês
+fechado passa a mostrar menos despesa do que teve, e o caminho de volta está trancado.
+Vale igual para desaprovar OC e para excluir lançamento solto.
+
+**Decisões**
+
+1. **Fechar isso é decisão do dono do sistema, não do implementador.** A pergunta é de
+   regra contábil: apagar despesa de mês fechado exige reabrir a competência (com
+   evento e permissão), ou é permitido com registro? Ninguém deve inventar a resposta.
+2. **Quando for fechado, é nas 4 de uma vez.** Travar só a folha faria dela a única das
+   quatro com trava, e a assimetria só trocaria de lugar: quem quisesse apagar despesa
+   de mês fechado usaria a exclusão de lançamento. Meia trava aqui é pior que trava
+   nenhuma, porque dá falsa sensação de cobertura.
+
+### 2. Tela de RH que lê tabela do Financeiro fica silenciosamente vazia se a RLS não conhecer a permissão de RH
+
+Este bloco foi o **terceiro** caso do mesmo padrão. O sintoma é o pior possível: não dá
+erro, a tela mostra "nada encontrado", e quem olha conclui que **o dado não existe**.
+
+| caso | o que a tela mostrava | correção |
+|---|---|---|
+| painel de alertas (Bloco 1) | "nenhum EPI a recolher", com EPIs a recolher (o join com `colaboradores` era zerado pela RLS) | `fn_epis_a_recolher`, definer gateada por `rh.epis:ver` |
+| trava de adiantamento (Task 6) | deixava editar adiantamento já pago, porque o predicado não via a parcela | predicados definer gateados |
+| lançamentos gerados da folha (Task 7) | "Esta folha foi aprovada sem gerar lancamentos", numa folha que TEM lançamento | policy de `lancamentos` estendida, restringindo por origem |
+
+**Decisões**
+
+3. **Dois padrões, e a escolha é pelo que a tela precisa ler.**
+   - A tela precisa de um **agregado, um bit ou uma lista derivada**: função
+     `security definer` **gateada por permissão no corpo** (`fn_epis_a_recolher` é o
+     precedente). O gate tem que ser **fail-closed**: em `language sql` não existe
+     `raise`, então retornar `true` (= "comprometido", = nega) no lugar de deixar o
+     `where` devolver `false`. Predicado gateado por `and tem_permissao(...)` no `where`
+     é fail-**open** disfarçado.
+   - A tela precisa da **linha inteira** da tabela do outro módulo: estender a policy
+     de SELECT **restringindo por origem**. Foi o que a Task 7 fez
+     (`20260808205001`): `rh.folha:ver` passa a ver `origem in ('folha','folha_guia')`
+     e `rh.adiantamentos:ver` só `origem = 'adiantamento'`. **Não** usar um `OR` solto
+     com o recurso de RH: isso daria ao RH o contas a pagar inteiro, incluindo nota de
+     fornecedor. Custo medido: o `exists()` correlacionado vira hashed subplan com
+     `loops=1` via `idx_lancamentos_origem`, 9,3 ms para 3000 linhas, não nested-loop
+     por linha.
+4. **Toda tela que cruza módulo tem que ser testada com o perfil mínimo, não com o
+   Admin.** Os três casos passaram no olho de quem implementou porque quem testou tinha
+   permissão dos dois lados. O teste que pega é: derrubar as permissões do outro módulo
+   em transação e conferir que a tela ainda mostra o dado (ou dá erro honesto), nunca
+   "nada encontrado".
+
+### 3. Editar adiantamento deixou de existir, por desenho
+
+Todo adiantamento agora nasce com lançamento no Financeiro
+(`fn_registrar_adiantamento`, Task 6), e o registro é **congelado** quando tem
+lançamento vinculado: a policy `rh_adiantamentos_update` exige `lancamento_id is null`
+nos **dois** lados (`using` e `with check`), espelhando `rh_diarias`, que congela desde
+junho. Corrigir digitação passa a ser **excluir e recriar**, que é atômico
+(`fn_excluir_adiantamento` apaga o lançamento junto).
+
+O que isso fechou, provado por execução na revisão da Task 6: um usuário só de RH
+(`rh.adiantamentos` editar/excluir, zero permissão em `financeiro.lancamentos`)
+repontava `rh_adiantamentos.lancamento_id` para a nota de um fornecedor de R$ 5.000 e
+apagava a nota chamando a exclusão do adiantamento de R$ 100, com parcelas e rateios.
+Contornava `fn_excluir_lancamento` inteira. A variante branda (`lancamento_id = null`)
+deixava um `a_pagar` fantasma que `fn_excluir_lancamento` se recusa a apagar.
+
+**Decisões**
+
+5. **Sincronizar não é resposta; congelar é.** Editar o registro de RH sem sincronizar o
+   Financeiro produz divergência silenciosa (RH 999,99 contra lançamento 100,00, e
+   também centro de custo, rateio, descrição e `mes_competencia`). Nem `rh_diarias` nem
+   a OC sincronizam: as duas congelam. Divergência silenciosa não é resposta aceita em
+   nenhum lugar deste código.
+6. **Coluna que aponta para dinheiro não é escrivível pelo usuário.** `lancamento_id`,
+   `origem`, `origem_id`: quem escreve é a função definer. Grant de UPDATE de tabela
+   inteira em transacional com vínculo financeiro é o mesmo furo duas vezes (Critical da
+   Task 2 em `folhas`, Critical da Task 6 em `rh_adiantamentos`). Grant por coluna, e a
+   policy fixando a coluna de vínculo nos dois lados.
+
+### 4. O espelho da migration é o SQL executável, não o byte
+
+A Global Constraint pedia "arquivo homônimo no repo com o mesmo SQL". A Task 8 conferiu
+as **18** migrations `20260808*` do bloco e mediu que **1** é byte-idêntica ao ledger e
+**17** não são, sempre e só em comentário:
+
+| causa da divergência | quantas | tamanho |
+|---|---|---|
+| só a quebra de linha final do arquivo | 4 | +1 char |
+| cabeçalho "Aplicada em produção pelo MCP, não rode `db push`" e/ou acento posto depois de aplicar | 13 | +230 a +1290 chars |
+| nenhuma (byte-idêntica) | 1 | 0 |
+
+**Decisões**
+
+7. **A conferência é por SQL executável, com comentário removido e espaço em branco
+   normalizado**, não por `md5` do arquivo cru. Byte-exatidão é inalcançável de propósito:
+   arquivo de texto termina em quebra de linha (o ledger não guarda a última), e 13
+   arquivos carregam de propósito o aviso de que **não se roda `db push` neste projeto**,
+   que é justamente a informação que salva o banco. A receita, aplicada dos dois lados:
+   `regexp_replace(txt, '--[^\n]*', '', 'g')`, depois `regexp_replace(..., '\s+', ' ', 'g')`,
+   depois `btrim`, depois `md5`. Nos 18 arquivos do bloco o resultado bate com
+   `md5(array_to_string(statements, E'\n'))` do ledger.
+8. **Regex do Postgres não tem `\b`.** A fronteira de palavra é `\y`; `\b` é backspace, e
+   uma varredura de `prosrc` com `\b` devolve zero linha em silêncio. Foi o que quase fez
+   a Task 8 registrar "nenhuma função apaga lançamento" no item 1 desta entrada.
