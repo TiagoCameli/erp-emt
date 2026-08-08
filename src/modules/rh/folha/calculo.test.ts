@@ -4,6 +4,7 @@ import {
   agruparLancamentosDaFolha,
   resumoPorCentroCusto,
   resumoPorEncargo,
+  retidoSemGrupoDeRecolhimento,
 } from "@/modules/rh/folha/calculo";
 import type {
   FolhaDetalhe,
@@ -304,5 +305,60 @@ describe("agruparLancamentosDaFolha", () => {
     expect(agrupado.totalSalarios).toBe(5500);
     expect(agrupado.guias).toEqual([]);
     expect(agrupado.totalGuias).toBe(0);
+  });
+});
+
+describe("retidoSemGrupoDeRecolhimento", () => {
+  // Cenário fixo: 2 colaboradores com retido, espelhando a prova em banco.
+  const folha = criarFolha([
+    criarItem({ id: "1", inss: 202.23, irrf: 2.89 }),
+    criarItem({ id: "2", inss: 509.6, irrf: 347.57 }),
+  ]);
+  const somaInss = 711.83;
+  const somaIrrf = 350.46;
+
+  it("folha_parametros sem linha (estado de produção): INSS e IRRF ficam fora da guia", () => {
+    expect(retidoSemGrupoDeRecolhimento(folha, null)).toEqual({
+      inss: somaInss,
+      irrf: somaIrrf,
+      total: somaInss + somaIrrf,
+    });
+  });
+
+  it("os dois grupos configurados: nada fica fora, e o aviso não aparece", () => {
+    expect(
+      retidoSemGrupoDeRecolhimento(folha, {
+        grupoRecolhimentoInss: "GPS",
+        grupoRecolhimentoIrrf: "DARF IRRF",
+      }),
+    ).toEqual({ inss: 0, irrf: 0, total: 0 });
+  });
+
+  it("caso parcial (só o INSS configurado): só o IRRF fica fora", () => {
+    expect(
+      retidoSemGrupoDeRecolhimento(folha, {
+        grupoRecolhimentoInss: "GPS",
+        grupoRecolhimentoIrrf: null,
+      }),
+    ).toEqual({ inss: 0, irrf: somaIrrf, total: somaIrrf });
+  });
+
+  it("grupo em branco conta como ausente, igual ao nullif(btrim(...)) da consulta de diagnóstico", () => {
+    expect(
+      retidoSemGrupoDeRecolhimento(folha, {
+        grupoRecolhimentoInss: "   ",
+        grupoRecolhimentoIrrf: "DARF IRRF",
+      }),
+    ).toEqual({ inss: somaInss, irrf: 0, total: somaInss });
+  });
+
+  it("folha sem retido nenhum não gera aviso, mesmo com os grupos vazios", () => {
+    const semRetido = criarFolha([criarItem({ id: "1" })]);
+
+    expect(retidoSemGrupoDeRecolhimento(semRetido, null)).toEqual({
+      inss: 0,
+      irrf: 0,
+      total: 0,
+    });
   });
 });

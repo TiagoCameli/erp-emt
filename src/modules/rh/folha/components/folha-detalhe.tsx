@@ -24,7 +24,10 @@ import {
   enviarFolhaParaAprovacao,
   rejeitarFolha,
 } from "@/modules/rh/folha/actions";
-import type { LancamentosDaFolhaAgrupados } from "@/modules/rh/folha/calculo";
+import {
+  retidoSemGrupoDeRecolhimento,
+  type LancamentosDaFolhaAgrupados,
+} from "@/modules/rh/folha/calculo";
 import type {
   CustoCentroCusto,
   FolhaDetalhe,
@@ -80,6 +83,15 @@ export interface FolhaDetalheViewProps {
   lancamentos: LancamentosDaFolhaAgrupados;
   /** % do FGTS (parâmetros da folha) para o informativo do holerite. */
   fgtsPercentual: number;
+  /**
+   * Grupos de recolhimento dos retidos (`folha_parametros`). `null` quando a
+   * linha de parâmetros nem existe. Só para o aviso de retido que não vira
+   * conta a pagar: nada aqui muda valor nenhum.
+   */
+  gruposRetido: {
+    grupoRecolhimentoInss: string | null;
+    grupoRecolhimentoIrrf: string | null;
+  } | null;
   trilha: EventoTrilha[];
   podeCriar: boolean;
   podeEditar: boolean;
@@ -102,6 +114,7 @@ export function FolhaDetalheView({
   resumoEncargos,
   lancamentos,
   fgtsPercentual,
+  gruposRetido,
   trilha,
   podeCriar,
   podeEditar,
@@ -128,6 +141,16 @@ export function FolhaDetalheView({
   const semDescontosLegais =
     folha.itens.length > 0 &&
     folha.itens.every((item) => item.inss === 0 && item.irrf === 0);
+  // Retido que não vai virar conta a pagar por falta de grupo de recolhimento.
+  // Avisa e não bloqueia: config vazia é deploy seguro, e a folha pode servir só
+  // como custo gerencial por um tempo. Mostrado já no rascunho, para o aviso
+  // chegar ANTES de alguém aprovar. É a terceira causa de resíduo da identidade
+  // de conferência (ver obj_description da fn_aprovar_folha).
+  const retidoSemGrupo = retidoSemGrupoDeRecolhimento(folha, gruposRetido);
+  const impostosSemGrupo = [
+    retidoSemGrupo.inss > 0 ? "INSS" : null,
+    retidoSemGrupo.irrf > 0 ? "IRRF" : null,
+  ].filter((nome): nome is string => nome !== null);
 
   const [dialogEnviar, setDialogEnviar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
@@ -249,6 +272,24 @@ export function FolhaDetalheView({
             Sem descontos legais aplicados (INSS e IRRF zerados). Cadastre as
             faixas vigentes em Parâmetros da Folha para a folha calcular os
             descontos.
+          </p>
+        </div>
+      ) : null}
+
+      {impostosSemGrupo.length > 0 ? (
+        <div className="rounded-md border border-status-pendente/30 bg-status-pendente/5 px-4 py-3">
+          <p className="text-detalhe text-foreground">
+            {impostosSemGrupo.join(" e ")} retido dos colaboradores, somando{" "}
+            <MoneyText valor={retidoSemGrupo.total} />, não vira conta a pagar:{" "}
+            {impostosSemGrupo.length > 1
+              ? "os grupos de recolhimento estão"
+              : "o grupo de recolhimento está"}{" "}
+            sem configuração. O desconto continua no holerite e no líquido, mas a
+            guia que a empresa recolhe não aparece no Financeiro. Configure em RH
+            &gt; Parâmetros da Folha (/rh/parametros-folha)
+            {folha.status === "aprovado"
+              ? " e depois desaprove e reaprove esta folha, para a aprovação gerar a guia."
+              : " antes de aprovar."}
           </p>
         </div>
       ) : null}

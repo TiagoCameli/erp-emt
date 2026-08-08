@@ -42,6 +42,8 @@ export default async function PaginaFolhaDetalhe({
     .filter((idLancamento): idLancamento is string => idLancamento !== null);
   // FGTS informativo do holerite: % vem dos parâmetros da folha (0 se ainda
   // não cadastrados). Só leitura, não afeta os valores já fechados na folha.
+  // A mesma leitura serve ao aviso de retido sem grupo de recolhimento (onda de
+  // correção do review do Bloco 8a): nenhuma consulta nova.
   const [parametros, trilha, lancamentosDaFolha] = await Promise.all([
     buscarParametros(),
     trilhaFolha(id),
@@ -62,6 +64,14 @@ export default async function PaginaFolhaDetalhe({
       resumoEncargos={resumoEncargos}
       lancamentos={lancamentos}
       fgtsPercentual={parametros?.fgtsPercentual ?? 0}
+      gruposRetido={
+        parametros
+          ? {
+              grupoRecolhimentoInss: parametros.grupoRecolhimentoInss,
+              grupoRecolhimentoIrrf: parametros.grupoRecolhimentoIrrf,
+            }
+          : null
+      }
       trilha={trilha}
       podeCriar={podeCriar}
       podeEditar={podeEditar}
