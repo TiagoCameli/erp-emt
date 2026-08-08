@@ -51,11 +51,12 @@ cadastrar colaborador, encargos e faixas.
 3. **As guias (INSS, FGTS, IRRF) também viram lançamento**, uma por grupo de recolhimento,
    configurável pelo Tiago. Sem isso o custo por obra no Financeiro ficaria menor que o do RH
    e nasceriam dois números de custo de mão de obra convivendo.
-4. **A aprovação é o que gera o dinheiro:** `rascunho > pendente_aprovacao > aprovada`. Os
-   lançamentos nascem no momento da aprovação, nunca antes. Reprovar volta para rascunho com
+4. **A aprovação é o que gera o dinheiro:** `rascunho > pendente_aprovacao > aprovado`. Os
+   lançamentos nascem no momento da aprovação, nunca antes. Rejeitar volta para rascunho com
    motivo obrigatório e zero lançamento criado.
-5. **`rh.folha:aprovar` só no perfil Admin.** O RH gera e envia, não aprova a própria folha.
-6. **Reabrir apaga os lançamentos** (delete de verdade, não cancelamento), e é bloqueado se
+5. **`rh.folha:aprovar` e `rh.folha:desaprovar` só no perfil Admin.** O RH gera e envia, não
+   aprova a própria folha.
+6. **Desaprovar apaga os lançamentos** (delete de verdade, não cancelamento), e é bloqueado se
    qualquer parcela já estiver comprometida (ver trava abaixo).
 7. **Vencimento do salário por parâmetro**, não digitado a cada mês.
 8. **O adiantamento passa a virar lançamento** na concessão. Hoje ele é descontado do líquido
@@ -66,9 +67,21 @@ cadastrar colaborador, encargos e faixas.
 ### 1. Máquina de status da folha
 
 **`folhas.status`**: o check passa de `('rascunho','fechada')` para
-`('rascunho','pendente_aprovacao','aprovada')`. O valor `fechada` **sai**: manter `fechada` e
-`aprovada` como dois nomes do mesmo estado é dívida que vira bug. Zero folha no banco, então
+`('rascunho','pendente_aprovacao','aprovado')`. O valor `fechada` **sai**: manter `fechada` e
+`aprovado` como dois nomes do mesmo estado é dívida que vira bug. Zero folha no banco, então
 é troca de check, não migração.
+
+**`aprovado` no masculino, e isso não é descuido de concordância.** É o valor do `StatusPadrao`
+canônico (`src/components/canonicos/status-badge.tsx`), o mesmo que a OC usa, e o `ApprovalBar`
+canônico decide o que renderizar comparando com `'pendente_aprovacao'` e `'aprovado'` literais.
+Usar `aprovada` no banco faria o canônico não reconhecer o estado e sumir com o botão de
+desaprovar. O rótulo feminino na tela sai do `rotulo` do `StatusBadge`, que existe pra isso.
+
+**Não existe status `rejeitado` na folha.** Rejeitar leva a `rascunho` com o motivo gravado, e o
+próximo envio limpa o motivo (igual a OC faz). Divergência consciente da OC: uma OC rejeitada é
+um documento que morreu, uma folha é recalculável, e corrigir exige regenerar, que exige
+rascunho. Um `rejeitado` na folha seria um beco sem saída precisando de uma transição extra só
+pra sair dele.
 
 **Colunas novas em `folhas`**, todas espelhando padrão existente no projeto:
 - `aprovado_por uuid` e `aprovado_em timestamptz` (espelha `rh_pontos`)
@@ -82,20 +95,29 @@ troca "fechada em" por "aprovada em".
 canônica lê de lá e já renderiza `status`, `motivo_rejeicao`, `aprovado_por` e `aprovado_em`.
 A trilha da folha sai de graça.
 
-**Ação nova `aprovar` no recurso `rh.folha`**, semeada apenas no perfil Admin e nos usuários
-que já têm o Admin. O perfil RH mantém criar/editar/ver e **não** ganha `aprovar`.
+**Duas ações novas no recurso `rh.folha`**: `aprovar` e `desaprovar`, ambas semeadas apenas no
+perfil Admin e nos usuários que já têm o Admin. O par é o mesmo que `compras.ordens` usa (as duas
+já existem em `ACOES`), e separá-las permite dar a alçada de aprovar sem dar a de desfazer. O
+perfil RH mantém criar/editar/ver e não ganha nenhuma das duas.
 
-**Funções (todas `SECURITY DEFINER`, `search_path` vazio, checando `tem_permissao`):**
+**A máquina de status, espelhando exatamente o que a OC faz:**
 
-| função | transição | exige | efeito em dinheiro |
-|---|---|---|---|
-| `fn_enviar_folha_aprovacao(p_folha)` | rascunho → pendente_aprovacao | `rh.folha:editar` | nenhum. Recusa folha vazia |
-| `fn_aprovar_folha(p_folha)` | pendente_aprovacao → aprovada | `rh.folha:aprovar` | **cria os lançamentos** |
-| `fn_reprovar_folha(p_folha, p_motivo)` | pendente_aprovacao → rascunho | `rh.folha:aprovar` | nenhum. Motivo obrigatório, não vazio |
-| `fn_reabrir_folha(p_folha)` | aprovada → rascunho | `rh.folha:aprovar` (era `editar`) | apaga os lançamentos |
+| ação na UI | transição | exige | como | efeito em dinheiro |
+|---|---|---|---|---|
+| Enviar para aprovação | rascunho → pendente_aprovacao | `rh.folha:editar` | update direto, guardado por trigger | nenhum. Recusa folha vazia |
+| Aprovar | pendente_aprovacao → aprovado | `rh.folha:aprovar` | `fn_aprovar_folha(p_folha)` | **cria os lançamentos** |
+| Rejeitar | pendente_aprovacao → rascunho | `rh.folha:aprovar` | update direto + `motivo_rejeicao` | nenhum |
+| Desaprovar | aprovado → rascunho | `rh.folha:desaprovar` | `fn_desaprovar_folha(p_folha, p_motivo)` | apaga os lançamentos |
 
-`fn_fechar_folha` é dropada junto com o status `fechada`. A checagem de folha vazia que vivia
-nela migra para `fn_enviar_folha_aprovacao`.
+**Trigger de guarda `fn_guarda_status_folha`**, cópia estrutural de `fn_guarda_status_oc`: deixa
+passar quando o status não mudou, deixa passar quando `current_user` não é `authenticated`/`anon`
+(dentro das RPCs definer, que já checaram tudo), permite só as duas transições que o app faz por
+update direto com a permissão de cada uma, e estoura com mensagem explicativa em qualquer outra.
+Sem ele, um update direto por RLS pularia a aprovação e deixaria a folha aprovada sem lançamento.
+
+`fn_fechar_folha` e `fn_reabrir_folha` são dropadas junto com o status `fechada`. A checagem de
+folha vazia que vivia na `fn_fechar_folha` passa para o trigger de guarda (rascunho só sai para
+pendente_aprovacao se houver item).
 
 **`fn_gerar_folha` passa a exigir status `rascunho`.** Hoje ela recusa apenas
 `status='fechada'`, o que com a máquina nova deixaria o RH regenerar uma folha que está
@@ -104,15 +126,15 @@ nela migra para `fn_enviar_folha_aprovacao`.
 
 **A aprovação não recalcula a folha.** `fn_aprovar_folha` usa os `folha_itens` como estão: o
 Admin aprova exatamente o que viu na tela. Se o ponto mudou depois do envio, o caminho é
-reprovar, regenerar em rascunho e enviar de novo. Recalcular na aprovação faria o Admin
+rejeitar, regenerar em rascunho e enviar de novo. Recalcular na aprovação faria o Admin
 carimbar um número que ele não leu.
 
-**Por que `fn_reabrir_folha` sobe de `editar` para `aprovar`:** reabrir é desfazer aprovação.
-Em `editar`, o perfil RH desfaria o carimbo do Admin e apagaria lançamentos aprovados por ele,
-sozinho. A alçada de desfazer é a de fazer.
+**Por que desaprovar não fica em `editar`:** hoje a `fn_reabrir_folha` exige `rh.folha:editar`,
+ou seja, o perfil RH reabre. Desaprovar é desfazer aprovação: em `editar`, o RH desfaria o
+carimbo do Admin e apagaria lançamentos aprovados por ele, sozinho.
 
-**Trava da reabertura (mais forte do que "se foi pago").** A reabertura estoura, sem reabrir,
-se **qualquer** parcela de **qualquer** lançamento daquela folha estiver:
+**Trava do desaprovar (mais forte do que "se foi pago").** A desaprovação estoura, sem desfazer
+nada, se **qualquer** parcela de **qualquer** lançamento daquela folha estiver:
 - com status `aprovado` ou `pago` (parcela aprovada já está na fila de pagamento), ou
 - conciliada em `extrato_transacoes` (já casou com o extrato do banco).
 
@@ -187,11 +209,17 @@ numa categoria financeira, é um campo em `folha_parametros` depois, não neste 
 
 Segue o padrão que destravou o Grupo B: o Tiago cadastra, eu construo o mecanismo.
 
-- `folha_encargos` ganha `grupo_recolhimento text` (nulo = não vira guia) e
-  `dia_vencimento smallint` com check 1..31.
+- `folha_encargos` ganha `grupo_recolhimento text` (nulo = não vira guia).
 - `folha_parametros` (singleton `id=1`) ganha `grupo_recolhimento_inss text` e
   `grupo_recolhimento_irrf text`, cada um nomeando o grupo onde o retido do trabalhador entra.
-  Vazio = o retido não vira guia.
+  Vazio = o retido não vira guia. Ganha também `dia_vencimento_guias smallint` (check 1..31):
+  **um dia para todas as guias**, não um por encargo. INSS, FGTS e IRRF de folha vencem no
+  mesmo dia, e dia por encargo obrigaria a inventar desempate para dois encargos do mesmo grupo
+  com dias diferentes, resolvendo um problema que a própria config criaria.
+- `folha_item_encargos` ganha `grupo_recolhimento text`, gravado pela `fn_gerar_folha` como
+  **snapshot** junto com nome/percentual/valor. A tabela não tem FK para `folha_encargos` (só o
+  nome), então mapear encargo para grupo por nome quebraria ao renomear um encargo. O grupo é
+  congelado no momento da geração, mesmo princípio que o Bloco 6 já usa para o percentual.
 
 **O nome do grupo casa por igualdade exata, então não pode ser digitação livre nos dois
 lados.** Em `/rh/parametros-folha` os dois campos de grupo são `Combobox` alimentado pelos
@@ -203,10 +231,9 @@ viraria uma guia sozinha, silenciosamente.
 IRRF, só o retido do trabalhador. Então a guia de IRRF nasce de `folha_itens.irrf` e de mais
 nada, e isso é válido, não é erro de configuração.
 
-**`dia_vencimento` do grupo vem do encargo, e grupo sem encargo não tem dia.** Quando o grupo
-existe só pelo retido, o dia de vencimento vem de um campo próprio ao lado do Combobox em
-`/rh/parametros-folha`. Se dois encargos do mesmo grupo tiverem dias diferentes, vale o menor,
-e a tela avisa a divergência ao salvar (pagar guia atrasada é multa; antecipar não é).
+**Todas as guias vencem no mesmo dia**, o `dia_vencimento_guias` de `folha_parametros`, pela
+mesma regra de mês seguinte do salário. Sem parâmetro, as guias nascem sem vencimento e o
+Financeiro preenche.
 
 **Config vazia é deploy seguro:** sem grupo cadastrado, a aprovação gera apenas os salários e
 nenhuma guia. Não existe caminho em que o bloco invente um valor de guia.
@@ -217,7 +244,7 @@ nenhuma guia. Não existe caminho em que o bloco invente um valor de guia.
 - Vencimento do salário = esse dia **no mês seguinte** à competência. Dia que não existe no mês
   (31 em fevereiro) cai no último dia do mês. Dezembro rola para janeiro do ano seguinte.
 - Sem parâmetro, o lançamento nasce sem `data_vencimento` e o Financeiro preenche.
-- As guias usam o `dia_vencimento` do próprio grupo, mesma regra de mês seguinte.
+- As guias usam `dia_vencimento_guias`, mesma regra de mês seguinte.
 - A conta é função pura em TypeScript, testada, e a mesma regra em SQL na função. As duas têm
   que dar o mesmo dia para os casos de borda (o mesmo cuidado do Bloco 7 entre
   `calculo-imposto.ts` e a `fn_gerar_folha`).
@@ -283,9 +310,10 @@ porque os retidos e o adiantamento se cancelam:
 
 Se não fechar no centavo, o bloco não sobe. Além disso:
 - soma dos rateios de cada guia == valor do lançamento da guia;
-- reabrir com tudo pendente apaga os lançamentos e zera `lancamento_id`;
-- parcela marcada como `aprovado`, `pago` ou conciliada faz a reabertura estourar;
-- perfil RH consegue enviar para aprovação e **não** consegue aprovar nem reabrir;
+- desaprovar com tudo pendente apaga os lançamentos e zera `lancamento_id`;
+- parcela marcada como `aprovado`, `pago` ou conciliada faz a desaprovação estourar;
+- perfil RH consegue enviar para aprovação e **não** consegue aprovar nem desaprovar;
+- update direto de status por RLS pulando a aprovação estoura no trigger de guarda;
 - config de grupos vazia gera salários e nenhuma guia;
 - item com líquido zero não gera lançamento e continua na folha;
 - `fn_gerar_folha` estoura em folha `pendente_aprovacao` (não deixa trocar o número debaixo do
@@ -324,9 +352,9 @@ em 8a/8b/8c/8d. Registrados aqui para o módulo não ser declarado 100% sem eles
 
 Sem estas, o bloco sobe mas não roda com número real:
 
-1. Cadastrar os encargos patronais em `/rh/encargos`, agora **com grupo de recolhimento e dia
-   de vencimento**.
+1. Cadastrar os encargos patronais em `/rh/encargos`, agora **com grupo de recolhimento**.
 2. Cadastrar as faixas de INSS e IRRF e os parâmetros em `/rh/parametros-folha`, incluindo o
-   **dia de pagamento do salário** e em que grupo cada retido entra.
+   **dia de pagamento do salário**, o **dia de vencimento das guias** e em que grupo cada retido
+   entra.
 3. Cadastrar ao menos um colaborador CLT real (o banco tem zero hoje).
 4. Validar um holerite real (aceite fiscal pendente desde o Bloco 7).
