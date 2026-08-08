@@ -230,11 +230,21 @@ export function AdiantamentosTabela({
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const adiantamento = row.original;
-        // Travado na folha ou com pagamento comprometido (aprovado, pago ou
-        // conciliado): sem ações de editar/excluir.
-        if (adiantamento.naFolha || adiantamento.pagamentoComprometido) {
-          return null;
-        }
+        // Editar só existe enquanto não há lançamento: todo adiantamento
+        // nasce com um (fn_registrar_adiantamento), então na prática essa
+        // ação nunca aparece para um registro criado depois desta trava —
+        // corrigir é excluir e recriar. Excluir é mais permissivo: um
+        // adiantamento limpo (lançamento pendente, ainda não pago) continua
+        // podendo ser excluído; só trava na folha ou com pagamento
+        // comprometido (aprovado, pago ou conciliado).
+        const podeEditarLinha =
+          podeEditar && !adiantamento.naFolha && adiantamento.lancamentoId === null;
+        const podeExcluirLinha =
+          podeExcluir &&
+          !adiantamento.naFolha &&
+          !adiantamento.pagamentoComprometido;
+
+        if (!podeEditarLinha && !podeExcluirLinha) return null;
 
         return (
           <DropdownMenu>
@@ -249,12 +259,12 @@ export function AdiantamentosTabela({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {podeEditar ? (
+              {podeEditarLinha ? (
                 <DropdownMenuItem onSelect={() => abrirEdicao(adiantamento)}>
                   Editar
                 </DropdownMenuItem>
               ) : null}
-              {podeExcluir ? (
+              {podeExcluirLinha ? (
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => pedirExclusao(adiantamento)}

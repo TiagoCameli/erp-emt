@@ -29,17 +29,29 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
 }
 
 /**
- * Garante que o adiantamento existe, ainda não entrou numa folha (folha_id
- * preenchido) e o lançamento dele (se já existir) não tem pagamento
- * comprometido (parcela aprovada, paga ou conciliada). Qualquer um dos três
- * trava editar e excluir. A checagem de pagamento vai pela RPC
- * `fn_adiantamento_pagamento_comprometido` (security definer) porque um
- * perfil só-rh.adiantamentos não enxerga `lancamento_parcelas`/
- * `extrato_transacoes` pela RLS: uma consulta direta a essas tabelas
- * devolveria sempre vazio para esse perfil e a trava passaria "falso
- * positivo" de liberado.
+ * Erro de uma RPC: só devolve `error.message` ao usuário quando é um
+ * `raise exception` nosso (SQLSTATE `P0001`, o default do plpgsql sem
+ * `USING ERRCODE`). Qualquer outro código (permission denied, violação de
+ * RLS, erro de conexão etc.) é infraestrutura do Postgres/PostgREST e vai só
+ * pro log — nunca pro toast, senão "permission denied for column..." vaza
+ * pro usuário.
  */
-async function garantirEmAberto(
+function mensagemDeNegocio(
+  error: { code?: string; message?: string } | null | undefined,
+  fallback: string,
+): string {
+  if (error?.code === "P0001" && error.message) return error.message;
+  return fallback;
+}
+
+/**
+ * Garante que o adiantamento existe e ainda não entrou numa folha nem tem
+ * lançamento. Trava de EDITAR: com `lancamento_id` preenchido (todo
+ * adiantamento nasce assim, via `fn_registrar_adiantamento`) a RLS já recusa
+ * o update por completo — aqui só devolvemos a mensagem amigável antes de
+ * gastar a viagem ao banco. Mesmo padrão de `rh/diaristas/actions.ts`.
+ */
+async function garantirEditavel(
   supabase: Awaited<ReturnType<typeof createClient>>,
   id: string,
 ): Promise<ResultadoAcao> {
@@ -51,7 +63,47 @@ async function garantirEmAberto(
 
   if (error) {
     return erroAcao(
-      "rh.adiantamentos.garantirEmAberto",
+      "rh.adiantamentos.garantirEditavel",
+      error,
+      "Não foi possível carregar o adiantamento",
+    );
+  }
+  if (!data) return { erro: "Adiantamento não encontrado" };
+  if (data.folha_id !== null) {
+    return { erro: "Adiantamento já incluído numa folha" };
+  }
+  if (data.lancamento_id !== null) {
+    return {
+      erro:
+        "Adiantamento já gerou lançamento no Financeiro: não dá para editar, só excluir e recriar",
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Garante que o adiantamento existe, ainda não entrou numa folha e o
+ * lançamento dele (se já existir) não tem pagamento comprometido (parcela
+ * aprovada, paga ou conciliada). Trava de EXCLUIR: diferente de editar,
+ * excluir um adiantamento limpo (com lançamento ainda pendente) continua
+ * válido — é o `fn_excluir_adiantamento` que apaga os dois juntos. A
+ * checagem de pagamento vai pela RPC `fn_adiantamento_pagamento_comprometido`
+ * (security definer, fail-closed) porque um perfil só-rh.adiantamentos não
+ * enxerga `lancamento_parcelas`/`extrato_transacoes` pela RLS deles.
+ */
+async function garantirExcluivel(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+): Promise<ResultadoAcao> {
+  const { data, error } = await supabase
+    .from(TABELA)
+    .select("folha_id, lancamento_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    return erroAcao(
+      "rh.adiantamentos.garantirExcluivel",
       error,
       "Não foi possível carregar o adiantamento",
     );
@@ -68,7 +120,7 @@ async function garantirEmAberto(
 
     if (erroComprometido) {
       return erroAcao(
-        "rh.adiantamentos.garantirEmAberto",
+        "rh.adiantamentos.garantirExcluivel",
         erroComprometido,
         "Não foi possível conferir o pagamento do adiantamento",
       );
@@ -76,7 +128,7 @@ async function garantirEmAberto(
     if (comprometido) {
       return {
         erro:
-          "O pagamento deste adiantamento já foi aprovado, pago ou conciliado. Estorne o pagamento antes de editar ou excluir",
+          "O pagamento deste adiantamento já foi aprovado, pago ou conciliado. Estorne o pagamento antes de excluir",
       };
     }
   }
@@ -116,7 +168,10 @@ export async function criarAdiantamento(
     return erroAcao(
       "rh.adiantamentos.criar",
       error,
-      error.message || "Não foi possível salvar o adiantamento. Tente novamente",
+      mensagemDeNegocio(
+        error,
+        "Não foi possível salvar o adiantamento. Tente novamente",
+      ),
     );
   }
 
@@ -124,7 +179,12 @@ export async function criarAdiantamento(
   return { ok: true };
 }
 
-/** Edita um adiantamento. Bloqueia se já entrou numa folha ou tem pagamento comprometido. */
+/**
+ * Edita um adiantamento. Só funciona enquanto ele não tem lançamento — como
+ * todo adiantamento nasce com um (via `fn_registrar_adiantamento`), na
+ * prática não há mais janela para editar depois de criado: corrigir um
+ * valor ou uma data é excluir e recriar. Ver `garantirEditavel`.
+ */
 export async function editarAdiantamento(
   id: string,
   dados: AdiantamentoInput,
@@ -143,7 +203,7 @@ export async function editarAdiantamento(
 
   const supabase = await createClient();
 
-  const aberto = await garantirEmAberto(supabase, idValido.data);
+  const aberto = await garantirEditavel(supabase, idValido.data);
   if ("erro" in aberto) return aberto;
 
   const { error } = await supabase
@@ -186,7 +246,7 @@ export async function removerAdiantamento(id: string): Promise<ResultadoAcao> {
 
   const supabase = await createClient();
 
-  const aberto = await garantirEmAberto(supabase, idValido.data);
+  const aberto = await garantirExcluivel(supabase, idValido.data);
   if ("erro" in aberto) return aberto;
 
   const { error } = await supabase.rpc("fn_excluir_adiantamento", {
@@ -197,7 +257,10 @@ export async function removerAdiantamento(id: string): Promise<ResultadoAcao> {
     return erroAcao(
       "rh.adiantamentos.remover",
       error,
-      error.message || "Não foi possível excluir o adiantamento. Tente novamente",
+      mensagemDeNegocio(
+        error,
+        "Não foi possível excluir o adiantamento. Tente novamente",
+      ),
     );
   }
 
