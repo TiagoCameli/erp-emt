@@ -21,6 +21,11 @@ export default async function PaginaAdiantamentos() {
   const podeCriar = temPermissao(usuario, "rh.adiantamentos", "criar");
   const podeEditar = temPermissao(usuario, "rh.adiantamentos", "editar");
   const podeExcluir = temPermissao(usuario, "rh.adiantamentos", "excluir");
+  const podeVerLancamento = temPermissao(
+    usuario,
+    "financeiro.lancamentos",
+    "ver",
+  );
 
   return (
     <>
@@ -40,6 +45,7 @@ export default async function PaginaAdiantamentos() {
         podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        podeVerLancamento={podeVerLancamento}
       />
     </>
   );

@@ -2528,6 +2528,7 @@ export type Database = {
           descricao: string | null
           folha_id: string | null
           id: string
+          lancamento_id: string | null
           updated_at: string
           valor: number
         }
@@ -2540,6 +2541,7 @@ export type Database = {
           descricao?: string | null
           folha_id?: string | null
           id?: string
+          lancamento_id?: string | null
           updated_at?: string
           valor: number
         }
@@ -2552,6 +2554,7 @@ export type Database = {
           descricao?: string | null
           folha_id?: string | null
           id?: string
+          lancamento_id?: string | null
           updated_at?: string
           valor?: number
         }
@@ -2568,6 +2571,13 @@ export type Database = {
             columns: ["folha_id"]
             isOneToOne: false
             referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_adiantamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -3154,6 +3164,14 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string }
         Returns: undefined
       }
+      fn_adiantamento_pagamento_comprometido: {
+        Args: { p_lancamento_id: string }
+        Returns: boolean
+      }
+      fn_adiantamentos_comprometidos: {
+        Args: { p_lancamento_ids: string[] }
+        Returns: string[]
+      }
       fn_alterar_mes_competencia: {
         Args: { p_entidade: string; p_id: string; p_mes: string }
         Returns: undefined
@@ -3283,6 +3301,7 @@ export type Database = {
         Args: { p_parcela_id: string }
         Returns: undefined
       }
+      fn_excluir_adiantamento: { Args: { p_id: string }; Returns: undefined }
       fn_excluir_cadastro: {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
@@ -3392,6 +3411,7 @@ export type Database = {
         Args: { p_observacao?: string; p_parcela_id: string }
         Returns: undefined
       }
+      fn_registrar_adiantamento: { Args: { p_dados: Json }; Returns: string }
       fn_registrar_arquivo: {
         Args: {
           p_entidade_id: string

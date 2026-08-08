@@ -29,8 +29,15 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
 }
 
 /**
- * Garante que o adiantamento existe e ainda não entrou numa folha. Uma vez na
- * folha (folha_id preenchido) fica travado: não dá para editar nem excluir.
+ * Garante que o adiantamento existe, ainda não entrou numa folha (folha_id
+ * preenchido) e o lançamento dele (se já existir) não tem pagamento
+ * comprometido (parcela aprovada, paga ou conciliada). Qualquer um dos três
+ * trava editar e excluir. A checagem de pagamento vai pela RPC
+ * `fn_adiantamento_pagamento_comprometido` (security definer) porque um
+ * perfil só-rh.adiantamentos não enxerga `lancamento_parcelas`/
+ * `extrato_transacoes` pela RLS: uma consulta direta a essas tabelas
+ * devolveria sempre vazio para esse perfil e a trava passaria "falso
+ * positivo" de liberado.
  */
 async function garantirEmAberto(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -38,7 +45,7 @@ async function garantirEmAberto(
 ): Promise<ResultadoAcao> {
   const { data, error } = await supabase
     .from(TABELA)
-    .select("folha_id")
+    .select("folha_id, lancamento_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -53,10 +60,35 @@ async function garantirEmAberto(
   if (data.folha_id !== null) {
     return { erro: "Adiantamento já incluído numa folha" };
   }
+  if (data.lancamento_id !== null) {
+    const { data: comprometido, error: erroComprometido } = await supabase.rpc(
+      "fn_adiantamento_pagamento_comprometido",
+      { p_lancamento_id: data.lancamento_id },
+    );
+
+    if (erroComprometido) {
+      return erroAcao(
+        "rh.adiantamentos.garantirEmAberto",
+        erroComprometido,
+        "Não foi possível conferir o pagamento do adiantamento",
+      );
+    }
+    if (comprometido) {
+      return {
+        erro:
+          "O pagamento deste adiantamento já foi aprovado, pago ou conciliado. Estorne o pagamento antes de editar ou excluir",
+      };
+    }
+  }
   return { ok: true };
 }
 
-/** Cria um adiantamento. */
+/**
+ * Cria um adiantamento. Vai pela RPC `fn_registrar_adiantamento`, que grava o
+ * adiantamento e o lançamento a_pagar dele (no centro de custo do
+ * colaborador) na mesma transação: um insert direto seguido de outra chamada
+ * deixaria um dos dois órfão se a segunda falhasse.
+ */
 export async function criarAdiantamento(
   dados: AdiantamentoInput,
 ): Promise<ResultadoAcao> {
@@ -70,19 +102,21 @@ export async function criarAdiantamento(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from(TABELA).insert({
-    colaborador_id: validado.data.colaboradorId,
-    competencia: validado.data.competencia,
-    valor: validado.data.valor,
-    data: validado.data.data,
-    descricao: validado.data.descricao ?? null,
+  const { error } = await supabase.rpc("fn_registrar_adiantamento", {
+    p_dados: {
+      colaborador_id: validado.data.colaboradorId,
+      competencia: validado.data.competencia,
+      valor: validado.data.valor,
+      data: validado.data.data,
+      descricao: validado.data.descricao ?? null,
+    },
   });
 
   if (error) {
     return erroAcao(
       "rh.adiantamentos.criar",
       error,
-      "Não foi possível salvar o adiantamento. Tente novamente",
+      error.message || "Não foi possível salvar o adiantamento. Tente novamente",
     );
   }
 
@@ -90,7 +124,7 @@ export async function criarAdiantamento(
   return { ok: true };
 }
 
-/** Edita um adiantamento. Bloqueia se já entrou numa folha. */
+/** Edita um adiantamento. Bloqueia se já entrou numa folha ou tem pagamento comprometido. */
 export async function editarAdiantamento(
   id: string,
   dados: AdiantamentoInput,
@@ -135,7 +169,13 @@ export async function editarAdiantamento(
   return { ok: true };
 }
 
-/** Remove um adiantamento. Bloqueia se já entrou numa folha. */
+/**
+ * Remove um adiantamento. Bloqueia se já entrou numa folha ou tem pagamento
+ * comprometido. Vai pela RPC `fn_excluir_adiantamento`, que apaga o
+ * adiantamento e o lançamento dele junto, na mesma transação: por isso não é
+ * mais um `.delete()` direto na tabela (que só apagaria o adiantamento e
+ * deixaria o lançamento órfão).
+ */
 export async function removerAdiantamento(id: string): Promise<ResultadoAcao> {
   if (!(await checarPermissao("excluir"))) {
     return { erro: "Sem permissão para excluir adiantamentos" };
@@ -149,16 +189,15 @@ export async function removerAdiantamento(id: string): Promise<ResultadoAcao> {
   const aberto = await garantirEmAberto(supabase, idValido.data);
   if ("erro" in aberto) return aberto;
 
-  const { error } = await supabase
-    .from(TABELA)
-    .delete()
-    .eq("id", idValido.data);
+  const { error } = await supabase.rpc("fn_excluir_adiantamento", {
+    p_id: idValido.data,
+  });
 
   if (error) {
     return erroAcao(
       "rh.adiantamentos.remover",
       error,
-      "Não foi possível excluir o adiantamento. Tente novamente",
+      error.message || "Não foi possível excluir o adiantamento. Tente novamente",
     );
   }
 

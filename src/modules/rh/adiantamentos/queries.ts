@@ -24,6 +24,15 @@ export interface AdiantamentoLista {
   folhaId: string | null;
   /** True quando já entrou numa folha: linha travada (sem editar/excluir). */
   naFolha: boolean;
+  /** Id do lançamento a_pagar gerado na concessão, ou null (registro antigo). */
+  lancamentoId: string | null;
+  /** Número do lançamento (ex. LAN-2026-0001), para o link no Financeiro. */
+  lancamentoNumero: string | null;
+  /**
+   * True quando o lançamento já tem parcela aprovada, paga ou conciliada:
+   * linha travada (sem editar/excluir), mesmo fora da folha.
+   */
+  pagamentoComprometido: boolean;
   criadoEm: string;
 }
 
@@ -40,7 +49,7 @@ export async function listarAdiantamentos(
   let consulta = supabase
     .from("rh_adiantamentos")
     .select(
-      "id, colaborador_id, competencia, valor, data, descricao, folha_id, created_at, colaboradores(nome)",
+      "id, colaborador_id, competencia, valor, data, descricao, folha_id, lancamento_id, created_at, colaboradores(nome), lancamentos(numero)",
     )
     .order("competencia", { ascending: false })
     .order("created_at", { ascending: false });
@@ -58,7 +67,28 @@ export async function listarAdiantamentos(
     throw new Error("Não foi possível carregar os adiantamentos");
   }
 
-  return (data ?? []).map((linha) => ({
+  const linhas = data ?? [];
+
+  // Checa o pagamento em lote (1 RPC, não 1 por linha): security definer
+  // porque um perfil só-rh.adiantamentos não enxerga lancamento_parcelas /
+  // extrato_transacoes pela RLS.
+  const idsLancamento = linhas
+    .map((linha) => linha.lancamento_id)
+    .filter((id): id is string => id !== null);
+
+  let comprometidos = new Set<string>();
+  if (idsLancamento.length > 0) {
+    const { data: idsComprometidos, error: erroComprometidos } =
+      await supabase.rpc("fn_adiantamentos_comprometidos", {
+        p_lancamento_ids: idsLancamento,
+      });
+    if (erroComprometidos) {
+      throw new Error("Não foi possível conferir o pagamento dos adiantamentos");
+    }
+    comprometidos = new Set(idsComprometidos ?? []);
+  }
+
+  return linhas.map((linha) => ({
     id: linha.id,
     colaboradorId: linha.colaborador_id,
     colaboradorNome: linha.colaboradores?.nome ?? "",
@@ -68,6 +98,11 @@ export async function listarAdiantamentos(
     descricao: linha.descricao,
     folhaId: linha.folha_id,
     naFolha: linha.folha_id !== null,
+    lancamentoId: linha.lancamento_id,
+    lancamentoNumero: linha.lancamentos?.numero ?? null,
+    pagamentoComprometido: linha.lancamento_id
+      ? comprometidos.has(linha.lancamento_id)
+      : false,
     criadoEm: linha.created_at,
   }));
 }
