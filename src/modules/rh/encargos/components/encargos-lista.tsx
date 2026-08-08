@@ -10,6 +10,8 @@ export interface EncargosListaProps {
   encargos: EncargoLista[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Grupos de recolhimento já cadastrados, para o Combobox do drawer de edição. */
+  grupos: string[];
 }
 
 /**
@@ -20,6 +22,7 @@ export function EncargosLista({
   encargos,
   podeEditar,
   podeExcluir,
+  grupos,
 }: EncargosListaProps) {
   const [editando, setEditando] = React.useState<EncargoLista | null>(null);
   const [aberto, setAberto] = React.useState(false);
@@ -48,6 +51,7 @@ export function EncargosLista({
         aberto={aberto}
         onAbertoChange={aoMudarAberto}
         encargo={editando}
+        grupos={grupos}
       />
     </>
   );

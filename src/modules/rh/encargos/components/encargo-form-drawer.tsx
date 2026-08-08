@@ -9,6 +9,7 @@ import { toast } from "@/components/canonicos/toast";
 import {
   CampoFormulario,
   classesFormulario,
+  ComboboxCriavel,
   FormDrawer,
   SelectAtivo,
 } from "@/components/canonicos";
@@ -34,6 +35,8 @@ export interface EncargoFormDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Encargo em edição. Ausente abre o drawer em modo de criação. */
   encargo?: EncargoLista | null;
+  /** Grupos de recolhimento já cadastrados, para o Combobox não deixar digitar divergente. */
+  grupos: string[];
 }
 
 /**
@@ -45,6 +48,7 @@ export function EncargoFormDrawer({
   aberto,
   onAbertoChange,
   encargo,
+  grupos,
 }: EncargoFormDrawerProps) {
   const editando = Boolean(encargo);
 
@@ -63,6 +67,7 @@ export function EncargoFormDrawer({
         nome: encargo.nome,
         ativo: encargo.ativo,
         percentual: String(encargo.percentual).replace(".", ","),
+        grupoRecolhimento: encargo.grupoRecolhimento ?? undefined,
       });
     } else {
       form.reset(PADRAO);
@@ -164,6 +169,27 @@ export function EncargoFormDrawer({
           rotulo="Ativo"
           ajuda="Encargos inativos somem do cálculo da folha, mas continuam no histórico."
         />
+
+        <CampoFormulario
+          id="encargo-grupo"
+          rotulo="Grupo de recolhimento"
+          erro={form.formState.errors.grupoRecolhimento?.message}
+          ajuda="Encargo sem grupo não gera guia no Financeiro"
+        >
+          <ComboboxCriavel
+            id="encargo-grupo"
+            valor={form.watch("grupoRecolhimento") ?? ""}
+            onValorChange={(valor) =>
+              form.setValue("grupoRecolhimento", valor === "" ? undefined : valor, {
+                shouldValidate: true,
+              })
+            }
+            opcoes={grupos}
+            onCriar={async (texto) => texto.trim()}
+            placeholder="Sem grupo"
+            disabled={salvando}
+          />
+        </CampoFormulario>
       </form>
     </FormDrawer>
   );

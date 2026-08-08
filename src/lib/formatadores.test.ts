@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   competenciaParaMes,
+  dataLocalISO,
   formatarBRL,
   formatarData,
   formatarDataHora,
@@ -169,6 +170,36 @@ describe("formatarDataHora", () => {
     expect(formatarDataHora(null)).toBe("");
     expect(formatarDataHora(undefined)).toBe("");
     expect(formatarDataHora("nao-e-data")).toBe("");
+  });
+});
+
+describe("dataLocalISO", () => {
+  it("deriva o dia local mesmo quando o UTC já virou o dia seguinte (borda do período)", () => {
+    // 03:00 UTC = 22:00 do dia anterior em Rio Branco: a mesma borda que
+    // formatarData já testa, mas aqui o retorno alimenta o de/até do filtro.
+    // Sem essa conversão, um período "até 10/06" excluiria este registro.
+    expect(dataLocalISO("2026-06-11T03:00:00Z")).toBe("2026-06-10");
+  });
+
+  it("depois das 19h locais o UTC já é o dia seguinte, e o dia local continua o mesmo", () => {
+    // 20h em Rio Branco (UTC-5) = 01h UTC do dia seguinte: comparar a string
+    // UTC crua contra um filtro em dia local erraria o dia a partir daqui.
+    expect(dataLocalISO("2026-08-08T20:00:00-05:00")).toBe("2026-08-08");
+    expect(dataLocalISO("2026-08-09T01:00:00Z")).toBe("2026-08-08");
+  });
+
+  it("aceita objeto Date", () => {
+    expect(dataLocalISO(new Date("2026-06-11T12:00:00Z"))).toBe("2026-06-11");
+  });
+
+  it("preserva o dia em string date-only, sem deslocar", () => {
+    expect(dataLocalISO("2026-06-12")).toBe("2026-06-12");
+  });
+
+  it("retorna null para null, undefined e data inválida", () => {
+    expect(dataLocalISO(null)).toBeNull();
+    expect(dataLocalISO(undefined)).toBeNull();
+    expect(dataLocalISO("nao-e-data")).toBeNull();
   });
 });
 

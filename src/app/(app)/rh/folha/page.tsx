@@ -60,7 +60,7 @@ export default async function PaginaFolha() {
           <KPICard
             titulo="Folhas em rascunho"
             valor={emRascunho}
-            detalhe="Ainda podem ser regeradas ou fechadas"
+            detalhe="Ainda podem ser regeradas ou enviadas para aprovação"
           />
         </GradeKpis>
       ) : null}

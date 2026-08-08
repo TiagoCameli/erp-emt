@@ -7,6 +7,7 @@ const COLUNAS_MODELO = [
   { rotulo: "Nome", exemplo: "INSS patronal" },
   { rotulo: "Percentual", exemplo: "20" },
   { rotulo: "Ativo", exemplo: "sim" },
+  { rotulo: "Grupo de recolhimento", exemplo: "INSS" },
 ];
 
 /** Baixa o modelo .xlsx de importação de encargos. */

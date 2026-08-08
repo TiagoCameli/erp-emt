@@ -15,6 +15,15 @@ import { StatusBadge } from './status-badge';
 
 export interface ApprovalBarProps {
   status: string;
+  /**
+   * Rótulo custom do badge de status, repassado ao `StatusBadge` interno.
+   * Sem isso, o badge cai no rótulo default do mapa (`StatusBadge`), que é
+   * masculino ("Aprovado") — sobrescreva quando a entidade for feminina
+   * ("Aprovada") e a tela já mostrar esse rótulo em outro lugar (cabeçalho,
+   * por exemplo): sem o mesmo rótulo nos dois, a tela mostra duas grafias do
+   * mesmo status ao mesmo tempo.
+   */
+  rotulo?: string;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
   onAprovar: () => void | Promise<void>;
@@ -26,6 +35,7 @@ export interface ApprovalBarProps {
 
 export function ApprovalBar({
   status,
+  rotulo,
   podeAprovar,
   podeDesaprovar,
   onAprovar,
@@ -64,7 +74,7 @@ export function ApprovalBar({
 
   return (
     <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface px-4 py-3">
-      <StatusBadge status={status} />
+      <StatusBadge status={status} rotulo={rotulo} />
 
       <div className="flex items-center gap-2">
         {mostrarAprovacao ? (

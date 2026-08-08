@@ -51,6 +51,7 @@ import {
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
 import type { PagamentoDireto } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 import { CONFERENCIA } from "@/modules/financeiro/aprovacao-pagamentos/rotulos";
+import { rotuloOrigemLancamento } from "@/modules/financeiro/lancamentos/schemas";
 import {
   dentroDaFaixaValor,
   dentroDoPeriodo,
@@ -475,7 +476,13 @@ export function PagamentosDiretos({
               <ExternalLink className="size-3.5" aria-hidden="true" />
             </Link>
           ) : (
-            <span className="text-muted-foreground">Manual</span>
+            // Mesmo catálogo da fila de aprovação: aqui hoje não cai linha de
+            // folha (o lançamento da folha nasce sem forma de pagamento, e esta
+            // aba é só dinheiro e cartão), mas a origem 'diaria' cai, e ela
+            // também não é "Manual".
+            <span className="text-muted-foreground">
+              {rotuloOrigemLancamento(row.original.origem)}
+            </span>
           ),
       },
       {

@@ -6,6 +6,7 @@ import { Percent, MoreHorizontal } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  CelulaVazia,
   ConfirmDialog,
   DataTable,
   EmptyState,
@@ -111,6 +112,12 @@ export function EncargosTabela({
           ) : (
             <StatusBadge status="rascunho" rotulo="Inativo" />
           ),
+      },
+      {
+        accessorKey: "grupoRecolhimento",
+        header: "Grupo de recolhimento",
+        cell: ({ row }) =>
+          row.original.grupoRecolhimento ?? <CelulaVazia />,
       },
     ];
 

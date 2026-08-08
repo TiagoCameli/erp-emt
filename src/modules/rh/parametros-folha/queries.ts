@@ -63,6 +63,14 @@ export interface ParametrosFolha {
   irrfDeducaoPorDependente: number;
   irrfDescontoSimplificado: number;
   fgtsPercentual: number;
+  /** Dia do mês do pagamento do salário. Nulo: ainda não configurado. */
+  diaPagamentoSalario: number | null;
+  /** Dia do mês de vencimento das guias (INSS, FGTS e IRRF vencem juntos). */
+  diaVencimentoGuias: number | null;
+  /** Grupo de recolhimento do INSS retido do trabalhador. Nulo: não vira guia. */
+  grupoRecolhimentoInss: string | null;
+  /** Grupo de recolhimento do IRRF retido do trabalhador. Nulo: não vira guia. */
+  grupoRecolhimentoIrrf: string | null;
 }
 
 /**
@@ -74,7 +82,9 @@ export async function buscarParametros(): Promise<ParametrosFolha | null> {
 
   const { data, error } = await supabase
     .from("folha_parametros")
-    .select("irrf_deducao_por_dependente, irrf_desconto_simplificado, fgts_percentual")
+    .select(
+      "irrf_deducao_por_dependente, irrf_desconto_simplificado, fgts_percentual, dia_pagamento_salario, dia_vencimento_guias, grupo_recolhimento_inss, grupo_recolhimento_irrf",
+    )
     .eq("id", 1)
     .maybeSingle();
 
@@ -88,5 +98,31 @@ export async function buscarParametros(): Promise<ParametrosFolha | null> {
     irrfDeducaoPorDependente: data.irrf_deducao_por_dependente,
     irrfDescontoSimplificado: data.irrf_desconto_simplificado,
     fgtsPercentual: data.fgts_percentual,
+    diaPagamentoSalario: data.dia_pagamento_salario,
+    diaVencimentoGuias: data.dia_vencimento_guias,
+    grupoRecolhimentoInss: data.grupo_recolhimento_inss,
+    grupoRecolhimentoIrrf: data.grupo_recolhimento_irrf,
   };
+}
+
+/**
+ * Grupos de recolhimento distintos já cadastrados nos encargos, para o
+ * Combobox dos retidos. O nome do grupo casa por igualdade exata na geração da
+ * guia: dois inputs de texto livre transformariam "INSS" e "inss" em duas
+ * guias, caladas.
+ */
+export async function listarGruposRecolhimento(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("folha_encargos")
+    .select("grupo_recolhimento")
+    .not("grupo_recolhimento", "is", null);
+
+  if (error) throw new Error("Não foi possível carregar os grupos de recolhimento");
+
+  const grupos = new Set<string>();
+  for (const linha of data ?? []) {
+    if (linha.grupo_recolhimento) grupos.add(linha.grupo_recolhimento);
+  }
+  return [...grupos].sort((a, b) => a.localeCompare(b, "pt-BR"));
 }

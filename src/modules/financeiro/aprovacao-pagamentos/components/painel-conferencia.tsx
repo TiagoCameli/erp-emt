@@ -46,6 +46,7 @@ import {
   rotuloParcela,
 } from "@/modules/financeiro/_shared/formato";
 import type { LancamentoDetalhe } from "@/modules/financeiro/lancamentos/queries";
+import { rotuloOrigemLancamento } from "@/modules/financeiro/lancamentos/schemas";
 
 interface Carga {
   lancamento: LancamentoDetalhe;
@@ -272,7 +273,10 @@ export function PainelConferencia({
                         <ExternalLink className="size-3.5" aria-hidden="true" />
                       </Link>
                     ) : (
-                      "Manual"
+                      // Mesmo catálogo da coluna "Origem" da fila: este painel é
+                      // da mesma tela, e chamar a guia da folha de "Manual" aqui
+                      // desmentiria a linha que o abriu.
+                      rotuloOrigemLancamento(lancamento.origem)
                     )}
                   </Linha>
                 </div>

@@ -773,3 +773,335 @@ O `CLAUDE.md` dizia "migrations versionadas via Supabase CLI", o que convida ao
    sem ler grant: a trava estoura exceção se sobrar privilégio, exceção aborta a
    transação, e transação abortada não grava versão no ledger. Logo, versão no
    ledger = trava passou. Padrão a repetir em toda migration de privilégio.
+
+## 2026-08-08 - A identidade de conferência da folha é condicional, e custo sem centro de custo não chega ao BI
+
+A aprovação da folha (`fn_aprovar_folha`, Bloco 8a Task 4) gera um `a_pagar` por
+colaborador com o líquido e um por grupo de recolhimento com a guia. A conferência
+que um contador faz é bater `folhas.custo_total` contra o contas a pagar gerado:
+
+```
+soma(líquidos) + soma(guias) + soma(adiantamentos) = folhas.custo_total
+```
+
+Ela fecha porque os retidos e o adiantamento se cancelam: `Σ(salário − inss − irrf
+− adiant) + Σ(encargos + inss + irrf) + Σ(adiant) = Σ(salário) + Σ(encargos)`.
+Medido em banco com 2 colaboradores em 2 centros de custo e 1 adiantamento:
+líquidos 6202,50 + guias 3237,50 + adiantamentos 800,00 = 10240,00 = `custo_total`,
+diferença **0,00**. A revisão repetiu com um cenário próprio (3 colaboradores em 3
+centros de custo, 4 encargos em 3 grupos, INSS retido caindo no mesmo grupo dos
+patronais) e também fechou em 0,00.
+
+**Só que ela é condicional, e a primeira redação não dizia isso.** Duas situações
+normais deixam resíduo, e nenhuma das duas é bug:
+
+| situação | efeito | medido |
+|---|---|---|
+| encargo ativo com `grupo_recolhimento` nulo | entra em `custo_total`, não vira guia | resíduo −678,94 com 678,94 de encargo sem grupo |
+| item com `valor_liquido <= 0` | fica na folha, não vira lançamento | resíduo +275,00 com líquido −275,00 |
+
+Nos dois casos o resíduo é **exatamente** a soma da causa, sem componente
+escondido e sem centavo de arredondamento:
+
+```
+diferença = soma(encargos sem grupo de recolhimento) + soma(valor_liquido <= 0)
+```
+
+O caso do encargo sem grupo passou perto de não ser descoberto porque o teste de
+"config vazia" foi feito com **todos** os grupos nulos: 100% de buraco lê como
+"não configurado, zero guia, tudo certo". O caso perigoso é o **parcial**, um
+encargo com grupo e outro sem, que gera guia e resíduo ao mesmo tempo.
+
+O segundo achado é de rateio. O rateio da guia é exato, não proporcional: cada
+centavo nasce ligado a um `folha_itens` e o item tem centro de custo, então
+`soma(rateios) == valor` por construção. Mas item com `centro_custo_id` nulo fica
+fora do rateio (mesmo `if v_cc is not null` que a `fn_fechar_diarias` já tem).
+Medido com um colaborador sem centro de custo:
+
+| | valor |
+|---|---|
+| lançamentos gerados | 9562,71 |
+| soma dos rateios | 8014,60 |
+| **custo sem centro de custo** | **1548,11** |
+
+E o buraco se espalha por **todas** as guias, não fica isolado num lançamento (na
+guia do GPS: lançamento 2238,88, rateios 1905,55, buraco 333,33). A identidade
+global continua 0,00 e o total a pagar está certo; o que não acontece é o custo
+chegar ao centro de custo. O `CLAUDE.md` declara "nenhum custo existe sem centro
+de custo" como espinha dorsal, e o painel de Gestão sub-reporta esse valor.
+
+**Decisões**
+
+1. **A identidade é documentada com a condição, não sem ela.** O texto completo
+   mora no `obj_description` da própria `fn_aprovar_folha` (migration
+   `20260808173430`), porque é lá que quem confere o número vai olhar, e não no
+   `.sql` do repo. Inclui a consulta que separa as duas causas do resíduo por
+   folha. Afirmar a identidade sem condição, em comentário ou relatório, é
+   convidar alguém a tratar um resíduo legítimo como erro de arredondamento e
+   "consertar" a função de dinheiro.
+2. **Encargo ativo sem `grupo_recolhimento` é provisão, não erro de cadastro.**
+   Entra no custo do empregador e de propósito não gera guia, porque não existe
+   para onde recolher. É o desenho que o Bloco 8b vai usar para 13º e férias.
+   Nenhuma trava deve exigir grupo em todo encargo.
+3. **Item sem centro de custo deixa o rateio incompleto, e isso fica pendente de
+   decisão de cadastro.** As duas saídas possíveis não são de código: exigir
+   `centro_custo_id` no colaborador CLT (decisão do dono do sistema, muda o
+   cadastro e pode travar folha existente) ou criar um centro de custo padrão
+   para o que sobra (inventaria regra contábil). Enquanto não houver decisão, o
+   comportamento fica como está, medido e registrado aqui. **Não inventar rateio
+   proporcional para fechar o buraco**: distribuir 1548,11 entre centros de custo
+   que não gastaram esse dinheiro é pior que não distribuir.
+4. **Achado latente que a Task 7 vai encostar:** `lancamentoSchema`
+   (`src/modules/financeiro/lancamentos/schemas.ts:158-162`) e
+   `lancamentoFormSchema` (`:284-294`) exigem
+   `|soma(rateios) − valor| <= 0,005` **quando existe rateio**. O lançamento de
+   guia com buraco tem rateio não vazio e soma menor, então **viola essa
+   invariante**. Hoje não estoura porque editar lançamento de origem diferente de
+   `manual` é bloqueado nos três níveis (drawer em
+   `lancamento-form-drawer.tsx:161`, Server Action em `actions.ts:114`, e a RPC
+   `fn_salvar_lancamento` com `if v_origem <> 'manual' then raise`). Quem for
+   mexer no Financeiro, ou afrouxar esse bloqueio, precisa saber que a guia da
+   folha não passa por esses dois schemas. (O relatório de revisão chamou o
+   segundo de `lancamentoEdicaoSchema`; esse nome não existe no arquivo, os
+   exports são `lancamentoSchema` e `lancamentoFormSchema`.)
+
+   **Correção de registro (onda de correção do review amplo, 2026-08-08):** o
+   parágrafo acima descrevia o bloqueio de três níveis como se ele cobrisse toda
+   escrita em lançamento de origem do RH, e **não cobria**. `fn_salvar_lancamento`
+   e `fn_excluir_lancamento` estavam fechadas; **`fn_definir_parcelas_lancamento`
+   e `fn_alterar_mes_competencia` estavam abertas**, e o revisor executou os dois
+   ataques como usuário do Financeiro: moveu o vencimento da guia de INSS de
+   2026-12-20 para 2027-06-30 dividida em duas parcelas, e moveu um lançamento de
+   salário para a competência 2027-03 com `folhas.competencia` parada em 2026-11.
+   Nos dois casos a identidade de conferência continuou reportando
+   `explicado 0.00` (o total é preservado, e ela agrupa por `folha_id`, não por
+   mês) e a tela da folha não mostrava nada. A migration `20260808221920` fechou
+   as duas com a mesma guarda da `fn_excluir_lancamento`. **Agora o bloqueio é
+   verdade; antes deste parágrafo ser escrito, não era.** A lição que fica: "está
+   bloqueado nos três níveis" tem que ser afirmado por função de escrita, não por
+   tela — o inventário certo é *todas* as funções que escrevem na tabela, e
+   `origem` `diaria` segue fora da guarda nessas duas (gap registrado, decisão do
+   dono do sistema).
+
+## 2026-08-08 - Fechamento do Bloco 8a: portão de competência de mão única, tela de RH que lê tabela do Financeiro, e adiantamento congelado
+
+Três achados do Bloco 8a (aprovação da folha e a ponte com o Financeiro) que não são
+sobre folha: valem para o projeto inteiro.
+
+### 1. O portão de competência contábil está montado só na entrada
+
+`fn_exigir_competencia_aberta` é a trava que impede lançar dinheiro em mês fechado.
+Medido no banco vivo em 08/08/2026, lendo `pg_proc.prosrc`:
+
+| chama `fn_exigir_competencia_aberta` | funções |
+|---|---|
+| **sim (7)** | `fn_alterar_mes_competencia`, `fn_aprovar_folha`, `fn_aprovar_ordem_compra`, `fn_criar_ordem_compra`, `fn_fechar_diarias`, `fn_registrar_adiantamento`, `fn_salvar_lancamento` |
+| **não, e apagam `lancamentos` (4)** | `fn_desaprovar_folha`, `fn_desaprovar_ordem_compra`, `fn_excluir_lancamento`, `fn_excluir_ordem_compra` |
+
+As 7 que chamam são, todas, caminho de **criar ou mover** dinheiro. As 4 que **apagam**
+lançamento não chamam nenhuma. (A sétima entrou neste bloco: `fn_registrar_adiantamento`.
+Até a Task 6 eram 6.)
+
+Efeito reproduzido pela revisão da Task 5: quem tem `rh.folha:desaprovar` **sem**
+`financeiro.competencias:desaprovar` apaga as contas a pagar de um mês já fechado, sem
+gerar uma linha em `competencia_eventos`, **e não consegue recolocá-las**, porque a
+aprovação chama o portão e barra lançar em mês fechado. É porta de mão única: o mês
+fechado passa a mostrar menos despesa do que teve, e o caminho de volta está trancado.
+Vale igual para desaprovar OC e para excluir lançamento solto.
+
+**Decisões**
+
+1. **Fechar isso é decisão do dono do sistema, não do implementador.** A pergunta é de
+   regra contábil: apagar despesa de mês fechado exige reabrir a competência (com
+   evento e permissão), ou é permitido com registro? Ninguém deve inventar a resposta.
+2. **Quando for fechado, é nas 4 de uma vez.** Travar só a folha faria dela a única das
+   quatro com trava, e a assimetria só trocaria de lugar: quem quisesse apagar despesa
+   de mês fechado usaria a exclusão de lançamento. Meia trava aqui é pior que trava
+   nenhuma, porque dá falsa sensação de cobertura.
+
+### 2. Tela de RH que lê tabela do Financeiro fica silenciosamente vazia se a RLS não conhecer a permissão de RH
+
+Este bloco foi o **terceiro** caso do mesmo padrão. O sintoma é o pior possível: não dá
+erro, a tela mostra "nada encontrado", e quem olha conclui que **o dado não existe**.
+
+| caso | o que a tela mostrava | correção |
+|---|---|---|
+| painel de alertas (Bloco 1) | "nenhum EPI a recolher", com EPIs a recolher (o join com `colaboradores` era zerado pela RLS) | `fn_epis_a_recolher`, definer gateada por `rh.epis:ver` |
+| trava de adiantamento (Task 6) | deixava editar adiantamento já pago, porque o predicado não via a parcela | predicados definer gateados |
+| lançamentos gerados da folha (Task 7) | "Esta folha foi aprovada sem gerar lancamentos", numa folha que TEM lançamento | policy de `lancamentos` estendida, restringindo por origem |
+
+**Decisões**
+
+3. **Dois padrões, e a escolha é pelo que a tela precisa ler.**
+   - A tela precisa de um **agregado, um bit ou uma lista derivada**: função
+     `security definer` **gateada por permissão no corpo** (`fn_epis_a_recolher` é o
+     precedente). O gate tem que ser **fail-closed**: em `language sql` não existe
+     `raise`, então retornar `true` (= "comprometido", = nega) no lugar de deixar o
+     `where` devolver `false`. Predicado gateado por `and tem_permissao(...)` no `where`
+     é fail-**open** disfarçado.
+   - A tela precisa da **linha inteira** da tabela do outro módulo: estender a policy
+     de SELECT **restringindo por origem**. Foi o que a Task 7 fez
+     (`20260808205001`): `rh.folha:ver` passa a ver `origem in ('folha','folha_guia')`
+     e `rh.adiantamentos:ver` só `origem = 'adiantamento'`. **Não** usar um `OR` solto
+     com o recurso de RH: isso daria ao RH o contas a pagar inteiro, incluindo nota de
+     fornecedor. Custo medido: o `exists()` correlacionado vira hashed subplan com
+     `loops=1` via `idx_lancamentos_origem`, 9,3 ms para 3000 linhas, não nested-loop
+     por linha.
+4. **Toda tela que cruza módulo tem que ser testada com o perfil mínimo, não com o
+   Admin.** Os três casos passaram no olho de quem implementou porque quem testou tinha
+   permissão dos dois lados. O teste que pega é: derrubar as permissões do outro módulo
+   em transação e conferir que a tela ainda mostra o dado (ou dá erro honesto), nunca
+   "nada encontrado".
+
+### 3. Editar adiantamento deixou de existir, por desenho
+
+Todo adiantamento agora nasce com lançamento no Financeiro
+(`fn_registrar_adiantamento`, Task 6), e o registro é **congelado** quando tem
+lançamento vinculado: a policy `rh_adiantamentos_update` exige `lancamento_id is null`
+nos **dois** lados (`using` e `with check`), espelhando `rh_diarias`, que congela desde
+junho. Corrigir digitação passa a ser **excluir e recriar**, que é atômico
+(`fn_excluir_adiantamento` apaga o lançamento junto).
+
+**O que NÃO é verdade sobre isso, e o registro anterior dizia (corrigido na onda
+de correção do review amplo):** que `editarAdiantamento` virou "código morto por
+desenho". O congelamento é real, mas o gate da UI é `lancamentoId === null`, e uma
+linha criada **antes** desta branch tem `lancamento_id` nulo: ela mostraria
+"Editar" normalmente e só falharia na policy. O que torna o caminho inalcançável
+hoje é produção ter **zero** `rh_adiantamentos` — um fato de dado, não de desenho.
+Manter o código continua certo (ele falha fechado, com mensagem limpa, e remover
+mexeria em 3+ arquivos fora do escopo), mas a justificativa é "inalcançável porque
+a tabela está vazia", não "impossível por construção".
+
+O que isso fechou, provado por execução na revisão da Task 6: um usuário só de RH
+(`rh.adiantamentos` editar/excluir, zero permissão em `financeiro.lancamentos`)
+repontava `rh_adiantamentos.lancamento_id` para a nota de um fornecedor de R$ 5.000 e
+apagava a nota chamando a exclusão do adiantamento de R$ 100, com parcelas e rateios.
+Contornava `fn_excluir_lancamento` inteira. A variante branda (`lancamento_id = null`)
+deixava um `a_pagar` fantasma que `fn_excluir_lancamento` se recusa a apagar.
+
+**Decisões**
+
+5. **Sincronizar não é resposta; congelar é.** Editar o registro de RH sem sincronizar o
+   Financeiro produz divergência silenciosa (RH 999,99 contra lançamento 100,00, e
+   também centro de custo, rateio, descrição e `mes_competencia`). Nem `rh_diarias` nem
+   a OC sincronizam: as duas congelam. Divergência silenciosa não é resposta aceita em
+   nenhum lugar deste código.
+6. **Coluna que aponta para dinheiro não é escrivível pelo usuário.** `lancamento_id`,
+   `origem`, `origem_id`: quem escreve é a função definer. Grant de UPDATE de tabela
+   inteira em transacional com vínculo financeiro é o mesmo furo duas vezes (Critical da
+   Task 2 em `folhas`, Critical da Task 6 em `rh_adiantamentos`). Grant por coluna, e a
+   policy fixando a coluna de vínculo nos dois lados.
+
+### 4. O espelho da migration é o SQL executável, não o byte
+
+A Global Constraint pedia "arquivo homônimo no repo com o mesmo SQL". A Task 8 conferiu
+as **18** migrations `20260808*` do bloco e mediu que **1** é byte-idêntica ao ledger e
+**17** não são, sempre e só em comentário:
+
+| causa da divergência | quantas | tamanho |
+|---|---|---|
+| só a quebra de linha final do arquivo | 4 | +1 char |
+| cabeçalho "Aplicada em produção pelo MCP, não rode `db push`" e/ou acento posto depois de aplicar | 13 | +230 a +1290 chars |
+| nenhuma (byte-idêntica) | 1 | 0 |
+
+**Decisões**
+
+7. **A conferência é por SQL executável, com comentário removido e espaço em branco
+   normalizado**, não por `md5` do arquivo cru. Byte-exatidão é inalcançável de propósito:
+   arquivo de texto termina em quebra de linha (o ledger não guarda a última), e 13
+   arquivos carregam de propósito o aviso de que **não se roda `db push` neste projeto**,
+   que é justamente a informação que salva o banco. A receita, aplicada dos dois lados:
+   `regexp_replace(txt, '--[^\n]*', '', 'g')`, depois `regexp_replace(..., '\s+', ' ', 'g')`,
+   depois `btrim`, depois `md5`. Nos 18 arquivos do bloco o resultado bate com
+   `md5(array_to_string(statements, E'\n'))` do ledger.
+8. **Regex do Postgres não tem `\b`.** A fronteira de palavra é `\y`; `\b` é backspace, e
+   uma varredura de `prosrc` com `\b` devolve zero linha em silêncio. Foi o que quase fez
+   a Task 8 registrar "nenhuma função apaga lançamento" no item 1 desta entrada.
+
+## 2026-08-08 - Onda de correção do review do Bloco 8a: a terceira pré-condição da identidade, e guarda de origem em toda função que escreve
+
+Quatro achados Important do review amplo, nenhum Critical. Dois deles são de projeto,
+não de folha, e valem para qualquer módulo que ganhe uma origem nova de lançamento.
+
+### 1. Config vazia que não bloqueia precisa aparecer nas três leituras: função, tela e diagnóstico
+
+`folha_parametros` está vazia em produção (zero linha). Nesse estado a folha aprova sem
+erro e o INSS e o IRRF **retidos do trabalhador não viram conta a pagar**, porque
+`grupo_recolhimento_inss` / `_irrf` chegam nulos na `fn_aprovar_folha` e as duas linhas da
+fonte da guia que dependem deles têm `v_grupo_* is not null` no `where`. O desconto continua
+no holerite e no líquido; a guia que a empresa recolhe não existe no Financeiro.
+
+O dano real não era a guia faltando (isso é config): era a **auto-conferência acusando bug
+onde falta configuração**. A consulta gravada no `obj_description` da `fn_aprovar_folha`
+tinha duas causas de resíduo, e o texto ao lado dizia "se `explicado` NÃO der 0.00, aí sim é
+bug". Medido em transação com rollback, cenário de 5 colaboradores e `folha_parametros`
+vazia:
+
+| consulta | residuo | explicado |
+|---|---|---|
+| gravada antes (2 causas) | −4860,72 | **−3649,31** (falso sinal de bug) |
+| gravada agora (3 causas) | −4860,72 | **0,00**, com `retidos_sem_grupo` 3649,31 |
+
+E 3649,31 é exatamente `sum(inss) + sum(irrf)` dos itens. Conferido também com os dois
+grupos configurados (resíduo −1211,41, retidos 0) e no caso **parcial**, só o INSS
+configurado (resíduo −2798,62, retidos 1587,21): `explicado` 0,00 nos três.
+
+**Decisões**
+
+1. **Uma pré-condição que muda dinheiro tem que estar declarada nos três lugares onde
+   alguém olha:** no `obj_description` da função (para quem confere o número), na coluna da
+   consulta de diagnóstico (para a ferramenta não mentir) e na tela (para quem opera).
+   Faltava nos três. A identidade da folha agora tem **três** condições, não duas, e a
+   terceira é "`folha_parametros` existe e tem os dois grupos de recolhimento preenchidos".
+2. **Config vazia continua não recusando a aprovação.** "Config vazia é deploy seguro" é
+   premissa do bloco, e o dono do sistema pode legitimamente querer a folha só como custo
+   gerencial por um tempo. O aviso é na tela do detalhe da folha (`folha-detalhe.tsx`,
+   mesmo padrão visual do aviso de faixas de INSS/IRRF ausentes), mostrado **já no
+   rascunho** para chegar antes de alguém aprovar, com o valor em reais e a rota
+   `/rh/parametros-folha`. Regra pura em `calculo.ts` (`retidoSemGrupoDeRecolhimento`), com
+   Vitest, porque é regra de dinheiro e não pode viver só no JSX.
+3. **A terceira causa é medida contra a config ATUAL, e isso está escrito no comentário.**
+   Não existe snapshot do grupo do retido (existe o do encargo patronal, em
+   `folha_item_encargos.grupo_recolhimento`). Quem configurar os grupos **depois** de
+   aprovar tem que desaprovar e reaprovar antes de concluir que a diferença é bug. Derivar
+   a terceira causa do próprio resíduo faria a identidade fechar sempre, por construção, e
+   destruiria a capacidade dela de detectar bug de verdade: por isso ela lê a config, que é
+   a única medida independente disponível.
+
+### 2. "Bloqueado nos três níveis" se conta por função de escrita, não por tela
+
+O bloco fechou `fn_salvar_lancamento` e `fn_excluir_lancamento` para as origens novas
+(`folha`, `folha_guia`, `adiantamento`) e **deixou duas funções de escrita abertas**. O
+revisor executou os dois ataques, como usuário do Financeiro sem nenhuma permissão de RH:
+
+| função | ataque | por que a identidade não pegou |
+|---|---|---|
+| `fn_definir_parcelas_lancamento` | guia de INSS de 2026-12-20 para 2027-06-30, em 2 parcelas | o **total** é preservado, e é o total que a identidade soma |
+| `fn_alterar_mes_competencia` | salário para competência 2027-03 com `folhas.competencia` em 2026-11 | ela agrupa por **`folha_id`**, não por mês |
+
+Nos dois casos `explicado` continuou 0,00 e a tela da folha não mostrou nada. Guia de
+imposto tem prazo legal, e competência errada é erro contábil silencioso.
+
+**Decisões**
+
+4. **A guarda de origem é por função que escreve, e o inventário é `pg_proc`, não a UI.**
+   O erro de raciocínio foi contar "níveis" (drawer, Server Action, RPC) em vez de contar
+   **funções de escrita** na tabela. Antes de declarar uma origem fechada, listar todas as
+   funções que fazem `insert`/`update`/`delete` em `lancamentos` e `lancamento_parcelas` e
+   conferir uma por uma. Migration `20260808221920` fechou as duas, espelhando exatamente o
+   critério e a forma de mensagem que a `fn_excluir_lancamento` já usava
+   (`in ('folha', 'folha_guia')` numa mensagem, `= 'adiantamento'` em outra, cada uma
+   dizendo onde a pessoa resolve). Recriação cirúrgica com md5 fixado e replace reverso,
+   mesmo método da `20260808165352`.
+5. **`origem = 'diaria'` segue FORA da guarda nessas duas funções, e isso é gap registrado,
+   não decisão tomada.** A `fn_excluir_lancamento` barra `diaria` desde a `20260730192937`;
+   `fn_definir_parcelas_lancamento` e `fn_alterar_mes_competencia` aceitam. É o mesmo defeito
+   de classe, **pré-existente** (não foi este bloco que o criou), e fechar é uma linha em
+   cada função. Decisão do dono do sistema, porque muda o que o Financeiro pode fazer com
+   uma diária já fechada.
+6. **Tela que autoriza dinheiro sair não pode chamar tudo de "Manual".** A fila de aprovação
+   de pagamentos rotulava líquido de folha, guia de imposto e adiantamento como "Manual",
+   e o filtro de origem tinha duas opções com "Manual" significando `origem !== 'oc'`. Agora
+   as três telas do módulo usam `rotuloOrigemLancamento` e o catálogo `ORIGENS_LANCAMENTO`,
+   e o filtro casa por igualdade exata. Rótulo de origem é informação de auditoria na tela
+   onde se libera pagamento: derivar de catálogo único, nunca escrever literal.

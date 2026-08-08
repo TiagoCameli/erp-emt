@@ -18,6 +18,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
+  dataLocalISO,
   formatarData,
   formatarQuantidade,
   mesParaCompetencia,
@@ -77,9 +78,9 @@ const colunas: ColumnDef<FolhaLista, unknown>[] = [
     meta: { alinharDireita: true },
     cell: ({ row }) => <MoneyText valor={row.original.valorLiquido} />,
   },
-  // Secundária, mas existe para o filtro de período de fechamento não filtrar
+  // Secundária, mas existe para o filtro de período de aprovação não filtrar
   // por um dado que a tela nunca mostra.
-  colunaData<FolhaLista>("dataFechamento", "Fechamento", formatarData, {
+  colunaData<FolhaLista>("aprovadoEm", "Aprovação", formatarData, {
     meta: { ocultaPorPadrao: true },
   }),
 ];
@@ -103,8 +104,8 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
 
   const [mes, setMes] = useFiltroSessao("mes", "");
   const [status, setStatus] = useFiltroSessao("status", "");
-  const [fechamentoDe, setFechamentoDe] = useFiltroSessao("fechamentoDe", "");
-  const [fechamentoAte, setFechamentoAte] = useFiltroSessao("fechamentoAte", "");
+  const [aprovacaoDe, setAprovacaoDe] = useFiltroSessao("aprovacaoDe", "");
+  const [aprovacaoAte, setAprovacaoAte] = useFiltroSessao("aprovacaoAte", "");
   const [custoDe, setCustoDe] = useFiltroSessao("custoDe", "");
   const [custoAte, setCustoAte] = useFiltroSessao("custoAte", "");
   const [liquidoDe, setLiquidoDe] = useFiltroSessao("liquidoDe", "");
@@ -115,7 +116,14 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
     return folhas.filter((folha) => {
       if (competencia !== "" && folha.competencia !== competencia) return false;
       if (status !== "" && folha.status !== status) return false;
-      if (!noPeriodo(folha.dataFechamento, fechamentoDe, fechamentoAte)) {
+      // aprovado_em é timestamptz (UTC); noPeriodo compara string de dia, então
+      // precisa do dia LOCAL (Rio Branco), não o dia cru do ISO em UTC — senão
+      // uma folha aprovada às 19h+ locais (já no dia seguinte em UTC) some do
+      // filtro de período, e depois das 19h a coluna exibida (formatarData, já
+      // em fuso local) divergiria do dia que o filtro considerou.
+      if (
+        !noPeriodo(dataLocalISO(folha.aprovadoEm), aprovacaoDe, aprovacaoAte)
+      ) {
         return false;
       }
       if (!naFaixa(folha.custoTotal, custoDe, custoAte)) return false;
@@ -126,8 +134,8 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
     folhas,
     mes,
     status,
-    fechamentoDe,
-    fechamentoAte,
+    aprovacaoDe,
+    aprovacaoAte,
     custoDe,
     custoAte,
     liquidoDe,
@@ -170,22 +178,22 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
             ),
           },
           {
-            id: "fechamento",
-            rotulo: "Período de fechamento",
+            id: "aprovacao",
+            rotulo: "Período de aprovação",
             ocultoPorPadrao: true,
-            temValor: fechamentoDe !== "" || fechamentoAte !== "",
+            temValor: aprovacaoDe !== "" || aprovacaoAte !== "",
             onLimpar: () => {
-              setFechamentoDe("");
-              setFechamentoAte("");
+              setAprovacaoDe("");
+              setAprovacaoAte("");
             },
             elemento: (
               <FiltroPeriodo
-                de={fechamentoDe}
-                ate={fechamentoAte}
-                rotulo="Fechamento"
+                de={aprovacaoDe}
+                ate={aprovacaoAte}
+                rotulo="Aprovação"
                 onPeriodoChange={(de, ate) => {
-                  setFechamentoDe(de);
-                  setFechamentoAte(ate);
+                  setAprovacaoDe(de);
+                  setAprovacaoAte(ate);
                 }}
               />
             ),

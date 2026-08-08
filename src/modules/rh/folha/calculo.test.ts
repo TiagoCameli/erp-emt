@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { resumoPorCentroCusto, resumoPorEncargo } from "@/modules/rh/folha/calculo";
-import type { FolhaDetalhe, FolhaItem } from "@/modules/rh/folha/queries";
+import {
+  agruparLancamentosDaFolha,
+  resumoPorCentroCusto,
+  resumoPorEncargo,
+  retidoSemGrupoDeRecolhimento,
+} from "@/modules/rh/folha/calculo";
+import type {
+  FolhaDetalhe,
+  FolhaItem,
+  LancamentoDaFolha,
+} from "@/modules/rh/folha/queries";
 
 function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
   return {
@@ -19,6 +28,7 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     irrf: 0,
     encargos: 0,
     encargosDetalhe: [],
+    lancamentoId: null,
     adiantamentos: 0,
     custoTotal: 0,
     valorLiquido: 0,
@@ -30,14 +40,16 @@ function criarFolha(itens: FolhaItem[]): FolhaDetalhe {
   return {
     id: "folha-1",
     competencia: "2026-06",
-    status: "fechada",
+    status: "aprovado",
     encargosPercentual: 20,
     valorBruto: 0,
     valorEncargos: 0,
     valorAdiantamentos: 0,
     valorLiquido: 0,
     custoTotal: 0,
-    dataFechamento: null,
+    aprovadoEm: null,
+    aprovadoPorNome: null,
+    motivoRejeicao: null,
     itens,
   };
 }
@@ -172,5 +184,181 @@ describe("resumoPorEncargo", () => {
     const somaEncargos = resumo.reduce((acc, e) => acc + e.total, 0);
 
     expect(somaEncargos).toBe(folha.valorEncargos);
+  });
+});
+
+function criarLancamento(
+  overrides: Partial<LancamentoDaFolha> & { id: string },
+): LancamentoDaFolha {
+  return {
+    tipo: "salario",
+    descricao: `Lançamento ${overrides.id}`,
+    numero: null,
+    valor: 0,
+    dataVencimento: null,
+    statusParcela: "pendente",
+    ...overrides,
+  };
+}
+
+describe("agruparLancamentosDaFolha", () => {
+  it("separa salários de guias e soma cada grupo", () => {
+    const lancamentos = [
+      criarLancamento({
+        id: "1",
+        tipo: "salario",
+        descricao: "Salario Ana Souza 08/2026",
+        valor: 3000,
+      }),
+      criarLancamento({
+        id: "2",
+        tipo: "salario",
+        descricao: "Salario Bruno Lima 08/2026",
+        valor: 2500,
+      }),
+      criarLancamento({
+        id: "3",
+        tipo: "guia",
+        descricao: "GPS folha 08/2026",
+        valor: 1200,
+      }),
+      criarLancamento({
+        id: "4",
+        tipo: "guia",
+        descricao: "FGTS folha 08/2026",
+        valor: 400,
+      }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.salarios.map((l) => l.id)).toEqual(["1", "2"]);
+    expect(agrupado.guias.map((l) => l.id)).toEqual(["4", "3"]); // ordem alfabética: FGTS antes de GPS
+    expect(agrupado.totalSalarios).toBe(5500);
+    expect(agrupado.totalGuias).toBe(1600);
+  });
+
+  it("folha em rascunho ou pendente de aprovação não tem lançamento: lista vazia, sem quebrar", () => {
+    const agrupado = agruparLancamentosDaFolha([]);
+
+    expect(agrupado).toEqual({
+      salarios: [],
+      guias: [],
+      totalSalarios: 0,
+      totalGuias: 0,
+    });
+  });
+
+  it("guia sem rateio completo (colaborador sem centro de custo) ainda soma pelo valor cheio do lançamento", () => {
+    // docs/decisoes.md: o rateio por centro de custo de uma guia pode somar
+    // menos que o valor do lançamento quando algum colaborador não tem centro
+    // de custo. LancamentoDaFolha não carrega rateio — só o total do
+    // lançamento — então essa lacuna nunca aparece aqui como erro: o grupo
+    // "guias" soma o valor do lançamento, ponto.
+    const lancamentos = [
+      criarLancamento({
+        id: "guia-1",
+        tipo: "guia",
+        descricao: "GPS folha 08/2026",
+        valor: 9562.71,
+      }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.guias).toHaveLength(1);
+    expect(agrupado.totalGuias).toBe(9562.71);
+    expect(agrupado.salarios).toEqual([]);
+  });
+
+  it("só guias, sem nenhum salário (todos os líquidos ficaram <= 0)", () => {
+    const lancamentos = [
+      criarLancamento({ id: "guia-1", tipo: "guia", valor: 500 }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.salarios).toEqual([]);
+    expect(agrupado.totalSalarios).toBe(0);
+    expect(agrupado.guias).toHaveLength(1);
+  });
+
+  it("só salários, sem nenhuma guia (nenhum grupo de recolhimento configurado)", () => {
+    const lancamentos = [
+      criarLancamento({
+        id: "1",
+        tipo: "salario",
+        descricao: "Salario Ana Souza 08/2026",
+        valor: 3000,
+      }),
+      criarLancamento({
+        id: "2",
+        tipo: "salario",
+        descricao: "Salario Bruno Lima 08/2026",
+        valor: 2500,
+      }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.salarios).toHaveLength(2);
+    expect(agrupado.totalSalarios).toBe(5500);
+    expect(agrupado.guias).toEqual([]);
+    expect(agrupado.totalGuias).toBe(0);
+  });
+});
+
+describe("retidoSemGrupoDeRecolhimento", () => {
+  // Cenário fixo: 2 colaboradores com retido, espelhando a prova em banco.
+  const folha = criarFolha([
+    criarItem({ id: "1", inss: 202.23, irrf: 2.89 }),
+    criarItem({ id: "2", inss: 509.6, irrf: 347.57 }),
+  ]);
+  const somaInss = 711.83;
+  const somaIrrf = 350.46;
+
+  it("folha_parametros sem linha (estado de produção): INSS e IRRF ficam fora da guia", () => {
+    expect(retidoSemGrupoDeRecolhimento(folha, null)).toEqual({
+      inss: somaInss,
+      irrf: somaIrrf,
+      total: somaInss + somaIrrf,
+    });
+  });
+
+  it("os dois grupos configurados: nada fica fora, e o aviso não aparece", () => {
+    expect(
+      retidoSemGrupoDeRecolhimento(folha, {
+        grupoRecolhimentoInss: "GPS",
+        grupoRecolhimentoIrrf: "DARF IRRF",
+      }),
+    ).toEqual({ inss: 0, irrf: 0, total: 0 });
+  });
+
+  it("caso parcial (só o INSS configurado): só o IRRF fica fora", () => {
+    expect(
+      retidoSemGrupoDeRecolhimento(folha, {
+        grupoRecolhimentoInss: "GPS",
+        grupoRecolhimentoIrrf: null,
+      }),
+    ).toEqual({ inss: 0, irrf: somaIrrf, total: somaIrrf });
+  });
+
+  it("grupo em branco conta como ausente, igual ao nullif(btrim(...)) da consulta de diagnóstico", () => {
+    expect(
+      retidoSemGrupoDeRecolhimento(folha, {
+        grupoRecolhimentoInss: "   ",
+        grupoRecolhimentoIrrf: "DARF IRRF",
+      }),
+    ).toEqual({ inss: somaInss, irrf: 0, total: somaInss });
+  });
+
+  it("folha sem retido nenhum não gera aviso, mesmo com os grupos vazios", () => {
+    const semRetido = criarFolha([criarItem({ id: "1" })]);
+
+    expect(retidoSemGrupoDeRecolhimento(semRetido, null)).toEqual({
+      inss: 0,
+      irrf: 0,
+      total: 0,
+    });
   });
 });

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   FILTROS_REVISAO,
+  ORIGENS_LANCAMENTO,
   ROTULO_FILTRO_REVISAO,
   lancamentoFormSchema,
   lancamentoSchema,
+  rotuloOrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 
 const CENTRO = "33333333-3333-4333-8333-333333333333";
@@ -181,5 +183,36 @@ describe("filtro de revisão", () => {
   it("não revisado e revisado são rótulos distintos e opostos", () => {
     expect(ROTULO_FILTRO_REVISAO.revisado).toBe("Revisado");
     expect(ROTULO_FILTRO_REVISAO.nao_revisado).toBe("Não revisado");
+  });
+});
+
+describe("rótulo de origem do lançamento", () => {
+  // O catálogo é a fonte única do rótulo em três telas do Financeiro: a lista de
+  // lançamentos, o detalhe e a fila de aprovação de pagamentos (onde se autoriza
+  // dinheiro sair). Antes da onda de correção do review do Bloco 8a, a fila
+  // rotulava líquido de folha, guia de imposto e adiantamento como "Manual".
+  it("cada origem do catálogo tem rótulo pt-BR próprio, e nenhuma vira Manual por acidente", () => {
+    expect(ORIGENS_LANCAMENTO.map(rotuloOrigemLancamento)).toEqual([
+      "Ordem de compra",
+      "Manual",
+      "Diária",
+      "Folha de pagamento",
+      "Guia da folha",
+      "Adiantamento",
+    ]);
+  });
+
+  it("só a origem manual é rotulada Manual", () => {
+    const comRotuloManual = ORIGENS_LANCAMENTO.filter(
+      (origem) => rotuloOrigemLancamento(origem) === "Manual",
+    );
+
+    expect(comRotuloManual).toEqual(["manual"]);
+  });
+
+  it("origem fora do catálogo cai no valor cru, sem quebrar a tela", () => {
+    expect(rotuloOrigemLancamento("origem_que_nao_existe")).toBe(
+      "origem_que_nao_existe",
+    );
   });
 });

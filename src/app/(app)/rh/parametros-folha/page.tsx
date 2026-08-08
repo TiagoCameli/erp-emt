@@ -9,6 +9,7 @@ import {
   buscarParametros,
   listarFaixasInss,
   listarFaixasIrrf,
+  listarGruposRecolhimento,
 } from "@/modules/rh/parametros-folha/queries";
 
 export default async function PaginaParametrosFolha() {
@@ -17,11 +18,13 @@ export default async function PaginaParametrosFolha() {
     notFound();
   }
 
-  const [faixasInss, faixasIrrf, parametros] = await Promise.all([
-    listarFaixasInss(),
-    listarFaixasIrrf(),
-    buscarParametros(),
-  ]);
+  const [faixasInss, faixasIrrf, parametros, gruposRecolhimento] =
+    await Promise.all([
+      listarFaixasInss(),
+      listarFaixasIrrf(),
+      buscarParametros(),
+      listarGruposRecolhimento(),
+    ]);
 
   const podeCriar = temPermissao(usuario, "rh.parametros-folha", "criar");
   const podeEditar = temPermissao(usuario, "rh.parametros-folha", "editar");
@@ -55,7 +58,11 @@ export default async function PaginaParametrosFolha() {
           />
         </div>
 
-        <ParametrosForm parametros={parametros} podeEditar={podeEditar} />
+        <ParametrosForm
+          parametros={parametros}
+          podeEditar={podeEditar}
+          gruposRecolhimento={gruposRecolhimento}
+        />
       </div>
     </>
   );

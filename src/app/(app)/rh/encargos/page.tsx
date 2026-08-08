@@ -6,6 +6,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { EncargosAcoesCabecalho } from "@/modules/rh/encargos/components/encargos-acoes-cabecalho";
 import { EncargosLista } from "@/modules/rh/encargos/components/encargos-lista";
 import { listarEncargos } from "@/modules/rh/encargos/queries";
+import { listarGruposRecolhimento } from "@/modules/rh/parametros-folha/queries";
 
 export default async function PaginaEncargos() {
   const usuario = await getUsuarioLogado();
@@ -13,7 +14,10 @@ export default async function PaginaEncargos() {
     notFound();
   }
 
-  const encargos = await listarEncargos();
+  const [encargos, grupos] = await Promise.all([
+    listarEncargos(),
+    listarGruposRecolhimento(),
+  ]);
 
   const ativos = encargos.filter((encargo) => encargo.ativo);
   const percentualTotal = ativos.reduce(
@@ -31,7 +35,7 @@ export default async function PaginaEncargos() {
         modulo="RH"
         titulo="Encargos da folha"
         descricao="Encargos e alíquotas usados no cálculo da folha de pagamento"
-        acoes={<EncargosAcoesCabecalho podeCriar={podeCriar} />}
+        acoes={<EncargosAcoesCabecalho podeCriar={podeCriar} grupos={grupos} />}
       />
       {/* O percentual total é exatamente o que a geração da folha grava em
           `folhas.encargos_percentual` (soma dos ativos), então o cartão
@@ -55,6 +59,7 @@ export default async function PaginaEncargos() {
         encargos={encargos}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        grupos={grupos}
       />
     </>
   );

@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       anexo_vinculos: {
@@ -1194,6 +1169,7 @@ export type Database = {
           ativo: boolean
           created_at: string
           created_by: string | null
+          grupo_recolhimento: string | null
           id: string
           nome: string
           percentual: number
@@ -1203,6 +1179,7 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           created_by?: string | null
+          grupo_recolhimento?: string | null
           id?: string
           nome: string
           percentual: number
@@ -1212,12 +1189,55 @@ export type Database = {
           ativo?: boolean
           created_at?: string
           created_by?: string | null
+          grupo_recolhimento?: string | null
           id?: string
           nome?: string
           percentual?: number
           updated_at?: string
         }
         Relationships: []
+      }
+      folha_guias: {
+        Row: {
+          created_at: string
+          folha_id: string
+          grupo: string
+          id: string
+          lancamento_id: string | null
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          folha_id: string
+          grupo: string
+          id?: string
+          lancamento_id?: string | null
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          folha_id?: string
+          grupo?: string
+          id?: string
+          lancamento_id?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folha_guias_folha_id_fkey"
+            columns: ["folha_id"]
+            isOneToOne: false
+            referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_guias_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       folha_inss_faixas: {
         Row: {
@@ -1279,6 +1299,7 @@ export type Database = {
       folha_item_encargos: {
         Row: {
           folha_item_id: string
+          grupo_recolhimento: string | null
           id: string
           nome: string
           percentual: number
@@ -1286,6 +1307,7 @@ export type Database = {
         }
         Insert: {
           folha_item_id: string
+          grupo_recolhimento?: string | null
           id?: string
           nome: string
           percentual: number
@@ -1293,6 +1315,7 @@ export type Database = {
         }
         Update: {
           folha_item_id?: string
+          grupo_recolhimento?: string | null
           id?: string
           nome?: string
           percentual?: number
@@ -1322,6 +1345,7 @@ export type Database = {
           id: string
           inss: number
           irrf: number
+          lancamento_id: string | null
           salario_base: number
           valor_extras: number
           valor_liquido: number
@@ -1339,6 +1363,7 @@ export type Database = {
           id?: string
           inss?: number
           irrf?: number
+          lancamento_id?: string | null
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1356,6 +1381,7 @@ export type Database = {
           id?: string
           inss?: number
           irrf?: number
+          lancamento_id?: string | null
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1382,13 +1408,24 @@ export type Database = {
             referencedRelation: "folhas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "folha_itens_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
         ]
       }
       folha_parametros: {
         Row: {
           created_at: string
           created_by: string | null
+          dia_pagamento_salario: number | null
+          dia_vencimento_guias: number | null
           fgts_percentual: number
+          grupo_recolhimento_inss: string | null
+          grupo_recolhimento_irrf: string | null
           id: number
           irrf_deducao_por_dependente: number
           irrf_desconto_simplificado: number
@@ -1397,7 +1434,11 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          dia_pagamento_salario?: number | null
+          dia_vencimento_guias?: number | null
           fgts_percentual?: number
+          grupo_recolhimento_inss?: string | null
+          grupo_recolhimento_irrf?: string | null
           id?: number
           irrf_deducao_por_dependente?: number
           irrf_desconto_simplificado?: number
@@ -1406,7 +1447,11 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          dia_pagamento_salario?: number | null
+          dia_vencimento_guias?: number | null
           fgts_percentual?: number
+          grupo_recolhimento_inss?: string | null
+          grupo_recolhimento_irrf?: string | null
           id?: number
           irrf_deducao_por_dependente?: number
           irrf_desconto_simplificado?: number
@@ -1416,13 +1461,15 @@ export type Database = {
       }
       folhas: {
         Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
           competencia: string
           created_at: string
           created_by: string | null
           custo_total: number
-          data_fechamento: string | null
           encargos_percentual: number
           id: string
+          motivo_rejeicao: string | null
           status: string
           updated_at: string
           valor_adiantamentos: number
@@ -1431,13 +1478,15 @@ export type Database = {
           valor_liquido: number
         }
         Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           competencia: string
           created_at?: string
           created_by?: string | null
           custo_total?: number
-          data_fechamento?: string | null
           encargos_percentual?: number
           id?: string
+          motivo_rejeicao?: string | null
           status?: string
           updated_at?: string
           valor_adiantamentos?: number
@@ -1446,13 +1495,15 @@ export type Database = {
           valor_liquido?: number
         }
         Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           competencia?: string
           created_at?: string
           created_by?: string | null
           custo_total?: number
-          data_fechamento?: string | null
           encargos_percentual?: number
           id?: string
+          motivo_rejeicao?: string | null
           status?: string
           updated_at?: string
           valor_adiantamentos?: number
@@ -1460,7 +1511,15 @@ export type Database = {
           valor_encargos?: number
           valor_liquido?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "folhas_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       formas_pagamento: {
         Row: {
@@ -2469,6 +2528,7 @@ export type Database = {
           descricao: string | null
           folha_id: string | null
           id: string
+          lancamento_id: string | null
           updated_at: string
           valor: number
         }
@@ -2481,6 +2541,7 @@ export type Database = {
           descricao?: string | null
           folha_id?: string | null
           id?: string
+          lancamento_id?: string | null
           updated_at?: string
           valor: number
         }
@@ -2493,6 +2554,7 @@ export type Database = {
           descricao?: string | null
           folha_id?: string | null
           id?: string
+          lancamento_id?: string | null
           updated_at?: string
           valor?: number
         }
@@ -2509,6 +2571,13 @@ export type Database = {
             columns: ["folha_id"]
             isOneToOne: false
             referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_adiantamentos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -3095,6 +3164,14 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string }
         Returns: undefined
       }
+      fn_adiantamento_pagamento_comprometido: {
+        Args: { p_lancamento_id: string }
+        Returns: boolean
+      }
+      fn_adiantamentos_comprometidos: {
+        Args: { p_lancamento_ids: string[] }
+        Returns: string[]
+      }
       fn_alterar_mes_competencia: {
         Args: { p_entidade: string; p_id: string; p_mes: string }
         Returns: undefined
@@ -3107,6 +3184,7 @@ export type Database = {
         Args: { p_lanc_id: string }
         Returns: undefined
       }
+      fn_aprovar_folha: { Args: { p_folha: string }; Returns: undefined }
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: {
         Args: {
@@ -3187,6 +3265,10 @@ export type Database = {
         Args: { p_lanc_id: string; p_parcelas: Json }
         Returns: undefined
       }
+      fn_desaprovar_folha: {
+        Args: { p_folha: string; p_motivo: string }
+        Returns: undefined
+      }
       fn_desaprovar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string }
         Returns: undefined
@@ -3219,6 +3301,7 @@ export type Database = {
         Args: { p_parcela_id: string }
         Returns: undefined
       }
+      fn_excluir_adiantamento: { Args: { p_id: string }; Returns: undefined }
       fn_excluir_cadastro: {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
@@ -3243,7 +3326,6 @@ export type Database = {
         }
         Returns: string
       }
-      fn_fechar_folha: { Args: { p_folha: string }; Returns: undefined }
       fn_gerar_folha: {
         Args: { p_competencia: string; p_encargos_pct?: number }
         Returns: string
@@ -3318,7 +3400,6 @@ export type Database = {
         Args: { p_mes: string; p_motivo: string }
         Returns: undefined
       }
-      fn_reabrir_folha: { Args: { p_folha: string }; Returns: undefined }
       fn_reabrir_ponto: { Args: { p_ponto: string }; Returns: undefined }
       fn_recalcular_status_lancamento: {
         Args: { p_lanc_id: string }
@@ -3330,6 +3411,7 @@ export type Database = {
         Args: { p_observacao?: string; p_parcela_id: string }
         Returns: undefined
       }
+      fn_registrar_adiantamento: { Args: { p_dados: Json }; Returns: string }
       fn_registrar_arquivo: {
         Args: {
           p_entidade_id: string
@@ -3500,6 +3582,10 @@ export type Database = {
       fn_salvar_preferencia_tabela: {
         Args: { p_preferencia: Json; p_tabela: string }
         Returns: undefined
+      }
+      fn_vencimento_folha: {
+        Args: { p_competencia: string; p_dia: number }
+        Returns: string
       }
       fn_vincular_arquivo: {
         Args: {
@@ -3679,9 +3765,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

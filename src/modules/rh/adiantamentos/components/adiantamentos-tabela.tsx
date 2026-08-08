@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { HandCoins, MoreHorizontal, Plus } from "lucide-react";
+import { ExternalLink, HandCoins, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  CelulaVazia,
   colunaDinheiro,
   ConfirmDialog,
   DataTable,
@@ -43,6 +45,8 @@ export interface AdiantamentosTabelaProps {
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Permissão para abrir o lançamento no Financeiro (financeiro.lancamentos:ver). */
+  podeVerLancamento: boolean;
 }
 
 /** Competência (yyyy-MM-01) como MM/AAAA. */
@@ -75,6 +79,7 @@ export function AdiantamentosTabela({
   podeCriar,
   podeEditar,
   podeExcluir,
+  podeVerLancamento,
 }: AdiantamentosTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [competencia, setCompetencia] = useFiltroSessao("competencia", "");
@@ -193,6 +198,28 @@ export function AdiantamentosTabela({
             <StatusBadge status="rascunho" rotulo="Em aberto" />
           ),
       },
+      {
+        id: "lancamento",
+        header: "No Financeiro",
+        cell: ({ row }) => {
+          const { lancamentoId, lancamentoNumero } = row.original;
+          if (!lancamentoId) return <CelulaVazia />;
+
+          const rotulo = lancamentoNumero ?? "Abrir lançamento";
+          if (!podeVerLancamento) {
+            return <span className="codigo-doc text-muted-foreground">{rotulo}</span>;
+          }
+          return (
+            <Link
+              href={`/financeiro/lancamentos/${lancamentoId}`}
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              <span className="codigo-doc">{rotulo}</span>
+              <ExternalLink className="size-3.5" aria-hidden="true" />
+            </Link>
+          );
+        },
+      },
     ];
 
     if (!podeAgir) return base;
@@ -203,8 +230,21 @@ export function AdiantamentosTabela({
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const adiantamento = row.original;
-        // Travado na folha: sem ações de editar/excluir.
-        if (adiantamento.naFolha) return null;
+        // Editar só existe enquanto não há lançamento: todo adiantamento
+        // nasce com um (fn_registrar_adiantamento), então na prática essa
+        // ação nunca aparece para um registro criado depois desta trava —
+        // corrigir é excluir e recriar. Excluir é mais permissivo: um
+        // adiantamento limpo (lançamento pendente, ainda não pago) continua
+        // podendo ser excluído; só trava na folha ou com pagamento
+        // comprometido (aprovado, pago ou conciliado).
+        const podeEditarLinha =
+          podeEditar && !adiantamento.naFolha && adiantamento.lancamentoId === null;
+        const podeExcluirLinha =
+          podeExcluir &&
+          !adiantamento.naFolha &&
+          !adiantamento.pagamentoComprometido;
+
+        if (!podeEditarLinha && !podeExcluirLinha) return null;
 
         return (
           <DropdownMenu>
@@ -219,12 +259,12 @@ export function AdiantamentosTabela({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {podeEditar ? (
+              {podeEditarLinha ? (
                 <DropdownMenuItem onSelect={() => abrirEdicao(adiantamento)}>
                   Editar
                 </DropdownMenuItem>
               ) : null}
-              {podeExcluir ? (
+              {podeExcluirLinha ? (
                 <DropdownMenuItem
                   variant="destructive"
                   onSelect={() => pedirExclusao(adiantamento)}
@@ -239,7 +279,7 @@ export function AdiantamentosTabela({
     });
 
     return base;
-  }, [podeAgir, podeEditar, podeExcluir]);
+  }, [podeAgir, podeEditar, podeExcluir, podeVerLancamento]);
 
   return (
     <>

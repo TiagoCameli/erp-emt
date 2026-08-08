@@ -278,7 +278,7 @@ export const RECURSOS = [
     nome: "Folha gerencial",
     modulo: "rh",
     rota: "/rh/folha",
-    acoes: ["ver", "criar", "editar"],
+    acoes: ["ver", "criar", "editar", "aprovar", "desaprovar"],
   },
   {
     id: "rh.encargos",

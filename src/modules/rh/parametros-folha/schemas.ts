@@ -126,6 +126,35 @@ export type FaixaIrrfInput = z.infer<typeof faixaIrrfSchema>;
 /** Entrada do formulário (valores como string): use no react-hook-form. */
 export type FaixaIrrfFormInput = z.input<typeof faixaIrrfSchema>;
 
+/**
+ * Dia do mês (1..31), opcional: ausente é o normal antes do Tiago cadastrar
+ * (config vazia não pode travar o deploy). Usado tanto para o dia de
+ * pagamento do salário quanto para o dia único de vencimento das guias
+ * (INSS, FGTS e IRRF da folha vencem todos no mesmo dia — não existe um dia
+ * por encargo, senão precisaria inventar desempate).
+ */
+const diaDoMesSchema = z
+  .number({ error: "Dia inválido" })
+  .int({ error: "O dia precisa ser um número inteiro" })
+  .min(1, { error: "O dia precisa ser entre 1 e 31" })
+  .max(31, { error: "O dia precisa ser entre 1 e 31" })
+  .optional();
+
+/**
+ * Grupo de recolhimento do que foi retido do trabalhador (INSS ou IRRF da
+ * folha, colunas folha_itens.inss/.irrf). Opcional: vazio é o normal antes do
+ * cadastro, e o retido correspondente não vira guia. O nome casa por
+ * igualdade exata com folha_encargos.grupo_recolhimento na geração da guia
+ * (Task 4), por isso o campo é um Combobox alimentado pelos grupos já
+ * cadastrados, não texto livre.
+ */
+const grupoRecolhimentoRetidoSchema = z
+  .string()
+  .trim()
+  .min(1, { error: "Informe o grupo ou deixe vazio" })
+  .max(60, { error: "Máximo de 60 caracteres" })
+  .optional();
+
 /** Schema dos parâmetros escalares da folha (config singleton, id=1). */
 export const parametrosSchema = z.object({
   irrfDeducaoPorDependente: criarDinheiroSchema({
@@ -137,6 +166,10 @@ export const parametrosSchema = z.object({
     mensagemMinimo: "O desconto simplificado não pode ser negativo",
   }),
   fgtsPercentual: percentualSchema,
+  diaPagamentoSalario: diaDoMesSchema,
+  diaVencimentoGuias: diaDoMesSchema,
+  grupoRecolhimentoInss: grupoRecolhimentoRetidoSchema,
+  grupoRecolhimentoIrrf: grupoRecolhimentoRetidoSchema,
 });
 
 /** Saída validada (valores já números): use nas server actions. */

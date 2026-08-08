@@ -1,6 +1,13 @@
 import "server-only";
 
+import {
+  eventosDoAuditLog,
+  type EventoTrilha,
+  type RegistroAuditLog,
+} from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
+import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import { STATUS_PARCELA, type StatusParcela } from "@/modules/financeiro/_shared/formato";
 import { type StatusFolha, STATUS_FOLHA } from "@/modules/rh/_shared/formato";
 
 /** Linha da listagem de folhas, com a contagem de itens. */
@@ -14,8 +21,20 @@ export interface FolhaLista {
   valorAdiantamentos: number;
   valorLiquido: number;
   custoTotal: number;
-  /** Data de fechamento (yyyy-MM-dd) ou null se ainda em rascunho. */
-  dataFechamento: string | null;
+  /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
+  aprovadoEm: string | null;
+  /**
+   * Nome de quem aprovou, via join com `usuarios`. Vem null se a folha não
+   * foi aprovada. Também vem null (mesmo com a folha aprovada) para quem
+   * está vendo não é o próprio aprovador e não tem
+   * `administracao.usuarios:ver`: a policy `usuarios_select` só libera a
+   * própria linha (`id = auth.uid()`) ou quem tem essa permissão, então o
+   * embed barra e a query não distingue os dois motivos — a tela mostra
+   * "aprovada em ..." sem o "por quem", calada.
+   */
+  aprovadoPorNome: string | null;
+  /** Motivo da última rejeição, mostrado enquanto a folha volta pra rascunho. */
+  motivoRejeicao: string | null;
   /** Quantidade de colaboradores na folha. */
   totalItens: number;
 }
@@ -54,6 +73,15 @@ export interface FolhaItem {
   adiantamentos: number;
   custoTotal: number;
   valorLiquido: number;
+  /**
+   * Id do lançamento a_pagar do salário deste colaborador (Task 4), ou null
+   * se ainda não existe (folha em rascunho/pendente_aprovacao, ou líquido
+   * ≤ 0, que não gera lançamento). `listarLancamentosDaFolha` (Task 7) reusa
+   * este campo em vez de reconsultar `folha_itens`: `buscarFolha` já leu essa
+   * tabela nesta mesma leitura, e reler o que já está em memória é o erro que
+   * o Bloco 6 corrigiu nesta tela.
+   */
+  lancamentoId: string | null;
 }
 
 /** Folha completa para o detalhe: cabeçalho + itens por colaborador. */
@@ -67,7 +95,20 @@ export interface FolhaDetalhe {
   valorAdiantamentos: number;
   valorLiquido: number;
   custoTotal: number;
-  dataFechamento: string | null;
+  /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
+  aprovadoEm: string | null;
+  /**
+   * Nome de quem aprovou, via join com `usuarios`. Vem null se a folha não
+   * foi aprovada. Também vem null (mesmo com a folha aprovada) para quem
+   * está vendo não é o próprio aprovador e não tem
+   * `administracao.usuarios:ver`: a policy `usuarios_select` só libera a
+   * própria linha (`id = auth.uid()`) ou quem tem essa permissão, então o
+   * embed barra e a query não distingue os dois motivos — a tela mostra
+   * "aprovada em ..." sem o "por quem", calada.
+   */
+  aprovadoPorNome: string | null;
+  /** Motivo da última rejeição, mostrado enquanto a folha volta pra rascunho. */
+  motivoRejeicao: string | null;
   itens: FolhaItem[];
 }
 
@@ -103,7 +144,8 @@ export async function listarFolhas(): Promise<FolhaLista[]> {
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
        valor_encargos, valor_adiantamentos, valor_liquido, custo_total,
-       data_fechamento, folha_itens(count)`,
+       aprovado_em, motivo_rejeicao, usuarios!folhas_aprovado_por_fkey(nome),
+       folha_itens(count)`,
     )
     .order("competencia", { ascending: false });
 
@@ -119,7 +161,9 @@ export async function listarFolhas(): Promise<FolhaLista[]> {
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
-    dataFechamento: folha.data_fechamento,
+    aprovadoEm: folha.aprovado_em,
+    aprovadoPorNome: folha.usuarios?.nome ?? null,
+    motivoRejeicao: folha.motivo_rejeicao,
     totalItens: folha.folha_itens?.[0]?.count ?? 0,
   }));
 }
@@ -137,7 +181,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
        valor_encargos, valor_adiantamentos, valor_liquido, custo_total,
-       data_fechamento`,
+       aprovado_em, motivo_rejeicao, usuarios!folhas_aprovado_por_fkey(nome)`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -149,7 +193,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .select(
       `id, colaborador_id, centro_custo_id, salario_base, horas_normais,
        horas_extras, valor_extras, inss, irrf, encargos, adiantamentos,
-       custo_total, valor_liquido,
+       custo_total, valor_liquido, lancamento_id,
        colaboradores(nome, funcoes(nome)),
        centros_custo(nome, codigo),
        folha_item_encargos(nome, valor)`,
@@ -183,6 +227,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       adiantamentos: item.adiantamentos,
       custoTotal: item.custo_total,
       valorLiquido: item.valor_liquido,
+      lancamentoId: item.lancamento_id,
     }))
     .sort((a, b) =>
       a.colaboradorNome.localeCompare(b.colaboradorNome, "pt-BR"),
@@ -198,7 +243,9 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
-    dataFechamento: folha.data_fechamento,
+    aprovadoEm: folha.aprovado_em,
+    aprovadoPorNome: folha.usuarios?.nome ?? null,
+    motivoRejeicao: folha.motivo_rejeicao,
     itens,
   };
 }
@@ -206,3 +253,153 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
 // `resumoPorCentroCusto` e `resumoPorEncargo` foram movidos para
 // `./calculo.ts`: são derivações puras dos itens já carregados aqui por
 // `buscarFolha`, sem precisar de uma 2ª/3ª leitura da folha no banco.
+
+/**
+ * Lançamento gerado pela aprovação da folha (Bloco 8a, Task 7): salário de um
+ * colaborador (`origem='folha'`) ou guia de um grupo de recolhimento
+ * (`origem='folha_guia'`). `numero` e `dataVencimento` vêm null só em dado
+ * legado sem número atribuído; na prática toda linha aqui já passou pela
+ * aprovação e tem os dois preenchidos.
+ */
+export interface LancamentoDaFolha {
+  id: string;
+  tipo: "salario" | "guia";
+  descricao: string;
+  numero: string | null;
+  valor: number;
+  dataVencimento: string | null;
+  statusParcela: StatusParcela;
+}
+
+/** Normaliza o status da parcela (texto livre no banco) para o domínio conhecido. */
+function normalizarStatusParcela(status: string): StatusParcela {
+  return status in STATUS_PARCELA ? (status as StatusParcela) : "pendente";
+}
+
+/**
+ * Lista os lançamentos que a aprovação desta folha gerou: um por colaborador
+ * (o líquido) e um por grupo de recolhimento (a guia). Em rascunho e
+ * pendente_aprovacao não existe nenhum (a aprovação é quem cria), e a função
+ * devolve `[]` sem erro.
+ *
+ * `idsLancamentoSalario` vem de `folha.itens[].lancamentoId` — `buscarFolha`
+ * já leu `folha_itens` nesta mesma requisição (Task 7, fix round 1: reler
+ * essa tabela aqui repetiria o erro que o Bloco 6 corrigiu nesta tela). Só
+ * `folha_guias` precisa de uma leitura própria (enxuta, só `lancamento_id`):
+ * não há como saber esses ids sem consultar essa tabela, ela não é carregada
+ * em outro lugar da página. As duas fontes de id alimentam a ÚNICA leitura
+ * que importa: um select em `lancamentos` (join com `lancamento_parcelas`)
+ * filtrado por `.in("id", ...)`, cobrindo as duas origens da folha de uma vez
+ * — não uma consulta por origem.
+ */
+export async function listarLancamentosDaFolha(
+  folhaId: string,
+  idsLancamentoSalario: string[],
+): Promise<LancamentoDaFolha[]> {
+  const supabase = await createClient();
+
+  const { data: guias, error: erroGuias } = await supabase
+    .from("folha_guias")
+    .select("lancamento_id")
+    .eq("folha_id", folhaId)
+    .not("lancamento_id", "is", null);
+
+  if (erroGuias) {
+    throw new Error("Não foi possível carregar os lançamentos da folha");
+  }
+
+  const idsLancamento = [
+    ...idsLancamentoSalario,
+    ...(guias ?? []).map((guia) => guia.lancamento_id),
+  ].filter((id): id is string => id !== null);
+
+  if (idsLancamento.length === 0) return [];
+
+  // Leitura única: lançamentos + parcela, cobrindo salário e guia de uma vez
+  // via o id do próprio lançamento (não .eq("origem", ...) duas vezes).
+  const { data, error } = await supabase
+    .from("lancamentos")
+    .select(
+      "id, origem, descricao, numero, valor, data_vencimento, lancamento_parcelas(status)",
+    )
+    .in("id", idsLancamento);
+
+  if (error) {
+    throw new Error("Não foi possível carregar os lançamentos da folha");
+  }
+
+  return (data ?? []).map((lancamento) => ({
+    id: lancamento.id,
+    tipo: lancamento.origem === "folha_guia" ? "guia" : "salario",
+    descricao: lancamento.descricao,
+    numero: lancamento.numero,
+    valor: lancamento.valor,
+    dataVencimento: lancamento.data_vencimento,
+    statusParcela: normalizarStatusParcela(
+      lancamento.lancamento_parcelas?.[0]?.status ?? "pendente",
+    ),
+  }));
+}
+
+/**
+ * Trilha de auditoria da folha: lê o audit_log só do cabeçalho (tabela
+ * `folhas`) para aquele id e resolve os nomes dos usuários via RPC (security
+ * definer), no mesmo padrão de `trilhaOrdem`. Sem enriquecimento de
+ * pagamento: a Task 2 não mexe em dinheiro, isso entra nas Tasks 4/5/7.
+ */
+export async function trilhaFolha(id: string): Promise<EventoTrilha[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select(
+      "id, tabela, registro_id, acao, usuario_id, dados_antes, dados_depois, criado_em",
+    )
+    .eq("tabela", "folhas")
+    .eq("registro_id", id)
+    .order("criado_em", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error || !data) return [];
+
+  const idsUsuarios = [
+    ...new Set(
+      data
+        .map((linha) => linha.usuario_id)
+        .filter((usuarioId): usuarioId is string => usuarioId !== null),
+    ),
+  ];
+
+  const nomesPorId = new Map<string, string>();
+  if (idsUsuarios.length > 0) {
+    const { data: usuarios } = await supabase.rpc(
+      "nomes_usuarios_auditoria",
+      { p_ids: idsUsuarios },
+    );
+    for (const usuario of usuarios ?? []) {
+      nomesPorId.set(usuario.id, usuario.nome);
+    }
+  }
+
+  const registros: RegistroAuditLog[] = data.map((linha) => ({
+    id: linha.id,
+    tabela: linha.tabela,
+    registro_id: linha.registro_id,
+    acao: linha.acao,
+    usuario_id: linha.usuario_id,
+    usuario_nome:
+      linha.usuario_id === null
+        ? "Sistema"
+        : (nomesPorId.get(linha.usuario_id) ?? "Sistema"),
+    dados_antes: linha.dados_antes,
+    dados_depois: linha.dados_depois,
+    criado_em: linha.criado_em,
+  }));
+
+  const nomes = await resolverNomesAuditLog(supabase, registros);
+  return eventosDoAuditLog(registros, {
+    nomes,
+    entidade: "Folha",
+    genero: "f",
+  });
+}

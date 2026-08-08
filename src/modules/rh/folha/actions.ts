@@ -10,9 +10,10 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatarBRL,
-  formatarData,
+  formatarDataHora,
   formatarQuantidade,
 } from "@/lib/formatadores";
+import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
 import { buscarFolha } from "@/modules/rh/folha/queries";
 import {
   gerarFolhaSchema,
@@ -87,28 +88,60 @@ export async function gerarFolha(
 }
 
 /* ------------------------------------------------------------------ */
-/* Fechar / reabrir                                                   */
+/* Fluxo de aprovação: enviar, aprovar, rejeitar, desaprovar          */
 /* ------------------------------------------------------------------ */
 
-/** Fecha a folha via fn_fechar_folha (rascunho -> fechada). */
-export async function fecharFolha(id: string): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("editar"))) {
-    return { erro: "Sem permissão para fechar folhas" };
+/**
+ * Atualiza status (e motivo_rejeicao opcional) da folha via UPDATE direto,
+ * lendo o status atual antes de escrever. Sem essa leitura, um UPDATE com
+ * `.eq("status", statusEsperado)` que não bate nenhuma linha (a folha já
+ * mudou de status por outra aba/usuário) não é erro no PostgREST: a action
+ * devolveria sucesso falso, e a tela daria o toast de sucesso sobre uma
+ * transição que não aconteceu. Espelha transicionarStatus da OC
+ * (src/modules/compras/ordens/actions.ts).
+ */
+async function transicionarStatusFolha(
+  id: string,
+  acao: Acao,
+  statusEsperado: StatusFolha,
+  novoStatus: StatusFolha,
+  extra: { motivo_rejeicao?: string | null } = {},
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao(acao))) {
+    return { erro: "Sem permissão para esta ação na folha" };
   }
 
   const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Folha inválida" };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_fechar_folha", {
-    p_folha: idValido.data,
-  });
+  const { data: atual, error: erroBusca } = await supabase
+    .from("folhas")
+    .select("status")
+    .eq("id", idValido.data)
+    .single();
+
+  if (erroBusca || !atual) {
+    return erroAcao(
+      "rh.folha.transicionarStatus",
+      erroBusca,
+      "Folha não encontrada",
+    );
+  }
+  if (atual.status !== statusEsperado) {
+    return { erro: "A folha não está no status esperado para esta ação" };
+  }
+
+  const { error } = await supabase
+    .from("folhas")
+    .update({ status: novoStatus, ...extra })
+    .eq("id", idValido.data);
 
   if (error) {
     return erroAcao(
-      "rh.folha.fechar",
+      "rh.folha.transicionarStatus",
       error,
-      error.message || "Não foi possível fechar a folha",
+      "Não foi possível atualizar a folha. Tente novamente",
     );
   }
 
@@ -117,25 +150,93 @@ export async function fecharFolha(id: string): Promise<ResultadoAcao> {
   return { ok: true };
 }
 
-/** Reabre a folha via fn_reabrir_folha (fechada -> rascunho). */
-export async function reabrirFolha(id: string): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("editar"))) {
-    return { erro: "Sem permissão para reabrir folhas" };
+/**
+ * Envia a folha de rascunho para aprovação. UPDATE direto pela RLS, guardado
+ * pelo trigger fn_guarda_status_folha (que também recusa folha vazia). Limpa o
+ * motivo da rejeição anterior, igual a OC faz.
+ */
+export async function enviarFolhaParaAprovacao(
+  id: string,
+): Promise<ResultadoAcao> {
+  return transicionarStatusFolha(id, "editar", "rascunho", "pendente_aprovacao", {
+    motivo_rejeicao: null,
+  });
+}
+
+/**
+ * Aprova a folha via fn_aprovar_folha. É a aprovação que gera os lançamentos no
+ * Financeiro (salário por colaborador e as guias por grupo de recolhimento), e
+ * a mensagem de erro do banco vai direto pro toast.
+ */
+export async function aprovarFolha(id: string): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("aprovar"))) {
+    return { erro: "Sem permissão para aprovar a folha" };
   }
 
   const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Folha inválida" };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_reabrir_folha", {
+  const { error } = await supabase.rpc("fn_aprovar_folha", {
     p_folha: idValido.data,
   });
 
   if (error) {
     return erroAcao(
-      "rh.folha.reabrir",
+      "rh.folha.aprovar",
       error,
-      error.message || "Não foi possível reabrir a folha",
+      error.message || "Não foi possível aprovar a folha",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idValido.data));
+  return { ok: true };
+}
+
+/** Rejeita a folha pendente com motivo, devolvendo para rascunho. */
+export async function rejeitarFolha(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  const motivoLimpo = motivo.trim();
+  if (motivoLimpo === "") return { erro: "Informe o motivo da rejeição" };
+
+  return transicionarStatusFolha(id, "aprovar", "pendente_aprovacao", "rascunho", {
+    motivo_rejeicao: motivoLimpo,
+  });
+}
+
+/**
+ * Desaprova a folha via fn_desaprovar_folha: volta para rascunho e apaga os
+ * lançamentos gerados. A RPC recusa se algum pagamento já estiver aprovado,
+ * pago ou conciliado, e a mensagem dela vai direto pro toast.
+ */
+export async function desaprovarFolha(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("desaprovar"))) {
+    return { erro: "Sem permissão para desaprovar a folha" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Folha inválida" };
+
+  const motivoLimpo = motivo.trim();
+  if (motivoLimpo === "") return { erro: "Informe o motivo da desaprovação" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_desaprovar_folha", {
+    p_folha: idValido.data,
+    p_motivo: motivoLimpo,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.desaprovar",
+      error,
+      error.message || "Não foi possível desaprovar a folha",
     );
   }
 
@@ -193,16 +294,13 @@ export async function gerarPlanilhaFolha(
 
   worksheet.addRow(["Folha gerencial"]);
   worksheet.addRow(["Competência", competenciaMesAno(folha.competencia)]);
-  worksheet.addRow([
-    "Status",
-    folha.status === "fechada" ? "Fechada" : "Rascunho",
-  ]);
+  worksheet.addRow(["Status", STATUS_FOLHA[folha.status].rotulo]);
   worksheet.addRow([
     "Encargos (%)",
     `${formatarQuantidade(folha.encargosPercentual)}%`,
   ]);
-  if (folha.dataFechamento) {
-    worksheet.addRow(["Fechamento", formatarData(folha.dataFechamento)]);
+  if (folha.aprovadoEm) {
+    worksheet.addRow(["Aprovada em", formatarDataHora(folha.aprovadoEm)]);
   }
   worksheet.addRow([]);
 
