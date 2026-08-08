@@ -7,7 +7,7 @@
 -- caminhos do trigger -- enviar (editar) e rejeitar (aprovar) -- e quem so
 -- aprova tambem precisa conseguir rejeitar.
 --
--- NOTA (fix round 1, ver 20260808153000_folha_update_coluna_e_motivo.sql):
+-- NOTA (fix round 1, ver 20260808154914_folha_update_coluna_e_motivo.sql):
 -- o `grant update on public.folhas` abaixo, sem lista de colunas, abriu a
 -- tabela inteira para authenticated. trg_guarda_status_folha e BEFORE UPDATE
 -- OF status, entao so dispara quando status esta no SET: ficava cego para
