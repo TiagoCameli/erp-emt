@@ -73,6 +73,15 @@ export interface FolhaItem {
   adiantamentos: number;
   custoTotal: number;
   valorLiquido: number;
+  /**
+   * Id do lançamento a_pagar do salário deste colaborador (Task 4), ou null
+   * se ainda não existe (folha em rascunho/pendente_aprovacao, ou líquido
+   * ≤ 0, que não gera lançamento). `listarLancamentosDaFolha` (Task 7) reusa
+   * este campo em vez de reconsultar `folha_itens`: `buscarFolha` já leu essa
+   * tabela nesta mesma leitura, e reler o que já está em memória é o erro que
+   * o Bloco 6 corrigiu nesta tela.
+   */
+  lancamentoId: string | null;
 }
 
 /** Folha completa para o detalhe: cabeçalho + itens por colaborador. */
@@ -184,7 +193,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .select(
       `id, colaborador_id, centro_custo_id, salario_base, horas_normais,
        horas_extras, valor_extras, inss, irrf, encargos, adiantamentos,
-       custo_total, valor_liquido,
+       custo_total, valor_liquido, lancamento_id,
        colaboradores(nome, funcoes(nome)),
        centros_custo(nome, codigo),
        folha_item_encargos(nome, valor)`,
@@ -218,6 +227,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       adiantamentos: item.adiantamentos,
       custoTotal: item.custo_total,
       valorLiquido: item.valor_liquido,
+      lancamentoId: item.lancamento_id,
     }))
     .sort((a, b) =>
       a.colaboradorNome.localeCompare(b.colaboradorNome, "pt-BR"),
@@ -272,39 +282,35 @@ function normalizarStatusParcela(status: string): StatusParcela {
  * pendente_aprovacao não existe nenhum (a aprovação é quem cria), e a função
  * devolve `[]` sem erro.
  *
- * Duas leituras enxutas e paralelas (só o `lancamento_id` de `folha_itens` e
- * de `folha_guias` desta folha) alimentam a ÚNICA leitura que importa: um
- * select em `lancamentos` (join com `lancamento_parcelas`) filtrado por
- * `.in("id", ...)`, cobrindo as duas origens da folha de uma vez — não uma
- * consulta por origem. É o mesmo desenho de `buscarFolha` (cabeçalho + itens
- * sob um único ponto de entrada): "uma leitura" é uma chamada exportada, não
- * literalmente uma instrução SQL.
+ * `idsLancamentoSalario` vem de `folha.itens[].lancamentoId` — `buscarFolha`
+ * já leu `folha_itens` nesta mesma requisição (Task 7, fix round 1: reler
+ * essa tabela aqui repetiria o erro que o Bloco 6 corrigiu nesta tela). Só
+ * `folha_guias` precisa de uma leitura própria (enxuta, só `lancamento_id`):
+ * não há como saber esses ids sem consultar essa tabela, ela não é carregada
+ * em outro lugar da página. As duas fontes de id alimentam a ÚNICA leitura
+ * que importa: um select em `lancamentos` (join com `lancamento_parcelas`)
+ * filtrado por `.in("id", ...)`, cobrindo as duas origens da folha de uma vez
+ * — não uma consulta por origem.
  */
 export async function listarLancamentosDaFolha(
   folhaId: string,
+  idsLancamentoSalario: string[],
 ): Promise<LancamentoDaFolha[]> {
   const supabase = await createClient();
 
-  const [itens, guias] = await Promise.all([
-    supabase
-      .from("folha_itens")
-      .select("lancamento_id")
-      .eq("folha_id", folhaId)
-      .not("lancamento_id", "is", null),
-    supabase
-      .from("folha_guias")
-      .select("lancamento_id")
-      .eq("folha_id", folhaId)
-      .not("lancamento_id", "is", null),
-  ]);
+  const { data: guias, error: erroGuias } = await supabase
+    .from("folha_guias")
+    .select("lancamento_id")
+    .eq("folha_id", folhaId)
+    .not("lancamento_id", "is", null);
 
-  if (itens.error || guias.error) {
+  if (erroGuias) {
     throw new Error("Não foi possível carregar os lançamentos da folha");
   }
 
   const idsLancamento = [
-    ...(itens.data ?? []).map((item) => item.lancamento_id),
-    ...(guias.data ?? []).map((guia) => guia.lancamento_id),
+    ...idsLancamentoSalario,
+    ...(guias ?? []).map((guia) => guia.lancamento_id),
   ].filter((id): id is string => id !== null);
 
   if (idsLancamento.length === 0) return [];

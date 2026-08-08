@@ -32,15 +32,20 @@ export default async function PaginaFolhaDetalhe({
 
   const custosPorCentro = resumoPorCentroCusto(folha);
   const resumoEncargos = resumoPorEncargo(folha);
+  // Ids dos lançamentos de salário: já vêm em `folha.itens` (buscarFolha leu
+  // `folha_itens` mais acima nesta mesma requisição). listarLancamentosDaFolha
+  // só faz a leitura própria de `folha_guias` (que não é carregada em
+  // nenhum outro lugar da página) — fix round 1 da Task 7, mesma disciplina
+  // de não reler o que a página já tem na mão.
+  const idsLancamentoSalario = folha.itens
+    .map((item) => item.lancamentoId)
+    .filter((idLancamento): idLancamento is string => idLancamento !== null);
   // FGTS informativo do holerite: % vem dos parâmetros da folha (0 se ainda
   // não cadastrados). Só leitura, não afeta os valores já fechados na folha.
-  // Lançamentos gerados (Task 7): leitura própria (não há como derivar de
-  // `folha.itens` em memória, os lançamentos vivem em outra tabela), separada
-  // em salários/guias pela função pura de calculo.ts.
   const [parametros, trilha, lancamentosDaFolha] = await Promise.all([
     buscarParametros(),
     trilhaFolha(id),
-    listarLancamentosDaFolha(id),
+    listarLancamentosDaFolha(id, idsLancamentoSalario),
   ]);
   const lancamentos = agruparLancamentosDaFolha(lancamentosDaFolha);
 

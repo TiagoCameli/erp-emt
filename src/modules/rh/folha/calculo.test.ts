@@ -27,6 +27,7 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     irrf: 0,
     encargos: 0,
     encargosDetalhe: [],
+    lancamentoId: null,
     adiantamentos: 0,
     custoTotal: 0,
     valorLiquido: 0,
@@ -279,5 +280,29 @@ describe("agruparLancamentosDaFolha", () => {
     expect(agrupado.salarios).toEqual([]);
     expect(agrupado.totalSalarios).toBe(0);
     expect(agrupado.guias).toHaveLength(1);
+  });
+
+  it("só salários, sem nenhuma guia (nenhum grupo de recolhimento configurado)", () => {
+    const lancamentos = [
+      criarLancamento({
+        id: "1",
+        tipo: "salario",
+        descricao: "Salario Ana Souza 08/2026",
+        valor: 3000,
+      }),
+      criarLancamento({
+        id: "2",
+        tipo: "salario",
+        descricao: "Salario Bruno Lima 08/2026",
+        valor: 2500,
+      }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.salarios).toHaveLength(2);
+    expect(agrupado.totalSalarios).toBe(5500);
+    expect(agrupado.guias).toEqual([]);
+    expect(agrupado.totalGuias).toBe(0);
   });
 });
