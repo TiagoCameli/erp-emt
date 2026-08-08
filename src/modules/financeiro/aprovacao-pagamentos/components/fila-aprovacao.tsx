@@ -30,6 +30,7 @@ import {
   MoneyText,
   StatusBadge,
   type FiltroConfiguravel,
+  type OpcaoFiltro,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -52,6 +53,11 @@ import type {
   ResumoFora,
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 import { CONFERENCIA } from "@/modules/financeiro/aprovacao-pagamentos/rotulos";
+import {
+  ORIGENS_LANCAMENTO,
+  ROTULO_ORIGEM_LANCAMENTO,
+  rotuloOrigemLancamento,
+} from "@/modules/financeiro/lancamentos/schemas";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import {
   dentroDaFaixaValor,
@@ -71,11 +77,17 @@ const OPCOES_NOTA = [
   { valor: "com", rotulo: "Com nota fiscal" },
 ];
 
-/** Origem do lançamento: veio de uma ordem de compra ou foi lançado à mão. */
-const OPCOES_ORIGEM = [
-  { valor: "oc", rotulo: "Ordem de compra" },
-  { valor: "manual", rotulo: "Manual" },
-];
+/**
+ * Origem do lançamento, do mesmo catálogo do módulo de lançamentos. Antes eram
+ * duas opções ("Ordem de compra" e "Manual") e o filtro de "Manual" era
+ * `origem !== 'oc'`: desde o Bloco 8a a fila também recebe o líquido da folha,
+ * a guia de imposto e o adiantamento, e chamar isso de "Manual" na tela onde se
+ * autoriza dinheiro sair esconde de onde o valor veio.
+ */
+const OPCOES_ORIGEM: OpcaoFiltro[] = ORIGENS_LANCAMENTO.map((valor) => ({
+  valor,
+  rotulo: ROTULO_ORIGEM_LANCAMENTO[valor],
+}));
 
 export interface FilaAprovacaoProps {
   parcelas: ParcelaPendente[];
@@ -257,8 +269,10 @@ export function FilaAprovacao({
       ) {
         return false;
       }
-      if (filtroOrigem === "oc" && parcela.origem !== "oc") return false;
-      if (filtroOrigem === "manual" && parcela.origem === "oc") return false;
+      // Igualdade exata: "Manual" agora quer dizer manual, não "tudo que não é
+      // ordem de compra". Filtrar por folha, guia ou adiantamento é o motivo de
+      // o seletor existir nesta tela.
+      if (filtroOrigem !== "" && parcela.origem !== filtroOrigem) return false;
       if (filtroNota === "sem" && !parcela.semNota) return false;
       if (filtroNota === "com" && parcela.semNota) return false;
       if (!mesmoMesReferencia(parcela.mesCompetencia, filtroMes)) return false;
@@ -525,7 +539,12 @@ export function FilaAprovacao({
               <ExternalLink className="size-3.5" aria-hidden="true" />
             </Link>
           ) : (
-            <span className="text-muted-foreground">Manual</span>
+            // Sem link: só a OC tem tela própria linkável daqui. O rótulo vem do
+            // catálogo, então folha, guia e adiantamento aparecem com o nome
+            // deles em vez de "Manual".
+            <span className="text-muted-foreground">
+              {rotuloOrigemLancamento(row.original.origem)}
+            </span>
           ),
       },
       {
