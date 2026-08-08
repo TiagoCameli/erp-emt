@@ -1197,6 +1197,48 @@ export type Database = {
         }
         Relationships: []
       }
+      folha_guias: {
+        Row: {
+          created_at: string
+          folha_id: string
+          grupo: string
+          id: string
+          lancamento_id: string | null
+          valor: number
+        }
+        Insert: {
+          created_at?: string
+          folha_id: string
+          grupo: string
+          id?: string
+          lancamento_id?: string | null
+          valor: number
+        }
+        Update: {
+          created_at?: string
+          folha_id?: string
+          grupo?: string
+          id?: string
+          lancamento_id?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folha_guias_folha_id_fkey"
+            columns: ["folha_id"]
+            isOneToOne: false
+            referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_guias_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folha_inss_faixas: {
         Row: {
           aliquota: number
@@ -1303,6 +1345,7 @@ export type Database = {
           id: string
           inss: number
           irrf: number
+          lancamento_id: string | null
           salario_base: number
           valor_extras: number
           valor_liquido: number
@@ -1320,6 +1363,7 @@ export type Database = {
           id?: string
           inss?: number
           irrf?: number
+          lancamento_id?: string | null
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1337,6 +1381,7 @@ export type Database = {
           id?: string
           inss?: number
           irrf?: number
+          lancamento_id?: string | null
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1361,6 +1406,13 @@ export type Database = {
             columns: ["folha_id"]
             isOneToOne: false
             referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folha_itens_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -3510,6 +3562,10 @@ export type Database = {
       fn_salvar_preferencia_tabela: {
         Args: { p_preferencia: Json; p_tabela: string }
         Returns: undefined
+      }
+      fn_vencimento_folha: {
+        Args: { p_competencia: string; p_dia: number }
+        Returns: string
       }
       fn_vincular_arquivo: {
         Args: {

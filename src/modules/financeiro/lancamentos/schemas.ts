@@ -305,10 +305,23 @@ export { TOLERANCIA as TOLERANCIA_SOMA };
 
 /**
  * Origens possíveis de um lançamento. Espelha o check do banco
- * (lancamentos_origem_check): só 'oc', 'manual' e 'diaria' existem. Cotação não
- * gera lançamento direto, ela vira ordem de compra primeiro.
+ * (lancamentos_origem_check). Cotação não gera lançamento direto, ela vira
+ * ordem de compra primeiro.
+ *
+ * As três últimas são do RH e só nascem por função definer: 'folha' é o líquido
+ * de um colaborador, 'folha_guia' é a guia de um grupo de recolhimento (INSS,
+ * FGTS, IRRF) e 'adiantamento' é o adiantamento pago no mês. Nenhuma delas se
+ * exclui pelo Financeiro (a fn_excluir_lancamento recusa), então aparecem aqui
+ * só como filtro e rótulo de leitura.
  */
-export const ORIGENS_LANCAMENTO = ["oc", "manual", "diaria"] as const;
+export const ORIGENS_LANCAMENTO = [
+  "oc",
+  "manual",
+  "diaria",
+  "folha",
+  "folha_guia",
+  "adiantamento",
+] as const;
 
 export type OrigemLancamento = (typeof ORIGENS_LANCAMENTO)[number];
 
@@ -316,6 +329,9 @@ export const ROTULO_ORIGEM_LANCAMENTO: Record<OrigemLancamento, string> = {
   oc: "Ordem de compra",
   manual: "Manual",
   diaria: "Diária",
+  folha: "Folha de pagamento",
+  folha_guia: "Guia da folha",
+  adiantamento: "Adiantamento",
 };
 
 /**
