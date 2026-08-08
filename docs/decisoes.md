@@ -865,6 +865,24 @@ de custo" como espinha dorsal, e o painel de Gestão sub-reporta esse valor.
    segundo de `lancamentoEdicaoSchema`; esse nome não existe no arquivo, os
    exports são `lancamentoSchema` e `lancamentoFormSchema`.)
 
+   **Correção de registro (onda de correção do review amplo, 2026-08-08):** o
+   parágrafo acima descrevia o bloqueio de três níveis como se ele cobrisse toda
+   escrita em lançamento de origem do RH, e **não cobria**. `fn_salvar_lancamento`
+   e `fn_excluir_lancamento` estavam fechadas; **`fn_definir_parcelas_lancamento`
+   e `fn_alterar_mes_competencia` estavam abertas**, e o revisor executou os dois
+   ataques como usuário do Financeiro: moveu o vencimento da guia de INSS de
+   2026-12-20 para 2027-06-30 dividida em duas parcelas, e moveu um lançamento de
+   salário para a competência 2027-03 com `folhas.competencia` parada em 2026-11.
+   Nos dois casos a identidade de conferência continuou reportando
+   `explicado 0.00` (o total é preservado, e ela agrupa por `folha_id`, não por
+   mês) e a tela da folha não mostrava nada. A migration `20260808221920` fechou
+   as duas com a mesma guarda da `fn_excluir_lancamento`. **Agora o bloqueio é
+   verdade; antes deste parágrafo ser escrito, não era.** A lição que fica: "está
+   bloqueado nos três níveis" tem que ser afirmado por função de escrita, não por
+   tela — o inventário certo é *todas* as funções que escrevem na tabela, e
+   `origem` `diaria` segue fora da guarda nessas duas (gap registrado, decisão do
+   dono do sistema).
+
 ## 2026-08-08 - Fechamento do Bloco 8a: portão de competência de mão única, tela de RH que lê tabela do Financeiro, e adiantamento congelado
 
 Três achados do Bloco 8a (aprovação da folha e a ponte com o Financeiro) que não são
@@ -944,6 +962,16 @@ nos **dois** lados (`using` e `with check`), espelhando `rh_diarias`, que congel
 junho. Corrigir digitação passa a ser **excluir e recriar**, que é atômico
 (`fn_excluir_adiantamento` apaga o lançamento junto).
 
+**O que NÃO é verdade sobre isso, e o registro anterior dizia (corrigido na onda
+de correção do review amplo):** que `editarAdiantamento` virou "código morto por
+desenho". O congelamento é real, mas o gate da UI é `lancamentoId === null`, e uma
+linha criada **antes** desta branch tem `lancamento_id` nulo: ela mostraria
+"Editar" normalmente e só falharia na policy. O que torna o caminho inalcançável
+hoje é produção ter **zero** `rh_adiantamentos` — um fato de dado, não de desenho.
+Manter o código continua certo (ele falha fechado, com mensagem limpa, e remover
+mexeria em 3+ arquivos fora do escopo), mas a justificativa é "inalcançável porque
+a tabela está vazia", não "impossível por construção".
+
 O que isso fechou, provado por execução na revisão da Task 6: um usuário só de RH
 (`rh.adiantamentos` editar/excluir, zero permissão em `financeiro.lancamentos`)
 repontava `rh_adiantamentos.lancamento_id` para a nota de um fornecedor de R$ 5.000 e
@@ -989,3 +1017,91 @@ as **18** migrations `20260808*` do bloco e mediu que **1** é byte-idêntica ao
 8. **Regex do Postgres não tem `\b`.** A fronteira de palavra é `\y`; `\b` é backspace, e
    uma varredura de `prosrc` com `\b` devolve zero linha em silêncio. Foi o que quase fez
    a Task 8 registrar "nenhuma função apaga lançamento" no item 1 desta entrada.
+
+## 2026-08-08 - Onda de correção do review do Bloco 8a: a terceira pré-condição da identidade, e guarda de origem em toda função que escreve
+
+Quatro achados Important do review amplo, nenhum Critical. Dois deles são de projeto,
+não de folha, e valem para qualquer módulo que ganhe uma origem nova de lançamento.
+
+### 1. Config vazia que não bloqueia precisa aparecer nas três leituras: função, tela e diagnóstico
+
+`folha_parametros` está vazia em produção (zero linha). Nesse estado a folha aprova sem
+erro e o INSS e o IRRF **retidos do trabalhador não viram conta a pagar**, porque
+`grupo_recolhimento_inss` / `_irrf` chegam nulos na `fn_aprovar_folha` e as duas linhas da
+fonte da guia que dependem deles têm `v_grupo_* is not null` no `where`. O desconto continua
+no holerite e no líquido; a guia que a empresa recolhe não existe no Financeiro.
+
+O dano real não era a guia faltando (isso é config): era a **auto-conferência acusando bug
+onde falta configuração**. A consulta gravada no `obj_description` da `fn_aprovar_folha`
+tinha duas causas de resíduo, e o texto ao lado dizia "se `explicado` NÃO der 0.00, aí sim é
+bug". Medido em transação com rollback, cenário de 5 colaboradores e `folha_parametros`
+vazia:
+
+| consulta | residuo | explicado |
+|---|---|---|
+| gravada antes (2 causas) | −4860,72 | **−3649,31** (falso sinal de bug) |
+| gravada agora (3 causas) | −4860,72 | **0,00**, com `retidos_sem_grupo` 3649,31 |
+
+E 3649,31 é exatamente `sum(inss) + sum(irrf)` dos itens. Conferido também com os dois
+grupos configurados (resíduo −1211,41, retidos 0) e no caso **parcial**, só o INSS
+configurado (resíduo −2798,62, retidos 1587,21): `explicado` 0,00 nos três.
+
+**Decisões**
+
+1. **Uma pré-condição que muda dinheiro tem que estar declarada nos três lugares onde
+   alguém olha:** no `obj_description` da função (para quem confere o número), na coluna da
+   consulta de diagnóstico (para a ferramenta não mentir) e na tela (para quem opera).
+   Faltava nos três. A identidade da folha agora tem **três** condições, não duas, e a
+   terceira é "`folha_parametros` existe e tem os dois grupos de recolhimento preenchidos".
+2. **Config vazia continua não recusando a aprovação.** "Config vazia é deploy seguro" é
+   premissa do bloco, e o dono do sistema pode legitimamente querer a folha só como custo
+   gerencial por um tempo. O aviso é na tela do detalhe da folha (`folha-detalhe.tsx`,
+   mesmo padrão visual do aviso de faixas de INSS/IRRF ausentes), mostrado **já no
+   rascunho** para chegar antes de alguém aprovar, com o valor em reais e a rota
+   `/rh/parametros-folha`. Regra pura em `calculo.ts` (`retidoSemGrupoDeRecolhimento`), com
+   Vitest, porque é regra de dinheiro e não pode viver só no JSX.
+3. **A terceira causa é medida contra a config ATUAL, e isso está escrito no comentário.**
+   Não existe snapshot do grupo do retido (existe o do encargo patronal, em
+   `folha_item_encargos.grupo_recolhimento`). Quem configurar os grupos **depois** de
+   aprovar tem que desaprovar e reaprovar antes de concluir que a diferença é bug. Derivar
+   a terceira causa do próprio resíduo faria a identidade fechar sempre, por construção, e
+   destruiria a capacidade dela de detectar bug de verdade: por isso ela lê a config, que é
+   a única medida independente disponível.
+
+### 2. "Bloqueado nos três níveis" se conta por função de escrita, não por tela
+
+O bloco fechou `fn_salvar_lancamento` e `fn_excluir_lancamento` para as origens novas
+(`folha`, `folha_guia`, `adiantamento`) e **deixou duas funções de escrita abertas**. O
+revisor executou os dois ataques, como usuário do Financeiro sem nenhuma permissão de RH:
+
+| função | ataque | por que a identidade não pegou |
+|---|---|---|
+| `fn_definir_parcelas_lancamento` | guia de INSS de 2026-12-20 para 2027-06-30, em 2 parcelas | o **total** é preservado, e é o total que a identidade soma |
+| `fn_alterar_mes_competencia` | salário para competência 2027-03 com `folhas.competencia` em 2026-11 | ela agrupa por **`folha_id`**, não por mês |
+
+Nos dois casos `explicado` continuou 0,00 e a tela da folha não mostrou nada. Guia de
+imposto tem prazo legal, e competência errada é erro contábil silencioso.
+
+**Decisões**
+
+4. **A guarda de origem é por função que escreve, e o inventário é `pg_proc`, não a UI.**
+   O erro de raciocínio foi contar "níveis" (drawer, Server Action, RPC) em vez de contar
+   **funções de escrita** na tabela. Antes de declarar uma origem fechada, listar todas as
+   funções que fazem `insert`/`update`/`delete` em `lancamentos` e `lancamento_parcelas` e
+   conferir uma por uma. Migration `20260808221920` fechou as duas, espelhando exatamente o
+   critério e a forma de mensagem que a `fn_excluir_lancamento` já usava
+   (`in ('folha', 'folha_guia')` numa mensagem, `= 'adiantamento'` em outra, cada uma
+   dizendo onde a pessoa resolve). Recriação cirúrgica com md5 fixado e replace reverso,
+   mesmo método da `20260808165352`.
+5. **`origem = 'diaria'` segue FORA da guarda nessas duas funções, e isso é gap registrado,
+   não decisão tomada.** A `fn_excluir_lancamento` barra `diaria` desde a `20260730192937`;
+   `fn_definir_parcelas_lancamento` e `fn_alterar_mes_competencia` aceitam. É o mesmo defeito
+   de classe, **pré-existente** (não foi este bloco que o criou), e fechar é uma linha em
+   cada função. Decisão do dono do sistema, porque muda o que o Financeiro pode fazer com
+   uma diária já fechada.
+6. **Tela que autoriza dinheiro sair não pode chamar tudo de "Manual".** A fila de aprovação
+   de pagamentos rotulava líquido de folha, guia de imposto e adiantamento como "Manual",
+   e o filtro de origem tinha duas opções com "Manual" significando `origem !== 'oc'`. Agora
+   as três telas do módulo usam `rotuloOrigemLancamento` e o catálogo `ORIGENS_LANCAMENTO`,
+   e o filtro casa por igualdade exata. Rótulo de origem é informação de auditoria na tela
+   onde se libera pagamento: derivar de catálogo único, nunca escrever literal.
