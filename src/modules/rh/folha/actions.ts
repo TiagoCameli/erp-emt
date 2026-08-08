@@ -10,9 +10,10 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatarBRL,
-  formatarData,
+  formatarDataHora,
   formatarQuantidade,
 } from "@/lib/formatadores";
+import { STATUS_FOLHA } from "@/modules/rh/_shared/formato";
 import { buscarFolha } from "@/modules/rh/folha/queries";
 import {
   gerarFolhaSchema,
@@ -87,28 +88,36 @@ export async function gerarFolha(
 }
 
 /* ------------------------------------------------------------------ */
-/* Fechar / reabrir                                                   */
+/* Fluxo de aprovação: enviar, aprovar, rejeitar, desaprovar          */
 /* ------------------------------------------------------------------ */
 
-/** Fecha a folha via fn_fechar_folha (rascunho -> fechada). */
-export async function fecharFolha(id: string): Promise<ResultadoAcao> {
+/**
+ * Envia a folha de rascunho para aprovação. UPDATE direto pela RLS, guardado
+ * pelo trigger fn_guarda_status_folha (que também recusa folha vazia). Limpa o
+ * motivo da rejeição anterior, igual a OC faz.
+ */
+export async function enviarFolhaParaAprovacao(
+  id: string,
+): Promise<ResultadoAcao> {
   if (!(await checarPermissao("editar"))) {
-    return { erro: "Sem permissão para fechar folhas" };
+    return { erro: "Sem permissão para enviar a folha para aprovação" };
   }
 
   const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Folha inválida" };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_fechar_folha", {
-    p_folha: idValido.data,
-  });
+  const { error } = await supabase
+    .from("folhas")
+    .update({ status: "pendente_aprovacao", motivo_rejeicao: null })
+    .eq("id", idValido.data)
+    .eq("status", "rascunho");
 
   if (error) {
     return erroAcao(
-      "rh.folha.fechar",
+      "rh.folha.enviarParaAprovacao",
       error,
-      error.message || "Não foi possível fechar a folha",
+      error.message || "Não foi possível enviar a folha para aprovação",
     );
   }
 
@@ -117,25 +126,102 @@ export async function fecharFolha(id: string): Promise<ResultadoAcao> {
   return { ok: true };
 }
 
-/** Reabre a folha via fn_reabrir_folha (fechada -> rascunho). */
-export async function reabrirFolha(id: string): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("editar"))) {
-    return { erro: "Sem permissão para reabrir folhas" };
+/**
+ * Aprova a folha via fn_aprovar_folha. É a aprovação que gera os lançamentos no
+ * Financeiro (salário por colaborador e as guias por grupo de recolhimento), e
+ * a mensagem de erro do banco vai direto pro toast.
+ */
+export async function aprovarFolha(id: string): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("aprovar"))) {
+    return { erro: "Sem permissão para aprovar a folha" };
   }
 
   const idValido = idSchema.safeParse(id);
   if (!idValido.success) return { erro: "Folha inválida" };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_reabrir_folha", {
+  const { error } = await supabase.rpc("fn_aprovar_folha", {
     p_folha: idValido.data,
   });
 
   if (error) {
     return erroAcao(
-      "rh.folha.reabrir",
+      "rh.folha.aprovar",
       error,
-      error.message || "Não foi possível reabrir a folha",
+      error.message || "Não foi possível aprovar a folha",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idValido.data));
+  return { ok: true };
+}
+
+/** Rejeita a folha pendente com motivo, devolvendo para rascunho. */
+export async function rejeitarFolha(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("aprovar"))) {
+    return { erro: "Sem permissão para rejeitar a folha" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Folha inválida" };
+
+  const motivoLimpo = motivo.trim();
+  if (motivoLimpo === "") return { erro: "Informe o motivo da rejeição" };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("folhas")
+    .update({ status: "rascunho", motivo_rejeicao: motivoLimpo })
+    .eq("id", idValido.data)
+    .eq("status", "pendente_aprovacao");
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.rejeitar",
+      error,
+      error.message || "Não foi possível rejeitar a folha",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idValido.data));
+  return { ok: true };
+}
+
+/**
+ * Desaprova a folha via fn_desaprovar_folha: volta para rascunho e apaga os
+ * lançamentos gerados. A RPC recusa se algum pagamento já estiver aprovado,
+ * pago ou conciliado, e a mensagem dela vai direto pro toast.
+ */
+export async function desaprovarFolha(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("desaprovar"))) {
+    return { erro: "Sem permissão para desaprovar a folha" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Folha inválida" };
+
+  const motivoLimpo = motivo.trim();
+  if (motivoLimpo === "") return { erro: "Informe o motivo da desaprovação" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_desaprovar_folha", {
+    p_folha: idValido.data,
+    p_motivo: motivoLimpo,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.desaprovar",
+      error,
+      error.message || "Não foi possível desaprovar a folha",
     );
   }
 
@@ -193,16 +279,13 @@ export async function gerarPlanilhaFolha(
 
   worksheet.addRow(["Folha gerencial"]);
   worksheet.addRow(["Competência", competenciaMesAno(folha.competencia)]);
-  worksheet.addRow([
-    "Status",
-    folha.status === "fechada" ? "Fechada" : "Rascunho",
-  ]);
+  worksheet.addRow(["Status", STATUS_FOLHA[folha.status].rotulo]);
   worksheet.addRow([
     "Encargos (%)",
     `${formatarQuantidade(folha.encargosPercentual)}%`,
   ]);
-  if (folha.dataFechamento) {
-    worksheet.addRow(["Fechamento", formatarData(folha.dataFechamento)]);
+  if (folha.aprovadoEm) {
+    worksheet.addRow(["Aprovada em", formatarDataHora(folha.aprovadoEm)]);
   }
   worksheet.addRow([]);
 

@@ -2,27 +2,28 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowLeft,
-  ChevronDown,
-  FileText,
-  Lock,
-  RotateCcw,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowLeft, ChevronDown, FileText, RefreshCw } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  ApprovalBar,
   CelulaVazia,
   ConfirmDialog,
   KPICard,
   MoneyText,
   StatusBadge,
+  Trilha,
+  type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { formatarData, formatarQuantidade } from "@/lib/formatadores";
+import { formatarDataHora, formatarQuantidade } from "@/lib/formatadores";
 import { STATUS_FOLHA } from "@/modules/rh/_shared/formato";
-import { fecharFolha, reabrirFolha } from "@/modules/rh/folha/actions";
+import {
+  aprovarFolha,
+  desaprovarFolha,
+  enviarFolhaParaAprovacao,
+  rejeitarFolha,
+} from "@/modules/rh/folha/actions";
 import type {
   CustoCentroCusto,
   FolhaDetalhe,
@@ -74,8 +75,11 @@ export interface FolhaDetalheViewProps {
   resumoEncargos: ResumoEncargo[];
   /** % do FGTS (parâmetros da folha) para o informativo do holerite. */
   fgtsPercentual: number;
+  trilha: EventoTrilha[];
   podeCriar: boolean;
   podeEditar: boolean;
+  podeAprovar: boolean;
+  podeDesaprovar: boolean;
 }
 
 /**
@@ -90,41 +94,63 @@ export function FolhaDetalheView({
   custosPorCentro,
   resumoEncargos,
   fgtsPercentual,
+  trilha,
   podeCriar,
   podeEditar,
+  podeAprovar,
+  podeDesaprovar,
 }: FolhaDetalheViewProps) {
   const router = useRouter();
   const info = STATUS_FOLHA[folha.status];
 
   const rascunho = folha.status === "rascunho";
-  const fechada = folha.status === "fechada";
   // Sem faixas de INSS/IRRF cadastradas, todos os itens saem com desconto 0 e
   // o líquido vira igual ao bruto; avisamos para não passar a impressão errada.
   const semDescontosLegais =
     folha.itens.length > 0 &&
     folha.itens.every((item) => item.inss === 0 && item.irrf === 0);
 
-  const [dialogFechar, setDialogFechar] = React.useState(false);
+  const [dialogEnviar, setDialogEnviar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
   const [holeriteItem, setHoleriteItem] = React.useState<FolhaItem | null>(null);
 
-  async function aoFechar() {
-    const resultado = await fecharFolha(folha.id);
+  async function aoEnviarParaAprovacao() {
+    const resultado = await enviarFolhaParaAprovacao(folha.id);
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Folha fechada");
+    toast.success("Folha enviada para aprovação");
     router.refresh();
   }
 
-  async function aoReabrir() {
-    const resultado = await reabrirFolha(folha.id);
+  async function aoAprovar() {
+    const resultado = await aprovarFolha(folha.id);
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Folha reaberta");
+    toast.success("Folha aprovada. Lançamentos gerados no Financeiro");
+    router.refresh();
+  }
+
+  async function aoRejeitar(motivo: string) {
+    const resultado = await rejeitarFolha(folha.id, motivo);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Folha rejeitada e devolvida para rascunho");
+    router.refresh();
+  }
+
+  async function aoDesaprovar(motivo: string) {
+    const resultado = await desaprovarFolha(folha.id, motivo);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Aprovação desfeita. Lançamentos apagados");
     router.refresh();
   }
 
@@ -151,8 +177,12 @@ export function FolhaDetalheView({
             <p className="text-detalhe text-muted-foreground">
               Folha gerencial · {folha.itens.length}{" "}
               {folha.itens.length === 1 ? "colaborador" : "colaboradores"}
-              {folha.dataFechamento
-                ? ` · fechada em ${formatarData(folha.dataFechamento)}`
+              {folha.status === "aprovado" && folha.aprovadoEm
+                ? ` · aprovada em ${formatarDataHora(folha.aprovadoEm)}${
+                    folha.aprovadoPorNome
+                      ? ` por ${folha.aprovadoPorNome}`
+                      : ""
+                  }`
                 : ""}
             </p>
           </div>
@@ -169,30 +199,29 @@ export function FolhaDetalheView({
               Regerar
             </Button>
           ) : null}
-          {podeEditar && rascunho ? (
+          {podeEditar && rascunho && folha.itens.length > 0 ? (
             <Button
               type="button"
               size="sm"
-              onClick={() => setDialogFechar(true)}
+              onClick={() => setDialogEnviar(true)}
             >
-              <Lock />
-              Fechar
-            </Button>
-          ) : null}
-          {podeEditar && fechada ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={aoReabrir}
-            >
-              <RotateCcw />
-              Reabrir
+              Enviar para aprovação
             </Button>
           ) : null}
           <BotaoPlanilha folhaId={folha.id} />
         </div>
       </div>
+
+      {folha.status === "pendente_aprovacao" || folha.status === "aprovado" ? (
+        <ApprovalBar
+          status={folha.status}
+          podeAprovar={podeAprovar}
+          podeDesaprovar={podeDesaprovar}
+          onAprovar={aoAprovar}
+          onRejeitar={aoRejeitar}
+          onDesaprovar={aoDesaprovar}
+        />
+      ) : null}
 
       {semDescontosLegais ? (
         <div className="rounded-md border border-status-pendente/30 bg-status-pendente/5 px-4 py-3">
@@ -230,6 +259,17 @@ export function FolhaDetalheView({
           }
         />
       </div>
+
+      {folha.motivoRejeicao && rascunho ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <p className="text-legenda font-medium text-destructive">
+            Motivo do registro
+          </p>
+          <p className="text-detalhe text-foreground">
+            {folha.motivoRejeicao}
+          </p>
+        </div>
+      ) : null}
 
       <Secao titulo="Itens por colaborador">
         {folha.itens.length === 0 ? (
@@ -456,6 +496,10 @@ export function FolhaDetalheView({
         </Secao>
       ) : null}
 
+      <Secao titulo="Trilha">
+        <Trilha eventos={trilha} />
+      </Secao>
+
       {podeCriar && rascunho ? (
         <GerarFolhaFormDrawer
           aberto={drawerRegerar}
@@ -465,14 +509,14 @@ export function FolhaDetalheView({
         />
       ) : null}
 
-      {podeEditar && rascunho ? (
+      {podeEditar && rascunho && folha.itens.length > 0 ? (
         <ConfirmDialog
-          aberto={dialogFechar}
-          onAbertoChange={setDialogFechar}
-          titulo="Fechar folha"
-          descricao="A folha fica travada para consulta e exportação. Você pode reabrir depois para regerar."
-          textoConfirmar="Fechar folha"
-          onConfirmar={aoFechar}
+          aberto={dialogEnviar}
+          onAbertoChange={setDialogEnviar}
+          titulo="Enviar para aprovação"
+          descricao="A folha vai para o Admin aprovar. Enquanto estiver pendente, ela não pode ser regerada."
+          textoConfirmar="Enviar para aprovação"
+          onConfirmar={aoEnviarParaAprovacao}
         />
       ) : null}
 

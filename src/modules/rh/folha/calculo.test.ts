@@ -30,14 +30,16 @@ function criarFolha(itens: FolhaItem[]): FolhaDetalhe {
   return {
     id: "folha-1",
     competencia: "2026-06",
-    status: "fechada",
+    status: "aprovado",
     encargosPercentual: 20,
     valorBruto: 0,
     valorEncargos: 0,
     valorAdiantamentos: 0,
     valorLiquido: 0,
     custoTotal: 0,
-    dataFechamento: null,
+    aprovadoEm: null,
+    aprovadoPorNome: null,
+    motivoRejeicao: null,
     itens,
   };
 }

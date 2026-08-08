@@ -1,6 +1,12 @@
 import "server-only";
 
+import {
+  eventosDoAuditLog,
+  type EventoTrilha,
+  type RegistroAuditLog,
+} from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
+import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import { type StatusFolha, STATUS_FOLHA } from "@/modules/rh/_shared/formato";
 
 /** Linha da listagem de folhas, com a contagem de itens. */
@@ -14,8 +20,12 @@ export interface FolhaLista {
   valorAdiantamentos: number;
   valorLiquido: number;
   custoTotal: number;
-  /** Data de fechamento (yyyy-MM-dd) ou null se ainda em rascunho. */
-  dataFechamento: string | null;
+  /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
+  aprovadoEm: string | null;
+  /** Nome de quem aprovou, via join com usuarios. Null se não aprovada. */
+  aprovadoPorNome: string | null;
+  /** Motivo da última rejeição, mostrado enquanto a folha volta pra rascunho. */
+  motivoRejeicao: string | null;
   /** Quantidade de colaboradores na folha. */
   totalItens: number;
 }
@@ -67,7 +77,12 @@ export interface FolhaDetalhe {
   valorAdiantamentos: number;
   valorLiquido: number;
   custoTotal: number;
-  dataFechamento: string | null;
+  /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
+  aprovadoEm: string | null;
+  /** Nome de quem aprovou, via join com usuarios. Null se não aprovada. */
+  aprovadoPorNome: string | null;
+  /** Motivo da última rejeição, mostrado enquanto a folha volta pra rascunho. */
+  motivoRejeicao: string | null;
   itens: FolhaItem[];
 }
 
@@ -103,7 +118,8 @@ export async function listarFolhas(): Promise<FolhaLista[]> {
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
        valor_encargos, valor_adiantamentos, valor_liquido, custo_total,
-       data_fechamento, folha_itens(count)`,
+       aprovado_em, motivo_rejeicao, usuarios!folhas_aprovado_por_fkey(nome),
+       folha_itens(count)`,
     )
     .order("competencia", { ascending: false });
 
@@ -119,7 +135,9 @@ export async function listarFolhas(): Promise<FolhaLista[]> {
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
-    dataFechamento: folha.data_fechamento,
+    aprovadoEm: folha.aprovado_em,
+    aprovadoPorNome: folha.usuarios?.nome ?? null,
+    motivoRejeicao: folha.motivo_rejeicao,
     totalItens: folha.folha_itens?.[0]?.count ?? 0,
   }));
 }
@@ -137,7 +155,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
        valor_encargos, valor_adiantamentos, valor_liquido, custo_total,
-       data_fechamento`,
+       aprovado_em, motivo_rejeicao, usuarios!folhas_aprovado_por_fkey(nome)`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -198,7 +216,9 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
-    dataFechamento: folha.data_fechamento,
+    aprovadoEm: folha.aprovado_em,
+    aprovadoPorNome: folha.usuarios?.nome ?? null,
+    motivoRejeicao: folha.motivo_rejeicao,
     itens,
   };
 }
@@ -206,3 +226,66 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
 // `resumoPorCentroCusto` e `resumoPorEncargo` foram movidos para
 // `./calculo.ts`: são derivações puras dos itens já carregados aqui por
 // `buscarFolha`, sem precisar de uma 2ª/3ª leitura da folha no banco.
+
+/**
+ * Trilha de auditoria da folha: lê o audit_log só do cabeçalho (tabela
+ * `folhas`) para aquele id e resolve os nomes dos usuários via RPC (security
+ * definer), no mesmo padrão de `trilhaOrdem`. Sem enriquecimento de
+ * pagamento: a Task 2 não mexe em dinheiro, isso entra nas Tasks 4/5/7.
+ */
+export async function trilhaFolha(id: string): Promise<EventoTrilha[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select(
+      "id, tabela, registro_id, acao, usuario_id, dados_antes, dados_depois, criado_em",
+    )
+    .eq("tabela", "folhas")
+    .eq("registro_id", id)
+    .order("criado_em", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error || !data) return [];
+
+  const idsUsuarios = [
+    ...new Set(
+      data
+        .map((linha) => linha.usuario_id)
+        .filter((usuarioId): usuarioId is string => usuarioId !== null),
+    ),
+  ];
+
+  const nomesPorId = new Map<string, string>();
+  if (idsUsuarios.length > 0) {
+    const { data: usuarios } = await supabase.rpc(
+      "nomes_usuarios_auditoria",
+      { p_ids: idsUsuarios },
+    );
+    for (const usuario of usuarios ?? []) {
+      nomesPorId.set(usuario.id, usuario.nome);
+    }
+  }
+
+  const registros: RegistroAuditLog[] = data.map((linha) => ({
+    id: linha.id,
+    tabela: linha.tabela,
+    registro_id: linha.registro_id,
+    acao: linha.acao,
+    usuario_id: linha.usuario_id,
+    usuario_nome:
+      linha.usuario_id === null
+        ? "Sistema"
+        : (nomesPorId.get(linha.usuario_id) ?? "Sistema"),
+    dados_antes: linha.dados_antes,
+    dados_depois: linha.dados_depois,
+    criado_em: linha.criado_em,
+  }));
+
+  const nomes = await resolverNomesAuditLog(supabase, registros);
+  return eventosDoAuditLog(registros, {
+    nomes,
+    entidade: "Folha",
+    genero: "f",
+  });
+}

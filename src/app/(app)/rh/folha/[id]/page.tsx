@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { resumoPorCentroCusto, resumoPorEncargo } from "@/modules/rh/folha/calculo";
 import { FolhaDetalheView } from "@/modules/rh/folha/components/folha-detalhe";
-import { buscarFolha } from "@/modules/rh/folha/queries";
+import { buscarFolha, trilhaFolha } from "@/modules/rh/folha/queries";
 import { buscarParametros } from "@/modules/rh/parametros-folha/queries";
 
 export default async function PaginaFolhaDetalhe({
@@ -26,10 +26,15 @@ export default async function PaginaFolhaDetalhe({
   const resumoEncargos = resumoPorEncargo(folha);
   // FGTS informativo do holerite: % vem dos parâmetros da folha (0 se ainda
   // não cadastrados). Só leitura, não afeta os valores já fechados na folha.
-  const parametros = await buscarParametros();
+  const [parametros, trilha] = await Promise.all([
+    buscarParametros(),
+    trilhaFolha(id),
+  ]);
 
   const podeCriar = temPermissao(usuario, "rh.folha", "criar");
   const podeEditar = temPermissao(usuario, "rh.folha", "editar");
+  const podeAprovar = temPermissao(usuario, "rh.folha", "aprovar");
+  const podeDesaprovar = temPermissao(usuario, "rh.folha", "desaprovar");
 
   return (
     <FolhaDetalheView
@@ -37,8 +42,11 @@ export default async function PaginaFolhaDetalhe({
       custosPorCentro={custosPorCentro}
       resumoEncargos={resumoEncargos}
       fgtsPercentual={parametros?.fgtsPercentual ?? 0}
+      trilha={trilha}
       podeCriar={podeCriar}
       podeEditar={podeEditar}
+      podeAprovar={podeAprovar}
+      podeDesaprovar={podeDesaprovar}
     />
   );
 }

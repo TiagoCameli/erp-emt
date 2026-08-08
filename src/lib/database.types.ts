@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       anexo_vinculos: {
@@ -1416,13 +1391,15 @@ export type Database = {
       }
       folhas: {
         Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
           competencia: string
           created_at: string
           created_by: string | null
           custo_total: number
-          data_fechamento: string | null
           encargos_percentual: number
           id: string
+          motivo_rejeicao: string | null
           status: string
           updated_at: string
           valor_adiantamentos: number
@@ -1431,13 +1408,15 @@ export type Database = {
           valor_liquido: number
         }
         Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           competencia: string
           created_at?: string
           created_by?: string | null
           custo_total?: number
-          data_fechamento?: string | null
           encargos_percentual?: number
           id?: string
+          motivo_rejeicao?: string | null
           status?: string
           updated_at?: string
           valor_adiantamentos?: number
@@ -1446,13 +1425,15 @@ export type Database = {
           valor_liquido?: number
         }
         Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
           competencia?: string
           created_at?: string
           created_by?: string | null
           custo_total?: number
-          data_fechamento?: string | null
           encargos_percentual?: number
           id?: string
+          motivo_rejeicao?: string | null
           status?: string
           updated_at?: string
           valor_adiantamentos?: number
@@ -1460,7 +1441,15 @@ export type Database = {
           valor_encargos?: number
           valor_liquido?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "folhas_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       formas_pagamento: {
         Row: {
@@ -3107,6 +3096,7 @@ export type Database = {
         Args: { p_lanc_id: string }
         Returns: undefined
       }
+      fn_aprovar_folha: { Args: { p_folha: string }; Returns: undefined }
       fn_aprovar_ordem_compra: { Args: { p_oc_id: string }; Returns: undefined }
       fn_aprovar_parcela: {
         Args: {
@@ -3187,6 +3177,10 @@ export type Database = {
         Args: { p_lanc_id: string; p_parcelas: Json }
         Returns: undefined
       }
+      fn_desaprovar_folha: {
+        Args: { p_folha: string; p_motivo: string }
+        Returns: undefined
+      }
       fn_desaprovar_ordem_compra: {
         Args: { p_motivo: string; p_oc_id: string }
         Returns: undefined
@@ -3243,7 +3237,6 @@ export type Database = {
         }
         Returns: string
       }
-      fn_fechar_folha: { Args: { p_folha: string }; Returns: undefined }
       fn_gerar_folha: {
         Args: { p_competencia: string; p_encargos_pct?: number }
         Returns: string
@@ -3318,7 +3311,6 @@ export type Database = {
         Args: { p_mes: string; p_motivo: string }
         Returns: undefined
       }
-      fn_reabrir_folha: { Args: { p_folha: string }; Returns: undefined }
       fn_reabrir_ponto: { Args: { p_ponto: string }; Returns: undefined }
       fn_recalcular_status_lancamento: {
         Args: { p_lanc_id: string }
@@ -3679,9 +3671,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
