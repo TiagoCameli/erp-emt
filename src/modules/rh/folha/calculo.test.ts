@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { resumoPorCentroCusto, resumoPorEncargo } from "@/modules/rh/folha/calculo";
-import type { FolhaDetalhe, FolhaItem } from "@/modules/rh/folha/queries";
+import {
+  agruparLancamentosDaFolha,
+  resumoPorCentroCusto,
+  resumoPorEncargo,
+} from "@/modules/rh/folha/calculo";
+import type {
+  FolhaDetalhe,
+  FolhaItem,
+  LancamentoDaFolha,
+} from "@/modules/rh/folha/queries";
 
 function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
   return {
@@ -174,5 +182,102 @@ describe("resumoPorEncargo", () => {
     const somaEncargos = resumo.reduce((acc, e) => acc + e.total, 0);
 
     expect(somaEncargos).toBe(folha.valorEncargos);
+  });
+});
+
+function criarLancamento(
+  overrides: Partial<LancamentoDaFolha> & { id: string },
+): LancamentoDaFolha {
+  return {
+    tipo: "salario",
+    descricao: `Lançamento ${overrides.id}`,
+    numero: null,
+    valor: 0,
+    dataVencimento: null,
+    statusParcela: "pendente",
+    ...overrides,
+  };
+}
+
+describe("agruparLancamentosDaFolha", () => {
+  it("separa salários de guias e soma cada grupo", () => {
+    const lancamentos = [
+      criarLancamento({
+        id: "1",
+        tipo: "salario",
+        descricao: "Salario Ana Souza 08/2026",
+        valor: 3000,
+      }),
+      criarLancamento({
+        id: "2",
+        tipo: "salario",
+        descricao: "Salario Bruno Lima 08/2026",
+        valor: 2500,
+      }),
+      criarLancamento({
+        id: "3",
+        tipo: "guia",
+        descricao: "GPS folha 08/2026",
+        valor: 1200,
+      }),
+      criarLancamento({
+        id: "4",
+        tipo: "guia",
+        descricao: "FGTS folha 08/2026",
+        valor: 400,
+      }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.salarios.map((l) => l.id)).toEqual(["1", "2"]);
+    expect(agrupado.guias.map((l) => l.id)).toEqual(["4", "3"]); // ordem alfabética: FGTS antes de GPS
+    expect(agrupado.totalSalarios).toBe(5500);
+    expect(agrupado.totalGuias).toBe(1600);
+  });
+
+  it("folha em rascunho ou pendente de aprovação não tem lançamento: lista vazia, sem quebrar", () => {
+    const agrupado = agruparLancamentosDaFolha([]);
+
+    expect(agrupado).toEqual({
+      salarios: [],
+      guias: [],
+      totalSalarios: 0,
+      totalGuias: 0,
+    });
+  });
+
+  it("guia sem rateio completo (colaborador sem centro de custo) ainda soma pelo valor cheio do lançamento", () => {
+    // docs/decisoes.md: o rateio por centro de custo de uma guia pode somar
+    // menos que o valor do lançamento quando algum colaborador não tem centro
+    // de custo. LancamentoDaFolha não carrega rateio — só o total do
+    // lançamento — então essa lacuna nunca aparece aqui como erro: o grupo
+    // "guias" soma o valor do lançamento, ponto.
+    const lancamentos = [
+      criarLancamento({
+        id: "guia-1",
+        tipo: "guia",
+        descricao: "GPS folha 08/2026",
+        valor: 9562.71,
+      }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.guias).toHaveLength(1);
+    expect(agrupado.totalGuias).toBe(9562.71);
+    expect(agrupado.salarios).toEqual([]);
+  });
+
+  it("só guias, sem nenhum salário (todos os líquidos ficaram <= 0)", () => {
+    const lancamentos = [
+      criarLancamento({ id: "guia-1", tipo: "guia", valor: 500 }),
+    ];
+
+    const agrupado = agruparLancamentosDaFolha(lancamentos);
+
+    expect(agrupado.salarios).toEqual([]);
+    expect(agrupado.totalSalarios).toBe(0);
+    expect(agrupado.guias).toHaveLength(1);
   });
 });

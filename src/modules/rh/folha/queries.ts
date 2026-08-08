@@ -7,6 +7,7 @@ import {
 } from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import { STATUS_PARCELA, type StatusParcela } from "@/modules/financeiro/_shared/formato";
 import { type StatusFolha, STATUS_FOLHA } from "@/modules/rh/_shared/formato";
 
 /** Linha da listagem de folhas, com a contagem de itens. */
@@ -242,6 +243,97 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
 // `resumoPorCentroCusto` e `resumoPorEncargo` foram movidos para
 // `./calculo.ts`: são derivações puras dos itens já carregados aqui por
 // `buscarFolha`, sem precisar de uma 2ª/3ª leitura da folha no banco.
+
+/**
+ * Lançamento gerado pela aprovação da folha (Bloco 8a, Task 7): salário de um
+ * colaborador (`origem='folha'`) ou guia de um grupo de recolhimento
+ * (`origem='folha_guia'`). `numero` e `dataVencimento` vêm null só em dado
+ * legado sem número atribuído; na prática toda linha aqui já passou pela
+ * aprovação e tem os dois preenchidos.
+ */
+export interface LancamentoDaFolha {
+  id: string;
+  tipo: "salario" | "guia";
+  descricao: string;
+  numero: string | null;
+  valor: number;
+  dataVencimento: string | null;
+  statusParcela: StatusParcela;
+}
+
+/** Normaliza o status da parcela (texto livre no banco) para o domínio conhecido. */
+function normalizarStatusParcela(status: string): StatusParcela {
+  return status in STATUS_PARCELA ? (status as StatusParcela) : "pendente";
+}
+
+/**
+ * Lista os lançamentos que a aprovação desta folha gerou: um por colaborador
+ * (o líquido) e um por grupo de recolhimento (a guia). Em rascunho e
+ * pendente_aprovacao não existe nenhum (a aprovação é quem cria), e a função
+ * devolve `[]` sem erro.
+ *
+ * Duas leituras enxutas e paralelas (só o `lancamento_id` de `folha_itens` e
+ * de `folha_guias` desta folha) alimentam a ÚNICA leitura que importa: um
+ * select em `lancamentos` (join com `lancamento_parcelas`) filtrado por
+ * `.in("id", ...)`, cobrindo as duas origens da folha de uma vez — não uma
+ * consulta por origem. É o mesmo desenho de `buscarFolha` (cabeçalho + itens
+ * sob um único ponto de entrada): "uma leitura" é uma chamada exportada, não
+ * literalmente uma instrução SQL.
+ */
+export async function listarLancamentosDaFolha(
+  folhaId: string,
+): Promise<LancamentoDaFolha[]> {
+  const supabase = await createClient();
+
+  const [itens, guias] = await Promise.all([
+    supabase
+      .from("folha_itens")
+      .select("lancamento_id")
+      .eq("folha_id", folhaId)
+      .not("lancamento_id", "is", null),
+    supabase
+      .from("folha_guias")
+      .select("lancamento_id")
+      .eq("folha_id", folhaId)
+      .not("lancamento_id", "is", null),
+  ]);
+
+  if (itens.error || guias.error) {
+    throw new Error("Não foi possível carregar os lançamentos da folha");
+  }
+
+  const idsLancamento = [
+    ...(itens.data ?? []).map((item) => item.lancamento_id),
+    ...(guias.data ?? []).map((guia) => guia.lancamento_id),
+  ].filter((id): id is string => id !== null);
+
+  if (idsLancamento.length === 0) return [];
+
+  // Leitura única: lançamentos + parcela, cobrindo salário e guia de uma vez
+  // via o id do próprio lançamento (não .eq("origem", ...) duas vezes).
+  const { data, error } = await supabase
+    .from("lancamentos")
+    .select(
+      "id, origem, descricao, numero, valor, data_vencimento, lancamento_parcelas(status)",
+    )
+    .in("id", idsLancamento);
+
+  if (error) {
+    throw new Error("Não foi possível carregar os lançamentos da folha");
+  }
+
+  return (data ?? []).map((lancamento) => ({
+    id: lancamento.id,
+    tipo: lancamento.origem === "folha_guia" ? "guia" : "salario",
+    descricao: lancamento.descricao,
+    numero: lancamento.numero,
+    valor: lancamento.valor,
+    dataVencimento: lancamento.data_vencimento,
+    statusParcela: normalizarStatusParcela(
+      lancamento.lancamento_parcelas?.[0]?.status ?? "pendente",
+    ),
+  }));
+}
 
 /**
  * Trilha de auditoria da folha: lê o audit_log só do cabeçalho (tabela

@@ -8,6 +8,7 @@
 import type {
   CustoCentroCusto,
   FolhaDetalhe,
+  LancamentoDaFolha,
   ResumoEncargo,
 } from "@/modules/rh/folha/queries";
 
@@ -55,4 +56,47 @@ export function resumoPorEncargo(folha: FolhaDetalhe): ResumoEncargo[] {
   return [...totais.entries()]
     .map(([nome, total]) => ({ nome, total }))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+/** Lançamentos da folha (Bloco 8a, Task 7) separados por tipo, com o total de cada grupo. */
+export interface LancamentosDaFolhaAgrupados {
+  salarios: LancamentoDaFolha[];
+  guias: LancamentoDaFolha[];
+  totalSalarios: number;
+  totalGuias: number;
+}
+
+/**
+ * Separa os lançamentos gerados pela aprovação da folha em salários (um por
+ * colaborador) e guias (um por grupo de recolhimento), e soma cada grupo.
+ * Pura: sem Supabase, para não obrigar `listarLancamentosDaFolha` a fazer uma
+ * leitura por grupo (o erro que o Bloco 6 corrigiu na revisão desta mesma
+ * tela, com `resumoPorCentroCusto`/`resumoPorEncargo` acima).
+ *
+ * Em rascunho e pendente_aprovacao não existe lançamento nenhum (a aprovação
+ * é quem gera): a lista de entrada vem vazia e os dois grupos saem vazios,
+ * sem quebrar. O rateio por centro de custo de uma guia pode ficar incompleto
+ * quando um colaborador não tem centro de custo (docs/decisoes.md) — isso não
+ * aparece aqui porque `LancamentoDaFolha` não carrega rateio, só o total do
+ * lançamento, que é sempre o valor cheio da guia.
+ */
+export function agruparLancamentosDaFolha(
+  lancamentos: LancamentoDaFolha[],
+): LancamentosDaFolhaAgrupados {
+  const porDescricao = (a: LancamentoDaFolha, b: LancamentoDaFolha) =>
+    a.descricao.localeCompare(b.descricao, "pt-BR");
+
+  const salarios = lancamentos
+    .filter((lancamento) => lancamento.tipo === "salario")
+    .sort(porDescricao);
+  const guias = lancamentos
+    .filter((lancamento) => lancamento.tipo === "guia")
+    .sort(porDescricao);
+
+  return {
+    salarios,
+    guias,
+    totalSalarios: salarios.reduce((soma, l) => soma + l.valor, 0),
+    totalGuias: guias.reduce((soma, l) => soma + l.valor, 0),
+  };
 }

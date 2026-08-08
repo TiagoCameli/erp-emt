@@ -24,6 +24,7 @@ import {
   enviarFolhaParaAprovacao,
   rejeitarFolha,
 } from "@/modules/rh/folha/actions";
+import type { LancamentosDaFolhaAgrupados } from "@/modules/rh/folha/calculo";
 import type {
   CustoCentroCusto,
   FolhaDetalhe,
@@ -34,6 +35,7 @@ import { podeTransicionar } from "@/modules/rh/folha/transicoes";
 import { BotaoPlanilha } from "./botao-planilha";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
 import { HoleriteDialog } from "./holerite-dialog";
+import { LancamentosGerados } from "./lancamentos-gerados";
 
 /** Card de seção do detalhe (borda + superfície), com título e ação. */
 function Secao({
@@ -74,6 +76,8 @@ export interface FolhaDetalheViewProps {
   folha: FolhaDetalhe;
   custosPorCentro: CustoCentroCusto[];
   resumoEncargos: ResumoEncargo[];
+  /** Lançamentos gerados pela aprovação, já separados em salários/guias (Task 7). */
+  lancamentos: LancamentosDaFolhaAgrupados;
   /** % do FGTS (parâmetros da folha) para o informativo do holerite. */
   fgtsPercentual: number;
   trilha: EventoTrilha[];
@@ -81,6 +85,8 @@ export interface FolhaDetalheViewProps {
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
+  /** Permissão de ver lançamento (financeiro.lancamentos:ver), pro link da seção de lançamentos. */
+  podeVerLancamento: boolean;
 }
 
 /**
@@ -94,12 +100,14 @@ export function FolhaDetalheView({
   folha,
   custosPorCentro,
   resumoEncargos,
+  lancamentos,
   fgtsPercentual,
   trilha,
   podeCriar,
   podeEditar,
   podeAprovar,
   podeDesaprovar,
+  podeVerLancamento,
 }: FolhaDetalheViewProps) {
   const router = useRouter();
   const info = STATUS_FOLHA[folha.status];
@@ -507,6 +515,14 @@ export function FolhaDetalheView({
           </div>
         </Secao>
       ) : null}
+
+      <Secao titulo="Lançamentos gerados">
+        <LancamentosGerados
+          status={folha.status}
+          agrupado={lancamentos}
+          podeVerLancamento={podeVerLancamento}
+        />
+      </Secao>
 
       <Secao titulo="Trilha">
         <Trilha eventos={trilha} />

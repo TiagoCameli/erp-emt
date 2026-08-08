@@ -47,6 +47,7 @@ import {
   ORIGENS_LANCAMENTO,
   ROTULO_FILTRO_REVISAO,
   ROTULO_ORIGEM_LANCAMENTO,
+  rotuloOrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
@@ -113,7 +114,7 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
         complemento={
           row.original.origem === "manual"
             ? null
-            : `(origem ${row.original.origem})`
+            : `(${rotuloOrigemLancamento(row.original.origem)})`
         }
       />
     ),

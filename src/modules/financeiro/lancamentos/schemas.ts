@@ -335,6 +335,18 @@ export const ROTULO_ORIGEM_LANCAMENTO: Record<OrigemLancamento, string> = {
 };
 
 /**
+ * Rótulo pt-BR da origem de um lançamento, com fallback pro valor cru: o
+ * campo `origem` chega das telas como `string` solto (não o union), então
+ * qualquer valor fora do catálogo (não deveria acontecer, dado o check do
+ * banco) ainda mostra algo em vez de quebrar.
+ */
+export function rotuloOrigemLancamento(origem: string): string {
+  return origem in ROTULO_ORIGEM_LANCAMENTO
+    ? ROTULO_ORIGEM_LANCAMENTO[origem as OrigemLancamento]
+    : origem;
+}
+
+/**
  * Estado da revisão de um lançamento a pagar, como filtro próprio. Antes viajava
  * dentro do filtro de status com os pseudo-valores 'em_revisao' e 'sem_conta',
  * o que misturava duas perguntas diferentes ("em que ponto o lançamento está?" e

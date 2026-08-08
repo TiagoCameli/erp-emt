@@ -40,6 +40,7 @@ import {
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { ROTULO_ORIGEM_DATA } from "@/modules/financeiro/_shared/janela-pagamento";
+import { rotuloOrigemLancamento } from "@/modules/financeiro/lancamentos/schemas";
 import { DefinirParcelasDialog } from "./definir-parcelas-dialog";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
@@ -259,7 +260,7 @@ export function LancamentoDetalheView({
   // não há caminho de volta pela desaprovação, e é o que o banco responde
   // primeiro. Cada texto diz o que fazer, não só o que travou.
   const motivoBloqueio = !ehManual
-    ? `Lançamento de origem ${lancamento.origem}. Edite na origem.`
+    ? `Lançamento de origem ${rotuloOrigemLancamento(lancamento.origem)}. Edite na origem.`
     : temParcelaPaga
       ? "Tem parcela paga. Não dá para editar."
       : temParcelaAprovada
