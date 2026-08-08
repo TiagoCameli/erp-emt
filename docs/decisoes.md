@@ -773,3 +773,94 @@ O `CLAUDE.md` dizia "migrations versionadas via Supabase CLI", o que convida ao
    sem ler grant: a trava estoura exceção se sobrar privilégio, exceção aborta a
    transação, e transação abortada não grava versão no ledger. Logo, versão no
    ledger = trava passou. Padrão a repetir em toda migration de privilégio.
+
+## 2026-08-08 - A identidade de conferência da folha é condicional, e custo sem centro de custo não chega ao BI
+
+A aprovação da folha (`fn_aprovar_folha`, Bloco 8a Task 4) gera um `a_pagar` por
+colaborador com o líquido e um por grupo de recolhimento com a guia. A conferência
+que um contador faz é bater `folhas.custo_total` contra o contas a pagar gerado:
+
+```
+soma(líquidos) + soma(guias) + soma(adiantamentos) = folhas.custo_total
+```
+
+Ela fecha porque os retidos e o adiantamento se cancelam: `Σ(salário − inss − irrf
+− adiant) + Σ(encargos + inss + irrf) + Σ(adiant) = Σ(salário) + Σ(encargos)`.
+Medido em banco com 2 colaboradores em 2 centros de custo e 1 adiantamento:
+líquidos 6202,50 + guias 3237,50 + adiantamentos 800,00 = 10240,00 = `custo_total`,
+diferença **0,00**. A revisão repetiu com um cenário próprio (3 colaboradores em 3
+centros de custo, 4 encargos em 3 grupos, INSS retido caindo no mesmo grupo dos
+patronais) e também fechou em 0,00.
+
+**Só que ela é condicional, e a primeira redação não dizia isso.** Duas situações
+normais deixam resíduo, e nenhuma das duas é bug:
+
+| situação | efeito | medido |
+|---|---|---|
+| encargo ativo com `grupo_recolhimento` nulo | entra em `custo_total`, não vira guia | resíduo −678,94 com 678,94 de encargo sem grupo |
+| item com `valor_liquido <= 0` | fica na folha, não vira lançamento | resíduo +275,00 com líquido −275,00 |
+
+Nos dois casos o resíduo é **exatamente** a soma da causa, sem componente
+escondido e sem centavo de arredondamento:
+
+```
+diferença = soma(encargos sem grupo de recolhimento) + soma(valor_liquido <= 0)
+```
+
+O caso do encargo sem grupo passou perto de não ser descoberto porque o teste de
+"config vazia" foi feito com **todos** os grupos nulos: 100% de buraco lê como
+"não configurado, zero guia, tudo certo". O caso perigoso é o **parcial**, um
+encargo com grupo e outro sem, que gera guia e resíduo ao mesmo tempo.
+
+O segundo achado é de rateio. O rateio da guia é exato, não proporcional: cada
+centavo nasce ligado a um `folha_itens` e o item tem centro de custo, então
+`soma(rateios) == valor` por construção. Mas item com `centro_custo_id` nulo fica
+fora do rateio (mesmo `if v_cc is not null` que a `fn_fechar_diarias` já tem).
+Medido com um colaborador sem centro de custo:
+
+| | valor |
+|---|---|
+| lançamentos gerados | 9562,71 |
+| soma dos rateios | 8014,60 |
+| **custo sem centro de custo** | **1548,11** |
+
+E o buraco se espalha por **todas** as guias, não fica isolado num lançamento (na
+guia do GPS: lançamento 2238,88, rateios 1905,55, buraco 333,33). A identidade
+global continua 0,00 e o total a pagar está certo; o que não acontece é o custo
+chegar ao centro de custo. O `CLAUDE.md` declara "nenhum custo existe sem centro
+de custo" como espinha dorsal, e o painel de Gestão sub-reporta esse valor.
+
+**Decisões**
+
+1. **A identidade é documentada com a condição, não sem ela.** O texto completo
+   mora no `obj_description` da própria `fn_aprovar_folha` (migration
+   `20260808173430`), porque é lá que quem confere o número vai olhar, e não no
+   `.sql` do repo. Inclui a consulta que separa as duas causas do resíduo por
+   folha. Afirmar a identidade sem condição, em comentário ou relatório, é
+   convidar alguém a tratar um resíduo legítimo como erro de arredondamento e
+   "consertar" a função de dinheiro.
+2. **Encargo ativo sem `grupo_recolhimento` é provisão, não erro de cadastro.**
+   Entra no custo do empregador e de propósito não gera guia, porque não existe
+   para onde recolher. É o desenho que o Bloco 8b vai usar para 13º e férias.
+   Nenhuma trava deve exigir grupo em todo encargo.
+3. **Item sem centro de custo deixa o rateio incompleto, e isso fica pendente de
+   decisão de cadastro.** As duas saídas possíveis não são de código: exigir
+   `centro_custo_id` no colaborador CLT (decisão do dono do sistema, muda o
+   cadastro e pode travar folha existente) ou criar um centro de custo padrão
+   para o que sobra (inventaria regra contábil). Enquanto não houver decisão, o
+   comportamento fica como está, medido e registrado aqui. **Não inventar rateio
+   proporcional para fechar o buraco**: distribuir 1548,11 entre centros de custo
+   que não gastaram esse dinheiro é pior que não distribuir.
+4. **Achado latente que a Task 7 vai encostar:** `lancamentoSchema`
+   (`src/modules/financeiro/lancamentos/schemas.ts:158-162`) e
+   `lancamentoFormSchema` (`:284-294`) exigem
+   `|soma(rateios) − valor| <= 0,005` **quando existe rateio**. O lançamento de
+   guia com buraco tem rateio não vazio e soma menor, então **viola essa
+   invariante**. Hoje não estoura porque editar lançamento de origem diferente de
+   `manual` é bloqueado nos três níveis (drawer em
+   `lancamento-form-drawer.tsx:161`, Server Action em `actions.ts:114`, e a RPC
+   `fn_salvar_lancamento` com `if v_origem <> 'manual' then raise`). Quem for
+   mexer no Financeiro, ou afrouxar esse bloqueio, precisa saber que a guia da
+   folha não passa por esses dois schemas. (O relatório de revisão chamou o
+   segundo de `lancamentoEdicaoSchema`; esse nome não existe no arquivo, os
+   exports são `lancamentoSchema` e `lancamentoFormSchema`.)

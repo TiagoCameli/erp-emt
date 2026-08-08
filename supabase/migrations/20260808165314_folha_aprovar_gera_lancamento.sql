@@ -22,6 +22,17 @@
 -- Provada em banco (transação com rollback), 2 colaboradores em 2 centros de
 -- custo + 1 adiantamento: líquidos 6202.50 + guias 3237.50 + adiantamentos
 -- 800.00 = 10240.00 = custo_total, diferença 0.00.
+--
+-- NOTA (fix round 1, ver 20260808173430_folha_aprovar_comentario_identidade.sql):
+-- a identidade escrita acima é CONDICIONAL e o texto original não dizia isso.
+-- Ela só fecha quando todo encargo ativo tem grupo_recolhimento E todo item tem
+-- valor_liquido > 0. Fora disso a diferença é exatamente
+-- Σ(encargos sem grupo) + Σ(valor_liquido <= 0), e as duas pontas são desejadas
+-- (encargo sem grupo é provisão, líquido não positivo não gera lançamento). A
+-- migration de comentário grava a versão completa em obj_description da própria
+-- função, que é onde quem confere o número vai olhar. Mantido aqui tal como
+-- rodou, porque o arquivo é rastro do que foi aplicado, não fonte de
+-- reaplicação; o corpo da função não mudou (md5 a1261a1ccbff886980f0991da47a2446).
 create or replace function public.fn_aprovar_folha(p_folha uuid)
 returns void
 language plpgsql
