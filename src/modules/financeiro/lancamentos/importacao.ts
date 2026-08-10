@@ -148,9 +148,13 @@ export const COLUNAS_LANCAMENTO = [
     obrigatoria: true,
     exemplo: "07/2026",
     transformar: (valor: unknown) => {
+      // Competência é mês, e o banco guarda o dia 1 (CHECK
+      // lancamentos_mes_competencia_dia1). Quem digita 31/07/2026 quer
+      // dizer julho, então a data cheia cai para o dia 1 aqui, e não só
+      // no fn_salvar_lancamento: assim a prévia mostra o que vai gravar.
       const data = parseData(valor);
-      if (data) return data;
-      // Aceita mm/aaaa: competência é mês, o dia 1 é convenção do banco.
+      if (data) return `${data.slice(0, 7)}-01`;
+      // Aceita mm/aaaa, a forma como competência costuma ser escrita.
       const mes = /^(\d{1,2})\/(\d{4})$/.exec(String(valor ?? "").trim());
       if (mes) return `${mes[2]}-${mes[1].padStart(2, "0")}-01`;
       throw new Error("informe a competência, ex: 07/2026 ou 07/07/2026");

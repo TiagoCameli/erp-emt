@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  COLUNAS_LANCAMENTO,
   parseData,
   parseListaDatas,
   parseValor,
@@ -89,5 +90,28 @@ describe("parseValor", () => {
   it("NaN no que não é número, para a coluna acusar a linha", () => {
     expect(parseValor("abc")).toBeNaN();
     expect(parseValor("")).toBeNaN();
+  });
+});
+
+describe("coluna Competência", () => {
+  const coluna = COLUNAS_LANCAMENTO.find((c) => c.chave === "competencia");
+  const transformar = (valor: unknown) => coluna!.transformar!(valor);
+
+  it("aceita mm/aaaa, que é como competência costuma ser escrita", () => {
+    expect(transformar("07/2026")).toBe("2026-07-01");
+    expect(transformar("7/2026")).toBe("2026-07-01");
+  });
+
+  it("cai para o dia 1 quando vem data cheia", () => {
+    // O banco só aceita competência no dia 1 (CHECK
+    // lancamentos_mes_competencia_dia1), e 6.941 das 7.253 linhas do
+    // arquivo real do Tiago vêm com a data cheia.
+    expect(transformar("31/07/2025")).toBe("2025-07-01");
+    expect(transformar("2026-08-07")).toBe("2026-08-01");
+    expect(transformar(new Date(Date.UTC(2026, 7, 7)))).toBe("2026-08-01");
+  });
+
+  it("reclama do que não é mês nem data", () => {
+    expect(() => transformar("julho")).toThrow(/competência/);
   });
 });
