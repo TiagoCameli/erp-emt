@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { chaveNome } from "@/lib/chave-nome";
 import { erroAcao, logErroServidor } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import {
@@ -23,6 +24,7 @@ import {
   type CriarItemInput,
   type EditarNoInput,
 } from "@/modules/cadastros/centros-custo/schemas";
+import { nomeVemDeOutroCadastro } from "@/modules/cadastros/centros-custo/travas";
 
 const RECURSO = "cadastros.centros-custo" as const;
 const ROTA = "/cadastros/centros-custo";
@@ -143,8 +145,9 @@ export async function criarItem(dados: CriarItemInput): Promise<ResultadoAcao> {
 }
 
 /**
- * Edita um nó. Em nó gerido (sistema ou equipamento) só o orçamento muda:
- * nome e código ficam travados. Em nó manual edita nome, código e orçamento.
+ * Edita um nó. O nome só fica travado quando é espelho de outro cadastro (raiz
+ * de obra, etapa de equipamento) — aí só o orçamento muda. Centro de sistema e
+ * nó manual editam nome, código e orçamento.
  */
 export async function editarNo(
   id: string,
@@ -166,9 +169,10 @@ export async function editarNo(
 
   const orcamento = validado.data.orcamento ?? null;
 
-  // Nó gerido (sistema, equipamento, raiz de obra) ou de nível 1: só orçamento.
-  // Nó manual (etapa/item criado à mão): nome, código e orçamento.
-  const atualizacao = no.nivel === 1 || noGerido(no)
+  // Nome espelho de outro cadastro (raiz de obra, etapa de equipamento): só
+  // orçamento, porque o trigger sobrescreveria o nome no próximo rename da
+  // origem. Centro de sistema e nó manual: nome, código e orçamento.
+  const atualizacao = nomeVemDeOutroCadastro(no)
     ? { orcamento }
     : {
         nome: validado.data.nome,
@@ -319,7 +323,7 @@ const COLUNAS_IMPORT: ColunaImportacao<LinhaImportCentroCusto>[] = [
     chave: "centro",
     rotulo: "Centro",
     obrigatoria: true,
-    exemplo: "Escritorio Central",
+    exemplo: "Escritório Central",
     transformar: (valor) => String(valor).trim(),
   },
   {
@@ -409,7 +413,9 @@ export async function importar(
 
   const supabase = await createClient();
 
-  // Índice dos centros de nível 1 existentes, por nome em minúsculas.
+  // Índice dos centros de nível 1 existentes, por chave de nome (minúsculo, sem
+  // acento). Sem normalizar acento, a planilha antiga escrita "Escritorio
+  // Central" pararia de casar depois que o dado semeado ganhou grafia correta.
   const { data: centros, error: erroCentros } = await supabase
     .from(TABELA)
     .select("id, nome")
@@ -425,7 +431,7 @@ export async function importar(
 
   const centroPorNome = new Map<string, string>();
   for (const centro of centros ?? []) {
-    centroPorNome.set(centro.nome.trim().toLowerCase(), centro.id);
+    centroPorNome.set(chaveNome(centro.nome), centro.id);
   }
 
   // Resolve TODOS os centros antes de inserir qualquer coisa. Como o supabase-js
@@ -433,7 +439,7 @@ export async function importar(
   // meio deixando parte da hierarquia gravada (importação não atômica).
   for (const linha of resultado.validas) {
     const nomeCentro = String(linha.dados.centro ?? "").trim();
-    if (!centroPorNome.has(nomeCentro.toLowerCase())) {
+    if (!centroPorNome.has(chaveNome(nomeCentro))) {
       return {
         erro: `O centro "${nomeCentro}" não existe (linha ${linha.linha}). Centros nascem de Obras ou são de sistema; a planilha só cria etapas e itens.`,
       };
@@ -490,7 +496,7 @@ export async function importar(
       typeof dados.orcamento === "number" ? dados.orcamento : null;
 
     // centroId garantido pela pré-validação acima.
-    const centroId = centroPorNome.get(nomeCentro.toLowerCase())!;
+    const centroId = centroPorNome.get(chaveNome(nomeCentro))!;
 
     // Resolve a etapa: cache (existentes + criados nesta rodada) ou cria.
     const erroEtapas = await carregarFilhos(centroId, 2, etapaPorChave);

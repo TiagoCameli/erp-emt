@@ -44,6 +44,7 @@ import {
   excluirNo,
 } from "@/modules/cadastros/centros-custo/actions";
 import type { NoCentroCusto } from "@/modules/cadastros/centros-custo/queries";
+import { nomeVemDeOutroCadastro } from "@/modules/cadastros/centros-custo/travas";
 import {
   ROTULO_TIPO_CENTRO,
   TIPOS_CENTRO,
@@ -423,7 +424,7 @@ export function ArvoreCentrosCusto({
                 ) : null}
                 {podeAbrirEditar ? (
                   <DropdownMenuItem onSelect={() => abrirEditar(no)}>
-                    {gerido ? "Editar orçamento" : "Editar"}
+                    {nomeVemDeOutroCadastro(no) ? "Editar orçamento" : "Editar"}
                   </DropdownMenuItem>
                 ) : null}
                 {podeDesativar ? (
