@@ -36,7 +36,7 @@ export const COLUNAS_FORNECEDOR: ColunaImportacao<FornecedorImportacao>[] = [
   },
   {
     chave: "razaoSocial",
-    rotulo: "Razao social",
+    rotulo: "Razão social",
     obrigatoria: true,
     exemplo: "Brita Acre LTDA",
     // Remove prefixo de código legado no formato "101 - " e faz trim.

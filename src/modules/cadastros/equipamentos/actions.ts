@@ -260,13 +260,13 @@ const ROTULO_CONTROLE: Record<string, ControlePor> = {
 const COLUNAS: ColunaImportacao<LinhaEquipamento>[] = [
   {
     chave: "codigo",
-    rotulo: "Codigo",
+    rotulo: "Código",
     exemplo: "EQ-001",
     transformar: (valor) => String(valor).trim(),
   },
   {
     chave: "descricao",
-    rotulo: "Descricao",
+    rotulo: "Descrição",
     obrigatoria: true,
     exemplo: "Escavadeira CAT 320",
     transformar: (valor) => String(valor).trim(),

@@ -22,8 +22,8 @@ export async function GET() {
     [
       { rotulo: "Centro", exemplo: "Escritório Central" },
       { rotulo: "Etapa", exemplo: "Administrativo" },
-      { rotulo: "Item", exemplo: "Material de escritorio" },
-      { rotulo: "Orcamento", exemplo: "15000,00" },
+      { rotulo: "Item", exemplo: "Material de escritório" },
+      { rotulo: "Orçamento", exemplo: "15000,00" },
     ],
     "Centros de custo",
   );

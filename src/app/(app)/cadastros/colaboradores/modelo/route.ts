@@ -4,10 +4,10 @@ import { gerarModeloXlsx } from "@/lib/importacao";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 
 const COLUNAS_MODELO = [
-  { rotulo: "Nome", exemplo: "Jose da Silva" },
+  { rotulo: "Nome", exemplo: "José da Silva" },
   { rotulo: "CPF", exemplo: "000.000.000-00" },
-  { rotulo: "Funcao", exemplo: "Operador" },
-  { rotulo: "Vinculo", exemplo: "clt" },
+  { rotulo: "Função", exemplo: "Operador" },
+  { rotulo: "Vínculo", exemplo: "clt" },
   { rotulo: "Obra", exemplo: "BR-364 Lote 09" },
 ];
 

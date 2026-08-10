@@ -1163,3 +1163,54 @@ centro Manutenção) e continuam fora. Mesma solução se aplica, é outro bloco
 **Efeito colateral avisado ao Tiago:** como não há custo lançado no sistema, as 16 obras ficaram
 todas excluíveis. É o caso de uso pedido (limpar lixo de importação), mas o botão aparece
 habilitado em toda a lista.
+
+## 2026-08-10 - Grafia correta é mudança de contrato de importação, não só de texto
+
+O Tiago pediu "Manutenção de equipamentos" com grafia correta e certeza de que o app todo
+está certo. Varredura com 6 agentes em paralelo (966k tokens, 15 min) sobre código e
+migrations, mais conferência manual do banco vivo.
+
+**O que a varredura mostrou:** as strings de interface já estavam corretas. `src/components/`
+e `src/modules/rh/` (106 arquivos, ~17,6 mil linhas) voltaram **zero** achado. O erro estava
+em dois outros lugares: dado semeado nas migrations e **rótulo de coluna de planilha**.
+
+**Decisões**
+
+1. **Acentuar rótulo de importação exige dobrar acento no casamento primeiro, na mesma
+   entrega.** Os rótulos ("Razao social", "Codigo", "Orcamento", "Funcao") não são só texto:
+   `lerEValidarXlsx` casa o cabeçalho do arquivo enviado contra eles, e `normalizarRotulo` só
+   fazia trim+lowercase. Acentuar sozinho **recusaria toda planilha que a obra já usa**.
+   Agora `normalizarRotulo` usa `chaveNome` (dobra acento) e só então os rótulos ganharam
+   acento. Regra geral: **rótulo que também é chave de casamento não é texto, é contrato.**
+2. **`chaveNome` em TS espelha a `fn_chave_nome` do banco.** Já existia no Postgres desde a
+   20260804140000, para o casamento da importação BR-364. Passou a existir em TS porque três
+   importações casam em memória (centros de custo, insumos, cabeçalho de coluna). Um conceito,
+   duas implementações, cada uma no lado onde o casamento acontece.
+3. **Migration antiga não se edita; corrige-se o dado.** Os agentes reportaram os seeds errados
+   apontando arquivo:linha das migrations aplicadas. Isso serve para **localizar** o dado, não
+   para reescrever histórico. As correções foram por `update` em migration nova, casando pelo
+   valor antigo exato para não sobrescrever rename que o Tiago tenha feito à mão (e ficar
+   idempotente).
+4. **Varredura de código não acha erro de grafia em dado vivo.** Conferindo o banco depois dos
+   agentes, sobraram `Centimetro`, `Mes`, `Tonelada-quilometro` e `Cartão de Credito` — linhas
+   cadastradas pela tela ou por importação, que não estão em migration nenhuma. Nenhum agente
+   podia achar isso. **Auditoria de dado se faz no dado.**
+5. **Antes de renomear qualquer catálogo, achar quem casa por nome.** Conferido um por um:
+   `categorias_financeiras` já casava por `fn_chave_nome` (seguro), `unidades_medida` casa por
+   **sigla** (seguro, sigla intacta), `formas_pagamento.nome` só é lido para exibir (seguro), e
+   `categorias_insumo` casava por `toLowerCase` sem acento — esse virou `chaveNome`, senão
+   planilha sem acento pararia de casar com "Peças e componentes".
+6. **Um agente teve falso negativo, e foi o dado que denunciou.** A varredura leu
+   `20260612210001` e reportou as unidades erradas, mas passou batido em `categorias_insumo`
+   logo abaixo, no mesmo arquivo. Não custou nada porque o dado vivo daquela tabela já havia
+   sido substituído por um conjunto acentuado, mas o aprendizado fica: **resultado de agente é
+   pista, não inventário.** Conferir no dado antes de declarar varredura completa.
+
+**Deixado de fora, de propósito, precisa de decisão do Tiago**
+
+- **As ~885 mensagens `raise exception` em SQL são sem acento**, por convenção do repo, e várias
+  chegam na tela pela Server Action. Corrigir é mudança grande e mecânica em função de banco,
+  incluindo funções que mexem em dinheiro. Não faço isso numa passada de grafia sem combinar.
+- **`lancamentos.descricao` gerada por função** nasce "Diarias ..." e "Salario ...", sem acento
+  (`fn_fechar_diarias`, `fn_aprovar_folha`). Aparece no Financeiro. Corrigir é recriar duas
+  funções que geram lançamento; vale, mas é entrega própria, não passada de grafia.

@@ -47,7 +47,7 @@ export const COLUNAS_FUNCAO: ColunaImportacao<FuncaoImportacao>[] = [
   },
   {
     chave: "salarioBase",
-    rotulo: "Salario base",
+    rotulo: "Salário base",
     exemplo: "2.500,00",
     transformar: (valor) => {
       if (typeof valor === "number") return valor;

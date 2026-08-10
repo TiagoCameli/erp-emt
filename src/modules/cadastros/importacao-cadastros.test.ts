@@ -170,7 +170,11 @@ describe("importação de fornecedores (colunas reais de produção)", () => {
     expect(tipoInvalido?.erros).toContain("Tipo deve ser pf ou pj");
 
     const semRazao = resultado.invalidas.find((item) => item.linha === 4);
-    expect(semRazao?.erros).toContain("Coluna Razao social é obrigatória");
+    // O rótulo passou a ter grafia correta, e a mensagem espelha o rótulo. A
+    // planilha do teste continua com o cabeçalho SEM acento de propósito: é a
+    // prova de que normalizarRotulo dobra acento e o arquivo antigo do pessoal
+    // da obra continua sendo aceito.
+    expect(semRazao?.erros).toContain("Coluna Razão social é obrigatória");
 
     const ufInvalida = resultado.invalidas.find((item) => item.linha === 5);
     expect(ufInvalida?.erros).toContain("UF deve ter 2 letras");

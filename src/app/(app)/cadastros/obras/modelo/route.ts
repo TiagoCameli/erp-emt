@@ -3,12 +3,12 @@ import { exigirPermissao } from "@/lib/permissoes";
 
 const COLUNAS_MODELO = [
   { rotulo: "Nome", exemplo: "Conservação BR-364 Lote 09" },
-  { rotulo: "Numero do contrato", exemplo: "00615/2025" },
+  { rotulo: "Número do contrato", exemplo: "00615/2025" },
   { rotulo: "Cliente", exemplo: "DNIT" },
   { rotulo: "Rodovia", exemplo: "BR-364" },
   { rotulo: "Lote", exemplo: "09" },
   { rotulo: "UF", exemplo: "AC" },
-  { rotulo: "Extensao km", exemplo: "120,5" },
+  { rotulo: "Extensão km", exemplo: "120,5" },
   { rotulo: "Status", exemplo: "Em andamento" },
 ];
 

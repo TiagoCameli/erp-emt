@@ -242,7 +242,7 @@ const COLUNAS: ColunaImportacao<LinhaObra>[] = [
   },
   {
     chave: "numeroContrato",
-    rotulo: "Numero do contrato",
+    rotulo: "Número do contrato",
     exemplo: "00615/2025",
     transformar: (valor) => String(valor).trim(),
   },
@@ -276,7 +276,7 @@ const COLUNAS: ColunaImportacao<LinhaObra>[] = [
   },
   {
     chave: "extensaoKm",
-    rotulo: "Extensao km",
+    rotulo: "Extensão km",
     exemplo: "120,5",
     transformar: (valor) => {
       const numero = Number(String(valor).replace(",", "."));
@@ -294,7 +294,7 @@ const COLUNAS: ColunaImportacao<LinhaObra>[] = [
       const status = ROTULO_STATUS[chave];
       if (!status) {
         throw new Error(
-          "use planejamento, em andamento, paralisada ou concluida",
+          "use planejamento, em andamento, paralisada ou concluída",
         );
       }
       return status;

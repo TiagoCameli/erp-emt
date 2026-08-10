@@ -2,8 +2,8 @@ import { gerarModeloXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 
 const COLUNAS_MODELO = [
-  { rotulo: "Codigo", exemplo: "EQ-001" },
-  { rotulo: "Descricao", exemplo: "Escavadeira CAT 320" },
+  { rotulo: "Código", exemplo: "EQ-001" },
+  { rotulo: "Descrição", exemplo: "Escavadeira CAT 320" },
   { rotulo: "Tipo", exemplo: "escavadeira" },
   { rotulo: "Marca", exemplo: "Caterpillar" },
   { rotulo: "Modelo", exemplo: "320" },
