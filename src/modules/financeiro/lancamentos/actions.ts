@@ -6,8 +6,13 @@ import { z } from "zod";
 import type { Json } from "@/lib/database.types";
 import { erroAcao } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
+import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import {
+  COLUNAS_LANCAMENTO,
+  type LinhaLancamento,
+} from "@/modules/financeiro/lancamentos/importacao";
 import {
   lancamentoSchema,
   type LancamentoInput,
@@ -515,4 +520,152 @@ export async function definirContaLancamentosLote(
       naoEncontrados: bruto.nao_encontrados ?? 0,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Importação por planilha
+// ---------------------------------------------------------------------------
+
+function arquivoDoFormData(formData: FormData): File {
+  const arquivo = formData.get("arquivo");
+  if (!(arquivo instanceof File)) throw new Error("Nenhum arquivo enviado");
+  return arquivo;
+}
+
+/** Resumo da prévia de importação, conforme o contrato do ImportDialog. */
+export interface ResumoImportacao {
+  validas: number;
+  invalidas: { linha: number; erros: string[] }[];
+  totalLinhas: number;
+}
+
+/** Valida a planilha de lançamentos e devolve o resumo para a prévia. */
+export async function validarImportLancamentos(
+  formData: FormData,
+): Promise<ResumoImportacao> {
+  await exigirPermissao(RECURSO, "criar");
+
+  const arquivo = arquivoDoFormData(formData);
+  const buffer = Buffer.from(await arquivo.arrayBuffer());
+  const resultado = await lerEValidarXlsx<LinhaLancamento>(
+    buffer,
+    COLUNAS_LANCAMENTO,
+  );
+
+  return {
+    validas: resultado.validas.length,
+    invalidas: resultado.invalidas.map((linha) => ({
+      linha: linha.linha,
+      erros: linha.erros,
+    })),
+    totalLinhas: resultado.totalLinhas,
+  };
+}
+
+/**
+ * Importa a planilha de lançamentos.
+ *
+ * A validação de formato é aqui (colunas, data, valor); a de negócio é toda no
+ * banco, em fn_importar_lancamentos, que resolve fornecedor, categoria, conta e
+ * centro de custo e **só grava se nenhuma linha tiver problema**. Por isso o
+ * lote inteiro vai numa chamada: a atomicidade é o ponto, não a performance.
+ *
+ * Linha com data de pagamento entra já aprovada e paga, o que faz esta mesma
+ * planilha carregar histórico financeiro já fechado.
+ */
+export async function importarLancamentos(
+  formData: FormData,
+): Promise<{ ok: true; mensagem: string } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "criar");
+  } catch {
+    return { erro: "Sem permissão para importar lançamentos" };
+  }
+
+  let buffer: Buffer;
+  try {
+    const arquivo = arquivoDoFormData(formData);
+    buffer = Buffer.from(await arquivo.arrayBuffer());
+  } catch (e) {
+    return erroAcao(
+      "financeiro.lancamentos.importar",
+      e,
+      "Nenhum arquivo enviado",
+    );
+  }
+
+  const resultado = await lerEValidarXlsx<LinhaLancamento>(
+    buffer,
+    COLUNAS_LANCAMENTO,
+  );
+
+  if (resultado.invalidas.length > 0) {
+    return {
+      erro: `${resultado.invalidas.length} linha(s) com problema de formato. Corrija na planilha e importe de novo. Nada foi gravado.`,
+    };
+  }
+  if (resultado.validas.length === 0) {
+    return { erro: "Nenhuma linha válida para importar" };
+  }
+
+  const linhas = resultado.validas.map((item) => ({
+    linha: item.linha,
+    tipo: item.dados.tipo,
+    valor: item.dados.valor,
+    fornecedor: item.dados.fornecedor,
+    documento_fornecedor: item.dados.documentoFornecedor,
+    descricao: item.dados.descricao,
+    categoria: item.dados.categoria,
+    centro_custo: item.dados.centroCusto,
+    forma_pagamento: item.dados.formaPagamento,
+    conta: item.dados.conta,
+    data_lancamento: item.dados.dataLancamento,
+    competencia: item.dados.competencia,
+    vencimentos: item.dados.vencimentos,
+    pagamentos: item.dados.pagamentos,
+    numero_documento: item.dados.numeroDocumento,
+    ordem_compra: item.dados.ordemCompra,
+    plano_contas: item.dados.planoContas,
+    quem_paga: item.dados.quemPaga,
+    observacoes: item.dados.observacoes,
+  }));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_importar_lancamentos", {
+    p_linhas: linhas as unknown as Json,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.lancamentos.importar",
+      error,
+      error.message || "Não foi possível importar os lançamentos",
+    );
+  }
+
+  const retorno = (data ?? {}) as {
+    ok?: boolean;
+    mensagem?: string;
+    erros?: { linha: number; erro: string }[];
+  };
+
+  if (retorno.ok === false) {
+    // O banco recusou o lote inteiro. Mostramos as primeiras linhas com o
+    // motivo exato: é o que a pessoa precisa para corrigir a planilha.
+    const erros = retorno.erros ?? [];
+    const primeiras = erros
+      .slice(0, 5)
+      .map((e) => `linha ${e.linha}: ${e.erro}`)
+      .join(" | ");
+    const resto = erros.length - 5;
+    return {
+      erro: `${retorno.mensagem ?? "Importação recusada"} ${primeiras}${
+        resto > 0 ? ` | e mais ${resto}` : ""
+      }`,
+    };
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath("/financeiro/aprovacao-pagamentos");
+  return { ok: true, mensagem: retorno.mensagem ?? "Importação concluída" };
 }

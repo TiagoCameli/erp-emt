@@ -3365,6 +3365,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_importar_lancamentos: { Args: { p_linhas: Json }; Returns: Json }
       fn_janela_pagamento: { Args: never; Returns: string }
       fn_jornadas_ponto: {
         Args: never
