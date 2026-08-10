@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { motivoBloqueioCentroCusto } from "@/modules/cadastros/_shared/dependencias";
 import type { TipoCentro } from "@/modules/cadastros/centros-custo/schemas";
 
 /**
@@ -23,11 +24,21 @@ export interface NoCentroCusto {
   orcamento: number | null;
   sistema: boolean;
   ativo: boolean;
+  /**
+   * Por que este nó não pode ser excluído, já em pt-BR, ou null quando pode.
+   * Vem de fn_centro_custo_bloqueio: só é folha de nível 2/3, sem filhos e
+   * sem nada apontando para ele, que fica liberado.
+   */
+  motivoBloqueio: string | null;
 }
 
 /**
  * Lista todos os nós da árvore de centros de custo, ordenados por nível e
  * nome para uma montagem estável no client.
+ *
+ * O bloqueio de exclusão vem numa segunda chamada, em lote
+ * (fn_centros_custo_bloqueios): a contagem precisa de security definer para
+ * não sair zerada sob RLS, e uma chamada por nó seria N+1.
  */
 export async function listarArvore(): Promise<NoCentroCusto[]> {
   const supabase = await createClient();
@@ -44,6 +55,23 @@ export async function listarArvore(): Promise<NoCentroCusto[]> {
     throw new Error("Não foi possível carregar os centros de custo");
   }
 
+  const { data: bloqueios, error: erroBloqueios } = await supabase.rpc(
+    "fn_centros_custo_bloqueios",
+    { p_ids: (data ?? []).map((no) => no.id) },
+  );
+
+  if (erroBloqueios) {
+    throw new Error("Não foi possível carregar os centros de custo");
+  }
+
+  const porNo = new Map<string, string | null>(
+    (bloqueios ?? []).map((linha) => [linha.centro_custo_id, linha.bloqueio]),
+  );
+
+  /** Nó ausente do lote nunca é tratado como liberado. */
+  const bloqueioDe = (id: string): string | null =>
+    porNo.has(id) ? (porNo.get(id) ?? null) : "nao_encontrado";
+
   return (data ?? []).map((no) => ({
     id: no.id,
     codigo: no.codigo,
@@ -56,5 +84,6 @@ export async function listarArvore(): Promise<NoCentroCusto[]> {
     orcamento: no.orcamento,
     sistema: no.sistema,
     ativo: no.ativo,
+    motivoBloqueio: motivoBloqueioCentroCusto(bloqueioDe(no.id)),
   }));
 }

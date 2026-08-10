@@ -19,6 +19,7 @@ export default async function PaginaObras() {
 
   const podeCriar = temPermissao(usuario, "cadastros.obras", "criar");
   const podeEditar = temPermissao(usuario, "cadastros.obras", "editar");
+  const podeExcluir = temPermissao(usuario, "cadastros.obras", "excluir");
 
   return (
     <>
@@ -28,7 +29,12 @@ export default async function PaginaObras() {
         descricao="Contratos de obra. Cada obra gera o centro de custo raiz dela"
         acoes={<ObrasAcoesCabecalho clientes={clientes} podeCriar={podeCriar} />}
       />
-      <ObrasTabela obras={obras} clientes={clientes} podeEditar={podeEditar} />
+      <ObrasTabela
+        obras={obras}
+        clientes={clientes}
+        podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
+      />
     </>
   );
 }

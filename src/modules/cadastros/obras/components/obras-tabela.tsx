@@ -6,6 +6,7 @@ import { Building2, MoreHorizontal } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroBusca,
@@ -19,11 +20,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
-import { alternarAtivo } from "@/modules/cadastros/obras/actions";
+import { alternarAtivo, excluirObra } from "@/modules/cadastros/obras/actions";
 import type { ClienteOpcao, ObraLista } from "@/modules/cadastros/obras/queries";
 import {
   STATUS_OBRA,
@@ -125,6 +128,7 @@ export interface ObrasTabelaProps {
   obras: ObraLista[];
   clientes: ClienteOpcao[];
   podeEditar: boolean;
+  podeExcluir: boolean;
 }
 
 /**
@@ -134,9 +138,16 @@ export interface ObrasTabelaProps {
  * A página carrega todas as obras (dezenas de contratos, não milhares), então
  * filtrar em memória está correto: o total da tabela é o total real.
  */
-export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
+export function ObrasTabela({
+  obras,
+  clientes,
+  podeEditar,
+  podeExcluir,
+}: ObrasTabelaProps) {
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
+  const [exclusaoObra, setExclusaoObra] = React.useState<ObraLista | null>(null);
+  const [exclusaoAberta, setExclusaoAberta] = React.useState(false);
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = useFiltroSessao("status", "ativos");
   const [situacao, setSituacao] = useFiltroSessao("situacao", "");
@@ -247,11 +258,30 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
     toast.success(obra.ativo ? "Obra desativada" : "Obra reativada");
   }, []);
 
-  // Coluna de ações (menu ⋮) só quando o usuário pode editar. Reaproveita as
-  // colunas base e acrescenta Editar + Desativar/Reativar, no padrão dos
-  // outros cadastros. O clique na linha continua abrindo a edição.
+  const abrirExclusao = React.useCallback((obra: ObraLista) => {
+    setExclusaoObra(obra);
+    setExclusaoAberta(true);
+  }, []);
+
+  const confirmarExclusao = React.useCallback(
+    async (motivo?: string) => {
+      if (!exclusaoObra) return;
+      const resultado = await excluirObra(exclusaoObra.id, motivo ?? "");
+      if ("erro" in resultado) {
+        toast.error(resultado.erro);
+        return;
+      }
+      toast.success("Obra excluída, com o centro de custo raiz dela");
+    },
+    [exclusaoObra],
+  );
+
+  // Coluna de ações (menu ⋮) quando o usuário pode editar ou excluir.
+  // Reaproveita as colunas base e acrescenta Editar + Desativar/Reativar +
+  // Excluir, no padrão dos outros cadastros. O clique na linha continua
+  // abrindo a edição.
   const colunasComAcoes = React.useMemo<ColumnDef<ObraLista, unknown>[]>(() => {
-    if (!podeEditar) return colunas;
+    if (!podeEditar && !podeExcluir) return colunas;
     return [
       ...colunas,
       {
@@ -278,12 +308,35 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => abrirEdicao(obra)}>
-                    Editar
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void alternar(obra)}>
-                    {obra.ativo ? "Desativar" : "Reativar"}
-                  </DropdownMenuItem>
+                  {podeEditar ? (
+                    <>
+                      <DropdownMenuItem onSelect={() => abrirEdicao(obra)}>
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void alternar(obra)}>
+                        {obra.ativo ? "Desativar" : "Reativar"}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  {podeExcluir ? (
+                    <>
+                      {podeEditar ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={obra.motivoBloqueio !== null}
+                        onSelect={() => abrirExclusao(obra)}
+                      >
+                        Excluir obra
+                      </DropdownMenuItem>
+                      {/* Motivo do bloqueio no próprio menu: tooltip em item
+                          de dropdown não é acessível por teclado. */}
+                      {obra.motivoBloqueio ? (
+                        <DropdownMenuLabel className="max-w-64 text-xs font-normal whitespace-normal text-muted-foreground">
+                          {obra.motivoBloqueio}
+                        </DropdownMenuLabel>
+                      ) : null}
+                    </>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -291,7 +344,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
         },
       },
     ];
-  }, [podeEditar, abrirEdicao, alternar]);
+  }, [podeEditar, podeExcluir, abrirEdicao, alternar, abrirExclusao]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -471,6 +524,24 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
         obra={obraSelecionada}
         clientes={clientes}
       />
+
+      {podeExcluir ? (
+        <ConfirmDialog
+          aberto={exclusaoAberta}
+          onAbertoChange={(estaAberto) => {
+            setExclusaoAberta(estaAberto);
+            if (!estaAberto) setExclusaoObra(null);
+          }}
+          titulo="Excluir obra"
+          descricao={`A obra ${
+            exclusaoObra?.nome ?? ""
+          } e o centro de custo raiz dela vão para a lixeira, juntos. Os dois nascem juntos, então saem juntos. Nada de custo está atrelado a eles.`}
+          textoConfirmar="Excluir obra"
+          variante="destrutivo"
+          exigeMotivo
+          onConfirmar={confirmarExclusao}
+        />
+      ) : null}
     </div>
   );
 }

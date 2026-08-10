@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { motivoBloqueioObra } from "@/modules/cadastros/_shared/dependencias";
 import type { StatusObra } from "@/modules/cadastros/obras/schemas";
 
 /** Linha da listagem de obras, com o nome do cliente resolvido. */
@@ -19,6 +20,11 @@ export interface ObraLista {
   status: StatusObra;
   observacoes: string | null;
   ativo: boolean;
+  /**
+   * Por que esta obra não pode ser excluída, já em pt-BR, ou null quando
+   * pode. Vem de fn_obra_bloqueio: a regra é do banco, aqui só traduzimos.
+   */
+  motivoBloqueio: string | null;
 }
 
 /** Cliente disponível para vincular numa obra (select). */
@@ -30,6 +36,10 @@ export interface ClienteOpcao {
 /**
  * Lista todas as obras com o nome do cliente (join em clientes).
  * Usa nome_fantasia quando existe, senão a razão social (nome).
+ *
+ * O bloqueio de exclusão vem numa segunda chamada, em lote
+ * (fn_obras_bloqueios), e não por linha: a contagem precisa de security
+ * definer para não sair zerada sob RLS, e uma chamada por obra seria N+1.
  */
 export async function listarObras(): Promise<ObraLista[]> {
   const supabase = await createClient();
@@ -44,6 +54,26 @@ export async function listarObras(): Promise<ObraLista[]> {
   if (error) {
     throw new Error("Não foi possível carregar as obras");
   }
+
+  const { data: bloqueios, error: erroBloqueios } = await supabase.rpc(
+    "fn_obras_bloqueios",
+    { p_ids: (data ?? []).map((obra) => obra.id) },
+  );
+
+  if (erroBloqueios) {
+    throw new Error("Não foi possível carregar as obras");
+  }
+
+  const porObra = new Map<string, string | null>(
+    (bloqueios ?? []).map((linha) => [linha.obra_id, linha.bloqueio]),
+  );
+
+  /**
+   * Obra ausente do lote é tratada como "não encontrada", nunca como
+   * liberada: omissão não pode habilitar um botão destrutivo.
+   */
+  const bloqueioDe = (id: string): string | null =>
+    porObra.has(id) ? (porObra.get(id) ?? null) : "nao_encontrado";
 
   return (data ?? []).map((obra) => ({
     id: obra.id,
@@ -60,6 +90,7 @@ export async function listarObras(): Promise<ObraLista[]> {
     status: obra.status as StatusObra,
     observacoes: obra.observacoes,
     ativo: obra.ativo,
+    motivoBloqueio: motivoBloqueioObra(bloqueioDe(obra.id)),
   }));
 }
 

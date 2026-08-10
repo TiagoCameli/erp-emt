@@ -1105,3 +1105,61 @@ imposto tem prazo legal, e competência errada é erro contábil silencioso.
    as três telas do módulo usam `rotuloOrigemLancamento` e o catálogo `ORIGENS_LANCAMENTO`,
    e o filtro casa por igualdade exata. Rótulo de origem é informação de auditoria na tela
    onde se libera pagamento: derivar de catálogo único, nunca escrever literal.
+
+## 2026-08-10 - Obra e centro de custo raiz são um par: nascem juntos, morrem juntos
+
+Pedido do Tiago: poder excluir obra e centro de custo que não têm nada atrelado. Até aqui os
+dois só **desativavam**; a migration 11 os deixou fora da allowlist `fn_recurso_do_cadastro`
+com o comentário "tem triggers/auto-referencia".
+
+O comentário escondia um impasse real, não preguiça. O trigger `trg_obra_cria_centro_custo`
+faz **toda obra nascer com um centro de custo raiz**, e `centros_custo.obra_id` tem FK para
+`obras`. Ao pé da letra do pedido, portanto, **nenhuma obra jamais estaria "sem nada
+atrelado"**: sempre tem o centro dela pendurado, e a FK barra o delete. A exclusão genérica
+falharia sempre, com um 23503 traduzido como "Este registro está em uso" — mensagem verdadeira
+no código e mentirosa para o usuário.
+
+**Decisões**
+
+1. **A obra e o centro raiz dela são excluídos juntos, numa transação.** É o simétrico do
+   trigger. `fn_excluir_obra` apaga o centro e depois a obra, e só quando nada aponta para
+   nenhum dos dois. Não existe "excluir a obra e deixar o centro órfão": todo centro tipo obra
+   pertence a uma obra.
+2. **Centro de custo exclui só folha, de baixo para cima.** Nó com filho é barrado; para apagar
+   uma etapa com 3 itens, apaga os 3 itens primeiro. Escolha do Tiago entre isso e apagar a
+   subárvore de uma vez. Mais cliques, e nenhuma exclusão em massa acidental na espinha dorsal.
+   Nível 1 nunca sai sozinho: é ou centro de sistema ou raiz de obra.
+3. **A lixeira guarda o par numa entrada só.** Restaurar uma obra reinsere a linha e o trigger
+   **cria um centro raiz novo**; reinserir também o centro antigo daria dois centros na mesma
+   obra. Então `fn_excluir_obra` grava uma única entrada, de `obras`, com o snapshot do centro
+   na chave `centro_custo_raiz` (o `jsonb_populate_record` ignora chave que não é coluna), e
+   `fn_restaurar_cadastro` aplica `codigo`/`orcamento`/`ativo` sobre o centro recém-criado. Sem
+   desabilitar trigger, sem duplicata, e o par volta sempre junto. O `id` do centro muda ao
+   restaurar, e isso é inofensivo porque a exclusão só era permitida quando nada referenciava
+   aquele id.
+4. **Abrir a allowlist para restauração obriga a fechar a porta genérica.** `fn_recurso_do_cadastro`
+   passou a mapear `obras` e `centros_custo` (a restauração usa essa allowlist), o que de graça
+   faria `fn_excluir_cadastro` aceitá-las e furar todas as validações novas. A função ganhou
+   guarda explícita rejeitando as duas e apontando para as específicas. **Toda vez que uma
+   allowlist serve a dois propósitos, abrir para um abre para o outro.**
+5. **A regra devolve código, não frase.** `fn_obra_bloqueio` e `fn_centro_custo_bloqueio` são a
+   fonte única e devolvem NULL ou um código (`tem_filhos`, `em_uso`, `raiz_de_obra`, ...). O
+   texto pt-BR acentuado é montado em `_shared/dependencias.ts`, testado em Vitest. Motivo: as
+   mensagens SQL deste repo são sem acento (885 `raise exception` assim) e a UI precisa de
+   acento; com código a regra fica num lugar e o texto noutro, sem duplicar.
+6. **Contagem de dependência é `security definer`, e por isso exige `ver`.** Sob RLS o usuário
+   pode não ver `folha_itens` ou `lancamentos`: a contagem sairia zerada e habilitaria um botão
+   destrutivo que vai falhar. As funções de leitura contam por fora do RLS e checam
+   `tem_permissao(recurso, 'ver')` antes.
+7. **Lista pede o bloqueio em lote, não por linha.** As queries usam o client do Supabase, não
+   SQL cru, então não há `LEFT JOIN LATERAL`; e uma chamada por linha seria N+1.
+   `fn_obras_bloqueios(p_ids)` e `fn_centros_custo_bloqueios(p_ids)` devolvem o mapa numa
+   chamada. Linha ausente do mapa é tratada como bloqueada, nunca como liberada: **omissão não
+   habilita botão destrutivo.**
+
+**Gap registrado, não resolvido:** equipamentos têm o mesmo problema (equipamento cria etapa no
+centro Manutenção) e continuam fora. Mesma solução se aplica, é outro bloco.
+
+**Efeito colateral avisado ao Tiago:** como não há custo lançado no sistema, as 16 obras ficaram
+todas excluíveis. É o caso de uso pedido (limpar lixo de importação), mas o botão aparece
+habilitado em toda a lista.

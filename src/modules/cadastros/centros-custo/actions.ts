@@ -11,6 +11,11 @@ import {
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  codigoBloqueio,
+  motivoBloqueioCentroCusto,
+} from "@/modules/cadastros/_shared/dependencias";
+import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
+import {
   criarEtapaSchema,
   criarItemSchema,
   editarNoSchema,
@@ -223,6 +228,47 @@ export async function alternarAtivo(
       "cadastros.centros-custo.alternarAtivo",
       error,
       "Não foi possível alterar o status. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Exclui um nó da árvore, mandando o snapshot para a lixeira.
+ *
+ * Só folha, de baixo para cima: nó com filho é barrado, e nível 1 nunca sai
+ * por aqui (centro de sistema não se exclui, e raiz de obra sai junto com a
+ * obra, pela excluirObra). Toda a validação está em fn_excluir_centro_custo;
+ * aqui só traduzimos o código de bloqueio que ela devolve, o que cobre a
+ * corrida entre carregar a árvore e clicar.
+ */
+export async function excluirNo(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  await exigirPermissao(RECURSO, "excluir");
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Centro de custo inválido" };
+
+  const motivoLimpo = motivo.trim();
+  if (motivoLimpo.length === 0) return { erro: "Informe o motivo da exclusão" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_excluir_centro_custo", {
+    p_id: idValido.data,
+    p_motivo: motivoLimpo,
+  });
+
+  if (error) {
+    return erroAcao(
+      "cadastros.centros-custo.excluir",
+      error,
+      motivoBloqueioCentroCusto(codigoBloqueio(error.message)) ??
+        traduzErroExclusao(error) ??
+        "Não foi possível excluir o centro de custo. Tente novamente",
     );
   }
 
