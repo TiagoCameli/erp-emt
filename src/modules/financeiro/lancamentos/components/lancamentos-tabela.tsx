@@ -244,9 +244,24 @@ export interface ValoresFiltrosLancamentos {
   criadoAte: string;
 }
 
+/**
+ * Algum filtro está valendo? Decide só o rótulo do total ("total" x "total
+ * filtrado"), e é lido de `valores` de propósito: é a mesma fonte que preenche a
+ * barra de filtros, então rótulo e barra nunca discordam. `busca` entra porque
+ * buscar também recorta o conjunto.
+ */
+function temFiltroAtivo(valores: ValoresFiltrosLancamentos): boolean {
+  return Object.values(valores).some((valor) => valor !== "");
+}
+
 export interface LancamentosTabelaProps {
   lancamentos: LancamentoLista[];
   total: number;
+  /**
+   * Soma do valor do conjunto filtrado inteiro (não só da página), ou null
+   * quando o banco não conseguiu somar tudo. Vem de `listarLancamentos`.
+   */
+  valorTotal: number | null;
   pagina: number;
   tamanho: number;
   valores: ValoresFiltrosLancamentos;
@@ -269,6 +284,7 @@ export interface LancamentosTabelaProps {
 export function LancamentosTabela({
   lancamentos,
   total,
+  valorTotal,
   pagina,
   tamanho,
   valores,
@@ -643,6 +659,19 @@ export function LancamentosTabela({
         pageIndex={pagina}
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
+        resumo={
+          valorTotal === null ? null : (
+            <span>
+              {temFiltroAtivo(valores)
+                ? `Total de ${total.toLocaleString("pt-BR")} lançamento${total === 1 ? "" : "s"} no filtro: `
+                : `Total de ${total.toLocaleString("pt-BR")} lançamento${total === 1 ? "" : "s"}: `}
+              <MoneyText
+                valor={valorTotal}
+                className="font-medium text-foreground"
+              />
+            </span>
+          )
+        }
         selecao={{
           idDaLinha: (lancamento) => lancamento.id,
           selecionados,

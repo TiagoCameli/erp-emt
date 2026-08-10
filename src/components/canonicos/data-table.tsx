@@ -592,6 +592,17 @@ export interface DataTableProps<TData> {
   /** Filtros e busca da listagem, na mesma barra dos botões da tabela. */
   toolbar?: React.ReactNode;
   /**
+   * Resumo do conjunto listado (tipicamente o total em dinheiro), numa tira
+   * discreta logo acima da tabela.
+   *
+   * Fica ACIMA, e não no rodapé junto da contagem, porque o rodapé de uma
+   * listagem longa nasce abaixo da dobra: um total que exige rolar 25 linhas
+   * para aparecer não é um total visível. Quem passa por aqui é responsável por
+   * o número ser do conjunto FILTRADO inteiro, não só da página — total só da
+   * página, com paginação server-side, é número errado com cara de certo.
+   */
+  resumo?: React.ReactNode;
+  /**
    * Liga a seleção de linha por checkbox. **Opt-in**: sem esta prop a tabela não
    * renderiza checkbox nenhum, e é isso que mantém as outras listagens do app
    * exatamente como sempre foram.
@@ -790,6 +801,7 @@ export function DataTable<TData>({
   cabecalhoFixo = false,
   alturaMaxima,
   toolbar,
+  resumo,
   acoesLinha,
   filtros,
   selecao,
@@ -2440,6 +2452,12 @@ export function DataTable<TData>({
               </Button>
             )}
           </div>
+        </div>
+      )}
+
+      {resumo !== undefined && resumo !== null && (
+        <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-detalhe text-muted-foreground tabular-nums">
+          {resumo}
         </div>
       )}
 

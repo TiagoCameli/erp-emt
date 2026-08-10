@@ -148,7 +148,7 @@ export default async function PaginaLancamentos({
       : TAMANHO_PADRAO;
 
   const [
-    { itens, total },
+    { itens, total, valorTotal },
     categorias,
     fornecedores,
     centrosCusto,
@@ -208,6 +208,7 @@ export default async function PaginaLancamentos({
         podeExcluir={podeExcluir}
         lancamentos={itens}
         total={total}
+        valorTotal={valorTotal}
         pagina={pagina}
         tamanho={tamanho}
         // Só o que passou na validação chega na tela: filtro inválido na URL não
