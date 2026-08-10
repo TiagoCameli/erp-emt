@@ -36,6 +36,29 @@
 --    trilha de auditoria registra tudo.
 -- =============================================================
 
+-- -------------------------------------------------------------
+-- fn_jsonb_lista: devolve o valor quando ele E array, ou array
+-- vazio em qualquer outro caso.
+--
+-- Existe por causa de um erro real: coluna opcional vazia chega da
+-- Server Action como JSON `null`, e `v_linha->'chave'` devolve
+-- 'null'::jsonb, que NAO e SQL NULL. Entao o coalesce nao pegava e
+-- jsonb_array_elements_text recebia um escalar, levantando
+-- "cannot extract elements from a scalar" e derrubando a carga
+-- inteira. Checar o TIPO e o unico jeito seguro.
+-- -------------------------------------------------------------
+create or replace function public.fn_jsonb_lista(p_valor jsonb)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $$
+  select case when jsonb_typeof(p_valor) = 'array' then p_valor else '[]'::jsonb end;
+$$;
+
+revoke all on function public.fn_jsonb_lista(jsonb) from public, anon;
+grant execute on function public.fn_jsonb_lista(jsonb) to authenticated;
+
 create or replace function public.fn_importar_lancamentos(p_linhas jsonb)
 returns jsonb
 language plpgsql
@@ -136,14 +159,14 @@ begin
     -- Vencimentos e pagamentos
     select array_agg((x)::date order by ordinality)
       into v_venc
-      from jsonb_array_elements_text(coalesce(v_linha->'vencimentos','[]'::jsonb)) with ordinality as t(x, ordinality);
+      from jsonb_array_elements_text(public.fn_jsonb_lista(v_linha->'vencimentos')) with ordinality as t(x, ordinality);
     if v_venc is null or array_length(v_venc, 1) is null then
       v_txt := coalesce(v_txt || '; ', '') || 'Informe pelo menos um vencimento';
     end if;
 
     select array_agg((x)::date order by ordinality)
       into v_pgto
-      from jsonb_array_elements_text(coalesce(v_linha->'pagamentos','[]'::jsonb)) with ordinality as t(x, ordinality);
+      from jsonb_array_elements_text(public.fn_jsonb_lista(v_linha->'pagamentos')) with ordinality as t(x, ordinality);
     if v_pgto is not null and array_length(v_pgto,1) > coalesce(array_length(v_venc,1), 0) then
       v_txt := coalesce(v_txt || '; ', '') || 'Mais datas de pagamento que de vencimento';
     end if;
@@ -201,9 +224,9 @@ begin
     end if;
 
     select array_agg((x)::date order by ordinality) into v_venc
-      from jsonb_array_elements_text(coalesce(v_linha->'vencimentos','[]'::jsonb)) with ordinality as t(x, ordinality);
+      from jsonb_array_elements_text(public.fn_jsonb_lista(v_linha->'vencimentos')) with ordinality as t(x, ordinality);
     select array_agg((x)::date order by ordinality) into v_pgto
-      from jsonb_array_elements_text(coalesce(v_linha->'pagamentos','[]'::jsonb)) with ordinality as t(x, ordinality);
+      from jsonb_array_elements_text(public.fn_jsonb_lista(v_linha->'pagamentos')) with ordinality as t(x, ordinality);
 
     -- Parcelas: divide igual, sobra na primeira, para a soma fechar no centavo.
     v_n := array_length(v_venc, 1);
