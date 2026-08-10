@@ -575,7 +575,7 @@ export async function validarImportLancamentos(
  */
 export async function importarLancamentos(
   formData: FormData,
-): Promise<{ ok: true; mensagem: string } | { erro: string }> {
+): Promise<{ importadas: number } | { erro: string }> {
   try {
     await exigirPermissao(RECURSO, "criar");
   } catch {
@@ -645,6 +645,7 @@ export async function importarLancamentos(
 
   const retorno = (data ?? {}) as {
     ok?: boolean;
+    criados?: number;
     mensagem?: string;
     erros?: { linha: number; erro: string }[];
   };
@@ -667,5 +668,5 @@ export async function importarLancamentos(
 
   revalidatePath(ROTA);
   revalidatePath("/financeiro/aprovacao-pagamentos");
-  return { ok: true, mensagem: retorno.mensagem ?? "Importação concluída" };
+  return { importadas: retorno.criados ?? 0 };
 }

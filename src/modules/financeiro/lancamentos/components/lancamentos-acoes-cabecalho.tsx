@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ImportarCadastro } from "@/modules/cadastros/_shared/importar-cadastro";
+import {
+  importarLancamentos,
+  validarImportLancamentos,
+} from "@/modules/financeiro/lancamentos/actions";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
@@ -24,8 +29,13 @@ export interface LancamentosAcoesCabecalhoProps {
 }
 
 /**
- * Ação do cabeçalho de lançamentos: criar um novo. Só renderiza quando o
- * usuário tem permissão de criar. Ao criar, navega para o detalhe.
+ * Ações do cabeçalho de lançamentos: importar planilha e criar um novo. Só
+ * renderiza quando o usuário tem permissão de criar. Ao criar, navega para o
+ * detalhe.
+ *
+ * A importação aceita lançamento e pagamento na mesma planilha: linha com a
+ * coluna "Data de pagamento" preenchida entra já aprovada e paga, o que serve
+ * para carregar histórico financeiro fechado.
  */
 export function LancamentosAcoesCabecalho({
   podeCriar,
@@ -42,6 +52,12 @@ export function LancamentosAcoesCabecalho({
 
   return (
     <>
+      <ImportarCadastro
+        titulo="Importar lançamentos"
+        modeloHref="/financeiro/lancamentos/modelo"
+        validarAction={validarImportLancamentos}
+        importarAction={importarLancamentos}
+      />
       <Button type="button" size="sm" onClick={() => setAberto(true)}>
         <Plus />
         Novo lançamento
