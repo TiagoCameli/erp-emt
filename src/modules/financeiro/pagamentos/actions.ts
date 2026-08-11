@@ -30,19 +30,29 @@ const dataSchema = z.iso.date();
 const descontoSchema = z.number().min(0).max(999999999999.99);
 
 /**
+ * Juros e multa do ato do pagamento: mesma regra do desconto, e pelo mesmo
+ * motivo. Não tem teto contra o valor da parcela: juros de atraso longo pode
+ * passar do principal, e inventar um limite aqui recusaria pagamento legítimo.
+ */
+const jurosSchema = z.number().min(0).max(999999999999.99);
+
+/**
  * Registra o pagamento de uma parcela via RPC. A_pagar exige parcela já
  * aprovada (a regra é validada no banco). Repassa a mensagem de erro do
  * banco direto para o toast. Sem anexo de comprovante nesta fase.
  *
- * `desconto` é o abatimento concedido pelo credor no ato do pagamento, em
- * reais: sai do valor que a conta bancária paga, sem mexer no valor devido da
- * parcela. Omitido ou zero, o pagamento é exatamente o de antes.
+ * `desconto` é o abatimento concedido pelo credor no ato do pagamento e `juros`
+ * é o que se paga a mais por atraso ou multa. Os dois mexem no que a conta
+ * bancária paga (`valor_liquido` = valor − desconto + juros), e nenhum dos dois
+ * mexe no valor devido da parcela. Omitidos ou zero, o pagamento é exatamente o
+ * de antes.
  */
 export async function pagarParcela(
   id: string,
   contaBancariaId: string,
   dataPagamento: string,
   desconto = 0,
+  juros = 0,
 ): Promise<ResultadoAcao> {
   try {
     await exigirPermissao(RECURSO, "criar");
@@ -62,12 +72,16 @@ export async function pagarParcela(
   const descontoValido = descontoSchema.safeParse(desconto);
   if (!descontoValido.success) return { erro: "Desconto inválido" };
 
+  const jurosValido = jurosSchema.safeParse(juros);
+  if (!jurosValido.success) return { erro: "Juros inválidos" };
+
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_pagar_parcela", {
     p_parcela_id: idValido.data,
     p_conta_id: contaValida.data,
     p_data_pagamento: dataValida.data,
     p_desconto: descontoValido.data,
+    p_juros: jurosValido.data,
   });
 
   if (error) {

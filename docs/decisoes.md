@@ -1315,3 +1315,38 @@ primeira, a outra em observações); 15 lançamentos sem favorecido na origem (v
 para OUTRAS); e R$ 29.998,67 de diferença entre o export e o rodapé da tela do
 próprio maiscontrole — duas telas dele discordando, sendo R$ 4.000,00 de uma
 parcela sem favorecido.
+
+## 2026-08-11 — Juros na parcela, e o que `valor_liquido` significa
+
+A carga do histórico trouxe R$ 788,71 de juros em 3 parcelas que não tinham onde
+entrar. Poderia ficar como resíduo documentado, mas o problema não era a
+diferença: **sem o campo, todo juros futuro entraria como zero em silêncio**, e a
+posição bancária mentiria um pouco mais a cada boleto pago com atraso.
+
+**`valor_liquido` passou a ser `valor − desconto + juros`.** Isso não é
+conveniência: `valor_liquido` já era, pela própria definição e pelo comentário
+dentro de `fn_pagar_parcela`, "o que de fato sai do caixa". Enquanto juros não
+existia, `valor − desconto` era a resposta certa para essa pergunta; com juros,
+deixou de ser. As 8 funções que leem `valor_liquido` — posição bancária, fluxo de
+caixa, conciliação, resumo de gestão, folha, importação do lote 09 — passaram a
+estar corretas **sem mudar uma linha**, porque todas querem exatamente isso.
+
+Coluna gerada não aceita `ALTER` da expressão, então sai e volta. Conferido antes
+que não havia índice nem view sobre ela, e função em plpgsql resolve o nome em
+tempo de execução, então nada quebrou.
+
+**A conciliação melhorou de graça:** ela casa extrato com parcela por valor, e o
+extrato traz o que saiu com juros. Antes, boleto pago com multa nunca casava.
+
+**Juros não tem teto contra o valor da parcela**, ao contrário do desconto.
+Atraso longo pode passar do principal, e inventar um limite recusaria pagamento
+legítimo. Só a recusa de negativo, nas três barreiras (Zod na Server Action,
+`raise` na função, `check` na tabela).
+
+**A versão de 4 argumentos de `fn_pagar_parcela` foi derrubada, não mantida.**
+Mantida, o app poderia seguir chamando ela e o juros ficaria zero calado — que é
+exatamente o defeito que esta entrega existe para fechar.
+
+Resultado: o que saiu do banco no ERP-EMT passou a ser R$ 49.702.568,80, o mesmo
+"Valor Total Pago" do maiscontrole, **sem resíduo**. A dívida segue
+R$ 61.432.852,10 e as cinco contas seguem fechando em zero.

@@ -1785,6 +1785,7 @@ export type Database = {
           data_vencimento: string | null
           desconto: number
           id: string
+          juros: number
           lancamento_id: string
           numero_parcela: number
           pago_em: string | null
@@ -1807,6 +1808,7 @@ export type Database = {
           data_programada_origem?: string | null
           data_vencimento?: string | null
           desconto?: number
+          juros?: number
           id?: string
           lancamento_id: string
           numero_parcela?: number
@@ -1830,6 +1832,7 @@ export type Database = {
           data_programada_origem?: string | null
           data_vencimento?: string | null
           desconto?: number
+          juros?: number
           id?: string
           lancamento_id?: string
           numero_parcela?: number
@@ -3412,6 +3415,7 @@ export type Database = {
           p_conta_id: string
           p_data_pagamento: string
           p_desconto?: number
+          p_juros?: number
           p_parcela_id: string
         }
         Returns: undefined

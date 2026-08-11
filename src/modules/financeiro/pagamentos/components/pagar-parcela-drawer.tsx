@@ -76,6 +76,7 @@ export function PagarParcelaDrawer({
   const [contaId, setContaId] = React.useState("");
   const [dataPagamento, setDataPagamento] = React.useState(dataHojeISO());
   const [desconto, setDesconto] = React.useState("");
+  const [juros, setJuros] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
   // Ao abrir o drawer, zera a conta e o desconto e volta a data para hoje.
@@ -89,6 +90,7 @@ export function PagarParcelaDrawer({
     setContaId("");
     setDataPagamento(dataHojeISO());
     setDesconto("");
+    setJuros("");
   } else if (!aberto && estavaAberto) {
     setEstavaAberto(false);
   }
@@ -100,8 +102,17 @@ export function PagarParcelaDrawer({
     Number.isFinite(descontoNumero) &&
     descontoNumero >= 0 &&
     (parcela === null || descontoNumero <= parcela.valor);
+
+  // Juros não tem teto contra o valor da parcela: atraso longo pode passar do
+  // principal, e recusar isso barraria pagamento legítimo.
+  const jurosInformado = juros.trim() !== "";
+  const jurosNumero = jurosInformado ? paraNumero(juros) : 0;
+  const jurosValido = Number.isFinite(jurosNumero) && jurosNumero >= 0;
+
   const liquido =
-    parcela && descontoValido ? parcela.valor - descontoNumero : null;
+    parcela && descontoValido && jurosValido
+      ? parcela.valor - descontoNumero + jurosNumero
+      : null;
 
   async function aoEnviar(evento: React.FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -125,12 +136,22 @@ export function PagarParcelaDrawer({
       return;
     }
 
+    if (jurosInformado && !Number.isFinite(jurosNumero)) {
+      toast.error("Informe os juros como número (ex: 762,40)");
+      return;
+    }
+    if (jurosNumero < 0) {
+      toast.error("Os juros não podem ser negativos");
+      return;
+    }
+
     setSalvando(true);
     const resultado = await pagarParcela(
       parcela.id,
       contaId,
       dataPagamento,
       descontoNumero,
+      jurosNumero,
     );
     setSalvando(false);
 
@@ -156,12 +177,25 @@ export function PagarParcelaDrawer({
               valor; com desconto, a conta feita, porque é o líquido que vai
               sair da conta e bater com o extrato do banco. */}
           <div className="text-detalhe text-muted-foreground">
-            {descontoNumero > 0 && liquido !== null ? (
+            {(descontoNumero > 0 || jurosNumero > 0) && liquido !== null ? (
               <>
                 Valor{" "}
-                <MoneyText valor={parcela?.valor ?? null} className="inline" />{" "}
-                menos desconto{" "}
-                <MoneyText valor={descontoNumero} className="inline" /> ={" "}
+                <MoneyText valor={parcela?.valor ?? null} className="inline" />
+                {descontoNumero > 0 ? (
+                  <>
+                    {" "}
+                    menos desconto{" "}
+                    <MoneyText valor={descontoNumero} className="inline" />
+                  </>
+                ) : null}
+                {jurosNumero > 0 ? (
+                  <>
+                    {" "}
+                    mais juros{" "}
+                    <MoneyText valor={jurosNumero} className="inline" />
+                  </>
+                ) : null}{" "}
+                ={" "}
                 <span className="font-semibold text-foreground">
                   <MoneyText valor={liquido} className="inline" />
                 </span>
@@ -187,7 +221,7 @@ export function PagarParcelaDrawer({
             <Button
               type="submit"
               form={ID_FORM}
-              disabled={salvando || !parcela || !descontoValido}
+              disabled={salvando || !parcela || !descontoValido || !jurosValido}
             >
               {salvando ? (
                 <>
@@ -318,6 +352,27 @@ export function PagarParcelaDrawer({
             id="pagamento-desconto"
             valor={desconto}
             onValorChange={setDesconto}
+            disabled={salvando}
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="pagamento-juros"
+          rotulo="Juros e multa"
+          largura="medio"
+          ajuda="O que se pagou a mais por atraso ou multa. Deixe vazio se não houve. Entra no que sai da conta e não altera o valor devido da parcela."
+          erro={
+            jurosInformado && !jurosValido
+              ? !Number.isFinite(jurosNumero)
+                ? "Informe um número (ex: 762,40)"
+                : "Os juros não podem ser negativos"
+              : undefined
+          }
+        >
+          <InputMoeda
+            id="pagamento-juros"
+            valor={juros}
+            onValorChange={setJuros}
             disabled={salvando}
           />
         </CampoFormulario>
