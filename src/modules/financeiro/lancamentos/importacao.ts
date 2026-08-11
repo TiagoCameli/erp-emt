@@ -28,7 +28,27 @@ export interface LinhaLancamento {
   formaPagamento: string | null;
   vencimentos: string[];
   conta: string | null;
-  pagamentos: string[];
+  /**
+   * Datas de pagamento POSICIONAIS: o item k é da parcela k, e `null` é parcela
+   * em aberto. Posicional, e não "as k primeiras pagas", porque existe carnê com
+   * a parcela 3 paga e a 2 em aberto, e alinhar por contagem marcaria a errada.
+   */
+  pagamentos: (string | null)[];
+  /**
+   * Valor de cada parcela, quando a planilha traz o carnê real. Sem esta coluna,
+   * o valor do lançamento é dividido em partes iguais pelos vencimentos — o que
+   * é só uma estimativa, e não fecha com um carnê de prestações desiguais.
+   */
+  valoresParcelas: number[] | null;
+  /** Conta de cada parcela paga, quando o carnê foi pago de contas diferentes. */
+  contasParcelas: (string | null)[] | null;
+  /**
+   * Rateio entre centros de custo, quando o lançamento se divide em mais de um.
+   * Duas listas paralelas, na mesma posição. Sem elas, o valor inteiro vai para
+   * a coluna "Centro de custo" — que é o caso da esmagadora maioria.
+   */
+  centrosRateio: (string | null)[] | null;
+  valoresRateio: number[] | null;
   numeroDocumento: string | null;
   ordemCompra: string | null;
   planoContas: string | null;
@@ -94,6 +114,39 @@ export function parseListaDatas(valor: unknown): string[] {
     .split(/[;|\n]/)
     .map((parte) => parseData(parte.trim()))
     .filter((d): d is string => d !== null);
+}
+
+/**
+ * Lista de datas que PRESERVA a posição: item vazio (ou "-") vira `null` em vez
+ * de desaparecer. É o que permite dizer "parcela 1 paga, 2 em aberto, 3 paga":
+ * `parseListaDatas` descartaria o vazio do meio e a parcela 3 seria marcada como
+ * se fosse a 2.
+ */
+export function parseListaPosicional(valor: unknown): (string | null)[] {
+  if (valor instanceof Date || typeof valor === "number") {
+    return [parseData(valor)];
+  }
+  const texto = String(valor ?? "").trim();
+  if (texto === "" || texto === "-") return [];
+  return texto.split(/[;|\n]/).map((parte) => parseData(parte.trim()));
+}
+
+/** Lista de valores em reais, na mesma ordem dos vencimentos. */
+export function parseListaValores(valor: unknown): number[] {
+  if (typeof valor === "number") return [valor];
+  const texto = String(valor ?? "").trim();
+  if (texto === "" || texto === "-") return [];
+  return texto.split(/[;|\n]/).map((parte) => parseValor(parte.trim()));
+}
+
+/** Lista de textos, na mesma ordem dos vencimentos; vazio vira null. */
+export function parseListaTexto(valor: unknown): (string | null)[] {
+  const texto = String(valor ?? "").trim();
+  if (texto === "" || texto === "-") return [];
+  return texto.split(/[;|\n]/).map((parte) => {
+    const t = parte.trim();
+    return t === "" || t === "-" ? null : t;
+  });
 }
 
 /** Valor em reais, aceitando "1.234,56", "1234.56" e número puro. */
@@ -233,18 +286,123 @@ export const COLUNAS_LANCAMENTO = [
     transformar: textoOuNull,
   },
   {
+    // Opcional, e existe para o carnê de verdade. Sem ela o valor é dividido em
+    // partes iguais pelos vencimentos, que só acerta quando as prestações são
+    // iguais. Financiamento com entrada, ou prestação com centavo diferente, não
+    // fecha por divisão.
+    chave: "valoresParcelas" as const,
+    rotulo: "Valores das parcelas",
+    exemplo: "1.000,00; 1.000,00; 1.087,35",
+    transformar: (valor: unknown) => {
+      const valores = parseListaValores(valor);
+      return valores.length === 0 ? null : valores;
+    },
+    validar: (valor: unknown, linha: Partial<LinhaLancamento>) => {
+      const valores = valor as number[] | null;
+      if (!valores) return null;
+      if (valores.some((v) => Number.isNaN(v))) {
+        return "há valor de parcela que não é número";
+      }
+      const vencs = linha.vencimentos ?? [];
+      if (valores.length !== vencs.length) {
+        return `são ${valores.length} valores para ${vencs.length} vencimentos`;
+      }
+      if (valores.some((v) => v < 0)) return "valor de parcela negativo";
+      // Em centavos: somar float de duas casas erra no centavo, e é justamente
+      // o centavo que esta conferência existe para pegar.
+      const soma = valores.reduce((a, v) => a + Math.round(v * 100), 0);
+      const total = Math.round((linha.valor ?? 0) * 100);
+      if (soma !== total) {
+        return `a soma das parcelas (${(soma / 100).toFixed(2)}) não fecha com o valor (${(total / 100).toFixed(2)})`;
+      }
+      return null;
+    },
+  },
+  {
+    // Opcional: carnê pago de contas diferentes ao longo do tempo.
+    chave: "contasParcelas" as const,
+    rotulo: "Contas das parcelas",
+    exemplo: "BANCO DO BRASIL 102.124-9; CAIXINHA DE DINHEIRO",
+    transformar: (valor: unknown) => {
+      const contas = parseListaTexto(valor);
+      return contas.length === 0 ? null : contas;
+    },
+    validar: (valor: unknown, linha: Partial<LinhaLancamento>) => {
+      const contas = valor as (string | null)[] | null;
+      if (!contas) return null;
+      const vencs = linha.vencimentos ?? [];
+      if (contas.length > vencs.length) {
+        return `são ${contas.length} contas para ${vencs.length} vencimentos`;
+      }
+      return null;
+    },
+  },
+  {
     chave: "pagamentos" as const,
     rotulo: "Data de pagamento",
     exemplo: "10/08/2026",
-    transformar: (valor: unknown) => parseListaDatas(valor),
+    transformar: (valor: unknown) => parseListaPosicional(valor),
     validar: (valor: unknown, linha: Partial<LinhaLancamento>) => {
-      const pagos = (valor as string[]) ?? [];
+      const pagos = (valor as (string | null)[]) ?? [];
       const vencs = linha.vencimentos ?? [];
       if (pagos.length > vencs.length) {
         return "mais datas de pagamento que de vencimento nesta linha";
       }
-      if (pagos.length > 0 && !linha.conta) {
+      const contas = linha.contasParcelas;
+      const algumPago = pagos.some((d) => d !== null);
+      if (algumPago && !linha.conta && (contas ?? []).every((c) => !c)) {
         return "linha com pagamento precisa da coluna Conta preenchida";
+      }
+      // Pagamento na posição k sem conta na posição k nem conta da linha: o
+      // banco recusaria a parcela paga sem conta, e o erro apareceria no meio
+      // da carga em vez de aqui.
+      for (let k = 0; k < pagos.length; k += 1) {
+        if (pagos[k] && !(contas?.[k] ?? linha.conta)) {
+          return `parcela ${k + 1} está paga e sem conta bancária`;
+        }
+      }
+      return null;
+    },
+  },
+  {
+    // Rateio explícito. Opcional: sem ele o valor inteiro vai para a coluna
+    // "Centro de custo". Existe porque centro de custo é a espinha dorsal do
+    // ERP, e colapsar uma nota dividida entre duas obras numa obra só apaga
+    // custo de uma e infla o da outra.
+    chave: "centrosRateio" as const,
+    rotulo: "Centros do rateio",
+    exemplo: "003 - Recuperação do Ramal do Gama; 007 - AC 405 - Lote 2",
+    transformar: (valor: unknown) => {
+      const centros = parseListaTexto(valor);
+      return centros.length === 0 ? null : centros;
+    },
+  },
+  {
+    chave: "valoresRateio" as const,
+    rotulo: "Valores do rateio",
+    exemplo: "1.000,00; 500,00",
+    transformar: (valor: unknown) => {
+      const valores = parseListaValores(valor);
+      return valores.length === 0 ? null : valores;
+    },
+    validar: (valor: unknown, linha: Partial<LinhaLancamento>) => {
+      const valores = valor as number[] | null;
+      const centros = linha.centrosRateio;
+      if (!valores && !centros) return null;
+      if (!valores || !centros) {
+        return "informe as duas colunas do rateio, centros e valores";
+      }
+      if (valores.some((v) => Number.isNaN(v))) {
+        return "há valor de rateio que não é número";
+      }
+      if (valores.length !== centros.length) {
+        return `são ${valores.length} valores para ${centros.length} centros`;
+      }
+      if (centros.some((c) => !c)) return "há centro do rateio em branco";
+      const soma = valores.reduce((a, v) => a + Math.round(v * 100), 0);
+      const total = Math.round((linha.valor ?? 0) * 100);
+      if (soma !== total) {
+        return `a soma do rateio (${(soma / 100).toFixed(2)}) não fecha com o valor (${(total / 100).toFixed(2)})`;
       }
       return null;
     },

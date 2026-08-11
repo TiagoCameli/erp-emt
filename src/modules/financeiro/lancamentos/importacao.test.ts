@@ -4,6 +4,8 @@ import {
   COLUNAS_LANCAMENTO,
   parseData,
   parseListaDatas,
+  parseListaPosicional,
+  parseListaValores,
   parseValor,
 } from "@/modules/financeiro/lancamentos/importacao";
 
@@ -113,5 +115,86 @@ describe("coluna Competência", () => {
 
   it("reclama do que não é mês nem data", () => {
     expect(() => transformar("julho")).toThrow(/competência/);
+  });
+});
+
+describe("parseListaPosicional", () => {
+  it("preserva a posição do vazio, que é a parcela em aberto", () => {
+    // O caso que motivou existir: parcela 1 paga, 2 em aberto, 3 paga. Com
+    // parseListaDatas o vazio do meio desaparecia e a data da 3 marcaria a 2.
+    expect(parseListaPosicional("07/07/2026; -; 26/08/2026")).toEqual([
+      "2026-07-07",
+      null,
+      "2026-08-26",
+    ]);
+  });
+
+  it("lista vazia quando a célula está vazia", () => {
+    expect(parseListaPosicional("")).toEqual([]);
+    expect(parseListaPosicional("-")).toEqual([]);
+  });
+});
+
+describe("parseListaValores", () => {
+  it("lê valores em pt-BR", () => {
+    expect(parseListaValores("1.000,00; 586,54; 586,53")).toEqual([
+      1000, 586.54, 586.53,
+    ]);
+  });
+
+  it("NaN no que não é número, para a coluna acusar", () => {
+    expect(parseListaValores("100,00; abc")[1]).toBeNaN();
+  });
+});
+
+describe("coluna Valores das parcelas", () => {
+  const coluna = COLUNAS_LANCAMENTO.find((c) => c.chave === "valoresParcelas");
+
+  it("recusa soma que não fecha com o valor do lançamento", () => {
+    // É esta conferência que impede repetir o erro da primeira carga: carnê que
+    // não soma o total do lançamento entra torto e ninguém vê.
+    expect(
+      coluna!.validar!([586.54, 586.53], {
+        valor: 1759.6,
+        vencimentos: ["2026-07-07", "2026-08-01"],
+      }),
+    ).toMatch(/não fecha/);
+  });
+
+  it("aceita soma exata, com o centavo de sobra numa parcela", () => {
+    expect(
+      coluna!.validar!([586.54, 586.53, 586.53], {
+        valor: 1759.6,
+        vencimentos: ["2026-07-07", "2026-08-01", "2026-08-26"],
+      }),
+    ).toBeNull();
+  });
+
+  it("recusa quantidade de valores diferente da de vencimentos", () => {
+    expect(
+      coluna!.validar!([100, 100], { valor: 200, vencimentos: ["2026-07-07"] }),
+    ).toMatch(/2 valores para 1 vencimentos/);
+  });
+});
+
+describe("coluna Valores do rateio", () => {
+  const coluna = COLUNAS_LANCAMENTO.find((c) => c.chave === "valoresRateio");
+
+  it("exige as duas colunas do rateio", () => {
+    expect(coluna!.validar!([700, 300], { valor: 1000 })).toMatch(
+      /as duas colunas/,
+    );
+  });
+
+  it("recusa rateio que não fecha com o valor", () => {
+    expect(
+      coluna!.validar!([700, 200], { valor: 1000, centrosRateio: ["A", "B"] }),
+    ).toMatch(/não fecha/);
+  });
+
+  it("aceita rateio exato", () => {
+    expect(
+      coluna!.validar!([700, 300], { valor: 1000, centrosRateio: ["A", "B"] }),
+    ).toBeNull();
   });
 });
