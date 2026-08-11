@@ -294,7 +294,9 @@ async function lerEmPaginas<T>(
     const { data, error } = await consultar(inicio, inicio + PAGINA_IDS - 1);
     // Erro aqui não pode virar lista vazia: a tela mostraria "nenhum
     // lançamento" para um filtro que na verdade não foi aplicado.
-    if (error) throw new Error("Não foi possível aplicar o filtro");
+    if (error) {
+      throw new Error("Não foi possível aplicar o filtro", { cause: error });
+    }
     const lote = data ?? [];
     linhas.push(...lote);
     if (lote.length < PAGINA_IDS) break;
@@ -652,7 +654,12 @@ export async function listarLancamentos(
   ]);
 
   if (error) {
-    throw new Error("Não foi possível carregar os lançamentos");
+    // `cause` carrega o erro do PostgREST para o log do servidor. Sem ele, a
+    // unica pista de uma falha em producao e esta frase generica, que nao diz
+    // se foi timeout, permissao ou consulta malformada.
+    throw new Error("Não foi possível carregar os lançamentos", {
+      cause: error,
+    });
   }
 
   const itens: LancamentoLista[] = (data ?? []).map((lancamento) => {
