@@ -5,6 +5,7 @@ import { mesParaCompetencia } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { LancamentosAcoesCabecalho } from "@/modules/financeiro/lancamentos/components/lancamentos-acoes-cabecalho";
 import { LancamentosTabela } from "@/modules/financeiro/lancamentos/components/lancamentos-tabela";
+import { lerOrdenacao } from "@/modules/financeiro/lancamentos/ordenacao";
 import {
   listarCategorias,
   listarCentrosCusto,
@@ -138,6 +139,8 @@ export default async function PaginaLancamentos({
   const compra = periodo(params.compra_de, params.compra_ate);
   const criado = periodo(params.criado_de, params.criado_ate);
 
+  const ordenacao = lerOrdenacao(params.ordem, params.dir);
+
   const paginaParam = Number(params.pagina);
   const pagina =
     Number.isInteger(paginaParam) && paginaParam > 0 ? paginaParam - 1 : 0;
@@ -178,6 +181,8 @@ export default async function PaginaLancamentos({
       criadoDe: criado.de,
       criadoAte: criado.ate,
       revisao,
+      ordenarPor: ordenacao?.coluna,
+      descendente: ordenacao?.descendente,
     }),
     listarCategorias(),
     listarFornecedores(),
@@ -209,6 +214,7 @@ export default async function PaginaLancamentos({
         lancamentos={itens}
         total={total}
         valorTotal={valorTotal}
+        ordenacao={ordenacao}
         pagina={pagina}
         tamanho={tamanho}
         // Só o que passou na validação chega na tela: filtro inválido na URL não

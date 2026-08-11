@@ -22,6 +22,7 @@ import type {
 } from "@/modules/financeiro/_shared/formato";
 import type {
   FiltroRevisao,
+  OrdemLancamento,
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
@@ -76,6 +77,15 @@ export interface ListarLancamentosParams {
    * isso que impede filtro e selo de mostrarem conjuntos diferentes.
    */
   revisao?: FiltroRevisao;
+  /**
+   * Coluna da ordenação. Ausente = ordem padrão (compra mais recente primeiro).
+   * Ordenar no banco, e não na tela: com paginação server-side, ordenar as 100
+   * linhas carregadas mostraria "o maior valor DESTA página" com cara de "o
+   * maior valor".
+   */
+  ordenarPor?: OrdemLancamento;
+  /** Ordem decrescente. Só tem efeito com `ordenarPor`. */
+  descendente?: boolean;
 }
 
 // A linha e a pagina da listagem moram em `pagina.ts`, junto da leitura do
@@ -287,6 +297,8 @@ export async function listarLancamentos(
     },
     p_pagina: Math.max(0, params.pagina),
     p_tamanho: Math.max(1, params.tamanho),
+    p_ordenar_por: params.ordenarPor ?? null,
+    p_descendente: params.descendente ?? false,
   });
 
   if (error) {

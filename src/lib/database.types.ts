@@ -3385,7 +3385,13 @@ export type Database = {
         Returns: undefined
       }
       fn_listar_lancamentos: {
-        Args: { p_filtros?: Json; p_pagina?: number; p_tamanho?: number }
+        Args: {
+          p_descendente?: boolean
+          p_filtros?: Json
+          p_ordenar_por?: string | null
+          p_pagina?: number
+          p_tamanho?: number
+        }
         Returns: Json
       }
       fn_marcar_parcela_conferida: {
