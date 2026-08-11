@@ -1263,3 +1263,55 @@ tentativa e erro contra o banco, e eu descartei a hipótese certa (URL) porque u
 sintéticos mediu 15.234 B e passou raspando por baixo do limite. O erro real dizia o tamanho
 exato e sugeria a solução. Agora vai no `cause`. **Erro de infraestrutura tem que chegar ao log
 com a causa.**
+
+## 2026-08-11 — O histórico financeiro veio do nível de parcela, não de lançamento
+
+**O erro.** A primeira carga do histórico veio de uma planilha em nível de
+**lançamento**, sem o valor de cada parcela, e a importação reconstruía o carnê
+dividindo o total em partes iguais pelos vencimentos. Medido contra o export em
+nível de parcela do maiscontrole:
+
+| | ERP-EMT (estimado) | maiscontrole (origem) | diferença |
+| --- | --- | --- | --- |
+| Total | 64.541.696,82 | 61.432.852,10 | **+3.108.844,72** |
+| Em aberto | 15.024.746,09 | 11.699.473,00 | +3.325.273,09 |
+| Lançamentos | 7.253 | 5.817 | +1.436 |
+
+**O mecanismo, que é a parte que interessa.** Quando o pagamento de UMA parcela
+não casava com o total do lançamento, ele entrava como lançamento avulso pago e
+a parcela original ficava aberta. O mesmo dinheiro duas vezes, e "sem conta"
+onde já estava pago. Foi assim que o Tiago percebeu: a tela mostrava como
+pendente o que ele sabia estar pago.
+
+**A lição.** Divisão em partes iguais não é carnê, é estimativa. E estimativa
+que entra no lugar de dado real não avisa que é estimativa: ela vira número na
+tela, com duas casas decimais, com cara de conferido.
+
+**O que passou a existir.** A importação aceita o carnê real: `valores_parcelas`
+(com validação de que a soma fecha com o valor), `contas_parcelas` (77 carnês
+pagos de contas diferentes), `centros_rateio`/`valores_rateio` (141 lançamentos
+divididos entre obras, R$ 2,2 milhões) e datas de pagamento **posicionais**
+(existe carnê com a parcela 3 paga e a 2 aberta). Sem essas colunas, planilha
+escrita à mão continua funcionando igual.
+
+**Erro silencioso, de novo.** No meio do caminho, 14 pagamentos (R$ 818.891,95)
+não entraram e **nada acusou**. O maiscontrole traz algumas células com duas
+datas juntas (`27/05/2025, 28/05/2025`, parcela quitada em dois pagamentos); o
+conversor tratava a string como ISO, produzia `25//2/27/0`, e o parser da
+importação descartava a data calada. Consertado em três lugares, e o do meio é o
+que importa: **o gerador agora recusa data que não seja ISO em vez de fatiar às
+cegas, e a autoconferência exige o formato de todas as datas.** Transformar erro
+silencioso em erro que aparece vale mais que consertar o caso específico.
+
+**A conferência que fecha.** Três cortes independentes contra a origem, todos
+com diferença zero: 77 meses de vencimento (2025-01 a 2031-05), 5 contas
+bancárias e 11 centros de custo. E um sinal externo: agosto 2026 em aberto deu
+R$ 1.418.737,62, exatamente o rodapé que o maiscontrole mostra na tela.
+
+**Resíduos conhecidos, que não afetam os totais.** R$ 31.599,01 de descontos e
+R$ 788,71 de juros que o maiscontrole registra fora do valor da parcela (foram
+para observações); 3 parcelas pagas de duas contas ao mesmo tempo (fica a
+primeira, a outra em observações); 15 lançamentos sem favorecido na origem (vão
+para OUTRAS); e R$ 29.998,67 de diferença entre o export e o rodapé da tela do
+próprio maiscontrole — duas telas dele discordando, sendo R$ 4.000,00 de uma
+parcela sem favorecido.
