@@ -3384,6 +3384,10 @@ export type Database = {
         Args: { p_tabela: string }
         Returns: undefined
       }
+      fn_listar_lancamentos: {
+        Args: { p_filtros?: Json; p_pagina?: number; p_tamanho?: number }
+        Returns: Json
+      }
       fn_marcar_parcela_conferida: {
         Args: { p_conferido?: boolean; p_parcela_id: string }
         Returns: undefined

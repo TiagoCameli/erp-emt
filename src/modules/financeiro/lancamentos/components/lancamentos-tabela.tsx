@@ -52,6 +52,7 @@ import {
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
 import { ehElegivelParaLote } from "@/modules/financeiro/lancamentos/lote";
+import { somarValores } from "@/modules/financeiro/lancamentos/total";
 
 const OPCOES_TIPO = (
   Object.keys(ROTULO_TIPO_LANCAMENTO) as TipoLancamento[]
@@ -258,10 +259,10 @@ export interface LancamentosTabelaProps {
   lancamentos: LancamentoLista[];
   total: number;
   /**
-   * Soma do valor do conjunto filtrado inteiro (não só da página), ou null
-   * quando o banco não conseguiu somar tudo. Vem de `listarLancamentos`.
+   * Soma do valor do conjunto filtrado inteiro, não só da página. Vem somada
+   * pelo banco, na mesma consulta que traz a página.
    */
-  valorTotal: number | null;
+  valorTotal: number;
   pagina: number;
   tamanho: number;
   valores: ValoresFiltrosLancamentos;
@@ -637,9 +638,8 @@ export function LancamentosTabela({
     <div className="flex flex-col gap-2">
       <LoteContaBancaria
         selecionados={selecionados}
-        valorSelecionado={selecionadosNaPagina.reduce(
-          (soma, lancamento) => soma + lancamento.valor,
-          0,
+        valorSelecionado={somarValores(
+          selecionadosNaPagina.map((lancamento) => lancamento.valor),
         )}
         jaComConta={
           selecionadosNaPagina.filter(
@@ -660,17 +660,13 @@ export function LancamentosTabela({
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
         resumo={
-          valorTotal === null ? null : (
-            <span>
-              {temFiltroAtivo(valores)
-                ? `Total de ${total.toLocaleString("pt-BR")} lançamento${total === 1 ? "" : "s"} no filtro: `
-                : `Total de ${total.toLocaleString("pt-BR")} lançamento${total === 1 ? "" : "s"}: `}
-              <MoneyText
-                valor={valorTotal}
-                className="font-medium text-foreground"
-              />
-            </span>
-          )
+          <span>
+            {`Total de ${total.toLocaleString("pt-BR")} lançamento${total === 1 ? "" : "s"}${temFiltroAtivo(valores) ? " no filtro" : ""}: `}
+            <MoneyText
+              valor={valorTotal}
+              className="font-medium text-foreground"
+            />
+          </span>
         }
         selecao={{
           idDaLinha: (lancamento) => lancamento.id,

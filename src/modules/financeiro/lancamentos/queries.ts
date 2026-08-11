@@ -25,10 +25,6 @@ import type {
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
-import { somarValores } from "@/modules/financeiro/lancamentos/total";
-
-/** Cliente Supabase do servidor, para as consultas auxiliares de filtro. */
-type ClienteSupabase = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * Filtros e paginação da listagem de lançamentos. Todo filtro aqui é aplicado
@@ -48,12 +44,12 @@ export interface ListarLancamentosParams {
   categoriaId?: string;
   /**
    * Centro de custo do rateio. Mora em lancamento_rateios (um lançamento pode
-   * ser rateado entre vários centros), então vira consulta de ids + `in`.
+   * ser rateado entre vários centros), então o banco resolve por `exists`.
    */
   centroCustoId?: string;
   /**
-   * Conta bancária de alguma parcela do lançamento (paga ou a pagar). Mora em
-   * lancamento_parcelas, então também vira consulta de ids + `in`.
+   * Conta bancária de alguma parcela do lançamento (paga ou a pagar): a
+   * pergunta é "o que passou por esta conta", não "o que ainda vai sair dela".
    */
   contaBancariaId?: string;
   formaPagamentoId?: string;
@@ -75,61 +71,23 @@ export interface ListarLancamentosParams {
   criadoAte?: string;
   /**
    * Estado da revisão: parcela em revisão, ou a situação da conta bancária das
-   * parcelas ainda não pagas (sem conta, conta parcial, revisado). É derivado
-   * das parcelas, então vira consulta de ids + `in`.
+   * parcelas ainda não pagas (sem conta, conta parcial, revisado). Derivado das
+   * parcelas pela MESMA expressão que preenche o selo da coluna, no banco: é
+   * isso que impede filtro e selo de mostrarem conjuntos diferentes.
    */
   revisao?: FiltroRevisao;
-  /**
-   * Somar o valor do conjunto filtrado inteiro (padrão: sim). Quem só quer os
-   * ids, como a ação em lote, passa `false` e economiza a varredura da soma.
-   */
-  somarValor?: boolean;
 }
 
-/** Linha da listagem de lançamentos. */
-export interface LancamentoLista {
-  id: string;
-  numero: string | null;
-  tipo: TipoLancamento;
-  origem: string;
-  descricao: string;
-  categoriaNome: string | null;
-  fornecedorNome: string | null;
-  valor: number;
-  dataVencimento: string | null;
-  status: StatusLancamento;
-  qtdParcelas: number;
-  /** O fato: data da compra ou do documento. */
-  dataCompra: string;
-  /** Mês de referência (dia 1): em que mês o custo entra. */
-  mesCompetencia: string;
-  /** Data de sistema, imutável. */
-  criadoEm: string;
-  /**
-   * Estado da revisão do lançamento, derivado da conta bancária das parcelas.
-   * Não é um marcador que alguém liga na mão de propósito: selo dizendo
-   * "revisado" com a conta vazia seria mentira, e um flag manual sairia de
-   * sincronia com o que o banco exige para aprovar.
-   *
-   * Parcela PAGA conta como resolvida, porque pagar exige conta bancária. Logo
-   * lançamento quitado é `revisado`, e é o caso mais resolvido que existe.
-   *
-   * nao-se-aplica: a receber, ou sem parcela nenhuma.
-   */
-  revisao: "sem-conta" | "parcial" | "revisado" | "nao-se-aplica";
-}
-
-/** Resultado paginado da listagem. */
-export interface LancamentosPagina {
-  itens: LancamentoLista[];
-  total: number;
-  /**
-   * Soma do `valor` de TODOS os lançamentos que passaram no filtro, não só os da
-   * página. Sem filtro nenhum é o total da base. null quando não deu para somar
-   * o conjunto inteiro: total pela metade é pior que total nenhum.
-   */
-  valorTotal: number | null;
-}
+// A linha e a pagina da listagem moram em `pagina.ts`, junto da leitura do
+// que a RPC devolve: quem define o formato e quem o converte no mesmo lugar.
+export type {
+  LancamentoLista,
+  LancamentosPagina,
+} from "@/modules/financeiro/lancamentos/pagina";
+import {
+  lerPagina,
+  type LancamentosPagina,
+} from "@/modules/financeiro/lancamentos/pagina";
 
 /** Parcela do lançamento, com o nome da conta resolvido. */
 export interface ParcelaLancamento {
@@ -272,157 +230,6 @@ function nomeFornecedor(fornecedor: {
 }
 
 /** Linhas lidas por página nas consultas auxiliares de filtro. */
-const PAGINA_IDS = 1000;
-/** Teto de páginas auxiliares, para uma consulta errada não varrer o banco. */
-const MAX_PAGINAS_IDS = 10;
-
-/**
- * Lê uma consulta auxiliar em páginas, até acabar. Filtro que mora em tabela
- * filha (parcela, rateio) precisa da lista completa de lancamento_id, e o
- * PostgREST corta a resposta num teto invisível: sem paginar, o filtro perderia
- * lançamentos sem avisar ninguém.
- */
-async function lerEmPaginas<T>(
-  consultar: (
-    de: number,
-    ate: number,
-  ) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<T[]> {
-  const linhas: T[] = [];
-  for (let pagina = 0; pagina < MAX_PAGINAS_IDS; pagina += 1) {
-    const inicio = pagina * PAGINA_IDS;
-    const { data, error } = await consultar(inicio, inicio + PAGINA_IDS - 1);
-    // Erro aqui não pode virar lista vazia: a tela mostraria "nenhum
-    // lançamento" para um filtro que na verdade não foi aplicado.
-    if (error) {
-      throw new Error("Não foi possível aplicar o filtro", { cause: error });
-    }
-    const lote = data ?? [];
-    linhas.push(...lote);
-    if (lote.length < PAGINA_IDS) break;
-  }
-  return linhas;
-}
-
-/** Ids de lançamentos com alguma parcela na conta bancária informada. */
-async function idsPorContaBancaria(
-  supabase: ClienteSupabase,
-  contaBancariaId: string,
-): Promise<string[]> {
-  // Vale parcela paga e a pagar: a pergunta de quem filtra é "o que passou por
-  // esta conta", não "o que ainda vai sair dela".
-  const parcelas = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_parcelas")
-      .select("lancamento_id")
-      .eq("conta_bancaria_id", contaBancariaId)
-      // Ordem estável (id como desempate) para a paginação não repetir nem
-      // pular linha entre uma página e a seguinte.
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
-  );
-  return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
-}
-
-/** Ids de lançamentos rateados no centro de custo informado. */
-async function idsPorCentroCusto(
-  supabase: ClienteSupabase,
-  centroCustoId: string,
-): Promise<string[]> {
-  // O centro de custo do lançamento vive no rateio, nunca na tabela mãe: um
-  // lançamento pode ser dividido entre várias obras.
-  const rateios = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_rateios")
-      .select("lancamento_id")
-      .eq("centro_custo_id", centroCustoId)
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
-  );
-  return [...new Set(rateios.map((rateio) => rateio.lancamento_id))];
-}
-
-/**
- * Ids de lançamentos no estado de revisão pedido. `em_revisao` é status de
- * parcela; os outros três são derivados da conta bancária das parcelas ainda
- * não pagas, com a mesma regra que a coluna "Revisão" da lista usa (por isso
- * só lançamentos a pagar entram: a receber não tem revisão de conta).
- */
-async function idsPorRevisao(
-  supabase: ClienteSupabase,
-  revisao: FiltroRevisao,
-): Promise<string[]> {
-  if (revisao === "em_revisao") {
-    const parcelas = await lerEmPaginas((de, ate) =>
-      supabase
-        .from("lancamento_parcelas")
-        .select("lancamento_id")
-        .eq("status", "em_revisao")
-        .order("lancamento_id")
-        .order("id")
-        .range(de, ate),
-    );
-    return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
-  }
-
-  // Parcela PAGA entra na conta, e conta como resolvida: pagar exige conta
-  // bancária (fn_pagar_parcela recusa sem ela), então parcela paga é o caso mais
-  // resolvido que existe. Antes elas eram excluídas pela consulta, e o efeito era
-  // o contrário do esperado: lançamento quitado ficava fora do filtro "Revisado" e
-  // aparecia com "-" na coluna, como se a pergunta não valesse para ele.
-  const parcelas = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_parcelas")
-      .select("lancamento_id, conta_bancaria_id, status, lancamentos!inner(tipo)")
-      .eq("lancamentos.tipo", "a_pagar")
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
-  );
-
-  const contagem = new Map<string, { total: number; comConta: number }>();
-  for (const parcela of parcelas) {
-    const atual = contagem.get(parcela.lancamento_id) ?? {
-      total: 0,
-      comConta: 0,
-    };
-    atual.total += 1;
-    if (parcela.status === "pago" || parcela.conta_bancaria_id !== null) {
-      atual.comConta += 1;
-    }
-    contagem.set(parcela.lancamento_id, atual);
-  }
-
-  const ids: string[] = [];
-  for (const [id, { total, comConta }] of contagem) {
-    const estado =
-      comConta === 0 ? "sem_conta" : comConta === total ? "revisado" : "parcial";
-    // `nao_revisado` é o complemento de `revisado`: sem conta nenhuma ou conta em
-    // parte. Lançamento quitado NÃO entra aqui, porque parcela paga conta como
-    // resolvida (ver o comentário da contagem acima): quitado é revisado, não
-    // pendência.
-    const casa =
-      revisao === "nao_revisado" ? estado !== "revisado" : estado === revisao;
-    if (casa) ids.push(id);
-  }
-  return ids;
-}
-
-/**
- * Interseção das listas de ids vindas dos filtros de tabela filha, para ir ao
- * banco com um `in` só (dois `in` na mesma consulta já seriam AND, mas a lista
- * menor deixa a URL da consulta menor).
- */
-function intersecao(listas: string[][]): string[] {
-  const [primeira, ...resto] = listas;
-  return resto.reduce((acumulado, lista) => {
-    const atual = new Set(lista);
-    return acumulado.filter((id) => atual.has(id));
-  }, primeira);
-}
-
 /**
  * Instante UTC da meia-noite do dia informado no fuso de exibição (Rio Branco).
  * Filtro de período em coluna `timestamptz` (created_at) precisa disso: o dia do
@@ -438,275 +245,62 @@ function inicioDoDiaISO(data: string, deslocamentoDias = 0): string {
 }
 
 /**
- * O mínimo que `aplicarFiltros` precisa saber da consulta do PostgREST. É
- * estrutural de propósito: a consulta da página e a da soma têm o mesmo
- * construtor de filtro e diferem só no `select`, então uma função genérica
- * serve as duas sem depender do tipo interno do supabase-js.
- */
-interface FiltravelPorLancamento<Q> {
-  in(coluna: "id", valores: string[]): Q;
-  eq(
-    coluna:
-      | "tipo"
-      | "status"
-      | "mes_competencia"
-      | "fornecedor_id"
-      | "categoria_id"
-      | "forma_pagamento_id"
-      | "origem",
-    valor: string,
-  ): Q;
-  gte(
-    coluna: "valor" | "data_vencimento" | "data_compra" | "created_at",
-    valor: string | number,
-  ): Q;
-  lte(
-    coluna: "valor" | "data_vencimento" | "data_compra",
-    valor: string | number,
-  ): Q;
-  lt(coluna: "created_at", valor: string): Q;
-  or(filtro: string): Q;
-}
-
-/**
- * Aplica no banco todos os filtros de `ListarLancamentosParams`.
+ * Lista os lançamentos: página, contagem exata e soma do valor filtrado.
  *
- * Existe porque DUAS consultas precisam exatamente do mesmo filtro: a página da
- * listagem e a soma do valor filtrado que a tela mostra. Duas montagens de
- * filtro divergem no primeiro filtro novo que alguém acrescenta, e aí a tela
- * passa a mostrar uma lista de um conjunto e um total de outro. Num número de
- * dinheiro esse é o pior defeito possível, porque parece certo.
- *
- * Os filtros de tabela filha (revisão, conta, centro de custo) já chegam
- * resolvidos em `idsFiltrados`, pelo mesmo motivo explicado em
- * `listarLancamentos`.
- */
-function aplicarFiltros<Q extends FiltravelPorLancamento<Q>>(
-  consultaInicial: Q,
-  params: Omit<ListarLancamentosParams, "pagina" | "tamanho">,
-  idsFiltrados: string[] | null,
-): Q {
-  let consulta = consultaInicial;
-  if (idsFiltrados) consulta = consulta.in("id", idsFiltrados);
-  if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
-  if (params.status) consulta = consulta.eq("status", params.status);
-  if (params.mesCompetencia) {
-    consulta = consulta.eq("mes_competencia", params.mesCompetencia);
-  }
-  if (params.fornecedorId) {
-    consulta = consulta.eq("fornecedor_id", params.fornecedorId);
-  }
-  if (params.categoriaId) {
-    consulta = consulta.eq("categoria_id", params.categoriaId);
-  }
-  if (params.formaPagamentoId) {
-    consulta = consulta.eq("forma_pagamento_id", params.formaPagamentoId);
-  }
-  if (params.origem) consulta = consulta.eq("origem", params.origem);
-  if (params.valorDe !== undefined) {
-    consulta = consulta.gte("valor", params.valorDe);
-  }
-  if (params.valorAte !== undefined) {
-    consulta = consulta.lte("valor", params.valorAte);
-  }
-  if (params.vencimentoDe) {
-    consulta = consulta.gte("data_vencimento", params.vencimentoDe);
-  }
-  if (params.vencimentoAte) {
-    consulta = consulta.lte("data_vencimento", params.vencimentoAte);
-  }
-  if (params.compraDe) consulta = consulta.gte("data_compra", params.compraDe);
-  if (params.compraAte) consulta = consulta.lte("data_compra", params.compraAte);
-  if (params.criadoDe) {
-    consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadoDe));
-  }
-  if (params.criadoAte) {
-    // Fim do dia = meia-noite do dia seguinte, exclusiva: `lte` na data crua
-    // deixaria de fora tudo que foi criado depois de 00:00 do último dia.
-    consulta = consulta.lt("created_at", inicioDoDiaISO(params.criadoAte, 1));
-  }
-  if (params.busca?.trim()) {
-    const padrao = `%${params.busca.replace(/[,()"'\\]/g, "").trim()}%`;
-    consulta = consulta.or(`numero.ilike.${padrao},descricao.ilike.${padrao}`);
-  }
-  return consulta;
-}
-
-/** Quanto a soma pede por vez. Ver `somarValorFiltrado`. */
-const LOTE_SOMA = 10000;
-/** Teto de lotes da soma, para um filtro absurdo não virar consulta infinita. */
-const MAX_LOTES_SOMA = 50;
-
-/**
- * Soma o `valor` de todos os lançamentos do filtro, e não só os da página.
- *
- * A soma é feita aqui, e não no banco, porque a agregação do PostgREST está
- * desligada neste projeto (`PGRST123: Use of aggregate functions is not
- * allowed`). A alternativa seria uma função SQL repetindo os filtros, e aí
- * lista e total sairiam de sincronia no primeiro filtro novo. Então busca só a
- * coluna `valor` e soma, reusando `aplicarFiltros`.
- *
- * Busca em lotes e AVANÇA PELO TAMANHO DO LOTE QUE VOLTOU, parando só no lote
- * vazio. Parece rodeio, mas o PostgREST pode ter um teto de linhas por resposta
- * menor que o pedido: nesse caso pedir tudo de uma vez devolveria uma parte, e
- * uma soma truncada é um número errado com cara de certo. Sem teto, são duas
- * idas (o lote cheio e o vazio que encerra).
- *
- * A soma em si é `somarValores` (centavos inteiros, testada). Devolve null
- * quando não deu para somar tudo, porque total pela metade é pior que total
- * nenhum.
- */
-async function somarValorFiltrado(
-  supabase: ClienteSupabase,
-  params: Omit<ListarLancamentosParams, "pagina" | "tamanho">,
-  idsFiltrados: string[] | null,
-): Promise<number | null> {
-  const valores: number[] = [];
-  let inicio = 0;
-
-  for (let lote = 0; lote < MAX_LOTES_SOMA; lote += 1) {
-    const { data, error } = await aplicarFiltros(
-      supabase
-        .from("lancamentos")
-        .select("valor")
-        .order("id")
-        .range(inicio, inicio + LOTE_SOMA - 1),
-      params,
-      idsFiltrados,
-    );
-
-    // Total é informação de apoio: se falhar, a listagem não cai por causa
-    // dele, só fica sem o total.
-    if (error || !data) return null;
-    if (data.length === 0) return somarValores(valores);
-
-    for (const linha of data) valores.push(linha.valor);
-    inicio += data.length;
-  }
-
-  return null;
-}
-
-/**
- * Lista os lançamentos com paginação server-side (count exato), o nome da
- * categoria e do fornecedor resolvidos e a contagem de parcelas. Todos os
- * filtros de `ListarLancamentosParams` são aplicados no banco, e o resultado
- * traz também a soma do valor do conjunto filtrado inteiro.
+ * Uma chamada, um caminho: a RPC `fn_listar_lancamentos` aplica TODOS os
+ * filtros no banco. Antes, os filtros de revisão, conta bancária e centro de
+ * custo eram resolvidos aqui em lista de ids e mandados num `.in()` dentro da
+ * URL. Com 7.253 lançamentos isso passava de 16 KB de cabeçalho e o cliente
+ * recusava a requisição (HeadersOverflowError), depois de 11 segundos lendo as
+ * 9.244 parcelas em 10 idas ao banco. Nenhum ajuste de tamanho resolvia: a
+ * lista de ids cresce com a base.
  */
 export async function listarLancamentos(
   params: ListarLancamentosParams,
 ): Promise<LancamentosPagina> {
   const supabase = await createClient();
 
-  const pagina = Math.max(0, params.pagina);
-  const tamanho = Math.max(1, params.tamanho);
-  const de = pagina * tamanho;
-  const ate = de + tamanho - 1;
-
-  // Filtros que moram em tabela filha (parcela, rateio) viram lista de ids.
-  // Não dá para filtrar pelo join embutido no select: ele é o que alimenta a
-  // coluna "Revisão", e filtrá-lo esconderia parcelas do cálculo.
-  const listasDeIds: string[][] = [];
-  if (params.revisao) {
-    listasDeIds.push(await idsPorRevisao(supabase, params.revisao));
-  }
-  if (params.contaBancariaId) {
-    listasDeIds.push(
-      await idsPorContaBancaria(supabase, params.contaBancariaId),
-    );
-  }
-  if (params.centroCustoId) {
-    listasDeIds.push(await idsPorCentroCusto(supabase, params.centroCustoId));
-  }
-
-  let idsFiltrados: string[] | null = null;
-  if (listasDeIds.length > 0) {
-    idsFiltrados = intersecao(listasDeIds);
-    // Nenhum lançamento no filtro: devolve vazio sem ir buscar a lista toda.
-    if (idsFiltrados.length === 0) {
-      return { itens: [], total: 0, valorTotal: 0 };
-    }
-  }
-
-  const consulta = aplicarFiltros(
-    supabase
-      .from("lancamentos")
-      .select(
-        `id, numero, tipo, origem, descricao, valor, data_vencimento, status,
-         data_compra, mes_competencia, created_at,
-         categorias_financeiras(nome),
-         fornecedores(razao_social, nome_fantasia),
-         lancamento_parcelas(status, conta_bancaria_id)`,
-        { count: "exact" },
-      )
-      .order("data_compra", { ascending: false })
-      .order("created_at", { ascending: false })
-      .range(de, ate),
-    params,
-    idsFiltrados,
-  );
-
-  const [{ data, error, count }, valorTotal] = await Promise.all([
-    consulta,
-    params.somarValor === false
-      ? Promise.resolve(null)
-      : somarValorFiltrado(supabase, params, idsFiltrados),
-  ]);
+  const { data, error } = await supabase.rpc("fn_listar_lancamentos", {
+    p_filtros: {
+      tipo: params.tipo ?? null,
+      status: params.status ?? null,
+      origem: params.origem ?? null,
+      revisao: params.revisao ?? null,
+      busca: params.busca?.trim() || null,
+      mes_competencia: params.mesCompetencia ?? null,
+      fornecedor_id: params.fornecedorId ?? null,
+      categoria_id: params.categoriaId ?? null,
+      forma_pagamento_id: params.formaPagamentoId ?? null,
+      centro_custo_id: params.centroCustoId ?? null,
+      conta_bancaria_id: params.contaBancariaId ?? null,
+      valor_de: params.valorDe ?? null,
+      valor_ate: params.valorAte ?? null,
+      vencimento_de: params.vencimentoDe ?? null,
+      vencimento_ate: params.vencimentoAte ?? null,
+      compra_de: params.compraDe ?? null,
+      compra_ate: params.compraAte ?? null,
+      // A conversão do dia para instante fica aqui: quem sabe onde o dia do
+      // usuário começa é a camada de exibição, não o SQL. O `ate` é exclusivo
+      // (meia-noite do dia seguinte), senão o último dia entraria só até 00:00.
+      criado_de: params.criadoDe ? inicioDoDiaISO(params.criadoDe) : null,
+      criado_ate: params.criadoAte ? inicioDoDiaISO(params.criadoAte, 1) : null,
+    },
+    p_pagina: Math.max(0, params.pagina),
+    p_tamanho: Math.max(1, params.tamanho),
+  });
 
   if (error) {
     // `cause` carrega o erro do PostgREST para o log do servidor. Sem ele, a
-    // unica pista de uma falha em producao e esta frase generica, que nao diz
-    // se foi timeout, permissao ou consulta malformada.
+    // única pista de uma falha em produção é esta frase genérica, que não diz
+    // se foi timeout, permissão ou consulta malformada.
     throw new Error("Não foi possível carregar os lançamentos", {
       cause: error,
     });
   }
 
-  const itens: LancamentoLista[] = (data ?? []).map((lancamento) => {
-    const parcelas = lancamento.lancamento_parcelas ?? [];
-    // Parcela PAGA conta como resolvida: pagar exige conta bancária, então ela é o
-    // caso mais resolvido que existe. Antes as pagas eram descartadas aqui, e o
-    // lançamento quitado caía em "não se aplica" mostrando "-" na coluna, como se a
-    // pergunta não valesse para ele, justamente no caso em que a resposta é o
-    // melhor possível. Tem que casar com `idsPorRevisao`, senão o filtro traz um
-    // conjunto e a coluna mostra outro.
-    const comConta = parcelas.filter(
-      (parcela) =>
-        parcela.status === "pago" || parcela.conta_bancaria_id !== null,
-    ).length;
-
-    const revisao: LancamentoLista["revisao"] =
-      lancamento.tipo !== "a_pagar" || parcelas.length === 0
-        ? "nao-se-aplica"
-        : comConta === 0
-          ? "sem-conta"
-          : comConta === parcelas.length
-            ? "revisado"
-            : "parcial";
-
-    return {
-      revisao,
-      id: lancamento.id,
-      numero: lancamento.numero,
-      tipo: lancamento.tipo as TipoLancamento,
-      origem: lancamento.origem,
-      descricao: lancamento.descricao,
-      categoriaNome: lancamento.categorias_financeiras?.nome ?? null,
-      fornecedorNome: lancamento.fornecedores
-        ? nomeFornecedor(lancamento.fornecedores)
-        : null,
-      valor: lancamento.valor,
-      dataVencimento: lancamento.data_vencimento,
-      status: lancamento.status as StatusLancamento,
-      qtdParcelas: parcelas.length,
-      dataCompra: lancamento.data_compra,
-      mesCompetencia: lancamento.mes_competencia,
-      criadoEm: lancamento.created_at,
-    };
-  });
-
-  return { itens, total: count ?? 0, valorTotal };
+  return lerPagina(data);
 }
+
 
 /**
  * Lançamento completo para o detalhe: cabeçalho com nomes resolvidos, parcelas
@@ -975,9 +569,6 @@ export async function listarIdsLancamentosFiltrados(
     ...params,
     pagina: 0,
     tamanho: LIMITE_LOTE + 1,
-    // Aqui só interessa o id: a soma do valor filtrado seria uma varredura da
-    // base inteira para um número que ninguém vai ler.
-    somarValor: false,
   });
   return pagina.itens.map((item) => item.id);
 }

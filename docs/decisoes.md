@@ -1214,3 +1214,52 @@ em dois outros lugares: dado semeado nas migrations e **rótulo de coluna de pla
 - **`lancamentos.descricao` gerada por função** nasce "Diarias ..." e "Salario ...", sem acento
   (`fn_fechar_diarias`, `fn_aprovar_folha`). Aparece no Financeiro. Corrigir é recriar duas
   funções que geram lançamento; vale, mas é entrega própria, não passada de grafia.
+
+## 2026-08-11 — Filtro da listagem de lançamentos passou para o banco (RPC)
+
+**Problema.** Os filtros de revisão, conta bancária e centro de custo não filtravam no banco: o
+app resolvia a lista de `lancamento_id` em consultas auxiliares e mandava **todos** os ids num
+`.in()` dentro da URL. Com a base vazia isso nunca apareceu. Depois da carga do histórico (7.253
+lançamentos, 9.244 parcelas):
+
+| filtro | ids no `.in()` | URL |
+| --- | --- | --- |
+| conta BANCO DO BRASIL 102.124-9 | 5.634 | ~220 KB |
+| centro Escritório Central | 2.122 | ~83 KB |
+| centro 009 - BR-364 | 1.963 | ~77 KB |
+| centro Manutenção/Documentação | 1.728 | ~67 KB |
+| conta CAIXINHA DE DINHEIRO | 899 | ~35 KB |
+| revisão "não revisado" | 402 | 16,1 KB |
+
+O cliente recusava: `HeadersOverflowError ... HTTP headers exceeded server limits (typically
+16KB). Your request URL is 16073 characters`. Até o menor deles estourava, por 73 bytes. E antes
+de estourar, resolver os ids lia as 9.244 parcelas em 10 requisições sequenciais: **11 segundos**
+para desenhar 100 linhas.
+
+**Decisão.** `fn_listar_lancamentos(p_filtros jsonb, p_pagina int, p_tamanho int)` devolve a
+página, a contagem exata e a soma do valor filtrado. Uma ida ao banco no lugar de doze.
+
+**Por que RPC e não um remendo no tamanho.** Nenhum teto resolve: a lista de ids cresce com a
+base, então qualquer limite é uma data marcada para quebrar de novo. Medido: **48–75 ms** contra
+11.400 ms, e o filtro que não abria voltou a abrir.
+
+**Ganhos que vieram de graça.**
+
+1. **Revisão calculada uma vez só.** O estado de revisão decidia duas coisas em dois lugares: o
+   filtro (`idsPorRevisao`) e o selo da coluna (no `map` da listagem), com comentário no código
+   avisando que precisavam casar. Agora é a mesma expressão SQL para os dois, e não há como
+   discordarem. Conferido contra cálculo independente: `em_revisao` 0, `sem_conta` 328, `parcial`
+   74, `revisado` 6.851, `nao_revisado` 402, idênticos.
+2. **A soma do total filtrado virou agregação de verdade.** A agregação do PostgREST está
+   desligada neste projeto (`PGRST123`), então o total da tela era somado no app buscando a
+   coluna `valor` de milhares de linhas. Dentro da RPC é um `sum()`.
+
+**SECURITY INVOKER de propósito.** A RLS de `lancamentos` continua valendo para quem chama.
+`SECURITY DEFINER` aqui seria furo de permissão disfarçado de otimização.
+
+**Aprendizado que custou caro: erro engolido é erro que volta.** `listarLancamentos` descartava o
+erro do PostgREST e lançava "Não foi possível carregar os lançamentos". Diagnosticar virou
+tentativa e erro contra o banco, e eu descartei a hipótese certa (URL) porque um teste com uuids
+sintéticos mediu 15.234 B e passou raspando por baixo do limite. O erro real dizia o tamanho
+exato e sugeria a solução. Agora vai no `cause`. **Erro de infraestrutura tem que chegar ao log
+com a causa.**
