@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { numeroPositivo, paraNumero, valorValido } from "./numero";
+import { MAX_PARCELAS, quantidadeCabeNoTotal } from "./parcelamento";
 
 import { idSchemaCom } from "@/lib/id";
 
@@ -25,23 +26,33 @@ export function competenciaParaMes(competencia: string): string {
  * Schema de servidor do adiantamento (tipos já coeridos), validado na action
  * antes de gravar. Competência é sempre o 1o dia do mês.
  */
-export const adiantamentoSchema = z.object({
-  colaboradorId: idSchemaCom("Selecione o colaborador"),
-  competencia: z
-    .string()
-    .trim()
-    .regex(COMPETENCIA_REGEX, { error: "Competência inválida" }),
-  valor: z
-    .number({ error: "Valor inválido" })
-    .refine((v) => v > 0, { error: "O valor precisa ser maior que zero" })
-    .refine(valorValido, { error: "Valor inválido (até 2 casas)" }),
-  data: z.string().trim().regex(DATA_REGEX, { error: "Data inválida" }),
-  descricao: z
-    .string()
-    .trim()
-    .max(500, { error: "Máximo de 500 caracteres" })
-    .optional(),
-});
+export const adiantamentoSchema = z
+  .object({
+    colaboradorId: idSchemaCom("Selecione o colaborador"),
+    competencia: z
+      .string()
+      .trim()
+      .regex(COMPETENCIA_REGEX, { error: "Competência inválida" }),
+    valor: z
+      .number({ error: "Valor inválido" })
+      .refine((v) => v > 0, { error: "O valor precisa ser maior que zero" })
+      .refine(valorValido, { error: "Valor inválido (até 2 casas)" }),
+    data: z.string().trim().regex(DATA_REGEX, { error: "Data inválida" }),
+    descricao: z
+      .string()
+      .trim()
+      .max(500, { error: "Máximo de 500 caracteres" })
+      .optional(),
+    parcelas: z
+      .number({ error: "Parcelas inválidas" })
+      .int({ error: "Parcelas precisa ser um número inteiro" })
+      .min(1, { error: "No mínimo 1 parcela" })
+      .max(MAX_PARCELAS, { error: `No máximo ${MAX_PARCELAS} parcelas` }),
+  })
+  .refine((dados) => quantidadeCabeNoTotal(dados.valor, dados.parcelas), {
+    error: "Parcelas demais para este valor: cada parcela ficaria em zero",
+    path: ["parcelas"],
+  });
 
 export type AdiantamentoInput = z.infer<typeof adiantamentoSchema>;
 
@@ -62,6 +73,16 @@ export const adiantamentoFormSchema = z.object({
     .refine(numeroPositivo, { error: "Informe um valor maior que zero" }),
   data: z.string().trim().regex(DATA_REGEX, { error: "Informe a data" }),
   descricao: z.string().trim().max(500, { error: "Máximo de 500 caracteres" }),
+  parcelas: z
+    .string()
+    .trim()
+    .refine(
+      (valor) => {
+        const numero = Number(valor);
+        return Number.isInteger(numero) && numero >= 1 && numero <= MAX_PARCELAS;
+      },
+      { error: `Informe um número de parcelas entre 1 e ${MAX_PARCELAS}` },
+    ),
 });
 
 export type AdiantamentoFormInput = z.infer<typeof adiantamentoFormSchema>;
@@ -76,5 +97,6 @@ export function adiantamentoFormParaInput(
     valor: paraNumero(dados.valor),
     data: dados.data,
     descricao: dados.descricao === "" ? undefined : dados.descricao,
+    parcelas: Number(dados.parcelas.trim()),
   };
 }

@@ -44,6 +44,8 @@ function valoresIniciais(): AdiantamentoFormInput {
     valor: "",
     data: dataHojeISO(),
     descricao: "",
+    // Campo de parcelas ainda não tem tela (chega na Task 6); à vista por ora.
+    parcelas: "1",
   };
 }
 
@@ -83,6 +85,8 @@ export function AdiantamentoFormDrawer({
         valor: String(adiantamento.valor).replace(".", ","),
         data: adiantamento.data,
         descricao: adiantamento.descricao ?? "",
+        // Campo de parcelas ainda não tem tela (chega na Task 6); à vista por ora.
+        parcelas: "1",
       });
     } else {
       form.reset(valoresIniciais());
