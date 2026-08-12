@@ -22,6 +22,10 @@ import {
   editarNoSchema,
 } from "@/modules/cadastros/centros-custo/schemas";
 import type { NoCentroCusto } from "@/modules/cadastros/centros-custo/queries";
+import {
+  nomeVemDeOutroCadastro,
+  ondeRenomear,
+} from "@/modules/cadastros/centros-custo/travas";
 
 const ID_FORM = "form-no-centro-custo";
 
@@ -46,9 +50,10 @@ function lerOrcamento(texto: string): number | undefined {
 }
 
 /**
- * Drawer único para criar etapa, criar item e editar nó. Em nó gerido pelo
- * sistema (sistema=true ou equipamento), o nome e o código ficam travados e só
- * o orçamento é editável.
+ * Drawer único para criar etapa, criar item e editar nó. O nome só fica travado
+ * quando é espelho de outro cadastro (raiz de obra, etapa de equipamento); aí só
+ * o orçamento é editável e o drawer diz onde renomear. Centro de sistema edita
+ * nome normalmente.
  */
 export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps) {
   const [nome, setNome] = React.useState("");
@@ -60,13 +65,10 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
 
   const editando = modo?.tipo === "editar";
   const noEditado = modo?.tipo === "editar" ? modo.no : null;
-  const geridoSistema = Boolean(
-    noEditado &&
-      (noEditado.nivel === 1 ||
-        noEditado.sistema ||
-        noEditado.equipamento_id !== null ||
-        noEditado.obra_id !== null),
-  );
+  // O nome é espelho de obra ou equipamento? Só nesse caso ele trava. Centro de
+  // sistema (Escritório Central, Manutenção de equipamentos) tem nome próprio.
+  const nomeEspelhado = Boolean(noEditado && nomeVemDeOutroCadastro(noEditado));
+  const explicacaoRename = noEditado ? ondeRenomear(noEditado) : null;
 
   // Sincroniza os campos com o modo no momento em que o drawer abre. Em vez de um
   // efeito com setState (que dispara renders em cascata), guarda a chave da última
@@ -102,7 +104,7 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
     if (!modo) return "";
     if (modo.tipo === "criar-etapa") return "Adicionar etapa";
     if (modo.tipo === "criar-item") return "Adicionar item";
-    return geridoSistema ? "Editar orçamento" : "Editar nó";
+    return nomeEspelhado ? "Editar orçamento" : "Editar nó";
   }
 
   function descricao(): string {
@@ -113,9 +115,7 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
     if (modo.tipo === "criar-item") {
       return `Novo item sob ${modo.pai.nome}`;
     }
-    return geridoSistema
-      ? "Este nó é gerido pelo sistema. Só o orçamento pode ser ajustado."
-      : `Edição de ${modo.no.nome}`;
+    return explicacaoRename ?? `Edição de ${modo.no.nome}`;
   }
 
   async function aoEnviar(evento: React.FormEvent) {
@@ -188,7 +188,7 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
     }
   }
 
-  const nomeTravado = editando && geridoSistema;
+  const nomeTravado = editando && nomeEspelhado;
 
   return (
     <FormDrawer
@@ -219,11 +219,7 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
         <CampoFormulario
           id="no-nome"
           rotulo="Nome"
-          ajuda={
-            nomeTravado
-              ? "O nome é gerido pelo sistema e não pode ser alterado aqui."
-              : undefined
-          }
+          ajuda={nomeTravado ? (explicacaoRename ?? undefined) : undefined}
           erro={erroNome ?? undefined}
         >
           <Input
@@ -240,7 +236,9 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
           <CampoFormulario
             id="no-codigo"
             rotulo="Código"
-            ajuda={nomeTravado ? "O código é gerido pelo sistema." : undefined}
+            ajuda={
+              nomeTravado ? "O código acompanha o cadastro de origem." : undefined
+            }
           >
             <Input
               id="no-codigo"

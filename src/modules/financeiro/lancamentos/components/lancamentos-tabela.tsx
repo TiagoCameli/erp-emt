@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef, PaginationState } from "@tanstack/react-table";
+import type {
+  ColumnDef,
+  PaginationState,
+  SortingState,
+} from "@tanstack/react-table";
 import { Receipt, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
@@ -52,6 +56,13 @@ import {
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
 import { ehElegivelParaLote } from "@/modules/financeiro/lancamentos/lote";
+import { somarValores } from "@/modules/financeiro/lancamentos/total";
+import {
+  ordemValida,
+  ordenacaoParaUrl,
+  proximaOrdenacao,
+  type OrdenacaoLancamentos,
+} from "@/modules/financeiro/lancamentos/ordenacao";
 
 const OPCOES_TIPO = (
   Object.keys(ROTULO_TIPO_LANCAMENTO) as TipoLancamento[]
@@ -162,7 +173,9 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     // bancária neste lançamento? Sem conta ele não chega na aprovação.
     id: "revisao",
     header: "Revisão",
-    enableSorting: false,
+    // Ordenável desde que o estado passou a vir calculado do banco: ordena pela
+    // régua do que falta resolver (sem conta, parcial, revisado, não se
+    // aplica), não pelo alfabeto do rótulo.
     meta: { rotulo: "Revisão", naoTruncar: true },
     cell: ({ row }) => {
       const estado = row.original.revisao;
@@ -244,9 +257,26 @@ export interface ValoresFiltrosLancamentos {
   criadoAte: string;
 }
 
+/**
+ * Algum filtro está valendo? Decide só o rótulo do total ("total" x "total
+ * filtrado"), e é lido de `valores` de propósito: é a mesma fonte que preenche a
+ * barra de filtros, então rótulo e barra nunca discordam. `busca` entra porque
+ * buscar também recorta o conjunto.
+ */
+function temFiltroAtivo(valores: ValoresFiltrosLancamentos): boolean {
+  return Object.values(valores).some((valor) => valor !== "");
+}
+
 export interface LancamentosTabelaProps {
   lancamentos: LancamentoLista[];
   total: number;
+  /**
+   * Soma do valor do conjunto filtrado inteiro, não só da página. Vem somada
+   * pelo banco, na mesma consulta que traz a página.
+   */
+  valorTotal: number;
+  /** Ordenação vigente, lida da URL. null = ordem padrão. */
+  ordenacao: OrdenacaoLancamentos | null;
   pagina: number;
   tamanho: number;
   valores: ValoresFiltrosLancamentos;
@@ -269,6 +299,8 @@ export interface LancamentosTabelaProps {
 export function LancamentosTabela({
   lancamentos,
   total,
+  valorTotal,
+  ordenacao,
   pagina,
   tamanho,
   valores,
@@ -387,6 +419,30 @@ export function LancamentosTabela({
       pagina: String(paginacao.pageIndex + 1),
       tamanho: String(paginacao.pageSize),
     });
+  }
+
+  /**
+   * Ordenação da tabela, no formato que a TanStack usa. Uma coluna só: ordenar
+   * por duas ao mesmo tempo não é o que o clique no cabeçalho oferece, e o banco
+   * ordena por uma.
+   */
+  const ordenacaoTabela: SortingState = ordenacao
+    ? [{ id: ordenacao.coluna, desc: ordenacao.descendente }]
+    : [];
+
+  /**
+   * Clique no cabeçalho. A TanStack manda o estado que ELA calculou; aqui o que
+   * vale é o ciclo de `proximaOrdenacao` (crescente, decrescente, padrão), então
+   * o que se lê da TanStack é só qual coluna foi clicada.
+   */
+  function aoMudarOrdenacao(nova: SortingState) {
+    const clicada = nova[0]?.id ?? ordenacao?.coluna;
+    const coluna = ordemValida(clicada);
+    if (!coluna) {
+      setMuitos(ordenacaoParaUrl(null));
+      return;
+    }
+    setMuitos(ordenacaoParaUrl(proximaOrdenacao(ordenacao, coluna)));
   }
 
   /**
@@ -621,9 +677,8 @@ export function LancamentosTabela({
     <div className="flex flex-col gap-2">
       <LoteContaBancaria
         selecionados={selecionados}
-        valorSelecionado={selecionadosNaPagina.reduce(
-          (soma, lancamento) => soma + lancamento.valor,
-          0,
+        valorSelecionado={somarValores(
+          selecionadosNaPagina.map((lancamento) => lancamento.valor),
         )}
         jaComConta={
           selecionadosNaPagina.filter(
@@ -643,6 +698,17 @@ export function LancamentosTabela({
         pageIndex={pagina}
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
+        sorting={ordenacaoTabela}
+        onSortingChange={aoMudarOrdenacao}
+        resumo={
+          <span>
+            {`Total de ${total.toLocaleString("pt-BR")} lançamento${total === 1 ? "" : "s"}${temFiltroAtivo(valores) ? " no filtro" : ""}: `}
+            <MoneyText
+              valor={valorTotal}
+              className="font-medium text-foreground"
+            />
+          </span>
+        }
         selecao={{
           idDaLinha: (lancamento) => lancamento.id,
           selecionados,

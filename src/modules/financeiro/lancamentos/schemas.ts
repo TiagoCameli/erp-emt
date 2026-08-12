@@ -366,6 +366,29 @@ export const FILTROS_REVISAO = [
 
 export type FiltroRevisao = (typeof FILTROS_REVISAO)[number];
 
+/**
+ * Colunas por onde a listagem pode ser ordenada.
+ *
+ * São os `id` das colunas da tabela, de propósito: o clique no cabeçalho entrega
+ * o id da coluna, e assim ele viaja para a URL e para o banco sem tradução no
+ * meio. A mesma lista existe dentro de `fn_listar_lancamentos`; nome fora dela
+ * não ordena nada, volta para a ordem padrão em vez de virar erro na cara do
+ * usuário (URL editada à mão, ou link antigo depois de uma coluna sair).
+ */
+export const ORDENS_LANCAMENTO = [
+  "numero",
+  "tipo",
+  "descricao",
+  "valor",
+  "dataCompra",
+  "mesCompetencia",
+  "dataVencimento",
+  "revisao",
+  "status",
+] as const;
+
+export type OrdemLancamento = (typeof ORDENS_LANCAMENTO)[number];
+
 export const ROTULO_FILTRO_REVISAO: Record<FiltroRevisao, string> = {
   em_revisao: "Com parcela em revisão",
   sem_conta: "Sem conta bancária",

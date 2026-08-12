@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { chaveNome } from "@/lib/chave-nome";
 import { erroAcao } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
@@ -36,7 +37,7 @@ interface LinhaImportInsumo {
 
 /** Colunas da planilha de importação de insumos, usadas só dentro deste módulo. */
 const colunasImportInsumo: ColunaImportacao<LinhaImportInsumo>[] = [
-  { chave: "codigo", rotulo: "Codigo", exemplo: "MAT-001" },
+  { chave: "codigo", rotulo: "Código", exemplo: "MAT-001" },
   {
     chave: "nome",
     rotulo: "Nome",
@@ -323,10 +324,10 @@ export async function importar(
   const categoriaPorGrupoNome = new Map<string, string>();
   for (const c of categorias.data ?? []) {
     const slug = c.insumo_grupos?.slug ?? "";
-    categoriaPorGrupoNome.set(
-      `${slug}|${c.nome.trim().toLowerCase()}`,
-      c.id,
-    );
+    // chaveNome, não toLowerCase: as subcategorias têm acento ("Peças e
+    // componentes", "Óleos e lubrificantes") e a planilha vinda da obra
+    // raramente tem. Sem dobrar acento, a linha era recusada.
+    categoriaPorGrupoNome.set(`${slug}|${chaveNome(c.nome)}`, c.id);
   }
   const unidadePorSigla = new Map(
     (unidades.data ?? []).map((u) => [u.sigla.trim().toLowerCase(), u.id]),
@@ -342,9 +343,7 @@ export async function importar(
 
   for (const linha of validacao.validas) {
     const nome = String(linha.dados.nome ?? "").trim();
-    const categoriaNome = String(linha.dados.categoria ?? "")
-      .trim()
-      .toLowerCase();
+    const categoriaNome = chaveNome(String(linha.dados.categoria ?? ""));
     const unidadeSigla = String(linha.dados.unidade ?? "")
       .trim()
       .toLowerCase();

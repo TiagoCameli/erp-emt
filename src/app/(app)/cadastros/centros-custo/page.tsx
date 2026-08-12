@@ -20,6 +20,11 @@ export default async function PaginaCentrosCusto() {
 
   const podeCriar = temPermissao(usuario, "cadastros.centros-custo", "criar");
   const podeEditar = temPermissao(usuario, "cadastros.centros-custo", "editar");
+  const podeExcluir = temPermissao(
+    usuario,
+    "cadastros.centros-custo",
+    "excluir",
+  );
 
   return (
     <>
@@ -42,6 +47,7 @@ export default async function PaginaCentrosCusto() {
         nos={nos}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
       />
     </>
   );

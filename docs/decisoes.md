@@ -1105,3 +1105,248 @@ imposto tem prazo legal, e competência errada é erro contábil silencioso.
    as três telas do módulo usam `rotuloOrigemLancamento` e o catálogo `ORIGENS_LANCAMENTO`,
    e o filtro casa por igualdade exata. Rótulo de origem é informação de auditoria na tela
    onde se libera pagamento: derivar de catálogo único, nunca escrever literal.
+
+## 2026-08-10 - Obra e centro de custo raiz são um par: nascem juntos, morrem juntos
+
+Pedido do Tiago: poder excluir obra e centro de custo que não têm nada atrelado. Até aqui os
+dois só **desativavam**; a migration 11 os deixou fora da allowlist `fn_recurso_do_cadastro`
+com o comentário "tem triggers/auto-referencia".
+
+O comentário escondia um impasse real, não preguiça. O trigger `trg_obra_cria_centro_custo`
+faz **toda obra nascer com um centro de custo raiz**, e `centros_custo.obra_id` tem FK para
+`obras`. Ao pé da letra do pedido, portanto, **nenhuma obra jamais estaria "sem nada
+atrelado"**: sempre tem o centro dela pendurado, e a FK barra o delete. A exclusão genérica
+falharia sempre, com um 23503 traduzido como "Este registro está em uso" — mensagem verdadeira
+no código e mentirosa para o usuário.
+
+**Decisões**
+
+1. **A obra e o centro raiz dela são excluídos juntos, numa transação.** É o simétrico do
+   trigger. `fn_excluir_obra` apaga o centro e depois a obra, e só quando nada aponta para
+   nenhum dos dois. Não existe "excluir a obra e deixar o centro órfão": todo centro tipo obra
+   pertence a uma obra.
+2. **Centro de custo exclui só folha, de baixo para cima.** Nó com filho é barrado; para apagar
+   uma etapa com 3 itens, apaga os 3 itens primeiro. Escolha do Tiago entre isso e apagar a
+   subárvore de uma vez. Mais cliques, e nenhuma exclusão em massa acidental na espinha dorsal.
+   Nível 1 nunca sai sozinho: é ou centro de sistema ou raiz de obra.
+3. **A lixeira guarda o par numa entrada só.** Restaurar uma obra reinsere a linha e o trigger
+   **cria um centro raiz novo**; reinserir também o centro antigo daria dois centros na mesma
+   obra. Então `fn_excluir_obra` grava uma única entrada, de `obras`, com o snapshot do centro
+   na chave `centro_custo_raiz` (o `jsonb_populate_record` ignora chave que não é coluna), e
+   `fn_restaurar_cadastro` aplica `codigo`/`orcamento`/`ativo` sobre o centro recém-criado. Sem
+   desabilitar trigger, sem duplicata, e o par volta sempre junto. O `id` do centro muda ao
+   restaurar, e isso é inofensivo porque a exclusão só era permitida quando nada referenciava
+   aquele id.
+4. **Abrir a allowlist para restauração obriga a fechar a porta genérica.** `fn_recurso_do_cadastro`
+   passou a mapear `obras` e `centros_custo` (a restauração usa essa allowlist), o que de graça
+   faria `fn_excluir_cadastro` aceitá-las e furar todas as validações novas. A função ganhou
+   guarda explícita rejeitando as duas e apontando para as específicas. **Toda vez que uma
+   allowlist serve a dois propósitos, abrir para um abre para o outro.**
+5. **A regra devolve código, não frase.** `fn_obra_bloqueio` e `fn_centro_custo_bloqueio` são a
+   fonte única e devolvem NULL ou um código (`tem_filhos`, `em_uso`, `raiz_de_obra`, ...). O
+   texto pt-BR acentuado é montado em `_shared/dependencias.ts`, testado em Vitest. Motivo: as
+   mensagens SQL deste repo são sem acento (885 `raise exception` assim) e a UI precisa de
+   acento; com código a regra fica num lugar e o texto noutro, sem duplicar.
+6. **Contagem de dependência é `security definer`, e por isso exige `ver`.** Sob RLS o usuário
+   pode não ver `folha_itens` ou `lancamentos`: a contagem sairia zerada e habilitaria um botão
+   destrutivo que vai falhar. As funções de leitura contam por fora do RLS e checam
+   `tem_permissao(recurso, 'ver')` antes.
+7. **Lista pede o bloqueio em lote, não por linha.** As queries usam o client do Supabase, não
+   SQL cru, então não há `LEFT JOIN LATERAL`; e uma chamada por linha seria N+1.
+   `fn_obras_bloqueios(p_ids)` e `fn_centros_custo_bloqueios(p_ids)` devolvem o mapa numa
+   chamada. Linha ausente do mapa é tratada como bloqueada, nunca como liberada: **omissão não
+   habilita botão destrutivo.**
+
+**Gap registrado, não resolvido:** equipamentos têm o mesmo problema (equipamento cria etapa no
+centro Manutenção) e continuam fora. Mesma solução se aplica, é outro bloco.
+
+**Efeito colateral avisado ao Tiago:** como não há custo lançado no sistema, as 16 obras ficaram
+todas excluíveis. É o caso de uso pedido (limpar lixo de importação), mas o botão aparece
+habilitado em toda a lista.
+
+## 2026-08-10 - Grafia correta é mudança de contrato de importação, não só de texto
+
+O Tiago pediu "Manutenção de equipamentos" com grafia correta e certeza de que o app todo
+está certo. Varredura com 6 agentes em paralelo (966k tokens, 15 min) sobre código e
+migrations, mais conferência manual do banco vivo.
+
+**O que a varredura mostrou:** as strings de interface já estavam corretas. `src/components/`
+e `src/modules/rh/` (106 arquivos, ~17,6 mil linhas) voltaram **zero** achado. O erro estava
+em dois outros lugares: dado semeado nas migrations e **rótulo de coluna de planilha**.
+
+**Decisões**
+
+1. **Acentuar rótulo de importação exige dobrar acento no casamento primeiro, na mesma
+   entrega.** Os rótulos ("Razao social", "Codigo", "Orcamento", "Funcao") não são só texto:
+   `lerEValidarXlsx` casa o cabeçalho do arquivo enviado contra eles, e `normalizarRotulo` só
+   fazia trim+lowercase. Acentuar sozinho **recusaria toda planilha que a obra já usa**.
+   Agora `normalizarRotulo` usa `chaveNome` (dobra acento) e só então os rótulos ganharam
+   acento. Regra geral: **rótulo que também é chave de casamento não é texto, é contrato.**
+2. **`chaveNome` em TS espelha a `fn_chave_nome` do banco.** Já existia no Postgres desde a
+   20260804140000, para o casamento da importação BR-364. Passou a existir em TS porque três
+   importações casam em memória (centros de custo, insumos, cabeçalho de coluna). Um conceito,
+   duas implementações, cada uma no lado onde o casamento acontece.
+3. **Migration antiga não se edita; corrige-se o dado.** Os agentes reportaram os seeds errados
+   apontando arquivo:linha das migrations aplicadas. Isso serve para **localizar** o dado, não
+   para reescrever histórico. As correções foram por `update` em migration nova, casando pelo
+   valor antigo exato para não sobrescrever rename que o Tiago tenha feito à mão (e ficar
+   idempotente).
+4. **Varredura de código não acha erro de grafia em dado vivo.** Conferindo o banco depois dos
+   agentes, sobraram `Centimetro`, `Mes`, `Tonelada-quilometro` e `Cartão de Credito` — linhas
+   cadastradas pela tela ou por importação, que não estão em migration nenhuma. Nenhum agente
+   podia achar isso. **Auditoria de dado se faz no dado.**
+5. **Antes de renomear qualquer catálogo, achar quem casa por nome.** Conferido um por um:
+   `categorias_financeiras` já casava por `fn_chave_nome` (seguro), `unidades_medida` casa por
+   **sigla** (seguro, sigla intacta), `formas_pagamento.nome` só é lido para exibir (seguro), e
+   `categorias_insumo` casava por `toLowerCase` sem acento — esse virou `chaveNome`, senão
+   planilha sem acento pararia de casar com "Peças e componentes".
+6. **Um agente teve falso negativo, e foi o dado que denunciou.** A varredura leu
+   `20260612210001` e reportou as unidades erradas, mas passou batido em `categorias_insumo`
+   logo abaixo, no mesmo arquivo. Não custou nada porque o dado vivo daquela tabela já havia
+   sido substituído por um conjunto acentuado, mas o aprendizado fica: **resultado de agente é
+   pista, não inventário.** Conferir no dado antes de declarar varredura completa.
+
+**Deixado de fora, de propósito, precisa de decisão do Tiago**
+
+- **As ~885 mensagens `raise exception` em SQL são sem acento**, por convenção do repo, e várias
+  chegam na tela pela Server Action. Corrigir é mudança grande e mecânica em função de banco,
+  incluindo funções que mexem em dinheiro. Não faço isso numa passada de grafia sem combinar.
+- **`lancamentos.descricao` gerada por função** nasce "Diarias ..." e "Salario ...", sem acento
+  (`fn_fechar_diarias`, `fn_aprovar_folha`). Aparece no Financeiro. Corrigir é recriar duas
+  funções que geram lançamento; vale, mas é entrega própria, não passada de grafia.
+
+## 2026-08-11 — Filtro da listagem de lançamentos passou para o banco (RPC)
+
+**Problema.** Os filtros de revisão, conta bancária e centro de custo não filtravam no banco: o
+app resolvia a lista de `lancamento_id` em consultas auxiliares e mandava **todos** os ids num
+`.in()` dentro da URL. Com a base vazia isso nunca apareceu. Depois da carga do histórico (7.253
+lançamentos, 9.244 parcelas):
+
+| filtro | ids no `.in()` | URL |
+| --- | --- | --- |
+| conta BANCO DO BRASIL 102.124-9 | 5.634 | ~220 KB |
+| centro Escritório Central | 2.122 | ~83 KB |
+| centro 009 - BR-364 | 1.963 | ~77 KB |
+| centro Manutenção/Documentação | 1.728 | ~67 KB |
+| conta CAIXINHA DE DINHEIRO | 899 | ~35 KB |
+| revisão "não revisado" | 402 | 16,1 KB |
+
+O cliente recusava: `HeadersOverflowError ... HTTP headers exceeded server limits (typically
+16KB). Your request URL is 16073 characters`. Até o menor deles estourava, por 73 bytes. E antes
+de estourar, resolver os ids lia as 9.244 parcelas em 10 requisições sequenciais: **11 segundos**
+para desenhar 100 linhas.
+
+**Decisão.** `fn_listar_lancamentos(p_filtros jsonb, p_pagina int, p_tamanho int)` devolve a
+página, a contagem exata e a soma do valor filtrado. Uma ida ao banco no lugar de doze.
+
+**Por que RPC e não um remendo no tamanho.** Nenhum teto resolve: a lista de ids cresce com a
+base, então qualquer limite é uma data marcada para quebrar de novo. Medido: **48–75 ms** contra
+11.400 ms, e o filtro que não abria voltou a abrir.
+
+**Ganhos que vieram de graça.**
+
+1. **Revisão calculada uma vez só.** O estado de revisão decidia duas coisas em dois lugares: o
+   filtro (`idsPorRevisao`) e o selo da coluna (no `map` da listagem), com comentário no código
+   avisando que precisavam casar. Agora é a mesma expressão SQL para os dois, e não há como
+   discordarem. Conferido contra cálculo independente: `em_revisao` 0, `sem_conta` 328, `parcial`
+   74, `revisado` 6.851, `nao_revisado` 402, idênticos.
+2. **A soma do total filtrado virou agregação de verdade.** A agregação do PostgREST está
+   desligada neste projeto (`PGRST123`), então o total da tela era somado no app buscando a
+   coluna `valor` de milhares de linhas. Dentro da RPC é um `sum()`.
+
+**SECURITY INVOKER de propósito.** A RLS de `lancamentos` continua valendo para quem chama.
+`SECURITY DEFINER` aqui seria furo de permissão disfarçado de otimização.
+
+**Aprendizado que custou caro: erro engolido é erro que volta.** `listarLancamentos` descartava o
+erro do PostgREST e lançava "Não foi possível carregar os lançamentos". Diagnosticar virou
+tentativa e erro contra o banco, e eu descartei a hipótese certa (URL) porque um teste com uuids
+sintéticos mediu 15.234 B e passou raspando por baixo do limite. O erro real dizia o tamanho
+exato e sugeria a solução. Agora vai no `cause`. **Erro de infraestrutura tem que chegar ao log
+com a causa.**
+
+## 2026-08-11 — O histórico financeiro veio do nível de parcela, não de lançamento
+
+**O erro.** A primeira carga do histórico veio de uma planilha em nível de
+**lançamento**, sem o valor de cada parcela, e a importação reconstruía o carnê
+dividindo o total em partes iguais pelos vencimentos. Medido contra o export em
+nível de parcela do maiscontrole:
+
+| | ERP-EMT (estimado) | maiscontrole (origem) | diferença |
+| --- | --- | --- | --- |
+| Total | 64.541.696,82 | 61.432.852,10 | **+3.108.844,72** |
+| Em aberto | 15.024.746,09 | 11.699.473,00 | +3.325.273,09 |
+| Lançamentos | 7.253 | 5.817 | +1.436 |
+
+**O mecanismo, que é a parte que interessa.** Quando o pagamento de UMA parcela
+não casava com o total do lançamento, ele entrava como lançamento avulso pago e
+a parcela original ficava aberta. O mesmo dinheiro duas vezes, e "sem conta"
+onde já estava pago. Foi assim que o Tiago percebeu: a tela mostrava como
+pendente o que ele sabia estar pago.
+
+**A lição.** Divisão em partes iguais não é carnê, é estimativa. E estimativa
+que entra no lugar de dado real não avisa que é estimativa: ela vira número na
+tela, com duas casas decimais, com cara de conferido.
+
+**O que passou a existir.** A importação aceita o carnê real: `valores_parcelas`
+(com validação de que a soma fecha com o valor), `contas_parcelas` (77 carnês
+pagos de contas diferentes), `centros_rateio`/`valores_rateio` (141 lançamentos
+divididos entre obras, R$ 2,2 milhões) e datas de pagamento **posicionais**
+(existe carnê com a parcela 3 paga e a 2 aberta). Sem essas colunas, planilha
+escrita à mão continua funcionando igual.
+
+**Erro silencioso, de novo.** No meio do caminho, 14 pagamentos (R$ 818.891,95)
+não entraram e **nada acusou**. O maiscontrole traz algumas células com duas
+datas juntas (`27/05/2025, 28/05/2025`, parcela quitada em dois pagamentos); o
+conversor tratava a string como ISO, produzia `25//2/27/0`, e o parser da
+importação descartava a data calada. Consertado em três lugares, e o do meio é o
+que importa: **o gerador agora recusa data que não seja ISO em vez de fatiar às
+cegas, e a autoconferência exige o formato de todas as datas.** Transformar erro
+silencioso em erro que aparece vale mais que consertar o caso específico.
+
+**A conferência que fecha.** Três cortes independentes contra a origem, todos
+com diferença zero: 77 meses de vencimento (2025-01 a 2031-05), 5 contas
+bancárias e 11 centros de custo. E um sinal externo: agosto 2026 em aberto deu
+R$ 1.418.737,62, exatamente o rodapé que o maiscontrole mostra na tela.
+
+**Resíduos conhecidos, que não afetam os totais.** R$ 31.599,01 de descontos e
+R$ 788,71 de juros que o maiscontrole registra fora do valor da parcela (foram
+para observações); 3 parcelas pagas de duas contas ao mesmo tempo (fica a
+primeira, a outra em observações); 15 lançamentos sem favorecido na origem (vão
+para OUTRAS); e R$ 29.998,67 de diferença entre o export e o rodapé da tela do
+próprio maiscontrole — duas telas dele discordando, sendo R$ 4.000,00 de uma
+parcela sem favorecido.
+
+## 2026-08-11 — Juros na parcela, e o que `valor_liquido` significa
+
+A carga do histórico trouxe R$ 788,71 de juros em 3 parcelas que não tinham onde
+entrar. Poderia ficar como resíduo documentado, mas o problema não era a
+diferença: **sem o campo, todo juros futuro entraria como zero em silêncio**, e a
+posição bancária mentiria um pouco mais a cada boleto pago com atraso.
+
+**`valor_liquido` passou a ser `valor − desconto + juros`.** Isso não é
+conveniência: `valor_liquido` já era, pela própria definição e pelo comentário
+dentro de `fn_pagar_parcela`, "o que de fato sai do caixa". Enquanto juros não
+existia, `valor − desconto` era a resposta certa para essa pergunta; com juros,
+deixou de ser. As 8 funções que leem `valor_liquido` — posição bancária, fluxo de
+caixa, conciliação, resumo de gestão, folha, importação do lote 09 — passaram a
+estar corretas **sem mudar uma linha**, porque todas querem exatamente isso.
+
+Coluna gerada não aceita `ALTER` da expressão, então sai e volta. Conferido antes
+que não havia índice nem view sobre ela, e função em plpgsql resolve o nome em
+tempo de execução, então nada quebrou.
+
+**A conciliação melhorou de graça:** ela casa extrato com parcela por valor, e o
+extrato traz o que saiu com juros. Antes, boleto pago com multa nunca casava.
+
+**Juros não tem teto contra o valor da parcela**, ao contrário do desconto.
+Atraso longo pode passar do principal, e inventar um limite recusaria pagamento
+legítimo. Só a recusa de negativo, nas três barreiras (Zod na Server Action,
+`raise` na função, `check` na tabela).
+
+**A versão de 4 argumentos de `fn_pagar_parcela` foi derrubada, não mantida.**
+Mantida, o app poderia seguir chamando ela e o juros ficaria zero calado — que é
+exatamente o defeito que esta entrega existe para fechar.
+
+Resultado: o que saiu do banco no ERP-EMT passou a ser R$ 49.702.568,80, o mesmo
+"Valor Total Pago" do maiscontrole, **sem resíduo**. A dívida segue
+R$ 61.432.852,10 e as cinco contas seguem fechando em zero.

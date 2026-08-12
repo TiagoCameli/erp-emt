@@ -28,6 +28,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -38,8 +39,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { alternarAtivo } from "@/modules/cadastros/centros-custo/actions";
+import {
+  alternarAtivo,
+  excluirNo,
+} from "@/modules/cadastros/centros-custo/actions";
 import type { NoCentroCusto } from "@/modules/cadastros/centros-custo/queries";
+import { nomeVemDeOutroCadastro } from "@/modules/cadastros/centros-custo/travas";
 import {
   ROTULO_TIPO_CENTRO,
   TIPOS_CENTRO,
@@ -69,6 +74,7 @@ export interface ArvoreCentrosCustoProps {
   nos: NoCentroCusto[];
   podeCriar: boolean;
   podeEditar: boolean;
+  podeExcluir: boolean;
 }
 
 /** Nó já com a lista de filhos resolvida, para renderização recursiva. */
@@ -178,6 +184,7 @@ export function ArvoreCentrosCusto({
   nos,
   podeCriar,
   podeEditar,
+  podeExcluir,
 }: ArvoreCentrosCustoProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   // "todos" para não mudar o que a tela mostra hoje: a árvore sempre exibiu nó
@@ -194,6 +201,7 @@ export function ArvoreCentrosCusto({
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [modo, setModo] = React.useState<ModoNo | null>(null);
   const [aDesativar, setADesativar] = React.useState<NoCentroCusto | null>(null);
+  const [aExcluir, setAExcluir] = React.useState<NoCentroCusto | null>(null);
 
   const termo = busca.trim().toLowerCase();
 
@@ -270,6 +278,17 @@ export function ArvoreCentrosCusto({
     toast.success("Nó ativado");
   }
 
+  async function aoExcluir(motivo?: string) {
+    if (!aExcluir) return;
+    const resultado = await excluirNo(aExcluir.id, motivo ?? "");
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Centro de custo excluído");
+    setAExcluir(null);
+  }
+
   function renderNo(no: NoArvore, profundidade: number): React.ReactNode {
     const temFilhos = no.filhos.length > 0;
     const aberto = filtrando || expandidos.has(no.id);
@@ -283,11 +302,16 @@ export function ArvoreCentrosCusto({
     const podeAbrirEditar = podeEditar;
     // Desativar: só nó manual de nível 2 ou 3.
     const podeDesativar = podeEditar && no.nivel !== 1 && !gerido;
+    // Excluir: o item aparece para todo nó que não é de sistema, e fica
+    // desabilitado com o motivo quando o banco barra. A raiz de obra entra
+    // aqui de propósito, só para dizer "exclua pela obra".
+    const mostrarExcluir = podeExcluir && !no.sistema;
     const temAcoes =
       podeAdicionarEtapa ||
       podeAdicionarItem ||
       podeAbrirEditar ||
-      podeDesativar;
+      podeDesativar ||
+      mostrarExcluir;
 
     return (
       <React.Fragment key={no.id}>
@@ -400,7 +424,7 @@ export function ArvoreCentrosCusto({
                 ) : null}
                 {podeAbrirEditar ? (
                   <DropdownMenuItem onSelect={() => abrirEditar(no)}>
-                    {gerido ? "Editar orçamento" : "Editar"}
+                    {nomeVemDeOutroCadastro(no) ? "Editar orçamento" : "Editar"}
                   </DropdownMenuItem>
                 ) : null}
                 {podeDesativar ? (
@@ -418,6 +442,25 @@ export function ArvoreCentrosCusto({
                         Ativar
                       </DropdownMenuItem>
                     )}
+                  </>
+                ) : null}
+                {mostrarExcluir ? (
+                  <>
+                    {podeDesativar ? null : <DropdownMenuSeparator />}
+                    <DropdownMenuItem
+                      variant="destructive"
+                      disabled={no.motivoBloqueio !== null}
+                      onSelect={() => setAExcluir(no)}
+                    >
+                      Excluir
+                    </DropdownMenuItem>
+                    {/* Motivo no próprio menu: tooltip em item de dropdown
+                        não é alcançável por teclado. */}
+                    {no.motivoBloqueio ? (
+                      <DropdownMenuLabel className="max-w-64 text-xs font-normal whitespace-normal text-muted-foreground">
+                        {no.motivoBloqueio}
+                      </DropdownMenuLabel>
+                    ) : null}
                   </>
                 ) : null}
               </DropdownMenuContent>
@@ -567,6 +610,25 @@ export function ArvoreCentrosCusto({
           textoConfirmar="Desativar nó"
           variante="destrutivo"
           onConfirmar={aoDesativar}
+        />
+      ) : null}
+
+      {podeExcluir ? (
+        <ConfirmDialog
+          aberto={aExcluir !== null}
+          onAbertoChange={(aberto) => {
+            if (!aberto) setAExcluir(null);
+          }}
+          titulo="Excluir centro de custo"
+          descricao={
+            aExcluir
+              ? `${aExcluir.nome} vai para a lixeira e pode ser restaurado. Nada de custo está atrelado a ele.`
+              : ""
+          }
+          textoConfirmar="Excluir"
+          variante="destrutivo"
+          exigeMotivo
+          onConfirmar={aoExcluir}
         />
       ) : null}
     </>

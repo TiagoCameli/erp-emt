@@ -1785,6 +1785,7 @@ export type Database = {
           data_vencimento: string | null
           desconto: number
           id: string
+          juros: number
           lancamento_id: string
           numero_parcela: number
           pago_em: string | null
@@ -1807,6 +1808,7 @@ export type Database = {
           data_programada_origem?: string | null
           data_vencimento?: string | null
           desconto?: number
+          juros?: number
           id?: string
           lancamento_id: string
           numero_parcela?: number
@@ -1830,6 +1832,7 @@ export type Database = {
           data_programada_origem?: string | null
           data_vencimento?: string | null
           desconto?: number
+          juros?: number
           id?: string
           lancamento_id?: string
           numero_parcela?: number
@@ -3224,6 +3227,15 @@ export type Database = {
         Args: { p_motivo: string; p_oc_id: string }
         Returns: undefined
       }
+      fn_centro_custo_bloqueio: { Args: { p_id: string }; Returns: string }
+      fn_centro_custo_dependencias: { Args: { p_id: string }; Returns: Json }
+      fn_centros_custo_bloqueios: {
+        Args: { p_ids?: string[] }
+        Returns: {
+          bloqueio: string
+          centro_custo_id: string
+        }[]
+      }
       fn_chave_nome: { Args: { p_texto: string }; Returns: string }
       fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean }
       fn_competencias_painel: {
@@ -3306,8 +3318,16 @@ export type Database = {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
       }
+      fn_excluir_centro_custo: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
       fn_excluir_cotacao: { Args: { p_id: string }; Returns: undefined }
       fn_excluir_lancamento: { Args: { p_id: string }; Returns: undefined }
+      fn_excluir_obra: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined }
       fn_excluir_usuario: { Args: { p_id: string }; Returns: boolean }
       fn_exigir_competencia_aberta: {
@@ -3348,6 +3368,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_importar_lancamentos: { Args: { p_linhas: Json }; Returns: Json }
       fn_janela_pagamento: { Args: never; Returns: string }
       fn_jornadas_ponto: {
         Args: never
@@ -3366,15 +3387,35 @@ export type Database = {
         Args: { p_tabela: string }
         Returns: undefined
       }
+      fn_listar_lancamentos: {
+        Args: {
+          p_descendente?: boolean
+          p_filtros?: Json
+          p_ordenar_por?: string | null
+          p_pagina?: number
+          p_tamanho?: number
+        }
+        Returns: Json
+      }
       fn_marcar_parcela_conferida: {
         Args: { p_conferido?: boolean; p_parcela_id: string }
         Returns: undefined
+      }
+      fn_obra_bloqueio: { Args: { p_id: string }; Returns: string }
+      fn_obra_dependencias: { Args: { p_id: string }; Returns: Json }
+      fn_obras_bloqueios: {
+        Args: { p_ids?: string[] }
+        Returns: {
+          bloqueio: string
+          obra_id: string
+        }[]
       }
       fn_pagar_parcela: {
         Args: {
           p_conta_id: string
           p_data_pagamento: string
           p_desconto?: number
+          p_juros?: number
           p_parcela_id: string
         }
         Returns: undefined

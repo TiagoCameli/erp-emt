@@ -1,5 +1,7 @@
 import ExcelJS from "exceljs";
 
+import { chaveNome } from "@/lib/chave-nome";
+
 /**
  * Framework genérico de importação por planilha (.xlsx).
  * Server-compatible: sem React, usado por Server Actions e route handlers.
@@ -56,8 +58,15 @@ function sanitizarNomePlanilha(nome: string): string {
   return limpo.length > 0 ? limpo : "Modelo";
 }
 
+/**
+ * Chave de casamento entre o cabeçalho da planilha enviada e o rótulo esperado
+ * da coluna. Ignora acento de propósito: os rótulos passaram a ter grafia
+ * correta ("Razão social", "Código", "Orçamento") e sem dobrar acento toda
+ * planilha antiga, escrita "Razao social", seria recusada. Grafia correta não
+ * pode custar compatibilidade com o arquivo que o pessoal da obra já usa.
+ */
 function normalizarRotulo(rotulo: string): string {
-  return rotulo.trim().toLowerCase();
+  return chaveNome(rotulo);
 }
 
 /**

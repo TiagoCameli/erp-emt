@@ -13,6 +13,11 @@ import {
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  codigoBloqueio,
+  motivoBloqueioObra,
+} from "@/modules/cadastros/_shared/dependencias";
+import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
+import {
   obraSchema,
   type ObraInput,
   type StatusObra,
@@ -155,6 +160,52 @@ export async function alternarAtivo(
   return { ok: true };
 }
 
+/**
+ * Exclui a obra e, na mesma transação, o centro de custo raiz dela — os dois
+ * nascem juntos pelo trigger trg_obra_cria_centro_custo, então saem juntos.
+ * O par vai para a lixeira numa única entrada e é restaurável.
+ *
+ * Toda a validação de "nada atrelado" está em fn_excluir_obra: aqui só
+ * traduzimos o código de bloqueio que ela devolve no erro. Isso cobre a
+ * corrida (alguém vinculou um colaborador entre o carregamento da lista e o
+ * clique), caso em que o botão estava habilitado e a exclusão precisa falhar.
+ */
+export async function excluirObra(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("excluir"))) {
+    return { erro: "Sem permissão para excluir obras" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Obra inválida" };
+
+  const motivoLimpo = motivo.trim();
+  if (motivoLimpo.length === 0) return { erro: "Informe o motivo da exclusão" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_excluir_obra", {
+    p_id: idValido.data,
+    p_motivo: motivoLimpo,
+  });
+
+  if (error) {
+    return erroAcao(
+      "cadastros.obras.excluir",
+      error,
+      motivoBloqueioObra(codigoBloqueio(error.message)) ??
+        traduzErroExclusao(error) ??
+        "Não foi possível excluir a obra. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  // A exclusão apaga um centro de custo: a árvore precisa ser recarregada.
+  revalidatePath("/cadastros/centros-custo");
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Importação por planilha
 // ---------------------------------------------------------------------------
@@ -191,7 +242,7 @@ const COLUNAS: ColunaImportacao<LinhaObra>[] = [
   },
   {
     chave: "numeroContrato",
-    rotulo: "Numero do contrato",
+    rotulo: "Número do contrato",
     exemplo: "00615/2025",
     transformar: (valor) => String(valor).trim(),
   },
@@ -225,7 +276,7 @@ const COLUNAS: ColunaImportacao<LinhaObra>[] = [
   },
   {
     chave: "extensaoKm",
-    rotulo: "Extensao km",
+    rotulo: "Extensão km",
     exemplo: "120,5",
     transformar: (valor) => {
       const numero = Number(String(valor).replace(",", "."));
@@ -243,7 +294,7 @@ const COLUNAS: ColunaImportacao<LinhaObra>[] = [
       const status = ROTULO_STATUS[chave];
       if (!status) {
         throw new Error(
-          "use planejamento, em andamento, paralisada ou concluida",
+          "use planejamento, em andamento, paralisada ou concluída",
         );
       }
       return status;

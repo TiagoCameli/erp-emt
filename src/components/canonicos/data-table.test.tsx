@@ -2038,3 +2038,30 @@ describe("DataTable: coluna escondida pelo CSS fica intacta no ajuste", () => {
     ]);
   });
 });
+
+describe("DataTable: tira de resumo", () => {
+  it("não aparece quando a tela não passa resumo", () => {
+    renderizar();
+    expect(screen.queryByTestId("resumo")).toBeNull();
+  });
+
+  it("não aparece com resumo nulo, que é como a tela diz 'não tenho o total'", () => {
+    renderizar({ resumo: null });
+    expect(screen.queryByTestId("resumo")).toBeNull();
+  });
+
+  it("aparece ACIMA da tabela, senão o total nasce abaixo da dobra", () => {
+    const { container } = renderizar({
+      resumo: <span data-testid="resumo">Total de 3 lançamentos: R$ 60,00</span>,
+    });
+
+    const resumo = screen.getByTestId("resumo");
+    const tabela = container.querySelector("table");
+    expect(tabela).not.toBeNull();
+    // DOCUMENT_POSITION_FOLLOWING: a tabela vem DEPOIS do resumo no documento.
+    expect(
+      resumo.compareDocumentPosition(tabela as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});

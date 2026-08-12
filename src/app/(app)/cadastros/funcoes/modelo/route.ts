@@ -5,7 +5,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 
 const COLUNAS_MODELO = [
   { rotulo: "Nome", exemplo: "Pedreiro" },
-  { rotulo: "Salario base", exemplo: "2.500,00" },
+  { rotulo: "Salário base", exemplo: "2.500,00" },
   { rotulo: "CBO", exemplo: "7152-10" },
   { rotulo: "Ativo", exemplo: "sim" },
 ];
@@ -17,7 +17,7 @@ export async function GET() {
     notFound();
   }
 
-  const buffer = await gerarModeloXlsx(COLUNAS_MODELO, "Funcoes");
+  const buffer = await gerarModeloXlsx(COLUNAS_MODELO, "Funções");
 
   return new Response(new Uint8Array(buffer), {
     headers: {

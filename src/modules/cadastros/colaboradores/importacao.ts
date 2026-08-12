@@ -6,7 +6,7 @@ export interface LinhaImportacao {
   nome: string;
   cpf: string | null;
   /**
-   * Nome da função (cargo) como veio na planilha (coluna "Funcao"). A Server
+   * Nome da função (cargo) como veio na planilha (coluna "Função"). A Server
    * Action (`actions.ts`) resolve isso para `funcao_id`, casando por nome com
    * `funcoes` (Bloco 3, Task 3) — cria a função se ainda não existir.
    */
@@ -31,7 +31,7 @@ export const colunasImportacao: ColunaImportacao<LinhaImportacao>[] = [
     chave: "nome",
     rotulo: "Nome",
     obrigatoria: true,
-    exemplo: "Jose da Silva",
+    exemplo: "José da Silva",
     transformar: paraTexto,
   },
   {
@@ -42,13 +42,13 @@ export const colunasImportacao: ColunaImportacao<LinhaImportacao>[] = [
   },
   {
     chave: "funcaoNome",
-    rotulo: "Funcao",
+    rotulo: "Função",
     exemplo: "Operador",
     transformar: (valor) => paraTexto(valor) || null,
   },
   {
     chave: "vinculo",
-    rotulo: "Vinculo",
+    rotulo: "Vínculo",
     exemplo: "clt",
     transformar: (valor) => paraTexto(valor).toLowerCase(),
     validar: (valor) =>
