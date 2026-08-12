@@ -1350,3 +1350,43 @@ exatamente o defeito que esta entrega existe para fechar.
 Resultado: o que saiu do banco no ERP-EMT passou a ser R$ 49.702.568,80, o mesmo
 "Valor Total Pago" do maiscontrole, **sem resíduo**. A dívida segue
 R$ 61.432.852,10 e as cinco contas seguem fechando em zero.
+
+## 2026-08-12 — O maiscontrole edita o passado, e a carga tem que ser diferença, não recarga
+
+Julho/2026 ficou R$ 164.281,37 abaixo do maiscontrole depois de tudo conferido.
+Não era falha da carga. Comparando o export em nível de parcela de 12/08 com o
+ERP por multiconjunto (dia + valor), a diferença fechou nas **duas** pontas:
+faltavam 37 parcelas (R$ 182.420,24) e **sobravam 12** (R$ 18.138,87). O líquido
+das duas é exatamente a diferença.
+
+As 12 que sobravam não eram lixo: eram lançamentos que o maiscontrole **editou
+depois do export**. Duas tarifas de PIX viraram uma; duas guias de FGTS viraram
+uma; e oito pagamentos de folha de 06/07 viraram sete, com o **mesmo total** de
+R$ 10.476,36 e valor corrigido pessoa por pessoa. Alguém arrumou a folha na
+origem.
+
+**A lição operacional, que vale mais que o conserto:** o maiscontrole não é um
+livro só de escrita. Enquanto ele for a fonte, qualquer conferência de mês
+fechado é uma **diferença nas duas direções** — o que falta e o que sobra. Olhar
+só o que falta dá o sinal certo com o número errado, e nesse caso teria deixado
+julho R$ 18.138,87 acima da origem.
+
+**Isso define o corte de virada.** Não existe "carga final" que resista a edição
+retroativa na origem: a última recarga tem que ser feita com o maiscontrole já
+congelado, ou o ERP nasce divergente no dia seguinte.
+
+**Substituição, e não remendo de valor.** As 12 saíram e as 37 do export
+entraram, porque o arquivo já traz o rateio por centro de cada uma — um dos
+pagamentos rateia em dois centros, e recalcular proporção na mão seria inventar
+número que a origem já dá.
+
+**A migration é auto-verificável.** Ela termina conferindo os três números de
+julho (587 parcelas, face R$ 6.613.615,49, líquido R$ 6.607.138,48) e as contas
+em zero, e **levanta exceção** se algum não bater. Rodando em transação, isso
+desfaz as quatro partes anteriores: julho errado e visível é melhor que julho
+meio corrigido e silencioso.
+
+Julho passou a bater ao centavo, com junho como controle no mesmo corte
+(R$ 6.930.243,10 nos dois). O "em aberto" segue R$ 34.494,36 acima do print do
+maiscontrole, e a razão é conhecida: é o Auto Posto Progresso de 12/08, que
+entrou na origem depois daquele print.
