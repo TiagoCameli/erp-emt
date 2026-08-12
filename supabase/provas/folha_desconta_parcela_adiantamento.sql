@@ -333,3 +333,131 @@ end $prova$;
 select caso, obtido, passou from _r order by n;
 
 rollback;
+
+-- ############################################################################
+-- BLOCO D: folha OBSOLETA nao vai para aprovacao (fix round 2)
+--
+-- Precisa rodar o UPDATE de status como `authenticated`, porque o trigger
+-- fn_guarda_status_folha faz early-return quando current_user nao e
+-- ('authenticated','anon') -- as RPCs security definer sao a maquina de status.
+-- Rodando como postgres/service_role o trigger nao dispara e a prova seria falsa.
+-- ############################################################################
+begin;
+
+do $prova$
+declare v_usuario uuid;
+begin
+  select u.id into v_usuario
+  from public.usuarios u
+  join public.usuario_permissoes up on up.usuario_id = u.id
+  where u.ativo and up.recurso = 'rh.folha' and up.acao = 'criar'
+  limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario)::text, true);
+end $prova$;
+
+insert into public.folha_inss_faixas (limite_ate, aliquota) values
+  (1518.00,7.5),(2793.88,9),(4190.83,12),(8157.41,14);
+insert into public.folha_irrf_faixas (limite_ate, aliquota, parcela_deduzir) values
+  (2428.80,0,0),(4664.68,22.5,675.49),(999999999.00,27.5,908.73);
+insert into public.folha_parametros (id, irrf_deducao_por_dependente, irrf_desconto_simplificado, fgts_percentual,
+  grupo_recolhimento_inss, grupo_recolhimento_irrf, dia_vencimento_guias, dia_pagamento_salario)
+  values (1,189.59,607.20,8,'INSS','IRRF',20,5);
+insert into public.folha_encargos (nome, percentual, ativo, grupo_recolhimento)
+  values ('FGTS',8,true,'fgts');
+insert into public.colaboradores (id, nome, vinculo, ativo, salario) values
+  ('eeeeeeee-0000-0000-0000-00000000000e','PROVA E obsoleta','clt',true,2000.00);
+insert into public.rh_adiantamentos (id, colaborador_id, competencia, valor, data) values
+  ('e1000000-0000-0000-0000-000000000001','eeeeeeee-0000-0000-0000-00000000000e','2026-07-01',3200.00,'2026-07-05');
+insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto) values
+  ('e1000000-0000-0000-0000-000000000001',1,'2026-07-01',3200.00);
+
+create temp table _r (n int generated always as identity, caso text, obtido text, passou boolean);
+
+do $prova$
+declare v_jul uuid; v_ago uuid; v_set uuid; v_msg text; v_ok boolean;
+begin
+  v_jul := public.fn_gerar_folha('2026-07-01');
+  v_ago := public.fn_gerar_folha('2026-08-01');
+
+  begin
+    set local role authenticated;
+    update public.folhas set status='pendente_aprovacao' where id = v_ago;
+    v_ok := true; v_msg := 'enviou';
+  exception when others then
+    v_ok := false; v_msg := sqlerrm;
+  end;
+  reset role;
+  insert into _r (caso, obtido, passou) values
+    ('D1 folha INTEGRA (agosto consistente) envia para aprovacao sem atrito', v_msg, v_ok);
+
+  -- volta para rascunho: a trava do fix round 1 exigiria isso para regerar julho
+  update public.folhas set status='rascunho' where id = v_ago;
+
+  perform public.fn_gerar_folha('2026-07-01');
+  insert into _r (caso, obtido, passou)
+  select 'D2 obsolescencia instalada: parcelas descontadas em agosto vs itens de agosto',
+         coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id = v_ago),0)::text
+         || ' vs ' || coalesce((select sum(adiantamentos) from public.folha_itens where folha_id = v_ago),0)::text,
+         coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id = v_ago),0)
+         <> coalesce((select sum(adiantamentos) from public.folha_itens where folha_id = v_ago),0);
+
+  insert into _r (caso, obtido, passou) values
+    ('D3 regerar julho com agosto em rascunho continua funcionando (sem deadlock)', 'regerou', true);
+
+  begin
+    set local role authenticated;
+    update public.folhas set status='pendente_aprovacao' where id = v_ago;
+    v_ok := false; v_msg := 'ENVIOU (FALHA)';
+  exception when others then
+    v_ok := true; v_msg := sqlerrm;
+  end;
+  reset role;
+  insert into _r (caso, obtido, passou) values
+    ('D4 enviar agosto OBSOLETO para aprovacao e RECUSADO', v_msg,
+     v_ok and v_msg like '%ficou desatualizada%' and v_msg like '%Regere a folha antes de enviar%');
+
+  insert into _r (caso, obtido, passou)
+  select 'D5 agosto continua em rascunho depois da recusa', status, status = 'rascunho'
+  from public.folhas where id = v_ago;
+
+  v_ago := public.fn_gerar_folha('2026-08-01');
+  begin
+    set local role authenticated;
+    update public.folhas set status='pendente_aprovacao' where id = v_ago;
+    v_ok := true; v_msg := 'enviou';
+  exception when others then
+    v_ok := false; v_msg := sqlerrm;
+  end;
+  reset role;
+  insert into _r (caso, obtido, passou) values
+    ('D6 regerar AGOSTO libera o envio (a saida existe e esta na mensagem)', v_msg, v_ok);
+
+  insert into _r (caso, obtido, passou)
+  select 'D7 depois de regerar, as duas somas batem de novo',
+         coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id = v_ago),0)::text
+         || ' vs ' || coalesce((select sum(adiantamentos) from public.folha_itens where folha_id = v_ago),0)::text,
+         coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id = v_ago),0)
+         = coalesce((select sum(adiantamentos) from public.folha_itens where folha_id = v_ago),0);
+
+  -- folha sem adiantamento nenhum: as duas somas dao zero e sao IGUAIS
+  v_set := public.fn_gerar_folha('2026-09-01');
+  begin
+    set local role authenticated;
+    update public.folhas set status='pendente_aprovacao' where id = v_set;
+    v_ok := true; v_msg := 'enviou';
+  exception when others then
+    v_ok := false; v_msg := sqlerrm;
+  end;
+  reset role;
+  insert into _r (caso, obtido, passou) values
+    ('D8 folha SEM adiantamento nenhum (0 vs 0 sao IGUAIS) envia sem atrito', v_msg, v_ok);
+
+  insert into _r (caso, obtido, passou)
+  select 'D9 setembro: as duas somas sao zero', a::text || ' vs ' || b::text, a = b and a = 0
+  from (select coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id = v_set),0) a,
+               coalesce((select sum(adiantamentos) from public.folha_itens where folha_id = v_set),0) b) t;
+end $prova$;
+
+select caso, obtido, passou from _r order by n;
+
+rollback;

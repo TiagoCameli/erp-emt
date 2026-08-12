@@ -34,6 +34,27 @@ export type ResultadoPlanilha =
   | { ok: true; base64: string; nomeArquivo: string }
   | { erro: string };
 
+/**
+ * Erro de banco: só devolve `error.message` ao usuário quando é um
+ * `raise exception` nosso (SQLSTATE `P0001`, o default do plpgsql sem
+ * `USING ERRCODE`). Qualquer outro código (permission denied, violação de RLS,
+ * erro de conexão) é infraestrutura e vai só pro log. Mesma função de
+ * `rh/adiantamentos/actions.ts`.
+ *
+ * Vale para o UPDATE de status porque as travas dele vivem no trigger
+ * `fn_guarda_status_folha`, e a mensagem dele é a única coisa que diz ao
+ * operador o que fazer: "a folha está vazia, gere antes" e "a folha ficou
+ * desatualizada, regere antes". Sem isto o toast dizia só "Não foi possível
+ * atualizar a folha", e a saída ficava invisível.
+ */
+function mensagemDeNegocio(
+  error: { code?: string; message?: string } | null | undefined,
+  fallback: string,
+): string {
+  if (error?.code === "P0001" && error.message) return error.message;
+  return fallback;
+}
+
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
   try {
@@ -141,7 +162,10 @@ async function transicionarStatusFolha(
     return erroAcao(
       "rh.folha.transicionarStatus",
       error,
-      "Não foi possível atualizar a folha. Tente novamente",
+      mensagemDeNegocio(
+        error,
+        "Não foi possível atualizar a folha. Tente novamente",
+      ),
     );
   }
 

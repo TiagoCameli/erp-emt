@@ -38,10 +38,16 @@
 --
 -- A `fn_gerar_folha` foi recriada a partir da definição viva
 -- (md5(prosrc) = 352da56059609bf02d19e0d7a53af117, 11114 chars) com `replace()`
--- cirúrgico em três pontos e nada mais:
+-- cirúrgico em QUATRO edits e nada mais. São três chamadas de `replace()`, mas
+-- quatro edits, porque a terceira chamada trocou o comentário e o `update`
+-- juntos (correção de contagem apontada no re-review):
 --   1. declare: + v_trava date;
 --   2. regeneração: a trava antes do delete;
---   3. o `case when v_desc_par > 0 then v_folha else null end` vira `v_folha`.
+--   3. o comentário acima do `update ... set folha_id`, que descrevia a regra
+--      pré-fix ("parcela de desconto zero fica ABERTA");
+--   4. o `case when v_desc_par > 0 then v_folha else null end` vira `v_folha`.
+-- Revertendo os QUATRO volta a 352da56059609bf02d19e0d7a53af117; revertendo só
+-- três dá outro hash.
 -- md5(prosrc) resultante: 6918f7175806dcdd806480d2cf6ef17c (12690 chars).
 
 -- ============================================================================
