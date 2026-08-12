@@ -330,9 +330,9 @@ export interface FichaAdiantamentos {
 /**
  * Adiantamentos do colaborador (reaproveita `listarAdiantamentos` filtrada,
  * que já calcula a flag `naFolha`). Volume por colaborador é pequeno: os 5
- * mais recentes vêm da mesma leitura filtrada; o total em aberto (folhaId
- * nulo: ainda não entrou em nenhuma folha) é agregado em JS porque o
- * PostgREST não soma no servidor.
+ * mais recentes vêm da mesma leitura filtrada; o total em aberto (nenhuma
+ * parcela descontada em folha ainda) é agregado em JS porque o PostgREST não
+ * soma no servidor.
  */
 export async function resumoAdiantamentos(
   colaboradorId: string,

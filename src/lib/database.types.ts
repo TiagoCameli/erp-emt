@@ -2587,7 +2587,6 @@ export type Database = {
           created_by: string | null
           data: string
           descricao: string | null
-          folha_id: string | null
           id: string
           lancamento_id: string | null
           updated_at: string
@@ -2600,7 +2599,6 @@ export type Database = {
           created_by?: string | null
           data?: string
           descricao?: string | null
-          folha_id?: string | null
           id?: string
           lancamento_id?: string | null
           updated_at?: string
@@ -2613,7 +2611,6 @@ export type Database = {
           created_by?: string | null
           data?: string
           descricao?: string | null
-          folha_id?: string | null
           id?: string
           lancamento_id?: string | null
           updated_at?: string
@@ -2625,13 +2622,6 @@ export type Database = {
             columns: ["colaborador_id"]
             isOneToOne: false
             referencedRelation: "colaboradores"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "rh_adiantamentos_folha_id_fkey"
-            columns: ["folha_id"]
-            isOneToOne: false
-            referencedRelation: "folhas"
             referencedColumns: ["id"]
           },
           {
@@ -3225,12 +3215,20 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string }
         Returns: undefined
       }
+      fn_adiantamento_em_folha: {
+        Args: { p_adiantamento_id: string }
+        Returns: boolean
+      }
       fn_adiantamento_pagamento_comprometido: {
         Args: { p_lancamento_id: string }
         Returns: boolean
       }
       fn_adiantamentos_comprometidos: {
         Args: { p_lancamento_ids: string[] }
+        Returns: string[]
+      }
+      fn_adiantamentos_em_folha: {
+        Args: { p_adiantamento_ids: string[] }
         Returns: string[]
       }
       fn_alterar_mes_competencia: {
@@ -3495,6 +3493,10 @@ export type Database = {
           p_para_tipo: string
         }
         Returns: number
+      }
+      fn_proxima_competencia_desconto: {
+        Args: { p_apos: string }
+        Returns: string
       }
       fn_rateios_da_linha: {
         Args: { p_centro_padrao: string; p_linha: Json; p_valor: number }

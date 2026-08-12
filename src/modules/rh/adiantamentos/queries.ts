@@ -20,9 +20,12 @@ export interface AdiantamentoLista {
   /** Data do adiantamento (yyyy-MM-dd). */
   data: string;
   descricao: string | null;
-  /** Id da folha em que o adiantamento entrou, ou null se ainda em aberto. */
-  folhaId: string | null;
-  /** True quando já entrou numa folha: linha travada (sem editar/excluir). */
+  /**
+   * True quando alguma parcela do adiantamento já foi descontada em folha:
+   * linha travada (sem editar/excluir). O vínculo com a folha vive na parcela
+   * (`rh_adiantamento_parcelas.folha_id`); `rh_adiantamentos.folha_id` não
+   * existe mais.
+   */
   naFolha: boolean;
   /** Id do lançamento a_pagar gerado na concessão, ou null (registro antigo). */
   lancamentoId: string | null;
@@ -49,7 +52,7 @@ export async function listarAdiantamentos(
   let consulta = supabase
     .from("rh_adiantamentos")
     .select(
-      "id, colaborador_id, competencia, valor, data, descricao, folha_id, lancamento_id, created_at, colaboradores(nome), lancamentos(numero)",
+      "id, colaborador_id, competencia, valor, data, descricao, lancamento_id, created_at, colaboradores(nome), lancamentos(numero)",
     )
     .order("competencia", { ascending: false })
     .order("created_at", { ascending: false });
@@ -88,6 +91,24 @@ export async function listarAdiantamentos(
     comprometidos = new Set(idsComprometidos ?? []);
   }
 
+  // `naFolha` também em lote, e também por RPC definer: a policy de select de
+  // rh_adiantamento_parcelas exige rh.adiantamentos:ver, então um perfil sem
+  // `ver` leria vazio e a listagem mostraria como editável um adiantamento já
+  // descontado. A função é fail-closed: sem permissão devolve todos os ids.
+  let emFolha = new Set<string>();
+  if (linhas.length > 0) {
+    const { data: idsEmFolha, error: erroEmFolha } = await supabase.rpc(
+      "fn_adiantamentos_em_folha",
+      { p_adiantamento_ids: linhas.map((linha) => linha.id) },
+    );
+    if (erroEmFolha) {
+      throw new Error(
+        "Não foi possível conferir se os adiantamentos já entraram em folha",
+      );
+    }
+    emFolha = new Set(idsEmFolha ?? []);
+  }
+
   return linhas.map((linha) => ({
     id: linha.id,
     colaboradorId: linha.colaborador_id,
@@ -96,8 +117,7 @@ export async function listarAdiantamentos(
     valor: linha.valor,
     data: linha.data,
     descricao: linha.descricao,
-    folhaId: linha.folha_id,
-    naFolha: linha.folha_id !== null,
+    naFolha: emFolha.has(linha.id),
     lancamentoId: linha.lancamento_id,
     lancamentoNumero: linha.lancamentos?.numero ?? null,
     pagamentoComprometido: linha.lancamento_id
