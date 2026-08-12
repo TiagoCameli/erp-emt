@@ -137,9 +137,12 @@ async function garantirExcluivel(
 
 /**
  * Cria um adiantamento. Vai pela RPC `fn_registrar_adiantamento`, que grava o
- * adiantamento e o lançamento a_pagar dele (no centro de custo do
- * colaborador) na mesma transação: um insert direto seguido de outra chamada
- * deixaria um dos dois órfão se a segunda falhasse.
+ * adiantamento, o lançamento a_pagar dele (no centro de custo do colaborador)
+ * e o plano de parcelas do desconto na mesma transação: um insert direto
+ * seguido de outra chamada deixaria um dos três órfão se a segunda falhasse.
+ *
+ * `parcelas` é só a QUANTIDADE: quem divide o valor é o servidor, que refaz a
+ * conta de `dividirEmParcelas` em centavos. A prévia da tela é informativa.
  */
 export async function criarAdiantamento(
   dados: AdiantamentoInput,
@@ -161,6 +164,7 @@ export async function criarAdiantamento(
       valor: validado.data.valor,
       data: validado.data.data,
       descricao: validado.data.descricao ?? null,
+      parcelas: validado.data.parcelas,
     },
   });
 

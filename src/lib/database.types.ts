@@ -1785,6 +1785,7 @@ export type Database = {
           data_vencimento: string | null
           desconto: number
           id: string
+          juros: number
           lancamento_id: string
           numero_parcela: number
           pago_em: string | null
@@ -1808,6 +1809,7 @@ export type Database = {
           data_vencimento?: string | null
           desconto?: number
           id?: string
+          juros?: number
           lancamento_id: string
           numero_parcela?: number
           pago_em?: string | null
@@ -1831,6 +1833,7 @@ export type Database = {
           data_vencimento?: string | null
           desconto?: number
           id?: string
+          juros?: number
           lancamento_id?: string
           numero_parcela?: number
           pago_em?: string | null
@@ -2514,6 +2517,64 @@ export type Database = {
             columns: ["ordem_compra_id"]
             isOneToOne: true
             referencedRelation: "ordens_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_adiantamento_parcelas: {
+        Row: {
+          adiantamento_id: string
+          competencia: string
+          created_at: string
+          folha_id: string | null
+          gerada_por_folha_id: string | null
+          id: string
+          numero: number
+          valor_descontado: number
+          valor_previsto: number
+        }
+        Insert: {
+          adiantamento_id: string
+          competencia: string
+          created_at?: string
+          folha_id?: string | null
+          gerada_por_folha_id?: string | null
+          id?: string
+          numero: number
+          valor_descontado?: number
+          valor_previsto: number
+        }
+        Update: {
+          adiantamento_id?: string
+          competencia?: string
+          created_at?: string
+          folha_id?: string | null
+          gerada_por_folha_id?: string | null
+          id?: string
+          numero?: number
+          valor_descontado?: number
+          valor_previsto?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_adiantamento_parcelas_adiantamento_id_fkey"
+            columns: ["adiantamento_id"]
+            isOneToOne: false
+            referencedRelation: "rh_adiantamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_adiantamento_parcelas_folha_id_fkey"
+            columns: ["folha_id"]
+            isOneToOne: false
+            referencedRelation: "folhas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_adiantamento_parcelas_gerada_por_folha_id_fkey"
+            columns: ["gerada_por_folha_id"]
+            isOneToOne: false
+            referencedRelation: "folhas"
             referencedColumns: ["id"]
           },
         ]
@@ -3224,6 +3285,15 @@ export type Database = {
         Args: { p_motivo: string; p_oc_id: string }
         Returns: undefined
       }
+      fn_centro_custo_bloqueio: { Args: { p_id: string }; Returns: string }
+      fn_centro_custo_dependencias: { Args: { p_id: string }; Returns: Json }
+      fn_centros_custo_bloqueios: {
+        Args: { p_ids?: string[] }
+        Returns: {
+          bloqueio: string
+          centro_custo_id: string
+        }[]
+      }
       fn_chave_nome: { Args: { p_texto: string }; Returns: string }
       fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean }
       fn_competencias_painel: {
@@ -3306,8 +3376,16 @@ export type Database = {
         Args: { p_id: string; p_motivo: string; p_tabela: string }
         Returns: undefined
       }
+      fn_excluir_centro_custo: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
       fn_excluir_cotacao: { Args: { p_id: string }; Returns: undefined }
       fn_excluir_lancamento: { Args: { p_id: string }; Returns: undefined }
+      fn_excluir_obra: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined }
       fn_excluir_usuario: { Args: { p_id: string }; Returns: boolean }
       fn_exigir_competencia_aberta: {
@@ -3348,6 +3426,7 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_importar_lancamentos: { Args: { p_linhas: Json }; Returns: Json }
       fn_janela_pagamento: { Args: never; Returns: string }
       fn_jornadas_ponto: {
         Args: never
@@ -3362,19 +3441,40 @@ export type Database = {
           horas_terca: number
         }[]
       }
+      fn_jsonb_lista: { Args: { p_valor: Json }; Returns: Json }
       fn_limpar_preferencia_tabela: {
         Args: { p_tabela: string }
         Returns: undefined
       }
+      fn_listar_lancamentos: {
+        Args: {
+          p_descendente?: boolean
+          p_filtros?: Json
+          p_ordenar_por?: string
+          p_pagina?: number
+          p_tamanho?: number
+        }
+        Returns: Json
+      }
       fn_marcar_parcela_conferida: {
         Args: { p_conferido?: boolean; p_parcela_id: string }
         Returns: undefined
+      }
+      fn_obra_bloqueio: { Args: { p_id: string }; Returns: string }
+      fn_obra_dependencias: { Args: { p_id: string }; Returns: Json }
+      fn_obras_bloqueios: {
+        Args: { p_ids?: string[] }
+        Returns: {
+          bloqueio: string
+          obra_id: string
+        }[]
       }
       fn_pagar_parcela: {
         Args: {
           p_conta_id: string
           p_data_pagamento: string
           p_desconto?: number
+          p_juros?: number
           p_parcela_id: string
         }
         Returns: undefined
@@ -3395,6 +3495,10 @@ export type Database = {
           p_para_tipo: string
         }
         Returns: number
+      }
+      fn_rateios_da_linha: {
+        Args: { p_centro_padrao: string; p_linha: Json; p_valor: number }
+        Returns: Json
       }
       fn_reabrir_competencia: {
         Args: { p_mes: string; p_motivo: string }
