@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { FilaAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/components/fila-aprovacao";
@@ -26,7 +26,11 @@ vi.mock("@/modules/financeiro/aprovacao-pagamentos/actions", () => ({
   aprovarParcelasEmLote: vi.fn(),
   revisarParcela: vi.fn(),
   revisarParcelasEmLote: vi.fn(),
-  detalheDaFila: vi.fn(),
+  // Promessa que não resolve, de propósito: o painel de conferência fica no
+  // estado de carregando, que é o suficiente para checar que ele ABRIU. Devolver
+  // vi.fn() cru (undefined) faz o painel estourar em `.then` de undefined, e era
+  // o que acontecia aqui: nenhum teste abria o painel, então nunca apareceu.
+  detalheDaFila: vi.fn(() => new Promise(() => {})),
 }));
 
 // A DataTable guarda a personalização de colunas no localStorage, que o jsdom
@@ -94,6 +98,9 @@ const PADRAO = {
   podeRevisar: true,
   podeEditarLancamento: true,
   idUsuario: "44444444-4444-4444-8444-444444444444",
+  // Navegação normal pelo menu: sem link de aprovação na URL.
+  parcelasDoLink: [],
+  foraDaFila: [],
 };
 
 describe("FilaAprovacao", () => {
@@ -185,5 +192,212 @@ describe("FilaAprovacao", () => {
     expect(
       screen.getByText(/dinheiro e cartão de crédito não passam por aqui/i),
     ).toBeInTheDocument();
+  });
+});
+
+const OUTRA_ID = "66666666-6666-4666-8666-666666666666";
+
+/** A segunda parcela da fila, a que o link NÃO aponta. */
+function outraParcela() {
+  return parcela({
+    id: OUTRA_ID,
+    lancamentoNumero: "LAN-2026-0099",
+    fornecedorNome: "POSTO IPE",
+    lancamentoDescricao: "Diesel S10",
+  });
+}
+
+describe("FilaAprovacao aberta por link de aprovação", () => {
+  it("mostra só o pagamento do link, não a fila inteira", () => {
+    render(
+      <FilaAprovacao
+        parcelas={[parcela(), outraParcela()]}
+        {...PADRAO}
+        parcelasDoLink={[parcela().id]}
+      />,
+    );
+
+    expect(screen.getByText("Compra de cimento")).toBeInTheDocument();
+    // O perigo que isto trava: quem abre o link de um pagamento e vê a fila
+    // inteira pode aprovar o vizinho por engano.
+    expect(screen.queryByText("Diesel S10")).not.toBeInTheDocument();
+  });
+
+  it("avisa que a fila está recortada por um link, com saída para a fila inteira", () => {
+    // Link de duas parcelas de propósito: com uma só o painel de conferência
+    // abre por cima e, sendo modal, tira o resto da página da árvore acessível.
+    // O aviso continua lá atrás, e é isso que a pessoa vê ao fechar o painel.
+    render(
+      <FilaAprovacao
+        parcelas={[parcela(), outraParcela()]}
+        {...PADRAO}
+        parcelasDoLink={[parcela().id, OUTRA_ID]}
+      />,
+    );
+
+    expect(screen.getByText(/abriu um link de aprovação/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Ver a fila inteira" }),
+    ).toBeInTheDocument();
+  });
+
+  it("não avisa nada na navegação normal pelo menu", () => {
+    render(<FilaAprovacao parcelas={[parcela()]} {...PADRAO} />);
+    expect(
+      screen.queryByText(/abriu um link de aprovação/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("abre o painel de conferência já no pagamento do link", () => {
+    render(
+      <FilaAprovacao
+        parcelas={[parcela(), outraParcela()]}
+        {...PADRAO}
+        parcelasDoLink={[parcela().id]}
+      />,
+    );
+
+    // É isto que faz o link "abrir na tela de aprovar": sem o painel, quem
+    // recebe cai numa lista de um item e tem que descobrir que precisa clicar.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("não abre painel quando o link traz vários pagamentos", () => {
+    render(
+      <FilaAprovacao
+        parcelas={[parcela(), outraParcela()]}
+        {...PADRAO}
+        parcelasDoLink={[parcela().id, OUTRA_ID]}
+      />,
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Compra de cimento")).toBeInTheDocument();
+    expect(screen.getByText("Diesel S10")).toBeInTheDocument();
+  });
+
+  it("diz onde o pagamento foi parar quando ele já saiu da fila", () => {
+    render(
+      <FilaAprovacao
+        parcelas={[]}
+        {...PADRAO}
+        parcelasDoLink={[parcela().id]}
+        foraDaFila={[
+          {
+            id: parcela().id,
+            numero: "LAN-2026-0015",
+            fornecedorNome: "A CRUZEIRENSE",
+            valor: 20,
+            status: "aprovado",
+            naoEncontrada: false,
+          },
+        ]}
+      />,
+    );
+
+    // Um link parado dias no WhatsApp cai aqui. "Nenhum pagamento encontrado"
+    // faria quem abriu achar que o lançamento foi perdido.
+    expect(screen.getByText(/já está aprovado/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/pagamentos deste link já saíram da fila/i),
+    ).toBeInTheDocument();
+  });
+
+  it("distingue pagamento sem acesso de pagamento já aprovado", () => {
+    render(
+      <FilaAprovacao
+        parcelas={[]}
+        {...PADRAO}
+        parcelasDoLink={[parcela().id]}
+        foraDaFila={[
+          {
+            id: parcela().id,
+            numero: null,
+            fornecedorNome: "-",
+            valor: 0,
+            status: null,
+            naoEncontrada: true,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText(/não foi encontrado/i)).toBeInTheDocument();
+  });
+});
+
+describe("FilaAprovacao copia a mensagem de aprovação", () => {
+  /** Área de transferência de mentira, para ler o texto que sairia daqui. */
+  function espionarClipboard() {
+    const escrito: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (texto: string) => {
+          escrito.push(texto);
+        },
+      },
+    });
+    return escrito;
+  }
+
+  it("copia fornecedor, valor e link do pagamento da linha", async () => {
+    const escrito = espionarClipboard();
+    render(<FilaAprovacao parcelas={[parcela()]} {...PADRAO} />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Copiar mensagem de aprovação de LAN-2026-0015/i,
+      }),
+    );
+    await vi.waitFor(() => expect(escrito).toHaveLength(1));
+
+    expect(escrito[0]).toContain("A CRUZEIRENSE");
+    expect(escrito[0]).toContain("Compra de cimento");
+    expect(escrito[0]).toContain(
+      `/financeiro/aprovacao-pagamentos?parcela=${parcela().id}`,
+    );
+  });
+
+  it("copia um link só com as duas parcelas quando há seleção", async () => {
+    const escrito = espionarClipboard();
+    render(<FilaAprovacao parcelas={[parcela(), outraParcela()]} {...PADRAO} />);
+
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Selecionar todos os pagamentos" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copiar mensagem de aprovação" }),
+    );
+    await vi.waitFor(() => expect(escrito).toHaveLength(1));
+
+    expect(escrito[0]).toContain("2 pagamentos para aprovar");
+    expect(escrito[0]).toContain(
+      `?parcela=${parcela().id},${OUTRA_ID}`,
+    );
+  });
+
+  it("quem só tem ver copia a mensagem, mas não aprova nem revisa", () => {
+    render(
+      <FilaAprovacao
+        parcelas={[parcela()]}
+        {...PADRAO}
+        podeAprovar={false}
+        podeRevisar={false}
+      />,
+    );
+
+    // O caso de uso do link: o financeiro monta a mensagem, quem aprova recebe.
+    expect(
+      screen.getByRole("button", {
+        name: /Copiar mensagem de aprovação de LAN-2026-0015/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Aprovar LAN/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Revisar LAN/i }),
+    ).not.toBeInTheDocument();
   });
 });

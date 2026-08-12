@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { PARAM_DESTINO } from "@/modules/auth/destino";
+
 /**
  * Rotas que não passam pela sessão do usuário.
  *
@@ -51,7 +53,16 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !rotaPublica) {
     const url = request.nextUrl.clone();
+    const pretendida = `${request.nextUrl.pathname}${request.nextUrl.search}`;
     url.pathname = "/login";
+    url.search = "";
+    // Guarda para onde a pessoa estava indo. Sem isto, quem recebe o link de uma
+    // tela específica (o link de aprovação de pagamento, por exemplo) loga e cai
+    // na home sem saber mais qual era o pagamento. A home não precisa de bilhete
+    // de volta. Quem valida isto na volta é destinoSeguro().
+    if (pretendida !== "/") {
+      url.searchParams.set(PARAM_DESTINO, pretendida);
+    }
     return NextResponse.redirect(url);
   }
 

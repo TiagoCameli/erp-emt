@@ -19,9 +19,15 @@ import { loginSchema, type LoginInput } from "@/modules/auth/schemas";
 interface LoginFormProps {
   /** Mensagem de erro vinda da URL (ex: link de convite inválido). */
   erroInicial?: string;
+  /**
+   * Rota para onde a pessoa estava indo quando o middleware pediu login. Vem
+   * crua da URL e é validada no servidor por `destinoSeguro()`: aqui é só
+   * carona.
+   */
+  destino?: string;
 }
 
-export function LoginForm({ erroInicial }: LoginFormProps) {
+export function LoginForm({ erroInicial, destino }: LoginFormProps) {
   const [erro, setErro] = useState<string | null>(erroInicial ?? null);
 
   /**
@@ -44,7 +50,7 @@ export function LoginForm({ erroInicial }: LoginFormProps) {
 
   async function aoEnviar(dados: LoginInput) {
     setErro(null);
-    const resultado = await entrar(dados);
+    const resultado = await entrar(dados, destino);
     if (resultado) {
       setErro(resultado.erro);
     }
