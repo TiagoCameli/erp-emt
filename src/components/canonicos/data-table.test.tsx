@@ -417,8 +417,11 @@ describe("DataTable: alinhamento do texto", () => {
     // vírgula: é o que faz "R$ 512.340,00" saltar aos olhos ao lado de
     // "R$ 1.940,50". Centralizar dinheiro é regressão. Se este teste ficar
     // vermelho, o conserto é devolver o alinhamento à direita, não mudar o teste.
+    //
+    // A decisão vale para a CÉLULA, que é onde existe vírgula para alinhar. O
+    // cabeçalho é rótulo, não número, e desde 2026-08-13 ele centraliza junto com
+    // todos os outros: ver o teste do cabeçalho abaixo.
     renderizar();
-    expect(alinhamento(cabecalho("Valor"))).toBe("text-right");
     for (const celula of celulas("Valor")) {
       expect(alinhamento(celula)).toBe("text-right");
       expect(within(celula).getByText(/^R\$/)).toHaveClass("tabular-nums");
@@ -427,10 +430,19 @@ describe("DataTable: alinhamento do texto", () => {
 
   it("mantém quantidade e contagem à direita", () => {
     renderizar();
-    expect(alinhamento(cabecalho("Parcelas"))).toBe("text-right");
     for (const celula of celulas("Parcelas")) {
       expect(alinhamento(celula)).toBe("text-right");
     }
+  });
+
+  it("centraliza TODO cabeçalho, inclusive o de coluna alinhada à direita", () => {
+    // O cabeçalho seguia o alinhamento da célula, então "Valor", "Parcelas" e
+    // "Ações" eram os únicos rótulos fora do centro numa fila de dez colunas
+    // centralizadas, e a régua do cabeçalho ficava torta. Rótulo não tem vírgula
+    // para alinhar: o motivo que manda dinheiro para a direita não alcança ele.
+    renderizar();
+    expect(alinhamento(cabecalho("Valor"))).toBe("text-center");
+    expect(alinhamento(cabecalho("Parcelas"))).toBe("text-center");
   });
 
   it("centraliza igual nas tabelas que não são personalizáveis", () => {

@@ -1958,8 +1958,8 @@ export function DataTable<TData>({
       {table.getHeaderGroups().map((grupo) => (
         <TableRow key={grupo.id} className="group/cabecalho hover:bg-transparent">
           {grupo.headers.map((header, indiceHeader) => {
-            const alinharDireita =
-              header.column.columnDef.meta?.alinharDireita === true;
+            // Sem `alinharDireita` aqui: o cabeçalho não lê essa meta. Ela é
+            // regra da célula (ver o corpo da tabela, mais abaixo).
             const podeReordenar =
               personalizavel && header.column.columnDef.meta?.fixa !== true;
             return (
@@ -2007,8 +2007,15 @@ export function DataTable<TData>({
                   // Centralizado é o padrão da tabela. O `text-center` também
                   // vence o `text-left` fixo do TableHead do shadcn porque o `cn`
                   // é tailwind-merge (conflito resolve pelo último).
+                  //
+                  // TODO cabeçalho centraliza, inclusive de coluna alinhada à
+                  // direita. `alinharDireita` é regra da CÉLULA: dinheiro e
+                  // quantidade vão à direita para a vírgula cair embaixo da
+                  // vírgula, e rótulo não tem vírgula para alinhar. Quando o
+                  // cabeçalho seguia a célula, "Valor" e "Ações" eram os únicos
+                  // rótulos fora do centro numa fila de dez, e a régua do
+                  // cabeçalho ficava torta.
                   "h-9 px-3 text-center text-detalhe font-medium text-muted-foreground",
-                  alinharDireita && "text-right",
                   personalizavel && "relative",
                   podeReordenar && "cursor-grab active:cursor-grabbing",
                   arrastando === header.column.id && "opacity-50",
@@ -2025,10 +2032,11 @@ export function DataTable<TData>({
                   <button
                     type="button"
                     onClick={header.column.getToggleSortingHandler()}
-                    className={cn(
-                      "inline-flex max-w-full items-center gap-1 select-none hover:text-foreground",
-                      alinharDireita && "flex-row-reverse"
-                    )}
+                    // Sem flex-row-reverse: com o cabeçalho centralizado, inverter
+                    // a ordem punha o ícone de ordenação ANTES do rótulo só nas
+                    // colunas de dinheiro ("⇅ Valor" contra "Vencimento ⇅").
+                    // O ícone fica depois do texto em toda coluna.
+                    className="inline-flex max-w-full items-center gap-1 select-none hover:text-foreground"
                   >
                     <span data-medir className="truncate">
                       {flexRender(
