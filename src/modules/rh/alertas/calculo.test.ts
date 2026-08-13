@@ -4,6 +4,7 @@ import {
   cadastroFaltando,
   contarPorUrgencia,
   corKpi,
+  temSaldoAdiantamentoInativo,
   urgenciaDocumento,
   urgenciaFerias,
   type Urgencia,
@@ -220,5 +221,31 @@ describe("corKpi", () => {
 
   it("sem crítico e sem aviso devolve neutro", () => {
     expect(corKpi({ critico: 0, aviso: 0 })).toBe("neutro");
+  });
+});
+
+describe("temSaldoAdiantamentoInativo", () => {
+  it("inativo com saldo aparece", () => {
+    expect(
+      temSaldoAdiantamentoInativo({ ativo: false, saldo: 400 }),
+    ).toBe(true);
+  });
+
+  it("inativo sem saldo não aparece", () => {
+    expect(temSaldoAdiantamentoInativo({ ativo: false, saldo: 0 })).toBe(
+      false,
+    );
+  });
+
+  it("ativo com saldo não aparece (é o desconto normal da folha)", () => {
+    expect(temSaldoAdiantamentoInativo({ ativo: true, saldo: 400 })).toBe(
+      false,
+    );
+  });
+
+  it("inativo com saldo negativo não aparece (não deveria ocorrer, mas não trava o painel)", () => {
+    expect(temSaldoAdiantamentoInativo({ ativo: false, saldo: -10 })).toBe(
+      false,
+    );
   });
 });

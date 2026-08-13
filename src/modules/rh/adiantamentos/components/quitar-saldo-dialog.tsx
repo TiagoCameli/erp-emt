@@ -50,9 +50,14 @@ export function QuitarSaldoDialog({
   const [mes, setMes] = React.useState(mesAtual);
   const [salvando, setSalvando] = React.useState(false);
 
-  React.useEffect(() => {
+  // Reabrir o diálogo volta para o mês atual, sem carregar a digitação
+  // anterior. Ajuste em tempo de render (comparando o `aberto` anterior),
+  // não em efeito: mesmo padrão de `AlterarMesDialog`.
+  const [abertoAnterior, setAbertoAnterior] = React.useState(aberto);
+  if (aberto !== abertoAnterior) {
+    setAbertoAnterior(aberto);
     if (aberto) setMes(mesAtual());
-  }, [aberto]);
+  }
 
   function trocarAberto(novoAberto: boolean) {
     if (salvando) return;
