@@ -178,6 +178,86 @@ export function nomeArquivoPlanilhaLancamentos(dataISO: string): string {
 }
 
 /* ------------------------------------------------------------------ */
+/* Leitura completa do filtro                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Linhas por requisição na leitura completa.
+ *
+ * Mil, e não "tudo de uma vez", porque o PostgREST corta a resposta num teto
+ * invisível: pedir oito mil linhas numa tacada pode devolver menos e a planilha
+ * sairia faltando lançamento sem ninguém perceber. É o mesmo tamanho que
+ * `lerEmPaginas` usa nas consultas auxiliares de filtro, pelo mesmo motivo.
+ */
+export const PAGINA_EXPORTACAO = 1000;
+
+/** Uma página da listagem, com o total exato do filtro. */
+export interface PaginaDeLancamentos {
+  itens: LancamentoLista[];
+  total: number;
+}
+
+/** Quem busca uma página. Injetado para esta função não depender do banco. */
+export type LeitorDePagina = (
+  pagina: number,
+  tamanho: number,
+) => Promise<PaginaDeLancamentos>;
+
+export interface LeituraCompleta {
+  /** Linhas lidas, na ordem da listagem, sem repetição. */
+  itens: LancamentoLista[];
+  /** Total exato do filtro, direto do count do banco. */
+  total: number;
+}
+
+/**
+ * Lê o filtro inteiro, página por página, até fechar o total.
+ *
+ * `itens.length < total` no retorno significa leitura incompleta, e quem chamou
+ * tem que tratar como erro em vez de entregar o arquivo: planilha com metade dos
+ * lançamentos e nenhum aviso é pior que exportação que falhou.
+ *
+ * Deduplica por id de propósito. Se alguém criar um lançamento no meio da
+ * leitura, o novo entra na frente e empurra as linhas uma casa para baixo, o que
+ * faria uma linha aparecer em duas páginas. Somar dois lançamentos iguais no
+ * total é o tipo de erro que ninguém confere.
+ *
+ * `teto` é freio de disparada, não regra de negócio: passando dele a função
+ * devolve `itens` vazio com o `total` real, para a tela dizer o número.
+ */
+export async function lerLancamentosEmPaginas(
+  ler: LeitorDePagina,
+  teto: number,
+  tamanhoPagina: number = PAGINA_EXPORTACAO,
+): Promise<LeituraCompleta> {
+  const vistos = new Set<string>();
+  const itens: LancamentoLista[] = [];
+  let total = 0;
+
+  const maximoDePaginas = Math.ceil(teto / tamanhoPagina);
+  for (let pagina = 0; pagina < maximoDePaginas; pagina += 1) {
+    const lote = await ler(pagina, tamanhoPagina);
+    total = lote.total;
+
+    // Passou do teto: para na primeira página, sem varrer o banco à toa.
+    if (total > teto) return { itens: [], total };
+
+    for (const item of lote.itens) {
+      if (vistos.has(item.id)) continue;
+      vistos.add(item.id);
+      itens.push(item);
+    }
+
+    // Página curta é fim de lista. E o total fechado também: sem essa saída, um
+    // filtro de 1000 exatas pediria uma página a mais só para ouvir "vazio".
+    if (lote.itens.length < tamanhoPagina) break;
+    if (itens.length >= total) break;
+  }
+
+  return { itens, total };
+}
+
+/* ------------------------------------------------------------------ */
 /* Montagem do arquivo                                                */
 /* ------------------------------------------------------------------ */
 

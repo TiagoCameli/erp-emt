@@ -15,6 +15,14 @@ import {
 } from "@/modules/financeiro/lancamentos/queries";
 import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
 
+/**
+ * A Server Action de exportar roda na função desta página, e exportar a base
+ * inteira é ler milhares de linhas em páginas de mil e montar o .xlsx. Com o
+ * teto padrão da Vercel (10 a 15s) isso morreria no meio, devolvendo erro de
+ * timeout no lugar do arquivo. 60s é o máximo que vale em qualquer plano.
+ */
+export const maxDuration = 60;
+
 export default async function PaginaLancamentos({
   searchParams,
 }: {
