@@ -7,7 +7,7 @@ import {
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
-import { TIMEZONE } from "@/lib/formatadores";
+import { dataHojeISO, TIMEZONE } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
@@ -25,6 +25,15 @@ import type {
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
+import {
+  lerLancamentosEmPaginas,
+  PAGINA_LEITURA,
+} from "@/modules/financeiro/lancamentos/leitura-completa";
+import {
+  dinheiroDasParcelas,
+  resumirLancamentos,
+  type ResumoLancamentos,
+} from "@/modules/financeiro/lancamentos/resumo";
 
 /** Cliente Supabase do servidor, para as consultas auxiliares de filtro. */
 type ClienteSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -99,6 +108,23 @@ export interface LancamentoLista {
   mesCompetencia: string;
   /** Data de sistema, imutável. */
   criadoEm: string;
+  /**
+   * Dinheiro do lançamento repartido pelo estado das PARCELAS, que é onde o
+   * pagamento acontece. O `valor` acima é o total do documento; estes três dizem
+   * quanto dele já saiu, quanto falta e quanto está atrasado.
+   *
+   * Existe porque somar por status do lançamento mente: 107 lançamentos da base
+   * estão parcialmente pagos (medido em 13/08/2026, R$ 12,36 mi de valor com
+   * R$ 2,53 mi já pagos), e pelo status eles contam inteiros como "a pagar".
+   */
+  /** Soma das parcelas pagas, pelo LÍQUIDO: é o que saiu da conta bancária. */
+  valorPago: number;
+  /** Soma das parcelas que não estão pagas nem canceladas. */
+  valorAberto: number;
+  /** Parte do aberto com vencimento anterior a hoje (fuso de Rio Branco). */
+  valorVencido: number;
+  /** Desconto concedido nas parcelas já pagas. Zero quando não houve. */
+  descontoObtido: number;
   /**
    * Estado da revisão do lançamento, derivado da conta bancária das parcelas.
    * Não é um marcador que alguém liga na mão de propósito: selo dizendo
@@ -468,7 +494,10 @@ export async function listarLancamentos(
        data_compra, mes_competencia, created_at,
        categorias_financeiras(nome),
        fornecedores(razao_social, nome_fantasia),
-       lancamento_parcelas(status, conta_bancaria_id)`,
+       lancamento_parcelas(
+         status, conta_bancaria_id, valor, valor_liquido, desconto,
+         data_vencimento
+       )`,
       { count: "exact" },
     )
     .order("data_compra", { ascending: false })
@@ -532,6 +561,11 @@ export async function listarLancamentos(
     throw new Error("Não foi possível carregar os lançamentos");
   }
 
+  // Uma leitura do relógio para a página toda: com `dataHojeISO()` por linha, uma
+  // consulta que virasse a meia-noite classificaria parte das linhas por um dia e
+  // parte pelo outro.
+  const hojeISO = dataHojeISO();
+
   const itens: LancamentoLista[] = (data ?? []).map((lancamento) => {
     const parcelas = lancamento.lancamento_parcelas ?? [];
     // Parcela PAGA conta como resolvida: pagar exige conta bancária, então ela é o
@@ -554,8 +588,20 @@ export async function listarLancamentos(
             ? "revisado"
             : "parcial";
 
+    const dinheiro = dinheiroDasParcelas(
+      parcelas.map((parcela) => ({
+        status: parcela.status,
+        valor: parcela.valor,
+        valorLiquido: parcela.valor_liquido,
+        desconto: parcela.desconto,
+        dataVencimento: parcela.data_vencimento,
+      })),
+      hojeISO,
+    );
+
     return {
       revisao,
+      ...dinheiro,
       id: lancamento.id,
       numero: lancamento.numero,
       tipo: lancamento.tipo as TipoLancamento,
@@ -847,4 +893,49 @@ export async function listarIdsLancamentosFiltrados(
     tamanho: LIMITE_LOTE + 1,
   });
   return pagina.itens.map((item) => item.id);
+}
+
+/**
+ * Teto de linhas lidas para o resumo.
+ *
+ * Mesmo espírito do teto da exportação, e o mesmo número: passando dele o resumo
+ * diz "refine o filtro" em vez de varrer o banco a cada carregamento de tela. Hoje
+ * a base inteira (5.848 lançamentos) cabe com folga.
+ */
+export const LIMITE_RESUMO = 25_000;
+
+/** Resumo do filtro, mais o aviso de quando ele não pôde ser calculado. */
+export type ResultadoResumo =
+  | { ok: true; resumo: ResumoLancamentos }
+  | { ok: false; motivo: "acima-do-teto" | "leitura-incompleta"; total: number };
+
+/**
+ * Resumo do conjunto FILTRADO inteiro, para os cartões do cabeçalho.
+ *
+ * Lê pelo mesmo `listarLancamentos` da tela, em páginas, e soma no
+ * `resumirLancamentos`. É a única forma de garantir que o cartão e a lista falem
+ * do mesmo conjunto: um `sum()` em SQL seria mais rápido, mas ganharia uma cópia
+ * própria dos filtros (incluindo os derivados de parcela e rateio) e divergiria
+ * da lista no primeiro filtro novo.
+ *
+ * Leitura incompleta NÃO virá arredondada para baixo: devolve `ok: false` para a
+ * tela dizer que não deu, em vez de mostrar um total de dinheiro menor que o real
+ * com cara de certo.
+ */
+export async function resumoLancamentos(
+  params: Omit<ListarLancamentosParams, "pagina" | "tamanho">,
+): Promise<ResultadoResumo> {
+  const { itens, total } = await lerLancamentosEmPaginas(
+    (pagina, tamanho) => listarLancamentos({ ...params, pagina, tamanho }),
+    LIMITE_RESUMO,
+    PAGINA_LEITURA,
+  );
+
+  if (total > LIMITE_RESUMO) {
+    return { ok: false, motivo: "acima-do-teto", total };
+  }
+  if (itens.length < total) {
+    return { ok: false, motivo: "leitura-incompleta", total };
+  }
+  return { ok: true, resumo: resumirLancamentos(itens) };
 }
