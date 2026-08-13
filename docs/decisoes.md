@@ -1474,9 +1474,21 @@ gravada em comentário não é compilada, não é testada e não aparece em port
    script `supabase/provas/diagnosticos_gravados_executaveis.sql` roda a mesma varredura, com
    controle negativo (três defeitos plantados, um deles a consulta velha de verdade), e entra no
    portão de qualquer task que toque schema.
-4. **A prova de "extrair e executar" só vale no instante em que roda.** É por isso que a
-   verificação é permanente e automática, e não um passo de checklist: o comentário quebra por
-   causa de uma migration que ninguém relacionou com ele.
+4. **A prova de "extrair e executar" só vale no instante em que roda**, e o comentário quebra por
+   causa de uma migration que ninguém relacionou com ele. Por isso a verificação virou código
+   chamável em vez de um item de checklist. **Ela ainda NÃO é automática**, e vale dizer o que
+   falta: hoje são uma função pronta no banco e um script em `supabase/provas/` que **alguém
+   precisa chamar**. Não há event trigger, não há job, e o `ci.yml` nem enxerga esses arquivos
+   (`paths-ignore: supabase/provas/**`, e o job roda com credencial placeholder, sem banco). Para
+   ser automática de verdade seriam necessários um event trigger `ddl_command_end` no banco (pega
+   qualquer DDL, inclusive de outra sessão) ou um passo de CI com credencial de banco. Enquanto
+   não for, o que segura é a regra 3 acima: a chamada dentro da migration que mexe em schema.
+5. **A verificação não pega DERIVA SEMÂNTICA, e isso é limitação declarada, não esquecimento.**
+   Ela prova que a consulta **resolve** contra o schema, não que ela ainda mede a coisa certa.
+   Medido no review: trocando `valor_descontado` por `valor_previsto` na consulta gravada, o
+   `explain` resolve, a varredura passa, e o número muda de significado. Consulta que **compila e
+   mente** continua sendo pega só por prova de aceite com números esperados, como a de
+   `supabase/provas/adiantamento_parcelado_aceite_final.sql`.
 
 ### 8. Uma lição de processo que se repetiu três vezes nesta frente
 
@@ -1486,3 +1498,52 @@ atualizou o texto de `resumoAdiantamentos` para "nenhuma parcela descontada" e d
 seguinte filtrando pela semântica antiga. Ao mudar a semântica de um conceito (aqui, "está na
 folha"), procure **todos** os agregadores que dependem dele, não só as telas do módulo em que se
 está mexendo.
+
+### 9. Dois gaps que o review amplo achou, os dois pendentes de decisão do dono
+
+**a) Parcela que chega ABERTA depois da folha gerada não é pega por trava nenhuma.**
+
+O trigger `fn_guarda_status_folha` compara `sum(valor_descontado)` das parcelas com `folha_id` = a
+folha contra `sum(folha_itens.adiantamentos)`. **Parcela aberta não entra em nenhum dos dois
+lados**: ele pega desconto que **diminui** (regeneração de mês anterior que soltou parcela já
+descontada) e não pega dívida que **chega** depois da folha gerada. O `comment on function` da
+`fn_quitar_adiantamento` afirmava que essa era "a rede desse caso"; não era, e o texto foi
+corrigido na migration `20260813230316`.
+
+Três caminhos levam ao mesmo estado, todos medidos:
+
+| caminho | medido |
+|---|---|
+| conceder adiantamento novo numa competência já gerada | somas `400,00 vs 400,00`, envio passa, folha aprova com R$ 900 concedidos e R$ 0 descontados |
+| quitar na competência da folha já gerada | R$ 800,00 abertos na competência da folha aprovada |
+| inativar colaborador (antecipação) | R$ 1.000,00 abertos |
+
+Consequência: **aquele mês desconta menos do que deveria**, e o saldo fica aberto numa competência
+que já passou. Não há valor perdido nem cobrado em dobro (a invariante do plano continua
+fechando), e a correção é **desaprovar e regerar** aquela folha.
+
+Fechar de verdade exige uma **condição nova no trigger**, comparando também as parcelas abertas da
+competência, e ela tem que espelhar **exatamente** a iteração da `fn_gerar_folha` (`ativo`,
+`vinculo = 'clt'`, e o `continue` de salário zero sem horas). Uma condição mais larga travaria o
+envio por parcela que a folha nunca descontaria, e como o único jeito de destravar é regerar,
+viraria beco sem saída. **Não foi feita no último passo da frente de propósito:** mudança de trava
+de dinheiro sem ciclo próprio de review é exatamente como nasceram os piores erros desta frente.
+
+O que já foi feito para tirar o caso do caminho padrão, que é barato e não muda trava: o
+`QuitarSaldoDialog` passou a abrir no **mês seguinte** (o corrente normalmente já tem folha
+gerada), e a tela avisa que quitar numa competência com folha gerada exige regerar aquela folha.
+
+**b) Adiantamento a colaborador ativo NÃO-CLT nunca é descontado.**
+
+`listarColaboradores` oferece todos os vínculos no formulário e a `fn_registrar_adiantamento` não
+checa vínculo, mas a `fn_gerar_folha` itera `where ativo and vinculo = 'clt'`. Medido em transação
+revertida, com um CLT de controle na mesma folha: diarista ativo, R$ 1.500,00 em 3x, lançamento
+`a_pagar` de 1.500,00 criado normalmente e plano com 3 parcelas; folha de agosto gerada com **1
+item, nenhum dele**; saldo **0,00 descontado e 1.500,00 em aberto**, para sempre. E o alerta de
+"inativo com saldo em aberto" **não pega**, porque ele está **ativo**: a dívida não aparece em
+lugar nenhum.
+
+É **pré-existente** (o vínculo sempre foi filtro da folha), mas esta frente criou o conceito de
+saldo e a rede tem esse buraco. **Decisão do dono**, porque muda quem pode receber adiantamento:
+ou o formulário passa a oferecer só CLT, ou o alerta passa a cobrir "saldo aberto sem folha futura
+possível" (que cobriria os dois casos de uma vez, o inativo e o não-CLT).
