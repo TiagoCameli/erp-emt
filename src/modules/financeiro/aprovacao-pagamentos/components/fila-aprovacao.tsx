@@ -559,32 +559,30 @@ export function FilaAprovacao({
     // Sem depender de permissão: selecionar não muta nada, e quem só tem 'ver'
     // usa a seleção para copiar a mensagem de aprovação de um lote e mandar para
     // quem aprova. Os botões que mutam continuam cada um com a sua permissão.
-    {
-      base.push({
-        id: "selecao",
-        enableSorting: false,
-        size: 44,
-        meta: { fixa: true, naoTruncar: true },
-        header: () => (
-          <Checkbox
-            checked={todasSelecionadas}
-            onCheckedChange={alternarTodas}
-            aria-label="Selecionar todos os pagamentos"
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={selecionadas.has(row.original.id)}
-            onCheckedChange={() => alternarUma(row.original.id)}
-            aria-label={`Selecionar ${rotuloParcela(
-              row.original.lancamentoNumero,
-              row.original.numeroParcela,
-              row.original.totalParcelas,
-            )}`}
-          />
-        ),
-      });
-    }
+    base.push({
+      id: "selecao",
+      enableSorting: false,
+      size: 44,
+      meta: { fixa: true, naoTruncar: true },
+      header: () => (
+        <Checkbox
+          checked={todasSelecionadas}
+          onCheckedChange={alternarTodas}
+          aria-label="Selecionar todos os pagamentos"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selecionadas.has(row.original.id)}
+          onCheckedChange={() => alternarUma(row.original.id)}
+          aria-label={`Selecionar ${rotuloParcela(
+            row.original.lancamentoNumero,
+            row.original.numeroParcela,
+            row.original.totalParcelas,
+          )}`}
+        />
+      ),
+    });
 
     base.push(
       {
@@ -814,77 +812,82 @@ export function FilaAprovacao({
     // Sempre existe: o botão de copiar a mensagem de aprovação não muta nada e
     // vale para quem só tem 'ver' (o financeiro monta a mensagem, quem aprova
     // recebe). Aprovar e Revisar seguem cada um atrás da sua permissão.
-    {
-      base.push({
-        id: "acoes",
-        header: "Ações",
-        enableSorting: false,
-        // Três ícones: 3 x 32 do botão, 2 x 4 do gap e 24 do padding da célula
-        // dão 128px. 132 fecha com folga. Era 240 quando os botões tinham texto
-        // ("Aprovar" + "Revisar" passavam de 190px e transbordavam para a
-        // esquerda, cobrindo o valor). Manter 240 aqui devolveria o problema ao
-        // contrário: 100px de vazio empurrando as colunas que interessam para
-        // fora da tela.
-        size: 132,
-        meta: {
-          rotulo: "Ações",
-          fixa: true,
-          alinharDireita: true,
-          naoTruncar: true,
-        },
-        cell: ({ row }) => (
-          <div
-            className="flex items-center justify-end gap-1"
-            onClick={(evento) => evento.stopPropagation()}
-          >
-            {/*
-              Só o ícone. O `aria-label` carrega o número da parcela porque, sem
-              o texto, "Aprovar" repetido 25 vezes é o que um leitor de tela
-              anunciaria em toda linha, sem dizer de qual. O `title` é o tooltip
-              de quem usa o mouse e não reconhece o ícone: sem um dos dois, um
-              botão que autoriza pagamento vira adivinhação.
-            */}
-            {podeAprovar ? (
-              <Button
-                type="button"
-                size="icon-sm"
-                aria-label={`Aprovar ${row.original.lancamentoNumero}`}
-                title="Aprovar"
-                onClick={() =>
-                  setAlvoAprovacao({ tipo: "linha", parcela: row.original })
-                }
-              >
-                <Check />
-              </Button>
-            ) : null}
-            {podeRevisar ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label={`Revisar ${row.original.lancamentoNumero}`}
-                title="Revisar"
-                onClick={() =>
-                  setAlvoRevisao({ tipo: "linha", parcela: row.original })
-                }
-              >
-                <PenLine />
-              </Button>
-            ) : null}
+    base.push({
+      id: "acoes",
+      header: "Ações",
+      enableSorting: false,
+      // Três ícones: 3 x 32 do botão, 2 x 4 do gap e 24 do padding da célula
+      // dão 128px. 132 fecha com folga. Era 240 quando os botões tinham texto
+      // ("Aprovar" + "Revisar" passavam de 190px e transbordavam para a
+      // esquerda, cobrindo o valor). Manter 240 aqui devolveria o problema ao
+      // contrário: 100px de vazio empurrando as colunas que interessam para
+      // fora da tela.
+      size: 132,
+      // Piso na largura, e não só o padrão: `larguras` é preferência salva por
+      // usuário e o mínimo geral do DataTable é 60px. Sem isto, quem já tinha
+      // arrastado esta coluna para estreita (ou arrastar depois) fica com os
+      // três botões transbordando para a esquerda por cima do Valor, que é o
+      // bug que a versão de dois botões com texto já causou em produção.
+      // O DataTable respeita minSize no arraste E no saneamento da preferência.
+      minSize: 132,
+      meta: {
+        rotulo: "Ações",
+        fixa: true,
+        alinharDireita: true,
+        naoTruncar: true,
+      },
+      cell: ({ row }) => (
+        <div
+          className="flex items-center justify-end gap-1"
+          onClick={(evento) => evento.stopPropagation()}
+        >
+          {/*
+            Só o ícone. O `aria-label` carrega o número da parcela porque, sem
+            o texto, "Aprovar" repetido 25 vezes é o que um leitor de tela
+            anunciaria em toda linha, sem dizer de qual. O `title` é o tooltip
+            de quem usa o mouse e não reconhece o ícone: sem um dos dois, um
+            botão que autoriza pagamento vira adivinhação.
+          */}
+          {podeAprovar ? (
+            <Button
+              type="button"
+              size="icon-sm"
+              aria-label={`Aprovar ${row.original.lancamentoNumero}`}
+              title="Aprovar"
+              onClick={() =>
+                setAlvoAprovacao({ tipo: "linha", parcela: row.original })
+              }
+            >
+              <Check />
+            </Button>
+          ) : null}
+          {podeRevisar ? (
             <Button
               type="button"
               variant="outline"
               size="icon-sm"
-              aria-label={`Copiar mensagem de aprovação de ${row.original.lancamentoNumero}`}
-              title="Copiar mensagem de aprovação (para colar no WhatsApp)"
-              onClick={() => void copiarMensagem([row.original])}
+              aria-label={`Revisar ${row.original.lancamentoNumero}`}
+              title="Revisar"
+              onClick={() =>
+                setAlvoRevisao({ tipo: "linha", parcela: row.original })
+              }
             >
-              <ClipboardCopy />
+              <PenLine />
             </Button>
-          </div>
-        ),
-      });
-    }
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label={`Copiar mensagem de aprovação de ${row.original.lancamentoNumero}`}
+            title="Copiar mensagem de aprovação (para colar no WhatsApp)"
+            onClick={() => void copiarMensagem([row.original])}
+          >
+            <ClipboardCopy />
+          </Button>
+        </div>
+      ),
+    });
 
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
