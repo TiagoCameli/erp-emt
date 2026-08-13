@@ -22,6 +22,7 @@ import {
   type ResumoLote,
 } from "@/modules/financeiro/lancamentos/lote";
 import {
+  lerLancamentosEmPaginas,
   montarPlanilhaLancamentos,
   nomeArquivoPlanilhaLancamentos,
 } from "@/modules/financeiro/lancamentos/planilha";
@@ -539,14 +540,19 @@ export type ResultadoPlanilha =
   | { erro: string };
 
 /**
- * Teto de linhas por planilha.
+ * Freio de disparada, não regra de negócio.
  *
- * Não é a rede que limita, é a memória: o arquivo é montado inteiro no servidor
- * e volta em base64 (que já infla os bytes em um terço) pela resposta da Server
- * Action. Com o teto, "exportei e não chegou nada" vira um aviso que diz o que
- * fazer. 5.000 linhas cobrem qualquer mês do financeiro com folga.
+ * A exportação leva TUDO que está no filtro, e sem filtro nenhum leva a base
+ * inteira (hoje da ordem de 8 mil lançamentos, com a carga do Mais Controle
+ * dentro). O número existe só porque o arquivo é montado inteiro na memória do
+ * servidor e volta em base64 pela resposta da Server Action: sem teto algum, um
+ * dia a exportação viraria um erro genérico de memória em vez de um aviso.
+ *
+ * 25.000 é umas três vezes a base de hoje, então não é para ele encostar em uso
+ * normal. Se encostar, a mensagem diz o número real e o que fazer, em vez de
+ * cortar a planilha em silêncio.
  */
-const LIMITE_PLANILHA = 5000;
+const LIMITE_PLANILHA = 25_000;
 
 /** Teto da query string aceita, para ninguém mandar uma URL de 1 MB. */
 const TETO_QUERY = 4000;
@@ -563,7 +569,15 @@ const TETO_QUERY = 4000;
  *
  * Exporta o conjunto FILTRADO inteiro, e não a página aberta: quem exporta quer
  * fechar o mês, não as 25 linhas que couberam na tela. A paginação da tela não
- * tem nada a ver com o recorte do relatório.
+ * tem nada a ver com o recorte do relatório. Sem filtro nenhum na tela, sai a
+ * base inteira.
+ *
+ * A leitura vai em páginas de mil, e não numa requisição só: o PostgREST corta a
+ * resposta num teto invisível, então pedir tudo de uma vez pode devolver menos e
+ * a planilha sairia faltando lançamento sem ninguém perceber (é o mesmo motivo do
+ * `lerEmPaginas` nas consultas de filtro). No fim a contagem lida é conferida
+ * contra o `count` do banco: se não fechar, a resposta é erro, não um arquivo
+ * pela metade.
  */
 export async function gerarPlanilhaLancamentos(
   query: string,
@@ -581,16 +595,15 @@ export async function gerarPlanilhaLancamentos(
 
   const { filtros } = lerFiltrosLancamentos(parametrosDaQueryString(query));
 
-  // Uma linha além do teto: com um a mais, dá para dizer "passou do limite" sem
-  // precisar contar o conjunto todo. Mesmo truque de listarIdsLancamentosFiltrados.
   let itens: LancamentoLista[];
+  let total: number;
   try {
-    const pagina = await listarLancamentos({
-      ...filtros,
-      pagina: 0,
-      tamanho: LIMITE_PLANILHA + 1,
-    });
-    itens = pagina.itens;
+    const leitura = await lerLancamentosEmPaginas(
+      (pagina, tamanho) => listarLancamentos({ ...filtros, pagina, tamanho }),
+      LIMITE_PLANILHA,
+    );
+    itens = leitura.itens;
+    total = leitura.total;
   } catch (erro) {
     return erroAcao(
       "financeiro.lancamentos.gerarPlanilhaLancamentos",
@@ -599,13 +612,23 @@ export async function gerarPlanilhaLancamentos(
     );
   }
 
-  if (itens.length === 0) {
+  if (total === 0) {
     return { erro: "O filtro atual não tem nenhum lançamento para exportar" };
   }
-  if (itens.length > LIMITE_PLANILHA) {
+  if (total > LIMITE_PLANILHA) {
     return {
-      erro: `O filtro atual passa de ${LIMITE_PLANILHA.toLocaleString("pt-BR")} lançamentos. Refine (por mês de referência, por exemplo) e exporte em partes`,
+      erro: `O filtro atual tem ${total.toLocaleString("pt-BR")} lançamentos, acima do limite de ${LIMITE_PLANILHA.toLocaleString("pt-BR")} por arquivo. Filtre por mês de referência e exporte em partes`,
     };
+  }
+  // Leu menos do que o banco disse que existe: alguém mexeu na lista no meio da
+  // leitura. Melhor recusar e pedir de novo do que entregar planilha incompleta
+  // com cara de completa, que é o tipo de erro que ninguém confere.
+  if (itens.length < total) {
+    return erroAcao(
+      "financeiro.lancamentos.gerarPlanilhaLancamentos",
+      new Error(`leitura incompleta: ${itens.length} de ${total}`),
+      `Li ${itens.length.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} lançamentos porque a lista mudou durante a exportação. Exporte de novo`,
+    );
   }
 
   const workbook = montarPlanilhaLancamentos(itens);
