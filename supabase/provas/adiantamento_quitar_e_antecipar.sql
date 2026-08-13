@@ -57,6 +57,43 @@
 --
 -- Bloco F (privilégio)
 --
+-- Bloco X (fix round 1: o PISO de competência na quitação, e é dinheiro do
+--          colaborador). Sobra que volta para ANTES da folha que a gerou inverte
+--          a ordem da cadeia e FURA a trava de regeneração, porque a trava
+--          compara `f.status <> 'rascunho'` e não tem condição de ordem: a
+--          isenção "folha posterior em rascunho não trava" passa a valer para
+--          uma folha ANTERIOR, e o `delete ... where gerada_por_folha_id =
+--          v_folha` (que não filtra `folha_id`) apaga parcela JÁ FECHADA na
+--          folha mais antiga.
+--          MEDIDO ANTES DO FIX, adiantamento de 5.200,00 e salário 2.000,00
+--          (sem faixas de INSS, disponível 2.000,00): quitar em julho a sobra
+--          empurrada pela folha de agosto, gerar julho e regerar agosto levava o
+--          plano a 6.400,00, e rodando a folha até zerar o colaborador pagava
+--          6.400,00, 1.200,00 A MAIS do que o concedido, com a folha que cobra a
+--          mais nascendo limpa e passando pelo fn_guarda_status_folha sem
+--          atrito. Não é o transitório do ponto 1 do comentário da
+--          fn_gerar_folha: aquele é para FRENTE e cura ao regerar o mês seguinte.
+--   X2   quitar ANTES do piso é RECUSADO, dizendo qual é o piso e por quê
+--   X2b  quitar IGUAL ao piso é permitido (não inverte nada)
+--   X2d  quitar DEPOIS do piso é permitido
+--   X6   regerar a folha de origem depois disso mantém o plano no concedido
+--   K    rodando a folha até zerar o saldo, o TOTAL DESCONTADO é exatamente o
+--        concedido (era 6.400,00 contra 5.200,00)
+--
+-- Bloco Y (fix round 1: o PISO na antecipação, que é AUTOMÁTICA). Aqui o furo
+--          não exigia escolha nenhuma do operador: o destino era
+--          `min(competencia)` das folhas em rascunho, sem piso, então qualquer
+--          folha antiga parada em rascunho fazia a inativação mover a sobra para
+--          trás sozinha. Por ser automática, a função não RECUSA: ela ESCOLHE
+--          respeitando o piso, para a inativação nunca falhar por isso.
+--   Y1   folha de 05/2026 em rascunho e sobra empurrada pela de 08/2026: escolhe
+--        08/2026 (o piso), nunca 05/2026
+--   Y2   sem nenhum rascunho >= piso: o fallback também respeita o piso
+--   Y3   sem sobra nenhuma (piso nulo), a regra original vale inteira
+--   Y4   saldo que JÁ está na competência de destino: nada se move e o retorno
+--        traz `saldo_aberto`, para a Server Action avisar em vez de calar
+--   Y5   `valor` do retorno conta só o que MUDOU de mês, não o saldo inteiro
+--
 -- IMPORTANTE: as duas funções checam `tem_permissao`, que depende de
 -- `auth.uid()`. Rodando fora de uma sessão autenticada (SQL editor, MCP), os
 -- blocos assumem o primeiro usuário ativo com as permissões necessárias.
@@ -727,3 +764,235 @@ select 'rh_adiantamento_parcelas: grants indevidos (anon, ou authenticated com D
        (select count(*) > 0 from information_schema.role_table_grants
         where table_schema='public' and table_name='rh_adiantamento_parcelas'
           and (grantee='anon' or (grantee='authenticated' and privilege_type in ('INSERT','UPDATE','DELETE'))));
+
+-- ############################################################################
+-- BLOCO X: o PISO de competência na quitação (fix round 1, dinheiro)
+-- ############################################################################
+begin;
+create temp table res(ordem serial, k text, obtido text, esperado text);
+
+do $setup$
+declare v_usuario uuid;
+begin
+  select u.id into v_usuario from public.usuarios u
+  where u.ativo
+    and exists (select 1 from public.usuario_permissoes p where p.usuario_id=u.id and p.recurso='rh.folha' and p.acao='criar')
+    and exists (select 1 from public.usuario_permissoes p where p.usuario_id=u.id and p.recurso='rh.adiantamentos' and p.acao='editar')
+  order by u.id limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario)::text, true);
+end $setup$;
+
+-- Sem faixas de INSS/IRRF de proposito: disponivel = salario = 2.000,00, que e o
+-- ambiente em que o furo foi medido.
+insert into public.colaboradores (nome, ativo, vinculo, salario) values ('ZZ5 X Piso', true, 'clt', 2000);
+insert into public.rh_adiantamentos (colaborador_id, competencia, valor, data)
+select id, '2026-08-01', 5200, '2026-08-05' from public.colaboradores where nome='ZZ5 X Piso';
+insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto)
+select a.id, 1, '2026-08-01', 5200 from public.rh_adiantamentos a join public.colaboradores c on c.id=a.colaborador_id
+where c.nome='ZZ5 X Piso';
+
+do $t$
+declare v_a uuid;
+begin
+  -- A folha de agosto desconta 2.000,00 e empurra 3.200,00 para setembro,
+  -- marcada com agosto. O piso passa a ser 08/2026.
+  perform public.fn_gerar_folha('2026-08-01', 0);
+  select a.id into v_a from public.rh_adiantamentos a join public.colaboradores c on c.id=a.colaborador_id where c.nome='ZZ5 X Piso';
+
+  begin
+    perform public.fn_quitar_adiantamento(v_a, '2026-07-01');
+    insert into res(k,obtido,esperado) values ('X2 quitar ANTES do piso (07/2026, origem 08/2026)','PERMITIU','RECUSA pelo piso');
+  exception when others then
+    insert into res(k,obtido,esperado) values ('X2 quitar ANTES do piso (07/2026, origem 08/2026)', sqlerrm, 'RECUSA pelo piso');
+  end;
+
+  begin
+    perform public.fn_quitar_adiantamento(v_a, '2026-08-01');
+    insert into res(k,obtido,esperado) values ('X2b quitar IGUAL ao piso (08/2026)','quitou','quitou');
+  exception when others then
+    insert into res(k,obtido,esperado) values ('X2b quitar IGUAL ao piso (08/2026)', 'RECUSOU: '||sqlerrm, 'quitou');
+  end;
+
+  insert into res(k,obtido,esperado)
+  select 'X2c INVARIANTE depois de quitar no piso',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)
+          + (select coalesce(sum(pa.valor_previsto),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null))::text, '5200.00';
+
+  begin
+    perform public.fn_quitar_adiantamento(v_a, '2026-11-01');
+    insert into res(k,obtido,esperado) values ('X2d quitar DEPOIS do piso (11/2026)','quitou','quitou');
+  exception when others then
+    insert into res(k,obtido,esperado) values ('X2d quitar DEPOIS do piso (11/2026)', 'RECUSOU: '||sqlerrm, 'quitou');
+  end;
+
+  -- Regerar a folha de ORIGEM, que era o caminho que inventava dinheiro.
+  perform public.fn_gerar_folha('2026-08-01', 0);
+  insert into res(k,obtido,esperado)
+  select 'X6 INVARIANTE depois de regerar a origem (era 6400.00)',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)
+          + (select coalesce(sum(pa.valor_previsto),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null))::text, '5200.00';
+end $t$;
+
+-- K: o numero que importa para o colaborador. Roda a folha para frente ate nao
+-- sobrar parcela aberta e soma o que foi efetivamente descontado dele.
+do $t$
+declare v_a uuid; v_i integer;
+begin
+  select a.id into v_a from public.rh_adiantamentos a join public.colaboradores c on c.id=a.colaborador_id where c.nome='ZZ5 X Piso';
+  for v_i in 7..30 loop
+    perform public.fn_gerar_folha(('2026-01-01'::date + ((v_i - 1) || ' month')::interval)::date, 0);
+  end loop;
+  insert into res(k,obtido,esperado)
+  select 'K1 parcelas ainda abertas', count(*)::text, '0'
+  from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null;
+  insert into res(k,obtido,esperado)
+  select 'K2 TOTAL DESCONTADO do colaborador (era 6400.00)',
+         (select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)::text, '5200.00';
+  insert into res(k,obtido,esperado)
+  select 'K3 cobrado a mais (era 1200.00)',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a) - 5200)::text, '0.00';
+end $t$;
+
+select k, obtido, esperado from res order by ordem;
+rollback;
+
+-- ############################################################################
+-- BLOCO Y: o PISO na antecipação automática (fix round 1)
+-- ############################################################################
+begin;
+create temp table res(ordem serial, k text, obtido text, esperado text);
+
+do $setup$
+declare v_usuario uuid;
+begin
+  select u.id into v_usuario from public.usuarios u
+  where u.ativo
+    and exists (select 1 from public.usuario_permissoes p where p.usuario_id=u.id and p.recurso='rh.folha' and p.acao='criar')
+    and exists (select 1 from public.usuario_permissoes p where p.usuario_id=u.id and p.recurso='cadastros.colaboradores' and p.acao='editar')
+  order by u.id limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario)::text, true);
+end $setup$;
+
+-- A folha antiga parada em RASCUNHO e o gatilho do furo automatico: sem piso ela
+-- e a menor competencia e puxa a sobra para o passado, sozinha, na inativacao.
+insert into public.folhas (competencia, status) values ('2026-05-01','rascunho');
+
+insert into public.colaboradores (nome, ativo, vinculo, salario) values ('ZZ5 Y Auto', true, 'clt', 2000);
+insert into public.rh_adiantamentos (colaborador_id, competencia, valor, data)
+select id, '2026-08-01', 5200, '2026-08-05' from public.colaboradores where nome='ZZ5 Y Auto';
+insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto)
+select a.id, 1, '2026-08-01', 5200 from public.rh_adiantamentos a join public.colaboradores c on c.id=a.colaborador_id
+where c.nome='ZZ5 Y Auto';
+
+do $t$
+declare v_a uuid; v_r jsonb;
+begin
+  perform public.fn_gerar_folha('2026-08-01', 0);
+  select a.id into v_a from public.rh_adiantamentos a join public.colaboradores c on c.id=a.colaborador_id where c.nome='ZZ5 Y Auto';
+  insert into res(k,obtido,esperado)
+  select 'Y0 estado (comp|previsto|gerada por): piso 08/2026, menor rascunho 05/2026',
+         string_agg(pa.competencia||'|'||pa.valor_previsto||'|'||coalesce((select to_char(f.competencia,'MM/YYYY') from public.folhas f where f.id=pa.gerada_por_folha_id),'-'), ' ; ' order by pa.numero),
+         '2026-08-01|5200.00|- ; 2026-09-01|3200.00|08/2026'
+  from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a;
+
+  v_r := public.fn_antecipar_adiantamentos_colaborador((select id from public.colaboradores where nome='ZZ5 Y Auto'));
+  insert into res(k,obtido,esperado) values
+    ('Y1 competencia escolhida', v_r::text, 'competencia 2026-08-01 (o piso), NUNCA 2026-05-01');
+
+  insert into res(k,obtido,esperado)
+  select 'Y1b INVARIANTE',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)
+          + (select coalesce(sum(pa.valor_previsto),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null))::text, '5200.00';
+
+  perform public.fn_gerar_folha('2026-08-01', 0);
+  insert into res(k,obtido,esperado)
+  select 'Y1c INVARIANTE depois de regerar a origem',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)
+          + (select coalesce(sum(pa.valor_previsto),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null))::text, '5200.00';
+end $t$;
+
+-- Y2: nenhum rascunho >= piso (a folha do piso saiu do rascunho). O fallback
+-- tambem nao pode cair antes do piso.
+insert into public.colaboradores (nome, ativo, vinculo, salario) values ('ZZ5 Y Fallback', true, 'clt', 2000);
+do $t$
+declare v_a uuid; v_r jsonb;
+begin
+  insert into public.rh_adiantamentos (colaborador_id, competencia, valor, data)
+  select id, '2026-08-01', 3000, '2026-08-06' from public.colaboradores where nome='ZZ5 Y Fallback'
+  returning id into v_a;
+  insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto, gerada_por_folha_id)
+  values (v_a, 1, '2026-12-01', 3000, (select id from public.folhas where competencia='2026-08-01'));
+  update public.folhas set status='pendente_aprovacao' where competencia='2026-08-01';
+
+  v_r := public.fn_antecipar_adiantamentos_colaborador((select id from public.colaboradores where nome='ZZ5 Y Fallback'));
+  insert into res(k,obtido,esperado) values
+    ('Y2 sem rascunho >= piso: o fallback respeita o piso', v_r::text,
+     'competencia 2026-09-01 (o piso 08/2026 esta em aprovacao, anda 1 mes), NUNCA 2026-05-01');
+  insert into res(k,obtido,esperado)
+  select 'Y2b INVARIANTE',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)
+          + (select coalesce(sum(pa.valor_previsto),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null))::text, '3000.00';
+  insert into res(k,obtido,esperado)
+  select 'Y2c a parcela nao voltou para tras do piso', string_agg(pa.competencia::text, ' ; ' order by pa.numero), '2026-09-01'
+  from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null;
+end $t$;
+
+-- Y3: sem sobra nenhuma (piso nulo), a regra original vale inteira.
+insert into public.colaboradores (nome, ativo, vinculo, salario) values ('ZZ5 Y Sem Sobra', true, 'clt', 2000);
+do $t$
+declare v_a uuid; v_r jsonb;
+begin
+  insert into public.rh_adiantamentos (colaborador_id, competencia, valor, data)
+  select id, '2026-06-01', 800, '2026-06-06' from public.colaboradores where nome='ZZ5 Y Sem Sobra'
+  returning id into v_a;
+  insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto)
+  values (v_a, 1, '2026-12-01', 400), (v_a, 2, '2027-01-01', 400);
+  v_r := public.fn_antecipar_adiantamentos_colaborador((select id from public.colaboradores where nome='ZZ5 Y Sem Sobra'));
+  insert into res(k,obtido,esperado) values
+    ('Y3 piso nulo (nenhuma sobra): menor rascunho vale', v_r::text, 'competencia 2026-05-01');
+  insert into res(k,obtido,esperado)
+  select 'Y3b INVARIANTE',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)
+          + (select coalesce(sum(pa.valor_previsto),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null))::text, '800.00';
+end $t$;
+
+-- Y4: saldo que JA esta na competencia de destino. Nada se move, e o retorno tem
+-- que dizer que existe saldo (era o aviso silencioso).
+insert into public.colaboradores (nome, ativo, vinculo, salario) values ('ZZ5 Y Ja No Destino', true, 'clt', 2000);
+do $t$
+declare v_a uuid; v_r jsonb; v_antes integer; v_depois integer;
+begin
+  insert into public.rh_adiantamentos (colaborador_id, competencia, valor, data)
+  select id, '2026-05-01', 700, '2026-05-06' from public.colaboradores where nome='ZZ5 Y Ja No Destino'
+  returning id into v_a;
+  insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto)
+  values (v_a, 1, '2026-05-01', 700);
+  select count(*) into v_antes from public.rh_adiantamento_parcelas where adiantamento_id=v_a;
+  v_r := public.fn_antecipar_adiantamentos_colaborador((select id from public.colaboradores where nome='ZZ5 Y Ja No Destino'));
+  select count(*) into v_depois from public.rh_adiantamento_parcelas where adiantamento_id=v_a;
+  insert into res(k,obtido,esperado) values
+    ('Y4 saldo JA na competencia de destino', v_r::text, 'parcelas 0 mas saldo_aberto 700.00');
+  insert into res(k,obtido,esperado) values ('Y4b nada criado nem apagado', v_antes||' vs '||v_depois, 'iguais');
+end $t$;
+
+-- Y5: o valor do aviso conta SO o que mudou de mes.
+insert into public.colaboradores (nome, ativo, vinculo, salario) values ('ZZ5 Y Valor Movido', true, 'clt', 2000);
+do $t$
+declare v_a uuid; v_r jsonb;
+begin
+  insert into public.rh_adiantamentos (colaborador_id, competencia, valor, data)
+  select id, '2026-05-01', 1000, '2026-05-07' from public.colaboradores where nome='ZZ5 Y Valor Movido'
+  returning id into v_a;
+  insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto)
+  values (v_a, 1, '2026-05-01', 400), (v_a, 2, '2026-11-01', 600);
+  v_r := public.fn_antecipar_adiantamentos_colaborador((select id from public.colaboradores where nome='ZZ5 Y Valor Movido'));
+  insert into res(k,obtido,esperado) values
+    ('Y5 valor do aviso = so o que mudou de mes', v_r::text, 'valor 600.00 (nao 1000.00), saldo_aberto 1000.00');
+  insert into res(k,obtido,esperado)
+  select 'Y5b INVARIANTE',
+         ((select coalesce(sum(pa.valor_descontado),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a)
+          + (select coalesce(sum(pa.valor_previsto),0) from public.rh_adiantamento_parcelas pa where pa.adiantamento_id=v_a and pa.folha_id is null))::text, '1000.00';
+end $t$;
+
+select k, obtido, esperado from res order by ordem;
+rollback;
