@@ -677,3 +677,86 @@ end $prova$;
 select caso, esperado, obtido, passou from _r order by n;
 
 rollback;
+
+-- ############################################################################
+-- BLOCO G: a trava da regeneracao tem condicao de ORDEM (causa raiz)
+--
+-- A isencao "folha posterior em rascunho nao trava" so se justifica quando a
+-- folha e POSTERIOR. Sem condicao de ordem, uma sobra movida para competencia
+-- ANTERIOR a folha que a criou fazia a regeneracao apagar parcela JA FECHADA, e
+-- o desconto dela virava dinheiro cobrado do colaborador sem registro no plano.
+--
+-- A prova move a parcela com UPDATE direto, NAO pelas funcoes da Task 5: o piso
+-- de competencia dela nao participa. E de proposito, para mostrar que a correcao
+-- na fn_gerar_folha segura sozinha, na raiz.
+-- ############################################################################
+begin;
+
+do $prova$
+declare v_usuario uuid;
+begin
+  select u.id into v_usuario from public.usuarios u
+  join public.usuario_permissoes up on up.usuario_id = u.id
+  where u.ativo and up.recurso = 'rh.folha' and up.acao = 'criar' limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario)::text, true);
+end $prova$;
+
+insert into public.folha_inss_faixas (limite_ate, aliquota) values
+  (1518.00,7.5),(2793.88,9),(4190.83,12),(8157.41,14);
+insert into public.folha_irrf_faixas (limite_ate, aliquota, parcela_deduzir) values
+  (2428.80,0,0),(999999999.00,27.5,908.73);
+insert into public.folha_parametros (id, irrf_deducao_por_dependente, irrf_desconto_simplificado, fgts_percentual)
+  values (1,189.59,607.20,8);
+insert into public.colaboradores (id, nome, vinculo, ativo, salario) values
+  ('ffffffff-4444-4444-4444-44444444444f','PROVA INVERTIDA','clt',true,2000.00);
+insert into public.rh_adiantamentos (id, colaborador_id, competencia, valor, data) values
+  ('f5000000-0000-0000-0000-000000000005','ffffffff-4444-4444-4444-44444444444f','2026-07-01',5200.00,'2026-07-05');
+insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto) values
+  ('f5000000-0000-0000-0000-000000000005',1,'2026-07-01',5200.00);
+
+create temp table _r (n int generated always as identity, caso text, esperado text, obtido text, passou boolean);
+
+do $prova$
+declare v_jul uuid; v_jun uuid; v_msg text; v_ok boolean; v_inv numeric;
+        v_fech_antes int; v_fech_depois int; v_cobrado numeric; v_ledger numeric;
+begin
+  v_jul := public.fn_gerar_folha('2026-07-01');
+  update public.rh_adiantamento_parcelas set competencia='2026-06-01' where numero=2;
+  v_jun := public.fn_gerar_folha('2026-06-01');
+
+  select count(*) into v_fech_antes from public.rh_adiantamento_parcelas where folha_id is not null;
+  begin
+    perform public.fn_gerar_folha('2026-07-01');
+    v_ok := false; v_msg := 'PASSOU (furo aberto)';
+  exception when others then v_ok := true; v_msg := sqlerrm; end;
+  select count(*) into v_fech_depois from public.rh_adiantamento_parcelas where folha_id is not null;
+
+  insert into _r (caso,esperado,obtido,passou) values
+    ('G1 regerar julho cuja sobra JUNHO (anterior, em rascunho) descontou: RECUSA', 'recusado', left(v_msg,120), v_ok);
+  insert into _r (caso,esperado,obtido,passou) values
+    ('G2 a mensagem cobre os DOIS motivos (POSTERIOR e ANTERIOR)', 'sim',
+     (v_msg like '%POSTERIOR%' and v_msg like '%ANTERIOR%')::text,
+     v_msg like '%POSTERIOR%' and v_msg like '%ANTERIOR%');
+  insert into _r (caso,esperado,obtido,passou) values
+    ('G3 a mensagem NAO afirma mais "que nao esta em rascunho"', 'nao afirma',
+     (v_msg not like '%que nao esta em rascunho%')::text, v_msg not like '%que nao esta em rascunho%');
+  insert into _r (caso,esperado,obtido,passou) values
+    ('G4 nenhuma parcela FECHADA foi apagada', v_fech_antes::text, v_fech_depois::text, v_fech_antes = v_fech_depois);
+  insert into _r (caso,esperado,obtido,passou)
+  select 'G5 a parcela fechada por junho sobreviveu com o desconto dela', '1842.77',
+         coalesce((select valor_descontado::text from public.rh_adiantamento_parcelas where numero=2),'APAGADA'),
+         (select valor_descontado from public.rh_adiantamento_parcelas where numero=2) = 1842.77;
+
+  select coalesce(sum(valor_descontado),0)+coalesce(sum(case when folha_id is null then valor_previsto else 0 end),0) into v_inv
+    from public.rh_adiantamento_parcelas;
+  select coalesce(sum(adiantamentos),0) into v_cobrado from public.folha_itens;
+  select coalesce(sum(valor_descontado),0) into v_ledger from public.rh_adiantamento_parcelas;
+  insert into _r (caso,esperado,obtido,passou) values
+    ('G6 invariante na forma correta: descontado + previsto das ABERTAS', '5200.00', v_inv::text, v_inv = 5200.00);
+  insert into _r (caso,esperado,obtido,passou) values
+    ('G7 cobrado via liquido == ledger (zero invisivel)', '0.00', (v_cobrado - v_ledger)::text, v_cobrado = v_ledger);
+end $prova$;
+
+select caso, esperado, obtido, passou from _r order by n;
+
+rollback;
