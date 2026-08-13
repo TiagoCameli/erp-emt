@@ -9,6 +9,7 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   adiantamentoSchema,
+  competenciaSchema,
   type AdiantamentoInput,
 } from "@/modules/rh/adiantamentos/schemas";
 
@@ -275,6 +276,59 @@ export async function editarAdiantamento(
       "rh.adiantamentos.editar",
       error,
       "Não foi possível salvar o adiantamento. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Junta as parcelas em aberto do adiantamento numa só, na competência
+ * informada, preservando o total. Vai pela RPC `fn_quitar_adiantamento`
+ * (definer), que é quem pode escrever em `rh_adiantamento_parcelas`:
+ * `authenticated` só tem SELECT naquela tabela.
+ *
+ * Não usa `garantirEditavel`: quitar não é editar o adiantamento. Todo
+ * adiantamento nasce com lançamento (o dinheiro já saiu inteiro na concessão) e
+ * ter parcela já descontada em folha é justamente o caso normal de quem tem
+ * saldo para quitar. As travas de quitação são as três da própria função: folha
+ * aprovada, folha em aprovação e nenhuma parcela em aberto.
+ *
+ * As mensagens das três recusas são `raise exception` nossos (SQLSTATE P0001),
+ * então `mensagemDeNegocio` as entrega ao usuário; qualquer outro código de erro
+ * vira mensagem genérica e vai só pro log.
+ */
+export async function quitarAdiantamento(
+  id: string,
+  competencia: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para quitar adiantamentos" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Adiantamento inválido" };
+
+  const competenciaValida = competenciaSchema.safeParse(competencia);
+  if (!competenciaValida.success) {
+    return { erro: "Competência inválida" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_quitar_adiantamento", {
+    p_adiantamento: idValido.data,
+    p_competencia: competenciaValida.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.adiantamentos.quitar",
+      error,
+      mensagemDeNegocio(
+        error,
+        "Não foi possível quitar o adiantamento. Tente novamente",
+      ),
     );
   }
 

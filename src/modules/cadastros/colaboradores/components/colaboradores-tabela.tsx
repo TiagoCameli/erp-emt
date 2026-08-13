@@ -130,6 +130,9 @@ export function ColaboradoresTabela({
       return;
     }
     toast.success(colaborador.ativo ? "Colaborador desativado" : "Colaborador reativado");
+    // Inativar antecipa o saldo de adiantamento: o efeito em dinheiro aparece
+    // para quem o causou, na hora.
+    if (resultado.aviso) toast.warning(resultado.aviso);
   }
 
   async function aoConfirmarExclusao(motivo?: string) {

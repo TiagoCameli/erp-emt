@@ -12,6 +12,15 @@ const MES_REGEX = /^\d{4}-\d{2}$/;
 /** Data do adiantamento, yyyy-MM-dd. */
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Competência isolada (yyyy-MM-01), para ação que recebe só a competência (a
+ * quitação). Mesma regra do campo `competencia` do `adiantamentoSchema`.
+ */
+export const competenciaSchema = z
+  .string()
+  .trim()
+  .regex(COMPETENCIA_REGEX, { error: "Competência inválida" });
+
 /** Converte o mês do formulário (yyyy-MM) na competência (yyyy-MM-01). */
 export function mesParaCompetencia(mes: string): string {
   return `${mes}-01`;

@@ -3235,6 +3235,10 @@ export type Database = {
         Args: { p_entidade: string; p_id: string; p_mes: string }
         Returns: undefined
       }
+      fn_antecipar_adiantamentos_colaborador: {
+        Args: { p_colaborador: string }
+        Returns: Json
+      }
       fn_apagar_arquivo_orfao: {
         Args: { p_arquivo_id: string; p_carencia_horas?: number }
         Returns: boolean
@@ -3497,6 +3501,10 @@ export type Database = {
       fn_proxima_competencia_desconto: {
         Args: { p_apos: string }
         Returns: string
+      }
+      fn_quitar_adiantamento: {
+        Args: { p_adiantamento: string; p_competencia: string }
+        Returns: undefined
       }
       fn_rateios_da_linha: {
         Args: { p_centro_padrao: string; p_linha: Json; p_valor: number }

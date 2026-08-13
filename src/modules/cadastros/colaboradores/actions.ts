@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { erroAcao } from "@/lib/erros";
+import { erroAcao, logErroServidor } from "@/lib/erros";
+import { formatarBRL, formatarMesAno } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
@@ -20,7 +21,93 @@ import {
 const RECURSO = "cadastros.colaboradores" as const;
 const ROTA = "/cadastros/colaboradores";
 
-export type ResultadoAcao = { ok: true } | { erro: string };
+export type ResultadoAcao = { ok: true; aviso?: string } | { erro: string };
+
+/** Formato do jsonb devolvido por `fn_antecipar_adiantamentos_colaborador`. */
+interface AntecipacaoAdiantamentos {
+  parcelas: number;
+  adiantamentos: number;
+  valor: number;
+  competencia: string | null;
+}
+
+/**
+ * Lê o jsonb da RPC de antecipação sem confiar no formato: a RPC devolve `Json`
+ * nos tipos gerados, então um campo faltando não pode virar `NaN` no toast.
+ */
+function lerAntecipacao(dados: unknown): AntecipacaoAdiantamentos | null {
+  if (typeof dados !== "object" || dados === null || Array.isArray(dados)) {
+    return null;
+  }
+  const bruto = dados as Record<string, unknown>;
+  const parcelas = Number(bruto.parcelas);
+  if (!Number.isFinite(parcelas)) return null;
+  const valor = Number(bruto.valor);
+  const adiantamentos = Number(bruto.adiantamentos);
+  return {
+    parcelas,
+    adiantamentos: Number.isFinite(adiantamentos) ? adiantamentos : 0,
+    valor: Number.isFinite(valor) ? valor : 0,
+    competencia:
+      typeof bruto.competencia === "string" ? bruto.competencia : null,
+  };
+}
+
+/** Lê o `ativo` gravado hoje. `null` quando o colaborador não existe. */
+async function ativoGravado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+): Promise<boolean | null> {
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select("ativo")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.ativo;
+}
+
+/**
+ * Antecipa o saldo de adiantamento em aberto do colaborador que acabou de ser
+ * inativado, e devolve o aviso para o toast de quem inativou.
+ *
+ * É chamada EXPLICITAMENTE, depois do update bem-sucedido, e **não** é trigger.
+ * A escolha é deliberada: efeito financeiro dentro de um UPDATE de cadastro é o
+ * que ninguém encontra depois, e esta base já pagou por esse padrão (o trigger
+ * de guarda da folha é `BEFORE UPDATE OF status` e ficava cego a qualquer outra
+ * coluna). Dinheiro que se move tem que aparecer para quem o moveu, na hora.
+ *
+ * Nunca faz a inativação falhar: sem saldo a RPC devolve `parcelas: 0` e aqui
+ * sai `undefined` (nenhum aviso); se a RPC falhar, o erro vai para o log e o
+ * aviso pede conferência manual, porque o cadastro já foi gravado.
+ */
+async function anteciparAdiantamentos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  origem: string,
+): Promise<string | undefined> {
+  const { data, error } = await supabase.rpc(
+    "fn_antecipar_adiantamentos_colaborador",
+    { p_colaborador: id },
+  );
+
+  if (error) {
+    logErroServidor(origem, error);
+    return "Colaborador inativado, mas não foi possível antecipar o saldo de adiantamento dele. Confira em RH, Adiantamentos";
+  }
+
+  const antecipacao = lerAntecipacao(data);
+  if (!antecipacao || antecipacao.parcelas === 0) return undefined;
+
+  const parcelas =
+    antecipacao.parcelas === 1
+      ? "1 parcela"
+      : `${antecipacao.parcelas} parcelas`;
+  const mes = formatarMesAno(antecipacao.competencia);
+  const folha = mes === "" ? "a próxima folha" : `a folha de ${mes}`;
+  return `Saldo de adiantamento antecipado: ${parcelas} de ${formatarBRL(antecipacao.valor)} para ${folha}`;
+}
 
 /**
  * Converte o ColaboradorInput validado nas colunas da tabela colaboradores.
@@ -96,7 +183,11 @@ export async function criar(dados: ColaboradorInput): Promise<ResultadoAcao> {
   return { ok: true };
 }
 
-/** Edita um colaborador existente. */
+/**
+ * Edita um colaborador existente. Quando este save é o que INATIVA o
+ * colaborador, o saldo de adiantamento em aberto dele é antecipado depois do
+ * update, e o aviso volta para o toast (ver `anteciparAdiantamentos`).
+ */
 export async function editar(
   id: string,
   dados: ColaboradorInput,
@@ -112,6 +203,15 @@ export async function editar(
   }
 
   const supabase = await createClient();
+
+  // O `ativo` de ANTES é o que diz se este save é uma inativação: o payload
+  // sozinho não distingue "está inativando agora" de "já estava inativo e
+  // mudou o telefone". Só vai ao banco quando o payload inativa.
+  const estavaAtivo =
+    validado.data.ativo === false
+      ? await ativoGravado(supabase, idValido.data)
+      : null;
+
   const { error } = await supabase
     .from("colaboradores")
     .update(paraLinhaBanco(validado.data))
@@ -125,11 +225,25 @@ export async function editar(
     );
   }
 
+  const aviso =
+    estavaAtivo === true
+      ? await anteciparAdiantamentos(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.editar",
+        )
+      : undefined;
+
   revalidatePath(ROTA);
-  return { ok: true };
+  const resultado: ResultadoAcao = { ok: true };
+  if (aviso) resultado.aviso = aviso;
+  return resultado;
 }
 
-/** Ativa ou desativa o colaborador (soft delete por status). */
+/**
+ * Ativa ou desativa o colaborador (soft delete por status). Inativar antecipa o
+ * saldo de adiantamento em aberto, depois do update, avisando quem inativou.
+ */
 export async function alternarAtivo(
   id: string,
   ativo: boolean,
@@ -140,6 +254,12 @@ export async function alternarAtivo(
   if (!idValido.success) return { erro: "Colaborador inválido" };
 
   const supabase = await createClient();
+
+  // `ativo` vem do estado da tela, que pode estar velho: quem diz se este
+  // clique é uma inativação é o valor GRAVADO.
+  const estavaAtivo =
+    ativo === false ? await ativoGravado(supabase, idValido.data) : null;
+
   const { error } = await supabase
     .from("colaboradores")
     .update({ ativo })
@@ -153,8 +273,19 @@ export async function alternarAtivo(
     );
   }
 
+  const aviso =
+    estavaAtivo === true
+      ? await anteciparAdiantamentos(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.alternarAtivo",
+        )
+      : undefined;
+
   revalidatePath(ROTA);
-  return { ok: true };
+  const resultado: ResultadoAcao = { ok: true };
+  if (aviso) resultado.aviso = aviso;
+  return resultado;
 }
 
 /** Exclusão física: move o colaborador para a lixeira com motivo. */
