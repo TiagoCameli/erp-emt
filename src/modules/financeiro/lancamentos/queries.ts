@@ -28,6 +28,10 @@ import type {
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
 import {
+  emLotes,
+  LOTE_IDS_POSTGREST,
+} from "@/modules/financeiro/lancamentos/lotes-de-ids";
+import {
   lerLancamentosEmPaginas,
   PAGINA_LEITURA,
 } from "@/modules/financeiro/lancamentos/leitura-completa";
@@ -753,22 +757,32 @@ export async function detalharLancamentosParaPlanilha(
 
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("lancamentos")
-    .select(
-      `id, observacoes, origem, origem_id,
-       formas_pagamento(nome),
-       condicoes_pagamento(descricao),
-       lancamento_parcelas(conta_bancaria_id, contas_bancarias(nome)),
-       lancamento_rateios(valor, centros_custo(nome, codigo))`,
-    )
-    .in("id", ids);
+  // Em lotes porque `in` é query string de um GET: 1000 uuids dão 37 KB de URL e
+  // o PostgREST devolve 400 antes de olhar permissão (ver LOTE_IDS_POSTGREST).
+  const linhas: LinhaDetalhePlanilha[] = [];
+  for (const lote of emLotes(ids, LOTE_IDS_POSTGREST)) {
+    const { data, error } = await supabase
+      .from("lancamentos")
+      .select(
+        `id, observacoes, origem, origem_id,
+         formas_pagamento(nome),
+         condicoes_pagamento(descricao),
+         lancamento_parcelas(conta_bancaria_id, contas_bancarias(nome)),
+         lancamento_rateios(valor, centros_custo(nome, codigo))`,
+      )
+      .in("id", lote);
 
-  if (error) {
-    throw new Error("Não foi possível carregar o detalhe para a planilha");
+    if (error) {
+      // A mensagem do banco vai junto de propósito: sem ela, a falha chega no log
+      // como "não foi possível" e descobrir o motivo vira adivinhação. Foi o que
+      // aconteceu com o 400 de URL longa.
+      throw new Error(
+        `Não foi possível carregar o detalhe para a planilha: ${error.message}`,
+      );
+    }
+    linhas.push(...(data ?? []));
   }
 
-  const linhas = data ?? [];
   const numeroOc = await numerosDeOcDosLancamentos(supabase, linhas);
 
   for (const linha of linhas) {
@@ -804,6 +818,24 @@ export async function detalharLancamentosParaPlanilha(
 
   return detalhes;
 }
+
+/** Uma linha crua do select do detalhe, como o PostgREST devolve. */
+type LinhaDetalhePlanilha = {
+  id: string;
+  observacoes: string | null;
+  origem: string;
+  origem_id: string | null;
+  formas_pagamento: { nome: string } | null;
+  condicoes_pagamento: { descricao: string } | null;
+  lancamento_parcelas: {
+    conta_bancaria_id: string | null;
+    contas_bancarias: { nome: string } | null;
+  }[];
+  lancamento_rateios: {
+    valor: number;
+    centros_custo: { nome: string; codigo: string | null } | null;
+  }[];
+};
 
 /** Número da OC de cada lançamento que vem de ordem de compra. */
 async function numerosDeOcDosLancamentos(
