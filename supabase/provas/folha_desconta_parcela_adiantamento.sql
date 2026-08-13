@@ -461,3 +461,219 @@ end $prova$;
 select caso, obtido, passou from _r order by n;
 
 rollback;
+
+-- ############################################################################
+-- BLOCO E: a sobra vai para o MES SEGUINTE, nao para o fim do plano (fix round 3)
+--
+-- Cadeia jul/ago/set de 5.200,00 sobre salario 2.000,00 (disponivel 1.842,77).
+-- Antes do fix, regerar julho jogava a sobra em OUTUBRO (o max(competencia) ainda
+-- via a sobra que a cadeia criou mais adiante) e agosto saia com adiantamentos
+-- 0,00 e liquido cheio, passando pela checagem do round 2 (0 vs 0,00).
+-- ############################################################################
+begin;
+
+do $prova$
+declare v_usuario uuid;
+begin
+  select u.id into v_usuario from public.usuarios u
+  join public.usuario_permissoes up on up.usuario_id = u.id
+  where u.ativo and up.recurso = 'rh.folha' and up.acao = 'criar' limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario)::text, true);
+end $prova$;
+
+insert into public.folha_inss_faixas (limite_ate, aliquota) values
+  (1518.00,7.5),(2793.88,9),(4190.83,12),(8157.41,14);
+insert into public.folha_irrf_faixas (limite_ate, aliquota, parcela_deduzir) values
+  (2428.80,0,0),(999999999.00,27.5,908.73);
+insert into public.folha_parametros (id, irrf_deducao_por_dependente, irrf_desconto_simplificado, fgts_percentual)
+  values (1,189.59,607.20,8);
+insert into public.colaboradores (id, nome, vinculo, ativo, salario) values
+  ('ffffffff-1111-1111-1111-11111111111f','PROVA CADEIA','clt',true,2000.00);
+insert into public.rh_adiantamentos (id, colaborador_id, competencia, valor, data) values
+  ('f2000000-0000-0000-0000-000000000002','ffffffff-1111-1111-1111-11111111111f','2026-07-01',5200.00,'2026-07-05');
+insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto) values
+  ('f2000000-0000-0000-0000-000000000002',1,'2026-07-01',5200.00);
+
+create temp table _r (n int generated always as identity, caso text, esperado text, obtido text, passou boolean);
+
+do $prova$
+declare v_jul uuid; v_ago uuid; v_set uuid; v_msg text; v_ok boolean; v_inv numeric;
+begin
+  v_jul := public.fn_gerar_folha('2026-07-01');
+  v_ago := public.fn_gerar_folha('2026-08-01');
+  v_set := public.fn_gerar_folha('2026-09-01');
+
+  select coalesce(sum(valor_descontado),0)+coalesce(sum(case when folha_id is null then valor_previsto else 0 end),0)
+    into v_inv from public.rh_adiantamento_parcelas;
+  insert into _r (caso,esperado,obtido,passou) values
+    ('E1 cadeia montada: invariante do plano', '5200.00', v_inv::text, v_inv=5200.00);
+
+  perform public.fn_gerar_folha('2026-07-01');
+  insert into _r (caso,esperado,obtido,passou)
+  select 'E2 a sobra de julho aterrissa em AGOSTO, nao pula mes', '2026-08-01', competencia::text, competencia='2026-08-01'
+  from public.rh_adiantamento_parcelas where gerada_por_folha_id = v_jul;
+
+  insert into _r (caso,esperado,obtido,passou)
+  select 'E3 nenhuma parcela em competencia distante (nada depois de 2026-09-01)', '2026-09-01',
+         max(competencia)::text, max(competencia) <= '2026-09-01'
+  from public.rh_adiantamento_parcelas;
+
+  insert into _r (caso,esperado,obtido,passou)
+  select 'E4 agosto fica DESATUALIZADA (parcelas vs itens divergem)', 'divergente',
+         coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id=v_ago),0)::text||' vs '||
+         coalesce((select sum(adiantamentos) from public.folha_itens where folha_id=v_ago),0)::text,
+         coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id=v_ago),0)
+         <> coalesce((select sum(adiantamentos) from public.folha_itens where folha_id=v_ago),0);
+  begin
+    set local role authenticated;
+    update public.folhas set status='pendente_aprovacao' where id=v_ago;
+    v_ok:=false; v_msg:='ENVIOU (FALHA)';
+  exception when others then v_ok:=true; v_msg:=sqlerrm; end;
+  reset role;
+  insert into _r (caso,esperado,obtido,passou) values
+    ('E5 no estado transitorio agosto NAO pode ser enviada', 'recusado', v_msg,
+     v_ok and v_msg like '%ficou desatualizada%');
+
+  perform public.fn_gerar_folha('2026-08-01');
+  insert into _r (caso,esperado,obtido,passou)
+  select 'E6 regerar agosto devolve o desconto correto (NAO zero)', '1842.77 / 0.00',
+         adiantamentos::text||' / '||valor_liquido::text, adiantamentos=1842.77 and valor_liquido=0
+  from public.folha_itens where folha_id=v_ago;
+
+  perform public.fn_gerar_folha('2026-09-01');
+  select coalesce(sum(valor_descontado),0)+coalesce(sum(case when folha_id is null then valor_previsto else 0 end),0)
+    into v_inv from public.rh_adiantamento_parcelas;
+  insert into _r (caso,esperado,obtido,passou) values
+    ('E7 cadeia regerada em ordem: invariante volta a 5200.00', '5200.00', v_inv::text, v_inv=5200.00);
+
+  insert into _r (caso,esperado,obtido,passou)
+  select 'E8 plano final: 3 parcelas fechadas, nada em outubro',
+         'soma 5200.00, zero abertas, max 2026-09-01',
+         string_agg('n'||numero||' '||competencia||' desc='||valor_descontado, ' | ' order by numero)
+         ||' | abertas='||(select count(*) from public.rh_adiantamento_parcelas where folha_id is null)::text,
+         sum(valor_descontado)=5200.00
+         and (select count(*) from public.rh_adiantamento_parcelas where folha_id is null)=0
+         and max(competencia)='2026-09-01'
+  from public.rh_adiantamento_parcelas;
+
+  begin
+    set local role authenticated;
+    update public.folhas set status='pendente_aprovacao' where id=v_ago;
+    v_ok:=true; v_msg:='enviou';
+  exception when others then v_ok:=false; v_msg:=sqlerrm; end;
+  reset role;
+  insert into _r (caso,esperado,obtido,passou) values
+    ('E9 depois de regerar a cadeia, agosto envia sem atrito', 'enviou', v_msg, v_ok);
+end $prova$;
+
+select caso, esperado, obtido, passou from _r order by n;
+
+rollback;
+
+-- ############################################################################
+-- BLOCO F: o mes seguinte ENGROSSA, e duas parcelas do mesmo adiantamento no
+-- mesmo mes sao descontadas em cascata sem dobrar e sem perder centavo.
+--
+-- Salario 300,00 -> INSS 22,50 -> disponivel 277,50. Plano de 3 parcelas de
+-- 400,00 (ago/set/out): nenhuma cabe inteira, entao a cadeia empurra sobra todo
+-- mes e setembro fica com DUAS parcelas abertas do mesmo adiantamento.
+-- ############################################################################
+begin;
+
+do $prova$
+declare v_usuario uuid;
+begin
+  select u.id into v_usuario from public.usuarios u
+  join public.usuario_permissoes up on up.usuario_id = u.id
+  where u.ativo and up.recurso = 'rh.folha' and up.acao = 'criar' limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario)::text, true);
+end $prova$;
+
+insert into public.folha_inss_faixas (limite_ate, aliquota) values (1518.00,7.5),(2793.88,9);
+insert into public.folha_irrf_faixas (limite_ate, aliquota, parcela_deduzir) values
+  (2428.80,0,0),(999999999.00,27.5,908.73);
+insert into public.folha_parametros (id, irrf_deducao_por_dependente, irrf_desconto_simplificado, fgts_percentual)
+  values (1,189.59,607.20,8);
+insert into public.colaboradores (id, nome, vinculo, ativo, salario) values
+  ('ffffffff-2222-2222-2222-22222222222f','PROVA ENGROSSA','clt',true,300.00);
+insert into public.rh_adiantamentos (id, colaborador_id, competencia, valor, data) values
+  ('f3000000-0000-0000-0000-000000000003','ffffffff-2222-2222-2222-22222222222f','2026-08-01',1200.00,'2026-08-05');
+insert into public.rh_adiantamento_parcelas (adiantamento_id, numero, competencia, valor_previsto) values
+  ('f3000000-0000-0000-0000-000000000003',1,'2026-08-01',400.00),
+  ('f3000000-0000-0000-0000-000000000003',2,'2026-09-01',400.00),
+  ('f3000000-0000-0000-0000-000000000003',3,'2026-10-01',400.00);
+
+create temp table _r (n int generated always as identity, caso text, esperado text, obtido text, passou boolean);
+create temp view _v as
+select md5(string_agg(l, E'\n' order by l)) as impressao from (
+  select 'PAR n'||numero||' '||competencia||' prev='||valor_previsto||' desc='||valor_descontado
+         ||' emfolha='||(folha_id is not null)::text||' gerada='||(gerada_por_folha_id is not null)::text as l
+  from public.rh_adiantamento_parcelas
+  union all
+  select 'ITEM '||fi.folha_id::text||' adiant='||fi.adiantamentos||' liq='||fi.valor_liquido from public.folha_itens fi
+) s;
+
+do $prova$
+declare v_ago uuid; v_set uuid; v_i int; v_base text; v_x text; v_inv numeric;
+begin
+  v_ago := public.fn_gerar_folha('2026-08-01');
+  insert into _r (caso,esperado,obtido,passou)
+  select 'F1 agosto: 400 sobre disponivel 277,50 -> desconta 277,50 e empurra 122,50 para SETEMBRO',
+         '277.50 / 122.50 2026-09-01',
+         (select valor_descontado::text from public.rh_adiantamento_parcelas where numero=1)||' / '||
+         (select valor_previsto::text||' '||competencia::text from public.rh_adiantamento_parcelas where numero=4),
+         (select valor_descontado from public.rh_adiantamento_parcelas where numero=1)=277.50
+         and (select valor_previsto from public.rh_adiantamento_parcelas where numero=4)=122.50
+         and (select competencia from public.rh_adiantamento_parcelas where numero=4)='2026-09-01';
+
+  insert into _r (caso,esperado,obtido,passou)
+  select 'F2 setembro tem DUAS parcelas abertas do mesmo adiantamento', '2', count(*)::text, count(*)=2
+  from public.rh_adiantamento_parcelas where competencia='2026-09-01' and folha_id is null;
+
+  v_set := public.fn_gerar_folha('2026-09-01');
+  insert into _r (caso,esperado,obtido,passou)
+  select 'F3 cascata nas duas do mesmo mes: n2 leva 277,50 e n4 leva 0,00', '277.50 / 0.00',
+         (select valor_descontado::text from public.rh_adiantamento_parcelas where numero=2)||' / '||
+         (select valor_descontado::text from public.rh_adiantamento_parcelas where numero=4),
+         (select valor_descontado from public.rh_adiantamento_parcelas where numero=2)=277.50
+         and (select valor_descontado from public.rh_adiantamento_parcelas where numero=4)=0;
+
+  insert into _r (caso,esperado,obtido,passou)
+  select 'F4 setembro nao descontou em dobro: item = soma das duas parcelas', '277.50 / 277.50',
+         fi.adiantamentos::text||' / '||
+         coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id=v_set),0)::text,
+         fi.adiantamentos = coalesce((select sum(valor_descontado) from public.rh_adiantamento_parcelas where folha_id=v_set),0)
+         and fi.adiantamentos = 277.50
+  from public.folha_itens fi where fi.folha_id=v_set;
+
+  insert into _r (caso,esperado,obtido,passou)
+  select 'F5 as duas do mesmo mes FECHARAM nesta folha', '2', count(*)::text, count(*)=2
+  from public.rh_adiantamento_parcelas where folha_id=v_set;
+
+  select coalesce(sum(valor_descontado),0)+coalesce(sum(case when folha_id is null then valor_previsto else 0 end),0)
+    into v_inv from public.rh_adiantamento_parcelas;
+  insert into _r (caso,esperado,obtido,passou) values
+    ('F6 invariante: sem perder centavo e sem dobrar', '1200.00', v_inv::text, v_inv=1200.00);
+
+  insert into _r (caso,esperado,obtido,passou)
+  select 'F7 outubro engrossou (400 + 122,50 + 122,50)', '3 / 645.00',
+         count(*)::text||' / '||sum(valor_previsto)::text, count(*)=3 and sum(valor_previsto)=645.00
+  from public.rh_adiantamento_parcelas where competencia='2026-10-01';
+
+  select impressao into v_base from _v;
+  for v_i in 1..3 loop
+    perform public.fn_gerar_folha('2026-09-01');
+    select impressao into v_x from _v;
+    insert into _r (caso,esperado,obtido,passou) values
+      ('F8.'||v_i||' regerar setembro '||v_i||'x: impressao identica', v_base, v_x, v_x=v_base);
+  end loop;
+
+  select coalesce(sum(valor_descontado),0)+coalesce(sum(case when folha_id is null then valor_previsto else 0 end),0)
+    into v_inv from public.rh_adiantamento_parcelas;
+  insert into _r (caso,esperado,obtido,passou) values
+    ('F9 invariante depois das 3 regeracoes', '1200.00', v_inv::text, v_inv=1200.00);
+end $prova$;
+
+select caso, esperado, obtido, passou from _r order by n;
+
+rollback;
