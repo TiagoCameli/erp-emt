@@ -1212,3 +1212,39 @@ trava isso nas duas colunas. Centralizar VALOR continua sendo regressão.
 De passagem caiu o `flex-row-reverse` do botão de ordenação: ele existia para o ícone encostar no
 texto quando o cabeçalho era à direita, e com tudo centralizado ele só produzia "⇅ Valor" contra
 "Vencimento ⇅" na mesma régua. O ícone fica depois do rótulo em toda coluna.
+
+## 2026-08-13 - Rótulo de cabeçalho quebra em vez de cortar, e altura e peso dele são preferência do usuário
+
+Três mudanças no DataTable canônico, então valem para as tabelas de todo o app.
+
+1. **O rótulo do cabeçalho QUEBRA, nunca corta.** Era `truncate`, e "Mês de referência" virava
+   "Mês de referê…" numa coluna estreita: cortar o rótulo esconde qual coluna a pessoa está
+   lendo, e rótulo é uma ou duas palavras. Agora é `whitespace-normal break-words` com `min-w-0`
+   (sem o `min-w-0` o span é item de flex e cresce por cima da coluna vizinha em vez de quebrar),
+   e o `h-9` da `th` virou `min-h-9` para a faixa poder crescer. O `whitespace-nowrap` que a
+   `TableHead` do shadcn fixa é HERDADO, então a coluna sem ordenação também precisou do span:
+   sem ele o rótulo continuava em uma linha só.
+
+   **Efeito colateral a colher depois:** existem larguras declaradas hoje só para o rótulo caber
+   (`size: 176` no mês, `size: 184` na forma de pagamento, com comentário dizendo isso). Elas
+   deixaram de ser necessárias e podem encolher, mas não foi nesta entrega para não misturar.
+
+2. **Altura da faixa do cabeçalho é preferência**, com preset no menu "Altura" e arraste na borda
+   de baixo, guardada por usuário e por tabela. O gesto de arraste NÃO foi duplicado: ganhou um
+   campo `alvo: "linha" | "cabecalho"` e o efeito escolhe qual preferência recebe o resultado.
+   Limites próprios (28 a 96) porque no cabeçalho não mora botão: o piso é caber uma linha de
+   rótulo, não a altura do `⋮` como na linha.
+
+3. **Peso do rótulo é preferência**, com lista FECHADA (400, 500, 600, 700). Peso arbitrário faria
+   o navegador sintetizar a fonte onde a Inter não tem o corte, e o resultado é rótulo borrado.
+   O sanitizador RECUSA fora da lista em vez de aproximar, ao contrário do que faz com altura:
+   aproximar 450 para 400 mudaria a escolha da pessoa sem ela pedir. "Padrão" grava `null`, não
+   500, para a escolha seguir o design se o padrão mudar um dia.
+
+Os três campos entraram **sem subir `VERSAO_PREFERENCIAS`**, pelo mesmo motivo do `alturaLinha`:
+campo que só acrescenta se resolve na leitura, e subir a versão apagaria colunas, larguras e
+filtros que todo mundo já configurou. Há teste travando isso para os dois campos novos.
+
+De passagem, os três grupos de rádio do menu ganharam `aria-label`. Sem nome, o leitor de tela
+anunciava "Automática" duas vezes sem dizer de quê, e o teste que varria o menu não tinha como
+distinguir altura de linha de altura de cabeçalho.
