@@ -1,6 +1,6 @@
 # Adiantamento parcelado, descontado em vários meses — Design
 
-Data: 2026-08-08
+Data: 2026-08-11 (o nome do arquivo ficou com 08-08 por engano meu; o Bloco 8a e que foi em 08/08)
 Status: rascunho (design), pendente de revisão do Tiago
 Autor: Léo (com Tiago)
 
