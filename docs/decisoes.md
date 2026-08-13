@@ -1279,3 +1279,37 @@ enxuta da tela e para a linha enriquecida da planilha.
 **Coluna nova entra no fim, não no meio.** "Observações" é a última de todas: é a única com texto
 de tamanho imprevisível, e no meio ela empurraria para fora da tela tudo que a pessoa abriu a
 planilha para ver.
+
+## 2026-08-13 - `in` do PostgREST tem limite de URL, e 1000 ids não cabem
+
+A primeira versão da planilha completa subiu **quebrada em produção** e passou em 1102 testes e no
+CI. O enriquecimento chamava `.in("id", ids)` com uma página inteira da exportação, e
+`PAGINA_LEITURA` é 1000.
+
+**Medido no projeto vivo (13/08/2026), batendo direto no PostgREST:**
+
+| ids | tamanho da URL | resposta |
+|-----|----------------|----------|
+| 100 | 3,7 KB | passa |
+| 500 | 18,5 KB | passa |
+| 1000 | 37 KB | **HTTP 400 Bad Request** |
+
+O `in` viaja na QUERY STRING de um GET, então cada uuid custa 37 caracteres. O 400 acontece ANTES
+de qualquer checagem de permissão ou RLS, e do lado do app chega como erro genérico de consulta:
+não se parece nem com falta de grant nem com RLS, que é o que faz perder tempo.
+
+**Regra:** `.in()` com lista derivada de dados sempre em lotes de `LOTE_IDS_POSTGREST` (200,
+~7,5 KB, abaixo dos 8 KB que proxy e CDN costumam cortar). O lote fica DENTRO da função de query,
+não no chamador, para não depender de quem chama lembrar.
+
+Três lições que valem além desta tela:
+
+1. **Teste unitário não pega isso, por construção.** O teste roda com dois registros, e dois ids
+   cabem em qualquer URL. Quem pega é rodar contra dado real. A exportação tem 5.848 lançamentos
+   na base de hoje; nenhum teste chega perto disso.
+2. **Engolir a mensagem do banco custa caro.** A query lançava
+   `throw new Error("Não foi possível carregar o detalhe para a planilha")` e descartava `error`.
+   Descobrir a causa virou eliminação de hipóteses (grant de coluna, FK ambígua, grant de tabela),
+   todas erradas. Agora a mensagem do PostgREST vai anexada.
+3. **Verificar no navegador com dado real não é opcional em exportação.** CI verde aqui provou
+   apenas que compila.
