@@ -5,6 +5,7 @@ import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
 import {
   dinheiroDasParcelas,
   resumirLancamentos,
+  situacaoDeAtraso,
   type ParcelaParaResumo,
 } from "@/modules/financeiro/lancamentos/resumo";
 
@@ -170,6 +171,102 @@ describe("dinheiroDasParcelas", () => {
     );
 
     expect(dinheiro.valorAberto).toBe(0.3);
+  });
+});
+
+/**
+ * O que o filtro "Atraso" escolhe. Tem que casar com o cartão "Vencido" do
+ * cabeçalho: se divergir, o cartão diz 3 e o filtro traz 5, e ninguém sabe qual
+ * acreditar. As duas coisas passam por aqui.
+ */
+describe("situacaoDeAtraso", () => {
+  it("uma parcela atrasada já deixa o lançamento vencido", () => {
+    // Mesmo com as outras em dia: é o caso do lançamento de três parcelas em que
+    // só a primeira estourou.
+    expect(
+      situacaoDeAtraso(
+        [
+          parcela({ status: "pendente", dataVencimento: "2026-08-01" }),
+          parcela({ status: "pendente", dataVencimento: "2026-12-01" }),
+        ],
+        HOJE,
+      ),
+    ).toBe("vencido");
+  });
+
+  it("tudo em aberto e no prazo é a vencer", () => {
+    expect(
+      situacaoDeAtraso(
+        [parcela({ status: "pendente", dataVencimento: "2026-09-10" })],
+        HOJE,
+      ),
+    ).toBe("a_vencer");
+  });
+
+  it("vencendo hoje ainda é a vencer: dá para pagar hoje", () => {
+    expect(
+      situacaoDeAtraso([parcela({ status: "pendente", dataVencimento: HOJE })], HOJE),
+    ).toBe("a_vencer");
+  });
+
+  it("quitado não é vencido nem a vencer, fica fora dos dois lados", () => {
+    expect(
+      situacaoDeAtraso(
+        [parcela({ status: "pago", dataVencimento: "2026-01-01" })],
+        HOJE,
+      ),
+    ).toBe("sem-aberto");
+  });
+
+  it("cancelada não segura o lançamento em aberto", () => {
+    expect(
+      situacaoDeAtraso(
+        [parcela({ status: "cancelado", dataVencimento: "2026-01-01" })],
+        HOJE,
+      ),
+    ).toBe("sem-aberto");
+  });
+
+  it("em revisão atrasada conta como vencida", () => {
+    // `em_revisao` é pedido de ajuste, não baixa: o dinheiro continua devido e o
+    // prazo continua correndo.
+    expect(
+      situacaoDeAtraso(
+        [parcela({ status: "em_revisao", dataVencimento: "2026-07-01" })],
+        HOJE,
+      ),
+    ).toBe("vencido");
+  });
+
+  it("parcela em aberto sem vencimento é a vencer, não vencida", () => {
+    expect(
+      situacaoDeAtraso(
+        [parcela({ status: "pendente", dataVencimento: null })],
+        HOJE,
+      ),
+    ).toBe("a_vencer");
+  });
+
+  it("sem parcela nenhuma não entra no filtro", () => {
+    expect(situacaoDeAtraso([], HOJE)).toBe("sem-aberto");
+  });
+
+  it("classifica igual ao cartão: vencido só quando há valor vencido", () => {
+    // A trava contra divergência entre o filtro e o KPI: as duas funções olhando
+    // as mesmas parcelas têm que concordar.
+    const parcelas = [
+      parcela({ status: "pago", valor: 300, valorLiquido: 300 }),
+      parcela({ status: "pendente", valor: 700, dataVencimento: "2026-08-10" }),
+    ];
+
+    expect(situacaoDeAtraso(parcelas, HOJE)).toBe("vencido");
+    expect(dinheiroDasParcelas(parcelas, HOJE).valorVencido).toBe(700);
+
+    const emDia = [
+      parcela({ status: "pendente", valor: 700, dataVencimento: "2026-09-10" }),
+    ];
+    expect(situacaoDeAtraso(emDia, HOJE)).toBe("a_vencer");
+    expect(dinheiroDasParcelas(emDia, HOJE).valorVencido).toBe(0);
   });
 });
 

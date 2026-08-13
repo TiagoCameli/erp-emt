@@ -1,3 +1,4 @@
+import { ehParcelaAberta } from "@/modules/financeiro/_shared/formato";
 import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
 
 /**
@@ -64,9 +65,48 @@ function estaPaga(parcela: ParcelaParaResumo): boolean {
 /**
  * Parcela em aberto: não paga e não cancelada. Cancelada não é dívida, e somá-la
  * no aberto faria a empresa parecer devedora de algo que foi desfeito.
+ *
+ * A regra vem de `_shared/formato` porque o filtro de atraso da listagem usa a
+ * MESMA definição para escolher os lançamentos: se as duas divergirem, o cartão
+ * "Vencido" mostra um número e o filtro traz outro conjunto.
  */
 function estaAberta(parcela: ParcelaParaResumo): boolean {
-  return parcela.status !== "pago" && parcela.status !== "cancelado";
+  return ehParcelaAberta(parcela.status);
+}
+
+/**
+ * Está vencida: em aberto e com vencimento ANTES de hoje.
+ *
+ * Comparação de string em yyyy-MM-dd é comparação de data, e evita fuso. Parcela
+ * sem vencimento não está atrasada (não há prazo para ter estourado), e vencendo
+ * hoje também não: ainda dá para pagar.
+ */
+export function estaVencida(
+  parcela: Pick<ParcelaParaResumo, "status" | "dataVencimento">,
+  hojeISO: string,
+): boolean {
+  if (!ehParcelaAberta(parcela.status)) return false;
+  return parcela.dataVencimento !== null && parcela.dataVencimento < hojeISO;
+}
+
+/**
+ * Situação de atraso de um lançamento, a partir das parcelas dele. É o que o
+ * filtro "Atraso" da listagem escolhe, e usa as mesmas duas funções acima que
+ * alimentam o cartão "Vencido".
+ *
+ * `sem-aberto` é lançamento quitado (ou com tudo cancelado): não é vencido nem a
+ * vencer, e fica fora dos dois lados do filtro.
+ */
+export function situacaoDeAtraso(
+  parcelas: Array<Pick<ParcelaParaResumo, "status" | "dataVencimento">>,
+  hojeISO: string,
+): "vencido" | "a_vencer" | "sem-aberto" {
+  let temAberta = false;
+  for (const parcela of parcelas) {
+    if (estaVencida(parcela, hojeISO)) return "vencido";
+    if (ehParcelaAberta(parcela.status)) temAberta = true;
+  }
+  return temAberta ? "a_vencer" : "sem-aberto";
 }
 
 /**
@@ -96,11 +136,9 @@ export function dinheiroDasParcelas(
     if (!estaAberta(parcela)) continue;
 
     aberto += centavos(parcela.valor);
-    // Comparação de string em yyyy-MM-dd é comparação de data, e evita fuso.
-    // Parcela sem vencimento não está atrasada: não há prazo para ter estourado.
-    if (parcela.dataVencimento !== null && parcela.dataVencimento < hojeISO) {
-      vencido += centavos(parcela.valor);
-    }
+    // Mesma função que o filtro de atraso usa, para o cartão "Vencido" e o
+    // filtro "Com parcela vencida" nunca falarem de conjuntos diferentes.
+    if (estaVencida(parcela, hojeISO)) vencido += centavos(parcela.valor);
   }
 
   return {

@@ -15,12 +15,14 @@ import {
   tipoFormaPagamento,
   type TipoFormaPagamento,
 } from "@/modules/_shared/forma-pagamento";
-import type {
-  StatusLancamento,
-  StatusParcela,
-  TipoLancamento,
+import {
+  STATUS_PARCELA_ABERTA,
+  type StatusLancamento,
+  type StatusParcela,
+  type TipoLancamento,
 } from "@/modules/financeiro/_shared/formato";
 import type {
+  FiltroAtraso,
   FiltroRevisao,
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
@@ -32,6 +34,7 @@ import {
 import {
   dinheiroDasParcelas,
   resumirLancamentos,
+  situacaoDeAtraso,
   type ResumoLancamentos,
 } from "@/modules/financeiro/lancamentos/resumo";
 
@@ -87,6 +90,13 @@ export interface ListarLancamentosParams {
    * das parcelas, então vira consulta de ids + `in`.
    */
   revisao?: FiltroRevisao;
+  /**
+   * Situação de atraso, derivada das parcelas em aberto: `vencido` (alguma
+   * atrasada) ou `a_vencer` (tem saldo e nada estourou). Também vira consulta de
+   * ids + `in`. Não confundir com `vencimentoDe`/`vencimentoAte`, que olham a
+   * coluna do cabeçalho do lançamento.
+   */
+  atraso?: FiltroAtraso;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -357,6 +367,53 @@ async function idsPorCentroCusto(
 }
 
 /**
+ * Ids de lançamentos por situação de atraso.
+ *
+ * Lê SÓ as parcelas em aberto (`STATUS_PARCELA_ABERTA`), e não todas: são 931 de
+ * 7.701 na base de hoje, então isto é uma requisição em vez de oito, e nem
+ * encosta no teto de páginas do `lerEmPaginas`. Quem está quitado não aparece em
+ * nenhum dos dois lados do filtro justamente por não ter parcela aberta nenhuma.
+ *
+ * A classificação em si é do `situacaoDeAtraso`, o mesmo módulo que alimenta o
+ * cartão "Vencido": o filtro não pode trazer um conjunto diferente do número que
+ * está escrito em cima dele.
+ */
+async function idsPorAtraso(
+  supabase: ClienteSupabase,
+  atraso: FiltroAtraso,
+  hojeISO: string,
+): Promise<string[]> {
+  const parcelas = await lerEmPaginas((de, ate) =>
+    supabase
+      .from("lancamento_parcelas")
+      .select("lancamento_id, status, data_vencimento")
+      .in("status", STATUS_PARCELA_ABERTA)
+      .order("lancamento_id")
+      .order("id")
+      .range(de, ate),
+  );
+
+  const porLancamento = new Map<
+    string,
+    Array<{ status: string; dataVencimento: string | null }>
+  >();
+  for (const parcela of parcelas) {
+    const lista = porLancamento.get(parcela.lancamento_id) ?? [];
+    lista.push({
+      status: parcela.status,
+      dataVencimento: parcela.data_vencimento,
+    });
+    porLancamento.set(parcela.lancamento_id, lista);
+  }
+
+  const ids: string[] = [];
+  for (const [id, lista] of porLancamento) {
+    if (situacaoDeAtraso(lista, hojeISO) === atraso) ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Ids de lançamentos no estado de revisão pedido. `em_revisao` é status de
  * parcela; os outros três são derivados da conta bancária das parcelas ainda
  * não pagas, com a mesma regra que a coluna "Revisão" da lista usa (por isso
@@ -467,9 +524,18 @@ export async function listarLancamentos(
   // Filtros que moram em tabela filha (parcela, rateio) viram lista de ids.
   // Não dá para filtrar pelo join embutido no select: ele é o que alimenta a
   // coluna "Revisão", e filtrá-lo esconderia parcelas do cálculo.
+  // Uma leitura do relógio para a consulta toda: serve o filtro de atraso e o
+  // cálculo por linha. Com duas chamadas de `dataHojeISO()`, uma consulta que
+  // virasse a meia-noite filtraria por um dia e classificaria as linhas pelo
+  // outro, e o filtro "vencidos" traria linha que a coluna mostra em dia.
+  const hojeISO = dataHojeISO();
+
   const listasDeIds: string[][] = [];
   if (params.revisao) {
     listasDeIds.push(await idsPorRevisao(supabase, params.revisao));
+  }
+  if (params.atraso) {
+    listasDeIds.push(await idsPorAtraso(supabase, params.atraso, hojeISO));
   }
   if (params.contaBancariaId) {
     listasDeIds.push(
@@ -560,11 +626,6 @@ export async function listarLancamentos(
   if (error) {
     throw new Error("Não foi possível carregar os lançamentos");
   }
-
-  // Uma leitura do relógio para a página toda: com `dataHojeISO()` por linha, uma
-  // consulta que virasse a meia-noite classificaria parte das linhas por um dia e
-  // parte pelo outro.
-  const hojeISO = dataHojeISO();
 
   const itens: LancamentoLista[] = (data ?? []).map((lancamento) => {
     const parcelas = lancamento.lancamento_parcelas ?? [];
