@@ -71,6 +71,19 @@ export interface FolhaItem {
    */
   encargosDetalhe: EncargoDetalhe[];
   adiantamentos: number;
+  /**
+   * Identificação da(s) parcela(s) de adiantamento descontada(s) nesta folha
+   * para este colaborador (Task 6 do parcelamento): posição por competência
+   * entre TODAS as parcelas do mesmo adiantamento (nunca por `numero`, que
+   * não é identidade estável — ver `comment on function` da `fn_gerar_folha`)
+   * e o total de parcelas do plano. Vazio quando o colaborador não tem
+   * adiantamento descontado nesta folha, ou quando quem gerou esta leitura
+   * não tem `rh.adiantamentos:ver` (a RLS de `rh_adiantamento_parcelas` exige
+   * essa permissão; sem ela a lista vem vazia e o holerite mostra o rótulo
+   * genérico "Adiantamentos", sem quebrar). Opcional para não obrigar todo
+   * `FolhaItem` de teste a preencher isto.
+   */
+  adiantamentoParcelas?: { ordinal: number; total: number }[];
   custoTotal: number;
   valorLiquido: number;
   /**
@@ -169,6 +182,101 @@ export async function listarFolhas(): Promise<FolhaLista[]> {
 }
 
 /**
+ * Identifica, por colaborador, qual(is) parcela(s) de adiantamento esta folha
+ * descontou e a posição de cada uma no plano do adiantamento dela ("2 de 3").
+ * Task 6 do parcelamento: o holerite passa a mostrar isso quando o
+ * adiantamento tem mais de uma parcela, sem leitura extra por colaborador —
+ * são exatamente DUAS leituras para a folha TODA (não uma por colaborador,
+ * nem uma por adiantamento):
+ *
+ *   1. as parcelas que ESTA folha fechou (`folha_id = id`), com o colaborador
+ *      de cada uma (via o adiantamento dela);
+ *   2. TODAS as parcelas dos adiantamentos encontrados no passo 1 (abertas ou
+ *      fechadas em qualquer folha), para calcular a posição e o total do
+ *      plano AGORA.
+ *
+ * A posição é por ORDEM DE COMPETÊNCIA (e `id` como desempate), nunca pelo
+ * `numero`: ele não é identidade estável, é recalculado como `max(numero) +
+ * 1` a cada sobra (ver `comment on function` da `fn_gerar_folha`). Mesmo
+ * critério de ordenação da listagem de adiantamentos.
+ *
+ * Sem `rh.adiantamentos:ver` (a RLS de `rh_adiantamento_parcelas` exige essa
+ * permissão, e esta função é chamada por quem tem `rh.folha:ver`, uma
+ * permissão diferente) as duas leituras vêm vazias e a função devolve um Map
+ * vazio: o holerite cai no rótulo genérico "Adiantamentos", sem quebrar e sem
+ * mostrar número errado.
+ */
+async function identificarParcelasDaFolha(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  folhaId: string,
+): Promise<Map<string, { ordinal: number; total: number }[]>> {
+  const vazio = new Map<string, { ordinal: number; total: number }[]>();
+
+  const { data: parcelasDaFolha, error: erroParcelasDaFolha } = await supabase
+    .from("rh_adiantamento_parcelas")
+    .select("id, adiantamento_id, rh_adiantamentos!inner(colaborador_id)")
+    .eq("folha_id", folhaId);
+
+  if (erroParcelasDaFolha) {
+    throw new Error(
+      "Não foi possível identificar as parcelas de adiantamento descontadas nesta folha",
+    );
+  }
+  if (!parcelasDaFolha || parcelasDaFolha.length === 0) return vazio;
+
+  const idsAdiantamento = [
+    ...new Set(parcelasDaFolha.map((linha) => linha.adiantamento_id)),
+  ];
+
+  const { data: todasParcelas, error: erroTodas } = await supabase
+    .from("rh_adiantamento_parcelas")
+    .select("id, adiantamento_id, competencia")
+    .in("adiantamento_id", idsAdiantamento);
+
+  if (erroTodas) {
+    throw new Error(
+      "Não foi possível carregar o plano de parcelas dos adiantamentos desta folha",
+    );
+  }
+
+  // Ordem por competência (e id como desempate) dentro de cada adiantamento,
+  // para achar a posição de cada parcela no plano ATUAL — não o `numero`.
+  const porAdiantamento = new Map<string, { id: string; competencia: string }[]>();
+  for (const parcela of todasParcelas ?? []) {
+    const lista = porAdiantamento.get(parcela.adiantamento_id) ?? [];
+    lista.push({ id: parcela.id, competencia: parcela.competencia });
+    porAdiantamento.set(parcela.adiantamento_id, lista);
+  }
+
+  const posicaoPorParcelaId = new Map<string, { ordinal: number; total: number }>();
+  for (const lista of porAdiantamento.values()) {
+    const ordenada = [...lista].sort((a, b) =>
+      a.competencia === b.competencia
+        ? a.id.localeCompare(b.id)
+        : a.competencia.localeCompare(b.competencia),
+    );
+    ordenada.forEach((parcela, indice) => {
+      posicaoPorParcelaId.set(parcela.id, {
+        ordinal: indice + 1,
+        total: ordenada.length,
+      });
+    });
+  }
+
+  const resultado = new Map<string, { ordinal: number; total: number }[]>();
+  for (const linha of parcelasDaFolha) {
+    const posicao = posicaoPorParcelaId.get(linha.id);
+    if (!posicao) continue;
+    const colaboradorId = linha.rh_adiantamentos.colaborador_id;
+    const lista = resultado.get(colaboradorId) ?? [];
+    lista.push(posicao);
+    resultado.set(colaboradorId, lista.sort((a, b) => a.ordinal - b.ordinal));
+  }
+
+  return resultado;
+}
+
+/**
  * Folha completa para o detalhe: cabeçalho com os valores consolidados e os
  * itens por colaborador, com nome/função e o centro de custo (nome/código) via
  * embed. Itens em ordem alfabética de colaborador. Retorna null se não achar.
@@ -204,6 +312,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     throw new Error("Não foi possível carregar os itens da folha");
   }
 
+  const parcelasPorColaborador = await identificarParcelasDaFolha(supabase, id);
+
   const itens: FolhaItem[] = (itensRaw ?? [])
     .map((item) => ({
       id: item.id,
@@ -225,6 +335,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
         .map((encargo) => ({ nome: encargo.nome, valor: encargo.valor }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       adiantamentos: item.adiantamentos,
+      adiantamentoParcelas: parcelasPorColaborador.get(item.colaborador_id) ?? [],
       custoTotal: item.custo_total,
       valorLiquido: item.valor_liquido,
       lancamentoId: item.lancamento_id,

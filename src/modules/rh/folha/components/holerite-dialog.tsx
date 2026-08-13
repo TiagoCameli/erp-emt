@@ -25,6 +25,25 @@ function fgtsDoMes(salarioBase: number, fgtsPercentual: number): number {
   return Math.round(salarioBase * (fgtsPercentual / 100) * 100) / 100;
 }
 
+/**
+ * Rótulo do desconto de adiantamento: identifica a parcela ("Adiantamento
+ * 2/3") quando o colaborador tem mais de uma parcela descontada nesta folha
+ * E o plano dela tem mais de uma parcela no total. Com plano de 1 parcela
+ * (à vista) o rótulo genérico já diz tudo, e "1/1" seria ruído. Sem a
+ * informação (ex.: quem gerou a leitura não tem `rh.adiantamentos:ver`), cai
+ * no mesmo rótulo genérico de sempre — nunca quebra, nunca mostra número
+ * errado.
+ */
+function rotuloAdiantamento(
+  parcelas: { ordinal: number; total: number }[] | undefined,
+): string {
+  const comOrdinal = (parcelas ?? []).filter((parcela) => parcela.total > 1);
+  if (comOrdinal.length === 0) return "Adiantamentos";
+  return comOrdinal
+    .map((parcela) => `Adiantamento ${parcela.ordinal}/${parcela.total}`)
+    .join(" e ");
+}
+
 /** Linha de valor (rótulo à esquerda, dinheiro à direita). */
 function Linha({
   rotulo,
@@ -101,7 +120,10 @@ export function HoleriteDialog({
               </h3>
               <Linha rotulo="INSS" valor={item.inss} />
               <Linha rotulo="IRRF" valor={item.irrf} />
-              <Linha rotulo="Adiantamentos" valor={item.adiantamentos} />
+              <Linha
+                rotulo={rotuloAdiantamento(item.adiantamentoParcelas)}
+                valor={item.adiantamentos}
+              />
               <div className="mt-1 border-t border-border pt-1">
                 <Linha
                   rotulo="Total de descontos"

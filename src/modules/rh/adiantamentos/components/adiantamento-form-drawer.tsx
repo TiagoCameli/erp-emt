@@ -12,20 +12,24 @@ import {
   Combobox,
   FormDrawer,
   LinhaCampos,
+  MoneyText,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { dataHojeISO } from "@/lib/formatadores";
+import { dataHojeISO, formatarMesAno } from "@/lib/formatadores";
 import {
   criarAdiantamento,
   editarAdiantamento,
 } from "@/modules/rh/adiantamentos/actions";
+import { paraNumero } from "@/modules/rh/adiantamentos/numero";
+import { MAX_PARCELAS, montarPrevia } from "@/modules/rh/adiantamentos/parcelamento";
 import type { AdiantamentoLista } from "@/modules/rh/adiantamentos/queries";
 import {
   adiantamentoFormParaInput,
   adiantamentoFormSchema,
   competenciaParaMes,
+  mesParaCompetencia,
   type AdiantamentoFormInput,
 } from "@/modules/rh/adiantamentos/schemas";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
@@ -44,9 +48,54 @@ function valoresIniciais(): AdiantamentoFormInput {
     valor: "",
     data: dataHojeISO(),
     descricao: "",
-    // Campo de parcelas ainda não tem tela (chega na Task 6); à vista por ora.
     parcelas: "1",
   };
+}
+
+/**
+ * Prévia do plano de parcelas, recalculada a cada mudança de valor, parcelas
+ * ou competência. Só aparece a partir de 2 parcelas (com 1 é o valor cheio,
+ * já visível no campo "Valor"). Puramente informativa: o rótulo abaixo diz
+ * isso de propósito, porque o servidor RECALCULA esta divisão na hora de
+ * gravar (`fn_registrar_adiantamento` chama a mesma conta em centavos) — a
+ * prévia nunca é fonte de verdade, só uma prévia.
+ */
+function PreviaParcelas({
+  valor,
+  parcelas,
+  competencia,
+}: {
+  valor: string;
+  parcelas: string;
+  competencia: string;
+}) {
+  const quantidade = Number(parcelas.trim());
+  const previa =
+    competencia === ""
+      ? []
+      : montarPrevia(paraNumero(valor), quantidade, competencia);
+
+  if (previa.length < 2) return null;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-dashed border-border bg-surface/50 p-3">
+      <p className="text-legenda text-muted-foreground">
+        Prévia das parcelas (informativa: o servidor recalcula os valores
+        exatos ao salvar)
+      </p>
+      <ul className="flex flex-col gap-1">
+        {previa.map((parcela) => (
+          <li
+            key={parcela.competencia}
+            className="flex items-center justify-between text-detalhe"
+          >
+            <span>{formatarMesAno(mesParaCompetencia(parcela.competencia))}</span>
+            <MoneyText valor={parcela.valor} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export interface AdiantamentoFormDrawerProps {
@@ -85,7 +134,10 @@ export function AdiantamentoFormDrawer({
         valor: String(adiantamento.valor).replace(".", ","),
         data: adiantamento.data,
         descricao: adiantamento.descricao ?? "",
-        // Campo de parcelas ainda não tem tela (chega na Task 6); à vista por ora.
+        // Editar é só o cabeçalho (colaborador/competência/valor/data/descrição):
+        // o plano de parcelas nasce com a criação e não é editável depois (só
+        // quitação, que é outra ação). Volta a 1 para não sugerir que dá pra
+        // reparcelar por aqui.
         parcelas: "1",
       });
     } else {
@@ -188,17 +240,42 @@ export function AdiantamentoFormDrawer({
           </CampoFormulario>
         </LinhaCampos>
 
-        <CampoFormulario
-          id="adiantamento-data"
-          rotulo="Data do adiantamento"
-          erro={form.formState.errors.data?.message}
-        >
-          <Input
+        <LinhaCampos>
+          <CampoFormulario
             id="adiantamento-data"
-            type="date"
-            {...form.register("data")}
-          />
-        </CampoFormulario>
+            rotulo="Data do adiantamento"
+            erro={form.formState.errors.data?.message}
+          >
+            <Input
+              id="adiantamento-data"
+              type="date"
+              {...form.register("data")}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="adiantamento-parcelas"
+            rotulo="Parcelas"
+            erro={form.formState.errors.parcelas?.message}
+          >
+            <Input
+              id="adiantamento-parcelas"
+              type="number"
+              min={1}
+              max={MAX_PARCELAS}
+              step={1}
+              inputMode="numeric"
+              className="text-right tabular-nums"
+              {...form.register("parcelas")}
+            />
+          </CampoFormulario>
+        </LinhaCampos>
+
+        <PreviaParcelas
+          valor={form.watch("valor")}
+          parcelas={form.watch("parcelas")}
+          competencia={form.watch("competencia")}
+        />
 
         <CampoFormulario
           id="adiantamento-descricao"

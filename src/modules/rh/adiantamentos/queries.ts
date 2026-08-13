@@ -1,12 +1,36 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { resumirParcelas } from "@/modules/rh/adiantamentos/parcelamento";
 
 /** Filtros opcionais da listagem de adiantamentos. */
 export interface FiltrosAdiantamentos {
   /** Competência completa (yyyy-MM-01) para filtrar por mês. */
   competencia?: string;
   colaboradorId?: string;
+}
+
+/**
+ * Uma parcela do plano de desconto, para a tela mostrar competência,
+ * previsto, descontado e a folha que descontou. Ordenada por competência (e
+ * `id` como critério de desempate): `numero` NÃO é identidade estável (é
+ * recalculado a cada sobra — ver `comment on function` da `fn_gerar_folha`),
+ * então não é usado nem para exibir, nem para ordenar.
+ */
+export interface AdiantamentoParcela {
+  id: string;
+  /** Competência (yyyy-MM-01). */
+  competencia: string;
+  valorPrevisto: number;
+  valorDescontado: number;
+  /**
+   * Folha que processou (fechou) esta parcela, ou null se ainda está aberta.
+   * Uma parcela fechada pode ter `valorDescontado = 0` (não coube nem
+   * centavo naquele mês): é "processada sem descontar nada", diferente de
+   * "ainda não processada" — a UI distingue os dois pelos dois campos juntos,
+   * nunca só por `valorDescontado > 0`.
+   */
+  folhaId: string | null;
 }
 
 /** Linha da listagem de adiantamentos. */
@@ -37,6 +61,27 @@ export interface AdiantamentoLista {
    */
   pagamentoComprometido: boolean;
   criadoEm: string;
+  /** Plano de desconto, ordenado por competência (ver `AdiantamentoParcela`). */
+  parcelas: AdiantamentoParcela[];
+  /** `parcelas.length`: quantidade de linhas do plano hoje (cresce com sobra). */
+  parcelasTotal: number;
+  /** Quantas parcelas já foram processadas por uma folha (`folhaId` preenchido). */
+  parcelasDescontadas: number;
+  /**
+   * Saldo em aberto: `valor - soma(valorDescontado das parcelas)`. NUNCA
+   * `soma(valorPrevisto) - soma(valorDescontado)` — ver `resumirParcelas`.
+   *
+   * ATENÇÃO para quem reusar este campo fora da tela de adiantamentos
+   * (`rh.adiantamentos:ver`): diferente de `naFolha`/`pagamentoComprometido`
+   * (que vêm de RPC security definer, fail-closed), `parcelas`/`saldo` vêm de
+   * um embed comum, sujeito à RLS de `rh_adiantamento_parcelas` (exige
+   * `rh.adiantamentos:ver`). Para um chamador sem essa permissão (ex.: a
+   * ficha do colaborador, que só exige `cadastros.colaboradores:ver`), o
+   * embed volta vazio e `saldo` sai igual a `valor` — silenciosamente
+   * otimista, não fail-closed. Por isso estes campos só são exibidos na
+   * própria tela de adiantamentos, que já exige `ver` para carregar.
+   */
+  saldo: number;
 }
 
 /**
@@ -52,7 +97,9 @@ export async function listarAdiantamentos(
   let consulta = supabase
     .from("rh_adiantamentos")
     .select(
-      "id, colaborador_id, competencia, valor, data, descricao, lancamento_id, created_at, colaboradores(nome), lancamentos(numero)",
+      `id, colaborador_id, competencia, valor, data, descricao, lancamento_id,
+       created_at, colaboradores(nome), lancamentos(numero),
+       rh_adiantamento_parcelas(id, competencia, valor_previsto, valor_descontado, folha_id)`,
     )
     .order("competencia", { ascending: false })
     .order("created_at", { ascending: false });
@@ -109,20 +156,49 @@ export async function listarAdiantamentos(
     emFolha = new Set(idsEmFolha ?? []);
   }
 
-  return linhas.map((linha) => ({
-    id: linha.id,
-    colaboradorId: linha.colaborador_id,
-    colaboradorNome: linha.colaboradores?.nome ?? "",
-    competencia: linha.competencia,
-    valor: linha.valor,
-    data: linha.data,
-    descricao: linha.descricao,
-    naFolha: emFolha.has(linha.id),
-    lancamentoId: linha.lancamento_id,
-    lancamentoNumero: linha.lancamentos?.numero ?? null,
-    pagamentoComprometido: linha.lancamento_id
-      ? comprometidos.has(linha.lancamento_id)
-      : false,
-    criadoEm: linha.created_at,
-  }));
+  return linhas.map((linha) => {
+    // Ordem por competência (e id como desempate), nunca por `numero`: ver o
+    // comentário de `AdiantamentoParcela`. Duas parcelas podem coexistir na
+    // mesma competência (plano + sobra empurrada), e a ordenação por id
+    // desempata as duas de forma estável, sem depender de `numero`.
+    const parcelas: AdiantamentoParcela[] = (linha.rh_adiantamento_parcelas ?? [])
+      .map((parcela) => ({
+        id: parcela.id,
+        competencia: parcela.competencia,
+        valorPrevisto: parcela.valor_previsto,
+        valorDescontado: parcela.valor_descontado,
+        folhaId: parcela.folha_id,
+      }))
+      .sort((a, b) =>
+        a.competencia === b.competencia
+          ? a.id.localeCompare(b.id)
+          : a.competencia.localeCompare(b.competencia),
+      );
+
+    // Uma leitura só: plano e saldo vêm do MESMO embed acima, agregados aqui
+    // pela função pura `resumirParcelas` — não uma consulta de contagem e
+    // outra de soma.
+    const resumo = resumirParcelas(linha.valor, parcelas);
+
+    return {
+      id: linha.id,
+      colaboradorId: linha.colaborador_id,
+      colaboradorNome: linha.colaboradores?.nome ?? "",
+      competencia: linha.competencia,
+      valor: linha.valor,
+      data: linha.data,
+      descricao: linha.descricao,
+      naFolha: emFolha.has(linha.id),
+      lancamentoId: linha.lancamento_id,
+      lancamentoNumero: linha.lancamentos?.numero ?? null,
+      pagamentoComprometido: linha.lancamento_id
+        ? comprometidos.has(linha.lancamento_id)
+        : false,
+      criadoEm: linha.created_at,
+      parcelas,
+      parcelasTotal: resumo.parcelasTotal,
+      parcelasDescontadas: resumo.parcelasDescontadas,
+      saldo: resumo.saldo,
+    };
+  });
 }

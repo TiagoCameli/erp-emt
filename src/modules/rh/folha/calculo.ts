@@ -66,8 +66,9 @@ export function resumoPorEncargo(folha: FolhaDetalhe): ResumoEncargo[] {
  * `folha_parametros.grupo_recolhimento_inss` / `_irrf` estão preenchidos (as
  * duas linhas da fonte da guia têm `v_grupo_* is not null` no `where`). Sem
  * grupo, o desconto continua no holerite e no líquido, mas a guia que a empresa
- * precisa recolher não existe no Financeiro. É a terceira causa de resíduo da
- * identidade de conferência, documentada no `obj_description` da própria função.
+ * precisa recolher não existe no Financeiro. É a segunda causa de resíduo da
+ * identidade de conferência (a lista tem duas), documentada no `obj_description`
+ * da própria função.
  *
  * Branco conta como ausente, igual à consulta de diagnóstico gravada na função
  * (`nullif(btrim(...), '')`). Na prática as duas leituras não podem divergir: o
