@@ -109,6 +109,13 @@ async function ativoGravado(
  * saldo em aberto mas nada se moveu, porque o saldo já estava na competência de
  * destino. Antes, inativar alguém devendo adiantamento nesse estado não dizia
  * nada. Agora o aviso informa o saldo e manda conferir.
+ *
+ * O AVISO NÃO PROMETE DESCONTO, e isso é deliberado. A `fn_gerar_folha` itera
+ * `where ativo and vinculo = 'clt'`, e a inativação acontece antes desta
+ * chamada: nenhuma folha futura vai descontar esse saldo, porque a pessoa não
+ * está mais na folha. O mecanismo de antecipação está pronto para o dia em que
+ * existir rescisão (Bloco 9); enquanto isso, quem mostra essa dívida é o alerta
+ * de "inativo com saldo em aberto" no painel de RH.
  */
 async function anteciparAdiantamentos(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -138,10 +145,14 @@ async function anteciparAdiantamentos(
       ? "1 parcela"
       : `${antecipacao.parcelas} parcelas`;
   const mes = formatarMesAno(antecipacao.competencia);
-  const folha = mes === "" ? "a próxima folha" : `a folha de ${mes}`;
-  // `valor` é só o que mudou de mês. Somar o saldo inteiro aqui prometeria
-  // dinheiro que não andou.
-  return `Saldo de adiantamento antecipado: ${parcelas} de ${formatarBRL(antecipacao.valor)} para ${folha}`;
+  const destino = mes === "" ? "a competência seguinte" : mes;
+  // A mensagem diz o que ACONTECEU (o saldo mudou de competência) e não promete
+  // o desconto: a `fn_gerar_folha` itera `where ativo and vinculo = 'clt'` e a
+  // inativação acontece ANTES desta chamada, então nenhuma folha vai descontar
+  // esse saldo. Medido: 3.191,70 antecipados, folha da competência de destino
+  // gerada, zero item do inativo e zero descontado. `valor` é só o que mudou de
+  // mês; `saldoAberto` é a dívida inteira, e é ela que alguém precisa cobrar.
+  return `Saldo de adiantamento remanejado para ${destino}: ${parcelas} de ${formatarBRL(antecipacao.valor)}. Nada foi descontado, porque a folha não inclui colaborador inativo: os ${formatarBRL(antecipacao.saldoAberto)} em aberto seguem para acerto. Confira em RH, Adiantamentos`;
 }
 
 /**
