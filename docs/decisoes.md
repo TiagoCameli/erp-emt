@@ -1195,3 +1195,20 @@ decisão de superfície.
    sendo Visualizar hoje a ação de entrada. O caminho descobrível para o detalhe virou o número do
    lançamento, que é link de verdade (abre em nova aba, mostra destino na barra de status) em vez
    de linha clicável.
+
+## 2026-08-13 - Cabeçalho de tabela centraliza sempre, e `alinharDireita` é regra só da célula
+
+`meta.alinharDireita` mandava no `<th>` e no `<td>` juntos, então "Valor", "Parcelas" e "Ações"
+eram os únicos rótulos fora do centro numa fila de dez colunas centralizadas, e a régua do
+cabeçalho ficava torta. Agora o cabeçalho centraliza sempre, em toda tabela do app (mudança no
+DataTable canônico, não em tela nenhuma).
+
+**Isto não afrouxa a regra do dinheiro.** O teste que protege "dinheiro à direita" traz aviso de
+não mudar, e o aviso continua valendo: a razão dele é a vírgula cair embaixo da vírgula, o que só
+existe na CÉLULA. Rótulo não tem vírgula para alinhar. As asserções das células seguem intactas
+(`text-right` + `tabular-nums`); só as do cabeçalho passaram para `text-center`, e um teste novo
+trava isso nas duas colunas. Centralizar VALOR continua sendo regressão.
+
+De passagem caiu o `flex-row-reverse` do botão de ordenação: ele existia para o ícone encostar no
+texto quando o cabeçalho era à direita, e com tudo centralizado ele só produzia "⇅ Valor" contra
+"Vencimento ⇅" na mesma régua. O ícone fica depois do rótulo em toda coluna.
