@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { dataHojeISO } from "@/lib/formatadores";
+import { mesHojeISO, mesSeguinte } from "@/lib/formatadores";
 import { quitarAdiantamento } from "@/modules/rh/adiantamentos/actions";
 import { mesParaCompetencia } from "@/modules/rh/adiantamentos/schemas";
 
@@ -29,9 +29,18 @@ export interface QuitarSaldoDialogProps {
   saldo: number;
 }
 
-/** Mês corrente (yyyy-MM) no fuso do sistema, default da competência de destino. */
-function mesAtual(): string {
-  return dataHojeISO().slice(0, 7);
+/**
+ * Default da competência de destino: o mês SEGUINTE, não o corrente.
+ *
+ * O mês corrente normalmente já tem folha gerada, e quitar numa competência
+ * cuja folha já foi gerada NÃO faz o desconto acontecer: a parcela nasce
+ * aberta, a folha não é regerada sozinha, e nada no banco obriga a regerar
+ * (o trigger `fn_guarda_status_folha` só pega desconto que diminui, não dívida
+ * que chega depois; está escrito no `comment on function` da
+ * `fn_quitar_adiantamento`). O default antigo levava direto para esse caso.
+ */
+function mesPadrao(): string {
+  return mesSeguinte(mesHojeISO());
 }
 
 /**
@@ -47,16 +56,16 @@ export function QuitarSaldoDialog({
   colaboradorNome,
   saldo,
 }: QuitarSaldoDialogProps) {
-  const [mes, setMes] = React.useState(mesAtual);
+  const [mes, setMes] = React.useState(mesPadrao);
   const [salvando, setSalvando] = React.useState(false);
 
-  // Reabrir o diálogo volta para o mês atual, sem carregar a digitação
+  // Reabrir o diálogo volta para o mês padrão, sem carregar a digitação
   // anterior. Ajuste em tempo de render (comparando o `aberto` anterior),
   // não em efeito: mesmo padrão de `AlterarMesDialog`.
   const [abertoAnterior, setAbertoAnterior] = React.useState(aberto);
   if (aberto !== abertoAnterior) {
     setAbertoAnterior(aberto);
-    if (aberto) setMes(mesAtual());
+    if (aberto) setMes(mesPadrao());
   }
 
   function trocarAberto(novoAberto: boolean) {
@@ -112,7 +121,15 @@ export function QuitarSaldoDialog({
               value={mes}
               onChange={(evento) => setMes(evento.target.value)}
               disabled={salvando}
+              aria-describedby="quitar-adiantamento-aviso"
             />
+            <p
+              id="quitar-adiantamento-aviso"
+              className="text-detalhe text-muted-foreground"
+            >
+              Se a folha dessa competência já tiver sido gerada, o desconto só
+              acontece quando ela for regerada.
+            </p>
           </div>
         </div>
 
