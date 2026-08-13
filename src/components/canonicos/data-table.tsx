@@ -28,6 +28,7 @@ import {
   ChevronRight,
   EllipsisVertical,
   FileSpreadsheet,
+  LoaderCircle,
   Rows3,
   Search,
 } from "lucide-react";
@@ -570,6 +571,12 @@ export interface DataTableProps<TData> {
   /** Quando presente, exibe o botão "Exportar Excel" acima da tabela. */
   exportar?: () => void;
   /**
+   * Exportação em andamento: o botão vira spinner e não aceita clique. Gerar a
+   * planilha é uma ida ao servidor, e sem isso o botão fica igual ao de sempre
+   * enquanto nada acontece na tela, convidando ao segundo clique.
+   */
+  exportando?: boolean;
+  /**
    * Liga a personalização da tabela pelo usuário (menu "Colunas", arrastar a
    * borda do cabeçalho para redimensionar, arrastar o cabeçalho para reordenar)
    * e a memória disso no navegador. O id identifica a tabela na memória:
@@ -786,6 +793,7 @@ export function DataTable<TData>({
   emptyState,
   isLoading = false,
   exportar,
+  exportando = false,
   idTabela,
   cabecalhoFixo = false,
   alturaMaxima,
@@ -2442,8 +2450,18 @@ export function DataTable<TData>({
               />
             )}
             {exportar && (
-              <Button type="button" variant="outline" size="sm" onClick={exportar}>
-                <FileSpreadsheet />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={exportando}
+                onClick={exportar}
+              >
+                {exportando ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <FileSpreadsheet />
+                )}
                 Exportar Excel
               </Button>
             )}
