@@ -25,7 +25,11 @@ import {
   type OpcaoFiltro,
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
+import {
+  excluirLancamento,
+  gerarPlanilhaLancamentos,
+} from "@/modules/financeiro/lancamentos/actions";
+import { baixarBase64 } from "@/lib/download";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   ROTULO_BANCO,
@@ -48,10 +52,15 @@ import {
   ROTULO_FILTRO_REVISAO,
   ROTULO_ORIGEM_LANCAMENTO,
   rotuloOrigemLancamento,
+  rotuloStatusLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
+import type { ValoresFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
-import { ehElegivelParaLote } from "@/modules/financeiro/lancamentos/lote";
+import {
+  ehElegivelParaLote,
+  ROTULO_REVISAO_DA_LINHA,
+} from "@/modules/financeiro/lancamentos/lote";
 
 const OPCOES_TIPO = (
   Object.keys(ROTULO_TIPO_LANCAMENTO) as TipoLancamento[]
@@ -169,13 +178,12 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
       if (estado === "nao-se-aplica") {
         return <span className="text-muted-foreground">-</span>;
       }
-      if (estado === "revisado") {
-        return <StatusBadge status="aprovado" rotulo="Revisado" />;
-      }
+      // Rótulo compartilhado com a exportação para Excel (ROTULO_REVISAO_DA_LINHA):
+      // a planilha precisa dizer o mesmo que a coluna.
       return (
         <StatusBadge
-          status="pendente_aprovacao"
-          rotulo={estado === "parcial" ? "Conta parcial" : "Sem conta"}
+          status={estado === "revisado" ? "aprovado" : "pendente_aprovacao"}
+          rotulo={ROTULO_REVISAO_DA_LINHA[estado]}
         />
       );
     },
@@ -193,12 +201,12 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     meta: { naoTruncar: true },
     cell: ({ row }) => {
       const info = STATUS_LANCAMENTO[row.original.status];
-      // Todo lançamento nasce com status 'a_pagar' (em aberto); para um
-      // recebível o rótulo correto é "A receber", não "A pagar".
-      const rotulo =
-        row.original.status === "a_pagar" && row.original.tipo === "a_receber"
-          ? "A receber"
-          : info.rotulo;
+      // Rótulo compartilhado com a exportação para Excel: a regra do "A receber"
+      // (todo lançamento nasce com status 'a_pagar') mora em schemas.ts.
+      const rotulo = rotuloStatusLancamento(
+        row.original.status,
+        row.original.tipo,
+      );
       return (
         // justify-center porque flex não herda o text-center da célula: sem
         // isso os badges encostam na esquerda e desalinham do cabeçalho.
@@ -214,35 +222,6 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     },
   },
 ];
-
-/**
- * Valores atuais dos filtros, do jeito que vivem na URL (string vazia = sem
- * filtro). Um objeto só em vez de vinte props soltas: a listagem tem muito
- * filtro, e assim a assinatura não vira uma lista de vinte strings iguais.
- */
-export interface ValoresFiltrosLancamentos {
-  busca: string;
-  tipo: string;
-  status: string;
-  /** Mês de referência, no formato do input (yyyy-MM). */
-  mes: string;
-  /** Estado da revisão (em_revisao, sem_conta, parcial, revisado). */
-  revisao: string;
-  origem: string;
-  fornecedor: string;
-  categoria: string;
-  centro: string;
-  conta: string;
-  forma: string;
-  valorDe: string;
-  valorAte: string;
-  vencDe: string;
-  vencAte: string;
-  compraDe: string;
-  compraAte: string;
-  criadoDe: string;
-  criadoAte: string;
-}
 
 export interface LancamentosTabelaProps {
   lancamentos: LancamentoLista[];
@@ -280,8 +259,9 @@ export function LancamentosTabela({
   podeExcluir,
 }: LancamentosTabelaProps) {
   const router = useRouter();
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, query } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(valores.busca);
+  const [exportando, setExportando] = React.useState(false);
   // Faixa de valor é digitada dígito a dígito: vai pela URL com espera, senão
   // cada tecla viraria uma consulta e o campo perderia caracteres.
   const {
@@ -380,6 +360,31 @@ export function LancamentosTabela({
     toast.success("Lançamento excluído");
     setAExcluir(null);
     router.refresh();
+  }
+
+  /**
+   * Exporta para Excel o conjunto FILTRADO inteiro, não a página aberta: quem
+   * exporta quer fechar o mês, e a paginação da tela não tem nada a ver com o
+   * recorte do relatório.
+   *
+   * Manda a query string da URL, que é a MESMA que a página leu para montar a
+   * lista: assim a planilha e a tela não podem discordar. Inclui a espera da
+   * busca digitada, e isso está certo: a lista na tela também só muda quando a
+   * busca chega na URL, então os dois andam juntos.
+   */
+  async function aoExportar() {
+    if (exportando) return;
+    setExportando(true);
+    try {
+      const resultado = await gerarPlanilhaLancamentos(query);
+      if ("erro" in resultado) {
+        toast.error(resultado.erro);
+        return;
+      }
+      baixarBase64(resultado.base64, resultado.nomeArquivo);
+    } finally {
+      setExportando(false);
+    }
   }
 
   function aoMudarPaginacao(paginacao: PaginationState) {
@@ -643,6 +648,8 @@ export function LancamentosTabela({
         pageIndex={pagina}
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
+        exportar={aoExportar}
+        exportando={exportando}
         selecao={{
           idDaLinha: (lancamento) => lancamento.id,
           selecionados,

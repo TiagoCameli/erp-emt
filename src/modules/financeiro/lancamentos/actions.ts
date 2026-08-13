@@ -5,9 +5,14 @@ import { z } from "zod";
 
 import type { Json } from "@/lib/database.types";
 import { erroAcao } from "@/lib/erros";
+import { dataHojeISO } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import {
+  lerFiltrosLancamentos,
+  parametrosDaQueryString,
+} from "@/modules/financeiro/lancamentos/filtros";
 import {
   lancamentoSchema,
   type LancamentoInput,
@@ -16,6 +21,14 @@ import {
   LIMITE_LOTE,
   type ResumoLote,
 } from "@/modules/financeiro/lancamentos/lote";
+import {
+  montarPlanilhaLancamentos,
+  nomeArquivoPlanilhaLancamentos,
+} from "@/modules/financeiro/lancamentos/planilha";
+import {
+  listarLancamentos,
+  type LancamentoLista,
+} from "@/modules/financeiro/lancamentos/queries";
 
 const RECURSO = "financeiro.lancamentos" as const;
 const ROTA = "/financeiro/lancamentos";
@@ -514,5 +527,94 @@ export async function definirContaLancamentosLote(
       puladosSemParcelaPendente: bruto.pulados_sem_parcela_pendente ?? 0,
       naoEncontrados: bruto.nao_encontrados ?? 0,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Exportar a listagem para Excel
+// ---------------------------------------------------------------------------
+
+export type ResultadoPlanilha =
+  | { ok: true; base64: string; nomeArquivo: string }
+  | { erro: string };
+
+/**
+ * Teto de linhas por planilha.
+ *
+ * Não é a rede que limita, é a memória: o arquivo é montado inteiro no servidor
+ * e volta em base64 (que já infla os bytes em um terço) pela resposta da Server
+ * Action. Com o teto, "exportei e não chegou nada" vira um aviso que diz o que
+ * fazer. 5.000 linhas cobrem qualquer mês do financeiro com folga.
+ */
+const LIMITE_PLANILHA = 5000;
+
+/** Teto da query string aceita, para ninguém mandar uma URL de 1 MB. */
+const TETO_QUERY = 4000;
+
+/**
+ * Gera a planilha (.xlsx) dos lançamentos que estão no filtro da tela e devolve
+ * em base64 para o navegador baixar.
+ *
+ * Recebe a QUERY STRING da listagem, não uma cópia dos filtros: a página e a
+ * planilha passam pelo mesmo `lerFiltrosLancamentos`, então o que sai no arquivo
+ * é exatamente o conjunto que está na tela. Um segundo lugar montando filtro
+ * divergiria no primeiro filtro novo, e a planilha começaria a contradizer a
+ * lista sem ninguém perceber.
+ *
+ * Exporta o conjunto FILTRADO inteiro, e não a página aberta: quem exporta quer
+ * fechar o mês, não as 25 linhas que couberam na tela. A paginação da tela não
+ * tem nada a ver com o recorte do relatório.
+ */
+export async function gerarPlanilhaLancamentos(
+  query: string,
+): Promise<ResultadoPlanilha> {
+  // Exportar é ler: mesma permissão que abre a tela. Sem ela, nem a lista existe.
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para exportar lançamentos" };
+  }
+
+  if (typeof query !== "string" || query.length > TETO_QUERY) {
+    return { erro: "Filtro inválido para exportar" };
+  }
+
+  const { filtros } = lerFiltrosLancamentos(parametrosDaQueryString(query));
+
+  // Uma linha além do teto: com um a mais, dá para dizer "passou do limite" sem
+  // precisar contar o conjunto todo. Mesmo truque de listarIdsLancamentosFiltrados.
+  let itens: LancamentoLista[];
+  try {
+    const pagina = await listarLancamentos({
+      ...filtros,
+      pagina: 0,
+      tamanho: LIMITE_PLANILHA + 1,
+    });
+    itens = pagina.itens;
+  } catch (erro) {
+    return erroAcao(
+      "financeiro.lancamentos.gerarPlanilhaLancamentos",
+      erro,
+      "Não foi possível ler os lançamentos para exportar. Tente novamente",
+    );
+  }
+
+  if (itens.length === 0) {
+    return { erro: "O filtro atual não tem nenhum lançamento para exportar" };
+  }
+  if (itens.length > LIMITE_PLANILHA) {
+    return {
+      erro: `O filtro atual passa de ${LIMITE_PLANILHA.toLocaleString("pt-BR")} lançamentos. Refine (por mês de referência, por exemplo) e exporte em partes`,
+    };
+  }
+
+  const workbook = montarPlanilhaLancamentos(itens);
+  workbook.created = new Date();
+  const conteudo = await workbook.xlsx.writeBuffer();
+
+  return {
+    ok: true,
+    base64: Buffer.from(conteudo).toString("base64"),
+    nomeArquivo: nomeArquivoPlanilhaLancamentos(dataHojeISO()),
   };
 }

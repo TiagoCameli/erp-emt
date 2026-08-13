@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import { idSchema, idSchemaCom } from "@/lib/id";
+import {
+  STATUS_LANCAMENTO,
+  type StatusLancamento,
+  type TipoLancamento,
+} from "@/modules/financeiro/_shared/formato";
 
 /**
  * Schemas do lançamento financeiro manual (a pagar / a receber), com parcelas
@@ -344,6 +349,23 @@ export function rotuloOrigemLancamento(origem: string): string {
   return origem in ROTULO_ORIGEM_LANCAMENTO
     ? ROTULO_ORIGEM_LANCAMENTO[origem as OrigemLancamento]
     : origem;
+}
+
+/**
+ * Rótulo do status de um lançamento COM o tipo, que é o que a tela mostra.
+ *
+ * Todo lançamento nasce com status 'a_pagar' (em aberto), inclusive recebível;
+ * para uma conta a receber o rótulo correto é "A receber", não "A pagar". A
+ * regra vive aqui, e não dentro da célula da tabela, porque a exportação para
+ * Excel precisa dizer a mesma coisa que a lista: rótulo divergente entre tela e
+ * planilha é um relatório que contradiz o sistema.
+ */
+export function rotuloStatusLancamento(
+  status: StatusLancamento,
+  tipo: TipoLancamento,
+): string {
+  if (status === "a_pagar" && tipo === "a_receber") return "A receber";
+  return STATUS_LANCAMENTO[status].rotulo;
 }
 
 /**

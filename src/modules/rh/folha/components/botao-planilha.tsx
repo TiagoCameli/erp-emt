@@ -5,20 +5,8 @@ import { FileSpreadsheet, LoaderCircle } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import { Button } from "@/components/ui/button";
+import { baixarBase64 } from "@/lib/download";
 import { gerarPlanilhaFolha } from "@/modules/rh/folha/actions";
-
-const MIME_XLSX =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-/** Converte o base64 da Server Action num Blob para download no navegador. */
-function base64ParaBlob(base64: string): Blob {
-  const binario = atob(base64);
-  const bytes = new Uint8Array(binario.length);
-  for (let i = 0; i < binario.length; i += 1) {
-    bytes[i] = binario.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: MIME_XLSX });
-}
 
 export interface BotaoPlanilhaProps {
   folhaId: string;
@@ -42,15 +30,7 @@ export function BotaoPlanilha({ folhaId }: BotaoPlanilhaProps) {
         return;
       }
 
-      const blob = base64ParaBlob(resultado.base64);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = resultado.nomeArquivo;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      baixarBase64(resultado.base64, resultado.nomeArquivo);
     } finally {
       setGerando(false);
     }
