@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BotaoExportarLancamentos } from "./botao-exportar-lancamentos";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
@@ -24,8 +25,15 @@ export interface LancamentosAcoesCabecalhoProps {
 }
 
 /**
- * Ação do cabeçalho de lançamentos: criar um novo. Só renderiza quando o
- * usuário tem permissão de criar. Ao criar, navega para o detalhe.
+ * Ações do cabeçalho de lançamentos: exportar para Excel e criar um novo.
+ *
+ * "Novo lançamento" depende da permissão de criar; exportar NÃO, porque exportar
+ * é ler e quem abre a tela já pode ler. Por isso o `podeCriar` esconde só o botão
+ * de criar, e não o cabeçalho inteiro como antes: com o `return null` no topo,
+ * quem só consulta ficava sem o botão de exportar sem motivo.
+ *
+ * O primário fica por último, na ponta direita, que é onde ele está em todas as
+ * telas. Ao criar, navega para o detalhe.
  */
 export function LancamentosAcoesCabecalho({
   podeCriar,
@@ -38,27 +46,33 @@ export function LancamentosAcoesCabecalho({
   const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
 
-  if (!podeCriar) return null;
-
   return (
     <>
-      <Button type="button" size="sm" onClick={() => setAberto(true)}>
-        <Plus />
-        Novo lançamento
-      </Button>
+      <BotaoExportarLancamentos />
 
-      <LancamentoFormDrawer
-        key={aberto ? "aberto" : "fechado"}
-        aberto={aberto}
-        onAbertoChange={setAberto}
-        lancamento={null}
-        categorias={categorias}
-        fornecedores={fornecedores}
-        centrosCusto={centrosCusto}
-        formasPagamento={formasPagamento}
-        condicoesPagamento={condicoesPagamento}
-        onSalvo={(id) => router.push(`/financeiro/lancamentos/${id}`)}
-      />
+      {/* O formulário anda junto com o botão que o abre: sem permissão de criar,
+          nada de drawer montado na página. */}
+      {podeCriar ? (
+        <>
+          <Button type="button" size="sm" onClick={() => setAberto(true)}>
+            <Plus />
+            Novo lançamento
+          </Button>
+
+          <LancamentoFormDrawer
+            key={aberto ? "aberto" : "fechado"}
+            aberto={aberto}
+            onAbertoChange={setAberto}
+            lancamento={null}
+            categorias={categorias}
+            fornecedores={fornecedores}
+            centrosCusto={centrosCusto}
+            formasPagamento={formasPagamento}
+            condicoesPagamento={condicoesPagamento}
+            onSalvo={(id) => router.push(`/financeiro/lancamentos/${id}`)}
+          />
+        </>
+      ) : null}
     </>
   );
 }

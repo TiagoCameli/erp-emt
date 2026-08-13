@@ -23,6 +23,21 @@ export type RevisaoDaLinha =
   | "nao-se-aplica";
 
 /**
+ * Rótulo pt-BR do estado de revisão da linha.
+ *
+ * `nao-se-aplica` é string vazia de propósito: na tabela a célula mostra "-"
+ * (traço cinza de "não vale a pergunta"), e numa planilha o mesmo significado se
+ * escreve com a célula em branco, não com um traço que atrapalha filtro e
+ * tabela dinâmica. Quem exibe decide o desenho; o rótulo é um só.
+ */
+export const ROTULO_REVISAO_DA_LINHA: Record<RevisaoDaLinha, string> = {
+  "sem-conta": "Sem conta",
+  parcial: "Conta parcial",
+  revisado: "Revisado",
+  "nao-se-aplica": "",
+};
+
+/**
  * Teto de lançamentos por chamada.
  *
  * É o MESMO número que a `fn_definir_conta_lancamentos_lote` recusa passar, e

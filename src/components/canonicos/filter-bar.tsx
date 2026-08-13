@@ -195,7 +195,15 @@ export function useFiltrosUrl() {
     [setMuitos],
   );
 
-  return { get, set, setMuitos };
+  /**
+   * Query string atual, para quem precisa mandar os filtros da tela INTEIROS ao
+   * servidor (exportar para Excel: a planilha lê os mesmos filtros que a lista).
+   * Sai daqui, e não de um segundo `useSearchParams`, porque este hook já é o
+   * dono da URL de filtro.
+   */
+  const query = searchParams.toString();
+
+  return { get, set, setMuitos, query };
 }
 
 /** Espera (ms) entre a digitação e a escrita da busca na URL. */

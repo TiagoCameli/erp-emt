@@ -141,6 +141,25 @@ describe("PagamentoDetalheView mostra o pagamento inteiro", () => {
     expect(screen.getByText("esta")).toBeInTheDocument();
   });
 
+  it("centraliza o cabeçalho das tabelas de leitura, igual ao DataTable", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento()}
+        parcela={parcela()}
+        {...PADRAO}
+      />,
+    );
+
+    // Estas tabelas são à mão (leitura pura, sem filtro nem ordenação), então não
+    // herdam nada do DataTable: a régua do cabeçalho tinha que ser repetida aqui,
+    // e "Valor" nasceu à direita. O valor da célula segue à direita, o rótulo não.
+    for (const rotulo of ["#", "Vencimento", "Status", "Valor"]) {
+      const cabecalho = screen.getByRole("columnheader", { name: rotulo });
+      expect(cabecalho).toHaveClass("text-center");
+      expect(cabecalho).not.toHaveClass("text-right");
+    }
+  });
+
   it("mostra o rateio por centro de custo", () => {
     render(
       <PagamentoDetalheView

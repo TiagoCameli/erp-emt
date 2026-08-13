@@ -473,6 +473,14 @@ export async function listarLancamentos(
     )
     .order("data_compra", { ascending: false })
     .order("created_at", { ascending: false })
+    // Desempate por id, que é único: sem ele a ordem de lançamentos com a MESMA
+    // data de compra e o mesmo created_at fica a critério do Postgres, e pode
+    // sair diferente entre uma página e a seguinte — a página 2 repete uma linha
+    // e some com outra. Não é hipótese: a carga do Mais Controle gravou milhares
+    // de lançamentos na mesma transação, então created_at empatado é o normal
+    // aqui. Vale para a paginação da tela e para a leitura completa da
+    // exportação, que percorre página por página.
+    .order("id", { ascending: false })
     .range(de, ate);
 
   if (idsFiltrados) consulta = consulta.in("id", idsFiltrados);
