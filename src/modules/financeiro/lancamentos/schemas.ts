@@ -388,6 +388,27 @@ export const FILTROS_REVISAO = [
 
 export type FiltroRevisao = (typeof FILTROS_REVISAO)[number];
 
+/**
+ * Situação de atraso do lançamento, derivada das PARCELAS em aberto.
+ *
+ * Não confundir com o filtro de "Período de vencimento" (venc_de/venc_ate), que
+ * olha a coluna `data_vencimento` do cabeçalho do lançamento. Este aqui responde
+ * "está atrasado?" pelas parcelas, que é onde o pagamento acontece e é a mesma
+ * regra do cartão "Vencido" do cabeçalho: um lançamento de três parcelas com uma
+ * atrasada está vencido, mesmo que o vencimento do cabeçalho ainda esteja longe.
+ *
+ * `a_vencer` é o complemento útil: tem saldo em aberto e nada estourou ainda.
+ * Quitado não entra em nenhum dos dois (para isso existe o filtro de status).
+ */
+export const FILTROS_ATRASO = ["vencido", "a_vencer"] as const;
+
+export type FiltroAtraso = (typeof FILTROS_ATRASO)[number];
+
+export const ROTULO_FILTRO_ATRASO: Record<FiltroAtraso, string> = {
+  vencido: "Com parcela vencida",
+  a_vencer: "Em aberto, sem atraso",
+};
+
 export const ROTULO_FILTRO_REVISAO: Record<FiltroRevisao, string> = {
   em_revisao: "Com parcela em revisão",
   sem_conta: "Sem conta bancária",

@@ -43,8 +43,10 @@ import type {
   LancamentoLista,
 } from "@/modules/financeiro/lancamentos/queries";
 import {
+  FILTROS_ATRASO,
   FILTROS_REVISAO,
   ORIGENS_LANCAMENTO,
+  ROTULO_FILTRO_ATRASO,
   ROTULO_FILTRO_REVISAO,
   ROTULO_ORIGEM_LANCAMENTO,
   rotuloOrigemLancamento,
@@ -72,6 +74,13 @@ const OPCOES_STATUS = (
 const OPCOES_REVISAO: OpcaoFiltro[] = FILTROS_REVISAO.map((valor) => ({
   valor,
   rotulo: ROTULO_FILTRO_REVISAO[valor],
+}));
+
+// Atraso é pergunta das PARCELAS ("estourou o prazo?"), diferente do filtro de
+// período de vencimento, que olha a data no cabeçalho do lançamento.
+const OPCOES_ATRASO: OpcaoFiltro[] = FILTROS_ATRASO.map((valor) => ({
+  valor,
+  rotulo: ROTULO_FILTRO_ATRASO[valor],
 }));
 
 const OPCOES_ORIGEM: OpcaoFiltro[] = ORIGENS_LANCAMENTO.map((valor) => ({
@@ -484,6 +493,17 @@ export function LancamentosTabela({
         />
       ),
     },
+    // Sem `oculto`: filtro novo nasce VISÍVEL, inclusive para quem já tem
+    // preferência de filtros salva (o `filtroVisivel` do DataTable cai em `true`
+    // quando o id não está na preferência nem nos ocultos por padrão). Nasceu
+    // escondido seria o mesmo problema do botão de exportar: existe e não é achado.
+    selecao({
+      chave: "atraso",
+      rotulo: "Atraso",
+      valor: valores.atraso,
+      opcoes: OPCOES_ATRASO,
+      todosRotulo: "Vencidos e a vencer",
+    }),
     selecao({
       chave: "revisao",
       rotulo: "Revisão",

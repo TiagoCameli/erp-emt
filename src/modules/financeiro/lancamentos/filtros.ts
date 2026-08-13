@@ -1,6 +1,7 @@
 import { mesParaCompetencia } from "@/lib/formatadores";
 import type { ListarLancamentosParams } from "@/modules/financeiro/lancamentos/queries";
 import {
+  FILTROS_ATRASO,
   FILTROS_REVISAO,
   ORIGENS_LANCAMENTO,
 } from "@/modules/financeiro/lancamentos/schemas";
@@ -47,6 +48,8 @@ export interface ValoresFiltrosLancamentos {
   mes: string;
   /** Estado da revisão (em_revisao, sem_conta, parcial, revisado). */
   revisao: string;
+  /** Situação de atraso das parcelas (vencido, a_vencer). */
+  atraso: string;
   origem: string;
   fornecedor: string;
   categoria: string;
@@ -190,6 +193,7 @@ export function lerFiltrosLancamentos(
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
   const status = parametroValido(params.status, STATUS_VALIDOS);
   const revisao = parametroValido(params.revisao, FILTROS_REVISAO);
+  const atraso = parametroValido(params.atraso, FILTROS_ATRASO);
   const origem = parametroValido(params.origem, ORIGENS_LANCAMENTO);
   const busca = typeof params.busca === "string" ? params.busca : "";
   const mes = typeof params.mes === "string" ? params.mes : "";
@@ -236,6 +240,7 @@ export function lerFiltrosLancamentos(
       criadoDe: criado.de,
       criadoAte: criado.ate,
       revisao,
+      atraso,
     },
     valores: {
       busca,
@@ -243,6 +248,7 @@ export function lerFiltrosLancamentos(
       status: status ?? "",
       mes: mesCompetencia === "" ? "" : mes,
       revisao: revisao ?? "",
+      atraso: atraso ?? "",
       origem: origem ?? "",
       fornecedor: fornecedorId ?? "",
       categoria: categoriaId ?? "",
