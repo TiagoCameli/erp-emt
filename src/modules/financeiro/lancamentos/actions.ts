@@ -21,8 +21,8 @@ import {
   LIMITE_LOTE,
   type ResumoLote,
 } from "@/modules/financeiro/lancamentos/lote";
+import { lerLancamentosEmPaginas } from "@/modules/financeiro/lancamentos/leitura-completa";
 import {
-  lerLancamentosEmPaginas,
   montarPlanilhaLancamentos,
   nomeArquivoPlanilhaLancamentos,
 } from "@/modules/financeiro/lancamentos/planilha";

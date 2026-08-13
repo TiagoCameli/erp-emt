@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
@@ -5,6 +6,10 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { lerFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
 import { LancamentosAcoesCabecalho } from "@/modules/financeiro/lancamentos/components/lancamentos-acoes-cabecalho";
 import { LancamentosTabela } from "@/modules/financeiro/lancamentos/components/lancamentos-tabela";
+import {
+  ResumoLancamentosCartoes,
+  SkeletonResumoLancamentos,
+} from "@/modules/financeiro/lancamentos/components/resumo-lancamentos-cartoes";
 import {
   listarCategorias,
   listarCentrosCusto,
@@ -79,6 +84,20 @@ export default async function PaginaLancamentos({
           />
         }
       />
+      {/*
+        Os cartões somam o filtro INTEIRO, o que são milhares de linhas. Em
+        Suspense para a tabela aparecer na hora e os números chegarem em seguida,
+        no lugar de uma tela em branco esperando as duas coisas. A `key` refaz o
+        boundary quando o filtro muda: sem ela, o React reaproveita o resultado
+        antigo e os cartões ficariam mostrando o total do filtro anterior.
+      */}
+      <Suspense
+        key={JSON.stringify(filtros)}
+        fallback={<SkeletonResumoLancamentos />}
+      >
+        <ResumoLancamentosCartoes filtros={filtros} />
+      </Suspense>
+
       <LancamentosTabela
         podeExcluir={podeExcluir}
         lancamentos={itens}
