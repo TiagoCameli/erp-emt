@@ -387,6 +387,14 @@ export function PagamentoDetalheView({
             <div className="overflow-x-auto rounded-md border border-border">
               <table className="w-full text-detalhe">
                 <thead className="bg-surface">
+                  {/*
+                    Todo cabeçalho centralizado, igual ao DataTable canônico. O
+                    valor da célula continua à direita (vírgula embaixo de
+                    vírgula); rótulo não tem vírgula para alinhar. Estas tabelas
+                    são à mão porque são leitura pura dentro de uma seção, sem
+                    filtro, ordenação nem preferência de coluna: o DataTable aqui
+                    seria peso sem função. Mas a régua do cabeçalho é a mesma.
+                  */}
                   <tr className="border-b border-border text-legenda text-muted-foreground">
                     <th className="px-3 py-1.5 text-center font-medium">#</th>
                     <th className="px-3 py-1.5 text-center font-medium">
@@ -395,7 +403,7 @@ export function PagamentoDetalheView({
                     <th className="px-3 py-1.5 text-center font-medium">
                       Status
                     </th>
-                    <th className="px-3 py-1.5 text-right font-medium">Valor</th>
+                    <th className="px-3 py-1.5 text-center font-medium">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -479,19 +487,19 @@ export function PagamentoDetalheView({
                 <table className="w-full text-detalhe">
                   <thead className="bg-surface">
                     <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-1.5 text-left font-medium">
+                      <th className="px-3 py-1.5 text-center font-medium">
                         Insumo
                       </th>
                       <th className="px-3 py-1.5 text-center font-medium">
                         Centro de custo
                       </th>
-                      <th className="px-3 py-1.5 text-right font-medium">
+                      <th className="px-3 py-1.5 text-center font-medium">
                         Quantidade
                       </th>
-                      <th className="px-3 py-1.5 text-right font-medium">
+                      <th className="px-3 py-1.5 text-center font-medium">
                         Preço unitário
                       </th>
-                      <th className="px-3 py-1.5 text-right font-medium">
+                      <th className="px-3 py-1.5 text-center font-medium">
                         Subtotal
                       </th>
                     </tr>
