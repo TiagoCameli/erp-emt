@@ -53,8 +53,11 @@ import {
   salvarPreferenciaTabela,
 } from "@/modules/_shared/preferencias-tabela/actions";
 import {
+  ALTURA_CABECALHO_MAXIMA,
+  ALTURA_CABECALHO_MINIMA,
   ALTURA_LINHA_MAXIMA,
   ALTURA_LINHA_MINIMA,
+  PESOS_CABECALHO,
   escreverPreferenciasTabela,
   LARGURA_MAXIMA,
   LARGURA_MINIMA,
@@ -237,6 +240,34 @@ function limitarAltura(altura: number): number {
   );
 }
 
+/** Mesma coisa para o cabeçalho, que tem limites próprios (ver a preferência). */
+function limitarAlturaCabecalho(altura: number): number {
+  return Math.min(
+    ALTURA_CABECALHO_MAXIMA,
+    Math.max(ALTURA_CABECALHO_MINIMA, Math.round(altura)),
+  );
+}
+
+/**
+ * Alturas de cabeçalho do menu. Mesma ideia dos presets de linha: cada degrau
+ * tem que ser perceptível ao lado do anterior. "Automática" é o padrão e a única
+ * que deixa o rótulo quebrar em quantas linhas precisar.
+ */
+const ALTURAS_CABECALHO_PRESET: { rotulo: string; altura: number | null }[] = [
+  { rotulo: "Automática", altura: null },
+  { rotulo: "Fina", altura: ALTURA_CABECALHO_MINIMA },
+  { rotulo: "Média", altura: 44 },
+  { rotulo: "Grossa", altura: 64 },
+];
+
+/** Rótulos dos pesos, na ordem da lista fechada da preferência. */
+const ROTULO_PESO: Record<number, string> = {
+  400: "Fino",
+  500: "Médio",
+  600: "Forte",
+  700: "Muito forte",
+};
+
 /**
  * A altura fixa das linhas desta tabela, em px, ou `null` na automática.
  *
@@ -316,6 +347,10 @@ interface EstadoTabela {
    * (descrição + categoria) e altura fixa esconderia a segunda.
    */
   alturaLinha: number | null;
+  /** `null` = automática: min-h-9 e o cabeçalho cresce quando o rótulo quebra. */
+  alturaCabecalho: number | null;
+  /** `null` = o peso padrão do design (500). */
+  pesoCabecalho: number | null;
 }
 
 /** Tudo que as instâncias de um mesmo `idTabela` compartilham. */
@@ -651,6 +686,35 @@ export interface FiltroConfiguravel {
   onLimpar?: () => void;
 }
 
+/**
+ * Classes do rótulo do cabeçalho. O rótulo QUEBRA em várias linhas em vez de ser
+ * cortado com "…", porque é uma ou duas palavras: cortar esconde qual coluna a
+ * pessoa está lendo, e "Mês de referê…" é pior que duas linhas.
+ *
+ * `whitespace-normal` desfaz o `whitespace-nowrap` que a `TableHead` do shadcn
+ * fixa e que é herdado. `break-words` corta palavra que não cabe sozinha na
+ * coluna (nome de centro de custo colado, por exemplo). `min-w-0` é o que deixa
+ * o span encolher dentro do flex do botão de ordenação: sem ele, item de flex tem
+ * largura mínima igual ao conteúdo e a caixa cresceria por cima da coluna vizinha
+ * em vez de quebrar.
+ *
+ * Com altura de cabeçalho definida pela pessoa, o que não couber é clipado pelo
+ * `overflow-hidden` da própria `th` (mesma regra das linhas com altura fixa).
+ */
+const CLASSES_ROTULO = "min-w-0 whitespace-normal break-words";
+
+/**
+ * Peso escolhido -> classe do Tailwind. Mapa fixo, e não `font-[${peso}]`: classe
+ * montada em tempo de execução não existe no CSS gerado (o Tailwind varre o fonte
+ * estaticamente), então o peso simplesmente não aplicaria.
+ */
+const CLASSES_PESO: Record<number, string> = {
+  400: "font-normal",
+  500: "font-medium",
+  600: "font-semibold",
+  700: "font-bold",
+};
+
 function IconeOrdenacao({ direcao }: { direcao: false | "asc" | "desc" }) {
   if (direcao === "asc") return <ArrowUp className="size-3.5 shrink-0" />;
   if (direcao === "desc") return <ArrowDown className="size-3.5 shrink-0" />;
@@ -665,11 +729,22 @@ function IconeOrdenacao({ direcao }: { direcao: false | "asc" | "desc" }) {
 function MenuAltura({
   altura,
   onEscolher,
+  alturaCabecalho,
+  onEscolherCabecalho,
+  peso,
+  onEscolherPeso,
 }: {
   altura: number | null;
   onEscolher: (altura: number | null) => void;
+  alturaCabecalho: number | null;
+  onEscolherCabecalho: (altura: number | null) => void;
+  peso: number | null;
+  onEscolherPeso: (peso: number | null) => void;
 }) {
   const ehPreset = ALTURAS_PRESET.some((preset) => preset.altura === altura);
+  const ehPresetCabecalho = ALTURAS_CABECALHO_PRESET.some(
+    (preset) => preset.altura === alturaCabecalho,
+  );
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -684,6 +759,9 @@ function MenuAltura({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
+          // Nome no grupo: são três grupos de rádio no mesmo menu, e sem isso o
+          // leitor de tela anuncia "Automática" três vezes sem dizer de quê.
+          aria-label="Altura das linhas"
           value={valorAltura(altura)}
           onValueChange={(valor) =>
             onEscolher(valor === "auto" ? null : Number(valor))
@@ -716,6 +794,76 @@ function MenuAltura({
               </span>
             </DropdownMenuRadioItem>
           ) : null}
+        </DropdownMenuRadioGroup>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-legenda text-muted-foreground">
+          Altura do cabeçalho
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          aria-label="Altura do cabeçalho"
+          value={valorAltura(alturaCabecalho)}
+          onValueChange={(valor) =>
+            onEscolherCabecalho(valor === "auto" ? null : Number(valor))
+          }
+        >
+          {ALTURAS_CABECALHO_PRESET.map((preset) => (
+            <DropdownMenuRadioItem
+              key={valorAltura(preset.altura)}
+              value={valorAltura(preset.altura)}
+              className="text-detalhe"
+            >
+              {preset.rotulo}
+              {preset.altura !== null ? (
+                <span className="ml-auto text-legenda text-muted-foreground tabular-nums">
+                  {preset.altura} px
+                </span>
+              ) : null}
+            </DropdownMenuRadioItem>
+          ))}
+          {/* Mesma ideia da linha: altura vinda do arraste aparece aqui. */}
+          {!ehPresetCabecalho && alturaCabecalho !== null ? (
+            <DropdownMenuRadioItem
+              value={valorAltura(alturaCabecalho)}
+              className="text-detalhe"
+            >
+              Personalizada
+              <span className="ml-auto text-legenda text-muted-foreground tabular-nums">
+                {alturaCabecalho} px
+              </span>
+            </DropdownMenuRadioItem>
+          ) : null}
+        </DropdownMenuRadioGroup>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-legenda text-muted-foreground">
+          Peso do rótulo
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          aria-label="Peso do rótulo"
+          // "padrao" e não o número: sem escolha, quem manda é o design, e gravar
+          // 500 explicitamente faria a preferência mudar sozinha se o padrão
+          // mudar um dia.
+          value={peso === null ? "padrao" : String(peso)}
+          onValueChange={(valor) =>
+            onEscolherPeso(valor === "padrao" ? null : Number(valor))
+          }
+        >
+          <DropdownMenuRadioItem value="padrao" className="text-detalhe">
+            Padrão
+          </DropdownMenuRadioItem>
+          {PESOS_CABECALHO.map((valor) => (
+            <DropdownMenuRadioItem
+              key={valor}
+              value={String(valor)}
+              className="text-detalhe"
+            >
+              {ROTULO_PESO[valor]}
+              <span className="ml-auto text-legenda text-muted-foreground tabular-nums">
+                {valor}
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -907,6 +1055,8 @@ export function DataTable<TData>({
     larguras: {},
     filtros: {},
     alturaLinha: null,
+    alturaCabecalho: null,
+    pesoCabecalho: null,
   }));
 
   const assinarEstado = React.useCallback(
@@ -929,6 +1079,8 @@ export function DataTable<TData>({
     larguras,
     filtros: filtrosVisiveis,
     alturaLinha,
+    alturaCabecalho,
+    pesoCabecalho,
   } = React.useSyncExternalStore(
     assinarEstado,
     // Só leitura, nunca criação: chave que ainda não existe cai no snapshot
@@ -969,6 +1121,8 @@ export function DataTable<TData>({
   const [arrastando, setArrastando] = React.useState<string | null>(null);
   /** Arraste de altura em andamento: qual linha, de onde partiu e de qual altura. */
   const [arrasteAltura, setArrasteAltura] = React.useState<{
+    /** Qual faixa está sendo arrastada: uma linha qualquer, ou o cabeçalho. */
+    alvo: "linha" | "cabecalho";
     idLinha: string;
     clienteY: number;
     alturaBase: number;
@@ -1028,6 +1182,8 @@ export function DataTable<TData>({
         larguras: salvo.larguras,
         filtros: salvo.filtros,
         alturaLinha: salvo.alturaLinha,
+        alturaCabecalho: salvo.alturaCabecalho,
+        pesoCabecalho: salvo.pesoCabecalho,
       });
     });
     return () => {
@@ -1041,6 +1197,8 @@ export function DataTable<TData>({
     Object.keys(larguras).length > 0 ||
     ordemColunas.length > 0 ||
     alturaLinha !== null ||
+    alturaCabecalho !== null ||
+    pesoCabecalho !== null ||
     idsColunas.some(
       (id) =>
         (visibilidade[id] ?? true) !== (visibilidadePadrao[id] ?? true),
@@ -1063,6 +1221,8 @@ export function DataTable<TData>({
         larguras: entrada.estado.larguras,
         filtros: entrada.estado.filtros,
         alturaLinha: entrada.estado.alturaLinha,
+        alturaCabecalho: entrada.estado.alturaCabecalho,
+        pesoCabecalho: entrada.estado.pesoCabecalho,
       });
       if (entrada.temporizador !== null) clearTimeout(entrada.temporizador);
       entrada.temporizador = setTimeout(
@@ -1161,6 +1321,25 @@ export function DataTable<TData>({
     [aplicarPreferencia],
   );
 
+  /** Altura da faixa do cabeçalho. `null` volta para a automática. */
+  const aplicarAlturaCabecalho = React.useCallback(
+    (proxima: number | null) => {
+      aplicarPreferencia({
+        alturaCabecalho:
+          proxima === null ? null : limitarAlturaCabecalho(proxima),
+      });
+    },
+    [aplicarPreferencia],
+  );
+
+  /** Peso do rótulo do cabeçalho. `null` volta para o padrão do design. */
+  const aplicarPesoCabecalho = React.useCallback(
+    (proximo: number | null) => {
+      aplicarPreferencia({ pesoCabecalho: proximo });
+    },
+    [aplicarPreferencia],
+  );
+
   function restaurarPadrao() {
     const entrada = mudarEstado({
       visibilidade: visibilidadePadrao,
@@ -1168,6 +1347,8 @@ export function DataTable<TData>({
       larguras: {},
       filtros: {},
       alturaLinha: null,
+      alturaCabecalho: null,
+      pesoCabecalho: null,
     });
     // Uma gravação em espera aqui ressuscitaria o que a pessoa acabou de limpar.
     descartarPendente(entrada);
@@ -1212,15 +1393,22 @@ export function DataTable<TData>({
   function iniciarArrasteAltura(
     evento: React.MouseEvent<HTMLElement>,
     idLinha: string,
+    alvo: "linha" | "cabecalho" = "linha",
   ) {
     evento.preventDefault();
     evento.stopPropagation();
-    const linha = evento.currentTarget.closest("tr");
-    const medida = linha?.getBoundingClientRect().height ?? ALTURA_LINHA_PADRAO;
+    const faixa = evento.currentTarget.closest("tr");
+    const medida = faixa?.getBoundingClientRect().height ?? ALTURA_LINHA_PADRAO;
     setArrasteAltura({
+      alvo,
       idLinha,
       clienteY: evento.clientY,
-      alturaBase: limitarAltura(alturaLinha ?? medida),
+      // Cada alvo tem limites próprios: o cabeçalho desce mais que a linha
+      // porque nele não mora botão, e sobe menos porque não precisa.
+      alturaBase:
+        alvo === "cabecalho"
+          ? limitarAlturaCabecalho(alturaCabecalho ?? medida)
+          : limitarAltura(alturaLinha ?? medida),
     });
   }
 
@@ -1229,10 +1417,11 @@ export function DataTable<TData>({
   // então os ouvintes são registrados uma vez por gesto.
   React.useEffect(() => {
     if (arrasteAltura === null) return;
-    const { clienteY, alturaBase } = arrasteAltura;
+    const { clienteY, alturaBase, alvo } = arrasteAltura;
+    const aplicar = alvo === "cabecalho" ? aplicarAlturaCabecalho : aplicarAltura;
 
     function mover(evento: MouseEvent) {
-      aplicarAltura(alturaBase + (evento.clientY - clienteY));
+      aplicar(alturaBase + (evento.clientY - clienteY));
     }
     function soltar() {
       setArrasteAltura(null);
@@ -1244,7 +1433,7 @@ export function DataTable<TData>({
       window.removeEventListener("mousemove", mover);
       window.removeEventListener("mouseup", soltar);
     };
-  }, [arrasteAltura, aplicarAltura]);
+  }, [arrasteAltura, aplicarAltura, aplicarAlturaCabecalho]);
 
   /**
    * Grava largura de coluna. Lê o mapa da entrada COMPARTILHADA (e não o
@@ -1918,8 +2107,15 @@ export function DataTable<TData>({
   const estiloLinha =
     alturaLinha === null ? undefined : { height: `${alturaLinha}px` };
 
+  const estiloCabecalho =
+    alturaCabecalho === null ? undefined : { height: `${alturaCabecalho}px` };
+
   /** Altura mostrada no arraste: a nova, ou a medida antes do primeiro movimento. */
   const alturaEmArraste = alturaLinha ?? arrasteAltura?.alturaBase ?? null;
+
+  /** A mesma etiqueta, para o arraste do cabeçalho. */
+  const alturaCabecalhoEmArraste =
+    alturaCabecalho ?? arrasteAltura?.alturaBase ?? null;
 
   /**
    * Alça de altura: faixa fina na borda de baixo da linha, com cursor
@@ -1966,6 +2162,45 @@ export function DataTable<TData>({
     );
   }
 
+  /**
+   * Alça de altura do cabeçalho: mesma faixa da linha, na borda de baixo do
+   * cabeçalho. Reaproveita o gesto inteiro passando `alvo: "cabecalho"`, então o
+   * que muda é só qual preferência recebe o resultado.
+   *
+   * Mora na primeira `th` pelo mesmo motivo da linha (`<tr>` só aceita célula
+   * como filho) e aparece no hover do cabeçalho, não no da linha.
+   */
+  function alcaAlturaCabecalho() {
+    const arrastandoEsta = arrasteAltura?.alvo === "cabecalho";
+    return (
+      <>
+        <span
+          aria-hidden="true"
+          data-alca="altura"
+          title="Arraste para mudar a altura do cabeçalho"
+          onMouseDown={(evento) =>
+            iniciarArrasteAltura(evento, "cabecalho", "cabecalho")
+          }
+          onClick={(evento) => evento.stopPropagation()}
+          className={cn(
+            "absolute -bottom-1 left-0 z-20 h-2 w-full cursor-row-resize select-none",
+            "bg-linear-to-b from-transparent from-25% via-faixa/40 via-50% to-transparent to-75%",
+            "opacity-0 group-hover/cabecalho:opacity-100",
+            arrastandoEsta && "via-faixa opacity-100",
+          )}
+        />
+        {arrastandoEsta && alturaCabecalhoEmArraste !== null ? (
+          <span
+            data-alca="altura"
+            className="pointer-events-none absolute right-2 bottom-1 z-20 rounded bg-foreground px-1.5 py-0.5 text-legenda font-medium text-background tabular-nums"
+          >
+            {alturaCabecalhoEmArraste} px
+          </span>
+        ) : null}
+      </>
+    );
+  }
+
   /** Última coluna visível: a alça dela não pode transbordar para fora da tabela. */
   const idUltimaColuna =
     colunasVisiveis[colunasVisiveis.length - 1]?.id ?? undefined;
@@ -1973,7 +2208,16 @@ export function DataTable<TData>({
   const cabecalho = (
     <TableHeader>
       {table.getHeaderGroups().map((grupo) => (
-        <TableRow key={grupo.id} className="group/cabecalho hover:bg-transparent">
+        <TableRow
+          key={grupo.id}
+          style={estiloCabecalho}
+          className={cn(
+            "group/cabecalho hover:bg-transparent",
+            // `relative` para a alça se posicionar pela faixa do cabeçalho, do
+            // mesmo jeito que a alça da linha se posiciona pela `tr` dela.
+            personalizavel && "relative",
+          )}
+        >
           {grupo.headers.map((header, indiceHeader) => {
             // Sem `alinharDireita` aqui: o cabeçalho não lê essa meta. Ela é
             // regra da célula (ver o corpo da tabela, mais abaixo).
@@ -2032,7 +2276,15 @@ export function DataTable<TData>({
                   // cabeçalho seguia a célula, "Valor" e "Ações" eram os únicos
                   // rótulos fora do centro numa fila de dez, e a régua do
                   // cabeçalho ficava torta.
-                  "h-9 px-3 text-center text-detalhe font-medium text-muted-foreground",
+                  // `min-h-9`, não `h-9`: com o rótulo quebrando, altura fixa
+                  // decepava a segunda linha. Vira mínimo e o cabeçalho cresce.
+                  // Quem quer altura igual em todo cabeçalho define no menu, e é
+                  // aí que o `overflow-hidden` abaixo passa a valer.
+                  "min-h-9 px-3 text-center text-detalhe font-medium text-muted-foreground",
+                  // Peso do rótulo só quando a pessoa escolheu: sem escolha, o
+                  // `font-medium` acima é o padrão do design.
+                  pesoCabecalho !== null && CLASSES_PESO[pesoCabecalho],
+                  alturaCabecalho !== null && "overflow-hidden py-0",
                   personalizavel && "relative",
                   podeReordenar && "cursor-grab active:cursor-grabbing",
                   arrastando === header.column.id && "opacity-50",
@@ -2053,9 +2305,9 @@ export function DataTable<TData>({
                     // a ordem punha o ícone de ordenação ANTES do rótulo só nas
                     // colunas de dinheiro ("⇅ Valor" contra "Vencimento ⇅").
                     // O ícone fica depois do texto em toda coluna.
-                    className="inline-flex max-w-full items-center gap-1 select-none hover:text-foreground"
+                    className="inline-flex max-w-full min-w-0 items-center gap-1 select-none hover:text-foreground"
                   >
-                    <span data-medir className="truncate">
+                    <span data-medir className={CLASSES_ROTULO}>
                       {flexRender(
                         header.column.columnDef.header,
                         header.getContext()
@@ -2064,8 +2316,23 @@ export function DataTable<TData>({
                     <IconeOrdenacao direcao={header.column.getIsSorted()} />
                   </button>
                 ) : (
-                  flexRender(header.column.columnDef.header, header.getContext())
+                  // Coluna sem ordenação também precisa do span: o `whitespace-nowrap`
+                  // que a TableHead do shadcn fixa é herdado, então sem ele aqui o
+                  // rótulo continuaria em uma linha só e vazaria para a vizinha.
+                  <span className={CLASSES_ROTULO}>
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext(),
+                    )}
+                  </span>
                 )}
+
+                {/* Uma alça por cabeçalho, na primeira coluna: ela atravessa a
+                    largura toda da faixa, então repetir por coluna empilharia
+                    N alças sobrepostas. */}
+                {personalizavel && indiceHeader === 0
+                  ? alcaAlturaCabecalho()
+                  : null}
 
                 {personalizavel && header.column.getCanResize() ? (
                   <span
@@ -2448,7 +2715,14 @@ export function DataTable<TData>({
               />
             )}
             {personalizavel && (
-              <MenuAltura altura={alturaLinha} onEscolher={aplicarAltura} />
+              <MenuAltura
+                altura={alturaLinha}
+                onEscolher={aplicarAltura}
+                alturaCabecalho={alturaCabecalho}
+                onEscolherCabecalho={aplicarAlturaCabecalho}
+                peso={pesoCabecalho}
+                onEscolherPeso={aplicarPesoCabecalho}
+              />
             )}
             {personalizavel && (
               <MenuColunas

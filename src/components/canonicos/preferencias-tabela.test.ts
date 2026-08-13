@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ALTURA_CABECALHO_MAXIMA,
+  ALTURA_CABECALHO_MINIMA,
   ALTURA_LINHA_MAXIMA,
   ALTURA_LINHA_MINIMA,
+  PESOS_CABECALHO,
   chavePreferenciasTabela,
   escreverPreferenciasTabela,
   LARGURA_MAXIMA,
@@ -55,6 +58,8 @@ describe("lerPreferenciasTabela", () => {
       larguras: { numero: 120 },
       filtros: {},
       alturaLinha: null,
+      alturaCabecalho: null,
+      pesoCabecalho: null,
     });
 
     expect(lerPreferenciasTabela(salvo, IDS)).toEqual({
@@ -64,6 +69,8 @@ describe("lerPreferenciasTabela", () => {
       larguras: { numero: 120 },
       filtros: {},
       alturaLinha: null,
+      alturaCabecalho: null,
+      pesoCabecalho: null,
     });
   });
 
@@ -75,6 +82,8 @@ describe("lerPreferenciasTabela", () => {
       larguras: { colunaMorta: 300, status: 100 },
       filtros: {},
       alturaLinha: null,
+      alturaCabecalho: null,
+      pesoCabecalho: null,
     });
 
     const lido = lerPreferenciasTabela(salvo, IDS);
@@ -99,6 +108,8 @@ describe("lerPreferenciasTabela", () => {
       larguras: {},
       filtros: {},
       alturaLinha: null,
+      alturaCabecalho: null,
+      pesoCabecalho: null,
     });
   });
 
@@ -262,11 +273,32 @@ describe("altura da linha na preferência", () => {
       larguras: { numero: 120, fornecedor: 240 },
       filtros: { status: false },
       alturaLinha: null,
+      alturaCabecalho: null,
+      pesoCabecalho: null,
     });
   });
 
   it("a versão do formato continua 2: subir apaga a configuração de todo mundo", () => {
     expect(VERSAO_PREFERENCIAS).toBe(2);
+  });
+
+  it("blob sem os campos do cabeçalho continua sendo lido inteiro", () => {
+    // Mesma proteção do teste acima, para os dois campos que entraram depois:
+    // altura e peso do cabeçalho também não subiram a versão.
+    const salvoAntesDoCabecalho = JSON.stringify({
+      versao: 2,
+      visiveis: { status: false },
+      ordem: ["status", "numero", "fornecedor", "valorTotal"],
+      larguras: { numero: 120 },
+      filtros: {},
+      alturaLinha: 52,
+    });
+
+    const lido = lerPreferenciasTabela(salvoAntesDoCabecalho, IDS, ["status"]);
+
+    expect(lido?.alturaLinha).toBe(52);
+    expect(lido?.alturaCabecalho).toBeNull();
+    expect(lido?.pesoCabecalho).toBeNull();
   });
 
   it("o mínimo é 34, a altura do botão de ação da linha", () => {
@@ -276,5 +308,81 @@ describe("altura da linha na preferência", () => {
     // esses botões em toda listagem do app. Não é detalhe de gosto.
     expect(ALTURA_LINHA_MINIMA).toBe(34);
     expect(ALTURA_LINHA_MINIMA).toBeGreaterThanOrEqual(32);
+  });
+});
+
+describe("altura do cabeçalho na preferência", () => {
+  function ler(alturaCabecalho: unknown): number | null | undefined {
+    const salvo = JSON.stringify({
+      versao: VERSAO_PREFERENCIAS,
+      alturaCabecalho,
+    });
+    return lerPreferenciasTabela(salvo, IDS)?.alturaCabecalho;
+  }
+
+  it("trava no mínimo e no máximo, e arredonda", () => {
+    expect(ler(1)).toBe(ALTURA_CABECALHO_MINIMA);
+    expect(ler(-40)).toBe(ALTURA_CABECALHO_MINIMA);
+    expect(ler(99999)).toBe(ALTURA_CABECALHO_MAXIMA);
+    expect(ler(44.6)).toBe(45);
+  });
+
+  it("ignora valor absurdo e cai em automática", () => {
+    // Altura fixa errada CLIPA o rótulo, e rótulo cortado esconde qual coluna a
+    // pessoa está lendo. Qualquer lixo tem que virar automática.
+    expect(ler("alto")).toBeNull();
+    expect(ler(Number.NaN)).toBeNull();
+    expect(ler(true)).toBeNull();
+    expect(ler({ px: 40 })).toBeNull();
+  });
+
+  it("sobrevive à ida e à volta", () => {
+    const salvo = escreverPreferenciasTabela({
+      ...preferenciasVazias(),
+      alturaCabecalho: 56,
+    });
+    expect(lerPreferenciasTabela(salvo, IDS)?.alturaCabecalho).toBe(56);
+  });
+
+  it("o mínimo cabe uma linha de rótulo", () => {
+    // Abaixo disso o texto do cabeçalho sai decepado no meio da letra, o que é
+    // pior que qualquer densidade que a pessoa queira.
+    expect(ALTURA_CABECALHO_MINIMA).toBeGreaterThanOrEqual(28);
+  });
+});
+
+describe("peso do rótulo do cabeçalho na preferência", () => {
+  function ler(pesoCabecalho: unknown): number | null | undefined {
+    const salvo = JSON.stringify({ versao: VERSAO_PREFERENCIAS, pesoCabecalho });
+    return lerPreferenciasTabela(salvo, IDS)?.pesoCabecalho;
+  }
+
+  it("aceita só os pesos que o menu oferece", () => {
+    for (const peso of PESOS_CABECALHO) {
+      expect(ler(peso)).toBe(peso);
+    }
+  });
+
+  it("recusa peso fora da lista em vez de inventar um", () => {
+    // Peso arbitrário viraria fonte sintética em alguns navegadores (Inter não
+    // tem todos os pesos), então a lista é fechada de propósito.
+    expect(ler(450)).toBeNull();
+    expect(ler(900)).toBeNull();
+    expect(ler(0)).toBeNull();
+    expect(ler("bold")).toBeNull();
+    expect(ler(true)).toBeNull();
+  });
+
+  it("sobrevive à ida e à volta", () => {
+    const salvo = escreverPreferenciasTabela({
+      ...preferenciasVazias(),
+      pesoCabecalho: 600,
+    });
+    expect(lerPreferenciasTabela(salvo, IDS)?.pesoCabecalho).toBe(600);
+  });
+
+  it("500 está na lista, porque é o peso de hoje", () => {
+    // Se 500 sair da lista, a preferência de quem escolheu "Médio" morre calada.
+    expect(PESOS_CABECALHO).toContain(500);
   });
 });
