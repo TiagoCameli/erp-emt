@@ -96,7 +96,6 @@ const PADRAO = {
   ],
   podeAprovar: true,
   podeRevisar: true,
-  podeEditarLancamento: true,
   idUsuario: "44444444-4444-4444-8444-444444444444",
   // Navegação normal pelo menu: sem link de aprovação na URL.
   parcelasDoLink: [],
@@ -248,7 +247,7 @@ describe("FilaAprovacao aberta por link de aprovação", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("abre o painel de conferência já no pagamento do link", () => {
+  it("não abre painel nenhum: quem confere vai para a tela inteira", () => {
     render(
       <FilaAprovacao
         parcelas={[parcela(), outraParcela()]}
@@ -257,23 +256,8 @@ describe("FilaAprovacao aberta por link de aprovação", () => {
       />,
     );
 
-    // É isto que faz o link "abrir na tela de aprovar": sem o painel, quem
-    // recebe cai numa lista de um item e tem que descobrir que precisa clicar.
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
-
-  it("não abre painel quando o link traz vários pagamentos", () => {
-    render(
-      <FilaAprovacao
-        parcelas={[parcela(), outraParcela()]}
-        {...PADRAO}
-        parcelasDoLink={[parcela().id, OUTRA_ID]}
-      />,
-    );
-
+    // O painel lateral saiu do sistema. Se voltar a abrir sozinho, é regressão.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByText("Compra de cimento")).toBeInTheDocument();
-    expect(screen.getByText("Diesel S10")).toBeInTheDocument();
   });
 
   it("diz onde o pagamento foi parar quando ele já saiu da fila", () => {
@@ -326,6 +310,54 @@ describe("FilaAprovacao aberta por link de aprovação", () => {
   });
 });
 
+describe("FilaAprovacao não abre nada ao clicar na linha", () => {
+  it("clicar na célula da descrição não abre painel nem navega", () => {
+    render(<FilaAprovacao parcelas={[parcela()]} {...PADRAO} />);
+
+    fireEvent.click(screen.getByText("Compra de cimento"));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("marcar o checkbox só seleciona, sem abrir o pagamento", () => {
+    render(<FilaAprovacao parcelas={[parcela()]} {...PADRAO} />);
+
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /Selecionar LAN-2026-0015/i,
+      }),
+    );
+
+    // O bug que isto trava: com a linha inteira clicável, o clique no checkbox
+    // subia para a linha e a conferência abria por cima da seleção. Selecionar
+    // pagamento para aprovar em lote virava fechar um painel a cada clique.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(/1 selecionado/i)).toBeInTheDocument();
+  });
+});
+
+describe("FilaAprovacao leva para a tela inteira do pagamento", () => {
+  const ROTA_ESPERADA = `/financeiro/aprovacao-pagamentos/${parcela().id}`;
+
+  it("pelo botão de visualizar da coluna Ações", () => {
+    render(<FilaAprovacao parcelas={[parcela()]} {...PADRAO} />);
+
+    const botao = screen.getByRole("link", {
+      name: /Visualizar LAN-2026-0015 em tela inteira/i,
+    });
+    expect(botao).toHaveAttribute("href", ROTA_ESPERADA);
+  });
+
+  it("pelo número do lançamento, que é o alvo que a mão procura primeiro", () => {
+    render(<FilaAprovacao parcelas={[parcela()]} {...PADRAO} />);
+
+    const numero = screen.getByRole("link", {
+      name: "LAN-2026-0015 · parcela 1 de 3",
+    });
+    expect(numero).toHaveAttribute("href", ROTA_ESPERADA);
+  });
+});
+
 describe("FilaAprovacao copia a mensagem de aprovação", () => {
   /** Área de transferência de mentira, para ler o texto que sairia daqui. */
   function espionarClipboard() {
@@ -354,8 +386,10 @@ describe("FilaAprovacao copia a mensagem de aprovação", () => {
 
     expect(escrito[0]).toContain("A CRUZEIRENSE");
     expect(escrito[0]).toContain("Compra de cimento");
+    // Uma parcela manda a tela inteira dela, não a fila recortada: é o que faz
+    // quem recebe no WhatsApp cair no pagamento em vez de numa lista de um item.
     expect(escrito[0]).toContain(
-      `/financeiro/aprovacao-pagamentos?parcela=${parcela().id}`,
+      `/financeiro/aprovacao-pagamentos/${parcela().id}`,
     );
   });
 

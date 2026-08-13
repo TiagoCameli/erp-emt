@@ -41,11 +41,6 @@ export default async function PaginaAprovacaoPagamentos({
     "financeiro.aprovacao-pagamentos",
     "desaprovar",
   );
-  const podeEditarLancamento = temPermissao(
-    usuario,
-    "financeiro.lancamentos",
-    "editar",
-  );
   const podeVerLancamento = temPermissao(
     usuario,
     "financeiro.lancamentos",
@@ -106,7 +101,6 @@ export default async function PaginaAprovacaoPagamentos({
           contas,
           podeAprovar,
           podeRevisar,
-          podeEditarLancamento,
           idUsuario: usuario.id,
           parcelasDoLink,
           foraDaFila,

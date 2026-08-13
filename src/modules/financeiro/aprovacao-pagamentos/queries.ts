@@ -294,6 +294,34 @@ async function contarAnexos(
 }
 
 /**
+ * Qual lançamento é o dono desta parcela, para a tela inteira de um pagamento
+ * carregar o resto pelas queries que já existem.
+ *
+ * Restringe a `a_pagar` porque a aprovação de pagamentos só trata disso: id de
+ * parcela de `a_receber` colado na URL devolve `null` e a página cai em 404, em
+ * vez de abrir uma tela de "aprovar pagamento" para uma conta a receber.
+ *
+ * Nenhum filtro de exclusão aqui, igual ao resto do módulo: quem esconde
+ * registro na lixeira é a RLS, e duplicar isso na consulta só cria dois lugares
+ * para a regra divergir.
+ */
+export async function lancamentoDaParcela(
+  parcelaId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("lancamento_parcelas")
+    .select("lancamento_id, lancamentos!inner(tipo)")
+    .eq("id", parcelaId)
+    .eq("lancamentos.tipo", "a_pagar")
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.lancamento_id;
+}
+
+/**
  * Onde foram parar as parcelas de um link de aprovação que não estão na fila.
  *
  * Só roda quando alguém abre a tela por um link e alguma das parcelas não está

@@ -9,6 +9,7 @@ import {
   CheckCheck,
   ClipboardCopy,
   ExternalLink,
+  Eye,
   Filter,
   Inbox,
   Link2,
@@ -49,7 +50,10 @@ import {
   revisarParcela,
   revisarParcelasEmLote,
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
-import { mensagemAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
+import {
+  mensagemAprovacao,
+  urlTelaInteira,
+} from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
 import type {
   ParcelaForaDaFila,
   ParcelaPendente,
@@ -72,7 +76,6 @@ import {
 } from "@/modules/financeiro/_shared/filtros-cliente";
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
 import { AprovarDialog } from "./aprovar-dialog";
-import { PainelConferencia } from "./painel-conferencia";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Aviso de nota fiscal da OC de origem: não bloqueia aprovar, só informa. */
@@ -108,8 +111,6 @@ export interface FilaAprovacaoProps {
   podeAprovar: boolean;
   /** Permissão de desaprovar: é ela que libera mandar para revisão. */
   podeRevisar: boolean;
-  /** Libera o atalho do painel para a tela do lançamento. */
-  podeEditarLancamento: boolean;
   /** Para a personalização de colunas não vazar entre pessoas no navegador. */
   idUsuario: string;
   /**
@@ -231,7 +232,6 @@ export function FilaAprovacao({
   contas,
   podeAprovar,
   podeRevisar,
-  podeEditarLancamento,
   idUsuario,
   parcelasDoLink,
   foraDaFila,
@@ -243,21 +243,6 @@ export function FilaAprovacao({
   );
   const [alvoAprovacao, setAlvoAprovacao] = React.useState<Alvo | null>(null);
   const [alvoRevisao, setAlvoRevisao] = React.useState<Alvo | null>(null);
-  /**
-   * Link de uma parcela só abre o painel de conferência nela, já no primeiro
-   * render: é o que faz o link "abrir na tela de aprovar" em vez de largar a
-   * pessoa numa lista de um item para ela descobrir que precisa clicar.
-   *
-   * Inicializador do useState, não efeito: com efeito a tela pisca a lista antes
-   * do painel. Link de várias não abre painel nenhum, porque aí a leitura é a
-   * lista.
-   */
-  const [emConferencia, setEmConferencia] = React.useState<ParcelaPendente | null>(
-    () => {
-      if (parcelasDoLink.length !== 1) return null;
-      return parcelas.find((parcela) => parcela.id === parcelasDoLink[0]) ?? null;
-    },
-  );
   const [filtroBusca, setFiltroBusca] = useFiltroSessao("filtroBusca", "");
   const [filtroConta, setFiltroConta] = useFiltroSessao("filtroConta", "");
   const [filtroCategoria, setFiltroCategoria] = useFiltroSessao("filtroCategoria", "");
@@ -381,11 +366,6 @@ export function FilaAprovacao({
     visiveis.length > 0 && selecionadas.size === visiveis.length;
   const algumaSelecionada = selecionadas.size > 0;
 
-  // Índice da parcela em conferência, para as setas do painel andarem na fila.
-  const indiceConferencia = emConferencia
-    ? visiveis.findIndex((parcela) => parcela.id === emConferencia.id)
-    : -1;
-
   function alternarTodas() {
     setSelecionadas((atual) =>
       atual.size === visiveis.length
@@ -468,7 +448,6 @@ export function FilaAprovacao({
   /** Sai do recorte do link e mostra a fila inteira, sem recarregar a página. */
   function verFilaInteira() {
     setSelecionadas(new Set());
-    setEmConferencia(null);
     zerarPagina();
     router.replace(pathname);
   }
@@ -492,7 +471,6 @@ export function FilaAprovacao({
       }
       toast.success("Pagamento aprovado");
       tirarDaSelecao(parcela.id);
-      if (emConferencia?.id === parcela.id) setEmConferencia(null);
     } else {
       const resultado = await aprovarParcelasEmLote(
         [...selecionadas],
@@ -531,7 +509,6 @@ export function FilaAprovacao({
       }
       toast.success("Pagamento enviado para revisão");
       tirarDaSelecao(parcela.id);
-      if (emConferencia?.id === parcela.id) setEmConferencia(null);
     } else {
       const resultado = await revisarParcelasEmLote([...selecionadas], texto);
       if ("erro" in resultado) {
@@ -596,13 +573,23 @@ export function FilaAprovacao({
           // justify-center porque flex não herda o text-center da célula: sem
           // isso o número encosta na esquerda e desalinha do cabeçalho.
           <div className="flex flex-wrap items-center justify-center gap-1.5">
-            <span className="codigo-doc">
+            {/*
+              O número abre a tela inteira do pagamento. É o alvo que a mão
+              procura primeiro, e é link de verdade (não linha clicável): abre em
+              nova aba com cmd+clique e o navegador mostra o destino na barra de
+              status. A linha em si não clica mais, para o checkbox só selecionar.
+            */}
+            <Link
+              href={urlTelaInteira(row.original.id)}
+              onClick={(evento) => evento.stopPropagation()}
+              className="codigo-doc text-primary hover:underline"
+            >
               {rotuloParcela(
                 row.original.lancamentoNumero,
                 row.original.numeroParcela,
                 row.original.totalParcelas,
               )}
-            </span>
+            </Link>
             {row.original.semNota ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -816,20 +803,18 @@ export function FilaAprovacao({
       id: "acoes",
       header: "Ações",
       enableSorting: false,
-      // Três ícones: 3 x 32 do botão, 2 x 4 do gap e 24 do padding da célula
-      // dão 128px. 132 fecha com folga. Era 240 quando os botões tinham texto
+      // Quatro ícones: 4 x 32 do botão, 3 x 4 do gap e 24 do padding da célula
+      // dão 164px. 168 fecha com folga. Era 240 quando os botões tinham texto
       // ("Aprovar" + "Revisar" passavam de 190px e transbordavam para a
-      // esquerda, cobrindo o valor). Manter 240 aqui devolveria o problema ao
-      // contrário: 100px de vazio empurrando as colunas que interessam para
-      // fora da tela.
-      size: 132,
+      // esquerda, cobrindo o valor).
+      size: 168,
       // Piso na largura, e não só o padrão: `larguras` é preferência salva por
       // usuário e o mínimo geral do DataTable é 60px. Sem isto, quem já tinha
-      // arrastado esta coluna para estreita (ou arrastar depois) fica com os
-      // três botões transbordando para a esquerda por cima do Valor, que é o
-      // bug que a versão de dois botões com texto já causou em produção.
+      // arrastado esta coluna para estreita (ou arrastar depois) fica com
+      // botão transbordando para a esquerda por cima do Valor, que é o bug que
+      // a versão de dois botões com texto já causou em produção.
       // O DataTable respeita minSize no arraste E no saneamento da preferência.
-      minSize: 132,
+      minSize: 168,
       meta: {
         rotulo: "Ações",
         fixa: true,
@@ -875,6 +860,23 @@ export function FilaAprovacao({
               <PenLine />
             </Button>
           ) : null}
+          {/* Ver vem depois de decidir de propósito: Aprovar e Revisar ficam nas
+              posições que a mão já conhece, e trocar a posição de um botão que
+              autoriza dinheiro é convite para clique errado. */}
+          <Button
+            asChild
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            title="Visualizar o pagamento em tela inteira"
+          >
+            <Link
+              href={urlTelaInteira(row.original.id)}
+              aria-label={`Visualizar ${row.original.lancamentoNumero} em tela inteira`}
+            >
+              <Eye />
+            </Link>
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -1294,7 +1296,11 @@ export function FilaAprovacao({
           pageIndex={paginacao.pageIndex}
           pageSize={paginacao.pageSize}
           onPaginationChange={setPaginacao}
-          onRowClick={setEmConferencia}
+          // Sem onRowClick de propósito: clicar na linha não abre nada. A linha
+          // inteira clicável fazia o clique no checkbox subir e abrir a
+          // conferência junto, então marcar uma parcela para aprovar em lote
+          // virava abrir um painel por cima. Quem quer ver o pagamento usa o
+          // botão do olho ou o número do lançamento.
           idTabela="financeiro.aprovacao-pagamentos"
           idUsuario={idUsuario}
           cabecalhoFixo
@@ -1332,31 +1338,6 @@ export function FilaAprovacao({
               />
             )
           }
-        />
-
-        <PainelConferencia
-          parcela={emConferencia}
-          onFechar={() => setEmConferencia(null)}
-          posicao={
-            indiceConferencia >= 0
-              ? { atual: indiceConferencia + 1, total: visiveis.length }
-              : null
-          }
-          onAnterior={
-            indiceConferencia > 0
-              ? () => setEmConferencia(visiveis[indiceConferencia - 1])
-              : null
-          }
-          onProximo={
-            indiceConferencia >= 0 && indiceConferencia < visiveis.length - 1
-              ? () => setEmConferencia(visiveis[indiceConferencia + 1])
-              : null
-          }
-          podeAprovar={podeAprovar}
-          podeRevisar={podeRevisar}
-          podeEditarLancamento={podeEditarLancamento}
-          onAprovar={(parcela) => setAlvoAprovacao({ tipo: "linha", parcela })}
-          onRevisar={(parcela) => setAlvoRevisao({ tipo: "linha", parcela })}
         />
 
         <AprovarDialog
