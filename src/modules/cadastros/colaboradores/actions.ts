@@ -20,6 +20,12 @@ import {
 
 const RECURSO = "cadastros.colaboradores" as const;
 const ROTA = "/cadastros/colaboradores";
+/**
+ * Inativar colaborador remaneja parcela de adiantamento, então a tela de
+ * adiantamentos fica velha junto: revalidar só a de colaboradores deixaria o
+ * saldo antigo na tela onde ele é conferido.
+ */
+const ROTA_ADIANTAMENTOS = "/rh/adiantamentos";
 
 export type ResultadoAcao = { ok: true; aviso?: string } | { erro: string };
 
@@ -27,8 +33,11 @@ export type ResultadoAcao = { ok: true; aviso?: string } | { erro: string };
 interface AntecipacaoAdiantamentos {
   parcelas: number;
   adiantamentos: number;
+  /** Só o que MUDOU de mês, não o saldo inteiro. */
   valor: number;
   competencia: string | null;
+  /** Saldo total em aberto do colaborador, tenha ou não se movido. */
+  saldoAberto: number;
 }
 
 /**
@@ -44,12 +53,14 @@ function lerAntecipacao(dados: unknown): AntecipacaoAdiantamentos | null {
   if (!Number.isFinite(parcelas)) return null;
   const valor = Number(bruto.valor);
   const adiantamentos = Number(bruto.adiantamentos);
+  const saldoAberto = Number(bruto.saldo_aberto);
   return {
     parcelas,
     adiantamentos: Number.isFinite(adiantamentos) ? adiantamentos : 0,
     valor: Number.isFinite(valor) ? valor : 0,
     competencia:
       typeof bruto.competencia === "string" ? bruto.competencia : null,
+    saldoAberto: Number.isFinite(saldoAberto) ? saldoAberto : 0,
   };
 }
 
@@ -89,9 +100,15 @@ async function ativoGravado(
  * de guarda da folha é `BEFORE UPDATE OF status` e ficava cego a qualquer outra
  * coluna). Dinheiro que se move tem que aparecer para quem o moveu, na hora.
  *
- * Nunca faz a inativação falhar: sem saldo a RPC devolve `parcelas: 0` e aqui
- * sai `undefined` (nenhum aviso); se a RPC falhar, o erro vai para o log e o
- * aviso pede conferência manual, porque o cadastro já foi gravado.
+ * Nunca faz a inativação falhar: sem saldo nenhum a RPC devolve `parcelas: 0` com
+ * `saldo_aberto: 0` e aqui sai `undefined` (nenhum aviso); se a RPC falhar, o
+ * erro vai para o log e o aviso pede conferência manual, porque o cadastro já
+ * foi gravado.
+ *
+ * Existe um terceiro caso, e ele NÃO pode ser silencioso: o colaborador tem
+ * saldo em aberto mas nada se moveu, porque o saldo já estava na competência de
+ * destino. Antes, inativar alguém devendo adiantamento nesse estado não dizia
+ * nada. Agora o aviso informa o saldo e manda conferir.
  */
 async function anteciparAdiantamentos(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -109,7 +126,12 @@ async function anteciparAdiantamentos(
   }
 
   const antecipacao = lerAntecipacao(data);
-  if (!antecipacao || antecipacao.parcelas === 0) return undefined;
+  if (!antecipacao) return undefined;
+
+  if (antecipacao.parcelas === 0) {
+    if (antecipacao.saldoAberto <= 0) return undefined;
+    return `Colaborador inativado com ${formatarBRL(antecipacao.saldoAberto)} de adiantamento em aberto. O saldo já estava na competência de destino, então nada foi antecipado. Confira em RH, Adiantamentos`;
+  }
 
   const parcelas =
     antecipacao.parcelas === 1
@@ -117,6 +139,8 @@ async function anteciparAdiantamentos(
       : `${antecipacao.parcelas} parcelas`;
   const mes = formatarMesAno(antecipacao.competencia);
   const folha = mes === "" ? "a próxima folha" : `a folha de ${mes}`;
+  // `valor` é só o que mudou de mês. Somar o saldo inteiro aqui prometeria
+  // dinheiro que não andou.
   return `Saldo de adiantamento antecipado: ${parcelas} de ${formatarBRL(antecipacao.valor)} para ${folha}`;
 }
 
@@ -250,6 +274,10 @@ export async function editar(
       : undefined;
 
   revalidatePath(ROTA);
+  // Revalida sempre que a antecipação RODOU, e não só quando ela mexeu em
+  // parcela: ela sempre pode ter mexido, e cache velho de saldo é o que faz
+  // alguém conferir o número errado.
+  if (estavaAtivo === true) revalidatePath(ROTA_ADIANTAMENTOS);
   const resultado: ResultadoAcao = { ok: true };
   if (aviso) resultado.aviso = aviso;
   return resultado;
@@ -304,6 +332,7 @@ export async function alternarAtivo(
       : undefined;
 
   revalidatePath(ROTA);
+  if (estavaAtivo === true) revalidatePath(ROTA_ADIANTAMENTOS);
   const resultado: ResultadoAcao = { ok: true };
   if (aviso) resultado.aviso = aviso;
   return resultado;
