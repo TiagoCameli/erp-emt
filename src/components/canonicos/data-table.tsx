@@ -568,7 +568,16 @@ export interface DataTableProps<TData> {
   /** Conteúdo exibido quando não há registros. */
   emptyState?: React.ReactNode;
   isLoading?: boolean;
-  /** Quando presente, exibe o botão "Exportar Excel" acima da tabela. */
+  /**
+   * Quando presente, exibe o botão "Exportar Excel" acima da tabela, junto dos
+   * menus Filtros/Altura/Colunas.
+   *
+   * Nenhuma tela usa: em Lançamentos a exportação foi para as ações do cabeçalho,
+   * ao lado de "Novo lançamento", porque na barra da tabela o botão passa por
+   * mais um menu de tabela e não é achado (aconteceu, em 13/08/2026). Ação da
+   * página vive no cabeçalho. Antes de usar isto numa tela nova, considere o
+   * `BotaoExportarLancamentos` como modelo.
+   */
   exportar?: () => void;
   /**
    * Exportação em andamento: o botão vira spinner e não aceita clique. Gerar a
