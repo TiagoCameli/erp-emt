@@ -43,15 +43,22 @@ import type {
   LancamentoLista,
 } from "@/modules/financeiro/lancamentos/queries";
 import {
+  FILTROS_ATRASO,
   FILTROS_REVISAO,
   ORIGENS_LANCAMENTO,
+  ROTULO_FILTRO_ATRASO,
   ROTULO_FILTRO_REVISAO,
   ROTULO_ORIGEM_LANCAMENTO,
   rotuloOrigemLancamento,
+  rotuloStatusLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
+import type { ValoresFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
-import { ehElegivelParaLote } from "@/modules/financeiro/lancamentos/lote";
+import {
+  ehElegivelParaLote,
+  ROTULO_REVISAO_DA_LINHA,
+} from "@/modules/financeiro/lancamentos/lote";
 
 const OPCOES_TIPO = (
   Object.keys(ROTULO_TIPO_LANCAMENTO) as TipoLancamento[]
@@ -67,6 +74,13 @@ const OPCOES_STATUS = (
 const OPCOES_REVISAO: OpcaoFiltro[] = FILTROS_REVISAO.map((valor) => ({
   valor,
   rotulo: ROTULO_FILTRO_REVISAO[valor],
+}));
+
+// Atraso é pergunta das PARCELAS ("estourou o prazo?"), diferente do filtro de
+// período de vencimento, que olha a data no cabeçalho do lançamento.
+const OPCOES_ATRASO: OpcaoFiltro[] = FILTROS_ATRASO.map((valor) => ({
+  valor,
+  rotulo: ROTULO_FILTRO_ATRASO[valor],
 }));
 
 const OPCOES_ORIGEM: OpcaoFiltro[] = ORIGENS_LANCAMENTO.map((valor) => ({
@@ -169,13 +183,12 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
       if (estado === "nao-se-aplica") {
         return <span className="text-muted-foreground">-</span>;
       }
-      if (estado === "revisado") {
-        return <StatusBadge status="aprovado" rotulo="Revisado" />;
-      }
+      // Rótulo compartilhado com a exportação para Excel (ROTULO_REVISAO_DA_LINHA):
+      // a planilha precisa dizer o mesmo que a coluna.
       return (
         <StatusBadge
-          status="pendente_aprovacao"
-          rotulo={estado === "parcial" ? "Conta parcial" : "Sem conta"}
+          status={estado === "revisado" ? "aprovado" : "pendente_aprovacao"}
+          rotulo={ROTULO_REVISAO_DA_LINHA[estado]}
         />
       );
     },
@@ -193,12 +206,12 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     meta: { naoTruncar: true },
     cell: ({ row }) => {
       const info = STATUS_LANCAMENTO[row.original.status];
-      // Todo lançamento nasce com status 'a_pagar' (em aberto); para um
-      // recebível o rótulo correto é "A receber", não "A pagar".
-      const rotulo =
-        row.original.status === "a_pagar" && row.original.tipo === "a_receber"
-          ? "A receber"
-          : info.rotulo;
+      // Rótulo compartilhado com a exportação para Excel: a regra do "A receber"
+      // (todo lançamento nasce com status 'a_pagar') mora em schemas.ts.
+      const rotulo = rotuloStatusLancamento(
+        row.original.status,
+        row.original.tipo,
+      );
       return (
         // justify-center porque flex não herda o text-center da célula: sem
         // isso os badges encostam na esquerda e desalinham do cabeçalho.
@@ -214,35 +227,6 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     },
   },
 ];
-
-/**
- * Valores atuais dos filtros, do jeito que vivem na URL (string vazia = sem
- * filtro). Um objeto só em vez de vinte props soltas: a listagem tem muito
- * filtro, e assim a assinatura não vira uma lista de vinte strings iguais.
- */
-export interface ValoresFiltrosLancamentos {
-  busca: string;
-  tipo: string;
-  status: string;
-  /** Mês de referência, no formato do input (yyyy-MM). */
-  mes: string;
-  /** Estado da revisão (em_revisao, sem_conta, parcial, revisado). */
-  revisao: string;
-  origem: string;
-  fornecedor: string;
-  categoria: string;
-  centro: string;
-  conta: string;
-  forma: string;
-  valorDe: string;
-  valorAte: string;
-  vencDe: string;
-  vencAte: string;
-  compraDe: string;
-  compraAte: string;
-  criadoDe: string;
-  criadoAte: string;
-}
 
 export interface LancamentosTabelaProps {
   lancamentos: LancamentoLista[];
@@ -509,6 +493,17 @@ export function LancamentosTabela({
         />
       ),
     },
+    // Sem `oculto`: filtro novo nasce VISÍVEL, inclusive para quem já tem
+    // preferência de filtros salva (o `filtroVisivel` do DataTable cai em `true`
+    // quando o id não está na preferência nem nos ocultos por padrão). Nasceu
+    // escondido seria o mesmo problema do botão de exportar: existe e não é achado.
+    selecao({
+      chave: "atraso",
+      rotulo: "Atraso",
+      valor: valores.atraso,
+      opcoes: OPCOES_ATRASO,
+      todosRotulo: "Vencidos e a vencer",
+    }),
     selecao({
       chave: "revisao",
       rotulo: "Revisão",

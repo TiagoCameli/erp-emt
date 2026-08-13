@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import { idSchema, idSchemaCom } from "@/lib/id";
+import {
+  STATUS_LANCAMENTO,
+  type StatusLancamento,
+  type TipoLancamento,
+} from "@/modules/financeiro/_shared/formato";
 
 /**
  * Schemas do lançamento financeiro manual (a pagar / a receber), com parcelas
@@ -347,6 +352,23 @@ export function rotuloOrigemLancamento(origem: string): string {
 }
 
 /**
+ * Rótulo do status de um lançamento COM o tipo, que é o que a tela mostra.
+ *
+ * Todo lançamento nasce com status 'a_pagar' (em aberto), inclusive recebível;
+ * para uma conta a receber o rótulo correto é "A receber", não "A pagar". A
+ * regra vive aqui, e não dentro da célula da tabela, porque a exportação para
+ * Excel precisa dizer a mesma coisa que a lista: rótulo divergente entre tela e
+ * planilha é um relatório que contradiz o sistema.
+ */
+export function rotuloStatusLancamento(
+  status: StatusLancamento,
+  tipo: TipoLancamento,
+): string {
+  if (status === "a_pagar" && tipo === "a_receber") return "A receber";
+  return STATUS_LANCAMENTO[status].rotulo;
+}
+
+/**
  * Estado da revisão de um lançamento a pagar, como filtro próprio. Antes viajava
  * dentro do filtro de status com os pseudo-valores 'em_revisao' e 'sem_conta',
  * o que misturava duas perguntas diferentes ("em que ponto o lançamento está?" e
@@ -365,6 +387,27 @@ export const FILTROS_REVISAO = [
 ] as const;
 
 export type FiltroRevisao = (typeof FILTROS_REVISAO)[number];
+
+/**
+ * Situação de atraso do lançamento, derivada das PARCELAS em aberto.
+ *
+ * Não confundir com o filtro de "Período de vencimento" (venc_de/venc_ate), que
+ * olha a coluna `data_vencimento` do cabeçalho do lançamento. Este aqui responde
+ * "está atrasado?" pelas parcelas, que é onde o pagamento acontece e é a mesma
+ * regra do cartão "Vencido" do cabeçalho: um lançamento de três parcelas com uma
+ * atrasada está vencido, mesmo que o vencimento do cabeçalho ainda esteja longe.
+ *
+ * `a_vencer` é o complemento útil: tem saldo em aberto e nada estourou ainda.
+ * Quitado não entra em nenhum dos dois (para isso existe o filtro de status).
+ */
+export const FILTROS_ATRASO = ["vencido", "a_vencer"] as const;
+
+export type FiltroAtraso = (typeof FILTROS_ATRASO)[number];
+
+export const ROTULO_FILTRO_ATRASO: Record<FiltroAtraso, string> = {
+  vencido: "Com parcela vencida",
+  a_vencer: "Em aberto, sem atraso",
+};
 
 export const ROTULO_FILTRO_REVISAO: Record<FiltroRevisao, string> = {
   em_revisao: "Com parcela em revisão",

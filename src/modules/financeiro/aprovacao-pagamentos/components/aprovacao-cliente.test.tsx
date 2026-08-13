@@ -123,8 +123,9 @@ function renderizar() {
         ],
         podeAprovar: true,
         podeRevisar: true,
-        podeEditarLancamento: true,
         idUsuario: "44444444-4444-4444-8444-444444444444",
+        parcelasDoLink: [],
+        foraDaFila: [],
       }}
       diretos={{
         pagamentos: [direto],

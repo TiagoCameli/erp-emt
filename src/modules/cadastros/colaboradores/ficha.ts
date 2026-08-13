@@ -329,21 +329,33 @@ export interface FichaAdiantamentos {
 
 /**
  * Adiantamentos do colaborador (reaproveita `listarAdiantamentos` filtrada,
- * que já calcula a flag `naFolha`). Volume por colaborador é pequeno: os 5
- * mais recentes vêm da mesma leitura filtrada; o total em aberto (folhaId
- * nulo: ainda não entrou em nenhuma folha) é agregado em JS porque o
- * PostgREST não soma no servidor.
+ * que já traz `saldo` — Task 6 do parcelamento). Volume por colaborador é
+ * pequeno: os 5 mais recentes vêm da mesma leitura filtrada; "em aberto" é
+ * agregado em JS porque o PostgREST não soma no servidor.
+ *
+ * "Em aberto" é `saldo > 0` (dívida real), NÃO `!naFolha`. Antes do
+ * parcelamento, um adiantamento só saía de "aberto" quando entrava em
+ * folha por inteiro, e as duas noções coincidiam; com parcelamento,
+ * `naFolha` vira `true` assim que UMA parcela tem `folha_id` preenchido —
+ * mesmo que o adiantamento ainda deva a maior parte. Filtrar por `!naFolha` e
+ * somar `valor` (o concedido) fazia o `totalEmAberto` da ficha zerar a
+ * contribuição de qualquer adiantamento parcelado que já teve um desconto,
+ * que é o caso mais comum: medido em transação revertida, 1.200,00 em 3x com
+ * 400,00 já descontados contribuía ZERO para o total, quando a dívida real
+ * era 800,00. `qtdEmAberto` tinha o mesmo problema (contava adiantamentos
+ * "ainda não tocados pela folha", não quantos têm dívida). Com `saldo > 0`,
+ * as duas medem a mesma coisa que a listagem de adiantamentos mede.
  */
 export async function resumoAdiantamentos(
   colaboradorId: string,
 ): Promise<FichaAdiantamentos> {
   const todos = await listarAdiantamentos({ colaboradorId });
-  const abertos = todos.filter((item) => !item.naFolha);
+  const abertos = todos.filter((item) => item.saldo > 0);
 
   return {
     itens: todos.slice(0, LIMITE_RECENTES),
     qtdEmAberto: abertos.length,
-    totalEmAberto: abertos.reduce((soma, item) => soma + item.valor, 0),
+    totalEmAberto: abertos.reduce((soma, item) => soma + item.saldo, 0),
   };
 }
 

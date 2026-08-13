@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { erroAcao } from "@/lib/erros";
+import { erroAcao, logErroServidor } from "@/lib/erros";
+import { formatarBRL, formatarMesAno } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
@@ -19,8 +20,140 @@ import {
 
 const RECURSO = "cadastros.colaboradores" as const;
 const ROTA = "/cadastros/colaboradores";
+/**
+ * Inativar colaborador remaneja parcela de adiantamento, então a tela de
+ * adiantamentos fica velha junto: revalidar só a de colaboradores deixaria o
+ * saldo antigo na tela onde ele é conferido.
+ */
+const ROTA_ADIANTAMENTOS = "/rh/adiantamentos";
 
-export type ResultadoAcao = { ok: true } | { erro: string };
+export type ResultadoAcao = { ok: true; aviso?: string } | { erro: string };
+
+/** Formato do jsonb devolvido por `fn_antecipar_adiantamentos_colaborador`. */
+interface AntecipacaoAdiantamentos {
+  parcelas: number;
+  adiantamentos: number;
+  /** Só o que MUDOU de mês, não o saldo inteiro. */
+  valor: number;
+  competencia: string | null;
+  /** Saldo total em aberto do colaborador, tenha ou não se movido. */
+  saldoAberto: number;
+}
+
+/**
+ * Lê o jsonb da RPC de antecipação sem confiar no formato: a RPC devolve `Json`
+ * nos tipos gerados, então um campo faltando não pode virar `NaN` no toast.
+ */
+function lerAntecipacao(dados: unknown): AntecipacaoAdiantamentos | null {
+  if (typeof dados !== "object" || dados === null || Array.isArray(dados)) {
+    return null;
+  }
+  const bruto = dados as Record<string, unknown>;
+  const parcelas = Number(bruto.parcelas);
+  if (!Number.isFinite(parcelas)) return null;
+  const valor = Number(bruto.valor);
+  const adiantamentos = Number(bruto.adiantamentos);
+  const saldoAberto = Number(bruto.saldo_aberto);
+  return {
+    parcelas,
+    adiantamentos: Number.isFinite(adiantamentos) ? adiantamentos : 0,
+    valor: Number.isFinite(valor) ? valor : 0,
+    competencia:
+      typeof bruto.competencia === "string" ? bruto.competencia : null,
+    saldoAberto: Number.isFinite(saldoAberto) ? saldoAberto : 0,
+  };
+}
+
+/**
+ * Lê o `ativo` gravado hoje. `null` quando o colaborador não existe ou a leitura
+ * falhou. O erro vai para o log em vez de sumir: `null` faz a antecipação do
+ * saldo ser PULADA, e pular calado uma decisão de dinheiro é exatamente o que
+ * ninguém encontra depois. A rede, se acontecer, é o painel de alertas do RH
+ * (colaborador inativo com saldo em aberto).
+ */
+async function ativoGravado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  origem: string,
+): Promise<boolean | null> {
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select("ativo")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    logErroServidor(origem, error);
+    return null;
+  }
+  if (!data) return null;
+  return data.ativo;
+}
+
+/**
+ * Antecipa o saldo de adiantamento em aberto do colaborador que acabou de ser
+ * inativado, e devolve o aviso para o toast de quem inativou.
+ *
+ * É chamada EXPLICITAMENTE, depois do update bem-sucedido, e **não** é trigger.
+ * A escolha é deliberada: efeito financeiro dentro de um UPDATE de cadastro é o
+ * que ninguém encontra depois, e esta base já pagou por esse padrão (o trigger
+ * de guarda da folha é `BEFORE UPDATE OF status` e ficava cego a qualquer outra
+ * coluna). Dinheiro que se move tem que aparecer para quem o moveu, na hora.
+ *
+ * Nunca faz a inativação falhar: sem saldo nenhum a RPC devolve `parcelas: 0` com
+ * `saldo_aberto: 0` e aqui sai `undefined` (nenhum aviso); se a RPC falhar, o
+ * erro vai para o log e o aviso pede conferência manual, porque o cadastro já
+ * foi gravado.
+ *
+ * Existe um terceiro caso, e ele NÃO pode ser silencioso: o colaborador tem
+ * saldo em aberto mas nada se moveu, porque o saldo já estava na competência de
+ * destino. Antes, inativar alguém devendo adiantamento nesse estado não dizia
+ * nada. Agora o aviso informa o saldo e manda conferir.
+ *
+ * O AVISO NÃO PROMETE DESCONTO, e isso é deliberado. A `fn_gerar_folha` itera
+ * `where ativo and vinculo = 'clt'`, e a inativação acontece antes desta
+ * chamada: nenhuma folha futura vai descontar esse saldo, porque a pessoa não
+ * está mais na folha. O mecanismo de antecipação está pronto para o dia em que
+ * existir rescisão (Bloco 9); enquanto isso, quem mostra essa dívida é o alerta
+ * de "inativo com saldo em aberto" no painel de RH.
+ */
+async function anteciparAdiantamentos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  origem: string,
+): Promise<string | undefined> {
+  const { data, error } = await supabase.rpc(
+    "fn_antecipar_adiantamentos_colaborador",
+    { p_colaborador: id },
+  );
+
+  if (error) {
+    logErroServidor(origem, error);
+    return "Colaborador inativado, mas não foi possível antecipar o saldo de adiantamento dele. Confira em RH, Adiantamentos";
+  }
+
+  const antecipacao = lerAntecipacao(data);
+  if (!antecipacao) return undefined;
+
+  if (antecipacao.parcelas === 0) {
+    if (antecipacao.saldoAberto <= 0) return undefined;
+    return `Colaborador inativado com ${formatarBRL(antecipacao.saldoAberto)} de adiantamento em aberto. O saldo já estava na competência de destino, então nada foi antecipado. Confira em RH, Adiantamentos`;
+  }
+
+  const parcelas =
+    antecipacao.parcelas === 1
+      ? "1 parcela"
+      : `${antecipacao.parcelas} parcelas`;
+  const mes = formatarMesAno(antecipacao.competencia);
+  const destino = mes === "" ? "a competência seguinte" : mes;
+  // A mensagem diz o que ACONTECEU (o saldo mudou de competência) e não promete
+  // o desconto: a `fn_gerar_folha` itera `where ativo and vinculo = 'clt'` e a
+  // inativação acontece ANTES desta chamada, então nenhuma folha vai descontar
+  // esse saldo. Medido: 3.191,70 antecipados, folha da competência de destino
+  // gerada, zero item do inativo e zero descontado. `valor` é só o que mudou de
+  // mês; `saldoAberto` é a dívida inteira, e é ela que alguém precisa cobrar.
+  return `Saldo de adiantamento remanejado para ${destino}: ${parcelas} de ${formatarBRL(antecipacao.valor)}. Nada foi descontado, porque a folha não inclui colaborador inativo: os ${formatarBRL(antecipacao.saldoAberto)} em aberto seguem para acerto. Confira em RH, Adiantamentos`;
+}
 
 /**
  * Converte o ColaboradorInput validado nas colunas da tabela colaboradores.
@@ -96,7 +229,11 @@ export async function criar(dados: ColaboradorInput): Promise<ResultadoAcao> {
   return { ok: true };
 }
 
-/** Edita um colaborador existente. */
+/**
+ * Edita um colaborador existente. Quando este save é o que INATIVA o
+ * colaborador, o saldo de adiantamento em aberto dele é antecipado depois do
+ * update, e o aviso volta para o toast (ver `anteciparAdiantamentos`).
+ */
 export async function editar(
   id: string,
   dados: ColaboradorInput,
@@ -112,6 +249,19 @@ export async function editar(
   }
 
   const supabase = await createClient();
+
+  // O `ativo` de ANTES é o que diz se este save é uma inativação: o payload
+  // sozinho não distingue "está inativando agora" de "já estava inativo e
+  // mudou o telefone". Só vai ao banco quando o payload inativa.
+  const estavaAtivo =
+    validado.data.ativo === false
+      ? await ativoGravado(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.editar",
+        )
+      : null;
+
   const { error } = await supabase
     .from("colaboradores")
     .update(paraLinhaBanco(validado.data))
@@ -125,11 +275,29 @@ export async function editar(
     );
   }
 
+  const aviso =
+    estavaAtivo === true
+      ? await anteciparAdiantamentos(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.editar",
+        )
+      : undefined;
+
   revalidatePath(ROTA);
-  return { ok: true };
+  // Revalida sempre que a antecipação RODOU, e não só quando ela mexeu em
+  // parcela: ela sempre pode ter mexido, e cache velho de saldo é o que faz
+  // alguém conferir o número errado.
+  if (estavaAtivo === true) revalidatePath(ROTA_ADIANTAMENTOS);
+  const resultado: ResultadoAcao = { ok: true };
+  if (aviso) resultado.aviso = aviso;
+  return resultado;
 }
 
-/** Ativa ou desativa o colaborador (soft delete por status). */
+/**
+ * Ativa ou desativa o colaborador (soft delete por status). Inativar antecipa o
+ * saldo de adiantamento em aberto, depois do update, avisando quem inativou.
+ */
 export async function alternarAtivo(
   id: string,
   ativo: boolean,
@@ -140,6 +308,18 @@ export async function alternarAtivo(
   if (!idValido.success) return { erro: "Colaborador inválido" };
 
   const supabase = await createClient();
+
+  // `ativo` vem do estado da tela, que pode estar velho: quem diz se este
+  // clique é uma inativação é o valor GRAVADO.
+  const estavaAtivo =
+    ativo === false
+      ? await ativoGravado(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.alternarAtivo",
+        )
+      : null;
+
   const { error } = await supabase
     .from("colaboradores")
     .update({ ativo })
@@ -153,8 +333,20 @@ export async function alternarAtivo(
     );
   }
 
+  const aviso =
+    estavaAtivo === true
+      ? await anteciparAdiantamentos(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.alternarAtivo",
+        )
+      : undefined;
+
   revalidatePath(ROTA);
-  return { ok: true };
+  if (estavaAtivo === true) revalidatePath(ROTA_ADIANTAMENTOS);
+  const resultado: ResultadoAcao = { ok: true };
+  if (aviso) resultado.aviso = aviso;
+  return resultado;
 }
 
 /** Exclusão física: move o colaborador para a lixeira com motivo. */

@@ -26,6 +26,7 @@ export default async function PaginaAdiantamentos() {
     "financeiro.lancamentos",
     "ver",
   );
+  const podeVerFolha = temPermissao(usuario, "rh.folha", "ver");
 
   return (
     <>
@@ -46,6 +47,7 @@ export default async function PaginaAdiantamentos() {
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
         podeVerLancamento={podeVerLancamento}
+        podeVerFolha={podeVerFolha}
       />
     </>
   );

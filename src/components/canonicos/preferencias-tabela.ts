@@ -45,6 +45,30 @@ export const ALTURA_LINHA_MINIMA = 34;
 /** Altura máxima de linha, em px. Acima disso a tabela vira uma lista de cards. */
 export const ALTURA_LINHA_MAXIMA = 160;
 
+/**
+ * Altura mínima do cabeçalho, em px. É menor que a da linha porque no cabeçalho
+ * não mora botão nenhum: o limite aqui é caber uma linha de rótulo sem decepar a
+ * letra (13px de fonte, ~18px de linha, mais a folga do padding).
+ */
+export const ALTURA_CABECALHO_MINIMA = 28;
+
+/**
+ * Altura máxima do cabeçalho, em px. Três linhas de rótulo com folga. Acima
+ * disso o cabeçalho come a área de leitura sem devolver nada.
+ */
+export const ALTURA_CABECALHO_MAXIMA = 96;
+
+/**
+ * Pesos que o menu oferece para o rótulo do cabeçalho. Lista FECHADA de
+ * propósito: peso arbitrário (450, 550) faz o navegador sintetizar a fonte
+ * quando a Inter não tem aquele corte, e o resultado é um rótulo borrado que
+ * ninguém pediu. 500 é o peso de hoje e tem que continuar na lista, senão a
+ * escolha "Médio" de quem já configurou morre calada na leitura.
+ */
+export const PESOS_CABECALHO = [400, 500, 600, 700] as const;
+
+export type PesoCabecalho = (typeof PESOS_CABECALHO)[number];
+
 export interface PreferenciasTabela {
   versao: number;
   /** id da coluna -> visível. Coluna ausente segue o padrão definido na tela. */
@@ -61,6 +85,15 @@ export interface PreferenciasTabela {
    * segunda linha das células de duas linhas).
    */
   alturaLinha: number | null;
+  /**
+   * Altura da faixa do cabeçalho, em px. `null` = automática: o cabeçalho tem
+   * altura mínima e cresce quando o rótulo quebra em mais de uma linha.
+   */
+  alturaCabecalho: number | null;
+  /**
+   * Peso da fonte do rótulo do cabeçalho. `null` = o padrão do design (500).
+   */
+  pesoCabecalho: number | null;
 }
 
 /** Preferência neutra: nada escondido, nada reordenado, nada redimensionado. */
@@ -72,6 +105,8 @@ export function preferenciasVazias(): PreferenciasTabela {
     larguras: {},
     filtros: {},
     alturaLinha: null,
+    alturaCabecalho: null,
+    pesoCabecalho: null,
   };
 }
 
@@ -144,6 +179,26 @@ function saneiaAlturaLinha(bruto: unknown): number | null {
   );
 }
 
+/** Mesma ideia da altura da linha, com os limites do cabeçalho. */
+function saneiaAlturaCabecalho(bruto: unknown): number | null {
+  if (typeof bruto !== "number" || !Number.isFinite(bruto)) return null;
+  return Math.min(
+    ALTURA_CABECALHO_MAXIMA,
+    Math.max(ALTURA_CABECALHO_MINIMA, Math.round(bruto)),
+  );
+}
+
+/**
+ * Peso do rótulo: só o que está em PESOS_CABECALHO passa. Aqui NÃO se trava no
+ * intervalo como se faz com altura, porque peso não é contínuo: aproximar 450
+ * para 400 mudaria a escolha da pessoa sem ela pedir, e aceitar 450 pediria uma
+ * fonte que não existe. Fora da lista cai no padrão.
+ */
+function saneiaPesoCabecalho(bruto: unknown): number | null {
+  if (typeof bruto !== "number") return null;
+  return PESOS_CABECALHO.some((peso) => peso === bruto) ? bruto : null;
+}
+
 /**
  * Interpreta o que estava salvo. Devolve null quando não há nada aproveitável
  * (ausente, JSON inválido, versão antiga, formato estranho) — nesse caso a tela
@@ -176,6 +231,8 @@ export function lerPreferenciasTabela(
     // Blob gravado antes da altura existir não tem o campo: lê como automática,
     // sem perder o resto da configuração.
     alturaLinha: saneiaAlturaLinha(dados.alturaLinha),
+    alturaCabecalho: saneiaAlturaCabecalho(dados.alturaCabecalho),
+    pesoCabecalho: saneiaPesoCabecalho(dados.pesoCabecalho),
   };
 }
 

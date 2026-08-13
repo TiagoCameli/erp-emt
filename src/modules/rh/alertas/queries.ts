@@ -3,10 +3,12 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import {
   cadastroFaltando,
+  temSaldoAdiantamentoInativo,
   urgenciaDocumento,
   urgenciaFerias,
   type Urgencia,
 } from "@/modules/rh/alertas/calculo";
+import { resumirParcelas } from "@/modules/rh/adiantamentos/parcelamento";
 import { listarDocumentos, type SituacaoDocumento } from "@/modules/rh/documentos/queries";
 import { listarFerias, type SituacaoFerias } from "@/modules/rh/ferias/queries";
 
@@ -191,4 +193,85 @@ export async function listarAlertasCadastro(): Promise<AlertaCadastro[]> {
   }
 
   return alertas;
+}
+
+/** Alerta de saldo de adiantamento em aberto de um colaborador já inativo. */
+export interface AlertaAdiantamento {
+  colaboradorId: string;
+  colaboradorNome: string;
+  saldo: number;
+}
+
+/**
+ * Alertas de saldo de adiantamento em aberto de colaborador inativo: a rede
+ * para a dívida que a antecipação (Bloco 8b) e a `fn_gerar_folha` não cobrem
+ * hoje (o porquê está em `temSaldoAdiantamentoInativo`, em `calculo.ts`).
+ *
+ * Uma leitura: embed de `colaboradores` e de `rh_adiantamento_parcelas` a
+ * partir de `rh_adiantamentos`, agregado por colaborador em JS com a MESMA
+ * função pura da listagem de adiantamentos (`resumirParcelas`) — um
+ * colaborador pode ter mais de um adiantamento, e o saldo dele é a soma dos
+ * saldos de todos.
+ *
+ * Exige as DUAS permissões de quem chama (checadas no `page.tsx`, não aqui):
+ * `rh.adiantamentos:ver` (a policy de `rh_adiantamento_parcelas`) E
+ * `cadastros.colaboradores:ver` (a policy de `colaboradores`, que NÃO tem OR
+ * para nenhum recurso de RH — é o mesmo motivo pelo qual `fn_epis_a_recolher`
+ * precisou ser SECURITY DEFINER, mas aqui não dá para criar função nova
+ * nesta task). Sem as duas, o embed de `colaboradores` volta vazio pela RLS e
+ * o alerta desapareceria calado — por isso esta função não tenta cobrir esse
+ * caso: ela confia no gate de quem chama, como as outras `listarAlertas*`
+ * deste arquivo confiam no `podeX` calculado no `page.tsx`.
+ */
+export async function listarAlertasAdiantamentoInativo(): Promise<
+  AlertaAdiantamento[]
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("rh_adiantamentos")
+    .select(
+      `colaborador_id, valor, colaboradores(nome, ativo),
+       rh_adiantamento_parcelas(valor_previsto, valor_descontado, folha_id)`,
+    );
+
+  if (error) {
+    throw new Error("Não foi possível carregar os alertas de adiantamento");
+  }
+
+  const porColaborador = new Map<string, { nome: string; saldo: number }>();
+
+  for (const linha of data ?? []) {
+    // ativo !== false cobre tanto "está ativo" quanto "embed bloqueado pela
+    // RLS" (undefined): nos dois casos, não é o inativo que este alerta
+    // procura, e é melhor pular do que arriscar contar errado.
+    if (linha.colaboradores?.ativo !== false) continue;
+
+    const resumo = resumirParcelas(
+      linha.valor,
+      (linha.rh_adiantamento_parcelas ?? []).map((parcela) => ({
+        valorPrevisto: parcela.valor_previsto,
+        valorDescontado: parcela.valor_descontado,
+        folhaId: parcela.folha_id,
+      })),
+    );
+
+    const atual = porColaborador.get(linha.colaborador_id);
+    if (atual) {
+      atual.saldo = Math.round((atual.saldo + resumo.saldo) * 100) / 100;
+    } else {
+      porColaborador.set(linha.colaborador_id, {
+        nome: linha.colaboradores?.nome ?? "",
+        saldo: resumo.saldo,
+      });
+    }
+  }
+
+  const alertas: AlertaAdiantamento[] = [];
+  for (const [colaboradorId, { nome, saldo }] of porColaborador) {
+    if (!temSaldoAdiantamentoInativo({ ativo: false, saldo })) continue;
+    alertas.push({ colaboradorId, colaboradorNome: nome, saldo });
+  }
+
+  return alertas.sort((a, b) => b.saldo - a.saldo);
 }

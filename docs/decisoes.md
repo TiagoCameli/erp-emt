@@ -1105,3 +1105,445 @@ imposto tem prazo legal, e competência errada é erro contábil silencioso.
    as três telas do módulo usam `rotuloOrigemLancamento` e o catálogo `ORIGENS_LANCAMENTO`,
    e o filtro casa por igualdade exata. Rótulo de origem é informação de auditoria na tela
    onde se libera pagamento: derivar de catálogo único, nunca escrever literal.
+
+## 2026-08-13 - Link de aprovação de pagamento é atalho, não credencial, e o login guarda o destino
+
+A fila de aprovação passou a gerar um link para mandar no WhatsApp de quem aprova. A pergunta
+que decidiu o desenho foi: o link carrega autoridade, ou só endereço?
+
+1. **O link é endereço, não credencial.** `?parcela=<id>[,<id>]` na própria rota
+   `/financeiro/aprovacao-pagamentos`. Sem token, sem expiração, sem tabela nova, sem rota
+   pública, sem RPC fora da sessão. Quem abre precisa de sessão e de `aprovar`, igual a quem
+   entra pelo menu. As três opções com token (público, público com PIN, e magic link do
+   responsável) foram avaliadas e recusadas: nenhuma paga o custo de criar uma superfície de
+   autorização de dinheiro paralela à que já existe, para um sistema de 20 a 30 usuários em
+   que quem aprova já tem conta. **Consequência aceita:** quem não tem login não aprova por
+   link, e isso é o ponto, não uma limitação a contornar depois.
+
+2. **Copiar a mensagem não é ação de quem aprova.** O botão vive na coluna Ações e na barra de
+   seleção, e aparece para quem tem só `ver`. Montar texto não muta nada, e o caminho real é o
+   financeiro montar e o diretor aprovar. Por isso a coluna Ações e a de seleção deixaram de
+   depender de `aprovar`/`desaprovar`: os botões que mutam seguem cada um atrás da sua
+   permissão, dentro de uma coluna que agora sempre existe.
+
+3. **O que fazia o link não funcionar era o login, não a fila.** O middleware mandava quem não
+   tinha sessão para `/login` descartando a rota pretendida, e `entrar()` redirecionava sempre
+   para `/`. Qualquer link para tela específica deste sistema já chegava quebrado no celular de
+   quem não estava logado; o link de aprovação só tornou isso visível. Agora o middleware anexa
+   `?destino=` e `entrar()` volta para lá.
+
+4. **`destinoSeguro()` valida por lista de permissão, e a limpeza vem antes da checagem.**
+   Recusa `//host`, `/\host`, esquema absoluto, caminho sem barra inicial e o próprio `/login`
+   (laço, não ataque). Remove espaço e caractere de controle ANTES de checar, porque o navegador
+   remove tab e quebra de linha por conta própria: validar o texto cru deixaria `/\n/evil.com`
+   navegar para `//evil.com`. É a única entrada não confiável que a feature criou, e é a única
+   coisa aqui com teste de segurança próprio. O valor cru aparece no payload RSC como string
+   JSON escapada, nunca como markup ou href.
+
+5. **Parcela que saiu da fila diz para onde foi.** `statusDasParcelas()` resolve aprovada, paga,
+   em revisão, cancelada, sem acesso, e pendente travada por falta de conta bancária. Link fica
+   dias parado no WhatsApp, então esse é o caso comum, não a exceção: "nenhum pagamento
+   encontrado" numa tela de dinheiro faz quem abriu concluir que o lançamento foi perdido.
+
+6. **Largura de coluna com botão novo precisa de `minSize`, não só de `size`.** `larguras` é
+   preferência salva por usuário e o piso geral do DataTable é 60px, então `size` novo não
+   alcança quem já arrastou a coluna. Sem `minSize`, os três ícones transbordam por cima do
+   Valor: o mesmo defeito que a versão de dois botões com texto já causou em produção. Vale para
+   qualquer coluna de ações que ganhar botão.
+
+## 2026-08-13 - A conferência de pagamento virou tela inteira, e a linha da fila parou de clicar
+
+Ajuste do bloco anterior depois de o Tiago usar a tela. Três sintomas, uma causa comum e uma
+decisão de superfície.
+
+1. **Linha inteira clicável e checkbox no meio dela não convivem.** A fila abria o painel de
+   conferência no `onRowClick`, e o clique no checkbox subia para a linha: marcar uma parcela
+   para aprovar em lote abria um painel por cima da seleção. Não é bug do checkbox, é o padrão
+   "linha clicável" aplicado a uma tabela cujo trabalho principal é seleção múltipla. `onRowClick`
+   saiu. **Regra:** tabela com seleção em lote não usa linha clicável; o caminho para o detalhe é
+   botão ou link explícito.
+
+2. **O painel lateral foi substituído por tela inteira, e não duplicado.** 480px para lançamento,
+   datas, pagamento, N parcelas (57 em caso real), rateio, itens da OC, anexos e trilha era
+   rolagem em coluna estreita, e pior no celular de quem recebe o link de aprovação. A tela
+   inteira (`/financeiro/aprovacao-pagamentos/[parcelaId]`) mostra o mesmo conteúdo com a decisão
+   numa coluna fixa à direita. `painel-conferencia.tsx` e a action `detalheDaFila` foram
+   **apagados**: manter os dois seria duas telas de conferência com conteúdo igual divergindo com
+   o tempo.
+
+3. **Esta página não é a de lançamento que já existe.** `/financeiro/lancamentos/[id]` exige
+   `financeiro.lancamentos:ver` e é tela de edição do lançamento. Quem aprova pagamento não
+   necessariamente tem essa permissão e cairia em 404. A nova é a visão de aprovação de UMA
+   parcela, com portão em `financeiro.aprovacao-pagamentos:ver`, e quem controla a leitura do
+   lançamento por dentro é a RLS, a mesma que já deixa a fila fazer o join. Duas telas parecidas
+   com portões diferentes é o correto aqui, e é o oposto do item 2: lá o conteúdo era igual, aqui
+   a permissão é diferente.
+
+4. **Tela alcançada por link não pode só esconder o botão.** `situacaoDaParcela` centraliza a
+   regra de "esta parcela é aprovável" (a mesma de `listarParcelasPendentes` e de
+   `fn_aprovar_parcela`) e devolve o motivo da recusa. A ordem das checagens é a ordem da pergunta
+   de quem olha: o que aconteceu com a PARCELA antes do que falta no LANÇAMENTO, senão parcela já
+   paga sem conta bancária aparece como "falta escolher a conta" e manda alguém mexer num
+   lançamento resolvido. Isso NÃO é autorização: quem autoriza segue sendo a permissão na Server
+   Action e a RLS.
+
+5. **Link de uma parcela passou a apontar para a tela inteira dela.** Link de várias continua na
+   fila recortada (`?parcela=a,b`), porque tela inteira é de uma parcela por definição.
+
+6. **Posição de botão que mexe com dinheiro não se troca por conveniência.** Aprovar e Revisar
+   ficaram onde estavam e os dois novos (Visualizar, Copiar mensagem) entraram à direita, mesmo
+   sendo Visualizar hoje a ação de entrada. O caminho descobrível para o detalhe virou o número do
+   lançamento, que é link de verdade (abre em nova aba, mostra destino na barra de status) em vez
+   de linha clicável.
+
+## 2026-08-13 - Cabeçalho de tabela centraliza sempre, e `alinharDireita` é regra só da célula
+
+`meta.alinharDireita` mandava no `<th>` e no `<td>` juntos, então "Valor", "Parcelas" e "Ações"
+eram os únicos rótulos fora do centro numa fila de dez colunas centralizadas, e a régua do
+cabeçalho ficava torta. Agora o cabeçalho centraliza sempre, em toda tabela do app (mudança no
+DataTable canônico, não em tela nenhuma).
+
+**Isto não afrouxa a regra do dinheiro.** O teste que protege "dinheiro à direita" traz aviso de
+não mudar, e o aviso continua valendo: a razão dele é a vírgula cair embaixo da vírgula, o que só
+existe na CÉLULA. Rótulo não tem vírgula para alinhar. As asserções das células seguem intactas
+(`text-right` + `tabular-nums`); só as do cabeçalho passaram para `text-center`, e um teste novo
+trava isso nas duas colunas. Centralizar VALOR continua sendo regressão.
+
+De passagem caiu o `flex-row-reverse` do botão de ordenação: ele existia para o ícone encostar no
+texto quando o cabeçalho era à direita, e com tudo centralizado ele só produzia "⇅ Valor" contra
+"Vencimento ⇅" na mesma régua. O ícone fica depois do rótulo em toda coluna.
+
+## 2026-08-13 - Rótulo de cabeçalho quebra em vez de cortar, e altura e peso dele são preferência do usuário
+
+Três mudanças no DataTable canônico, então valem para as tabelas de todo o app.
+
+1. **O rótulo do cabeçalho QUEBRA, nunca corta.** Era `truncate`, e "Mês de referência" virava
+   "Mês de referê…" numa coluna estreita: cortar o rótulo esconde qual coluna a pessoa está
+   lendo, e rótulo é uma ou duas palavras. Agora é `whitespace-normal break-words` com `min-w-0`
+   (sem o `min-w-0` o span é item de flex e cresce por cima da coluna vizinha em vez de quebrar),
+   e o `h-9` da `th` virou `min-h-9` para a faixa poder crescer. O `whitespace-nowrap` que a
+   `TableHead` do shadcn fixa é HERDADO, então a coluna sem ordenação também precisou do span:
+   sem ele o rótulo continuava em uma linha só.
+
+   **Efeito colateral a colher depois:** existem larguras declaradas hoje só para o rótulo caber
+   (`size: 176` no mês, `size: 184` na forma de pagamento, com comentário dizendo isso). Elas
+   deixaram de ser necessárias e podem encolher, mas não foi nesta entrega para não misturar.
+
+2. **Altura da faixa do cabeçalho é preferência**, com preset no menu "Altura" e arraste na borda
+   de baixo, guardada por usuário e por tabela. O gesto de arraste NÃO foi duplicado: ganhou um
+   campo `alvo: "linha" | "cabecalho"` e o efeito escolhe qual preferência recebe o resultado.
+   Limites próprios (28 a 96) porque no cabeçalho não mora botão: o piso é caber uma linha de
+   rótulo, não a altura do `⋮` como na linha.
+
+3. **Peso do rótulo é preferência**, com lista FECHADA (400, 500, 600, 700). Peso arbitrário faria
+   o navegador sintetizar a fonte onde a Inter não tem o corte, e o resultado é rótulo borrado.
+   O sanitizador RECUSA fora da lista em vez de aproximar, ao contrário do que faz com altura:
+   aproximar 450 para 400 mudaria a escolha da pessoa sem ela pedir. "Padrão" grava `null`, não
+   500, para a escolha seguir o design se o padrão mudar um dia.
+
+Os três campos entraram **sem subir `VERSAO_PREFERENCIAS`**, pelo mesmo motivo do `alturaLinha`:
+campo que só acrescenta se resolve na leitura, e subir a versão apagaria colunas, larguras e
+filtros que todo mundo já configurou. Há teste travando isso para os dois campos novos.
+
+De passagem, os três grupos de rádio do menu ganharam `aria-label`. Sem nome, o leitor de tela
+anunciava "Automática" duas vezes sem dizer de quê, e o teste que varria o menu não tinha como
+distinguir altura de linha de altura de cabeçalho.
+
+## 2026-08-13 - A planilha de lançamentos leva o lançamento inteiro, e o rateio não vira linha
+
+A exportação tinha 14 colunas e faltava o que mais importa num relatório de custo: **centro de
+custo** e **observações**, mais forma e condição de pagamento, conta bancária e o número do
+documento de origem. Duas decisões estruturais no caminho.
+
+1. **Uma linha por lançamento, e o rateio em duas colunas de texto.** Centro de custo mora no
+   rateio, e um lançamento pode ser dividido entre várias obras. "Centro de custo" lista os nomes
+   e "Rateio" traz quanto foi para cada um (sem "R$", que repetido cinco vezes numa célula é
+   ruído; a moeda está na coluna Valor, que é número e soma). A alternativa avaliada e **recusada**
+   foi uma linha por rateio: ela repetiria o valor do lançamento em N linhas, e quem somasse a
+   coluna Valor contaria o mesmo dinheiro várias vezes. Numa planilha de dinheiro, total errado
+   que abre sem erro nenhum é o pior defeito possível. Parcela é 1-N pelo mesmo motivo e entra só
+   como resumo: quantidade em "Parcelas" e conta bancária quando é a mesma em todas (contas
+   diferentes viram "Várias contas", porque um nome só ali seria mentira).
+
+2. **A listagem NÃO paga pela planilha.** Os campos novos não entraram em `listarLancamentos`: a
+   tela é a mais usada do módulo, não mostra nenhum deles, e pendurar o rateio no select dela
+   sairia caro em toda navegação para servir uma exportação ocasional. Quem enriquece é
+   `detalharLancamentosParaPlanilha`, chamada **página por página** sobre os ids que a lista já
+   devolveu. Página por página e não de uma vez porque o teto é 25.000 lançamentos, e um `in` com
+   25 mil uuids é uma query que o Postgres aceita mas ninguém quer depurar.
+
+`lerLancamentosEmPaginas` virou genérica em `T extends LancamentoLista` em vez de ganhar uma cópia:
+a deduplicação por id (que é o que impede linha repetida entre páginas) vale igual para a linha
+enxuta da tela e para a linha enriquecida da planilha.
+
+**Coluna nova entra no fim, não no meio.** "Observações" é a última de todas: é a única com texto
+de tamanho imprevisível, e no meio ela empurraria para fora da tela tudo que a pessoa abriu a
+planilha para ver.
+
+## 2026-08-13 - `in` do PostgREST tem limite de URL, e 1000 ids não cabem
+
+A primeira versão da planilha completa subiu **quebrada em produção** e passou em 1102 testes e no
+CI. O enriquecimento chamava `.in("id", ids)` com uma página inteira da exportação, e
+`PAGINA_LEITURA` é 1000.
+
+**Medido no projeto vivo (13/08/2026), batendo direto no PostgREST:**
+
+| ids | tamanho da URL | resposta |
+|-----|----------------|----------|
+| 100 | 3,7 KB | passa |
+| 500 | 18,5 KB | passa |
+| 1000 | 37 KB | **HTTP 400 Bad Request** |
+
+O `in` viaja na QUERY STRING de um GET, então cada uuid custa 37 caracteres. O 400 acontece ANTES
+de qualquer checagem de permissão ou RLS, e do lado do app chega como erro genérico de consulta:
+não se parece nem com falta de grant nem com RLS, que é o que faz perder tempo.
+
+**Regra:** `.in()` com lista derivada de dados sempre em lotes de `LOTE_IDS_POSTGREST` (200,
+~7,5 KB, abaixo dos 8 KB que proxy e CDN costumam cortar). O lote fica DENTRO da função de query,
+não no chamador, para não depender de quem chama lembrar.
+
+Três lições que valem além desta tela:
+
+1. **Teste unitário não pega isso, por construção.** O teste roda com dois registros, e dois ids
+   cabem em qualquer URL. Quem pega é rodar contra dado real. A exportação tem 5.848 lançamentos
+   na base de hoje; nenhum teste chega perto disso.
+2. **Engolir a mensagem do banco custa caro.** A query lançava
+   `throw new Error("Não foi possível carregar o detalhe para a planilha")` e descartava `error`.
+   Descobrir a causa virou eliminação de hipóteses (grant de coluna, FK ambígua, grant de tabela),
+   todas erradas. Agora a mensagem do PostgREST vai anexada.
+3. **Verificar no navegador com dado real não é opcional em exportação.** CI verde aqui provou
+   apenas que compila.
+
+## 2026-08-13 - Adiantamento parcelado: o vale do mês virou dívida amortizada, e quem protege o dinheiro é uma trava com condição de ordem
+
+O adiantamento de salário passou a ser descontado em **N parcelas** na folha, com o dinheiro
+saindo **inteiro na concessão**. Quinze migrations de schema, função e comentário, sete tarefas,
+seis rodadas de correção. Três dos achados abaixo são bugs de dinheiro que existiram e foram
+medidos, não riscos hipotéticos.
+
+### 1. Mudou a natureza do adiantamento, não só a quantidade de parcelas
+
+Antes, adiantamento era **vale do mês**: concedido em agosto, descontado inteiro na folha de
+agosto, e a coluna `rh_adiantamentos.folha_id` amarrava um ao outro. Agora o desembolso e a
+amortização vivem em **competências diferentes de propósito**: 6.000,00 concedidos em agosto
+podem ser amortizados 1.404,15 em agosto, 1.404,15 em setembro e o resto depois.
+
+Consequências que valem para quem lê qualquer número deste módulo:
+
+1. **O caixa vê a despesa na CONCESSÃO.** A `fn_registrar_adiantamento` cria o lançamento
+   `a_pagar` de origem `adiantamento` no ato, com o valor cheio, no centro de custo do
+   colaborador. Para o Financeiro é despesa paga, não empréstimo a receber: não existe conta a
+   receber neste sistema, e criar uma para isso significaria um módulo novo.
+2. **A folha vê o custo na AMORTIZAÇÃO**, mês a mês, como redução do líquido.
+3. **O saldo devedor não é uma coluna, é uma conta**: `valor concedido - soma(valor_descontado)`.
+   Quem somar "adiantamentos não descontados" pelo valor concedido mente assim que existir uma
+   parcela paga pela metade. Foi exatamente isso que a ficha do colaborador fazia, e ela
+   escondeu **1.300,00** de dívida num cenário de 4 casos medidos.
+4. **`rh_adiantamentos.folha_id` não existe mais.** O vínculo é `rh_adiantamento_parcelas.folha_id`,
+   por parcela.
+
+### 2. A identidade da folha trocou o terceiro termo
+
+A conferência do custo da folha continua sendo
+
+    soma(líquidos) + soma(guias) + soma(adiantamento) = folhas.custo_total
+
+mas o terceiro termo **não é mais "os adiantamentos concedidos nesta competência"**: é
+`sum(rh_adiantamento_parcelas.valor_descontado)` das parcelas com `folha_id` = esta folha, ou
+seja, o que esta folha de fato amortizou. Somar o concedido faria agosto responder por dinheiro
+que não descontou, e setembro por nada.
+
+A consulta gravada no `obj_description` da `fn_aprovar_folha` traz `concedido_no_mes` ao lado,
+fora da identidade, porque com parcelamento os dois números **são diferentes e isso é o normal**:
+na prova de aceite final, 10.000,00 concedidos contra 3.646,92 descontados, com `explicado` em
+`0.00`.
+
+Uma pré-condição da identidade **caiu**: era "todo item tem `valor_liquido > 0`". Com o desconto
+limitado ao disponível, líquido negativo virou inalcançável por construção. O termo
+`liquidos_nao_positivos` **ficou na consulta mesmo valendo 0,00**, como detector de regressão
+desse limite: se ele voltar a ser diferente de zero, é bug ainda que `explicado` feche.
+
+### 3. Cascata: ordem declarada, limite no disponível, e a sobra vai para o mês seguinte
+
+O desconto de cada parcela é `least(valor_previsto, greatest(disponível - já descontado, 0))`,
+com `disponível = greatest(salário - INSS - IRRF, 0)`. A ordem é
+`(rh_adiantamentos.data, rh_adiantamento_parcelas.numero)`, do adiantamento **mais antigo** para
+o mais novo, e é conferível: na prova final, com 1.842,77 disponíveis, o adiantamento de 03/08
+leva 1.200,00 e o de 20/08 leva 642,77. Na ordem invertida os mesmos dados dariam 800,00 e
+1.042,77, então os números provam a ordem, não a suposição.
+
+O que não couber vira parcela nova **na próxima competência livre depois da que está sendo
+processada**, não "no fim do plano": depender do `max(competencia)` das outras linhas fazia a
+sobra **pular um mês** ao regerar um mês anterior, e o mês pulado saía sem desconto nenhum
+(medido: 3.357,23 de dívida invisível duas competências à frente).
+
+Parcela que não coube **nada** fecha na folha com `valor_descontado = 0`, e o check
+`rh_adiant_parcelas_descontado_com_folha` admite esse estado de propósito. Se ela ficasse aberta,
+ela e a sobra (que nasce com o valor inteiro dela) somariam duas vezes o mesmo dinheiro.
+
+### 4. A forma correta da invariante do plano, e por que a simples superconta
+
+Para cada adiantamento, em todo estado estável:
+
+    soma(valor_descontado) + soma(valor_previsto das parcelas ABERTAS) = valor concedido
+
+**Não** `soma(valor_previsto)` de todas as parcelas. A parcela fechada guarda o previsto
+**inteiro** e a sobra nasce com a diferença, então a forma simples conta a diferença duas vezes
+sempre que uma folha descontou parcela pela metade. Medido três vezes, com dados diferentes:
+1.150,00 contra 1.000,00 concedidos; 6.400,00 contra 5.200,00; e 10.753,08 contra 10.000,00 na
+prova de aceite final. A forma errada estava nos meus próprios briefs até a Task 5, e é a que
+qualquer um escreve primeiro.
+
+A invariante vale em **estado estável**. Entre regerar um mês do meio da cadeia e regerar o mês
+seguinte ela fica quebrada de propósito, porque apagar a sobra daquele mês deixa órfã a sobra que
+a folha seguinte derivou dela. Ela se cura ao regerar o mês de origem, não o mês anterior.
+
+Desde 13/08 essa consulta está **gravada e executável** no `obj_description` da `fn_gerar_folha`,
+com a forma errada ao lado, na última coluna, para quem confere ver a diferença em vez de ler
+sobre ela.
+
+### 5. O cerco de travas, e o `delete` que NÃO deve ser filtrado
+
+Três travas independentes protegem a cadeia, e elas cobrem janelas diferentes:
+
+| trava | onde | recusa |
+|---|---|---|
+| regeneração | `fn_gerar_folha` | regerar uma folha cuja sobra já foi descontada por outra folha que não está em rascunho **ou que é anterior a esta** |
+| folha desatualizada | `fn_guarda_status_folha` | enviar para aprovação uma folha cujo desconto de adiantamento não bate com os itens dela |
+| piso da competência | `fn_quitar_adiantamento` e `fn_antecipar_adiantamentos_colaborador` | mover sobra aberta para antes do mês da folha que a gerou |
+
+**A proteção do dinheiro depende inteiramente da primeira, e da condição de ordem dela.** Sem o
+`f.competencia < v_ini`, a isenção "folha posterior em rascunho não trava" passa a valer para uma
+folha **anterior**, e regerar apaga parcela já fechada: medido, 1.842,77 cobrados do colaborador
+sem registro nenhum no plano, com a folha que cobra a mais aprovando sem atrito. Quem for
+relaxar essa trava por conveniência operacional (o ciclo de desaprovar e refazer é chato) tem que
+reler os quatro pontos do `comment on function` da `fn_gerar_folha` antes.
+
+**O `delete` de sobras não filtra `folha_id`, e isso é deliberado.** Ele desfaz a **subárvore** que
+aquela geração criou, e precisa ser total: manter uma sobra já fechada enquanto a causa dela é
+recalculada faz o mesmo dinheiro ser representado duas vezes. Eu instruí duas vezes a "consertar"
+isso filtrando `folha_id is null`, e as duas vezes a medição derrubou a instrução: com o filtro, o
+plano de 5.200,00 vai a 8.557,23 ao regerar o mês anterior e a 10.071,69 depois de refazer a
+cadeia em ordem, e o colaborador termina cobrado em **328,31 a mais** do que o concedido. **A
+mudança feita para proteger dinheiro cobrava a mais.** Depois da condição de ordem, ela não tem
+caso restante.
+
+A trava do trigger é **por folha** e não protege o plano: a folha diretamente corrompida fica
+bloqueada, mas uma folha mais adiante na mesma cadeia, internamente consistente sozinha, envia e
+aprova sem atrito. Uma versão anterior do comentário afirmava o contrário, e garantia falsa em
+comentário é pior que comentário nenhum. Quem contém o estrago é a trava de regeneração, que
+força o ciclo desaprovar, regerar em ordem, reaprovar. Nesse ciclo nenhum valor é perdido nem
+cobrado em dobro: o lançamento renasce uma vez só e com o mesmo valor.
+
+### 6. A antecipação no desligamento não desconta nada hoje, e é decisão do dono
+
+Inativar um colaborador com saldo junta as parcelas em aberto numa competência válida (respeitando
+o piso), e o toast promete que o saldo será descontado. **A folha itera `where ativo and vinculo =
+'clt'`, e a inativação acontece antes.** Medido na prova final: 3.191,70 antecipados para 12/2026,
+folha de 12/2026 gerada, **zero item do inativo e zero descontado**; a parcela fica aberta para
+sempre.
+
+A premissa da feature caiu: se a pessoa saiu, não existe folha futura dela, e o desconto sai da
+rescisão, que é o Bloco 9 e não existe. **Três saídas foram apresentadas ao dono do sistema e
+nenhuma foi escolhida ainda.** A recomendação é deixar o mecanismo pronto valendo no Bloco 9 e
+corrigir a mensagem para não prometer. Enquanto isso, o **alerta de inativo com saldo em aberto**
+no painel de RH não é enfeite: é a única coisa no sistema que mostra essa dívida.
+
+### 7. Consulta gravada em comentário passa a ter marca e verificação automática
+
+A consulta de diagnóstico gravada no `obj_description` da `fn_aprovar_folha` **ficou quebrada em
+silêncio por quatro tarefas**: ela lia `rh_adiantamentos.folha_id` e a migration `20260812215337`
+dropou a coluna. A ferramenta que o dono do sistema usaria para separar "bug" de "configuração
+faltando" respondia `42703 column "folha_id" does not exist`, e nada acusou, porque consulta
+gravada em comentário não é compilada, não é testada e não aparece em portão nenhum.
+
+**Decisões**
+
+1. **Toda consulta executável gravada em comentário carrega uma marca fixa**, a linha literal
+   `-- DIAGNOSTICO EXECUTAVEL v1`, e termina em ponto e vírgula. Hoje são duas: a identidade da
+   folha (`fn_aprovar_folha`) e a invariante do plano (`fn_gerar_folha`).
+2. **`public.fn_verificar_diagnosticos_gravados()`** varre `pg_proc` / `obj_description` atrás da
+   marca, extrai cada consulta e roda **`explain`** nela. `explain` não precisa de dado nenhum
+   (produção tem zero folha) e já pega o modo de falha real, que é coluna ou tabela que sumiu. Ela
+   também denuncia marca sem consulta, consulta sem terminador, marca em objeto que a varredura
+   não lê, e **o caso de não achar marca nenhuma**: varredura que passa por não encontrar nada é a
+   mesma cegueira que ela existe para fechar. Não tem grant para `authenticated` nem `anon`.
+3. **Toda migration que faça `drop column`, `rename column` ou `drop table` chama essa função no
+   fim e falha se ela devolver linha.** É isso que fecha a lacuna de verdade, porque passa a valer
+   para qualquer migration de schema, não só para quem lembrou de conferir aquele comentário. O
+   script `supabase/provas/diagnosticos_gravados_executaveis.sql` roda a mesma varredura, com
+   controle negativo (três defeitos plantados, um deles a consulta velha de verdade), e entra no
+   portão de qualquer task que toque schema.
+4. **A prova de "extrair e executar" só vale no instante em que roda**, e o comentário quebra por
+   causa de uma migration que ninguém relacionou com ele. Por isso a verificação virou código
+   chamável em vez de um item de checklist. **Ela ainda NÃO é automática**, e vale dizer o que
+   falta: hoje são uma função pronta no banco e um script em `supabase/provas/` que **alguém
+   precisa chamar**. Não há event trigger, não há job, e o `ci.yml` nem enxerga esses arquivos
+   (`paths-ignore: supabase/provas/**`, e o job roda com credencial placeholder, sem banco). Para
+   ser automática de verdade seriam necessários um event trigger `ddl_command_end` no banco (pega
+   qualquer DDL, inclusive de outra sessão) ou um passo de CI com credencial de banco. Enquanto
+   não for, o que segura é a regra 3 acima: a chamada dentro da migration que mexe em schema.
+5. **A verificação não pega DERIVA SEMÂNTICA, e isso é limitação declarada, não esquecimento.**
+   Ela prova que a consulta **resolve** contra o schema, não que ela ainda mede a coisa certa.
+   Medido no review: trocando `valor_descontado` por `valor_previsto` na consulta gravada, o
+   `explain` resolve, a varredura passa, e o número muda de significado. Consulta que **compila e
+   mente** continua sendo pega só por prova de aceite com números esperados, como a de
+   `supabase/provas/adiantamento_parcelado_aceite_final.sql`.
+
+### 8. Uma lição de processo que se repetiu três vezes nesta frente
+
+Comentário e código se descolaram três vezes, e nas três o comentário era o único lugar onde a
+intenção estava escrita. Na terceira, o comentário estava **certo** e o código errado: a Task 3
+atualizou o texto de `resumoAdiantamentos` para "nenhuma parcela descontada" e deixou a linha
+seguinte filtrando pela semântica antiga. Ao mudar a semântica de um conceito (aqui, "está na
+folha"), procure **todos** os agregadores que dependem dele, não só as telas do módulo em que se
+está mexendo.
+
+### 9. Dois gaps que o review amplo achou, os dois pendentes de decisão do dono
+
+**a) Parcela que chega ABERTA depois da folha gerada não é pega por trava nenhuma.**
+
+O trigger `fn_guarda_status_folha` compara `sum(valor_descontado)` das parcelas com `folha_id` = a
+folha contra `sum(folha_itens.adiantamentos)`. **Parcela aberta não entra em nenhum dos dois
+lados**: ele pega desconto que **diminui** (regeneração de mês anterior que soltou parcela já
+descontada) e não pega dívida que **chega** depois da folha gerada. O `comment on function` da
+`fn_quitar_adiantamento` afirmava que essa era "a rede desse caso"; não era, e o texto foi
+corrigido na migration `20260813230316`.
+
+Três caminhos levam ao mesmo estado, todos medidos:
+
+| caminho | medido |
+|---|---|
+| conceder adiantamento novo numa competência já gerada | somas `400,00 vs 400,00`, envio passa, folha aprova com R$ 900 concedidos e R$ 0 descontados |
+| quitar na competência da folha já gerada | R$ 800,00 abertos na competência da folha aprovada |
+| inativar colaborador (antecipação) | R$ 1.000,00 abertos |
+
+Consequência: **aquele mês desconta menos do que deveria**, e o saldo fica aberto numa competência
+que já passou. Não há valor perdido nem cobrado em dobro (a invariante do plano continua
+fechando), e a correção é **desaprovar e regerar** aquela folha.
+
+Fechar de verdade exige uma **condição nova no trigger**, comparando também as parcelas abertas da
+competência, e ela tem que espelhar **exatamente** a iteração da `fn_gerar_folha` (`ativo`,
+`vinculo = 'clt'`, e o `continue` de salário zero sem horas). Uma condição mais larga travaria o
+envio por parcela que a folha nunca descontaria, e como o único jeito de destravar é regerar,
+viraria beco sem saída. **Não foi feita no último passo da frente de propósito:** mudança de trava
+de dinheiro sem ciclo próprio de review é exatamente como nasceram os piores erros desta frente.
+
+O que já foi feito para tirar o caso do caminho padrão, que é barato e não muda trava: o
+`QuitarSaldoDialog` passou a abrir no **mês seguinte** (o corrente normalmente já tem folha
+gerada), e a tela avisa que quitar numa competência com folha gerada exige regerar aquela folha.
+
+**b) Adiantamento a colaborador ativo NÃO-CLT nunca é descontado.**
+
+`listarColaboradores` oferece todos os vínculos no formulário e a `fn_registrar_adiantamento` não
+checa vínculo, mas a `fn_gerar_folha` itera `where ativo and vinculo = 'clt'`. Medido em transação
+revertida, com um CLT de controle na mesma folha: diarista ativo, R$ 1.500,00 em 3x, lançamento
+`a_pagar` de 1.500,00 criado normalmente e plano com 3 parcelas; folha de agosto gerada com **1
+item, nenhum dele**; saldo **0,00 descontado e 1.500,00 em aberto**, para sempre. E o alerta de
+"inativo com saldo em aberto" **não pega**, porque ele está **ativo**: a dívida não aparece em
+lugar nenhum.
+
+É **pré-existente** (o vínculo sempre foi filtro da folha), mas esta frente criou o conceito de
+saldo e a rede tem esse buraco. **Decisão do dono**, porque muda quem pode receber adiantamento:
+ou o formulário passa a oferecer só CLT, ou o alerta passa a cobrir "saldo aberto sem folha futura
+possível" (que cobriria os dois casos de uma vez, o inativo e o não-CLT).

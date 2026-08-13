@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { erroAcao, logErroServidor } from "@/lib/erros";
 import { createClient } from "@/lib/supabase/server";
+import { destinoSeguro } from "@/modules/auth/destino";
 import {
   definirSenhaSchema,
   loginSchema,
@@ -14,10 +15,17 @@ import {
 type ResultadoAcao = { erro: string } | undefined;
 
 /**
- * Autentica com email e senha. Em caso de sucesso redireciona para "/".
+ * Autentica com email e senha. Em caso de sucesso redireciona para o `destino`
+ * pretendido, ou para "/" quando não há um que preste.
  * Retorna { erro } com mensagem amigável quando a autenticação falha.
+ *
+ * `destino` chega cru do query string, então é entrada não confiável: quem
+ * decide para onde o redirect vai é `destinoSeguro()`, e nunca o texto recebido.
  */
-export async function entrar(dados: LoginInput): Promise<ResultadoAcao> {
+export async function entrar(
+  dados: LoginInput,
+  destino?: string,
+): Promise<ResultadoAcao> {
   const resultado = loginSchema.safeParse(dados);
   if (!resultado.success) {
     return {
@@ -43,7 +51,7 @@ export async function entrar(dados: LoginInput): Promise<ResultadoAcao> {
   }
 
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect(destinoSeguro(destino));
 }
 
 /** Encerra a sessão e redireciona para o login. */

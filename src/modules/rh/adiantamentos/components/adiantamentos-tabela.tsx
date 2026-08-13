@@ -3,7 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ExternalLink, HandCoins, MoreHorizontal, Plus } from "lucide-react";
+import {
+  ExternalLink,
+  HandCoins,
+  MoreHorizontal,
+  Plus,
+  Receipt,
+  Wallet,
+} from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -16,6 +23,7 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
+  MoneyText,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -27,10 +35,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
 import { removerAdiantamento } from "@/modules/rh/adiantamentos/actions";
+import { dividirEmParcelas } from "@/modules/rh/adiantamentos/parcelamento";
 import type { AdiantamentoLista } from "@/modules/rh/adiantamentos/queries";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { AdiantamentoFormDrawer } from "./adiantamento-form-drawer";
+import { AdiantamentoParcelasDialog } from "./adiantamento-parcelas-dialog";
+import { QuitarSaldoDialog } from "./quitar-saldo-dialog";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Opções do filtro de situação: espelham a coluna Situação da tabela. */
@@ -47,12 +58,26 @@ export interface AdiantamentosTabelaProps {
   podeExcluir: boolean;
   /** Permissão para abrir o lançamento no Financeiro (financeiro.lancamentos:ver). */
   podeVerLancamento: boolean;
+  /** Permissão para abrir a folha que descontou a parcela (rh.folha:ver). */
+  podeVerFolha: boolean;
 }
 
 /** Competência (yyyy-MM-01) como MM/AAAA. */
 function formatarCompetencia(competencia: string): string {
   const [ano, mes] = competencia.split("-");
   return `${mes}/${ano}`;
+}
+
+/**
+ * Valor "de cada parcela" para o rótulo resumido da tabela ("3x de R$
+ * 400,00"): a base da divisão, sem a sobra de centavos que a primeira
+ * parcela carrega (índice 1, não 0). Informativo — os valores exatos de
+ * cada parcela (que podem variar com sobra empurrada por folha) estão no
+ * detalhe ("Ver parcelas").
+ */
+function valorParcelaRotulo(valor: number, parcelasTotal: number): number {
+  if (parcelasTotal <= 1) return valor;
+  return dividirEmParcelas(valor, parcelasTotal)[1] ?? valor;
 }
 
 /** Opções do filtro de competência: cada mês presente na listagem. */
@@ -80,6 +105,7 @@ export function AdiantamentosTabela({
   podeEditar,
   podeExcluir,
   podeVerLancamento,
+  podeVerFolha,
 }: AdiantamentosTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [competencia, setCompetencia] = useFiltroSessao("competencia", "");
@@ -99,6 +125,11 @@ export function AdiantamentosTabela({
   const [aExcluir, setAExcluir] = React.useState<AdiantamentoLista | null>(
     null,
   );
+
+  const [verParcelas, setVerParcelas] = React.useState<AdiantamentoLista | null>(
+    null,
+  );
+  const [aQuitar, setAQuitar] = React.useState<AdiantamentoLista | null>(null);
 
   function abrirNovo() {
     setEmEdicao(null);
@@ -158,8 +189,6 @@ export function AdiantamentosTabela({
     valorAte,
   ]);
 
-  const podeAgir = podeEditar || podeExcluir;
-
   const colunas = React.useMemo<ColumnDef<AdiantamentoLista, unknown>[]>(() => {
     const base: ColumnDef<AdiantamentoLista, unknown>[] = [
       {
@@ -179,6 +208,24 @@ export function AdiantamentosTabela({
         ),
       },
       colunaDinheiro<AdiantamentoLista>("valor", "Valor"),
+      {
+        id: "parcelamento",
+        header: "Parcelamento",
+        cell: ({ row }) => {
+          const { valor, parcelasTotal } = row.original;
+          if (parcelasTotal <= 1) return <span>À vista</span>;
+          return (
+            <span className="tabular-nums">
+              {parcelasTotal}x de{" "}
+              <MoneyText
+                valor={valorParcelaRotulo(valor, parcelasTotal)}
+                className="inline"
+              />
+            </span>
+          );
+        },
+      },
+      colunaDinheiro<AdiantamentoLista>("saldo", "Saldo"),
       {
         accessorKey: "data",
         header: "Data",
@@ -222,8 +269,10 @@ export function AdiantamentosTabela({
       },
     ];
 
-    if (!podeAgir) return base;
-
+    // "Ver parcelas" não pede permissão além da que já abre esta tela
+    // (rh.adiantamentos:ver): é a mesma informação que a linha já mostra
+    // (valor, saldo, situação), só detalhada por competência. Por isso a
+    // coluna de ações agora aparece para todo mundo, não só quem edita/exclui.
     base.push({
       id: "acoes",
       header: "",
@@ -243,8 +292,11 @@ export function AdiantamentosTabela({
           podeExcluir &&
           !adiantamento.naFolha &&
           !adiantamento.pagamentoComprometido;
-
-        if (!podeEditarLinha && !podeExcluirLinha) return null;
+        // "Quitar saldo" pede a permissão de editar E que exista saldo em
+        // aberto: sem saldo não há o que juntar, e a ação some — evita quem
+        // já quitou (ou nunca teve parcela em aberto) ver um botão que só
+        // devolveria erro do servidor.
+        const podeQuitarLinha = podeEditar && adiantamento.saldo > 0;
 
         return (
           <DropdownMenu>
@@ -259,6 +311,16 @@ export function AdiantamentosTabela({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setVerParcelas(adiantamento)}>
+                <Receipt />
+                Ver parcelas
+              </DropdownMenuItem>
+              {podeQuitarLinha ? (
+                <DropdownMenuItem onSelect={() => setAQuitar(adiantamento)}>
+                  <Wallet />
+                  Quitar saldo
+                </DropdownMenuItem>
+              ) : null}
               {podeEditarLinha ? (
                 <DropdownMenuItem onSelect={() => abrirEdicao(adiantamento)}>
                   Editar
@@ -279,7 +341,7 @@ export function AdiantamentosTabela({
     });
 
     return base;
-  }, [podeAgir, podeEditar, podeExcluir, podeVerLancamento]);
+  }, [podeEditar, podeExcluir, podeVerLancamento]);
 
   return (
     <>
@@ -432,6 +494,27 @@ export function AdiantamentosTabela({
           textoConfirmar="Excluir"
           variante="destrutivo"
           onConfirmar={confirmarExclusao}
+        />
+      ) : null}
+
+      <AdiantamentoParcelasDialog
+        adiantamento={verParcelas}
+        aberto={verParcelas !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setVerParcelas(null);
+        }}
+        podeVerFolha={podeVerFolha}
+      />
+
+      {podeEditar && aQuitar ? (
+        <QuitarSaldoDialog
+          aberto={aQuitar !== null}
+          onAbertoChange={(aberto) => {
+            if (!aberto) setAQuitar(null);
+          }}
+          adiantamentoId={aQuitar.id}
+          colaboradorNome={aQuitar.colaboradorNome}
+          saldo={aQuitar.saldo}
         />
       ) : null}
     </>

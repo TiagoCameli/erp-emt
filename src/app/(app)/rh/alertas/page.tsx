@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { PainelAlertas } from "@/modules/rh/alertas/components/painel-alertas";
 import {
+  listarAlertasAdiantamentoInativo,
   listarAlertasCadastro,
   listarAlertasDocumentos,
   listarAlertasEpiRecolher,
@@ -28,12 +29,20 @@ export default async function PaginaAlertasRh() {
   const podeFerias = temPermissao(usuario, "rh.ferias", "ver");
   const podeEpis = temPermissao(usuario, "rh.epis", "ver");
   const podeCadastro = temPermissao(usuario, "cadastros.colaboradores", "ver");
+  // O alerta de adiantamento de inativo lê colaboradores E
+  // rh_adiantamento_parcelas na mesma consulta (uma leitura, ver
+  // listarAlertasAdiantamentoInativo); a RLS de cada tabela exige a
+  // permissão do recurso dela, sem OR entre os dois, então a categoria só
+  // aparece com as DUAS.
+  const podeAdiantamentos =
+    temPermissao(usuario, "rh.adiantamentos", "ver") && podeCadastro;
 
-  const [documentos, ferias, epis, cadastros] = await Promise.all([
+  const [documentos, ferias, epis, cadastros, adiantamentos] = await Promise.all([
     podeDocumentos ? listarAlertasDocumentos() : Promise.resolve(null),
     podeFerias ? listarAlertasFerias() : Promise.resolve(null),
     podeEpis ? listarAlertasEpiRecolher() : Promise.resolve(null),
     podeCadastro ? listarAlertasCadastro() : Promise.resolve(null),
+    podeAdiantamentos ? listarAlertasAdiantamentoInativo() : Promise.resolve(null),
   ]);
 
   return (
@@ -43,13 +52,14 @@ export default async function PaginaAlertasRh() {
       <PageHeader
         modulo="RH"
         titulo="Alertas"
-        descricao="Documentos, férias, EPI e cadastro que precisam de atenção"
+        descricao="Documentos, férias, EPI, cadastro e adiantamento que precisam de atenção"
       />
       <PainelAlertas
         documentos={documentos}
         ferias={ferias}
         epis={epis}
         cadastros={cadastros}
+        adiantamentos={adiantamentos}
       />
     </>
   );

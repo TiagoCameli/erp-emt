@@ -5,9 +5,14 @@ import { z } from "zod";
 
 import type { Json } from "@/lib/database.types";
 import { erroAcao } from "@/lib/erros";
+import { dataHojeISO } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import {
+  lerFiltrosLancamentos,
+  parametrosDaQueryString,
+} from "@/modules/financeiro/lancamentos/filtros";
 import {
   lancamentoSchema,
   type LancamentoInput,
@@ -16,6 +21,16 @@ import {
   LIMITE_LOTE,
   type ResumoLote,
 } from "@/modules/financeiro/lancamentos/lote";
+import { lerLancamentosEmPaginas } from "@/modules/financeiro/lancamentos/leitura-completa";
+import {
+  montarPlanilhaLancamentos,
+  nomeArquivoPlanilhaLancamentos,
+} from "@/modules/financeiro/lancamentos/planilha";
+import {
+  detalharLancamentosParaPlanilha,
+  listarLancamentos,
+  type LancamentoPlanilha,
+} from "@/modules/financeiro/lancamentos/queries";
 
 const RECURSO = "financeiro.lancamentos" as const;
 const ROTA = "/financeiro/lancamentos";
@@ -514,5 +529,146 @@ export async function definirContaLancamentosLote(
       puladosSemParcelaPendente: bruto.pulados_sem_parcela_pendente ?? 0,
       naoEncontrados: bruto.nao_encontrados ?? 0,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Exportar a listagem para Excel
+// ---------------------------------------------------------------------------
+
+export type ResultadoPlanilha =
+  | { ok: true; base64: string; nomeArquivo: string }
+  | { erro: string };
+
+/**
+ * Freio de disparada, não regra de negócio.
+ *
+ * A exportação leva TUDO que está no filtro, e sem filtro nenhum leva a base
+ * inteira (hoje da ordem de 8 mil lançamentos, com a carga do Mais Controle
+ * dentro). O número existe só porque o arquivo é montado inteiro na memória do
+ * servidor e volta em base64 pela resposta da Server Action: sem teto algum, um
+ * dia a exportação viraria um erro genérico de memória em vez de um aviso.
+ *
+ * 25.000 é umas três vezes a base de hoje, então não é para ele encostar em uso
+ * normal. Se encostar, a mensagem diz o número real e o que fazer, em vez de
+ * cortar a planilha em silêncio.
+ */
+const LIMITE_PLANILHA = 25_000;
+
+/** Teto da query string aceita, para ninguém mandar uma URL de 1 MB. */
+const TETO_QUERY = 4000;
+
+/**
+ * Gera a planilha (.xlsx) dos lançamentos que estão no filtro da tela e devolve
+ * em base64 para o navegador baixar.
+ *
+ * Recebe a QUERY STRING da listagem, não uma cópia dos filtros: a página e a
+ * planilha passam pelo mesmo `lerFiltrosLancamentos`, então o que sai no arquivo
+ * é exatamente o conjunto que está na tela. Um segundo lugar montando filtro
+ * divergiria no primeiro filtro novo, e a planilha começaria a contradizer a
+ * lista sem ninguém perceber.
+ *
+ * Exporta o conjunto FILTRADO inteiro, e não a página aberta: quem exporta quer
+ * fechar o mês, não as 25 linhas que couberam na tela. A paginação da tela não
+ * tem nada a ver com o recorte do relatório. Sem filtro nenhum na tela, sai a
+ * base inteira.
+ *
+ * A leitura vai em páginas de mil, e não numa requisição só: o PostgREST corta a
+ * resposta num teto invisível, então pedir tudo de uma vez pode devolver menos e
+ * a planilha sairia faltando lançamento sem ninguém perceber (é o mesmo motivo do
+ * `lerEmPaginas` nas consultas de filtro). No fim a contagem lida é conferida
+ * contra o `count` do banco: se não fechar, a resposta é erro, não um arquivo
+ * pela metade.
+ */
+export async function gerarPlanilhaLancamentos(
+  query: string,
+): Promise<ResultadoPlanilha> {
+  // Exportar é ler: mesma permissão que abre a tela. Sem ela, nem a lista existe.
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para exportar lançamentos" };
+  }
+
+  if (typeof query !== "string" || query.length > TETO_QUERY) {
+    return { erro: "Filtro inválido para exportar" };
+  }
+
+  const { filtros } = lerFiltrosLancamentos(parametrosDaQueryString(query));
+
+  let itens: LancamentoPlanilha[];
+  let total: number;
+  try {
+    const leitura = await lerLancamentosEmPaginas<LancamentoPlanilha>(
+      // Enriquece PÁGINA POR PÁGINA, não a exportação toda de uma vez: o teto é
+      // 25.000 lançamentos, e um `in` com 25 mil uuids é uma query que o Postgres
+      // aceita mas ninguém quer depurar. Aqui o `in` tem no máximo o tamanho da
+      // página, e cada uma paga uma consulta a mais para trazer observações,
+      // rateio, forma, condição, conta e o número da OC de origem.
+      async (pagina, tamanho) => {
+        const lote = await listarLancamentos({ ...filtros, pagina, tamanho });
+        // Acima do teto a leitura para na primeira página: não vale enriquecer
+        // uma página que vai ser descartada.
+        if (lote.total > LIMITE_PLANILHA) return { itens: [], total: lote.total };
+        const detalhes = await detalharLancamentosParaPlanilha(
+          lote.itens.map((item) => item.id),
+        );
+        return {
+          total: lote.total,
+          itens: lote.itens.map((item) => ({
+            ...item,
+            // Lançamento sem detalhe é lançamento que saiu da lista entre as duas
+            // consultas. Cai em branco em vez de derrubar a exportação: a checagem
+            // de `itens.length < total` mais abaixo é quem recusa leitura parcial.
+            ...(detalhes.get(item.id) ?? {
+              observacoes: null,
+              formaPagamentoNome: null,
+              condicaoPagamentoDescricao: null,
+              contaBancariaNome: null,
+              origemNumero: null,
+              rateios: [],
+            }),
+          })),
+        };
+      },
+      LIMITE_PLANILHA,
+    );
+    itens = leitura.itens;
+    total = leitura.total;
+  } catch (erro) {
+    return erroAcao(
+      "financeiro.lancamentos.gerarPlanilhaLancamentos",
+      erro,
+      "Não foi possível ler os lançamentos para exportar. Tente novamente",
+    );
+  }
+
+  if (total === 0) {
+    return { erro: "O filtro atual não tem nenhum lançamento para exportar" };
+  }
+  if (total > LIMITE_PLANILHA) {
+    return {
+      erro: `O filtro atual tem ${total.toLocaleString("pt-BR")} lançamentos, acima do limite de ${LIMITE_PLANILHA.toLocaleString("pt-BR")} por arquivo. Filtre por mês de referência e exporte em partes`,
+    };
+  }
+  // Leu menos do que o banco disse que existe: alguém mexeu na lista no meio da
+  // leitura. Melhor recusar e pedir de novo do que entregar planilha incompleta
+  // com cara de completa, que é o tipo de erro que ninguém confere.
+  if (itens.length < total) {
+    return erroAcao(
+      "financeiro.lancamentos.gerarPlanilhaLancamentos",
+      new Error(`leitura incompleta: ${itens.length} de ${total}`),
+      `Li ${itens.length.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} lançamentos porque a lista mudou durante a exportação. Exporte de novo`,
+    );
+  }
+
+  const workbook = montarPlanilhaLancamentos(itens);
+  workbook.created = new Date();
+  const conteudo = await workbook.xlsx.writeBuffer();
+
+  return {
+    ok: true,
+    base64: Buffer.from(conteudo).toString("base64"),
+    nomeArquivo: nomeArquivoPlanilhaLancamentos(dataHojeISO()),
   };
 }

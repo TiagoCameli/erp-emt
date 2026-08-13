@@ -10,6 +10,7 @@ import {
   formatarPercentual,
   formatarQuantidade,
   mesParaCompetencia,
+  mesSeguinte,
 } from "@/lib/formatadores";
 
 /**
@@ -226,5 +227,25 @@ describe("mês de referência (competência)", () => {
   it("formatarMesAno exibe mm/aaaa", () => {
     expect(formatarMesAno("2026-07-01")).toBe("07/2026");
     expect(formatarMesAno(null)).toBe("");
+  });
+
+  it("mesSeguinte anda um mês", () => {
+    expect(mesSeguinte("2026-07")).toBe("2026-08");
+    expect(mesSeguinte("2026-01")).toBe("2026-02");
+  });
+
+  it("mesSeguinte vira o ano em dezembro", () => {
+    expect(mesSeguinte("2026-12")).toBe("2027-01");
+  });
+
+  it("mesSeguinte recusa o que não é mês", () => {
+    expect(mesSeguinte("2026-13")).toBe("");
+    expect(mesSeguinte("2026-00")).toBe("");
+    expect(mesSeguinte("2026-07-01")).toBe("");
+    expect(mesSeguinte("")).toBe("");
+  });
+
+  it("mesSeguinte entrega mês que mesParaCompetencia aceita", () => {
+    expect(mesParaCompetencia(mesSeguinte("2026-12"))).toBe("2027-01-01");
   });
 });

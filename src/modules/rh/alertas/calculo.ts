@@ -108,3 +108,29 @@ export function corKpi(contagem: {
   if (contagem.aviso > 0) return "aviso";
   return "neutro";
 }
+
+/** Colaborador mínimo para checar saldo de adiantamento em aberto (soma de todos os adiantamentos dele). */
+export interface SaldoAdiantamentoColaborador {
+  ativo: boolean;
+  saldo: number;
+}
+
+/**
+ * Alerta de saldo de adiantamento em aberto de um colaborador JÁ INATIVO: a
+ * rede para a dívida que a antecipação (Bloco 8b, Task 5, ao inativar) não
+ * cobre. Ela só age no MOMENTO da inativação; quem já estava inativo antes
+ * dela existir, ou cujo saldo aumentou depois (ex.: sobra empurrada por uma
+ * folha), fica de fora. A `fn_gerar_folha` também não desconta inativo: o
+ * loop de geração é `where ativo`, e a inativação acontece antes (pendente de
+ * decisão do dono do sistema, ver docs/decisoes.md). Hoje ESTE alerta é a
+ * única coisa que mostra essa dívida — não é enfeite do painel.
+ *
+ * Ativo com saldo é o desconto normal da folha, sem alerta (ela vai cobrir
+ * mês a mês). Inativo com saldo zero (ou negativo, que não devia ocorrer,
+ * mas não é motivo pra travar o painel) também não alerta: já não deve nada.
+ */
+export function temSaldoAdiantamentoInativo(
+  colaborador: SaldoAdiantamentoColaborador,
+): boolean {
+  return !colaborador.ativo && colaborador.saldo > 0;
+}

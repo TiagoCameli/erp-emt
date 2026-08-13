@@ -159,6 +159,23 @@ export function mesHojeISO(): string {
 }
 
 /**
+ * "2026-07" -> "2026-08", virando o ano em dezembro. String fora do formato
+ * volta vazia. Pura (só manipula a string, não depende de fuso), para telas
+ * cujo default seguro é o mês seguinte, não o corrente: o mês corrente
+ * normalmente já tem folha gerada.
+ */
+export function mesSeguinte(mes: string): string {
+  const limpo = (mes ?? "").trim();
+  if (!/^\d{4}-\d{2}$/.test(limpo)) return "";
+  const ano = Number(limpo.slice(0, 4));
+  const numero = Number(limpo.slice(5, 7));
+  if (numero < 1 || numero > 12) return "";
+  const proximoAno = numero === 12 ? ano + 1 : ano;
+  const proximoMes = numero === 12 ? 1 : numero + 1;
+  return `${String(proximoAno).padStart(4, "0")}-${String(proximoMes).padStart(2, "0")}`;
+}
+
+/**
  * Quantos dias atrás está uma data yyyy-MM-dd, contra hoje no fuso de Rio
  * Branco. Negativo quando a data é no futuro. Comparação por string de data,
  * sem hora, então não pula dia por fuso.

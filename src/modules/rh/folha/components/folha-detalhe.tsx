@@ -144,8 +144,8 @@ export function FolhaDetalheView({
   // Retido que não vai virar conta a pagar por falta de grupo de recolhimento.
   // Avisa e não bloqueia: config vazia é deploy seguro, e a folha pode servir só
   // como custo gerencial por um tempo. Mostrado já no rascunho, para o aviso
-  // chegar ANTES de alguém aprovar. É a terceira causa de resíduo da identidade
-  // de conferência (ver obj_description da fn_aprovar_folha).
+  // chegar ANTES de alguém aprovar. É a segunda causa de resíduo da identidade
+  // de conferência (a lista tem duas; ver obj_description da fn_aprovar_folha).
   const retidoSemGrupo = retidoSemGrupoDeRecolhimento(folha, gruposRetido);
   const impostosSemGrupo = [
     retidoSemGrupo.inss > 0 ? "INSS" : null,

@@ -2,11 +2,18 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { EmptyState, GradeKpis, KPICard, StatusBadge } from "@/components/canonicos";
+import {
+  EmptyState,
+  GradeKpis,
+  KPICard,
+  MoneyText,
+  StatusBadge,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { contarPorUrgencia, corKpi, type ContagemUrgencia } from "@/modules/rh/alertas/calculo";
 import type {
+  AlertaAdiantamento,
   AlertaCadastro,
   AlertaDocumento,
   AlertaEpi,
@@ -28,6 +35,12 @@ export interface PainelAlertasProps {
   ferias: AlertaFerias[] | null;
   epis: AlertaEpi[] | null;
   cadastros: AlertaCadastro[] | null;
+  /**
+   * Colaborador inativo com saldo de adiantamento em aberto. Exige as duas
+   * permissões que a leitura precisa (`rh.adiantamentos:ver` E
+   * `cadastros.colaboradores:ver`) — ver `listarAlertasAdiantamentoInativo`.
+   */
+  adiantamentos: AlertaAdiantamento[] | null;
 }
 
 /** Quantos itens mais urgentes aparecem por seção antes do "ver tudo". */
@@ -94,7 +107,13 @@ function LinhaAlerta({ href, children }: { href: string; children: ReactNode }) 
   );
 }
 
-export function PainelAlertas({ documentos, ferias, epis, cadastros }: PainelAlertasProps) {
+export function PainelAlertas({
+  documentos,
+  ferias,
+  epis,
+  cadastros,
+  adiantamentos,
+}: PainelAlertasProps) {
   const contagemDocumentos = documentos
     ? contarPorUrgencia(documentos.map((d) => d.urgencia))
     : null;
@@ -103,12 +122,16 @@ export function PainelAlertas({ documentos, ferias, epis, cadastros }: PainelAle
   const contagemCadastros = cadastros
     ? contarPorUrgencia(cadastros.map(() => "critico" as const))
     : null;
+  const contagemAdiantamentos = adiantamentos
+    ? contarPorUrgencia(adiantamentos.map(() => "critico" as const))
+    : null;
 
   const totalGeral =
     (contagemDocumentos?.total ?? 0) +
     (contagemFerias?.total ?? 0) +
     (contagemEpis?.total ?? 0) +
-    (contagemCadastros?.total ?? 0);
+    (contagemCadastros?.total ?? 0) +
+    (contagemAdiantamentos?.total ?? 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -173,6 +196,19 @@ export function PainelAlertas({ documentos, ferias, epis, cadastros }: PainelAle
                 }
                 detalhe={detalheContagem(contagemCadastros, "incompleto(s)")}
                 href="/cadastros/colaboradores"
+              />
+            ) : null}
+
+            {contagemAdiantamentos ? (
+              <KPICard
+                titulo="Adiantamento de inativo"
+                valor={
+                  <span className={CLASSE_COR_KPI[corKpi(contagemAdiantamentos)]}>
+                    {contagemAdiantamentos.total}
+                  </span>
+                }
+                detalhe={detalheContagem(contagemAdiantamentos, "com saldo")}
+                href="/rh/adiantamentos"
               />
             ) : null}
           </GradeKpis>
@@ -292,6 +328,36 @@ export function PainelAlertas({ documentos, ferias, epis, cadastros }: PainelAle
                   </ul>
                 )}
                 <NotaMostrando total={cadastros.length} />
+              </SecaoDetalhe>
+            ) : null}
+
+            {adiantamentos ? (
+              <SecaoDetalhe
+                titulo="Adiantamento de inativo"
+                card
+                acao={<VerTudo href="/rh/adiantamentos" />}
+              >
+                {adiantamentos.length === 0 ? (
+                  <SemAlertas texto="Nenhum colaborador inativo com saldo em aberto." />
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {adiantamentos.slice(0, LIMITE_ITENS).map((item) => (
+                      <LinhaAlerta
+                        key={item.colaboradorId}
+                        href="/rh/adiantamentos"
+                      >
+                        <div>
+                          <p className="text-detalhe">{item.colaboradorNome}</p>
+                          <p className="text-legenda text-muted-foreground">
+                            Colaborador inativo
+                          </p>
+                        </div>
+                        <MoneyText valor={item.saldo} className="font-medium" />
+                      </LinhaAlerta>
+                    ))}
+                  </ul>
+                )}
+                <NotaMostrando total={adiantamentos.length} />
               </SecaoDetalhe>
             ) : null}
           </div>

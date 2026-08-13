@@ -9,6 +9,7 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   adiantamentoSchema,
+  competenciaSchema,
   type AdiantamentoInput,
 } from "@/modules/rh/adiantamentos/schemas";
 
@@ -45,8 +46,46 @@ function mensagemDeNegocio(
 }
 
 /**
- * Garante que o adiantamento existe e ainda não entrou numa folha nem tem
- * lançamento. Trava de EDITAR: com `lancamento_id` preenchido (todo
+ * "Já entrou em folha" virou "já teve parcela descontada em folha": a coluna
+ * `rh_adiantamentos.folha_id` deixou de existir (Task 3 do parcelamento) e o
+ * vínculo com a folha vive na parcela.
+ *
+ * A leitura vai pela RPC `fn_adiantamento_em_folha` (security definer,
+ * fail-closed) e NÃO por um `exists` direto em `rh_adiantamento_parcelas`: a
+ * policy de select daquela tabela exige `rh.adiantamentos:ver`, então um perfil
+ * com `editar` (ou `excluir`) sem `ver` leria vazio e a trava falharia ABERTA.
+ * A função devolve `true` (= "está em folha" = travado) quando falta a
+ * permissão. Mesmo motivo de `fn_adiantamento_pagamento_comprometido`.
+ */
+async function garantirForaDeFolha(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+  origem: string,
+): Promise<ResultadoAcao> {
+  const { data: emFolha, error } = await supabase.rpc(
+    "fn_adiantamento_em_folha",
+    { p_adiantamento_id: id },
+  );
+
+  if (error) {
+    return erroAcao(
+      origem,
+      error,
+      "Não foi possível conferir se o adiantamento já entrou em folha",
+    );
+  }
+  if (emFolha) {
+    return {
+      erro:
+        "Este adiantamento já teve parcela descontada em folha. Desaprove a folha e regere antes",
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Garante que o adiantamento existe, ainda não teve parcela descontada em folha
+ * e não tem lançamento. Trava de EDITAR: com `lancamento_id` preenchido (todo
  * adiantamento nasce assim, via `fn_registrar_adiantamento`) a RLS já recusa
  * o update por completo — aqui só devolvemos a mensagem amigável antes de
  * gastar a viagem ao banco. Mesmo padrão de `rh/diaristas/actions.ts`.
@@ -57,7 +96,7 @@ async function garantirEditavel(
 ): Promise<ResultadoAcao> {
   const { data, error } = await supabase
     .from(TABELA)
-    .select("folha_id, lancamento_id")
+    .select("lancamento_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -69,9 +108,14 @@ async function garantirEditavel(
     );
   }
   if (!data) return { erro: "Adiantamento não encontrado" };
-  if (data.folha_id !== null) {
-    return { erro: "Adiantamento já incluído numa folha" };
-  }
+
+  const foraDeFolha = await garantirForaDeFolha(
+    supabase,
+    id,
+    "rh.adiantamentos.garantirEditavel",
+  );
+  if ("erro" in foraDeFolha) return foraDeFolha;
+
   if (data.lancamento_id !== null) {
     return {
       erro:
@@ -82,14 +126,15 @@ async function garantirEditavel(
 }
 
 /**
- * Garante que o adiantamento existe, ainda não entrou numa folha e o
- * lançamento dele (se já existir) não tem pagamento comprometido (parcela
+ * Garante que o adiantamento existe, ainda não teve parcela descontada em folha
+ * e o lançamento dele (se já existir) não tem pagamento comprometido (parcela
  * aprovada, paga ou conciliada). Trava de EXCLUIR: diferente de editar,
  * excluir um adiantamento limpo (com lançamento ainda pendente) continua
- * válido — é o `fn_excluir_adiantamento` que apaga os dois juntos. A
- * checagem de pagamento vai pela RPC `fn_adiantamento_pagamento_comprometido`
- * (security definer, fail-closed) porque um perfil só-rh.adiantamentos não
- * enxerga `lancamento_parcelas`/`extrato_transacoes` pela RLS deles.
+ * válido — é o `fn_excluir_adiantamento` que apaga os dois juntos. As duas
+ * checagens vão por RPC security definer e fail-closed (`fn_adiantamento_em_folha`
+ * e `fn_adiantamento_pagamento_comprometido`) porque um perfil
+ * só-rh.adiantamentos não enxerga `lancamento_parcelas`/`extrato_transacoes`
+ * pela RLS deles, e um perfil sem `ver` não enxerga as parcelas do adiantamento.
  */
 async function garantirExcluivel(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -97,7 +142,7 @@ async function garantirExcluivel(
 ): Promise<ResultadoAcao> {
   const { data, error } = await supabase
     .from(TABELA)
-    .select("folha_id, lancamento_id")
+    .select("lancamento_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -109,9 +154,14 @@ async function garantirExcluivel(
     );
   }
   if (!data) return { erro: "Adiantamento não encontrado" };
-  if (data.folha_id !== null) {
-    return { erro: "Adiantamento já incluído numa folha" };
-  }
+
+  const foraDeFolha = await garantirForaDeFolha(
+    supabase,
+    id,
+    "rh.adiantamentos.garantirExcluivel",
+  );
+  if ("erro" in foraDeFolha) return foraDeFolha;
+
   if (data.lancamento_id !== null) {
     const { data: comprometido, error: erroComprometido } = await supabase.rpc(
       "fn_adiantamento_pagamento_comprometido",
@@ -137,9 +187,12 @@ async function garantirExcluivel(
 
 /**
  * Cria um adiantamento. Vai pela RPC `fn_registrar_adiantamento`, que grava o
- * adiantamento e o lançamento a_pagar dele (no centro de custo do
- * colaborador) na mesma transação: um insert direto seguido de outra chamada
- * deixaria um dos dois órfão se a segunda falhasse.
+ * adiantamento, o lançamento a_pagar dele (no centro de custo do colaborador)
+ * e o plano de parcelas do desconto na mesma transação: um insert direto
+ * seguido de outra chamada deixaria um dos três órfão se a segunda falhasse.
+ *
+ * `parcelas` é só a QUANTIDADE: quem divide o valor é o servidor, que refaz a
+ * conta de `dividirEmParcelas` em centavos. A prévia da tela é informativa.
  */
 export async function criarAdiantamento(
   dados: AdiantamentoInput,
@@ -161,6 +214,7 @@ export async function criarAdiantamento(
       valor: validado.data.valor,
       data: validado.data.data,
       descricao: validado.data.descricao ?? null,
+      parcelas: validado.data.parcelas,
     },
   });
 
@@ -222,6 +276,59 @@ export async function editarAdiantamento(
       "rh.adiantamentos.editar",
       error,
       "Não foi possível salvar o adiantamento. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Junta as parcelas em aberto do adiantamento numa só, na competência
+ * informada, preservando o total. Vai pela RPC `fn_quitar_adiantamento`
+ * (definer), que é quem pode escrever em `rh_adiantamento_parcelas`:
+ * `authenticated` só tem SELECT naquela tabela.
+ *
+ * Não usa `garantirEditavel`: quitar não é editar o adiantamento. Todo
+ * adiantamento nasce com lançamento (o dinheiro já saiu inteiro na concessão) e
+ * ter parcela já descontada em folha é justamente o caso normal de quem tem
+ * saldo para quitar. As travas de quitação são as três da própria função: folha
+ * aprovada, folha em aprovação e nenhuma parcela em aberto.
+ *
+ * As mensagens das três recusas são `raise exception` nossos (SQLSTATE P0001),
+ * então `mensagemDeNegocio` as entrega ao usuário; qualquer outro código de erro
+ * vira mensagem genérica e vai só pro log.
+ */
+export async function quitarAdiantamento(
+  id: string,
+  competencia: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para quitar adiantamentos" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Adiantamento inválido" };
+
+  const competenciaValida = competenciaSchema.safeParse(competencia);
+  if (!competenciaValida.success) {
+    return { erro: "Competência inválida" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_quitar_adiantamento", {
+    p_adiantamento: idValido.data,
+    p_competencia: competenciaValida.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.adiantamentos.quitar",
+      error,
+      mensagemDeNegocio(
+        error,
+        "Não foi possível quitar o adiantamento. Tente novamente",
+      ),
     );
   }
 

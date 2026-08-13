@@ -8,16 +8,6 @@ import { erroAcao, logErroServidor } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
-import type { EventoTrilha } from "@/components/canonicos";
-import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
-import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
-import { buscarOrdem } from "@/modules/compras/ordens/queries";
-import type { OrdemItem } from "@/modules/compras/ordens/queries";
-import {
-  buscarLancamento,
-  trilhaLancamento,
-} from "@/modules/financeiro/lancamentos/queries";
-import type { LancamentoDetalhe } from "@/modules/financeiro/lancamentos/queries";
 
 const RECURSO = "financeiro.aprovacao-pagamentos" as const;
 const ROTA = "/financeiro/aprovacao-pagamentos";
@@ -418,47 +408,4 @@ export async function marcarParcelasConferidasEmLote(
 
   revalidatePath(ROTA);
   return { ok: true, marcadas };
-}
-
-/**
- * Carrega o lançamento inteiro para o painel de conferência da fila, sob
- * demanda: só quando alguém clica na linha.
- *
- * É leitura pura e serve a um painel 100% read-only. Não vem pronto na página
- * porque seriam N lançamentos completos (com parcelas, rateio, itens da OC,
- * anexos e trilha) para uma fila em que normalmente se abre um ou dois.
- */
-export async function detalheDaFila(lancamentoId: string): Promise<
-  | {
-      lancamento: LancamentoDetalhe;
-      anexos: AnexoDoDocumento[];
-      trilha: EventoTrilha[];
-      itensOrigem: OrdemItem[];
-    }
-  | { erro: string }
-> {
-  if (!(await checarPermissao("ver"))) {
-    return { erro: "Sem permissão para ver a aprovação de pagamentos" };
-  }
-
-  const idValido = idSchema.safeParse(lancamentoId);
-  if (!idValido.success) return { erro: "Lançamento inválido" };
-
-  const lancamento = await buscarLancamento(idValido.data);
-  if (!lancamento) return { erro: "Lançamento não encontrado" };
-
-  const [anexos, trilha, ordem] = await Promise.all([
-    listarAnexosDoDocumento("lancamento", lancamento.id),
-    trilhaLancamento(lancamento.id),
-    lancamento.origem === "oc" && lancamento.origemId
-      ? buscarOrdem(lancamento.origemId)
-      : Promise.resolve(null),
-  ]);
-
-  return {
-    lancamento,
-    anexos,
-    trilha,
-    itensOrigem: ordem?.itens ?? [],
-  };
 }

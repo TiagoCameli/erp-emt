@@ -309,9 +309,16 @@ function abrirMenuAltura() {
 }
 
 /** Escolhe uma altura no menu. */
-function escolherAltura(rotulo: string) {
+function escolherAltura(rotulo: string, grupo = "Altura das linhas") {
   abrirMenuAltura();
-  fireEvent.click(screen.getByText(rotulo));
+  // Pelo grupo, não por texto solto: "Automática" existe nas linhas e no
+  // cabeçalho, e clicar no primeiro que aparecer mudaria a coisa errada.
+  fireEvent.click(
+    within(screen.getByRole("group", { name: grupo })).getByRole(
+      "menuitemradio",
+      { name: new RegExp(`^${rotulo}`) },
+    ),
+  );
 }
 
 /**
@@ -326,16 +333,22 @@ function fecharMenu() {
  * Degraus do menu "Altura", na ordem, com o px que cada um mostra ao lado
  * (`null` = automática, que não tem número).
  */
-function degrausDeAltura(): { rotulo: string; px: number | null }[] {
+function degrausDeAltura(
+  grupo = "Altura das linhas",
+): { rotulo: string; px: number | null }[] {
   abrirMenuAltura();
-  const degraus = screen.getAllByRole("menuitemradio").map((item) => {
-    const texto = item.textContent ?? "";
-    const emPx = /(\d+) px$/.exec(texto);
-    return {
-      rotulo: texto.replace(/\d+ px$/, "").trim(),
-      px: emPx === null ? null : Number(emPx[1]),
-    };
-  });
+  // Escopado no grupo: o menu tem três (linhas, cabeçalho, peso do rótulo) e
+  // "Automática" aparece em dois deles.
+  const degraus = within(screen.getByRole("group", { name: grupo }))
+    .getAllByRole("menuitemradio")
+    .map((item) => {
+      const texto = item.textContent ?? "";
+      const emPx = /(\d+) px$/.exec(texto);
+      return {
+        rotulo: texto.replace(/\d+ px$/, "").trim(),
+        px: emPx === null ? null : Number(emPx[1]),
+      };
+    });
   fecharMenu();
   return degraus;
 }
@@ -417,8 +430,11 @@ describe("DataTable: alinhamento do texto", () => {
     // vírgula: é o que faz "R$ 512.340,00" saltar aos olhos ao lado de
     // "R$ 1.940,50". Centralizar dinheiro é regressão. Se este teste ficar
     // vermelho, o conserto é devolver o alinhamento à direita, não mudar o teste.
+    //
+    // A decisão vale para a CÉLULA, que é onde existe vírgula para alinhar. O
+    // cabeçalho é rótulo, não número, e desde 2026-08-13 ele centraliza junto com
+    // todos os outros: ver o teste do cabeçalho abaixo.
     renderizar();
-    expect(alinhamento(cabecalho("Valor"))).toBe("text-right");
     for (const celula of celulas("Valor")) {
       expect(alinhamento(celula)).toBe("text-right");
       expect(within(celula).getByText(/^R\$/)).toHaveClass("tabular-nums");
@@ -427,10 +443,19 @@ describe("DataTable: alinhamento do texto", () => {
 
   it("mantém quantidade e contagem à direita", () => {
     renderizar();
-    expect(alinhamento(cabecalho("Parcelas"))).toBe("text-right");
     for (const celula of celulas("Parcelas")) {
       expect(alinhamento(celula)).toBe("text-right");
     }
+  });
+
+  it("centraliza TODO cabeçalho, inclusive o de coluna alinhada à direita", () => {
+    // O cabeçalho seguia o alinhamento da célula, então "Valor", "Parcelas" e
+    // "Ações" eram os únicos rótulos fora do centro numa fila de dez colunas
+    // centralizadas, e a régua do cabeçalho ficava torta. Rótulo não tem vírgula
+    // para alinhar: o motivo que manda dinheiro para a direita não alcança ele.
+    renderizar();
+    expect(alinhamento(cabecalho("Valor"))).toBe("text-center");
+    expect(alinhamento(cabecalho("Parcelas"))).toBe("text-center");
   });
 
   it("centraliza igual nas tabelas que não são personalizáveis", () => {
@@ -2036,5 +2061,93 @@ describe("DataTable: coluna escondida pelo CSS fica intacta no ajuste", () => {
       "categoria",
       "numero",
     ]);
+  });
+});
+
+
+describe("DataTable: cabeçalho ajustável pelo usuário", () => {
+  /** A faixa do cabeçalho: a `tr` que contém as `th`. */
+  function faixaCabecalho(): HTMLElement {
+    const th = cabecalhos()[0];
+    const tr = th.closest("tr");
+    if (!tr) throw new Error("cabeçalho sem tr");
+    return tr as HTMLElement;
+  }
+
+  it("o rótulo quebra em vez de ser cortado com reticências", () => {
+    // O `truncate` do cabeçalho cortava "Mês de referê..." e escondia qual coluna
+    // a pessoa está lendo. Rótulo é uma ou duas palavras: quebrar é sempre melhor.
+    renderizar();
+    for (const rotulo of ["Número", "Valor"]) {
+      const alvo = cabecalho(rotulo);
+      const span = alvo.querySelector("[data-medir], span");
+      expect(span?.className).toContain("whitespace-normal");
+      expect(span?.className).not.toContain("truncate");
+    }
+  });
+
+  it("o cabeçalho nasce com altura mínima, não fixa", () => {
+    // `min-h-9` e nao `h-9`: com altura fixa a segunda linha do rotulo era
+    // decepada em vez de esticar a faixa.
+    renderizar();
+    expect(cabecalhos()[0].className).toContain("min-h-9");
+    expect(cabecalhos()[0].className).not.toMatch(/(^|\s)h-9(\s|$)/);
+  });
+
+  it("aplica a altura escolhida na faixa do cabeçalho", () => {
+    renderizar();
+    escolherAltura("Grossa", "Altura do cabeçalho");
+    expect(faixaCabecalho().style.height).toBe("64px");
+  });
+
+  it("a altura do cabeçalho não mexe na altura das linhas", () => {
+    // São duas preferências separadas. Se uma vazasse na outra, mudar o
+    // cabeçalho clipava o conteúdo das linhas sem ninguém pedir.
+    renderizar();
+    escolherAltura("Grossa", "Altura do cabeçalho");
+    expect(alturasDasLinhas()).toEqual(Array.from(REGISTROS, () => ""));
+  });
+
+  it("volta para automática e solta a altura do cabeçalho", () => {
+    renderizar();
+    escolherAltura("Grossa", "Altura do cabeçalho");
+    expect(faixaCabecalho().style.height).toBe("64px");
+    fecharMenu();
+    escolherAltura("Automática", "Altura do cabeçalho");
+    expect(faixaCabecalho().style.height).toBe("");
+  });
+
+  it("aplica o peso escolhido no rótulo", () => {
+    renderizar();
+    escolherAltura("Muito forte", "Peso do rótulo");
+    expect(cabecalhos()[0].className).toContain("font-bold");
+  });
+
+  it("Padrão devolve o peso do design, sem gravar um número", () => {
+    renderizar();
+    escolherAltura("Fino", "Peso do rótulo");
+    expect(cabecalhos()[0].className).toContain("font-normal");
+    fecharMenu();
+    escolherAltura("Padrão", "Peso do rótulo");
+    expect(cabecalhos()[0].className).toContain("font-medium");
+    expect(cabecalhos()[0].className).not.toContain("font-normal");
+  });
+
+  it("cada degrau de altura do cabeçalho é perceptível ao lado do anterior", () => {
+    const FOLGA_MINIMA = 8;
+    renderizar();
+    const degraus = degrausDeAltura("Altura do cabeçalho");
+    expect(degraus.map((degrau) => degrau.rotulo)).toEqual([
+      "Automática",
+      "Fina",
+      "Média",
+      "Grossa",
+    ]);
+    const fixos = degraus.slice(1).map((degrau) => degrau.px as number);
+    for (const [indice, px] of fixos.entries()) {
+      if (indice > 0) {
+        expect(px - fixos[indice - 1]).toBeGreaterThanOrEqual(FOLGA_MINIMA);
+      }
+    }
   });
 });
