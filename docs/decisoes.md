@@ -1248,3 +1248,34 @@ filtros que todo mundo já configurou. Há teste travando isso para os dois camp
 De passagem, os três grupos de rádio do menu ganharam `aria-label`. Sem nome, o leitor de tela
 anunciava "Automática" duas vezes sem dizer de quê, e o teste que varria o menu não tinha como
 distinguir altura de linha de altura de cabeçalho.
+
+## 2026-08-13 - A planilha de lançamentos leva o lançamento inteiro, e o rateio não vira linha
+
+A exportação tinha 14 colunas e faltava o que mais importa num relatório de custo: **centro de
+custo** e **observações**, mais forma e condição de pagamento, conta bancária e o número do
+documento de origem. Duas decisões estruturais no caminho.
+
+1. **Uma linha por lançamento, e o rateio em duas colunas de texto.** Centro de custo mora no
+   rateio, e um lançamento pode ser dividido entre várias obras. "Centro de custo" lista os nomes
+   e "Rateio" traz quanto foi para cada um (sem "R$", que repetido cinco vezes numa célula é
+   ruído; a moeda está na coluna Valor, que é número e soma). A alternativa avaliada e **recusada**
+   foi uma linha por rateio: ela repetiria o valor do lançamento em N linhas, e quem somasse a
+   coluna Valor contaria o mesmo dinheiro várias vezes. Numa planilha de dinheiro, total errado
+   que abre sem erro nenhum é o pior defeito possível. Parcela é 1-N pelo mesmo motivo e entra só
+   como resumo: quantidade em "Parcelas" e conta bancária quando é a mesma em todas (contas
+   diferentes viram "Várias contas", porque um nome só ali seria mentira).
+
+2. **A listagem NÃO paga pela planilha.** Os campos novos não entraram em `listarLancamentos`: a
+   tela é a mais usada do módulo, não mostra nenhum deles, e pendurar o rateio no select dela
+   sairia caro em toda navegação para servir uma exportação ocasional. Quem enriquece é
+   `detalharLancamentosParaPlanilha`, chamada **página por página** sobre os ids que a lista já
+   devolveu. Página por página e não de uma vez porque o teto é 25.000 lançamentos, e um `in` com
+   25 mil uuids é uma query que o Postgres aceita mas ninguém quer depurar.
+
+`lerLancamentosEmPaginas` virou genérica em `T extends LancamentoLista` em vez de ganhar uma cópia:
+a deduplicação por id (que é o que impede linha repetida entre páginas) vale igual para a linha
+enxuta da tela e para a linha enriquecida da planilha.
+
+**Coluna nova entra no fim, não no meio.** "Observações" é a última de todas: é a única com texto
+de tamanho imprevisível, e no meio ela empurraria para fora da tela tudo que a pessoa abriu a
+planilha para ver.
