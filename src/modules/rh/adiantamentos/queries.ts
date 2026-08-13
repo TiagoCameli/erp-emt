@@ -71,15 +71,24 @@ export interface AdiantamentoLista {
    * Saldo em aberto: `valor - soma(valorDescontado das parcelas)`. NUNCA
    * `soma(valorPrevisto) - soma(valorDescontado)` — ver `resumirParcelas`.
    *
-   * ATENÇÃO para quem reusar este campo fora da tela de adiantamentos
-   * (`rh.adiantamentos:ver`): diferente de `naFolha`/`pagamentoComprometido`
-   * (que vêm de RPC security definer, fail-closed), `parcelas`/`saldo` vêm de
-   * um embed comum, sujeito à RLS de `rh_adiantamento_parcelas` (exige
-   * `rh.adiantamentos:ver`). Para um chamador sem essa permissão (ex.: a
-   * ficha do colaborador, que só exige `cadastros.colaboradores:ver`), o
-   * embed volta vazio e `saldo` sai igual a `valor` — silenciosamente
-   * otimista, não fail-closed. Por isso estes campos só são exibidos na
-   * própria tela de adiantamentos, que já exige `ver` para carregar.
+   * ATENÇÃO para quem chamar `listarAdiantamentos` (ou reusar `saldo`/
+   * `parcelas`/`parcelasTotal`/`parcelasDescontadas`): diferente de
+   * `naFolha`/`pagamentoComprometido` (que vêm de RPC security definer,
+   * fail-closed), estes campos vêm de um embed comum, sujeito à RLS de
+   * `rh_adiantamento_parcelas` (exige `rh.adiantamentos:ver`). Sem essa
+   * permissão o embed volta vazio e `saldo` sai igual a `valor` —
+   * silenciosamente otimista, não fail-closed (o tipo `number` não expressa
+   * essa condição; corrigir isso de verdade exigiria uma RPC que devolva
+   * `null` quando falta a permissão, virando `saldo: number | null` — não
+   * feito ainda, é item de backlog).
+   *
+   * Os dois chamadores hoje CHECAM `rh.adiantamentos:ver` antes de ler estes
+   * campos: a tela de adiantamentos (`app/(app)/rh/adiantamentos/page.tsx`) e
+   * a ficha do colaborador (`resumoAdiantamentos` em
+   * `cadastros/colaboradores/ficha.ts`, só chamada quando
+   * `app/(app)/cadastros/colaboradores/[id]/page.tsx` já verificou
+   * `podeAdiantamentos`). Qualquer chamador NOVO precisa fazer o mesmo antes
+   * de confiar nestes campos — a RLS não faz essa garantia sozinha aqui.
    */
   saldo: number;
 }
