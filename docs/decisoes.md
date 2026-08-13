@@ -1105,3 +1105,48 @@ imposto tem prazo legal, e competência errada é erro contábil silencioso.
    as três telas do módulo usam `rotuloOrigemLancamento` e o catálogo `ORIGENS_LANCAMENTO`,
    e o filtro casa por igualdade exata. Rótulo de origem é informação de auditoria na tela
    onde se libera pagamento: derivar de catálogo único, nunca escrever literal.
+
+## 2026-08-13 - Link de aprovação de pagamento é atalho, não credencial, e o login guarda o destino
+
+A fila de aprovação passou a gerar um link para mandar no WhatsApp de quem aprova. A pergunta
+que decidiu o desenho foi: o link carrega autoridade, ou só endereço?
+
+1. **O link é endereço, não credencial.** `?parcela=<id>[,<id>]` na própria rota
+   `/financeiro/aprovacao-pagamentos`. Sem token, sem expiração, sem tabela nova, sem rota
+   pública, sem RPC fora da sessão. Quem abre precisa de sessão e de `aprovar`, igual a quem
+   entra pelo menu. As três opções com token (público, público com PIN, e magic link do
+   responsável) foram avaliadas e recusadas: nenhuma paga o custo de criar uma superfície de
+   autorização de dinheiro paralela à que já existe, para um sistema de 20 a 30 usuários em
+   que quem aprova já tem conta. **Consequência aceita:** quem não tem login não aprova por
+   link, e isso é o ponto, não uma limitação a contornar depois.
+
+2. **Copiar a mensagem não é ação de quem aprova.** O botão vive na coluna Ações e na barra de
+   seleção, e aparece para quem tem só `ver`. Montar texto não muta nada, e o caminho real é o
+   financeiro montar e o diretor aprovar. Por isso a coluna Ações e a de seleção deixaram de
+   depender de `aprovar`/`desaprovar`: os botões que mutam seguem cada um atrás da sua
+   permissão, dentro de uma coluna que agora sempre existe.
+
+3. **O que fazia o link não funcionar era o login, não a fila.** O middleware mandava quem não
+   tinha sessão para `/login` descartando a rota pretendida, e `entrar()` redirecionava sempre
+   para `/`. Qualquer link para tela específica deste sistema já chegava quebrado no celular de
+   quem não estava logado; o link de aprovação só tornou isso visível. Agora o middleware anexa
+   `?destino=` e `entrar()` volta para lá.
+
+4. **`destinoSeguro()` valida por lista de permissão, e a limpeza vem antes da checagem.**
+   Recusa `//host`, `/\host`, esquema absoluto, caminho sem barra inicial e o próprio `/login`
+   (laço, não ataque). Remove espaço e caractere de controle ANTES de checar, porque o navegador
+   remove tab e quebra de linha por conta própria: validar o texto cru deixaria `/\n/evil.com`
+   navegar para `//evil.com`. É a única entrada não confiável que a feature criou, e é a única
+   coisa aqui com teste de segurança próprio. O valor cru aparece no payload RSC como string
+   JSON escapada, nunca como markup ou href.
+
+5. **Parcela que saiu da fila diz para onde foi.** `statusDasParcelas()` resolve aprovada, paga,
+   em revisão, cancelada, sem acesso, e pendente travada por falta de conta bancária. Link fica
+   dias parado no WhatsApp, então esse é o caso comum, não a exceção: "nenhum pagamento
+   encontrado" numa tela de dinheiro faz quem abriu concluir que o lançamento foi perdido.
+
+6. **Largura de coluna com botão novo precisa de `minSize`, não só de `size`.** `larguras` é
+   preferência salva por usuário e o piso geral do DataTable é 60px, então `size` novo não
+   alcança quem já arrastou a coluna. Sem `minSize`, os três ícones transbordam por cima do
+   Valor: o mesmo defeito que a versão de dois botões com texto já causou em produção. Vale para
+   qualquer coluna de ações que ganhar botão.
