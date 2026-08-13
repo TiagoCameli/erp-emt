@@ -2,7 +2,7 @@ import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
 import { formatarDataHora } from "@/lib/formatadores";
-import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
+import type { LancamentoPlanilha } from "@/modules/financeiro/lancamentos/queries";
 import {
   ABA_PLANILHA_LANCAMENTOS,
   CABECALHOS_PLANILHA_LANCAMENTOS,
@@ -14,7 +14,7 @@ import {
 } from "@/modules/financeiro/lancamentos/planilha";
 
 /** Lançamento a pagar completo, o caso mais comum da lista. */
-const lancamento: LancamentoLista = {
+const lancamento: LancamentoPlanilha = {
   id: "11111111-1111-4111-8111-111111111111",
   numero: "LAN-2026-0015",
   tipo: "a_pagar",
@@ -36,6 +36,14 @@ const lancamento: LancamentoLista = {
   valorAberto: 823.04,
   valorVencido: 0,
   descontoObtido: 0,
+  // Campos que só a planilha usa: em branco aqui, para os testes antigos
+  // continuarem falando do que eles falavam. O caso cheio tem describe próprio.
+  observacoes: null,
+  formaPagamentoNome: null,
+  condicaoPagamentoDescricao: null,
+  contaBancariaNome: null,
+  origemNumero: null,
+  rateios: [],
 };
 
 /** Índice de uma coluna pelo cabeçalho, para o teste não contar posição na mão. */
@@ -177,7 +185,7 @@ describe("nomeArquivoPlanilhaLancamentos", () => {
  * arquivo errado abre normalmente no Excel, só com o conteúdo errado.
  */
 describe("montarPlanilhaLancamentos, arquivo relido", () => {
-  const segundo: LancamentoLista = {
+  const segundo: LancamentoPlanilha = {
     ...lancamento,
     id: "22222222-2222-4222-8222-222222222222",
     numero: "LAN-2026-0016",
@@ -187,7 +195,7 @@ describe("montarPlanilhaLancamentos, arquivo relido", () => {
   };
 
   /** Escreve em buffer e abre de novo, como o Excel faria. */
-  async function relerPlanilha(itens: LancamentoLista[]) {
+  async function relerPlanilha(itens: LancamentoPlanilha[]) {
     const buffer = await montarPlanilhaLancamentos(itens).xlsx.writeBuffer();
     const lido = new ExcelJS.Workbook();
     await lido.xlsx.load(buffer);
@@ -260,5 +268,100 @@ describe("montarPlanilhaLancamentos, arquivo relido", () => {
     const celula = aba.getRow(2).getCell(coluna("Vencimento") + 1);
 
     expect(celula.value).toBeNull();
+  });
+});
+
+describe("planilha traz o lançamento inteiro, não só o resumo da lista", () => {
+  /** O caso completo: rateado em dois centros, com observação e conta. */
+  const completo: LancamentoPlanilha = {
+    ...lancamento,
+    observacoes: "Nota chegou rasgada, conferir com o posto",
+    formaPagamentoNome: "Boleto",
+    condicaoPagamentoDescricao: "30/60/90",
+    contaBancariaNome: "Banco do Brasil 102.124-9",
+    origemNumero: "OC-2026-0041",
+    rateios: [
+      { nome: "Escritório Central", codigo: "001", valor: 800 },
+      { nome: "BR-364 Lote 09", codigo: "009", valor: 434.56 },
+    ],
+  };
+
+  it("traz observações, que é onde mora o combinado que não cabe na descrição", () => {
+    const linha = linhaPlanilhaLancamento(completo);
+    expect(linha[coluna("Observações")]).toBe(
+      "Nota chegou rasgada, conferir com o posto",
+    );
+  });
+
+  it("traz forma, condição e conta bancária", () => {
+    const linha = linhaPlanilhaLancamento(completo);
+    expect(linha[coluna("Forma de pagamento")]).toBe("Boleto");
+    expect(linha[coluna("Condição de pagamento")]).toBe("30/60/90");
+    expect(linha[coluna("Conta bancária")]).toBe("Banco do Brasil 102.124-9");
+  });
+
+  it("traz o número da OC de origem, não só a palavra Origem", () => {
+    // "Ordem de compra" na coluna Origem não diz QUAL ordem: sem o número, quem
+    // confere a planilha tem que voltar ao sistema para achar o documento.
+    const linha = linhaPlanilhaLancamento(completo);
+    expect(linha[coluna("Documento de origem")]).toBe("OC-2026-0041");
+  });
+
+  it("lista os centros de custo do rateio numa coluna só", () => {
+    const linha = linhaPlanilhaLancamento(completo);
+    expect(linha[coluna("Centro de custo")]).toBe(
+      "Escritório Central; BR-364 Lote 09",
+    );
+  });
+
+  it("mostra a composição do rateio com o valor de cada centro", () => {
+    // Uma linha por lançamento: sem esta coluna o rateio some da planilha, e
+    // "Escritório Central; BR-364" não diz quanto foi para cada um.
+    const linha = linhaPlanilhaLancamento(completo);
+    expect(linha[coluna("Rateio")]).toContain("Escritório Central: 800,00");
+    expect(linha[coluna("Rateio")]).toContain("BR-364 Lote 09: 434,56");
+  });
+
+  it("não repete a composição quando o centro de custo é único", () => {
+    // Rateio de um centro só é o caso normal: repetir "Escritório: 1.234,56" ao
+    // lado do nome e do valor do lançamento é ruído em toda linha da planilha.
+    const linha = linhaPlanilhaLancamento({
+      ...completo,
+      rateios: [{ nome: "Escritório Central", codigo: "001", valor: 1234.56 }],
+    });
+    expect(linha[coluna("Centro de custo")]).toBe("Escritório Central");
+    expect(linha[coluna("Rateio")]).toBeNull();
+  });
+
+  it("lançamento sem rateio nenhum deixa as duas células em branco", () => {
+    const linha = linhaPlanilhaLancamento({ ...completo, rateios: [] });
+    expect(linha[coluna("Centro de custo")]).toBeNull();
+    expect(linha[coluna("Rateio")]).toBeNull();
+  });
+
+  it("campo vazio sai em branco, nunca com a palavra null", () => {
+    const linha = linhaPlanilhaLancamento({
+      ...completo,
+      observacoes: null,
+      formaPagamentoNome: null,
+      condicaoPagamentoDescricao: null,
+      contaBancariaNome: null,
+      origemNumero: null,
+    });
+    for (const rotulo of [
+      "Observações",
+      "Forma de pagamento",
+      "Condição de pagamento",
+      "Conta bancária",
+      "Documento de origem",
+    ]) {
+      expect(linha[coluna(rotulo)], rotulo).toBeNull();
+    }
+  });
+
+  it("continua uma célula por cabeçalho depois das colunas novas", () => {
+    expect(linhaPlanilhaLancamento(completo)).toHaveLength(
+      CABECALHOS_PLANILHA_LANCAMENTOS.length,
+    );
   });
 });

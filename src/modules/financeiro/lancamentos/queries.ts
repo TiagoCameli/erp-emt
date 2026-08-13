@@ -149,6 +149,42 @@ export interface LancamentoLista {
   revisao: "sem-conta" | "parcial" | "revisado" | "nao-se-aplica";
 }
 
+/** Um centro de custo do rateio, para a coluna da planilha. */
+export interface RateioPlanilha {
+  nome: string;
+  codigo: string | null;
+  valor: number;
+}
+
+/**
+ * O lançamento como a PLANILHA precisa dele: a linha da lista mais o que a tela
+ * não mostra (observações, rateio, forma, condição, conta, documento de origem).
+ *
+ * Existe separado de `LancamentoLista` de propósito. A listagem é a tela mais
+ * usada do módulo e não mostra nenhum destes campos: pendurar rateio no select
+ * dela sairia caro em toda navegação para servir uma exportação que acontece de
+ * vez em quando. Quem enriquece é `detalharLancamentosParaPlanilha`, página por
+ * página, sobre os ids que a lista já devolveu.
+ */
+export interface LancamentoPlanilha extends LancamentoLista {
+  observacoes: string | null;
+  formaPagamentoNome: string | null;
+  condicaoPagamentoDescricao: string | null;
+  /**
+   * Conta bancária das parcelas. `null` quando nenhuma tem conta escolhida, e o
+   * nome quando todas apontam para a mesma. Parcelas em contas diferentes viram
+   * `VARIAS_CONTAS`: um nome só ali seria mentira, e a planilha é uma linha por
+   * lançamento.
+   */
+  contaBancariaNome: string | null;
+  /** Número do documento de origem (a OC), quando o lançamento vem de um. */
+  origemNumero: string | null;
+  rateios: RateioPlanilha[];
+}
+
+/** O que vai na coluna de conta quando as parcelas usam contas diferentes. */
+export const VARIAS_CONTAS = "Várias contas";
+
 /** Resultado paginado da listagem. */
 export interface LancamentosPagina {
   itens: LancamentoLista[];
@@ -683,6 +719,116 @@ export async function listarLancamentos(
   });
 
   return { itens, total: count ?? 0 };
+}
+
+/** O que a planilha acrescenta a uma linha da lista. */
+type DetalhePlanilha = Pick<
+  LancamentoPlanilha,
+  | "observacoes"
+  | "formaPagamentoNome"
+  | "condicaoPagamentoDescricao"
+  | "contaBancariaNome"
+  | "origemNumero"
+  | "rateios"
+>;
+
+/**
+ * Busca, para um punhado de lançamentos, o que a listagem não traz: observações,
+ * rateio com centro de custo, forma e condição de pagamento, conta bancária das
+ * parcelas e número da OC de origem.
+ *
+ * Recebe os ids de UMA página da exportação, não a exportação inteira: o teto é
+ * 25.000 lançamentos, e um `in` com 25 mil uuids é uma query que o Postgres
+ * aceita mas ninguém quer depurar. Quem chama enriquece página por página.
+ *
+ * A condição de pagamento de lançamento vindo de OC vive na ordem, não no
+ * lançamento (é o documento de origem que manda nela), então ela é lida das duas
+ * fontes: a do próprio lançamento quando existe, senão a da OC.
+ */
+export async function detalharLancamentosParaPlanilha(
+  ids: string[],
+): Promise<Map<string, DetalhePlanilha>> {
+  const detalhes = new Map<string, DetalhePlanilha>();
+  if (ids.length === 0) return detalhes;
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("lancamentos")
+    .select(
+      `id, observacoes, origem, origem_id,
+       formas_pagamento(nome),
+       condicoes_pagamento(descricao),
+       lancamento_parcelas(conta_bancaria_id, contas_bancarias(nome)),
+       lancamento_rateios(valor, centros_custo(nome, codigo))`,
+    )
+    .in("id", ids);
+
+  if (error) {
+    throw new Error("Não foi possível carregar o detalhe para a planilha");
+  }
+
+  const linhas = data ?? [];
+  const numeroOc = await numerosDeOcDosLancamentos(supabase, linhas);
+
+  for (const linha of linhas) {
+    const parcelas = linha.lancamento_parcelas ?? [];
+    const nomesDeConta = new Set(
+      parcelas
+        .map((parcela) => parcela.contas_bancarias?.nome)
+        .filter((nome): nome is string => typeof nome === "string"),
+    );
+
+    detalhes.set(linha.id, {
+      observacoes: linha.observacoes,
+      formaPagamentoNome: linha.formas_pagamento?.nome ?? null,
+      condicaoPagamentoDescricao:
+        linha.condicoes_pagamento?.descricao ?? null,
+      contaBancariaNome:
+        nomesDeConta.size === 0
+          ? null
+          : nomesDeConta.size === 1
+            ? [...nomesDeConta][0]
+            : VARIAS_CONTAS,
+      origemNumero:
+        linha.origem === "oc" && linha.origem_id
+          ? (numeroOc.get(linha.origem_id) ?? null)
+          : null,
+      rateios: (linha.lancamento_rateios ?? []).map((rateio) => ({
+        nome: rateio.centros_custo?.nome ?? "Sem centro de custo",
+        codigo: rateio.centros_custo?.codigo ?? null,
+        valor: rateio.valor,
+      })),
+    });
+  }
+
+  return detalhes;
+}
+
+/** Número da OC de cada lançamento que vem de ordem de compra. */
+async function numerosDeOcDosLancamentos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  linhas: { origem: string; origem_id: string | null }[],
+): Promise<Map<string, string>> {
+  const idsOc = [
+    ...new Set(
+      linhas
+        .filter((linha) => linha.origem === "oc" && linha.origem_id)
+        .map((linha) => linha.origem_id as string),
+    ),
+  ];
+  const numeros = new Map<string, string>();
+  if (idsOc.length === 0) return numeros;
+
+  const { data } = await supabase
+    .from("ordens_compra")
+    .select("id, numero")
+    .in("id", idsOc);
+
+  for (const ordem of data ?? []) {
+    if (ordem.numero) numeros.set(ordem.id, ordem.numero);
+  }
+  return numeros;
 }
 
 /**

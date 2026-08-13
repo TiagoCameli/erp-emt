@@ -23,21 +23,27 @@ import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
  */
 export const PAGINA_LEITURA = 1000;
 
-/** Uma página da listagem, com o total exato do filtro. */
-export interface PaginaDeLancamentos {
-  itens: LancamentoLista[];
+/**
+ * Uma página da listagem, com o total exato do filtro.
+ *
+ * Genérica em `T` porque a exportação lê a MESMA página e depois a enriquece
+ * (observações, rateio, conta): o leitor devolve `LancamentoPlanilha` e a
+ * deduplicação por id continua valendo sem cópia desta função.
+ */
+export interface PaginaDeLancamentos<T extends LancamentoLista = LancamentoLista> {
+  itens: T[];
   total: number;
 }
 
 /** Quem busca uma página. Injetado para esta função não depender do banco. */
-export type LeitorDePagina = (
+export type LeitorDePagina<T extends LancamentoLista = LancamentoLista> = (
   pagina: number,
   tamanho: number,
-) => Promise<PaginaDeLancamentos>;
+) => Promise<PaginaDeLancamentos<T>>;
 
-export interface LeituraCompleta {
+export interface LeituraCompleta<T extends LancamentoLista = LancamentoLista> {
   /** Linhas lidas, na ordem da listagem, sem repetição. */
-  itens: LancamentoLista[];
+  itens: T[];
   /** Total exato do filtro, direto do count do banco. */
   total: number;
 }
@@ -58,13 +64,15 @@ export interface LeituraCompleta {
  * `teto` é freio de disparada, não regra de negócio: passando dele a função
  * devolve `itens` vazio com o `total` real, para a tela dizer o número.
  */
-export async function lerLancamentosEmPaginas(
-  ler: LeitorDePagina,
+export async function lerLancamentosEmPaginas<
+  T extends LancamentoLista = LancamentoLista,
+>(
+  ler: LeitorDePagina<T>,
   teto: number,
   tamanhoPagina: number = PAGINA_LEITURA,
-): Promise<LeituraCompleta> {
+): Promise<LeituraCompleta<T>> {
   const vistos = new Set<string>();
-  const itens: LancamentoLista[] = [];
+  const itens: T[] = [];
   let total = 0;
 
   const maximoDePaginas = Math.ceil(teto / tamanhoPagina);
