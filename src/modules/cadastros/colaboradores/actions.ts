@@ -53,10 +53,17 @@ function lerAntecipacao(dados: unknown): AntecipacaoAdiantamentos | null {
   };
 }
 
-/** Lê o `ativo` gravado hoje. `null` quando o colaborador não existe. */
+/**
+ * Lê o `ativo` gravado hoje. `null` quando o colaborador não existe ou a leitura
+ * falhou. O erro vai para o log em vez de sumir: `null` faz a antecipação do
+ * saldo ser PULADA, e pular calado uma decisão de dinheiro é exatamente o que
+ * ninguém encontra depois. A rede, se acontecer, é o painel de alertas do RH
+ * (colaborador inativo com saldo em aberto).
+ */
 async function ativoGravado(
   supabase: Awaited<ReturnType<typeof createClient>>,
   id: string,
+  origem: string,
 ): Promise<boolean | null> {
   const { data, error } = await supabase
     .from("colaboradores")
@@ -64,7 +71,11 @@ async function ativoGravado(
     .eq("id", id)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) {
+    logErroServidor(origem, error);
+    return null;
+  }
+  if (!data) return null;
   return data.ativo;
 }
 
@@ -209,7 +220,11 @@ export async function editar(
   // mudou o telefone". Só vai ao banco quando o payload inativa.
   const estavaAtivo =
     validado.data.ativo === false
-      ? await ativoGravado(supabase, idValido.data)
+      ? await ativoGravado(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.editar",
+        )
       : null;
 
   const { error } = await supabase
@@ -258,7 +273,13 @@ export async function alternarAtivo(
   // `ativo` vem do estado da tela, que pode estar velho: quem diz se este
   // clique é uma inativação é o valor GRAVADO.
   const estavaAtivo =
-    ativo === false ? await ativoGravado(supabase, idValido.data) : null;
+    ativo === false
+      ? await ativoGravado(
+          supabase,
+          idValido.data,
+          "cadastros.colaboradores.alternarAtivo",
+        )
+      : null;
 
   const { error } = await supabase
     .from("colaboradores")
