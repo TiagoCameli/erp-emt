@@ -74,6 +74,21 @@ export interface ResumoFora {
   valor: number;
 }
 
+/**
+ * Onde uma parcela do link de aprovação foi parar quando não está mais na fila.
+ *
+ * `status` é o da parcela; `naoEncontrada` cobre id que não existe (ou que a RLS
+ * não deixa esta pessoa ver), que é diferente de "já foi aprovada".
+ */
+export interface ParcelaForaDaFila {
+  id: string;
+  numero: string | null;
+  fornecedorNome: string;
+  valor: number;
+  status: StatusParcela | null;
+  naoEncontrada: boolean;
+}
+
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
 function nomeFornecedor(
   fornecedor: { razao_social: string; nome_fantasia: string | null } | null,
@@ -276,6 +291,93 @@ async function contarAnexos(
     );
   }
   return contagem;
+}
+
+/**
+ * Qual lançamento é o dono desta parcela, para a tela inteira de um pagamento
+ * carregar o resto pelas queries que já existem.
+ *
+ * Restringe a `a_pagar` porque a aprovação de pagamentos só trata disso: id de
+ * parcela de `a_receber` colado na URL devolve `null` e a página cai em 404, em
+ * vez de abrir uma tela de "aprovar pagamento" para uma conta a receber.
+ *
+ * Nenhum filtro de exclusão aqui, igual ao resto do módulo: quem esconde
+ * registro na lixeira é a RLS, e duplicar isso na consulta só cria dois lugares
+ * para a regra divergir.
+ */
+export async function lancamentoDaParcela(
+  parcelaId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("lancamento_parcelas")
+    .select("lancamento_id, lancamentos!inner(tipo)")
+    .eq("id", parcelaId)
+    .eq("lancamentos.tipo", "a_pagar")
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.lancamento_id;
+}
+
+/**
+ * Onde foram parar as parcelas de um link de aprovação que não estão na fila.
+ *
+ * Só roda quando alguém abre a tela por um link e alguma das parcelas não está
+ * mais pendente, que é o caso comum de link que ficou parado no WhatsApp por uns
+ * dias. Existe porque "nenhum pagamento encontrado" numa tela de dinheiro faz a
+ * pessoa achar que o lançamento foi perdido e ligar para o financeiro; dizer
+ * "essa parcela já está aprovada" encerra o assunto sozinho.
+ *
+ * Não filtra por tipo nem por status: aqui a pergunta é onde a parcela está, e a
+ * resposta honesta inclui cancelado e pago. A RLS continua mandando no que esta
+ * pessoa pode ver, e id invisível para ela sai como `naoEncontrada`.
+ */
+export async function statusDasParcelas(
+  ids: string[],
+): Promise<ParcelaForaDaFila[]> {
+  if (ids.length === 0) return [];
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("lancamento_parcelas")
+    .select(
+      `id, valor, status,
+       lancamentos(numero, fornecedores(razao_social, nome_fantasia))`,
+    )
+    .in("id", ids);
+
+  if (error) {
+    throw new Error("Não foi possível verificar a situação desses pagamentos");
+  }
+
+  const porId = new Map((data ?? []).map((linha) => [linha.id, linha]));
+
+  // Percorre os ids pedidos, não as linhas achadas: id que a consulta não
+  // devolveu é justamente o que precisa aparecer como não encontrado.
+  return ids.map((id) => {
+    const linha = porId.get(id);
+    if (!linha) {
+      return {
+        id,
+        numero: null,
+        fornecedorNome: "-",
+        valor: 0,
+        status: null,
+        naoEncontrada: true,
+      };
+    }
+    return {
+      id,
+      numero: linha.lancamentos?.numero ?? null,
+      fornecedorNome: nomeFornecedor(linha.lancamentos?.fornecedores ?? null),
+      valor: linha.valor,
+      status: linha.status as StatusParcela,
+      naoEncontrada: false,
+    };
+  });
 }
 
 /**

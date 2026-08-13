@@ -16,9 +16,9 @@ export const metadata: Metadata = {
 export default async function PaginaLogin({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string }>;
+  searchParams: Promise<{ erro?: string; destino?: string }>;
 }) {
-  const { erro } = await searchParams;
+  const { erro, destino } = await searchParams;
   const erroInicial =
     erro === "link-invalido"
       ? "Link inválido ou expirado. Peça um novo convite ao administrador"
@@ -34,7 +34,9 @@ export default async function PaginaLogin({
         <CardDescription>Entre com seu email e senha</CardDescription>
       </CardHeader>
       <CardContent>
-        <LoginForm erroInicial={erroInicial} />
+        {/* O destino vem cru da URL de propósito: quem decide se ele presta é o
+            destinoSeguro() dentro do entrar(), no servidor, não esta página. */}
+        <LoginForm erroInicial={erroInicial} destino={destino} />
       </CardContent>
       <CardFooter className="justify-center">
         <p className="text-legenda text-muted-foreground">

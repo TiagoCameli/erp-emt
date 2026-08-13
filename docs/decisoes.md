@@ -1105,3 +1105,93 @@ imposto tem prazo legal, e competência errada é erro contábil silencioso.
    as três telas do módulo usam `rotuloOrigemLancamento` e o catálogo `ORIGENS_LANCAMENTO`,
    e o filtro casa por igualdade exata. Rótulo de origem é informação de auditoria na tela
    onde se libera pagamento: derivar de catálogo único, nunca escrever literal.
+
+## 2026-08-13 - Link de aprovação de pagamento é atalho, não credencial, e o login guarda o destino
+
+A fila de aprovação passou a gerar um link para mandar no WhatsApp de quem aprova. A pergunta
+que decidiu o desenho foi: o link carrega autoridade, ou só endereço?
+
+1. **O link é endereço, não credencial.** `?parcela=<id>[,<id>]` na própria rota
+   `/financeiro/aprovacao-pagamentos`. Sem token, sem expiração, sem tabela nova, sem rota
+   pública, sem RPC fora da sessão. Quem abre precisa de sessão e de `aprovar`, igual a quem
+   entra pelo menu. As três opções com token (público, público com PIN, e magic link do
+   responsável) foram avaliadas e recusadas: nenhuma paga o custo de criar uma superfície de
+   autorização de dinheiro paralela à que já existe, para um sistema de 20 a 30 usuários em
+   que quem aprova já tem conta. **Consequência aceita:** quem não tem login não aprova por
+   link, e isso é o ponto, não uma limitação a contornar depois.
+
+2. **Copiar a mensagem não é ação de quem aprova.** O botão vive na coluna Ações e na barra de
+   seleção, e aparece para quem tem só `ver`. Montar texto não muta nada, e o caminho real é o
+   financeiro montar e o diretor aprovar. Por isso a coluna Ações e a de seleção deixaram de
+   depender de `aprovar`/`desaprovar`: os botões que mutam seguem cada um atrás da sua
+   permissão, dentro de uma coluna que agora sempre existe.
+
+3. **O que fazia o link não funcionar era o login, não a fila.** O middleware mandava quem não
+   tinha sessão para `/login` descartando a rota pretendida, e `entrar()` redirecionava sempre
+   para `/`. Qualquer link para tela específica deste sistema já chegava quebrado no celular de
+   quem não estava logado; o link de aprovação só tornou isso visível. Agora o middleware anexa
+   `?destino=` e `entrar()` volta para lá.
+
+4. **`destinoSeguro()` valida por lista de permissão, e a limpeza vem antes da checagem.**
+   Recusa `//host`, `/\host`, esquema absoluto, caminho sem barra inicial e o próprio `/login`
+   (laço, não ataque). Remove espaço e caractere de controle ANTES de checar, porque o navegador
+   remove tab e quebra de linha por conta própria: validar o texto cru deixaria `/\n/evil.com`
+   navegar para `//evil.com`. É a única entrada não confiável que a feature criou, e é a única
+   coisa aqui com teste de segurança próprio. O valor cru aparece no payload RSC como string
+   JSON escapada, nunca como markup ou href.
+
+5. **Parcela que saiu da fila diz para onde foi.** `statusDasParcelas()` resolve aprovada, paga,
+   em revisão, cancelada, sem acesso, e pendente travada por falta de conta bancária. Link fica
+   dias parado no WhatsApp, então esse é o caso comum, não a exceção: "nenhum pagamento
+   encontrado" numa tela de dinheiro faz quem abriu concluir que o lançamento foi perdido.
+
+6. **Largura de coluna com botão novo precisa de `minSize`, não só de `size`.** `larguras` é
+   preferência salva por usuário e o piso geral do DataTable é 60px, então `size` novo não
+   alcança quem já arrastou a coluna. Sem `minSize`, os três ícones transbordam por cima do
+   Valor: o mesmo defeito que a versão de dois botões com texto já causou em produção. Vale para
+   qualquer coluna de ações que ganhar botão.
+
+## 2026-08-13 - A conferência de pagamento virou tela inteira, e a linha da fila parou de clicar
+
+Ajuste do bloco anterior depois de o Tiago usar a tela. Três sintomas, uma causa comum e uma
+decisão de superfície.
+
+1. **Linha inteira clicável e checkbox no meio dela não convivem.** A fila abria o painel de
+   conferência no `onRowClick`, e o clique no checkbox subia para a linha: marcar uma parcela
+   para aprovar em lote abria um painel por cima da seleção. Não é bug do checkbox, é o padrão
+   "linha clicável" aplicado a uma tabela cujo trabalho principal é seleção múltipla. `onRowClick`
+   saiu. **Regra:** tabela com seleção em lote não usa linha clicável; o caminho para o detalhe é
+   botão ou link explícito.
+
+2. **O painel lateral foi substituído por tela inteira, e não duplicado.** 480px para lançamento,
+   datas, pagamento, N parcelas (57 em caso real), rateio, itens da OC, anexos e trilha era
+   rolagem em coluna estreita, e pior no celular de quem recebe o link de aprovação. A tela
+   inteira (`/financeiro/aprovacao-pagamentos/[parcelaId]`) mostra o mesmo conteúdo com a decisão
+   numa coluna fixa à direita. `painel-conferencia.tsx` e a action `detalheDaFila` foram
+   **apagados**: manter os dois seria duas telas de conferência com conteúdo igual divergindo com
+   o tempo.
+
+3. **Esta página não é a de lançamento que já existe.** `/financeiro/lancamentos/[id]` exige
+   `financeiro.lancamentos:ver` e é tela de edição do lançamento. Quem aprova pagamento não
+   necessariamente tem essa permissão e cairia em 404. A nova é a visão de aprovação de UMA
+   parcela, com portão em `financeiro.aprovacao-pagamentos:ver`, e quem controla a leitura do
+   lançamento por dentro é a RLS, a mesma que já deixa a fila fazer o join. Duas telas parecidas
+   com portões diferentes é o correto aqui, e é o oposto do item 2: lá o conteúdo era igual, aqui
+   a permissão é diferente.
+
+4. **Tela alcançada por link não pode só esconder o botão.** `situacaoDaParcela` centraliza a
+   regra de "esta parcela é aprovável" (a mesma de `listarParcelasPendentes` e de
+   `fn_aprovar_parcela`) e devolve o motivo da recusa. A ordem das checagens é a ordem da pergunta
+   de quem olha: o que aconteceu com a PARCELA antes do que falta no LANÇAMENTO, senão parcela já
+   paga sem conta bancária aparece como "falta escolher a conta" e manda alguém mexer num
+   lançamento resolvido. Isso NÃO é autorização: quem autoriza segue sendo a permissão na Server
+   Action e a RLS.
+
+5. **Link de uma parcela passou a apontar para a tela inteira dela.** Link de várias continua na
+   fila recortada (`?parcela=a,b`), porque tela inteira é de uma parcela por definição.
+
+6. **Posição de botão que mexe com dinheiro não se troca por conveniência.** Aprovar e Revisar
+   ficaram onde estavam e os dois novos (Visualizar, Copiar mensagem) entraram à direita, mesmo
+   sendo Visualizar hoje a ação de entrada. O caminho descobrível para o detalhe virou o número do
+   lançamento, que é link de verdade (abre em nova aba, mostra destino na barra de status) em vez
+   de linha clicável.

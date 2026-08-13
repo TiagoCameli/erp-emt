@@ -2,14 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   Check,
   CheckCheck,
+  ClipboardCopy,
   ExternalLink,
+  Eye,
   Filter,
   Inbox,
+  Link2,
   Paperclip,
   PenLine,
 } from "lucide-react";
@@ -47,7 +50,12 @@ import {
   revisarParcela,
   revisarParcelasEmLote,
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
+import {
+  mensagemAprovacao,
+  urlTelaInteira,
+} from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
 import type {
+  ParcelaForaDaFila,
   ParcelaPendente,
   ParcelasIncompletas,
   ResumoFora,
@@ -68,7 +76,6 @@ import {
 } from "@/modules/financeiro/_shared/filtros-cliente";
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
 import { AprovarDialog } from "./aprovar-dialog";
-import { PainelConferencia } from "./painel-conferencia";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Aviso de nota fiscal da OC de origem: não bloqueia aprovar, só informa. */
@@ -104,10 +111,15 @@ export interface FilaAprovacaoProps {
   podeAprovar: boolean;
   /** Permissão de desaprovar: é ela que libera mandar para revisão. */
   podeRevisar: boolean;
-  /** Libera o atalho do painel para a tela do lançamento. */
-  podeEditarLancamento: boolean;
   /** Para a personalização de colunas não vazar entre pessoas no navegador. */
   idUsuario: string;
+  /**
+   * Parcelas apontadas por um link de aprovação (o que se manda no WhatsApp).
+   * Vazio na navegação normal pelo menu. Com conteúdo, a fila mostra só essas.
+   */
+  parcelasDoLink: string[];
+  /** Parcelas do link que já saíram da fila, com o motivo, para o aviso. */
+  foraDaFila: ParcelaForaDaFila[];
 }
 
 /** O que está sendo aprovado ou revisado: uma linha, ou a seleção inteira. */
@@ -130,6 +142,33 @@ function descricaoVazia(incompletas: ParcelasIncompletas): string {
       ? `${incompletas.lancamentos} lançamentos incompletos`
       : "um lançamento incompleto"
   }: as parcelas precisam somar o valor do lançamento para entrar na fila.`;
+}
+
+/**
+ * Onde a parcela do link foi parar, em uma frase. O link fica dias parado no
+ * WhatsApp, então "não encontrei" é a resposta errada: quem abre precisa saber se
+ * o pagamento já andou ou se travou.
+ */
+function explicacaoFora(parcela: ParcelaForaDaFila): string {
+  if (parcela.naoEncontrada) {
+    return "não foi encontrado: pode ter sido excluído, ou você não tem acesso a ele";
+  }
+  switch (parcela.status) {
+    case "aprovado":
+      return "já está aprovado";
+    case "pago":
+      return "já foi pago";
+    case "em_revisao":
+      return "voltou para revisão e está sendo ajustado";
+    case "cancelado":
+      return "foi cancelado";
+    case "pendente":
+      // Pendente e fora da fila só acontece por lançamento sem conta bancária
+      // escolhida ou incompleto: são as duas travas de listarParcelasPendentes.
+      return "ainda não está aprovável: falta escolher a conta bancária no lançamento, ou as parcelas não somam o valor dele";
+    default:
+      return "não está mais na fila de aprovação";
+  }
 }
 
 /** Soma o valor das parcelas, em centavos para não arrastar erro de float. */
@@ -193,17 +232,17 @@ export function FilaAprovacao({
   contas,
   podeAprovar,
   podeRevisar,
-  podeEditarLancamento,
   idUsuario,
+  parcelasDoLink,
+  foraDaFila,
 }: FilaAprovacaoProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [selecionadas, setSelecionadas] = React.useState<Set<string>>(
     new Set(),
   );
   const [alvoAprovacao, setAlvoAprovacao] = React.useState<Alvo | null>(null);
   const [alvoRevisao, setAlvoRevisao] = React.useState<Alvo | null>(null);
-  const [emConferencia, setEmConferencia] =
-    React.useState<ParcelaPendente | null>(null);
   const [filtroBusca, setFiltroBusca] = useFiltroSessao("filtroBusca", "");
   const [filtroConta, setFiltroConta] = useFiltroSessao("filtroConta", "");
   const [filtroCategoria, setFiltroCategoria] = useFiltroSessao("filtroCategoria", "");
@@ -241,7 +280,11 @@ export function FilaAprovacao({
    */
   const visiveis = React.useMemo(() => {
     const termo = filtroBusca.trim().toLowerCase();
+    // O link é recorte, não filtro: vem antes de tudo e não aparece na barra de
+    // filtros. Quem abriu um link não quer aprovar por engano a parcela vizinha.
+    const doLink = parcelasDoLink.length > 0 ? new Set(parcelasDoLink) : null;
     return parcelas.filter((parcela) => {
+      if (doLink && !doLink.has(parcela.id)) return false;
       if (filtroConta !== "" && parcela.contaBancariaId !== filtroConta) {
         return false;
       }
@@ -292,6 +335,7 @@ export function FilaAprovacao({
     });
   }, [
     parcelas,
+    parcelasDoLink,
     filtroBusca,
     filtroConta,
     filtroCategoria,
@@ -321,11 +365,6 @@ export function FilaAprovacao({
   const todasSelecionadas =
     visiveis.length > 0 && selecionadas.size === visiveis.length;
   const algumaSelecionada = selecionadas.size > 0;
-
-  // Índice da parcela em conferência, para as setas do painel andarem na fila.
-  const indiceConferencia = emConferencia
-    ? visiveis.findIndex((parcela) => parcela.id === emConferencia.id)
-    : -1;
 
   function alternarTodas() {
     setSelecionadas((atual) =>
@@ -374,6 +413,45 @@ export function FilaAprovacao({
     });
   }
 
+  /**
+   * Copia a mensagem de aprovação (resumo do pagamento + link da tela) para quem
+   * clicou colar no WhatsApp de quem aprova.
+   *
+   * A origem sai de `window.location.origin`, então o link nasce no mesmo
+   * domínio em que a pessoa está: quem usa produção manda link de produção.
+   *
+   * O link não é credencial. Quem abrir precisa de sessão e de permissão de
+   * aprovar, igual a quem entra pelo menu: isto aqui é um atalho, não um portão.
+   */
+  async function copiarMensagem(alvo: ParcelaPendente[]) {
+    const texto = mensagemAprovacao(alvo, window.location.origin);
+    if (texto === "") return;
+
+    try {
+      // Sem HTTPS (ou com a permissão negada) a API não existe. Checar explícito
+      // porque `navigator.clipboard?.writeText()` devolveria undefined sem
+      // lançar, e o toast diria "copiado" com a área de transferência vazia.
+      if (!navigator.clipboard) throw new Error("sem area de transferencia");
+      await navigator.clipboard.writeText(texto);
+      toast.success(
+        alvo.length > 1
+          ? `Mensagem de ${alvo.length} pagamentos copiada. Cole no WhatsApp de quem aprova.`
+          : "Mensagem copiada. Cole no WhatsApp de quem aprova.",
+      );
+    } catch {
+      toast.error(
+        "O navegador não deixou copiar. Verifique a permissão de área de transferência.",
+      );
+    }
+  }
+
+  /** Sai do recorte do link e mostra a fila inteira, sem recarregar a página. */
+  function verFilaInteira() {
+    setSelecionadas(new Set());
+    zerarPagina();
+    router.replace(pathname);
+  }
+
   async function confirmarAprovacao(
     dataProgramada: string | null,
     contaId: string | null,
@@ -393,7 +471,6 @@ export function FilaAprovacao({
       }
       toast.success("Pagamento aprovado");
       tirarDaSelecao(parcela.id);
-      if (emConferencia?.id === parcela.id) setEmConferencia(null);
     } else {
       const resultado = await aprovarParcelasEmLote(
         [...selecionadas],
@@ -432,7 +509,6 @@ export function FilaAprovacao({
       }
       toast.success("Pagamento enviado para revisão");
       tirarDaSelecao(parcela.id);
-      if (emConferencia?.id === parcela.id) setEmConferencia(null);
     } else {
       const resultado = await revisarParcelasEmLote([...selecionadas], texto);
       if ("erro" in resultado) {
@@ -457,32 +533,33 @@ export function FilaAprovacao({
   const colunas = React.useMemo<ColumnDef<ParcelaPendente, unknown>[]>(() => {
     const base: ColumnDef<ParcelaPendente, unknown>[] = [];
 
-    if (podeAprovar || podeRevisar) {
-      base.push({
-        id: "selecao",
-        enableSorting: false,
-        size: 44,
-        meta: { fixa: true, naoTruncar: true },
-        header: () => (
-          <Checkbox
-            checked={todasSelecionadas}
-            onCheckedChange={alternarTodas}
-            aria-label="Selecionar todos os pagamentos"
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={selecionadas.has(row.original.id)}
-            onCheckedChange={() => alternarUma(row.original.id)}
-            aria-label={`Selecionar ${rotuloParcela(
-              row.original.lancamentoNumero,
-              row.original.numeroParcela,
-              row.original.totalParcelas,
-            )}`}
-          />
-        ),
-      });
-    }
+    // Sem depender de permissão: selecionar não muta nada, e quem só tem 'ver'
+    // usa a seleção para copiar a mensagem de aprovação de um lote e mandar para
+    // quem aprova. Os botões que mutam continuam cada um com a sua permissão.
+    base.push({
+      id: "selecao",
+      enableSorting: false,
+      size: 44,
+      meta: { fixa: true, naoTruncar: true },
+      header: () => (
+        <Checkbox
+          checked={todasSelecionadas}
+          onCheckedChange={alternarTodas}
+          aria-label="Selecionar todos os pagamentos"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={selecionadas.has(row.original.id)}
+          onCheckedChange={() => alternarUma(row.original.id)}
+          aria-label={`Selecionar ${rotuloParcela(
+            row.original.lancamentoNumero,
+            row.original.numeroParcela,
+            row.original.totalParcelas,
+          )}`}
+        />
+      ),
+    });
 
     base.push(
       {
@@ -496,13 +573,23 @@ export function FilaAprovacao({
           // justify-center porque flex não herda o text-center da célula: sem
           // isso o número encosta na esquerda e desalinha do cabeçalho.
           <div className="flex flex-wrap items-center justify-center gap-1.5">
-            <span className="codigo-doc">
+            {/*
+              O número abre a tela inteira do pagamento. É o alvo que a mão
+              procura primeiro, e é link de verdade (não linha clicável): abre em
+              nova aba com cmd+clique e o navegador mostra o destino na barra de
+              status. A linha em si não clica mais, para o checkbox só selecionar.
+            */}
+            <Link
+              href={urlTelaInteira(row.original.id)}
+              onClick={(evento) => evento.stopPropagation()}
+              className="codigo-doc text-primary hover:underline"
+            >
               {rotuloParcela(
                 row.original.lancamentoNumero,
                 row.original.numeroParcela,
                 row.original.totalParcelas,
               )}
-            </span>
+            </Link>
             {row.original.semNota ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -709,67 +796,100 @@ export function FilaAprovacao({
       },
     );
 
-    if (podeAprovar || podeRevisar) {
-      base.push({
-        id: "acoes",
-        header: "Ações",
-        enableSorting: false,
-        // Só os dois ícones: 32 + 32 do botão, 4 do gap e 24 do padding da
-        // célula dão 92px. 100 fecha com folga. Era 240 quando os botões
-        // tinham texto ("Aprovar" + "Revisar" passavam de 190px e transbordavam
-        // para a esquerda, cobrindo o valor). Manter 240 aqui devolveria o
-        // problema ao contrário: 150px de vazio empurrando as colunas que
-        // interessam para fora da tela.
-        size: 100,
-        meta: {
-          rotulo: "Ações",
-          fixa: true,
-          alinharDireita: true,
-          naoTruncar: true,
-        },
-        cell: ({ row }) => (
-          <div
-            className="flex items-center justify-end gap-1"
-            onClick={(evento) => evento.stopPropagation()}
+    // Sempre existe: o botão de copiar a mensagem de aprovação não muta nada e
+    // vale para quem só tem 'ver' (o financeiro monta a mensagem, quem aprova
+    // recebe). Aprovar e Revisar seguem cada um atrás da sua permissão.
+    base.push({
+      id: "acoes",
+      header: "Ações",
+      enableSorting: false,
+      // Quatro ícones: 4 x 32 do botão, 3 x 4 do gap e 24 do padding da célula
+      // dão 164px. 168 fecha com folga. Era 240 quando os botões tinham texto
+      // ("Aprovar" + "Revisar" passavam de 190px e transbordavam para a
+      // esquerda, cobrindo o valor).
+      size: 168,
+      // Piso na largura, e não só o padrão: `larguras` é preferência salva por
+      // usuário e o mínimo geral do DataTable é 60px. Sem isto, quem já tinha
+      // arrastado esta coluna para estreita (ou arrastar depois) fica com
+      // botão transbordando para a esquerda por cima do Valor, que é o bug que
+      // a versão de dois botões com texto já causou em produção.
+      // O DataTable respeita minSize no arraste E no saneamento da preferência.
+      minSize: 168,
+      meta: {
+        rotulo: "Ações",
+        fixa: true,
+        alinharDireita: true,
+        naoTruncar: true,
+      },
+      cell: ({ row }) => (
+        <div
+          className="flex items-center justify-end gap-1"
+          onClick={(evento) => evento.stopPropagation()}
+        >
+          {/*
+            Só o ícone. O `aria-label` carrega o número da parcela porque, sem
+            o texto, "Aprovar" repetido 25 vezes é o que um leitor de tela
+            anunciaria em toda linha, sem dizer de qual. O `title` é o tooltip
+            de quem usa o mouse e não reconhece o ícone: sem um dos dois, um
+            botão que autoriza pagamento vira adivinhação.
+          */}
+          {podeAprovar ? (
+            <Button
+              type="button"
+              size="icon-sm"
+              aria-label={`Aprovar ${row.original.lancamentoNumero}`}
+              title="Aprovar"
+              onClick={() =>
+                setAlvoAprovacao({ tipo: "linha", parcela: row.original })
+              }
+            >
+              <Check />
+            </Button>
+          ) : null}
+          {podeRevisar ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label={`Revisar ${row.original.lancamentoNumero}`}
+              title="Revisar"
+              onClick={() =>
+                setAlvoRevisao({ tipo: "linha", parcela: row.original })
+              }
+            >
+              <PenLine />
+            </Button>
+          ) : null}
+          {/* Ver vem depois de decidir de propósito: Aprovar e Revisar ficam nas
+              posições que a mão já conhece, e trocar a posição de um botão que
+              autoriza dinheiro é convite para clique errado. */}
+          <Button
+            asChild
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            title="Visualizar o pagamento em tela inteira"
           >
-            {/*
-              Só o ícone. O `aria-label` carrega o número da parcela porque, sem
-              o texto, "Aprovar" repetido 25 vezes é o que um leitor de tela
-              anunciaria em toda linha, sem dizer de qual. O `title` é o tooltip
-              de quem usa o mouse e não reconhece o ícone: sem um dos dois, um
-              botão que autoriza pagamento vira adivinhação.
-            */}
-            {podeAprovar ? (
-              <Button
-                type="button"
-                size="icon-sm"
-                aria-label={`Aprovar ${row.original.lancamentoNumero}`}
-                title="Aprovar"
-                onClick={() =>
-                  setAlvoAprovacao({ tipo: "linha", parcela: row.original })
-                }
-              >
-                <Check />
-              </Button>
-            ) : null}
-            {podeRevisar ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label={`Revisar ${row.original.lancamentoNumero}`}
-                title="Revisar"
-                onClick={() =>
-                  setAlvoRevisao({ tipo: "linha", parcela: row.original })
-                }
-              >
-                <PenLine />
-              </Button>
-            ) : null}
-          </div>
-        ),
-      });
-    }
+            <Link
+              href={urlTelaInteira(row.original.id)}
+              aria-label={`Visualizar ${row.original.lancamentoNumero} em tela inteira`}
+            >
+              <Eye />
+            </Link>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label={`Copiar mensagem de aprovação de ${row.original.lancamentoNumero}`}
+            title="Copiar mensagem de aprovação (para colar no WhatsApp)"
+            onClick={() => void copiarMensagem([row.original])}
+          >
+            <ClipboardCopy />
+          </Button>
+        </div>
+      ),
+    });
 
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1082,6 +1202,47 @@ export function FilaAprovacao({
           />
         </GradeKpis>
 
+        {/*
+          Aviso do link de aprovação. Aparece antes da tabela porque explica por
+          que a fila está curta: sem ele, quem abre o link vê 1 pagamento e conclui
+          que a empresa só tem 1 pagamento para aprovar.
+        */}
+        {parcelasDoLink.length > 0 ? (
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border border-l-[3px] border-l-faixa bg-surface px-4 py-2.5">
+            <div className="flex flex-col gap-1">
+              <p className="text-detalhe text-foreground">
+                <Link2 className="mr-1.5 inline size-3.5" aria-hidden="true" />
+                Você abriu um link de aprovação:{" "}
+                {visiveis.length === 0
+                  ? "nenhum destes pagamentos está na fila."
+                  : `a fila está mostrando só ${visiveis.length} pagamento(s) deste link.`}
+              </p>
+              {foraDaFila.map((parcela) => (
+                <p
+                  key={parcela.id}
+                  className="text-legenda text-muted-foreground"
+                >
+                  {parcela.numero ? (
+                    <span className="codigo-doc">{parcela.numero}</span>
+                  ) : (
+                    "Um dos pagamentos do link"
+                  )}
+                  {parcela.naoEncontrada ? "" : ` de ${parcela.fornecedorNome}`}{" "}
+                  {explicacaoFora(parcela)}.
+                </p>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={verFilaInteira}
+            >
+              Ver a fila inteira
+            </Button>
+          </div>
+        ) : null}
+
         {algumaSelecionada ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-2.5">
             <p className="text-detalhe text-foreground">
@@ -1092,6 +1253,17 @@ export function FilaAprovacao({
               </span>
             </p>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Sem permissão: montar a mensagem não muta nada. É o caminho de
+                  quem confere e repassa para quem aprova. */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void copiarMensagem(selecionadasNaFila)}
+              >
+                <ClipboardCopy />
+                Copiar mensagem de aprovação
+              </Button>
               {podeRevisar ? (
                 <Button
                   type="button"
@@ -1124,12 +1296,31 @@ export function FilaAprovacao({
           pageIndex={paginacao.pageIndex}
           pageSize={paginacao.pageSize}
           onPaginationChange={setPaginacao}
-          onRowClick={setEmConferencia}
+          // Sem onRowClick de propósito: clicar na linha não abre nada. A linha
+          // inteira clicável fazia o clique no checkbox subir e abrir a
+          // conferência junto, então marcar uma parcela para aprovar em lote
+          // virava abrir um painel por cima. Quem quer ver o pagamento usa o
+          // botão do olho ou o número do lançamento.
           idTabela="financeiro.aprovacao-pagamentos"
           idUsuario={idUsuario}
           cabecalhoFixo
           emptyState={
-            // Fila cheia e nada na tela é filtro, não fila vazia: dizer
+            // Link cobre os outros dois casos: a fila pode estar cheia e o
+            // recorte do link vazio, e aí nem "sem filtro" nem "fila vazia"
+            // explicam. O aviso acima da tabela já diz o motivo de cada parcela.
+            parcelasDoLink.length > 0 ? (
+              <EmptyState
+                icone={Link2}
+                titulo="Os pagamentos deste link já saíram da fila"
+                descricao="O link continua válido, mas esses pagamentos não estão mais aguardando aprovação. O aviso acima diz onde cada um foi parar."
+                acao={
+                  <Button type="button" size="sm" onClick={verFilaInteira}>
+                    Ver a fila inteira
+                  </Button>
+                }
+                className="border-none bg-transparent"
+              />
+            ) : // Fila cheia e nada na tela é filtro, não fila vazia: dizer
             // "nenhum pagamento aguardando aprovação" aqui seria mentira.
             filtrando && parcelas.length > 0 ? (
               <EmptyState
@@ -1147,31 +1338,6 @@ export function FilaAprovacao({
               />
             )
           }
-        />
-
-        <PainelConferencia
-          parcela={emConferencia}
-          onFechar={() => setEmConferencia(null)}
-          posicao={
-            indiceConferencia >= 0
-              ? { atual: indiceConferencia + 1, total: visiveis.length }
-              : null
-          }
-          onAnterior={
-            indiceConferencia > 0
-              ? () => setEmConferencia(visiveis[indiceConferencia - 1])
-              : null
-          }
-          onProximo={
-            indiceConferencia >= 0 && indiceConferencia < visiveis.length - 1
-              ? () => setEmConferencia(visiveis[indiceConferencia + 1])
-              : null
-          }
-          podeAprovar={podeAprovar}
-          podeRevisar={podeRevisar}
-          podeEditarLancamento={podeEditarLancamento}
-          onAprovar={(parcela) => setAlvoAprovacao({ tipo: "linha", parcela })}
-          onRevisar={(parcela) => setAlvoRevisao({ tipo: "linha", parcela })}
         />
 
         <AprovarDialog
