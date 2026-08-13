@@ -1317,9 +1317,9 @@ Três lições que valem além desta tela:
 ## 2026-08-13 - Adiantamento parcelado: o vale do mês virou dívida amortizada, e quem protege o dinheiro é uma trava com condição de ordem
 
 O adiantamento de salário passou a ser descontado em **N parcelas** na folha, com o dinheiro
-saindo **inteiro na concessão**. Nove migrations de schema e função, sete tarefas, seis rodadas
-de correção. Três dos achados abaixo são bugs de dinheiro que existiram e foram medidos, não
-riscos hipotéticos.
+saindo **inteiro na concessão**. Quinze migrations de schema, função e comentário, sete tarefas,
+seis rodadas de correção. Três dos achados abaixo são bugs de dinheiro que existiram e foram
+medidos, não riscos hipotéticos.
 
 ### 1. Mudou a natureza do adiantamento, não só a quantidade de parcelas
 
