@@ -25,11 +25,7 @@ import {
   type OpcaoFiltro,
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import {
-  excluirLancamento,
-  gerarPlanilhaLancamentos,
-} from "@/modules/financeiro/lancamentos/actions";
-import { baixarBase64 } from "@/lib/download";
+import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   ROTULO_BANCO,
@@ -259,9 +255,8 @@ export function LancamentosTabela({
   podeExcluir,
 }: LancamentosTabelaProps) {
   const router = useRouter();
-  const { setMuitos, query } = useFiltrosUrl();
+  const { setMuitos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(valores.busca);
-  const [exportando, setExportando] = React.useState(false);
   // Faixa de valor é digitada dígito a dígito: vai pela URL com espera, senão
   // cada tecla viraria uma consulta e o campo perderia caracteres.
   const {
@@ -360,31 +355,6 @@ export function LancamentosTabela({
     toast.success("Lançamento excluído");
     setAExcluir(null);
     router.refresh();
-  }
-
-  /**
-   * Exporta para Excel o conjunto FILTRADO inteiro, não a página aberta: quem
-   * exporta quer fechar o mês, e a paginação da tela não tem nada a ver com o
-   * recorte do relatório.
-   *
-   * Manda a query string da URL, que é a MESMA que a página leu para montar a
-   * lista: assim a planilha e a tela não podem discordar. Inclui a espera da
-   * busca digitada, e isso está certo: a lista na tela também só muda quando a
-   * busca chega na URL, então os dois andam juntos.
-   */
-  async function aoExportar() {
-    if (exportando) return;
-    setExportando(true);
-    try {
-      const resultado = await gerarPlanilhaLancamentos(query);
-      if ("erro" in resultado) {
-        toast.error(resultado.erro);
-        return;
-      }
-      baixarBase64(resultado.base64, resultado.nomeArquivo);
-    } finally {
-      setExportando(false);
-    }
   }
 
   function aoMudarPaginacao(paginacao: PaginationState) {
@@ -648,8 +618,6 @@ export function LancamentosTabela({
         pageIndex={pagina}
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
-        exportar={aoExportar}
-        exportando={exportando}
         selecao={{
           idDaLinha: (lancamento) => lancamento.id,
           selecionados,
