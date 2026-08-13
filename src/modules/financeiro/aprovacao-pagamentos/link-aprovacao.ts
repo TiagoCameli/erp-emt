@@ -21,14 +21,25 @@ export const PARAM_LINK_APROVACAO = "parcela";
 
 const ROTA_FILA = "/financeiro/aprovacao-pagamentos";
 
+/** Rota da tela inteira de aprovação de uma parcela, relativa. */
+export function urlTelaInteira(id: string): string {
+  return `${ROTA_FILA}/${id}`;
+}
+
 /**
  * Monta a URL absoluta do link. `origem` é o `window.location.origin` de quem
  * gera: o link nasce no mesmo domínio em que a pessoa está, então quem abre o
  * app em produção manda link de produção e quem abre em preview manda de
  * preview, sem variável de ambiente para desencontrar.
+ *
+ * Uma parcela vai para a tela inteira dela: quem recebe no WhatsApp quer o
+ * pagamento na tela, não uma fila de um item. Várias caem na fila recortada,
+ * porque tela inteira é de uma parcela por definição.
  */
 export function urlAprovacao(origem: string, ids: string[]): string {
   const base = origem.replace(/\/+$/, "");
+  if (ids.length === 1) return `${base}${urlTelaInteira(ids[0])}`;
+  if (ids.length === 0) return `${base}${ROTA_FILA}`;
   return `${base}${ROTA_FILA}?${PARAM_LINK_APROVACAO}=${ids.join(",")}`;
 }
 

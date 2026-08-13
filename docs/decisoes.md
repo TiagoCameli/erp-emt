@@ -1150,3 +1150,48 @@ que decidiu o desenho foi: o link carrega autoridade, ou só endereço?
    alcança quem já arrastou a coluna. Sem `minSize`, os três ícones transbordam por cima do
    Valor: o mesmo defeito que a versão de dois botões com texto já causou em produção. Vale para
    qualquer coluna de ações que ganhar botão.
+
+## 2026-08-13 - A conferência de pagamento virou tela inteira, e a linha da fila parou de clicar
+
+Ajuste do bloco anterior depois de o Tiago usar a tela. Três sintomas, uma causa comum e uma
+decisão de superfície.
+
+1. **Linha inteira clicável e checkbox no meio dela não convivem.** A fila abria o painel de
+   conferência no `onRowClick`, e o clique no checkbox subia para a linha: marcar uma parcela
+   para aprovar em lote abria um painel por cima da seleção. Não é bug do checkbox, é o padrão
+   "linha clicável" aplicado a uma tabela cujo trabalho principal é seleção múltipla. `onRowClick`
+   saiu. **Regra:** tabela com seleção em lote não usa linha clicável; o caminho para o detalhe é
+   botão ou link explícito.
+
+2. **O painel lateral foi substituído por tela inteira, e não duplicado.** 480px para lançamento,
+   datas, pagamento, N parcelas (57 em caso real), rateio, itens da OC, anexos e trilha era
+   rolagem em coluna estreita, e pior no celular de quem recebe o link de aprovação. A tela
+   inteira (`/financeiro/aprovacao-pagamentos/[parcelaId]`) mostra o mesmo conteúdo com a decisão
+   numa coluna fixa à direita. `painel-conferencia.tsx` e a action `detalheDaFila` foram
+   **apagados**: manter os dois seria duas telas de conferência com conteúdo igual divergindo com
+   o tempo.
+
+3. **Esta página não é a de lançamento que já existe.** `/financeiro/lancamentos/[id]` exige
+   `financeiro.lancamentos:ver` e é tela de edição do lançamento. Quem aprova pagamento não
+   necessariamente tem essa permissão e cairia em 404. A nova é a visão de aprovação de UMA
+   parcela, com portão em `financeiro.aprovacao-pagamentos:ver`, e quem controla a leitura do
+   lançamento por dentro é a RLS, a mesma que já deixa a fila fazer o join. Duas telas parecidas
+   com portões diferentes é o correto aqui, e é o oposto do item 2: lá o conteúdo era igual, aqui
+   a permissão é diferente.
+
+4. **Tela alcançada por link não pode só esconder o botão.** `situacaoDaParcela` centraliza a
+   regra de "esta parcela é aprovável" (a mesma de `listarParcelasPendentes` e de
+   `fn_aprovar_parcela`) e devolve o motivo da recusa. A ordem das checagens é a ordem da pergunta
+   de quem olha: o que aconteceu com a PARCELA antes do que falta no LANÇAMENTO, senão parcela já
+   paga sem conta bancária aparece como "falta escolher a conta" e manda alguém mexer num
+   lançamento resolvido. Isso NÃO é autorização: quem autoriza segue sendo a permissão na Server
+   Action e a RLS.
+
+5. **Link de uma parcela passou a apontar para a tela inteira dela.** Link de várias continua na
+   fila recortada (`?parcela=a,b`), porque tela inteira é de uma parcela por definição.
+
+6. **Posição de botão que mexe com dinheiro não se troca por conveniência.** Aprovar e Revisar
+   ficaram onde estavam e os dois novos (Visualizar, Copiar mensagem) entraram à direita, mesmo
+   sendo Visualizar hoje a ação de entrada. O caminho descobrível para o detalhe virou o número do
+   lançamento, que é link de verdade (abre em nova aba, mostra destino na barra de status) em vez
+   de linha clicável.

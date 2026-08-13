@@ -6,6 +6,7 @@ import {
   lerParcelasDoLink,
   mensagemAprovacao,
   urlAprovacao,
+  urlTelaInteira,
 } from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
 import type { ParcelaPendente } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 
@@ -41,13 +42,15 @@ function parcela(troca: Partial<ParcelaPendente> = {}): ParcelaPendente {
 }
 
 describe("urlAprovacao", () => {
-  it("aponta para a fila de aprovação com a parcela no parâmetro", () => {
+  it("uma parcela abre a tela inteira dela, não a fila", () => {
+    // Quem recebe o link no WhatsApp quer o pagamento na tela, não uma lista de
+    // um item para descobrir onde clicar.
     expect(urlAprovacao("https://erp.emt.com", [ID_A])).toBe(
-      `https://erp.emt.com/financeiro/aprovacao-pagamentos?${PARAM_LINK_APROVACAO}=${ID_A}`,
+      `https://erp.emt.com/financeiro/aprovacao-pagamentos/${ID_A}`,
     );
   });
 
-  it("junta várias parcelas por vírgula", () => {
+  it("várias parcelas caem na fila recortada, porque tela inteira é de uma só", () => {
     expect(urlAprovacao("https://erp.emt.com", [ID_A, ID_B])).toBe(
       `https://erp.emt.com/financeiro/aprovacao-pagamentos?${PARAM_LINK_APROVACAO}=${ID_A},${ID_B}`,
     );
@@ -55,7 +58,21 @@ describe("urlAprovacao", () => {
 
   it("não duplica a barra quando a origem termina com uma", () => {
     expect(urlAprovacao("https://erp.emt.com/", [ID_A])).toBe(
-      `https://erp.emt.com/financeiro/aprovacao-pagamentos?${PARAM_LINK_APROVACAO}=${ID_A}`,
+      `https://erp.emt.com/financeiro/aprovacao-pagamentos/${ID_A}`,
+    );
+  });
+
+  it("sem parcela nenhuma aponta para a fila, sem rota quebrada", () => {
+    expect(urlAprovacao("https://erp.emt.com", [])).toBe(
+      "https://erp.emt.com/financeiro/aprovacao-pagamentos",
+    );
+  });
+});
+
+describe("urlTelaInteira", () => {
+  it("monta a rota da tela de aprovação de uma parcela", () => {
+    expect(urlTelaInteira(ID_A)).toBe(
+      `/financeiro/aprovacao-pagamentos/${ID_A}`,
     );
   });
 });
