@@ -3,7 +3,7 @@ import ExcelJS from "exceljs";
 import { formatarDataHora, formatarMesAno } from "@/lib/formatadores";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
 import { ROTULO_REVISAO_DA_LINHA } from "@/modules/financeiro/lancamentos/lote";
-import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
+import type { LancamentoPlanilha } from "@/modules/financeiro/lancamentos/queries";
 import {
   rotuloOrigemLancamento,
   rotuloStatusLancamento,
@@ -35,7 +35,7 @@ export interface ColunaPlanilha {
   /** Largura em caracteres, o que o exceljs entende. */
   largura: number;
   tipo: TipoColunaPlanilha;
-  celula: (lancamento: LancamentoLista) => CelulaPlanilha;
+  celula: (lancamento: LancamentoPlanilha) => CelulaPlanilha;
 }
 
 /**
@@ -56,12 +56,36 @@ export function dataParaCelula(
 }
 
 /**
+ * Valor de um item do rateio, dentro da célula de composição.
+ *
+ * Sem "R$" de propósito, e é por isso que não usa `formatarBRL`: a célula junta
+ * vários centros ("Escritório: 1.200,00; BR-364: 800,00") e repetir o símbolo em
+ * cada um enche de ruído a única coluna que já é a mais longa da planilha. A
+ * moeda está na coluna Valor, que é número de verdade e soma.
+ */
+function valorDoRateio(valor: number): string {
+  return valor.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/**
  * Colunas da planilha, na ordem em que saem.
  *
- * São as mesmas informações da listagem, mais Fornecedor e Origem (que na tela
- * dividem célula com outra coisa) e Criado em. Centro de custo fica de fora: ele
- * mora no rateio, um lançamento pode ser dividido entre várias obras, e uma
- * coluna só mentiria sobre isso.
+ * Traz o lançamento INTEIRO, não o resumo da listagem: além do que a tela mostra,
+ * vão centro de custo, rateio, forma e condição de pagamento, conta bancária,
+ * número do documento de origem e observações.
+ *
+ * **Uma linha por lançamento, e isso é o que decide a forma do rateio.** Um
+ * lançamento pode ser dividido entre várias obras, então "Centro de custo" lista
+ * os nomes e "Rateio" traz quanto foi para cada um. A alternativa (uma linha por
+ * rateio) foi recusada: ela repetiria o valor do lançamento em N linhas, e quem
+ * somasse a coluna Valor contaria o mesmo dinheiro várias vezes. Numa planilha
+ * de dinheiro, total errado que abre sem erro é o pior defeito possível.
+ *
+ * Parcela também é 1-N (conta, vencimento, pagamento). Aqui entra só o resumo: a
+ * quantidade em "Parcelas" e a conta bancária quando é a mesma em todas.
  */
 export const COLUNAS_PLANILHA_LANCAMENTOS: ColunaPlanilha[] = [
   {
@@ -147,12 +171,71 @@ export const COLUNAS_PLANILHA_LANCAMENTOS: ColunaPlanilha[] = [
     celula: (l) => rotuloOrigemLancamento(l.origem),
   },
   {
+    cabecalho: "Documento de origem",
+    largura: 20,
+    tipo: "texto",
+    // "Ordem de compra" na coluna Origem não diz QUAL ordem: sem o número, quem
+    // confere a planilha volta ao sistema para achar o documento.
+    celula: (l) => l.origemNumero,
+  },
+  {
+    // A espinha dorsal do ERP: custo sem centro de custo não existe. Era a
+    // ausência mais sentida da planilha.
+    cabecalho: "Centro de custo",
+    largura: 28,
+    tipo: "texto",
+    celula: (l) =>
+      l.rateios.length === 0
+        ? null
+        : l.rateios.map((rateio) => rateio.nome).join("; "),
+  },
+  {
+    cabecalho: "Rateio",
+    largura: 40,
+    tipo: "texto",
+    // Só quando há mais de um centro: com um só, a composição repetiria o nome
+    // da coluna ao lado e o valor do lançamento, virando ruído em toda linha.
+    celula: (l) =>
+      l.rateios.length < 2
+        ? null
+        : l.rateios
+            .map((rateio) => `${rateio.nome}: ${valorDoRateio(rateio.valor)}`)
+            .join("; "),
+  },
+  {
+    cabecalho: "Forma de pagamento",
+    largura: 20,
+    tipo: "texto",
+    celula: (l) => l.formaPagamentoNome,
+  },
+  {
+    cabecalho: "Condição de pagamento",
+    largura: 22,
+    tipo: "texto",
+    celula: (l) => l.condicaoPagamentoDescricao,
+  },
+  {
+    cabecalho: "Conta bancária",
+    largura: 26,
+    tipo: "texto",
+    celula: (l) => l.contaBancariaNome,
+  },
+  {
     cabecalho: "Criado em",
     largura: 18,
     tipo: "texto",
     // Texto, e não data: é timestamptz, e o que vale é o horário de Rio Branco
     // (regra do ERP). Como data do Excel, ela abriria no fuso de quem abre.
     celula: (l) => formatarDataHora(l.criadoEm),
+  },
+  {
+    // Última de propósito: é a coluna mais larga e a única com texto de tamanho
+    // imprevisível. No meio da planilha ela empurraria tudo que interessa para
+    // fora da tela de quem abre o arquivo.
+    cabecalho: "Observações",
+    largura: 50,
+    tipo: "texto",
+    celula: (l) => l.observacoes,
   },
 ];
 
@@ -162,7 +245,7 @@ export const CABECALHOS_PLANILHA_LANCAMENTOS =
 
 /** Uma linha da planilha, na ordem das colunas. */
 export function linhaPlanilhaLancamento(
-  lancamento: LancamentoLista,
+  lancamento: LancamentoPlanilha,
 ): CelulaPlanilha[] {
   return COLUNAS_PLANILHA_LANCAMENTOS.map((coluna) => coluna.celula(lancamento));
 }
@@ -175,86 +258,6 @@ export function linhaPlanilhaLancamento(
  */
 export function nomeArquivoPlanilhaLancamentos(dataISO: string): string {
   return `lancamentos-${dataISO}.xlsx`;
-}
-
-/* ------------------------------------------------------------------ */
-/* Leitura completa do filtro                                         */
-/* ------------------------------------------------------------------ */
-
-/**
- * Linhas por requisição na leitura completa.
- *
- * Mil, e não "tudo de uma vez", porque o PostgREST corta a resposta num teto
- * invisível: pedir oito mil linhas numa tacada pode devolver menos e a planilha
- * sairia faltando lançamento sem ninguém perceber. É o mesmo tamanho que
- * `lerEmPaginas` usa nas consultas auxiliares de filtro, pelo mesmo motivo.
- */
-export const PAGINA_EXPORTACAO = 1000;
-
-/** Uma página da listagem, com o total exato do filtro. */
-export interface PaginaDeLancamentos {
-  itens: LancamentoLista[];
-  total: number;
-}
-
-/** Quem busca uma página. Injetado para esta função não depender do banco. */
-export type LeitorDePagina = (
-  pagina: number,
-  tamanho: number,
-) => Promise<PaginaDeLancamentos>;
-
-export interface LeituraCompleta {
-  /** Linhas lidas, na ordem da listagem, sem repetição. */
-  itens: LancamentoLista[];
-  /** Total exato do filtro, direto do count do banco. */
-  total: number;
-}
-
-/**
- * Lê o filtro inteiro, página por página, até fechar o total.
- *
- * `itens.length < total` no retorno significa leitura incompleta, e quem chamou
- * tem que tratar como erro em vez de entregar o arquivo: planilha com metade dos
- * lançamentos e nenhum aviso é pior que exportação que falhou.
- *
- * Deduplica por id de propósito. Se alguém criar um lançamento no meio da
- * leitura, o novo entra na frente e empurra as linhas uma casa para baixo, o que
- * faria uma linha aparecer em duas páginas. Somar dois lançamentos iguais no
- * total é o tipo de erro que ninguém confere.
- *
- * `teto` é freio de disparada, não regra de negócio: passando dele a função
- * devolve `itens` vazio com o `total` real, para a tela dizer o número.
- */
-export async function lerLancamentosEmPaginas(
-  ler: LeitorDePagina,
-  teto: number,
-  tamanhoPagina: number = PAGINA_EXPORTACAO,
-): Promise<LeituraCompleta> {
-  const vistos = new Set<string>();
-  const itens: LancamentoLista[] = [];
-  let total = 0;
-
-  const maximoDePaginas = Math.ceil(teto / tamanhoPagina);
-  for (let pagina = 0; pagina < maximoDePaginas; pagina += 1) {
-    const lote = await ler(pagina, tamanhoPagina);
-    total = lote.total;
-
-    // Passou do teto: para na primeira página, sem varrer o banco à toa.
-    if (total > teto) return { itens: [], total };
-
-    for (const item of lote.itens) {
-      if (vistos.has(item.id)) continue;
-      vistos.add(item.id);
-      itens.push(item);
-    }
-
-    // Página curta é fim de lista. E o total fechado também: sem essa saída, um
-    // filtro de 1000 exatas pediria uma página a mais só para ouvir "vazio".
-    if (lote.itens.length < tamanhoPagina) break;
-    if (itens.length >= total) break;
-  }
-
-  return { itens, total };
 }
 
 /* ------------------------------------------------------------------ */
@@ -280,7 +283,7 @@ export const ABA_PLANILHA_LANCAMENTOS = "Lançamentos";
  * filtro do Excel ligado e a linha de total.
  */
 export function montarPlanilhaLancamentos(
-  itens: LancamentoLista[],
+  itens: LancamentoPlanilha[],
 ): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "ERP EMT";

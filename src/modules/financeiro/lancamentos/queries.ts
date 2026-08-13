@@ -7,7 +7,7 @@ import {
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
-import { TIMEZONE } from "@/lib/formatadores";
+import { dataHojeISO, TIMEZONE } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
@@ -15,16 +15,28 @@ import {
   tipoFormaPagamento,
   type TipoFormaPagamento,
 } from "@/modules/_shared/forma-pagamento";
-import type {
-  StatusLancamento,
-  StatusParcela,
-  TipoLancamento,
+import {
+  STATUS_PARCELA_ABERTA,
+  type StatusLancamento,
+  type StatusParcela,
+  type TipoLancamento,
 } from "@/modules/financeiro/_shared/formato";
 import type {
+  FiltroAtraso,
   FiltroRevisao,
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
+import {
+  lerLancamentosEmPaginas,
+  PAGINA_LEITURA,
+} from "@/modules/financeiro/lancamentos/leitura-completa";
+import {
+  dinheiroDasParcelas,
+  resumirLancamentos,
+  situacaoDeAtraso,
+  type ResumoLancamentos,
+} from "@/modules/financeiro/lancamentos/resumo";
 
 /** Cliente Supabase do servidor, para as consultas auxiliares de filtro. */
 type ClienteSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -78,6 +90,13 @@ export interface ListarLancamentosParams {
    * das parcelas, então vira consulta de ids + `in`.
    */
   revisao?: FiltroRevisao;
+  /**
+   * Situação de atraso, derivada das parcelas em aberto: `vencido` (alguma
+   * atrasada) ou `a_vencer` (tem saldo e nada estourou). Também vira consulta de
+   * ids + `in`. Não confundir com `vencimentoDe`/`vencimentoAte`, que olham a
+   * coluna do cabeçalho do lançamento.
+   */
+  atraso?: FiltroAtraso;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -100,6 +119,23 @@ export interface LancamentoLista {
   /** Data de sistema, imutável. */
   criadoEm: string;
   /**
+   * Dinheiro do lançamento repartido pelo estado das PARCELAS, que é onde o
+   * pagamento acontece. O `valor` acima é o total do documento; estes três dizem
+   * quanto dele já saiu, quanto falta e quanto está atrasado.
+   *
+   * Existe porque somar por status do lançamento mente: 107 lançamentos da base
+   * estão parcialmente pagos (medido em 13/08/2026, R$ 12,36 mi de valor com
+   * R$ 2,53 mi já pagos), e pelo status eles contam inteiros como "a pagar".
+   */
+  /** Soma das parcelas pagas, pelo LÍQUIDO: é o que saiu da conta bancária. */
+  valorPago: number;
+  /** Soma das parcelas que não estão pagas nem canceladas. */
+  valorAberto: number;
+  /** Parte do aberto com vencimento anterior a hoje (fuso de Rio Branco). */
+  valorVencido: number;
+  /** Desconto concedido nas parcelas já pagas. Zero quando não houve. */
+  descontoObtido: number;
+  /**
    * Estado da revisão do lançamento, derivado da conta bancária das parcelas.
    * Não é um marcador que alguém liga na mão de propósito: selo dizendo
    * "revisado" com a conta vazia seria mentira, e um flag manual sairia de
@@ -112,6 +148,42 @@ export interface LancamentoLista {
    */
   revisao: "sem-conta" | "parcial" | "revisado" | "nao-se-aplica";
 }
+
+/** Um centro de custo do rateio, para a coluna da planilha. */
+export interface RateioPlanilha {
+  nome: string;
+  codigo: string | null;
+  valor: number;
+}
+
+/**
+ * O lançamento como a PLANILHA precisa dele: a linha da lista mais o que a tela
+ * não mostra (observações, rateio, forma, condição, conta, documento de origem).
+ *
+ * Existe separado de `LancamentoLista` de propósito. A listagem é a tela mais
+ * usada do módulo e não mostra nenhum destes campos: pendurar rateio no select
+ * dela sairia caro em toda navegação para servir uma exportação que acontece de
+ * vez em quando. Quem enriquece é `detalharLancamentosParaPlanilha`, página por
+ * página, sobre os ids que a lista já devolveu.
+ */
+export interface LancamentoPlanilha extends LancamentoLista {
+  observacoes: string | null;
+  formaPagamentoNome: string | null;
+  condicaoPagamentoDescricao: string | null;
+  /**
+   * Conta bancária das parcelas. `null` quando nenhuma tem conta escolhida, e o
+   * nome quando todas apontam para a mesma. Parcelas em contas diferentes viram
+   * `VARIAS_CONTAS`: um nome só ali seria mentira, e a planilha é uma linha por
+   * lançamento.
+   */
+  contaBancariaNome: string | null;
+  /** Número do documento de origem (a OC), quando o lançamento vem de um. */
+  origemNumero: string | null;
+  rateios: RateioPlanilha[];
+}
+
+/** O que vai na coluna de conta quando as parcelas usam contas diferentes. */
+export const VARIAS_CONTAS = "Várias contas";
 
 /** Resultado paginado da listagem. */
 export interface LancamentosPagina {
@@ -331,6 +403,53 @@ async function idsPorCentroCusto(
 }
 
 /**
+ * Ids de lançamentos por situação de atraso.
+ *
+ * Lê SÓ as parcelas em aberto (`STATUS_PARCELA_ABERTA`), e não todas: são 931 de
+ * 7.701 na base de hoje, então isto é uma requisição em vez de oito, e nem
+ * encosta no teto de páginas do `lerEmPaginas`. Quem está quitado não aparece em
+ * nenhum dos dois lados do filtro justamente por não ter parcela aberta nenhuma.
+ *
+ * A classificação em si é do `situacaoDeAtraso`, o mesmo módulo que alimenta o
+ * cartão "Vencido": o filtro não pode trazer um conjunto diferente do número que
+ * está escrito em cima dele.
+ */
+async function idsPorAtraso(
+  supabase: ClienteSupabase,
+  atraso: FiltroAtraso,
+  hojeISO: string,
+): Promise<string[]> {
+  const parcelas = await lerEmPaginas((de, ate) =>
+    supabase
+      .from("lancamento_parcelas")
+      .select("lancamento_id, status, data_vencimento")
+      .in("status", STATUS_PARCELA_ABERTA)
+      .order("lancamento_id")
+      .order("id")
+      .range(de, ate),
+  );
+
+  const porLancamento = new Map<
+    string,
+    Array<{ status: string; dataVencimento: string | null }>
+  >();
+  for (const parcela of parcelas) {
+    const lista = porLancamento.get(parcela.lancamento_id) ?? [];
+    lista.push({
+      status: parcela.status,
+      dataVencimento: parcela.data_vencimento,
+    });
+    porLancamento.set(parcela.lancamento_id, lista);
+  }
+
+  const ids: string[] = [];
+  for (const [id, lista] of porLancamento) {
+    if (situacaoDeAtraso(lista, hojeISO) === atraso) ids.push(id);
+  }
+  return ids;
+}
+
+/**
  * Ids de lançamentos no estado de revisão pedido. `em_revisao` é status de
  * parcela; os outros três são derivados da conta bancária das parcelas ainda
  * não pagas, com a mesma regra que a coluna "Revisão" da lista usa (por isso
@@ -441,9 +560,18 @@ export async function listarLancamentos(
   // Filtros que moram em tabela filha (parcela, rateio) viram lista de ids.
   // Não dá para filtrar pelo join embutido no select: ele é o que alimenta a
   // coluna "Revisão", e filtrá-lo esconderia parcelas do cálculo.
+  // Uma leitura do relógio para a consulta toda: serve o filtro de atraso e o
+  // cálculo por linha. Com duas chamadas de `dataHojeISO()`, uma consulta que
+  // virasse a meia-noite filtraria por um dia e classificaria as linhas pelo
+  // outro, e o filtro "vencidos" traria linha que a coluna mostra em dia.
+  const hojeISO = dataHojeISO();
+
   const listasDeIds: string[][] = [];
   if (params.revisao) {
     listasDeIds.push(await idsPorRevisao(supabase, params.revisao));
+  }
+  if (params.atraso) {
+    listasDeIds.push(await idsPorAtraso(supabase, params.atraso, hojeISO));
   }
   if (params.contaBancariaId) {
     listasDeIds.push(
@@ -468,7 +596,10 @@ export async function listarLancamentos(
        data_compra, mes_competencia, created_at,
        categorias_financeiras(nome),
        fornecedores(razao_social, nome_fantasia),
-       lancamento_parcelas(status, conta_bancaria_id)`,
+       lancamento_parcelas(
+         status, conta_bancaria_id, valor, valor_liquido, desconto,
+         data_vencimento
+       )`,
       { count: "exact" },
     )
     .order("data_compra", { ascending: false })
@@ -554,8 +685,20 @@ export async function listarLancamentos(
             ? "revisado"
             : "parcial";
 
+    const dinheiro = dinheiroDasParcelas(
+      parcelas.map((parcela) => ({
+        status: parcela.status,
+        valor: parcela.valor,
+        valorLiquido: parcela.valor_liquido,
+        desconto: parcela.desconto,
+        dataVencimento: parcela.data_vencimento,
+      })),
+      hojeISO,
+    );
+
     return {
       revisao,
+      ...dinheiro,
       id: lancamento.id,
       numero: lancamento.numero,
       tipo: lancamento.tipo as TipoLancamento,
@@ -576,6 +719,116 @@ export async function listarLancamentos(
   });
 
   return { itens, total: count ?? 0 };
+}
+
+/** O que a planilha acrescenta a uma linha da lista. */
+type DetalhePlanilha = Pick<
+  LancamentoPlanilha,
+  | "observacoes"
+  | "formaPagamentoNome"
+  | "condicaoPagamentoDescricao"
+  | "contaBancariaNome"
+  | "origemNumero"
+  | "rateios"
+>;
+
+/**
+ * Busca, para um punhado de lançamentos, o que a listagem não traz: observações,
+ * rateio com centro de custo, forma e condição de pagamento, conta bancária das
+ * parcelas e número da OC de origem.
+ *
+ * Recebe os ids de UMA página da exportação, não a exportação inteira: o teto é
+ * 25.000 lançamentos, e um `in` com 25 mil uuids é uma query que o Postgres
+ * aceita mas ninguém quer depurar. Quem chama enriquece página por página.
+ *
+ * A condição de pagamento de lançamento vindo de OC vive na ordem, não no
+ * lançamento (é o documento de origem que manda nela), então ela é lida das duas
+ * fontes: a do próprio lançamento quando existe, senão a da OC.
+ */
+export async function detalharLancamentosParaPlanilha(
+  ids: string[],
+): Promise<Map<string, DetalhePlanilha>> {
+  const detalhes = new Map<string, DetalhePlanilha>();
+  if (ids.length === 0) return detalhes;
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("lancamentos")
+    .select(
+      `id, observacoes, origem, origem_id,
+       formas_pagamento(nome),
+       condicoes_pagamento(descricao),
+       lancamento_parcelas(conta_bancaria_id, contas_bancarias(nome)),
+       lancamento_rateios(valor, centros_custo(nome, codigo))`,
+    )
+    .in("id", ids);
+
+  if (error) {
+    throw new Error("Não foi possível carregar o detalhe para a planilha");
+  }
+
+  const linhas = data ?? [];
+  const numeroOc = await numerosDeOcDosLancamentos(supabase, linhas);
+
+  for (const linha of linhas) {
+    const parcelas = linha.lancamento_parcelas ?? [];
+    const nomesDeConta = new Set(
+      parcelas
+        .map((parcela) => parcela.contas_bancarias?.nome)
+        .filter((nome): nome is string => typeof nome === "string"),
+    );
+
+    detalhes.set(linha.id, {
+      observacoes: linha.observacoes,
+      formaPagamentoNome: linha.formas_pagamento?.nome ?? null,
+      condicaoPagamentoDescricao:
+        linha.condicoes_pagamento?.descricao ?? null,
+      contaBancariaNome:
+        nomesDeConta.size === 0
+          ? null
+          : nomesDeConta.size === 1
+            ? [...nomesDeConta][0]
+            : VARIAS_CONTAS,
+      origemNumero:
+        linha.origem === "oc" && linha.origem_id
+          ? (numeroOc.get(linha.origem_id) ?? null)
+          : null,
+      rateios: (linha.lancamento_rateios ?? []).map((rateio) => ({
+        nome: rateio.centros_custo?.nome ?? "Sem centro de custo",
+        codigo: rateio.centros_custo?.codigo ?? null,
+        valor: rateio.valor,
+      })),
+    });
+  }
+
+  return detalhes;
+}
+
+/** Número da OC de cada lançamento que vem de ordem de compra. */
+async function numerosDeOcDosLancamentos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  linhas: { origem: string; origem_id: string | null }[],
+): Promise<Map<string, string>> {
+  const idsOc = [
+    ...new Set(
+      linhas
+        .filter((linha) => linha.origem === "oc" && linha.origem_id)
+        .map((linha) => linha.origem_id as string),
+    ),
+  ];
+  const numeros = new Map<string, string>();
+  if (idsOc.length === 0) return numeros;
+
+  const { data } = await supabase
+    .from("ordens_compra")
+    .select("id, numero")
+    .in("id", idsOc);
+
+  for (const ordem of data ?? []) {
+    if (ordem.numero) numeros.set(ordem.id, ordem.numero);
+  }
+  return numeros;
 }
 
 /**
@@ -847,4 +1100,49 @@ export async function listarIdsLancamentosFiltrados(
     tamanho: LIMITE_LOTE + 1,
   });
   return pagina.itens.map((item) => item.id);
+}
+
+/**
+ * Teto de linhas lidas para o resumo.
+ *
+ * Mesmo espírito do teto da exportação, e o mesmo número: passando dele o resumo
+ * diz "refine o filtro" em vez de varrer o banco a cada carregamento de tela. Hoje
+ * a base inteira (5.848 lançamentos) cabe com folga.
+ */
+export const LIMITE_RESUMO = 25_000;
+
+/** Resumo do filtro, mais o aviso de quando ele não pôde ser calculado. */
+export type ResultadoResumo =
+  | { ok: true; resumo: ResumoLancamentos }
+  | { ok: false; motivo: "acima-do-teto" | "leitura-incompleta"; total: number };
+
+/**
+ * Resumo do conjunto FILTRADO inteiro, para os cartões do cabeçalho.
+ *
+ * Lê pelo mesmo `listarLancamentos` da tela, em páginas, e soma no
+ * `resumirLancamentos`. É a única forma de garantir que o cartão e a lista falem
+ * do mesmo conjunto: um `sum()` em SQL seria mais rápido, mas ganharia uma cópia
+ * própria dos filtros (incluindo os derivados de parcela e rateio) e divergiria
+ * da lista no primeiro filtro novo.
+ *
+ * Leitura incompleta NÃO virá arredondada para baixo: devolve `ok: false` para a
+ * tela dizer que não deu, em vez de mostrar um total de dinheiro menor que o real
+ * com cara de certo.
+ */
+export async function resumoLancamentos(
+  params: Omit<ListarLancamentosParams, "pagina" | "tamanho">,
+): Promise<ResultadoResumo> {
+  const { itens, total } = await lerLancamentosEmPaginas(
+    (pagina, tamanho) => listarLancamentos({ ...params, pagina, tamanho }),
+    LIMITE_RESUMO,
+    PAGINA_LEITURA,
+  );
+
+  if (total > LIMITE_RESUMO) {
+    return { ok: false, motivo: "acima-do-teto", total };
+  }
+  if (itens.length < total) {
+    return { ok: false, motivo: "leitura-incompleta", total };
+  }
+  return { ok: true, resumo: resumirLancamentos(itens) };
 }

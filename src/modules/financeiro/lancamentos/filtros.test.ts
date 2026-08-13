@@ -50,6 +50,25 @@ describe("lerFiltrosLancamentos", () => {
     expect(valores.fornecedor).toBe(FORNECEDOR);
   });
 
+  it("aceita o filtro de atraso e devolve para a barra", () => {
+    const vencido = lerFiltrosLancamentos({ atraso: "vencido" });
+    expect(vencido.filtros.atraso).toBe("vencido");
+    expect(vencido.valores.atraso).toBe("vencido");
+
+    const aVencer = lerFiltrosLancamentos({ atraso: "a_vencer" });
+    expect(aVencer.filtros.atraso).toBe("a_vencer");
+  });
+
+  it("atraso fora do catálogo cai fora, sem filtrar por lixo", () => {
+    // "vencidos" no plural e "atrasado" são os erros de digitação prováveis em
+    // link colado na mão.
+    for (const valor of ["vencidos", "atrasado", "true", ""]) {
+      const { filtros, valores } = lerFiltrosLancamentos({ atraso: valor });
+      expect(filtros.atraso).toBeUndefined();
+      expect(valores.atraso).toBe("");
+    }
+  });
+
   it("descarta valor fora do catálogo em vez de mandar lixo pro banco", () => {
     const { filtros, valores } = lerFiltrosLancamentos({
       tipo: "a_pagar_talvez",

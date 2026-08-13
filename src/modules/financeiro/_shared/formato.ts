@@ -62,6 +62,28 @@ export const STATUS_PARCELA: Record<StatusParcela, FormatoStatus> = {
   cancelado: { rotulo: "Cancelado", badge: "cancelado" },
 };
 
+/**
+ * Status de parcela que contam como EM ABERTO: dívida viva.
+ *
+ * Derivado da lista completa menos `pago` e `cancelado`, e não digitado à mão, por
+ * dois motivos. Primeiro, a regra verdadeira é a negativa ("não pago e não
+ * cancelado"): `em_revisao` é pedido de ajuste, não baixa, e continua devendo.
+ * Segundo, status novo em `STATUS_PARCELA` entra aqui sozinho, então o resumo do
+ * cabeçalho e o filtro de atraso não podem passar a discordar por esquecimento.
+ *
+ * Existe como lista (e não só como função) porque o filtro precisa mandar os
+ * valores para o banco num `in`, e negação no PostgREST é mais fácil de escrever
+ * errado do que uma lista explícita.
+ */
+export const STATUS_PARCELA_ABERTA: StatusParcela[] = (
+  Object.keys(STATUS_PARCELA) as StatusParcela[]
+).filter((status) => status !== "pago" && status !== "cancelado");
+
+/** A parcela é dívida viva? Mesma regra do `STATUS_PARCELA_ABERTA`. */
+export function ehParcelaAberta(status: string): boolean {
+  return (STATUS_PARCELA_ABERTA as string[]).includes(status);
+}
+
 export const ROTULO_BANCO: Record<BancoConta, string> = {
   caixa: "Caixa",
   bb: "Banco do Brasil",

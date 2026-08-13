@@ -21,14 +21,15 @@ import {
   LIMITE_LOTE,
   type ResumoLote,
 } from "@/modules/financeiro/lancamentos/lote";
+import { lerLancamentosEmPaginas } from "@/modules/financeiro/lancamentos/leitura-completa";
 import {
-  lerLancamentosEmPaginas,
   montarPlanilhaLancamentos,
   nomeArquivoPlanilhaLancamentos,
 } from "@/modules/financeiro/lancamentos/planilha";
 import {
+  detalharLancamentosParaPlanilha,
   listarLancamentos,
-  type LancamentoLista,
+  type LancamentoPlanilha,
 } from "@/modules/financeiro/lancamentos/queries";
 
 const RECURSO = "financeiro.lancamentos" as const;
@@ -595,11 +596,41 @@ export async function gerarPlanilhaLancamentos(
 
   const { filtros } = lerFiltrosLancamentos(parametrosDaQueryString(query));
 
-  let itens: LancamentoLista[];
+  let itens: LancamentoPlanilha[];
   let total: number;
   try {
-    const leitura = await lerLancamentosEmPaginas(
-      (pagina, tamanho) => listarLancamentos({ ...filtros, pagina, tamanho }),
+    const leitura = await lerLancamentosEmPaginas<LancamentoPlanilha>(
+      // Enriquece PÁGINA POR PÁGINA, não a exportação toda de uma vez: o teto é
+      // 25.000 lançamentos, e um `in` com 25 mil uuids é uma query que o Postgres
+      // aceita mas ninguém quer depurar. Aqui o `in` tem no máximo o tamanho da
+      // página, e cada uma paga uma consulta a mais para trazer observações,
+      // rateio, forma, condição, conta e o número da OC de origem.
+      async (pagina, tamanho) => {
+        const lote = await listarLancamentos({ ...filtros, pagina, tamanho });
+        // Acima do teto a leitura para na primeira página: não vale enriquecer
+        // uma página que vai ser descartada.
+        if (lote.total > LIMITE_PLANILHA) return { itens: [], total: lote.total };
+        const detalhes = await detalharLancamentosParaPlanilha(
+          lote.itens.map((item) => item.id),
+        );
+        return {
+          total: lote.total,
+          itens: lote.itens.map((item) => ({
+            ...item,
+            // Lançamento sem detalhe é lançamento que saiu da lista entre as duas
+            // consultas. Cai em branco em vez de derrubar a exportação: a checagem
+            // de `itens.length < total` mais abaixo é quem recusa leitura parcial.
+            ...(detalhes.get(item.id) ?? {
+              observacoes: null,
+              formaPagamentoNome: null,
+              condicaoPagamentoDescricao: null,
+              contaBancariaNome: null,
+              origemNumero: null,
+              rateios: [],
+            }),
+          })),
+        };
+      },
       LIMITE_PLANILHA,
     );
     itens = leitura.itens;
