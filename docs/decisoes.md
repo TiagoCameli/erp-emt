@@ -1313,3 +1313,176 @@ Três lições que valem além desta tela:
    todas erradas. Agora a mensagem do PostgREST vai anexada.
 3. **Verificar no navegador com dado real não é opcional em exportação.** CI verde aqui provou
    apenas que compila.
+
+## 2026-08-13 - Adiantamento parcelado: o vale do mês virou dívida amortizada, e quem protege o dinheiro é uma trava com condição de ordem
+
+O adiantamento de salário passou a ser descontado em **N parcelas** na folha, com o dinheiro
+saindo **inteiro na concessão**. Nove migrations de schema e função, sete tarefas, seis rodadas
+de correção. Três dos achados abaixo são bugs de dinheiro que existiram e foram medidos, não
+riscos hipotéticos.
+
+### 1. Mudou a natureza do adiantamento, não só a quantidade de parcelas
+
+Antes, adiantamento era **vale do mês**: concedido em agosto, descontado inteiro na folha de
+agosto, e a coluna `rh_adiantamentos.folha_id` amarrava um ao outro. Agora o desembolso e a
+amortização vivem em **competências diferentes de propósito**: 6.000,00 concedidos em agosto
+podem ser amortizados 1.404,15 em agosto, 1.404,15 em setembro e o resto depois.
+
+Consequências que valem para quem lê qualquer número deste módulo:
+
+1. **O caixa vê a despesa na CONCESSÃO.** A `fn_registrar_adiantamento` cria o lançamento
+   `a_pagar` de origem `adiantamento` no ato, com o valor cheio, no centro de custo do
+   colaborador. Para o Financeiro é despesa paga, não empréstimo a receber: não existe conta a
+   receber neste sistema, e criar uma para isso significaria um módulo novo.
+2. **A folha vê o custo na AMORTIZAÇÃO**, mês a mês, como redução do líquido.
+3. **O saldo devedor não é uma coluna, é uma conta**: `valor concedido - soma(valor_descontado)`.
+   Quem somar "adiantamentos não descontados" pelo valor concedido mente assim que existir uma
+   parcela paga pela metade. Foi exatamente isso que a ficha do colaborador fazia, e ela
+   escondeu **1.300,00** de dívida num cenário de 4 casos medidos.
+4. **`rh_adiantamentos.folha_id` não existe mais.** O vínculo é `rh_adiantamento_parcelas.folha_id`,
+   por parcela.
+
+### 2. A identidade da folha trocou o terceiro termo
+
+A conferência do custo da folha continua sendo
+
+    soma(líquidos) + soma(guias) + soma(adiantamento) = folhas.custo_total
+
+mas o terceiro termo **não é mais "os adiantamentos concedidos nesta competência"**: é
+`sum(rh_adiantamento_parcelas.valor_descontado)` das parcelas com `folha_id` = esta folha, ou
+seja, o que esta folha de fato amortizou. Somar o concedido faria agosto responder por dinheiro
+que não descontou, e setembro por nada.
+
+A consulta gravada no `obj_description` da `fn_aprovar_folha` traz `concedido_no_mes` ao lado,
+fora da identidade, porque com parcelamento os dois números **são diferentes e isso é o normal**:
+na prova de aceite final, 10.000,00 concedidos contra 3.646,92 descontados, com `explicado` em
+`0.00`.
+
+Uma pré-condição da identidade **caiu**: era "todo item tem `valor_liquido > 0`". Com o desconto
+limitado ao disponível, líquido negativo virou inalcançável por construção. O termo
+`liquidos_nao_positivos` **ficou na consulta mesmo valendo 0,00**, como detector de regressão
+desse limite: se ele voltar a ser diferente de zero, é bug ainda que `explicado` feche.
+
+### 3. Cascata: ordem declarada, limite no disponível, e a sobra vai para o mês seguinte
+
+O desconto de cada parcela é `least(valor_previsto, greatest(disponível - já descontado, 0))`,
+com `disponível = greatest(salário - INSS - IRRF, 0)`. A ordem é
+`(rh_adiantamentos.data, rh_adiantamento_parcelas.numero)`, do adiantamento **mais antigo** para
+o mais novo, e é conferível: na prova final, com 1.842,77 disponíveis, o adiantamento de 03/08
+leva 1.200,00 e o de 20/08 leva 642,77. Na ordem invertida os mesmos dados dariam 800,00 e
+1.042,77, então os números provam a ordem, não a suposição.
+
+O que não couber vira parcela nova **na próxima competência livre depois da que está sendo
+processada**, não "no fim do plano": depender do `max(competencia)` das outras linhas fazia a
+sobra **pular um mês** ao regerar um mês anterior, e o mês pulado saía sem desconto nenhum
+(medido: 3.357,23 de dívida invisível duas competências à frente).
+
+Parcela que não coube **nada** fecha na folha com `valor_descontado = 0`, e o check
+`rh_adiant_parcelas_descontado_com_folha` admite esse estado de propósito. Se ela ficasse aberta,
+ela e a sobra (que nasce com o valor inteiro dela) somariam duas vezes o mesmo dinheiro.
+
+### 4. A forma correta da invariante do plano, e por que a simples superconta
+
+Para cada adiantamento, em todo estado estável:
+
+    soma(valor_descontado) + soma(valor_previsto das parcelas ABERTAS) = valor concedido
+
+**Não** `soma(valor_previsto)` de todas as parcelas. A parcela fechada guarda o previsto
+**inteiro** e a sobra nasce com a diferença, então a forma simples conta a diferença duas vezes
+sempre que uma folha descontou parcela pela metade. Medido três vezes, com dados diferentes:
+1.150,00 contra 1.000,00 concedidos; 6.400,00 contra 5.200,00; e 10.753,08 contra 10.000,00 na
+prova de aceite final. A forma errada estava nos meus próprios briefs até a Task 5, e é a que
+qualquer um escreve primeiro.
+
+A invariante vale em **estado estável**. Entre regerar um mês do meio da cadeia e regerar o mês
+seguinte ela fica quebrada de propósito, porque apagar a sobra daquele mês deixa órfã a sobra que
+a folha seguinte derivou dela. Ela se cura ao regerar o mês de origem, não o mês anterior.
+
+Desde 13/08 essa consulta está **gravada e executável** no `obj_description` da `fn_gerar_folha`,
+com a forma errada ao lado, na última coluna, para quem confere ver a diferença em vez de ler
+sobre ela.
+
+### 5. O cerco de travas, e o `delete` que NÃO deve ser filtrado
+
+Três travas independentes protegem a cadeia, e elas cobrem janelas diferentes:
+
+| trava | onde | recusa |
+|---|---|---|
+| regeneração | `fn_gerar_folha` | regerar uma folha cuja sobra já foi descontada por outra folha que não está em rascunho **ou que é anterior a esta** |
+| folha desatualizada | `fn_guarda_status_folha` | enviar para aprovação uma folha cujo desconto de adiantamento não bate com os itens dela |
+| piso da competência | `fn_quitar_adiantamento` e `fn_antecipar_adiantamentos_colaborador` | mover sobra aberta para antes do mês da folha que a gerou |
+
+**A proteção do dinheiro depende inteiramente da primeira, e da condição de ordem dela.** Sem o
+`f.competencia < v_ini`, a isenção "folha posterior em rascunho não trava" passa a valer para uma
+folha **anterior**, e regerar apaga parcela já fechada: medido, 1.842,77 cobrados do colaborador
+sem registro nenhum no plano, com a folha que cobra a mais aprovando sem atrito. Quem for
+relaxar essa trava por conveniência operacional (o ciclo de desaprovar e refazer é chato) tem que
+reler os quatro pontos do `comment on function` da `fn_gerar_folha` antes.
+
+**O `delete` de sobras não filtra `folha_id`, e isso é deliberado.** Ele desfaz a **subárvore** que
+aquela geração criou, e precisa ser total: manter uma sobra já fechada enquanto a causa dela é
+recalculada faz o mesmo dinheiro ser representado duas vezes. Eu instruí duas vezes a "consertar"
+isso filtrando `folha_id is null`, e as duas vezes a medição derrubou a instrução: com o filtro, o
+plano de 5.200,00 vai a 8.557,23 ao regerar o mês anterior e a 10.071,69 depois de refazer a
+cadeia em ordem, e o colaborador termina cobrado em **328,31 a mais** do que o concedido. **A
+mudança feita para proteger dinheiro cobrava a mais.** Depois da condição de ordem, ela não tem
+caso restante.
+
+A trava do trigger é **por folha** e não protege o plano: a folha diretamente corrompida fica
+bloqueada, mas uma folha mais adiante na mesma cadeia, internamente consistente sozinha, envia e
+aprova sem atrito. Uma versão anterior do comentário afirmava o contrário, e garantia falsa em
+comentário é pior que comentário nenhum. Quem contém o estrago é a trava de regeneração, que
+força o ciclo desaprovar, regerar em ordem, reaprovar. Nesse ciclo nenhum valor é perdido nem
+cobrado em dobro: o lançamento renasce uma vez só e com o mesmo valor.
+
+### 6. A antecipação no desligamento não desconta nada hoje, e é decisão do dono
+
+Inativar um colaborador com saldo junta as parcelas em aberto numa competência válida (respeitando
+o piso), e o toast promete que o saldo será descontado. **A folha itera `where ativo and vinculo =
+'clt'`, e a inativação acontece antes.** Medido na prova final: 3.191,70 antecipados para 12/2026,
+folha de 12/2026 gerada, **zero item do inativo e zero descontado**; a parcela fica aberta para
+sempre.
+
+A premissa da feature caiu: se a pessoa saiu, não existe folha futura dela, e o desconto sai da
+rescisão, que é o Bloco 9 e não existe. **Três saídas foram apresentadas ao dono do sistema e
+nenhuma foi escolhida ainda.** A recomendação é deixar o mecanismo pronto valendo no Bloco 9 e
+corrigir a mensagem para não prometer. Enquanto isso, o **alerta de inativo com saldo em aberto**
+no painel de RH não é enfeite: é a única coisa no sistema que mostra essa dívida.
+
+### 7. Consulta gravada em comentário passa a ter marca e verificação automática
+
+A consulta de diagnóstico gravada no `obj_description` da `fn_aprovar_folha` **ficou quebrada em
+silêncio por quatro tarefas**: ela lia `rh_adiantamentos.folha_id` e a migration `20260812215337`
+dropou a coluna. A ferramenta que o dono do sistema usaria para separar "bug" de "configuração
+faltando" respondia `42703 column "folha_id" does not exist`, e nada acusou, porque consulta
+gravada em comentário não é compilada, não é testada e não aparece em portão nenhum.
+
+**Decisões**
+
+1. **Toda consulta executável gravada em comentário carrega uma marca fixa**, a linha literal
+   `-- DIAGNOSTICO EXECUTAVEL v1`, e termina em ponto e vírgula. Hoje são duas: a identidade da
+   folha (`fn_aprovar_folha`) e a invariante do plano (`fn_gerar_folha`).
+2. **`public.fn_verificar_diagnosticos_gravados()`** varre `pg_proc` / `obj_description` atrás da
+   marca, extrai cada consulta e roda **`explain`** nela. `explain` não precisa de dado nenhum
+   (produção tem zero folha) e já pega o modo de falha real, que é coluna ou tabela que sumiu. Ela
+   também denuncia marca sem consulta, consulta sem terminador, marca em objeto que a varredura
+   não lê, e **o caso de não achar marca nenhuma**: varredura que passa por não encontrar nada é a
+   mesma cegueira que ela existe para fechar. Não tem grant para `authenticated` nem `anon`.
+3. **Toda migration que faça `drop column`, `rename column` ou `drop table` chama essa função no
+   fim e falha se ela devolver linha.** É isso que fecha a lacuna de verdade, porque passa a valer
+   para qualquer migration de schema, não só para quem lembrou de conferir aquele comentário. O
+   script `supabase/provas/diagnosticos_gravados_executaveis.sql` roda a mesma varredura, com
+   controle negativo (três defeitos plantados, um deles a consulta velha de verdade), e entra no
+   portão de qualquer task que toque schema.
+4. **A prova de "extrair e executar" só vale no instante em que roda.** É por isso que a
+   verificação é permanente e automática, e não um passo de checklist: o comentário quebra por
+   causa de uma migration que ninguém relacionou com ele.
+
+### 8. Uma lição de processo que se repetiu três vezes nesta frente
+
+Comentário e código se descolaram três vezes, e nas três o comentário era o único lugar onde a
+intenção estava escrita. Na terceira, o comentário estava **certo** e o código errado: a Task 3
+atualizou o texto de `resumoAdiantamentos` para "nenhuma parcela descontada" e deixou a linha
+seguinte filtrando pela semântica antiga. Ao mudar a semântica de um conceito (aqui, "está na
+folha"), procure **todos** os agregadores que dependem dele, não só as telas do módulo em que se
+está mexendo.
