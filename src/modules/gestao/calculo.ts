@@ -88,6 +88,38 @@ export function janelaPainel(
   };
 }
 
+/**
+ * Janela entre dois meses escolhidos na tela, para o filtro de período.
+ *
+ * Mesma forma da `janelaPainel` (mesmo `fim` exclusivo, mesma lista de meses),
+ * então todos os cortes de custo continuam fechando entre si. A diferença é só
+ * que esta não termina obrigatoriamente no mês corrente.
+ *
+ * Período invertido é trocado de lado em vez de devolver janela vazia: quem
+ * digita "de ago até jan" quer jan a ago, não uma tela em branco sem explicação.
+ * É a mesma regra dos períodos da listagem de lançamentos.
+ *
+ * `de` e `ate` vêm em "yyyy-MM"; o `ate` é INCLUSIVO para quem escolhe (agosto
+ * escolhido mostra agosto) e vira limite exclusivo no `fim`.
+ */
+export function janelaEntre(de: string, ate: string): JanelaPainel {
+  const primeiro = `${de}-01`;
+  const ultimo = `${ate}-01`;
+  const [inicio, fim] =
+    primeiro <= ultimo ? [primeiro, ultimo] : [ultimo, primeiro];
+
+  const meses: string[] = [];
+  let mes = inicio;
+  // Laço por soma de mês (e não por diferença de datas) para não tropeçar em
+  // fuso nem em mês de 28/31 dias: somarMeses já normaliza no dia 1.
+  while (mes <= fim) {
+    meses.push(mes);
+    mes = somarMeses(mes, 1);
+  }
+
+  return { inicio, fim: somarMeses(fim, 1), meses };
+}
+
 export interface PontoMes {
   /** Competência "yyyy-MM-01". */
   mes: string;
