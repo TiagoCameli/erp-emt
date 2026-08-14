@@ -6,8 +6,10 @@
 -- editável, sem cálculo. Tabela separada de folha_encargos de propósito: as
 -- duas guardam campos parecidos mas têm destinos opostos (encargo pode virar
 -- guia no Financeiro; provisão só entra no custo do mês, nunca gera conta a
--- pagar). Espelha public.folha_encargos (lida via MCP 2026-08-14) menos
--- grupo_recolhimento, que não existe aqui.
+-- pagar). Espelha public.folha_encargos (lida via MCP 2026-08-14) com duas
+-- diferenças estruturais: sem grupo_recolhimento (não existe aqui) e com um
+-- check novo de tamanho do nome (`length(btrim(nome)) between 2 and 60`), que
+-- folha_encargos não tem.
 --
 -- Diferença deliberada: percentual > 0 (não >= 0 como em folha_encargos).
 -- Provisão de 0% só geraria linha de valor zero no snapshot e sujaria a
@@ -20,11 +22,18 @@
 -- Este é o padrão correto da casa (igual folhas e rh_pontos): não copiar o
 -- grant frouxo do encargo, e não alterar o grant do encargo nesta migration.
 --
--- Rollback:
---   drop table if exists public.folha_item_provisoes;
---   alter table public.folha_itens drop column if exists provisoes;
---   alter table public.folhas drop column if exists valor_provisoes;
---   drop table if exists public.folha_provisoes;
+-- Rollback (nesta ordem — reverter o dispatcher ANTES de derrubar as tabelas: com
+-- fn_recurso_do_cadastro ainda mapeando 'folha_provisoes' para uma tabela que já não
+-- existe, fn_excluir_cadastro/fn_restaurar_cadastro estouram "relation does not
+-- exist" dentro do format() em vez de recusar limpo com "tabela não pode ser
+-- excluída"):
+--   1. reverter fn_recurso_do_cadastro removendo o case 'folha_provisoes' — usar o
+--      rollback documentado na migration mais recente que recriou a função (ver
+--      supabase/migrations/, em ordem cronológica reversa a partir desta);
+--   2. drop table if exists public.folha_item_provisoes;
+--   3. alter table public.folha_itens drop column if exists provisoes;
+--   4. alter table public.folhas drop column if exists valor_provisoes;
+--   5. drop table if exists public.folha_provisoes;
 
 create table if not exists public.folha_provisoes (
   id uuid primary key default gen_random_uuid(),
@@ -96,6 +105,15 @@ create trigger trg_audit_folha_item_provisoes
 alter table public.folha_itens add column if not exists provisoes numeric(14,2) not null default 0;
 alter table public.folhas add column if not exists valor_provisoes numeric(14,2) not null default 0;
 
+-- Trava best-effort, não uma garantia formal: cobre só privilégio de TABELA
+-- INTEIRA visto por information_schema.role_table_grants — qualquer privilégio de
+-- anon nas duas tabelas, e INSERT/UPDATE/DELETE de tabela inteira de authenticated
+-- em folha_item_provisoes / DELETE de tabela inteira em folha_provisoes. NÃO cobre
+-- grant por COLUNA (mora em information_schema.role_column_grants, não lido aqui)
+-- nem MAINTAIN (esse privilégio não aparece em role_table_grants nesta versão do
+-- Postgres; toda tabela do projeto tem MAINTAIN de anon/authenticated por default
+-- privilege do schema, e isso é esperado, não um grant indevido desta migration).
+-- É rede contra copiar/colar o grant errado, não prova de que o grant está certo.
 do $$
 declare v_ruim integer;
 begin

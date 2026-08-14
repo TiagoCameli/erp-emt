@@ -11,7 +11,13 @@
 -- 2026-08-14.
 --
 -- Rollback: recriar removendo as duas linhas novas (when 'folha_encargos' ...,
--- when 'folha_provisoes' ...), voltando aos 9 cases originais.
+-- when 'folha_provisoes' ...), voltando ao estado imediatamente anterior (9
+-- cases). Esse 9 NÃO é o baseline correto histórico: já estava faltando
+-- 'funcoes', 'jornadas', 'folha_inss_faixas' e 'folha_irrf_faixas' desde a
+-- migration 20260810130444 (excluir_obras_e_centros_custo, no ledger, sem
+-- arquivo versionado no repo), que os derrubou sem querer ao recriar esta
+-- mesma função. Uma migration posterior (20260814153344) repõe os quatro;
+-- reverter em ordem cronológica reversa, uma de cada vez.
 
 create or replace function public.fn_recurso_do_cadastro(p_tabela text)
   returns text
