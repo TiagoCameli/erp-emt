@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { lerFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
+import { rotuloRecorte as rotuloRecorte_ } from "@/modules/financeiro/lancamentos/recorte";
 import { LancamentosAcoesCabecalho } from "@/modules/financeiro/lancamentos/components/lancamentos-acoes-cabecalho";
 import { LancamentosTabela } from "@/modules/financeiro/lancamentos/components/lancamentos-tabela";
 import {
@@ -67,6 +68,23 @@ export default async function PaginaLancamentos({
     listarContasBancarias(),
   ]);
 
+  /**
+   * Rótulo da fatia recortada, para a coluna da tabela e o cartão do resumo.
+   *
+   * Montado aqui porque é aqui que os NOMES existem: o centro de custo já veio em
+   * `centrosCusto`, e resolver isso dentro da tabela (client) exigiria uma segunda
+   * leitura do banco no navegador. Precedência igual à de `escolherValorRecorte`:
+   * o centro ganha do recorte de parcela.
+   */
+  const rotuloRecorte = filtros.centroCustoId
+    ? `No centro ${
+        centrosCusto.find((centro) => centro.id === filtros.centroCustoId)
+          ?.nome ?? "de custo"
+      }`
+    : filtros.recorte
+      ? rotuloRecorte_(filtros.recorte)
+      : null;
+
   return (
     <>
       <PageHeader
@@ -95,7 +113,10 @@ export default async function PaginaLancamentos({
         key={JSON.stringify(filtros)}
         fallback={<SkeletonResumoLancamentos />}
       >
-        <ResumoLancamentosCartoes filtros={filtros} />
+        <ResumoLancamentosCartoes
+          filtros={filtros}
+          rotuloRecorte={rotuloRecorte}
+        />
       </Suspense>
 
       <LancamentosTabela
@@ -110,6 +131,7 @@ export default async function PaginaLancamentos({
         centrosCusto={centrosCusto}
         formasPagamento={formasPagamento}
         contas={contas}
+        rotuloRecorte={rotuloRecorte}
       />
     </>
   );

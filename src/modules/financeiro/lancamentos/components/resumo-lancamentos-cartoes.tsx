@@ -49,8 +49,15 @@ export function SkeletonResumoLancamentos() {
  */
 export async function ResumoLancamentosCartoes({
   filtros,
+  rotuloRecorte,
 }: {
   filtros: Omit<ListarLancamentosParams, "pagina" | "tamanho">;
+  /**
+   * Nome da fatia recortada (ex: "No centro 009 - BR-364"), ou `null` sem recorte.
+   * Quando presente, o PRIMEIRO cartão passa a ser o total da fatia: é o número
+   * que a pessoa veio conferir contra a célula do relatório que ela clicou.
+   */
+  rotuloRecorte?: string | null;
 }) {
   const resultado = await resumoLancamentos(filtros);
 
@@ -73,10 +80,22 @@ export async function ResumoLancamentosCartoes({
 
   return (
     <GradeKpis className="mb-4">
+      {r.temRecorte ? (
+        <KPICard
+          titulo="Total no recorte"
+          valor={<MoneyText valor={r.valorNoRecorte} />}
+          // É este número que tem que ser igual à célula clicada no relatório.
+          detalhe={rotuloRecorte ?? "Parte dos lançamentos que está nesta fatia"}
+        />
+      ) : null}
       <KPICard
-        titulo="Total no filtro"
+        titulo={r.temRecorte ? "Valor dos documentos" : "Total no filtro"}
         valor={<MoneyText valor={r.valorTotal} />}
-        detalhe={lancamentos(r.quantidade)}
+        detalhe={
+          r.temRecorte
+            ? `${lancamentos(r.quantidade)} · o valor cheio, não só a fatia`
+            : lancamentos(r.quantidade)
+        }
       />
       <KPICard
         titulo="Em aberto"
