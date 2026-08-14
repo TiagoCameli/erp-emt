@@ -1331,6 +1331,41 @@ export type Database = {
           },
         ]
       }
+      folha_item_provisoes: {
+        Row: {
+          folha_item_id: string
+          id: string
+          nome: string
+          percentual: number
+          valor_encargos: number
+          valor_principal: number
+        }
+        Insert: {
+          folha_item_id: string
+          id?: string
+          nome: string
+          percentual: number
+          valor_encargos?: number
+          valor_principal: number
+        }
+        Update: {
+          folha_item_id?: string
+          id?: string
+          nome?: string
+          percentual?: number
+          valor_encargos?: number
+          valor_principal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folha_item_provisoes_folha_item_id_fkey"
+            columns: ["folha_item_id"]
+            isOneToOne: false
+            referencedRelation: "folha_itens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folha_itens: {
         Row: {
           adiantamentos: number
@@ -1346,6 +1381,7 @@ export type Database = {
           inss: number
           irrf: number
           lancamento_id: string | null
+          provisoes: number
           salario_base: number
           valor_extras: number
           valor_liquido: number
@@ -1364,6 +1400,7 @@ export type Database = {
           inss?: number
           irrf?: number
           lancamento_id?: string | null
+          provisoes?: number
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1382,6 +1419,7 @@ export type Database = {
           inss?: number
           irrf?: number
           lancamento_id?: string | null
+          provisoes?: number
           salario_base?: number
           valor_extras?: number
           valor_liquido?: number
@@ -1459,6 +1497,44 @@ export type Database = {
         }
         Relationships: []
       }
+      folha_provisoes: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          nome: string
+          percentual: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome: string
+          percentual: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          nome?: string
+          percentual?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folha_provisoes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folhas: {
         Row: {
           aprovado_em: string | null
@@ -1476,6 +1552,7 @@ export type Database = {
           valor_bruto: number
           valor_encargos: number
           valor_liquido: number
+          valor_provisoes: number
         }
         Insert: {
           aprovado_em?: string | null
@@ -1493,6 +1570,7 @@ export type Database = {
           valor_bruto?: number
           valor_encargos?: number
           valor_liquido?: number
+          valor_provisoes?: number
         }
         Update: {
           aprovado_em?: string | null
@@ -1510,6 +1588,7 @@ export type Database = {
           valor_bruto?: number
           valor_encargos?: number
           valor_liquido?: number
+          valor_provisoes?: number
         }
         Relationships: [
           {
@@ -3700,6 +3779,15 @@ export type Database = {
       fn_vencimento_folha: {
         Args: { p_competencia: string; p_dia: number }
         Returns: string
+      }
+      fn_verificar_diagnosticos_gravados: {
+        Args: never
+        Returns: {
+          consulta: string
+          erro: string
+          objeto: string
+          ordem: number
+        }[]
       }
       fn_vincular_arquivo: {
         Args: {
