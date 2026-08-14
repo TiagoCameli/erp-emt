@@ -4,6 +4,7 @@ import {
   agruparLancamentosDaFolha,
   resumoPorCentroCusto,
   resumoPorEncargo,
+  resumoPorProvisao,
   retidoSemGrupoDeRecolhimento,
 } from "@/modules/rh/folha/calculo";
 import type {
@@ -28,6 +29,8 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     irrf: 0,
     encargos: 0,
     encargosDetalhe: [],
+    provisoes: 0,
+    provisoesDetalhe: [],
     lancamentoId: null,
     adiantamentos: 0,
     custoTotal: 0,
@@ -44,6 +47,7 @@ function criarFolha(itens: FolhaItem[]): FolhaDetalhe {
     encargosPercentual: 20,
     valorBruto: 0,
     valorEncargos: 0,
+    valorProvisoes: 0,
     valorAdiantamentos: 0,
     valorLiquido: 0,
     custoTotal: 0,
@@ -184,6 +188,75 @@ describe("resumoPorEncargo", () => {
     const somaEncargos = resumo.reduce((acc, e) => acc + e.total, 0);
 
     expect(somaEncargos).toBe(folha.valorEncargos);
+  });
+});
+
+describe("resumoPorProvisao", () => {
+  it("agrupa por nome somando principal e encargos", () => {
+    const folha = criarFolha([
+      criarItem({
+        id: "1",
+        provisoesDetalhe: [
+          { nome: "13º", valorPrincipal: 100, valorEncargos: 28 },
+        ],
+      }),
+      criarItem({
+        id: "2",
+        provisoesDetalhe: [
+          { nome: "13º", valorPrincipal: 50, valorEncargos: 14 },
+        ],
+      }),
+    ]);
+
+    const resumo = resumoPorProvisao(folha);
+
+    expect(resumo).toEqual([
+      { nome: "13º", principal: 150, encargos: 42, total: 192 },
+    ]);
+  });
+
+  it("ordena por nome e mantém as provisões separadas", () => {
+    const folha = criarFolha([
+      criarItem({
+        id: "1",
+        provisoesDetalhe: [
+          { nome: "Férias", valorPrincipal: 111, valorEncargos: 31 },
+          { nome: "13º", valorPrincipal: 83, valorEncargos: 23 },
+        ],
+      }),
+    ]);
+
+    const resumo = resumoPorProvisao(folha);
+
+    expect(resumo.map((p) => p.nome)).toEqual(["13º", "Férias"]);
+  });
+
+  it("devolve lista vazia quando nenhum item tem provisão", () => {
+    const folha = criarFolha([criarItem({ id: "1" })]);
+
+    expect(resumoPorProvisao(folha)).toEqual([]);
+  });
+
+  it("a soma dos totais bate com o valor_provisoes da folha", () => {
+    const folha = criarFolha([
+      criarItem({
+        id: "1",
+        provisoesDetalhe: [
+          { nome: "13º", valorPrincipal: 100, valorEncargos: 28 },
+          { nome: "Férias", valorPrincipal: 111, valorEncargos: 31 },
+        ],
+      }),
+      criarItem({
+        id: "2",
+        provisoesDetalhe: [{ nome: "13º", valorPrincipal: 50, valorEncargos: 14 }],
+      }),
+    ]);
+    folha.valorProvisoes = 334;
+
+    const resumo = resumoPorProvisao(folha);
+    const somaProvisoes = resumo.reduce((acc, p) => acc + p.total, 0);
+
+    expect(somaProvisoes).toBe(folha.valorProvisoes);
   });
 });
 

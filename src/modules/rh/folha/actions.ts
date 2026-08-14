@@ -337,6 +337,7 @@ export async function gerarPlanilhaFolha(
     "Horas extras",
     "Valor extras",
     "Encargos",
+    "Provisão (13º/férias)",
     "Adiantamentos",
     "Custo total",
     "Líquido",
@@ -371,6 +372,7 @@ export async function gerarPlanilhaFolha(
       formatarQuantidade(item.horasExtras),
       formatarBRL(item.valorExtras),
       formatarBRL(item.encargos),
+      formatarBRL(item.provisoes),
       formatarBRL(item.adiantamentos),
       formatarBRL(item.custoTotal),
       formatarBRL(item.valorLiquido),
@@ -387,6 +389,7 @@ export async function gerarPlanilhaFolha(
     "",
     "",
     formatarBRL(folha.valorEncargos),
+    formatarBRL(folha.valorProvisoes),
     formatarBRL(folha.valorAdiantamentos),
     formatarBRL(folha.custoTotal),
     formatarBRL(folha.valorLiquido),
@@ -398,7 +401,7 @@ export async function gerarPlanilhaFolha(
   worksheet.getColumn(1).width = 28;
   worksheet.getColumn(2).width = 22;
   worksheet.getColumn(3).width = 26;
-  for (const indice of [4, 5, 6, 7, 8, 9, 10, 11]) {
+  for (const indice of [4, 5, 6, 7, 8, 9, 10, 11, 12]) {
     const coluna = worksheet.getColumn(indice);
     coluna.width = Math.max(coluna.width ?? 0, 16);
   }

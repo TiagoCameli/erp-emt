@@ -127,28 +127,46 @@ export function LancamentosGerados({
   agrupado,
   podeVerLancamento,
 }: LancamentosGeradosProps) {
+  // Explica a diferença entre custo_total e a soma dos lançamentos ANTES que
+  // alguém compare os dois e abra chamado: a provisão de 13º e férias (Bloco
+  // 8b) é custo sem caixa, entra no custo_total da folha mas nunca gera
+  // lançamento nem guia, então não aparece em nenhuma das listas abaixo.
+  const notaProvisao = (
+    <p className="text-legenda text-muted-foreground">
+      A provisão de 13º e férias entra no custo da folha e não vira conta a
+      pagar: por isso não aparece nesta lista.
+    </p>
+  );
+
   if (status !== "aprovado") {
     return (
-      <EmptyState
-        icone={Receipt}
-        titulo="Lançamentos ainda não gerados"
-        descricao="A aprovação da folha cria um lançamento a pagar por colaborador (o líquido) e um por grupo de recolhimento (a guia). Enquanto a folha estiver em rascunho ou pendente de aprovação, não existe lançamento nenhum."
-      />
+      <div className="flex flex-col gap-3">
+        {notaProvisao}
+        <EmptyState
+          icone={Receipt}
+          titulo="Lançamentos ainda não gerados"
+          descricao="A aprovação da folha cria um lançamento a pagar por colaborador (o líquido) e um por grupo de recolhimento (a guia). Enquanto a folha estiver em rascunho ou pendente de aprovação, não existe lançamento nenhum."
+        />
+      </div>
     );
   }
 
   if (agrupado.salarios.length === 0 && agrupado.guias.length === 0) {
     return (
-      <EmptyState
-        icone={Receipt}
-        titulo="Nenhum lançamento gerado"
-        descricao="Esta folha foi aprovada sem gerar lançamentos. Confira os líquidos dos colaboradores e os grupos de recolhimento configurados em Parâmetros da Folha."
-      />
+      <div className="flex flex-col gap-3">
+        {notaProvisao}
+        <EmptyState
+          icone={Receipt}
+          titulo="Nenhum lançamento gerado"
+          descricao="Esta folha foi aprovada sem gerar lançamentos. Confira os líquidos dos colaboradores e os grupos de recolhimento configurados em Parâmetros da Folha."
+        />
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {notaProvisao}
       <div>
         <h3 className="mb-2 text-legenda font-medium text-muted-foreground">
           Salários
