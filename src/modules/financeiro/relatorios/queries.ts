@@ -3,6 +3,10 @@ import "server-only";
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import {
+  abertoPorPrazo,
+  type AbertoPorPrazo,
+} from "@/modules/financeiro/_shared/prazo";
+import {
   corGrupo,
   type CorGrupo,
 } from "@/modules/cadastros/_shared/insumo-grupos";
@@ -468,16 +472,32 @@ export interface ExtratoLancamento {
   mesCompetencia: string;
   dataVencimento: string | null;
   valor: number;
+  /**
+   * Dinheiro em aberto desta linha, repartido por prazo, contado nas PARCELAS.
+   *
+   * O `valor` acima é o total do documento e inclui o que já foi pago. Somar ele
+   * e chamar de "a pagar" foi o defeito que esta estrutura conserta: no extrato
+   * da EMAM dava R$ 2.325.558,12 com 12 dos 16 lançamentos pagos, quando o
+   * aberto real era R$ 271.421,16.
+   */
+  aberto: AbertoPorPrazo;
 }
 
 export interface ExtratoPorFornecedor {
-  fornecedorId: string | null;
+  fornecedorIds: string[];
   lancamentos: ExtratoLancamento[];
   total: number;
 }
 
 interface ExtratoParam {
-  fornecedorId?: string;
+  /**
+   * Fornecedores do extrato. Lista vazia (ou ausente) traz todos.
+   *
+   * Lista, e não um id só, porque comparar dois ou três fornecedores no mesmo
+   * extrato é o uso real. O teto de quantos entram fica no parser da URL: `in`
+   * com uuid demais estoura o tamanho da URL do PostgREST antes de chegar na RLS.
+   */
+  fornecedorIds?: string[];
 }
 
 /** Fornecedores que têm ao menos um lançamento a_pagar, em ordem alfabética. */
@@ -507,7 +527,7 @@ export async function listarFornecedoresComLancamentos(): Promise<
  * Cancelados ficam de fora.
  */
 export async function extratoPorFornecedor({
-  fornecedorId,
+  fornecedorIds = [],
 }: ExtratoParam = {}): Promise<ExtratoPorFornecedor> {
   const supabase = await createClient();
 
@@ -515,22 +535,34 @@ export async function extratoPorFornecedor({
     .from("lancamentos")
     .select(
       `id, numero, descricao, status, mes_competencia, data_vencimento, valor,
-       categorias_financeiras(nome)`,
+       categorias_financeiras(nome),
+       lancamento_parcelas(status, valor, data_vencimento)`,
     )
     .eq("tipo", "a_pagar")
     .neq("status", "cancelado");
 
-  if (fornecedorId) {
-    consulta = consulta.eq("fornecedor_id", fornecedorId);
+  if (fornecedorIds.length === 1) {
+    consulta = consulta.eq("fornecedor_id", fornecedorIds[0]);
+  } else if (fornecedorIds.length > 1) {
+    consulta = consulta.in("fornecedor_id", fornecedorIds);
   }
 
   const { data, error } = await consulta
     .order("data_vencimento", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // Desempate por id: created_at está empatado em massa pela carga do Mais
+    // Controle, e sem chave única a ordem de linhas empatadas muda entre cargas
+    // da mesma tela.
+    .order("id", { ascending: false });
 
   if (error) {
     throw new Error("Não foi possível carregar o extrato do fornecedor");
   }
+
+  // Uma leitura do relógio para o extrato todo: com `dataHojeISO()` por linha,
+  // uma consulta que virasse a meia-noite classificaria parte das parcelas por um
+  // dia e parte pelo outro, e as faixas deixariam de fechar com o total.
+  const hojeISO = dataHojeISO();
 
   const lancamentos: ExtratoLancamento[] = (data ?? []).map((lancamento) => ({
     id: lancamento.id,
@@ -541,17 +573,26 @@ export async function extratoPorFornecedor({
     mesCompetencia: lancamento.mes_competencia,
     dataVencimento: lancamento.data_vencimento,
     valor: lancamento.valor,
+    aberto: abertoPorPrazo(
+      (lancamento.lancamento_parcelas ?? []).map((parcela) => ({
+        status: parcela.status,
+        valor: parcela.valor,
+        dataVencimento: parcela.data_vencimento,
+      })),
+      hojeISO,
+    ),
   }));
 
-  const totalCentavos = lancamentos.reduce(
-    (soma, l) => soma + paraCentavos(l.valor),
-    0,
-  );
-
   return {
-    fornecedorId: fornecedorId ?? null,
+    fornecedorIds,
     lancamentos,
-    total: paraReais(totalCentavos),
+    // Total do EXTRATO (documentos, pagos incluídos). Continua existindo porque é
+    // o tamanho da relação com o fornecedor, mas quem manda nos cartões de
+    // dinheiro é o `aberto` de cada linha: os cartões são somados na tela, sobre
+    // as linhas que sobraram do filtro.
+    total: paraReais(
+      lancamentos.reduce((soma, l) => soma + paraCentavos(l.valor), 0),
+    ),
   };
 }
 

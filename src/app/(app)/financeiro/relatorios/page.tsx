@@ -17,6 +17,7 @@ import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/cus
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
+import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
@@ -340,13 +341,13 @@ async function ConteudoCustoGrupo({ mes }: { mes: string }) {
 }
 
 async function ConteudoExtratoFornecedor({
-  fornecedorId,
+  fornecedorIds,
 }: {
-  fornecedorId?: string;
+  fornecedorIds: string[];
 }) {
   const [fornecedores, extrato] = await Promise.all([
     listarFornecedoresComLancamentos(),
-    extratoPorFornecedor({ fornecedorId }),
+    extratoPorFornecedor({ fornecedorIds }),
   ]);
 
   if (fornecedores.length === 0) {
@@ -362,30 +363,16 @@ async function ConteudoExtratoFornecedor({
   return (
     <SecaoRelatorio
       titulo="Extrato por fornecedor"
-      descricao="Lançamentos a pagar do fornecedor selecionado, do vencimento mais recente para o mais antigo. A coluna Mês de referência é o mês em que o custo entra."
+      descricao="Lançamentos a pagar dos fornecedores escolhidos, do vencimento mais recente para o mais antigo. A coluna Mês de referência é o mês em que o custo entra. Os cartões somam o que está em aberto nas parcelas e acompanham os filtros da tabela."
       controles={
         <SeletorFornecedor
           fornecedores={fornecedores}
-          valor={fornecedorId ?? ""}
+          valores={extrato.fornecedorIds}
         />
       }
     >
-      <GradeKpis>
-        <KPICard
-          titulo="Total a pagar"
-          valor={<MoneyText valor={extrato.total} />}
-          detalhe={
-            fornecedorId
-              ? "Do fornecedor selecionado"
-              : "Todos os fornecedores"
-          }
-        />
-        <KPICard
-          titulo="Lançamentos"
-          valor={extrato.lancamentos.length}
-          detalhe="No extrato"
-        />
-      </GradeKpis>
+      {/* Os cartões moram DENTRO da tabela agora: eles somam as linhas que
+          sobraram do filtro, e filtro aqui é client-side. */}
       <ExtratoFornecedorTabela lancamentos={extrato.lancamentos} />
     </SecaoRelatorio>
   );
@@ -405,7 +392,9 @@ export default async function RelatoriosPage({
   const mesParam = primeiro(params.mes);
   const mes = mesParam && MES_VALIDO.test(mesParam) ? mesParam : mesCorrente();
 
-  const fornecedorId = primeiro(params.fornecedor) || undefined;
+  // Lista, com uuid validado, deduplicada e no teto do filtro `in`. Regra e teto
+  // moram em extrato-filtros.ts, que o seletor também usa para escrever.
+  const fornecedorIds = lerFornecedoresDaUrl(params.fornecedor);
 
   return (
     <div className="flex flex-col gap-6">
@@ -475,7 +464,7 @@ export default async function RelatoriosPage({
       ) : null}
 
       {relatorio === "extrato-fornecedor" ? (
-        <ConteudoExtratoFornecedor fornecedorId={fornecedorId} />
+        <ConteudoExtratoFornecedor fornecedorIds={fornecedorIds} />
       ) : null}
     </div>
   );
