@@ -5,21 +5,59 @@ import { z } from "zod";
  * número. Mesmo formato do salário de funções (cadastros/funcoes/schemas.ts)
  * e das horas de jornada (cadastros/jornadas/schemas.ts).
  *
- * Extraído de rh/encargos/schemas.ts (Bloco 8b, Task 1): era a terceira cópia
- * da mesma regra de percentual na folha (a outra vive em
- * rh/parametros-folha/schemas.ts, fora do escopo desta extração). Uma quarta
- * cópia em rh/provisoes seria a linha demais.
+ * Extraído de rh/encargos/schemas.ts (Bloco 8b, Task 1): eram três cópias da
+ * mesma regra de percentual na folha antes desta extração; depois dela
+ * sobram duas fora daqui — rh/parametros-folha/schemas.ts e
+ * rh/encargos/importacao.ts —, ambas fora do escopo desta extração e desta
+ * correção. Uma quarta cópia em rh/provisoes seria a linha demais.
+ *
+ * Valida o agrupamento do ponto de milhar: cada grupo à direita do primeiro
+ * ponto tem que ter exatamente 3 dígitos ("1.234.567"), senão "0.5" (grupo
+ * de 1 dígito) virava 5 caladamente — dez vezes o valor digitado, aprovado
+ * por todos os refines e pelo check da coluna (fix round 1 da Task 1).
+ * Devolve NaN (não lança) quando o agrupamento é inválido; quem chama já
+ * trata NaN como "Percentual inválido".
  */
 export function paraNumero(texto: string): number {
-  const limpo = texto.trim().replace(/\./g, "").replace(",", ".");
-  return Number(limpo);
+  const limpo = texto.trim();
+  const negativo = limpo.startsWith("-");
+  const semSinal = negativo ? limpo.slice(1) : limpo;
+  const [parteInteira, ...resto] = semSinal.split(",");
+
+  if (parteInteira.includes(".")) {
+    const grupos = parteInteira.split(".");
+    const agrupamentoValido =
+      grupos.length > 1 &&
+      /^\d{1,3}$/.test(grupos[0]) &&
+      grupos.slice(1).every((grupo) => /^\d{3}$/.test(grupo));
+    if (!agrupamentoValido) return NaN;
+  }
+
+  const semMilhar = parteInteira.replace(/\./g, "");
+  const numeroTexto =
+    resto.length > 0 ? `${semMilhar}.${resto.join(",")}` : semMilhar;
+  const numero = Number(numeroTexto);
+  return negativo ? -numero : numero;
 }
 
-/** Quantas casas decimais um número tem, pela representação decimal. */
+/**
+ * Quantas casas decimais um número tem, pela representação decimal.
+ *
+ * `Number.prototype.toString()` vira notação exponencial fora de
+ * [1e-6, 1e21) — `(1e-7).toString()` é `"1e-7"`, sem ponto, e a versão
+ * anterior desta função contava 0 casas aí (fix round 1 da Task 1): o Zod
+ * aceitava, a coluna `numeric(6,3)` arredondava pra 0.000, e o check
+ * `percentual > 0` da provisão estourava na tela como erro genérico. O regex
+ * cobre as duas notações: parte decimal explícita menos o quanto o expoente
+ * desloca o ponto (negativo, no caso de `e-N`, aumenta as casas).
+ */
 export function casasDecimais(valor: number): number {
-  const texto = valor.toString();
-  const ponto = texto.indexOf(".");
-  return ponto === -1 ? 0 : texto.length - ponto - 1;
+  if (!Number.isFinite(valor)) return 0;
+  const partes = /^-?\d+(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(valor.toString());
+  if (!partes) return 0;
+  const casasBase = partes[1] ? partes[1].length : 0;
+  const expoente = partes[2] ? Number(partes[2]) : 0;
+  return Math.max(0, casasBase - expoente);
 }
 
 /** Percentual NUMERIC(6,3) com check 0..100 no banco. */
