@@ -170,9 +170,11 @@ end $$;
 
 **Contexto medido, não suposto:** `fn_excluir_cadastro(p_tabela, p_id, p_motivo)` grava o registro em `lixeira` e dá `delete`, mas começa por `v_recurso := fn_recurso_do_cadastro(p_tabela)` e **levanta exceção se vier null**. Hoje `fn_recurso_do_cadastro('folha_encargos')` devolve **null**: os únicos casos no `case` são `unidades_medida`, `categorias_insumo`, `clientes`, `fornecedores`, `insumos`, `depositos`, `colaboradores`, `obras` e `centros_custo`.
 
-Ou seja: **`excluirEncargo` (`rh/encargos/actions.ts:110`) está quebrado em produção** e sempre levantou `Tabela folha_encargos nao pode ser excluida por esta funcao`. Nunca apareceu porque existem zero encargos cadastrados, então ninguém nunca clicou. O recurso `rh.encargos` tem `CRUD` em `config/recursos.ts:288`, então o botão de excluir aparece na tela.
+Ou seja: **`excluirEncargo` (`rh/encargos/actions.ts:110`) está quebrado em produção** e sempre levantou `Tabela folha_encargos nao pode ser excluida por esta funcao`. Nunca apareceu porque existem zero encargos cadastrados, então ninguém nunca clicou.
 
-Isso importa aqui porque a spec manda espelhar esse caminho: espelhado como está, a provisão nasce com o botão de excluir quebrado do mesmo jeito.
+> **Corrigido em 14/08/2026** (ver `docs/decisoes.md`, entrada de 14/08/2026, ponto 9a): este passo dizia "o recurso `rh.encargos` tem `CRUD` em `config/recursos.ts:288`, então o botão de excluir aparece na tela". **Medido: o botão nunca aparece para ninguém.** O catálogo declara `CRUD`, mas a matriz de permissão foi semeada copiando as ações de `rh.folha` (que não têm `excluir`), nenhum perfil tem `rh.encargos:excluir`, e as duas tabelas só renderizam o item de menu se `podeExcluir`. O conserto do dispatcher segue certo: sem ele, o caminho não funciona nem quando a permissão for concedida.
+
+Isso importa aqui porque a spec manda espelhar esse caminho: espelhado como está, a provisão nasce com a exclusão quebrada do mesmo jeito.
 
 Recrie `fn_recurso_do_cadastro` **inteira, preservando todos os casos existentes**, e acrescente **dois**:
 
@@ -523,7 +525,9 @@ where n.nspname='public' and p.proname in ('fn_aprovar_folha','fn_gerar_folha') 
 Via `apply_migration`, nome `folha_aprovar_comentario_provisao`. O texto novo tem que:
 
 1. declarar a identidade de **quatro** termos: `Σ líquidos + Σ guias + Σ adiantamento descontado + Σ provisões == folhas.custo_total`;
-2. dizer que **provisão não é uma quarta causa de resíduo, é um termo explícito** — as causas de diferença legítima continuam três (encargo sem grupo, retido sem grupo, líquido zero);
+2. dizer que **provisão não é uma quarta causa de resíduo, é um termo explícito** — as causas de diferença legítima continuam **duas** (encargo sem grupo e retido sem grupo), mais **um detector de regressão** (líquido não positivo, que vale 0,00 por construção);
+
+   > **Corrigido em 14/08/2026** (ver `docs/decisoes.md`, entrada de 14/08/2026, ponto 2): este item pedia "as causas de diferença legítima continuam três (encargo sem grupo, retido sem grupo, líquido zero)". Líquido zero **não é causa**: soma zero nos dois lados e só entra na conta do `explicado` como detector. Foi preciso um round de fix inteiro (migration `20260814173542`) para tirar essa contradição de dentro do `obj_description`; escrever o comentário a partir da formulação antiga desfaz o round.
 3. explicar em uma frase que provisão é custo sem caixa e por isso **não** aparece nos lançamentos;
 4. trazer a consulta de diagnóstico atualizada com a coluna de provisões somando na conta do `explicado`;
 5. manter a marca `-- DIAGNOSTICO EXECUTAVEL v1` e continuar **rodando colada**, sem placeholder de cliente (`:folha` e afins não são SQL fora do `psql`, e a base tem guarda de regressão contra `:[a-zA-Z_]`).
@@ -809,7 +813,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 3: A prova de aceite ponta a ponta**, em transação revertida, com produção estável antes e depois. Cenário: 3 colaboradores CLT em centros de custo distintos, faixas de INSS e IRRF, 2 encargos (um com grupo, um sem), 2 provisões (uma ativa, uma inativa), parâmetros completos, e um adiantamento parcelado com uma parcela que não cabe.
 
-Prove: a **identidade de quatro termos** com a consulta extraída do `obj_description` dando `explicado = 0.00`; `custo_total = salário + encargos + provisões` em cada item; **contagem de lançamentos idêntica antes e depois de aprovar** (a prova de que provisão não vira caixa); `valor_liquido` inalterado; a soma das linhas de provisão batendo com o total do item; regenerar três vezes idêntico; e o ciclo aprovar → desaprovar → reaprovar.
+Prove: a **identidade de quatro termos** com a consulta extraída do `obj_description` dando `explicado = 0.00`; `custo_total = salário + encargos + provisões` em cada item; o **contraste na mesma folha** entre aprovada sem provisão e aprovada com provisão, dando a **mesma contagem de lançamentos e a mesma soma ao centavo** (a prova de que provisão não vira caixa); `valor_liquido` inalterado; a soma das linhas de provisão batendo com o total do item; regenerar três vezes idêntico; e o ciclo aprovar → desaprovar → reaprovar.
+
+> **Corrigido em 14/08/2026** (ver `docs/decisoes.md`, entrada de 14/08/2026, ponto 2): este passo pedia "contagem de lançamentos idêntica antes e depois de aprovar (a prova de que provisão não vira caixa)". **É falso:** aprovar cria lançamentos por desenho do Bloco 8a, então essa contagem muda de propósito. A prova que vale, e que foi a executada, é o contraste na mesma folha descrito acima.
 
 - [ ] **Step 4: Conferir as migrations desta frente** — cada versão nova com arquivo homônimo e SQL executável igual ao gravado, pela receita normalizada de `docs/decisoes.md`. Reporte a tabela versão × md5 dos dois lados. E rode `fn_verificar_diagnosticos_gravados()` uma última vez.
 

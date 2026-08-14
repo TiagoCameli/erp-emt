@@ -36,10 +36,18 @@ padrão da casa), espelhando `folha_encargos`: RLS, policies sob `rh.encargos`, 
 **Correção que veio junto, medida durante o planejamento:** o soft delete de `folha_encargos`
 **está quebrado hoje**. `fn_excluir_cadastro` resolve o recurso por `fn_recurso_do_cadastro`, e
 essa função não conhece `folha_encargos` (devolve null), o que faz a exclusão levantar
-`Tabela folha_encargos nao pode ser excluida por esta funcao`. O botão existe na tela, porque
-`rh.encargos` tem `CRUD` no catálogo, e nunca falhou na cara de ninguém só porque não existe
-encargo cadastrado em produção. Espelhar o padrão sem consertar faria a provisão nascer com o
-mesmo botão quebrado, então **as duas tabelas entram no dispatcher** nesta entrega.
+`Tabela folha_encargos nao pode ser excluida por esta funcao`. Espelhar o padrão sem consertar faria
+a provisão nascer com o mesmo caminho quebrado, então **as duas tabelas entram no dispatcher** nesta
+entrega.
+
+> **Corrigido em 14/08/2026** (ver `docs/decisoes.md`, entrada de 14/08/2026, ponto 9a): esta spec
+> dizia "o botão existe na tela, porque `rh.encargos` tem `CRUD` no catálogo, e nunca falhou na cara
+> de ninguém só porque não existe encargo cadastrado em produção". **Medido: o botão nunca aparece
+> para ninguém.** Nenhum perfil tem `rh.encargos:excluir` (a matriz foi semeada copiando as ações de
+> `rh.folha`, que não incluem `excluir`), e `encargos-tabela.tsx` e `provisoes-tabela.tsx` só
+> renderizam o item de menu se `podeExcluir`. O conserto do dispatcher continua sendo o certo: sem
+> ele o caminho não funciona nem quando a permissão for concedida, e conceder a permissão é decisão
+> pendente do dono.
 
 **Não é uma flag em `folha_encargos`, e a razão é de segurança, não de estilo.** As duas tabelas
 guardariam os mesmos campos, mas têm **destinos opostos**: encargo vira guia e sai do caixa,
@@ -115,8 +123,18 @@ Fecha pela mesma álgebra de sempre:
 = Σ salário + Σ encargos + Σ provisões`.
 
 **A provisão não é uma quarta causa de resíduo: é um termo explícito da conta.** As causas de
-diferença legítima continuam três (encargo sem grupo de recolhimento, retido sem grupo, líquido
-zero). Essa distinção é o que impede alguém de ver a diferença e concluir que é bug.
+diferença legítima continuam **duas** (encargo sem grupo de recolhimento e retido sem grupo), mais
+**um detector de regressão** (líquido não positivo, que vale 0,00 por construção e entra na conta do
+`explicado` de propósito). Essa distinção é o que impede alguém de ver a diferença e concluir que é
+bug.
+
+> **Corrigido em 14/08/2026** (ver `docs/decisoes.md`, entrada de 14/08/2026, ponto 2): esta spec
+> dizia "as causas de diferença legítima continuam três (encargo sem grupo de recolhimento, retido
+> sem grupo, líquido zero)". Líquido zero **não é causa**: soma zero nos dois lados da identidade e
+> só existe na conta como detector de regressão. Um round de fix inteiro foi gasto tirando essa
+> mesma contradição de dentro do `obj_description` vivo da `fn_aprovar_folha` (migration
+> `20260814173542`), e ela ficou de pé aqui. Quem reescrever o comentário da função a partir desta
+> spec, com "três causas", desfaz o round.
 
 **O `obj_description` da `fn_aprovar_folha` e a consulta de diagnóstico gravada nele mudam na
 mesma entrega.** Nesta frente isso já custou duas correções: mudar o cálculo e deixar o texto
@@ -144,8 +162,16 @@ que as duas parcelas somadas não batem com o percentual composto; e o resumo po
 **Prova em banco, em transação revertida:**
 - a identidade de **quatro** termos fechando no centavo, com a consulta **extraída do
   `obj_description` e executada**;
-- **contagem de lançamentos idêntica antes e depois de aprovar**, que é a prova de que provisão
-  não vira caixa;
+- **contraste na mesma folha**: aprovada sem provisão cadastrada contra aprovada com provisão dá a
+  **mesma contagem de lançamentos e a mesma soma ao centavo**, e é essa a prova de que provisão não
+  vira caixa;
+
+  > **Corrigido em 14/08/2026** (ver `docs/decisoes.md`, entrada de 14/08/2026, ponto 2): esta spec
+  > pedia "contagem de lançamentos idêntica antes e depois de aprovar, que é a prova de que provisão
+  > não vira caixa". **É falso:** aprovar cria lançamentos por desenho do Bloco 8a, então a contagem
+  > antes e depois de aprovar muda de propósito. A prova executada foi o contraste acima: 5
+  > lançamentos e soma idêntica nas duas aprovações, com o `custo_total` subindo exatamente
+  > `folhas.valor_provisoes`.
 - `custo_total = salário + encargos + provisões`, e `valor_liquido` **inalterado** em relação a
   antes da task;
 - config de provisão vazia dando provisão zero e `custo_total` igual ao de hoje;
