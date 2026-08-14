@@ -1838,3 +1838,89 @@ de falha do ponto 7**, uma allowlist duplicada que envelhece em silêncio, só q
 TypeScript, e também **sem teste** casando os dois lados. O conserto barato e durável é um teste
 que leia os casos de `fn_recurso_do_cadastro` e case com a constante, ignorando `when` de tabela que
 não existe mais (hoje só `depositos`), senão ele nasce falhando por um caso morto.
+
+## 2026-08-14 - Relatório clicável: o total da lista tem que fechar com a célula, e isso custou um campo novo
+
+Os seis relatórios do Financeiro viraram becos sem saída: a tela dizia que o 009 - BR-364
+custou R$ 3,23 mi em julho e não havia o que fazer com o número. Agora clicar em qualquer
+dimensão abre, em aba nova, os lançamentos daquela fatia com o mesmo filtro.
+
+A decisão que governa o resto: **o total da lista que abre é igual à célula que foi
+clicada.** Sem isso o recurso é decorativo — quem confere vê dois números diferentes,
+conclui que um está errado e para de usar os dois.
+
+**Por que isso exigiu um campo novo (`valorRecorte`).** Cada relatório soma um GRÃO
+diferente, e a listagem soma o valor do documento:
+
+| relatório | grão | fecha com a lista? |
+|---|---|---|
+| DRE | lançamento | sim |
+| Custo por centro de custo | **rateio** | não: 121 lançamentos são rateados entre obras |
+| Fluxo de caixa | **parcela**, pelo líquido | não |
+| Aging | **parcela aberta** | não |
+| Posição bancária | **parcela paga**, pelo líquido | não |
+| Custo por grupo de insumo | misto (item de OC ou rateio) | por identidade, hoje |
+
+`LancamentoLista.valorRecorte` (null = sem recorte) e `resumirLancamentos` somando
+`valorRecorte ?? valor` resolvem os cinco. Zero é fatia de zero e é diferente de null.
+
+**A fatia de parcela viaja num parâmetro só (`recorte`), e pela chave da dimensão, não
+por uma reconstrução dela.** Medido: **694 parcelas foram pagas em mês diferente do
+vencimento**. O fluxo de caixa agrupa o realizado pelo mês do PAGAMENTO, então mandar
+`venc_de`/`venc_ate` num clique de barra realizada erraria nessas 694 — hoje, na base
+real. No aging o mesmo vale nas bordas de faixa e na parcela sem vencimento (que ele
+conta como "a vencer" e um filtro de data descartaria). Por isso existe a
+`fn_lancamentos_do_recorte`, que reusa a classificação de `fn_rel_aging` e
+`fn_rel_fluxo_caixa` em vez de copiá-la para o TypeScript.
+
+**Centro e parcela ao mesmo tempo: o centro ganha, e não é o produto dos dois.** Ratear
+o valor da parcela pela proporção do centro é uma conta que nenhum relatório pede, e ela
+apareceria na tela com aparência de verdade. Precedência declarada e travada por teste.
+
+**Previsto continua DENTRO por padrão.** O relatório sempre incluiu previsto (só exclui
+cancelado). Fazer "incluir previsto" um opt-in mudaria o número sem ninguém pedir, e como
+a base tem 0 previsto hoje a mudança não apareceria na tela e só morderia no primeiro
+previsto lançado. O filtro é o EXCLUDE (`sem_previsto`), desligado por padrão.
+
+**A prova constrói o caso; não confere o dado de hoje.** A base tem 0 cancelados, 0
+previstos e 0 parcelas sem vencimento, então o caminho errado daria o mesmo número do
+certo e um teste sobre o retrato de hoje passaria sem provar nada.
+`supabase/provas/drill_fecha_com_a_celula.sql` insere um rateado 60/40, um cancelado, um
+previsto e uma parcela paga fora do mês, numa transação revertida. Rodada em 14/08: as
+seis conferências deram 0,00, e a linha de CONTROLE (a mesma conta de propósito sem a
+exclusão de cancelado) deu R$ 50.000,00 — o valor exato do cancelado. É o controle que
+prova que a prova funciona.
+
+**Não vira link, e o motivo importa:** "Sem centro de custo" e "sem categoria" (não há o
+que filtrar, e um link que abrisse a lista inteira mentiria sobre o que mostra), faixa de
+aging zerada (abriria lista vazia), grupo COM insumo (soma item de OC; `drillGrupoInsumo`
+LANÇA em vez de abrir, para o dia da primeira OC não virar um total que não fecha), e
+tudo isso para quem não tem `financeiro.lancamentos` `ver`, que cairia num 404.
+
+## 2026-08-14 - Duas sobrecargas de uma `fn_rel_*` quebram em runtime, e o build não vê
+
+`fn_rel_custo_centro_custo` ficou com duas sobrecargas no banco vivo: a de 4 parâmetros do
+painel de Gestão, aplicada enquanto este trabalho estava em curso, e a de 6 que a migration
+`20260814140000` criou sem saber dela.
+
+Com duas sobrecargas de mesmo prefixo e **todos os argumentos com default**, a chamada por
+nome que o PostgREST faz fica ambígua:
+
+```
+ERROR 42725: function fn_rel_custo_centro_custo(unknown, unknown) is not unique
+HINT: Could not choose a best candidate function.
+```
+
+O relatório quebrou em produção com `tsc`, lint, testes e build todos verdes — é o mesmo
+feitio do embed ambíguo do PostgREST (HTTP 300) já registrado aqui.
+
+Conserto na `20260814150000`: **uma função só, com a união dos parâmetros**, na ordem da de
+4 primeiro, para não quebrar chamada posicional nem por nome de nenhum dos dois lados.
+
+Duas lições, e a segunda é a que pega de novo:
+1. `create function` com assinatura diferente **cria sobrecarga**, não substitui. `drop`
+   antes, com a assinatura EXATA, e conferir depois com `pg_get_function_identity_arguments`
+   que sobrou uma só.
+2. **O banco vivo se move enquanto se trabalha nele.** Ler a definição de uma função no
+   começo da sessão não garante que ela é a mesma na hora de aplicar. Reler antes do
+   `apply_migration` quando houver outra frente aberta no mesmo projeto.

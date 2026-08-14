@@ -13,10 +13,14 @@ import {
 } from "recharts";
 
 import { formatarBRL } from "@/lib/formatadores";
+import { drillFluxoCaixa } from "@/modules/financeiro/relatorios/drill";
+import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
 import type { FluxoCaixaMes } from "../queries";
 
 interface FluxoCaixaGraficoProps {
   meses: FluxoCaixaMes[];
+  /** Sem permissão de ver lançamentos, a barra não clica (levaria a um 404). */
+  podeVerLancamentos: boolean;
 }
 
 /** Eixo Y compacto: R$ 12 mil / R$ 1,2 mi, pra não estourar a largura. */
@@ -69,7 +73,25 @@ function ConteudoTooltip({
  * Fluxo de caixa por mês: barras de entradas x saídas (realizado + projetado
  * empilhados) e a linha de saldo do mês. Cores do design system EMT.
  */
-export function FluxoCaixaGrafico({ meses }: FluxoCaixaGraficoProps) {
+export function FluxoCaixaGrafico({
+  meses,
+  podeVerLancamentos,
+}: FluxoCaixaGraficoProps) {
+  /**
+   * O clique de cada barra: o mês vem do ponto, e o par tipo/realizado vem da
+   * barra. Regime de CAIXA, então o destino vai pelo `recorte` (que reusa a
+   * expressão de `fn_rel_fluxo_caixa`) e não por `mes`, que é competência: o
+   * realizado é agrupado pelo mês do PAGAMENTO, e 694 parcelas da base foram
+   * pagas em mês diferente do vencimento.
+   */
+  const aoClicar =
+    (tipo: "a_pagar" | "a_receber", realizado: boolean) =>
+    (ponto: { payload?: FluxoCaixaMes }) => {
+      if (!podeVerLancamentos || !ponto?.payload?.mes) return;
+      abrirDrill(drillFluxoCaixa({ mes: ponto.payload.mes, tipo, realizado }));
+    };
+  const cursor = podeVerLancamentos ? "pointer" : undefined;
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -102,6 +124,8 @@ export function FluxoCaixaGrafico({ meses }: FluxoCaixaGraficoProps) {
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Bar
             dataKey="entradasRealizado"
+            cursor={cursor}
+            onClick={aoClicar("a_receber", true)}
             stackId="entradas"
             name="Entradas realizadas"
             fill="var(--color-chart-3)"
@@ -109,6 +133,8 @@ export function FluxoCaixaGrafico({ meses }: FluxoCaixaGraficoProps) {
           />
           <Bar
             dataKey="entradasProjetado"
+            cursor={cursor}
+            onClick={aoClicar("a_receber", false)}
             stackId="entradas"
             name="Entradas projetadas"
             fill="var(--color-chart-3)"
@@ -117,6 +143,8 @@ export function FluxoCaixaGrafico({ meses }: FluxoCaixaGraficoProps) {
           />
           <Bar
             dataKey="saidasRealizado"
+            cursor={cursor}
+            onClick={aoClicar("a_pagar", true)}
             stackId="saidas"
             name="Saídas realizadas"
             fill="var(--color-chart-1)"
@@ -124,6 +152,8 @@ export function FluxoCaixaGrafico({ meses }: FluxoCaixaGraficoProps) {
           />
           <Bar
             dataKey="saidasProjetado"
+            cursor={cursor}
+            onClick={aoClicar("a_pagar", false)}
             stackId="saidas"
             name="Saídas projetadas"
             fill="var(--color-chart-1)"

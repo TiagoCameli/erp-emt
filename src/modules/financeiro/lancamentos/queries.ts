@@ -27,6 +27,7 @@ import type {
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
+import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
   emLotes,
   LOTE_IDS_POSTGREST,
@@ -37,10 +38,15 @@ import {
 } from "@/modules/financeiro/lancamentos/leitura-completa";
 import {
   dinheiroDasParcelas,
+  escolherValorRecorte,
   resumirLancamentos,
   situacaoDeAtraso,
   type ResumoLancamentos,
 } from "@/modules/financeiro/lancamentos/resumo";
+import {
+  paraCentavos,
+  paraReais,
+} from "@/modules/financeiro/relatorios/calculo";
 
 /** Cliente Supabase do servidor, para as consultas auxiliares de filtro. */
 type ClienteSupabase = Awaited<ReturnType<typeof createClient>>;
@@ -88,6 +94,32 @@ export interface ListarLancamentosParams {
    */
   criadoDe?: string;
   criadoAte?: string;
+  /**
+   * Faixa de MÊS DE REFERÊNCIA (mes_competencia, yyyy-MM-dd). Irmã do
+   * `mesCompetencia`, que é um mês exato: esta é a janela, e existe porque o
+   * relatório de centro de custo soma por período ("acumulado da obra no ano") e
+   * o clique nele precisa de um destino com a mesma janela.
+   */
+  competenciaDe?: string;
+  competenciaAte?: string;
+  /**
+   * Tira os cancelados da lista. Os relatórios de custo somam
+   * `status <> 'cancelado'`, e o filtro de `status` só sabe escolher UM status,
+   * não excluir um.
+   */
+  semCancelado?: boolean;
+  /**
+   * Tira os previstos da lista. Irmão do `semCancelado`, para o clique num
+   * relatório que está somando sem previsto abrir a MESMA fatia.
+   */
+  semPrevisto?: boolean;
+  /**
+   * Fatia de nível de PARCELA recortada por um relatório. Ver
+   * `lancamentos/recorte.ts`: ela decide quais lançamentos entram na lista E como
+   * o `valorRecorte` de cada um é somado, para o total fechar com a célula que foi
+   * clicada no relatório.
+   */
+  recorte?: Recorte;
   /**
    * Estado da revisão: parcela em revisão, ou a situação da conta bancária das
    * parcelas ainda não pagas (sem conta, conta parcial, revisado). É derivado
@@ -151,6 +183,19 @@ export interface LancamentoLista {
    * nao-se-aplica: a receber, ou sem parcela nenhuma.
    */
   revisao: "sem-conta" | "parcial" | "revisado" | "nao-se-aplica";
+  /**
+   * Quanto DESTE lançamento pertence à fatia que a URL recortou, ou `null` quando
+   * não há recorte (e aí o total é o `valor` do documento, como sempre).
+   *
+   * Existe porque relatório e listagem somam grãos diferentes. O custo por centro
+   * de custo soma `lancamento_rateios.valor`, e nos 121 lançamentos rateados entre
+   * obras o valor do documento é MAIOR que a parte daquele centro. Sem este campo,
+   * clicar numa célula de R$ 3,23 mi abriria uma lista somando R$ 3,29 mi, e quem
+   * confere concluiria que um dos dois está errado — e pararia de usar os dois.
+   *
+   * Zero é fatia de zero, e é diferente de `null`.
+   */
+  valorRecorte: number | null;
 }
 
 /** Um centro de custo do rateio, para a coluna da planilha. */
@@ -387,23 +432,85 @@ async function idsPorContaBancaria(
   return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
 }
 
-/** Ids de lançamentos rateados no centro de custo informado. */
-async function idsPorCentroCusto(
+/**
+ * Valor rateado no centro, por lançamento: é ao mesmo tempo o FILTRO de centro de
+ * custo (as chaves do mapa) e o RECORTE dele (os valores).
+ *
+ * Os dois saem da mesma leitura de propósito. Uma segunda consulta só para o
+ * valor leria os mesmos rateios de novo e, pior, poderia ler um conjunto
+ * diferente no dia em que alguém mexesse num dos dois lugares — e aí a lista
+ * mostraria um conjunto e somaria outro.
+ */
+async function valoresPorCentroCusto(
   supabase: ClienteSupabase,
   centroCustoId: string,
-): Promise<string[]> {
+): Promise<Map<string, number>> {
   // O centro de custo do lançamento vive no rateio, nunca na tabela mãe: um
   // lançamento pode ser dividido entre várias obras.
   const rateios = await lerEmPaginas((de, ate) =>
     supabase
       .from("lancamento_rateios")
-      .select("lancamento_id")
+      .select("lancamento_id, valor")
       .eq("centro_custo_id", centroCustoId)
       .order("lancamento_id")
       .order("id")
       .range(de, ate),
   );
-  return [...new Set(rateios.map((rateio) => rateio.lancamento_id))];
+
+  // Soma em vez de sobrescrever: nada no banco impede o mesmo lançamento de ter
+  // duas linhas de rateio no MESMO centro, e sobrescrever perderia uma delas.
+  const porLancamento = new Map<string, number>();
+  for (const rateio of rateios) {
+    const atual = porLancamento.get(rateio.lancamento_id) ?? 0;
+    porLancamento.set(
+      rateio.lancamento_id,
+      paraReais(paraCentavos(atual) + paraCentavos(rateio.valor)),
+    );
+  }
+  return porLancamento;
+}
+
+/**
+ * Valor na FATIA, por lançamento, para o recorte de nível de parcela.
+ *
+ * Vai pela RPC, e não por uma classificação escrita aqui, porque a faixa do aging
+ * e o mês do fluxo de caixa são regra do banco (`fn_rel_aging`,
+ * `fn_rel_fluxo_caixa`). Uma segunda cópia em TypeScript divergiria, e o sintoma
+ * seria uma lista somando diferente da célula que foi clicada, sem erro nenhum.
+ *
+ * `contaBancariaId` entra na chamada de propósito quando a fatia é `conta_paga`:
+ * sem ela, um lançamento com parcelas pagas em DUAS contas somaria as duas na
+ * fatia de uma só, e o total da lista passaria da célula da posição bancária.
+ */
+async function valoresDoRecorte(
+  supabase: ClienteSupabase,
+  recorte: Recorte,
+  contaBancariaId?: string,
+): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc("fn_lancamentos_do_recorte", {
+    p_tipo_recorte: recorte.tipo,
+    // `undefined` e não `null`: os parâmetros da RPC são opcionais com default
+    // null no banco, e é assim que os tipos gerados os descrevem.
+    p_faixa: recorte.tipo === "aging" ? recorte.faixa : undefined,
+    p_tipo_lancamento:
+      recorte.tipo === "aging" ? recorte.tipoLancamento : undefined,
+    p_mes: recorte.tipo === "fluxo" ? recorte.mes : undefined,
+    p_realizado: recorte.tipo === "fluxo" ? recorte.realizado : undefined,
+    p_conta: recorte.tipo === "conta_paga" ? contaBancariaId : undefined,
+  });
+
+  if (error) {
+    // A mensagem do banco vai junto: sem ela a falha chega como "não foi
+    // possível" e descobrir o motivo vira adivinhação.
+    throw new Error(`Não foi possível ler o recorte: ${error.message}`);
+  }
+
+  return new Map(
+    (data ?? []).map((linha) => [
+      linha.lancamento_id,
+      paraReais(paraCentavos(linha.valor_no_recorte)),
+    ]),
+  );
 }
 
 /**
@@ -582,8 +689,20 @@ export async function listarLancamentos(
       await idsPorContaBancaria(supabase, params.contaBancariaId),
     );
   }
-  if (params.centroCustoId) {
-    listasDeIds.push(await idsPorCentroCusto(supabase, params.centroCustoId));
+  // O centro é filtro E recorte: as chaves entram na interseção de ids, e o valor
+  // rateado vira o `valorRecorte` de cada linha mais abaixo.
+  const valoresCentro = params.centroCustoId
+    ? await valoresPorCentroCusto(supabase, params.centroCustoId)
+    : null;
+  if (valoresCentro) {
+    listasDeIds.push([...valoresCentro.keys()]);
+  }
+  // O recorte de parcela também é filtro E medida, pelo mesmo motivo do centro.
+  const valoresRecorte = params.recorte
+    ? await valoresDoRecorte(supabase, params.recorte, params.contaBancariaId)
+    : null;
+  if (valoresRecorte) {
+    listasDeIds.push([...valoresRecorte.keys()]);
   }
 
   let idsFiltrados: string[] | null = null;
@@ -648,6 +767,16 @@ export async function listarLancamentos(
   }
   if (params.compraDe) consulta = consulta.gte("data_compra", params.compraDe);
   if (params.compraAte) consulta = consulta.lte("data_compra", params.compraAte);
+  if (params.competenciaDe) {
+    consulta = consulta.gte("mes_competencia", params.competenciaDe);
+  }
+  if (params.competenciaAte) {
+    consulta = consulta.lte("mes_competencia", params.competenciaAte);
+  }
+  // `neq` e não um `status` positivo: os relatórios de custo excluem UM status e
+  // aceitam todos os outros, o que o filtro de status (um valor só) não expressa.
+  if (params.semCancelado) consulta = consulta.neq("status", "cancelado");
+  if (params.semPrevisto) consulta = consulta.neq("status", "previsto");
   if (params.criadoDe) {
     consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadoDe));
   }
@@ -719,6 +848,10 @@ export async function listarLancamentos(
       dataCompra: lancamento.data_compra,
       mesCompetencia: lancamento.mes_competencia,
       criadoEm: lancamento.created_at,
+      valorRecorte: escolherValorRecorte(
+        valoresCentro?.get(lancamento.id) ?? null,
+        valoresRecorte?.get(lancamento.id) ?? null,
+      ),
     };
   });
 

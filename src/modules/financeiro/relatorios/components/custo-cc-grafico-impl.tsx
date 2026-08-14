@@ -12,10 +12,17 @@ import {
 } from "recharts";
 
 import { formatarBRL } from "@/lib/formatadores";
+import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
 import type { CustoCentroCusto } from "../queries";
 
 interface CustoCcGraficoProps {
   centros: CustoCentroCusto[];
+  /**
+   * URL de destino por centro. A barra "Outros" e os centros sem id ficam de
+   * fora do mapa, e aí a barra não clica: "Outros" agrupa vários centros e não
+   * existe uma lista que corresponda a ela.
+   */
+  destinos?: Map<string, string>;
 }
 
 const CORES = [
@@ -61,19 +68,21 @@ function ConteudoTooltip({
 }
 
 /** Custo por centro de custo: barras verticais, maiores primeiro. */
-export function CustoCcGrafico({ centros }: CustoCcGraficoProps) {
+export function CustoCcGrafico({ centros, destinos }: CustoCcGraficoProps) {
   const principais = centros.slice(0, MAX_BARRAS);
   const restantes = centros.slice(MAX_BARRAS);
 
   const dados = principais.map((centro) => ({
     rotulo: centro.codigo ?? centro.nome,
     valor: centro.valor,
+    href: destinos?.get(centro.centroCustoId),
   }));
 
   if (restantes.length > 0) {
     dados.push({
       rotulo: "Outros",
       valor: restantes.reduce((soma, c) => soma + c.valor, 0),
+      href: undefined,
     });
   }
 
@@ -110,9 +119,25 @@ export function CustoCcGrafico({ centros }: CustoCcGraficoProps) {
             content={<ConteudoTooltip />}
             cursor={{ fill: "var(--muted)" }}
           />
-          <Bar dataKey="valor" name="Custo" radius={[3, 3, 0, 0]}>
+          {/*
+            No gráfico o clique é onClick porque o Recharts desenha <path>, não
+            âncora. É por isso que a TABELA usa link de verdade: quem quer copiar
+            o link ou abrir com o meio-clique usa ela, que mostra a mesma coisa.
+          */}
+          <Bar
+            dataKey="valor"
+            name="Custo"
+            radius={[3, 3, 0, 0]}
+            onClick={(ponto: { payload?: { href?: string } }) =>
+              abrirDrill(ponto?.payload?.href)
+            }
+          >
             {dados.map((linha, indice) => (
-              <Cell key={linha.rotulo} fill={CORES[indice % CORES.length]} />
+              <Cell
+                key={linha.rotulo}
+                fill={CORES[indice % CORES.length]}
+                cursor={linha.href ? "pointer" : undefined}
+              />
             ))}
           </Bar>
         </BarChart>

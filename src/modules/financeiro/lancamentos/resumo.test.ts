@@ -4,8 +4,10 @@ import { formatarBRL } from "@/lib/formatadores";
 import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
 import {
   dinheiroDasParcelas,
+  escolherValorRecorte,
   resumirLancamentos,
   situacaoDeAtraso,
+  valorDasParcelasNoRecorte,
   type ParcelaParaResumo,
 } from "@/modules/financeiro/lancamentos/resumo";
 
@@ -45,6 +47,7 @@ function linha(l: Partial<LancamentoLista>): LancamentoLista {
     valorAberto: 100,
     valorVencido: 0,
     descontoObtido: 0,
+    valorRecorte: null,
     ...l,
   };
 }
@@ -342,5 +345,131 @@ describe("resumirLancamentos", () => {
     // Pelo formatador, que é como o número chega na tela (espaço não separável
     // no "R$" faz literal cru nunca bater).
     expect(formatarBRL(r.valorTotal)).toBe(formatarBRL(30_030));
+  });
+});
+
+describe("valorDasParcelasNoRecorte", () => {
+  it("soma pelo valor quando a medida é valor", () => {
+    const total = valorDasParcelasNoRecorte(
+      [
+        parcela({ status: "pendente", valor: 100 }),
+        parcela({ status: "pago", valor: 200, valorLiquido: 180, desconto: 20 }),
+      ],
+      "valor",
+    );
+    expect(total).toBe(300);
+  });
+
+  it("soma pelo líquido quando a medida é líquido", () => {
+    const total = valorDasParcelasNoRecorte(
+      [parcela({ status: "pago", valor: 200, valorLiquido: 180, desconto: 20 })],
+      "liquido",
+    );
+    expect(total).toBe(180);
+  });
+
+  it("cai no valor cheio quando o líquido é nulo", () => {
+    // valor_liquido aceita nulo no banco (parcela antiga). É a mesma defesa que
+    // dinheiroDasParcelas já faz, e não um cuidado novo.
+    const total = valorDasParcelasNoRecorte(
+      [parcela({ status: "pago", valor: 200, valorLiquido: null })],
+      "liquido",
+    );
+    expect(total).toBe(200);
+  });
+
+  it("soma em centavos: três parcelas de 0,10 dão 0,30 exato", () => {
+    const total = valorDasParcelasNoRecorte(
+      [0.1, 0.1, 0.1].map((valor) => parcela({ valor })),
+      "valor",
+    );
+    expect(total).toBe(0.3);
+  });
+
+  it("sem parcela, o recorte é zero", () => {
+    expect(valorDasParcelasNoRecorte([], "valor")).toBe(0);
+  });
+});
+
+/**
+ * O recorte é o que faz o total da lista fechar com a célula do relatório que foi
+ * clicada. O caso que motivou tudo: 121 lançamentos da base são rateados entre
+ * duas ou mais obras, e o relatório de centro de custo contou só a parte daquele
+ * centro. Sem recorte, clicar numa célula de R$ 3,23 mi abriria uma lista somando
+ * R$ 3,29 mi, e quem confere concluiria que um dos dois está errado.
+ */
+describe("resumirLancamentos com recorte", () => {
+  it("sem recorte, o total continua sendo o valor do documento", () => {
+    const resumo = resumirLancamentos([
+      linha({ valor: 100 }),
+      linha({ id: "id-2", valor: 50 }),
+    ]);
+    expect(resumo.valorTotal).toBe(150);
+    expect(resumo.temRecorte).toBe(false);
+    expect(resumo.valorNoRecorte).toBe(150);
+  });
+
+  it("com recorte, soma a fatia e não o valor cheio", () => {
+    const resumo = resumirLancamentos([
+      linha({ valor: 100_000, valorRecorte: 40_000 }),
+      linha({ id: "id-2", valor: 6_576, valorRecorte: 6_576 }),
+    ]);
+    // O valor do documento continua disponível: a coluna Valor não muda.
+    expect(resumo.valorTotal).toBe(106_576);
+    expect(resumo.temRecorte).toBe(true);
+    expect(resumo.valorNoRecorte).toBe(46_576);
+  });
+
+  it("linha sem recorte no meio de linhas recortadas cai no valor cheio", () => {
+    // Caso PARCIAL, não o extremo. Se o código somasse `valorRecorte ?? 0` este
+    // teste pegaria; se somasse sempre `valor`, também pegaria. Um caso "todas
+    // recortadas" não pega nenhum dos dois.
+    const resumo = resumirLancamentos([
+      linha({ valor: 100, valorRecorte: 40 }),
+      linha({ id: "id-2", valor: 70, valorRecorte: null }),
+      linha({ id: "id-3", valor: 30, valorRecorte: 30 }),
+    ]);
+    expect(resumo.temRecorte).toBe(true);
+    expect(resumo.valorNoRecorte).toBe(140);
+  });
+
+  it("recorte zerado é fatia de zero, não ausência de fatia", () => {
+    const resumo = resumirLancamentos([linha({ valor: 100, valorRecorte: 0 })]);
+    expect(resumo.temRecorte).toBe(true);
+    expect(resumo.valorNoRecorte).toBe(0);
+  });
+
+  it("soma o recorte em centavos, sem resto binário em muitas linhas", () => {
+    const resumo = resumirLancamentos(
+      Array.from({ length: 3 }, (_, indice) =>
+        linha({ id: `id-${indice}`, valor: 1, valorRecorte: 0.1 }),
+      ),
+    );
+    expect(resumo.valorNoRecorte).toBe(0.3);
+  });
+});
+
+describe("escolherValorRecorte", () => {
+  it("sem nada, não há recorte", () => {
+    expect(escolherValorRecorte(null, null)).toBeNull();
+  });
+
+  it("só centro: o recorte é o rateio", () => {
+    expect(escolherValorRecorte(40_000, null)).toBe(40_000);
+  });
+
+  it("só parcela: o recorte é a fatia da parcela", () => {
+    expect(escolherValorRecorte(null, 180)).toBe(180);
+  });
+
+  it("os dois juntos: o centro ganha, e não é o produto dos dois", () => {
+    // Ratear o valor da parcela pela proporção do centro seria uma conta que
+    // nenhum relatório pede, e que apareceria na tela com aparência de verdade.
+    expect(escolherValorRecorte(40_000, 180)).toBe(40_000);
+  });
+
+  it("centro com zero ganha de parcela com valor", () => {
+    // Zero é fatia de zero: a comparação é com null, não com falsidade.
+    expect(escolherValorRecorte(0, 180)).toBe(0);
   });
 });

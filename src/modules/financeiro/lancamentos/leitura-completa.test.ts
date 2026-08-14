@@ -20,6 +20,7 @@ const base: LancamentoLista = {
   mesCompetencia: "2026-08-01",
   criadoEm: "2026-08-01T12:00:00.000Z",
   revisao: "sem-conta",
+  valorRecorte: null,
   valorPago: 0,
   valorAberto: 100,
   valorVencido: 0,

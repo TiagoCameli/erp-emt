@@ -91,7 +91,20 @@ const OPCOES_ORIGEM: OpcaoFiltro[] = ORIGENS_LANCAMENTO.map((valor) => ({
 /** Largura máxima do seletor de nome comprido (fornecedor, centro de custo). */
 const LARGURA_NOME = "max-w-[15rem]";
 
-const colunas: ColumnDef<LancamentoLista, unknown>[] = [
+/**
+ * Colunas da listagem.
+ *
+ * É função, e não uma const de módulo, por causa da coluna do RECORTE: ela só
+ * existe quando a URL recorta (o clique num relatório), e uma coluna permanente
+ * mostrando o mesmo número da de Valor em quase toda navegação seria ruído que
+ * rouba largura das colunas que importam.
+ *
+ * `rotuloRecorte` nulo = sem recorte = colunas de sempre.
+ */
+function montarColunas(
+  rotuloRecorte: string | null,
+): ColumnDef<LancamentoLista, unknown>[] {
+  return [
   {
     accessorKey: "numero",
     header: "Número",
@@ -139,6 +152,21 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     meta: { alinharDireita: true },
     cell: ({ row }) => <MoneyText valor={row.original.valor} />,
   },
+  // Logo depois de Valor de propósito: o par só se lê junto ("o documento inteiro,
+  // e a parte dele que é desta fatia"). Separadas, a pessoa compara o número
+  // errado.
+  ...(rotuloRecorte
+    ? [
+        {
+          id: "valorRecorte",
+          header: rotuloRecorte,
+          meta: { alinharDireita: true, rotulo: rotuloRecorte },
+          cell: ({ row }: { row: { original: LancamentoLista } }) => (
+            <MoneyText valor={row.original.valorRecorte ?? row.original.valor} />
+          ),
+        } satisfies ColumnDef<LancamentoLista, unknown>,
+      ]
+    : []),
   {
     accessorKey: "dataCompra",
     header: "Data da compra",
@@ -226,7 +254,8 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
       );
     },
   },
-];
+  ];
+}
 
 export interface LancamentosTabelaProps {
   lancamentos: LancamentoLista[];
@@ -242,6 +271,14 @@ export interface LancamentosTabelaProps {
   contas: ContaBancariaOpcao[];
   /** Permissão de excluir: sem ela a ação não aparece na linha. */
   podeExcluir: boolean;
+  /**
+   * Rótulo da coluna do recorte, ou `null` quando a URL não recorta.
+   *
+   * Vem pronto da página (que conhece o nome do centro de custo e o rótulo da
+   * fatia) em vez de ser montado aqui: este componente é client, e resolver o nome
+   * do centro exigiria uma segunda leitura do banco no cliente.
+   */
+  rotuloRecorte: string | null;
 }
 
 /**
@@ -262,7 +299,12 @@ export function LancamentosTabela({
   formasPagamento,
   contas,
   podeExcluir,
+  rotuloRecorte,
 }: LancamentosTabelaProps) {
+  const colunas = React.useMemo(
+    () => montarColunas(rotuloRecorte),
+    [rotuloRecorte],
+  );
   const router = useRouter();
   const { setMuitos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(valores.busca);

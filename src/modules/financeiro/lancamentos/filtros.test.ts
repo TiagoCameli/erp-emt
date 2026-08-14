@@ -181,3 +181,83 @@ describe("parametrosDaQueryString", () => {
     expect(daQuery.filtros).toEqual(daPagina.filtros);
   });
 });
+
+/**
+ * Os dois parâmetros que o drill-down dos relatórios acrescenta, mais a faixa de
+ * mês de referência que o modo "período" do relatório de centro de custo precisa.
+ *
+ * `recorte` é o mais delicado: um recorte inválido que passasse faria os cartões
+ * da tela somarem uma fatia que ninguém pediu, e um que fosse descartado do
+ * filtro mas sobrasse na barra diria ao usuário que a lista está recortada quando
+ * ela não está.
+ */
+describe("lerFiltrosLancamentos: sem_cancelado, recorte e faixa de competência", () => {
+  it("lê sem_cancelado=1 como filtro e devolve o valor para a barra", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({ sem_cancelado: "1" });
+    expect(filtros.semCancelado).toBe(true);
+    expect(valores.semCancelado).toBe("1");
+  });
+
+  it("ignora sem_cancelado com qualquer outro valor", () => {
+    for (const valor of ["0", "sim", "true", ""]) {
+      const { filtros, valores } = lerFiltrosLancamentos({
+        sem_cancelado: valor,
+      });
+      expect(filtros.semCancelado).toBeUndefined();
+      expect(valores.semCancelado).toBe("");
+    }
+  });
+
+  it("lê o recorte válido", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({
+      recorte: "aging:v_16_30:a_pagar",
+    });
+    expect(filtros.recorte).toEqual({
+      tipo: "aging",
+      faixa: "v_16_30",
+      tipoLancamento: "a_pagar",
+    });
+    expect(valores.recorte).toBe("aging:v_16_30:a_pagar");
+  });
+
+  it("descarta recorte inválido do filtro E da barra", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({
+      recorte: "aging:banana:a_pagar",
+    });
+    expect(filtros.recorte).toBeUndefined();
+    expect(valores.recorte).toBe("");
+  });
+
+  it("lê a faixa de mês de referência como período de datas", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({
+      comp_de: "2025-01-01",
+      comp_ate: "2026-07-31",
+    });
+    expect(filtros.competenciaDe).toBe("2025-01-01");
+    expect(filtros.competenciaAte).toBe("2026-07-31");
+    expect(valores.compDe).toBe("2025-01-01");
+    expect(valores.compAte).toBe("2026-07-31");
+  });
+
+  it("troca de lado a faixa de competência invertida", () => {
+    const { filtros } = lerFiltrosLancamentos({
+      comp_de: "2026-07-31",
+      comp_ate: "2025-01-01",
+    });
+    expect(filtros.competenciaDe).toBe("2025-01-01");
+    expect(filtros.competenciaAte).toBe("2026-07-31");
+  });
+
+  it("convive com os filtros que já existiam", () => {
+    const { filtros } = lerFiltrosLancamentos({
+      centro: "0a327d7e-6e2d-40d9-a87b-cf9b4a76be2e",
+      mes: "2026-07",
+      tipo: "a_pagar",
+      sem_cancelado: "1",
+    });
+    expect(filtros.centroCustoId).toBe("0a327d7e-6e2d-40d9-a87b-cf9b4a76be2e");
+    expect(filtros.mesCompetencia).toBe("2026-07-01");
+    expect(filtros.tipo).toBe("a_pagar");
+    expect(filtros.semCancelado).toBe(true);
+  });
+});

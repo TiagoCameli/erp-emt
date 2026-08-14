@@ -422,8 +422,25 @@ export interface CustoPorCentroCusto {
  * É este o custo de obra: como toda OC vira lançamento e existem lançamentos
  * avulsos, o gasto está nos lançamentos, não em consumo de estoque.
  */
+/**
+ * Filtros do relatório de custo por centro de custo.
+ *
+ * `excluirPrevisto` (e não `incluirPrevisto`) porque o padrão histórico do
+ * relatório é INCLUIR previsto: ele só exclui cancelado. Inverter o padrão mudaria
+ * o número sem ninguém pedir, e como a base tem 0 previsto em 14/08/2026 a mudança
+ * não apareceria na tela hoje e só morderia no primeiro previsto lançado.
+ */
+export interface FiltrosCustoCentroCusto {
+  inicio?: string;
+  fim?: string;
+  categoriaId?: string;
+  fornecedorId?: string;
+  excluirPrevisto?: boolean;
+  tipoCentro?: "obra" | "escritorio" | "manutencao";
+}
+
 export async function custoPorCentroCusto(
-  periodo?: { inicio: string; fim: string },
+  periodo?: FiltrosCustoCentroCusto,
 ): Promise<CustoPorCentroCusto> {
   const supabase = await createClient();
 
@@ -431,6 +448,10 @@ export async function custoPorCentroCusto(
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo", {
     p_inicio: periodo?.inicio,
     p_fim: periodo?.fim,
+    p_categoria: periodo?.categoriaId,
+    p_fornecedor: periodo?.fornecedorId,
+    p_excluir_previsto: periodo?.excluirPrevisto,
+    p_tipo_centro: periodo?.tipoCentro,
   });
 
   if (error) {
@@ -450,6 +471,63 @@ export async function custoPorCentroCusto(
     centros,
     total: centros.reduce((soma, c) => soma + c.valor, 0),
   };
+}
+
+/**
+ * Primeiro mês (yyyy-MM) com custo naquele centro: o início da vida dele.
+ *
+ * `null` quando o centro nunca teve lançamento. Quem chama trata isso como "sem
+ * período", e NÃO como "tudo": um centro sem lançamento não tem vida, e mostrar o
+ * total geral no lugar trocaria a pergunta do usuário por outra.
+ */
+export async function primeiroMesDoCentro(
+  centroId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_custo_centro_vida", {
+    p_centro: centroId,
+  });
+  if (error) {
+    throw new Error(
+      `Não foi possível ler o início do centro de custo: ${error.message}`,
+    );
+  }
+  return typeof data === "string" ? data.slice(0, 7) : null;
+}
+
+/** Um mês da série do centro. Mês sem custo vem com valor zero, não omitido. */
+export interface PontoSerieCentro {
+  /** yyyy-MM. */
+  mes: string;
+  valor: number;
+}
+
+/**
+ * Série mensal de UM centro de custo, para o gráfico do modo "vida do centro".
+ *
+ * Mês sem custo vem como zero (a RPC preenche): série com buraco faz o gráfico
+ * ligar dois meses distantes por uma reta e some com a informação de que a obra
+ * parou naquele intervalo — que numa obra rodoviária é o que se quer ver.
+ */
+export async function serieDoCentro(
+  centroId: string,
+  periodo?: { inicio?: string; fim?: string },
+): Promise<PontoSerieCentro[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_custo_centro_serie", {
+    p_centro: centroId,
+    p_inicio: periodo?.inicio,
+    p_fim: periodo?.fim,
+  });
+  if (error) {
+    throw new Error(
+      `Não foi possível ler a série do centro de custo: ${error.message}`,
+    );
+  }
+  return (data ?? []).map((linha) => ({
+    mes: linha.mes,
+    valor: paraReais(paraCentavos(linha.total)),
+  }));
 }
 
 // =====================================================================
