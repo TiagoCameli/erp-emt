@@ -205,8 +205,23 @@ $b4$
   -- Postgres cria funcao plpgsql com SQL embutido INVALIDO sem reclamar: nome de
   -- coluna errado no corpo so estoura na primeira execucao, ou seja na primeira
   -- folha de verdade. Nesta base isso ja aconteceu (um sum(valor) sobre
-  -- subconsulta cuja coluna era valor_cc). As quatro referencias novas do bloco
-  -- da provisao sao conferidas aqui, no ato, contra o schema de verdade.
+  -- subconsulta cuja coluna era valor_cc).
+  --
+  -- O QUE AS QUATRO LINHAS ABAIXO REALMENTE COBREM (corrigido na Task 3; o texto
+  -- anterior dizia "as quatro referencias novas do bloco da provisao sao
+  -- conferidas aqui", e isso era mais do que elas fazem):
+  --   - as DUAS ultimas conferem COLUNA: `provisoes` em folha_itens e
+  --     `valor_provisoes` em folhas sao resolvidos contra o schema de verdade;
+  --   - as DUAS primeiras conferem so que a TABELA existe. `perform 1 from t
+  --     where false` resolve o nome da relacao e nada mais, entao os nomes de
+  --     coluna que o bloco da provisao usa em folha_provisoes (`nome`,
+  --     `percentual`, `ativo`) e em folha_item_provisoes (`folha_item_id`,
+  --     `nome`, `percentual`, `valor_principal`, `valor_encargos`) NAO passam
+  --     por aqui.
+  -- Quem cobriu esses nomes foi a EXECUCAO do bloco em transacao revertida
+  -- (gerar e aprovar uma folha de verdade, com linha gravada e conferida), nao
+  -- esta trava. Se um dia isto for endurecido, a forma que cobre coluna e a das
+  -- duas ultimas linhas: `perform <coluna> from <tabela> where false`.
   perform 1 from public.folha_provisoes where false;
   perform 1 from public.folha_item_provisoes where false;
   perform provisoes from public.folha_itens where false;
