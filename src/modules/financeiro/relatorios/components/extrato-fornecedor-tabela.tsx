@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import {
@@ -37,6 +38,8 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 interface ExtratoFornecedorTabelaProps {
   lancamentos: ExtratoLancamento[];
+  /** Sem permissão de ver lançamentos, a linha não clica (levaria a um 404). */
+  podeVerLancamentos: boolean;
 }
 
 function formatoStatus(status: string): {
@@ -57,7 +60,9 @@ function formatoStatus(status: string): {
  */
 export function ExtratoFornecedorTabela({
   lancamentos,
+  podeVerLancamentos,
 }: ExtratoFornecedorTabelaProps) {
+  const router = useRouter();
   const colunas = React.useMemo<ColumnDef<ExtratoLancamento, unknown>[]>(
     () => [
       {
@@ -349,6 +354,19 @@ export function ExtratoFornecedorTabela({
         idTabela="financeiro.relatorios.extrato-fornecedor"
         columns={colunas}
         data={dados}
+        /*
+          O extrato é o único relatório que já lista lançamentos em vez de
+          agregados, então a interatividade dele não é "abrir a lista": é abrir o
+          LANÇAMENTO. Aqui a linha inteira clica (é o gesto da listagem de
+          Lançamentos), e na mesma aba, porque não há relatório atrás para
+          preservar — a lista já é o detalhe.
+        */
+        onRowClick={
+          podeVerLancamentos
+            ? (lancamento) =>
+                router.push(`/financeiro/lancamentos/${lancamento.id}`)
+            : undefined
+        }
         filtros={filtros}
         pageIndex={paginacao.pageIndex}
         pageSize={paginacao.pageSize}

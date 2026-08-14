@@ -581,8 +581,10 @@ async function ConteudoCustoGrupo({
 
 async function ConteudoExtratoFornecedor({
   fornecedorIds,
+  podeVerLancamentos,
 }: {
   fornecedorIds: string[];
+  podeVerLancamentos: boolean;
 }) {
   const [fornecedores, extrato] = await Promise.all([
     listarFornecedoresComLancamentos(),
@@ -612,7 +614,10 @@ async function ConteudoExtratoFornecedor({
     >
       {/* Os cartões moram DENTRO da tabela agora: eles somam as linhas que
           sobraram do filtro, e filtro aqui é client-side. */}
-      <ExtratoFornecedorTabela lancamentos={extrato.lancamentos} />
+      <ExtratoFornecedorTabela
+        lancamentos={extrato.lancamentos}
+        podeVerLancamentos={podeVerLancamentos}
+      />
     </SecaoRelatorio>
   );
 }
@@ -745,7 +750,10 @@ export default async function RelatoriosPage({
       ) : null}
 
       {relatorio === "extrato-fornecedor" ? (
-        <ConteudoExtratoFornecedor fornecedorIds={fornecedorIds} />
+        <ConteudoExtratoFornecedor
+          fornecedorIds={fornecedorIds}
+          podeVerLancamentos={podeVerLancamentos}
+        />
       ) : null}
     </div>
   );
