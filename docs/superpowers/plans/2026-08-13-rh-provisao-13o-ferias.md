@@ -766,12 +766,21 @@ As três travas levantam `P0001` (`raise_exception`) ou `23514` (check). O padr�
 
 Traduza nas três actions, devolvendo a mensagem no campo certo (`percentual` nas duas de percentual, `salario` na de colaborador). Teste a tradução no padrão que o módulo já usa para erro de banco.
 
-- [ ] **Step 5: Portão e commit**
+- [ ] **Step 5: A regra do terço tem que aparecer onde se cadastra**
+
+Regra que o Tiago forneceu em 14/08/2026, e que **não existe em lugar nenhum do sistema**: **o percentual cadastrado já embute o terço constitucional de férias.** "Férias 11,111%" é 8,333% de férias mais 2,778% de terço, já somados. Não há campo, coluna nem cálculo de terço: o percentual digitado é a definição inteira.
+
+Escreva isso no texto de ajuda do campo de percentual em `src/modules/rh/provisoes/components/provisao-form-drawer.tsx`, em uma frase, junto do que já explica que a provisão entra no custo e não gera conta a pagar. Sem isso, quem cadastrar férias em 8,333% subestima o custo em 25% e nada no sistema avisa.
+
+**Só o texto de ajuda.** Não crie campo, coluna, validação nem cálculo de terço: a regra é que o percentual já vem embutido.
+
+- [ ] **Step 6: Portão e commit**
 
 ```bash
 find src supabase .next -name "* [0-9].*" -delete
 npx tsc --noEmit && npx eslint src && npx vitest run && npm run build
 git add supabase/migrations/ src/modules/rh/provisoes/actions.ts src/modules/rh/encargos/actions.ts \
+  src/modules/rh/provisoes/components/provisao-form-drawer.tsx \
   src/modules/cadastros/colaboradores/actions.ts src/lib/database.types.ts
 git commit -m "feat(rh): travar a soma dos percentuais e o salário negativo
 
@@ -812,7 +821,8 @@ Prove: a **identidade de quatro termos** com a consulta extraída do `obj_descri
 4. a **dependência do Bloco 8c**: a provisão acumula sem nada consumi-la, e quando o 13º for pago ela tem que ser abatida, senão o custo conta duas vezes;
 5. o teto agregado de 100% nas duas tabelas de percentual e o check de salário não negativo, com o motivo: o que multiplica salário passou a ser conferido em conjunto, não só linha por linha;
 6. **que `fn_recurso_do_cadastro` perdeu cinco casos numa recriação de 10/08 (`20260810130444`, que não tem arquivo no repo) e ficou com exclusão e restauração quebradas em produção até esta frente**, e que hoje ela tem quinze casos. Escreva explicitamente que **recriar essa função a partir de uma cópia é a armadilha**, e que não existe teste travando isso;
-7. **que a receita de conferência arquivo × ledger é cega para payload de comentário dentro de dollar-quote**, porque normaliza removendo `--` antes do md5: quem cobre isso de fato é a trava de `md5(prosrc)`. Vale para quem fizer a sexta alteração na `fn_gerar_folha`.
+7. **que a receita de conferência arquivo × ledger é cega para payload de comentário dentro de dollar-quote**, porque normaliza removendo `--` antes do md5: quem cobre isso de fato é a trava de `md5(prosrc)`. Vale para quem fizer a sexta alteração na `fn_gerar_folha`;
+8. **a regra que o Tiago forneceu em 14/08/2026: o percentual de provisão cadastrado já embute o terço constitucional de férias**, e o sistema não modela o terço em lugar nenhum. Registre a consequência para o Bloco 8d: ao pagar as férias e abater a provisão acumulada, o valor provisionado **já é férias com terço**, então somar o terço de novo conta o custo duas vezes.
 
 - [ ] **Step 6: Não faça merge.** O merge é do coordenador, depois do review amplo.
 
