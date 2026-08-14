@@ -10,12 +10,16 @@ import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { CLASSE_COR_GRUPO } from "@/modules/cadastros/_shared/insumo-grupos";
 import { insumosDaSubcategoria } from "@/modules/financeiro/relatorios/actions";
+import { drillGrupoInsumo } from "@/modules/financeiro/relatorios/drill";
+import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { CustoPorGrupo } from "@/modules/financeiro/relatorios/queries";
 
 export interface CustoGrupoTabelaProps {
   custo: CustoPorGrupo;
   /** Mês de referência (yyyy-MM), repassado ao carregar o nível de insumo. */
   mes: string;
+  /** Sem permissão de ver lançamentos, o grupo não vira link (daria 404). */
+  podeVerLancamentos: boolean;
 }
 
 interface LinhaInsumo {
@@ -31,7 +35,11 @@ interface LinhaInsumo {
  * insumo é buscado sob demanda ao abrir a subcategoria: é o único que pode ter
  * centenas de linhas, e ninguém abre todas.
  */
-export function CustoGrupoTabela({ custo, mes }: CustoGrupoTabelaProps) {
+export function CustoGrupoTabela({
+  custo,
+  mes,
+  podeVerLancamentos,
+}: CustoGrupoTabelaProps) {
   const [gruposAbertos, setGruposAbertos] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -119,14 +127,38 @@ export function CustoGrupoTabela({ custo, mes }: CustoGrupoTabelaProps) {
                       ) : (
                         <span className="inline-block w-8" />
                       )}
-                      <span
-                        className={cn(
-                          "rounded-md px-2 py-0.5 text-legenda font-medium",
-                          CLASSE_COR_GRUPO[grupo.cor],
-                        )}
-                      >
-                        {grupo.nome}
-                      </span>
+                      {/*
+                        Só o grupo SEM insumo (grupoId nulo, o lançamento avulso)
+                        vira link. O grupo com insumo soma
+                        `oc_itens.quantidade * preco_unitario`, não o valor do
+                        lançamento, então a lista de lançamentos não fecharia com
+                        a célula — e `drillGrupoInsumo` lança se for chamado
+                        assim. Não acontece hoje: há 0 ordens de compra.
+                      */}
+                      {grupo.grupoId === null && podeVerLancamentos ? (
+                        <LinkDrill
+                          href={drillGrupoInsumo({
+                            grupoId: null,
+                            periodo: { mes },
+                          })}
+                          titulo={`Ver os lançamentos de ${grupo.nome} neste mês`}
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-legenda font-medium",
+                            CLASSE_COR_GRUPO[grupo.cor],
+                          )}
+                        >
+                          {grupo.nome}
+                        </LinkDrill>
+                      ) : (
+                        <span
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-legenda font-medium",
+                            CLASSE_COR_GRUPO[grupo.cor],
+                          )}
+                        >
+                          {grupo.nome}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">

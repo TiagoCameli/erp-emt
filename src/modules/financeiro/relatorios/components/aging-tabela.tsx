@@ -7,14 +7,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { drillAging } from "@/modules/financeiro/relatorios/drill";
+import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { Aging } from "../queries";
 
 interface AgingTabelaProps {
   aging: Aging;
+  /** Sem permissão de ver lançamentos, o valor não vira link (daria 404). */
+  podeVerLancamentos: boolean;
 }
 
-/** Aging em tabela: uma linha por faixa, colunas a pagar e a receber. */
-export function AgingTabela({ aging }: AgingTabelaProps) {
+/**
+ * Aging em tabela: uma linha por faixa, colunas a pagar e a receber.
+ *
+ * O link fica no VALOR, e não na faixa, porque a faixa é a mesma nas duas colunas
+ * e o que se clica é "esses R$ X a pagar vencidos 8 a 15 dias" — a coluna faz
+ * parte da identidade do que abre.
+ */
+export function AgingTabela({ aging, podeVerLancamentos }: AgingTabelaProps) {
   return (
     <div className="overflow-x-auto rounded-md border border-border">
       <Table>
@@ -40,13 +50,37 @@ export function AgingTabela({ aging }: AgingTabelaProps) {
                 {faixa.rotulo}
               </TableCell>
               <TableCell className="py-2 text-right">
-                <MoneyText valor={faixa.valor} className="text-detalhe" />
+                {/* Faixa zerada não vira link: abriria uma lista vazia, o que é
+                    um clique que não leva a nada. */}
+                {faixa.valor > 0 && podeVerLancamentos ? (
+                  <LinkDrill
+                    href={drillAging({ faixa: faixa.faixa, tipo: "a_pagar" })}
+                    titulo={`Ver as parcelas a pagar ${faixa.rotulo.toLowerCase()}`}
+                  >
+                    <MoneyText valor={faixa.valor} className="text-detalhe" />
+                  </LinkDrill>
+                ) : (
+                  <MoneyText valor={faixa.valor} className="text-detalhe" />
+                )}
               </TableCell>
               <TableCell className="py-2 text-right">
-                <MoneyText
-                  valor={aging.aReceber[indice]?.valor ?? 0}
-                  className="text-detalhe"
-                />
+                {(aging.aReceber[indice]?.valor ?? 0) > 0 &&
+                podeVerLancamentos ? (
+                  <LinkDrill
+                    href={drillAging({ faixa: faixa.faixa, tipo: "a_receber" })}
+                    titulo={`Ver as parcelas a receber ${faixa.rotulo.toLowerCase()}`}
+                  >
+                    <MoneyText
+                      valor={aging.aReceber[indice]?.valor ?? 0}
+                      className="text-detalhe"
+                    />
+                  </LinkDrill>
+                ) : (
+                  <MoneyText
+                    valor={aging.aReceber[indice]?.valor ?? 0}
+                    className="text-detalhe"
+                  />
+                )}
               </TableCell>
             </TableRow>
           ))}

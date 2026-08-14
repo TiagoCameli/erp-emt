@@ -8,10 +8,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { drillCategoriaCompetencia } from "@/modules/financeiro/relatorios/drill";
+import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { DreGerencial, DreLinha } from "../queries";
 
 interface DreTabelaProps {
   dre: DreGerencial;
+  /** Mês de referência do DRE, para o clique abrir a mesma competência. */
+  mes: string;
+  /** Sem permissão de ver lançamentos, a categoria não vira link (daria 404). */
+  podeVerLancamentos: boolean;
 }
 
 function SecaoDre({
@@ -19,11 +25,18 @@ function SecaoDre({
   linhas,
   total,
   rotuloTotal,
+  tipo,
+  mes,
+  podeVerLancamentos,
 }: {
   titulo: string;
   linhas: DreLinha[];
   total: number;
   rotuloTotal: string;
+  /** Receita ou despesa: decide o `tipo` do lançamento no destino do clique. */
+  tipo: "a_pagar" | "a_receber";
+  mes: string;
+  podeVerLancamentos: boolean;
 }) {
   return (
     <>
@@ -39,7 +52,23 @@ function SecaoDre({
         linhas.map((linha) => (
           <TableRow key={`${titulo}-${linha.categoriaId ?? "sem"}`}>
             <TableCell className="py-2 text-center text-detalhe text-foreground">
-              {linha.categoria}
+              {/* Linha "sem categoria" não vira link: não há categoria para
+                  filtrar, e um link que abrisse a lista inteira mentiria sobre o
+                  que ele mostra. */}
+              {linha.categoriaId && podeVerLancamentos ? (
+                <LinkDrill
+                  href={drillCategoriaCompetencia({
+                    categoriaId: linha.categoriaId,
+                    mes,
+                    tipo,
+                  })}
+                  titulo={`Ver os lançamentos de ${linha.categoria} neste mês`}
+                >
+                  {linha.categoria}
+                </LinkDrill>
+              ) : (
+                linha.categoria
+              )}
             </TableCell>
             <TableCell className="py-2 text-right">
               <MoneyText valor={linha.valor} className="text-detalhe" />
@@ -72,7 +101,11 @@ function SecaoDre({
  * DRE gerencial do mês em tabela: receitas por categoria, despesas por
  * categoria e o resultado. Sem interatividade, renderiza no servidor.
  */
-export function DreTabela({ dre }: DreTabelaProps) {
+export function DreTabela({
+  dre,
+  mes,
+  podeVerLancamentos,
+}: DreTabelaProps) {
   const resultadoPositivo = dre.resultado >= 0;
 
   return (
@@ -96,12 +129,18 @@ export function DreTabela({ dre }: DreTabelaProps) {
             linhas={dre.receitas}
             total={dre.totalReceitas}
             rotuloTotal="Total de receitas"
+            tipo="a_receber"
+            mes={mes}
+            podeVerLancamentos={podeVerLancamentos}
           />
           <SecaoDre
             titulo="Despesas"
             linhas={dre.despesas}
             total={dre.totalDespesas}
             rotuloTotal="Total de despesas"
+            tipo="a_pagar"
+            mes={mes}
+            podeVerLancamentos={podeVerLancamentos}
           />
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
             <TableCell className="py-2.5 text-center text-corpo font-semibold text-foreground">

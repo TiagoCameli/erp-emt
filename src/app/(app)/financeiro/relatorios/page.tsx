@@ -8,7 +8,28 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
+import { formatarBRL } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import {
+  listarCategorias,
+  listarCentrosCusto,
+  listarFornecedores,
+} from "@/modules/financeiro/lancamentos/queries";
+import { rotuloMes } from "@/modules/financeiro/relatorios/calculo";
+import {
+  drillCentroCusto,
+  type FiltrosDoRelatorioDeCusto,
+  type PeriodoCompetencia,
+} from "@/modules/financeiro/relatorios/drill";
+import {
+  comparacaoPermitida,
+  lerFiltrosCustoCc,
+  periodoAnterior,
+  periodoDoModo,
+  type FiltrosCustoCc,
+} from "@/modules/financeiro/relatorios/filtros-custo-cc";
+import { CustoCcSerie } from "@/modules/financeiro/relatorios/components/custo-cc-serie";
+import { FiltrosCustoCcBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-cc-barra";
 import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-grafico";
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
 import { proximoMes } from "@/modules/financeiro/relatorios/calculo";
@@ -37,6 +58,8 @@ import {
   listarFornecedoresComLancamentos,
   mesCorrente,
   posicaoBancaria,
+  primeiroMesDoCentro,
+  serieDoCentro,
 } from "@/modules/financeiro/relatorios/queries";
 
 interface RelatoriosPageProps {
@@ -87,7 +110,11 @@ function Painel({ children }: { children: React.ReactNode }) {
   );
 }
 
-async function ConteudoFluxoCaixa() {
+async function ConteudoFluxoCaixa({
+  podeVerLancamentos,
+}: {
+  podeVerLancamentos: boolean;
+}) {
   const dados = await fluxoCaixa();
   if (dados.meses.length === 0) {
     return (
@@ -131,13 +158,22 @@ async function ConteudoFluxoCaixa() {
         />
       </GradeKpis>
       <Painel>
-        <FluxoCaixaGrafico meses={dados.meses} />
+        <FluxoCaixaGrafico
+          meses={dados.meses}
+          podeVerLancamentos={podeVerLancamentos}
+        />
       </Painel>
     </>
   );
 }
 
-async function ConteudoDre({ mes }: { mes: string }) {
+async function ConteudoDre({
+  mes,
+  podeVerLancamentos,
+}: {
+  mes: string;
+  podeVerLancamentos: boolean;
+}) {
   const dre = await dreGerencial({ mes });
   return (
     <>
@@ -165,13 +201,21 @@ async function ConteudoDre({ mes }: { mes: string }) {
           descricao="Não há receitas nem despesas com competência neste mês."
         />
       ) : (
-        <DreTabela dre={dre} />
+        <DreTabela
+          dre={dre}
+          mes={mes}
+          podeVerLancamentos={podeVerLancamentos}
+        />
       )}
     </>
   );
 }
 
-async function ConteudoAging() {
+async function ConteudoAging({
+  podeVerLancamentos,
+}: {
+  podeVerLancamentos: boolean;
+}) {
   const dados = await aging();
   const semDados =
     dados.totalAPagar === 0 && dados.totalAReceber === 0;
@@ -206,16 +250,24 @@ async function ConteudoAging() {
       ) : (
         <>
           <Painel>
-            <AgingGrafico aPagar={dados.aPagar} aReceber={dados.aReceber} />
+            <AgingGrafico
+              aPagar={dados.aPagar}
+              aReceber={dados.aReceber}
+              podeVerLancamentos={podeVerLancamentos}
+            />
           </Painel>
-          <AgingTabela aging={dados} />
+          <AgingTabela aging={dados} podeVerLancamentos={podeVerLancamentos} />
         </>
       )}
     </>
   );
 }
 
-async function ConteudoPosicaoBancaria() {
+async function ConteudoPosicaoBancaria({
+  podeVerLancamentos,
+}: {
+  podeVerLancamentos: boolean;
+}) {
   const posicao = await posicaoBancaria();
   if (posicao.contas.length === 0) {
     return (
@@ -247,38 +299,190 @@ async function ConteudoPosicaoBancaria() {
           detalhe="Somando todas as contas ativas"
         />
       </GradeKpis>
-      <PosicaoBancariaTabela posicao={posicao} />
+      <PosicaoBancariaTabela
+        posicao={posicao}
+        podeVerLancamentos={podeVerLancamentos}
+      />
     </>
   );
 }
 
-async function ConteudoCustoCc({ mes }: { mes: string }) {
-  const custo = await custoPorCentroCusto({
-    inicio: `${mes}-01`,
-    fim: proximoMes(mes),
-  });
+/**
+ * Traduz o período do relatório para as pontas que a RPC entende.
+ *
+ * A RPC usa `[inicio, fim)` — fim EXCLUSIVO —, então a ponta de cima é o primeiro
+ * dia do mês SEGUINTE ao último mês pedido. Fechar no primeiro dia do próprio mês
+ * deixaria o último mês inteiro de fora, que é o tipo de erro que some do olho
+ * porque o relatório continua mostrando número.
+ */
+function pontasDaRpc(periodo: PeriodoCompetencia): {
+  inicio?: string;
+  fim?: string;
+} {
+  if (periodo.mes) {
+    return { inicio: `${periodo.mes}-01`, fim: proximoMes(periodo.mes) };
+  }
+  return {
+    inicio: periodo.de ? `${periodo.de}-01` : undefined,
+    fim: periodo.ate ? proximoMes(periodo.ate) : undefined,
+  };
+}
+
+/** Descreve o período em pt-BR, para o detalhe dos cartões. */
+function descreverPeriodo(
+  periodo: PeriodoCompetencia,
+  modo: FiltrosCustoCc["modo"],
+): string {
+  if (modo === "total") return "Todo o período, sem limite de data";
+  if (periodo.mes) return `Mês de referência ${rotuloMes(periodo.mes)}`;
+  if (periodo.de && periodo.ate) {
+    return periodo.de === periodo.ate
+      ? `Mês de referência ${rotuloMes(periodo.de)}`
+      : `De ${rotuloMes(periodo.de)} a ${rotuloMes(periodo.ate)}`;
+  }
+  if (periodo.de) return `De ${rotuloMes(periodo.de)} em diante`;
+  if (periodo.ate) return `Até ${rotuloMes(periodo.ate)}`;
+  return "Todo o período";
+}
+
+async function ConteudoCustoCc({
+  filtros,
+  erroDoModo,
+  podeVerLancamentos,
+}: {
+  filtros: FiltrosCustoCc;
+  erroDoModo?: string;
+  podeVerLancamentos: boolean;
+}) {
+  if (erroDoModo) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Escolha um centro de custo"
+        descricao={erroDoModo}
+      />
+    );
+  }
+
+  // No modo vida o período NASCE do centro: primeiro descobre quando ele começou.
+  const primeiroMes =
+    filtros.modo === "vida" && filtros.centroId
+      ? await primeiroMesDoCentro(filtros.centroId)
+      : undefined;
+
+  if (filtros.modo === "vida" && primeiroMes === null) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Este centro de custo ainda não tem custo"
+        descricao="Nenhum lançamento a pagar foi rateado neste centro, então ele ainda não tem uma vida para mostrar."
+      />
+    );
+  }
+
+  const periodo = periodoDoModo(filtros, primeiroMes ?? undefined);
+  const pontas = pontasDaRpc(periodo);
+
+  const filtrosDoDrill: FiltrosDoRelatorioDeCusto = {
+    categoriaId: filtros.categoriaId,
+    fornecedorId: filtros.fornecedorId,
+    excluirPrevisto: filtros.excluirPrevisto,
+  };
+
+  const filtrosDaRpc = {
+    ...pontas,
+    // No modo vida o relatório é de UM centro: filtrar aqui é o que faz a tabela
+    // e os cartões falarem só dele, e não de todos no período dele.
+    centroCustoId: filtros.modo === "vida" ? filtros.centroId : filtros.centroId,
+    categoriaId: filtros.categoriaId,
+    fornecedorId: filtros.fornecedorId,
+    excluirPrevisto: filtros.excluirPrevisto,
+    tipoCentro: filtros.tipoCentro,
+  };
+
+  const comparar = filtros.comparar && comparacaoPermitida(filtros.modo);
+  const anterior = comparar ? periodoAnterior(periodo) : null;
+
+  const [custo, custoAnterior, serie] = await Promise.all([
+    custoPorCentroCusto(filtrosDaRpc),
+    anterior
+      ? custoPorCentroCusto({ ...filtrosDaRpc, ...pontasDaRpc(anterior) })
+      : Promise.resolve(null),
+    filtros.modo === "vida" && filtros.centroId
+      ? serieDoCentro(filtros.centroId, pontas)
+      : Promise.resolve(null),
+  ]);
+
   if (custo.centros.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
-        titulo="Sem custo neste mês de referência"
-        descricao="Nenhum lançamento a pagar tem este mês de referência. Troque o mês ou confira o mês de referência dos lançamentos."
+        titulo="Sem custo neste período"
+        descricao="Nenhum lançamento a pagar cai neste recorte. Troque o período ou afrouxe os filtros."
       />
     );
   }
+
   const maior = custo.centros[0];
+
+  // Variação por centro, em centavos: somar reais em ponto flutuante sobre dezenas
+  // de centros acumula resto, e o total da coluna deixaria de bater com as linhas.
+  const variacao = custoAnterior
+    ? new Map(
+        custo.centros.map((centro) => {
+          const antes =
+            custoAnterior.centros.find(
+              (outro) => outro.centroCustoId === centro.centroCustoId,
+            )?.valor ?? 0;
+          const diferenca =
+            Math.round(centro.valor * 100 - antes * 100) / 100;
+          return [
+            centro.centroCustoId,
+            {
+              valorAnterior: antes,
+              diferenca,
+              // Percentual sobre zero não existe: "+100%" leria como a obra tendo
+              // dobrado de custo, quando ela acabou de começar.
+              percentual: antes > 0 ? (diferenca / antes) * 100 : null,
+            },
+          ];
+        }),
+      )
+    : undefined;
+
+  const destinos = podeVerLancamentos
+    ? new Map(
+        custo.centros
+          .filter((centro) => centro.centroCustoId)
+          .map((centro) => [
+            centro.centroCustoId,
+            drillCentroCusto({
+              centroCustoId: centro.centroCustoId,
+              periodo,
+              filtros: filtrosDoDrill,
+            }),
+          ]),
+      )
+    : undefined;
+
+  const descricaoPeriodo = descreverPeriodo(periodo, filtros.modo);
+
   return (
     <>
       <GradeKpis>
         <KPICard
           titulo="Custo total"
           valor={<MoneyText valor={custo.total} />}
-          detalhe="Lançamentos a pagar com este mês de referência"
+          detalhe={
+            filtros.modo === "vida" && primeiroMes
+              ? `Desde ${rotuloMes(primeiroMes)}, o primeiro lançamento deste centro`
+              : descricaoPeriodo
+          }
         />
         <KPICard
           titulo="Centros de custo"
           valor={custo.centros.length}
-          detalhe="Com custo no mês"
+          detalhe="Com custo no período"
         />
         {maior ? (
           <KPICard
@@ -287,16 +491,47 @@ async function ConteudoCustoCc({ mes }: { mes: string }) {
             detalhe={maior.nome}
           />
         ) : null}
+        {custoAnterior ? (
+          <KPICard
+            titulo="Período anterior"
+            valor={<MoneyText valor={custoAnterior.total} />}
+            detalhe={`Variação de ${formatarBRL(custo.total - custoAnterior.total)}`}
+          />
+        ) : null}
       </GradeKpis>
-      <Painel>
-        <CustoCcGrafico centros={custo.centros} />
-      </Painel>
-      <CustoCcTabela custo={custo} />
+
+      {serie && filtros.centroId ? (
+        <Painel>
+          <CustoCcSerie
+            serie={serie}
+            centroCustoId={filtros.centroId}
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        </Painel>
+      ) : (
+        <Painel>
+          <CustoCcGrafico centros={custo.centros} destinos={destinos} />
+        </Painel>
+      )}
+
+      <CustoCcTabela
+        custo={custo}
+        periodo={periodo}
+        filtros={filtrosDoDrill}
+        podeVerLancamentos={podeVerLancamentos}
+        variacao={variacao}
+      />
     </>
   );
 }
 
-async function ConteudoCustoGrupo({ mes }: { mes: string }) {
+async function ConteudoCustoGrupo({
+  mes,
+  podeVerLancamentos,
+}: {
+  mes: string;
+  podeVerLancamentos: boolean;
+}) {
   const custo = await custoPorGrupo({
     inicio: `${mes}-01`,
     fim: proximoMes(mes),
@@ -335,7 +570,11 @@ async function ConteudoCustoGrupo({ mes }: { mes: string }) {
           detalhe="Abra o grupo para ver subcategoria e insumo"
         />
       </GradeKpis>
-      <CustoGrupoTabela custo={custo} mes={mes} />
+      <CustoGrupoTabela
+        custo={custo}
+        mes={mes}
+        podeVerLancamentos={podeVerLancamentos}
+      />
     </>
   );
 }
@@ -386,6 +625,17 @@ export default async function RelatoriosPage({
     notFound();
   }
 
+  /**
+   * O drill-down leva para `/financeiro/lancamentos`, que exige a própria
+   * permissão. Sem ela, o link levaria a um `notFound()` — então ele não aparece,
+   * e o relatório continua servindo como leitura.
+   */
+  const podeVerLancamentos = temPermissao(
+    usuario,
+    "financeiro.lancamentos",
+    "ver",
+  );
+
   const params = await searchParams;
   const relatorio: RelatorioId = normalizarRelatorio(primeiro(params.rel));
 
@@ -395,6 +645,25 @@ export default async function RelatoriosPage({
   // Lista, com uuid validado, deduplicada e no teto do filtro `in`. Regra e teto
   // moram em extrato-filtros.ts, que o seletor também usa para escrever.
   const fornecedorIds = lerFornecedoresDaUrl(params.fornecedor);
+
+  // O relatório de centro de custo tem contrato de URL próprio (4 modos de
+  // período + filtros de análise), lido pelo mesmo padrão do de lançamentos.
+  const { filtros: filtrosCustoCc, erroDoModo } = lerFiltrosCustoCc(
+    params,
+    mesCorrente(),
+  );
+
+  // As opções dos seletores só são lidas na aba que as usa: as outras cinco não
+  // precisam de centro, categoria nem fornecedor, e três consultas em toda
+  // navegação de relatório seriam trabalho jogado fora.
+  const opcoesCustoCc =
+    relatorio === "custo-cc"
+      ? await Promise.all([
+          listarCentrosCusto(),
+          listarCategorias(),
+          listarFornecedores(),
+        ])
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -411,7 +680,7 @@ export default async function RelatoriosPage({
           titulo="Fluxo de caixa"
           descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado). Não usa o mês de referência."
         >
-          <ConteudoFluxoCaixa />
+          <ConteudoFluxoCaixa podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 
@@ -421,7 +690,7 @@ export default async function RelatoriosPage({
           descricao="Regime de COMPETÊNCIA: receitas e despesas por categoria no MÊS DE REFERÊNCIA do lançamento, com o resultado."
           controles={<SeletorMes valor={mes} />}
         >
-          <ConteudoDre mes={mes} />
+          <ConteudoDre mes={mes} podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 
@@ -431,7 +700,10 @@ export default async function RelatoriosPage({
           descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo."
           controles={<SeletorMes valor={mes} />}
         >
-          <ConteudoCustoGrupo mes={mes} />
+          <ConteudoCustoGrupo
+            mes={mes}
+            podeVerLancamentos={podeVerLancamentos}
+          />
         </SecaoRelatorio>
       ) : null}
 
@@ -440,7 +712,7 @@ export default async function RelatoriosPage({
           titulo="Aging de vencimentos"
           descricao="Regime de CAIXA: parcelas em aberto por faixa de vencimento, a pagar e a receber."
         >
-          <ConteudoAging />
+          <ConteudoAging podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 
@@ -449,17 +721,26 @@ export default async function RelatoriosPage({
           titulo="Posição bancária"
           descricao="Saldo por conta: saldo inicial mais o efeito das parcelas pagas."
         >
-          <ConteudoPosicaoBancaria />
+          <ConteudoPosicaoBancaria podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 
-      {relatorio === "custo-cc" ? (
+      {relatorio === "custo-cc" && opcoesCustoCc ? (
         <SecaoRelatorio
           titulo="Custo por centro de custo"
-          descricao="Regime de COMPETÊNCIA: custo por centro de custo pelo MÊS DE REFERÊNCIA do lançamento (é o gasto da obra no mês, não o que saiu do caixa)."
-          controles={<SeletorMes valor={mes} />}
+          descricao="Regime de COMPETÊNCIA: custo por centro de custo pelo MÊS DE REFERÊNCIA do lançamento (é o gasto da obra no mês, não o que saiu do caixa). Clique num centro para ver os lançamentos dele, com o mesmo filtro."
         >
-          <ConteudoCustoCc mes={mes} />
+          <FiltrosCustoCcBarra
+            filtros={filtrosCustoCc}
+            centrosCusto={opcoesCustoCc[0]}
+            categorias={opcoesCustoCc[1]}
+            fornecedores={opcoesCustoCc[2]}
+          />
+          <ConteudoCustoCc
+            filtros={filtrosCustoCc}
+            erroDoModo={erroDoModo}
+            podeVerLancamentos={podeVerLancamentos}
+          />
         </SecaoRelatorio>
       ) : null}
 

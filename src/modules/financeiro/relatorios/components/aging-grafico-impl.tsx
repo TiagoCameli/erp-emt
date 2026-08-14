@@ -12,17 +12,24 @@ import {
 } from "recharts";
 
 import { formatarBRL } from "@/lib/formatadores";
+import { drillAging } from "@/modules/financeiro/relatorios/drill";
+import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
 import type { AgingFaixa } from "../queries";
 
 interface AgingGraficoProps {
   aPagar: AgingFaixa[];
   aReceber: AgingFaixa[];
+  /** Sem permissão de ver lançamentos, a barra não clica (levaria a um 404). */
+  podeVerLancamentos: boolean;
 }
 
 interface LinhaGrafico {
   rotulo: string;
   aPagar: number;
   aReceber: number;
+  /** Destino do clique em cada barra da faixa, por tipo. */
+  hrefAPagar: string;
+  hrefAReceber: string;
 }
 
 function rotuloEixoValor(valor: number): string {
@@ -71,11 +78,17 @@ function ConteudoTooltip({
 }
 
 /** Aging por faixa de vencimento: a pagar x a receber lado a lado. */
-export function AgingGrafico({ aPagar, aReceber }: AgingGraficoProps) {
+export function AgingGrafico({
+  aPagar,
+  aReceber,
+  podeVerLancamentos,
+}: AgingGraficoProps) {
   const dados: LinhaGrafico[] = aPagar.map((faixa, indice) => ({
     rotulo: faixa.rotulo,
     aPagar: faixa.valor,
     aReceber: aReceber[indice]?.valor ?? 0,
+    hrefAPagar: drillAging({ faixa: faixa.faixa, tipo: "a_pagar" }),
+    hrefAReceber: drillAging({ faixa: faixa.faixa, tipo: "a_receber" }),
   }));
 
   return (
@@ -109,17 +122,30 @@ export function AgingGrafico({ aPagar, aReceber }: AgingGraficoProps) {
             cursor={{ fill: "var(--muted)" }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
+          {/* Clique por onClick porque o Recharts desenha <path>, não âncora. */}
           <Bar
             dataKey="aPagar"
             name="A pagar"
             fill="var(--color-chart-1)"
             radius={[3, 3, 0, 0]}
+            cursor={podeVerLancamentos ? "pointer" : undefined}
+            onClick={(ponto: { payload?: LinhaGrafico }) =>
+              podeVerLancamentos
+                ? abrirDrill(ponto?.payload?.hrefAPagar)
+                : undefined
+            }
           />
           <Bar
             dataKey="aReceber"
             name="A receber"
             fill="var(--color-chart-3)"
             radius={[3, 3, 0, 0]}
+            cursor={podeVerLancamentos ? "pointer" : undefined}
+            onClick={(ponto: { payload?: LinhaGrafico }) =>
+              podeVerLancamentos
+                ? abrirDrill(ponto?.payload?.hrefAReceber)
+                : undefined
+            }
           />
         </BarChart>
       </ResponsiveContainer>

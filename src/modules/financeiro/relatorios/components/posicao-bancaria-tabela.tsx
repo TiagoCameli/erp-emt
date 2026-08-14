@@ -11,10 +11,14 @@ import {
   ROTULO_BANCO,
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
+import { drillContaBancaria } from "@/modules/financeiro/relatorios/drill";
+import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { PosicaoBancaria } from "../queries";
 
 interface PosicaoBancariaTabelaProps {
   posicao: PosicaoBancaria;
+  /** Sem permissão de ver lançamentos, a conta não vira link (daria 404). */
+  podeVerLancamentos: boolean;
 }
 
 function rotuloBanco(banco: string): string {
@@ -25,7 +29,10 @@ function rotuloBanco(banco: string): string {
  * Posição bancária em tabela: por conta, saldo inicial, entradas, saídas e
  * saldo atual, mais a linha de total. Detalha os KPICards de cada conta.
  */
-export function PosicaoBancariaTabela({ posicao }: PosicaoBancariaTabelaProps) {
+export function PosicaoBancariaTabela({
+  posicao,
+  podeVerLancamentos,
+}: PosicaoBancariaTabelaProps) {
   return (
     <div className="overflow-x-auto rounded-md border border-border">
       <Table>
@@ -57,7 +64,22 @@ export function PosicaoBancariaTabela({ posicao }: PosicaoBancariaTabelaProps) {
           {posicao.contas.map((conta) => (
             <TableRow key={conta.contaId}>
               <TableCell className="py-2 text-center text-detalhe text-foreground">
-                {conta.nome}
+                {/* O clique abre as parcelas PAGAS por esta conta, que é o que a
+                    posição soma (pelo líquido). Sem o recorte a lista traria
+                    também o que ainda não passou por ela. */}
+                {podeVerLancamentos ? (
+                  <LinkDrill
+                    href={drillContaBancaria({
+                      contaId: conta.contaId,
+                      tipo: "a_pagar",
+                    })}
+                    titulo={`Ver os pagamentos feitos por ${conta.nome}`}
+                  >
+                    {conta.nome}
+                  </LinkDrill>
+                ) : (
+                  conta.nome
+                )}
               </TableCell>
               <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
                 {rotuloBanco(conta.banco)}
