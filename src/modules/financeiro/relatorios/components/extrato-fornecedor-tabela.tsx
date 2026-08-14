@@ -9,6 +9,9 @@ import {
   colunaDinheiro,
   DataTable,
   EmptyState,
+  GradeKpis,
+  KPICard,
+  MoneyText,
   FiltroBusca,
   FiltroMes,
   FiltroPeriodo,
@@ -28,6 +31,7 @@ import {
   STATUS_LANCAMENTO,
   type StatusLancamento,
 } from "@/modules/financeiro/_shared/formato";
+import { somarAberto } from "@/modules/financeiro/_shared/prazo";
 import type { ExtratoLancamento } from "../queries";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -117,7 +121,10 @@ export function ExtratoFornecedorTabela({
   const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
   const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
   const [vencimentoDe, setVencimentoDe] = useFiltroSessao("vencimentoDe", "");
-  const [vencimentoAte, setVencimentoAte] = useFiltroSessao("vencimentoAte", "");
+  const [vencimentoAte, setVencimentoAte] = useFiltroSessao(
+    "vencimentoAte",
+    "",
+  );
 
   // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
   // numa página vazia.
@@ -147,7 +154,9 @@ export function ExtratoFornecedorTabela({
   // As opções de status saem do próprio extrato: oferecer "Pago" num extrato
   // sem nada pago só devolve tabela vazia.
   const opcoesStatus = React.useMemo(() => {
-    const presentes = new Set(lancamentos.map((lancamento) => lancamento.status));
+    const presentes = new Set(
+      lancamentos.map((lancamento) => lancamento.status),
+    );
     return [...presentes]
       .map((valor) => ({ valor, rotulo: formatoStatus(valor).rotulo }))
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
@@ -158,13 +167,10 @@ export function ExtratoFornecedorTabela({
     return lancamentos.filter((lancamento) => {
       if (status !== "" && lancamento.status !== status) return false;
       if (!mesmoMesReferencia(lancamento.mesCompetencia, mes)) return false;
-      if (!dentroDaFaixaValor(lancamento.valor, valorDe, valorAte)) return false;
+      if (!dentroDaFaixaValor(lancamento.valor, valorDe, valorAte))
+        return false;
       if (
-        !dentroDoPeriodo(
-          lancamento.dataVencimento,
-          vencimentoDe,
-          vencimentoAte,
-        )
+        !dentroDoPeriodo(lancamento.dataVencimento, vencimentoDe, vencimentoAte)
       ) {
         return false;
       }
@@ -262,28 +268,105 @@ export function ExtratoFornecedorTabela({
     vencimentoDe !== "" ||
     vencimentoAte !== "";
 
+  /**
+   * Resumo dos cartões, somado sobre `dados`: as linhas que SOBRARAM do filtro.
+   *
+   * Somar aqui, e não no servidor, é o que faz os cartões obedecerem aos filtros
+   * da tabela (busca, status, competência, vencimento, faixa de valor), que são
+   * client-side. Antes os cartões vinham do servidor com o fornecedor e mais nada,
+   * então mudar filtro na tela não mexia neles.
+   *
+   * E o dinheiro vem do `aberto` de cada linha, que é contado nas PARCELAS: o
+   * cartão antigo somava o `valor` do documento com os pagos dentro e chamava de
+   * "Total a pagar" (no extrato da EMAM, R$ 2,32 mi contra R$ 271 mil de aberto
+   * real, com 12 dos 16 lançamentos pagos).
+   */
+  const resumo = React.useMemo(
+    () => somarAberto(dados.map((lancamento) => lancamento.aberto)),
+    [dados],
+  );
+
+  const totalDocumentos = React.useMemo(
+    () =>
+      dados.reduce(
+        (soma, lancamento) => soma + Math.round(lancamento.valor * 100),
+        0,
+      ) / 100,
+    [dados],
+  );
+
+  const comSaldo = React.useMemo(
+    () => dados.filter((lancamento) => lancamento.aberto.total > 0).length,
+    [dados],
+  );
+
   return (
-    <DataTable
-      idTabela="financeiro.relatorios.extrato-fornecedor"
-      columns={colunas}
-      data={dados}
-      filtros={filtros}
-      pageIndex={paginacao.pageIndex}
-      pageSize={paginacao.pageSize}
-      onPaginationChange={setPaginacao}
-      emptyState={
-        filtrando && lancamentos.length > 0 ? (
-          <EmptyState
-            titulo="Nenhum lançamento com esses filtros"
-            descricao="O extrato tem lançamentos, mas nenhum bate com os filtros escolhidos."
-          />
-        ) : (
-          <EmptyState
-            titulo="Sem lançamentos"
-            descricao="Nenhum lançamento a pagar para este fornecedor."
-          />
-        )
-      }
-    />
+    <div className="flex flex-col gap-4">
+      <GradeKpis>
+        <KPICard
+          titulo="A pagar"
+          valor={<MoneyText valor={resumo.total} />}
+          detalhe={
+            comSaldo === 0
+              ? "Nada em aberto"
+              : `${comSaldo} de ${dados.length} lançamento(s) com saldo`
+          }
+        />
+        <KPICard
+          titulo="Vencido"
+          valor={<MoneyText valor={resumo.vencido} />}
+          detalhe={resumo.vencido > 0 ? "Já passou do prazo" : "Nada atrasado"}
+        />
+        <KPICard
+          titulo="Vence em até 7 dias"
+          valor={<MoneyText valor={resumo.ate7} />}
+          detalhe="Contando de hoje"
+        />
+        <KPICard
+          titulo="Vence em 8 a 30 dias"
+          valor={<MoneyText valor={resumo.de8a30} />}
+          detalhe="Próximo mês de caixa"
+        />
+        <KPICard
+          titulo="Vence em mais de 30 dias"
+          valor={<MoneyText valor={resumo.mais30} />}
+          detalhe="Depois dos 30 dias"
+        />
+        <KPICard
+          titulo="Lançamentos"
+          valor={dados.length}
+          // O total dos documentos (com os pagos dentro) continua à mão, porque é
+          // o tamanho da relação com o fornecedor. Só não se chama "a pagar".
+          detalhe={
+            <>
+              <MoneyText valor={totalDocumentos} /> no extrato, pagos incluídos
+            </>
+          }
+        />
+      </GradeKpis>
+
+      <DataTable
+        idTabela="financeiro.relatorios.extrato-fornecedor"
+        columns={colunas}
+        data={dados}
+        filtros={filtros}
+        pageIndex={paginacao.pageIndex}
+        pageSize={paginacao.pageSize}
+        onPaginationChange={setPaginacao}
+        emptyState={
+          filtrando && lancamentos.length > 0 ? (
+            <EmptyState
+              titulo="Nenhum lançamento com esses filtros"
+              descricao="O extrato tem lançamentos, mas nenhum bate com os filtros escolhidos."
+            />
+          ) : (
+            <EmptyState
+              titulo="Sem lançamentos"
+              descricao="Nenhum lançamento a pagar para este fornecedor."
+            />
+          )
+        }
+      />
+    </div>
   );
 }
