@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { erroAcao, logErroServidor } from "@/lib/erros";
+import { traduzErroSalario } from "@/lib/erros-banco";
 import { formatarBRL, formatarMesAno } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
@@ -203,7 +204,15 @@ function paraLinhaBanco(dados: ColaboradorInput) {
   };
 }
 
-/** Cria um colaborador. Marca o created_by com o usuário logado. */
+/**
+ * Cria um colaborador. Marca o created_by com o usuário logado.
+ *
+ * O check `colaboradores_salario_nao_negativo` (`23514`) é rede de segurança:
+ * o Zod já recusa salário negativo antes de chegar aqui, então esta tradução só
+ * dispara se algum caminho novo escapar do schema. Ainda assim ela existe
+ * porque o 23514 cru mostraria "Não foi possível salvar o colaborador. Tente
+ * novamente", um retry que nunca funciona.
+ */
 export async function criar(dados: ColaboradorInput): Promise<ResultadoAcao> {
   const usuario = await exigirPermissao(RECURSO, "criar");
 
@@ -221,7 +230,8 @@ export async function criar(dados: ColaboradorInput): Promise<ResultadoAcao> {
     return erroAcao(
       "cadastros.colaboradores.criar",
       error,
-      "Não foi possível salvar o colaborador. Tente novamente",
+      traduzErroSalario(error) ??
+        "Não foi possível salvar o colaborador. Tente novamente",
     );
   }
 
@@ -271,7 +281,8 @@ export async function editar(
     return erroAcao(
       "cadastros.colaboradores.editar",
       error,
-      "Não foi possível salvar o colaborador. Tente novamente",
+      traduzErroSalario(error) ??
+        "Não foi possível salvar o colaborador. Tente novamente",
     );
   }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { mensagemDeNegocio } from "@/lib/erros-banco";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -21,7 +22,16 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 
 const motivoSchema = z.string().trim().min(1);
 
-/** Cria ou edita uma provisão da folha (nome + percentual). A presença de `id` decide a operação. */
+/**
+ * Cria ou edita uma provisão da folha (nome + percentual). A presença de `id`
+ * decide a operação.
+ *
+ * O teto de 100% na SOMA dos percentuais ativos vive no trigger
+ * `trg_trava_soma_provisoes` (não dá para validar no Zod: depende das outras
+ * linhas da tabela), e chega aqui como `P0001`. `mensagemDeNegocio` é o que
+ * entrega essa mensagem ao campo em vez do genérico "Tente novamente" — a
+ * trava dispararia e o usuário não descobriria por quê.
+ */
 export async function salvarProvisao(
   dados: ProvisaoInput,
   id?: string,
@@ -61,7 +71,10 @@ export async function salvarProvisao(
       return erroAcao(
         "rh.provisoes.editar",
         error,
-        "Não foi possível salvar a provisão. Tente novamente",
+        mensagemDeNegocio(
+          error,
+          "Não foi possível salvar a provisão. Tente novamente",
+        ),
       );
     }
   } else {
@@ -74,7 +87,10 @@ export async function salvarProvisao(
       return erroAcao(
         "rh.provisoes.criar",
         error,
-        "Não foi possível salvar a provisão. Tente novamente",
+        mensagemDeNegocio(
+          error,
+          "Não foi possível salvar a provisão. Tente novamente",
+        ),
       );
     }
   }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { mensagemDeNegocio } from "@/lib/erros-banco";
 import { idSchema } from "@/lib/id";
 import { lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
@@ -26,7 +27,15 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 
 const motivoSchema = z.string().trim().min(1);
 
-/** Cria ou edita um encargo da folha (nome + alíquota). A presença de `id` decide a operação. */
+/**
+ * Cria ou edita um encargo da folha (nome + alíquota). A presença de `id` decide
+ * a operação.
+ *
+ * O teto de 100% na SOMA das alíquotas ativas vive no trigger
+ * `trg_trava_soma_encargos` (não dá para validar no Zod: depende das outras
+ * linhas da tabela), e chega aqui como `P0001`. `mensagemDeNegocio` é o que
+ * entrega essa mensagem ao campo em vez do genérico "Tente novamente".
+ */
 export async function salvarEncargo(
   dados: EncargoInput,
   id?: string,
@@ -67,7 +76,10 @@ export async function salvarEncargo(
       return erroAcao(
         "rh.encargos.editar",
         error,
-        "Não foi possível salvar o encargo. Tente novamente",
+        mensagemDeNegocio(
+          error,
+          "Não foi possível salvar o encargo. Tente novamente",
+        ),
       );
     }
   } else {
@@ -80,7 +92,10 @@ export async function salvarEncargo(
       return erroAcao(
         "rh.encargos.criar",
         error,
-        "Não foi possível salvar o encargo. Tente novamente",
+        mensagemDeNegocio(
+          error,
+          "Não foi possível salvar o encargo. Tente novamente",
+        ),
       );
     }
   }
@@ -216,10 +231,16 @@ export async function importar(
         erro: "Há nomes repetidos no arquivo ou já cadastrados. Corrija e tente de novo",
       };
     }
+    // A planilha é o caminho mais fácil de estourar o teto da soma (o trigger
+    // roda linha a linha e a primeira que passa de 100% aborta o lote inteiro),
+    // então a mensagem da trava tem que chegar aqui também.
     return erroAcao(
       "rh.encargos.importar",
       error,
-      "Não foi possível importar os encargos. Tente novamente",
+      mensagemDeNegocio(
+        error,
+        "Não foi possível importar os encargos. Tente novamente",
+      ),
     );
   }
 
