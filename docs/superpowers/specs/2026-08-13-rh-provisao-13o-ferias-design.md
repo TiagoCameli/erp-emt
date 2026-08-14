@@ -33,6 +33,14 @@ Gap #5 do QA do RH de 23/07/2026, decomposto em quatro entregas na spec do Bloco
 padrão da casa), espelhando `folha_encargos`: RLS, policies sob `rh.encargos`, soft delete via
 `fn_excluir_cadastro`, sem DML para `anon`.
 
+**Correção que veio junto, medida durante o planejamento:** o soft delete de `folha_encargos`
+**está quebrado hoje**. `fn_excluir_cadastro` resolve o recurso por `fn_recurso_do_cadastro`, e
+essa função não conhece `folha_encargos` (devolve null), o que faz a exclusão levantar
+`Tabela folha_encargos nao pode ser excluida por esta funcao`. O botão existe na tela, porque
+`rh.encargos` tem `CRUD` no catálogo, e nunca falhou na cara de ninguém só porque não existe
+encargo cadastrado em produção. Espelhar o padrão sem consertar faria a provisão nascer com o
+mesmo botão quebrado, então **as duas tabelas entram no dispatcher** nesta entrega.
+
 **Não é uma flag em `folha_encargos`, e a razão é de segurança, não de estilo.** As duas tabelas
 guardariam os mesmos campos, mas têm **destinos opostos**: encargo vira guia e sai do caixa,
 provisão não vira nada. A `fn_gerar_folha` itera `folha_encargos where ativo` e o total dessa
