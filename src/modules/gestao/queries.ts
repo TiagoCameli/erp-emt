@@ -16,6 +16,7 @@ import {
   type LinhaFaixaPrazo,
   type PontoMes,
 } from "@/modules/gestao/calculo";
+import type { FiltrosPainel } from "@/modules/gestao/filtros";
 
 /**
  * Leituras do painel de Gestão (BI). Tudo somente leitura e agregado no banco
@@ -72,6 +73,56 @@ function emReais(valor: number | string | null | undefined): number {
 /** Janela de competência do painel: os últimos meses até o mês corrente. */
 export function janelaDoPainel(): JanelaPainel {
   return janelaPainel(mesHojeISO(), MESES_PAINEL);
+}
+
+/** Opção de um seletor da barra de filtros do painel. */
+export interface OpcaoPainel {
+  id: string;
+  nome: string;
+}
+
+/**
+ * Opções dos filtros do painel: obras (centros de custo raiz) e categorias
+ * financeiras, só as ativas.
+ *
+ * Consulta própria do módulo em vez de importar a do Financeiro: cada módulo lê o
+ * que precisa, que é o padrão do projeto. Aqui só interessa o NÍVEL 1, porque o
+ * painel raciocina por obra, não por etapa ou item da árvore.
+ */
+export async function opcoesDoPainel(): Promise<{
+  centros: OpcaoPainel[];
+  categorias: OpcaoPainel[];
+}> {
+  const supabase = await createClient();
+
+  const [centros, categorias] = await Promise.all([
+    supabase
+      .from("centros_custo")
+      .select("id, nome, codigo")
+      .eq("nivel", 1)
+      .eq("ativo", true)
+      .order("nome"),
+    supabase
+      .from("categorias_financeiras")
+      .select("id, nome")
+      .eq("ativo", true)
+      .order("nome"),
+  ]);
+
+  if (centros.error || categorias.error) {
+    throw new Error("Não foi possível carregar as opções dos filtros");
+  }
+
+  return {
+    centros: (centros.data ?? []).map((centro) => ({
+      id: centro.id,
+      nome: centro.codigo ? `${centro.codigo} - ${centro.nome}` : centro.nome,
+    })),
+    categorias: (categorias.data ?? []).map((categoria) => ({
+      id: categoria.id,
+      nome: categoria.nome,
+    })),
+  };
 }
 
 /**
@@ -202,12 +253,20 @@ export interface CustoPorMes {
  * a pagar. É o gasto da obra: toda OC vira lançamento e existem lançamentos
  * avulsos, então o custo está nos lançamentos, não na data de pagamento.
  */
-export async function custoPorMes(): Promise<CustoPorMes> {
+export async function custoPorMes(
+  filtros: FiltrosPainel,
+): Promise<CustoPorMes> {
   const supabase = await createClient();
-  const janela = janelaDoPainel();
+  const { janela } = filtros;
 
+  // Manda o período explícito em vez de `p_meses`: com a janela escolhida na
+  // tela, contar meses para trás do mês corrente não serve mais. `p_meses` fica
+  // como o padrão da função para quem chamar sem período.
   const { data, error } = await supabase.rpc("fn_rel_custo_por_mes", {
-    p_meses: janela.meses.length,
+    p_inicio: janela.inicio,
+    p_fim: janela.fim,
+    p_centro_custo: filtros.centroCustoId,
+    p_categoria: filtros.categoriaId,
   });
 
   if (error) {
@@ -250,13 +309,17 @@ export interface CustoPorCentro {
 }
 
 /** Custo do período por centro de custo, maiores primeiro, com "Outros" no fim. */
-export async function custoPorCentroCusto(): Promise<CustoPorCentro> {
+export async function custoPorCentroCusto(
+  filtros: FiltrosPainel,
+): Promise<CustoPorCentro> {
   const supabase = await createClient();
-  const janela = janelaDoPainel();
+  const { janela } = filtros;
 
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo", {
     p_inicio: janela.inicio,
     p_fim: janela.fim,
+    p_centro_custo: filtros.centroCustoId,
+    p_categoria: filtros.categoriaId,
   });
 
   if (error) {
@@ -314,13 +377,17 @@ export interface CustoPorGrupo {
  * serviço). Lançamento avulso não tem insumo e entra em "Sem insumo": é isso
  * que faz a soma por grupo fechar com o custo total do período.
  */
-export async function custoPorGrupo(): Promise<CustoPorGrupo> {
+export async function custoPorGrupo(
+  filtros: FiltrosPainel,
+): Promise<CustoPorGrupo> {
   const supabase = await createClient();
-  const janela = janelaDoPainel();
+  const { janela } = filtros;
 
   const { data, error } = await supabase.rpc("fn_rel_custo_por_grupo", {
     p_inicio: janela.inicio,
     p_fim: janela.fim,
+    p_centro_custo: filtros.centroCustoId,
+    p_categoria: filtros.categoriaId,
   });
 
   if (error) {
@@ -414,11 +481,22 @@ export interface MaiorCusto {
  * o custo" sem precisar abrir o Financeiro, e o limite mantém a consulta barata
  * na primeira tela depois do login.
  */
-export async function maioresCustos(): Promise<MaiorCusto[]> {
-  const supabase = await createClient();
-  const janela = janelaDoPainel();
+export async function maioresCustos(
+  filtros: FiltrosPainel,
+): Promise<MaiorCusto[]> {
+  // Com obra escolhida a pergunta muda: não é "o maior lançamento", é "o maior
+  // custo NESTA obra". São 121 lançamentos rateados entre até 3 obras (medido em
+  // 14/08/2026), e eles tendem a ser justamente os grandes, que é o que esta
+  // lista mostra. Somar o documento inteiro dentro de uma obra inflaria o número
+  // dela, então o caminho filtrado ordena e soma pelo RATEIO.
+  if (filtros.centroCustoId !== undefined) {
+    return maioresCustosDaObra(filtros, filtros.centroCustoId);
+  }
 
-  const { data, error } = await supabase
+  const supabase = await createClient();
+  const { janela } = filtros;
+
+  let consulta = supabase
     .from("lancamentos")
     .select(
       `id, numero, descricao, valor, mes_competencia, data_vencimento,
@@ -427,8 +505,17 @@ export async function maioresCustos(): Promise<MaiorCusto[]> {
     .eq("tipo", "a_pagar")
     .neq("status", "cancelado")
     .gte("mes_competencia", janela.inicio)
-    .lt("mes_competencia", janela.fim)
+    .lt("mes_competencia", janela.fim);
+
+  if (filtros.categoriaId !== undefined) {
+    consulta = consulta.eq("categoria_id", filtros.categoriaId);
+  }
+
+  const { data, error } = await consulta
     .order("valor", { ascending: false })
+    // Desempate por id: sem chave única, dois lançamentos de mesmo valor podem
+    // trocar de lugar entre uma carga e a seguinte da mesma tela.
+    .order("id", { ascending: false })
     .limit(MAX_MAIORES_CUSTOS);
 
   if (error) {
@@ -446,5 +533,62 @@ export async function maioresCustos(): Promise<MaiorCusto[]> {
     mesCompetencia: lancamento.mes_competencia,
     dataVencimento: lancamento.data_vencimento,
     valor: paraReais(paraCentavos(lancamento.valor)),
+  }));
+}
+
+/**
+ * Maiores custos DENTRO de uma obra: consulta os rateios daquela obra, não os
+ * lançamentos, e o valor exibido é a parte que caiu nela.
+ *
+ * Ordenar pelo rateio (e não pelo valor do lançamento) é o que faz o "maiores"
+ * significar algo aqui: um lançamento de R$ 300 mil rateado 10% nesta obra pesa
+ * menos que um de R$ 50 mil inteiro nela.
+ */
+async function maioresCustosDaObra(
+  filtros: FiltrosPainel,
+  centroCustoId: string,
+): Promise<MaiorCusto[]> {
+  const supabase = await createClient();
+  const { janela } = filtros;
+
+  let consulta = supabase
+    .from("lancamento_rateios")
+    .select(
+      `valor,
+       lancamentos!inner(
+         id, numero, descricao, mes_competencia, data_vencimento, tipo, status,
+         categoria_id, fornecedores(razao_social, nome_fantasia)
+       )`,
+    )
+    .eq("centro_custo_id", centroCustoId)
+    .eq("lancamentos.tipo", "a_pagar")
+    .neq("lancamentos.status", "cancelado")
+    .gte("lancamentos.mes_competencia", janela.inicio)
+    .lt("lancamentos.mes_competencia", janela.fim);
+
+  if (filtros.categoriaId !== undefined) {
+    consulta = consulta.eq("lancamentos.categoria_id", filtros.categoriaId);
+  }
+
+  const { data, error } = await consulta
+    .order("valor", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(MAX_MAIORES_CUSTOS);
+
+  if (error) {
+    throw new Error("Não foi possível carregar os maiores custos");
+  }
+
+  return (data ?? []).map((rateio) => ({
+    id: rateio.lancamentos.id,
+    numero: rateio.lancamentos.numero,
+    descricao: rateio.lancamentos.descricao,
+    fornecedor:
+      rateio.lancamentos.fornecedores?.nome_fantasia ??
+      rateio.lancamentos.fornecedores?.razao_social ??
+      null,
+    mesCompetencia: rateio.lancamentos.mes_competencia,
+    dataVencimento: rateio.lancamentos.data_vencimento,
+    valor: paraReais(paraCentavos(rateio.valor)),
   }));
 }

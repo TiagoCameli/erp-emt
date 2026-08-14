@@ -29,10 +29,12 @@ import {
   custoPorGrupo,
   custoPorMes,
   financeiroResumo,
-  janelaDoPainel,
   maioresCustos,
+  opcoesDoPainel,
   rhResumo,
 } from "@/modules/gestao/queries";
+import { lerFiltrosPainel } from "@/modules/gestao/filtros";
+import { PainelFiltros } from "@/modules/gestao/components/painel-filtros";
 
 export const metadata = {
   title: "Gestão",
@@ -79,28 +81,45 @@ function textoVariacao(
   return `${sinal}${formatarPercentual(variacao, 0)} vs ${rotulo}`;
 }
 
-export default async function GestaoPage() {
+export default async function GestaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const usuario = await getUsuarioLogado();
   if (!temPermissao(usuario, "gestao.painel", "ver")) {
     notFound();
   }
 
-  const janela = janelaDoPainel();
+  // A leitura da URL mora em `gestao/filtros.ts`, e a janela sai de lá: sem
+  // filtro ela é a mesma dos últimos seis meses que a tela sempre usou.
+  const { filtros, valores, temRecorte } = lerFiltrosPainel(await searchParams);
+  const { janela } = filtros;
   const periodo = `${rotuloMesCurto(janela.meses[0])} a ${rotuloMesCurto(
     janela.meses[janela.meses.length - 1],
   )}`;
 
-  const [compras, custo, centros, grupos, vencimentos, maiores, financeiro, rh] =
-    await Promise.allSettled([
-      comprasResumo(),
-      custoPorMes(),
-      custoPorCentroCusto(),
-      custoPorGrupo(),
-      aPagarPorVencimento(),
-      maioresCustos(),
-      financeiroResumo(),
-      rhResumo(),
-    ]);
+  const [
+    compras,
+    custo,
+    centros,
+    grupos,
+    vencimentos,
+    maiores,
+    financeiro,
+    rh,
+    opcoes,
+  ] = await Promise.allSettled([
+    comprasResumo(),
+    custoPorMes(filtros),
+    custoPorCentroCusto(filtros),
+    custoPorGrupo(filtros),
+    aPagarPorVencimento(),
+    maioresCustos(filtros),
+    financeiroResumo(),
+    rhResumo(),
+    opcoesDoPainel(),
+  ]);
 
   registrarFalhas({
     compras,
@@ -111,7 +130,35 @@ export default async function GestaoPage() {
     "maiores custos": maiores,
     financeiro,
     RH: rh,
+    "opções dos filtros": opcoes,
   });
+
+  /**
+   * Marca o bloco que NÃO obedece ao recorte por obra e categoria.
+   *
+   * Estes números são foto do momento (o que está em aberto, o que espera
+   * aprovação, quantos colaboradores existem) ou contagem de documento sem obra,
+   * então filtrar por obra não faz sentido neles. O que não pode acontecer é o
+   * número ficar parado enquanto o resto da tela muda e ninguém entender por quê:
+   * é o mesmo defeito silencioso do resto do dia. O período de propósito não
+   * dispara o aviso: "hoje" não muda com o período escolhido.
+   */
+  function semRecorte(detalhe: ReactNode): ReactNode {
+    if (!temRecorte) return detalhe;
+    return (
+      <>
+        {detalhe}
+        <span className="block text-legenda text-muted-foreground">
+          Total da empresa, não filtrado
+        </span>
+      </>
+    );
+  }
+
+  /** Mesma marca, para a `descricao` de seção (que é texto). */
+  const avisoSecao = temRecorte
+    ? " Não obedece ao filtro de obra e categoria."
+    : "";
 
   return (
     <div className="space-y-4">
@@ -120,6 +167,17 @@ export default async function GestaoPage() {
         titulo="Painel"
         descricao={`Custo, caixa e pendências da EMT. Custo por mês de referência, ${periodo}.`}
       />
+
+      {/* A barra fica logo abaixo do cabeçalho, antes dos números, porque é ela
+          que define de que conjunto os números falam. Se as opções falharem, o
+          painel continua funcionando sem filtro em vez de sumir da tela. */}
+      {opcoes.status === "fulfilled" ? (
+        <PainelFiltros
+          valores={valores}
+          centros={opcoes.value.centros}
+          categorias={opcoes.value.categorias}
+        />
+      ) : null}
 
       {/* Os números que decidem o dia: o que a obra custou, o que o caixa tem
           pela frente, o que está parado esperando alguém e o que já saiu. */}
@@ -140,13 +198,15 @@ export default async function GestaoPage() {
         <KPICard
           titulo="A pagar em aberto"
           valor={ler(vencimentos, (d) => <MoneyText valor={d.total} />)}
-          detalhe={ler(vencimentos, (d) =>
-            d.vencido > 0 ? (
-              <>
-                Vencido <MoneyText valor={d.vencido} />
-              </>
-            ) : (
-              "Nada vencido"
+          detalhe={semRecorte(
+            ler(vencimentos, (d) =>
+              d.vencido > 0 ? (
+                <>
+                  Vencido <MoneyText valor={d.vencido} />
+                </>
+              ) : (
+                "Nada vencido"
+              ),
             ),
           )}
           href="/financeiro/pagamentos"
@@ -154,25 +214,31 @@ export default async function GestaoPage() {
         <KPICard
           titulo="Vence em até 7 dias"
           valor={ler(financeiro, (d) => <MoneyText valor={d.aPagar.valor} />)}
-          detalhe={ler(
-            financeiro,
-            (d) =>
-              `${d.aPagar.contagem} parcela(s) aprovada(s), ${d.aPagar.vencidas} vencida(s)`,
+          detalhe={semRecorte(
+            ler(
+              financeiro,
+              (d) =>
+                `${d.aPagar.contagem} parcela(s) aprovada(s), ${d.aPagar.vencidas} vencida(s)`,
+            ),
           )}
           href="/financeiro/pagamentos"
         />
         <KPICard
           titulo="Pagamentos a aprovar"
           valor={ler(financeiro, (d) => d.aAprovar.contagem)}
-          detalhe={ler(financeiro, (d) => <MoneyText valor={d.aAprovar.valor} />)}
+          detalhe={semRecorte(
+            ler(financeiro, (d) => <MoneyText valor={d.aAprovar.valor} />),
+          )}
           href="/financeiro/aprovacao-pagamentos"
         />
         <KPICard
           titulo="Pago no mês"
           valor={ler(financeiro, (d) => <MoneyText valor={d.pagoNoMes.valor} />)}
-          detalhe={ler(
-            financeiro,
-            (d) => `${d.pagoNoMes.contagem} pagamento(s) no caixa`,
+          detalhe={semRecorte(
+            ler(
+              financeiro,
+              (d) => `${d.pagoNoMes.contagem} pagamento(s) no caixa`,
+            ),
           )}
           href="/financeiro/pagamentos"
         />
@@ -212,7 +278,7 @@ export default async function GestaoPage() {
 
         <Painel
           titulo="A pagar por prazo de vencimento"
-          descricao="Parcelas em aberto pelo prazo até o vencimento. É o que o caixa precisa suportar."
+          descricao={`Parcelas em aberto pelo prazo até o vencimento. É o que o caixa precisa suportar.${avisoSecao}`}
           destaque={ler(vencimentos, (d) => <MoneyText valor={d.total} />)}
           rotuloDestaque="Em aberto"
           link={{ href: "/financeiro/pagamentos", rotulo: "Abrir pagamentos" }}
@@ -303,7 +369,7 @@ export default async function GestaoPage() {
 
       <Painel
         titulo="Maiores custos do período"
-        descricao={`Os lançamentos a pagar de maior valor, ${periodo}.`}
+        descricao={`${valores.centro === "" ? "Os lançamentos a pagar de maior valor" : "Maiores custos nesta obra, pelo valor rateado nela"}, ${periodo}.`}
         link={{
           href: "/financeiro/lancamentos",
           rotulo: "Abrir lançamentos",
@@ -325,7 +391,7 @@ export default async function GestaoPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Painel
           titulo="Compras"
-          descricao="O que está parado esperando decisão."
+          descricao={`O que está parado esperando decisão.${avisoSecao}`}
           link={{ href: "/compras/ordens", rotulo: "Abrir compras" }}
         >
           {compras.status === "rejected" ? (
@@ -355,7 +421,7 @@ export default async function GestaoPage() {
 
         <Painel
           titulo="RH"
-          descricao="Equipe e folha do mês."
+          descricao={`Equipe e folha do mês.${avisoSecao}`}
           link={{ href: "/rh/folha", rotulo: "Abrir RH" }}
         >
           {rh.status === "rejected" ? (

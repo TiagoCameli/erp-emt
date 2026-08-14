@@ -3636,7 +3636,12 @@ export type Database = {
         }[]
       }
       fn_rel_custo_centro_custo: {
-        Args: { p_fim?: string; p_inicio?: string }
+        Args: {
+          p_categoria?: string
+          p_centro_custo?: string
+          p_fim?: string
+          p_inicio?: string
+        }
         Returns: {
           centro_custo_id: string
           codigo: string
@@ -3645,7 +3650,12 @@ export type Database = {
         }[]
       }
       fn_rel_custo_por_grupo: {
-        Args: { p_centro_custo?: string; p_fim?: string; p_inicio?: string }
+        Args: {
+          p_categoria?: string
+          p_centro_custo?: string
+          p_fim?: string
+          p_inicio?: string
+        }
         Returns: {
           grupo_cor: string
           grupo_id: string
@@ -3669,7 +3679,13 @@ export type Database = {
         }[]
       }
       fn_rel_custo_por_mes: {
-        Args: { p_meses?: number }
+        Args: {
+          p_categoria?: string
+          p_centro_custo?: string
+          p_fim?: string
+          p_inicio?: string
+          p_meses?: number
+        }
         Returns: {
           lancamentos: number
           mes: string
