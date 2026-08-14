@@ -79,19 +79,41 @@ dentro de `fn_rel_aging`; remontar isso como janela de datas no destino
 sem vencimento — que o aging conta como "a vencer" e um filtro de data exclui. Então
 o destino recebe `faixa_aging=v_8_15` e reusa a MESMA classificação.
 
-### 2. Três parâmetros novos na URL de Lançamentos
+### 2. Dois parâmetros novos na URL de Lançamentos
 
-É o custo de "o total fecha", e cada um existe por um relatório específico:
+É o custo de "o total fecha".
 
-| parâmetro | por causa de | por que não dá sem ele |
+**`sem_cancelado=1`** — filtro de lançamento, existe por si. Custo por centro e Custo
+por grupo somam `status <> 'cancelado'`, e a listagem só sabe filtrar *um* status, não
+excluir um. É um filtro que o usuário também quer sozinho (cancelado polui qualquer
+total), então entra na barra como qualquer outro.
+
+**`recorte=<fatia>`** — um parâmetro só para toda fatia de nível de PARCELA, em vez de
+cinco parâmetros soltos. Valores aceitos, validados contra lista fechada em
+`lancamentos/recorte.ts`:
+
+| valor | usado por | significa |
 |---|---|---|
-| `sem_cancelado=1` | Custo por centro, Custo por grupo | os dois somam `status <> 'cancelado'`; a listagem só sabe filtrar *um* status, não excluir um |
-| `parcela_status=pago` | Posição bancária | ela soma parcela paga pelo líquido; sem isso o clique numa conta nunca fecha |
-| `faixa_aging=<faixa>` | Aging | ver a regra de ouro acima: reconstruir a faixa por datas erra na borda e perde parcela sem vencimento |
+| `aging:<faixa>:<tipo>` | Aging | parcelas abertas na faixa, pela classificação de `fn_rel_aging` |
+| `fluxo:<yyyy-MM>:realizado` | Fluxo de caixa | parcelas pagas cujo mês de PAGAMENTO é esse |
+| `fluxo:<yyyy-MM>:previsto` | Fluxo de caixa | parcelas não pagas cujo mês programado (ou de vencimento) é esse |
+| `conta_paga` | Posição bancária | parcelas pagas, combinado com `conta` |
 
-Todos entram em `lerFiltrosLancamentos` com validação contra lista fechada, aparecem
-como chip na FilterBar e são lidos **uma vez só** — a exportação para Excel os herda
-de graça, porque ela já lê os mesmos filtros que a lista.
+Um parâmetro composto em vez de cinco porque isto **não é filtro de usuário, é a fatia
+que o relatório recortou**: ela aparece na barra como um chip de leitura ("Parcelas
+vencidas 8 a 15 dias") com um X para limpar, não como um seletor. Cinco parâmetros
+soltos convidariam a combinações que nenhum relatório produz e que ninguém validou.
+
+**Por que não reconstruir a fatia com os filtros que já existem:** medido em
+14/08/2026, **694 parcelas foram pagas em mês diferente do vencimento**. O fluxo de
+caixa agrupa o realizado pelo mês do PAGAMENTO
+(`coalesce(data_pagamento, data_vencimento)`), então mandar `venc_de`/`venc_ate` num
+clique de barra realizada erra em 694 parcelas — hoje, na base real, não numa hipótese.
+No aging o mesmo vale nas bordas de faixa e na parcela sem vencimento (que ele conta
+como "a vencer" e um filtro de data descartaria).
+
+Os dois entram em `lerFiltrosLancamentos` e são lidos **uma vez só** — a exportação
+para Excel os herda de graça, porque ela já lê os mesmos filtros que a lista.
 
 ### 3. O recorte: `valorRecorte` na listagem
 
@@ -103,9 +125,18 @@ recorte, com o rótulo dizendo qual é (ex: "No centro 009 - BR-364").
 Duas origens, com **precedência declarada**:
 
 1. `centro` ativo → soma dos rateios daquele lançamento naquele centro
-2. senão, filtro de parcela ativo (`venc_de/ate`, `conta`, `atraso`, `parcela_status`,
-   `faixa_aging`) → soma das parcelas que casam, por `valor`, ou por
-   `coalesce(valor_liquido, valor)` quando o recorte é de pagas
+2. senão, `recorte` ativo → soma das parcelas que casam a fatia, na medida que o
+   relatório de origem usa:
+
+| recorte | medida, igual à do relatório |
+|---|---|
+| `aging:*` | `parcela.valor` (é dívida viva, não tem desconto ainda) |
+| `fluxo:*` | `coalesce(parcela.valor_liquido, parcela.valor)` |
+| `conta_paga` | `coalesce(parcela.valor_liquido, parcela.valor)` |
+
+`valor_liquido` está preenchido nas 7.701 parcelas de hoje, mas a coluna aceita nulo e
+parcela antiga pode não ter: o `coalesce` é a mesma defesa que `dinheiroDasParcelas` já
+faz, e não um cuidado novo.
 
 **Centro e parcela ativos ao mesmo tempo não geram o produto dos dois.** Ratear o
 valor da parcela pela proporção do centro seria uma conta que ninguém pediu e que
@@ -166,9 +197,9 @@ célula que foi clicada, não com o total do centro no mês inteiro.
 | Custo por centro de custo | linha da tabela e barra do gráfico | `centro` + período + `tipo=a_pagar` + `sem_cancelado=1` |
 | Custo por grupo de insumo | linha do grupo | período + `tipo=a_pagar` + `sem_cancelado=1` (ver ressalva abaixo) |
 | DRE gerencial | linha de categoria | `categoria` + `mes` + `tipo` conforme receita ou despesa |
-| Fluxo de caixa | barra do mês, entrada ou saída | `venc_de`/`venc_ate` do mês + `tipo` |
-| Aging | faixa de vencimento | `faixa_aging` + `tipo` |
-| Posição bancária | conta | `conta` + `parcela_status=pago` |
+| Fluxo de caixa | barra do mês, entrada ou saída, realizado ou previsto | `recorte=fluxo:<mês>:<realizado\|previsto>` + `tipo` |
+| Aging | faixa de vencimento | `recorte=aging:<faixa>:<tipo>` |
+| Posição bancária | conta | `conta` + `recorte=conta_paga` |
 
 **Ressalva do Custo por grupo de insumo.** Ele é o único de grão MISTO: para
 lançamento de origem OC soma `oc_itens.quantidade * preco_unitario`, e para todo o
@@ -208,7 +239,8 @@ nada. Advisors de security e performance rodados depois.
 |---|---|
 | `relatorios/drill.test.ts` | os 6 destinos, e principalmente que os filtros IMPLÍCITOS viajam (`tipo`, `sem_cancelado`) e que os filtros do relatório viajam junto |
 | `lancamentos/resumo.test.ts` (acréscimo) | recorte por centro fecha com a soma dos rateios; recorte por parcela por `valor` e por líquido; precedência quando centro e parcela estão ativos; `valorRecorte` nulo mantém o total antigo |
-| `lancamentos/filtros.test.ts` (acréscimo) | os 3 parâmetros novos validados contra lista fechada, e lixo na URL não vira filtro |
+| `lancamentos/recorte.test.ts` | cada fatia aceita, e lixo na URL (`aging:banana`, `fluxo:2026-13:x`, mês inválido) não vira recorte |
+| `lancamentos/filtros.test.ts` (acréscimo) | `sem_cancelado` e `recorte` lidos junto do resto, e recorte inválido não aparece preenchido na barra |
 | `relatorios/filtros-custo-cc.test.ts` | os 4 modos, período invertido trocado de lado, `vida` sem centro |
 | `supabase/provas/drill_fecha_com_a_celula.sql` | para os 6: total do drill = célula do relatório, **no caso parcial construído** (um cancelado, um previsto, um rateado 60/40, uma parcela sem vencimento), em transação revertida |
 
