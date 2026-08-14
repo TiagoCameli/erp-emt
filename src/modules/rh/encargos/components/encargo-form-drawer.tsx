@@ -150,7 +150,7 @@ export function EncargoFormDrawer({
           rotulo="Percentual"
           obrigatorio
           erro={form.formState.errors.percentual?.message}
-          ajuda="Alíquota do encargo, de 0 a 100, com até 3 casas decimais"
+          ajuda="Alíquota do encargo, de 0 a 100, com até 3 casas decimais. A soma das alíquotas dos encargos ativos não pode passar de 100%."
         >
           <Input
             id="encargo-percentual"

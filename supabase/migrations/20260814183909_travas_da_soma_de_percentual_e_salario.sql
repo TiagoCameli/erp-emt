@@ -7,14 +7,21 @@
 --
 -- Por que a soma e não a linha: cada percentual já era conferido isolado
 -- (folha_provisoes: > 0 e <= 100; folha_encargos: >= 0 e <= 100), mas a soma,
--- que é o que de fato multiplica o salário, não era conferida por nada. Cinco
--- provisões de 20% com um encargo de 20% levam o custo de um colaborador de
--- 3.000,00 de 3.600,00 para 7.200,00 sem ninguém tropeçar em erro nenhum.
+-- que é o que de fato multiplica o salário, não era conferida por nada. Duas
+-- provisões de 60% somam 120% do salário em provisão e nada reclamava: é essa
+-- soma estourada que a trava barra.
 --
--- 100% é sanidade de cadastro, não regra fiscal: acima do próprio salário é
--- sempre erro de digitação, e o teto é generoso (encargo patronal real soma
--- perto de 37%, provisão de 13º mais férias perto de 20%). O limite é
--- INCLUSIVO (a soma pode fechar exatamente 100) e é por tabela.
+-- O QUE ELA NÃO BARRA, de propósito: o limite é INCLUSIVO, então cinco
+-- provisões de 20% (soma exatamente 100%) continuam aceitas — medido depois de
+-- aplicar esta migration, e com elas o custo de um colaborador de 3.000,00 vai
+-- de 3.600,00 a 7.200,00. Isso é cadastro deliberado, não erro de digitação, e
+-- apertar o número sem o dono do sistema pedir seria inventar regra de negócio.
+-- O teto é POR TABELA, então provisões a 100% e encargos a 100% ao mesmo tempo
+-- também passam: teto agregado entre as duas é decisão pendente do dono.
+--
+-- 100% é sanidade de cadastro, não regra fiscal: passar do próprio salário em
+-- uma tabela é erro de digitação, e o teto é generoso (encargo patronal real
+-- soma perto de 37%, provisão de 13º mais férias perto de 20%).
 --
 -- Duas funções com a consulta estática, uma por tabela, e não uma genérica com
 -- execute format(TG_TABLE_NAME): SQL dinâmico em trava de dinheiro é mais
@@ -59,12 +66,22 @@ begin
   -- Mesmo recurso que fn_aprovar_medicao usa para serializar por obra.
   perform pg_advisory_xact_lock(hashtextextended('public.folha_provisoes.percentual', 0));
 
-  -- id <> new.id cobre INSERT e UPDATE: o default gen_random_uuid() da coluna
-  -- id já está aplicado quando o trigger BEFORE roda (default lido no banco
-  -- antes de escrever isto), então no INSERT a exclusão não casa com linha
-  -- nenhuma, e no UPDATE ela tira exatamente a própria linha — a linha em
-  -- edição não é contada duas vezes. Reativar (ativo false -> true) cai aqui
-  -- também, porque new.ativo é true e a soma exclui só ela mesma.
+  -- id <> new.id cobre INSERT e UPDATE PURO: o default gen_random_uuid() da
+  -- coluna id já está aplicado quando o trigger BEFORE roda (default lido no
+  -- banco antes de escrever isto), então no INSERT a exclusão não casa com
+  -- linha nenhuma, e no UPDATE ... where id = <id> ela tira exatamente a
+  -- própria linha — a linha em edição não é contada duas vezes. Reativar
+  -- (ativo false -> true) cai aqui também, porque new.ativo é true e a soma
+  -- exclui só ela mesma.
+  --
+  -- UPSERT é a exceção, e está MEDIDO: `insert ... on conflict (nome) do
+  -- update` dispara este BEFORE INSERT com um gen_random_uuid() NOVO, antes de
+  -- o conflito ser detectado, então a linha em conflito NÃO é excluída da soma
+  -- e conta duas vezes — subir a única ativa de 40% para 95% por upsert é
+  -- recusado como se somasse 135%. Falha FECHADA (recusa a mais, nunca a
+  -- menos), e hoje inalcançável: nenhum caminho do app faz upsert nestas duas
+  -- tabelas (só folha_parametros usa upsert no repo). Quem escrever o primeiro
+  -- upsert aqui precisa tratar isto, e não descobrir na produção.
   select coalesce(sum(percentual), 0) into v_outras
   from public.folha_provisoes
   where ativo and id <> new.id;
@@ -98,6 +115,9 @@ as $fn_encargos$
 declare
   v_outros numeric;
 begin
+  -- Gêmea de fn_trava_soma_provisoes: a razão de cada linha (inativa fora da
+  -- conta, advisory lock, id <> new.id no INSERT e no UPDATE puro, e o upsert
+  -- que conta a própria linha duas vezes) está comentada lá em cima.
   if not new.ativo then
     return new;
   end if;
@@ -135,6 +155,12 @@ create trigger trg_trava_soma_encargos
 -- nenhum item de nenhum colaborador é gravado — um cadastro errado bloqueia a
 -- folha dos outros 199. Nulo é permitido: colaborador sem salário definido
 -- existe (diarista, terceiro).
+--
+-- Quais caminhos este check realmente cobre hoje, sem exagerar: restauração da
+-- lixeira, RPC futura, script e qualquer escrita fora do formulário. NÃO cobre
+-- "a importação por planilha", porque a planilha de colaborador não tem coluna
+-- de salário (cadastros/colaboradores/importacao.ts) — o dia em que tiver, o
+-- check passa a ser a única defesa daquele caminho.
 alter table public.colaboradores
   drop constraint if exists colaboradores_salario_nao_negativo;
 

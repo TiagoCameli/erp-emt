@@ -82,7 +82,7 @@ describe("traduzErroSalario", () => {
 });
 
 /* ------------------------------------------------------------------------- */
-/* A tradução só serve se CHEGAR na tela: as três actions, com o banco falso  */
+/* A tradução só serve se CHEGAR na tela: as actions, com o banco falso       */
 /* ------------------------------------------------------------------------- */
 
 /**
@@ -90,7 +90,7 @@ describe("traduzErroSalario", () => {
  * tradutor que não estava ligado no caminho do erro. Estes testes são a prova
  * de ligação: mandam o erro exato do banco pela action e conferem a mensagem
  * que volta para o toast. Ficam neste arquivo, com um só conjunto de mocks,
- * porque é uma regra só atravessando três módulos.
+ * porque é uma regra só atravessando quatro módulos.
  */
 const estado = vi.hoisted(() => ({
   erro: null as { code?: string; message?: string } | null,
@@ -115,9 +115,11 @@ vi.mock("@/lib/supabase/server", () => ({
         eq: () => Promise.resolve({ error: estado.erro }),
       }),
     }),
+    rpc: () => Promise.resolve({ error: estado.erro }),
   }),
 }));
 
+import { restaurarItem } from "@/modules/administracao/lixeira/actions";
 import {
   criar as criarColaborador,
   editar as editarColaborador,
@@ -182,6 +184,16 @@ describe("a mensagem da trava chega pela action, em vez de 'Tente novamente'", (
     ).resolves.toEqual({ erro: MSG_TRAVA_ENCARGOS });
   });
 
+  it("restaurar da lixeira devolve a mensagem do teto, não 'Tente novamente'", async () => {
+    // fn_restaurar_cadastro REINSERE a linha, então o trigger dispara: sem a
+    // tradução aqui a tela mandava tentar de novo para sempre (fix round 1).
+    estado.erro = { code: "P0001", message: MSG_TRAVA_PROVISOES };
+
+    await expect(restaurarItem(ID)).resolves.toEqual({
+      erro: MSG_TRAVA_PROVISOES,
+    });
+  });
+
   it("criar e editar colaborador devolvem a mensagem do salário negativo", async () => {
     estado.erro = { code: "23514", message: MSG_CHECK_SALARIO };
 
@@ -193,7 +205,7 @@ describe("a mensagem da trava chega pela action, em vez de 'Tente novamente'", (
     });
   });
 
-  it("erro de infraestrutura continua genérico nas três", async () => {
+  it("erro de infraestrutura continua genérico em todas", async () => {
     estado.erro = {
       code: "42501",
       message: "permission denied for table folha_provisoes",
@@ -211,6 +223,9 @@ describe("a mensagem da trava chega pela action, em vez de 'Tente novamente'", (
     });
     await expect(criarColaborador(colaborador)).resolves.toEqual({
       erro: "Não foi possível salvar o colaborador. Tente novamente",
+    });
+    await expect(restaurarItem(ID)).resolves.toEqual({
+      erro: "Não foi possível restaurar o item. Tente novamente",
     });
   });
 });

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { erroAcao } from "@/lib/erros";
+import { mensagemDeNegocio } from "@/lib/erros-banco";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,10 +43,20 @@ export async function restaurarItem(lixeiraId: string): Promise<ResultadoAcao> {
         erro: "Já existe um registro com esses dados. Não foi possível restaurar",
       };
     }
+    // Restaurar é uma ESCRITA na tabela de origem (`fn_restaurar_cadastro`
+    // reinsere a linha), então as travas dela chegam aqui. Medido: provisão de
+    // 90% na lixeira com 40% ativos levanta o P0001 do teto da soma, e sem esta
+    // linha a tela mostrava "Não foi possível restaurar o item. Tente
+    // novamente" — um retry que nunca funciona, porque o que falta é desativar
+    // uma provisão antes. Os raise da própria função já são casados por texto
+    // acima; este fallback cobre os demais P0001, hoje e no futuro.
     return erroAcao(
       "administracao.lixeira.restaurar",
       error,
-      "Não foi possível restaurar o item. Tente novamente",
+      mensagemDeNegocio(
+        error,
+        "Não foi possível restaurar o item. Tente novamente",
+      ),
     );
   }
 
