@@ -198,16 +198,28 @@ E prove a exclusão de ponta a ponta, em transação revertida, para **as duas**
 - [ ] **Step 4: Conferir no banco**
 
 ```sql
-select relacl from pg_class where relname in ('folha_provisoes','folha_item_provisoes');
-select policyname, cmd from pg_policies where tablename in ('folha_provisoes','folha_item_provisoes') order by 1;
-select column_name, column_default, is_nullable from information_schema.columns
+-- Grant de tabela e grant de COLUNA moram em lugares diferentes: `grant update
+-- (col)` NÃO aparece em relacl, só em pg_attribute.attacl. Conferir só o relacl
+-- daria "faltou o update" numa migration correta.
+select c.relname, c.relacl::text as relacl_tabela,
+       (select string_agg(a.attname || '=' || a.attacl::text, ' | ')
+        from pg_attribute a where a.attrelid = c.oid and a.attacl is not null) as attacl_colunas
+from pg_class c where c.relname in ('folha_provisoes','folha_item_provisoes');
+
+select policyname, cmd from pg_policies
+where tablename in ('folha_provisoes','folha_item_provisoes') order by 1;
+
+select table_name, column_name, column_default, is_nullable from information_schema.columns
 where table_schema='public' and (
   (table_name='folha_itens' and column_name='provisoes') or
   (table_name='folhas' and column_name='valor_provisoes'));
+
 select count(*) as provisoes_semeadas from public.folha_provisoes;
 ```
 
-Esperado: `folha_provisoes` com `arw` (sem `d`), `folha_item_provisoes` com `r` só; quatro policies na primeira e uma na segunda; as duas colunas `NOT NULL default 0`; e **zero** provisão semeada.
+Esperado: `folha_provisoes` com `authenticated=ar` no relacl (**sem `w` e sem `d`**) e `attacl` com `w` de `authenticated` em `nome`, `percentual` e `ativo`; `folha_item_provisoes` com `authenticated=r` e `attacl` nulo; três policies na primeira e uma na segunda; as duas colunas `NOT NULL default 0`; e **zero** provisão semeada.
+
+**Isso é deliberadamente mais restrito que `folha_encargos`**, que hoje tem `authenticated=arwm`, ou seja, update na tabela inteira, incluindo `created_by` e `created_at`. Não replique esse grant: o padrão correto da casa é o de `folhas` e `rh_pontos`, que dão update só nas colunas que a tela edita. Não mexa no grant de `folha_encargos` nesta task.
 
 - [ ] **Step 5: Escrever o teste do schema (falha primeiro)**
 
@@ -500,11 +512,11 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ```sql
 select obj_description('public.fn_aprovar_folha(uuid)'::regprocedure) as texto;
-select md5(prosrc) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-where n.nspname='public' and p.proname='fn_aprovar_folha';
+select p.proname, md5(prosrc) as md5 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+where n.nspname='public' and p.proname in ('fn_aprovar_folha','fn_gerar_folha') order by 1;
 ```
 
-O md5 é `a1261a1ccbff886980f0991da47a2446` e **não pode mudar nesta task**: só o comentário muda.
+`fn_aprovar_folha` tem que estar em `a1261a1ccbff886980f0991da47a2446` e **não pode mudar nesta task**: só o comentário dela muda. **Anote o md5 da `fn_gerar_folha`** que voltar aqui: é o valor pós-Task 2, e é ele que vai na trava do Step 2 (o das Global Constraints é o de antes da Task 2).
 
 - [ ] **Step 2: Aplicar o comentário e a consulta novos**
 
@@ -516,7 +528,10 @@ Via `apply_migration`, nome `folha_aprovar_comentario_provisao`. O texto novo te
 4. trazer a consulta de diagnóstico atualizada com a coluna de provisões somando na conta do `explicado`;
 5. manter a marca `-- DIAGNOSTICO EXECUTAVEL v1` e continuar **rodando colada**, sem placeholder de cliente (`:folha` e afins não são SQL fora do `psql`, e a base tem guarda de regressão contra `:[a-zA-Z_]`).
 
-Trava `do $$` conferindo o md5 de `fn_aprovar_folha` e de `fn_gerar_folha`, e chamando `fn_verificar_diagnosticos_gravados()` no fim.
+Trava `do $$` no fim, conferindo **duas** coisas e chamando `fn_verificar_diagnosticos_gravados()`:
+
+1. `fn_aprovar_folha` em `a1261a1ccbff886980f0991da47a2446` — o md5 **de antes desta frente**, porque esta task só mexe no comentário dela e o corpo não pode ter mudado;
+2. `fn_gerar_folha` **no md5 pós-Task 2**, que você mede no Step 1 desta task. **Não use o `29c33b2d43a50af321f0ee2f7b7e5728` das Global Constraints:** aquele é o valor de antes da Task 2, e a Task 2 muda a função de propósito. Grave na migration o valor que você mediu, com um comentário dizendo que é o md5 pós-provisão.
 
 - [ ] **Step 3: Provar nos cinco estados, com a consulta EXTRAÍDA e executada**
 
