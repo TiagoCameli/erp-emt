@@ -1547,3 +1547,37 @@ lugar nenhum.
 saldo e a rede tem esse buraco. **Decisão do dono**, porque muda quem pode receber adiantamento:
 ou o formulário passa a oferecer só CLT, ou o alerta passa a cobrir "saldo aberto sem folha futura
 possível" (que cobriria os dois casos de uma vez, o inativo e o não-CLT).
+
+## 2026-08-14 - A planilha exportada volta editada, e a linha se identifica por assinatura porque `numero` não é único
+
+O Tiago exportou a tela de Lançamentos (`lancamentos-2026-08-14.xlsx`, 5.848 linhas), reclassificou
+centro de custo na mão e devolveu o arquivo para ser aplicado. Aplicado na migration
+`20260814120000_reclassifica_centro_custo_planilha_131`. Dois fatos estruturais saíram daí.
+
+**a) `lancamentos.numero` NÃO é único nesta base, e nada pode usar ele como chave.**
+
+Medido: 5.848 lançamentos, **587 números distintos**. A carga do Mais Controle repetiu o mesmo
+`LAN-2026-xxxx` em até **10 lançamentos completamente diferentes** (fornecedor, valor e data
+distintos). Não há unique constraint em `numero`, e `fn_numerar_documento` só age no INSERT pela
+tela, não na carga. Consequência prática: qualquer conferência, deduplicação, importação ou
+relatório que agrupe por "Número" mistura lançamentos alheios, e a planilha exportada — que traz
+`Número` mas **não** traz o `id` — não é reconciliável por ele.
+
+**b) Round-trip de planilha se faz por assinatura das colunas que não mudaram, não por posição.**
+
+A ordem também não serve de chave: o Excel reordenou as 5.848 linhas por Data da compra ao abrir, e
+o desempate dentro de cada data não sobreviveu (nenhuma combinação de `created_at`/`id` reproduz a
+ordem do arquivo). O método que funcionou, e que vale para a próxima planilha que voltar editada:
+
+1. Hash **por coluna, como multiset** (ordem-independente), dos dois lados. Isola o que mudou sem
+   depender de alinhamento: das 21 colunas, 19 bateram byte a byte e só `Centro de custo` divergiu
+   de verdade. `Rateio` divergiu só na **ordem dos nomes dentro da célula** (o embed do PostgREST
+   não garante ordem), então comparar essa coluna exige normalizar a ordem antes.
+2. Assinatura md5 das colunas provadas iguais como identificador da linha. Casou 1:1 nas 5.848,
+   **zero órfãs dos dois lados** — o que ao mesmo tempo prova que nada foi inserido nem removido.
+3. Escrever com trava de contagem exata (`row_count <> N` levanta exceção) e o estado de origem no
+   `where`, para o arquivo aplicar duas vezes não reclassificar nada por engano.
+
+Colação importa no passo 1: `order by ... collate "C"` no Postgres para bater com a ordenação por
+code point do outro lado. Sem isso os multisets de coluna com acento não fecham e a comparação
+acusa mudança onde não houve.
