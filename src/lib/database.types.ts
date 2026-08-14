@@ -3654,13 +3654,24 @@ export type Database = {
         Args: {
           p_categoria?: string
           p_centro_custo?: string
+          p_excluir_previsto?: boolean
           p_fim?: string
+          p_fornecedor?: string
           p_inicio?: string
+          p_tipo_centro?: string
         }
         Returns: {
           centro_custo_id: string
           codigo: string
           nome: string
+          total: number
+        }[]
+      }
+      fn_rel_custo_centro_vida: { Args: { p_centro: string }; Returns: string }
+      fn_rel_custo_centro_serie: {
+        Args: { p_centro: string; p_fim?: string; p_inicio?: string }
+        Returns: {
+          mes: string
           total: number
         }[]
       }
