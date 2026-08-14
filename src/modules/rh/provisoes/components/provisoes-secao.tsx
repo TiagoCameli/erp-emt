@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Plus } from "lucide-react";
+import { Plus, TriangleAlert } from "lucide-react";
 
 import { SecaoFormulario } from "@/components/canonicos";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import type { ProvisaoLista } from "@/modules/rh/provisoes/queries";
 import { ProvisaoFormDrawer } from "./provisao-form-drawer";
@@ -57,10 +58,29 @@ export function ProvisoesSecao({
         ) : null
       }
     >
+      {/* A frase anterior dizia que a provisão "não gera conta a pagar,
+          diferente dos encargos acima", e isso é falso para encargo SEM grupo
+          de recolhimento, que também não gera lançamento nenhum. A distinção
+          verdadeira é o grupo, e ela importa porque é justamente o encargo sem
+          grupo que parece servir para 13º e férias (ver docs/decisoes.md,
+          entrada de 14/08/2026, ponto 1). */}
       <p className="text-detalhe text-muted-foreground">
-        Percentual do salário lançado como custo do mês na folha. Não gera
-        conta a pagar no Financeiro — diferente dos encargos acima.
+        Percentual do salário lançado como custo do mês na folha, sem gerar
+        conta a pagar no Financeiro. Nos encargos acima, quem tem grupo de
+        recolhimento vira guia e sai do caixa; encargo sem grupo entra no custo
+        e também não gera lançamento nenhum.
       </p>
+
+      <Alert>
+        <TriangleAlert />
+        <AlertTitle>Não cadastre 13º nem férias como encargo</AlertTitle>
+        <AlertDescription>
+          Com a provisão cadastrada aqui, o mesmo custo conta duas vezes na
+          folha, e nenhuma conferência acusa: a diferença aparece só no custo da
+          obra e no resultado do mês. Encargo é para o que a empresa recolhe
+          sobre a folha do mês, como INSS patronal, FGTS e RAT/SAT.
+        </AlertDescription>
+      </Alert>
 
       <ProvisoesTabela
         provisoes={provisoes}

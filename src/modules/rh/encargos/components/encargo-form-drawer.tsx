@@ -134,7 +134,7 @@ export function EncargoFormDrawer({
           rotulo="Nome"
           obrigatorio
           erro={form.formState.errors.nome?.message}
-          ajuda="Exemplos: INSS patronal, FGTS, RAT/SAT, Terceiros (Sistema S)"
+          ajuda="Exemplos: INSS patronal, FGTS, RAT/SAT, Terceiros (Sistema S). Não cadastre 13º nem férias aqui: eles têm seção própria de provisões, e cadastrar nos dois lugares conta o mesmo custo duas vezes na folha."
         >
           <Input
             id="encargo-nome"
