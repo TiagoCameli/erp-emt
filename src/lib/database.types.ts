@@ -3523,6 +3523,21 @@ export type Database = {
         }[]
       }
       fn_jsonb_lista: { Args: { p_valor: Json }; Returns: Json }
+      fn_lancamentos_do_recorte: {
+        Args: {
+          p_conta?: string
+          p_faixa?: string
+          p_hoje?: string
+          p_mes?: string
+          p_realizado?: boolean
+          p_tipo_lancamento?: string
+          p_tipo_recorte: string
+        }
+        Returns: {
+          lancamento_id: string
+          valor_no_recorte: number
+        }[]
+      }
       fn_limpar_preferencia_tabela: {
         Args: { p_tabela: string }
         Returns: undefined

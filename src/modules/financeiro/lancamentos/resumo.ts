@@ -1,5 +1,6 @@
 import { ehParcelaAberta } from "@/modules/financeiro/_shared/formato";
 import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
+import type { MedidaRecorte } from "@/modules/financeiro/lancamentos/recorte";
 
 /**
  * Contas do resumo do cabeçalho de Lançamentos: quanto tem, quanto já saiu,
@@ -149,6 +150,46 @@ export function dinheiroDasParcelas(
   };
 }
 
+/**
+ * Soma as parcelas JÁ FILTRADAS pela fatia, na medida que o relatório de origem
+ * usa. Quem escolhe QUAIS parcelas entram é a consulta (a fatia vive no banco,
+ * ver `fn_lancamentos_do_recorte`); aqui é só a soma, em centavos.
+ */
+export function valorDasParcelasNoRecorte(
+  parcelas: ParcelaParaResumo[],
+  medida: MedidaRecorte,
+): number {
+  let total = 0;
+  for (const parcela of parcelas) {
+    total +=
+      medida === "liquido"
+        ? centavos(parcela.valorLiquido ?? parcela.valor)
+        : centavos(parcela.valor);
+  }
+  return reais(total);
+}
+
+/**
+ * Qual fatia vale, quando a URL recorta por centro de custo E por parcela ao
+ * mesmo tempo.
+ *
+ * O centro ganha. O produto dos dois (a parte do centro dentro das parcelas da
+ * fatia) é uma conta que NENHUM relatório pede: o relatório de centro de custo não
+ * tem dimensão de parcela, e os de parcela não têm dimensão de centro. Inventar
+ * essa conta seria pior que não tê-la, porque ela apareceria na tela como um
+ * número com aparência de verdade que ninguém sabe conferir.
+ *
+ * Zero é fatia de zero e ganha normalmente: a comparação é com `null`, não com
+ * falsidade.
+ */
+export function escolherValorRecorte(
+  valorNoCentro: number | null,
+  valorNaParcela: number | null,
+): number | null {
+  if (valorNoCentro !== null) return valorNoCentro;
+  return valorNaParcela;
+}
+
 /** O resumo que os cartões do cabeçalho mostram. */
 export interface ResumoLancamentos {
   /** Quantos lançamentos o filtro pegou. */
@@ -175,6 +216,17 @@ export interface ResumoLancamentos {
   quantidadeARevisar: number;
   /** Quanto de dinheiro em aberto está preso nesses lançamentos a revisar. */
   valorARevisar: number;
+  /**
+   * Soma da FATIA quando a URL recorta (o rateio de um centro, ou as parcelas de
+   * uma faixa, mês ou conta). Sem recorte é igual a `valorTotal`.
+   *
+   * É o número que fecha com a célula do relatório que foi clicada, e é por isso
+   * que ele existe separado do `valorTotal`: os dois são verdadeiros e dizem
+   * coisas diferentes (o documento inteiro, e a parte dele que está nesta fatia).
+   */
+  valorNoRecorte: number;
+  /** Há recorte valendo? Decide se a tela mostra a coluna e o cartão da fatia. */
+  temRecorte: boolean;
 }
 
 const VAZIO: ResumoLancamentos = {
@@ -190,6 +242,8 @@ const VAZIO: ResumoLancamentos = {
   quantidadeParciais: 0,
   quantidadeARevisar: 0,
   valorARevisar: 0,
+  valorNoRecorte: 0,
+  temRecorte: false,
 };
 
 /**
@@ -217,9 +271,16 @@ export function resumirLancamentos(
   let quantidadeVencidos = 0;
   let quantidadeParciais = 0;
   let quantidadeARevisar = 0;
+  let valorNoRecorte = 0;
+  let temRecorte = false;
 
   for (const item of itens) {
     valorTotal += centavos(item.valor);
+    // `?? item.valor` e não `?? 0`: linha sem recorte contribui com o documento
+    // inteiro. Zero é fatia de zero, e o `??` respeita isso (só null cai no
+    // fallback).
+    valorNoRecorte += centavos(item.valorRecorte ?? item.valor);
+    if (item.valorRecorte !== null) temRecorte = true;
     valorPago += centavos(item.valorPago);
     valorAberto += centavos(item.valorAberto);
     valorVencido += centavos(item.valorVencido);
@@ -253,5 +314,7 @@ export function resumirLancamentos(
     quantidadeParciais,
     quantidadeARevisar,
     valorARevisar: reais(valorARevisar),
+    valorNoRecorte: reais(valorNoRecorte),
+    temRecorte,
   };
 }

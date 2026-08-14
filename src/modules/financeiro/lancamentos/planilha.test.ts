@@ -36,6 +36,9 @@ const lancamento: LancamentoPlanilha = {
   valorAberto: 823.04,
   valorVencido: 0,
   descontoObtido: 0,
+  // A planilha não tem coluna de recorte: ela exporta o lançamento inteiro, e a
+  // fatia é uma leitura da TELA (o drill-down de um relatório).
+  valorRecorte: null,
   // Campos que só a planilha usa: em branco aqui, para os testes antigos
   // continuarem falando do que eles falavam. O caso cheio tem describe próprio.
   observacoes: null,
