@@ -6,10 +6,12 @@ import { z } from "zod";
  * e das horas de jornada (cadastros/jornadas/schemas.ts).
  *
  * Extraído de rh/encargos/schemas.ts (Bloco 8b, Task 1): eram três cópias da
- * mesma regra de percentual na folha antes desta extração; depois dela
- * sobram duas fora daqui — rh/parametros-folha/schemas.ts e
- * rh/encargos/importacao.ts —, ambas fora do escopo desta extração e desta
- * correção. Uma quarta cópia em rh/provisoes seria a linha demais.
+ * mesma regra de percentual na folha antes desta extração. Na rodada de
+ * correção de 14/08/2026, rh/encargos/importacao.ts passou a importar daqui
+ * (a coluna que ela alimenta multiplica salário e provisão), e sobra uma cópia
+ * fora daqui: rh/parametros-folha/schemas.ts, que segue com a versão antiga de
+ * propósito, documentada lá. Uma quarta cópia em rh/provisoes seria a linha
+ * demais.
  *
  * Valida o agrupamento do ponto de milhar: cada grupo à direita do primeiro
  * ponto tem que ter exatamente 3 dígitos ("1.234.567"), senão "0.5" (grupo

@@ -1,4 +1,5 @@
 import type { ColunaImportacao } from "@/lib/importacao";
+import { casasDecimais, paraNumero } from "@/modules/rh/percentual";
 
 /** Forma de uma linha lida da planilha de importação de encargos. */
 export interface EncargoImportacao {
@@ -9,22 +10,20 @@ export interface EncargoImportacao {
   grupoRecolhimento: string | null;
 }
 
-/** Converte texto pt-BR (ponto = milhar, vírgula = decimal) em número. */
-function paraNumero(texto: string): number {
-  const limpo = texto.trim().replace(/\./g, "").replace(",", ".");
-  return Number(limpo);
-}
-
-/** Quantas casas decimais um número tem, pela representação decimal. */
-function casasDecimais(valor: number): number {
-  const texto = valor.toString();
-  const ponto = texto.indexOf(".");
-  return ponto === -1 ? 0 : texto.length - ponto - 1;
-}
-
 const PERCENTUAL_MAX = 100;
 
-/** Converte o valor bruto da célula de percentual (número ou texto pt-BR) em número. */
+/**
+ * Converte o valor bruto da célula de percentual (número ou texto pt-BR) em
+ * número.
+ *
+ * `paraNumero` e `casasDecimais` vêm de `rh/percentual`, os mesmos do
+ * formulário: esta coluna alimenta `folha_encargos.percentual`, que multiplica
+ * o salário **e** a provisão de 13º e férias. As cópias locais que existiam
+ * aqui eram as versões anteriores ao fix round 1 da Task 1 do Bloco 8b, em que
+ * "0.5" na planilha (formato natural de quem copia de Excel em locale inglês)
+ * virava 5 caladamente — dez vezes o pretendido, aprovado pelo teto de 100% e
+ * pelo check da coluna —, e notação exponencial contava 0 casas decimais.
+ */
 function paraNumeroPercentual(valor: unknown): number {
   if (typeof valor === "number") return valor;
   const numero = paraNumero(String(valor));
