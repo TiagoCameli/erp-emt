@@ -1547,3 +1547,219 @@ lugar nenhum.
 saldo e a rede tem esse buraco. **Decisão do dono**, porque muda quem pode receber adiantamento:
 ou o formulário passa a oferecer só CLT, ou o alerta passa a cobrir "saldo aberto sem folha futura
 possível" (que cobriria os dois casos de uma vez, o inativo e o não-CLT).
+
+## 2026-08-14 - Provisão de 13º e férias: custo do mês sem caixa, e o quarto termo da identidade da folha
+
+Bloco 8b do RH. A folha passou a provisionar 13º e férias como **custo do mês**, e essa é a
+primeira coisa no sistema que entra em `folhas.custo_total` **sem virar conta a pagar**. Todos os
+números abaixo foram medidos na prova de aceite da Task 6, em `begin; ... rollback;` contra o banco
+vivo, com produção zerada antes e depois. O cenário é o parcial, não o extremo: 3 colaboradores CLT
+de 5.000,00, 1.518,00 e 2.000,00 em centros de custo distintos, em três faixas de INSS, com IRRF
+apenas no primeiro; 2 encargos ativos (8% com grupo `FGTS`, 10% **sem** grupo, soma 18%); 2
+provisões cadastradas, uma **ativa** de 11,111% e uma **inativa** de 8,333%; `folha_parametros`
+completo; e um adiantamento parcelado cuja parcela de 2.000,00 **não cabe** no disponível de
+1.404,15.
+
+### 1. A provisão mora em tabela separada dos encargos, e cadastrar como encargo é erro
+
+`folha_provisoes` (cadastro de percentuais) e `folha_item_provisoes` (snapshot por item) são tabelas
+próprias, não linhas de `folha_encargos`. O motivo não é organização: **encargo e provisão têm
+destino financeiro oposto**. Encargo com grupo de recolhimento vira guia; encargo **sem** grupo
+entra no custo e não vira guia, e é essa segunda forma que parecia servir para 13º e férias. Até
+14/08/2026 o próprio `comment on function` da `fn_aprovar_folha` mandava fazer isso, e a orientação
+está **morta**.
+
+Três razões pelas quais a tabela separada não é preferência:
+
+1. **Encargo multiplica salário; provisão multiplica salário E depois arrasta encargo.** Uma linha
+   de provisão vale `principal + encargos que vão incidir quando o 13º e as férias forem pagos`,
+   com `v_pct_total` (a mesma base de encargos do mês). Medido: A 555,55 + 100,00 = 655,55; B
+   168,66 + 30,36 = 199,02; C 222,22 + 40,00 = 262,22. Encargo não tem esse segundo andar.
+2. **O snapshot é de outra natureza.** `folha_item_provisoes` guarda nome, percentual,
+   `valor_principal` e `valor_encargos` como estavam na geração. Desativar, reajustar ou excluir a
+   provisão depois não mexe em folha já gerada.
+3. **Cadastrar 13º ou férias como encargo ativo sem grupo HOJE conta o custo duas vezes**, uma em
+   `folha_item_encargos` e outra em `folha_item_provisoes`, e o `explicado` da consulta de
+   diagnóstico continua fechando 0,00 nas duas contagens. A duplicidade **não aparece** na
+   conferência: aparece no custo da obra e no resultado do mês. Encargo sem grupo segue legítimo
+   para custo patronal que de fato não tem guia neste sistema; para 13º e férias, não.
+
+### 2. A identidade da folha tem QUATRO termos, e a provisão não é causa de resíduo
+
+A identidade passou de três para quatro termos:
+
+    soma(líquidos) + soma(guias) + soma(adiantamento descontado) + soma(provisões) = folhas.custo_total
+
+O quarto termo nasceu porque a provisão **não tem contrapartida no contas a pagar**. Sem ela do lado
+esquerdo, a soma dos lançamentos fica menor que o custo total em exatamente `folhas.valor_provisoes`.
+
+**Termo da identidade e causa de resíduo são coisas diferentes, e as duas contagens não se
+misturam.** Na identidade são quatro termos; na explicação do resíduo nada mudou: continuam as
+**mesmas duas causas** de sempre (encargo sem grupo e retido sem grupo) mais **um detector** de
+regressão (o líquido não positivo, que vale 0,00 por construção). São três termos na conta do
+`explicado` porque o detector entra nela de propósito, não porque exista uma terceira causa.
+
+Medido por contraste, na mesma folha, com a consulta **extraída do `obj_description` e executada**
+(2.804 caracteres, mesmo md5 nas três leituras):
+
+| | líquidos | guias | descontado | provisões | custo_total | resíduo | encargos sem grupo | explicado |
+|---|---|---|---|---|---|---|---|---|
+| sem provisão cadastrada | 5.620,28 | 1.775,01 | 1.804,15 | 0,00 | 10.051,24 | −851,80 | 851,80 | **0,00** |
+| com provisão ativa | 5.620,28 | 1.775,01 | 1.804,15 | **1.116,79** | 11.168,03 | −851,80 | 851,80 | **0,00** |
+
+O **resíduo é idêntico nas duas linhas**, e é isso que prova que a provisão não é causa de resíduo:
+ela cresce do lado esquerdo exatamente o quanto o `custo_total` cresce do lado direito. Se alguém
+contar a provisão nos dois lados, o `explicado` volta a acusar bug em folha certa, com o sinal
+trocado. E qualquer cópia da consulta anterior a 14/08/2026 soma só três termos e devolve
+`explicado = -folhas.valor_provisoes` em folha perfeita.
+
+**Provisão não vira caixa, e isso foi medido pela contagem de lançamentos**, não por leitura de
+código. A mesma folha foi aprovada, desaprovada, teve a provisão cadastrada, foi regerada e
+reaprovada: **5 lançamentos (2 de líquido e 3 de guia) antes e 5 depois**, soma total dos
+lançamentos **idêntica ao centavo**, `valor_liquido` **5.620,28 nas duas**, e 3 guias (`FGTS`,
+`INSS`, `IRRF`) e nenhuma a mais. Só o `custo_total` mudou, de 10.051,24 para 11.168,03, delta
+1.116,79, exatamente `valor_provisoes`.
+
+### 3. O custo_total do BI da Gestão VAI SUBIR no mês em que a config for cadastrada
+
+Config vazia é deploy seguro: com zero linha em `folha_provisoes` o `custo_total` é o de antes, ao
+centavo. **No mês em que a primeira provisão for cadastrada, o custo da folha sobe, e nada
+piorou.** No cenário medido, 8.518,00 de salário viram 11.168,03 de custo em vez de 10.051,24: 13%
+a mais, sem nenhum centavo novo saindo do caixa.
+
+Quem olha o painel de Gestão vai ver o custo da obra subir de um mês para o outro sem ordem de
+compra nova e sem contratação. **O custo estava sendo subestimado antes**, porque 13º e férias são
+obrigação que nasce mês a mês e só era vista quando paga. A provisão por centro de custo se soma
+por `folha_itens.centro_custo_id`, nunca por `lancamento_rateios`, porque provisão não tem
+lançamento e portanto não tem rateio.
+
+### 4. Dependência do Bloco 8c: a provisão acumula e NADA a consome hoje
+
+Hoje a provisão só cresce. Não existe nenhum caminho no sistema que a abata. **Quando o 13º for
+pago (Bloco 8c), o valor pago tem que abater a provisão acumulada, senão o custo conta duas
+vezes**: uma vez espalhada pelos meses em que foi provisionada, outra vez inteira no mês do
+pagamento.
+
+Não há trava impedindo isso hoje, e não há como haver, porque o pagamento do 13º não existe. É
+dependência declarada, não esquecimento: quem abrir o 8c precisa ler esta entrada antes de escrever
+a primeira linha.
+
+### 5. O percentual de provisão cadastrado JÁ EMBUTE o terço constitucional (regra do dono, 14/08/2026)
+
+Regra fornecida pelo Tiago em 14/08/2026, não inventada aqui: **o percentual que se cadastra em
+`folha_provisoes` já vem com o terço constitucional de férias somado dentro dele.** "Férias
+11,111%" é 8,333% de férias mais 2,778% de terço, já somados na hora de cadastrar. **O sistema não
+modela o terço em lugar nenhum**: não há coluna, não há campo, não há cálculo. Ele existe apenas
+dentro do número que a pessoa digita.
+
+**Consequência para o Bloco 8d**, e é a parte fácil de errar: ao pagar as férias e abater a
+provisão acumulada, o valor provisionado **já é férias com terço**. Somar o terço de novo na hora
+do pagamento conta o custo duas vezes. Quem for implementar o pagamento de férias precisa tratar o
+saldo provisionado como valor final, não como base sobre a qual aplicar 1/3.
+
+### 6. O teto de 100% é na SOMA, é por TABELA e é INCLUSIVO
+
+Cada percentual já era conferido isolado (`folha_provisoes`: > 0 e <= 100; `folha_encargos`: >= 0 e
+<= 100), mas **a soma, que é o que de fato multiplica o salário, não era conferida por nada**. Duas
+provisões de 60% somavam 120% do salário e nada reclamava. Agora há um trigger `before insert or
+update` por tabela (`fn_trava_soma_provisoes` e a gêmea `fn_trava_soma_encargos`), com
+`pg_advisory_xact_lock` para serializar sessões concorrentes, e linha inativa fora da conta (para
+**desativar nunca ser recusado**, medido: com a soma em 100%, desativar uma passa e a soma cai para
+80%).
+
+As duas são `SECURITY DEFINER` de propósito: as policies de SELECT exigem
+`tem_permissao('rh.encargos','ver')`, então com invoker um perfil com `criar` sem `ver` leria soma
+zero e **a trava falharia ABERTA**. Definer lê a soma inteira e falha fechada.
+
+Junto veio o piso de zero no salário (`colaboradores_salario_nao_negativo`, `salario is null or
+salario >= 0`). O motivo é a provisão: antes dela, salário −1.000,00 gerava um item com
+`custo_total` −1.200,00, lixo silencioso de um colaborador só; depois dela, a folha **inteira**
+aborta no check de `folha_item_provisoes.valor_encargos` e nenhum item de nenhum colaborador é
+gravado. Um cadastro errado bloquearia a folha dos outros 199. Nulo segue permitido (diarista,
+terceiro), medido.
+
+**O que a trava NÃO barra, e é limite honesto, não descuido:** o limite é **inclusivo** e **por
+tabela**. Medido depois de aplicada: **cinco provisões de 20% somam exatamente 100% e passam de
+propósito**; a sexta, de 0,001%, é recusada com a mensagem em português citando a soma das outras.
+Com 100% de provisão e 20% de encargo ao mesmo tempo, o custo de um colaborador de 3.000,00 vai a
+**7.200,00**, e isso passa. **Teto agregado entre as duas tabelas é decisão pendente do dono**, e
+apertar o número sem ele pedir seria inventar regra de negócio. 100% é sanidade de cadastro, não
+regra fiscal: encargo patronal real soma perto de 37%, provisão de 13º mais férias perto de 20%.
+
+### 7. `fn_recurso_do_cadastro` perdeu cinco casos numa recriação, e recriar de cópia é A armadilha
+
+A migration `20260810130444` (`excluir_obras_e_centros_custo`, **está no ledger e não tem arquivo
+no repo**) recriou `fn_recurso_do_cadastro` para acrescentar `obras` e `centros_custo`, mas
+**partiu de uma cópia incompleta** e derrubou cinco casos que a última definição versionada
+(`20260727130001_folha_faixas_parametros.sql`) tinha: `funcoes`, `jornadas`, `folha_encargos`,
+`folha_inss_faixas`, `folha_irrf_faixas`.
+
+Efeito em produção, de 10/08 até esta frente: **exclusão e restauração quebradas** para esses
+cinco. O dispatcher é usado por `fn_excluir_cadastro` e, como whitelist, por
+`fn_restaurar_cadastro`. Excluir a função ou a jornada cadastrada, ou qualquer faixa de INSS/IRRF,
+caía em "Tabela X nao pode ser excluida por esta funcao", e restaurar recusava igual. Ninguém
+percebeu por dois blocos.
+
+Hoje ela tem **quinze** casos, conferidos no banco: `unidades_medida`, `categorias_insumo`,
+`clientes`, `fornecedores`, `insumos`, `depositos`, `colaboradores`, `obras`, `centros_custo`,
+`funcoes`, `jornadas`, `folha_encargos`, `folha_provisoes`, `folha_inss_faixas`,
+`folha_irrf_faixas`.
+
+**A armadilha, escrita explicitamente: recriar essa função a partir de uma cópia é o modo de falha
+dela.** É um `case` grande de uma linha por tabela, um `create or replace` a partir de qualquer
+texto desatualizado apaga casos em silêncio, e nada acusa: não há erro, não há teste, não há
+advisor. **Não existe teste travando isso.** Quem precisar mexer nela deve partir da definição
+**viva** (`pg_get_functiondef` / `prosrc` no banco), nunca de um arquivo do repo nem de uma
+migration anterior, e contar os casos antes e depois. Foi assim, e só assim, que os cinco voltaram.
+
+### 8. Três limites honestos das ferramentas de conferência desta frente
+
+Quem vier depois vai confiar nelas se estes limites não estiverem escritos.
+
+1. **O teto de 100% é por tabela e inclusivo** (detalhado no ponto 6): cinco provisões de 20% somam
+   exatamente 100% e passam. Teto agregado entre as duas tabelas é decisão pendente do dono.
+2. **`fn_verificar_diagnosticos_gravados()` só roda `explain`, então é CEGA para conta errada.** Ela
+   prova que a consulta gravada em comentário **resolve** contra o schema, não que ela ainda mede a
+   coisa certa. **O erro desta frente não seria pego por ela**: a consulta de três termos compilava
+   perfeitamente e devolvia `explicado = -749,98` numa folha perfeita. Quem pegou foi **medição
+   humana** por contraste, comparando o `explicado` com `-folhas.valor_provisoes`. Consulta que
+   compila e mente continua sendo pega só por prova de aceite com números esperados.
+3. **A receita de conferência arquivo × ledger é cega para payload de comentário dentro de
+   dollar-quote.** Ela normaliza removendo `--[^\n]*` antes do `md5`, exatamente para tolerar o
+   cabeçalho "não rode `db push`" e a quebra de linha final. Consequência: qualquer coisa escrita
+   como comentário **dentro** de um `$$ ... $$`, inclusive o `comment on function` inteiro, é
+   apagada da conferência e pode divergir entre arquivo e ledger sem a receita acusar. Isso importa
+   porque `fn_aprovar_folha` tem um `obj_description` de mais de 20 mil caracteres, que é onde a
+   consulta de diagnóstico vive. **Quem cobre isso de fato é a trava de `md5(prosrc)`** dentro da
+   própria migration, e a receita de md5 de função é `md5(prosrc)`, **não**
+   `md5(pg_get_functiondef)`: por `functiondef` os hashes são outros, e isso já causou falso alarme
+   nesta frente.
+
+### 9. Dois achados da prova de aceite que a frente NÃO fechou, os dois pendentes de decisão do dono
+
+Nenhum dos dois mexe em dinheiro, e nenhum dos dois foi criado por esta frente. Os dois tornam o
+conserto do ponto 7 **inalcançável pela tela**, e por isso ficam registrados em vez de silenciados.
+
+**a) `rh.encargos` nunca teve a ação `excluir`, então excluir provisão ou encargo é inalcançável
+hoje.** `src/config/recursos.ts` declara `rh.encargos` com `acoes: CRUD` (inclui `excluir`), mas a
+migration `20260727110002_perm_encargos` semeou a matriz **copiando as ações de `rh.folha`**, que
+são `ver, criar, editar, aprovar, desaprovar` e não incluem `excluir`. Medido em produção: os dois
+usuários ativos têm `rh.encargos` com `criar, editar, ver` e **zero `excluir`**, enquanto as irmãs
+`rh.parametros-folha`, `cadastros.funcoes` e `cadastros.jornadas` têm `excluir` sincronizado nos
+dois. `provisoes/actions.ts` exige `exigirPermissao('rh.encargos','excluir')`, então a exclusão
+recusa antes de chegar ao banco. É **pré-existente** (desde 27/07), mas esta frente consertou o
+dispatcher justamente para esse caminho funcionar. **Decisão do dono**, porque define quem pode
+apagar um percentual que multiplica salário.
+
+**b) `TABELAS_RESTAURAVEIS` tem 6 tabelas e o dispatcher do banco tem 15.**
+`src/modules/administracao/lixeira/restauravel.ts` lista `unidades_medida`, `categorias_insumo`,
+`clientes`, `fornecedores`, `insumos`, `colaboradores`. Faltam **nove**, incluindo
+`folha_provisoes` e `folha_encargos`. `lixeira-tabela.tsx` usa essa lista para decidir se mostra o
+botão Restaurar: para as nove, ele aparece **desabilitado**, com o tooltip "Este tipo de registro
+não pode ser restaurado pela lixeira". Medido em transação revertida que **o banco restaura a
+provisão sem reclamar**: `fn_excluir_cadastro` move para a lixeira e `fn_restaurar_cadastro`
+reinsere. **É a UI que está errada, não o banco**, e o comentário do arquivo ainda diz "Obras,
+equipamentos e centros de custo não entram", que deixou de ser verdade em 10/08. É o **mesmo modo
+de falha do ponto 7**, uma allowlist duplicada que envelhece em silêncio, só que do lado do
+TypeScript, e também **sem teste** casando os dois lados. O conserto barato e durável é um teste
+que leia os casos de `fn_recurso_do_cadastro` e case com a constante.
