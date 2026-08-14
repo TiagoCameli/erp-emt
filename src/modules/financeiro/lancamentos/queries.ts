@@ -27,6 +27,7 @@ import type {
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
+import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
   emLotes,
   LOTE_IDS_POSTGREST,
@@ -88,6 +89,27 @@ export interface ListarLancamentosParams {
    */
   criadoDe?: string;
   criadoAte?: string;
+  /**
+   * Faixa de MÊS DE REFERÊNCIA (mes_competencia, yyyy-MM-dd). Irmã do
+   * `mesCompetencia`, que é um mês exato: esta é a janela, e existe porque o
+   * relatório de centro de custo soma por período ("acumulado da obra no ano") e
+   * o clique nele precisa de um destino com a mesma janela.
+   */
+  competenciaDe?: string;
+  competenciaAte?: string;
+  /**
+   * Tira os cancelados da lista. Os relatórios de custo somam
+   * `status <> 'cancelado'`, e o filtro de `status` só sabe escolher UM status,
+   * não excluir um.
+   */
+  semCancelado?: boolean;
+  /**
+   * Fatia de nível de PARCELA recortada por um relatório. Ver
+   * `lancamentos/recorte.ts`: ela decide quais lançamentos entram na lista E como
+   * o `valorRecorte` de cada um é somado, para o total fechar com a célula que foi
+   * clicada no relatório.
+   */
+  recorte?: Recorte;
   /**
    * Estado da revisão: parcela em revisão, ou a situação da conta bancária das
    * parcelas ainda não pagas (sem conta, conta parcial, revisado). É derivado
@@ -648,6 +670,15 @@ export async function listarLancamentos(
   }
   if (params.compraDe) consulta = consulta.gte("data_compra", params.compraDe);
   if (params.compraAte) consulta = consulta.lte("data_compra", params.compraAte);
+  if (params.competenciaDe) {
+    consulta = consulta.gte("mes_competencia", params.competenciaDe);
+  }
+  if (params.competenciaAte) {
+    consulta = consulta.lte("mes_competencia", params.competenciaAte);
+  }
+  // `neq` e não um `status` positivo: os relatórios de custo excluem UM status e
+  // aceitam todos os outros, o que o filtro de status (um valor só) não expressa.
+  if (params.semCancelado) consulta = consulta.neq("status", "cancelado");
   if (params.criadoDe) {
     consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadoDe));
   }

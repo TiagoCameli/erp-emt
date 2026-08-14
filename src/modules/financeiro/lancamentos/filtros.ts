@@ -1,5 +1,6 @@
 import { mesParaCompetencia } from "@/lib/formatadores";
 import type { ListarLancamentosParams } from "@/modules/financeiro/lancamentos/queries";
+import { lerRecorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
   FILTROS_ATRASO,
   FILTROS_REVISAO,
@@ -64,6 +65,13 @@ export interface ValoresFiltrosLancamentos {
   compraAte: string;
   criadoDe: string;
   criadoAte: string;
+  /** "1" quando cancelados estão fora da lista, "" quando entram. */
+  semCancelado: string;
+  /** A fatia de parcela recortada por um relatório, como veio na URL. */
+  recorte: string;
+  /** Faixa de MÊS DE REFERÊNCIA, como data yyyy-MM-dd. */
+  compDe: string;
+  compAte: string;
 }
 
 /** Leitura completa da URL: o que vai ao banco e o que volta para a tela. */
@@ -207,6 +215,14 @@ export function lerFiltrosLancamentos(
   const vencimento = periodo(params.venc_de, params.venc_ate);
   const compra = periodo(params.compra_de, params.compra_ate);
   const criado = periodo(params.criado_de, params.criado_ate);
+  // Faixa de mês de REFERÊNCIA. O `mes` acima é um mês exato; esta é a janela, e
+  // ela existe porque o relatório de centro de custo passou a somar período
+  // ("acumulado da obra no ano") e o clique precisa de um destino equivalente.
+  const competencia = periodo(params.comp_de, params.comp_ate);
+  // Só o literal "1" liga: qualquer outro texto é URL mal montada, e ligar um
+  // filtro por engano some com linha da lista sem dizer por quê.
+  const semCancelado = params.sem_cancelado === "1" ? true : undefined;
+  const recorte = lerRecorte(params.recorte);
 
   const paginaParam = Number(params.pagina);
   const pagina =
@@ -239,8 +255,12 @@ export function lerFiltrosLancamentos(
       compraAte: compra.ate,
       criadoDe: criado.de,
       criadoAte: criado.ate,
+      competenciaDe: competencia.de,
+      competenciaAte: competencia.ate,
       revisao,
       atraso,
+      semCancelado,
+      recorte,
     },
     valores: {
       busca,
@@ -263,6 +283,12 @@ export function lerFiltrosLancamentos(
       compraAte: texto(compra.ate),
       criadoDe: texto(criado.de),
       criadoAte: texto(criado.ate),
+      compDe: texto(competencia.de),
+      compAte: texto(competencia.ate),
+      semCancelado: semCancelado ? "1" : "",
+      // Só o recorte que PASSOU na validação volta para a tela: recorte inválido
+      // aparecendo na barra diria que a lista está recortada quando ela não está.
+      recorte: recorte ? (params.recorte as string) : "",
     },
   };
 }
