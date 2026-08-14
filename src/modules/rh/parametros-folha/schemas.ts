@@ -2,8 +2,15 @@ import { z } from "zod";
 
 /**
  * Converte texto digitado (pt-BR: ponto = milhar, vírgula = decimal) em
- * número. Mesmo formato do salário de funções (cadastros/funcoes/schemas.ts)
- * e dos encargos da folha (rh/encargos/schemas.ts).
+ * número. Mesmo formato do salário de funções (cadastros/funcoes/schemas.ts).
+ *
+ * ATENÇÃO: esta cópia **divergiu** da dos encargos da folha, que desde o Bloco
+ * 8b mora em `rh/percentual.ts` (não mais em `rh/encargos/schemas.ts`). Lá
+ * `paraNumero` confere o agrupamento do ponto de milhar e devolve NaN para
+ * "0.5", que aqui ainda vira 5 caladamente, e `casasDecimais` entende notação
+ * exponencial. Unificar as duas ficou fora da rodada de correção de 14/08/2026
+ * de propósito: aqui o percentual é parâmetro fiscal digitado por uma pessoa,
+ * não planilha importada.
  */
 function paraNumero(texto: string): number {
   const limpo = texto.trim().replace(/\./g, "").replace(",", ".");
@@ -63,7 +70,11 @@ const PERCENTUAL_MAX = 100;
  * Percentual (alíquota/FGTS) obrigatório: aceita a string digitada no
  * formulário (pt-BR) ou o número já convertido. Não negativo, no máximo
  * 100, no máximo 3 casas — a coluna NUMERIC(6,3) arredonda sem avisar.
- * Mesmo validador do percentual dos encargos (rh/encargos/schemas.ts).
+ *
+ * O validador do percentual dos encargos e das provisões é o
+ * `percentualSchema` de `rh/percentual.ts`, e este **não é mais o mesmo**: ele
+ * usa o `paraNumero` e o `casasDecimais` mais estritos de lá (ver o comentário
+ * de `paraNumero` acima).
  */
 const percentualSchema = z
   .union([z.string(), z.number()])
