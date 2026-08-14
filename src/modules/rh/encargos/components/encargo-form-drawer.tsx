@@ -134,7 +134,7 @@ export function EncargoFormDrawer({
           rotulo="Nome"
           obrigatorio
           erro={form.formState.errors.nome?.message}
-          ajuda="Exemplos: INSS patronal, FGTS, RAT/SAT, Terceiros (Sistema S)"
+          ajuda="Exemplos: INSS patronal, FGTS, RAT/SAT, Terceiros (Sistema S). Não cadastre 13º nem férias aqui: eles têm seção própria de provisões, e cadastrar nos dois lugares conta o mesmo custo duas vezes na folha."
         >
           <Input
             id="encargo-nome"
@@ -150,7 +150,7 @@ export function EncargoFormDrawer({
           rotulo="Percentual"
           obrigatorio
           erro={form.formState.errors.percentual?.message}
-          ajuda="Alíquota do encargo, de 0 a 100, com até 3 casas decimais"
+          ajuda="Alíquota do encargo, de 0 a 100, com até 3 casas decimais. A soma das alíquotas dos encargos ativos não pode passar de 100%."
         >
           <Input
             id="encargo-percentual"

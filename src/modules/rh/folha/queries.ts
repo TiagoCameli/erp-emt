@@ -45,6 +45,17 @@ export interface EncargoDetalhe {
   valor: number;
 }
 
+/**
+ * Uma linha de provisão (13º, férias, ...) aplicada a um item da folha
+ * (Bloco 8b), com principal e os encargos que vão incidir quando ela for paga
+ * separados — é como o Tiago confere o valor.
+ */
+export interface ProvisaoDetalhe {
+  nome: string;
+  valorPrincipal: number;
+  valorEncargos: number;
+}
+
 /** Item da folha por colaborador, com nome/função e centro de custo resolvidos. */
 export interface FolhaItem {
   id: string;
@@ -70,6 +81,15 @@ export interface FolhaItem {
    * linhas: nesse caso vem `[]` e a UI mostra só o total.
    */
   encargosDetalhe: EncargoDetalhe[];
+  /** Provisão de 13º/férias deste item (Bloco 8b): custo do mês, sem caixa. */
+  provisoes: number;
+  /**
+   * Quebra de `provisoes` por tipo (13º, férias, ...), vinda de
+   * `folha_item_provisoes`. Folhas geradas antes desta frente não têm essas
+   * linhas: nesse caso vem `[]` e a UI mostra só o total, exatamente como
+   * `encargosDetalhe`.
+   */
+  provisoesDetalhe: ProvisaoDetalhe[];
   adiantamentos: number;
   /**
    * Identificação da(s) parcela(s) de adiantamento descontada(s) nesta folha
@@ -105,6 +125,12 @@ export interface FolhaDetalhe {
   encargosPercentual: number;
   valorBruto: number;
   valorEncargos: number;
+  /**
+   * Provisão de 13º/férias do mês (Bloco 8b), somando `folha_itens.provisoes`
+   * de todos os itens. Já embutida em `custoTotal` (= bruto + encargos +
+   * provisões); custo sem caixa, não vira lançamento nem guia.
+   */
+  valorProvisoes: number;
   valorAdiantamentos: number;
   valorLiquido: number;
   custoTotal: number;
@@ -136,6 +162,18 @@ export interface CustoCentroCusto {
 /** Total por tipo de encargo, somado entre todos os colaboradores da folha. */
 export interface ResumoEncargo {
   nome: string;
+  total: number;
+}
+
+/**
+ * Total por tipo de provisão (13º, férias, ...), somado entre todos os
+ * colaboradores da folha, com principal e encargos separados — é como o
+ * Tiago confere o valor.
+ */
+export interface ResumoProvisao {
+  nome: string;
+  principal: number;
+  encargos: number;
   total: number;
 }
 
@@ -288,8 +326,9 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .from("folhas")
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
-       valor_encargos, valor_adiantamentos, valor_liquido, custo_total,
-       aprovado_em, motivo_rejeicao, usuarios!folhas_aprovado_por_fkey(nome)`,
+       valor_encargos, valor_provisoes, valor_adiantamentos, valor_liquido,
+       custo_total, aprovado_em, motivo_rejeicao,
+       usuarios!folhas_aprovado_por_fkey(nome)`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -300,11 +339,12 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .from("folha_itens")
     .select(
       `id, colaborador_id, centro_custo_id, salario_base, horas_normais,
-       horas_extras, valor_extras, inss, irrf, encargos, adiantamentos,
-       custo_total, valor_liquido, lancamento_id,
+       horas_extras, valor_extras, inss, irrf, encargos, provisoes,
+       adiantamentos, custo_total, valor_liquido, lancamento_id,
        colaboradores(nome, funcoes(nome)),
        centros_custo(nome, codigo),
-       folha_item_encargos(nome, valor)`,
+       folha_item_encargos(nome, valor),
+       folha_item_provisoes(nome, valor_principal, valor_encargos)`,
     )
     .eq("folha_id", id);
 
@@ -334,6 +374,15 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       encargosDetalhe: (item.folha_item_encargos ?? [])
         .map((encargo) => ({ nome: encargo.nome, valor: encargo.valor }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+      provisoes: item.provisoes,
+      // Folhas geradas antes desta frente (Bloco 8b) não têm linhas aqui: [].
+      provisoesDetalhe: (item.folha_item_provisoes ?? [])
+        .map((provisao) => ({
+          nome: provisao.nome,
+          valorPrincipal: provisao.valor_principal,
+          valorEncargos: provisao.valor_encargos,
+        }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       adiantamentos: item.adiantamentos,
       adiantamentoParcelas: parcelasPorColaborador.get(item.colaborador_id) ?? [],
       custoTotal: item.custo_total,
@@ -351,6 +400,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     encargosPercentual: folha.encargos_percentual,
     valorBruto: folha.valor_bruto,
     valorEncargos: folha.valor_encargos,
+    valorProvisoes: folha.valor_provisoes,
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
@@ -361,7 +411,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
   };
 }
 
-// `resumoPorCentroCusto` e `resumoPorEncargo` foram movidos para
+// `resumoPorCentroCusto`, `resumoPorEncargo` e `resumoPorProvisao` moram em
 // `./calculo.ts`: são derivações puras dos itens já carregados aqui por
 // `buscarFolha`, sem precisar de uma 2ª/3ª leitura da folha no banco.
 

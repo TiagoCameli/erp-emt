@@ -10,6 +10,7 @@ import type {
   FolhaDetalhe,
   LancamentoDaFolha,
   ResumoEncargo,
+  ResumoProvisao,
 } from "@/modules/rh/folha/queries";
 
 /**
@@ -55,6 +56,37 @@ export function resumoPorEncargo(folha: FolhaDetalhe): ResumoEncargo[] {
 
   return [...totais.entries()]
     .map(([nome, total]) => ({ nome, total }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+/**
+ * Total por tipo de provisão (13º, férias, ...), somando as linhas de
+ * `provisoesDetalhe` de todos os itens da folha, com principal e os encargos
+ * que vão incidir quando a provisão for paga separados — é como o Tiago
+ * confere o valor. Ordenado por nome. Folhas antigas, sem provisão cadastrada
+ * (todo item com `provisoesDetalhe: []`), retornam lista vazia — a UI então
+ * omite esta seção.
+ */
+export function resumoPorProvisao(folha: FolhaDetalhe): ResumoProvisao[] {
+  const totais = new Map<string, { principal: number; encargos: number }>();
+
+  for (const item of folha.itens) {
+    for (const provisao of item.provisoesDetalhe) {
+      const atual = totais.get(provisao.nome) ?? { principal: 0, encargos: 0 };
+      totais.set(provisao.nome, {
+        principal: atual.principal + provisao.valorPrincipal,
+        encargos: atual.encargos + provisao.valorEncargos,
+      });
+    }
+  }
+
+  return [...totais.entries()]
+    .map(([nome, { principal, encargos }]) => ({
+      nome,
+      principal,
+      encargos,
+      total: principal + encargos,
+    }))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 

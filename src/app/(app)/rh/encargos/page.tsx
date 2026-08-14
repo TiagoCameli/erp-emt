@@ -7,6 +7,8 @@ import { EncargosAcoesCabecalho } from "@/modules/rh/encargos/components/encargo
 import { EncargosLista } from "@/modules/rh/encargos/components/encargos-lista";
 import { listarEncargos } from "@/modules/rh/encargos/queries";
 import { listarGruposRecolhimento } from "@/modules/rh/parametros-folha/queries";
+import { ProvisoesSecao } from "@/modules/rh/provisoes/components/provisoes-secao";
+import { listarProvisoes } from "@/modules/rh/provisoes/queries";
 
 export default async function PaginaEncargos() {
   const usuario = await getUsuarioLogado();
@@ -14,9 +16,10 @@ export default async function PaginaEncargos() {
     notFound();
   }
 
-  const [encargos, grupos] = await Promise.all([
+  const [encargos, grupos, provisoes] = await Promise.all([
     listarEncargos(),
     listarGruposRecolhimento(),
+    listarProvisoes(),
   ]);
 
   const ativos = encargos.filter((encargo) => encargo.ativo);
@@ -55,12 +58,21 @@ export default async function PaginaEncargos() {
         </GradeKpis>
       ) : null}
 
-      <EncargosLista
-        encargos={encargos}
-        podeEditar={podeEditar}
-        podeExcluir={podeExcluir}
-        grupos={grupos}
-      />
+      <div className="flex flex-col gap-8">
+        <EncargosLista
+          encargos={encargos}
+          podeEditar={podeEditar}
+          podeExcluir={podeExcluir}
+          grupos={grupos}
+        />
+
+        <ProvisoesSecao
+          provisoes={provisoes}
+          podeCriar={podeCriar}
+          podeEditar={podeEditar}
+          podeExcluir={podeExcluir}
+        />
+      </div>
     </>
   );
 }

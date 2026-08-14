@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { COLUNAS_ENCARGO } from "@/modules/rh/encargos/importacao";
 import { encargoSchema } from "@/modules/rh/encargos/schemas";
 
 const base = {
@@ -105,6 +106,57 @@ describe("encargoSchema — ativo", () => {
     const r = encargoSchema.safeParse({ ...base, ativo: false });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.ativo).toBe(false);
+  });
+});
+
+/**
+ * A coluna Percentual da planilha usa o mesmo `paraNumero`/`casasDecimais` do
+ * formulário (rh/percentual). `lerEValidarXlsx` chama `transformar` dentro de
+ * try/catch e vira erro da linha, então "recusado" aqui é `transformar`
+ * lançando ou `validar` devolvendo mensagem.
+ */
+function transformarPercentualImportacao(valor: unknown): unknown {
+  const coluna = COLUNAS_ENCARGO.find((item) => item.chave === "percentual");
+  if (!coluna?.transformar) {
+    throw new Error("coluna Percentual sem transformar");
+  }
+  return coluna.transformar(valor);
+}
+
+function validarPercentualImportacao(valor: unknown): string | null {
+  const coluna = COLUNAS_ENCARGO.find((item) => item.chave === "percentual");
+  if (!coluna?.validar) {
+    throw new Error("coluna Percentual sem validar");
+  }
+  return coluna.validar(valor, {});
+}
+
+describe("COLUNAS_ENCARGO — percentual da planilha", () => {
+  it("recusa '0.5' em vez de virar 5 (ponto não é decimal em pt-BR)", () => {
+    expect(() => transformarPercentualImportacao("0.5")).toThrow(
+      "percentual inválido",
+    );
+  });
+
+  it("recusa '0.50', que também não é agrupamento de milhar", () => {
+    expect(() => transformarPercentualImportacao("0.50")).toThrow(
+      "percentual inválido",
+    );
+  });
+
+  it("aceita '0,5' (vírgula decimal) como meio por cento", () => {
+    expect(transformarPercentualImportacao("0,5")).toBe(0.5);
+  });
+
+  it("aceita '8,333' e '20' no formato da planilha", () => {
+    expect(transformarPercentualImportacao("8,333")).toBe(8.333);
+    expect(transformarPercentualImportacao("20")).toBe(20);
+  });
+
+  it("recusa notação exponencial por casas decimais, não por teto", () => {
+    expect(validarPercentualImportacao(1e-7)).toBe(
+      "O percentual aceita no máximo 3 casas decimais",
+    );
   });
 });
 

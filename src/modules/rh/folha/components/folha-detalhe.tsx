@@ -33,6 +33,7 @@ import type {
   FolhaDetalhe,
   FolhaItem,
   ResumoEncargo,
+  ResumoProvisao,
 } from "@/modules/rh/folha/queries";
 import { podeTransicionar } from "@/modules/rh/folha/transicoes";
 import { BotaoPlanilha } from "./botao-planilha";
@@ -79,6 +80,7 @@ export interface FolhaDetalheViewProps {
   folha: FolhaDetalhe;
   custosPorCentro: CustoCentroCusto[];
   resumoEncargos: ResumoEncargo[];
+  resumoProvisoes: ResumoProvisao[];
   /** Lançamentos gerados pela aprovação, já separados em salários/guias (Task 7). */
   lancamentos: LancamentosDaFolhaAgrupados;
   /** % do FGTS (parâmetros da folha) para o informativo do holerite. */
@@ -112,6 +114,7 @@ export function FolhaDetalheView({
   folha,
   custosPorCentro,
   resumoEncargos,
+  resumoProvisoes,
   lancamentos,
   fgtsPercentual,
   gruposRetido,
@@ -151,6 +154,17 @@ export function FolhaDetalheView({
     retidoSemGrupo.inss > 0 ? "INSS" : null,
     retidoSemGrupo.irrf > 0 ? "IRRF" : null,
   ].filter((nome): nome is string => nome !== null);
+  // Total da seção "Provisões por tipo": soma sobre `resumoProvisoes`, a
+  // mesma fonte das linhas da tabela, para a linha de total sempre bater com
+  // as duas colunas ao lado (ver comentário na própria linha, mais abaixo).
+  const totalProvisoes = resumoProvisoes.reduce(
+    (soma, provisao) => ({
+      principal: soma.principal + provisao.principal,
+      encargos: soma.encargos + provisao.encargos,
+      total: soma.total + provisao.total,
+    }),
+    { principal: 0, encargos: 0, total: 0 },
+  );
 
   const [dialogEnviar, setDialogEnviar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
@@ -308,7 +322,7 @@ export function FolhaDetalheView({
         <KPICard
           titulo="Custo total"
           valor={<MoneyText valor={folha.custoTotal} />}
-          detalhe="Custo da empresa (bruto + encargos)"
+          detalhe="Custo da empresa (bruto + encargos + provisão)"
         />
         <KPICard
           titulo="Líquido"
@@ -366,6 +380,7 @@ export function FolhaDetalheView({
                     Valor extras
                   </th>
                   <th className="px-3 py-2 text-right font-medium">Encargos</th>
+                  <th className="px-3 py-2 text-right font-medium">Provisão</th>
                   <th className="px-3 py-2 text-right font-medium">
                     Adiantamentos
                   </th>
@@ -437,6 +452,35 @@ export function FolhaDetalheView({
                         </details>
                       ) : (
                         <MoneyText valor={item.encargos} />
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right text-muted-foreground">
+                      {item.provisoesDetalhe.length > 0 ? (
+                        <details className="group">
+                          <summary className="flex cursor-pointer list-none items-center justify-end gap-1 select-none [&::-webkit-details-marker]:hidden">
+                            <MoneyText valor={item.provisoes} />
+                            <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180" />
+                          </summary>
+                          <ul className="mt-1.5 space-y-1 border-t border-border pt-1.5 text-left text-legenda">
+                            {item.provisoesDetalhe.map((provisao) => (
+                              <li key={provisao.nome} className="flex flex-col gap-0.5">
+                                <span className="font-medium text-foreground">
+                                  {provisao.nome}
+                                </span>
+                                <span className="flex items-center justify-between gap-3">
+                                  <span>Principal</span>
+                                  <MoneyText valor={provisao.valorPrincipal} />
+                                </span>
+                                <span className="flex items-center justify-between gap-3">
+                                  <span>Encargos</span>
+                                  <MoneyText valor={provisao.valorEncargos} />
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : (
+                        <MoneyText valor={item.provisoes} />
                       )}
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
@@ -547,6 +591,74 @@ export function FolhaDetalheView({
                   <td className="px-3 py-2 text-right">
                     <MoneyText
                       valor={folha.valorEncargos}
+                      className="font-semibold"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Secao>
+      ) : null}
+
+      {resumoProvisoes.length > 0 ? (
+        <Secao titulo="Provisões por tipo">
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full text-detalhe">
+              <thead>
+                <tr className="border-b border-border text-legenda text-muted-foreground">
+                  <th className="px-3 py-2 text-center font-medium">
+                    Provisão
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Principal
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Encargos
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumoProvisoes.map((provisao) => (
+                  <tr
+                    key={provisao.nome}
+                    className="border-b border-border last:border-0"
+                  >
+                    <td className="px-3 py-2 text-center">{provisao.nome}</td>
+                    <td className="px-3 py-2 text-right">
+                      <MoneyText valor={provisao.principal} />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <MoneyText valor={provisao.encargos} />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <MoneyText valor={provisao.total} className="font-medium" />
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-border">
+                  <td className="px-3 py-2 text-center font-semibold">Total</td>
+                  {/* Fonte única: soma sobre `resumoProvisoes`, a mesma lista
+                      que preenche as linhas acima — as 3 células desta linha
+                      sempre somam entre si. `folha.valorProvisoes` (o banco) é
+                      a fonte do KPI de custo total, onde uma eventual
+                      divergência entre item e consolidado aparece. */}
+                  <td className="px-3 py-2 text-right">
+                    <MoneyText
+                      valor={totalProvisoes.principal}
+                      className="font-semibold"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <MoneyText
+                      valor={totalProvisoes.encargos}
+                      className="font-semibold"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <MoneyText
+                      valor={totalProvisoes.total}
                       className="font-semibold"
                     />
                   </td>
