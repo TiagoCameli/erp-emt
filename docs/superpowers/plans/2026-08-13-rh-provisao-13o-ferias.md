@@ -670,7 +670,127 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Portão final, prova de aceite e registro
+### Task 5: Travas de sanidade do que multiplica salário (DINHEIRO)
+
+**Modelo sugerido:** opus. Mexe em trigger de tabela cujo número entra no custo da folha.
+
+Task acrescentada depois da Task 2, com o Tiago aprovando explicitamente travar a soma **nas duas** tabelas. Duas travas, mais o tratamento de erro que impede as duas de virarem "Tente novamente" na tela.
+
+**Files:**
+- Migration nova: `travas_da_soma_de_percentual_e_salario`
+- Modify: `src/modules/rh/provisoes/actions.ts`, `src/modules/rh/encargos/actions.ts`, `src/modules/cadastros/colaboradores/actions.ts` (tradução do erro)
+- Modify ou create: o teste que cobre a tradução, no padrão que o módulo já usa
+
+**Interfaces:**
+- Consumes: `folha_provisoes`, `folha_encargos`, `colaboradores.salario`.
+- Produces: trigger de teto agregado nas duas tabelas de percentual; check `salario >= 0` em `colaboradores`; mensagem de erro que chega ao campo em vez do toast genérico.
+
+- [ ] **Step 1: Medir antes de travar**
+
+```sql
+select coalesce(sum(percentual), 0) as soma_provisoes_ativas from public.folha_provisoes where ativo;
+select coalesce(sum(percentual), 0) as soma_encargos_ativos from public.folha_encargos where ativo;
+select count(*) as colaboradores_com_salario_negativo from public.colaboradores where salario < 0;
+select count(*) as colaboradores_total, count(*) filter (where salario is null) as salario_nulo
+from public.colaboradores;
+```
+
+**Se qualquer soma já passar de 100, ou existir salário negativo, pare e reporte.** Adicionar a trava com o estado já violado bloquearia qualquer edição futura daquelas linhas, e decidir o que fazer com dado legado é decisão do Tiago, não sua. `salario` nulo não é violação: o check tem que aceitar nulo.
+
+- [ ] **Step 2: Aplicar a migration**
+
+Via `apply_migration`, nome `travas_da_soma_de_percentual_e_salario`.
+
+**Teto agregado de 100% em cada tabela, com uma função de trigger por tabela.** Duas funções pequenas com a consulta estática, **não** uma genérica com `execute format(TG_TABLE_NAME)`: SQL dinâmico numa trava de dinheiro é mais frágil, e são só duas.
+
+```sql
+-- Teto de 100%: nenhum conjunto de percentuais que multiplica salário pode
+-- passar do próprio salário. Não é regra fiscal, é sanidade de cadastro: acima
+-- disso é erro de digitação, sempre. Linha inativa não soma, porque desativar
+-- é como se desliga uma provisão sem apagá-la.
+create or replace function public.fn_trava_soma_provisoes()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+declare v_outras numeric;
+begin
+  if not new.ativo then return new; end if;
+  select coalesce(sum(percentual), 0) into v_outras
+  from public.folha_provisoes where ativo and id <> new.id;
+  if v_outras + new.percentual > 100 then
+    raise exception 'A soma dos percentuais de provisão ativos não pode passar de 100%%. As outras provisões ativas somam %%, e esta acrescentaria %%.', v_outras, new.percentual;
+  end if;
+  return new;
+end $$;
+
+create trigger trg_trava_soma_provisoes
+  before insert or update on public.folha_provisoes
+  for each row execute function public.fn_trava_soma_provisoes();
+```
+
+E o par para `folha_encargos`, idêntico trocando a tabela, o nome da função e a palavra "encargos" na mensagem.
+
+**Atenção a três coisas neste SQL:**
+1. **`id <> new.id` funciona no INSERT e no UPDATE**, porque o default de `id` é aplicado antes dos triggers BEFORE. Confirme lendo o default da coluna em vez de acreditar nesta frase.
+2. **`%%` no `raise exception` produz um `%` literal**, e `%` sozinho consome argumento. Conte os argumentos contra os placeholders antes de aplicar, e teste a mensagem de verdade.
+3. **Reativar uma linha por UPDATE de `ativo` false→true também é pego**, porque `new.ativo` é true e a soma exclui só a própria linha.
+
+O check do salário:
+
+```sql
+-- O Zod já recusa negativo, mas o banco não tinha nada, e depois da Task 2 um
+-- salário negativo faz a folha INTEIRA abortar: a provisão gera valor_encargos
+-- negativo e bate no check da coluna, então nenhum item de nenhum colaborador
+-- é gravado. Nulo é permitido (colaborador sem salário definido existe).
+alter table public.colaboradores
+  add constraint colaboradores_salario_nao_negativo check (salario is null or salario >= 0);
+```
+
+Trava `do $$` no fim conferindo que os dois triggers existem, que o check existe, e que `fn_gerar_folha` continua em `0705f9c753f84e16f411ef4e35ec9b9c` (esta task **não** toca nela).
+
+- [ ] **Step 3: Provar as travas, o caso parcial primeiro**
+
+Tudo em `begin; ... rollback;`. O caso parcial é o que importa: **uma linha inativa alta e uma ativa**, que é onde uma trava mal escrita erra.
+
+Para **cada** uma das duas tabelas:
+1. duas ativas de 40% cada, e uma terceira de 30% recusada com a mensagem certa (soma daria 110);
+2. a mesma terceira de 20% **aceita** (soma exatamente 100, o limite é inclusivo);
+3. uma inativa de 90% **não** conta: com uma ativa de 40%, inserir ativa de 50% passa;
+4. **reativar** por UPDATE a inativa de 90% quando os ativos somam 40% é recusado;
+5. editar o percentual de uma linha ativa para um valor que cabe é aceito, e a própria linha não é contada duas vezes (ativa única de 40% editada para 100% passa);
+6. desativar uma linha nunca é recusado, mesmo que a soma esteja no limite.
+
+E o salário: `insert`/`update` com `-1` recusado, com `0` aceito, com nulo aceito.
+
+- [ ] **Step 4: A mensagem não pode virar "Tente novamente"**
+
+As três travas levantam `P0001` (`raise_exception`) ou `23514` (check). O padrão desta base traduz erro do banco em mensagem de campo por `erroAcao` com um tradutor; **leia como `salvarEncargo` já trata `23505` (`src/modules/rh/encargos/actions.ts`) e siga o mesmo caminho**. Sem isso, a trava dispara e o usuário lê "Não foi possível salvar. Tente novamente", um retry que nunca funciona: foi exatamente o defeito que a revisão da Task 1 achou com o erro `23514`.
+
+Traduza nas três actions, devolvendo a mensagem no campo certo (`percentual` nas duas de percentual, `salario` na de colaborador). Teste a tradução no padrão que o módulo já usa para erro de banco.
+
+- [ ] **Step 5: Portão e commit**
+
+```bash
+find src supabase .next -name "* [0-9].*" -delete
+npx tsc --noEmit && npx eslint src && npx vitest run && npm run build
+git add supabase/migrations/ src/modules/rh/provisoes/actions.ts src/modules/rh/encargos/actions.ts \
+  src/modules/cadastros/colaboradores/actions.ts src/lib/database.types.ts
+git commit -m "feat(rh): travar a soma dos percentuais e o salário negativo
+
+Cinco provisões de 20% dobravam o custo do colaborador sem ninguém tropeçar, e
+o mesmo valia para encargos: cada percentual era conferido isolado e a soma,
+que é o que multiplica o salário, não era conferida por nada. Teto de 100% nas
+duas, com linha inativa fora da conta.
+
+O salário negativo não tinha check no banco, e depois da provisão ele deixou de
+ser lixo silencioso e passou a abortar a folha inteira, bloqueando todos os
+outros colaboradores. As três mensagens chegam ao campo em vez do toast
+genérico de tentar de novo.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 6: Portão final, prova de aceite e registro
 
 **Modelo sugerido:** opus.
 
@@ -684,7 +804,15 @@ Prove: a **identidade de quatro termos** com a consulta extraída do `obj_descri
 
 - [ ] **Step 4: Conferir as migrations desta frente** — cada versão nova com arquivo homônimo e SQL executável igual ao gravado, pela receita normalizada de `docs/decisoes.md`. Reporte a tabela versão × md5 dos dois lados. E rode `fn_verificar_diagnosticos_gravados()` uma última vez.
 
-- [ ] **Step 5: Registrar em `docs/decisoes.md`** uma entrada nova, no formato das existentes, com: por que a provisão mora em tabela separada dos encargos; a identidade de quatro termos e o fato de a provisão não ser causa de resíduo; que o `custo_total` do BI da Gestão **vai subir** no mês em que a config for cadastrada, sem nada ter piorado; e a **dependência do Bloco 8c**: a provisão acumula sem nada consumi-la, e quando o 13º for pago ela tem que ser abatida, senão o custo conta duas vezes.
+- [ ] **Step 5: Registrar em `docs/decisoes.md`** uma entrada nova, no formato das existentes, com sete pontos:
+
+1. por que a provisão mora em tabela separada dos encargos;
+2. a identidade de quatro termos e o fato de a provisão **não** ser causa de resíduo, e sim termo explícito;
+3. que o `custo_total` do BI da Gestão **vai subir** no mês em que a config for cadastrada, sem nada ter piorado;
+4. a **dependência do Bloco 8c**: a provisão acumula sem nada consumi-la, e quando o 13º for pago ela tem que ser abatida, senão o custo conta duas vezes;
+5. o teto agregado de 100% nas duas tabelas de percentual e o check de salário não negativo, com o motivo: o que multiplica salário passou a ser conferido em conjunto, não só linha por linha;
+6. **que `fn_recurso_do_cadastro` perdeu cinco casos numa recriação de 10/08 (`20260810130444`, que não tem arquivo no repo) e ficou com exclusão e restauração quebradas em produção até esta frente**, e que hoje ela tem quinze casos. Escreva explicitamente que **recriar essa função a partir de uma cópia é a armadilha**, e que não existe teste travando isso;
+7. **que a receita de conferência arquivo × ledger é cega para payload de comentário dentro de dollar-quote**, porque normaliza removendo `--` antes do md5: quem cobre isso de fato é a trava de `md5(prosrc)`. Vale para quem fizer a sexta alteração na `fn_gerar_folha`.
 
 - [ ] **Step 6: Não faça merge.** O merge é do coordenador, depois do review amplo.
 
