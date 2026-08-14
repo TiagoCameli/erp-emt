@@ -1700,10 +1700,18 @@ cinco. O dispatcher é usado por `fn_excluir_cadastro` e, como whitelist, por
 caía em "Tabela X nao pode ser excluida por esta funcao", e restaurar recusava igual. Ninguém
 percebeu por dois blocos.
 
-Hoje ela tem **quinze** casos, conferidos no banco: `unidades_medida`, `categorias_insumo`,
-`clientes`, `fornecedores`, `insumos`, `depositos`, `colaboradores`, `obras`, `centros_custo`,
-`funcoes`, `jornadas`, `folha_encargos`, `folha_provisoes`, `folha_inss_faixas`,
-`folha_irrf_faixas`.
+Hoje ela tem **quinze `when` e catorze casos vivos**, conferidos no banco em 14/08/2026:
+`unidades_medida`, `categorias_insumo`, `clientes`, `fornecedores`, `insumos`, `colaboradores`,
+`obras`, `centros_custo`, `funcoes`, `jornadas`, `folha_encargos`, `folha_provisoes`,
+`folha_inss_faixas`, `folha_irrf_faixas`.
+
+O décimo quinto `when` é `depositos`, e é **caso morto**: a tabela `depositos` caiu em
+`20260720120003_reforma_a_drop_estoque` e `cadastros.depositos` não existe no catálogo de recursos,
+então esse `when` não resolve para nada nem nunca vai. Ele ficou aqui de arrasto das recriações e
+**não conta**. Entre 14/08/2026 e a primeira leitura desta entrada, "quinze casos" era contagem
+errada num ponto que ensina justamente a contar os casos antes e depois: corrigido em 14/08/2026,
+na rodada de correção do review amplo do Bloco 8b. Quem for mexer na função conta `when` **e**
+confere `to_regclass` de cada tabela, senão herda o mesmo erro.
 
 **A armadilha, escrita explicitamente: recriar essa função a partir de uma cópia é o modo de falha
 dela.** É um `case` grande de uma linha por tabela, um `create or replace` a partir de qualquer
@@ -1711,8 +1719,10 @@ texto desatualizado apaga casos em silêncio, e nada acusa: não há erro, não 
 advisor. **Não existe teste travando isso.** Quem precisar mexer nela deve partir da definição
 **viva** (`pg_get_functiondef` / `prosrc` no banco), nunca de um arquivo do repo nem de uma
 migration anterior, e contar os casos antes e depois. Foi assim, e só assim, que os cinco voltaram.
+Isso vale para o **comportamento**: o arquivo do repo pode estar à frente do `prosrc` em
+**comentário**, e por isso o raciocínio se lê nos dois (ponto 8, limite 3).
 
-### 8. Três limites honestos das ferramentas de conferência desta frente
+### 8. Quatro limites honestos das ferramentas de conferência desta frente
 
 Quem vier depois vai confiar nelas se estes limites não estiverem escritos.
 
@@ -1735,6 +1745,35 @@ Quem vier depois vai confiar nelas se estes limites não estiverem escritos.
    `md5(pg_get_functiondef)`: por `functiondef` os hashes são outros, e isso já causou falso alarme
    nesta frente.
 
+   **Consequência que troca a regra de leitura do ponto 7: o arquivo do repo pode estar À FRENTE do
+   `prosrc` em comentário, e está.** Porque a receita é cega a comentário, corrigir comentário num
+   `.sql` já aplicado é permitido e não gera migration, então o arquivo acumula raciocínio que a
+   definição viva não tem. Medido em 14/08/2026 nas duas travas da migration `20260814183909`: corpo
+   vivo de `fn_trava_soma_provisoes` com 1.610 caracteres contra 2.254 no arquivo, e
+   `fn_trava_soma_encargos` com 640 contra 867, com o SQL executável **idêntico dos dois lados** (md5
+   normalizado `9ed20d8dad8a5df0c4b87e7cc01dfb65` e `7143172054258151925bf124bd705f58` no arquivo e
+   no banco). O que só existe no arquivo inclui o parágrafo do **upsert contar a própria linha duas
+   vezes** e a qualificação de que a exclusão da própria linha vale para **UPDATE puro**. Então o
+   ponto 7 continua valendo para comportamento (parta do `prosrc`), mas quem for mexer numa função
+   **lê os dois**: o `prosrc` para o que a função faz, o arquivo do repo para o porquê. Ler só o
+   `prosrc` de uma dessas duas travas é abrir o primeiro upsert nessas tabelas sem saber do risco.
+
+4. **A correção do `paraNumero` foi por cópia, e ainda sobra uma.** O percentual digitado era
+   convertido por três cópias da mesma função. A extração para `rh/percentual.ts` (Task 1) achou e
+   consertou um furo de dinheiro: `"0.5"` virava **5** caladamente, porque o ponto era tratado como
+   separador de milhar sem conferir o agrupamento, e o `casasDecimais` antigo contava 0 casas em
+   notação exponencial (`(1e-7).toString()` é `"1e-7"`, sem ponto). Dez vezes o valor pretendido,
+   **aprovado pelo teto de 100% e pelo check da coluna**: com 20 CLT a 3.000,00, 300,00/mês de
+   encargo viram 3.000,00/mês. O conserto foi na cópia do formulário, e as outras duas seguiram com
+   a versão antiga até a rodada de correção do review amplo, em 14/08/2026, que fez
+   `rh/encargos/importacao.ts` importar `paraNumero` e `casasDecimais` de `rh/percentual.ts` — era a
+   cópia que alimenta `folha_encargos.percentual`, a coluna que depois desta frente multiplica o
+   salário **e** a provisão (`v_prov_encargos := round(v_prov_principal * v_pct_total / 100.0, 2)`),
+   e o caminho de planilha é exatamente onde `0.5` chega, copiado de Excel em locale inglês.
+   **Sobra uma cópia, de propósito:** `rh/parametros-folha/schemas.ts`, onde `"0.5"` ainda vira 5. É
+   parâmetro fiscal digitado por uma pessoa numa tela, não planilha importada, e a divergência está
+   escrita nos dois comentários do arquivo. Unificar é conserto de uma linha para quem passar ali.
+
 ### 9. Dois achados da prova de aceite que a frente NÃO fechou, os dois pendentes de decisão do dono
 
 Nenhum dos dois mexe em dinheiro, e nenhum dos dois foi criado por esta frente. Os dois tornam o
@@ -1751,15 +1790,17 @@ recusa antes de chegar ao banco. É **pré-existente** (desde 27/07), mas esta f
 dispatcher justamente para esse caminho funcionar. **Decisão do dono**, porque define quem pode
 apagar um percentual que multiplica salário.
 
-**b) `TABELAS_RESTAURAVEIS` tem 6 tabelas e o dispatcher do banco tem 15.**
+**b) `TABELAS_RESTAURAVEIS` tem 6 tabelas e o dispatcher do banco tem 14 casos vivos.**
 `src/modules/administracao/lixeira/restauravel.ts` lista `unidades_medida`, `categorias_insumo`,
-`clientes`, `fornecedores`, `insumos`, `colaboradores`. Faltam **nove**, incluindo
-`folha_provisoes` e `folha_encargos`. `lixeira-tabela.tsx` usa essa lista para decidir se mostra o
-botão Restaurar: para as nove, ele aparece **desabilitado**, com o tooltip "Este tipo de registro
-não pode ser restaurado pela lixeira". Medido em transação revertida que **o banco restaura a
-provisão sem reclamar**: `fn_excluir_cadastro` move para a lixeira e `fn_restaurar_cadastro`
-reinsere. **É a UI que está errada, não o banco**, e o comentário do arquivo ainda diz "Obras,
+`clientes`, `fornecedores`, `insumos`, `colaboradores`. Faltam **oito** (medido em 14/08/2026,
+contra os catorze vivos do ponto 7, não contra os quinze `when`): `obras`, `centros_custo`,
+`funcoes`, `jornadas`, `folha_encargos`, `folha_provisoes`, `folha_inss_faixas`,
+`folha_irrf_faixas`. `lixeira-tabela.tsx` usa essa lista para decidir se mostra o botão Restaurar:
+para as oito, ele aparece **desabilitado**, com o tooltip "Este tipo de registro não pode ser
+restaurado pela lixeira". Medido em transação revertida que **o banco restaura a provisão sem
+reclamar**: `fn_excluir_cadastro` move para a lixeira e `fn_restaurar_cadastro` reinsere. **É a UI que está errada, não o banco**, e o comentário do arquivo ainda diz "Obras,
 equipamentos e centros de custo não entram", que deixou de ser verdade em 10/08. É o **mesmo modo
 de falha do ponto 7**, uma allowlist duplicada que envelhece em silêncio, só que do lado do
 TypeScript, e também **sem teste** casando os dois lados. O conserto barato e durável é um teste
-que leia os casos de `fn_recurso_do_cadastro` e case com a constante.
+que leia os casos de `fn_recurso_do_cadastro` e case com a constante, ignorando `when` de tabela que
+não existe mais (hoje só `depositos`), senão ele nasce falhando por um caso morto.
