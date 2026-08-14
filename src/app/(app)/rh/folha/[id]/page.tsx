@@ -5,6 +5,7 @@ import {
   agruparLancamentosDaFolha,
   resumoPorCentroCusto,
   resumoPorEncargo,
+  resumoPorProvisao,
 } from "@/modules/rh/folha/calculo";
 import { FolhaDetalheView } from "@/modules/rh/folha/components/folha-detalhe";
 import {
@@ -32,6 +33,7 @@ export default async function PaginaFolhaDetalhe({
 
   const custosPorCentro = resumoPorCentroCusto(folha);
   const resumoEncargos = resumoPorEncargo(folha);
+  const resumoProvisoes = resumoPorProvisao(folha);
   // Ids dos lançamentos de salário: já vêm em `folha.itens` (buscarFolha leu
   // `folha_itens` mais acima nesta mesma requisição). listarLancamentosDaFolha
   // só faz a leitura própria de `folha_guias` (que não é carregada em
@@ -62,6 +64,7 @@ export default async function PaginaFolhaDetalhe({
       folha={folha}
       custosPorCentro={custosPorCentro}
       resumoEncargos={resumoEncargos}
+      resumoProvisoes={resumoProvisoes}
       lancamentos={lancamentos}
       fgtsPercentual={parametros?.fgtsPercentual ?? 0}
       gruposRetido={

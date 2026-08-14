@@ -25,7 +25,6 @@ import {
   rejeitarFolha,
 } from "@/modules/rh/folha/actions";
 import {
-  resumoPorProvisao,
   retidoSemGrupoDeRecolhimento,
   type LancamentosDaFolhaAgrupados,
 } from "@/modules/rh/folha/calculo";
@@ -34,6 +33,7 @@ import type {
   FolhaDetalhe,
   FolhaItem,
   ResumoEncargo,
+  ResumoProvisao,
 } from "@/modules/rh/folha/queries";
 import { podeTransicionar } from "@/modules/rh/folha/transicoes";
 import { BotaoPlanilha } from "./botao-planilha";
@@ -80,6 +80,7 @@ export interface FolhaDetalheViewProps {
   folha: FolhaDetalhe;
   custosPorCentro: CustoCentroCusto[];
   resumoEncargos: ResumoEncargo[];
+  resumoProvisoes: ResumoProvisao[];
   /** Lançamentos gerados pela aprovação, já separados em salários/guias (Task 7). */
   lancamentos: LancamentosDaFolhaAgrupados;
   /** % do FGTS (parâmetros da folha) para o informativo do holerite. */
@@ -113,6 +114,7 @@ export function FolhaDetalheView({
   folha,
   custosPorCentro,
   resumoEncargos,
+  resumoProvisoes,
   lancamentos,
   fgtsPercentual,
   gruposRetido,
@@ -148,13 +150,21 @@ export function FolhaDetalheView({
   // chegar ANTES de alguém aprovar. É a segunda causa de resíduo da identidade
   // de conferência (a lista tem duas; ver obj_description da fn_aprovar_folha).
   const retidoSemGrupo = retidoSemGrupoDeRecolhimento(folha, gruposRetido);
-  // Derivado de `folha.itens`, já em mãos: mesma disciplina de não reler nem
-  // recalcular fora do que a página já buscou (ver resumoPorEncargo/queries.ts).
-  const resumoProvisoes = resumoPorProvisao(folha);
   const impostosSemGrupo = [
     retidoSemGrupo.inss > 0 ? "INSS" : null,
     retidoSemGrupo.irrf > 0 ? "IRRF" : null,
   ].filter((nome): nome is string => nome !== null);
+  // Total da seção "Provisões por tipo": soma sobre `resumoProvisoes`, a
+  // mesma fonte das linhas da tabela, para a linha de total sempre bater com
+  // as duas colunas ao lado (ver comentário na própria linha, mais abaixo).
+  const totalProvisoes = resumoProvisoes.reduce(
+    (soma, provisao) => ({
+      principal: soma.principal + provisao.principal,
+      encargos: soma.encargos + provisao.encargos,
+      total: soma.total + provisao.total,
+    }),
+    { principal: 0, encargos: 0, total: 0 },
+  );
 
   const [dialogEnviar, setDialogEnviar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
@@ -629,21 +639,26 @@ export function FolhaDetalheView({
                 ))}
                 <tr className="border-t border-border">
                   <td className="px-3 py-2 text-center font-semibold">Total</td>
+                  {/* Fonte única: soma sobre `resumoProvisoes`, a mesma lista
+                      que preenche as linhas acima — as 3 células desta linha
+                      sempre somam entre si. `folha.valorProvisoes` (o banco) é
+                      a fonte do KPI de custo total, onde uma eventual
+                      divergência entre item e consolidado aparece. */}
                   <td className="px-3 py-2 text-right">
                     <MoneyText
-                      valor={resumoProvisoes.reduce((soma, p) => soma + p.principal, 0)}
+                      valor={totalProvisoes.principal}
                       className="font-semibold"
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
                     <MoneyText
-                      valor={resumoProvisoes.reduce((soma, p) => soma + p.encargos, 0)}
+                      valor={totalProvisoes.encargos}
                       className="font-semibold"
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
                     <MoneyText
-                      valor={folha.valorProvisoes}
+                      valor={totalProvisoes.total}
                       className="font-semibold"
                     />
                   </td>
