@@ -124,17 +124,32 @@ describe("drillCentroCusto", () => {
     expect(p.fornecedor).toBe(FORNECEDOR);
   });
 
-  it("com incluirPrevisto, não trava o status", () => {
-    // O relatório exclui cancelado SEMPRE, mas previsto só quando o usuário pediu.
+  it("por padrão não exclui previsto, que é o relatório de hoje", () => {
+    // O relatório exclui cancelado SEMPRE e previsto NUNCA, até alguém pedir.
+    // Inverter isso mudaria um número de dinheiro sem ninguém pedir, e com 0
+    // previsto na base a mudança não apareceria na tela hoje.
     const p = params(
       drillCentroCusto({
         centroCustoId: CENTRO,
         periodo: { mes: "2026-07" },
-        filtros: { incluirPrevisto: true },
+        filtros: {},
       }),
     );
     expect(p.sem_cancelado).toBe("1");
+    expect(p.sem_previsto).toBeUndefined();
     expect(p.status).toBeUndefined();
+  });
+
+  it("com excluirPrevisto, a lista também exclui previsto", () => {
+    const p = params(
+      drillCentroCusto({
+        centroCustoId: CENTRO,
+        periodo: { mes: "2026-07" },
+        filtros: { excluirPrevisto: true },
+      }),
+    );
+    expect(p.sem_previsto).toBe("1");
+    expect(p.sem_cancelado).toBe("1");
   });
 });
 

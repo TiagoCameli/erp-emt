@@ -47,10 +47,14 @@ export interface FiltrosDoRelatorioDeCusto {
   categoriaId?: string;
   fornecedorId?: string;
   /**
-   * O relatório incluiu Previsto? Só muda o que NÃO é enviado: com previsto
-   * dentro, nenhum filtro de status vai além do `sem_cancelado`.
+   * O relatório está somando SEM os previstos? Então a lista também tem que
+   * excluí-los, senão ela traz linha que a célula não contou.
+   *
+   * Falso é o padrão porque é o comportamento do relatório de hoje (ele só exclui
+   * cancelado). Hoje a base tem 0 previsto, então a diferença não apareceria na
+   * tela — e é por isso que o teste trava o parâmetro em vez de confiar no olho.
    */
-  incluirPrevisto?: boolean;
+  excluirPrevisto?: boolean;
 }
 
 function montar(params: Record<string, string | undefined>): string {
@@ -107,6 +111,7 @@ export function drillCentroCusto({
     ...periodoNaUrl(periodo),
     categoria: filtros.categoriaId,
     fornecedor: filtros.fornecedorId,
+    sem_previsto: filtros.excluirPrevisto ? "1" : undefined,
   });
 }
 

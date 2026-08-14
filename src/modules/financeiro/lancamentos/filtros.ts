@@ -67,6 +67,8 @@ export interface ValoresFiltrosLancamentos {
   criadoAte: string;
   /** "1" quando cancelados estão fora da lista, "" quando entram. */
   semCancelado: string;
+  /** "1" quando previstos estão fora da lista, "" quando entram. */
+  semPrevisto: string;
   /** A fatia de parcela recortada por um relatório, como veio na URL. */
   recorte: string;
   /** Faixa de MÊS DE REFERÊNCIA, como data yyyy-MM-dd. */
@@ -222,6 +224,11 @@ export function lerFiltrosLancamentos(
   // Só o literal "1" liga: qualquer outro texto é URL mal montada, e ligar um
   // filtro por engano some com linha da lista sem dizer por quê.
   const semCancelado = params.sem_cancelado === "1" ? true : undefined;
+  // Irmão do sem_cancelado, e existe pelo mesmo motivo: o relatório de custo pode
+  // estar somando sem previsto, e o clique tem que abrir a MESMA fatia. Dois
+  // excludes explícitos em vez de um `status` multivalorado, porque o App Router
+  // entrega chave repetida como array e o contrato inteiro recusa array.
+  const semPrevisto = params.sem_previsto === "1" ? true : undefined;
   const recorte = lerRecorte(params.recorte);
 
   const paginaParam = Number(params.pagina);
@@ -260,6 +267,7 @@ export function lerFiltrosLancamentos(
       revisao,
       atraso,
       semCancelado,
+      semPrevisto,
       recorte,
     },
     valores: {
@@ -286,6 +294,7 @@ export function lerFiltrosLancamentos(
       compDe: texto(competencia.de),
       compAte: texto(competencia.ate),
       semCancelado: semCancelado ? "1" : "",
+      semPrevisto: semPrevisto ? "1" : "",
       // Só o recorte que PASSOU na validação volta para a tela: recorte inválido
       // aparecendo na barra diria que a lista está recortada quando ela não está.
       recorte: recorte ? (params.recorte as string) : "",

@@ -23,7 +23,9 @@ describe("lerFiltrosCustoCc", () => {
     expect(filtros.modo).toBe("mes");
     expect(filtros.mes).toBe(MES_CORRENTE);
     expect(filtros.comparar).toBe(false);
-    expect(filtros.incluirPrevisto).toBe(false);
+    // Falso = previsto DENTRO, que é o comportamento do relatório de hoje. O
+    // filtro é o exclude, para o padrão não mudar um número de dinheiro calado.
+    expect(filtros.excluirPrevisto).toBe(false);
     expect(filtros.centroId).toBeUndefined();
   });
 
@@ -73,7 +75,7 @@ describe("lerFiltrosCustoCc", () => {
       {
         categoria: CATEGORIA,
         fornecedor: FORNECEDOR,
-        previsto: "1",
+        sem_previsto: "1",
         tipo_centro: "obra",
         comparar: "1",
       },
@@ -81,18 +83,18 @@ describe("lerFiltrosCustoCc", () => {
     );
     expect(filtros.categoriaId).toBe(CATEGORIA);
     expect(filtros.fornecedorId).toBe(FORNECEDOR);
-    expect(filtros.incluirPrevisto).toBe(true);
+    expect(filtros.excluirPrevisto).toBe(true);
     expect(filtros.tipoCentro).toBe("obra");
     expect(filtros.comparar).toBe(true);
   });
 
-  it("previsto e comparar ligam só no literal 1", () => {
+  it("sem_previsto e comparar ligam só no literal 1", () => {
     for (const valor of ["0", "true", "sim", ""]) {
       const { filtros } = lerFiltrosCustoCc(
-        { previsto: valor, comparar: valor },
+        { sem_previsto: valor, comparar: valor },
         MES_CORRENTE,
       );
-      expect(filtros.incluirPrevisto).toBe(false);
+      expect(filtros.excluirPrevisto).toBe(false);
       expect(filtros.comparar).toBe(false);
     }
   });

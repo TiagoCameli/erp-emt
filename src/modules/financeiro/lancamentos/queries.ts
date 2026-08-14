@@ -109,6 +109,11 @@ export interface ListarLancamentosParams {
    */
   semCancelado?: boolean;
   /**
+   * Tira os previstos da lista. Irmão do `semCancelado`, para o clique num
+   * relatório que está somando sem previsto abrir a MESMA fatia.
+   */
+  semPrevisto?: boolean;
+  /**
    * Fatia de nível de PARCELA recortada por um relatório. Ver
    * `lancamentos/recorte.ts`: ela decide quais lançamentos entram na lista E como
    * o `valorRecorte` de cada um é somado, para o total fechar com a célula que foi
@@ -771,6 +776,7 @@ export async function listarLancamentos(
   // `neq` e não um `status` positivo: os relatórios de custo excluem UM status e
   // aceitam todos os outros, o que o filtro de status (um valor só) não expressa.
   if (params.semCancelado) consulta = consulta.neq("status", "cancelado");
+  if (params.semPrevisto) consulta = consulta.neq("status", "previsto");
   if (params.criadoDe) {
     consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadoDe));
   }

@@ -38,10 +38,18 @@ export interface FiltrosCustoCc {
   categoriaId?: string;
   fornecedorId?: string;
   /**
-   * Previsto entra na soma? Fora por padrão, igual ao relatório de hoje: ele é de
-   * custo incorrido, e previsto é intenção.
+   * Tirar os lançamentos `previsto` da soma?
+   *
+   * Falso por padrão, e o padrão é o que importa aqui: o relatório de hoje inclui
+   * previsto (ele só exclui cancelado). Fazer "incluir previsto" um opt-in
+   * mudaria o número de um relatório de dinheiro sem ninguém pedir — e como a base
+   * tem 0 previsto em 14/08/2026, a mudança não apareceria na tela hoje e só
+   * morderia no dia em que o primeiro previsto fosse lançado.
+   *
+   * O filtro é o EXCLUDE, então ligar é uma escolha visível e desligado é o
+   * comportamento de sempre.
    */
-  incluirPrevisto: boolean;
+  excluirPrevisto: boolean;
   tipoCentro?: TipoCentro;
   /** Mostrar a variação contra o período imediatamente anterior. */
   comparar: boolean;
@@ -119,7 +127,7 @@ export function lerFiltrosCustoCc(
     centroId,
     categoriaId: parametroUuid(params.categoria),
     fornecedorId: parametroUuid(params.fornecedor),
-    incluirPrevisto: parametroLigado(params.previsto),
+    excluirPrevisto: parametroLigado(params.sem_previsto),
     tipoCentro: parametroValido(params.tipo_centro, TIPOS_CENTRO),
     comparar: parametroLigado(params.comparar),
   };
