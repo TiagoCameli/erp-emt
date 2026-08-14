@@ -38,4 +38,25 @@ describe("provisaoSchema", () => {
       expect(provisaoSchema.safeParse({ ...base, nome }).success).toBe(false);
     }
   });
+
+  // Fix round 1: 1e-7 escapava do `percentual > 0` (JS: 1e-7 > 0 é true),
+  // a coluna numeric(6,3) arredondava pra 0.000 e o check do banco estourava
+  // como erro genérico em vez de mensagem de campo. As duas causas foram
+  // fechadas: casasDecimais conta certo a notação exponencial (percentual.ts)
+  // e o piso explícito de 0,001 documenta a regra independente disso.
+  it("recusa 1e-7 e 0.0001 com mensagem de campo, não erro cru do Postgres", () => {
+    for (const percentual of [1e-7, 0.0001]) {
+      const r = provisaoSchema.safeParse({ ...base, percentual });
+      expect(r.success).toBe(false);
+      if (!r.success) {
+        expect(r.error.issues.length).toBeGreaterThan(0);
+        expect(typeof r.error.issues[0]?.message).toBe("string");
+      }
+    }
+  });
+
+  it("aceita exatamente o piso de 0,001 (limite inclusive)", () => {
+    const r = provisaoSchema.safeParse({ ...base, percentual: 0.001 });
+    expect(r.success).toBe(true);
+  });
 });
