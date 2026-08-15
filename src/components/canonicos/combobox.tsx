@@ -36,9 +36,23 @@ export interface ComboboxOpcao {
 }
 
 export interface ComboboxProps {
-  /** Valor atual (o `valor` da opção selecionada). "" quando nada selecionado. */
+  /**
+   * Valor atual (o `valor` da opção selecionada). "" quando nada selecionado.
+   *
+   * No modo múltiplo (ver `valores`) este campo é ignorado; passe "".
+   */
   valor: string;
   onValorChange: (valor: string) => void;
+  /**
+   * Liga o modo MÚLTIPLO: a lista marca com caixinha, escolher não fecha o
+   * painel e o gatilho passa a contar quantos estão marcados.
+   *
+   * Opcional de propósito. Sem estas duas props o componente se comporta
+   * exatamente como sempre se comportou (é usado em 45 arquivos), e o caminho de
+   * valor único nem passa pelo código novo.
+   */
+  valores?: string[];
+  onValoresChange?: (valores: string[]) => void;
   opcoes: ComboboxOpcao[];
   /**
    * Quando presente, permite criar uma opção a partir do texto digitado que não
@@ -72,6 +86,8 @@ type Acao = { tipo: "criar"; texto: string } | { tipo: "limpar" };
 export function Combobox({
   valor,
   onValorChange,
+  valores,
+  onValoresChange,
   opcoes,
   onCriar,
   limpavel = false,
@@ -97,20 +113,48 @@ export function Combobox({
   // aparecer na hora sem esperar o `opcoes` do servidor recarregar.
   const [criadas, setCriadas] = React.useState<ComboboxOpcao[]>([]);
 
-  // opcoes + criadas locais + garante o valor atual na lista (fallback ao id).
+  /** Modo múltiplo é ligado por passar as duas props do plural. */
+  const multi = valores !== undefined && onValoresChange !== undefined;
+  const selecionados = React.useMemo(
+    () => new Set(multi ? valores : []),
+    [multi, valores],
+  );
+
+  // opcoes + criadas locais + garante o(s) valor(es) atual(is) na lista
+  // (fallback ao id, para seleção que veio de link não sumir da tela).
   const todasOpcoes = React.useMemo(() => {
     const base = [...opcoes];
     for (const criada of criadas) {
       if (!base.some((o) => o.valor === criada.valor)) base.push(criada);
     }
+    if (multi) {
+      const faltando = [...selecionados].filter(
+        (escolhido) => !base.some((o) => o.valor === escolhido),
+      );
+      return faltando.length > 0
+        ? [...faltando.map((v) => ({ valor: v, rotulo: v })), ...base]
+        : base;
+    }
     if (valor && !base.some((o) => o.valor === valor)) {
       return [{ valor, rotulo: valor }, ...base];
     }
     return base;
-  }, [valor, opcoes, criadas]);
+  }, [valor, opcoes, criadas, multi, selecionados]);
 
-  const rotuloSelecionado =
-    todasOpcoes.find((o) => o.valor === valor)?.rotulo ?? "";
+  /**
+   * Texto do gatilho. No múltiplo, um escolhido mostra o nome (é o caso comum e
+   * o nome informa mais que "1 selecionado"); daí para cima mostra a contagem,
+   * porque três nomes longos não cabem no botão.
+   */
+  const rotuloSelecionado = React.useMemo(() => {
+    if (!multi) return todasOpcoes.find((o) => o.valor === valor)?.rotulo ?? "";
+    if (selecionados.size === 0) return "";
+    if (selecionados.size === 1) {
+      const unico = [...selecionados][0];
+      return todasOpcoes.find((o) => o.valor === unico)?.rotulo ?? unico;
+    }
+    return `${selecionados.size} selecionados`;
+  }, [multi, todasOpcoes, valor, selecionados]);
 
   const selecionar = React.useCallback(
     (novoValor: string) => {
@@ -118,6 +162,28 @@ export function Combobox({
       setAberto(false);
     },
     [onValorChange],
+  );
+
+  /**
+   * Marca ou desmarca no modo múltiplo, SEM fechar o painel: marcar cinco
+   * fornecedores não pode custar cinco aberturas. Valor vazio limpa tudo, que é
+   * o que a ação "Limpar seleção" do rodapé faz.
+   */
+  const alternar = React.useCallback(
+    (alvo: string) => {
+      if (!onValoresChange) return;
+      if (alvo === "") {
+        onValoresChange([]);
+        return;
+      }
+      const atuais = valores ?? [];
+      onValoresChange(
+        atuais.includes(alvo)
+          ? atuais.filter((item) => item !== alvo)
+          : [...atuais, alvo],
+      );
+    },
+    [onValoresChange, valores],
   );
 
   const criar = React.useCallback(
@@ -189,12 +255,16 @@ export function Combobox({
         <PainelOpcoes
           todasOpcoes={todasOpcoes}
           valor={valor}
+          multi={multi}
+          selecionados={selecionados}
           buscaPlaceholder={buscaPlaceholder}
           vazioTexto={vazioTexto}
-          limpavel={limpavel}
+          // No múltiplo a limpeza sempre faz sentido quando há algo marcado, sem
+          // depender do `limpavel` (que existe para campo opcional de formulário).
+          limpavel={multi ? selecionados.size > 0 : limpavel}
           podeCriarOpcao={Boolean(onCriar)}
           criando={criando}
-          onSelecionar={selecionar}
+          onSelecionar={multi ? alternar : selecionar}
           onCriar={criar}
         />
       </PopoverContent>
@@ -205,6 +275,8 @@ export function Combobox({
 interface PainelOpcoesProps {
   todasOpcoes: ComboboxOpcao[];
   valor: string;
+  multi: boolean;
+  selecionados: ReadonlySet<string>;
   buscaPlaceholder: string;
   vazioTexto: string;
   limpavel: boolean;
@@ -235,6 +307,8 @@ interface PainelOpcoesProps {
 function PainelOpcoes({
   todasOpcoes,
   valor,
+  multi,
+  selecionados,
   buscaPlaceholder,
   vazioTexto,
   limpavel,
@@ -251,12 +325,34 @@ function PainelOpcoes({
   const buscaLimpa = busca.trim();
   const termo = buscaLimpa.toLowerCase();
 
+  /**
+   * Quem já estava marcado QUANDO O PAINEL ABRIU, congelado.
+   *
+   * É o que permite mostrar os escolhidos no topo sem a lista se reorganizar
+   * embaixo do cursor a cada clique. Reordenar ao vivo seria o pior dos mundos
+   * aqui: é exatamente o defeito que a virtualização deste componente foi feita
+   * para evitar (a linha troca entre apertar e soltar o mouse, e o clique cai no
+   * vizinho). O painel remonta a cada abertura, então na próxima vez a ordem já
+   * reflete a escolha nova.
+   */
+  const marcadosAoAbrir = React.useRef(selecionados);
+
+  const opcoesOrdenadas = React.useMemo(() => {
+    if (!multi || marcadosAoAbrir.current.size === 0) return todasOpcoes;
+    const escolhidas: ComboboxOpcao[] = [];
+    const resto: ComboboxOpcao[] = [];
+    for (const opcao of todasOpcoes) {
+      (marcadosAoAbrir.current.has(opcao.valor) ? escolhidas : resto).push(opcao);
+    }
+    return [...escolhidas, ...resto];
+  }, [multi, todasOpcoes]);
+
   const opcoesFiltradas = React.useMemo(
     () =>
       termo
-        ? todasOpcoes.filter((o) => o.rotulo.toLowerCase().includes(termo))
-        : todasOpcoes,
-    [todasOpcoes, termo],
+        ? opcoesOrdenadas.filter((o) => o.rotulo.toLowerCase().includes(termo))
+        : opcoesOrdenadas,
+    [opcoesOrdenadas, termo],
   );
 
   const existeExata = React.useMemo(
@@ -269,9 +365,9 @@ function PainelOpcoes({
   const acoes = React.useMemo<Acao[]>(() => {
     const lista: Acao[] = [];
     if (podeCriar) lista.push({ tipo: "criar", texto: buscaLimpa });
-    if (limpavel && valor) lista.push({ tipo: "limpar" });
+    if (limpavel && (multi || valor)) lista.push({ tipo: "limpar" });
     return lista;
-  }, [podeCriar, buscaLimpa, limpavel, valor]);
+  }, [podeCriar, buscaLimpa, limpavel, valor, multi]);
 
   // Espaço de navegação: as opções primeiro, as ações depois. As ações moram
   // num rodapé fixo (sempre clicáveis, sem precisar rolar 3 mil linhas) mas
@@ -298,13 +394,14 @@ function PainelOpcoes({
   React.useEffect(() => {
     if (jaAlinhou.current) return;
     jaAlinhou.current = true;
-    if (!valor) return;
+    // No múltiplo os marcados já estão no topo, então não há para onde rolar.
+    if (multi || !valor) return;
     const indice = opcoesFiltradas.findIndex((o) => o.valor === valor);
     if (indice > 0) {
       setIndiceDestacado(indice);
       virtualizador.scrollToIndex(indice, { align: "center" });
     }
-  }, [valor, opcoesFiltradas, virtualizador]);
+  }, [valor, multi, opcoesFiltradas, virtualizador]);
 
   const moverDestaque = React.useCallback(
     (destino: number) => {
@@ -423,7 +520,9 @@ function PainelOpcoes({
               {virtualizador.getVirtualItems().map((linha) => {
                 const opcao = opcoesFiltradas[linha.index];
                 if (!opcao) return null;
-                const selecionada = opcao.valor === valor;
+                const selecionada = multi
+                  ? selecionados.has(opcao.valor)
+                  : opcao.valor === valor;
                 return (
                   <div
                     key={linha.key}
@@ -445,12 +544,29 @@ function PainelOpcoes({
                     onMouseDown={(evento) => evento.preventDefault()}
                     onClick={() => onSelecionar(opcao.valor)}
                   >
-                    <Check
-                      className={cn(
-                        "size-4 shrink-0",
-                        selecionada ? "opacity-100" : "opacity-0",
-                      )}
-                    />
+                    {multi ? (
+                      // Caixinha de verdade: no múltiplo o usuário precisa ver o
+                      // que NÃO está marcado, e um check invisível não comunica
+                      // que a linha é marcável.
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
+                          selecionada
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input",
+                        )}
+                      >
+                        {selecionada ? <Check className="size-3" /> : null}
+                      </span>
+                    ) : (
+                      <Check
+                        className={cn(
+                          "size-4 shrink-0",
+                          selecionada ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                    )}
                     <span className="truncate">{opcao.rotulo}</span>
                   </div>
                 );
@@ -496,7 +612,9 @@ function PainelOpcoes({
                   onClick={() => onSelecionar("")}
                 >
                   <X className="size-4 shrink-0 opacity-50" />
-                  <span className="truncate">Limpar seleção</span>
+                  <span className="truncate">
+                    {multi ? "Limpar seleção (todos)" : "Limpar seleção"}
+                  </span>
                 </div>
               );
             })}
