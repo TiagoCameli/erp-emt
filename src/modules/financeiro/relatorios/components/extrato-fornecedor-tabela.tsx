@@ -33,6 +33,7 @@ import {
   type StatusLancamento,
 } from "@/modules/financeiro/_shared/formato";
 import { somarAberto } from "@/modules/financeiro/_shared/prazo";
+import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
 import type { ExtratoLancamento } from "../queries";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -96,8 +97,22 @@ export function ExtratoFornecedorTabela({
         header: "Status",
         size: 140,
         cell: ({ row }) => {
-          const { badge, rotulo } = formatoStatus(row.original.status);
-          return <StatusBadge status={badge} rotulo={rotulo} />;
+          // Selo pela DÍVIDA, não pela etapa: aprovado com saldo lê "A pagar",
+          // com a aprovação num selo menor ao lado. Mesma regra das outras
+          // quatro telas, em `_shared/selo-lancamento`.
+          const selo = seloDoLancamento(
+            row.original.status as StatusLancamento,
+            "a_pagar",
+            row.original.aberto.total,
+          );
+          return (
+            <div className="flex flex-wrap items-center justify-center gap-1">
+              <StatusBadge status={selo.badge} rotulo={selo.rotulo} />
+              {selo.etapa ? (
+                <StatusBadge status="aprovado" rotulo={selo.etapa} discreto />
+              ) : null}
+            </div>
+          );
         },
       },
       {
@@ -173,7 +188,15 @@ export function ExtratoFornecedorTabela({
   const dados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return lancamentos.filter((lancamento) => {
-      if (status !== "" && lancamento.status !== status) return false;
+      // "A pagar" é situação do dinheiro, não status exato do documento: traz
+      // tudo que ainda tem saldo, incluindo o que já foi aprovado. Mesma regra
+      // da listagem de Lançamentos (ver `comSaldoAberto` em filtros.ts), senão o
+      // mesmo filtro traria conjuntos diferentes nas duas telas.
+      if (status === "a_pagar") {
+        if (lancamento.aberto.total <= 0) return false;
+      } else if (status !== "" && lancamento.status !== status) {
+        return false;
+      }
       if (!mesmoMesReferencia(lancamento.mesCompetencia, mes)) return false;
       if (!dentroDaFaixaValor(lancamento.valor, valorDe, valorAte))
         return false;

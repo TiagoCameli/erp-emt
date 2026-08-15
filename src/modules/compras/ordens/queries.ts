@@ -11,6 +11,7 @@ import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
+import { ehParcelaAberta } from "@/modules/financeiro/_shared/formato";
 import {
   idsFornecedoresPorNome,
   inicioDoDiaISO,
@@ -128,6 +129,14 @@ export interface LancamentoVinculado {
   status: string;
   valor: number;
   dataVencimento: string | null;
+  /**
+   * Quanto ainda falta pagar, somado pelas PARCELAS.
+   *
+   * O selo de status precisa disto: um lançamento `aprovado` com saldo aberto
+   * tem que ler "A pagar", e não "Aprovado" em verde — que é como a tela dizia
+   * que R$ 9,8 milhões de dívida estavam resolvidos.
+   */
+  aberto: number;
 }
 
 /** Parcela definida na OC (tabela oc_parcelas). */
@@ -481,7 +490,11 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
 
   const { data: lancamento } = await supabase
     .from("lancamentos")
-    .select("id, numero, status, valor, data_vencimento")
+    // As parcelas entram para o selo de status saber se ainda há saldo: sem
+    // isso, um lançamento aprovado e não pago aparece aqui como resolvido.
+    .select(
+      "id, numero, status, valor, data_vencimento, lancamento_parcelas(status, valor)",
+    )
     .eq("origem", "oc")
     .eq("origem_id", id)
     .order("created_at", { ascending: false })
@@ -537,6 +550,10 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
           status: lancamento.status,
           valor: lancamento.valor,
           dataVencimento: lancamento.data_vencimento,
+          /** Quanto ainda falta pagar, somado pelas parcelas. */
+          aberto: (lancamento.lancamento_parcelas ?? [])
+            .filter((parcela) => ehParcelaAberta(parcela.status))
+            .reduce((soma, parcela) => soma + parcela.valor, 0),
         }
       : null,
   };

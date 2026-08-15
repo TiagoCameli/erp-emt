@@ -115,6 +115,15 @@ export interface ListarLancamentosParams {
    */
   semPrevisto?: boolean;
   /**
+   * Só lançamentos que a empresa ainda deve: alguma parcela em aberto (nem paga
+   * nem cancelada), e o próprio lançamento não cancelado.
+   *
+   * É o que o filtro "A pagar" da tela passou a significar. Igualdade de status
+   * (`.eq("status","a_pagar")`) trazia 86 lançamentos de R$ 1,90 mi e escondia os
+   * 107 `aprovado` com R$ 9,84 mi em aberto — 84% da dívida.
+   */
+  comSaldoAberto?: boolean;
+  /**
    * Fatia de nível de PARCELA recortada por um relatório. Ver
    * `lancamentos/recorte.ts`: ela decide quais lançamentos entram na lista E como
    * o `valorRecorte` de cada um é somado, para o total fechar com a célula que foi
@@ -472,6 +481,28 @@ async function valoresPorCentroCusto(
 }
 
 /**
+ * Ids dos lançamentos com alguma parcela EM ABERTO: o que a empresa ainda deve.
+ *
+ * Reusa `STATUS_PARCELA_ABERTA`, a mesma lista que o filtro de atraso e o cartão
+ * "Em aberto" usam. Se esta função tivesse a própria definição de "aberto", o
+ * filtro traria um conjunto e o cartão somaria outro.
+ */
+async function idsComSaldoAberto(
+  supabase: ClienteSupabase,
+): Promise<string[]> {
+  const parcelas = await lerEmPaginas((de, ate) =>
+    supabase
+      .from("lancamento_parcelas")
+      .select("lancamento_id")
+      .in("status", STATUS_PARCELA_ABERTA)
+      .order("lancamento_id")
+      .order("id")
+      .range(de, ate),
+  );
+  return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
+}
+
+/**
  * Valor na FATIA, por lançamento, para o recorte de nível de parcela.
  *
  * Vai pela RPC, e não por uma classificação escrita aqui, porque a faixa do aging
@@ -690,6 +721,9 @@ export async function listarLancamentos(
       await idsPorContaBancaria(supabase, params.contaBancariaId),
     );
   }
+  if (params.comSaldoAberto) {
+    listasDeIds.push(await idsComSaldoAberto(supabase));
+  }
   // O centro é filtro E recorte: as chaves entram na interseção de ids, e o valor
   // rateado vira o `valorRecorte` de cada linha mais abaixo.
   const valoresCentro = params.centroCustoId
@@ -778,6 +812,9 @@ export async function listarLancamentos(
   // aceitam todos os outros, o que o filtro de status (um valor só) não expressa.
   if (params.semCancelado) consulta = consulta.neq("status", "cancelado");
   if (params.semPrevisto) consulta = consulta.neq("status", "previsto");
+  // Lançamento cancelado não é dívida, mesmo que as parcelas dele tenham ficado
+  // em aberto: sem isto o filtro "A pagar" mostraria o que foi desfeito.
+  if (params.comSaldoAberto) consulta = consulta.neq("status", "cancelado");
   if (params.criadoDe) {
     consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadoDe));
   }

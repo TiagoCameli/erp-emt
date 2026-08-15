@@ -33,10 +33,11 @@ import {
 } from "@/modules/financeiro/lancamentos/actions";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import {
+  ehParcelaAberta,
   ROTULO_TIPO_LANCAMENTO,
-  STATUS_LANCAMENTO,
   STATUS_PARCELA,
 } from "@/modules/financeiro/_shared/formato";
+import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { ROTULO_ORIGEM_DATA } from "@/modules/financeiro/_shared/janela-pagamento";
@@ -241,7 +242,18 @@ export function LancamentoDetalheView({
   // Quem precisa mudar desaprova o pagamento primeiro. A trava final é o banco
   // (fn_salvar_lancamento recusa), aqui é para ninguém tentar em vão.
   const editavel = podeEditar && ehManual && !temParcelaFechada;
-  const infoStatus = STATUS_LANCAMENTO[lancamento.status];
+  /**
+   * Selo pela DÍVIDA, não pela etapa. O saldo sai das parcelas, que o detalhe já
+   * carregou: `aberto` é tudo que não está pago nem cancelado.
+   */
+  const abertoDoLancamento = lancamento.parcelas
+    .filter((parcela) => ehParcelaAberta(parcela.status))
+    .reduce((soma, parcela) => soma + parcela.valor, 0);
+  const selo = seloDoLancamento(
+    lancamento.status,
+    lancamento.tipo,
+    abertoDoLancamento,
+  );
 
   // Caminho do pagamento: quem decide é o tipo da forma de pagamento, e é o que
   // explica por que uma parcela nasceu aprovada, quitada, ou foi para a fila.
@@ -292,10 +304,10 @@ export function LancamentoDetalheView({
                   {lancamento.numero ?? "Sem número"}
                 </span>
               </h1>
-              <StatusBadge
-                status={infoStatus.badge}
-                rotulo={infoStatus.rotulo}
-              />
+              <StatusBadge status={selo.badge} rotulo={selo.rotulo} />
+              {selo.etapa ? (
+                <StatusBadge status="aprovado" rotulo={selo.etapa} discreto />
+              ) : null}
               {/* "Conta a pagar" e não "A pagar": 'a_pagar' também é nome de
                   status, e os dois badges lado a lado se contradiziam. */}
               <StatusBadge

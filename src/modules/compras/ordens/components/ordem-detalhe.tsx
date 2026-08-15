@@ -48,35 +48,33 @@ import type {
   FormaPagamentoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
+  LancamentoVinculado,
   OrdemDetalhe,
   ParcelaCondicaoOpcao,
 } from "@/modules/compras/ordens/queries";
+import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
+import type { StatusLancamento } from "@/modules/financeiro/_shared/formato";
 import { OrdemFormDrawer } from "./ordem-form-drawer";
 import { RecebimentoDialog } from "./recebimento-dialog";
 
-/** Rótulo e cor do status do lançamento financeiro vinculado. */
-const STATUS_LANCAMENTO: Record<string, { rotulo: string; classes: string }> = {
-  previsto: {
-    rotulo: "Previsto",
-    classes: "bg-status-rascunho/10 text-status-rascunho",
-  },
-  a_pagar: {
-    rotulo: "A pagar",
-    classes: "bg-status-pendente/10 text-status-pendente",
-  },
-  pago: { rotulo: "Pago", classes: "bg-status-efeito/10 text-status-efeito" },
-  cancelado: {
-    rotulo: "Cancelado",
-    classes: "bg-status-rejeitado/10 text-status-rejeitado",
-  },
-};
-
-function infoLancamento(status: string): { rotulo: string; classes: string } {
+/** O selo de status do lançamento vinculado, pela dívida e não pela etapa. */
+function SeloDoLancamentoVinculado({
+  lancamento,
+}: {
+  lancamento: LancamentoVinculado;
+}) {
+  const selo = seloDoLancamento(
+    lancamento.status as StatusLancamento,
+    "a_pagar",
+    lancamento.aberto,
+  );
   return (
-    STATUS_LANCAMENTO[status] ?? {
-      rotulo: status,
-      classes: "bg-status-rascunho/10 text-status-rascunho",
-    }
+    <span className="inline-flex flex-wrap items-center gap-1">
+      <StatusBadge status={selo.badge} rotulo={selo.rotulo} />
+      {selo.etapa ? (
+        <StatusBadge status="aprovado" rotulo={selo.etapa} discreto />
+      ) : null}
+    </span>
   );
 }
 
@@ -401,11 +399,11 @@ export function OrdemDetalheView({
             {ordem.lancamento ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <StatusBadge
-                    status="rascunho"
-                    rotulo={infoLancamento(ordem.lancamento.status).rotulo}
-                    className={infoLancamento(ordem.lancamento.status).classes}
-                  />
+                  {/* Selo pela DÍVIDA, com a regra compartilhada das outras
+                      quatro telas. O mapa local que existia aqui era uma cópia
+                      do canônico e nem conhecia 'aprovado': mostrava a string
+                      crua em cinza. */}
+                  <SeloDoLancamentoVinculado lancamento={ordem.lancamento} />
                   <span className="text-legenda text-muted-foreground">
                     Vence em{" "}
                     {ordem.lancamento.dataVencimento ? (
