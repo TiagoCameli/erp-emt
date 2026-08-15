@@ -413,6 +413,54 @@ function alturasDaTabela(indice: number): string[] {
     .map((linha) => linha.style.height);
 }
 
+/**
+ * Rodapé de totais. O risco aqui é o total aparecer embaixo da coluna errada:
+ * esta tabela deixa esconder e reordenar coluna, então a posição não serve de
+ * âncora — o mapa é por id.
+ */
+describe("DataTable: rodapé de totais", () => {
+  function pe() {
+    return document.querySelector("tfoot");
+  }
+
+  it("sem a prop, não existe rodapé", () => {
+    renderizar();
+    expect(pe()).toBeNull();
+  });
+
+  it("põe cada total embaixo da coluna do seu id", () => {
+    renderizar({
+      rodape: { numero: "Total de 2", valor: "R$ 100,00" },
+    });
+
+    const celulas = pe()!.querySelectorAll("td");
+    const porColuna = new Map(
+      [...celulas].map((celula) => [
+        celula.getAttribute("data-coluna"),
+        celula.textContent,
+      ]),
+    );
+
+    expect(porColuna.get("numero")).toBe("Total de 2");
+    expect(porColuna.get("valor")).toBe("R$ 100,00");
+    // Coluna sem total no mapa fica vazia, não recebe o do vizinho.
+    expect(porColuna.get("descricao")).toBe("");
+    expect(porColuna.get("parcelas")).toBe("");
+  });
+
+  it("o total de dinheiro sai alinhado à direita, como as células", () => {
+    renderizar({ rodape: { valor: "R$ 100,00" } });
+    const celula = pe()!.querySelector('[data-coluna="valor"]');
+    expect(celula?.className).toContain("text-right");
+  });
+
+  it("sem linha na tabela, o rodapé some", () => {
+    // Somar zero linha não informa nada e ainda ocuparia altura.
+    renderizar({ data: [], rodape: { valor: "R$ 0,00" } });
+    expect(pe()).toBeNull();
+  });
+});
+
 describe("DataTable: alinhamento do texto", () => {
   it("nasce com o cabeçalho e as células centralizados", () => {
     renderizar();

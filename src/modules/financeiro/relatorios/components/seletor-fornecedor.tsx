@@ -35,6 +35,31 @@ export function SeletorFornecedor({
 }: SeletorFornecedorProps) {
   const { set } = useFiltrosUrl();
 
+  /**
+   * Escolha local, à frente da URL.
+   *
+   * SEM isto não dá para marcar dois seguidos, e foi o defeito que o Tiago pegou:
+   * gravar na URL é assíncrono (router.replace, ida ao servidor), então o segundo
+   * clique ainda enxergava a lista ANTIGA vindo do servidor e gravava só ele,
+   * substituindo o primeiro. Marcar devagar funcionava; marcar rápido, não.
+   *
+   * O estado local responde na hora e a URL vai atrás. Quando a volta do servidor
+   * chega diferente do que temos (link colado, voltar do navegador, outra aba), o
+   * local se rende a ela — comparando pelo CONTEÚDO, porque o array vem novo a
+   * cada render e comparar referência ressincronizaria sempre, matando o efeito.
+   */
+  const chaveDoServidor = valores.join(",");
+  const [escolhidos, setEscolhidos] = React.useState(valores);
+  // Guarda o que o servidor mandou por último em ESTADO, não em ref: é o padrão
+  // da doc do React para "ajustar estado quando a prop muda", e o lint do projeto
+  // (com razão) barra tocar em ref durante o render. Efeito também não serve:
+  // renderizaria a lista velha por um quadro.
+  const [chaveAnterior, setChaveAnterior] = React.useState(chaveDoServidor);
+  if (chaveAnterior !== chaveDoServidor) {
+    setChaveAnterior(chaveDoServidor);
+    setEscolhidos(valores);
+  }
+
   const opcoes = React.useMemo(
     () =>
       fornecedores.map((fornecedor) => ({
@@ -53,6 +78,13 @@ export function SeletorFornecedor({
       );
       return;
     }
+    // Local primeiro (a caixinha marca na hora), URL depois.
+    //
+    // `chaveAnterior` NÃO é tocada aqui de propósito: ela rastreia o que o
+    // SERVIDOR mandou por último. Atualizá-la no clique fazia a sincronização de
+    // render achar que a volta já tinha chegado e desfazer a marcação otimista na
+    // hora — o teste pegou isso, e era o mesmo sintoma do defeito original.
+    setEscolhidos(novos);
     set(PARAM_FORNECEDOR, escreverFornecedoresNaUrl(novos));
   }
 
@@ -62,7 +94,7 @@ export function SeletorFornecedor({
       <Combobox
         valor=""
         onValorChange={() => undefined}
-        valores={valores}
+        valores={escolhidos}
         onValoresChange={aoMudar}
         opcoes={opcoes}
         limpavel

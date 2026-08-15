@@ -617,6 +617,10 @@ async function ConteudoExtratoFornecedor({
       <ExtratoFornecedorTabela
         lancamentos={extrato.lancamentos}
         podeVerLancamentos={podeVerLancamentos}
+        fornecedoresEscolhidos={extrato.fornecedorIds.map(
+          (id) =>
+            fornecedores.find((fornecedor) => fornecedor.id === id)?.nome ?? id,
+        )}
       />
     </SecaoRelatorio>
   );

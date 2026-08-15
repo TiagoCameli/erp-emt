@@ -4,6 +4,7 @@ import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import {
   abertoPorPrazo,
+  pagoDasParcelas,
   type AbertoPorPrazo,
 } from "@/modules/financeiro/_shared/prazo";
 import {
@@ -559,6 +560,8 @@ export interface ExtratoLancamento {
    * aberto real era R$ 271.421,16.
    */
   aberto: AbertoPorPrazo;
+  /** Já pago nesta linha, pelo líquido (o que saiu da conta). */
+  pago: number;
 }
 
 export interface ExtratoPorFornecedor {
@@ -577,6 +580,11 @@ interface ExtratoParam {
    */
   fornecedorIds?: string[];
 }
+
+/** Linhas por requisição no extrato: o teto invisível do PostgREST. */
+const PAGINA_EXTRATO = 1000;
+/** Teto de páginas, para consulta errada não varrer o banco inteiro. */
+const MAX_PAGINAS_EXTRATO = 25;
 
 /** Fornecedores que têm ao menos um lançamento a_pagar, em ordem alfabética. */
 export async function listarFornecedoresComLancamentos(): Promise<
@@ -614,7 +622,7 @@ export async function extratoPorFornecedor({
     .select(
       `id, numero, descricao, status, mes_competencia, data_vencimento, valor,
        categorias_financeiras(nome),
-       lancamento_parcelas(status, valor, data_vencimento)`,
+       lancamento_parcelas(status, valor, valor_liquido, desconto, data_vencimento)`,
     )
     .eq("tipo", "a_pagar")
     .neq("status", "cancelado");
@@ -625,17 +633,60 @@ export async function extratoPorFornecedor({
     consulta = consulta.in("fornecedor_id", fornecedorIds);
   }
 
-  const { data, error } = await consulta
+  /**
+   * Lê em PÁGINAS, não numa tacada.
+   *
+   * O PostgREST corta a resposta em 1000 linhas sem avisar. Sem fornecedor
+   * escolhido o extrato tem 5.848 lançamentos, então a tela mostrava 1000 e os
+   * cartões somavam só esse pedaço com cara de total (medido em 15/08/2026). O
+   * desempate por `id` é o que torna a paginação confiável: `created_at` está
+   * empatado em massa pela carga do Mais Controle, e sem chave única a página 2
+   * repetiria linha e perderia outra.
+   */
+  const ordenada = consulta
     .order("data_vencimento", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    // Desempate por id: created_at está empatado em massa pela carga do Mais
-    // Controle, e sem chave única a ordem de linhas empatadas muda entre cargas
-    // da mesma tela.
     .order("id", { ascending: false });
 
-  if (error) {
+  const primeira = await ordenada.range(0, PAGINA_EXTRATO - 1);
+  if (primeira.error) {
     throw new Error("Não foi possível carregar o extrato do fornecedor");
   }
+
+  const data = [...(primeira.data ?? [])];
+  if (data.length === PAGINA_EXTRATO) {
+    for (let pagina = 1; pagina < MAX_PAGINAS_EXTRATO; pagina += 1) {
+      const inicio = pagina * PAGINA_EXTRATO;
+      const { data: lote, error } = await ordenada.range(
+        inicio,
+        inicio + PAGINA_EXTRATO - 1,
+      );
+      if (error) {
+        throw new Error("Não foi possível carregar o extrato do fornecedor");
+      }
+      const recebidas = lote ?? [];
+      data.push(...recebidas);
+      if (recebidas.length < PAGINA_EXTRATO) break;
+    }
+  }
+
+  /** Parcelas da linha no formato das funções de dinheiro do `_shared`. */
+  const parcelasDe = (lancamento: {
+    lancamento_parcelas: Array<{
+      status: string;
+      valor: number;
+      valor_liquido: number | null;
+      desconto: number | null;
+      data_vencimento: string | null;
+    }> | null;
+  }) =>
+    (lancamento.lancamento_parcelas ?? []).map((parcela) => ({
+      status: parcela.status,
+      valor: parcela.valor,
+      valorLiquido: parcela.valor_liquido,
+      desconto: parcela.desconto,
+      dataVencimento: parcela.data_vencimento,
+    }));
 
   // Uma leitura do relógio para o extrato todo: com `dataHojeISO()` por linha,
   // uma consulta que virasse a meia-noite classificaria parte das parcelas por um
@@ -651,14 +702,8 @@ export async function extratoPorFornecedor({
     mesCompetencia: lancamento.mes_competencia,
     dataVencimento: lancamento.data_vencimento,
     valor: lancamento.valor,
-    aberto: abertoPorPrazo(
-      (lancamento.lancamento_parcelas ?? []).map((parcela) => ({
-        status: parcela.status,
-        valor: parcela.valor,
-        dataVencimento: parcela.data_vencimento,
-      })),
-      hojeISO,
-    ),
+    aberto: abertoPorPrazo(parcelasDe(lancamento), hojeISO),
+    pago: pagoDasParcelas(parcelasDe(lancamento)).pago,
   }));
 
   return {

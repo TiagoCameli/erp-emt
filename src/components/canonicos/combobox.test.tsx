@@ -11,49 +11,20 @@ import {
 
 import { Combobox } from "@/components/canonicos/combobox";
 import { ComboboxCriavel } from "@/components/canonicos/combobox-criavel";
+import {
+  ALTURA_VISIVEL_TESTE as ALTURA_VISIVEL,
+  instalarLayoutDeLista,
+} from "@/components/canonicos/combobox-jsdom-teste";
 
 /**
- * O jsdom não faz layout: offsetHeight, clientHeight e scrollHeight voltam 0 e
- * Element.scrollTo não existe. Sem isso o virtualizador acha que a área visível
- * tem 0px (desenha janela mínima) e que o scroll máximo é 0 (scrollToIndex não
- * sai do lugar). Os stubs abaixo emulam um container rolável de verdade:
- * 300px de altura visível, scrollHeight = altura declarada do espaçador, e
- * scrollTo gravando scrollTop. O evento "scroll" quem entrega é o teste
- * (`sincronizarRolagem`), porque no navegador ele também chega depois, e não
- * dentro da chamada que rolou.
+ * O layout falso da lista virtualizada mora em `combobox-jsdom-teste`, porque o
+ * teste do seletor de fornecedores precisa do mesmo.
  */
-const ALTURA_VISIVEL = 300;
 const ALTURA_LINHA = 32;
 const RESPIRO_LISTA = 8;
 
-function ehAreaRolagem(elemento: HTMLElement) {
-  return elemento.dataset.testid === "combobox-area-rolagem";
-}
-
 beforeAll(() => {
-  for (const propriedade of ["offsetHeight", "clientHeight"]) {
-    Object.defineProperty(HTMLElement.prototype, propriedade, {
-      configurable: true,
-      get(this: HTMLElement) {
-        return ehAreaRolagem(this) ? ALTURA_VISIVEL : 0;
-      },
-    });
-  }
-  Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
-    configurable: true,
-    get(this: HTMLElement) {
-      if (!ehAreaRolagem(this)) return 0;
-      const espacador = this.firstElementChild as HTMLElement | null;
-      return Number.parseFloat(espacador?.style.height ?? "0") || 0;
-    },
-  });
-  Object.defineProperty(Element.prototype, "scrollTo", {
-    configurable: true,
-    writable: true,
-    value(this: Element, opcoes?: { top?: number }) {
-      if (typeof opcoes?.top === "number") this.scrollTop = opcoes.top;
-    },
-  });
+  instalarLayoutDeLista();
 });
 
 afterEach(cleanup);
