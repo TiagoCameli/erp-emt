@@ -1,3 +1,4 @@
+import * as React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -5,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 
 import { Combobox } from "@/components/canonicos/combobox";
@@ -281,6 +283,179 @@ describe("Combobox: limpar seleção", () => {
     const { onValorChange } = abrir({ valor: "id-10", limpavel: true });
     fireEvent.click(screen.getByText("Limpar seleção"));
     expect(onValorChange).toHaveBeenCalledWith("");
+  });
+});
+
+/**
+ * Modo múltiplo. O que não pode acontecer: o caminho de valor único mudar de
+ * comportamento (são 45 arquivos usando), e a lista se reorganizar embaixo do
+ * cursor enquanto se marca (é o defeito que a virtualização deste componente foi
+ * feita para evitar).
+ */
+describe("Combobox: modo múltiplo", () => {
+  function abrirMulti(valores: string[] = []) {
+    const onValoresChange = vi.fn();
+    render(
+      <Combobox
+        valor=""
+        onValorChange={vi.fn()}
+        valores={valores}
+        onValoresChange={onValoresChange}
+        opcoes={OPCOES}
+        limpavel
+      />,
+    );
+    fireEvent.click(screen.getByRole("combobox"));
+    return { onValoresChange };
+  }
+
+  it("marcar acrescenta sem tirar o que já estava", () => {
+    const { onValoresChange } = abrirMulti(["id-0"]);
+    fireEvent.click(screen.getByText("Insumo 2"));
+    expect(onValoresChange).toHaveBeenCalledWith(["id-0", "id-1"]);
+  });
+
+  it("clicar de novo desmarca", () => {
+    const { onValoresChange } = abrirMulti(["id-0", "id-1"]);
+    fireEvent.click(screen.getByText("Insumo 1"));
+    expect(onValoresChange).toHaveBeenCalledWith(["id-1"]);
+  });
+
+  it("o painel NÃO fecha ao marcar", () => {
+    // Marcar cinco fornecedores não pode custar cinco aberturas.
+    abrirMulti([]);
+    fireEvent.click(screen.getByText("Insumo 1"));
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+  });
+
+  it("os já marcados aparecem no topo quando o painel abre", () => {
+    abrirMulti(["id-100", "id-200"]);
+    const linhas = screen.getAllByRole("option");
+    expect(linhas[0]).toHaveTextContent("Insumo 101");
+    expect(linhas[1]).toHaveTextContent("Insumo 201");
+  });
+
+  it("a ordem NÃO muda enquanto se marca, para o clique não cair no vizinho", () => {
+    // Com pai de verdade, que grava a escolha e re-renderiza: é o único jeito de
+    // provar o congelamento. Sem ele o teste passaria por não haver re-render.
+    function Pai() {
+      const [escolhidos, setEscolhidos] = React.useState<string[]>([]);
+      return (
+        <Combobox
+          valor=""
+          onValorChange={vi.fn()}
+          valores={escolhidos}
+          onValoresChange={setEscolhidos}
+          opcoes={OPCOES}
+        />
+      );
+    }
+    cleanup();
+    render(<Pai />);
+    fireEvent.click(screen.getByRole("combobox"));
+
+    const primeiraAntes = screen.getAllByRole("option")[0].textContent;
+    // Marca uma opção lá de baixo da janela visível.
+    fireEvent.click(screen.getByText("Insumo 5"));
+
+    // Ela foi marcada de fato. A busca é dentro da LISTA porque o gatilho passa a
+    // mostrar o nome do único selecionado, e "Insumo 5" casaria nos dois.
+    const lista = within(screen.getByRole("listbox"));
+    expect(lista.getByText("Insumo 5").closest('[role="option"]')).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    // ...e mesmo assim a primeira linha continua a mesma: nada pulou de lugar.
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent(
+      primeiraAntes ?? "",
+    );
+  });
+
+  it("ao reabrir, aí sim os marcados sobem para o topo", () => {
+    function Pai() {
+      const [escolhidos, setEscolhidos] = React.useState<string[]>([]);
+      return (
+        <Combobox
+          valor=""
+          onValorChange={vi.fn()}
+          valores={escolhidos}
+          onValoresChange={setEscolhidos}
+          opcoes={OPCOES}
+        />
+      );
+    }
+    cleanup();
+    render(<Pai />);
+    const gatilho = screen.getByRole("combobox");
+
+    fireEvent.click(gatilho);
+    fireEvent.click(within(screen.getByRole("listbox")).getByText("Insumo 5"));
+    fireEvent.click(gatilho); // fecha
+    fireEvent.click(gatilho); // abre de novo
+
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent("Insumo 5");
+  });
+
+  it("o gatilho conta os marcados, e mostra o nome quando é um só", () => {
+    cleanup();
+    const { rerender } = render(
+      <Combobox
+        valor=""
+        onValorChange={vi.fn()}
+        valores={["id-5"]}
+        onValoresChange={vi.fn()}
+        opcoes={OPCOES}
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveTextContent("Insumo 6");
+
+    rerender(
+      <Combobox
+        valor=""
+        onValorChange={vi.fn()}
+        valores={["id-5", "id-6", "id-7"]}
+        onValoresChange={vi.fn()}
+        opcoes={OPCOES}
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveTextContent("3 selecionados");
+  });
+
+  it("limpar seleção zera tudo de uma vez", () => {
+    const { onValoresChange } = abrirMulti(["id-1", "id-2"]);
+    fireEvent.click(screen.getByText("Limpar seleção (todos)"));
+    expect(onValoresChange).toHaveBeenCalledWith([]);
+  });
+
+  it("Enter no teclado alterna em vez de fechar", () => {
+    const { onValoresChange } = abrirMulti([]);
+    const busca = screen.getByPlaceholderText("Buscar ou digitar");
+    fireEvent.keyDown(busca, { key: "Enter" });
+    expect(onValoresChange).toHaveBeenCalledWith(["id-0"]);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+  });
+
+  it("id escolhido que não está na lista de opções não some da seleção", () => {
+    // Acontece com link colado: o fornecedor pode ter saído do filtro do select.
+    cleanup();
+    render(
+      <Combobox
+        valor=""
+        onValorChange={vi.fn()}
+        valores={["id-orfao"]}
+        onValoresChange={vi.fn()}
+        opcoes={OPCOES}
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveTextContent("id-orfao");
+  });
+
+  it("sem as props do plural, segue sendo seleção única e fecha ao escolher", () => {
+    // A trava de regressão dos 45 arquivos que já usam o componente.
+    const { onValorChange } = abrir({ valor: "id-0", limpavel: true });
+    fireEvent.click(screen.getByText("Insumo 2"));
+    expect(onValorChange).toHaveBeenCalledWith("id-1");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });
 
