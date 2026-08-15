@@ -261,3 +261,38 @@ describe("lerFiltrosLancamentos: sem_cancelado, recorte e faixa de competência"
     expect(filtros.semCancelado).toBe(true);
   });
 });
+
+/**
+ * "A pagar" no filtro de status passou a significar A SITUAÇÃO DO DINHEIRO, não
+ * o status exato do documento.
+ *
+ * Medido em 15/08/2026: 86 lançamentos têm status `a_pagar` (R$ 1,90 mi) e 107
+ * têm status `aprovado` — TODOS com saldo em aberto, somando R$ 9,84 mi. Quem
+ * filtrava "A pagar" para achar o que a empresa deve encontrava 16% da dívida e
+ * ia embora achando que tinha visto tudo.
+ */
+describe("lerFiltrosLancamentos: 'A pagar' é situação, não status exato", () => {
+  it("status=a_pagar vira filtro de saldo em aberto, não igualdade de status", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({ status: "a_pagar" });
+
+    expect(filtros.comSaldoAberto).toBe(true);
+    // Não pode ir como igualdade: `.eq("status","a_pagar")` traria só os 86.
+    expect(filtros.status).toBeUndefined();
+    // A barra continua mostrando a escolha da pessoa.
+    expect(valores.status).toBe("a_pagar");
+  });
+
+  it("os outros status continuam sendo igualdade exata", () => {
+    for (const status of ["aprovado", "pago", "cancelado", "previsto"]) {
+      const { filtros } = lerFiltrosLancamentos({ status });
+      expect(filtros.status).toBe(status);
+      expect(filtros.comSaldoAberto).toBeUndefined();
+    }
+  });
+
+  it("sem filtro de status, não filtra por saldo", () => {
+    const { filtros } = lerFiltrosLancamentos({});
+    expect(filtros.comSaldoAberto).toBeUndefined();
+    expect(filtros.status).toBeUndefined();
+  });
+});

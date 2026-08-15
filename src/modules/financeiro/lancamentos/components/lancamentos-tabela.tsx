@@ -50,8 +50,8 @@ import {
   ROTULO_FILTRO_REVISAO,
   ROTULO_ORIGEM_LANCAMENTO,
   rotuloOrigemLancamento,
-  rotuloStatusLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
+import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
 import type { ValoresFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
@@ -233,18 +233,22 @@ function montarColunas(
     size: 160,
     meta: { naoTruncar: true },
     cell: ({ row }) => {
-      const info = STATUS_LANCAMENTO[row.original.status];
-      // Rótulo compartilhado com a exportação para Excel: a regra do "A receber"
-      // (todo lançamento nasce com status 'a_pagar') mora em schemas.ts.
-      const rotulo = rotuloStatusLancamento(
+      // O selo fala de DÍVIDA, não da etapa: aprovado com saldo em aberto lê
+      // "A pagar", com a aprovação num selo menor ao lado. A regra mora em
+      // `_shared/selo-lancamento`, uma só para as cinco telas que mostram isso.
+      const selo = seloDoLancamento(
         row.original.status,
         row.original.tipo,
+        row.original.valorAberto,
       );
       return (
         // justify-center porque flex não herda o text-center da célula: sem
         // isso os badges encostam na esquerda e desalinham do cabeçalho.
         <div className="flex flex-wrap items-center justify-center gap-1">
-          <StatusBadge status={info.badge} rotulo={rotulo} />
+          <StatusBadge status={selo.badge} rotulo={selo.rotulo} />
+          {selo.etapa ? (
+            <StatusBadge status="aprovado" rotulo={selo.etapa} discreto />
+          ) : null}
           {/* Sem parcela definida o lançamento não entra na fila de aprovação
               nem pode ser pago: precisa aparecer já na lista. */}
           {row.original.qtdParcelas === 0 ? (

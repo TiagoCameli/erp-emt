@@ -43,6 +43,15 @@ interface StatusBadgeProps {
   status: StatusPadrao | (string & NonNullable<unknown>);
   /** Rótulo custom: sobrepõe o rótulo do mapa. Obrigatório na prática para status fora do padrão. */
   rotulo?: string;
+  /**
+   * Selo SECUNDÁRIO, que qualifica o principal ao lado dele.
+   *
+   * Existe para o caso "A pagar · aprovado": o selo principal diz a situação do
+   * dinheiro e este diz a etapa já vencida. Dois selos do mesmo peso lado a lado
+   * competem, e o olho não sabe qual responde "e daí?". Continua sendo texto +
+   * cor (nunca só cor), só com menos ênfase.
+   */
+  discreto?: boolean;
   className?: string;
 }
 
@@ -50,7 +59,12 @@ interface StatusBadgeProps {
  * Badge canônico de status: sempre texto + cor, nunca só cor.
  * Status fora do padrão cai no visual neutro (cinza) com o rótulo informado.
  */
-export function StatusBadge({ status, rotulo, className }: StatusBadgeProps) {
+export function StatusBadge({
+  status,
+  rotulo,
+  discreto,
+  className,
+}: StatusBadgeProps) {
   const config = ehStatusPadrao(status)
     ? MAPA_STATUS[status]
     : { rotulo: status, classes: CLASSES_RASCUNHO };
@@ -58,7 +72,12 @@ export function StatusBadge({ status, rotulo, className }: StatusBadgeProps) {
   return (
     <Badge
       variant="secondary"
-      className={cn("border-transparent", config.classes, className)}
+      className={cn(
+        "border-transparent",
+        config.classes,
+        discreto && "bg-transparent px-1.5 py-0 text-legenda opacity-80",
+        className,
+      )}
     >
       {rotulo ?? config.rotulo}
     </Badge>

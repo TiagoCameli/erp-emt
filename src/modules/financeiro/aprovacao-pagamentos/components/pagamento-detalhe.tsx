@@ -38,11 +38,13 @@ import {
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
 import { mensagemAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
 import {
+  ehParcelaAberta,
   ROTULO_TIPO_LANCAMENTO,
-  STATUS_LANCAMENTO,
   STATUS_PARCELA,
   rotuloParcela,
+  type StatusLancamento,
 } from "@/modules/financeiro/_shared/formato";
+import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
 import type {
   LancamentoDetalhe,
   ParcelaLancamento,
@@ -147,7 +149,20 @@ export function PagamentoDetalheView({
   const [aprovando, setAprovando] = React.useState(false);
   const [revisando, setRevisando] = React.useState(false);
 
-  const infoLancamento = STATUS_LANCAMENTO[lancamento.status];
+  /**
+   * Selo do lançamento pela DÍVIDA, não pela etapa: esta tela existe justamente
+   * para pagar, e ver "Aprovado" em verde no cabeçalho de algo que ainda se deve
+   * é a leitura errada no pior lugar possível. O saldo sai das parcelas, que a
+   * tela já carregou.
+   */
+  const abertoDoLancamento = lancamento.parcelas
+    .filter((linha) => ehParcelaAberta(linha.status))
+    .reduce((soma, linha) => soma + linha.valor, 0);
+  const seloLancamento = seloDoLancamento(
+    lancamento.status as StatusLancamento,
+    "a_pagar",
+    abertoDoLancamento,
+  );
   const infoParcela = STATUS_PARCELA[parcela.status];
   const situacao = situacaoDaParcela({
     statusParcela: parcela.status,
@@ -295,14 +310,19 @@ export function PagamentoDetalheView({
                 {ROTULO_TIPO_LANCAMENTO[lancamento.tipo]}
               </Linha>
               <Linha rotulo="Status do lançamento">
-                {infoLancamento ? (
+                <span className="inline-flex flex-wrap items-center gap-1">
                   <StatusBadge
-                    status={infoLancamento.badge}
-                    rotulo={infoLancamento.rotulo}
+                    status={seloLancamento.badge}
+                    rotulo={seloLancamento.rotulo}
                   />
-                ) : (
-                  lancamento.status
-                )}
+                  {seloLancamento.etapa ? (
+                    <StatusBadge
+                      status="aprovado"
+                      rotulo={seloLancamento.etapa}
+                      discreto
+                    />
+                  ) : null}
+                </span>
               </Linha>
               <Linha rotulo="Fornecedor">
                 {lancamento.fornecedorNome ?? <CelulaVazia />}

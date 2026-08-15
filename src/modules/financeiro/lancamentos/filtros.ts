@@ -201,7 +201,19 @@ export function lerFiltrosLancamentos(
   params: ParametrosUrl,
 ): LeituraFiltrosLancamentos {
   const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
-  const status = parametroValido(params.status, STATUS_VALIDOS);
+  const statusEscolhido = parametroValido(params.status, STATUS_VALIDOS);
+  /**
+   * "A pagar" no seletor significa A SITUAÇÃO DO DINHEIRO, não o status exato do
+   * documento.
+   *
+   * Medido em 15/08/2026: 86 lançamentos têm status `a_pagar` (R$ 1,90 mi) e 107
+   * têm status `aprovado` — TODOS com saldo em aberto, somando R$ 9,84 mi.
+   * `.eq("status","a_pagar")` trazia 16% da dívida, e quem procurava o que a
+   * empresa deve ia embora achando que tinha visto tudo. Os outros status
+   * continuam sendo igualdade exata: "Aprovado" é a etapa, e ela existe.
+   */
+  const comSaldoAberto = statusEscolhido === "a_pagar" ? true : undefined;
+  const status = comSaldoAberto ? undefined : statusEscolhido;
   const revisao = parametroValido(params.revisao, FILTROS_REVISAO);
   const atraso = parametroValido(params.atraso, FILTROS_ATRASO);
   const origem = parametroValido(params.origem, ORIGENS_LANCAMENTO);
@@ -266,6 +278,7 @@ export function lerFiltrosLancamentos(
       competenciaAte: competencia.ate,
       revisao,
       atraso,
+      comSaldoAberto,
       semCancelado,
       semPrevisto,
       recorte,
@@ -273,7 +286,8 @@ export function lerFiltrosLancamentos(
     valores: {
       busca,
       tipo: tipo ?? "",
-      status: status ?? "",
+      // A barra mostra a escolha da pessoa, e não o que foi para o banco.
+      status: statusEscolhido ?? "",
       mes: mesCompetencia === "" ? "" : mes,
       revisao: revisao ?? "",
       atraso: atraso ?? "",
