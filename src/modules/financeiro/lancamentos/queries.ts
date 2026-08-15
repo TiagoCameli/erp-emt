@@ -9,6 +9,7 @@ import {
 } from "@/components/canonicos";
 import { dataHojeISO, TIMEZONE } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
 import {
@@ -1147,17 +1148,34 @@ export async function listarCategorias(): Promise<CategoriaOpcao[]> {
 export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("fornecedores")
-    .select("id, razao_social, nome_fantasia")
-    .eq("ativo", true)
-    .order("razao_social");
+  /**
+   * Lê em PÁGINAS, não numa tacada.
+   *
+   * Esta lista alimenta o Combobox de fornecedor do formulário de lançamento, do
+   * filtro da listagem e do relatório de custo por centro de custo — e o
+   * PostgREST corta em 1.000 linhas SEM ERRO. Medido em 15/08/2026: 939
+   * fornecedores, 938 ativos. Faltam 62 cadastros para o corte começar, e ele é
+   * invisível: o fornecedor some do seletor mesmo digitando o nome, porque a
+   * busca da tela roda sobre o que chegou. O desfecho previsível é alguém
+   * cadastrar um duplicado "porque não estava na lista".
+   *
+   * Mesmo defeito que já mordeu em 1.000 dos 3.349 insumos da ordem de compra e
+   * no saldo das contas bancárias.
+   */
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("fornecedores")
+      .select("id, razao_social, nome_fantasia")
+      .eq("ativo", true)
+      .order("razao_social")
+      .range(de, ate),
+  );
 
-  if (error) {
+  if (erro) {
     throw new Error("Não foi possível carregar os fornecedores");
   }
 
-  return (data ?? []).map((fornecedor) => ({
+  return linhas.map((fornecedor) => ({
     id: fornecedor.id,
     nome: nomeFornecedor(fornecedor),
   }));
