@@ -1,4 +1,5 @@
 import { ehParcelaAberta } from "@/modules/financeiro/_shared/formato";
+import { pagoDasParcelas } from "@/modules/financeiro/_shared/prazo";
 import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
 import type { MedidaRecorte } from "@/modules/financeiro/lancamentos/recorte";
 
@@ -126,14 +127,15 @@ export function dinheiroDasParcelas(
   let vencido = 0;
   let desconto = 0;
 
+  // Pago e desconto saem do `_shared/prazo`, que é a ÚNICA implementação da
+  // regra "pago é o líquido" no app: o extrato do fornecedor mostra o mesmo
+  // número, e duas cópias divergiriam no dia em que alguém mexesse numa só.
+  const jaPago = pagoDasParcelas(parcelas);
+  pago = centavos(jaPago.pago);
+  desconto = centavos(jaPago.desconto);
+
   for (const parcela of parcelas) {
-    if (estaPaga(parcela)) {
-      // Líquido é o que saiu do banco. `valor_liquido` pode vir null em parcela
-      // antiga, e aí o valor cheio é a melhor verdade disponível.
-      pago += centavos(parcela.valorLiquido ?? parcela.valor);
-      desconto += centavos(parcela.desconto ?? 0);
-      continue;
-    }
+    if (estaPaga(parcela)) continue;
     if (!estaAberta(parcela)) continue;
 
     aberto += centavos(parcela.valor);

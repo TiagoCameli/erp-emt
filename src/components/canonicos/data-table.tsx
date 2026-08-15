@@ -604,6 +604,18 @@ export interface DataTableProps<TData> {
   emptyState?: React.ReactNode;
   isLoading?: boolean;
   /**
+   * Linha de totais no pé da tabela, por id de coluna.
+   *
+   * Mapa (e não uma linha pronta) porque esta tabela deixa o usuário esconder e
+   * reordenar coluna: com posição fixa, o total apareceria embaixo da coluna
+   * errada assim que alguém mexesse. Aqui cada total é preso ao id da sua coluna
+   * e acompanha, e o alinhamento à direita vem do mesmo `meta.alinharDireita` que
+   * as células usam.
+   *
+   * Some junto com o corpo quando não há linha: total de nada é ruído.
+   */
+  rodape?: Record<string, React.ReactNode>;
+  /**
    * Quando presente, exibe o botão "Exportar Excel" acima da tabela, junto dos
    * menus Filtros/Altura/Colunas.
    *
@@ -949,6 +961,7 @@ export function DataTable<TData>({
   onRowClick,
   emptyState,
   isLoading = false,
+  rodape,
   exportar,
   exportando = false,
   idTabela,
@@ -2614,6 +2627,32 @@ export function DataTable<TData>({
     </TableBody>
   );
 
+  /**
+   * Pé com os totais. Só existe quando a tela passou `rodape` E há linha na
+   * página: somar zero linha não informa nada e ainda ocuparia altura.
+   */
+  const pe =
+    rodape && table.getRowModel().rows.length > 0 ? (
+      <tfoot data-slot="table-footer" className="border-t border-border">
+        <TableRow className="bg-surface hover:bg-surface">
+          {colunasVisiveis.map((coluna) => (
+            <TableCell
+              key={coluna.id}
+              data-coluna={coluna.id}
+              className={cn(
+                "h-9 py-0 font-medium",
+                coluna.columnDef.meta?.alinharDireita === true &&
+                  "text-right tabular-nums",
+              )}
+              style={personalizavel ? { width: coluna.getSize() } : undefined}
+            >
+              {rodape[coluna.id] ?? null}
+            </TableCell>
+          ))}
+        </TableRow>
+      </tfoot>
+    ) : null;
+
   const tabela = (
     // A altura desce por contexto porque o corte do texto é decidido dentro da
     // célula, e a célula é montada pela TELA (columnDef.cell): não há por onde
@@ -2629,6 +2668,7 @@ export function DataTable<TData>({
       >
         {cabecalho}
         {corpo}
+        {pe}
       </table>
     </ContextoAlturaLinha.Provider>
   );

@@ -40,6 +40,8 @@ interface ExtratoFornecedorTabelaProps {
   lancamentos: ExtratoLancamento[];
   /** Sem permissão de ver lançamentos, a linha não clica (levaria a um 404). */
   podeVerLancamentos: boolean;
+  /** Nomes dos fornecedores escolhidos, para o cartão dizer de quem é o extrato. */
+  fornecedoresEscolhidos: string[];
 }
 
 function formatoStatus(status: string): {
@@ -61,6 +63,7 @@ function formatoStatus(status: string): {
 export function ExtratoFornecedorTabela({
   lancamentos,
   podeVerLancamentos,
+  fornecedoresEscolhidos,
 }: ExtratoFornecedorTabelaProps) {
   const router = useRouter();
   const colunas = React.useMemo<ColumnDef<ExtratoLancamento, unknown>[]>(
@@ -291,6 +294,15 @@ export function ExtratoFornecedorTabela({
     [dados],
   );
 
+  const totalPago = React.useMemo(
+    () =>
+      dados.reduce(
+        (soma, lancamento) => soma + Math.round(lancamento.pago * 100),
+        0,
+      ) / 100,
+    [dados],
+  );
+
   const totalDocumentos = React.useMemo(
     () =>
       dados.reduce(
@@ -309,6 +321,23 @@ export function ExtratoFornecedorTabela({
     <div className="flex flex-col gap-4">
       <GradeKpis>
         <KPICard
+          titulo="Fornecedores"
+          valor={
+            fornecedoresEscolhidos.length === 0
+              ? "Todos"
+              : fornecedoresEscolhidos.length
+          }
+          // Com um ou dois o nome cabe e informa mais que a contagem; daí para
+          // cima vira lista longa e o cartão perde a leitura rápida.
+          detalhe={
+            fornecedoresEscolhidos.length === 0
+              ? "Nenhum filtro de fornecedor"
+              : fornecedoresEscolhidos.length <= 2
+                ? fornecedoresEscolhidos.join(" · ")
+                : `${fornecedoresEscolhidos[0]} e mais ${fornecedoresEscolhidos.length - 1}`
+          }
+        />
+        <KPICard
           titulo="A pagar"
           valor={<MoneyText valor={resumo.total} />}
           detalhe={
@@ -316,6 +345,11 @@ export function ExtratoFornecedorTabela({
               ? "Nada em aberto"
               : `${comSaldo} de ${dados.length} lançamento(s) com saldo`
           }
+        />
+        <KPICard
+          titulo="Pago"
+          valor={<MoneyText valor={totalPago} />}
+          detalhe="Já saiu da conta, com desconto abatido"
         />
         <KPICard
           titulo="Vencido"
@@ -371,6 +405,12 @@ export function ExtratoFornecedorTabela({
         pageIndex={paginacao.pageIndex}
         pageSize={paginacao.pageSize}
         onPaginationChange={setPaginacao}
+      // Soma do que está FILTRADO, no pé da tabela. Mapa por id de coluna para o
+      // total ficar embaixo de "Valor" mesmo se o usuário reordenar as colunas.
+      rodape={{
+        numero: `Total de ${dados.length} lançamento(s)`,
+        valor: <MoneyText valor={totalDocumentos} />,
+      }}
         emptyState={
           filtrando && lancamentos.length > 0 ? (
             <EmptyState

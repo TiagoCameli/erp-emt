@@ -23,6 +23,12 @@ export interface ParcelaParaPrazo {
   status: string;
   valor: number;
   dataVencimento: string | null;
+  /**
+   * Valor menos desconto: o que realmente saiu da conta. Ausente ou null (parcela
+   * antiga) cai no `valor`. Só é lido nas parcelas PAGAS.
+   */
+  valorLiquido?: number | null;
+  desconto?: number | null;
 }
 
 export interface AbertoPorPrazo {
@@ -45,6 +51,11 @@ export const ABERTO_ZERADO: AbertoPorPrazo = {
   de8a30: 0,
   mais30: 0,
 };
+
+/** Parcela paga: o dinheiro saiu. */
+function estaPaga(parcela: ParcelaParaPrazo): boolean {
+  return parcela.status === "pago";
+}
 
 /** Dinheiro soma em centavos: float de duas casas acumula resto binário. */
 function centavos(valor: number): number {
@@ -116,6 +127,36 @@ export function abertoPorPrazo(
     de8a30: reais(de8a30),
     mais30: reais(mais30),
   };
+}
+
+/** O que já saiu do caixa, e o desconto obtido no caminho. */
+export interface PagoDasParcelas {
+  /** Soma das parcelas pagas, pelo LÍQUIDO. */
+  pago: number;
+  /** Desconto concedido nas parcelas pagas. Zero quando não houve. */
+  desconto: number;
+}
+
+/**
+ * Quanto destas parcelas já foi pago, pelo LÍQUIDO.
+ *
+ * Líquido e não bruto porque é o que saiu da conta bancária: na base há 20
+ * parcelas com desconto (R$ 31.599,01), e pelo bruto o pago inflaria e o desconto
+ * obtido sumiria da conta. Esta é a única implementação da regra no app: o
+ * `dinheiroDasParcelas` do módulo de lançamentos chama esta função, para o
+ * "Pago" do extrato e o "Pago" da listagem nunca darem números diferentes.
+ */
+export function pagoDasParcelas(
+  parcelas: ParcelaParaPrazo[],
+): PagoDasParcelas {
+  let pago = 0;
+  let desconto = 0;
+  for (const parcela of parcelas) {
+    if (!estaPaga(parcela)) continue;
+    pago += centavos(parcela.valorLiquido ?? parcela.valor);
+    desconto += centavos(parcela.desconto ?? 0);
+  }
+  return { pago: reais(pago), desconto: reais(desconto) };
 }
 
 /** Soma faixa por faixa, para o resumo de várias linhas da tela. */
