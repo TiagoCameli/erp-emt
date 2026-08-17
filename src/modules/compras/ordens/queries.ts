@@ -11,6 +11,7 @@ import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
+import type { AjustesDaOrdem } from "@/modules/compras/ordens/calculo";
 import { ehParcelaAberta } from "@/modules/financeiro/_shared/formato";
 import {
   idsFornecedoresPorNome,
@@ -162,6 +163,12 @@ export interface OrdemDetalhe {
   categoriaId: string | null;
   categoriaNome: string | null;
   valorTotal: number;
+  /**
+   * Ajustes do rodapé da OC. Zero em tudo que a tela cria; diferentes de zero
+   * nas ordens vindas do Mais Controle. O `valorTotal` já vem do banco com eles
+   * embutidos — quem soma é a trigger, nunca o app.
+   */
+  ajustes: AjustesDaOrdem;
   status: string;
   motivoRejeicao: string | null;
   dataCompra: string;
@@ -470,7 +477,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     .select(
       `id, numero, fornecedor_id, condicao_pagamento_id, forma_pagamento_id, cotacao_id,
        categoria_id, descricao,
-       valor_total, status, motivo_rejeicao, data_compra, mes_competencia,
+       valor_total, frete, outras_despesas, impostos, desconto,
+       status, motivo_rejeicao, data_compra, mes_competencia,
        created_at, observacoes,
        fornecedores(razao_social, nome_fantasia),
        categorias_financeiras(nome),
@@ -529,6 +537,12 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     categoriaId: ordem.categoria_id,
     categoriaNome: ordem.categorias_financeiras?.nome ?? null,
     valorTotal: ordem.valor_total,
+    ajustes: {
+      frete: ordem.frete,
+      outrasDespesas: ordem.outras_despesas,
+      impostos: ordem.impostos,
+      desconto: ordem.desconto,
+    },
     status: ordem.status,
     motivoRejeicao: ordem.motivo_rejeicao,
     dataCompra: ordem.data_compra,
