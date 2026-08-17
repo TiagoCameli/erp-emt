@@ -100,8 +100,11 @@ const LARGURA_NOME = "max-w-[15rem]";
  * rouba largura das colunas que importam.
  *
  * `rotuloRecorte` nulo = sem recorte = colunas de sempre.
+ *
+ * Exportada para o teste poder olhar a lista de colunas sem montar a tela
+ * inteira (que precisaria de router, Server Action e preferência de tabela).
  */
-function montarColunas(
+export function montarColunas(
   rotuloRecorte: string | null,
 ): ColumnDef<LancamentoLista, unknown>[] {
   return [
@@ -126,6 +129,22 @@ function montarColunas(
         rotulo={ROTULO_TIPO_LANCAMENTO[row.original.tipo]}
       />
     ),
+  },
+  {
+    // Antes da descrição de propósito: quem varre a lista lê "de quem é" junto
+    // com "o que é", e o par identifica o lançamento numa linha. O filtro por
+    // fornecedor já existia nesta tela; faltava a coluna, então filtrar por um
+    // fornecedor não mostrava em nenhum lugar de quem era cada linha.
+    accessorKey: "fornecedorNome",
+    header: "Fornecedor",
+    size: 200,
+    meta: { rotulo: "Fornecedor" },
+    cell: ({ row }) =>
+      row.original.fornecedorNome ? (
+        <span className="font-medium">{row.original.fornecedorNome}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      ),
   },
   {
     // Descrição e categoria numa coluna só: quem lê a lista quer as duas juntas
