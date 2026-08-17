@@ -1924,3 +1924,36 @@ Duas lições, e a segunda é a que pega de novo:
 2. **O banco vivo se move enquanto se trabalha nele.** Ler a definição de uma função no
    começo da sessão não garante que ela é a mesma na hora de aplicar. Reler antes do
    `apply_migration` quando houver outra frente aberta no mesmo projeto.
+
+## 2026-08-13 - A listagem de lançamentos ordena no servidor, e coluna que o banco não sabe ordenar não ganha seta
+
+Descoberto ao investigar "a coluna de fornecedor tem que ser parecida com a da aprovação":
+**nenhuma coluna da listagem de lançamentos ordenava.** Não era detalhe do fornecedor.
+
+A causa: a listagem passa `total` para o DataTable, o que liga o modo servidor, e nesse modo o
+canônico só habilita ordenação se receber `onSortingChange` (`enableSorting: !modoServidor ||
+onSortingChange !== undefined`). A tela não passava, então a tabela inteira ficava sem seta. Na
+aprovação de pagamentos funciona porque ela carrega tudo e ordena no cliente.
+
+1. **Ordena no SERVIDOR, sobre o filtro inteiro.** São 5.906 lançamentos paginados de 25 em 25:
+   ordenar a página carregada mostraria o maior valor DA PÁGINA quando a pessoa pede o maior valor.
+   Numa tela de dinheiro isso não é limitação, é resposta errada com cara de certa. Medido depois
+   de pronto: por Valor desc o topo é R$ 3.249.275,31, e antes a página 1 tinha R$ 878,00.
+
+2. **Coluna que o banco não sabe ordenar NÃO ganha seta.** `ordenacao.ts` tem a lista fechada das
+   oito colunas que existem em `lancamentos`. Ficam de fora Fornecedor e Categoria (join), Revisão
+   e os valores pago/aberto/vencido (calculados no app a partir das parcelas) e a coluna do recorte
+   (somada no app). Elas são `enableSorting: false`: melhor não oferecer do que oferecer e ordenar
+   só a página. **Um teste amarra as duas pontas** (`ordenaveis()` da tabela === chaves de
+   `COLUNA_DO_BANCO`), porque seta sem suporte no servidor é clique que não faz nada, e suporte sem
+   seta é recurso escondido.
+
+3. **A ordem mora na URL, como os filtros.** Link compartilhado abre na mesma ordem, e a exportação
+   para Excel lê os MESMOS filtros, então a planilha sai na ordem da tela. O padrão (data da compra
+   desc) não vai para a URL, para o link ficar limpo. Ordem inventada na URL cai no padrão em vez de
+   erro: a URL é editável e nada cru chega no `order` do banco.
+
+4. **O desempate por `id` fica MAIS importante, não menos.** Ordenar por status empata quase tudo
+   (3 status distintos em 5.906 linhas). Medido: páginas 1 e 2 por status têm 0 id em comum com o
+   desempate. Sem ele, a página 2 repetiria linha e sumiria com outra — ver a entrada da paginação
+   sem desempate.

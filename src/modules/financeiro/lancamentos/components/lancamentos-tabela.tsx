@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef, PaginationState } from "@tanstack/react-table";
+import type {
+  ColumnDef,
+  PaginationState,
+  SortingState,
+} from "@tanstack/react-table";
 import { Receipt, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
@@ -51,6 +55,12 @@ import {
   ROTULO_ORIGEM_LANCAMENTO,
   rotuloOrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
+import {
+  DIRECAO_PADRAO,
+  lerOrdenacao,
+  ORDEM_PADRAO,
+  ordenacaoParaUrl,
+} from "@/modules/financeiro/lancamentos/ordenacao";
 import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
 import type { ValoresFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
@@ -138,6 +148,11 @@ export function montarColunas(
     accessorKey: "fornecedorNome",
     header: "Fornecedor",
     size: 200,
+    // Não ordena: o nome vem de join com `fornecedores`, e esta lista ordena no
+    // SERVIDOR sobre o filtro inteiro (ver ordenacao.ts). Oferecer a seta aqui
+    // ordenaria só as 25 linhas da página, o que numa lista de milhares responde
+    // errado com cara de certo. Melhor não ter seta do que ter seta que mente.
+    enableSorting: false,
     meta: { rotulo: "Fornecedor" },
     cell: ({ row }) =>
       row.original.fornecedorNome ? (
@@ -179,6 +194,9 @@ export function montarColunas(
         {
           id: "valorRecorte",
           header: rotuloRecorte,
+          // Não ordena: o valor da fatia é somado no app a partir das parcelas
+          // (ver recorte.ts), não existe como coluna para o `order` do banco.
+          enableSorting: false,
           meta: { alinharDireita: true, rotulo: rotuloRecorte },
           cell: ({ row }: { row: { original: LancamentoLista } }) => (
             <MoneyText valor={row.original.valorRecorte ?? row.original.valor} />
@@ -429,6 +447,37 @@ export function LancamentosTabela({
     toast.success("Lançamento excluído");
     setAExcluir(null);
     router.refresh();
+  }
+
+  /**
+   * Ordenação em vigor, para a tabela marcar a coluna e a seta certas. Vem da URL
+   * (via `valores`), não de estado local: é o servidor que ordena, então a fonte
+   * da verdade tem que ser a mesma que a consulta leu.
+   */
+  const ordenacao: SortingState = [
+    { id: valores.ordem, desc: valores.direcao === "desc" },
+  ];
+
+  /**
+   * Troca a ordenação na URL. Zera a página pelo mesmo motivo dos filtros: manter
+   * a página 5 depois de reordenar mostra um pedaço do meio de uma lista que a
+   * pessoa nunca viu do começo.
+   *
+   * Clique que desliga a ordenação (o terceiro do ciclo do TanStack) volta para o
+   * padrão em vez de deixar a lista sem ordem nenhuma: sem `order`, a ordem fica a
+   * critério do Postgres e pode repetir linha entre páginas.
+   */
+  function aoMudarOrdenacao(nova: SortingState) {
+    const escolha = nova[0];
+    const { ordem, direcao } = escolha
+      ? lerOrdenacao(escolha.id, escolha.desc ? "desc" : "asc")
+      : { ordem: ORDEM_PADRAO, direcao: DIRECAO_PADRAO };
+    const naUrl = ordenacaoParaUrl(ordem, direcao);
+    setMuitos({
+      ordem: naUrl.ordem ?? null,
+      direcao: naUrl.direcao ?? null,
+      pagina: "1",
+    });
   }
 
   function aoMudarPaginacao(paginacao: PaginationState) {
@@ -703,6 +752,8 @@ export function LancamentosTabela({
         pageIndex={pagina}
         pageSize={tamanho}
         onPaginationChange={aoMudarPaginacao}
+        sorting={ordenacao}
+        onSortingChange={aoMudarOrdenacao}
         selecao={{
           idDaLinha: (lancamento) => lancamento.id,
           selecionados,

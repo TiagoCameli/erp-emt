@@ -28,6 +28,13 @@ import type {
   OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
+import {
+  COLUNA_DO_BANCO,
+  DIRECAO_PADRAO,
+  ORDEM_PADRAO,
+  type DirecaoOrdem,
+  type OrdemLancamentos,
+} from "@/modules/financeiro/lancamentos/ordenacao";
 import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
   emLotes,
@@ -143,6 +150,13 @@ export interface ListarLancamentosParams {
    * coluna do cabeçalho do lançamento.
    */
   atraso?: FiltroAtraso;
+  /**
+   * Coluna da ordenação, escolhida pela pessoa no cabeçalho da tabela. Lista
+   * fechada em COLUNA_DO_BANCO: só coluna que existe em `lancamentos`, porque
+   * ordenar por join ou por valor calculado no app não tem como acontecer aqui.
+   */
+  ordem?: OrdemLancamentos;
+  direcao?: DirecaoOrdem;
 }
 
 /** Linha da listagem de lançamentos. */
@@ -695,6 +709,8 @@ export async function listarLancamentos(
 ): Promise<LancamentosPagina> {
   const supabase = await createClient();
 
+  const ordem = params.ordem ?? ORDEM_PADRAO;
+  const direcao = params.direcao ?? DIRECAO_PADRAO;
   const pagina = Math.max(0, params.pagina);
   const tamanho = Math.max(1, params.tamanho);
   const de = pagina * tamanho;
@@ -760,8 +776,14 @@ export async function listarLancamentos(
        )`,
       { count: "exact" },
     )
-    .order("data_compra", { ascending: false })
-    .order("created_at", { ascending: false })
+    // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
+    // sobre a página carregada. A coluna vem de COLUNA_DO_BANCO, lista fechada,
+    // então nada cru da URL chega no `order`.
+    .order(COLUNA_DO_BANCO[ordem], { ascending: direcao === "asc" })
+    // Segundo critério, sempre: com muitos lançamentos no mesmo dia (e no mesmo
+    // status, no mesmo tipo), a coluna escolhida sozinha empata demais. Acompanha
+    // a direção escolhida para a lista não ficar com metade da ordem invertida.
+    .order("created_at", { ascending: direcao === "asc" })
     // Desempate por id, que é único: sem ele a ordem de lançamentos com a MESMA
     // data de compra e o mesmo created_at fica a critério do Postgres, e pode
     // sair diferente entre uma página e a seguinte — a página 2 repete uma linha
@@ -769,6 +791,9 @@ export async function listarLancamentos(
     // de lançamentos na mesma transação, então created_at empatado é o normal
     // aqui. Vale para a paginação da tela e para a leitura completa da
     // exportação, que percorre página por página.
+    //
+    // Com ordenação escolhida pela pessoa isto fica MAIS importante, não menos:
+    // ordenar por status ou por tipo empata milhares de linhas de uma vez.
     .order("id", { ascending: false })
     .range(de, ate);
 

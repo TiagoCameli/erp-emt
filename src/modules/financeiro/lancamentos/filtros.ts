@@ -2,6 +2,11 @@ import { mesParaCompetencia } from "@/lib/formatadores";
 import type { ListarLancamentosParams } from "@/modules/financeiro/lancamentos/queries";
 import { lerRecorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
+  lerOrdenacao,
+  type DirecaoOrdem,
+  type OrdemLancamentos,
+} from "@/modules/financeiro/lancamentos/ordenacao";
+import {
   FILTROS_ATRASO,
   FILTROS_REVISAO,
   ORIGENS_LANCAMENTO,
@@ -74,6 +79,13 @@ export interface ValoresFiltrosLancamentos {
   /** Faixa de MÊS DE REFERÊNCIA, como data yyyy-MM-dd. */
   compDe: string;
   compAte: string;
+  /**
+   * Ordenação em vigor, já validada. Diferente dos outros valores, estes NUNCA
+   * são string vazia: sem escolha na URL eles vêm com o padrão, porque a tabela
+   * precisa marcar alguma coluna como ordenada.
+   */
+  ordem: OrdemLancamentos;
+  direcao: DirecaoOrdem;
 }
 
 /** Leitura completa da URL: o que vai ao banco e o que volta para a tela. */
@@ -242,6 +254,11 @@ export function lerFiltrosLancamentos(
   // entrega chave repetida como array e o contrato inteiro recusa array.
   const semPrevisto = params.sem_previsto === "1" ? true : undefined;
   const recorte = lerRecorte(params.recorte);
+  // Ordenação escolhida no cabeçalho da tabela. Mora na URL como os filtros, por
+  // dois motivos: o link compartilhado abre com a MESMA ordem que a pessoa viu, e
+  // a exportação para Excel lê estes mesmos filtros, então a planilha sai na
+  // ordem da tela em vez de numa ordem própria.
+  const { ordem, direcao } = lerOrdenacao(params.ordem, params.direcao);
 
   const paginaParam = Number(params.pagina);
   const pagina =
@@ -282,6 +299,8 @@ export function lerFiltrosLancamentos(
       semCancelado,
       semPrevisto,
       recorte,
+      ordem,
+      direcao,
     },
     valores: {
       busca,
@@ -312,6 +331,10 @@ export function lerFiltrosLancamentos(
       // Só o recorte que PASSOU na validação volta para a tela: recorte inválido
       // aparecendo na barra diria que a lista está recortada quando ela não está.
       recorte: recorte ? (params.recorte as string) : "",
+      // Sempre preenchidos, com o padrão quando a URL não escolheu: a tabela
+      // precisa saber qual coluna marcar como ordenada.
+      ordem,
+      direcao,
     },
   };
 }
