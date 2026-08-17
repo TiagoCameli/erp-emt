@@ -60,7 +60,11 @@ import {
 } from "@/modules/compras/ordens/calculo-parcelas";
 import {
   paraNumero,
+  LINHAS_DE_AJUSTE,
+  SEM_AJUSTES,
   subtotalItem,
+  temAjuste,
+  totalComAjustes,
   totalOrdemCompra,
 } from "@/modules/compras/ordens/calculo";
 import {
@@ -259,14 +263,22 @@ export function OrdemFormDrawer({
   // grupos. Computado a cada render (sem useMemo) porque o react-hook-form
   // reusa a referência do array observado.
   const gruposObservados = form.watch("centrosCusto");
-  const totalPrevia = totalOrdemCompra(
-    (gruposObservados ?? []).flatMap((grupo) =>
-      (grupo.insumos ?? []).map((insumo) => ({
-        quantidade: paraNumero(insumo.quantidade ?? ""),
-        precoUnitario: paraNumero(insumo.precoUnitario ?? ""),
-      })),
-    ),
+
+  // Ajustes do rodapé (frete, outras despesas, imposto, desconto). A tela não os
+  // edita — só as ordens vindas do Mais Controle os têm. Mas a prévia PRECISA
+  // somá-los, senão ela diverge do total que o banco grava: na ordem do Mais
+  // Controle 2592 a diferença é o desconto de R$ 3.835,95, e quem visse a
+  // prévia poderia "consertar" quantidade para fechar uma conta que já fecha.
+  const ajustes = ordem?.ajustes ?? SEM_AJUSTES;
+  const itensObservados = (gruposObservados ?? []).flatMap((grupo) =>
+    (grupo.insumos ?? []).map((insumo) => ({
+      quantidade: paraNumero(insumo.quantidade ?? ""),
+      precoUnitario: paraNumero(insumo.precoUnitario ?? ""),
+    })),
   );
+  const totalDosItens = totalOrdemCompra(itensObservados);
+  const totalPrevia = totalComAjustes(itensObservados, ajustes);
+  const mostrarAjustes = temAjuste(ajustes);
 
   // Centros de custo já escolhidos, para não permitir grupo repetido.
   const centrosUsados = new Set(
@@ -707,6 +719,34 @@ export function OrdemFormDrawer({
                 </span>
               </div>
             ))}
+            {mostrarAjustes ? (
+              <>
+                <div className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="text-detalhe font-medium">
+                    Soma dos itens
+                  </span>
+                  <span className="text-detalhe tabular-nums">
+                    {formatarBRL(totalDosItens)}
+                  </span>
+                </div>
+                {LINHAS_DE_AJUSTE.map(({ chave, rotulo, sinal }) =>
+                  ajustes[chave] === 0 ? null : (
+                    <div
+                      key={chave}
+                      className="flex items-center justify-between gap-3 px-3 py-2"
+                    >
+                      <span className="text-detalhe text-muted-foreground">
+                        {rotulo}
+                      </span>
+                      <span className="text-detalhe tabular-nums text-muted-foreground">
+                        {sinal === "-" ? "− " : "+ "}
+                        {formatarBRL(ajustes[chave])}
+                      </span>
+                    </div>
+                  ),
+                )}
+              </>
+            ) : null}
             <div className="flex items-center justify-between gap-3 bg-surface px-3 py-2.5">
               <span className="text-detalhe font-medium">
                 Total geral
@@ -719,6 +759,12 @@ export function OrdemFormDrawer({
                 {formatarBRL(totalPrevia)}
               </span>
             </div>
+            {mostrarAjustes ? (
+              <p className="px-3 py-2 text-detalhe text-muted-foreground">
+                Os ajustes vieram junto com a ordem e não são editáveis por
+                aqui. Mexer nos itens recalcula o total mantendo os ajustes.
+              </p>
+            ) : null}
           </div>
         </SecaoFormulario>
 

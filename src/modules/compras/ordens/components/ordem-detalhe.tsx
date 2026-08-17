@@ -26,6 +26,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
+  formatarBRL,
   formatarData,
   formatarMesAno,
   formatarQuantidade,
@@ -41,6 +42,11 @@ import {
   excluirOrdemCompra,
   rejeitarOrdem,
 } from "@/modules/compras/ordens/actions";
+import {
+  LINHAS_DE_AJUSTE,
+  temAjuste,
+  totalOrdemCompra,
+} from "@/modules/compras/ordens/calculo";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
@@ -156,6 +162,8 @@ export function OrdemDetalheView({
   const [enviando, setEnviando] = React.useState(false);
 
   const info = infoStatusOC(ordem.status);
+  // Só é diferente de `ordem.valorTotal` quando a ordem tem ajuste de rodapé.
+  const somaDosItens = totalOrdemCompra(ordem.itens);
   const editavel =
     podeEditar &&
     (ordem.status === "rascunho" || ordem.status === "pendente_aprovacao");
@@ -488,6 +496,38 @@ export function OrdemDetalheView({
                   ))}
                 </tbody>
                 <tfoot>
+                  {/*
+                    Quando a ordem tem ajuste de rodapé, a soma dos itens NÃO é o
+                    total, e mostrar só o total deixa uma diferença sem
+                    explicação na tela: na ordem 2592 do Mais Controle os itens
+                    somam R$ 103.835,95 e o total é R$ 100.000,00. As linhas
+                    abaixo mostram por quê.
+                  */}
+                  {temAjuste(ordem.ajustes) ? (
+                    <>
+                      <tr className="text-muted-foreground">
+                        <td className="px-3 py-2 text-center" colSpan={4}>
+                          Soma dos itens
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <MoneyText valor={somaDosItens} />
+                        </td>
+                      </tr>
+                      {LINHAS_DE_AJUSTE.map(({ chave, rotulo, sinal }) =>
+                        ordem.ajustes[chave] === 0 ? null : (
+                          <tr key={chave} className="text-muted-foreground">
+                            <td className="px-3 py-2 text-center" colSpan={4}>
+                              {rotulo}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {sinal === "-" ? "− " : "+ "}
+                              {formatarBRL(ordem.ajustes[chave])}
+                            </td>
+                          </tr>
+                        ),
+                      )}
+                    </>
+                  ) : null}
                   <tr className="font-semibold">
                     <td className="px-3 py-2 text-center" colSpan={4}>
                       Total

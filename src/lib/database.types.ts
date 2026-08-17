@@ -2311,14 +2311,18 @@ export type Database = {
           created_at: string
           created_by: string | null
           data_compra: string
+          desconto: number
           descricao: string | null
           forma_pagamento_id: string | null
           fornecedor_id: string
+          frete: number
           id: string
+          impostos: number
           mes_competencia: string
           motivo_rejeicao: string | null
           numero: string | null
           observacoes: string | null
+          outras_despesas: number
           status: string
           updated_at: string
           valor_total: number
@@ -2332,14 +2336,18 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_compra?: string
+          desconto?: number
           descricao?: string | null
           forma_pagamento_id?: string | null
           fornecedor_id: string
+          frete?: number
           id?: string
+          impostos?: number
           mes_competencia?: string
           motivo_rejeicao?: string | null
           numero?: string | null
           observacoes?: string | null
+          outras_despesas?: number
           status?: string
           updated_at?: string
           valor_total?: number
@@ -2353,14 +2361,18 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_compra?: string
+          desconto?: number
           descricao?: string | null
           forma_pagamento_id?: string | null
           fornecedor_id?: string
+          frete?: number
           id?: string
+          impostos?: number
           mes_competencia?: string
           motivo_rejeicao?: string | null
           numero?: string | null
           observacoes?: string | null
+          outras_despesas?: number
           status?: string
           updated_at?: string
           valor_total?: number
