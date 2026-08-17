@@ -1957,3 +1957,42 @@ aprovação de pagamentos funciona porque ela carrega tudo e ordena no cliente.
    (3 status distintos em 5.906 linhas). Medido: páginas 1 e 2 por status têm 0 id em comum com o
    desempate. Sem ele, a página 2 repetiria linha e sumiria com outra — ver a entrada da paginação
    sem desempate.
+
+## 2026-08-13 - "Limpar filtros" em todo lugar, e por que ele é UMA escrita e não N
+
+Todo lugar do app que tem filtro ganhou botão "Limpar filtros", que só aparece quando algum filtro
+está preenchido. São dois hosts canônicos de filtro, não um: o `filtros` do **DataTable** (45 telas)
+e a **BarraFiltrosConfiguravel** (relatório de custo por centro de custo e painel de Gestão, que não
+têm tabela). Levantamento inicial que dizia "nenhum filtro vive fora do DataTable" estava errado:
+procurava por `<FilterBar>`, e a segunda barra tem outro nome.
+
+1. **Limpar é UMA escrita, não uma por filtro.** A primeira versão chamava o `onLimpar` de cada
+   filtro em sequência. Funciona para filtro em estado local (cada `setState` é independente e o
+   React agrupa), e **quebra** para filtro que vive na URL: cada `onLimpar` chama `setMuitos`, que
+   monta a URL a partir do `searchParams` da renderização, e essa referência não muda no meio de um
+   laço síncrono. A segunda escrita parte da URL antiga e desfaz a primeira. Medido na tela: limpar
+   busca e status limpava a busca e o status voltava.
+
+   Por isso o canônico aceita `onLimparFiltros`, que a tela implementa como uma escrita só
+   (`limparTodos` do `useFiltrosUrl`), e cai no laço apenas quando a tela não passa nada — o caso do
+   filtro em estado local, onde o laço está correto.
+
+2. **Acumular dentro do `setMuitos` foi tentado e recusado.** Guardar as mudanças num ref e adiar a
+   navegação para o fim do tick fez o clique parar de ter efeito nenhum no navegador, sem erro no
+   console. Não vale enfeitar o funil de escrita para contornar quem chama errado; o contrato passou
+   a ser explícito ("uma chamada por interação") e há teste que DOCUMENTA a limitação.
+
+3. **`limparTodos` apaga por exclusão, não por lista.** São 16 telas com filtro na URL, algumas com
+   dezesseis filtros: uma lista de chaves por tela sairia de sincronia no primeiro filtro novo, e o
+   sintoma seria o botão limpando quase tudo — pior que não limpar. Sobrevivem só `tamanho`, `ordem`
+   e `direcao`, que não mudam QUAIS linhas entram na lista. `pagina` é apagada, o que a leitura
+   entende como primeira página.
+
+4. **O campo de busca entra no "limpar".** 36 telas declaravam a busca sem `temValor`/`onLimpar`
+   (eles existiam só para limpar filtro escondido no menu). Sem isso, o botão limpava os seletores e
+   deixava o texto filtrando, com a tela dizendo que tinha limpado.
+
+**Não verificado no navegador.** A tentativa de validar ponta a ponta caiu em ambiente instável
+(página servida sem hidratar, bundle velho depois de Fast Refresh, e por fim renderer congelado), e
+o que eu media não era o código novo. Os testes cobrem o comportamento, mas quem confirma que o
+clique limpa é a tela.

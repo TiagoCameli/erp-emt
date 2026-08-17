@@ -187,6 +187,10 @@ export function FormasTabela({
             id: "busca",
             rotulo: "Busca por nome",
             fixo: true,
+            // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+            // deixa o texto da busca filtrando a lista.
+            temValor: busca !== "",
+            onLimpar: () => setBusca(""),
             elemento: (
               <FiltroBusca
                 valor={busca}

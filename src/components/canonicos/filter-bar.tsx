@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { FilterX, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -152,6 +152,18 @@ export function FiltroPeriodo({
 }
 
 /**
+ * Parâmetros da URL que NÃO são filtro, e por isso sobrevivem ao "Limpar filtros".
+ *
+ * `tamanho` é preferência de quantas linhas ver; `ordem` e `direcao` são
+ * ordenação. Nenhum dos três muda QUAIS linhas entram na lista, e apagar eles
+ * junto faria o botão desfazer escolha que a pessoa não mandou desfazer.
+ *
+ * `pagina` NÃO entra aqui de propósito: ela é apagada, e a leitura entende
+ * ausência como primeira página.
+ */
+const PARAMS_QUE_NAO_SAO_FILTRO = ["tamanho", "ordem", "direcao"];
+
+/**
  * Lê e escreve filtros nos searchParams da URL (replace, sem scroll).
  * `set(chave, null)` ou valor vazio remove o parâmetro.
  */
@@ -165,7 +177,20 @@ export function useFiltrosUrl() {
     [searchParams],
   );
 
-  // Várias chaves numa única navegação (ex: trocar filtro + zerar página).
+  /**
+   * Várias chaves numa única navegação (ex: trocar filtro + zerar página).
+   *
+   * **Uma chamada por interação.** Duas chamadas no mesmo tick NÃO se somam: cada
+   * uma monta a URL a partir do `searchParams` desta renderização, que não muda no
+   * meio de um laço síncrono, então a segunda desfaz a primeira. Foi medido na
+   * tela ao construir o "Limpar filtros" chamando um `onLimpar` por filtro: a
+   * busca limpava e o status voltava.
+   *
+   * Quem precisa limpar vários filtros de uma vez passa TODAS as chaves nesta
+   * chamada (é o que `onLimparFiltros` faz em cada tela). Tentativa de acumular
+   * aqui dentro, com navegação adiada, deixou o clique sem efeito nenhum no
+   * navegador: não vale enfeitar este funil para contornar quem chama errado.
+   */
   const setMuitos = React.useCallback(
     (mudancas: Record<string, string | null>) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -188,6 +213,38 @@ export function useFiltrosUrl() {
     [router, pathname, searchParams],
   );
 
+  /**
+   * Apaga TODO filtro da URL numa navegação só, para o botão "Limpar filtros".
+   *
+   * Apaga por exclusão em vez de listar as chaves de cada tela: são 16 telas com
+   * filtro na URL e algumas têm dezesseis filtros, então uma lista por tela sairia
+   * de sincronia no primeiro filtro que alguém acrescenta — e o sintoma seria o
+   * botão limpando quase tudo, que é pior que não limpar.
+   *
+   * O que NÃO é filtro sobrevive: ordenar e escolher quantas linhas ver não é
+   * filtrar, e quem limpou filtro não pediu a ordem padrão de volta. `pagina` é
+   * apagada, o que a leitura entende como primeira página.
+   *
+   * Não navega quando não há filtro nenhum: clique de graça faria a tela recarregar
+   * sem motivo.
+   */
+  const limparTodos = React.useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    let mexeu = false;
+    for (const chave of [...params.keys()]) {
+      if (PARAMS_QUE_NAO_SAO_FILTRO.includes(chave)) continue;
+      params.delete(chave);
+      mexeu = true;
+    }
+    if (!mexeu) return;
+
+    const query = params.toString();
+    salvarQuerySessao(pathname, query);
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
+  }, [router, pathname, searchParams]);
+
   const set = React.useCallback(
     (chave: string, valor: string | null) => {
       setMuitos({ [chave]: valor });
@@ -203,7 +260,7 @@ export function useFiltrosUrl() {
    */
   const query = searchParams.toString();
 
-  return { get, set, setMuitos, query };
+  return { get, set, setMuitos, limparTodos, query };
 }
 
 /** Espera (ms) entre a digitação e a escrita da busca na URL. */
@@ -410,6 +467,12 @@ export interface BarraFiltrosConfiguravelProps {
    */
   idTabela: string;
   filtros: FiltroDaBarra[];
+  /**
+   * Limpa TODOS os filtros numa única escrita. Obrigatório quando os filtros vivem
+   * na URL, pelo mesmo motivo do DataTable: um `onLimpar` por filtro faz a segunda
+   * escrita desfazer a primeira (ver use-filtros-url.test.tsx).
+   */
+  onLimparFiltros?: () => void;
 }
 
 /**
@@ -427,6 +490,7 @@ export interface BarraFiltrosConfiguravelProps {
 export function BarraFiltrosConfiguravel({
   idTabela,
   filtros,
+  onLimparFiltros,
 }: BarraFiltrosConfiguravelProps) {
   const [escolha, setEscolha] = React.useState<Record<string, boolean>>({});
 
@@ -543,6 +607,28 @@ export function BarraFiltrosConfiguravel({
           ))}
       </div>
       <div className="flex items-center gap-2">
+        {/* Mesmo botão do DataTable, mesma regra: só com filtro ativo. Esta barra
+            é o outro lugar do app onde filtro vive, então ele tem que existir
+            aqui também, senão "todo lugar com filtro" viraria "quase todo". */}
+        {filtros.some((filtro) => filtro.temValor === true) ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (onLimparFiltros) {
+                onLimparFiltros();
+                return;
+              }
+              for (const filtro of filtros) {
+                if (filtro.temValor === true) filtro.onLimpar?.();
+              }
+            }}
+          >
+            <FilterX />
+            Limpar filtros
+          </Button>
+        ) : null}
         <MenuFiltros
           filtros={filtros.map((filtro) => ({
             id: filtro.id,

@@ -16,6 +16,7 @@ import {
   colunaTexto,
   limparEstadosTabelaParaTeste,
   type DataTableProps,
+  type FiltroConfiguravel,
 } from "@/components/canonicos/data-table";
 import {
   ALTURA_LINHA_MAXIMA,
@@ -2197,5 +2198,150 @@ describe("DataTable: cabeçalho ajustável pelo usuário", () => {
         expect(px - fixos[indice - 1]).toBeGreaterThanOrEqual(FOLGA_MINIMA);
       }
     }
+  });
+});
+
+describe("DataTable: botão de limpar filtros", () => {
+  /** Filtros de mentira, com o estado de "tem valor" controlado pelo teste. */
+  function filtrosCom(
+    comValor: string[],
+    limpou: string[] = [],
+  ): FiltroConfiguravel[] {
+    return [
+      {
+        id: "busca",
+        rotulo: "Busca",
+        fixo: true,
+        temValor: comValor.includes("busca"),
+        onLimpar: () => limpou.push("busca"),
+        elemento: <input aria-label="Buscar" />,
+      },
+      {
+        id: "status",
+        rotulo: "Status",
+        temValor: comValor.includes("status"),
+        onLimpar: () => limpou.push("status"),
+        elemento: <select aria-label="Status" />,
+      },
+      {
+        id: "conta",
+        rotulo: "Conta",
+        temValor: comValor.includes("conta"),
+        onLimpar: () => limpou.push("conta"),
+        elemento: <select aria-label="Conta" />,
+      },
+    ];
+  }
+
+  function botaoLimpar(): HTMLElement | null {
+    return screen.queryByRole("button", { name: "Limpar filtros" });
+  }
+
+  it("não aparece quando nenhum filtro tem valor", () => {
+    // Botão morto em toda tela do app é ruído: ele só existe quando há o que
+    // limpar, e a própria presença dele avisa que a lista está filtrada.
+    renderizar({ filtros: filtrosCom([]) });
+    expect(botaoLimpar()).toBeNull();
+  });
+
+  it("aparece quando algum filtro tem valor", () => {
+    renderizar({ filtros: filtrosCom(["status"]) });
+    expect(botaoLimpar()).toBeInTheDocument();
+  });
+
+  it("limpa TODOS os filtros com valor, num clique", () => {
+    const limpou: string[] = [];
+    renderizar({ filtros: filtrosCom(["busca", "status", "conta"], limpou) });
+
+    fireEvent.click(botaoLimpar() as HTMLElement);
+
+    expect(limpou.sort()).toEqual(["busca", "conta", "status"]);
+  });
+
+  it("limpa a BUSCA junto, não só os seletores", () => {
+    // O caso que fazia o botão mentir: limpar tudo menos o texto da busca deixa a
+    // lista filtrada com o botão dizendo que limpou.
+    const limpou: string[] = [];
+    renderizar({ filtros: filtrosCom(["busca"], limpou) });
+
+    fireEvent.click(botaoLimpar() as HTMLElement);
+
+    expect(limpou).toEqual(["busca"]);
+  });
+
+  it("não chama onLimpar de filtro que já está vazio", () => {
+    // Cada onLimpar é uma escrita na URL ou no estado da tela: chamar em filtro
+    // vazio empurra navegação e re-render de graça.
+    const limpou: string[] = [];
+    renderizar({ filtros: filtrosCom(["status"], limpou) });
+
+    fireEvent.click(botaoLimpar() as HTMLElement);
+
+    expect(limpou).toEqual(["status"]);
+  });
+
+  it("limpa também filtro que está escondido no menu", () => {
+    // Filtro escondido com valor continua filtrando a lista. Se "limpar" pulasse
+    // ele, a lista ficaria filtrada por algo que não aparece em nenhum lugar.
+    const limpou: string[] = [];
+    renderizar({
+      filtros: [
+        {
+          id: "oculto",
+          rotulo: "Escondido",
+          ocultoPorPadrao: true,
+          temValor: true,
+          onLimpar: () => limpou.push("oculto"),
+          elemento: <select aria-label="Escondido" />,
+        },
+      ],
+    });
+
+    fireEvent.click(botaoLimpar() as HTMLElement);
+
+    expect(limpou).toEqual(["oculto"]);
+  });
+
+  it("prefere o onLimparFiltros da tela quando ela passa um", () => {
+    // Tela cujos filtros vivem na URL limpa tudo numa escrita só; chamar um
+    // onLimpar por filtro faria a segunda escrita desfazer a primeira.
+    const limpou: string[] = [];
+    const chamadas: number[] = [];
+    renderizar({
+      filtros: filtrosCom(["busca", "status"], limpou),
+      onLimparFiltros: () => chamadas.push(1),
+    });
+
+    fireEvent.click(botaoLimpar() as HTMLElement);
+
+    expect(chamadas).toHaveLength(1);
+    // E NÃO chama o onLimpar de cada filtro: seria a escrita dupla de volta.
+    expect(limpou).toEqual([]);
+  });
+
+  it("volta para a primeira página ao limpar", () => {
+    // Página 3 de uma lista que deixou de ser filtrada quase sempre não existe, e
+    // cair numa página vazia parece "limpei e não veio nada".
+    const paginacoes: { pageIndex: number }[] = [];
+    renderizar({
+      filtros: filtrosCom(["status"]),
+      total: 500,
+      pageIndex: 2,
+      pageSize: 25,
+      onPaginationChange: (p) => paginacoes.push({ pageIndex: p.pageIndex }),
+    });
+
+    fireEvent.click(botaoLimpar() as HTMLElement);
+
+    expect(paginacoes.at(-1)?.pageIndex).toBe(0);
+  });
+
+  it("não mexe na paginação quando a tabela não é paginada no servidor", () => {
+    // Sem total/onPaginationChange a tabela pagina no cliente: limpar filtro não
+    // pode explodir por chamar um callback que não existe.
+    expect(() => {
+      renderizar({ filtros: filtrosCom(["status"]) });
+      fireEvent.click(botaoLimpar() as HTMLElement);
+    }).not.toThrow();
   });
 });

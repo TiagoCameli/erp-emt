@@ -196,6 +196,10 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
       id: "busca",
       rotulo: "Busca",
       fixo: true,
+      // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+      // deixa o texto da busca filtrando a lista.
+      temValor: busca !== "",
+      onLimpar: () => mudarBusca(""),
       elemento: (
         <FiltroBusca
           valor={busca}
