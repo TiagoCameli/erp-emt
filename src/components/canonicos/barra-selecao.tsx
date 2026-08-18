@@ -19,12 +19,20 @@ export function BarraSelecao({
   onLimpar,
   resumo,
   children,
+  limparDesabilitado = false,
 }: {
   quantidade: number;
   onLimpar: () => void;
   /** Ex.: o valor somado dos marcados. */
   resumo?: React.ReactNode;
   children: React.ReactNode;
+  /**
+   * Desabilita "Limpar seleção" enquanto a ação da barra está em voo. Limpar
+   * a seleção no meio de uma ação em andamento deixa o lote sem as linhas que
+   * ele está gravando — quem chama sabe quando isso está acontecendo, a barra
+   * não.
+   */
+  limparDesabilitado?: boolean;
 }) {
   if (quantidade === 0) return null;
 
@@ -40,7 +48,13 @@ export function BarraSelecao({
       ) : null}
       <div className="ml-auto flex items-center gap-2">
         {children}
-        <Button type="button" variant="ghost" size="sm" onClick={onLimpar}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onLimpar}
+          disabled={limparDesabilitado}
+        >
           Limpar seleção
         </Button>
       </div>

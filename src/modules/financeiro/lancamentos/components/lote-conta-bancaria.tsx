@@ -20,6 +20,12 @@ export interface LoteContaBancariaProps {
   contas: { valor: string; rotulo: string }[];
   onLimparSelecao: () => void;
   onConcluido: () => void;
+  /**
+   * Avisa quem monta a barra quando a gravação em lote começa e termina, pra
+   * ela desabilitar "Limpar seleção" enquanto isso: limpar a seleção no meio
+   * de uma gravação em voo deixa o lote sem as linhas que ele está gravando.
+   */
+  onSalvandoChange?: (salvando: boolean) => void;
 }
 
 /**
@@ -43,6 +49,7 @@ export function LoteContaBancaria({
   contas,
   onLimparSelecao,
   onConcluido,
+  onSalvandoChange,
 }: LoteContaBancariaProps) {
   const [conta, setConta] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
@@ -59,6 +66,7 @@ export function LoteContaBancaria({
 
   async function aoConfirmar() {
     setSalvando(true);
+    onSalvandoChange?.(true);
     try {
       const resultado = await definirContaLancamentosLote(selecionados, conta);
       if ("erro" in resultado) {
@@ -73,6 +81,7 @@ export function LoteContaBancaria({
       onConcluido();
     } finally {
       setSalvando(false);
+      onSalvandoChange?.(false);
     }
   }
 

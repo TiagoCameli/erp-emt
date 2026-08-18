@@ -370,6 +370,14 @@ export function LancamentosTabela({
   const [marcados, setSelecionados] = React.useState<string[]>([]);
 
   /**
+   * Espelha o "salvando" que mora dentro de LoteContaBancaria, só pra
+   * BarraSelecao saber quando desabilitar "Limpar seleção": limpar a seleção
+   * no meio da gravação em lote deixaria o lote sem as linhas que está
+   * gravando.
+   */
+  const [salvandoLote, setSalvandoLote] = React.useState(false);
+
+  /**
    * Só vale o que está à vista.
    *
    * A seleção é DERIVADA da lista da página, e não zerada por efeito: id que
@@ -743,6 +751,7 @@ export function LancamentosTabela({
         quantidade={selecionados.length}
         onLimpar={() => setSelecionados([])}
         resumo={<MoneyText valor={valorSelecionado} />}
+        limparDesabilitado={salvandoLote}
       >
         <LoteContaBancaria
           selecionados={selecionados}
@@ -755,6 +764,7 @@ export function LancamentosTabela({
           contas={opcoesConta}
           onLimparSelecao={() => setSelecionados([])}
           onConcluido={() => router.refresh()}
+          onSalvandoChange={setSalvandoLote}
         />
       </BarraSelecao>
       <DataTable

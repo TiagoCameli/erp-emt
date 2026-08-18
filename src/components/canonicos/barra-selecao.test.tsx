@@ -1,5 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BarraSelecao } from "@/components/canonicos/barra-selecao";
@@ -55,16 +54,32 @@ describe("BarraSelecao", () => {
     expect(screen.getByText("R$ 1.000,00")).toBeInTheDocument();
   });
 
-  it("limpar seleção chama quem cuida disso", async () => {
+  it("limpar seleção chama quem cuida disso", () => {
     const onLimpar = vi.fn();
     render(
       <BarraSelecao quantidade={2} onLimpar={onLimpar}>
         <button type="button">Ação</button>
       </BarraSelecao>,
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "Limpar seleção" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Limpar seleção" }));
     expect(onLimpar).toHaveBeenCalledOnce();
+  });
+
+  it("limparDesabilitado desabilita o botão de limpar, e a ausência dele deixa habilitado", () => {
+    const { rerender } = render(
+      <BarraSelecao quantidade={2} onLimpar={() => {}}>
+        <button type="button">Ação</button>
+      </BarraSelecao>,
+    );
+    expect(screen.getByRole("button", { name: "Limpar seleção" })).toBeEnabled();
+
+    rerender(
+      <BarraSelecao quantidade={2} onLimpar={() => {}} limparDesabilitado>
+        <button type="button">Ação</button>
+      </BarraSelecao>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Limpar seleção" }),
+    ).toBeDisabled();
   });
 });

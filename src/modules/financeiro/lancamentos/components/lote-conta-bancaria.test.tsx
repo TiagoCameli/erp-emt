@@ -177,6 +177,22 @@ describe("LoteContaBancaria", () => {
     expect(props.onConcluido).toHaveBeenCalled();
   });
 
+  it("avisa quem monta a barra quando começa e termina de salvar", async () => {
+    // Quem usa isso é o BarraSelecao, pra não deixar "Limpar seleção" clicável
+    // no meio da gravação (limpar aí deixaria o lote sem as linhas que está
+    // gravando).
+    const onSalvandoChange = vi.fn();
+    montar({ onSalvandoChange });
+    escolherConta("Caixa 1234");
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /definir conta bancária/i }),
+      );
+    });
+    expect(onSalvandoChange).toHaveBeenNthCalledWith(1, true);
+    expect(onSalvandoChange).toHaveBeenNthCalledWith(2, false);
+  });
+
   it("todos já com conta: não há o que fazer, botão desabilitado", async () => {
     montar({ selecionados: ["a", "b"], jaComConta: 2 });
     escolherConta("Caixa 1234");
