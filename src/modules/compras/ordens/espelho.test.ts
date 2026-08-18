@@ -6,7 +6,11 @@ const LINHA = {
   id: "550e8400-e29b-41d4-a716-446655440000",
   numero: "OC-2026-0001",
   descricao: "Pedra para a obra",
-  valor_total: "100000.00",
+  // valor_total = soma dos itens (100.000) + frete (500). A fixture TEM que
+  // fechar essa conta: a trigger `trg_total_oc_cabecalho` não deixa existir OC
+  // em que ela não feche, e a fixture antiga (100.000 com 500 de frete) era o
+  // que sustentava a crença errada de que o total ignora os ajustes.
+  valor_total: "100500.00",
   frete: "500.00",
   outras_despesas: "0.00",
   impostos: "0.00",
@@ -43,12 +47,13 @@ describe("montarEspelhoOrdem", () => {
     expect(espelho.categoriaNome).toBe("Materiais");
     expect(espelho.cotacaoNumero).toBe("COT-2026-0003");
     expect(espelho.condicaoDescricao).toBe("À Vista");
-    expect(espelho.valorTotal).toBe(100000);
+    expect(espelho.valorTotal).toBe(100500);
   });
 
-  it("traz frete, impostos e desconto, que ficam FORA do valor total", () => {
-    // Se o papel não mostrar isto, quem lê não tem como saber que a OC teve
-    // R$ 500 de frete: valor_total é só a soma dos itens, por trigger.
+  it("traz frete, impostos e desconto, que estão DENTRO do valor total", () => {
+    // A migration 20260817160000 (`fn_total_da_oc`) passou os ajustes para
+    // dentro de valor_total. O papel imprime os quatro assim mesmo, porque sem
+    // eles quem lê não tem como refazer a conta do total.
     const espelho = montarEspelhoOrdem(LINHA);
     expect(espelho.frete).toBe(500);
     expect(espelho.outrasDespesas).toBe(0);
@@ -66,10 +71,55 @@ describe("montarEspelhoOrdem", () => {
     expect(item.centroCustoNome).toBe("009 - Lote 09");
   });
 
-  it("os itens somam o valor total, que é o que a trigger mantém", () => {
+  it("somaItens é a soma dos itens, e NÃO o valor total, quando há ajuste", () => {
+    // Esta é a regressão que custou caro: `valor_total` é
+    //   round(soma dos itens + frete + outras + impostos - desconto, 2),
+    // e não a soma dos itens. Com R$ 500 de frete os dois números diferem em
+    // R$ 500, e imprimir um deles com o rótulo do outro põe dois valores
+    // diferentes no mesmo papel sob o mesmo nome.
     const espelho = montarEspelhoOrdem(LINHA);
-    const soma = espelho.itens.reduce((total, i) => total + i.subtotal, 0);
-    expect(soma).toBe(espelho.valorTotal);
+    expect(espelho.somaItens).toBe(100000);
+    expect(espelho.valorTotal).toBe(100500);
+    expect(espelho.somaItens).not.toBe(espelho.valorTotal);
+  });
+
+  it("somaItens vem das linhas impressas, não do cabeçalho", () => {
+    // Se a trigger e os itens divergirem (carga com `oc.recalc_suprimido`, por
+    // exemplo), o papel tem que mostrar a divergência. `somaItens` reduz sobre
+    // os itens; um valor_total absurdo no cabeçalho não pode contaminá-lo.
+    const espelho = montarEspelhoOrdem({ ...LINHA, valor_total: "999999.99" });
+    expect(espelho.somaItens).toBe(100000);
+    expect(espelho.valorTotal).toBe(999999.99);
+  });
+
+  it("reproduz a OC 2592 do Mais Controle: desconto de R$ 3.835,95", () => {
+    // Caso real, não hipotético: 6 das 17 OCs carregadas têm ajuste, e nesta
+    // os itens somam R$ 103.835,95 enquanto a ordem vale R$ 100.000,00.
+    const espelho = montarEspelhoOrdem({
+      ...LINHA,
+      valor_total: "100000.00",
+      frete: "0.00",
+      desconto: "3835.95",
+      oc_itens: [
+        {
+          ...LINHA.oc_itens[0],
+          quantidade: 1,
+          preco_unitario: "103835.95",
+        },
+      ],
+    });
+    expect(espelho.somaItens).toBe(103835.95);
+    expect(espelho.desconto).toBe(3835.95);
+    expect(espelho.valorTotal).toBe(100000);
+    // A conta do papel fecha: itens - desconto = total da ordem.
+    expect(espelho.somaItens - espelho.desconto).toBeCloseTo(
+      espelho.valorTotal,
+      2,
+    );
+  });
+
+  it("somaItens é zero na OC sem item, não undefined", () => {
+    expect(montarEspelhoOrdem({ ...LINHA, oc_itens: [] }).somaItens).toBe(0);
   });
 
   it("agrupa o rateio por centro de custo a partir dos itens", () => {
@@ -77,7 +127,7 @@ describe("montarEspelhoOrdem", () => {
     // mesmo centro viram UMA linha no papel.
     const espelho = montarEspelhoOrdem({
       ...LINHA,
-      valor_total: "150000.00",
+      valor_total: "150500.00",
       oc_itens: [
         LINHA.oc_itens[0],
         {
@@ -101,7 +151,7 @@ describe("montarEspelhoOrdem", () => {
     // agrupamento tem que usar centro_custo_id, nunca o nome.
     const espelho = montarEspelhoOrdem({
       ...LINHA,
-      valor_total: "150000.00",
+      valor_total: "150500.00",
       oc_itens: [
         {
           ...LINHA.oc_itens[0],
@@ -155,7 +205,7 @@ describe("montarEspelhoOrdem", () => {
     // cada item sem centro viraria a sua própria linha de rateio.
     const espelho = montarEspelhoOrdem({
       ...LINHA,
-      valor_total: "150000.00",
+      valor_total: "150500.00",
       oc_itens: [
         {
           ...LINHA.oc_itens[0],

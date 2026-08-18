@@ -124,9 +124,20 @@ export default async function EspelhoOrdensPage({
                   valor: formatarMesAno(ordem.mesCompetencia),
                 },
                 { rotulo: "Cotação de origem", valor: ordem.cotacaoNumero },
+                // Os seis campos de dinheiro são a conta da trigger
+                // `trg_total_oc_cabecalho`, na ordem em que ela soma:
+                // itens + frete + outras + impostos - desconto = total. Quem
+                // lê o papel consegue refazer a conta na mão, e por isso o
+                // desconto vai marcado com o sinal.
+                //
+                // `valorTotal` é o TOTAL DA ORDEM, não a soma dos itens: a
+                // migration 20260817160000 passou os ajustes para dentro dele.
+                // Os dois números só coincidem quando não há ajuste nenhum —
+                // em 6 das 17 OCs carregadas do Mais Controle eles diferem, e
+                // na 2592 a diferença é de R$ 3.835,95.
                 {
                   rotulo: "Total dos itens",
-                  valor: <EspelhoDinheiro valor={ordem.valorTotal} />,
+                  valor: <EspelhoDinheiro valor={ordem.somaItens} />,
                 },
                 {
                   rotulo: "Frete",
@@ -141,8 +152,12 @@ export default async function EspelhoOrdensPage({
                   valor: <EspelhoDinheiro valor={ordem.impostos} />,
                 },
                 {
-                  rotulo: "Desconto",
+                  rotulo: "Desconto (−)",
                   valor: <EspelhoDinheiro valor={ordem.desconto} />,
+                },
+                {
+                  rotulo: "Total da ordem",
+                  valor: <EspelhoDinheiro valor={ordem.valorTotal} />,
                 },
                 ...(ordem.motivoRejeicao
                   ? [
@@ -178,17 +193,13 @@ export default async function EspelhoOrdensPage({
               }))}
               totais={{
                 insumo: "Total dos itens",
-                // Soma as linhas impressas, não repete o cabeçalho: se um dia
-                // a trigger e o papel divergirem, o papel tem que mostrar a
-                // divergência, nunca escondê-la atrás do número do cabeçalho.
-                subtotal: (
-                  <EspelhoDinheiro
-                    valor={ordem.itens.reduce(
-                      (soma, item) => soma + item.subtotal,
-                      0,
-                    )}
-                  />
-                ),
+                // Mesmo rótulo e mesmo número do campo lá em cima, de
+                // propósito: `somaItens` vem das linhas impressas, nunca do
+                // `valorTotal` do cabeçalho. Se um dia a trigger e os itens
+                // divergirem, o papel mostra a divergência (o total da ordem
+                // não fecha com a conta), em vez de escondê-la repetindo o
+                // número do cabeçalho aqui embaixo.
+                subtotal: <EspelhoDinheiro valor={ordem.somaItens} />,
               }}
             />
           </EspelhoSecao>

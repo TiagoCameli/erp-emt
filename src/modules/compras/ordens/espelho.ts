@@ -36,8 +36,24 @@ export interface EspelhoOrdem {
   id: string;
   numero: string | null;
   descricao: string | null;
-  /** Soma dos itens, mantida por trigger. NÃO inclui frete nem impostos. */
+  /**
+   * O VALOR DA ORDEM, mantido pela trigger `trg_total_oc_cabecalho`:
+   *
+   *   valor_total = round(soma(quantidade * preco_unitario)
+   *                       + frete + outras_despesas + impostos - desconto, 2)
+   *
+   * Ou seja, JÁ INCLUI os ajustes do rodapé (migration 20260817160000,
+   * `fn_total_da_oc`). Não confundir com `somaItens`: das 17 OCs carregadas do
+   * Mais Controle, 6 têm ajuste, e na 2592 os dois números diferem em
+   * R$ 3.835,95. Rotular este como "total dos itens" no papel é mentira.
+   */
   valorTotal: number;
+  /**
+   * Soma dos subtotais dos itens, SEM os ajustes. Derivada aqui das mesmas
+   * linhas que o papel imprime, nunca do cabeçalho: se um dia a trigger e os
+   * itens divergirem, o papel tem que mostrar a divergência.
+   */
+  somaItens: number;
   frete: number;
   outrasDespesas: number;
   impostos: number;
@@ -149,6 +165,7 @@ export function montarEspelhoOrdem(linha: LinhaEspelhoOrdem): EspelhoOrdem {
     numero: linha.numero,
     descricao: linha.descricao,
     valorTotal: numero(linha.valor_total),
+    somaItens: itens.reduce((soma, item) => soma + item.subtotal, 0),
     frete: numero(linha.frete),
     outrasDespesas: numero(linha.outras_despesas),
     impostos: numero(linha.impostos),

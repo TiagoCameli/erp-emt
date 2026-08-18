@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import EspelhoOrdensPage from "@/app/(espelho)/espelho/ordens/page";
+import { formatarBRL } from "@/lib/formatadores";
 import { MAX_ESPELHOS } from "@/lib/ids-do-espelho";
 import {
   getUsuarioLogado,
@@ -52,6 +53,18 @@ const USUARIO: UsuarioLogado = {
 
 const ID_A = "550e8400-e29b-41d4-a716-446655440000";
 
+/**
+ * BRL como o testing-library enxerga.
+ *
+ * Assertar pelo formatador, e não por literal: se o formato mudar, o teste tem
+ * que quebrar junto. Mas `formatarBRL` usa espaço NÃO SEPARÁVEL (U+00A0) e o
+ * normalizador do testing-library troca isso por espaço comum antes de
+ * comparar — então o matcher precisa da mesma troca, senão nunca bate.
+ */
+function brl(valor: number): string {
+  return formatarBRL(valor).replace(/\u00a0/g, " ");
+}
+
 /** Ids válidos (mesmo gerador de src/lib/ids-do-espelho.test.ts). */
 function idsValidos(quantidade: number): string[] {
   return Array.from(
@@ -65,7 +78,10 @@ function ordemFixture(overrides: Partial<EspelhoOrdem> = {}): EspelhoOrdem {
     id: ID_A,
     numero: "OC-2026-0001",
     descricao: "Pedra para a obra",
-    valorTotal: 100000,
+    // valorTotal É o total da ordem (itens + ajustes), não a soma dos itens:
+    // 100.000 de itens + 500 de frete = 100.500.
+    valorTotal: 100500,
+    somaItens: 100000,
     frete: 500,
     outrasDespesas: 0,
     impostos: 0,
@@ -170,5 +186,62 @@ describe("EspelhoOrdensPage", () => {
 
     expect(screen.getByText("Pendente de aprovação")).toBeInTheDocument();
     expect(screen.queryByText("pendente_aprovacao")).not.toBeInTheDocument();
+  });
+
+  it("o total da ordem e o total dos itens saem com rótulos diferentes, e o papel diz quanto vale a OC", async () => {
+    // Regressão real e cara: o cabeçalho imprimia `valorTotal` (que a
+    // migration 20260817160000 passou a definir como itens + frete + outras +
+    // impostos - desconto) rotulado "Total dos itens", e o rodapé da tabela
+    // imprimia a soma real dos itens sob o MESMO rótulo. Dois números
+    // diferentes com o mesmo nome, e nenhum campo dizendo o valor da ordem.
+    // Números da OC 2592 do Mais Controle.
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockReturnValue(true);
+    vi.mocked(buscarOrdensParaEspelho).mockResolvedValue([
+      ordemFixture({
+        valorTotal: 100000,
+        somaItens: 103835.95,
+        frete: 0,
+        desconto: 3835.95,
+        itens: [
+          {
+            id: "item-1",
+            insumoNome: "Serviço",
+            unidade: null,
+            // 5 x 20.767,19 = 103.835,95. Quantidade e preço diferentes do
+            // subtotal de propósito: assim a contagem de ocorrências abaixo
+            // mede as células que interessam, e não o eco do preço unitário.
+            quantidade: 5,
+            precoUnitario: 20767.19,
+            subtotal: 103835.95,
+            centroCustoId: "aaaaaaaa-0000-4000-8000-000000000001",
+            centroCustoNome: "009 - Lote 09",
+            centroCustoCodigo: "009",
+          },
+        ],
+      }),
+    ]);
+    vi.mocked(trilhaOrdem).mockResolvedValue([]);
+    vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
+
+    await renderPagina(ID_A);
+
+    // O valor da ordem aparece, e sob o nome dele.
+    expect(screen.getByText("Total da ordem")).toBeInTheDocument();
+    expect(screen.getByText(brl(100000))).toBeInTheDocument();
+
+    // A soma dos itens aparece sob o rótulo "Total dos itens" nos dois lugares
+    // (campo do cabeçalho e rodapé da tabela), sempre com o MESMO número. As
+    // três células com esse valor são: o campo do cabeçalho, o subtotal da
+    // única linha de item, e o rodapé da tabela.
+    expect(screen.getAllByText("Total dos itens")).toHaveLength(2);
+    expect(screen.getAllByText(brl(103835.95))).toHaveLength(3);
+    // E os dois números NÃO são o mesmo: era exatamente isso que o papel
+    // escondia ao dar o mesmo rótulo aos dois.
+    expect(screen.queryAllByText(brl(100000))).toHaveLength(1);
+
+    // E o desconto vai com o sinal, para a conta fechar no papel.
+    expect(screen.getByText("Desconto (−)")).toBeInTheDocument();
+    expect(screen.getByText(brl(3835.95))).toBeInTheDocument();
   });
 });
