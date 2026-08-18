@@ -214,34 +214,75 @@ export async function trilhaDeParcelas(
   if (ids.length === 0) return {};
   const supabase = await createClient();
 
-  const porParcela: Record<string, EventoTrilha[]> = {};
+  const linhas: {
+    id: string;
+    parcela_id: string;
+    tipo: string;
+    motivo: string | null;
+    data_de: string | null;
+    data_para: string | null;
+    created_at: string;
+    created_by: string | null;
+  }[] = [];
   for (const lote of emLotes(ids, LOTE_IDS_POSTGREST)) {
     const { data, error } = await supabase
       .from("parcela_eventos")
-      .select("id, parcela_id, tipo, motivo, data_de, data_para, created_at")
+      .select(
+        "id, parcela_id, tipo, motivo, data_de, data_para, created_at, created_by",
+      )
       .in("parcela_id", lote)
       .order("created_at", { ascending: true });
 
     // Trilha ausente não derruba o espelho: o documento vale sem ela, e um
     // erro aqui não pode impedir de imprimir o comprovante do pagamento.
     if (error || !data) continue;
+    linhas.push(...data);
+  }
 
-    for (const evento of data) {
-      const reprogramacao =
-        evento.data_de && evento.data_para
-          ? `de ${formatarData(evento.data_de)} para ${formatarData(evento.data_para)}`
-          : null;
-      const rotulo = EVENTO_PARCELA[evento.tipo];
-      (porParcela[evento.parcela_id] ??= []).push({
-        id: evento.id,
-        data: evento.created_at,
-        titulo: rotulo?.titulo ?? evento.tipo,
-        descricao:
-          [evento.motivo, reprogramacao].filter(Boolean).join(" — ") ||
-          undefined,
-        tipo: rotulo?.tipo ?? "outro",
-      });
-    }
+  // Nome de quem fez cada evento, resolvido em lote pela MESMA RPC (security
+  // definer) que trilhaLancamento e trilhaOrdem usam. Este é o espelho cujo
+  // trabalho é provar que UM PAGAMENTO aconteceu: "quem aprovou" e "quem
+  // desaprovou" é a primeira pergunta de uma revisão contábil ou jurídica, não
+  // um detalhe cosmético — por isso resolve antes de montar os eventos, e não
+  // só quando alguém clicar em algo.
+  const idsUsuarios = [
+    ...new Set(
+      linhas
+        .map((linha) => linha.created_by)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+  const nomesPorId = new Map<string, string>();
+  if (idsUsuarios.length > 0) {
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_auditoria", {
+      p_ids: idsUsuarios,
+    });
+    for (const usuario of usuarios ?? []) nomesPorId.set(usuario.id, usuario.nome);
+  }
+  // Mesmo fallback dos dois irmãos (trilhaLancamento, trilhaOrdem):
+  // created_by nulo (função definer rodada sem auth.uid(), ex. rotina
+  // automática) ou id que a RPC não achou viram "Sistema", nunca "undefined"
+  // nem célula vazia com cara de bug de tela.
+  const nomeUsuario = (usuarioId: string | null): string =>
+    usuarioId === null ? "Sistema" : (nomesPorId.get(usuarioId) ?? "Sistema");
+
+  const porParcela: Record<string, EventoTrilha[]> = {};
+  for (const evento of linhas) {
+    const reprogramacao =
+      evento.data_de && evento.data_para
+        ? `de ${formatarData(evento.data_de)} para ${formatarData(evento.data_para)}`
+        : null;
+    const rotulo = EVENTO_PARCELA[evento.tipo];
+    (porParcela[evento.parcela_id] ??= []).push({
+      id: evento.id,
+      data: evento.created_at,
+      titulo: rotulo?.titulo ?? evento.tipo,
+      descricao:
+        [evento.motivo, reprogramacao].filter(Boolean).join(" — ") ||
+        undefined,
+      usuario: nomeUsuario(evento.created_by),
+      tipo: rotulo?.tipo ?? "outro",
+    });
   }
   return porParcela;
 }

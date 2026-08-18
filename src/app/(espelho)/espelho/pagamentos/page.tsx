@@ -204,10 +204,15 @@ export default async function EspelhoPagamentosPage({
 
           <EspelhoSecao rotulo="Trilha da parcela">
             <EspelhoTabela
+              // Mesmo conjunto e ordem de coluna dos espelhos irmãos
+              // (lançamento e OC): "quem aprovou/desaprovou" é a primeira
+              // pergunta de uma revisão contábil ou jurídica, e este é o
+              // espelho cujo trabalho é justamente provar que um pagamento
+              // aconteceu.
               colunas={[
                 { chave: "data", rotulo: "Quando" },
                 { chave: "titulo", rotulo: "O que" },
-                { chave: "motivo", rotulo: "Motivo" },
+                { chave: "usuario", rotulo: "Quem" },
               ]}
               linhas={(trilhas[pagamento.id] ?? []).map((evento) => ({
                 // Data E hora: dois eventos do mesmo dia (aprovar de manhã,
@@ -215,8 +220,10 @@ export default async function EspelhoPagamentosPage({
                 // este é justamente o documento que serve de prova de
                 // auditoria.
                 data: formatarDataHora(evento.data),
-                titulo: evento.titulo,
-                motivo: evento.descricao ?? null,
+                titulo: evento.descricao
+                  ? `${evento.titulo}: ${evento.descricao}`
+                  : evento.titulo,
+                usuario: evento.usuario,
               }))}
             />
           </EspelhoSecao>
