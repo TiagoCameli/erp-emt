@@ -110,7 +110,7 @@ export function LixeiraTabela({
   usuarios,
   podeEditar,
 }: LixeiraTabelaProps) {
-  const { setMuitos: atualizarParams } = useFiltrosUrl();
+  const { setMuitos: atualizarParams, limparTodos } = useFiltrosUrl();
   // Digitar no motivo escreve na URL com debounce, como as buscas das outras
   // listagens server-side.
   const { busca: motivo, setBusca: setMotivo } = useBuscaUrl(
@@ -196,6 +196,7 @@ export function LixeiraTabela({
   return (
     <div className="flex flex-col gap-2">
       <DataTable
+        onLimparFiltros={limparTodos}
         idTabela="administracao.lixeira"
         columns={colunas}
         data={itens}

@@ -115,7 +115,7 @@ export function PontosTabela({
   colaboradores,
 }: PontosTabelaProps) {
   const router = useRouter();
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
 
   const opcoesObra = obras.map((obra) => ({
     valor: obra.id,
@@ -137,6 +137,7 @@ export function PontosTabela({
   return (
     <div className="flex flex-col gap-2">
       <DataTable
+        onLimparFiltros={limparTodos}
         idTabela="rh.apontamentos"
         columns={colunas}
         data={pontos}

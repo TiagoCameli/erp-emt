@@ -94,7 +94,7 @@ export function FiltrosCustoCcBarra({
   categorias,
   fornecedores,
 }: FiltrosCustoCcBarraProps) {
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
 
   const podeComparar = comparacaoPermitida(filtros.modo);
 
@@ -296,6 +296,7 @@ export function FiltrosCustoCcBarra({
 
   return (
     <BarraFiltrosConfiguravel
+      onLimparFiltros={limparTodos}
       idTabela="relatorio-custo-cc"
       filtros={filtrosDaBarra}
     />

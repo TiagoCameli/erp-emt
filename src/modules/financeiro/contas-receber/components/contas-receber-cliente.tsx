@@ -96,7 +96,7 @@ export function ContasReceberCliente({
   podeBaixar,
 }: ContasReceberClienteProps) {
   const router = useRouter();
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
 
   // Busca com debounce na URL: escrever o termo zera a página sozinho.
   const { busca, setBusca } = useBuscaUrl(buscaFiltro);
@@ -260,6 +260,10 @@ export function ContasReceberCliente({
       id: "busca",
       rotulo: "Busca",
       fixo: true,
+      // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+      // deixa o texto da busca filtrando a lista.
+      temValor: busca !== "",
+      onLimpar: () => setBusca(""),
       elemento: (
         <FiltroBusca
           valor={busca}
@@ -410,6 +414,7 @@ export function ContasReceberCliente({
 
       <div className="flex flex-col gap-2">
         <DataTable
+          onLimparFiltros={limparTodos}
           idTabela="financeiro.contas-receber"
           columns={colunas}
           data={dados}

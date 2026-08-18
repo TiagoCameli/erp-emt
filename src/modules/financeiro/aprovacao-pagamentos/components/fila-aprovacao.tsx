@@ -947,6 +947,11 @@ export function FilaAprovacao({
       id: "busca",
       rotulo: "Busca",
       fixo: true,
+      // Entra no "Limpar filtros". Passa pelo aoTrocarFiltro como qualquer troca
+      // de filtro desta tela: ele zera a seleção e volta para a primeira página,
+      // e limpar a busca sem isso deixaria seleção de linha que saiu da vista.
+      temValor: filtroBusca.trim() !== "",
+      onLimpar: () => aoTrocarFiltro(() => setFiltroBusca("")),
       elemento: (
         <FiltroBusca
           valor={filtroBusca}

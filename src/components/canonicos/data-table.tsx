@@ -28,6 +28,7 @@ import {
   ChevronRight,
   EllipsisVertical,
   FileSpreadsheet,
+  FilterX,
   LoaderCircle,
   Rows3,
   Search,
@@ -593,6 +594,12 @@ export interface DataTableProps<TData> {
   pageSize?: number;
   /** Recebe a nova paginação. Junto com total ativa o modo server-side. */
   onPaginationChange?: (paginacao: PaginationState) => void;
+  /**
+   * Limpa TODOS os filtros da tela numa única escrita. Obrigatório em tela cujos
+   * filtros vivem na URL (ver limparFiltros). Sem ele, o botão cai no laço por
+   * filtro, que só está correto para filtro em estado local ou de sessão.
+   */
+  onLimparFiltros?: () => void;
   /** Ordenação controlada (use junto com onSortingChange). */
   sorting?: SortingState;
   onSortingChange?: (sorting: SortingState) => void;
@@ -956,6 +963,7 @@ export function DataTable<TData>({
   onPaginationChange,
   sorting,
   onSortingChange,
+  onLimparFiltros,
   searchKey,
   searchPlaceholder,
   onRowClick,
@@ -1379,6 +1387,50 @@ export function DataTable<TData>({
    * ativo e invisível é a pior combinação possível, porque a tabela mostra uma
    * lista filtrada e ninguém vê por quê.
    */
+  /** Algum filtro desta tabela está preenchido agora? */
+  const temFiltroAtivo = (filtros ?? []).some(
+    (filtro) => filtro.temValor === true,
+  );
+
+  /**
+   * Limpa todos os filtros preenchidos de uma vez.
+   *
+   * Dois caminhos, e a diferença NÃO é gosto:
+   *
+   * - **`onLimparFiltros` da tela, quando existe.** Obrigatório em tela cujos
+   *   filtros vivem na URL: lá cada `onLimpar` é uma escrita que parte do
+   *   `searchParams` da renderização, e chamar um por filtro faz a segunda desfazer
+   *   a primeira (ver a LIMITAÇÃO em `use-filtros-url.test.tsx`). A tela limpa tudo
+   *   numa escrita só. Foi medido: sem isso, limpar busca e status limpava a busca
+   *   e o status voltava.
+   * - **Laço por filtro, como reserva.** Serve para tela cujo filtro é estado
+   *   local ou de sessão: ali cada `setState` é independente e o React agrupa os
+   *   dois no mesmo render, então o laço está correto.
+   *
+   * O laço percorre a lista INTEIRA, inclusive filtro escondido no menu: filtro
+   * oculto com valor continua filtrando a lista, e pular ele deixaria a tela
+   * filtrada por algo que não aparece em lugar nenhum, logo depois de a pessoa
+   * clicar em "limpar". Só chama `onLimpar` de quem tem valor, porque cada chamada
+   * é um re-render.
+   *
+   * Volta para a primeira página quando a tabela pagina no servidor: página 3 de
+   * uma lista que deixou de ser filtrada quase sempre não existe, e cair em
+   * página vazia parece "limpei e não veio nada". Tela com `onLimparFiltros` já
+   * zera a página na própria escrita, então aqui isso não se repete.
+   */
+  function limparFiltros() {
+    if (onLimparFiltros) {
+      onLimparFiltros();
+      return;
+    }
+    for (const filtro of filtros ?? []) {
+      if (filtro.temValor === true) filtro.onLimpar?.();
+    }
+    if (onPaginationChange && paginacao.pageIndex !== 0) {
+      onPaginationChange({ pageIndex: 0, pageSize: paginacao.pageSize });
+    }
+  }
+
   function alternarFiltro(id: string) {
     const filtro = (filtros ?? []).find((f) => f.id === id);
     if (!filtro || filtro.fixo) return;
@@ -2743,6 +2795,22 @@ export function DataTable<TData>({
             {toolbar}
           </div>
           <div className="flex items-center gap-2">
+            {/*
+              Só aparece com filtro ativo. Botão morto em toda tela do app é
+              ruído, e a presença dele já avisa que a lista está filtrada — que é
+              metade do problema que ele resolve.
+            */}
+            {temFiltroAtivo ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={limparFiltros}
+              >
+                <FilterX />
+                Limpar filtros
+              </Button>
+            ) : null}
             {personalizavel && (filtros ?? []).length > 0 && (
               <MenuFiltros
                 filtros={(filtros ?? []).map((filtro) => ({

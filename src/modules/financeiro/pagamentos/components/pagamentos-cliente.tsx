@@ -153,7 +153,7 @@ export function PagamentosCliente({
   filtrosPagas,
 }: PagamentosClienteProps) {
   const router = useRouter();
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
   // Faixa de valor é digitada dígito a dígito: vai pela URL com espera, senão
   // cada tecla viraria uma navegação e o campo perderia caracteres. Uma por aba,
   // porque cada aba tem as suas chaves (o histórico usa o prefixo h_).
@@ -370,6 +370,10 @@ export function PagamentosCliente({
       id: "busca",
       rotulo: "Busca",
       fixo: true,
+      // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+      // deixa o texto da busca filtrando a lista.
+      temValor: buscaAprovadas !== "",
+      onLimpar: () => setBuscaAprovadas(""),
       elemento: (
         <FiltroBusca
           valor={buscaAprovadas}
@@ -431,6 +435,10 @@ export function PagamentosCliente({
       id: "busca",
       rotulo: "Busca",
       fixo: true,
+      // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+      // deixa o texto da busca filtrando a lista.
+      temValor: buscaPagas !== "",
+      onLimpar: () => setBuscaPagas(""),
       elemento: (
         <FiltroBusca
           valor={buscaPagas}
@@ -769,6 +777,7 @@ export function PagamentosCliente({
 
         <TabsContent value="a-pagar">
           <DataTable
+            onLimparFiltros={limparTodos}
             idTabela="financeiro.pagamentos.a-pagar"
             columns={colunasAprovadas}
             data={aprovadasFiltradas}

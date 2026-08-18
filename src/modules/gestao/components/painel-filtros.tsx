@@ -38,7 +38,7 @@ export function PainelFiltros({
   centros,
   categorias,
 }: PainelFiltrosProps) {
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
 
   const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
     () => centros.map((centro) => ({ valor: centro.id, rotulo: centro.nome })),
@@ -143,7 +143,7 @@ export function PainelFiltros({
 
   return (
     <div className="mb-4">
-      <BarraFiltrosConfiguravel idTabela="gestao.painel" filtros={filtros} />
+      <BarraFiltrosConfiguravel onLimparFiltros={limparTodos} idTabela="gestao.painel" filtros={filtros} />
     </div>
   );
 }

@@ -99,7 +99,7 @@ export function InsumosTabela({
   podeEditar,
   podeExcluir,
 }: InsumosTabelaProps) {
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(buscaInicial);
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
@@ -422,6 +422,7 @@ export function InsumosTabela({
       ) : null}
 
       <DataTable
+        onLimparFiltros={limparTodos}
         idTabela="cadastros.insumos"
         columns={colunas}
         data={insumos}
@@ -434,6 +435,10 @@ export function InsumosTabela({
             id: "busca",
             rotulo: "Busca por nome ou código",
             fixo: true,
+            // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+            // deixa o texto da busca filtrando a lista.
+            temValor: busca !== "",
+            onLimpar: () => setBusca(""),
             elemento: (
               <FiltroBusca
                 valor={busca}

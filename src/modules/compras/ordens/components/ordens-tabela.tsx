@@ -246,7 +246,7 @@ export function OrdensTabela({
   idUsuario,
 }: OrdensTabelaProps) {
   const router = useRouter();
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const novaOrdem = useNovaOrdem();
 
@@ -282,6 +282,7 @@ export function OrdensTabela({
 
   return (
     <DataTable
+      onLimparFiltros={limparTodos}
       columns={colunas}
       data={ordens}
       total={total}
@@ -298,6 +299,10 @@ export function OrdensTabela({
           rotulo: "Busca",
           // A busca é a porta de entrada da tela: não pode ser escondida.
           fixo: true,
+          // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+          // deixa o texto da busca filtrando a lista.
+          temValor: busca !== "",
+          onLimpar: () => setBusca(""),
           elemento: (
             <FiltroBusca
               valor={busca}

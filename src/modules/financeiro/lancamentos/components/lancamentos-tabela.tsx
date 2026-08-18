@@ -347,7 +347,7 @@ export function LancamentosTabela({
     [rotuloRecorte],
   );
   const router = useRouter();
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(valores.busca);
   // Faixa de valor é digitada dígito a dígito: vai pela URL com espera, senão
   // cada tecla viraria uma consulta e o campo perderia caracteres.
@@ -571,6 +571,10 @@ export function LancamentosTabela({
       id: "busca",
       rotulo: "Busca",
       fixo: true,
+      // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+      // deixa o texto da busca filtrando a lista.
+      temValor: busca !== "",
+      onLimpar: () => setBusca(""),
       elemento: (
         <FiltroBusca
           valor={busca}
@@ -744,6 +748,7 @@ export function LancamentosTabela({
         onConcluido={() => router.refresh()}
       />
       <DataTable
+        onLimparFiltros={limparTodos}
         idTabela="financeiro.lancamentos"
         columns={colunas}
         data={lancamentos}

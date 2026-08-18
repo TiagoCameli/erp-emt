@@ -223,7 +223,7 @@ export function CotacoesTabela({
   idUsuario,
 }: CotacoesTabelaProps) {
   const router = useRouter();
-  const { setMuitos } = useFiltrosUrl();
+  const { setMuitos, limparTodos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const { drawerAberto, setDrawerAberto, criando, aoCriar } = useCriarCotacao();
 
@@ -265,6 +265,10 @@ export function CotacoesTabela({
       rotulo: "Busca",
       // Busca principal da tela: fica sempre visível.
       fixo: true,
+      // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+      // deixa o texto da busca filtrando a lista.
+      temValor: busca !== "",
+      onLimpar: () => setBusca(""),
       elemento: (
         <FiltroBusca
           valor={busca}
@@ -430,6 +434,7 @@ export function CotacoesTabela({
   return (
     <>
       <DataTable
+        onLimparFiltros={limparTodos}
         columns={colunas}
         data={cotacoes}
         total={total}

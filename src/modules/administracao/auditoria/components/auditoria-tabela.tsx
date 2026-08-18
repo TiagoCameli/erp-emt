@@ -202,7 +202,7 @@ export function AuditoriaTabela({
   usuarios,
   nomes,
 }: AuditoriaTabelaProps) {
-  const { setMuitos: atualizarParams } = useFiltrosUrl();
+  const { setMuitos: atualizarParams, limparTodos } = useFiltrosUrl();
   // Digitar id de registro escreve na URL com debounce, como as buscas das
   // outras listagens server-side.
   const { busca: registro, setBusca: setRegistro } = useBuscaUrl(
@@ -216,6 +216,7 @@ export function AuditoriaTabela({
   return (
     <div className="flex flex-col gap-2">
       <DataTable
+        onLimparFiltros={limparTodos}
         idTabela="administracao.auditoria"
         columns={colunas}
         data={registros}
