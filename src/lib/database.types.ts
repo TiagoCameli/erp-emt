@@ -1750,6 +1750,7 @@ export type Database = {
       insumos: {
         Row: {
           ativo: boolean
+          categoria_financeira_id: string | null
           categoria_id: string
           codigo: string | null
           created_at: string
@@ -1762,6 +1763,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          categoria_financeira_id?: string | null
           categoria_id: string
           codigo?: string | null
           created_at?: string
@@ -1774,6 +1776,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          categoria_financeira_id?: string | null
           categoria_id?: string
           codigo?: string | null
           created_at?: string
@@ -1785,6 +1788,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "insumos_categoria_financeira_id_fkey"
+            columns: ["categoria_financeira_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_financeiras"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "insumos_categoria_id_fkey"
             columns: ["categoria_id"]
@@ -1962,6 +1972,7 @@ export type Database = {
       }
       lancamento_rateios: {
         Row: {
+          categoria_id: string | null
           centro_custo_id: string
           created_at: string
           created_by: string | null
@@ -1970,6 +1981,7 @@ export type Database = {
           valor: number
         }
         Insert: {
+          categoria_id?: string | null
           centro_custo_id: string
           created_at?: string
           created_by?: string | null
@@ -1978,6 +1990,7 @@ export type Database = {
           valor: number
         }
         Update: {
+          categoria_id?: string | null
           centro_custo_id?: string
           created_at?: string
           created_by?: string | null
@@ -1986,6 +1999,13 @@ export type Database = {
           valor?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "lancamento_rateios_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_financeiras"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lancamento_rateios_centro_custo_id_fkey"
             columns: ["centro_custo_id"]
@@ -2432,6 +2452,8 @@ export type Database = {
           motivo: string | null
           parcela_id: string
           tipo: string
+          valor_de: number | null
+          valor_para: number | null
         }
         Insert: {
           created_at?: string
@@ -2442,6 +2464,8 @@ export type Database = {
           motivo?: string | null
           parcela_id: string
           tipo: string
+          valor_de?: number | null
+          valor_para?: number | null
         }
         Update: {
           created_at?: string
@@ -2452,6 +2476,8 @@ export type Database = {
           motivo?: string | null
           parcela_id?: string
           tipo?: string
+          valor_de?: number | null
+          valor_para?: number | null
         }
         Relationships: [
           {
@@ -3577,6 +3603,13 @@ export type Database = {
           obra_id: string
         }[]
       }
+      fn_padrao_categoria_de_custo: {
+        Args: never
+        Returns: {
+          categoria_financeira_id: string
+          categoria_insumo_id: string
+        }[]
+      }
       fn_pagar_parcela: {
         Args: {
           p_conta_id: string
@@ -3679,7 +3712,6 @@ export type Database = {
           total: number
         }[]
       }
-      fn_rel_custo_centro_vida: { Args: { p_centro: string }; Returns: string }
       fn_rel_custo_centro_serie: {
         Args: { p_centro: string; p_fim?: string; p_inicio?: string }
         Returns: {
@@ -3687,6 +3719,7 @@ export type Database = {
           total: number
         }[]
       }
+      fn_rel_custo_centro_vida: { Args: { p_centro: string }; Returns: string }
       fn_rel_custo_por_grupo: {
         Args: {
           p_categoria?: string
@@ -3830,6 +3863,16 @@ export type Database = {
         Args: { p_preferencia: Json; p_tabela: string }
         Returns: undefined
       }
+      fn_total_da_oc: {
+        Args: {
+          p_desconto: number
+          p_frete: number
+          p_impostos: number
+          p_oc: string
+          p_outras: number
+        }
+        Returns: number
+      }
       fn_vencimento_folha: {
         Args: { p_competencia: string; p_dia: number }
         Returns: string
@@ -3860,6 +3903,13 @@ export type Database = {
         }[]
       }
       nomes_usuarios_compras: {
+        Args: { p_ids: string[] }
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
+      nomes_usuarios_financeiro: {
         Args: { p_ids: string[] }
         Returns: {
           id: string

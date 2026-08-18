@@ -1,8 +1,14 @@
 import "server-only";
 
+import type { EventoTrilha } from "@/components/canonicos/trilha";
 import { createClient } from "@/lib/supabase/server";
 import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
+import {
+  eventoParcelaParaTrilha,
+  type ParcelaEvento,
+  type TipoParcelaEvento,
+} from "@/modules/financeiro/pagamentos/eventos";
 
 /** Parcela a pagar já aprovada, pronta para registrar o pagamento. */
 export interface ParcelaAprovada {
@@ -300,4 +306,74 @@ export async function listarContasBancarias(): Promise<ContaBancariaOpcao[]> {
     nome: conta.nome,
     banco: conta.banco,
   }));
+}
+
+/**
+ * Trilha das parcelas do lançamento: lê `parcela_eventos` das parcelas
+ * daquele lançamento numa leitura só (embed de `lancamento_parcelas` para o
+ * número da parcela e o filtro pelo lançamento), resolve o nome do autor em
+ * lote via `nomes_usuarios_financeiro` e converte cada linha para o
+ * `EventoTrilha` do componente canônico, mais recente primeiro.
+ *
+ * `nomes_usuarios_financeiro` (não `nomes_usuarios_auditoria`) de propósito:
+ * é gated na mesma permissão de quem já pode ver o lançamento/a fila de
+ * aprovação, não na de auditoria/lixeira — Financeiro e Gestor não têm essa
+ * segunda, e veriam "Sistema" em vez do nome de quem aprovou/reprogramou.
+ */
+export async function trilhaParcelasDoLancamento(
+  lancamentoId: string,
+): Promise<EventoTrilha[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("parcela_eventos")
+    .select(
+      `id, tipo, motivo, data_de, data_para, valor_de, valor_para,
+       created_at, created_by,
+       lancamento_parcelas!inner(numero_parcela, lancamento_id)`,
+    )
+    .eq("lancamento_parcelas.lancamento_id", lancamentoId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error || !data) return [];
+
+  const idsUsuarios = [
+    ...new Set(
+      data
+        .map((linha) => linha.created_by)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+
+  const nomesPorId = new Map<string, string>();
+  if (idsUsuarios.length > 0) {
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_financeiro", {
+      p_ids: idsUsuarios,
+    });
+    for (const usuario of usuarios ?? []) {
+      nomesPorId.set(usuario.id, usuario.nome);
+    }
+  }
+
+  return data.map((linha) => {
+    const evento: ParcelaEvento = {
+      id: linha.id,
+      tipo: linha.tipo as TipoParcelaEvento,
+      motivo: linha.motivo,
+      dataDe: linha.data_de,
+      dataPara: linha.data_para,
+      valorDe: linha.valor_de,
+      valorPara: linha.valor_para,
+      criadoEm: linha.created_at,
+      usuarioNome:
+        linha.created_by === null
+          ? "Sistema"
+          : (nomesPorId.get(linha.created_by) ?? "Sistema"),
+    };
+    return eventoParcelaParaTrilha(
+      evento,
+      linha.lancamento_parcelas?.numero_parcela ?? 0,
+    );
+  });
 }

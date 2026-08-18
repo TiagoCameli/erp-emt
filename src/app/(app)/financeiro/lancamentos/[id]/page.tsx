@@ -2,7 +2,10 @@ import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
-import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
+import {
+  listarContasBancarias,
+  trilhaParcelasDoLancamento,
+} from "@/modules/financeiro/pagamentos/queries";
 import { LancamentoDetalheView } from "@/modules/financeiro/lancamentos/components/lancamento-detalhe";
 import {
   buscarLancamento,
@@ -30,6 +33,7 @@ export default async function PaginaLancamentoDetalhe({
 
   const [
     trilha,
+    trilhaParcelas,
     categorias,
     fornecedores,
     centrosCusto,
@@ -39,6 +43,7 @@ export default async function PaginaLancamentoDetalhe({
     contas,
   ] = await Promise.all([
     trilhaLancamento(id),
+    trilhaParcelasDoLancamento(id),
     listarCategorias(),
     listarFornecedores(),
     listarCentrosCusto(),
@@ -59,6 +64,7 @@ export default async function PaginaLancamentoDetalhe({
     <LancamentoDetalheView
       lancamento={lancamento}
       trilha={trilha}
+      trilhaParcelas={trilhaParcelas}
       anexos={anexos}
       categorias={categorias}
       fornecedores={fornecedores}

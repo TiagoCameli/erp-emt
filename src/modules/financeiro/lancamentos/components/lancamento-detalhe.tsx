@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   CalendarClock,
   ExternalLink,
+  History,
   Lock,
   Pencil,
   Trash2,
@@ -18,6 +19,7 @@ import {
   CelulaVazia,
   Combobox,
   ConfirmDialog,
+  EmptyState,
   MoneyText,
   StatusBadge,
   Trilha,
@@ -137,6 +139,8 @@ function Aviso({
 export interface LancamentoDetalheViewProps {
   lancamento: LancamentoDetalhe;
   trilha: EventoTrilha[];
+  /** Trilha das parcelas (aprovação, revisão, reprogramação...), lida de `parcela_eventos`. */
+  trilhaParcelas: EventoTrilha[];
   categorias: CategoriaOpcao[];
   fornecedores: FornecedorOpcao[];
   centrosCusto: CentroCustoOpcao[];
@@ -158,6 +162,7 @@ export interface LancamentoDetalheViewProps {
 export function LancamentoDetalheView({
   lancamento,
   trilha,
+  trilhaParcelas,
   categorias,
   fornecedores,
   centrosCusto,
@@ -756,9 +761,21 @@ export function LancamentoDetalheView({
           ) : null}
         </div>
 
-        <div className="lg:col-span-1">
+        <div className="flex flex-col gap-4 lg:col-span-1">
           <Secao titulo="Trilha">
             <Trilha eventos={trilha} />
+          </Secao>
+
+          <Secao titulo="Trilha das parcelas">
+            {trilhaParcelas.length > 0 ? (
+              <Trilha eventos={trilhaParcelas} />
+            ) : (
+              <EmptyState
+                icone={History}
+                titulo="Sem movimentação nas parcelas"
+                descricao="Aprovações, reprogramações e outras mudanças nas parcelas deste lançamento aparecem aqui."
+              />
+            )}
           </Secao>
         </div>
       </div>
