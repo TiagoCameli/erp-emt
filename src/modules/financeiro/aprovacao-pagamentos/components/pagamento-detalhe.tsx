@@ -293,7 +293,15 @@ export function PagamentoDetalheView({
         </div>
 
         <div className="flex items-center gap-2">
-          <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
+          {/* Só em parcela PAGA, a mesma regra da listagem (o espelho lá vive
+              na aba "Pagas"). Nesta tela a parcela ainda está em aprovação: o
+              espelho de pagamento imprime "Saiu da conta" e "Pago em", e
+              oferecer o botão aqui gera papel dizendo que saiu dinheiro que
+              não saiu. A página do espelho também degrada sozinha, porque o
+              link é colável — mas o botão não pode convidar para isso. */}
+          {parcela.status === "pago" ? (
+            <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
+          ) : null}
           <Button
             type="button"
             variant="outline"

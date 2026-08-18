@@ -50,6 +50,16 @@ export interface EspelhoPagamento {
   categoriaNome: string | null;
   formaPagamentoNome: string | null;
   rateios: EspelhoPagamentoRateio[];
+  /**
+   * Soma das linhas de `rateios`, e NUNCA `lancamentoValor`.
+   *
+   * Existe pelo mesmo motivo do `somaItens` do espelho de OC: a linha de total
+   * da tabela tem que reduzir sobre as linhas que o papel acabou de imprimir.
+   * Ecoar o valor do pai ali embaixo esconde a divergência exatamente no lugar
+   * onde ela apareceria — e o valor do lançamento continua no papel, no campo
+   * "Valor do lançamento", para quem lê comparar os dois.
+   */
+  somaRateios: number;
 }
 
 /** A linha crua do PostgREST. `numeric` chega como string. */
@@ -100,6 +110,15 @@ export function montarEspelhoPagamento(
   linha: LinhaEspelhoPagamento,
 ): EspelhoPagamento {
   const pai = linha.lancamentos;
+  const rateios: EspelhoPagamentoRateio[] = (pai?.lancamento_rateios ?? []).map(
+    (rateio) => ({
+      // "Sem centro de custo", igual ao fallback do espelho de lançamento e do
+      // de OC: os três descrevem a mesma ausência e não podem divergir entre si.
+      centroNome: rateio.centros_custo?.nome ?? "Sem centro de custo",
+      centroCodigo: rateio.centros_custo?.codigo ?? null,
+      valor: dinheiro(rateio.valor),
+    }),
+  );
   return {
     id: linha.id,
     titulo: `${pai?.numero ?? "sem número"} parcela ${linha.numero_parcela}`,
@@ -123,13 +142,8 @@ export function montarEspelhoPagamento(
     fornecedorNome: pai?.fornecedores?.razao_social ?? null,
     categoriaNome: pai?.categorias_financeiras?.nome ?? null,
     formaPagamentoNome: pai?.formas_pagamento?.nome ?? null,
-    rateios: (pai?.lancamento_rateios ?? []).map((rateio) => ({
-      // "Sem centro de custo", igual ao fallback do espelho de lançamento e do
-      // de OC: os três descrevem a mesma ausência e não podem divergir entre si.
-      centroNome: rateio.centros_custo?.nome ?? "Sem centro de custo",
-      centroCodigo: rateio.centros_custo?.codigo ?? null,
-      valor: dinheiro(rateio.valor),
-    })),
+    rateios,
+    somaRateios: rateios.reduce((soma, rateio) => soma + rateio.valor, 0),
   };
 }
 

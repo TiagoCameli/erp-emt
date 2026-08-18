@@ -138,4 +138,41 @@ describe("montarEspelhoPagamento", () => {
     const espelho = montarEspelhoPagamento({ ...LINHA, valor: "1234.56" });
     expect(espelho.valor).toBe(1234.56);
   });
+
+  it("a soma do rateio vem das linhas, não do valor do lançamento", () => {
+    // Rateio que NÃO fecha com o pai de propósito (700 + 500 = 1.200 contra um
+    // lançamento de 3.000): é essa divergência que o total impresso tem que
+    // mostrar. Ecoar `lancamentoValor` na linha de total esconderia a
+    // divergência exatamente onde ela apareceria.
+    const espelho = montarEspelhoPagamento({
+      ...LINHA,
+      lancamentos: {
+        ...LINHA.lancamentos,
+        valor: "3000.00",
+        lancamento_rateios: [
+          {
+            valor: "700.00",
+            centros_custo: { nome: "009 - Lote 09", codigo: "009" },
+          },
+          {
+            valor: "500.00",
+            centros_custo: { nome: "003 - Ramal do Gama", codigo: "003" },
+          },
+        ],
+      },
+    });
+    expect(espelho.somaRateios).toBe(1200);
+    expect(espelho.somaRateios).not.toBe(espelho.lancamentoValor);
+  });
+
+  it("rateio que fecha soma o mesmo que o lançamento", () => {
+    const espelho = montarEspelhoPagamento(LINHA);
+    expect(espelho.somaRateios).toBe(3000);
+  });
+
+  it("parcela sem lançamento pai soma zero em vez de estourar", () => {
+    expect(
+      montarEspelhoPagamento({ ...LINHA, lancamentos: null }).somaRateios,
+    ).toBe(0);
+  });
 });
