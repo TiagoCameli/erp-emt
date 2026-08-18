@@ -10,6 +10,7 @@ import {
   listarContasBancarias,
   listarParcelasAprovadas,
   listarParcelasPagas,
+  resumoParcelasPagas,
 } from "@/modules/financeiro/pagamentos/queries";
 
 const TAMANHO_PAGINA = 25;
@@ -133,16 +134,19 @@ export default async function PaginaPagamentos({
     pagamentoAte: pagoPagas.ate,
   };
 
-  const [aprovadas, pagas, contas, fornecedores] = await Promise.all([
-    listarParcelasAprovadas(),
-    listarParcelasPagas({
-      pagina: 0,
-      tamanho: TAMANHO_PAGINA,
-      filtros: filtrosPagas,
-    }),
-    listarContasBancarias(),
-    listarFornecedores(),
-  ]);
+  const [aprovadas, pagas, resumoPagas, contas, fornecedores] =
+    await Promise.all([
+      listarParcelasAprovadas(),
+      listarParcelasPagas({
+        pagina: 0,
+        tamanho: TAMANHO_PAGINA,
+        filtros: filtrosPagas,
+      }),
+      // Sobre o recorte inteiro, não sobre a página: ver resumoParcelasPagas.
+      resumoParcelasPagas(filtrosPagas),
+      listarContasBancarias(),
+      listarFornecedores(),
+    ]);
 
   // Anexos das parcelas a pagar numa consulta só (o pagamento é a parcela).
   const anexosPorParcela = await listarAnexosPorDocumento(
@@ -162,6 +166,7 @@ export default async function PaginaPagamentos({
         aprovadas={aprovadas}
         pagas={pagas.itens}
         totalPagas={pagas.total}
+        resumoPagas={resumoPagas}
         contas={contas}
         fornecedores={fornecedores}
         podePagar={podePagar}

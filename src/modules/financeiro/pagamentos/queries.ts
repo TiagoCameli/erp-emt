@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
+import { resumoPagas, type ResumoPagas } from "./calculo";
 
 /** Parcela a pagar já aprovada, pronta para registrar o pagamento. */
 export interface ParcelaAprovada {
@@ -180,6 +181,83 @@ async function idsFornecedoresPorNome(
  * conta bancária do pagamento e o fornecedor do lançamento via join, e aplica
  * todos os filtros no banco.
  */
+/**
+ * Formato mínimo de um builder do PostgREST para os filtros do histórico.
+ *
+ * Estrutural em vez do tipo do supabase-js: o que este módulo precisa é
+ * encadear eq/gte/lte/or, e amarrar na assinatura completa do builder
+ * genérico faria a extração custar mais do que a duplicação que ela evita.
+ */
+type ConsultaFiltravel<T> = {
+  eq: (coluna: string, valor: string | number) => T;
+  gte: (coluna: string, valor: string | number) => T;
+  lte: (coluna: string, valor: string | number) => T;
+  or: (filtro: string, opcoes: { referencedTable: string }) => T;
+};
+
+/**
+ * A cláusula `or` da busca por texto, ou null quando não há termo.
+ *
+ * Separada de `aplicarFiltrosPagas` porque descobrir os fornecedores pelo nome
+ * é a única parte assíncrona da filtragem, e um builder do PostgREST é
+ * thenable: uma função `async` que devolvesse o builder teria o `await` do
+ * chamador resolvendo a consulta em vez de continuar encadeando.
+ */
+async function clausulaBuscaPagas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  filtros: FiltrosParcelasPagas,
+): Promise<string | null> {
+  const termo = filtros.busca?.trim() ?? "";
+  if (termo === "") return null;
+
+  const padrao = padraoBusca(termo);
+  const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
+  const partes = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
+  if (idsFornecedores.length > 0) {
+    partes.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
+  }
+
+  return partes.join(",");
+}
+
+/**
+ * Aplica os filtros do histórico numa consulta de `lancamento_parcelas`.
+ *
+ * Extraído para o resumo do topo e a tabela usarem a MESMA cadeia. Card somando
+ * um conjunto e tabela mostrando outro é a tela se contradizendo, e duas cópias
+ * desta lista divergem no primeiro filtro que alguém acrescentar em só uma.
+ */
+function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
+  consulta: T,
+  filtros: FiltrosParcelasPagas,
+  clausulaBusca: string | null,
+): T {
+  let atual = consulta;
+
+  if (filtros.contaBancariaId) {
+    atual = atual.eq("conta_bancaria_id", filtros.contaBancariaId);
+  }
+  if (filtros.valorDe !== undefined) atual = atual.gte("valor", filtros.valorDe);
+  if (filtros.valorAte !== undefined) atual = atual.lte("valor", filtros.valorAte);
+  if (filtros.vencimentoDe) atual = atual.gte("data_vencimento", filtros.vencimentoDe);
+  if (filtros.vencimentoAte) atual = atual.lte("data_vencimento", filtros.vencimentoAte);
+  if (filtros.programadaDe) atual = atual.gte("data_programada", filtros.programadaDe);
+  if (filtros.programadaAte) atual = atual.lte("data_programada", filtros.programadaAte);
+  if (filtros.pagamentoDe) atual = atual.gte("data_pagamento", filtros.pagamentoDe);
+  if (filtros.pagamentoAte) atual = atual.lte("data_pagamento", filtros.pagamentoAte);
+
+  // Fornecedor e busca moram no lançamento. O join já é !inner, então filtrar a
+  // tabela embutida filtra as parcelas de verdade (não só o que aparece nela).
+  if (filtros.fornecedorId) {
+    atual = atual.eq("lancamentos.fornecedor_id", filtros.fornecedorId);
+  }
+  if (clausulaBusca) {
+    atual = atual.or(clausulaBusca, { referencedTable: "lancamentos" });
+  }
+
+  return atual;
+}
+
 export async function listarParcelasPagas({
   pagina,
   tamanho,
@@ -211,50 +289,8 @@ export async function listarParcelasPagas({
     .order("pago_em", { ascending: false, nullsFirst: false })
     .range(de, ate);
 
-  if (filtros.contaBancariaId) {
-    consulta = consulta.eq("conta_bancaria_id", filtros.contaBancariaId);
-  }
-  if (filtros.valorDe !== undefined) {
-    consulta = consulta.gte("valor", filtros.valorDe);
-  }
-  if (filtros.valorAte !== undefined) {
-    consulta = consulta.lte("valor", filtros.valorAte);
-  }
-  if (filtros.vencimentoDe) {
-    consulta = consulta.gte("data_vencimento", filtros.vencimentoDe);
-  }
-  if (filtros.vencimentoAte) {
-    consulta = consulta.lte("data_vencimento", filtros.vencimentoAte);
-  }
-  if (filtros.programadaDe) {
-    consulta = consulta.gte("data_programada", filtros.programadaDe);
-  }
-  if (filtros.programadaAte) {
-    consulta = consulta.lte("data_programada", filtros.programadaAte);
-  }
-  if (filtros.pagamentoDe) {
-    consulta = consulta.gte("data_pagamento", filtros.pagamentoDe);
-  }
-  if (filtros.pagamentoAte) {
-    consulta = consulta.lte("data_pagamento", filtros.pagamentoAte);
-  }
-  // Fornecedor e busca moram no lançamento. O join já é !inner, então filtrar a
-  // tabela embutida filtra as parcelas de verdade (não só o que aparece nela).
-  if (filtros.fornecedorId) {
-    consulta = consulta.eq("lancamentos.fornecedor_id", filtros.fornecedorId);
-  }
-  const termo = filtros.busca?.trim() ?? "";
-  if (termo !== "") {
-    const padrao = padraoBusca(termo);
-    const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
-    const partes = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
-    if (idsFornecedores.length > 0) {
-      partes.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
-    }
-    consulta = consulta.or(partes.join(","), {
-      referencedTable: "lancamentos",
-    });
-  }
+  const clausulaBusca = await clausulaBuscaPagas(supabase, filtros);
+  consulta = aplicarFiltrosPagas(consulta, filtros, clausulaBusca);
 
   const { data, error, count } = await consulta;
 
@@ -300,4 +336,44 @@ export async function listarContasBancarias(): Promise<ContaBancariaOpcao[]> {
     nome: conta.nome,
     banco: conta.banco,
   }));
+}
+
+/**
+ * Resumo do histórico de pagamentos, sobre o conjunto filtrado INTEIRO.
+ *
+ * Existe porque a aba "Pagas" é paginada no servidor: somar as linhas que
+ * chegaram daria o total da página, e um card chamado "Total pago" mostrando o
+ * total de 25 linhas é pior do que card nenhum.
+ *
+ * Traz só as três colunas numéricas, sem join e sem paginação, e soma em
+ * `resumoPagas`. É um round trip a mais em troca de um número verdadeiro. Se um
+ * dia o histórico de um período passar de algumas dezenas de milhares de
+ * parcelas, isto vira uma RPC com SUM no banco — o consumo aqui é linear no
+ * número de linhas do recorte, não no tamanho da tabela.
+ */
+export async function resumoParcelasPagas(
+  filtros: FiltrosParcelasPagas = {},
+): Promise<ResumoPagas> {
+  const supabase = await createClient();
+
+  let consulta = supabase
+    .from("lancamento_parcelas")
+    .select("valor, desconto, valor_liquido, lancamentos!inner(numero)")
+    .eq("status", "pago");
+
+  const clausulaBusca = await clausulaBuscaPagas(supabase, filtros);
+  consulta = aplicarFiltrosPagas(consulta, filtros, clausulaBusca);
+
+  const { data, error } = await consulta;
+
+  if (error) {
+    throw new Error("Não foi possível calcular o resumo dos pagamentos");
+  }
+
+  return resumoPagas(
+    (data ?? []).map((parcela) => ({
+      valorLiquido: parcela.valor_liquido ?? 0,
+      desconto: parcela.desconto ?? 0,
+    })),
+  );
 }

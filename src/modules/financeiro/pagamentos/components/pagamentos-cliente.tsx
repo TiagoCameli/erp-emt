@@ -27,6 +27,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import type { ResumoPagas } from "../calculo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
@@ -35,6 +36,10 @@ import {
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
 import { programacaoVencida } from "@/modules/financeiro/_shared/janela-pagamento";
+import {
+  dataEfetivaProgramacao,
+  resumoProgramados,
+} from "@/modules/financeiro/programados/calculo";
 import type { FornecedorOpcao } from "@/modules/financeiro/lancamentos/queries";
 import {
   buscarParcelasPagas,
@@ -77,6 +82,11 @@ export interface PagamentosClienteProps {
   aprovadas: ParcelaAprovada[];
   pagas: ParcelaPaga[];
   totalPagas: number;
+  /**
+   * Resumo do histórico sobre o recorte inteiro, vindo do servidor. Somar as
+   * linhas da tela daria o total da página, porque a aba é paginada lá.
+   */
+  resumoPagas: ResumoPagas;
   contas: ContaBancariaOpcao[];
   /** Fornecedores ativos, para o seletor de fornecedor das duas abas. */
   fornecedores: FornecedorOpcao[];
@@ -142,6 +152,7 @@ export function PagamentosCliente({
   aprovadas,
   pagas,
   totalPagas,
+  resumoPagas,
   contas,
   fornecedores,
   podePagar,
@@ -188,6 +199,30 @@ export function PagamentosCliente({
   const totalAPagar = React.useMemo(
     () => aprovadas.reduce((soma, parcela) => soma + parcela.valor, 0),
     [aprovadas],
+  );
+
+  /*
+   * Envelhecimento da fila, pela MESMA função que a tela de Programados usa. Se
+   * cada tela tivesse a sua conta, "vencidas" abriria valores diferentes em duas
+   * páginas do mesmo sistema, e a discussão viraria qual das duas está certa.
+   *
+   * Como o total acima, isto é a fila inteira e não o que está na tela: é o
+   * vencido da empresa. O detalhe do primeiro card é quem reconcilia os dois
+   * quando há filtro.
+   */
+  const resumoAPagar = React.useMemo(
+    () =>
+      resumoProgramados(
+        aprovadas.map((parcela) => ({
+          dataEfetiva: dataEfetivaProgramacao(
+            parcela.dataProgramada,
+            parcela.dataVencimento,
+          ),
+          valor: parcela.valor,
+        })),
+        hoje,
+      ),
+    [aprovadas, hoje],
   );
 
   const opcoesFornecedor = React.useMemo<OpcaoFiltro[]>(
@@ -364,6 +399,8 @@ export function PagamentosCliente({
       return true;
     });
   }, [aprovadas, buscaAprovadas, valoresAPagar]);
+
+  const filtrandoAPagar = aprovadasFiltradas.length !== aprovadas.length;
 
   const filtrosAprovadas: FiltroConfiguravel[] = [
     {
@@ -755,14 +792,6 @@ export function PagamentosCliente({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
-        <KPICard
-          titulo="Total a pagar aprovado"
-          valor={formatarBRL(totalAPagar)}
-          detalhe={`${aprovadas.length} ${aprovadas.length === 1 ? "parcela aprovada" : "parcelas aprovadas"}`}
-        />
-      </GradeKpis>
-
       {podePagar && semConta ? (
         <p className="rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-muted-foreground">
           Cadastre uma conta bancária ativa antes de registrar pagamentos.
@@ -776,6 +805,38 @@ export function PagamentosCliente({
         </TabsList>
 
         <TabsContent value="a-pagar">
+          <GradeKpis className="mb-4">
+            <KPICard
+              titulo="Total a pagar aprovado"
+              valor={formatarBRL(totalAPagar)}
+              /*
+               * O valor é a fila inteira; o detalhe é quem conta a verdade sobre
+               * a tela. Sem isto, filtro apertado mostra um total de seis dígitos
+               * em cima de uma tabela vazia, e nada explica a diferença.
+               */
+              detalhe={
+                filtrandoAPagar
+                  ? `${aprovadasFiltradas.length} de ${aprovadas.length} na tela`
+                  : `${aprovadas.length} ${aprovadas.length === 1 ? "parcela aprovada" : "parcelas aprovadas"}`
+              }
+            />
+            <KPICard
+              titulo="Vencidas"
+              valor={formatarBRL(resumoAPagar.atrasado)}
+              detalhe={`${resumoAPagar.quantidade.atrasado} ${resumoAPagar.quantidade.atrasado === 1 ? "parcela" : "parcelas"}`}
+            />
+            <KPICard
+              titulo="Vence hoje"
+              valor={formatarBRL(resumoAPagar.hoje)}
+              detalhe={`${resumoAPagar.quantidade.hoje} ${resumoAPagar.quantidade.hoje === 1 ? "parcela" : "parcelas"}`}
+            />
+            <KPICard
+              titulo="Próximos 7 dias"
+              valor={formatarBRL(resumoAPagar.proximos7)}
+              detalhe={`${resumoAPagar.quantidade.proximos7} ${resumoAPagar.quantidade.proximos7 === 1 ? "parcela" : "parcelas"}`}
+            />
+          </GradeKpis>
+
           <DataTable
             onLimparFiltros={limparTodos}
             idTabela="financeiro.pagamentos.a-pagar"
@@ -794,6 +855,20 @@ export function PagamentosCliente({
         </TabsContent>
 
         <TabsContent value="pagas">
+          <GradeKpis className="mb-4">
+            <KPICard
+              titulo="Total pago"
+              valor={formatarBRL(resumoPagas.totalLiquido)}
+              /* Líquido: é o que saiu do banco, que é o que um extrato responde. */
+              detalhe={`${resumoPagas.quantidade} ${resumoPagas.quantidade === 1 ? "pagamento" : "pagamentos"} no recorte`}
+            />
+            <KPICard
+              titulo="Descontos obtidos"
+              valor={formatarBRL(resumoPagas.desconto)}
+              detalhe={`em ${resumoPagas.comDesconto} ${resumoPagas.comDesconto === 1 ? "parcela" : "parcelas"}`}
+            />
+          </GradeKpis>
+
           <DataTable
             idTabela="financeiro.pagamentos.pagas"
             columns={colunasPagas}
