@@ -145,8 +145,8 @@ function rotuloParcela(
  * coluna própria) porque quase nenhum pagamento tem ambos, e uma coluna própria
  * apareceria vazia na maioria das linhas, mexendo no conjunto de colunas salvo
  * nas preferências do usuário. Juros entra aqui pelo mesmo motivo que desconto:
- * sem ele, as três parcelas do cálculo (valor, desconto/juros, líquido) não
- * reconciliam na tela, e a conta fica fisicamente errada no papel.
+ * sem ele, os três números (valor, desconto/juros, líquido) não somam na tela,
+ * e o usuário não consegue reconciliar a linha com o que realmente saiu da conta.
  */
 export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
   const temDesconto = parcela.desconto > 0;
