@@ -11,6 +11,7 @@ import { Receipt, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  BarraSelecao,
   CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
@@ -729,24 +730,33 @@ export function LancamentosTabela({
   const selecionadosNaPagina = lancamentos.filter((lancamento) =>
     selecionados.includes(lancamento.id),
   );
+  // Reaproveitado no resumo da barra E na confirmação do lote: os dois mostram
+  // o mesmo total, então é o mesmo cálculo, não dois.
+  const valorSelecionado = selecionadosNaPagina.reduce(
+    (soma, lancamento) => soma + lancamento.valor,
+    0,
+  );
 
   return (
     <div className="flex flex-col gap-2">
-      <LoteContaBancaria
-        selecionados={selecionados}
-        valorSelecionado={selecionadosNaPagina.reduce(
-          (soma, lancamento) => soma + lancamento.valor,
-          0,
-        )}
-        jaComConta={
-          selecionadosNaPagina.filter(
-            (lancamento) => !ehElegivelParaLote(lancamento),
-          ).length
-        }
-        contas={opcoesConta}
-        onLimparSelecao={() => setSelecionados([])}
-        onConcluido={() => router.refresh()}
-      />
+      <BarraSelecao
+        quantidade={selecionados.length}
+        onLimpar={() => setSelecionados([])}
+        resumo={<MoneyText valor={valorSelecionado} />}
+      >
+        <LoteContaBancaria
+          selecionados={selecionados}
+          valorSelecionado={valorSelecionado}
+          jaComConta={
+            selecionadosNaPagina.filter(
+              (lancamento) => !ehElegivelParaLote(lancamento),
+            ).length
+          }
+          contas={opcoesConta}
+          onLimparSelecao={() => setSelecionados([])}
+          onConcluido={() => router.refresh()}
+        />
+      </BarraSelecao>
       <DataTable
         onLimparFiltros={limparTodos}
         idTabela="financeiro.lancamentos"

@@ -106,19 +106,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("LoteContaBancaria", () => {
+  // A contagem ("N selecionados") e o "Limpar seleção" saíram daqui: agora são
+  // do canônico BarraSelecao (barra-selecao.test.tsx), que quem lista os
+  // lançamentos monta ao redor deste componente. Aqui só fica a ação.
   it("não aparece sem seleção", () => {
-    montar({ selecionados: [] });
-    expect(screen.queryByText(/selecionado/i)).not.toBeInTheDocument();
-  });
-
-  it("mostra a contagem da seleção", () => {
-    montar();
-    expect(screen.getByText("3 selecionados")).toBeInTheDocument();
-  });
-
-  it("singular não diz '1 selecionados'", () => {
-    montar({ selecionados: ["a"] });
-    expect(screen.getByText("1 selecionado")).toBeInTheDocument();
+    const { container } = montar({ selecionados: [] });
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("acima do teto avisa e não oferece o botão", () => {
@@ -190,11 +183,5 @@ describe("LoteContaBancaria", () => {
     expect(
       screen.getByRole("button", { name: /definir conta bancária/i }),
     ).toBeDisabled();
-  });
-
-  it("limpar seleção avisa quem manda", () => {
-    const { props } = montar();
-    fireEvent.click(screen.getByRole("button", { name: /limpar seleção/i }));
-    expect(props.onLimparSelecao).toHaveBeenCalled();
   });
 });

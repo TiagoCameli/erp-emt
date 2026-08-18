@@ -37,3 +37,4 @@ export * from "./import-dialog";
 export * from "./matriz-recursos-acoes";
 export * from "./espelho-impresso";
 export * from "./botao-imprimir";
+export * from "./barra-selecao";
