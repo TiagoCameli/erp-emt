@@ -44,6 +44,14 @@ export interface ParcelaPaga {
   valor: number;
   /** Desconto concedido no pagamento. Zero quando não houve. */
   desconto: number;
+  /**
+   * Juros e multa pagos no atraso. Zero quando não houve.
+   *
+   * Existe desde 11/08/2026, quando `valor_liquido` passou a ser
+   * `valor - desconto + juros`. Sem o campo aqui, o espelho de pagamento
+   * mostraria um líquido que não fecha com as partes impressas ao lado.
+   */
+  juros: number;
   /** Valor menos desconto: o que saiu da conta bancária. */
   valorLiquido: number;
 }
@@ -197,7 +205,7 @@ export async function listarParcelasPagas({
   let consulta = supabase
     .from("lancamento_parcelas")
     .select(
-      `id, numero_parcela, valor, desconto, valor_liquido, data_pagamento,
+      `id, numero_parcela, valor, desconto, juros, valor_liquido, data_pagamento,
        contas_bancarias(nome, banco),
        lancamentos!inner(
          numero, descricao,
@@ -275,6 +283,7 @@ export async function listarParcelasPagas({
     dataPagamento: parcela.data_pagamento,
     valor: parcela.valor,
     desconto: parcela.desconto ?? 0,
+    juros: Number(parcela.juros ?? 0),
     valorLiquido: parcela.valor_liquido ?? parcela.valor,
   }));
 
