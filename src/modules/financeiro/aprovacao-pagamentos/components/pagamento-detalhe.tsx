@@ -15,6 +15,7 @@ import { toast } from "@/components/canonicos/toast";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  BotaoEspelho,
   CelulaVazia,
   ConfirmDialog,
   MoneyText,
@@ -291,15 +292,18 @@ export function PagamentoDetalheView({
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void copiarMensagem()}
-        >
-          <ClipboardCopy />
-          Copiar mensagem de aprovação
-        </Button>
+        <div className="flex items-center gap-2">
+          <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void copiarMensagem()}
+          >
+            <ClipboardCopy />
+            Copiar mensagem de aprovação
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

@@ -7,6 +7,8 @@ import { CheckCircle2, Wallet } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  BarraSelecao,
+  BotaoEspelho,
   CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
@@ -762,6 +764,18 @@ export function PagamentosCliente({
     [podeEstornar],
   );
 
+  /**
+   * Parcelas PAGAS marcadas para imprimir o espelho. Só existe na aba "Pagas":
+   * parcela não paga não é pagamento, e imprimir espelho de pagamento que não
+   * aconteceu seria papel mentindo.
+   *
+   * NÃO usa `useFiltroSessao` (mesma escolha de `marcados` em
+   * lancamentos-tabela.tsx), e some ao trocar de aba (ver `Tabs` abaixo): uma
+   * seleção sobrevivendo à troca imprimiria linha que o usuário não está mais
+   * vendo.
+   */
+  const [selecionados, setSelecionados] = React.useState<string[]>([]);
+
   // Histórico paginado no servidor: a primeira página vem do server component,
   // as próximas são buscadas via action conforme a paginação muda.
   const [linhasPagas, setLinhasPagas] = React.useState(pagas);
@@ -819,7 +833,12 @@ export function PagamentosCliente({
         </p>
       ) : null}
 
-      <Tabs defaultValue="a-pagar">
+      <Tabs
+        defaultValue="a-pagar"
+        // Troca de aba limpa a seleção da aba "Pagas": mesma razão de
+        // lancamentos-tabela.tsx não persistir seleção entre visitas.
+        onValueChange={() => setSelecionados([])}
+      >
         <TabsList>
           <TabsTrigger value="a-pagar">A pagar</TabsTrigger>
           <TabsTrigger value="pagas">Pagas</TabsTrigger>
@@ -844,25 +863,38 @@ export function PagamentosCliente({
         </TabsContent>
 
         <TabsContent value="pagas">
-          <DataTable
-            idTabela="financeiro.pagamentos.pagas"
-            columns={colunasPagas}
-            data={linhasPagas}
-            filtros={filtrosPagasBarra}
-            total={totalRegistros}
-            pageIndex={paginacao.pageIndex}
-            pageSize={paginacao.pageSize}
-            onPaginationChange={aoMudarPaginacao}
-            isLoading={carregandoPagas}
-            emptyState={
-              <EmptyState
-                icone={CheckCircle2}
-                titulo="Nenhum pagamento registrado"
-                descricao="Os pagamentos confirmados aparecem aqui"
-                className="border-none bg-transparent"
-              />
-            }
-          />
+          <div className="flex flex-col gap-2">
+            <BarraSelecao
+              quantidade={selecionados.length}
+              onLimpar={() => setSelecionados([])}
+            >
+              <BotaoEspelho rota="/espelho/pagamentos" ids={selecionados} />
+            </BarraSelecao>
+            <DataTable
+              idTabela="financeiro.pagamentos.pagas"
+              columns={colunasPagas}
+              data={linhasPagas}
+              filtros={filtrosPagasBarra}
+              total={totalRegistros}
+              pageIndex={paginacao.pageIndex}
+              pageSize={paginacao.pageSize}
+              onPaginationChange={aoMudarPaginacao}
+              isLoading={carregandoPagas}
+              selecao={{
+                idDaLinha: (parcela: ParcelaPaga) => parcela.id,
+                selecionados,
+                onSelecionadosChange: setSelecionados,
+              }}
+              emptyState={
+                <EmptyState
+                  icone={CheckCircle2}
+                  titulo="Nenhum pagamento registrado"
+                  descricao="Os pagamentos confirmados aparecem aqui"
+                  className="border-none bg-transparent"
+                />
+              }
+            />
+          </div>
         </TabsContent>
       </Tabs>
 
