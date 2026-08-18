@@ -134,6 +134,70 @@ function rotuloParcela(
 }
 
 /**
+ * Célula do valor na tabela de pagamentos pagas. Mostra o valor da parcela e,
+ * quando houve ajuste (desconto e/ou juros), exibe a composição da linha líquida:
+ *
+ * - Se há desconto mas sem juros: "desconto X, líquido Y"
+ * - Se há juros mas sem desconto: "juros X, líquido Y"
+ * - Se há ambos: "desconto X, juros Z, líquido Y"
+ *
+ * Desconto e juros vivem como linha extra DENTRO da célula de valor (não como
+ * coluna própria) porque quase nenhum pagamento tem ambos, e uma coluna própria
+ * apareceria vazia na maioria das linhas, mexendo no conjunto de colunas salvo
+ * nas preferências do usuário. Juros entra aqui pelo mesmo motivo que desconto:
+ * sem ele, as três parcelas do cálculo (valor, desconto/juros, líquido) não
+ * reconciliam na tela, e a conta fica fisicamente errada no papel.
+ */
+export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
+  const temDesconto = parcela.desconto > 0;
+  const temJuros = parcela.juros > 0;
+
+  if (!temDesconto && !temJuros) {
+    return <MoneyText valor={parcela.valor} />;
+  }
+
+  // Monta a linha de ajustes dinamicamente. Começa vazia, acumula cada item.
+  const partes: React.ReactNode[] = [];
+
+  if (temDesconto) {
+    partes.push(
+      <React.Fragment key="desconto">
+        desconto{" "}
+        <MoneyText valor={parcela.desconto} className="inline" />
+      </React.Fragment>,
+    );
+  }
+
+  if (temJuros) {
+    partes.push(
+      <React.Fragment key="juros">
+        juros <MoneyText valor={parcela.juros} className="inline" />
+      </React.Fragment>,
+    );
+  }
+
+  // Sempre termina com o líquido.
+  partes.push(
+    <React.Fragment key="liquido">
+      líquido{" "}
+      <MoneyText valor={parcela.valorLiquido} className="inline" />
+    </React.Fragment>,
+  );
+
+  return (
+    <>
+      <MoneyText valor={parcela.valor} />
+      <span className="block text-legenda text-muted-foreground">
+        {partes.map((parte, index) => [
+          index > 0 && ", ",
+          parte,
+        ])}
+      </span>
+    </>
+  );
+}
+
+/**
  * Tela de pagamentos: KPI do total a pagar aprovado, aba "A pagar" com as
  * parcelas aprovadas e o botão de pagar, e aba "Pagas" com o histórico
  * paginado no servidor.
@@ -668,24 +732,8 @@ export function PagamentosCliente({
         header: "Valor",
         size: 130,
         meta: { alinharDireita: true },
-        // O desconto entra como linha extra DENTRO da célula de valor, e só
-        // quando existe. Coluna própria apareceria vazia em quase todo
-        // pagamento e mexeria no conjunto de colunas salvo nas preferências.
         cell: ({ row }) => (
-          <>
-            <MoneyText valor={row.original.valor} />
-            {row.original.desconto > 0 ? (
-              <span className="block text-legenda text-muted-foreground">
-                desconto{" "}
-                <MoneyText valor={row.original.desconto} className="inline" />,
-                líquido{" "}
-                <MoneyText
-                  valor={row.original.valorLiquido}
-                  className="inline"
-                />
-              </span>
-            ) : null}
-          </>
+          <CelulaValorPaga parcela={row.original} />
         ),
       },
       ...(podeEstornar
