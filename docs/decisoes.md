@@ -2068,3 +2068,76 @@ valem registro, mais o que as revisões corrigiram.
   só atualiza a parcela e propaga anexos, sem gravar trilha própria. Rótulo de evento errado no
   código não quebra `tsc` nem lint: só aparece como texto errado (ou o `tipo` cru, sem tradução) na
   Trilha do espelho de pagamento, e só contra o banco de verdade.
+
+**O que a revisão do branch INTEIRO pegou, e as doze revisões por task não:**
+
+As doze revisões olharam cada task contra o seu próprio plano, e o plano estava errado em dois
+pontos. Revisão por task não tem como pegar isso: ela confirma que o código faz o que o plano
+mandou. Os dois achados abaixo são de coisa que atravessa arquivos que nenhuma task tocou junto.
+
+- **Todo espelho imprimia folha em branco.** `globals.css` tem `body * { visibility: hidden }`
+  dentro de um `@media print`, e o único `visibility: visible` do projeto inteiro era o do
+  `.holerite-print`. A spec deste branch leu essa regra como se fosse escopada ao holerite. Não é:
+  `globals.css` entra uma vez só, pelo layout raiz; o grupo `(espelho)` é layout ANINHADO e
+  renderiza dentro do MESMO `<body>`; e `body *` bate em tudo. As três rotas montavam a página
+  inteira e o navegador imprimia nada. Corrigido reacendendo a árvore do espelho
+  (`.espelho-raiz, .espelho-raiz *`, especificidade 0,1,1 contra 0,0,1 de `body *`, então vence por
+  ter uma classe a mais, não por ordem no arquivo), e os dois blocos de `@media print` ganharam
+  comentário dizendo que a regra é global — a próxima superfície imprimível precisa revertê-la de
+  propósito ou cai no mesmo buraco. **Nenhum dos 1490 testes dizia nada sobre isso: jsdom não avalia
+  CSS de impressão.** É exatamente o que o e2e de Playwright dispensado neste branch teria pego, e
+  fica registrado como o custo daquela decisão.
+- **`@page` removido, não ajustado.** O branch tinha declarado `@page { size: A4; margin: 12mm }`.
+  `@page` não tem como ser escopado a uma subárvore: ele mudaria também a geometria do holerite,
+  num branch que declarou não tocar nele. Removido em vez de "verificar se o holerite aguenta":
+  a geometria do espelho já vem do próprio documento (`max-w-[190mm]` e padding), que É escopável,
+  e assim o risco de regressão desaparece em vez de depender de conferência manual.
+- **O espelho da OC imprimia dois números diferentes com o mesmo rótulo.** A migration
+  `20260817160000`, de 17/08 e já na base quando este branch começou, mudou o que `valor_total`
+  significa: passou a ser `round(soma dos itens + frete + outras + impostos - desconto, 2)`. O plano
+  leu o comentário da migration ANTIGA (`20260618210002`), onde o total era só a soma dos itens.
+  Resultado no papel: o cabeçalho imprimia o total geral rotulado "Total dos itens", o rodapé da
+  tabela imprimia a soma real dos itens com o MESMO rótulo, e nenhum campo dizia quanto vale a
+  ordem. Seis das dezessete OCs carregadas do Mais Controle têm ajuste; na 2592 os dois números
+  diferem em R$ 3.835,95. Corrigido, e corrigido reusando o que a tela de detalhe já usava
+  (`LINHAS_DE_AJUSTE` e `temAjuste`, em `calculo.ts`), em vez de inventar rótulo novo no papel:
+  as duas superfícies agora imprimem a mesma conta, com os mesmos rótulos e os mesmos sinais.
+
+  **A causa raiz de isso sobreviver a doze revisões foi uma fixture mentirosa.** `LINHA`, em
+  `espelho.test.ts`, tinha `valor_total` 100.000 com 500 de frete e 100.000 de itens. Essa OC não
+  pode existir: `trg_total_oc_cabecalho` é BEFORE e recalcula em todo INSERT e UPDATE. A fixture
+  encarnava a crença errada do autor, e dois testes travavam o invariante falso por cima dela — de
+  modo que o teste "provava" o que o código fazia de errado. **Fixture de dinheiro tem que ser
+  aritmeticamente possível sob as triggers vivas**, senão ela vira prova da crença do autor em vez
+  de prova do sistema. Vale para todo o projeto, não só para este espelho.
+- **Célula de tabela vazia saía em branco onde a regra pede travessão.** `EspelhoTabela` usava
+  `linha[chave] ?? "—"`, e `??` não pega string vazia — mas `formatarData(null)` devolve `""`.
+  Parcela em aberto não tem `dataPagamento`, então a coluna "Pago em" saía vazia, e vazio não
+  distingue "não tem" de "esqueceram de imprimir" num papel que serve de prova. `EspelhoCampos` e
+  `EspelhoDinheiro` já tratavam `""`; só a tabela ficou para trás. Como o defeito É a divergência
+  entre três cópias da mesma regra, ela virou um helper único que os três chamam. `0` e `false`
+  continuam sendo valor de verdade, nunca travessão, e a linha de totais segue de fora de propósito.
+- **O espelho afirmava um pagamento que não aconteceu.** A tela de aprovação oferecia "Imprimir
+  espelho" sem olhar o status, e ali a parcela ainda NÃO foi paga. Agrava que `valor_liquido` é
+  coluna calculada: vem preenchida mesmo em parcela em aberto. O papel saía dizendo "Saiu da conta
+  R$ 1.000,00" para dinheiro que não saiu de conta nenhuma. Corrigido nas DUAS camadas — o botão só
+  existe com status `pago` (a mesma regra que a listagem já aplicava), e a página degrada sozinha se
+  receber o id de uma parcela não paga (título "Parcela" em vez de "Pagamento", primeira seção
+  acompanhando o título, "Saiu da conta" e "Pago em" em travessão, resto do documento intacto).
+  **As duas camadas porque o link do espelho é colável**: a regra "o papel não mente" não pode
+  depender de o botão estar escondido. "Está paga" é por STATUS, nunca por "tem `dataPagamento`" —
+  `fn_pagar_parcela` grava os dois juntos e `fn_estornar_pagamento` limpa os dois juntos, e a conta
+  bancária impressa vem da parcela (que o estorno limpa), não do lançamento.
+- **Linha de total tem que reduzir sobre as linhas impressas, nunca ecoar o documento pai.** Apareceu
+  três vezes neste branch: no total dos itens da OC, no total do rateio da OC e no total do rateio do
+  pagamento (este ecoava `lancamentoValor`). Ecoar o pai esconde a divergência exatamente no lugar
+  onde ela apareceria. E o rótulo tem que nomear o que o número é: quando o total do rateio passou a
+  somar as linhas, "Total do lançamento" virou "Total do rateio", senão seria o mesmo defeito do
+  espelho da OC — um número com o nome de outro. O valor do pai continua no papel, em campo próprio,
+  para o leitor comparar.
+
+**A regra geral que sai deste branch, e que vale para qualquer documento impresso do ERP:** o papel
+não pode afirmar mais do que o sistema sabe. Todo campo que AFIRMA um fato (um pagamento, uma
+entrega, uma aprovação) precisa de guarda de estado no servidor, porque a URL é colável; todo total
+tem que ser derivado das linhas que o próprio papel imprimiu; e todo rótulo tem que nomear o número
+que está embaixo dele.
