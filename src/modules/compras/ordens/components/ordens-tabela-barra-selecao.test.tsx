@@ -38,6 +38,7 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
 
 const ID_A = "11111111-1111-4111-8111-111111111111";
 const ID_B = "22222222-2222-4222-8222-222222222222";
+const ID_C = "33333333-3333-4333-8333-333333333333";
 
 function ordem(troca: Partial<OrdemLista> = {}): OrdemLista {
   return {
@@ -66,11 +67,27 @@ const ORDENS = [
   ordem({ id: ID_B, numero: "OC-2026-0002" }),
 ];
 
-function montar() {
-  return render(
+/**
+ * Página 2, para o teste de troca de página: ID_A continua (ainda marcado),
+ * ID_B saiu de vista e ID_C é novo. Mesma ordem de fornecedor/OC, só o `id`
+ * muda entre página e página real.
+ */
+const ORDENS_PAGINA_2 = [
+  ordem({ id: ID_A, numero: "OC-2026-0001" }),
+  ordem({ id: ID_C, numero: "OC-2026-0003" }),
+];
+
+/**
+ * JSX completo, parametrizado por `ordens`: o teste de troca de página chama
+ * isto duas vezes com `rerender` — página 1 e depois página 2 — pra simular o
+ * que a URL faria de verdade (nova consulta no servidor, novo `ordens` como
+ * prop), sem precisar de router real nem de Server Component.
+ */
+function props(ordens: OrdemLista[]) {
+  return (
     <OrdensTabela
-      ordens={ORDENS}
-      total={ORDENS.length}
+      ordens={ordens}
+      total={ordens.length}
       pagina={0}
       tamanho={25}
       status=""
@@ -96,8 +113,12 @@ function montar() {
       centrosCusto={[]}
       insumos={[]}
       idUsuario="44444444-4444-4444-8444-444444444444"
-    />,
+    />
   );
+}
+
+function montar() {
+  return render(props(ORDENS));
 }
 
 function marcar(id: string) {
@@ -162,5 +183,22 @@ describe("BarraSelecao dentro de OrdensTabela", () => {
     fireEvent.click(screen.getByRole("button", { name: "Limpar seleção" }));
 
     expect(screen.queryByText(/selecionado/i)).not.toBeInTheDocument();
+  });
+
+  it("trocar de página descarta da contagem quem saiu de vista, sem descartar quem continua", () => {
+    const { rerender } = montar();
+    marcar(ID_A);
+    marcar(ID_B);
+    expect(screen.getByText("2 selecionados")).toBeInTheDocument();
+
+    // Troca de página de verdade: o servidor manda outra lista de `ordens`. ID_A
+    // continua nela (ainda marcado), ID_B não veio mais.
+    rerender(props(ORDENS_PAGINA_2));
+
+    expect(screen.getByText("1 selecionado")).toBeInTheDocument();
+    // Não é só a contagem: o botão também não carrega o id que saiu de vista.
+    expect(
+      screen.getByRole("button", { name: "Imprimir espelho" }),
+    ).toBeInTheDocument();
   });
 });

@@ -774,7 +774,7 @@ export function PagamentosCliente({
    * seleção sobrevivendo à troca imprimiria linha que o usuário não está mais
    * vendo.
    */
-  const [selecionados, setSelecionados] = React.useState<string[]>([]);
+  const [marcados, setSelecionados] = React.useState<string[]>([]);
 
   // Histórico paginado no servidor: a primeira página vem do server component,
   // as próximas são buscadas via action conforme a paginação muda.
@@ -785,6 +785,28 @@ export function PagamentosCliente({
     pageSize: TAMANHO_PAGINA,
   });
   const [carregandoPagas, setCarregandoPagas] = React.useState(false);
+
+  /**
+   * Só vale o que está à vista NESTA página do histórico.
+   *
+   * `selecionados` é DERIVADO de `linhasPagas` (a página atual, que muda a
+   * cada troca de página/filtro/refresh do servidor), e não o estado bruto:
+   * parcela que saiu da página deixa de contar sozinha. Sem isso, marcar 3
+   * parcelas e trocar de página deixaria a barra dizendo "3 selecionados" sem
+   * nenhum checkbox marcado à vista — a impressão continuaria certa (o id
+   * ainda existe), mas o número na tela estaria mentindo sobre o que está
+   * marcado. Mesma guarda de `lancamentos-tabela.tsx`; ali o risco citado é
+   * gravar em linha que sumiu da tela, aqui é só a contagem discordar do que
+   * se vê.
+   */
+  const idsVisiveisPagas = React.useMemo(
+    () => new Set(linhasPagas.map((parcela) => parcela.id)),
+    [linhasPagas],
+  );
+  const selecionados = React.useMemo(
+    () => marcados.filter((id) => idsVisiveisPagas.has(id)),
+    [marcados, idsVisiveisPagas],
+  );
 
   // Quando o server component reenvia a primeira página (após um pagamento e
   // router.refresh), volta a listar a partir dela. Ajuste de estado durante o

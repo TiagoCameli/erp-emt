@@ -259,7 +259,28 @@ export function OrdensTabela({
    * imprimir uma lista de ordens que ele não está mais olhando (mesma razão de
    * `marcados` em lancamentos-tabela.tsx).
    */
-  const [selecionados, setSelecionados] = React.useState<string[]>([]);
+  const [marcados, setSelecionados] = React.useState<string[]>([]);
+
+  /**
+   * Só vale o que está à vista.
+   *
+   * `selecionados` é DERIVADO da página atual, e não o estado bruto: id que
+   * saiu da tela (troca de página ou de filtro) deixa de contar sozinho. Sem
+   * isso, marcar 3 ordens, trocar de página e olhar a barra mostraria "3
+   * selecionados" sem nenhum checkbox marcado à vista — o id continua válido
+   * para imprimir, mas o número na tela estaria mentindo sobre o que está
+   * marcado. Mesma guarda de `lancamentos-tabela.tsx`; ali o risco citado é
+   * gravar em linha que sumiu da tela, aqui é só a contagem discordar do que
+   * se vê, porque não há ação de lote nesta tela.
+   */
+  const idsVisiveis = React.useMemo(
+    () => new Set(ordens.map((ordem) => ordem.id)),
+    [ordens],
+  );
+  const selecionados = React.useMemo(
+    () => marcados.filter((id) => idsVisiveis.has(id)),
+    [marcados, idsVisiveis],
+  );
 
   // A faixa de valor é digitada dígito a dígito, então vai para a URL com
   // espera (o canônico cuida disso): escrevendo a cada tecla, o input voltaria
