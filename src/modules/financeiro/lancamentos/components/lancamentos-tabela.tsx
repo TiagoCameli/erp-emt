@@ -12,6 +12,7 @@ import { toast } from "@/components/canonicos/toast";
 
 import {
   BarraSelecao,
+  BotaoEspelho,
   CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
@@ -754,6 +755,7 @@ export function LancamentosTabela({
         resumo={<MoneyText valor={valorSelecionado} />}
         limparDesabilitado={salvandoLote}
       >
+        <BotaoEspelho rota="/espelho/lancamentos" ids={selecionados} />
         <LoteContaBancaria
           selecionados={selecionados}
           jaComConta={

@@ -15,6 +15,7 @@ import { toast } from "@/components/canonicos/toast";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  BotaoEspelho,
   CelulaVazia,
   Combobox,
   ConfirmDialog,
@@ -333,6 +334,7 @@ export function LancamentoDetalheView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <BotaoEspelho rota="/espelho/lancamentos" ids={[lancamento.id]} />
           {editavel ? (
             <Button
               type="button"

@@ -38,3 +38,4 @@ export * from "./matriz-recursos-acoes";
 export * from "./espelho-impresso";
 export * from "./botao-imprimir";
 export * from "./barra-selecao";
+export * from "./botao-espelho";
