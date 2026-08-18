@@ -183,9 +183,7 @@ Validação: insumo em "A classificar" é recusado pelo schema da OC.
 - Reclassificar os 520 insumos em "A classificar" em mutirão
 - `NOT NULL` nas colunas novas
 - Mexer nos 6.737 rateios além do backfill da categoria do pai
-- Descrição das 17 OCs: **bloqueado**, precisa do acesso ao Mais Controle
-  (a carga registrou que 6 delas têm descrição vazia na origem; falta conferir
-  se o MC tem um campo de *observação* separado da *descrição*)
+- Descrição das 6 OCs que estão vazias no próprio Mais Controle (ver abaixo)
 
 ## Dependência
 
@@ -193,3 +191,36 @@ Este branch está empilhado em `feat-oc-ajustes-e-carga-mc`, que tem 3 commits,
 **nenhum PR aberto** e não está mergeado — mas cuja carga **já está aplicada no
 banco vivo**. Aquele branch precisa mergear antes deste, senão o merge traz os
 dois juntos. A migration nova entra depois da `20260817160000`.
+
+## Backfill da descrição — feito em 17/08/2026
+
+A observação da OC no Mais Controle **não é a coluna "Descrição"** da listagem
+(essa vem vazia). Ela vive na aba **Informações**, na seção **Observações**, no fim
+da ficha. Foi lida na tela das 17 ordens, uma por uma.
+
+Resultado: **4 ordens ganharam descrição**, 7 já tinham texto idêntico ao do MC, e
+**6 estão vazias no próprio MC** — não há o que copiar.
+
+| MC | erp | descrição gravada |
+|---|---|---|
+| 2607 | OC-2026-0001 | REFERENTE A 20 MIL LITROS DIESEL - 15 MIL S10 E 5 MIL S500 |
+| 2606 | OC-2026-0002 | REFERENTE A 5 MIL LITROS DIESEL S500 - BR364 LOTE10 |
+| 2605 | OC-2026-0003 | REFERENTE A 15 MIL LITROS DIESEL S10 - GREGORIO |
+| 2597 | OC-2026-0011 | CAIXA DO DIA 01/08/2026 - MECANICO PASSOU 1 SEMANA PRESTANDO SERVICO NO SILO |
+
+Nas três de diesel a observação também traz a data do boleto (31/08, 13/09 e
+13/09). Ela não entrou na descrição — que é "o que está sendo comprado" — e foi
+anexada em `observacoes` como `Observação no Mais Controle: ...`, porque é
+informação de vencimento e some se descartada.
+
+**Sem descrição nem aqui nem no MC (6):** OC-2026-0004 (SHIRLEY), 0005
+(M S TEIXEIRA), 0006 (PEMAZA), 0007 (RONDOBRAS), 0008 (GOL LOG) e **0017 (BRITAS,
+R$ 100.000)**. Todas em rascunho. A descrição é obrigatória no formulário, então
+elas **não passam pela aprovação** como estão. Duas saídas, e é escolha do Tiago:
+
+1. gerar a descrição a partir dos itens (ex.: "Diesel S10 e Diesel S500"),
+   marcando em `observacoes` que foi gerada porque a origem não tinha; ou
+2. ele preenche as seis na tela, que são rascunhos e leva um minuto cada.
+
+Nada foi gerado automaticamente: inventar texto e gravá-lo como se fosse dado do
+Mais Controle seria pior do que deixar em branco.
