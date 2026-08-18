@@ -26,10 +26,17 @@ export function KPICard({
   const conteudo = (
     <div
       className={cn(
-        // h-full para os cartões da mesma linha terminarem na mesma altura
-        // mesmo quando um tem detalhe de duas linhas e o outro não tem detalhe.
-        "faixa-esquerda h-full rounded-lg border border-border bg-card p-4",
-        href && "transition-colors hover:bg-surface",
+        // Sem `h-full` aqui: como item direto do flex da GradeKpis o cartão já é
+        // esticado pelo `align-items: stretch`, e fixar altura de 100% DESLIGA
+        // esse esticamento. A porcentagem passa a medir contra a altura da grade,
+        // que é indefinida (ela cresce pelo conteúdo), então cada cartão voltava a
+        // ter a altura do próprio texto: era por isso que o cartão de detalhe em
+        // duas linhas terminava mais abaixo que os vizinhos da mesma fileira.
+        //
+        // Dentro do Link o `h-full` volta a ser necessário e a funcionar: lá o
+        // item de flex é o Link, que fica com altura definida depois do stretch.
+        "faixa-esquerda rounded-lg border border-border bg-card p-4",
+        href && "h-full transition-colors hover:bg-surface",
         className,
       )}
     >
@@ -49,7 +56,7 @@ export function KPICard({
     return (
       <Link
         href={href}
-        className="block h-full rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
       >
         {conteudo}
       </Link>

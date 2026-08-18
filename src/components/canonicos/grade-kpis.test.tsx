@@ -35,6 +35,38 @@ describe("GradeKpis", () => {
     expect(screen.getByText("Cotações em aberto")).toBeInTheDocument();
   });
 
+  it("o cartão não fixa altura: quem estica é o flex da grade", () => {
+    const { container } = render(
+      <GradeKpis>
+        <KPICard titulo="Pago" valor="R$ 1,00" detalhe="detalhe comprido" />
+        <KPICard titulo="Vencido" valor="R$ 2,00" />
+      </GradeKpis>,
+    );
+
+    // `h-full` no item de flex DESLIGA o `align-items: stretch` que ele queria
+    // garantir: altura de 100% mede contra a altura da grade, que é indefinida
+    // porque ela cresce pelo conteúdo. Era por isso que o cartão de detalhe em
+    // duas linhas terminava mais abaixo que os vizinhos da mesma fileira.
+    for (const cartao of [...(container.firstElementChild?.children ?? [])]) {
+      expect(cartao.className).not.toContain("h-full");
+    }
+  });
+
+  it("cartão com href estica pelo Link, e aí o h-full é dentro dele", () => {
+    const { container } = render(
+      <GradeKpis>
+        <KPICard titulo="A revisar" valor={1} href="/financeiro/lancamentos" />
+      </GradeKpis>,
+    );
+
+    // Aqui o item de flex é o Link: ele não fixa altura (para ser esticado), e o
+    // cartão de dentro usa 100% da altura JÁ definida do Link.
+    const link = container.firstElementChild?.firstElementChild;
+    expect(link?.tagName).toBe("A");
+    expect(link?.className).not.toContain("h-full");
+    expect(link?.firstElementChild?.className).toContain("h-full");
+  });
+
   it("fragmento e lista continuam sendo filhos diretos no DOM", () => {
     const grupos = ["Material", "Mão de obra", "Equipamento"];
     const { container } = render(

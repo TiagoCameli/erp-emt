@@ -31,7 +31,6 @@ import {
   FilterX,
   LoaderCircle,
   Rows3,
-  Search,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,8 +43,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
+import { BlocoFiltros, FiltroBusca } from "@/components/canonicos/filter-bar";
 import { MenuColunas, type ColunaAlternavel } from "@/components/canonicos/menu-colunas";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
 import {
@@ -2774,90 +2773,114 @@ export function DataTable<TData>({
       )}
     >
       {temBarra && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-1 flex-wrap items-center gap-2">
-            {colunaBusca ? (
-              <div className="relative w-full max-w-xs">
-                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={(colunaBusca.getFilterValue() as string | undefined) ?? ""}
-                  onChange={(evento) => colunaBusca.setFilterValue(evento.target.value)}
-                  placeholder={searchPlaceholder ?? "Buscar"}
-                  className="h-8 pl-8 text-detalhe"
-                />
-              </div>
-            ) : null}
-            {(filtros ?? [])
+        <BlocoFiltros
+          campos={[
+            // A busca da tabela é o mesmo canônico das telas, e não uma cópia do
+            // Input com lupa: ela precisa do rótulo em cima e do trilho duplo
+            // igual às outras, senão seria o único campo da barra fora do prumo.
+            ...(colunaBusca
+              ? [
+                  {
+                    id: "__busca",
+                    rotulo: "Busca",
+                    elemento: (
+                      <FiltroBusca
+                        valor={
+                          (colunaBusca.getFilterValue() as string | undefined) ??
+                          ""
+                        }
+                        onValorChange={(texto) =>
+                          colunaBusca.setFilterValue(texto)
+                        }
+                        placeholder={searchPlaceholder ?? "Buscar"}
+                      />
+                    ),
+                  },
+                ]
+              : []),
+            ...(filtros ?? [])
               .filter((filtro) => filtroVisivel(filtro.id))
-              .map((filtro) => (
-                <React.Fragment key={filtro.id}>{filtro.elemento}</React.Fragment>
-              ))}
-            {toolbar}
-          </div>
-          <div className="flex items-center gap-2">
-            {/*
-              Só aparece com filtro ativo. Botão morto em toda tela do app é
-              ruído, e a presença dele já avisa que a lista está filtrada — que é
-              metade do problema que ele resolve.
-            */}
-            {temFiltroAtivo ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={limparFiltros}
-              >
-                <FilterX />
-                Limpar filtros
-              </Button>
-            ) : null}
-            {personalizavel && (filtros ?? []).length > 0 && (
-              <MenuFiltros
-                filtros={(filtros ?? []).map((filtro) => ({
-                  id: filtro.id,
-                  rotulo: filtro.rotulo,
-                  fixo: filtro.fixo,
-                  visivel: filtroVisivel(filtro.id),
-                }))}
-                onAlternar={alternarFiltro}
-              />
-            )}
-            {personalizavel && (
-              <MenuAltura
-                altura={alturaLinha}
-                onEscolher={aplicarAltura}
-                alturaCabecalho={alturaCabecalho}
-                onEscolherCabecalho={aplicarAlturaCabecalho}
-                peso={pesoCabecalho}
-                onEscolherPeso={aplicarPesoCabecalho}
-              />
-            )}
-            {personalizavel && (
-              <MenuColunas
-                colunas={colunasDoMenu}
-                onRestaurarPadrao={restaurarPadrao}
-                foraDoPadrao={foraDoPadrao}
-                onAjustarLarguras={ajustarTodasAoConteudo}
-              />
-            )}
-            {exportar && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={exportando}
-                onClick={exportar}
-              >
-                {exportando ? (
-                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
-                ) : (
-                  <FileSpreadsheet />
+              .map((filtro) => ({
+                id: filtro.id,
+                rotulo: filtro.rotulo,
+                elemento: filtro.elemento,
+              })),
+          ]}
+          acoesEsquerda={
+            temFiltroAtivo || toolbar !== undefined ? (
+              <>
+                {/*
+                  Só aparece com filtro ativo. Botão morto em toda tela do app é
+                  ruído, e a presença dele já avisa que a lista está filtrada, que
+                  é metade do problema que ele resolve.
+                */}
+                {temFiltroAtivo ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={limparFiltros}
+                  >
+                    <FilterX />
+                    Limpar filtros
+                  </Button>
+                ) : null}
+                {toolbar}
+              </>
+            ) : undefined
+          }
+          acoesDireita={
+            personalizavel || exportar !== undefined ? (
+              <>
+                {personalizavel && (filtros ?? []).length > 0 && (
+                  <MenuFiltros
+                    filtros={(filtros ?? []).map((filtro) => ({
+                      id: filtro.id,
+                      rotulo: filtro.rotulo,
+                      fixo: filtro.fixo,
+                      visivel: filtroVisivel(filtro.id),
+                    }))}
+                    onAlternar={alternarFiltro}
+                  />
                 )}
-                Exportar Excel
-              </Button>
-            )}
-          </div>
-        </div>
+                {personalizavel && (
+                  <MenuAltura
+                    altura={alturaLinha}
+                    onEscolher={aplicarAltura}
+                    alturaCabecalho={alturaCabecalho}
+                    onEscolherCabecalho={aplicarAlturaCabecalho}
+                    peso={pesoCabecalho}
+                    onEscolherPeso={aplicarPesoCabecalho}
+                  />
+                )}
+                {personalizavel && (
+                  <MenuColunas
+                    colunas={colunasDoMenu}
+                    onRestaurarPadrao={restaurarPadrao}
+                    foraDoPadrao={foraDoPadrao}
+                    onAjustarLarguras={ajustarTodasAoConteudo}
+                  />
+                )}
+                {exportar && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={exportando}
+                    onClick={exportar}
+                  >
+                    {exportando ? (
+                      <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                    ) : (
+                      <FileSpreadsheet />
+                    )}
+                    Exportar Excel
+                  </Button>
+                )}
+              </>
+            ) : undefined
+          }
+        />
       )}
 
       {cabecalhoFixo ? (
