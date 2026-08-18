@@ -178,7 +178,17 @@ export default async function EspelhoOrdensPage({
               }))}
               totais={{
                 insumo: "Total dos itens",
-                subtotal: <EspelhoDinheiro valor={ordem.valorTotal} />,
+                // Soma as linhas impressas, não repete o cabeçalho: se um dia
+                // a trigger e o papel divergirem, o papel tem que mostrar a
+                // divergência, nunca escondê-la atrás do número do cabeçalho.
+                subtotal: (
+                  <EspelhoDinheiro
+                    valor={ordem.itens.reduce(
+                      (soma, item) => soma + item.subtotal,
+                      0,
+                    )}
+                  />
+                ),
               }}
             />
           </EspelhoSecao>
@@ -197,7 +207,15 @@ export default async function EspelhoOrdensPage({
               }))}
               totais={{
                 centro: "Total",
-                valor: <EspelhoDinheiro valor={ordem.valorTotal} />,
+                // Idem: soma as linhas de rateio impressas, não o cabeçalho.
+                valor: (
+                  <EspelhoDinheiro
+                    valor={ordem.rateios.reduce(
+                      (soma, rateio) => soma + rateio.valor,
+                      0,
+                    )}
+                  />
+                ),
               }}
             />
           </EspelhoSecao>

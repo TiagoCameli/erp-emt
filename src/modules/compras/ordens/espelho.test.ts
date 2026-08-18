@@ -25,6 +25,7 @@ const LINHA = {
       id: "9f1b7c2e-6d3a-4f58-9b0e-1c2d3e4f5a6b",
       quantidade: 10,
       preco_unitario: 10000,
+      centro_custo_id: "3b1f7c2e-6d3a-4f58-9b0e-1c2d3e4f5a01",
       insumos: { nome: "Pedra brita 1", unidades_medida: { sigla: "m3" } },
       centros_custo: { nome: "009 - Lote 09", codigo: "009" },
     },
@@ -92,6 +93,37 @@ describe("montarEspelhoOrdem", () => {
     expect(espelho.rateios[0].valor).toBe(150000);
   });
 
+  it("dois itens em centros DIFERENTES com o mesmo nome não podem virar uma linha só", () => {
+    // centros_custo não tem unicidade em nome: é árvore Obra > Etapa > Item,
+    // e dois nós de nível 3 em obras diferentes podem se chamar igual (ex:
+    // dois "Diesel"). Agrupar por NOME juntaria custo de duas obras numa
+    // linha só no papel, sem nada revelar que aconteceu — por isso o
+    // agrupamento tem que usar centro_custo_id, nunca o nome.
+    const espelho = montarEspelhoOrdem({
+      ...LINHA,
+      valor_total: "150000.00",
+      oc_itens: [
+        {
+          ...LINHA.oc_itens[0],
+          centro_custo_id: "aaaaaaaa-0000-4000-8000-000000000001",
+          centros_custo: { nome: "Diesel", codigo: "001" },
+        },
+        {
+          ...LINHA.oc_itens[0],
+          id: "outro",
+          quantidade: 5,
+          preco_unitario: 10000,
+          centro_custo_id: "bbbbbbbb-0000-4000-8000-000000000002",
+          centros_custo: { nome: "Diesel", codigo: "002" },
+        },
+      ],
+    });
+    expect(espelho.rateios).toHaveLength(2);
+    expect(espelho.rateios.reduce((soma, r) => soma + r.valor, 0)).toBe(
+      150000,
+    );
+  });
+
   it("traz as parcelas previstas da OC", () => {
     const [parcela] = montarEspelhoOrdem(LINHA).parcelas;
     expect(parcela.numeroParcela).toBe(1);
@@ -102,13 +134,47 @@ describe("montarEspelhoOrdem", () => {
   it("item sem insumo, sem unidade ou sem centro não quebra o papel", () => {
     const espelho = montarEspelhoOrdem({
       ...LINHA,
-      oc_itens: [{ ...LINHA.oc_itens[0], insumos: null, centros_custo: null }],
+      oc_itens: [
+        {
+          ...LINHA.oc_itens[0],
+          centro_custo_id: null,
+          insumos: null,
+          centros_custo: null,
+        },
+      ],
     });
     expect(espelho.itens[0].insumoNome).toBeNull();
     expect(espelho.itens[0].unidade).toBeNull();
     // Mesmo texto de detalharLancamentosParaPlanilha e do espelho de
     // lançamento: os dois não podem divergir sobre a mesma ausência.
     expect(espelho.itens[0].centroCustoNome).toBe("Sem centro de custo");
+  });
+
+  it("dois itens sem centro colapsam na mesma linha 'Sem centro de custo'", () => {
+    // centro_custo_id null usa uma chave-sentinela no agrupamento: sem ela,
+    // cada item sem centro viraria a sua própria linha de rateio.
+    const espelho = montarEspelhoOrdem({
+      ...LINHA,
+      valor_total: "150000.00",
+      oc_itens: [
+        {
+          ...LINHA.oc_itens[0],
+          centro_custo_id: null,
+          centros_custo: null,
+        },
+        {
+          ...LINHA.oc_itens[0],
+          id: "outro",
+          quantidade: 5,
+          preco_unitario: 10000,
+          centro_custo_id: null,
+          centros_custo: null,
+        },
+      ],
+    });
+    expect(espelho.rateios).toHaveLength(1);
+    expect(espelho.rateios[0].centroNome).toBe("Sem centro de custo");
+    expect(espelho.rateios[0].valor).toBe(150000);
   });
 
   it("OC sem item e sem parcela sai com listas vazias, não com erro", () => {

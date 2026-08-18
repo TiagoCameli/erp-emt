@@ -9,6 +9,13 @@ export interface EspelhoOrdemItem {
   precoUnitario: number;
   /** quantidade x preço. Não é coluna do banco. */
   subtotal: number;
+  /**
+   * Chave real do agrupamento do rateio. `centros_custo` não tem unicidade em
+   * `nome` (é árvore Obra > Etapa > Item; dois nós de nível 3 em obras
+   * diferentes podem se chamar igual, ex: dois "Diesel"), então o rateio
+   * NUNCA pode agrupar por nome — ver `porCentro` abaixo.
+   */
+  centroCustoId: string | null;
   centroCustoNome: string;
   centroCustoCodigo: string | null;
 }
@@ -73,6 +80,7 @@ export interface LinhaEspelhoOrdem {
     id: string;
     quantidade: string | number;
     preco_unitario: string | number;
+    centro_custo_id: string | null;
     insumos: { nome: string; unidades_medida: { sigla: string } | null } | null;
     centros_custo: { nome: string; codigo: string | null } | null;
   }[];
@@ -106,6 +114,7 @@ export function montarEspelhoOrdem(linha: LinhaEspelhoOrdem): EspelhoOrdem {
       quantidade,
       precoUnitario,
       subtotal: quantidade * precoUnitario,
+      centroCustoId: item.centro_custo_id,
       // "Sem centro de custo", igual ao fallback de detalharLancamentosParaPlanilha
       // e do espelho de lançamento: os dois textos descrevem a mesma ausência e
       // não podem divergir entre a planilha, o outro espelho e este.
@@ -114,14 +123,21 @@ export function montarEspelhoOrdem(linha: LinhaEspelhoOrdem): EspelhoOrdem {
     };
   });
 
+  // Agrupa por ID, nunca por nome: `centros_custo` não tem unicidade em
+  // `nome` (árvore Obra > Etapa > Item), então dois centros DIFERENTES podem
+  // se chamar igual, e agrupar por nome juntaria custo de duas obras numa
+  // linha só sem nada revelar isso no papel. Sentinela para item sem centro,
+  // para todos eles colapsarem na mesma linha "Sem centro de custo" em vez de
+  // cada um virar sua própria linha (mesmo problema, na direção oposta).
   const porCentro = new Map<string, EspelhoOrdemRateio>();
   for (const item of itens) {
-    const atual = porCentro.get(item.centroCustoNome);
+    const chave = item.centroCustoId ?? "sem-centro";
+    const atual = porCentro.get(chave);
     if (atual) {
       atual.valor += item.subtotal;
       continue;
     }
-    porCentro.set(item.centroCustoNome, {
+    porCentro.set(chave, {
       centroNome: item.centroCustoNome,
       centroCodigo: item.centroCustoCodigo,
       valor: item.subtotal,
@@ -188,7 +204,7 @@ export async function buscarOrdensParaEspelho(
          categorias_financeiras(nome),
          cotacoes(numero),
          condicoes_pagamento(descricao),
-         oc_itens(id, quantidade, preco_unitario,
+         oc_itens(id, quantidade, preco_unitario, centro_custo_id,
            insumos(nome, unidades_medida(sigla)),
            centros_custo(nome, codigo)),
          oc_parcelas(numero_parcela, data_vencimento, valor)`,
