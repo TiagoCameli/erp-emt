@@ -1996,3 +1996,75 @@ procurava por `<FilterBar>`, e a segunda barra tem outro nome.
 (página servida sem hidratar, bundle velho depois de Fast Refresh, e por fim renderer congelado), e
 o que eu media não era o código novo. Os testes cobrem o comportamento, mas quem confirma que o
 clique limpa é a tela.
+
+## 2026-08-13 - Espelho impresso: rota no servidor, sem ação nova de permissão, e por que os ids validam por guid
+
+Lançamento, ordem de compra e pagamento ganharam um espelho impresso: uma folha por documento, com
+tudo que a tela de detalhe mostra (dados, parcelas, rateio por centro de custo, trilha, anexos),
+acessível pela barra de seleção da listagem e pelo próprio detalhe. Quatro decisões de desenho
+valem registro, mais o que as revisões corrigiram.
+
+1. **Rota renderizada no servidor, uma por documento, e não um dialog como o do holerite.** O
+   holerite imprime de DENTRO do app: abre um dialog, `window.print()` roda com a tela ainda atrás,
+   e `.holerite-print`/`visibility: hidden` no `globals.css` escondem tudo que não é o holerite
+   daquele dialog. O espelho vive no grupo `(espelho)`, sem `AppShell`, e a PÁGINA INTEIRA é o
+   documento — nada para esconder. Um dialog foi cogitado e recusado: com os até 50 documentos que
+   `MAX_ESPELHOS` permite, um dialog listando 12 ou 30 documentos é inutilizável, e o truque de
+   `visibility: hidden` sobre `body *` fica frágil quando o conteúdo mora dentro de um portal de
+   dialog. Rota por documento também é a convenção do projeto (Server Component lendo dado), a
+   permissão vem das MESMAS queries e do RLS que a tela de detalhe usa, N documentos em um trabalho
+   de impressão só saem com quebra de página no CSS (`.espelho-documento { break-after: page }`), e
+   listagem e detalhe compartilham o mesmo componente `EspelhoImpresso` sem chance de divergir.
+
+2. **Nenhuma ação `imprimir` nova em `ACOES`.** `ACOES` é `ver, criar, editar, excluir, aprovar,
+   desaprovar` (`src/config/recursos.ts`) e continua assim. O espelho não mostra nenhum dado que o
+   usuário não leia já na tela de detalhe — é o MESMO dado, só formatado para papel — então uma
+   permissão de imprimir seria teatro: um `print screen` da tela de detalhe reproduz o mesmo
+   "vazamento" sem passar por permissão nenhuma. Em troca, `imprimir` no catálogo abriria uma coluna
+   NOVA na matriz de permissão de TODOS os recursos do sistema (não só os três que têm espelho hoje)
+   e obrigaria reconceder todos os perfis existentes para não quebrar quem já usa o recurso. Custo
+   largo, controle real nenhum. A permissão que protege continua sendo a de sempre: `ver` no
+   recurso, checada antes de qualquer busca (primeira coisa em cada `page.tsx` do grupo
+   `(espelho)`).
+
+3. **`print-color-adjust: exact` é obrigatório, e nenhum dado impresso depende de cor.** O navegador
+   remove cor de fundo ao imprimir por padrão; sem a regra (declarada em `.espelho-raiz`, no
+   `globals.css`) a Faixa âmbar do cabeçalho sai branca. Mas a regra sozinha não basta: o usuário
+   pode desligar "gráficos de fundo" no diálogo do sistema operacional, e o espelho não tem como
+   saber se ele desligou. Por isso NENHUM dado do documento pode depender de cor para ser lido:
+   status de lançamento, de OC e de parcela saem sempre como TEXTO (`rotuloStatusLancamento`,
+   `infoStatusOC(...).rotulo`, `STATUS_PARCELA[...].rotulo`), nunca como `StatusBadge`. Se um
+   `StatusBadge` aparecer dentro de um espelho no futuro, é sinal de que a regra foi contrariada.
+
+4. **Os ids da rota (`?ids=`) validam por `z.guid()`, e não pelo `z.uuid()` do Zod — de propósito.**
+   `z.uuid()` no Zod 4 exige os bits de versão e variante do RFC 9562; a coluna `uuid` do Postgres não
+   exige nada disso. A importação da BR-364 (`fn_importar_br364_lote09`, migration
+   `20260804140000`) derivou ids determinísticos com `md5(...)::uuid` para poder rodar duas vezes
+   sem duplicar, e md5 devolve 32 hex crus: os dígitos de versão e variante saem qualquer coisa (ex.
+   real em produção: `c4e0f922-3aec-8c72-7089-225523e04557`, variante 7, quando o RFC só aceita 8, 9,
+   a ou b). São milhares de lançamentos, parcelas e rateios assim — id legítimo para o banco, e
+   exatamente o histórico que o espelho existe para poder imprimir. `z.uuid()` recusaria esses ids
+   com "Identificador inválido" **e passaria em todo teste escrito com uuid novo** (`crypto.randomUUID()`
+   já sai na variante certa), porque o teste nunca usa um id real da BR-364. `src/lib/id.ts`
+   (`idSchema`) documenta isso desde o fix da tela de detalhe (#77); o espelho só reusa o mesmo
+   schema. O papel da validação aqui é barrar lixo antes do banco (vazio, texto solto, tentativa de
+   injeção); quem garante que o id existe e que o usuário pode vê-lo é a FK e a RLS.
+
+**O que as revisões pegaram, porque é a parte que serve para a próxima vez:**
+
+- Um lançamento a receber em aberto imprimia o código cru `"a_pagar"` como status: `"a_pagar"` é o
+  código genérico de pendência tanto de um lançamento a pagar quanto a receber, e sem o `tipo` do
+  lançamento no `select`, `rotuloStatusLancamento` não tinha como inverter o rótulo. Um recebível
+  saía com cara de dívida. Corrigido levando `tipo` ao `select` dos dois espelhos que citam status de
+  lançamento (lançamento e pagamento) — fix `59f5a1d`.
+- O rateio por centro de custo da OC agrupava por NOME do centro, não por id. `centros_custo` é uma
+  árvore (Obra > Etapa > Item) sem unicidade de nome: dois nós de nível 3 em obras diferentes podem
+  se chamar "Diesel". Agrupar por nome mesclava, em silêncio, o custo de dois centros diferentes numa
+  linha só do papel — exatamente o tipo de erro que um documento de auditoria não pode cometer.
+  Corrigido agrupando por `centro_custo_id` — fix `56b2d5b`.
+- Os cinco valores de `tipo` de `parcela_eventos` escritos no plano de implementação estavam todos
+  errados. O valor real, conferido contra o `CHECK` da migration `20260730120001` (linha 90), é
+  `aprovou, revisou, reenviou, desaprovou, reprogramou` — sem `pagamento`, porque `fn_pagar_parcela`
+  só atualiza a parcela e propaga anexos, sem gravar trilha própria. Rótulo de evento errado no
+  código não quebra `tsc` nem lint: só aparece como texto errado (ou o `tipo` cru, sem tradução) na
+  Trilha do espelho de pagamento, e só contra o banco de verdade.
