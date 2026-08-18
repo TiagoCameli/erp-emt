@@ -47,9 +47,9 @@ export interface ParcelaPaga {
   /**
    * Juros e multa pagos no atraso. Zero quando não houve.
    *
-   * Existe desde 11/08/2026, quando `valor_liquido` passou a ser
-   * `valor - desconto + juros`. Sem o campo aqui, o espelho de pagamento
-   * mostraria um líquido que não fecha com as partes impressas ao lado.
+   * Necessário porque a aba "Pagas" exibe valor, desconto e líquido na mesma
+   * linha. Sem este campo, a tela mostra três números que não somam
+   * (valor − desconto ≠ líquido), mentindo sobre o que saiu da conta.
    */
   juros: number;
   /** Valor menos desconto: o que saiu da conta bancária. */

@@ -91,7 +91,7 @@ describe("CelulaValorPaga", () => {
     expect(within(container).queryByText(/desconto/)).not.toBeInTheDocument();
   });
 
-  it("com desconto e juros: mostra ambos e líquido", () => {
+  it("com desconto e juros: mostra ambos e líquido na ordem correta", () => {
     const { container } = render(
       <CelulaValorPaga
         parcela={parcela({
@@ -106,13 +106,13 @@ describe("CelulaValorPaga", () => {
     // Mostra o valor principal.
     expect(within(container).getByText("R$ 1.000,00")).toBeInTheDocument();
 
-    // Mostra a linha de ajustes com desconto, juros e líquido.
-    expect(within(container).getByText(/desconto/)).toBeInTheDocument();
-    expect(within(container).getByText(/juros/)).toBeInTheDocument();
-    expect(within(container).getByText(/líquido/)).toBeInTheDocument();
+    // Mostra a linha de ajustes com valores exatos: desconto X, juros Z, líquido Y
+    expect(within(container).getByText("R$ 50,00")).toBeInTheDocument();
+    expect(within(container).getByText("R$ 20,00")).toBeInTheDocument();
+    expect(within(container).getByText("R$ 970,00")).toBeInTheDocument();
 
-    // Mostra todos os valores.
-    const valores = within(container).getAllByText(/R\$/);
-    expect(valores).toHaveLength(4); // valor, desconto, juros, líquido
+    // Verifica a ordem: desconto antes de juros, juros antes de líquido
+    const ajustes = within(container).getByText(/desconto.*juros.*líquido/);
+    expect(ajustes).toBeInTheDocument();
   });
 });

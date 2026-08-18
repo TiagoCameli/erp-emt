@@ -4,9 +4,10 @@ import type { ParcelaPaga } from "@/modules/financeiro/pagamentos/queries";
 
 describe("ParcelaPaga", () => {
   it("o líquido é valor menos desconto mais juros", () => {
-    // Trava a semântica que a migration de 11/08/2026 fixou. Sem `juros` no
-    // tipo, o espelho de pagamento imprimiria um líquido que não fecha com as
-    // suas próprias partes, e ninguém veria o erro no papel.
+    // Trava a semântica que a migration de 11/08/2026 fixou. A aba "Pagas"
+    // exibe os três valores na mesma linha; sem `juros` no tipo, a tela mostra
+    // números que não somam, e o usuário não consegue reconciliar a listagem
+    // com o recebimento efetivo.
     const parcela: ParcelaPaga = {
       id: "550e8400-e29b-41d4-a716-446655440000",
       lancamentoNumero: "LAN-2026-0001",

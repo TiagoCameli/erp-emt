@@ -188,10 +188,12 @@ export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
     <>
       <MoneyText valor={parcela.valor} />
       <span className="block text-legenda text-muted-foreground">
-        {partes.map((parte, index) => [
-          index > 0 && ", ",
-          parte,
-        ])}
+        {partes.map((parte, index) => (
+          <React.Fragment key={index}>
+            {index > 0 && ", "}
+            {parte}
+          </React.Fragment>
+        ))}
       </span>
     </>
   );
