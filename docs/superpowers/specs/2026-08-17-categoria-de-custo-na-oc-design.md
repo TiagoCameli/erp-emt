@@ -159,7 +159,7 @@ financeiro hoje; repetir a regra evita duas aritméticas diferentes no sistema.
 | OC com N categorias | `ordens_compra.categoria_id` = a de maior valor |
 | desconto maior que a soma dos itens | já barrado pelo cálculo do total da OC hoje |
 | centro de custo repetido com a mesma categoria | agrupa numa fatia só |
-| rateio que não soma o total | erro; a trava `sum(rateios) = valor` do banco pega |
+| rateio que não soma o total | hoje **passa calado** (não existe trava); a Task 1 do plano cria a trava |
 
 ## Testes
 
