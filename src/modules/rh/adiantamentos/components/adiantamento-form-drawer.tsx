@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
   MoneyText,
 } from "@/components/canonicos";
@@ -230,9 +231,8 @@ export function AdiantamentoFormDrawer({
             rotulo="Valor (R$)"
             erro={form.formState.errors.valor?.message}
           >
-            <Input
+            <InputDecimal
               id="adiantamento-valor"
-              inputMode="decimal"
               placeholder="0,00"
               className="text-right tabular-nums"
               {...form.register("valor")}

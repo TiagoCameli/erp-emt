@@ -15,12 +15,13 @@ import { toast } from "@/components/canonicos/toast";
 import {
   CampoFormulario,
   classesFormulario,
+  type ColunaItem,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
   SecaoFormulario,
   TabelaItens,
-  type ColunaItem,
 } from "@/components/canonicos";
 import { Anexos } from "@/components/canonicos/anexos";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
@@ -554,9 +555,8 @@ export function LancamentoFormDrawer({
             obrigatorio
             erro={form.formState.errors.valor?.message}
           >
-            <Input
+            <InputDecimal
               id="lan-valor"
-              inputMode="decimal"
               placeholder="0,00"
               className="tabular-nums text-right"
               disabled={salvando}
@@ -840,10 +840,9 @@ export function LancamentoFormDrawer({
                 }
                 if (chave === "valor") {
                   return (
-                    <Input
+                    <InputDecimal
                       id={`lan-parcela-valor-${indice}`}
                       aria-label="Valor"
-                      inputMode="decimal"
                       placeholder="0,00"
                       className="tabular-nums text-right"
                       disabled={salvando}
@@ -940,10 +939,9 @@ export function LancamentoFormDrawer({
                 }
                 // valor
                 return (
-                  <Input
+                  <InputDecimal
                     id={`lan-rateio-valor-${indice}`}
                     aria-label="Valor"
-                    inputMode="decimal"
                     placeholder="0,00"
                     className="tabular-nums text-right"
                     disabled={salvando}

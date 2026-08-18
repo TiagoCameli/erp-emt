@@ -12,6 +12,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
   StatusBadge,
 } from "@/components/canonicos";
@@ -308,9 +309,8 @@ export function ApontamentoFormDrawer({
           rotulo="Total de horas"
           ajuda="Preencha o total do dia: as horas normais e extras abaixo são calculadas pela jornada do colaborador."
         >
-          <Input
+          <InputDecimal
             id="apontamento-total"
-            inputMode="decimal"
             placeholder="0,00"
             className="text-right tabular-nums"
             value={total}
@@ -324,9 +324,8 @@ export function ApontamentoFormDrawer({
             rotulo="Horas normais"
             erro={form.formState.errors.horasNormais?.message}
           >
-            <Input
+            <InputDecimal
               id="apontamento-horas-normais"
-              inputMode="decimal"
               placeholder="0,00"
               className="text-right tabular-nums"
               {...form.register("horasNormais")}
@@ -338,9 +337,8 @@ export function ApontamentoFormDrawer({
             rotulo="Horas extras"
             erro={form.formState.errors.horasExtras?.message}
           >
-            <Input
+            <InputDecimal
               id="apontamento-horas-extras"
-              inputMode="decimal"
               placeholder="0,00"
               className="text-right tabular-nums"
               {...form.register("horasExtras")}

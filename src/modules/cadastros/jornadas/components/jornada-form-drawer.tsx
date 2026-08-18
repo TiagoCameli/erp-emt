@@ -10,6 +10,7 @@ import {
   CampoFormulario,
   classesFormulario,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
   SelectAtivo,
 } from "@/components/canonicos";
@@ -179,10 +180,9 @@ export function JornadaFormDrawer({
               rotulo={dia.rotulo}
               erro={form.formState.errors[dia.chave]?.message}
             >
-              <Input
+              <InputDecimal
                 id={`jornada-${dia.chave}`}
                 autoComplete="off"
-                inputMode="decimal"
                 placeholder="0"
                 disabled={salvando}
                 {...form.register(dia.chave)}
