@@ -10,6 +10,7 @@ import {
   CampoFormulario,
   classesFormulario,
   FormDrawer,
+  InputDecimal,
   SelectAtivo,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -143,10 +144,10 @@ export function ProvisaoFormDrawer({
           erro={form.formState.errors.percentual?.message}
           ajuda="Percentual do salário lançado como custo do mês, maior que 0 e até 100, com até 3 casas decimais. O percentual já inclui o terço constitucional: férias é 11,111% (8,333% de férias mais 2,778% de terço), não 8,333%. A soma dos percentuais das provisões ativas não pode passar de 100%."
         >
-          <Input
+          <InputDecimal
+            casas={3}
             id="provisao-percentual"
             autoComplete="off"
-            inputMode="decimal"
             placeholder="8,333"
             disabled={salvando}
             {...form.register("percentual")}

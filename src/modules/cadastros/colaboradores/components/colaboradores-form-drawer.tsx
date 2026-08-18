@@ -13,6 +13,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
   SecaoFormulario,
   SelectAtivo,
@@ -592,9 +593,8 @@ export function ColaboradoresFormDrawer({
                 ajuda="Mensal, usado na folha de pagamento"
                 erro={form.formState.errors.salario?.message}
               >
-                <Input
+                <InputDecimal
                   id="colaborador-salario"
-                  inputMode="decimal"
                   autoComplete="off"
                   placeholder="0,00"
                   className="tabular-nums text-right"
@@ -609,9 +609,8 @@ export function ColaboradoresFormDrawer({
                 ajuda="Para colaboradores diaristas"
                 erro={form.formState.errors.valorDiaria?.message}
               >
-                <Input
+                <InputDecimal
                   id="colaborador-valor-diaria"
-                  inputMode="decimal"
                   autoComplete="off"
                   placeholder="0,00"
                   className="tabular-nums text-right"

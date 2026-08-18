@@ -2141,3 +2141,66 @@ não pode afirmar mais do que o sistema sabe. Todo campo que AFIRMA um fato (um 
 entrega, uma aprovação) precisa de guarda de estado no servidor, porque a URL é colável; todo total
 tem que ser derivado das linhas que o próprio papel imprimiu; e todo rótulo tem que nomear o número
 que está embaixo dele.
+
+---
+
+## 2026-08-18 - Barra de filtros em trilhos, com rótulo em cima, e as ações fora da fileira
+
+**Contexto:** a aba de Lançamentos mostra até dezesseis filtros, e a barra dela era uma escada. Três
+coisas somadas produziam isso:
+
+- **Largura pelo conteúdo.** `FiltroSelect` era `w-fit`, então "Todos os tipos" e "Todos os centros
+  de custo" nasciam de tamanhos diferentes e nada da segunda linha caía embaixo da coluna da
+  primeira. Pior: o gatilho media o texto da opção ESCOLHIDA, então o mesmo filtro mudava de largura
+  ao ser preenchido e empurrava para o lado todos os filtros seguintes da linha.
+- **Dois idiomas de rotulagem.** Seletor punha o nome da dimensão DENTRO do controle, como valor
+  ("Todos os status"); data, mês e faixa punham FORA, numa palavra cinza solta à esquerda do campo.
+- **Ações no meio do fluxo.** "Filtros/Altura/Colunas" eram irmãs dos filtros num `justify-between`,
+  então grudavam no fim da PRIMEIRA linha e os filtros iam quebrando por baixo delas. O resultado com
+  onze filtros visíveis era um buraco no fim da última linha, com três botões pendurados acima dele.
+
+**Decisão:**
+
+1. **Todo filtro mede um trilho (13rem) ou dois, nunca o próprio texto.** Quem declara a largura é o
+   filtro canônico, não a tela: busca, período e faixa de valor pedem dois trilhos; seletor e mês,
+   um. Como cada item é múltiplo de trilho + `gap-2`, o `flex-wrap` alinha as linhas sozinho, sem
+   grid e sem a tela precisar saber quantas colunas caberiam. 13rem é o que cabe o rótulo mais longo
+   do app ("Todos os centros de custo") sem cortar com reticência.
+
+2. **O rótulo vem do host, por contexto.** O `rotulo` que o DataTable e a BarraFiltrosConfiguravel
+   já exigiam para o menu "Filtros" passou a ser desenhado em cima do controle. Vai por contexto
+   (`ContextoRotuloFiltro`) porque o host recebe o filtro JÁ MONTADO no `elemento` e não tem como
+   injetar prop em elemento pronto: assim os cinco canônicos ganharam rótulo sem nenhuma das 43 telas
+   mudar uma linha, e elemento que não é canônico (o Switch da Lixeira) simplesmente não lê o
+   contexto e continua com o Label dele.
+
+   O ganho não é só de alinhamento: filtro PREENCHIDO passou a dizer de que dimensão ele é. Antes, o
+   seletor de status filtrado mostrava só "A pagar", sem nenhuma pista de que aquilo era status.
+
+3. **As ações saem da fileira dos filtros** para uma linha própria: "Limpar filtros" à esquerda (é
+   ação sobre o filtro) e os menus de vista à direita, colados na tabela que eles governam. O
+   `toolbar` da tela ("Importar OFX") vai com o grupo da esquerda.
+
+4. **Um único `BlocoFiltros` desenha a barra** para os dois hosts de filtro do app. Eles desenhavam a
+   mesma barra em dois lugares, e barra igual em tela diferente é metade do que "harmonizado" quer
+   dizer.
+
+**Consequência:** a altura da barra não cresceu apesar do rótulo novo, porque a linha das ações
+devolveu o espaço que o buraco desperdiçava: em Lançamentos com onze filtros são as mesmas duas
+linhas de antes. Tela com poucos filtros ganha uma linha de 32px, que é o preço de a barra ser igual
+em todo lugar.
+
+**De brinde, um defeito que a captura de tela denunciou:** os cinco KPICards da mesma fileira
+terminavam em alturas diferentes. O `h-full` que existia no cartão para garantir altura igual era
+justamente o que a impedia: altura de 100% num item de flex DESLIGA o `align-items: stretch`, e a
+porcentagem passa a medir contra a altura da grade, que é indefinida porque ela cresce pelo conteúdo.
+Cada cartão voltava a ter a altura do próprio texto, e o de detalhe em duas linhas descia mais que os
+vizinhos. O `h-full` ficou só dentro do `Link` do cartão clicável, onde o item de flex é o Link e a
+altura já está definida.
+
+**Verificação:** seis testes de layout com as peças reais (DataTable e os cinco filtros canônicos) e
+dois de altura de cartão, cada um conferido por mutação: desligar o rótulo, devolver o `w-fit`,
+devolver a palavra solta do período, devolver as ações para a fileira dos filtros, devolver a cópia
+do campo de busca e devolver o `h-full` derrubam exatamente o teste que os acusa. Confirmado também
+no navegador, nos três hosts: Lançamentos (DataTable com onze filtros), Centros de custo
+(BarraFiltrosConfiguravel) e Lixeira (filtro que não é canônico).

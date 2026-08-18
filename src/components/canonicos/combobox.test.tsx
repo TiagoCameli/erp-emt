@@ -9,7 +9,11 @@ import {
   within,
 } from "@testing-library/react";
 
-import { Combobox } from "@/components/canonicos/combobox";
+import {
+  Combobox,
+  ROTULO_VALOR_ORFAO,
+  rotuloOrfao,
+} from "@/components/canonicos/combobox";
 import { ComboboxCriavel } from "@/components/canonicos/combobox-criavel";
 import {
   ALTURA_VISIVEL_TESTE as ALTURA_VISIVEL,
@@ -487,5 +491,112 @@ describe("ComboboxCriavel", () => {
     fireEvent.change(busca, { target: { value: "À vista" } });
     fireEvent.keyDown(busca, { key: "Enter" });
     await waitFor(() => expect(onCriar).toHaveBeenCalledWith("À vista"));
+  });
+});
+
+describe("valor fora das opcoes", () => {
+  const UUID = "eb121acd-11e8-4b41-9f69-8aede125ba3d";
+
+  it("nao mostra o UUID: cai em 'Registro nao encontrado'", () => {
+    render(<Combobox valor={UUID} onValorChange={vi.fn()} opcoes={OPCOES} />);
+    const gatilho = screen.getByRole("combobox");
+    expect(gatilho).toHaveTextContent(ROTULO_VALOR_ORFAO);
+    expect(gatilho.textContent).not.toContain(UUID);
+  });
+
+  it("mostra o nome quando quem chama sabe qual e", () => {
+    render(
+      <Combobox
+        valor={UUID}
+        onValorChange={vi.fn()}
+        opcoes={OPCOES}
+        rotuloDoValor="Boleto 30 dias"
+      />,
+    );
+    const gatilho = screen.getByRole("combobox");
+    expect(gatilho).toHaveTextContent("Boleto 30 dias");
+    expect(gatilho.textContent).not.toContain(UUID);
+  });
+
+  it("rotuloDoValor so de espaco nao vale como nome", () => {
+    render(
+      <Combobox
+        valor={UUID}
+        onValorChange={vi.fn()}
+        opcoes={OPCOES}
+        rotuloDoValor="   "
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveTextContent(ROTULO_VALOR_ORFAO);
+  });
+
+  it("valor de texto (filtro vindo da URL) continua aparecendo como e", () => {
+    // Caso que a regra antiga existia para atender, e que nao pode regredir:
+    // em filtro o proprio valor e legivel e informa.
+    render(
+      <Combobox valor="aprovado" onValorChange={vi.fn()} opcoes={OPCOES} />,
+    );
+    expect(screen.getByRole("combobox")).toHaveTextContent("aprovado");
+  });
+
+  it("o valor orfao continua selecionavel na lista, com o nome certo", () => {
+    render(
+      <Combobox
+        valor={UUID}
+        onValorChange={vi.fn()}
+        opcoes={OPCOES}
+        rotuloDoValor="Boleto 30 dias"
+      />,
+    );
+    fireEvent.click(screen.getByRole("combobox"));
+    expect(within(area()).getByText("Boleto 30 dias")).toBeInTheDocument();
+  });
+
+  it("no modo multiplo o id marcado tambem nao vira UUID na tela", () => {
+    render(
+      <Combobox
+        valor=""
+        onValorChange={vi.fn()}
+        valores={[UUID]}
+        onValoresChange={vi.fn()}
+        opcoes={OPCOES}
+      />,
+    );
+    const gatilho = screen.getByRole("combobox");
+    expect(gatilho).toHaveTextContent(ROTULO_VALOR_ORFAO);
+    expect(gatilho.textContent).not.toContain(UUID);
+  });
+
+  it("valor que existe nas opcoes ignora rotuloDoValor", () => {
+    render(
+      <Combobox
+        valor={ULTIMA.valor}
+        onValorChange={vi.fn()}
+        opcoes={OPCOES}
+        rotuloDoValor="nome errado que nao deve aparecer"
+      />,
+    );
+    const gatilho = screen.getByRole("combobox");
+    expect(gatilho).toHaveTextContent(ULTIMA.rotulo);
+    expect(gatilho.textContent).not.toContain("nome errado");
+  });
+});
+
+describe("rotuloOrfao", () => {
+  it("UUID em qualquer caixa vira o aviso", () => {
+    expect(rotuloOrfao("EB121ACD-11E8-4B41-9F69-8AEDE125BA3D")).toBe(
+      ROTULO_VALOR_ORFAO,
+    );
+  });
+
+  it("texto livre passa inteiro", () => {
+    expect(rotuloOrfao("Boleto 30 dias")).toBe("Boleto 30 dias");
+    expect(rotuloOrfao("2026-08")).toBe("2026-08");
+  });
+
+  it("quase-UUID nao e UUID", () => {
+    expect(rotuloOrfao("eb121acd-11e8-4b41-9f69")).toBe(
+      "eb121acd-11e8-4b41-9f69",
+    );
   });
 });

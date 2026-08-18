@@ -502,17 +502,24 @@ export async function ordensDaCotacao(
 export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("fornecedores")
-    .select("id, razao_social, nome_fantasia")
-    .eq("ativo", true)
-    .order("razao_social", { ascending: true });
+  // Pagina até o fim: o PostgREST corta em 1.000 sem avisar e a EMT já tem 942
+  // fornecedores ativos. Cortado, o fornecedor não aparece nem digitando, porque
+  // a busca do Combobox roda sobre o que chegou.
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("fornecedores")
+      .select("id, razao_social, nome_fantasia")
+      .eq("ativo", true)
+      .order("razao_social", { ascending: true })
+      .order("id")
+      .range(de, ate),
+  );
 
-  if (error) {
+  if (erro) {
     throw new Error("Não foi possível carregar os fornecedores");
   }
 
-  return (data ?? [])
+  return linhas
     .map((fornecedor) => ({
       id: fornecedor.id,
       nome: fornecedor.nome_fantasia ?? fornecedor.razao_social,

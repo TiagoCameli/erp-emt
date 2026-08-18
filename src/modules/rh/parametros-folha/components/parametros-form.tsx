@@ -10,6 +10,7 @@ import {
   CampoFormulario,
   classesFormulario,
   ComboboxCriavel,
+  InputDecimal,
   LinhaCampos,
   SecaoFormulario,
 } from "@/components/canonicos";
@@ -108,10 +109,9 @@ export function ParametrosForm({
               erro={form.formState.errors.irrfDeducaoPorDependente?.message}
               ajuda="Valor deduzido da base de cálculo do IRRF por dependente, em reais"
             >
-              <Input
+              <InputDecimal
                 id="parametros-deducao-dependente"
                 autoComplete="off"
-                inputMode="decimal"
                 disabled={camposDesabilitados}
                 {...form.register("irrfDeducaoPorDependente")}
               />
@@ -124,10 +124,9 @@ export function ParametrosForm({
               erro={form.formState.errors.irrfDescontoSimplificado?.message}
               ajuda="Desconto substitutivo das deduções legais do IRRF, em reais"
             >
-              <Input
+              <InputDecimal
                 id="parametros-desconto-simplificado"
                 autoComplete="off"
-                inputMode="decimal"
                 disabled={camposDesabilitados}
                 {...form.register("irrfDescontoSimplificado")}
               />
@@ -140,10 +139,10 @@ export function ParametrosForm({
               erro={form.formState.errors.fgtsPercentual?.message}
               ajuda="Percentual do FGTS, de 0 a 100, com até 3 casas decimais"
             >
-              <Input
+              <InputDecimal
+                casas={3}
                 id="parametros-fgts"
                 autoComplete="off"
-                inputMode="decimal"
                 disabled={camposDesabilitados}
                 {...form.register("fgtsPercentual")}
               />
@@ -154,9 +153,9 @@ export function ParametrosForm({
 
       <SecaoFormulario titulo="Pagamento e recolhimento">
         <p className="text-detalhe text-muted-foreground">
-          Dia do mês do pagamento e das guias, e o grupo de recolhimento de
-          cada retido do trabalhador. Deixe vazio o que ainda não foi
-          definido: sem dia ou sem grupo, a folha não gera nada no Financeiro.
+          Dia do mês do pagamento e das guias, e o grupo de recolhimento de cada
+          retido do trabalhador. Deixe vazio o que ainda não foi definido: sem
+          dia ou sem grupo, a folha não gera nada no Financeiro.
         </p>
 
         <div className={classesFormulario}>

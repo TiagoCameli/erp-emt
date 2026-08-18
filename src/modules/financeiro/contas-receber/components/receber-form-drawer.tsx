@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -188,9 +189,8 @@ export function ReceberFormDrawer({
           obrigatorio
           erro={form.formState.errors.valor?.message}
         >
-          <Input
+          <InputDecimal
             id="receber-valor"
-            inputMode="decimal"
             placeholder="0,00"
             className="text-right tabular-nums"
             disabled={salvando}

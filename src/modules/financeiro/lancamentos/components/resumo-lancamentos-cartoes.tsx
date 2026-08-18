@@ -24,7 +24,7 @@ export function SkeletonResumoLancamentos() {
       {Array.from({ length: 5 }).map((_, indice) => (
         <div
           key={indice}
-          className="faixa-esquerda h-full rounded-lg border border-border bg-card p-4"
+          className="faixa-esquerda rounded-lg border border-border bg-card p-4"
         >
           <Skeleton className="h-3 w-20" />
           <Skeleton className="mt-2 h-6 w-32" />

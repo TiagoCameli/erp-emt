@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -207,9 +208,8 @@ export function DiariaFormDrawer({
             rotulo="Valor (R$)"
             erro={form.formState.errors.valor?.message}
           >
-            <Input
+            <InputDecimal
               id="diaria-valor"
-              inputMode="decimal"
               placeholder="0,00"
               className="text-right tabular-nums"
               {...form.register("valor")}
