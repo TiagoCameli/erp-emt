@@ -8,6 +8,7 @@ const LINHA = {
   descricao: "REFERENTE ABASTECIMENTO",
   valor: "1000.00",
   status: "pago",
+  tipo: "a_pagar",
   data_compra: "2026-08-01",
   data_vencimento: "2026-08-12",
   mes_competencia: "2026-08-01",
@@ -30,8 +31,14 @@ const LINHA = {
     },
   ],
   lancamento_rateios: [
-    { valor: "600.00", centros_custo: { nome: "009 - Lote 09", codigo: "009" } },
-    { valor: "400.00", centros_custo: { nome: "Escritório Central", codigo: null } },
+    {
+      valor: "600.00",
+      centros_custo: { nome: "009 - Lote 09", codigo: "009" },
+    },
+    {
+      valor: "400.00",
+      centros_custo: { nome: "Escritório Central", codigo: null },
+    },
   ],
 };
 
@@ -52,6 +59,14 @@ describe("montarEspelhoLancamento", () => {
     expect(parcela.juros).toBe(20);
     expect(parcela.valorLiquido).toBe(970);
     expect(parcela.contaNome).toBe("BANCO DO BRASIL 102.124-9");
+  });
+
+  it("carrega o tipo do lançamento, senão o rótulo do status sai invertido para um lançamento a receber", () => {
+    // A montagem só precisa TRANSPORTAR o tipo: quem decide o rótulo
+    // ("A receber" em vez do código cru) é rotuloStatusLancamento, na página.
+    // Sem o tipo aqui, a página não tem como chamar essa função direito.
+    const espelho = montarEspelhoLancamento({ ...LINHA, tipo: "a_receber" });
+    expect(espelho.tipo).toBe("a_receber");
   });
 
   it("o rateio soma o valor do lançamento", () => {

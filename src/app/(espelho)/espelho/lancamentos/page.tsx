@@ -7,12 +7,18 @@ import {
   EspelhoTabela,
   EspelhoVazio,
 } from "@/components/canonicos";
-import { formatarData, formatarMesAno } from "@/lib/formatadores";
+import {
+  formatarData,
+  formatarDataHora,
+  formatarMesAno,
+} from "@/lib/formatadores";
 import { lerIdsDoEspelho, MAX_ESPELHOS } from "@/lib/ids-do-espelho";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
+import { STATUS_PARCELA } from "@/modules/financeiro/_shared/formato";
 import { buscarLancamentosParaEspelho } from "@/modules/financeiro/lancamentos/espelho";
 import { trilhaLancamento } from "@/modules/financeiro/lancamentos/queries";
+import { rotuloStatusLancamento } from "@/modules/financeiro/lancamentos/schemas";
 
 export default async function EspelhoLancamentosPage({
   searchParams,
@@ -117,8 +123,17 @@ export default async function EspelhoLancamentosPage({
                   rotulo: "Valor",
                   valor: <EspelhoDinheiro valor={lancamento.valor} />,
                 },
-                // Status como TEXTO: no papel a cor pode não sair.
-                { rotulo: "Status", valor: lancamento.status },
+                // Status como TEXTO: no papel a cor pode não sair. E não é o
+                // código cru: "a_pagar" é o código genérico de pendência tanto
+                // de um lançamento a pagar quanto a receber, então precisa do
+                // tipo para não imprimir invertido num recebível.
+                {
+                  rotulo: "Status",
+                  valor: rotuloStatusLancamento(
+                    lancamento.status,
+                    lancamento.tipo,
+                  ),
+                },
                 {
                   rotulo: "Data do lançamento",
                   valor: formatarData(lancamento.dataCompra),
@@ -156,7 +171,8 @@ export default async function EspelhoLancamentosPage({
                 juros: <EspelhoDinheiro valor={parcela.juros} />,
                 liquido: <EspelhoDinheiro valor={parcela.valorLiquido} />,
                 conta: parcela.contaNome,
-                status: parcela.status,
+                // Rótulo, não o código cru ("em_revisao" em vez de "Em revisão").
+                status: STATUS_PARCELA[parcela.status].rotulo,
                 pagamento: formatarData(parcela.dataPagamento),
               }))}
               totais={{
@@ -207,11 +223,10 @@ export default async function EspelhoLancamentosPage({
                 { chave: "usuario", rotulo: "Quem" },
               ]}
               linhas={(trilhas[indice] ?? []).map((evento) => ({
-                data: formatarData(
-                  typeof evento.data === "string"
-                    ? evento.data
-                    : evento.data.toISOString(),
-                ),
+                // Data E hora, como a Trilha canônica em tela: dois eventos do
+                // mesmo dia ficam indistinguíveis só com a data, e este é
+                // justamente o documento que serve de prova de auditoria.
+                data: formatarDataHora(evento.data),
                 titulo: evento.descricao
                   ? `${evento.titulo}: ${evento.descricao}`
                   : evento.titulo,

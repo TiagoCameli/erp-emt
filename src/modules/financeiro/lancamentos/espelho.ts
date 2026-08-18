@@ -1,5 +1,10 @@
 import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 import { createClient } from "@/lib/supabase/server";
+import type {
+  StatusLancamento,
+  StatusParcela,
+  TipoLancamento,
+} from "@/modules/financeiro/_shared/formato";
 
 /** Uma parcela no papel. */
 export interface EspelhoParcela {
@@ -10,7 +15,7 @@ export interface EspelhoParcela {
   desconto: number;
   juros: number;
   valorLiquido: number;
-  status: string;
+  status: StatusParcela;
   dataPagamento: string | null;
   contaNome: string | null;
 }
@@ -27,7 +32,14 @@ export interface EspelhoLancamento {
   numero: string | null;
   descricao: string | null;
   valor: number;
-  status: string;
+  status: StatusLancamento;
+  /**
+   * Necessário para o rótulo do status: `rotuloStatusLancamento(status, tipo)`
+   * inverte "a_pagar" para "A receber" quando o lançamento é a receber. Sem o
+   * tipo, um recebível em aberto imprimiria o código cru e, pior, de trás para
+   * frente (parece uma dívida a pagar quando é dinheiro a receber).
+   */
+  tipo: TipoLancamento;
   dataCompra: string | null;
   dataVencimento: string | null;
   mesCompetencia: string | null;
@@ -46,6 +58,8 @@ export interface LinhaEspelhoLancamento {
   descricao: string | null;
   valor: string | number;
   status: string;
+  /** Cru do banco (texto); vira `TipoLancamento` na montagem. */
+  tipo: string;
   data_compra: string | null;
   data_vencimento: string | null;
   mes_competencia: string | null;
@@ -90,7 +104,8 @@ export function montarEspelhoLancamento(
     numero: linha.numero,
     descricao: linha.descricao,
     valor: dinheiro(linha.valor),
-    status: linha.status,
+    status: linha.status as StatusLancamento,
+    tipo: linha.tipo as TipoLancamento,
     dataCompra: linha.data_compra,
     dataVencimento: linha.data_vencimento,
     mesCompetencia: linha.mes_competencia,
@@ -107,13 +122,16 @@ export function montarEspelhoLancamento(
         desconto: dinheiro(parcela.desconto),
         juros: dinheiro(parcela.juros),
         valorLiquido: dinheiro(parcela.valor_liquido),
-        status: parcela.status,
+        status: parcela.status as StatusParcela,
         dataPagamento: parcela.data_pagamento,
         contaNome: parcela.contas_bancarias?.nome ?? null,
       }))
       .sort((a, b) => a.numeroParcela - b.numeroParcela),
+    // "Sem centro de custo", igual ao fallback de detalharLancamentosParaPlanilha
+    // no mesmo módulo: os dois textos descrevem a mesma ausência e não podem
+    // divergir entre a planilha e o papel.
     rateios: (linha.lancamento_rateios ?? []).map((rateio) => ({
-      centroNome: rateio.centros_custo?.nome ?? "sem centro",
+      centroNome: rateio.centros_custo?.nome ?? "Sem centro de custo",
       centroCodigo: rateio.centros_custo?.codigo ?? null,
       valor: dinheiro(rateio.valor),
     })),
@@ -139,7 +157,7 @@ export async function buscarLancamentosParaEspelho(
     const { data, error } = await supabase
       .from("lancamentos")
       .select(
-        `id, numero, descricao, valor, status, data_compra, data_vencimento,
+        `id, numero, tipo, descricao, valor, status, data_compra, data_vencimento,
          mes_competencia, observacoes,
          fornecedores(razao_social),
          categorias_financeiras(nome),
