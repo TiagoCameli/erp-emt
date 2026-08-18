@@ -77,6 +77,26 @@ export function EspelhoSecao({
 }
 
 /**
+ * Regra única de ausência do espelho, usada por `EspelhoCampos`,
+ * `EspelhoTabela` e `EspelhoDinheiro` — as três precisam responder igual, e
+ * três cópias da mesma condição divergem com o tempo (foi exatamente o que
+ * aconteceu: a tabela ficou só no `??`).
+ *
+ * `??` sozinho NÃO basta: ele pega `null` e `undefined`, mas não a string
+ * vazia, e `formatarData`/`formatarDataHora` devolvem `""` quando a data é
+ * nula. Parcela em aberto não tem `dataPagamento`, então a coluna "Pago em"
+ * saía EM BRANCO no papel — e em branco não distingue "não tem valor" de
+ * "esqueceram de imprimir". O documento existe para servir de prova.
+ *
+ * Só `null`, `undefined` e `""` são ausência. `0` e `false` são valor de
+ * verdade (quantidade zero, número de parcela, desconto zerado), por isso a
+ * checagem é explícita nos três casos e nunca uma checagem de "falsy".
+ */
+function semValor(valor: React.ReactNode): boolean {
+  return valor === null || valor === undefined || valor === "";
+}
+
+/**
  * Grade rótulo/valor. Campo sem valor sai como travessão: no papel, espaço
  * vazio não distingue "não tem" de "esqueceram de imprimir".
  */
@@ -91,11 +111,7 @@ export function EspelhoCampos({
         <div key={campo.rotulo} className="flex flex-col">
           <dt className="text-[12px] text-[#6B6B6B]">{campo.rotulo}</dt>
           <dd className="text-[#1F1F1F]">
-            {campo.valor === null ||
-            campo.valor === undefined ||
-            campo.valor === ""
-              ? "—"
-              : campo.valor}
+            {semValor(campo.valor) ? "—" : campo.valor}
           </dd>
         </div>
       ))}
@@ -139,17 +155,22 @@ export function EspelhoTabela({
             key={indice}
             className="border-b border-[#E8E6E1] last:border-b-0"
           >
-            {colunas.map((coluna) => (
-              <td
-                key={coluna.chave}
-                className={cn(
-                  "py-1 align-top",
-                  coluna.alinharDireita && "text-right tabular-nums",
-                )}
-              >
-                {linha[coluna.chave] ?? "—"}
-              </td>
-            ))}
+            {colunas.map((coluna) => {
+              const conteudo = linha[coluna.chave];
+              return (
+                <td
+                  key={coluna.chave}
+                  className={cn(
+                    "py-1 align-top",
+                    coluna.alinharDireita && "text-right tabular-nums",
+                  )}
+                >
+                  {/* Célula sem valor vira travessão — inclusive a string
+                  vazia que `formatarData(null)` devolve. Ver `semValor`. */}
+                  {semValor(conteudo) ? "—" : conteudo}
+                </td>
+              );
+            })}
           </tr>
         ))}
       </tbody>
@@ -164,7 +185,8 @@ export function EspelhoTabela({
                   coluna.alinharDireita && "text-right tabular-nums",
                 )}
               >
-                {/* Travessão aqui, não. Na linha de corpo, célula vazia é um
+                {/* Travessão aqui, não — e por isso esta linha NÃO usa
+                `semValor` de propósito. Na linha de corpo, célula vazia é um
                 campo que existe e está em branco (daí o "—" ali). Na linha de
                 totais, coluna sem total é uma coluna que NÃO TEM total nenhum
                 (não existe "total de Status" ou "total de Vencimento"):
@@ -195,7 +217,7 @@ export function EspelhoDinheiro({
 }: {
   valor: number | string | null | undefined;
 }) {
-  if (valor === null || valor === undefined || valor === "") {
+  if (semValor(valor)) {
     return <span className="tabular-nums">—</span>;
   }
   return <span className="tabular-nums">{formatarBRL(valor)}</span>;

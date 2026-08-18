@@ -8,7 +8,7 @@ import {
   EspelhoSecao,
   EspelhoTabela,
 } from "@/components/canonicos/espelho-impresso";
-import { formatarBRL } from "@/lib/formatadores";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
 
 // Sem globals: true no vitest.config, o cleanup automático da RTL não roda.
 afterEach(cleanup);
@@ -127,6 +127,76 @@ describe("EspelhoTabela", () => {
       />,
     );
     expect(screen.getByText("Total")).toBeInTheDocument();
+  });
+
+  it("célula de corpo com string vazia sai travessão, e não em branco", () => {
+    // A regressão real: parcela em aberto não tem data de pagamento, e a
+    // coluna "Pago em" é montada com `formatarData(parcela.dataPagamento)`.
+    // Chamar o formatador de verdade (em vez de escrever "" no teste) faz
+    // este teste morrer se ele mudar de contrato.
+    const { container } = render(
+      <EspelhoTabela
+        colunas={[
+          { chave: "n", rotulo: "Nº" },
+          { chave: "pagamento", rotulo: "Pago em" },
+        ]}
+        linhas={[{ n: 1, pagamento: formatarData(null) }]}
+      />,
+    );
+    const celulas = container.querySelectorAll("tbody td");
+    expect(celulas[0]?.textContent).toBe("1");
+    expect(celulas[1]?.textContent).toBe("—");
+  });
+
+  it("célula de corpo nula, indefinida ou ausente sai travessão", () => {
+    const { container } = render(
+      <EspelhoTabela
+        colunas={[
+          { chave: "nulo", rotulo: "Nulo" },
+          { chave: "indefinido", rotulo: "Indefinido" },
+          { chave: "ausente", rotulo: "Ausente" },
+        ]}
+        linhas={[{ nulo: null, indefinido: undefined }]}
+      />,
+    );
+    const celulas = container.querySelectorAll("tbody td");
+    expect(celulas[0]?.textContent).toBe("—");
+    expect(celulas[1]?.textContent).toBe("—");
+    expect(celulas[2]?.textContent).toBe("—");
+  });
+
+  it("zero é informação do documento e sai como 0, nunca travessão", () => {
+    // Guarda contra trocar a checagem explícita por uma de "falsy": zero é
+    // quantidade zero, e `false` também não é ausência de dado.
+    const { container } = render(
+      <EspelhoTabela
+        colunas={[
+          { chave: "n", rotulo: "Nº" },
+          { chave: "quantidade", rotulo: "Qtd", alinharDireita: true },
+          { chave: "flag", rotulo: "Flag" },
+        ]}
+        linhas={[{ n: 0, quantidade: 0, flag: false }]}
+      />,
+    );
+    const celulas = container.querySelectorAll("tbody td");
+    expect(celulas[0]?.textContent).toBe("0");
+    expect(celulas[1]?.textContent).toBe("0");
+    expect(celulas[2]?.textContent).not.toBe("—");
+  });
+
+  it("coluna sem total continua em branco na linha de totais", () => {
+    // Coluna sem total é coluna que NÃO TEM total (não existe "total de
+    // Descrição"). Travessão ali só encheria a linha de ruído.
+    const { container } = render(
+      <EspelhoTabela
+        colunas={colunas}
+        linhas={[{ descricao: "Pedra", valor: "R$ 100,00" }]}
+        totais={{ valor: "R$ 100,00" }}
+      />,
+    );
+    const celulas = container.querySelectorAll("tfoot td");
+    expect(celulas[0]?.textContent).toBe("");
+    expect(celulas[1]?.textContent).toBe("R$ 100,00");
   });
 });
 
