@@ -187,6 +187,49 @@ function rotuloCentro(centro: CentroCustoOpcao): string {
   return `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`;
 }
 
+/**
+ * Os nomes que a PRÓPRIA ordem já traz resolvidos, por id.
+ *
+ * Serve para o caso em que o id da ordem não está na lista de opções: o cadastro
+ * foi inativado depois de ter sido usado, ou quem abriu a tela não tem permissão
+ * de listar aquele cadastro. Sem isto o seletor não tinha nome nenhum para
+ * mostrar e caía no id — foi o que apareceu na tela quando a condição
+ * "Boleto 30 dias" foi inativada com quatro ordens apontando para ela.
+ */
+export interface NomesDaOrdem {
+  centrosCusto: Map<string, string>;
+  insumos: Map<string, string>;
+}
+
+const SEM_NOMES: NomesDaOrdem = {
+  centrosCusto: new Map(),
+  insumos: new Map(),
+};
+
+/** "-" é o que a consulta devolve quando não resolveu: não serve de rótulo. */
+function nomeUtil(nome: string | null | undefined): string | undefined {
+  const limpo = (nome ?? "").trim();
+  return limpo === "" || limpo === "-" ? undefined : limpo;
+}
+
+function nomesDaOrdemDe(ordem: OrdemDetalhe | null): NomesDaOrdem {
+  if (!ordem) return SEM_NOMES;
+  const centrosCusto = new Map<string, string>();
+  const insumos = new Map<string, string>();
+  for (const item of ordem.itens) {
+    const centro = nomeUtil(item.centroCustoNome);
+    if (item.centroCustoId && centro) centrosCusto.set(item.centroCustoId, centro);
+    const insumo = nomeUtil(item.insumoNome);
+    if (item.insumoId && insumo) {
+      insumos.set(
+        item.insumoId,
+        item.unidade ? `${insumo} (${item.unidade})` : insumo,
+      );
+    }
+  }
+  return { centrosCusto, insumos };
+}
+
 export interface OrdemFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
@@ -269,6 +312,7 @@ export function OrdemFormDrawer({
   // somá-los, senão ela diverge do total que o banco grava: na ordem do Mais
   // Controle 2592 a diferença é o desconto de R$ 3.835,95, e quem visse a
   // prévia poderia "consertar" quantidade para fechar uma conta que já fecha.
+  const nomesDaOrdem = React.useMemo(() => nomesDaOrdemDe(ordem), [ordem]);
   const ajustes = ordem?.ajustes ?? SEM_AJUSTES;
   const itensObservados = (gruposObservados ?? []).flatMap((grupo) =>
     (grupo.insumos ?? []).map((insumo) => ({
@@ -468,6 +512,7 @@ export function OrdemFormDrawer({
                   valor: fornecedor.id,
                   rotulo: fornecedor.nome,
                 }))}
+                rotuloDoValor={nomeUtil(ordem?.fornecedorNome)}
                 placeholder="Selecione o fornecedor"
                 disabled={salvando}
                 id="oc-fornecedor"
@@ -577,6 +622,7 @@ export function OrdemFormDrawer({
                   valor: condicao.id,
                   rotulo: condicao.descricao,
                 }))}
+                rotuloDoValor={nomeUtil(ordem?.condicaoPagamentoDescricao)}
                 onCriar={async (texto) => {
                   const r = await criarCondicaoPagamento(texto);
                   if ("erro" in r) {
@@ -685,6 +731,7 @@ export function OrdemFormDrawer({
                   indice={indice}
                   centrosDisponiveis={centrosDisponiveis}
                   insumos={insumos}
+                  nomesDaOrdem={nomesDaOrdem}
                   salvando={salvando}
                   podeRemover={grupos.length > 1}
                   onRemover={() => removerGrupo(indice)}
@@ -1109,6 +1156,7 @@ function GrupoCentroCusto({
   indice,
   centrosDisponiveis,
   insumos,
+  nomesDaOrdem,
   salvando,
   podeRemover,
   onRemover,
@@ -1117,6 +1165,8 @@ function GrupoCentroCusto({
   indice: number;
   centrosDisponiveis: CentroCustoOpcao[];
   insumos: InsumoOpcao[];
+  /** Nomes que a própria ordem já traz, para id fora da lista não virar UUID. */
+  nomesDaOrdem: NomesDaOrdem;
   salvando: boolean;
   podeRemover: boolean;
   onRemover: () => void;
@@ -1168,6 +1218,9 @@ function GrupoCentroCusto({
                 valor: centro.id,
                 rotulo: rotuloCentro(centro),
               }))}
+              rotuloDoValor={nomesDaOrdem.centrosCusto.get(
+                form.watch(`centrosCusto.${indice}.centroCustoId`),
+              )}
               placeholder="Selecione o centro de custo"
               disabled={salvando}
               id={`oc-grupo-cc-${indice}`}
@@ -1232,6 +1285,9 @@ function GrupoCentroCusto({
                     valor: insumo.id,
                     rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}`,
                   }))}
+                  rotuloDoValor={nomesDaOrdem.insumos.get(
+                    form.watch(`centrosCusto.${indice}.insumos.${j}.insumoId`),
+                  )}
                   placeholder="Selecione o insumo"
                   disabled={salvando}
                   ariaLabel="Insumo"
