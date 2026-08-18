@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
   SelectAtivo,
 } from "@/components/canonicos";
@@ -247,9 +248,8 @@ export function ContasFormDrawer({
           ajuda="Saldo de abertura da conta. O saldo atual soma a partir daqui as parcelas pagas nesta conta."
           erro={form.formState.errors.saldoInicial?.message}
         >
-          <Input
+          <InputDecimal
             id="conta-saldo-inicial"
-            inputMode="decimal"
             placeholder="0,00"
             className="tabular-nums text-right"
             disabled={salvando}

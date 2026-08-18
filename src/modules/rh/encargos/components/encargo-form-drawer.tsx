@@ -11,6 +11,7 @@ import {
   classesFormulario,
   ComboboxCriavel,
   FormDrawer,
+  InputDecimal,
   SelectAtivo,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -152,10 +153,10 @@ export function EncargoFormDrawer({
           erro={form.formState.errors.percentual?.message}
           ajuda="Alíquota do encargo, de 0 a 100, com até 3 casas decimais. A soma das alíquotas dos encargos ativos não pode passar de 100%."
         >
-          <Input
+          <InputDecimal
+            casas={3}
             id="encargo-percentual"
             autoComplete="off"
-            inputMode="decimal"
             placeholder="20"
             disabled={salvando}
             {...form.register("percentual")}
@@ -180,9 +181,13 @@ export function EncargoFormDrawer({
             id="encargo-grupo"
             valor={form.watch("grupoRecolhimento") ?? ""}
             onValorChange={(valor) =>
-              form.setValue("grupoRecolhimento", valor === "" ? undefined : valor, {
-                shouldValidate: true,
-              })
+              form.setValue(
+                "grupoRecolhimento",
+                valor === "" ? undefined : valor,
+                {
+                  shouldValidate: true,
+                },
+              )
             }
             opcoes={grupos}
             onCriar={async (texto) => texto.trim()}

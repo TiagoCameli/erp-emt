@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
   SelectAtivo,
 } from "@/components/canonicos";
@@ -18,7 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { criarObra, editarObra } from "@/modules/cadastros/obras/actions";
-import type { ClienteOpcao, ObraLista } from "@/modules/cadastros/obras/queries";
+import type {
+  ClienteOpcao,
+  ObraLista,
+} from "@/modules/cadastros/obras/queries";
 import {
   STATUS_OBRA,
   STATUS_OBRA_CONFIG,
@@ -266,9 +270,9 @@ export function ObrasFormDrawer({
             rotulo="Extensão (km)"
             erro={form.formState.errors.extensaoKm?.message}
           >
-            <Input
+            <InputDecimal
+              casas={3}
               id="obra-extensao"
-              inputMode="decimal"
               placeholder="120,5"
               className="tabular-nums"
               disabled={salvando}
