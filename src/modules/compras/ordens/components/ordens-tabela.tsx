@@ -7,6 +7,8 @@ import { Copy, ExternalLink, Plus, ShoppingCart } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  BarraSelecao,
+  BotaoEspelho,
   CelulaDescricaoCategoria,
   CelulaVazia,
   colunaData,
@@ -250,6 +252,15 @@ export function OrdensTabela({
   const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const novaOrdem = useNovaOrdem();
 
+  /**
+   * Ordens marcadas para imprimir o espelho.
+   *
+   * NÃO usa `useFiltroSessao`: seleção lembrada entre visitas faria o usuário
+   * imprimir uma lista de ordens que ele não está mais olhando (mesma razão de
+   * `marcados` em lancamentos-tabela.tsx).
+   */
+  const [selecionados, setSelecionados] = React.useState<string[]>([]);
+
   // A faixa de valor é digitada dígito a dígito, então vai para a URL com
   // espera (o canônico cuida disso): escrevendo a cada tecla, o input voltaria
   // do servidor no meio da digitação e perderia caracteres.
@@ -281,355 +292,368 @@ export function OrdensTabela({
   }
 
   return (
-    <DataTable
-      onLimparFiltros={limparTodos}
-      columns={colunas}
-      data={ordens}
-      total={total}
-      pageIndex={pagina}
-      pageSize={tamanho}
-      onPaginationChange={aoMudarPaginacao}
-      onRowClick={abrir}
-      idTabela="compras.ordens"
-      idUsuario={idUsuario}
-      cabecalhoFixo
-      filtros={[
-        {
-          id: "busca",
-          rotulo: "Busca",
-          // A busca é a porta de entrada da tela: não pode ser escondida.
-          fixo: true,
-          // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
-          // deixa o texto da busca filtrando a lista.
-          temValor: busca !== "",
-          onLimpar: () => setBusca(""),
-          elemento: (
-            <FiltroBusca
-              valor={busca}
-              onValorChange={setBusca}
-              placeholder="Buscar por número ou fornecedor"
-            />
-          ),
-        },
-        {
-          id: "status",
-          rotulo: "Status",
-          temValor: status !== "",
-          onLimpar: () => setMuitos({ status: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={status}
-              onValorChange={(valor) =>
-                setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={OPCOES_STATUS}
-              placeholder="Status"
-              todosRotulo="Todos os status"
-            />
-          ),
-        },
-        {
-          id: "fornecedor",
-          rotulo: "Fornecedor",
-          temValor: fornecedorId !== "",
-          onLimpar: () => setMuitos({ fornecedor: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={fornecedorId}
-              onValorChange={(valor) =>
-                setMuitos({
-                  fornecedor: valor === "" ? null : valor,
-                  pagina: "1",
-                })
-              }
-              opcoes={fornecedores.map((fornecedor) => ({
-                valor: fornecedor.id,
-                rotulo: fornecedor.nome,
-              }))}
-              placeholder="Fornecedor"
-              todosRotulo="Todos os fornecedores"
-              className="max-w-56"
-            />
-          ),
-        },
-        {
-          id: "mes",
-          rotulo: "Mês de referência",
-          temValor: mes !== "",
-          onLimpar: () => setMuitos({ mes: null, pagina: "1" }),
-          elemento: (
-            <FiltroMes
-              valor={mes}
-              onValorChange={(novoMes) =>
-                setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
-              }
-            />
-          ),
-        },
-        {
-          id: "periodo",
-          rotulo: "Período da compra",
-          temValor: de !== "" || ate !== "",
-          onLimpar: () => setMuitos({ de: null, ate: null, pagina: "1" }),
-          elemento: (
-            <FiltroPeriodo
-              de={de}
-              ate={ate}
-              rotulo="Compra"
-              onPeriodoChange={(novoDe, novoAte) =>
-                setMuitos({
-                  de: novoDe === "" ? null : novoDe,
-                  ate: novoAte === "" ? null : novoAte,
-                  pagina: "1",
-                })
-              }
-            />
-          ),
-        },
-        {
-          id: "categoria",
-          rotulo: "Categoria do custo",
-          ocultoPorPadrao: true,
-          temValor: categoriaId !== "",
-          onLimpar: () => setMuitos({ categoria: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={categoriaId}
-              onValorChange={(valor) =>
-                setMuitos({
-                  categoria: valor === "" ? null : valor,
-                  pagina: "1",
-                })
-              }
-              opcoes={categorias.map((categoria) => ({
-                valor: categoria.id,
-                rotulo: categoria.nome,
-              }))}
-              placeholder="Categoria do custo"
-              todosRotulo="Todas as categorias"
-              className="max-w-56"
-            />
-          ),
-        },
-        {
-          id: "forma",
-          rotulo: "Forma de pagamento",
-          ocultoPorPadrao: true,
-          temValor: formaPagamentoId !== "",
-          onLimpar: () => setMuitos({ forma: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={formaPagamentoId}
-              onValorChange={(valor) =>
-                setMuitos({ forma: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={formasPagamento.map((forma) => ({
-                valor: forma.id,
-                rotulo: forma.nome,
-              }))}
-              placeholder="Forma"
-              todosRotulo="Todas as formas"
-            />
-          ),
-        },
-        {
-          id: "condicao",
-          rotulo: "Condição de pagamento",
-          ocultoPorPadrao: true,
-          temValor: condicaoPagamentoId !== "",
-          onLimpar: () => setMuitos({ condicao: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={condicaoPagamentoId}
-              onValorChange={(valor) =>
-                setMuitos({ condicao: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={condicoesPagamento.map((condicao) => ({
-                valor: condicao.id,
-                rotulo: condicao.descricao,
-              }))}
-              placeholder="Condição"
-              todosRotulo="Todas as condições"
-              className="max-w-56"
-            />
-          ),
-        },
-        {
-          id: "valor",
-          rotulo: "Faixa de valor",
-          ocultoPorPadrao: true,
-          temValor: faixaValor.de !== "" || faixaValor.ate !== "",
-          onLimpar: limparFaixaValor,
-          elemento: (
-            <FiltroValor
-              de={faixaValor.de}
-              ate={faixaValor.ate}
-              rotulo="Valor total"
-              onValorChange={(novoDe, novoAte) =>
-                setFaixaValor({ de: novoDe, ate: novoAte })
-              }
-            />
-          ),
-        },
-        {
-          id: "criacao",
-          rotulo: "Período de criação",
-          ocultoPorPadrao: true,
-          temValor: criadaDe !== "" || criadaAte !== "",
-          onLimpar: () =>
-            setMuitos({ criadaDe: null, criadaAte: null, pagina: "1" }),
-          elemento: (
-            <FiltroPeriodo
-              de={criadaDe}
-              ate={criadaAte}
-              rotulo="Criada"
-              onPeriodoChange={(novoDe, novoAte) =>
-                setMuitos({
-                  criadaDe: novoDe === "" ? null : novoDe,
-                  criadaAte: novoAte === "" ? null : novoAte,
-                  pagina: "1",
-                })
-              }
-            />
-          ),
-        },
-        {
-          id: "nota",
-          rotulo: "Nota fiscal",
-          ocultoPorPadrao: true,
-          temValor: nota !== "",
-          onLimpar: () => setMuitos({ nota: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={nota}
-              onValorChange={(valor) =>
-                setMuitos({ nota: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={OPCOES_NOTA_OC}
-              placeholder="Nota fiscal"
-              todosRotulo="Com e sem nota"
-            />
-          ),
-        },
-        {
-          id: "origem",
-          rotulo: "Origem",
-          ocultoPorPadrao: true,
-          temValor: origem !== "",
-          onLimpar: () => setMuitos({ origem: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={origem}
-              onValorChange={(valor) =>
-                setMuitos({ origem: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={OPCOES_ORIGEM_OC}
-              placeholder="Origem"
-              todosRotulo="Qualquer origem"
-            />
-          ),
-        },
-        {
-          id: "centro",
-          rotulo: "Centro de custo",
-          ocultoPorPadrao: true,
-          temValor: centroCustoId !== "",
-          onLimpar: () => setMuitos({ centro: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={centroCustoId}
-              onValorChange={(valor) =>
-                setMuitos({ centro: valor === "" ? null : valor, pagina: "1" })
-              }
-              // Mesmo rótulo "CÓDIGO Nome" que o formulário da OC usa.
-              opcoes={centrosCusto.map((centro) => ({
-                valor: centro.id,
-                rotulo: centro.codigo
-                  ? `${centro.codigo} ${centro.nome}`
-                  : centro.nome,
-              }))}
-              placeholder="Centro de custo"
-              todosRotulo="Todos os centros de custo"
-              className="max-w-56"
-            />
-          ),
-        },
-        {
-          id: "insumo",
-          rotulo: "Insumo comprado",
-          ocultoPorPadrao: true,
-          temValor: insumoId !== "",
-          onLimpar: () => setMuitos({ insumo: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={insumoId}
-              onValorChange={(valor) =>
-                setMuitos({ insumo: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={insumos.map((insumo) => ({
-                valor: insumo.id,
-                rotulo: insumo.nome,
-              }))}
-              placeholder="Insumo"
-              todosRotulo="Todos os insumos"
-              className="max-w-56"
-            />
-          ),
-        },
-        {
-          id: "autoria",
-          rotulo: "Autoria",
-          ocultoPorPadrao: true,
-          temValor: autoria !== "",
-          onLimpar: () => setMuitos({ autoria: null, pagina: "1" }),
-          elemento: (
-            <FiltroSelect
-              valor={autoria}
-              onValorChange={(valor) =>
-                setMuitos({ autoria: valor === "" ? null : valor, pagina: "1" })
-              }
-              opcoes={OPCOES_AUTORIA_OC}
-              placeholder="Autoria"
-              todosRotulo="Qualquer autor"
-            />
-          ),
-        },
-      ]}
-      acoesLinha={(ordem) => (
-        <>
-          <DropdownMenuItem onSelect={() => abrir(ordem)}>
-            <ExternalLink />
-            Abrir ordem
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!ordem.numero}
-            onSelect={() => void copiarNumero(ordem)}
-          >
-            <Copy />
-            Copiar número
-          </DropdownMenuItem>
-        </>
-      )}
-      emptyState={
-        <EmptyState
-          icone={ShoppingCart}
-          titulo="Nenhuma ordem de compra"
-          descricao={
-            novaOrdem?.podeCriar
-              ? "Emita a primeira ordem de compra para começar"
-              : "Quando houver ordens de compra, elas aparecem aqui"
-          }
-          acao={
-            novaOrdem?.podeCriar ? (
-              <Button type="button" size="sm" onClick={novaOrdem.abrir}>
-                <Plus />
-                Criar ordem de compra
-              </Button>
-            ) : undefined
-          }
-          className="border-none bg-transparent"
-        />
-      }
-    />
+    <div className="flex flex-col gap-2">
+      <BarraSelecao
+        quantidade={selecionados.length}
+        onLimpar={() => setSelecionados([])}
+      >
+        <BotaoEspelho rota="/espelho/ordens" ids={selecionados} />
+      </BarraSelecao>
+      <DataTable
+        onLimparFiltros={limparTodos}
+        columns={colunas}
+        data={ordens}
+        total={total}
+        pageIndex={pagina}
+        pageSize={tamanho}
+        onPaginationChange={aoMudarPaginacao}
+        onRowClick={abrir}
+        idTabela="compras.ordens"
+        idUsuario={idUsuario}
+        cabecalhoFixo
+        selecao={{
+          idDaLinha: (ordem: OrdemLista) => ordem.id,
+          selecionados,
+          onSelecionadosChange: setSelecionados,
+        }}
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca",
+            // A busca é a porta de entrada da tela: não pode ser escondida.
+            fixo: true,
+            // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
+            // deixa o texto da busca filtrando a lista.
+            temValor: busca !== "",
+            onLimpar: () => setBusca(""),
+            elemento: (
+              <FiltroBusca
+                valor={busca}
+                onValorChange={setBusca}
+                placeholder="Buscar por número ou fornecedor"
+              />
+            ),
+          },
+          {
+            id: "status",
+            rotulo: "Status",
+            temValor: status !== "",
+            onLimpar: () => setMuitos({ status: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={status}
+                onValorChange={(valor) =>
+                  setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={OPCOES_STATUS}
+                placeholder="Status"
+                todosRotulo="Todos os status"
+              />
+            ),
+          },
+          {
+            id: "fornecedor",
+            rotulo: "Fornecedor",
+            temValor: fornecedorId !== "",
+            onLimpar: () => setMuitos({ fornecedor: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={fornecedorId}
+                onValorChange={(valor) =>
+                  setMuitos({
+                    fornecedor: valor === "" ? null : valor,
+                    pagina: "1",
+                  })
+                }
+                opcoes={fornecedores.map((fornecedor) => ({
+                  valor: fornecedor.id,
+                  rotulo: fornecedor.nome,
+                }))}
+                placeholder="Fornecedor"
+                todosRotulo="Todos os fornecedores"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "mes",
+            rotulo: "Mês de referência",
+            temValor: mes !== "",
+            onLimpar: () => setMuitos({ mes: null, pagina: "1" }),
+            elemento: (
+              <FiltroMes
+                valor={mes}
+                onValorChange={(novoMes) =>
+                  setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
+                }
+              />
+            ),
+          },
+          {
+            id: "periodo",
+            rotulo: "Período da compra",
+            temValor: de !== "" || ate !== "",
+            onLimpar: () => setMuitos({ de: null, ate: null, pagina: "1" }),
+            elemento: (
+              <FiltroPeriodo
+                de={de}
+                ate={ate}
+                rotulo="Compra"
+                onPeriodoChange={(novoDe, novoAte) =>
+                  setMuitos({
+                    de: novoDe === "" ? null : novoDe,
+                    ate: novoAte === "" ? null : novoAte,
+                    pagina: "1",
+                  })
+                }
+              />
+            ),
+          },
+          {
+            id: "categoria",
+            rotulo: "Categoria do custo",
+            ocultoPorPadrao: true,
+            temValor: categoriaId !== "",
+            onLimpar: () => setMuitos({ categoria: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={categoriaId}
+                onValorChange={(valor) =>
+                  setMuitos({
+                    categoria: valor === "" ? null : valor,
+                    pagina: "1",
+                  })
+                }
+                opcoes={categorias.map((categoria) => ({
+                  valor: categoria.id,
+                  rotulo: categoria.nome,
+                }))}
+                placeholder="Categoria do custo"
+                todosRotulo="Todas as categorias"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "forma",
+            rotulo: "Forma de pagamento",
+            ocultoPorPadrao: true,
+            temValor: formaPagamentoId !== "",
+            onLimpar: () => setMuitos({ forma: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={formaPagamentoId}
+                onValorChange={(valor) =>
+                  setMuitos({ forma: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={formasPagamento.map((forma) => ({
+                  valor: forma.id,
+                  rotulo: forma.nome,
+                }))}
+                placeholder="Forma"
+                todosRotulo="Todas as formas"
+              />
+            ),
+          },
+          {
+            id: "condicao",
+            rotulo: "Condição de pagamento",
+            ocultoPorPadrao: true,
+            temValor: condicaoPagamentoId !== "",
+            onLimpar: () => setMuitos({ condicao: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={condicaoPagamentoId}
+                onValorChange={(valor) =>
+                  setMuitos({ condicao: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={condicoesPagamento.map((condicao) => ({
+                  valor: condicao.id,
+                  rotulo: condicao.descricao,
+                }))}
+                placeholder="Condição"
+                todosRotulo="Todas as condições"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "valor",
+            rotulo: "Faixa de valor",
+            ocultoPorPadrao: true,
+            temValor: faixaValor.de !== "" || faixaValor.ate !== "",
+            onLimpar: limparFaixaValor,
+            elemento: (
+              <FiltroValor
+                de={faixaValor.de}
+                ate={faixaValor.ate}
+                rotulo="Valor total"
+                onValorChange={(novoDe, novoAte) =>
+                  setFaixaValor({ de: novoDe, ate: novoAte })
+                }
+              />
+            ),
+          },
+          {
+            id: "criacao",
+            rotulo: "Período de criação",
+            ocultoPorPadrao: true,
+            temValor: criadaDe !== "" || criadaAte !== "",
+            onLimpar: () =>
+              setMuitos({ criadaDe: null, criadaAte: null, pagina: "1" }),
+            elemento: (
+              <FiltroPeriodo
+                de={criadaDe}
+                ate={criadaAte}
+                rotulo="Criada"
+                onPeriodoChange={(novoDe, novoAte) =>
+                  setMuitos({
+                    criadaDe: novoDe === "" ? null : novoDe,
+                    criadaAte: novoAte === "" ? null : novoAte,
+                    pagina: "1",
+                  })
+                }
+              />
+            ),
+          },
+          {
+            id: "nota",
+            rotulo: "Nota fiscal",
+            ocultoPorPadrao: true,
+            temValor: nota !== "",
+            onLimpar: () => setMuitos({ nota: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={nota}
+                onValorChange={(valor) =>
+                  setMuitos({ nota: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={OPCOES_NOTA_OC}
+                placeholder="Nota fiscal"
+                todosRotulo="Com e sem nota"
+              />
+            ),
+          },
+          {
+            id: "origem",
+            rotulo: "Origem",
+            ocultoPorPadrao: true,
+            temValor: origem !== "",
+            onLimpar: () => setMuitos({ origem: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={origem}
+                onValorChange={(valor) =>
+                  setMuitos({ origem: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={OPCOES_ORIGEM_OC}
+                placeholder="Origem"
+                todosRotulo="Qualquer origem"
+              />
+            ),
+          },
+          {
+            id: "centro",
+            rotulo: "Centro de custo",
+            ocultoPorPadrao: true,
+            temValor: centroCustoId !== "",
+            onLimpar: () => setMuitos({ centro: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={centroCustoId}
+                onValorChange={(valor) =>
+                  setMuitos({ centro: valor === "" ? null : valor, pagina: "1" })
+                }
+                // Mesmo rótulo "CÓDIGO Nome" que o formulário da OC usa.
+                opcoes={centrosCusto.map((centro) => ({
+                  valor: centro.id,
+                  rotulo: centro.codigo
+                    ? `${centro.codigo} ${centro.nome}`
+                    : centro.nome,
+                }))}
+                placeholder="Centro de custo"
+                todosRotulo="Todos os centros de custo"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "insumo",
+            rotulo: "Insumo comprado",
+            ocultoPorPadrao: true,
+            temValor: insumoId !== "",
+            onLimpar: () => setMuitos({ insumo: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={insumoId}
+                onValorChange={(valor) =>
+                  setMuitos({ insumo: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={insumos.map((insumo) => ({
+                  valor: insumo.id,
+                  rotulo: insumo.nome,
+                }))}
+                placeholder="Insumo"
+                todosRotulo="Todos os insumos"
+                className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "autoria",
+            rotulo: "Autoria",
+            ocultoPorPadrao: true,
+            temValor: autoria !== "",
+            onLimpar: () => setMuitos({ autoria: null, pagina: "1" }),
+            elemento: (
+              <FiltroSelect
+                valor={autoria}
+                onValorChange={(valor) =>
+                  setMuitos({ autoria: valor === "" ? null : valor, pagina: "1" })
+                }
+                opcoes={OPCOES_AUTORIA_OC}
+                placeholder="Autoria"
+                todosRotulo="Qualquer autor"
+              />
+            ),
+          },
+        ]}
+        acoesLinha={(ordem) => (
+          <>
+            <DropdownMenuItem onSelect={() => abrir(ordem)}>
+              <ExternalLink />
+              Abrir ordem
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!ordem.numero}
+              onSelect={() => void copiarNumero(ordem)}
+            >
+              <Copy />
+              Copiar número
+            </DropdownMenuItem>
+          </>
+        )}
+        emptyState={
+          <EmptyState
+            icone={ShoppingCart}
+            titulo="Nenhuma ordem de compra"
+            descricao={
+              novaOrdem?.podeCriar
+                ? "Emita a primeira ordem de compra para começar"
+                : "Quando houver ordens de compra, elas aparecem aqui"
+            }
+            acao={
+              novaOrdem?.podeCriar ? (
+                <Button type="button" size="sm" onClick={novaOrdem.abrir}>
+                  <Plus />
+                  Criar ordem de compra
+                </Button>
+              ) : undefined
+            }
+            className="border-none bg-transparent"
+          />
+        }
+      />
+    </div>
   );
 }
