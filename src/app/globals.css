@@ -162,7 +162,14 @@
 
 /* Impressao: isola o holerite (contracheque). Ao imprimir a partir do
    HoleriteDialog, some tudo menos o bloco marcado com .holerite-print, que
-   passa a ocupar a pagina. .nao-imprime esconde controles (ex. botao). */
+   passa a ocupar a pagina. .nao-imprime esconde controles (ex. botao).
+
+   ATENCAO, isto e DOCUMENTO INTEIRO, nao escopado ao holerite: "body *" bate
+   em qualquer elemento de qualquer layout aninhado neste MESMO <body>
+   (globals.css so e importado uma vez, no layout raiz), e "@page" nem tem como
+   ser escopado a uma subarvore. Qualquer superficie imprimivel nova precisa
+   reverter isto de proposito dentro do seu proprio @media print (ver
+   .espelho-raiz mais abaixo) ou a impressao dela sai em branco. */
 @media print {
   body * {
     visibility: hidden;
@@ -214,9 +221,13 @@
 /*
   Espelho impresso de documento.
 
-  A página inteira É o documento (rota no grupo `(espelho)`, sem AppShell),
-  então aqui NÃO tem o truque de esconder o resto do app: aquilo existe para o
-  holerite, que imprime de dentro de um dialog.
+  A página inteira É o documento (rota no grupo `(espelho)`, sem AppShell). Mas
+  esse grupo de rota é um layout ANINHADO: ele renderiza dentro do MESMO
+  `<body>` do layout raiz, e a regra do holerite lá em cima (`body * {
+  visibility: hidden }`) é documento inteiro, não escopada ao holerite — ela
+  apaga qualquer coisa que não seja `.holerite-print`, espelho incluído. Por
+  isso o `@media print` abaixo reverte isso explicitamente para `.espelho-raiz`
+  (ver o porquê da especificidade lá).
 
   `print-color-adjust: exact` é obrigatório: navegador remove cor de fundo ao
   imprimir por padrão, e sem isto a Faixa âmbar sai branca. Mesmo com a regra o
@@ -231,16 +242,40 @@
 }
 
 @media print {
-  @page {
-    size: A4;
-    margin: 12mm;
+  /*
+    Reverte a regra global "body * { visibility: hidden }" do holerite (lá em
+    cima) para a árvore do espelho. Sem isto a folha sai em branco: o espelho
+    herda visibility:hidden do body inteiro e nada tem `.holerite-print` para
+    reacender.
+
+    A especificidade de ".espelho-raiz, .espelho-raiz *" é 0,1,1 (uma classe +
+    universal) contra 0,0,1 de "body *" (um elemento + universal) — vence por
+    ter uma classe a mais na comparação, não por ordem no arquivo.
+  */
+  .espelho-raiz,
+  .espelho-raiz * {
+    visibility: visible;
   }
-  /* Um documento por folha. Sem isto, N espelhos saem emendados. */
-  .espelho-documento {
-    break-after: page;
-  }
-  .espelho-documento:last-child {
-    break-after: auto;
+
+  /*
+    Nenhum `@page` é declarado aqui de propósito: `@page` não tem como ser
+    escopado a uma subárvore, ele é sempre documento inteiro. Declarar um
+    aqui encolheria também a página do holerite (que já tem sua própria
+    geometria via `.holerite-print { padding: 24px }`). A geometria do espelho
+    já vem só do próprio documento (`.espelho-documento`: max-w-[190mm] e
+    padding), que É escopável — por isso o navegador usa a margem de impressão
+    padrão dele, igual a antes desta branch.
+  */
+
+  /*
+    Um documento por folha. `+` em vez de `:last-child`: a quebra depende só de
+    "existe um .espelho-documento logo antes de mim", nunca de qual elemento é
+    o último filho do container. Com `:last-child`, qualquer coisa acrescentada
+    depois do último espelho (um rodapé, por exemplo) quebraria a regra e toda
+    impressão sairia com uma página em branco no fim.
+  */
+  .espelho-documento + .espelho-documento {
+    break-before: page;
   }
   /* Tabela de filhos não parte no meio de uma linha. */
   .espelho-documento tr {

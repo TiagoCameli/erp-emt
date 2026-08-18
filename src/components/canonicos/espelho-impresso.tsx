@@ -6,10 +6,13 @@ import { cn } from "@/lib/utils";
 /**
  * Espelho impresso de um documento.
  *
- * Diferente do holerite: lá a impressão acontece dentro do app e o CSS precisa
- * esconder o resto da tela (`.holerite-print`). Aqui a PÁGINA INTEIRA é o
- * documento, porque a rota vive no grupo `(espelho)`, sem AppShell. Nada a
- * esconder, nada de `visibility: hidden`.
+ * A PÁGINA INTEIRA é o documento, porque a rota vive no grupo `(espelho)`, sem
+ * AppShell — mas esse grupo ainda renderiza dentro do MESMO `<body>` do layout
+ * raiz, e a regra do holerite em `globals.css` (`body * { visibility: hidden
+ * }`) é documento inteiro, não escopada a ele. Por isso o espelho PRECISA do
+ * mesmo truque, revertido: `.espelho-raiz, .espelho-raiz *` (especificidade
+ * 0,1,1) vence `body *` (0,0,1) e reacende a visibilidade da árvore inteira do
+ * espelho. Ver o `@media print` de `.espelho-raiz` em `globals.css`.
  *
  * A quebra de página entre documentos e a cor de fundo vivem no `globals.css`
  * (`.espelho-documento`, `.espelho-raiz`), porque `break-after` e
