@@ -1197,3 +1197,28 @@ git commit -m "chore(compras): categoria derivada dos itens nas 17 ordens carreg
 - **`NOT NULL`** em `insumos.categoria_financeira_id` e `lancamento_rateios.categoria_id`.
 - **Reclassificar os 520 insumos em "A classificar"**: acontece sob demanda, pela trava da Task 7.
 - **Dependência de branch:** este trabalho está empilhado em `feat-oc-ajustes-e-carga-mc`, que tem 3 commits e ainda não tem PR. Aquele branch mergeia primeiro.
+
+## Achados durante a execução (17-18/08/2026)
+
+**1. A OC-2026-0008 foi aprovada e recebida por outra frente** enquanto o plano rodava,
+e o lançamento gerado ficou sem categoria. Coberto no ajuste da Task 8.
+
+**2. Um lançamento sem rateio nenhum — e a trava não pega.**
+`LAN-2026-1900`, FGTS RESCISORIO MARCILANDIO CORDOVEZ, R$ 195,78, `origem = manual`,
+criado em 18/08/2026 13:31 pelo app (não por este trabalho). Ele tem **zero** rateios,
+então viola "nenhum custo existe sem centro de custo" — e `trg_valida_soma_do_rateio`
+não o alcança, porque a trigger dispara em `lancamento_rateios` e ali nunca houve
+linha.
+
+É anomalia, não padrão: **1 de 5.908** lançamentos a pagar está assim, e todos os
+outros — inclusive os avulsos de tarifa bancária da carga de julho — têm rateio. O
+caminho que o criou é do RH (FGTS rescisório), fora do escopo deste plano.
+
+Fechar o furo é uma trava a mais, em `lancamentos`, também `DEFERRABLE INITIALLY
+DEFERRED`, exigindo pelo menos um rateio no commit. Não foi feita aqui porque:
+- é escopo novo, e mexe num caminho (RH) que este plano não toca;
+- o lançamento existente teria que ser corrigido antes, senão a trava nasce violada;
+- e ele é de outra frente, ativa agora — corrigir sem falar seria mexer no trabalho
+  de outra pessoa.
+
+**Decisão do Tiago pendente:** fechar o furo e corrigir o LAN-2026-1900, ou deixar.
