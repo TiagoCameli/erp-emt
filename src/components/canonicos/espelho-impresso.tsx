@@ -161,6 +161,11 @@ export function EspelhoTabela({
                   coluna.alinharDireita && "text-right tabular-nums",
                 )}
               >
+                {/* Travessão aqui, não. Na linha de corpo, célula vazia é um
+                campo que existe e está em branco (daí o "—" ali). Na linha de
+                totais, coluna sem total é uma coluna que NÃO TEM total nenhum
+                (não existe "total de Status" ou "total de Vencimento"):
+                travessão em sete colunas encheria a linha de ruído. */}
                 {totais[coluna.chave] ?? ""}
               </td>
             ))}
@@ -175,12 +180,21 @@ export function EspelhoTabela({
  * Dinheiro no papel. Não usa `MoneyText` porque aquele é um `span` pensado para
  * a tela; aqui o alinhamento vem da célula da tabela. O formato é o mesmo,
  * porque vem do mesmo `formatarBRL`.
+ *
+ * Ausência sai como travessão, e NÃO como `formatarBRL(null)` (que devolve
+ * "R$ 0,00"): no papel isso apagaria a diferença entre "não tem valor
+ * lançado" e "o valor lançado é zero". Zero continua saindo "R$ 0,00" de
+ * propósito — desconto e juros zerados são informação real do documento, não
+ * ausência de dado, e não podem virar travessão.
  */
 export function EspelhoDinheiro({
   valor,
 }: {
   valor: number | string | null | undefined;
 }) {
+  if (valor === null || valor === undefined || valor === "") {
+    return <span className="tabular-nums">—</span>;
+  }
   return <span className="tabular-nums">{formatarBRL(valor)}</span>;
 }
 

@@ -10,15 +10,19 @@ import { Button } from "@/components/ui/button";
  *
  * Dois quadros de espera: o primeiro monta, o segundo deixa fonte e layout
  * assentarem. Sem isso o Chrome mede a página antes do webfont e a última
- * linha cai para uma folha a mais. O `ref` guarda contra o efeito rodar duas
- * vezes no modo estrito do React, que abriria dois diálogos de impressão.
+ * linha cai para uma folha a mais.
+ *
+ * SEM ref de "já disparou": o modo estrito do React roda
+ * montagem -> desmontagem -> montagem no mount, e o cleanup da PRIMEIRA
+ * montagem cancela o `requestAnimationFrame` dela antes de ele disparar. Sobra
+ * só o rAF da SEGUNDA montagem, que dispara uma vez — esse é o padrão correto
+ * sob StrictMode. Uma ref travando "já disparei" fazia o efeito da segunda
+ * montagem abortar por causa da primeira, e `window.print()` nunca saía (era
+ * exatamente o bug que existia aqui).
  */
 export function BotaoImprimir({ auto = true }: { auto?: boolean }) {
-  const jaDisparou = React.useRef(false);
-
   React.useEffect(() => {
-    if (!auto || jaDisparou.current) return;
-    jaDisparou.current = true;
+    if (!auto) return;
     let interno = 0;
     const externo = requestAnimationFrame(() => {
       interno = requestAnimationFrame(() => window.print());

@@ -11,8 +11,8 @@ export const metadata: Metadata = {
  */
 export default function EspelhoLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return <div className="espelho-raiz min-h-screen">{children}</div>;
 }

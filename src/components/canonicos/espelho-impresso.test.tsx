@@ -1,12 +1,17 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   EspelhoCampos,
+  EspelhoDinheiro,
   EspelhoImpresso,
   EspelhoSecao,
   EspelhoTabela,
 } from "@/components/canonicos/espelho-impresso";
+import { formatarBRL } from "@/lib/formatadores";
+
+// Sem globals: true no vitest.config, o cleanup automático da RTL não roda.
+afterEach(cleanup);
 
 describe("EspelhoImpresso", () => {
   it("mostra tipo, número e quem emitiu", () => {
@@ -122,5 +127,25 @@ describe("EspelhoTabela", () => {
       />,
     );
     expect(screen.getByText("Total")).toBeInTheDocument();
+  });
+});
+
+describe("EspelhoDinheiro", () => {
+  it("formata valor real como dinheiro", () => {
+    const { container } = render(<EspelhoDinheiro valor={1234.56} />);
+    expect(container.textContent).toBe(formatarBRL(1234.56));
+  });
+
+  it("zero é informação do documento (desconto, juros) e continua saindo como dinheiro", () => {
+    const { container } = render(<EspelhoDinheiro valor={0} />);
+    expect(container.textContent).toBe(formatarBRL(0));
+  });
+
+  it("sem valor sai como travessão, e não como R$ 0,00", () => {
+    const semValor = render(<EspelhoDinheiro valor={null} />);
+    expect(semValor.container.textContent).toBe("—");
+
+    const indefinido = render(<EspelhoDinheiro valor={undefined} />);
+    expect(indefinido.container.textContent).toBe("—");
   });
 });
