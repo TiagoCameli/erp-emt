@@ -35,3 +35,5 @@ export * from "./trilha";
 export * from "./trilha-helpers";
 export * from "./import-dialog";
 export * from "./matriz-recursos-acoes";
+export * from "./espelho-impresso";
+export * from "./botao-imprimir";

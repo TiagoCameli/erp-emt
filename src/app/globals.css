@@ -210,3 +210,40 @@
   background-color: color-mix(in srgb, var(--foreground) 25%, transparent);
   border-radius: 9999px;
 }
+
+/*
+  Espelho impresso de documento.
+
+  A página inteira É o documento (rota no grupo `(espelho)`, sem AppShell),
+  então aqui NÃO tem o truque de esconder o resto do app: aquilo existe para o
+  holerite, que imprime de dentro de um dialog.
+
+  `print-color-adjust: exact` é obrigatório: navegador remove cor de fundo ao
+  imprimir por padrão, e sem isto a Faixa âmbar sai branca. Mesmo com a regra o
+  usuário pode desligar "gráficos de fundo" no diálogo do sistema, e por isso
+  nenhum dado do espelho depende de cor: status sai como texto.
+*/
+.espelho-raiz {
+  background: #ffffff;
+  color: #1f1f1f;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  /* Um documento por folha. Sem isto, N espelhos saem emendados. */
+  .espelho-documento {
+    break-after: page;
+  }
+  .espelho-documento:last-child {
+    break-after: auto;
+  }
+  /* Tabela de filhos não parte no meio de uma linha. */
+  .espelho-documento tr {
+    break-inside: avoid;
+  }
+}
