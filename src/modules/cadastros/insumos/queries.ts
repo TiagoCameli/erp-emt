@@ -17,10 +17,19 @@ export interface InsumoLista {
   grupoId: string | null;
   grupoNome: string | null;
   grupoCor: CorGrupo;
+  /** Categoria de custo (DRE): desce para o rateio do lançamento da OC. */
+  categoriaFinanceiraId: string | null;
+  categoriaFinanceiraNome: string | null;
   unidadeId: string;
   unidadeSigla: string | null;
   descricao: string | null;
   ativo: boolean;
+}
+
+/** Categoria de custo (DRE) para o select do formulário do insumo. */
+export interface CategoriaDeCustoOpcao {
+  id: string;
+  nome: string;
 }
 
 /**
@@ -82,7 +91,9 @@ export async function listar(
     .from("insumos")
     .select(
       `id, codigo, nome, categoria_id, unidade_id, descricao, ativo,
+       categoria_financeira_id,
        categorias_insumo!inner(nome, grupo_id, insumo_grupos(id, nome, cor)),
+       categorias_financeiras(nome),
        unidades_medida(sigla)`,
       { count: "exact" },
     )
@@ -120,6 +131,8 @@ export async function listar(
     grupoId: insumo.categorias_insumo?.insumo_grupos?.id ?? null,
     grupoNome: insumo.categorias_insumo?.insumo_grupos?.nome ?? null,
     grupoCor: corGrupo(insumo.categorias_insumo?.insumo_grupos?.cor),
+    categoriaFinanceiraId: insumo.categoria_financeira_id,
+    categoriaFinanceiraNome: insumo.categorias_financeiras?.nome ?? null,
     unidadeId: insumo.unidade_id,
     unidadeSigla: insumo.unidades_medida?.sigla ?? null,
     descricao: insumo.descricao,
@@ -153,6 +166,54 @@ export async function listarCategorias(): Promise<CategoriaOpcao[]> {
     }))
     .sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"))
     .map(({ ordem: _ordem, ...opcao }) => opcao);
+}
+
+/**
+ * Categorias de custo (DRE) ativas, para o select do formulário do insumo.
+ *
+ * São as mesmas categorias de despesa que o Financeiro usa: o custo da compra tem
+ * que cair no mesmo lugar do plano de contas, senão o DRE ganha duas verdades.
+ */
+export async function listarCategoriasDeCusto(): Promise<CategoriaDeCustoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("categorias_financeiras")
+    .select("id, nome")
+    .eq("tipo", "despesa")
+    .eq("ativo", true)
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar as categorias de custo");
+  }
+
+  return data ?? [];
+}
+
+/**
+ * Categoria de custo padrão de cada categoria de insumo, para o formulário sugerir
+ * sozinho quando a pessoa escolhe a subcategoria.
+ *
+ * O padrão emerge dos insumos já classificados (`fn_padrao_categoria_de_custo`), em
+ * vez de repetir o mapa de 27 linhas num terceiro lugar. Categoria de insumo sem
+ * nenhum insumo classificado não aparece aqui — hoje só "A classificar" de Mão de
+ * obra, que tem zero insumos.
+ */
+export async function padroesDeCategoriaDeCusto(): Promise<Record<string, string>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("fn_padrao_categoria_de_custo");
+
+  if (error) {
+    throw new Error("Não foi possível carregar as categorias de custo padrão");
+  }
+
+  const padroes: Record<string, string> = {};
+  for (const linha of data ?? []) {
+    padroes[linha.categoria_insumo_id] = linha.categoria_financeira_id;
+  }
+  return padroes;
 }
 
 /** Unidades de medida ativas, para o select do formulário. */

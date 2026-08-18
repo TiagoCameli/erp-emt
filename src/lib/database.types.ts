@@ -1750,6 +1750,7 @@ export type Database = {
       insumos: {
         Row: {
           ativo: boolean
+          categoria_financeira_id: string | null
           categoria_id: string
           codigo: string | null
           created_at: string
@@ -1762,6 +1763,7 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean
+          categoria_financeira_id?: string | null
           categoria_id: string
           codigo?: string | null
           created_at?: string
@@ -1774,6 +1776,7 @@ export type Database = {
         }
         Update: {
           ativo?: boolean
+          categoria_financeira_id?: string | null
           categoria_id?: string
           codigo?: string | null
           created_at?: string
@@ -1785,6 +1788,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "insumos_categoria_financeira_id_fkey"
+            columns: ["categoria_financeira_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_financeiras"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "insumos_categoria_id_fkey"
             columns: ["categoria_id"]
@@ -3586,6 +3596,13 @@ export type Database = {
           p_parcela_id: string
         }
         Returns: undefined
+      }
+      fn_padrao_categoria_de_custo: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          categoria_financeira_id: string
+          categoria_insumo_id: string
+        }[]
       }
       fn_parcelas_da_condicao: {
         Args: { p_condicao_id: string; p_data_base: string; p_valor: number }

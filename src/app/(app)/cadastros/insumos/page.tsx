@@ -6,7 +6,9 @@ import { InsumosTabela } from "@/modules/cadastros/insumos/components/insumos-ta
 import {
   listar,
   listarCategorias,
+  listarCategoriasDeCusto,
   listarUnidades,
+  padroesDeCategoriaDeCusto,
 } from "@/modules/cadastros/insumos/queries";
 
 const UUID =
@@ -61,7 +63,14 @@ export default async function PaginaInsumos({
       ? tamanhoParam
       : TAMANHO_PADRAO;
 
-  const [{ itens, total }, categorias, grupos, unidades] = await Promise.all([
+  const [
+    { itens, total },
+    categorias,
+    grupos,
+    unidades,
+    categoriasDeCusto,
+    padroesDeCusto,
+  ] = await Promise.all([
     listar({
       pagina,
       tamanho,
@@ -74,6 +83,8 @@ export default async function PaginaInsumos({
     listarCategorias(),
     listarGrupos(),
     listarUnidades(),
+    listarCategoriasDeCusto(),
+    padroesDeCategoriaDeCusto(),
   ]);
 
   return (
@@ -90,6 +101,8 @@ export default async function PaginaInsumos({
       categorias={categorias}
       grupos={grupos}
       unidades={unidades}
+      categoriasDeCusto={categoriasDeCusto}
+      padroesDeCusto={padroesDeCusto}
       podeCriar={temPermissao(usuario, "cadastros.insumos", "criar")}
       podeEditar={temPermissao(usuario, "cadastros.insumos", "editar")}
       podeExcluir={temPermissao(usuario, "cadastros.insumos", "excluir")}

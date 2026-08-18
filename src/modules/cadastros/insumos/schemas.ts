@@ -18,6 +18,12 @@ export const insumoSchema = z.object({
       error: "Nome do insumo não pode ser só números",
     }),
   categoriaId: idSchemaCom("Selecione uma categoria"),
+  /**
+   * Categoria de custo (DRE). Obrigatória: é ela que desce para o rateio do
+   * lançamento quando a Ordem de Compra deste insumo é aprovada. Sem ela a aprovação
+   * é recusada no banco, então barrar no cadastro evita descobrir o problema tarde.
+   */
+  categoriaFinanceiraId: idSchemaCom("Selecione a categoria do custo"),
   unidadeId: idSchemaCom("Selecione uma unidade de medida"),
   descricao: z.string().trim().optional().or(z.literal("")),
   ativo: z.boolean().default(true),

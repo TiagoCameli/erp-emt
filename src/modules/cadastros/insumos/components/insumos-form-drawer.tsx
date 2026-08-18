@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { criar, editar } from "@/modules/cadastros/insumos/actions";
 import type { GrupoOpcao } from "@/modules/cadastros/categorias/queries";
 import type {
+  CategoriaDeCustoOpcao,
   CategoriaOpcao,
   InsumoLista,
   UnidadeOpcao,
@@ -42,6 +43,14 @@ export interface InsumosFormDrawerProps {
   categorias: CategoriaOpcao[];
   grupos: GrupoOpcao[];
   unidades: UnidadeOpcao[];
+  /** Categorias de custo (DRE), as mesmas de despesa que o Financeiro usa. */
+  categoriasDeCusto: CategoriaDeCustoOpcao[];
+  /**
+   * Categoria de custo padrão por subcategoria de insumo, para preencher sozinho.
+   * Vem de `fn_padrao_categoria_de_custo`, que deduz o padrão dos insumos já
+   * classificados.
+   */
+  padroesDeCusto: Record<string, string>;
 }
 
 /** Drawer com o formulário de insumo, criando e editando. */
@@ -52,6 +61,8 @@ export function InsumosFormDrawer({
   categorias,
   grupos,
   unidades,
+  categoriasDeCusto,
+  padroesDeCusto,
 }: InsumosFormDrawerProps) {
   const editando = insumo !== null;
 
@@ -70,6 +81,7 @@ export function InsumosFormDrawer({
       codigo: insumo?.codigo ?? "",
       nome: insumo?.nome ?? "",
       categoriaId: insumo?.categoriaId ?? "",
+      categoriaFinanceiraId: insumo?.categoriaFinanceiraId ?? "",
       unidadeId: insumo?.unidadeId ?? "",
       descricao: insumo?.descricao ?? "",
       ativo: insumo?.ativo ?? true,
@@ -101,6 +113,7 @@ export function InsumosFormDrawer({
   const categoriasDoGrupo = categorias.filter(
     (categoria) => categoria.grupoId === grupoId,
   );
+  const categoriaDeCustoValor = form.watch("categoriaFinanceiraId");
   const unidadeValor = form.watch("unidadeId");
 
   return (
@@ -209,9 +222,18 @@ export function InsumosFormDrawer({
         >
           <Combobox
             valor={categoriaValor}
-            onValorChange={(valor) =>
-              form.setValue("categoriaId", valor, { shouldValidate: true })
-            }
+            onValorChange={(valor) => {
+              form.setValue("categoriaId", valor, { shouldValidate: true });
+              // A subcategoria já diz onde o custo cai: preenche a categoria de custo
+              // pelo padrão dela, para ninguém decidir duas vezes a mesma coisa. Só
+              // sugere quando o campo está vazio — escolha manual não é sobrescrita.
+              const padrao = padroesDeCusto[valor];
+              if (padrao && !form.getValues("categoriaFinanceiraId")) {
+                form.setValue("categoriaFinanceiraId", padrao, {
+                  shouldValidate: true,
+                });
+              }
+            }}
             opcoes={categoriasDoGrupo.map((categoria) => ({
               valor: categoria.id,
               rotulo: categoria.nome,
@@ -220,6 +242,29 @@ export function InsumosFormDrawer({
             disabled={salvando || categoriasDoGrupo.length === 0}
             className="w-full"
             id="insumo-categoria"
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="insumo-categoria-custo"
+          rotulo="Categoria de custo"
+          obrigatorio
+          ajuda="Onde este custo entra no DRE. Desce para o lançamento quando a compra é aprovada."
+          erro={form.formState.errors.categoriaFinanceiraId?.message}
+        >
+          <Combobox
+            valor={categoriaDeCustoValor}
+            onValorChange={(valor) =>
+              form.setValue("categoriaFinanceiraId", valor, { shouldValidate: true })
+            }
+            opcoes={categoriasDeCusto.map((categoria) => ({
+              valor: categoria.id,
+              rotulo: categoria.nome,
+            }))}
+            placeholder="Selecione a categoria do custo"
+            disabled={salvando}
+            className="w-full"
+            id="insumo-categoria-custo"
           />
         </CampoFormulario>
 

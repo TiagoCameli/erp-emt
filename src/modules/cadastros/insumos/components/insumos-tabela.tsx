@@ -40,6 +40,7 @@ import {
   validarImport,
 } from "@/modules/cadastros/insumos/actions";
 import type {
+  CategoriaDeCustoOpcao,
   CategoriaOpcao,
   InsumoLista,
   UnidadeOpcao,
@@ -68,6 +69,8 @@ export interface InsumosTabelaProps {
   categorias: CategoriaOpcao[];
   grupos: GrupoOpcao[];
   unidades: UnidadeOpcao[];
+  categoriasDeCusto: CategoriaDeCustoOpcao[];
+  padroesDeCusto: Record<string, string>;
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
@@ -95,6 +98,8 @@ export function InsumosTabela({
   categorias,
   grupos,
   unidades,
+  categoriasDeCusto,
+  padroesDeCusto,
   podeCriar,
   podeEditar,
   podeExcluir,
@@ -585,6 +590,8 @@ export function InsumosTabela({
         categorias={categorias}
         grupos={grupos}
         unidades={unidades}
+        categoriasDeCusto={categoriasDeCusto}
+        padroesDeCusto={padroesDeCusto}
       />
 
       <ReclassificarDialog

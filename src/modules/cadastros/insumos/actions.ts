@@ -95,6 +95,7 @@ function montarRegistro(dados: InsumoInput) {
     codigo: codigo ? codigo : null,
     nome: dados.nome.trim(),
     categoria_id: dados.categoriaId,
+    categoria_financeira_id: dados.categoriaFinanceiraId,
     unidade_id: dados.unidadeId,
     descricao: descricao ? descricao : null,
     ativo: dados.ativo,
@@ -332,10 +333,31 @@ export async function importar(
     (unidades.data ?? []).map((u) => [u.sigla.trim().toLowerCase(), u.id]),
   );
 
+  // A categoria de custo não é coluna da planilha: ela vem do padrão da subcategoria
+  // escolhida, o mesmo que o formulário sugere. Sem isso a importação criaria insumo
+  // sem categoria de custo, e a aprovação da OC dele seria recusada no banco.
+  const { data: padroes, error: erroPadroes } = await supabase.rpc(
+    "fn_padrao_categoria_de_custo",
+  );
+  if (erroPadroes) {
+    return erroAcao(
+      "cadastros.insumos.importar",
+      erroPadroes,
+      "Não foi possível carregar as categorias de custo padrão. Tente novamente",
+    );
+  }
+  const custoPorCategoria = new Map(
+    (padroes ?? []).map((linha) => [
+      linha.categoria_insumo_id,
+      linha.categoria_financeira_id,
+    ]),
+  );
+
   const registros: {
     codigo: string | null;
     nome: string;
     categoria_id: string;
+    categoria_financeira_id: string;
     unidade_id: string;
     ativo: boolean;
   }[] = [];
@@ -382,10 +404,21 @@ export async function importar(
         ? codigoBruto.trim()
         : null;
 
+    const categoriaFinanceiraId = custoPorCategoria.get(categoriaId);
+    if (!categoriaFinanceiraId) {
+      // Acontece quando a subcategoria ainda não tem nenhum insumo classificado, e
+      // por isso não há padrão de onde o custo dela cai. Cadastrar um insumo dessa
+      // subcategoria pela tela define o padrão para as importações seguintes.
+      return {
+        erro: `A subcategoria "${linha.dados.categoria}" (linha ${linha.linha}) ainda não tem categoria de custo definida. Cadastre um insumo dela pela tela, escolhendo a categoria de custo, e importe de novo.`,
+      };
+    }
+
     registros.push({
       codigo,
       nome,
       categoria_id: categoriaId,
+      categoria_financeira_id: categoriaFinanceiraId,
       unidade_id: unidadeId,
       ativo: true,
     });
