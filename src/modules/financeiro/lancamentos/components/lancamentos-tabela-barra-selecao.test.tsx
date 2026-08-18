@@ -114,6 +114,7 @@ beforeAll(() => {
 
 const ID_A = "11111111-1111-4111-8111-111111111111";
 const ID_B = "22222222-2222-4222-8222-222222222222";
+const ID_C = "33333333-3333-4333-8333-333333333333";
 
 function lancamento(troca: Partial<LancamentoLista> = {}): LancamentoLista {
   return {
@@ -154,13 +155,35 @@ const LANCAMENTOS = [
   lancamento({ id: ID_B, valor: 234.56, valorAberto: 234.56 }),
 ];
 
+/**
+ * Página 2, para o teste de troca de página: ID_A continua (ainda marcado),
+ * ID_B saiu de vista e ID_C é novo. Mesmo recorte de
+ * ordens-tabela-barra-selecao.test.tsx.
+ */
+const LANCAMENTOS_PAGINA_2 = [
+  lancamento({ id: ID_A, valor: 1000, valorAberto: 1000 }),
+  lancamento({
+    id: ID_C,
+    numero: "LAN-2026-0017",
+    valor: 500,
+    valorAberto: 500,
+  }),
+];
+
 const CONTA = { id: "conta-1", nome: "Obra 364", banco: "bb" };
 
-function montar() {
-  return render(
+/**
+ * JSX completo, parametrizado por `lancamentos`: o teste de troca de página
+ * chama isto duas vezes com `rerender` — página 1 e depois página 2 — pra
+ * simular o que a URL faria de verdade (nova consulta no servidor, novo
+ * `lancamentos` como prop), sem router real nem Server Component. Mesmo
+ * recurso de ordens-tabela-barra-selecao.test.tsx.
+ */
+function props(lancamentos: LancamentoLista[]) {
+  return (
     <LancamentosTabela
-      lancamentos={LANCAMENTOS}
-      total={LANCAMENTOS.length}
+      lancamentos={lancamentos}
+      total={lancamentos.length}
       pagina={0}
       tamanho={25}
       valores={lerFiltrosLancamentos({}).valores}
@@ -171,8 +194,12 @@ function montar() {
       contas={[CONTA]}
       podeExcluir={false}
       rotuloRecorte={null}
-    />,
+    />
   );
+}
+
+function montar() {
+  return render(props(LANCAMENTOS));
 }
 
 function marcar(id: string) {
@@ -224,6 +251,11 @@ describe("BarraSelecao dentro de LancamentosTabela", () => {
     expect(
       screen.queryByRole("button", { name: "Limpar seleção" }),
     ).not.toBeInTheDocument();
+    // A barra some inteira, então o espelho some junto: não há como imprimir
+    // sem ter marcado nada.
+    expect(
+      screen.queryByRole("button", { name: /imprimir espelho/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("marcar linhas mostra a barra com a contagem e o total certos", () => {
@@ -269,5 +301,56 @@ describe("BarraSelecao dentro de LancamentosTabela", () => {
     expect(
       within(barra()).getByRole("button", { name: "Limpar seleção" }),
     ).toBeEnabled();
+  });
+
+  it("marcar linhas mostra o botão de espelho dentro da barra, junto da ação de lote", () => {
+    montar();
+    marcar(ID_A);
+    marcar(ID_B);
+
+    // Esta é a única das três telas com DUAS ações na mesma barra: o espelho
+    // tem que conviver com o lote de conta, e os dois dentro da barra (não
+    // soltos acima da tabela).
+    expect(
+      within(barra()).getByRole("button", { name: "Imprimir espelho (2)" }),
+    ).toBeInTheDocument();
+    expect(
+      within(barra()).getByRole("button", { name: "Definir conta bancária" }),
+    ).toBeInTheDocument();
+  });
+
+  it("o botão de espelho abre a rota de lançamentos com os ids das linhas marcadas", () => {
+    montar();
+    marcar(ID_A);
+    marcar(ID_B);
+
+    const abrir = vi.fn();
+    vi.stubGlobal("open", abrir);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Imprimir espelho (2)" }),
+    );
+    expect(abrir).toHaveBeenCalledWith(
+      `/espelho/lancamentos?ids=${ID_A}%2C${ID_B}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("trocar de página descarta da contagem quem saiu de vista, sem descartar quem continua", () => {
+    const { rerender } = montar();
+    marcar(ID_A);
+    marcar(ID_B);
+    expect(screen.getByText("2 selecionados")).toBeInTheDocument();
+
+    // Troca de página de verdade: o servidor manda outra lista de
+    // `lancamentos`. ID_A continua nela (ainda marcado), ID_B não veio mais.
+    rerender(props(LANCAMENTOS_PAGINA_2));
+
+    expect(screen.getByText("1 selecionado")).toBeInTheDocument();
+    // Não é só a contagem: o botão também não carrega o id que saiu de vista.
+    expect(
+      screen.getByRole("button", { name: "Imprimir espelho" }),
+    ).toBeInTheDocument();
   });
 });
