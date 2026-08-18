@@ -24,6 +24,35 @@ import { cn } from "@/lib/utils";
 /** Sentinela interna do Radix Select para a opção "todos" (valor vazio é proibido). */
 const VALOR_TODOS = "__todos__";
 
+/**
+ * Largura de um trilho de filtro. Todo filtro da barra ocupa um trilho ou dois,
+ * nunca a largura do próprio conteúdo.
+ *
+ * Com `w-fit`, cada seletor nascia de um tamanho diferente ("Todos os tipos" ao
+ * lado de "Todos os centros de custo") e a barra virava escada: nenhuma coluna
+ * da segunda linha caía embaixo da coluna da primeira. Em trilhos, todo filtro
+ * começa num múltiplo de trilho + `gap-2`, então as linhas se alinham sozinhas.
+ *
+ * 13rem é o que cabe o rótulo mais longo do app ("Todos os centros de custo",
+ * 13px) sem cortar com reticência.
+ */
+export const TRILHO_FILTRO = "w-52";
+
+/** Dois trilhos mais o `gap-2` entre eles, para o filtro largo cair no prumo. */
+export const TRILHO_FILTRO_DUPLO = "w-[26.5rem]";
+
+/**
+ * Rótulo que o HOST da barra (DataTable ou BarraFiltrosConfiguravel) dá ao
+ * filtro, tirado do `rotulo` que ele já exige para o menu "Filtros".
+ *
+ * Vem por contexto, e não por prop, porque o host recebe o filtro JÁ MONTADO
+ * (`elemento: <FiltroSelect ... />`) e não tem como injetar prop em elemento
+ * pronto. Assim os cinco filtros canônicos ganham rótulo em cima sem nenhuma
+ * das 43 telas mudar uma linha, e elemento que não é canônico (um Switch com
+ * Label próprio) simplesmente não lê o contexto e continua como estava.
+ */
+const ContextoRotuloFiltro = React.createContext<string | null>(null);
+
 interface FilterBarProps {
   children: React.ReactNode;
   className?: string;
@@ -44,25 +73,130 @@ interface FiltroBuscaProps {
   placeholder?: string;
 }
 
-/** Campo de busca textual compacto com ícone. */
+/**
+ * Casca de um filtro na barra: rótulo em cima, controle embaixo, largura em
+ * trilhos.
+ *
+ * O rótulo em cima resolve duas coisas de uma vez. Primeira: o seletor dizia o
+ * nome da dimensão no lugar do valor ("Todos os status"), então filtro
+ * PREENCHIDO passava a dizer só "A pagar", sem nenhuma pista de que aquilo era
+ * status. Segunda: data, mês e faixa punham o nome numa palavra cinza SOLTA à
+ * esquerda do campo, enquanto o seletor punha dentro, e a mesma barra ficava com
+ * dois idiomas de rotulagem.
+ *
+ * Sem host que forneça rótulo (contexto vazio) a casca some e sobra só o
+ * controle, que é o que o filtro não canônico continua fazendo.
+ */
+function CampoFiltro({
+  largura,
+  children,
+}: {
+  largura: string;
+  children: React.ReactNode;
+}) {
+  const rotulo = React.useContext(ContextoRotuloFiltro);
+  return (
+    <div className={cn("flex max-w-full min-w-0 flex-col gap-1", largura)}>
+      {rotulo === null ? null : (
+        <span className="truncate text-legenda leading-none tracking-wide text-muted-foreground uppercase">
+          {rotulo}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Campo de busca textual da barra.
+ *
+ * Dois trilhos porque um só cortava o próprio placeholder: "Buscar por número ou
+ * descrição" pede 14rem de texto e o campo tinha 16rem contando o ícone.
+ */
 export function FiltroBusca({
   valor,
   onValorChange,
   placeholder = "Buscar",
 }: FiltroBuscaProps) {
   return (
-    <div className="relative w-64">
-      <Search
-        aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-      />
-      <Input
-        type="search"
-        value={valor}
-        onChange={(evento) => onValorChange(evento.target.value)}
-        placeholder={placeholder}
-        className="h-8 pl-8 text-detalhe"
-      />
+    <CampoFiltro largura={TRILHO_FILTRO_DUPLO}>
+      <div className="relative">
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          type="search"
+          value={valor}
+          onChange={(evento) => onValorChange(evento.target.value)}
+          placeholder={placeholder}
+          className="h-8 pl-8 text-detalhe"
+        />
+      </div>
+    </CampoFiltro>
+  );
+}
+
+/** Um filtro pronto para a barra: o que o host precisa para montar a casca. */
+export interface CampoDaBarra {
+  /** Identificador estável, só para a chave da lista. */
+  id: string;
+  /** Vira o rótulo em cima do controle, via `ContextoRotuloFiltro`. */
+  rotulo: string;
+  elemento: React.ReactNode;
+}
+
+/**
+ * Layout canônico da barra de filtros: os filtros em cima, em trilhos, e as
+ * ações numa linha só, embaixo.
+ *
+ * Existe como peça única porque os dois hosts de filtro do app (o `filtros` do
+ * DataTable e a BarraFiltrosConfiguravel) desenhavam a mesma barra em dois
+ * lugares, e barra igual em tela diferente é metade do que "harmonizado" quer
+ * dizer.
+ *
+ * Por que as ações saem da fileira dos filtros: elas eram irmãs dos filtros num
+ * `justify-between`, então "Filtros/Altura/Colunas" grudava no fim da PRIMEIRA
+ * linha e os filtros iam quebrando por baixo delas. Em tela cheia de filtro
+ * (Lançamentos tem dezesseis) sobrava um buraco no fim da última linha com três
+ * botões pendurados acima dele. Agora cada coisa tem lugar fixo: filtro em cima,
+ * "Limpar filtros" embaixo à esquerda (é ação sobre o filtro) e os menus de
+ * vista embaixo à direita, colados na tabela que eles governam.
+ */
+export function BlocoFiltros({
+  campos,
+  acoesEsquerda,
+  acoesDireita,
+}: {
+  campos: CampoDaBarra[];
+  /** Ações sobre o filtro (limpar) e da tela (importar). `undefined` = nenhuma. */
+  acoesEsquerda?: React.ReactNode;
+  /** Menus de vista da tabela e exportação. `undefined` = nenhuma. */
+  acoesDireita?: React.ReactNode;
+}) {
+  const temAcoes = acoesEsquerda !== undefined || acoesDireita !== undefined;
+  return (
+    <div className="flex flex-col gap-2">
+      {campos.length > 0 ? (
+        // `items-end` para o controle de todo filtro cair na mesma linha de base
+        // mesmo quando o vizinho não tem rótulo em cima (filtro não canônico, que
+        // não lê o contexto).
+        <div className="flex flex-wrap items-end gap-2">
+          {campos.map((campo) => (
+            <ContextoRotuloFiltro.Provider key={campo.id} value={campo.rotulo}>
+              {campo.elemento}
+            </ContextoRotuloFiltro.Provider>
+          ))}
+        </div>
+      ) : null}
+      {temAcoes ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {acoesEsquerda}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {acoesDireita}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -95,16 +229,21 @@ export function FiltroSelect({
   className,
 }: FiltroSelectProps) {
   return (
-    <Combobox
-      valor={valor === "" ? VALOR_TODOS : valor}
-      onValorChange={(novoValor) =>
-        onValorChange(novoValor === VALOR_TODOS ? "" : novoValor)
-      }
-      opcoes={[{ valor: VALOR_TODOS, rotulo: todosRotulo }, ...opcoes]}
-      placeholder={placeholder ?? todosRotulo}
-      size="sm"
-      className={cn("h-8 w-fit gap-1.5 text-detalhe", className)}
-    />
+    <CampoFiltro largura={TRILHO_FILTRO}>
+      <Combobox
+        valor={valor === "" ? VALOR_TODOS : valor}
+        onValorChange={(novoValor) =>
+          onValorChange(novoValor === VALOR_TODOS ? "" : novoValor)
+        }
+        opcoes={[{ valor: VALOR_TODOS, rotulo: todosRotulo }, ...opcoes]}
+        placeholder={placeholder ?? todosRotulo}
+        size="sm"
+        // `w-full`, não `w-fit`: o trilho manda na largura. Com `w-fit` o gatilho
+        // media o texto da opção escolhida, então o MESMO filtro mudava de
+        // tamanho ao ser preenchido e empurrava todos os filtros da linha.
+        className={cn("h-8 w-full gap-1.5 text-detalhe", className)}
+      />
+    </CampoFiltro>
   );
 }
 
@@ -128,26 +267,29 @@ export function FiltroPeriodo({
   rotulo = "Período",
 }: FiltroPeriodoProps) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-detalhe text-muted-foreground">{rotulo}</span>
-      <Input
-        type="date"
-        value={de}
-        max={ate === "" ? undefined : ate}
-        onChange={(evento) => onPeriodoChange(evento.target.value, ate)}
-        aria-label={`${rotulo}: data inicial`}
-        className="h-8 w-[8.75rem] text-detalhe tabular-nums"
-      />
-      <span className="text-detalhe text-muted-foreground">até</span>
-      <Input
-        type="date"
-        value={ate}
-        min={de === "" ? undefined : de}
-        onChange={(evento) => onPeriodoChange(de, evento.target.value)}
-        aria-label={`${rotulo}: data final`}
-        className="h-8 w-[8.75rem] text-detalhe tabular-nums"
-      />
-    </div>
+    <CampoFiltro largura={TRILHO_FILTRO_DUPLO}>
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="date"
+          value={de}
+          max={ate === "" ? undefined : ate}
+          onChange={(evento) => onPeriodoChange(evento.target.value, ate)}
+          // O `rotulo` continua nomeando as duas pontas para quem usa leitor de
+          // tela: o rótulo visível em cima diz "de quê", e uma ponta da outra não.
+          aria-label={`${rotulo}: data inicial`}
+          className="h-8 flex-1 text-detalhe tabular-nums"
+        />
+        <span className="text-detalhe text-muted-foreground">até</span>
+        <Input
+          type="date"
+          value={ate}
+          min={de === "" ? undefined : de}
+          onChange={(evento) => onPeriodoChange(de, evento.target.value)}
+          aria-label={`${rotulo}: data final`}
+          className="h-8 flex-1 text-detalhe tabular-nums"
+        />
+      </div>
+    </CampoFiltro>
   );
 }
 
@@ -360,27 +502,31 @@ export function FiltroMes({
   rotulo = "Mês de referência",
 }: FiltroMesProps) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-detalhe text-muted-foreground">{rotulo}</span>
-      <Input
-        type="month"
-        value={valor}
-        onChange={(evento) => onValorChange(evento.target.value)}
-        aria-label={rotulo}
-        className="h-8 w-[9.5rem] text-detalhe tabular-nums"
-      />
-      {valor === "" ? null : (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Limpar ${rotulo.toLowerCase()}`}
-          onClick={() => onValorChange("")}
-        >
-          <X />
-        </Button>
-      )}
-    </div>
+    <CampoFiltro largura={TRILHO_FILTRO}>
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="month"
+          value={valor}
+          onChange={(evento) => onValorChange(evento.target.value)}
+          aria-label={rotulo}
+          className="h-8 flex-1 text-detalhe tabular-nums"
+        />
+        {/* O X divide o trilho com o campo em vez de crescer para fora dele:
+            antes, escolher o mês alargava o filtro em 2rem e empurrava para o
+            lado todos os filtros que vinham depois na mesma linha. */}
+        {valor === "" ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Limpar ${rotulo.toLowerCase()}`}
+            onClick={() => onValorChange("")}
+          >
+            <X />
+          </Button>
+        )}
+      </div>
+    </CampoFiltro>
   );
 }
 
@@ -408,32 +554,33 @@ export function FiltroValor({
   rotulo = "Valor",
 }: FiltroValorProps) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-detalhe text-muted-foreground">{rotulo}</span>
-      <Input
-        type="number"
-        inputMode="decimal"
-        step="0.01"
-        min="0"
-        value={de}
-        onChange={(evento) => onValorChange(evento.target.value, ate)}
-        aria-label={`${rotulo}: mínimo`}
-        placeholder="de"
-        className="h-8 w-[6.5rem] text-detalhe tabular-nums"
-      />
-      <span className="text-detalhe text-muted-foreground">até</span>
-      <Input
-        type="number"
-        inputMode="decimal"
-        step="0.01"
-        min="0"
-        value={ate}
-        onChange={(evento) => onValorChange(de, evento.target.value)}
-        aria-label={`${rotulo}: máximo`}
-        placeholder="até"
-        className="h-8 w-[6.5rem] text-detalhe tabular-nums"
-      />
-    </div>
+    <CampoFiltro largura={TRILHO_FILTRO_DUPLO}>
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          value={de}
+          onChange={(evento) => onValorChange(evento.target.value, ate)}
+          aria-label={`${rotulo}: mínimo`}
+          placeholder="de"
+          className="h-8 flex-1 text-detalhe tabular-nums"
+        />
+        <span className="text-detalhe text-muted-foreground">até</span>
+        <Input
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          value={ate}
+          onChange={(evento) => onValorChange(de, evento.target.value)}
+          aria-label={`${rotulo}: máximo`}
+          placeholder="até"
+          className="h-8 flex-1 text-detalhe tabular-nums"
+        />
+      </div>
+    </CampoFiltro>
   );
 }
 
@@ -597,48 +744,55 @@ export function BarraFiltrosConfiguravel({
     );
   }
 
+  const temFiltroAtivo = filtros.some((filtro) => filtro.temValor === true);
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 py-2">
-      <div className="flex flex-1 flex-wrap items-center gap-2">
-        {filtros
+    <div className="py-2">
+      <BlocoFiltros
+        campos={filtros
           .filter((filtro) => visivel(filtro.id))
-          .map((filtro) => (
-            <React.Fragment key={filtro.id}>{filtro.elemento}</React.Fragment>
-          ))}
-      </div>
-      <div className="flex items-center gap-2">
-        {/* Mesmo botão do DataTable, mesma regra: só com filtro ativo. Esta barra
-            é o outro lugar do app onde filtro vive, então ele tem que existir
-            aqui também, senão "todo lugar com filtro" viraria "quase todo". */}
-        {filtros.some((filtro) => filtro.temValor === true) ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (onLimparFiltros) {
-                onLimparFiltros();
-                return;
-              }
-              for (const filtro of filtros) {
-                if (filtro.temValor === true) filtro.onLimpar?.();
-              }
-            }}
-          >
-            <FilterX />
-            Limpar filtros
-          </Button>
-        ) : null}
-        <MenuFiltros
-          filtros={filtros.map((filtro) => ({
+          .map((filtro) => ({
             id: filtro.id,
             rotulo: filtro.rotulo,
-            fixo: filtro.fixo,
-            visivel: visivel(filtro.id),
+            elemento: filtro.elemento,
           }))}
-          onAlternar={alternar}
-        />
-      </div>
+        acoesEsquerda={
+          /* Mesmo botão do DataTable, mesma regra: só com filtro ativo. Esta
+             barra é o outro lugar do app onde filtro vive, então ele tem que
+             existir aqui também, senão "todo lugar com filtro" viraria "quase
+             todo". */
+          temFiltroAtivo ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (onLimparFiltros) {
+                  onLimparFiltros();
+                  return;
+                }
+                for (const filtro of filtros) {
+                  if (filtro.temValor === true) filtro.onLimpar?.();
+                }
+              }}
+            >
+              <FilterX />
+              Limpar filtros
+            </Button>
+          ) : undefined
+        }
+        acoesDireita={
+          <MenuFiltros
+            filtros={filtros.map((filtro) => ({
+              id: filtro.id,
+              rotulo: filtro.rotulo,
+              fixo: filtro.fixo,
+              visivel: visivel(filtro.id),
+            }))}
+            onAlternar={alternar}
+          />
+        }
+      />
     </div>
   );
 }
