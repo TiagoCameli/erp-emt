@@ -1127,6 +1127,8 @@ git commit -m "feat(compras): a OC herda a categoria do insumo e mostra o rateio
 - Consumes: `insumos.categoria_financeira_id` (Task 2).
 - Produces: `ordens_compra.categoria_id` preenchida nas 17.
 
+**Ajuste de 17/08/2026, durante a execução:** a OC-2026-0008 (GOL LOG, R$ 375,17) foi aprovada e recebida por outra frente enquanto o plano rodava, e já gerou lançamento — que ficou **sem categoria**, porque a OC não tinha. O backfill precisa cobrir três lugares, não um: `ordens_compra`, o `lancamentos` gerado e o `lancamento_rateios` dele. As outras 16 seguem em rascunho (15) e pendente de aprovação (1).
+
 - [ ] **Step 1: Escrever a carga**
 
 As 17 ordens entraram por SQL, sem passar pelo formulário, e ficaram sem categoria. Com o insumo já classificado, a categoria da ordem é derivável: a de maior valor entre os itens, a mesma regra que a aprovação aplica.
