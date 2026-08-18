@@ -577,17 +577,25 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
 export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("fornecedores")
-    .select("id, razao_social, nome_fantasia")
-    .eq("ativo", true)
-    .order("razao_social");
+  // Pagina até o fim, pelo mesmo motivo dos insumos: o PostgREST corta em 1.000
+  // sem avisar, e a EMT já tem 942 fornecedores ativos. Ao passar de mil, o
+  // fornecedor cortado não apareceria nem digitando (a busca do Combobox roda
+  // sobre o que chegou), e a OC dele mostraria o id no lugar do nome.
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("fornecedores")
+      .select("id, razao_social, nome_fantasia")
+      .eq("ativo", true)
+      .order("razao_social")
+      .order("id")
+      .range(de, ate),
+  );
 
-  if (error) {
+  if (erro) {
     throw new Error("Não foi possível carregar os fornecedores");
   }
 
-  return (data ?? []).map((fornecedor) => ({
+  return linhas.map((fornecedor) => ({
     id: fornecedor.id,
     nome: nomeFornecedor(fornecedor),
   }));

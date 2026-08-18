@@ -35,6 +35,24 @@ export interface ComboboxOpcao {
   rotulo: string;
 }
 
+/** O que aparece no lugar de um id que não tem nome nenhum para mostrar. */
+export const ROTULO_VALOR_ORFAO = "Registro não encontrado";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Rótulo de um valor que não está em `opcoes` e nem veio com nome.
+ *
+ * Valor de texto (filtro que veio da URL, texto livre antigo) aparece como é: ali
+ * o próprio valor é legível e informa. UUID, não — id de chave estrangeira na
+ * tela é ruído que parece defeito, e foi exatamente o que apareceu na ordem de
+ * compra quando a condição de pagamento dela foi inativada. Nesse caso o
+ * componente diz que não achou, em vez de despejar o id.
+ */
+export function rotuloOrfao(valor: string): string {
+  return UUID.test(valor) ? ROTULO_VALOR_ORFAO : valor;
+}
+
 export interface ComboboxProps {
   /**
    * Valor atual (o `valor` da opção selecionada). "" quando nada selecionado.
@@ -54,6 +72,15 @@ export interface ComboboxProps {
   valores?: string[];
   onValoresChange?: (valores: string[]) => void;
   opcoes: ComboboxOpcao[];
+  /**
+   * Nome do valor atual, para quando ele NÃO está em `opcoes` — cadastro que foi
+   * inativado depois de usado, ou que o usuário não tem permissão de listar.
+   *
+   * Quem chama normalmente tem esse nome à mão (o próprio documento já traz o
+   * fornecedor, o centro de custo, o insumo resolvidos). Sem ele, o componente
+   * não tem como adivinhar e mostra `ROTULO_VALOR_ORFAO` em vez do id cru.
+   */
+  rotuloDoValor?: string;
   /**
    * Quando presente, permite criar uma opção a partir do texto digitado que não
    * existe na lista. Retorna o `valor` criado (para selecionar) ou null se falhou.
@@ -89,6 +116,7 @@ export function Combobox({
   valores,
   onValoresChange,
   opcoes,
+  rotuloDoValor,
   onCriar,
   limpavel = false,
   placeholder = "Selecione",
@@ -120,8 +148,8 @@ export function Combobox({
     [multi, valores],
   );
 
-  // opcoes + criadas locais + garante o(s) valor(es) atual(is) na lista
-  // (fallback ao id, para seleção que veio de link não sumir da tela).
+  // opcoes + criadas locais + garante o(s) valor(es) atual(is) na lista, para
+  // seleção que veio de link ou de cadastro fora da lista não sumir da tela.
   const todasOpcoes = React.useMemo(() => {
     const base = [...opcoes];
     for (const criada of criadas) {
@@ -132,14 +160,14 @@ export function Combobox({
         (escolhido) => !base.some((o) => o.valor === escolhido),
       );
       return faltando.length > 0
-        ? [...faltando.map((v) => ({ valor: v, rotulo: v })), ...base]
+        ? [...faltando.map((v) => ({ valor: v, rotulo: rotuloOrfao(v) })), ...base]
         : base;
     }
     if (valor && !base.some((o) => o.valor === valor)) {
-      return [{ valor, rotulo: valor }, ...base];
+      return [{ valor, rotulo: rotuloDoValor?.trim() || rotuloOrfao(valor) }, ...base];
     }
     return base;
-  }, [valor, opcoes, criadas, multi, selecionados]);
+  }, [valor, rotuloDoValor, opcoes, criadas, multi, selecionados]);
 
   /**
    * Texto do gatilho. No múltiplo, um escolhido mostra o nome (é o caso comum e
@@ -151,7 +179,7 @@ export function Combobox({
     if (selecionados.size === 0) return "";
     if (selecionados.size === 1) {
       const unico = [...selecionados][0];
-      return todasOpcoes.find((o) => o.valor === unico)?.rotulo ?? unico;
+      return todasOpcoes.find((o) => o.valor === unico)?.rotulo ?? rotuloOrfao(unico);
     }
     return `${selecionados.size} selecionados`;
   }, [multi, todasOpcoes, valor, selecionados]);
