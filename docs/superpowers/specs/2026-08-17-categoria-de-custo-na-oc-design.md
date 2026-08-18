@@ -58,7 +58,7 @@ nullable até a semeadura cobrir os 3.357 registros; a obrigatoriedade é impost
 na aplicação (Zod + o form de insumo) desde o primeiro dia. Virar `NOT NULL` no
 banco é um passo posterior, quando a cobertura estiver em 100% — e aí ele é
 barato. `lancamento_rateios.categoria_id` fica nullable pela mesma razão: os
-6.737 rateios existentes recebem backfill com a categoria do lançamento pai.
+6.041 rateios existentes recebem backfill com a categoria do lançamento pai.
 
 **`lancamentos.categoria_id` continua existindo e preenchido.** 5.905 lançamentos
 e todos os relatórios dependem dele. Quando a OC tem uma categoria só, ele e o
