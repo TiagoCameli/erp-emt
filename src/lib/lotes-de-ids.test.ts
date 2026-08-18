@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  emLotes,
-  LOTE_IDS_POSTGREST,
-} from "@/modules/financeiro/lancamentos/lotes-de-ids";
+import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 
 describe("emLotes", () => {
   it("quebra a lista em pedaços do tamanho pedido", () => {

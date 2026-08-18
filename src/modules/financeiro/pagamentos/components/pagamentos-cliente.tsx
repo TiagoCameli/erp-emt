@@ -7,6 +7,8 @@ import { CheckCircle2, Wallet } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  BarraSelecao,
+  BotaoEspelho,
   CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
@@ -130,6 +132,72 @@ function rotuloParcela(
       <span className="codigo-doc">{numero}</span>
       <span className="text-muted-foreground"> / {numeroParcela}</span>
     </span>
+  );
+}
+
+/**
+ * Célula do valor na tabela de pagamentos pagas. Mostra o valor da parcela e,
+ * quando houve ajuste (desconto e/ou juros), exibe a composição da linha líquida:
+ *
+ * - Se há desconto mas sem juros: "desconto X, líquido Y"
+ * - Se há juros mas sem desconto: "juros X, líquido Y"
+ * - Se há ambos: "desconto X, juros Z, líquido Y"
+ *
+ * Desconto e juros vivem como linha extra DENTRO da célula de valor (não como
+ * coluna própria) porque quase nenhum pagamento tem ambos, e uma coluna própria
+ * apareceria vazia na maioria das linhas, mexendo no conjunto de colunas salvo
+ * nas preferências do usuário. Juros entra aqui pelo mesmo motivo que desconto:
+ * sem ele, os três números (valor, desconto/juros, líquido) não somam na tela,
+ * e o usuário não consegue reconciliar a linha com o que realmente saiu da conta.
+ */
+export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
+  const temDesconto = parcela.desconto > 0;
+  const temJuros = parcela.juros > 0;
+
+  if (!temDesconto && !temJuros) {
+    return <MoneyText valor={parcela.valor} />;
+  }
+
+  // Monta a linha de ajustes dinamicamente. Começa vazia, acumula cada item.
+  const partes: React.ReactNode[] = [];
+
+  if (temDesconto) {
+    partes.push(
+      <React.Fragment key="desconto">
+        desconto{" "}
+        <MoneyText valor={parcela.desconto} className="inline" />
+      </React.Fragment>,
+    );
+  }
+
+  if (temJuros) {
+    partes.push(
+      <React.Fragment key="juros">
+        juros <MoneyText valor={parcela.juros} className="inline" />
+      </React.Fragment>,
+    );
+  }
+
+  // Sempre termina com o líquido.
+  partes.push(
+    <React.Fragment key="liquido">
+      líquido{" "}
+      <MoneyText valor={parcela.valorLiquido} className="inline" />
+    </React.Fragment>,
+  );
+
+  return (
+    <>
+      <MoneyText valor={parcela.valor} />
+      <span className="block text-legenda text-muted-foreground">
+        {partes.map((parte, index) => (
+          <React.Fragment key={index}>
+            {index > 0 && ", "}
+            {parte}
+          </React.Fragment>
+        ))}
+      </span>
+    </>
   );
 }
 
@@ -668,24 +736,8 @@ export function PagamentosCliente({
         header: "Valor",
         size: 130,
         meta: { alinharDireita: true },
-        // O desconto entra como linha extra DENTRO da célula de valor, e só
-        // quando existe. Coluna própria apareceria vazia em quase todo
-        // pagamento e mexeria no conjunto de colunas salvo nas preferências.
         cell: ({ row }) => (
-          <>
-            <MoneyText valor={row.original.valor} />
-            {row.original.desconto > 0 ? (
-              <span className="block text-legenda text-muted-foreground">
-                desconto{" "}
-                <MoneyText valor={row.original.desconto} className="inline" />,
-                líquido{" "}
-                <MoneyText
-                  valor={row.original.valorLiquido}
-                  className="inline"
-                />
-              </span>
-            ) : null}
-          </>
+          <CelulaValorPaga parcela={row.original} />
         ),
       },
       ...(podeEstornar
@@ -712,6 +764,18 @@ export function PagamentosCliente({
     [podeEstornar],
   );
 
+  /**
+   * Parcelas PAGAS marcadas para imprimir o espelho. Só existe na aba "Pagas":
+   * parcela não paga não é pagamento, e imprimir espelho de pagamento que não
+   * aconteceu seria papel mentindo.
+   *
+   * NÃO usa `useFiltroSessao` (mesma escolha de `marcados` em
+   * lancamentos-tabela.tsx), e some ao trocar de aba (ver `Tabs` abaixo): uma
+   * seleção sobrevivendo à troca imprimiria linha que o usuário não está mais
+   * vendo.
+   */
+  const [marcados, setSelecionados] = React.useState<string[]>([]);
+
   // Histórico paginado no servidor: a primeira página vem do server component,
   // as próximas são buscadas via action conforme a paginação muda.
   const [linhasPagas, setLinhasPagas] = React.useState(pagas);
@@ -721,6 +785,28 @@ export function PagamentosCliente({
     pageSize: TAMANHO_PAGINA,
   });
   const [carregandoPagas, setCarregandoPagas] = React.useState(false);
+
+  /**
+   * Só vale o que está à vista NESTA página do histórico.
+   *
+   * `selecionados` é DERIVADO de `linhasPagas` (a página atual, que muda a
+   * cada troca de página/filtro/refresh do servidor), e não o estado bruto:
+   * parcela que saiu da página deixa de contar sozinha. Sem isso, marcar 3
+   * parcelas e trocar de página deixaria a barra dizendo "3 selecionados" sem
+   * nenhum checkbox marcado à vista — a impressão continuaria certa (o id
+   * ainda existe), mas o número na tela estaria mentindo sobre o que está
+   * marcado. Mesma guarda de `lancamentos-tabela.tsx`; ali o risco citado é
+   * gravar em linha que sumiu da tela, aqui é só a contagem discordar do que
+   * se vê.
+   */
+  const idsVisiveisPagas = React.useMemo(
+    () => new Set(linhasPagas.map((parcela) => parcela.id)),
+    [linhasPagas],
+  );
+  const selecionados = React.useMemo(
+    () => marcados.filter((id) => idsVisiveisPagas.has(id)),
+    [marcados, idsVisiveisPagas],
+  );
 
   // Quando o server component reenvia a primeira página (após um pagamento e
   // router.refresh), volta a listar a partir dela. Ajuste de estado durante o
@@ -769,7 +855,12 @@ export function PagamentosCliente({
         </p>
       ) : null}
 
-      <Tabs defaultValue="a-pagar">
+      <Tabs
+        defaultValue="a-pagar"
+        // Troca de aba limpa a seleção da aba "Pagas": mesma razão de
+        // lancamentos-tabela.tsx não persistir seleção entre visitas.
+        onValueChange={() => setSelecionados([])}
+      >
         <TabsList>
           <TabsTrigger value="a-pagar">A pagar</TabsTrigger>
           <TabsTrigger value="pagas">Pagas</TabsTrigger>
@@ -794,25 +885,38 @@ export function PagamentosCliente({
         </TabsContent>
 
         <TabsContent value="pagas">
-          <DataTable
-            idTabela="financeiro.pagamentos.pagas"
-            columns={colunasPagas}
-            data={linhasPagas}
-            filtros={filtrosPagasBarra}
-            total={totalRegistros}
-            pageIndex={paginacao.pageIndex}
-            pageSize={paginacao.pageSize}
-            onPaginationChange={aoMudarPaginacao}
-            isLoading={carregandoPagas}
-            emptyState={
-              <EmptyState
-                icone={CheckCircle2}
-                titulo="Nenhum pagamento registrado"
-                descricao="Os pagamentos confirmados aparecem aqui"
-                className="border-none bg-transparent"
-              />
-            }
-          />
+          <div className="flex flex-col gap-2">
+            <BarraSelecao
+              quantidade={selecionados.length}
+              onLimpar={() => setSelecionados([])}
+            >
+              <BotaoEspelho rota="/espelho/pagamentos" ids={selecionados} />
+            </BarraSelecao>
+            <DataTable
+              idTabela="financeiro.pagamentos.pagas"
+              columns={colunasPagas}
+              data={linhasPagas}
+              filtros={filtrosPagasBarra}
+              total={totalRegistros}
+              pageIndex={paginacao.pageIndex}
+              pageSize={paginacao.pageSize}
+              onPaginationChange={aoMudarPaginacao}
+              isLoading={carregandoPagas}
+              selecao={{
+                idDaLinha: (parcela: ParcelaPaga) => parcela.id,
+                selecionados,
+                onSelecionadosChange: setSelecionados,
+              }}
+              emptyState={
+                <EmptyState
+                  icone={CheckCircle2}
+                  titulo="Nenhum pagamento registrado"
+                  descricao="Os pagamentos confirmados aparecem aqui"
+                  className="border-none bg-transparent"
+                />
+              }
+            />
+          </div>
         </TabsContent>
       </Tabs>
 

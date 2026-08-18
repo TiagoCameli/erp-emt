@@ -241,7 +241,41 @@ describe("PagamentoDetalheView e a decisão de aprovar", () => {
     expect(
       screen.queryByRole("button", { name: /Aprovar pagamento/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/não tem permissão para aprovar/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/não tem permissão para aprovar/i),
+    ).toBeInTheDocument();
+  });
+
+  it("não oferece o espelho de pagamento em parcela que ainda não foi paga", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento()}
+        parcela={parcela()}
+        {...PADRAO}
+      />,
+    );
+
+    // Nesta tela a parcela está EM APROVAÇÃO: o espelho de pagamento imprime
+    // "Saiu da conta" e "Pago em", então o botão aqui gerava papel dizendo que
+    // saiu dinheiro que não saiu. A listagem já só oferece o espelho na aba
+    // "Pagas"; o detalhe é que tinha escapado da regra.
+    expect(
+      screen.queryByRole("button", { name: /Imprimir espelho/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("oferece o espelho quando a parcela está paga", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento({ status: "pago" })}
+        parcela={parcela({ status: "pago", dataPagamento: "2026-08-15" })}
+        {...PADRAO}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Imprimir espelho/i }),
+    ).toBeInTheDocument();
   });
 
   it("avisa da nota fiscal sem impedir a aprovação", () => {

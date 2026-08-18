@@ -76,7 +76,6 @@ type Props = React.ComponentProps<typeof LoteContaBancaria>;
 function montar(props: Partial<Props> = {}) {
   const cheias: Props = {
     selecionados: ["a", "b", "c"],
-    valorSelecionado: 4200000,
     jaComConta: 1,
     contas: CONTAS,
     onLimparSelecao: vi.fn(),
@@ -106,19 +105,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("LoteContaBancaria", () => {
+  // A contagem ("N selecionados") e o "Limpar seleção" saíram daqui: agora são
+  // do canônico BarraSelecao (barra-selecao.test.tsx), que quem lista os
+  // lançamentos monta ao redor deste componente. Aqui só fica a ação.
   it("não aparece sem seleção", () => {
-    montar({ selecionados: [] });
-    expect(screen.queryByText(/selecionado/i)).not.toBeInTheDocument();
-  });
-
-  it("mostra a contagem da seleção", () => {
-    montar();
-    expect(screen.getByText("3 selecionados")).toBeInTheDocument();
-  });
-
-  it("singular não diz '1 selecionados'", () => {
-    montar({ selecionados: ["a"] });
-    expect(screen.getByText("1 selecionado")).toBeInTheDocument();
+    const { container } = montar({ selecionados: [] });
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("acima do teto avisa e não oferece o botão", () => {
@@ -139,12 +131,14 @@ describe("LoteContaBancaria", () => {
     ).toBeDisabled();
   });
 
-  it("com a conta escolhida diz quantos recebem, quantos pulam, a conta e o total", async () => {
+  it("com a conta escolhida diz quantos recebem, quantos pulam e a conta", async () => {
     montar();
     escolherConta("Caixa 1234");
     expect(screen.getByText(/2 lançamentos recebem/)).toBeInTheDocument();
     expect(screen.getByText(/1 já tem conta e será pulado/)).toBeInTheDocument();
-    expect(screen.getByText("R$ 4.200.000,00")).toBeInTheDocument();
+    // O total não se repete aqui: quem mostra o valor é o resumo da
+    // BarraSelecao, o tempo todo — repetir seria a mesma informação duas vezes.
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
   });
 
   it("erro da action vira toast de erro e a seleção FICA", async () => {
@@ -184,17 +178,27 @@ describe("LoteContaBancaria", () => {
     expect(props.onConcluido).toHaveBeenCalled();
   });
 
+  it("avisa quem monta a barra quando começa e termina de salvar", async () => {
+    // Quem usa isso é o BarraSelecao, pra não deixar "Limpar seleção" clicável
+    // no meio da gravação (limpar aí deixaria o lote sem as linhas que está
+    // gravando).
+    const onSalvandoChange = vi.fn();
+    montar({ onSalvandoChange });
+    escolherConta("Caixa 1234");
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /definir conta bancária/i }),
+      );
+    });
+    expect(onSalvandoChange).toHaveBeenNthCalledWith(1, true);
+    expect(onSalvandoChange).toHaveBeenNthCalledWith(2, false);
+  });
+
   it("todos já com conta: não há o que fazer, botão desabilitado", async () => {
     montar({ selecionados: ["a", "b"], jaComConta: 2 });
     escolherConta("Caixa 1234");
     expect(
       screen.getByRole("button", { name: /definir conta bancária/i }),
     ).toBeDisabled();
-  });
-
-  it("limpar seleção avisa quem manda", () => {
-    const { props } = montar();
-    fireEvent.click(screen.getByRole("button", { name: /limpar seleção/i }));
-    expect(props.onLimparSelecao).toHaveBeenCalled();
   });
 });
