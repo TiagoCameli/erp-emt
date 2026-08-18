@@ -82,10 +82,7 @@ function ordemFixture(overrides: Partial<EspelhoOrdem> = {}): EspelhoOrdem {
     // 100.000 de itens + 500 de frete = 100.500.
     valorTotal: 100500,
     somaItens: 100000,
-    frete: 500,
-    outrasDespesas: 0,
-    impostos: 0,
-    desconto: 0,
+    ajustes: { frete: 500, outrasDespesas: 0, impostos: 0, desconto: 0 },
     status: "aprovado",
     motivoRejeicao: null,
     dataCompra: "2026-07-31",
@@ -201,8 +198,12 @@ describe("EspelhoOrdensPage", () => {
       ordemFixture({
         valorTotal: 100000,
         somaItens: 103835.95,
-        frete: 0,
-        desconto: 3835.95,
+        ajustes: {
+          frete: 0,
+          outrasDespesas: 0,
+          impostos: 0,
+          desconto: 3835.95,
+        },
         itens: [
           {
             id: "item-1",
@@ -226,22 +227,45 @@ describe("EspelhoOrdensPage", () => {
 
     await renderPagina(ID_A);
 
-    // O valor da ordem aparece, e sob o nome dele.
-    expect(screen.getByText("Total da ordem")).toBeInTheDocument();
-    expect(screen.getByText(brl(100000))).toBeInTheDocument();
+    // O valor da ordem aparece com o rótulo "Valor total", o MESMO que a tela
+    // de detalhe usa para o mesmo número. Duas vezes: o campo do cabeçalho e o
+    // fecho da seção "Formação do total".
+    expect(screen.getAllByText("Valor total")).toHaveLength(2);
+    expect(screen.getAllByText(brl(100000))).toHaveLength(2);
 
-    // A soma dos itens aparece sob o rótulo "Total dos itens" nos dois lugares
-    // (campo do cabeçalho e rodapé da tabela), sempre com o MESMO número. As
-    // três células com esse valor são: o campo do cabeçalho, o subtotal da
-    // única linha de item, e o rodapé da tabela.
-    expect(screen.getAllByText("Total dos itens")).toHaveLength(2);
+    // A soma dos itens NÃO é o valor total, e nunca aparece com o nome dele.
+    // Três células: o rodapé da tabela de itens, o subtotal da única linha, e
+    // a linha "Soma dos itens" da formação do total.
+    expect(screen.getByText("Total dos itens")).toBeInTheDocument();
+    expect(screen.getByText("Soma dos itens")).toBeInTheDocument();
     expect(screen.getAllByText(brl(103835.95))).toHaveLength(3);
-    // E os dois números NÃO são o mesmo: era exatamente isso que o papel
-    // escondia ao dar o mesmo rótulo aos dois.
-    expect(screen.queryAllByText(brl(100000))).toHaveLength(1);
 
-    // E o desconto vai com o sinal, para a conta fechar no papel.
-    expect(screen.getByText("Desconto (−)")).toBeInTheDocument();
-    expect(screen.getByText(brl(3835.95))).toBeInTheDocument();
+    // E o desconto sai com o sinal que LINHAS_DE_AJUSTE define, para a conta
+    // fechar no papel: 103.835,95 − 3.835,95 = 100.000,00.
+    expect(screen.getByText("Desconto")).toBeInTheDocument();
+    expect(screen.getByText(`− ${brl(3835.95)}`)).toBeInTheDocument();
+  });
+
+  it("OC sem ajuste nenhum não imprime a seção de formação do total", async () => {
+    // Sem ajuste, "Valor total" e "Total dos itens" são o mesmo número: a
+    // seção só teria uma linha repetindo o total, e viraria ruído no papel.
+    // Mesma decisão que a tela de detalhe toma com `temAjuste`.
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockReturnValue(true);
+    vi.mocked(buscarOrdensParaEspelho).mockResolvedValue([
+      ordemFixture({
+        valorTotal: 100000,
+        somaItens: 100000,
+        ajustes: { frete: 0, outrasDespesas: 0, impostos: 0, desconto: 0 },
+      }),
+    ]);
+    vi.mocked(trilhaOrdem).mockResolvedValue([]);
+    vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
+
+    await renderPagina(ID_A);
+
+    expect(screen.queryByText("Formação do total")).not.toBeInTheDocument();
+    expect(screen.queryByText("Soma dos itens")).not.toBeInTheDocument();
+    expect(screen.getByText("Valor total")).toBeInTheDocument();
   });
 });

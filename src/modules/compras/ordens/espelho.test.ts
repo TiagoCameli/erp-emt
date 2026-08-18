@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { temAjuste } from "@/modules/compras/ordens/calculo";
 import { montarEspelhoOrdem } from "@/modules/compras/ordens/espelho";
 
 const LINHA = {
@@ -55,10 +56,30 @@ describe("montarEspelhoOrdem", () => {
     // dentro de valor_total. O papel imprime os quatro assim mesmo, porque sem
     // eles quem lê não tem como refazer a conta do total.
     const espelho = montarEspelhoOrdem(LINHA);
-    expect(espelho.frete).toBe(500);
-    expect(espelho.outrasDespesas).toBe(0);
-    expect(espelho.impostos).toBe(0);
-    expect(espelho.desconto).toBe(0);
+    expect(espelho.ajustes).toEqual({
+      frete: 500,
+      outrasDespesas: 0,
+      impostos: 0,
+      desconto: 0,
+    });
+    // Mesma forma que `OrdemDetalhe` usa, para os dois lerem LINHAS_DE_AJUSTE.
+    expect(temAjuste(espelho.ajustes)).toBe(true);
+  });
+
+  it("OC sem ajuste nenhum é reconhecida como sem ajuste", () => {
+    // É o que decide se o papel imprime a seção "Formação do total": sem
+    // ajuste, valor total e soma dos itens são o mesmo número e a seção
+    // seria ruído. Mesma decisão da tela de detalhe.
+    // Tirar o frete OBRIGA a baixar o total junto: a trigger é BEFORE e
+    // recalcula sempre, então OC com frete 0 e total 100.500 sobre 100.000 de
+    // itens não existe. Fixture de dinheiro tem que ser possível no banco.
+    const espelho = montarEspelhoOrdem({
+      ...LINHA,
+      frete: "0.00",
+      valor_total: "100000.00",
+    });
+    expect(temAjuste(espelho.ajustes)).toBe(false);
+    expect(espelho.somaItens).toBe(espelho.valorTotal);
   });
 
   it("calcula o subtotal do item, porque não é coluna do banco", () => {
@@ -109,10 +130,10 @@ describe("montarEspelhoOrdem", () => {
       ],
     });
     expect(espelho.somaItens).toBe(103835.95);
-    expect(espelho.desconto).toBe(3835.95);
+    expect(espelho.ajustes.desconto).toBe(3835.95);
     expect(espelho.valorTotal).toBe(100000);
     // A conta do papel fecha: itens - desconto = total da ordem.
-    expect(espelho.somaItens - espelho.desconto).toBeCloseTo(
+    expect(espelho.somaItens - espelho.ajustes.desconto).toBeCloseTo(
       espelho.valorTotal,
       2,
     );

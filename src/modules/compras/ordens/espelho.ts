@@ -1,5 +1,6 @@
 import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 import { createClient } from "@/lib/supabase/server";
+import type { AjustesDaOrdem } from "@/modules/compras/ordens/calculo";
 
 export interface EspelhoOrdemItem {
   id: string;
@@ -54,10 +55,14 @@ export interface EspelhoOrdem {
    * itens divergirem, o papel tem que mostrar a divergência.
    */
   somaItens: number;
-  frete: number;
-  outrasDespesas: number;
-  impostos: number;
-  desconto: number;
+  /**
+   * Os ajustes do rodapé, na MESMA forma que `OrdemDetalhe` (queries.ts) usa.
+   * Nomear igual não é gosto: o papel e a tela de detalhe imprimem a mesma
+   * conta, e é `LINHAS_DE_AJUSTE` (calculo.ts) que decide rótulo e sinal de
+   * cada uma nas duas superfícies. Duas listas divergiriam no primeiro ajuste
+   * novo.
+   */
+  ajustes: AjustesDaOrdem;
   status: string;
   motivoRejeicao: string | null;
   dataCompra: string | null;
@@ -166,10 +171,12 @@ export function montarEspelhoOrdem(linha: LinhaEspelhoOrdem): EspelhoOrdem {
     descricao: linha.descricao,
     valorTotal: numero(linha.valor_total),
     somaItens: itens.reduce((soma, item) => soma + item.subtotal, 0),
-    frete: numero(linha.frete),
-    outrasDespesas: numero(linha.outras_despesas),
-    impostos: numero(linha.impostos),
-    desconto: numero(linha.desconto),
+    ajustes: {
+      frete: numero(linha.frete),
+      outrasDespesas: numero(linha.outras_despesas),
+      impostos: numero(linha.impostos),
+      desconto: numero(linha.desconto),
+    },
     status: linha.status,
     motivoRejeicao: linha.motivo_rejeicao,
     dataCompra: linha.data_compra,

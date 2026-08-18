@@ -8,6 +8,7 @@ import {
   EspelhoVazio,
 } from "@/components/canonicos";
 import {
+  formatarBRL,
   formatarData,
   formatarDataHora,
   formatarMesAno,
@@ -17,6 +18,7 @@ import { lerIdsDoEspelho, MAX_ESPELHOS } from "@/lib/ids-do-espelho";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
+import { LINHAS_DE_AJUSTE, temAjuste } from "@/modules/compras/ordens/calculo";
 import { buscarOrdensParaEspelho } from "@/modules/compras/ordens/espelho";
 import { trilhaOrdem } from "@/modules/compras/ordens/queries";
 
@@ -124,39 +126,16 @@ export default async function EspelhoOrdensPage({
                   valor: formatarMesAno(ordem.mesCompetencia),
                 },
                 { rotulo: "Cotação de origem", valor: ordem.cotacaoNumero },
-                // Os seis campos de dinheiro são a conta da trigger
-                // `trg_total_oc_cabecalho`, na ordem em que ela soma:
-                // itens + frete + outras + impostos - desconto = total. Quem
-                // lê o papel consegue refazer a conta na mão, e por isso o
-                // desconto vai marcado com o sinal.
-                //
-                // `valorTotal` é o TOTAL DA ORDEM, não a soma dos itens: a
-                // migration 20260817160000 passou os ajustes para dentro dele.
-                // Os dois números só coincidem quando não há ajuste nenhum —
-                // em 6 das 17 OCs carregadas do Mais Controle eles diferem, e
-                // na 2592 a diferença é de R$ 3.835,95.
+                // "Valor total" é o mesmo rótulo, para o mesmo número, que a
+                // tela de detalhe usa. `valorTotal` é o VALOR DA ORDEM: a
+                // migration 20260817160000 passou os ajustes do rodapé para
+                // dentro dele, então ele NÃO é a soma dos itens. Os dois só
+                // coincidem quando não há ajuste nenhum; em 6 das 17 OCs
+                // carregadas do Mais Controle eles diferem, e na 2592 a
+                // diferença é de R$ 3.835,95. Quando diferem, a seção
+                // "Formação do total" logo abaixo mostra por quê.
                 {
-                  rotulo: "Total dos itens",
-                  valor: <EspelhoDinheiro valor={ordem.somaItens} />,
-                },
-                {
-                  rotulo: "Frete",
-                  valor: <EspelhoDinheiro valor={ordem.frete} />,
-                },
-                {
-                  rotulo: "Outras despesas",
-                  valor: <EspelhoDinheiro valor={ordem.outrasDespesas} />,
-                },
-                {
-                  rotulo: "Impostos",
-                  valor: <EspelhoDinheiro valor={ordem.impostos} />,
-                },
-                {
-                  rotulo: "Desconto (−)",
-                  valor: <EspelhoDinheiro valor={ordem.desconto} />,
-                },
-                {
-                  rotulo: "Total da ordem",
+                  rotulo: "Valor total",
                   valor: <EspelhoDinheiro valor={ordem.valorTotal} />,
                 },
                 ...(ordem.motivoRejeicao
@@ -203,6 +182,48 @@ export default async function EspelhoOrdensPage({
               }}
             />
           </EspelhoSecao>
+
+          {/*
+            Só existe quando há ajuste. Sem ajuste, "Valor total" e "Total dos
+            itens" são o mesmo número e a seção seria ruído — é a mesma decisão
+            que a tela de detalhe toma com `temAjuste`, e as duas superfícies
+            imprimem a MESMA conta, com os mesmos rótulos e os mesmos sinais,
+            porque as duas leem `LINHAS_DE_AJUSTE`.
+          */}
+          {temAjuste(ordem.ajustes) ? (
+            <EspelhoSecao rotulo="Formação do total">
+              <EspelhoTabela
+                colunas={[
+                  { chave: "linha", rotulo: "Composição" },
+                  { chave: "valor", rotulo: "Valor", alinharDireita: true },
+                ]}
+                linhas={[
+                  {
+                    linha: "Soma dos itens",
+                    valor: <EspelhoDinheiro valor={ordem.somaItens} />,
+                  },
+                  ...LINHAS_DE_AJUSTE.filter(
+                    ({ chave }) => ordem.ajustes[chave] !== 0,
+                  ).map(({ chave, rotulo, sinal }) => ({
+                    linha: rotulo,
+                    // O sinal vem de LINHAS_DE_AJUSTE, não do valor: desconto
+                    // é guardado positivo no banco e só subtrai aqui. Mesma
+                    // renderização da tela de detalhe.
+                    valor: (
+                      <span className="tabular-nums">
+                        {sinal === "-" ? "− " : "+ "}
+                        {formatarBRL(ordem.ajustes[chave])}
+                      </span>
+                    ),
+                  })),
+                ]}
+                totais={{
+                  linha: "Valor total",
+                  valor: <EspelhoDinheiro valor={ordem.valorTotal} />,
+                }}
+              />
+            </EspelhoSecao>
+          ) : null}
 
           <EspelhoSecao rotulo="Rateio por centro de custo">
             <EspelhoTabela
