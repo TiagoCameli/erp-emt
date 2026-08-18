@@ -76,7 +76,6 @@ type Props = React.ComponentProps<typeof LoteContaBancaria>;
 function montar(props: Partial<Props> = {}) {
   const cheias: Props = {
     selecionados: ["a", "b", "c"],
-    valorSelecionado: 4200000,
     jaComConta: 1,
     contas: CONTAS,
     onLimparSelecao: vi.fn(),
@@ -132,12 +131,14 @@ describe("LoteContaBancaria", () => {
     ).toBeDisabled();
   });
 
-  it("com a conta escolhida diz quantos recebem, quantos pulam, a conta e o total", async () => {
+  it("com a conta escolhida diz quantos recebem, quantos pulam e a conta", async () => {
     montar();
     escolherConta("Caixa 1234");
     expect(screen.getByText(/2 lançamentos recebem/)).toBeInTheDocument();
     expect(screen.getByText(/1 já tem conta e será pulado/)).toBeInTheDocument();
-    expect(screen.getByText("R$ 4.200.000,00")).toBeInTheDocument();
+    // O total não se repete aqui: quem mostra o valor é o resumo da
+    // BarraSelecao, o tempo todo — repetir seria a mesma informação duas vezes.
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
   });
 
   it("erro da action vira toast de erro e a seleção FICA", async () => {

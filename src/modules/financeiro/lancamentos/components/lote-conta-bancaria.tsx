@@ -4,7 +4,7 @@ import * as React from "react";
 import { toast } from "@/components/canonicos/toast";
 
 import { Button } from "@/components/ui/button";
-import { Combobox, MoneyText } from "@/components/canonicos";
+import { Combobox } from "@/components/canonicos";
 import { definirContaLancamentosLote } from "@/modules/financeiro/lancamentos/actions";
 import {
   LIMITE_LOTE,
@@ -13,8 +13,6 @@ import {
 
 export interface LoteContaBancariaProps {
   selecionados: string[];
-  /** Valor total dos selecionados, para a confirmação mostrar o tamanho do estrago possível. */
-  valorSelecionado: number;
   /** Quantos dos selecionados já têm conta: aparecem como pulados na confirmação. */
   jaComConta: number;
   contas: { valor: string; rotulo: string }[];
@@ -38,13 +36,14 @@ export interface LoteContaBancariaProps {
  * fila de pagamento) e definir uma por uma, abrindo o detalhe de cada lançamento,
  * era o atrito reportado.
  *
- * A confirmação mostra a CONTA e o VALOR TOTAL antes de gravar, de propósito: é o
- * que dá chance de perceber "não era isso que eu queria" antes, e não depois. Sem
- * esse passo, um "selecionar todos" mal filtrado só apareceria no extrato.
+ * O valor total dos selecionados não se repete aqui: o resumo da BarraSelecao já
+ * mostra esse total o tempo todo, inclusive no instante de clicar em "Definir
+ * conta bancária" — não precisa reaparecer nesta frase. O que esta frase diz, de
+ * propósito, é o que vai acontecer e quantas linhas ficam de fora: é o que dá
+ * chance de perceber "não era isso que eu queria" antes, e não depois.
  */
 export function LoteContaBancaria({
   selecionados,
-  valorSelecionado,
   jaComConta,
   contas,
   onLimparSelecao,
@@ -136,8 +135,7 @@ export function LoteContaBancaria({
                 : `${jaComConta} já têm conta e serão pulados`}
             </>
           )}
-          {". Total "}
-          <MoneyText valor={valorSelecionado} />
+          {"."}
         </span>
       )}
 

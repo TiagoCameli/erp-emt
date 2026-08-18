@@ -738,8 +738,9 @@ export function LancamentosTabela({
   const selecionadosNaPagina = lancamentos.filter((lancamento) =>
     selecionados.includes(lancamento.id),
   );
-  // Reaproveitado no resumo da barra E na confirmação do lote: os dois mostram
-  // o mesmo total, então é o mesmo cálculo, não dois.
+  // Só o resumo da barra usa isto agora: LoteContaBancaria não repete o valor
+  // na própria frase (o resumo já mostra o total o tempo todo, inclusive no
+  // instante de confirmar — repetir ali seria a mesma informação duas vezes).
   const valorSelecionado = selecionadosNaPagina.reduce(
     (soma, lancamento) => soma + lancamento.valor,
     0,
@@ -755,7 +756,6 @@ export function LancamentosTabela({
       >
         <LoteContaBancaria
           selecionados={selecionados}
-          valorSelecionado={valorSelecionado}
           jaComConta={
             selecionadosNaPagina.filter(
               (lancamento) => !ehElegivelParaLote(lancamento),

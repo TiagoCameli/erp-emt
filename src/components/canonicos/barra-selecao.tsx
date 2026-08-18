@@ -37,12 +37,12 @@ export function BarraSelecao({
   if (quantidade === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/40 px-3 py-2">
-      <span className="text-[13px] font-medium">
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-surface px-3 py-2">
+      <span className="text-detalhe font-medium">
         {quantidade === 1 ? "1 selecionado" : `${quantidade} selecionados`}
       </span>
       {resumo ? (
-        <span className="text-[13px] text-muted-foreground tabular-nums">
+        <span className="text-detalhe text-muted-foreground tabular-nums">
           {resumo}
         </span>
       ) : null}
