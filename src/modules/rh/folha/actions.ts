@@ -3,10 +3,15 @@
 import { revalidatePath } from "next/cache";
 import ExcelJS from "exceljs";
 
+import { EMPRESA } from "@/config/marca";
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
+import {
+  escreverCabecalhoMarca,
+  estilizarCabecalhoColunas,
+} from "@/lib/planilha-marca";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatarBRL,
@@ -182,9 +187,15 @@ async function transicionarStatusFolha(
 export async function enviarFolhaParaAprovacao(
   id: string,
 ): Promise<ResultadoAcao> {
-  return transicionarStatusFolha(id, "editar", "rascunho", "pendente_aprovacao", {
-    motivo_rejeicao: null,
-  });
+  return transicionarStatusFolha(
+    id,
+    "editar",
+    "rascunho",
+    "pendente_aprovacao",
+    {
+      motivo_rejeicao: null,
+    },
+  );
 }
 
 /**
@@ -226,9 +237,15 @@ export async function rejeitarFolha(
   const motivoLimpo = motivo.trim();
   if (motivoLimpo === "") return { erro: "Informe o motivo da rejeição" };
 
-  return transicionarStatusFolha(id, "aprovar", "pendente_aprovacao", "rascunho", {
-    motivo_rejeicao: motivoLimpo,
-  });
+  return transicionarStatusFolha(
+    id,
+    "aprovar",
+    "pendente_aprovacao",
+    "rascunho",
+    {
+      motivo_rejeicao: motivoLimpo,
+    },
+  );
 }
 
 /**
@@ -273,9 +290,8 @@ export async function desaprovarFolha(
 /* Planilha da folha (Excel)                                          */
 /* ------------------------------------------------------------------ */
 
-const COR_FUNDO_HEADER = "FFF7F7F5";
-const COR_BORDA_HEADER = "FFE8E6E1";
-const COR_TEXTO_HEADER = "FF1F1F1F";
+/* A marca no topo e a cor do cabeçalho de colunas vivem em
+   src/lib/planilha-marca.ts, para toda planilha exportada sair igual. */
 
 /** Competência (yyyy-MM-01) como MM/AAAA. */
 function competenciaMesAno(competencia: string): string {
@@ -312,11 +328,20 @@ export async function gerarPlanilhaFolha(
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "ERP EMT";
+  workbook.company = EMPRESA.razaoSocial;
   workbook.created = new Date();
 
   const worksheet = workbook.addWorksheet("Folha gerencial");
 
-  worksheet.addRow(["Folha gerencial"]);
+  // A mesma marca da planilha de lançamentos, pelo mesmo motivo: é relatório que
+  // sai do sistema e vai anexado em email. O nome do relatório já vem na linha
+  // de contexto do cabeçalho de marca, então não há uma linha "Folha gerencial"
+  // solta aqui — ela repetiria o título logo abaixo dele.
+  escreverCabecalhoMarca(workbook, worksheet, {
+    titulo: "Folha gerencial",
+    colunas: 12,
+  });
+
   worksheet.addRow(["Competência", competenciaMesAno(folha.competencia)]);
   worksheet.addRow(["Status", STATUS_FOLHA[folha.status].rotulo]);
   worksheet.addRow([
@@ -343,18 +368,7 @@ export async function gerarPlanilhaFolha(
     "Líquido",
   ];
   const linhaHeader = worksheet.addRow(cabecalhos);
-  linhaHeader.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: COR_TEXTO_HEADER } };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: COR_FUNDO_HEADER },
-    };
-    cell.border = {
-      bottom: { style: "thin", color: { argb: COR_BORDA_HEADER } },
-    };
-    cell.alignment = { vertical: "middle" };
-  });
+  estilizarCabecalhoColunas(linhaHeader);
 
   for (const item of folha.itens) {
     const centro = item.centroCustoNome

@@ -85,6 +85,37 @@ describe("gerarModeloXlsx", () => {
     expect(exemplos.getCell(3).value).toBe("m3");
   });
 
+  it("o modelo que o sistema entrega é lido pelo próprio sistema", async () => {
+    // Ida e volta, e não só "o header está na linha 1": o modelo é o único
+    // arquivo que SAI e VOLTA, e a marca dos relatórios (logo, razão social,
+    // CNPJ, a Pista) ocupa cinco linhas no topo. Aplicá-la aqui empurraria o
+    // cabeçalho e `lerEValidarXlsx` passaria a recusar o próprio modelo do
+    // sistema com "Colunas obrigatórias não encontradas" — erro que a pessoa não
+    // tem como consertar, porque ela baixou o arquivo certo.
+    const colunas = [
+      { chave: "nome" as const, rotulo: "Nome", obrigatoria: true },
+      { chave: "unidade" as const, rotulo: "Unidade", obrigatoria: true },
+    ];
+    const modelo = await gerarModeloXlsx(
+      [
+        { rotulo: "Nome", exemplo: "Brita 1" },
+        { rotulo: "Unidade", exemplo: "m3" },
+      ],
+      "Materiais",
+    );
+
+    const lido = await lerEValidarXlsx<{ nome: string; unidade: string }>(
+      modelo,
+      colunas,
+    );
+
+    // A linha de exemplo é a única linha de dados, e ela é válida.
+    expect(lido.invalidas).toHaveLength(0);
+    expect(lido.validas).toHaveLength(1);
+    expect(lido.validas[0].linha).toBe(2);
+    expect(lido.validas[0].dados).toEqual({ nome: "Brita 1", unidade: "m3" });
+  });
+
   it("sanitiza nome de planilha com caracteres proibidos pelo Excel", async () => {
     const arquivo = await gerarModeloXlsx(
       [{ rotulo: "Nome" }],

@@ -5,9 +5,18 @@
 
 /*
   Design system EMT
-  Base neutra estilo Notion + ambar de sinalizacao rodoviaria.
-  Assinatura visual: "a Faixa", barra ambar de 3px no item ativo
-  da sidebar, na aba ativa e na borda esquerda dos KPICards.
+  Base neutra estilo Notion + a marca da empresa: verde EMT como cor primaria e
+  o ambar do eixo da pista como acento.
+
+  As tres cores da marca sao MEDIDAS no arquivo da logo (verde #3E7744, asfalto
+  #45464B, eixo #CF943A), nao estimadas: quem le o logo e o app lado a lado ve a
+  mesma cor. Os mesmos hexes estao em src/config/marca.ts, para o exceljs e o
+  pdfmake, que nao leem CSS.
+
+  Assinatura visual: "a Faixa", barra ambar de 3px no item ativo da sidebar, na
+  aba ativa e na borda esquerda dos KPICards. Ela continua ambar de proposito: e
+  o eixo da pista do logo, e trocar ela por verde apagaria a unica peca do
+  desenho do app que ja era marca.
 */
 
 :root {
@@ -24,11 +33,17 @@
   --border: #e8e6e1;
   --input: #e8e6e1;
 
-  /* Marca: ambar rodoviario */
-  --primary: #b45309;
+  /* Marca EMT, direto do logo */
+  --emt-verde: #3e7744;
+  --emt-verde-escuro: #2e5b34;
+  --emt-verde-lavado: #f0f5f1;
+  --emt-asfalto: #45464b;
+  --emt-amarelo: #cf943a;
+
+  --primary: var(--emt-verde);
   --primary-foreground: #ffffff;
-  --accent: #fef3e2;
-  --accent-foreground: #b45309;
+  --accent: var(--emt-verde-lavado);
+  --accent-foreground: var(--emt-verde-escuro);
   --faixa: #f59e0b;
   --ring: #f59e0b;
 
@@ -37,7 +52,12 @@
   --destructive: #b91c1c;
   --destructive-foreground: #ffffff;
 
-  /* Status */
+  /*
+    Status. "aprovado" segue verde, e de proposito NAO e o verde da marca: o
+    #15803d e mais saturado e mais frio que o #3e7744, entao um badge de
+    aprovado nao se confunde com um botao primario. Fundir os dois faria a cor
+    perder a funcao de dizer "isto passou pela aprovacao".
+  */
   --status-aprovado: #15803d;
   --status-pendente: #b45309;
   --status-rejeitado: #b91c1c;
@@ -45,19 +65,19 @@
   /* Efeito do modulo: recebido, pago, faturado, executado */
   --status-efeito: #166534;
 
-  /* Graficos (modulo Gestao) */
-  --chart-1: #b45309;
-  --chart-2: #f59e0b;
-  --chart-3: #15803d;
-  --chart-4: #6b6b6b;
+  /* Graficos (modulo Gestao): a paleta da marca, verde > ambar > asfalto */
+  --chart-1: var(--emt-verde);
+  --chart-2: var(--emt-amarelo);
+  --chart-3: var(--emt-asfalto);
+  --chart-4: #8fb79a;
   --chart-5: #b91c1c;
 
   /* Sidebar */
   --sidebar: #f7f7f5;
   --sidebar-foreground: #1f1f1f;
-  --sidebar-primary: #b45309;
+  --sidebar-primary: var(--emt-verde);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #efeeea;
+  --sidebar-accent: #eaefe9;
   --sidebar-accent-foreground: #1f1f1f;
   --sidebar-border: #e8e6e1;
   --sidebar-ring: #f59e0b;
@@ -87,6 +107,12 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-faixa: var(--faixa);
+
+  --color-emt-verde: var(--emt-verde);
+  --color-emt-verde-escuro: var(--emt-verde-escuro);
+  --color-emt-verde-lavado: var(--emt-verde-lavado);
+  --color-emt-asfalto: var(--emt-asfalto);
+  --color-emt-amarelo: var(--emt-amarelo);
 
   --color-status-aprovado: var(--status-aprovado);
   --color-status-pendente: var(--status-pendente);

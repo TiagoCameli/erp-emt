@@ -1,6 +1,13 @@
 import * as React from "react";
 
-import { formatarBRL, formatarDataHora } from "@/lib/formatadores";
+import { LogoEmt } from "@/components/canonicos/logo-emt";
+import {
+  CabecalhoDocumento,
+  EmissaoDocumento,
+  PistaEmt,
+  RodapeEmpresa,
+} from "@/components/canonicos/marca-documento";
+import { formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,31 +43,31 @@ export function EspelhoImpresso({
 }) {
   return (
     <article className="espelho-documento mx-auto flex max-w-[190mm] flex-col gap-4 px-6 py-8">
-      {/* A Faixa âmbar, assinatura do design em todo o app. */}
-      <div className="h-[3px] w-full bg-[#F59E0B]" />
+      <CabecalhoDocumento
+        titulo={tipo}
+        subtitulo={numero ?? "sem número"}
+        meta={
+          <EmissaoDocumento emitidoPor={emitidoPor} emitidoEm={emitidoEm} />
+        }
+      />
 
-      <header className="flex items-baseline justify-between gap-4">
-        <div className="flex flex-col">
-          <span className="text-[18px] font-semibold">{tipo}</span>
-          <span className="font-mono text-[13px] text-[#6B6B6B]">
-            {numero ?? "sem número"}
-          </span>
-        </div>
-        <span className="text-[12px] font-semibold tracking-wide text-[#6B6B6B]">
-          EMT CONSTRUTORA
-        </span>
-      </header>
+      {/* A Pista: divisória do cabeçalho, o mesmo desenho do logo. */}
+      <PistaEmt />
 
       {children}
 
-      <footer className="mt-2 border-t border-[#E8E6E1] pt-2 text-[12px] text-[#6B6B6B]">
-        Emitido em {formatarDataHora(emitidoEm)} por {emitidoPor}
+      <footer className="mt-2 border-t border-[#E8E6E1] pt-2">
+        <RodapeEmpresa />
       </footer>
     </article>
   );
 }
 
-/** Bloco titulado do espelho. */
+/**
+ * Bloco titulado do espelho. O rótulo sai no verde da marca com um traço do
+ * asfalto embaixo: é o que dá ao papel a mesma hierarquia da tela sem gastar
+ * uma tarja colorida por seção.
+ */
 export function EspelhoSecao({
   rotulo,
   children,
@@ -70,7 +77,9 @@ export function EspelhoSecao({
 }) {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-[13px] font-semibold text-[#1F1F1F]">{rotulo}</h2>
+      <h2 className="border-b border-[#D8DFD8] pb-[3px] text-[11px] font-semibold tracking-[0.06em] text-[#2E5B34] uppercase">
+        {rotulo}
+      </h2>
       {children}
     </section>
   );
@@ -97,8 +106,12 @@ function semValor(valor: React.ReactNode): boolean {
 }
 
 /**
- * Grade rótulo/valor. Campo sem valor sai como travessão: no papel, espaço
- * vazio não distingue "não tem" de "esqueceram de imprimir".
+ * Grade rótulo/valor, dentro de um painel de superfície neutra. Campo sem valor
+ * sai como travessão: no papel, espaço vazio não distingue "não tem" de
+ * "esqueceram de imprimir".
+ *
+ * O painel é decoração e nada mais: se quem imprime desligar "gráficos de
+ * fundo", ele sai branco com a borda e a grade continua exatamente a mesma.
  */
 export function EspelhoCampos({
   campos,
@@ -106,10 +119,10 @@ export function EspelhoCampos({
   campos: { rotulo: string; valor: React.ReactNode }[];
 }) {
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px] sm:grid-cols-3">
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-[3px] border border-[#E8E6E1] bg-[#F7F7F5] px-3 py-2 text-[13px] sm:grid-cols-3">
       {campos.map((campo) => (
         <div key={campo.rotulo} className="flex flex-col">
-          <dt className="text-[12px] text-[#6B6B6B]">{campo.rotulo}</dt>
+          <dt className="text-[11px] text-[#6B6B6B]">{campo.rotulo}</dt>
           <dd className="text-[#1F1F1F]">
             {semValor(campo.valor) ? "—" : campo.valor}
           </dd>
@@ -135,12 +148,12 @@ export function EspelhoTabela({
   return (
     <table className="w-full border-collapse text-[12px]">
       <thead>
-        <tr className="border-b border-[#E8E6E1]">
+        <tr className="border-b border-[#B9CDBD] bg-[#F0F5F1]">
           {colunas.map((coluna) => (
             <th
               key={coluna.chave}
               className={cn(
-                "py-1 text-left font-medium text-[#6B6B6B]",
+                "px-2 py-1 text-left text-[11px] font-semibold text-[#2E5B34]",
                 coluna.alinharDireita && "text-right",
               )}
             >
@@ -161,7 +174,7 @@ export function EspelhoTabela({
                 <td
                   key={coluna.chave}
                   className={cn(
-                    "py-1 align-top",
+                    "px-2 py-1 align-top",
                     coluna.alinharDireita && "text-right tabular-nums",
                   )}
                 >
@@ -176,12 +189,12 @@ export function EspelhoTabela({
       </tbody>
       {totais ? (
         <tfoot>
-          <tr className="border-t border-[#1F1F1F] font-medium">
+          <tr className="border-t border-[#1F1F1F] font-semibold">
             {colunas.map((coluna) => (
               <td
                 key={coluna.chave}
                 className={cn(
-                  "py-1",
+                  "px-2 py-1",
                   coluna.alinharDireita && "text-right tabular-nums",
                 )}
               >
@@ -223,7 +236,11 @@ export function EspelhoDinheiro({
   return <span className="tabular-nums">{formatarBRL(valor)}</span>;
 }
 
-/** Página de espelho sem nada para imprimir. */
+/**
+ * Página de espelho sem nada para imprimir. Leva a marca igual ao documento de
+ * verdade: se alguém imprimir esta folha por engano, ela precisa se identificar
+ * como papel da EMT e não como uma página de erro solta.
+ */
 export function EspelhoVazio({
   titulo,
   explicacao,
@@ -232,9 +249,13 @@ export function EspelhoVazio({
   explicacao: string;
 }) {
   return (
-    <div className="mx-auto flex max-w-[190mm] flex-col gap-2 px-6 py-12">
-      <h1 className="text-[18px] font-semibold">{titulo}</h1>
-      <p className="text-[13px] text-[#6B6B6B]">{explicacao}</p>
+    <div className="mx-auto flex max-w-[190mm] flex-col gap-4 px-6 py-12">
+      <LogoEmt titulo="EMT Construtora" className="w-[34mm]" />
+      <PistaEmt />
+      <div className="flex flex-col gap-2">
+        <h1 className="text-[18px] font-semibold">{titulo}</h1>
+        <p className="text-[13px] text-[#6B6B6B]">{explicacao}</p>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import ExcelJS from "exceljs";
 
+import { estilizarCabecalhoColunas } from "@/lib/planilha-marca";
+
 /**
  * Framework genérico de importação por planilha (.xlsx).
  * Server-compatible: sem React, usado por Server Actions e route handlers.
@@ -46,13 +48,12 @@ interface ColunaModelo {
 
 type ValorNormalizado = string | number | boolean | Date | null;
 
-const COR_FUNDO_HEADER = "FFF7F7F5";
-const COR_BORDA_HEADER = "FFE8E6E1";
-const COR_TEXTO_HEADER = "FF1F1F1F";
-
 /** Excel limita o nome da aba a 31 caracteres e proíbe \\ / ? * [ ] : */
 function sanitizarNomePlanilha(nome: string): string {
-  const limpo = nome.replace(/[\\/?*[\]:]/g, " ").trim().slice(0, 31);
+  const limpo = nome
+    .replace(/[\\/?*[\]:]/g, " ")
+    .trim()
+    .slice(0, 31);
   return limpo.length > 0 ? limpo : "Modelo";
 }
 
@@ -116,8 +117,8 @@ function paraArrayBuffer(entrada: ArrayBuffer | Buffer): ArrayBuffer {
 }
 
 /**
- * Gera o modelo .xlsx para download: header estilizado (negrito, fundo
- * #F7F7F5) na linha 1 e uma linha de exemplo na linha 2.
+ * Gera o modelo .xlsx para download: header na cor da marca (verde EMT, texto
+ * branco) na linha 1 e uma linha de exemplo na linha 2.
  */
 export async function gerarModeloXlsx(
   colunas: ColunaImportacao<never>[] | { rotulo: string; exemplo?: string }[],
@@ -138,23 +139,18 @@ export async function gerarModeloXlsx(
 
   worksheet.columns = definicoes.map((coluna) => ({
     header: coluna.rotulo,
-    width: Math.max(coluna.rotulo.length, (coluna.exemplo ?? "").length, 14) + 4,
+    width:
+      Math.max(coluna.rotulo.length, (coluna.exemplo ?? "").length, 14) + 4,
   }));
 
   const header = worksheet.getRow(1);
   header.height = 22;
-  header.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: COR_TEXTO_HEADER } };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: COR_FUNDO_HEADER },
-    };
-    cell.border = {
-      bottom: { style: "thin", color: { argb: COR_BORDA_HEADER } },
-    };
-    cell.alignment = { vertical: "middle" };
-  });
+  // Só a COR da marca aqui, nunca o cabeçalho de marca com logo e CNPJ
+  // (`escreverCabecalhoMarca`, usado nos relatórios): este arquivo volta pra
+  // dentro do sistema, e `lerPlanilha` casa as colunas pelo `getRow(1)`. Cinco
+  // linhas de marca em cima empurrariam o cabeçalho e toda importação passaria a
+  // recusar o próprio modelo que o sistema entregou. Cor não desloca nada.
+  estilizarCabecalhoColunas(header);
 
   worksheet.addRow(definicoes.map((coluna) => coluna.exemplo ?? ""));
 
@@ -184,11 +180,13 @@ export async function lerEValidarXlsx<T>(
 
   // Mapeia rótulo do header (normalizado) para o número da coluna na planilha
   const colunaPorRotulo = new Map<string, number>();
-  worksheet.getRow(1).eachCell({ includeEmpty: false }, (cell, numeroColuna) => {
-    const valor = valorDaCelula(cell);
-    if (estaVazio(valor)) return;
-    colunaPorRotulo.set(normalizarRotulo(String(valor)), numeroColuna);
-  });
+  worksheet
+    .getRow(1)
+    .eachCell({ includeEmpty: false }, (cell, numeroColuna) => {
+      const valor = valorDaCelula(cell);
+      if (estaVazio(valor)) return;
+      colunaPorRotulo.set(normalizarRotulo(String(valor)), numeroColuna);
+    });
 
   const mapeamento = colunas.map((coluna) => ({
     coluna,

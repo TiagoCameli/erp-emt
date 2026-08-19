@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { LogoEmt } from "@/components/canonicos/logo-emt";
 import { LoginForm } from "@/modules/auth/components/login-form";
 
 export const metadata: Metadata = {
@@ -27,9 +28,9 @@ export default async function PaginaLogin({
   return (
     <Card className="w-full max-w-sm border-t-[3px] border-t-faixa">
       <CardHeader className="text-center">
-        <span className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary font-mono text-detalhe font-bold tracking-tight text-primary-foreground">
-          EMT
-        </span>
+        {/* A logo inteira, com o "Construtora Ltda": esta é a única tela do app
+            onde há espaço para a marca completa, e é a primeira que o usuário vê. */}
+        <LogoEmt titulo="EMT Construtora" className="mx-auto mb-3 w-[132px]" />
         <CardTitle className="text-secao">ERP EMT</CardTitle>
         <CardDescription>Entre com seu email e senha</CardDescription>
       </CardHeader>

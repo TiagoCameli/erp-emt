@@ -26,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LogoEmt } from "@/components/canonicos/logo-emt";
 import { useRestaurarFiltrosDaSessao } from "@/components/canonicos/use-restaurar-filtros";
 import { cn } from "@/lib/utils";
 
@@ -360,9 +361,12 @@ export function AppShell({
           className="flex h-12 shrink-0 items-center justify-center border-b border-sidebar-border"
           aria-label="ERP EMT, ir para o início"
         >
-          <span className="flex size-7 items-center justify-center rounded-md bg-primary text-legenda font-semibold text-primary-foreground">
-            E
-          </span>
+          {/*
+            A marca de verdade, não a inicial num quadrado. `simbolo` corta o
+            "Construtora Ltda" e deixa EMT sobre a pista, que é o que ainda se lê
+            nos 36px que a sidebar recolhida tem de largura útil.
+          */}
+          <LogoEmt variante="simbolo" className="w-9" />
         </Link>
 
         <nav className="flex-1 py-1" aria-label="Módulos">
@@ -415,7 +419,11 @@ export function AppShell({
           sidebar, e uma faixa vazia de 48px só roubaria altura do conteúdo.
         */}
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-4 md:hidden">
-          <span className="font-semibold">EMT</span>
+          <LogoEmt
+            variante="simbolo"
+            titulo="EMT Construtora"
+            className="w-10"
+          />
           <DropdownMenu>
             <DropdownMenuTrigger
               className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"

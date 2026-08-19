@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { LogoEmt } from "@/components/canonicos/logo-emt";
 import { DefinirSenhaForm } from "@/modules/auth/components/definir-senha-form";
 
 export const metadata: Metadata = {
@@ -16,9 +17,7 @@ export default function PaginaDefinirSenha() {
   return (
     <Card className="w-full max-w-sm border-t-[3px] border-t-faixa">
       <CardHeader className="text-center">
-        <span className="mx-auto mb-2 inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary font-mono text-detalhe font-bold tracking-tight text-primary-foreground">
-          EMT
-        </span>
+        <LogoEmt titulo="EMT Construtora" className="mx-auto mb-3 w-[132px]" />
         <CardTitle className="text-secao">Defina sua senha</CardTitle>
         <CardDescription>
           Crie a senha que você vai usar para entrar no ERP EMT

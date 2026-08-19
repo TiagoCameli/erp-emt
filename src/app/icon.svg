@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<!-- Selo da marca EMT para a aba do navegador. Cores iguais as do LogoEmt
+     (verde #3E7744, eixo #CF943A); se a marca mudar, os dois mudam juntos. -->
+<rect width="64" height="64" rx="12" fill="#3E7744"/>
+<g transform="translate(10 10.92) scale(0.04721)">
+<path d="M448 401 L454 440 L457 442 L459 438 L472 362 L517 151 L657 150 L658 557 L569 557 L574 224 L495 556 L412 555 L336 227 L342 557 L251 557 L250 151 L395 151Z M764 406 L764 223 L686 223 L685 151 L932 150 L931 222 L856 222 L856 557 L764 557Z M193 364 L192 385 L92 385 L92 483 L211 483 L212 557 L1 557 L1 150 L212 151 L211 223 L92 223 L92 313 L193 313Z" fill="#FFFFFF" fill-rule="evenodd"/>
+</g>
+<rect x="10" y="42.21" width="44" height="4" rx="1" fill="#CF943A"/>
+</svg>
