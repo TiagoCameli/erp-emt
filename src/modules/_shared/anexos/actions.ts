@@ -2,10 +2,12 @@
 
 
 import {
+  criarUploadAssinado,
+  ehCaminhoDeUpload,
   hashDoArquivo,
+  lerBinario,
   pathNovo,
   removerBinarios,
-  subirBinario,
   urlAssinada,
   validarArquivo,
 } from "@/lib/arquivos";
@@ -26,11 +28,15 @@ import {
 export type ResultadoAnexo = { ok: true } | { erro: string };
 export type ResultadoUrl = { url: string } | { erro: string };
 
-/** Um arquivo enviado: o que deu certo e o que não deu, com o motivo. */
-export interface ResultadoEnvio {
-  enviados: number;
-  erros: { nome: string; erro: string }[];
-}
+/**
+ * Para onde a tela manda o binário: caminho no bucket e token de upload.
+ *
+ * Não existe resposta "esse arquivo já existe, não suba": o dedup é decidido no
+ * `confirmarEnvioAnexo`, com o hash que o SERVIDOR calcula. Decidir aqui exigiria
+ * o hash vindo do navegador, e hash escolhido pelo cliente deixa um documento
+ * apontar para o binário de outro.
+ */
+export type PreparoDeEnvio = { path: string; token: string };
 
 /**
  * Checa a permissão de mexer nos anexos de um documento. Anexar aceita 'criar'
@@ -64,20 +70,27 @@ export async function anexosDoDocumento(
 }
 
 /**
- * Envia um ou mais arquivos para um documento.
+ * PASSO 1 do envio: decide se pode anexar e devolve para onde mandar.
  *
- * Dedup: calcula o sha-256 antes de subir. Se já existe arquivo com o mesmo
- * hash e tamanho, NÃO sobe binário nenhum, só cria o vínculo. É o que faz o
- * mesmo arquivo servir cotação, OC, lançamento e pagamento com um objeto só no
- * bucket.
+ * O binário NÃO passa por aqui. Ele vai do navegador direto para o Storage, com
+ * o token desta resposta, porque a function da Vercel recusa corpo acima de
+ * ~4,5 MB — teto da plataforma, não configurável. Enquanto o arquivo
+ * atravessava a server action, o limite real era esse por mais que a tela
+ * prometesse outro, e a falha chegava muda.
  *
- * FormData: entidade, entidadeId, arquivo (uma ou várias vezes).
+ * O que passa por aqui é a DECISÃO: entidade existe, usuário tem permissão,
+ * nome e tipo do arquivo são aceitos. O tamanho declarado é conferido aqui só
+ * para avisar cedo — quem recusa de verdade é o `file_size_limit` do bucket, e
+ * o `confirmarEnvioAnexo` mede de novo o que realmente chegou.
  */
-export async function enviarAnexos(
-  formData: FormData,
-): Promise<ResultadoEnvio | { erro: string }> {
-  const entidade = String(formData.get("entidade") ?? "");
-  const entidadeId = String(formData.get("entidadeId") ?? "");
+export async function prepararEnvioAnexo(dados: {
+  entidade: string;
+  entidadeId: string;
+  nome: string;
+  tipoMime: string;
+  tamanhoBytes: number;
+}): Promise<PreparoDeEnvio | { erro: string }> {
+  const { entidade, entidadeId, nome, tipoMime, tamanhoBytes } = dados;
 
   if (!ehEntidadeAnexo(entidade)) return { erro: "Documento inválido" };
   const idValido = idSchema.safeParse(entidadeId);
@@ -86,83 +99,103 @@ export async function enviarAnexos(
     return { erro: "Sem permissão para anexar neste documento" };
   }
 
-  const arquivos = formData
-    .getAll("arquivo")
-    .filter((item): item is File => item instanceof File);
-  if (arquivos.length === 0) return { erro: "Nenhum arquivo enviado" };
+  const invalido = validarArquivo({ nome, tipoMime, tamanhoBytes });
+  if (invalido) return { erro: invalido };
 
+  return criarUploadAssinado(pathNovo(nome));
+}
+
+/**
+ * PASSO 2 do envio: o binário já subiu; agora o servidor mede, hasheia e
+ * registra.
+ *
+ * Tamanho e hash saem do objeto BAIXADO DE VOLTA, nunca do que o navegador
+ * disse ter mandado. Os dois decidem coisa séria: o tamanho aparece na tela, e
+ * o hash é a chave do dedup — chave escolhida pelo cliente deixaria um
+ * documento apontar para o binário de outro, calado.
+ *
+ * Quando o mesmo conteúdo já existia, `fn_registrar_arquivo` reusa o registro
+ * antigo (unique de hash+tamanho) e o objeto que acabou de subir vira lixo: é
+ * apagado aqui mesmo, sem esperar a faxina.
+ */
+export async function confirmarEnvioAnexo(dados: {
+  entidade: string;
+  entidadeId: string;
+  path: string;
+  nome: string;
+  tipoMime: string;
+}): Promise<ResultadoAnexo> {
+  const { entidade, entidadeId, path, nome, tipoMime } = dados;
+
+  if (!ehEntidadeAnexo(entidade)) return { erro: "Documento inválido" };
+  const idValido = idSchema.safeParse(entidadeId);
+  if (!idValido.success) return { erro: "Documento inválido" };
+  if (!(await podeMexer(entidade, "anexar"))) {
+    return { erro: "Sem permissão para anexar neste documento" };
+  }
+  if (!ehCaminhoDeUpload(path)) return { erro: "Caminho de arquivo inválido" };
+
+  const binario = await lerBinario(path);
+  if ("erro" in binario) return { erro: binario.erro };
+
+  // Mede o que CHEGOU, não o que foi prometido.
+  const invalido = validarArquivo({
+    nome,
+    tipoMime,
+    tamanhoBytes: binario.tamanhoBytes,
+  });
+  if (invalido) {
+    await removerBinarios([path]);
+    return { erro: invalido };
+  }
+
+  const hash = await hashDoArquivo(binario.blob);
   const supabase = await createClient();
-  const resultado: ResultadoEnvio = { enviados: 0, erros: [] };
 
-  for (const arquivo of arquivos) {
-    const invalido = validarArquivo({
-      nome: arquivo.name,
-      tipoMime: arquivo.type,
-      tamanhoBytes: arquivo.size,
-    });
-    if (invalido) {
-      resultado.erros.push({ nome: arquivo.name, erro: invalido });
-      continue;
-    }
-
-    const hash = await hashDoArquivo(arquivo);
-
-    // Já existe esse binário? Então só vincula.
-    const { data: existente } = await supabase.rpc("fn_arquivo_por_hash", {
-      p_hash: hash,
-      p_tamanho: arquivo.size,
-    });
-
-    if (existente) {
-      const { error } = await supabase.rpc("fn_vincular_arquivo", {
-        p_arquivo_id: existente,
-        p_entidade_tipo: entidade,
-        p_entidade_id: idValido.data,
-        p_nome_exibicao: arquivo.name,
-      });
-      if (error) {
-        resultado.erros.push({
-          nome: arquivo.name,
-          erro: error.message ?? "Não foi possível anexar",
-        });
-        continue;
-      }
-      resultado.enviados += 1;
-      continue;
-    }
-
-    const path = pathNovo(arquivo.name);
-    const erroUpload = await subirBinario(path, arquivo);
-    if (erroUpload) {
-      resultado.erros.push({ nome: arquivo.name, erro: erroUpload.erro });
-      continue;
-    }
-
-    const { error } = await supabase.rpc("fn_registrar_arquivo", {
+  const { data: arquivoId, error } = await supabase.rpc(
+    "fn_registrar_arquivo",
+    {
       p_path: path,
-      p_nome: arquivo.name,
-      p_mime: arquivo.type || "",
-      p_tamanho: arquivo.size,
+      p_nome: nome,
+      p_mime: tipoMime || "",
+      p_tamanho: binario.tamanhoBytes,
       p_hash: hash,
       p_entidade_tipo: entidade,
       p_entidade_id: idValido.data,
-    });
+    },
+  );
 
-    if (error) {
-      // O binário já subiu e o registro falhou: desfaz o upload em vez de
-      // deixar objeto sem dono no bucket (a faxina agora também acha esses,
-      // mas o certo é não criar o lixo).
-      await removerBinarios([path]);
-      resultado.erros.push({
-        nome: arquivo.name,
-        erro: error.message ?? "Não foi possível registrar o arquivo",
-      });
-      continue;
-    }
-    resultado.enviados += 1;
+  if (error) {
+    // O binário subiu e o registro falhou: desfaz, em vez de deixar objeto sem
+    // dono no bucket (a faxina também acha esses, mas o certo é não criar lixo).
+    await removerBinarios([path]);
+    return erroAcao(
+      "anexos.confirmarEnvioAnexo",
+      error,
+      error.message ?? "Não foi possível registrar o arquivo",
+    );
   }
 
-  return resultado;
+  await apagarSeForDuplicata(arquivoId, path);
+  return { ok: true };
+}
+
+/**
+ * O registro reusou um arquivo que já existia? Então o objeto que acabou de
+ * subir não é de ninguém: apaga agora.
+ */
+async function apagarSeForDuplicata(
+  arquivoId: string | null,
+  path: string,
+): Promise<void> {
+  if (!arquivoId) return;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("arquivos")
+    .select("path_storage")
+    .eq("id", arquivoId)
+    .maybeSingle();
+  if (data && data.path_storage !== path) await removerBinarios([path]);
 }
 
 /**
