@@ -249,15 +249,21 @@ describe("EspelhoLancamentosPage e o resumo das parcelas", () => {
 
     await renderPagina(ID_A);
 
-    expect(screen.getByText("Pagas")).toBeInTheDocument();
+    // Os três números que o Tiago pediu, em cartão: quantas foram pagas,
+    // quanto já saiu e quanto falta.
+    expect(screen.getByText("Parcelas pagas")).toBeInTheDocument();
+    expect(screen.getByText("2 de 3")).toBeInTheDocument();
+    expect(screen.getByText("Já pago")).toBeInTheDocument();
     // "Em aberto", não "A pagar": "A pagar" é o rótulo do status do
-    // lançamento, que sai no cabeçalho do mesmo papel.
+    // lançamento, que sai na tarja do mesmo papel.
     expect(screen.getByText("Em aberto")).toBeInTheDocument();
     // Pagas somam o LÍQUIDO: 950 + 1.000. Somar o valor daria 2.000 e mentiria
     // sobre o caixa, porque a primeira teve R$ 50 de desconto.
     expect(screen.getByText(brl(1950))).toBeInTheDocument();
     expect(screen.queryByText(brl(2000))).not.toBeInTheDocument();
-    // Total fecha com as linhas impressas: 1.950 pagas + 1.000 a pagar.
+    // O total das parcelas fecha com os cartões: 1.950 pagas + 1.000 em aberto.
+    // É a linha que deixa a divergência entre parcelamento e cabeçalho visível.
+    expect(screen.getByText("Total das parcelas")).toBeInTheDocument();
     expect(screen.getByText(brl(2950))).toBeInTheDocument();
 
     // E a coluna "Conta", que antes colidia com o líquido na folha, sumiu
@@ -298,8 +304,11 @@ describe("EspelhoLancamentosPage e o resumo das parcelas", () => {
     expect(screen.getByText("Próximo vencimento")).toBeInTheDocument();
     // A mais ANTIGA em aberto, não a da primeira linha nem a do cabeçalho.
     expect(screen.getByText(formatarData("2026-09-05"))).toBeInTheDocument();
-    expect(screen.getByText("Último pagamento")).toBeInTheDocument();
-    expect(screen.getByText(formatarData("2026-07-10"))).toBeInTheDocument();
+    // O último pagamento virou a nota do cartão de parcelas pagas: é contexto
+    // do número, não um campo próprio, e no papel ele economiza uma linha.
+    expect(
+      screen.getByText(`última em ${formatarData("2026-07-10")}`),
+    ).toBeInTheDocument();
   });
 
   it("lançamento sem nenhuma parcela paga sai com travessão no último pagamento", async () => {
@@ -310,10 +319,11 @@ describe("EspelhoLancamentosPage e o resumo das parcelas", () => {
 
     await renderPagina(ID_A);
 
-    expect(screen.getByText("Último pagamento")).toBeInTheDocument();
-    // Travessão, nunca em branco: no papel, vazio não distingue "não tem" de
+    // Sem nenhuma paga, a nota DIZ que não houve pagamento, em vez de deixar
+    // o cartão sem contexto: no papel, vazio não distingue "não tem" de
     // "esqueceram de imprimir".
-    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    expect(screen.getByText("nenhuma paga ainda")).toBeInTheDocument();
+    expect(screen.getByText("0 de 1")).toBeInTheDocument();
   });
 
   it("não imprime mais a Trilha", async () => {
