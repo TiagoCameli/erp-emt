@@ -216,8 +216,17 @@ const parcelaDefinidaSchema = z.object({
 export type ParcelaDefinidaInput = z.infer<typeof parcelaDefinidaSchema>;
 
 /**
- * Troca as parcelas de um lançamento. A função do banco valida o resto: soma
- * igual ao valor do lançamento e nenhuma parcela já aprovada ou paga.
+ * Troca as parcelas EM ABERTO de um lançamento, preservando as pagas e as
+ * aprovadas.
+ *
+ * A lista pode vir VAZIA quando o lançamento tem parcela paga: nesse caso ele
+ * fica valendo só o que já foi pago. Sem nenhuma parcela paga, o banco recusa a
+ * lista vazia — lançamento sem parcela não entra na fila de pagamento.
+ *
+ * O resto é o banco que valida: valor maior que zero, data em toda parcela,
+ * parcela conciliada com o extrato, e a regra do total (em lançamento manual o
+ * valor passa a ser a soma das parcelas; em lançamento de origem a soma tem que
+ * fechar com o valor, porque o cabeçalho pertence à origem).
  */
 export async function definirParcelasLancamento(
   lancamentoId: string,
@@ -228,10 +237,13 @@ export async function definirParcelasLancamento(
   const idValido = idSchema.safeParse(lancamentoId);
   if (!idValido.success) return { erro: "Lançamento inválido" };
 
-  const validado = z.array(parcelaDefinidaSchema).min(1).safeParse(parcelas);
+  // Sem `.min(1)`: quem decide se a lista pode estar vazia é o banco, que sabe se
+  // existe parcela paga para sobrar. Barrar aqui tiraria do Tiago a única forma de
+  // deixar um parcelamento valendo só o que já foi pago.
+  const validado = z.array(parcelaDefinidaSchema).safeParse(parcelas);
   if (!validado.success) {
     return {
-      erro: validado.error.issues[0]?.message ?? "Informe ao menos uma parcela",
+      erro: validado.error.issues[0]?.message ?? "Parcela inválida",
     };
   }
 

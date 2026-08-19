@@ -2204,3 +2204,77 @@ devolver a palavra solta do período, devolver as ações para a fileira dos fil
 do campo de busca e devolver o `h-full` derrubam exatamente o teste que os acusa. Confirmado também
 no navegador, nos três hosts: Lançamentos (DataTable com onze filtros), Centros de custo
 (BarraFiltrosConfiguravel) e Lixeira (filtro que não é canônico).
+
+---
+
+## 2026-08-18 - Número de documento repetia a cada dez a partir de 10.000, e o culpado era o `lpad`
+
+**Contexto:** o Tiago viu vários lançamentos com o mesmo número. A leitura fácil seria culpar a carga
+histórica, e ela estaria errada: quatro lançamentos criados **hoje** pelo app, minutos um do outro,
+saíram todos como LAN-2026-1900.
+
+Estado medido antes: **5.911 lançamentos ocupando 594 números**, todos entre LAN-2026-1307 e
+LAN-2026-1900. A distribuição entregou o padrão: 581 números com exatamente dez lançamentos, cinco
+com nove, cinco com oito. Repetição regular assim não é corrida nem carga desastrada, é aritmética.
+
+**A causa é uma linha:** `proximo_numero_documento` formatava com `lpad(v_num::text, 4, '0')`, e o
+`lpad` do Postgres **corta** quando o texto é maior que o tamanho pedido:
+
+```
+lpad('9999',  4, '0') = '9999'
+lpad('10000', 4, '0') = '1000'
+lpad('10009', 4, '0') = '1000'
+lpad('19004', 4, '0') = '1900'
+```
+
+`documento_sequencias` marcava 19.005 para LAN/2026. Enquanto a sequência esteve abaixo de 10.000 o
+número foi único; ao passar disso, cada dez valores consecutivos colapsaram no mesmo texto. É o único
+`lpad` do banco, e ele numera os três tipos de documento que existem hoje (LAN, OC, COT): ordens de
+compra estão em 31 e cotações em 0, então elas ainda não tinham sido atingidas.
+
+**Decisão:**
+
+1. **O tamanho virou piso, não teto** (`greatest(4, length(v_num::text))`). Quatro dígitos continuam
+   sendo o padrão; número com cinco dígitos cresce em vez de perder o último. Recortar número para
+   caber num formato é trocar identidade de documento por alinhamento de coluna.
+
+2. **Renumerar TODOS os 5.911, e não só as repetições.** Não existe "o primeiro de cada grupo" para
+   preservar: todos os 594 números eram compartilhados, então manter um seria escolher no palpite
+   qual dos dez documentos fica com o número. E o resultado seria pior de ler, porque os renumerados
+   começariam em 19.005 (onde a sequência estava) e conviveriam com 594 de quatro dígitos sem
+   nenhum significado na diferença. Renumerando tudo, a numeração volta a 0001 em diante, contígua.
+
+   Seguro porque `numero` não é chave de nada: nenhuma FK aponta para ele, nenhuma outra coluna de
+   texto do schema guarda 'LAN-2026-' (varredura em todas), e o app só EXIBE, busca por ilike e
+   ordena. Quem abre o lançamento clica no id.
+
+3. **A ordem é `created_at`, não `data_compra`.** As compras vão de 2024-10-29 a 2026-08-18 porque
+   são história importada, mas o número é o registro do documento NO ERP, e é isso que a sequência
+   continua fazendo: lançamento novo com compra antiga vai receber número alto de qualquer forma.
+   Numerar pela data da compra criaria uma correlação que o próximo lançamento já quebraria.
+
+4. **`lock table ... in exclusive mode` antes de renumerar.** Um insert que entrasse no meio levaria
+   número da sequência antiga (19.005 em diante), que ficaria plantado no caminho futuro da sequência
+   reiniciada: daqui a treze mil documentos o índice único recusaria uma gravação legítima e ninguém
+   ligaria o erro à renumeração.
+
+5. **Índice único em `numero` e `not null`.** É o que impede a volta do problema por qualquer caminho
+   (numerador com defeito, carga que passe número na mão, insert direto). O trigger já preenchia
+   sempre; agora o banco exige.
+
+**Consequência conhecida:** ordenar por número é ordenação de TEXTO, então quando a sequência passar
+de 9.999 o LAN-2026-10000 vai aparecer antes do LAN-2026-9999 na lista ordenada por número. Fica
+registrado aqui em vez de consertado agora: são uns 4.000 documentos de folga, e a correção pede
+ordenar pelo sufixo numérico dentro de `fn_listar_lancamentos`.
+
+**Verificação:** `supabase/provas/numero_de_documento_e_unico.sql`, 12 asserções em 6 casos, rodando
+contra o banco vivo dentro de `begin ... rollback`. Ela **reproduz o defeito** reinstalando o
+numerador antigo dentro da transação (caso 2: o segundo documento repete o primeiro), prova que o
+numerador de hoje não repete (caso 3), que o índice único recusa insert repetido (caso 6), e tem
+linha de controle (caso 4: abaixo de 9.999 o formato de quatro dígitos NÃO mudou, senão trocar tudo
+para cinco dígitos passaria nos outros casos e estragaria todo número já impresso). Depois do
+rollback, conferido no banco que a função voltou a ser a corrigida e que não sobrou nada da prova.
+
+O de/para de cada linha ficou em `lancamentos_numero_reparo` (RLS ligada, sem policy e sem grant: é
+material de reparo, ninguém lê pelo app), que é o que o rollback usa e pode ser derrubada depois de
+conferido.
