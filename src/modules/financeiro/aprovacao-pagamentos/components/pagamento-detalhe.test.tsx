@@ -98,6 +98,7 @@ const PADRAO = {
       id: "55555555-5555-4555-8555-555555555555",
       nome: "Bradesco 1234",
       banco: "outro" as const,
+      saldoAtual: 0,
     },
   ],
   podeAprovar: true,

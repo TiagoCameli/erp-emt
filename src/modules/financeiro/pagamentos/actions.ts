@@ -8,12 +8,27 @@ import { formatarData } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import type { EventoTrilha } from "@/components/canonicos/trilha";
+import { anexosDoDocumento } from "@/modules/_shared/anexos/actions";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import {
+  buscarPagamentosParaEspelho,
+  type EspelhoPagamento,
+} from "@/modules/financeiro/pagamentos/espelho";
 import { foraDaJanela } from "@/modules/financeiro/pagamentos/janela";
 import {
   listarParcelasPagas,
+  trilhaParcelasDoLancamento,
   type FiltrosParcelasPagas,
   type ParcelasPagasPagina,
 } from "@/modules/financeiro/pagamentos/queries";
+
+/** Tudo que o painel de detalhe da parcela mostra, numa ida só ao servidor. */
+export interface DetalheParcela {
+  espelho: EspelhoPagamento;
+  anexos: AnexoDoDocumento[];
+  trilha: EventoTrilha[];
+}
 
 const RECURSO = "financeiro.pagamentos" as const;
 const ROTA = "/financeiro/pagamentos";
@@ -212,4 +227,43 @@ export async function buscarParcelasPagas(
   }
 
   return listarParcelasPagas({ pagina, tamanho, filtros: validados.data });
+}
+
+/**
+ * Detalhe completo de uma parcela, para o painel que abre ao clicar na linha.
+ *
+ * Junta o que estava espalhado em três lugares: os dados da parcela e do
+ * lançamento com o rateio por centro de custo (o mesmo carregador do espelho
+ * impresso, para a tela e o papel nunca discordarem), os anexos do pagamento e
+ * a trilha de eventos.
+ *
+ * Vale para parcela em qualquer situação, paga ou não: quem clica numa linha da
+ * fila a pagar quer saber a mesma coisa de quem clica numa já paga.
+ */
+export async function detalheDaParcela(
+  id: string,
+): Promise<DetalheParcela | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para ver pagamentos" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Parcela inválida" };
+
+  const [espelho] = await buscarPagamentosParaEspelho([idValido.data]);
+  if (!espelho) return { erro: "Parcela não encontrada" };
+
+  // Anexos e trilha em paralelo: são leituras independentes. A trilha é do
+  // LANÇAMENTO porque os eventos de uma parcela vivem junto com os das irmãs —
+  // reparcelamento e alteração de valor só fazem sentido lidos em conjunto.
+  const [anexos, trilha] = await Promise.all([
+    anexosDoDocumento("pagamento", idValido.data),
+    espelho.lancamentoId
+      ? trilhaParcelasDoLancamento(espelho.lancamentoId)
+      : Promise.resolve([]),
+  ]);
+
+  return { espelho, anexos, trilha };
 }

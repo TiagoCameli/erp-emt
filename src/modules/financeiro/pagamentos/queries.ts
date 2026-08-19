@@ -2,7 +2,17 @@ import "server-only";
 
 import type { EventoTrilha } from "@/components/canonicos/trilha";
 import { createClient } from "@/lib/supabase/server";
-import { ROTULO_BANCO, type BancoConta } from "@/modules/financeiro/_shared/formato";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import {
+  movimentoPorContaEmCentavos,
+  saldoAtualDaConta,
+} from "@/modules/financeiro/contas-bancarias/saldo";
+import {
+  ROTULO_BANCO,
+  STATUS_PARCELA_ABERTA,
+  type BancoConta,
+  type StatusParcela,
+} from "@/modules/financeiro/_shared/formato";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
 import {
   eventoParcelaParaTrilha,
@@ -33,6 +43,17 @@ export interface ParcelaAprovada {
   dataProgramadaOrigem: OrigemDataProgramada | null;
   valor: number;
   aprovadoEm: string | null;
+  /**
+   * Situação da parcela na fila a pagar: `pendente`, `em_revisao` ou
+   * `aprovado`.
+   *
+   * A aba mostra as três — quem paga precisa enxergar o que ainda não foi
+   * aprovado para saber o que vem pela frente —, e só `aprovado` ganha botão de
+   * pagar, porque `fn_pagar_parcela` recusa as outras duas. Opcional porque
+   * esta interface também é o contrato de entrada do drawer de pagamento, e
+   * quem abre o drawer pela aba Programados não carrega este campo.
+   */
+  status?: StatusParcela;
 }
 
 /** Parcela já paga, para o histórico. */
@@ -95,6 +116,16 @@ export interface ContaBancariaOpcao {
   id: string;
   nome: string;
   banco: string;
+  /**
+   * Saldo atual, em reais: saldo inicial mais o movimento das parcelas já pagas
+   * nesta conta. Mesma conta que `fn_pagar_parcela` faz antes de aceitar o
+   * pagamento — e ela RECUSA quando o saldo não cobre.
+   *
+   * Vai para a tela para o pagamento em lote poder dizer, ANTES de tentar,
+   * quanto sobra depois: sem isto o operador marca vinte parcelas, manda pagar,
+   * e descobre pelo erro do banco na décima que a conta acabou.
+   */
+  saldoAtual: number;
 }
 
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
@@ -111,38 +142,80 @@ function rotuloConta(nome: string, banco: string): string {
   return `${nome} - ${rotuloBanco}`;
 }
 
+/** Linha crua da fila a pagar, como o PostgREST devolve. */
+interface LinhaAPagar {
+  id: string;
+  numero_parcela: number;
+  valor: number;
+  status: string;
+  data_vencimento: string | null;
+  data_programada: string | null;
+  data_programada_origem: string | null;
+  aprovado_em: string | null;
+  lancamento_id: string;
+  conta_bancaria_id: string | null;
+  lancamentos: {
+    numero: string | null;
+    descricao: string | null;
+    tipo: string;
+    fornecedor_id: string | null;
+    categorias_financeiras: { nome: string } | null;
+    fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
+  } | null;
+}
+
+/** Colunas da fila a pagar. Uma constante só, porque a query é montada em lotes. */
+const SELECT_A_PAGAR = `id, numero_parcela, valor, status, data_vencimento,
+   data_programada, data_programada_origem, aprovado_em, lancamento_id,
+   conta_bancaria_id,
+   lancamentos!inner(
+     numero, descricao, tipo, fornecedor_id,
+     categorias_financeiras(nome),
+     fornecedores(razao_social, nome_fantasia)
+   )`;
+
 /**
- * Parcelas aprovadas de lançamentos a pagar, prontas para pagamento.
- * Só status='aprovado' e do tipo a_pagar (a_receber baixa em contas a
- * receber, não aqui). Ordena por vencimento mais próximo primeiro.
+ * Parcelas EM ABERTO de lançamentos a pagar: aprovadas, pendentes e em revisão.
+ *
+ * Mostra as não aprovadas junto com as aprovadas (pedido do Tiago, 19/08/2026)
+ * porque quem paga precisa enxergar o que vem pela frente, não só o que já
+ * passou pela aprovação. Quem decide o que é "em aberto" é
+ * `STATUS_PARCELA_ABERTA`, e não uma lista digitada aqui: status novo entra
+ * sozinho, sem esta consulta e o resumo do topo passarem a discordar.
+ *
+ * Só `tipo = a_pagar` (a_receber baixa em contas a receber) e lançamento não
+ * cancelado: parcela de lançamento cancelado listada como "a pagar" é convite
+ * para pagar o que não existe, e o banco recusaria de qualquer jeito.
+ *
+ * Traz TODAS as linhas (paginando acima do teto de mil do PostgREST) porque os
+ * cards do topo somam o conjunto inteiro e a seleção precisa atravessar as
+ * páginas da tabela: somar só a página carregada faria o card mentir sobre
+ * quanto a empresa deve. São ~900 linhas hoje.
  */
-export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
+export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("lancamento_parcelas")
-    .select(
-      `id, numero_parcela, valor, data_vencimento, data_programada,
-       data_programada_origem, aprovado_em, lancamento_id, conta_bancaria_id,
-       lancamentos!inner(
-         numero, descricao, tipo, fornecedor_id,
-         categorias_financeiras(nome),
-         fornecedores(razao_social, nome_fantasia)
-       )`,
-    )
-    .eq("status", "aprovado")
-    .eq("lancamentos.tipo", "a_pagar")
-    // Parcela de lançamento cancelado não é pagável. O banco recusa
-    // (fn_pagar_parcela), e ela também não aparece aqui: parcela de lançamento
-    // cancelado listada como "a pagar" é convite para pagar o que não existe.
-    .neq("lancamentos.status", "cancelado")
-    .order("data_vencimento", { ascending: true, nullsFirst: false });
+  const { linhas, erro } = await todasAsLinhas<LinhaAPagar>((de, ate) =>
+    supabase
+      .from("lancamento_parcelas")
+      .select(SELECT_A_PAGAR)
+      .in("status", STATUS_PARCELA_ABERTA)
+      .eq("lancamentos.tipo", "a_pagar")
+      .neq("lancamentos.status", "cancelado")
+      .order("data_vencimento", { ascending: true, nullsFirst: false })
+      // Desempate obrigatório: sem ele, vencimentos iguais (e são muitos, a
+      // carga trouxe parcelas em bloco) mudam de ordem entre uma faixa e a
+      // seguinte, repetindo linha numa página e perdendo em outra.
+      .order("id", { ascending: true })
+      .range(de, ate)
+      .returns<LinhaAPagar[]>(),
+  );
 
-  if (error) {
+  if (erro) {
     throw new Error("Não foi possível carregar as parcelas a pagar");
   }
 
-  return (data ?? []).map((parcela) => ({
+  return linhas.map((parcela) => ({
     id: parcela.id,
     lancamentoId: parcela.lancamento_id,
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
@@ -158,6 +231,7 @@ export async function listarParcelasAprovadas(): Promise<ParcelaAprovada[]> {
       (parcela.data_programada_origem as OrigemDataProgramada | null) ?? null,
     valor: parcela.valor,
     aprovadoEm: parcela.aprovado_em,
+    status: parcela.status as StatusParcela,
   }));
 }
 
@@ -300,20 +374,41 @@ export async function listarParcelasPagas({
 export async function listarContasBancarias(): Promise<ContaBancariaOpcao[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("contas_bancarias")
-    .select("id, nome, banco")
-    .eq("ativo", true)
-    .order("nome");
+  // O saldo vem da mesma RPC que a tela de contas bancárias usa, e a aritmética
+  // em centavos mora em contas-bancarias/saldo.ts, que tem teste: dois cálculos
+  // de saldo divergiriam no primeiro arredondamento.
+  const [contasResultado, movimentosResultado] = await Promise.all([
+    supabase
+      .from("contas_bancarias")
+      .select("id, nome, banco, saldo_inicial")
+      .eq("ativo", true)
+      .order("nome"),
+    supabase.rpc("fn_rel_posicao_bancaria"),
+  ]);
 
-  if (error) {
+  if (contasResultado.error) {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
+  if (movimentosResultado.error) {
+    throw new Error("Não foi possível calcular o saldo das contas");
+  }
 
-  return (data ?? []).map((conta) => ({
+  const movimentoCentavos = movimentoPorContaEmCentavos(
+    (movimentosResultado.data ?? []).map((linha) => ({
+      contaBancariaId: linha.conta_bancaria_id,
+      tipo: linha.tipo,
+      total: linha.total,
+    })),
+  );
+
+  return (contasResultado.data ?? []).map((conta) => ({
     id: conta.id,
     nome: conta.nome,
     banco: conta.banco,
+    saldoAtual: saldoAtualDaConta(
+      conta.saldo_inicial,
+      movimentoCentavos.get(conta.id) ?? 0,
+    ),
   }));
 }
 
