@@ -29,10 +29,10 @@ import { formatarDataHora } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import {
   anexosDoDocumento,
-  enviarAnexos,
   removerAnexo,
   urlDoAnexo,
 } from "@/modules/_shared/anexos/actions";
+import { enviarAnexoDoNavegador } from "@/modules/_shared/anexos/enviar-do-navegador";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 
 /** Mesmo limite do servidor: a constante é uma só, o número não pode divergir. */
@@ -149,36 +149,21 @@ export function Anexos({
 
     try {
       for (const [indice, arquivo] of aceitos.entries()) {
-        const formData = new FormData();
-        formData.append("entidade", entidade);
-        formData.append("entidadeId", entidadeId);
-        formData.append("arquivo", arquivo);
-
-        // O try é do arquivo, não da fila: quando um envio explode fora da
-        // action (corpo recusado pelo Next, conexão caída, deploy no meio do
-        // caminho), o erro precisa VIRAR MENSAGEM e o próximo arquivo precisa
-        // continuar. Sem isto a promessa quebrava lá dentro, o spinner sumia e
-        // o anexo não aparecia — sem uma palavra na tela.
-        let resultado;
-        try {
-          resultado = await enviarAnexos(formData);
-        } catch {
-          toast.error(
-            `${arquivo.name}: o envio falhou no caminho. Se o arquivo for grande, o limite é ${TAMANHO_MAXIMO_MB} MB`,
-          );
-          setProgresso({ feitos: indice + 1, total: aceitos.length });
-          continue;
-        }
+        // Um arquivo por vez, e a falha de um não derruba os outros: o envio
+        // devolve o motivo em pt-BR em vez de estourar, para nenhum anexo
+        // sumir em silêncio (era o defeito: a tela girava e nada aparecia).
+        const resultado = await enviarAnexoDoNavegador(
+          entidade,
+          entidadeId,
+          arquivo,
+        );
         setProgresso({ feitos: indice + 1, total: aceitos.length });
 
         if ("erro" in resultado) {
           toast.error(`${arquivo.name}: ${resultado.erro}`);
           continue;
         }
-        enviadosOk += resultado.enviados;
-        for (const falha of resultado.erros) {
-          toast.error(`${falha.nome}: ${falha.erro}`);
-        }
+        enviadosOk += 1;
       }
 
       if (enviadosOk > 0) {

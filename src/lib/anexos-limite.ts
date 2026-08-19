@@ -1,37 +1,34 @@
 /**
- * Limite de tamanho de anexo, em UM lugar só.
+ * Limites de tamanho de upload, em UM lugar só.
  *
  * Este arquivo é importado pelo `next.config.ts`, pelo servidor e por component
  * de cliente ao mesmo tempo, então NÃO pode importar nada: nem `server-only`,
  * nem React, nem env. É constante pura de propósito.
  *
- * O arquivo atravessa três limites e o menor manda:
+ * São DOIS limites, com donos diferentes, e confundir os dois foi o que deixou
+ * a tela prometendo 25 MB enquanto o Next cortava em 1 MB:
  *
- * 1. O que a tela recusa antes de gastar upload (este número).
- * 2. `experimental.serverActions.bodySizeLimit` no `next.config.ts`. Sem
- *    configurar, o Next corta o CORPO da requisição em 1 MB e devolve
- *    "Body exceeded 1 MB limit" ANTES da action rodar — a permissão nem é
- *    checada, o arquivo nem chega.
- * 3. O teto de payload de function da Vercel, ~4,5 MB. Esse não é
- *    configurável: acima dele a borda responde 413 FUNCTION_PAYLOAD_TOO_LARGE
- *    e a function nem é invocada.
- *
- * Por isso 4 MB e não os 25 MB que a tela anunciava: 25 MB nunca funcionaram,
- * a Vercel não deixa. Para passar disso, o binário precisa ir do navegador
- * direto para o Storage por URL assinada, sem atravessar a server action.
+ * 1. `ANEXO_TAMANHO_MAXIMO_MB` — o anexo. O binário NÃO passa mais pela server
+ *    action: o navegador manda direto para o Storage do Supabase por URL
+ *    assinada, então o teto da function da Vercel (~4,5 MB de payload) deixou
+ *    de valer aqui. Quem recusa arquivo grande agora é o próprio bucket, pelo
+ *    `file_size_limit` — servidor de verdade, não promessa de tela.
+ * 2. `BODY_MAXIMO_SERVER_ACTION_BYTES` — o corpo das server actions que ainda
+ *    carregam arquivo pequeno (importação de OFX, planilha de cadastro). Esse
+ *    continua preso ao teto da Vercel, que não é configurável: medido contra a
+ *    produção em 19/08/2026, 4.300.000 bytes passam e 4.500.000 voltam 413
+ *    FUNCTION_PAYLOAD_TOO_LARGE.
  */
-export const ANEXO_TAMANHO_MAXIMO_MB = 4;
+export const ANEXO_TAMANHO_MAXIMO_MB = 25;
 
-/** Igual ao limite do arquivo em bytes, para as contas de validação. */
+/** Igual ao limite do anexo em bytes, para as contas de validação. */
 export const ANEXO_TAMANHO_MAXIMO_BYTES = ANEXO_TAMANHO_MAXIMO_MB * 1024 * 1024;
 
 /**
- * Sobra para o resto do multipart: nome do arquivo, campos entidade e
- * entidadeId, e as fronteiras de cada parte. O corpo é sempre um pouco maior
- * que o arquivo, e é o CORPO que o Next mede.
+ * Corpo máximo de uma server action (`experimental.serverActions.bodySizeLimit`).
+ *
+ * Não é o limite do anexo: é o que sobra para OFX e planilha, que ainda sobem
+ * por FormData. Sem configurar, o padrão do Next é 1 MB e o extrato de um mês
+ * já passa disso. Fica abaixo do teto da Vercel de propósito.
  */
-const FOLGA_DO_ENVELOPE_BYTES = 64 * 1024;
-
-/** O que vai em `experimental.serverActions.bodySizeLimit`. */
-export const ANEXO_BODY_LIMITE_BYTES =
-  ANEXO_TAMANHO_MAXIMO_BYTES + FOLGA_DO_ENVELOPE_BYTES;
+export const BODY_MAXIMO_SERVER_ACTION_BYTES = 4 * 1024 * 1024;

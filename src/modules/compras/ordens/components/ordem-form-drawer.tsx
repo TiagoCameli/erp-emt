@@ -45,7 +45,6 @@ import {
 } from "@/lib/formatadores";
 import { criarFormaPagamento } from "@/modules/compras/_shared/pagamento-actions";
 import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
-import { enviarAnexos } from "@/modules/_shared/anexos/actions";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import {

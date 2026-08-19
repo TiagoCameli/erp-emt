@@ -88,8 +88,13 @@ export function validarArquivo(params: {
 /**
  * SHA-256 do conteúdo. É a chave do dedup: mesmo hash e mesmo tamanho
  * significam mesmo binário, e o registro é reusado em vez de subir de novo.
+ *
+ * Recebe Blob (File é um Blob) porque desde o upload direto quem é hasheado é o
+ * objeto BAIXADO DE VOLTA do Storage, não o arquivo que o navegador diz ter
+ * mandado: o hash é a chave do dedup, e chave que o cliente escolhe permite
+ * apontar o documento de um para o binário de outro.
  */
-export async function hashDoArquivo(arquivo: File): Promise<string> {
+export async function hashDoArquivo(arquivo: Blob): Promise<string> {
   const bytes = Buffer.from(await arquivo.arrayBuffer());
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -104,6 +109,19 @@ export function pathNovo(nome: string): string {
   const ano = agora.getUTCFullYear();
   const mes = String(agora.getUTCMonth() + 1).padStart(2, "0");
   return `arquivos/${ano}/${mes}/${crypto.randomUUID()}${extensaoDoNome(nome)}`;
+}
+
+/**
+ * O caminho foi emitido por `pathNovo`?
+ *
+ * O caminho vai para o navegador no preparo do envio e volta na confirmação —
+ * ou seja, passa pela mão do cliente. Antes de virar registro ele é conferido
+ * aqui: sem isto daria para confirmar apontando para o objeto de OUTRO anexo.
+ * O unique de `path_storage` ainda barraria o segundo registro, mas a recusa
+ * sairia como erro de banco em vez de "caminho inválido".
+ */
+export function ehCaminhoDeUpload(path: string): boolean {
+  return /^arquivos\/\d{4}\/\d{2}\/[0-9a-f-]{36}(\.[A-Za-z0-9]+)?$/.test(path);
 }
 
 /**
@@ -124,25 +142,56 @@ function clienteDoStorage(): ReturnType<typeof createAdminClient> | null {
 }
 
 /**
- * Sobe o binário. Usa a chave de serviço porque o bucket não tem policy para
- * usuário logado: o servidor é o único que fala com o Storage, e a permissão
- * já foi checada antes de chegar aqui.
+ * Crédito de upload para UM caminho: o navegador manda o binário direto para o
+ * Storage com este token, sem passar pela server action.
+ *
+ * É o que destrava anexo grande. A function da Vercel recusa corpo acima de
+ * ~4,5 MB (teto da plataforma, não configurável), então enquanto o arquivo
+ * atravessava a action o limite real era esse, não o que a tela prometia. Aqui
+ * a action só decide SE pode e para ONDE vai; os bytes não passam por ela.
+ *
+ * A permissão é checada antes de chamar isto. O token vale para um caminho só,
+ * gerado agora, e o caminho é aleatório: não dá para sobrescrever anexo de
+ * outro documento com ele.
  */
-export async function subirBinario(
+export async function criarUploadAssinado(
   path: string,
-  arquivo: File,
-): Promise<{ erro: string } | null> {
+): Promise<{ path: string; token: string } | { erro: string }> {
   const admin = clienteDoStorage();
   if (!admin) return { erro: ERRO_SEM_CHAVE };
 
-  const { error } = await admin.storage
+  const { data, error } = await admin.storage
     .from(BUCKET_ARQUIVOS)
-    .upload(path, arquivo, {
-      contentType: arquivo.type || undefined,
-      upsert: false,
-    });
+    .createSignedUploadUrl(path);
 
-  return error ? { erro: "Não foi possível enviar o arquivo. Tente novamente" } : null;
+  return error || !data
+    ? { erro: "Não foi possível preparar o envio. Tente novamente" }
+    : { path: data.path, token: data.token };
+}
+
+/**
+ * Lê de volta o objeto recém-enviado, para o SERVIDOR medir e hashear o que
+ * realmente chegou.
+ *
+ * Sem isto, tamanho e hash seriam o que o navegador disse que mandou — e os
+ * dois decidem coisa séria: o tamanho aparece na tela e o hash é a chave do
+ * dedup, que faz um documento reusar o binário de outro. É a contrapartida
+ * honesta de deixar o upload sair da server action.
+ */
+export async function lerBinario(
+  path: string,
+): Promise<{ blob: Blob; tamanhoBytes: number } | { erro: string }> {
+  const admin = clienteDoStorage();
+  if (!admin) return { erro: ERRO_SEM_CHAVE };
+
+  const { data, error } = await admin.storage
+    .from(BUCKET_ARQUIVOS)
+    .download(path);
+
+  if (error || !data) {
+    return { erro: "O arquivo não chegou ao servidor. Tente enviar de novo" };
+  }
+  return { blob: data, tamanhoBytes: data.size };
 }
 
 /**

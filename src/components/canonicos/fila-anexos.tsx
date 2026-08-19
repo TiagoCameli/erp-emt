@@ -10,7 +10,7 @@ import {
   ANEXO_TAMANHO_MAXIMO_MB,
 } from "@/lib/anexos-limite";
 import { cn } from "@/lib/utils";
-import { enviarAnexos } from "@/modules/_shared/anexos/actions";
+import { enviarAnexoDoNavegador } from "@/modules/_shared/anexos/enviar-do-navegador";
 
 /** Tamanho legível: 1,2 MB, 340 KB. */
 function tamanhoLegivel(bytes: number): string {
@@ -39,32 +39,13 @@ export async function subirFilaDeAnexos(
   let falhas = 0;
 
   for (const arquivo of arquivos) {
-    const dados = new FormData();
-    dados.append("entidade", entidade);
-    dados.append("entidadeId", entidadeId);
-    dados.append("arquivo", arquivo);
-
-    // Aqui o documento JÁ foi criado: um envio que estoura fora da action não
-    // pode derrubar o fluxo de salvar nem sumir calado. Vira falha contada e
-    // mensagem com o nome do arquivo, igual às outras.
-    let envio;
-    try {
-      envio = await enviarAnexos(dados);
-    } catch {
-      falhas += 1;
-      toast.error(
-        `${arquivo.name}: o envio falhou no caminho. Se o arquivo for grande, o limite é ${ANEXO_TAMANHO_MAXIMO_MB} MB`,
-      );
-      continue;
-    }
+    // Aqui o documento JÁ foi criado: uma falha de envio não pode derrubar o
+    // fluxo de salvar nem sumir calada. Vira falha contada e mensagem com o
+    // nome do arquivo.
+    const envio = await enviarAnexoDoNavegador(entidade, entidadeId, arquivo);
     if ("erro" in envio) {
       falhas += 1;
       toast.error(`${arquivo.name}: ${envio.erro}`);
-      continue;
-    }
-    falhas += envio.erros.length;
-    for (const falha of envio.erros) {
-      toast.error(`${falha.nome}: ${falha.erro}`);
     }
   }
 
