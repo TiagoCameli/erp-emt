@@ -2410,3 +2410,88 @@ componente (~60px). Nenhum deles esconde dado.
 **Sem emoji no papel.** O clipe do bloco de anexos era um emoji e depende da fonte de emoji do
 sistema que abrir o PDF: sai como retângulo vazio ou borrão preto em impressora monocromática. Virou
 um filete vertical, que imprime em qualquer lugar.
+
+## 2026-08-19 - O a receber ganha formulário próprio, e a aba vira Recebimentos
+
+**O caminho do a receber nunca funcionou, e o banco provava.** Zero lançamentos `tipo = 'a_receber'`
+em 5.912 registros. A causa não era ninguém usar: a action de criar recebível chamava
+`fn_salvar_lancamento`, que exigia `financeiro.lancamentos / criar`, e quem tinha só a aba de a
+receber era recusado antes de gravar. Isso tornou esta mudança barata — não havia dado a preservar
+nem tela a compatibilizar — e é o motivo de o rename ter ido até a chave de permissão.
+
+**A receber não é a pagar com um campo a mais.** O formulário era o MESMO: fornecedor (quem paga é o
+cliente), forma de pagamento (ela decide o caminho do *pagamento*, que aqui não existe) e nenhuma
+pergunta sobre onde o dinheiro entra. Agora, quando o tipo é "A receber", o formulário troca: **quem
+está pagando** (cadastro de clientes, criando na hora), **conta que vai receber**, **número do
+documento** e a descrição do recebimento. Os três primeiros são obrigatórios nos três lugares (schema
+do formulário, schema de servidor e `fn_salvar_lancamento`), porque a regra é de dinheiro.
+
+**A conta de destino é gravada na PARCELA, e só no a receber.** `fn_salvar_lancamento` passou a
+aceitar `conta_bancaria_id` em `p_dados` e a repassá-lo às parcelas — mas com guarda de tipo. No a
+pagar aquela coluna é o portão da revisão, e é ela que `fn_aplicar_regra_pagamento` lê para decidir
+se o lançamento já nasce aprovado (dinheiro) ou já quitado (cartão): aceitar o campo lá faria um
+lançamento a pagar nascer aprovado sem ninguém revisar. A guarda é no banco, não na tela.
+
+**A permissão passou a depender do TIPO, e na edição pergunta duas vezes.** `fn_pode_lancar_tipo`
+existe como função própria porque a edição confere o tipo GRAVADO *e* o tipo do payload. Sem as duas
+perguntas, quem tem só Recebimentos abriria um lançamento a pagar, mandaria `tipo = 'a_receber'` e
+converteria uma despesa em receita passando pela checagem.
+
+**O rename foi até a chave.** `financeiro.contas-receber` → `financeiro.recebimentos`, com rota
+`/financeiro/recebimentos`. A permissão é texto no banco, então a migration faz `update` em
+`usuario_permissoes` (13 linhas) e `perfil_permissoes` (7) e RECRIA as três policies e a função que
+citavam a chave antiga. Policy que cita uma chave que não existe mais não dá erro: ela apenas nunca
+libera, e a tela fica em branco sem mensagem. Foi por isso que a migration recriou em vez de deixar
+para depois.
+
+**Quem vê o documento lê o cadastro dele — de novo.** Seis policies de SELECT não liberavam para o
+recurso novo (`contas_bancarias`, `clientes`, `centros_custo`, `categorias_financeiras`,
+`condicoes_pagamento`, `lancamento_rateios`). O sintoma seria o mesmo de agosto: seletor vazio ou
+UUID na tela, sem erro nenhum. Vale a regra: aba nova que referencia cadastro precisa da leitura do
+cadastro na mesma migration.
+
+**Um formulário só para a tabela, não dois.** A aba tinha um "Novo a receber" simplificado próprio,
+com schema e action próprios. Os dois divergiram: o da aba nunca mandou número de documento nem conta
+de destino. Foi removido; a aba abre o MESMO formulário de lançamento com o tipo travado
+(`tipoFixo`). Duas telas gravando na mesma tabela de dinheiro é um convite a divergir em silêncio.
+
+**Centro de custo era "Opcional" na tela e obrigatório no banco.** `fn_salvar_lancamento` recusa
+rateio vazio desde `lancamento_exige_centro_de_custo` (19/08), mas o formulário dizia "Opcional" e
+deixava enviar: quem lançava sem centro levava o `raise` do Postgres num toast, sem campo apontado.
+Agora é um campo único obrigatório, com botão para dividir em rateio, no MESMO padrão da parcela
+única que já existia no arquivo (com um, a coluna de valor não aparece e ele vale o total; a partir
+de dois, a tabela aparece e a soma tem de fechar). Duas fixtures de teste traziam `rateios: []` —
+provavam um registro que o banco não aceita.
+
+**Recebível quitado é "Recebido", não "Pago".** O status no banco é o mesmo (`pago`) para os dois
+tipos, então o rótulo é a única coisa que os separa na tela. `rotuloStatusLancamento` já traduzia
+`a_pagar` → "A receber"; passou a traduzir `pago` → "Recebido". A função é a mesma que a exportação
+para Excel usa, senão a planilha contradiz a lista.
+
+**A tela espelha Pagamentos, e a diferença de fundo é que não há fila de aprovação.** Quatro cards
+que reagem à seleção (total a receber, a vencer, vencido, recebido no mês) e duas abas, "A receber" e
+"Recebidos". No resumo do a receber, vencido e a vencer são COMPLEMENTARES e somam o total — diferente
+do a pagar, onde "vencido" atravessa aprovado e aguardando e por isso não fecha. Parcela sem
+vencimento conta como a vencer, nunca como vencida: não há data para dizer que atrasou.
+
+**O saldo sobe, e isso foi PROVADO no banco vivo.** `fn_pagar_parcela` já somava `a_receber` no saldo
+(e não checa saldo nem janela nesse tipo) — o que faltava era prova. Rodada dentro de transação
+desfeita (`raise` no fim carrega os números e desfaz tudo), impersonando um usuário real via
+`set_config('request.jwt.claims', ...)`: recusa sem documento, recusa sem conta, conta gravada na
+parcela, saldo **inalterado** ao lançar (linha de controle) e saldo +R$ 1.234,56 exatos ao dar como
+recebido. A linha de controle é a que importa: um recebível que ainda não foi recebido não move o
+saldo. Total de lançamentos seguiu 5.912.
+
+**Cuidado com o nome: existe uma tabela `recebimentos` no banco, e é outra coisa.** Ela é o
+recebimento de MATERIAL de uma ordem de compra (a nota que chega com a mercadoria), do domínio de
+Compras. Este módulo é recebimento de DINHEIRO: parcelas de lançamentos `a_receber`. Está comentado
+no `queries.ts` do módulo, porque a colisão de nome é o tipo de coisa que faz alguém ler a tabela
+errada com convicção.
+
+**Duas frentes no mesmo arquivo, e o merge aceitou as duas.** `origin/main` recebeu "número do
+documento na OC e no lançamento" no meio deste trabalho. O git auto-mergeou sem conflito e produziu
+chave duplicada em seis arquivos e DOIS campos "Número do documento" com o mesmo `id` e o mesmo
+`register` na tela do a receber. Quem pegou foi o `tsc` (TS1117), não a revisão. Ficou um campo só, na
+fileira das datas, com `obrigatorio={aReceber}`. Lição: merge limpo em arquivo que a outra frente
+também tocou não significa merge correto — rodar o typecheck logo depois do merge é o que separa os
+dois.

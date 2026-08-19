@@ -40,9 +40,14 @@ import {
   mesParaCompetencia,
 } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { criarClienteRapido } from "@/modules/_shared/cliente/actions";
 import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
-import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
+import {
+  ROTULO_BANCO,
+  ROTULO_TIPO_LANCAMENTO,
+  type BancoConta,
+} from "@/modules/financeiro/_shared/formato";
 import {
   parcelasDaCondicaoLancamento,
   salvarLancamento,
@@ -50,11 +55,13 @@ import {
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  ClienteOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
   LancamentoDetalhe,
 } from "@/modules/financeiro/lancamentos/queries";
+import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import {
   lancamentoFormSchema,
   paraNumero,
@@ -133,11 +140,14 @@ const COLUNAS_RATEIO: ColunaItem[] = [
 /** Valores iniciais do formulário, a partir de um lançamento ou em branco. */
 function valoresIniciais(
   lancamento: LancamentoDetalhe | null,
+  tipoInicial: LancamentoFormInput["tipo"],
 ): LancamentoFormInput {
   if (!lancamento) {
     return {
-      tipo: "a_pagar",
+      tipo: tipoInicial,
       fornecedorId: undefined,
+      clienteId: "",
+      contaBancariaId: "",
       categoriaId: undefined,
       formaPagamentoId: "",
       condicaoPagamentoId: "",
@@ -149,12 +159,17 @@ function valoresIniciais(
       numeroDocumento: "",
       observacoes: "",
       parcelas: [parcelaVazia()],
-      rateios: [],
+      // Nasce com UMA linha: centro de custo é obrigatório (o banco recusa lista
+      // vazia), então o campo tem de estar na tela desde o começo, não escondido
+      // atrás de um "Adicionar rateio".
+      rateios: [rateioVazio()],
     };
   }
   return {
     tipo: lancamento.tipo,
     fornecedorId: lancamento.fornecedorId ?? undefined,
+    clienteId: lancamento.clienteId ?? "",
+    contaBancariaId: lancamento.contaBancariaId ?? "",
     categoriaId: lancamento.categoriaId ?? undefined,
     formaPagamentoId: lancamento.formaPagamentoId ?? "",
     // Em lançamento de OC a condição vem da ordem e o cabeçalho é somente
@@ -184,10 +199,16 @@ function valoresIniciais(
             dataVencimento: parcela.dataVencimento ?? "",
           }))
         : [parcelaVazia()],
-    rateios: lancamento.rateios.map((rateio) => ({
-      centroCustoId: rateio.centroCustoId,
-      valor: String(rateio.valor).replace(".", ","),
-    })),
+    rateios:
+      lancamento.rateios.length > 0
+        ? lancamento.rateios.map((rateio) => ({
+            centroCustoId: rateio.centroCustoId,
+            valor: String(rateio.valor).replace(".", ","),
+          }))
+        : // Lançamento antigo gravado antes da exigência de centro de custo:
+          // abre com a linha vazia para quem editar ter onde escolher, em vez de
+          // travar no envio sem campo à vista.
+          [rateioVazio()],
   };
 }
 
@@ -250,7 +271,18 @@ export interface LancamentoFormDrawerProps {
   formasPagamento: FormaPagamentoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   fornecedores: FornecedorOpcao[];
+  /** Clientes ativos: quem está pagando, no a receber. */
+  clientes: ClienteOpcao[];
+  /** Contas bancárias ativas: onde o dinheiro do recebimento vai entrar. */
+  contas: ContaBancariaOpcao[];
   centrosCusto: CentroCustoOpcao[];
+  /**
+   * Trava o tipo do lançamento. Vem preenchido quando o formulário é aberto de
+   * uma tela que já é de um tipo só — Financeiro > Recebimentos abre com
+   * "a_receber" travado, porque escolher "A pagar" ali criaria uma despesa numa
+   * tela de recebimento e ela sumiria da lista no mesmo instante.
+   */
+  tipoFixo?: LancamentoFormInput["tipo"];
   /** Chamado depois de criar, com o id, para navegar ao detalhe. */
   onSalvo?: (id: string) => void;
   /** Anexos já vinculados (modo edição). Vem do servidor. */
@@ -270,7 +302,10 @@ export function LancamentoFormDrawer({
   formasPagamento,
   condicoesPagamento,
   fornecedores,
+  clientes,
+  contas,
   centrosCusto,
+  tipoFixo,
   onSalvo,
   anexos = [],
 }: LancamentoFormDrawerProps) {
@@ -278,18 +313,19 @@ export function LancamentoFormDrawer({
   const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
   const [subindoAnexos, setSubindoAnexos] = React.useState(false);
   const [gerandoParcelas, setGerandoParcelas] = React.useState(false);
+  const tipoInicial = tipoFixo ?? "a_pagar";
 
   const form = useForm<LancamentoFormInput>({
     resolver: zodResolver(lancamentoFormSchema),
-    defaultValues: valoresIniciais(lancamento),
+    defaultValues: valoresIniciais(lancamento, tipoInicial),
   });
 
   const parcelas = useFieldArray({ control: form.control, name: "parcelas" });
   const rateios = useFieldArray({ control: form.control, name: "rateios" });
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(lancamento));
-  }, [aberto, lancamento, form]);
+    if (aberto) form.reset(valoresIniciais(lancamento, tipoInicial));
+  }, [aberto, lancamento, tipoInicial, form]);
 
   const salvando = form.formState.isSubmitting;
 
@@ -303,7 +339,18 @@ export function LancamentoFormDrawer({
   const somaRateios = somar(rateiosObservados);
 
   const tipoValor = form.watch("tipo");
+  /**
+   * A receber tem formulário próprio, e não o mesmo com um campo a mais.
+   *
+   * O que muda: sai fornecedor (quem paga é o cliente) e sai forma de pagamento
+   * (ela decide o caminho do PAGAMENTO, que aqui não existe); entram pagador,
+   * conta em que o dinheiro vai entrar e número do documento, os três
+   * obrigatórios. Os rótulos que falam de compra passam a falar de recebimento.
+   */
+  const aReceber = tipoValor === "a_receber";
   const fornecedorValor = form.watch("fornecedorId") ?? SEM_VINCULO;
+  const clienteValor = form.watch("clienteId") ?? "";
+  const contaValor = form.watch("contaBancariaId") ?? "";
   const categoriaValor = form.watch("categoriaId") ?? SEM_VINCULO;
   const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId") ?? "";
@@ -322,6 +369,12 @@ export function LancamentoFormDrawer({
    * lançamento com "Vencimento 31/07" no topo e parcela sem data embaixo.
    */
   const parcelaUnica = parcelas.fields.length <= 1;
+  /**
+   * Mesma regra do rateio: com UM centro de custo ele leva o total do lançamento
+   * e a coluna de valor não aparece, então a soma fecha por construção. A partir
+   * de dois a tabela mostra o valor de cada um e a soma tem de bater.
+   */
+  const rateioUnico = rateios.fields.length <= 1;
   // Sem condição escolhida ou sem valor não há o que dividir, e a action
   // recusaria com um toast. Melhor o botão já nascer desabilitado.
   const podeGerarParcelas =
@@ -407,6 +460,38 @@ export function LancamentoFormDrawer({
     }
   }
 
+  /**
+   * Adiciona uma linha de rateio.
+   *
+   * Saindo de centro único, a linha que estava sem coluna de valor assume o total
+   * do lançamento antes de a tabela aparecer: senão a tabela nasceria com a
+   * primeira linha sem valor e a pessoa teria de redigitar o que já estava
+   * implícito. Mesmo movimento de `adicionarParcela`.
+   */
+  function adicionarRateio() {
+    if (rateios.fields.length <= 1) {
+      const centroEscolhido = form.getValues("rateios.0.centroCustoId") ?? "";
+      rateios.replace([
+        { centroCustoId: centroEscolhido, valor: form.getValues("valor") },
+        rateioVazio(),
+      ]);
+      return;
+    }
+    rateios.append(rateioVazio());
+  }
+
+  /**
+   * Remove uma linha de rateio.
+   *
+   * Sobrando uma só, a coluna de valor desaparece e o centro que restou passa a
+   * valer o total. O valor da linha que sobra não é aproveitado de propósito, pelo
+   * mesmo motivo de `removerParcela`: com um centro ele vale o total, e é o total
+   * que o banco exige que feche.
+   */
+  function removerRateio(indice: number) {
+    rateios.remove(indice);
+  }
+
   async function aoEnviar(valores: LancamentoFormInput) {
     /**
      * Com uma parcela a tabela não está na tela, então a parcela é montada aqui
@@ -445,11 +530,23 @@ export function LancamentoFormDrawer({
         ? valores.dataVencimento
         : (vencimentosDasParcelas[0] ?? "");
 
+    /**
+     * A receber e a pagar mandam campos diferentes, e o que não é do tipo vai
+     * como undefined em vez de ir com o que sobrou no formulário. Quem trocou o
+     * tipo no meio do preenchimento deixa lixo para trás: um fornecedor escolhido
+     * antes de virar "A receber" gravaria um recebimento com fornecedor, e uma
+     * conta escolhida antes de virar "A pagar" faria o lançamento nascer aprovado
+     * ou quitado por causa de fn_aplicar_regra_pagamento.
+     */
+    const doTipo = valores.tipo === "a_receber";
+
     const dados = {
       tipo: valores.tipo,
-      fornecedorId: valores.fornecedorId,
+      fornecedorId: doTipo ? undefined : valores.fornecedorId,
+      clienteId: doTipo ? valores.clienteId || undefined : undefined,
+      contaBancariaId: doTipo ? valores.contaBancariaId || undefined : undefined,
       categoriaId: valores.categoriaId,
-      formaPagamentoId: valores.formaPagamentoId || undefined,
+      formaPagamentoId: doTipo ? undefined : valores.formaPagamentoId || undefined,
       condicaoPagamentoId: valores.condicaoPagamentoId || undefined,
       descricao: valores.descricao,
       valor: paraNumero(valores.valor),
@@ -459,10 +556,22 @@ export function LancamentoFormDrawer({
       numeroDocumento: valores.numeroDocumento || undefined,
       observacoes: valores.observacoes || undefined,
       parcelas: parcelasParaSalvar,
-      rateios: valores.rateios.map((rateio) => ({
-        centroCustoId: rateio.centroCustoId,
-        valor: paraNumero(rateio.valor),
-      })),
+      /**
+       * Com UM centro de custo a coluna de valor não está na tela, então ele
+       * leva o total do lançamento — mesmo tratamento da parcela única. Sem
+       * isto o rateio iria com valor vazio e o banco recusaria dizendo que a
+       * soma do rateio não bate com o valor.
+       */
+      rateios:
+        valores.rateios.length <= 1
+          ? valores.rateios.map((rateio) => ({
+              centroCustoId: rateio.centroCustoId,
+              valor: paraNumero(valores.valor),
+            }))
+          : valores.rateios.map((rateio) => ({
+              centroCustoId: rateio.centroCustoId,
+              valor: paraNumero(rateio.valor),
+            })),
     };
 
     const resultado = await salvarLancamento(lancamento?.id ?? null, dados);
@@ -478,20 +587,132 @@ export function LancamentoFormDrawer({
       setFilaAnexos([]);
     }
 
-    toast.success(editando ? "Lançamento salvo" : "Lançamento criado");
+    toast.success(
+      editando
+        ? aReceber
+          ? "Recebimento salvo"
+          : "Lançamento salvo"
+        : aReceber
+          ? "Recebimento lançado"
+          : "Lançamento criado",
+    );
     onAbertoChange(false);
     if (!editando) onSalvo?.(resultado.id);
   }
+
+  /**
+   * Categoria pelo LADO do lançamento: receita no a receber, despesa no a pagar.
+   *
+   * Sem o corte, a base de hoje oferece 55 categorias de despesa num recebimento,
+   * e alguém classificaria uma receita como "Combustível". A categoria que já está
+   * escolhida entra na lista mesmo fora do lado — senão editar um lançamento
+   * antigo classificado do outro lado mostraria o campo em branco e apagaria a
+   * classificação no primeiro salvamento.
+   */
+  const ladoDaCategoria = aReceber ? "receita" : "despesa";
+  const categoriasDoLado = categorias.filter(
+    (categoria) =>
+      categoria.tipo === ladoDaCategoria || categoria.id === categoriaValor,
+  );
+
+  /**
+   * Categoria e condição de pagamento aparecem nos dois formulários, mas em
+   * linhas diferentes: no a pagar a categoria acompanha o fornecedor, no a
+   * receber ela acompanha o número do documento. Ficam em variável para não
+   * existirem duas cópias do mesmo campo se afastando com o tempo.
+   */
+  const campoCategoria = (
+    <CampoFormulario id="lan-categoria" rotulo="Categoria" ajuda="Opcional">
+      <Combobox
+        valor={categoriaValor}
+        onValorChange={(valor) =>
+          form.setValue(
+            "categoriaId",
+            valor === SEM_VINCULO ? undefined : valor,
+          )
+        }
+        opcoes={[
+          { valor: SEM_VINCULO, rotulo: "Sem categoria" },
+          ...categoriasDoLado.map((categoria) => ({
+            valor: categoria.id,
+            rotulo: categoria.nome,
+          })),
+        ]}
+        placeholder="Sem categoria"
+        disabled={salvando}
+        id="lan-categoria"
+      />
+    </CampoFormulario>
+  );
+
+  /* Condição de pagamento: mesmo catálogo da OC, e dá para criar na hora igual
+     lá. Só a obrigatoriedade difere: aqui é opcional. É ela que o "Gerar pela
+     condição" das parcelas usa, e no a receber ela é o que divide o recebimento
+     em parcelas. */
+  const campoCondicao = (
+    <CampoFormulario
+      id="lan-condicao"
+      rotulo="Condição de pagamento"
+      ajuda={
+        aReceber
+          ? "Opcional. Divide o recebimento em parcelas quando você gerar por ela"
+          : "Opcional. Define as parcelas quando você gerar por ela"
+      }
+      erro={form.formState.errors.condicaoPagamentoId?.message}
+    >
+      <Combobox
+        valor={condicaoPagamentoValor}
+        onValorChange={(valor) =>
+          form.setValue(
+            "condicaoPagamentoId",
+            valor === SEM_VINCULO ? "" : valor,
+            { shouldValidate: true },
+          )
+        }
+        opcoes={[
+          { valor: SEM_VINCULO, rotulo: "Sem condição" },
+          ...condicoesPagamento.map((condicao) => ({
+            valor: condicao.id,
+            rotulo: condicao.descricao,
+          })),
+        ]}
+        onCriar={async (texto) => {
+          const r = await criarCondicaoPagamento(texto);
+          if ("erro" in r) {
+            toast.error(r.erro);
+            return null;
+          }
+          toast.success("Condição criada");
+          return r.id;
+        }}
+        placeholder="Sem condição"
+        disabled={salvando}
+        id="lan-condicao"
+      />
+    </CampoFormulario>
+  );
 
   return (
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
-      titulo={editando ? "Editar lançamento" : "Novo lançamento"}
+      titulo={
+        aReceber
+          ? editando
+            ? "Editar recebimento"
+            : "Novo recebimento"
+          : editando
+            ? "Editar lançamento"
+            : "Novo lançamento"
+      }
       descricao={
-        editando
-          ? "Atualize os dados, as parcelas e o rateio deste lançamento"
-          : "Registre um lançamento a pagar ou a receber, com parcelas e rateio por centro de custo"
+        aReceber
+          ? editando
+            ? "Atualize o recebimento, as parcelas e o rateio por centro de custo"
+            : "Registre o que a EMT tem a receber: quem paga, em qual conta entra e por qual documento"
+          : editando
+            ? "Atualize os dados, as parcelas e o rateio deste lançamento"
+            : "Registre um lançamento a pagar ou a receber, com parcelas e rateio por centro de custo"
       }
       larguraClassName="sm:max-w-[95vw]"
       rodape={
@@ -511,7 +732,13 @@ export function LancamentoFormDrawer({
                 Salvando...
               </>
             ) : editando ? (
-              "Salvar lançamento"
+              aReceber ? (
+                "Salvar recebimento"
+              ) : (
+                "Salvar lançamento"
+              )
+            ) : aReceber ? (
+              "Lançar recebimento"
             ) : (
               "Criar lançamento"
             )}
@@ -530,6 +757,11 @@ export function LancamentoFormDrawer({
             id="lan-tipo"
             rotulo="Tipo"
             obrigatorio
+            ajuda={
+              tipoFixo
+                ? "Fixo nesta tela: lance a pagar em Financeiro > Lançamentos"
+                : undefined
+            }
             erro={form.formState.errors.tipo?.message}
           >
             <Combobox
@@ -547,7 +779,7 @@ export function LancamentoFormDrawer({
                 },
               ]}
               placeholder="Selecione"
-              disabled={salvando}
+              disabled={salvando || tipoFixo !== undefined}
               id="lan-tipo"
             />
           </CampoFormulario>
@@ -570,142 +802,161 @@ export function LancamentoFormDrawer({
 
         <CampoFormulario
           id="lan-descricao"
-          rotulo="Descrição"
+          rotulo={aReceber ? "Descrição do recebimento" : "Descrição"}
           obrigatorio
           erro={form.formState.errors.descricao?.message}
         >
           <Input
             id="lan-descricao"
-            placeholder="Ex: Combustível dezembro"
+            placeholder={
+              aReceber
+                ? "Ex: Medição 7 da BR-364 lote 4"
+                : "Ex: Combustível dezembro"
+            }
             disabled={salvando}
             {...form.register("descricao")}
           />
         </CampoFormulario>
 
-        <LinhaCampos>
-          <CampoFormulario
-            id="lan-fornecedor"
-            rotulo="Fornecedor"
-            ajuda="Opcional"
-          >
-            <Combobox
-              valor={fornecedorValor}
-              onValorChange={(valor) =>
-                form.setValue(
-                  "fornecedorId",
-                  valor === SEM_VINCULO ? undefined : valor,
-                )
-              }
-              opcoes={[
-                { valor: SEM_VINCULO, rotulo: "Sem fornecedor" },
-                ...fornecedores.map((fornecedor) => ({
-                  valor: fornecedor.id,
-                  rotulo: fornecedor.nome,
-                })),
-              ]}
-              placeholder="Sem fornecedor"
-              disabled={salvando}
-              id="lan-fornecedor"
-            />
-          </CampoFormulario>
+        {/* Daqui em diante o formulário é OUTRO conforme o tipo. A receber não é
+            a pagar com um campo a mais: quem está do outro lado do dinheiro é o
+            cliente, o dinheiro tem destino conhecido desde o lançamento e o
+            documento é obrigatório. Ver o comentário de `aReceber` acima. */}
+        {aReceber ? (
+          <>
+            <LinhaCampos>
+              <CampoFormulario
+                id="lan-cliente"
+                rotulo="Quem está pagando"
+                obrigatorio
+                ajuda="Cliente do cadastro. Digite para criar um novo"
+                erro={form.formState.errors.clienteId?.message}
+              >
+                <Combobox
+                  valor={clienteValor}
+                  onValorChange={(valor) =>
+                    form.setValue("clienteId", valor, { shouldValidate: true })
+                  }
+                  opcoes={clientes.map((cliente) => ({
+                    valor: cliente.id,
+                    rotulo: cliente.nome,
+                  }))}
+                  onCriar={async (texto) => {
+                    const r = await criarClienteRapido(texto);
+                    if ("erro" in r) {
+                      toast.error(r.erro);
+                      return null;
+                    }
+                    toast.success("Cliente criado");
+                    return r.id;
+                  }}
+                  placeholder="Selecione ou digite quem está pagando"
+                  disabled={salvando}
+                  id="lan-cliente"
+                />
+              </CampoFormulario>
 
-          <CampoFormulario
-            id="lan-categoria"
-            rotulo="Categoria"
-            ajuda="Opcional"
-          >
-            <Combobox
-              valor={categoriaValor}
-              onValorChange={(valor) =>
-                form.setValue(
-                  "categoriaId",
-                  valor === SEM_VINCULO ? undefined : valor,
-                )
-              }
-              opcoes={[
-                { valor: SEM_VINCULO, rotulo: "Sem categoria" },
-                ...categorias.map((categoria) => ({
-                  valor: categoria.id,
-                  rotulo: categoria.nome,
-                })),
-              ]}
-              placeholder="Sem categoria"
-              disabled={salvando}
-              id="lan-categoria"
-            />
-          </CampoFormulario>
-        </LinhaCampos>
+              <CampoFormulario
+                id="lan-conta-destino"
+                rotulo="Conta que vai receber"
+                obrigatorio
+                ajuda="O saldo desta conta sobe quando o recebimento for dado como recebido"
+                erro={form.formState.errors.contaBancariaId?.message}
+              >
+                <Combobox
+                  valor={contaValor}
+                  onValorChange={(valor) =>
+                    form.setValue("contaBancariaId", valor, {
+                      shouldValidate: true,
+                    })
+                  }
+                  // "nome - banco", igual ao drawer de pagamento e ao filtro:
+                  // "Conta movimento" existe em mais de um banco, e rotular só
+                  // pelo nome faria a mesma conta aparecer diferente em telas
+                  // vizinhas — ou duas contas diferentes parecerem a mesma.
+                  opcoes={contas.map((conta) => ({
+                    valor: conta.id,
+                    rotulo: `${conta.nome} - ${ROTULO_BANCO[conta.banco as BancoConta] ?? conta.banco}`,
+                  }))}
+                  placeholder="Selecione a conta"
+                  disabled={salvando}
+                  id="lan-conta-destino"
+                />
+              </CampoFormulario>
+            </LinhaCampos>
 
-        <LinhaCampos>
-          {/* Condição de pagamento: mesmo catálogo da OC, e dá para criar na hora
-              igual lá (o campo dizia "Buscar ou digitar" e digitar não criava
-              nada). Só a obrigatoriedade difere: aqui é opcional. É ela que o
-              "Gerar pela condição" das parcelas usa. */}
-          <CampoFormulario
-            id="lan-condicao"
-            rotulo="Condição de pagamento"
-            ajuda="Opcional. Define as parcelas quando você gerar por ela"
-            erro={form.formState.errors.condicaoPagamentoId?.message}
-          >
-            <Combobox
-              valor={condicaoPagamentoValor}
-              onValorChange={(valor) =>
-                form.setValue(
-                  "condicaoPagamentoId",
-                  valor === SEM_VINCULO ? "" : valor,
-                  { shouldValidate: true },
-                )
-              }
-              opcoes={[
-                { valor: SEM_VINCULO, rotulo: "Sem condição" },
-                ...condicoesPagamento.map((condicao) => ({
-                  valor: condicao.id,
-                  rotulo: condicao.descricao,
-                })),
-              ]}
-              onCriar={async (texto) => {
-                const r = await criarCondicaoPagamento(texto);
-                if ("erro" in r) {
-                  toast.error(r.erro);
-                  return null;
-                }
-                toast.success("Condição criada");
-                return r.id;
-              }}
-              placeholder="Sem condição"
-              disabled={salvando}
-              id="lan-condicao"
-            />
-          </CampoFormulario>
+            {/* O número do documento NÃO fica aqui: ele mora na fileira das
+                datas, junto da data do documento, e é um campo só para os dois
+                tipos (obrigatório no a receber). Dois campos com o mesmo
+                `register` e o mesmo id era o que este bloco fazia antes. */}
+            <LinhaCampos>
+              {campoCategoria}
+              {campoCondicao}
+            </LinhaCampos>
+          </>
+        ) : (
+          <>
+            <LinhaCampos>
+              <CampoFormulario
+                id="lan-fornecedor"
+                rotulo="Fornecedor"
+                ajuda="Opcional"
+              >
+                <Combobox
+                  valor={fornecedorValor}
+                  onValorChange={(valor) =>
+                    form.setValue(
+                      "fornecedorId",
+                      valor === SEM_VINCULO ? undefined : valor,
+                    )
+                  }
+                  opcoes={[
+                    { valor: SEM_VINCULO, rotulo: "Sem fornecedor" },
+                    ...fornecedores.map((fornecedor) => ({
+                      valor: fornecedor.id,
+                      rotulo: fornecedor.nome,
+                    })),
+                  ]}
+                  placeholder="Sem fornecedor"
+                  disabled={salvando}
+                  id="lan-fornecedor"
+                />
+              </CampoFormulario>
 
-          {tipoValor === "a_pagar" ? (
-            <CampoFormulario
-              id="lan-forma-pagamento"
-              rotulo="Forma de pagamento"
-              ajuda={
-                tipoFormaEscolhida
-                  ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
-                  : undefined
-              }
-              erro={form.formState.errors.formaPagamentoId?.message}
-            >
-              <Combobox
-                valor={formaPagamentoValor}
-                onValorChange={(valor) => {
-                  form.setValue("formaPagamentoId", valor);
-                  void form.trigger("formaPagamentoId");
-                }}
-                opcoes={formasPagamento.map((forma) => ({
-                  valor: forma.id,
-                  rotulo: forma.nome,
-                }))}
-                placeholder="Selecione a forma de pagamento"
-                disabled={salvando}
+              {campoCategoria}
+            </LinhaCampos>
+
+            <LinhaCampos>
+              {campoCondicao}
+
+              <CampoFormulario
                 id="lan-forma-pagamento"
-              />
-            </CampoFormulario>
-          ) : null}
-        </LinhaCampos>
+                rotulo="Forma de pagamento"
+                ajuda={
+                  tipoFormaEscolhida
+                    ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
+                    : undefined
+                }
+                erro={form.formState.errors.formaPagamentoId?.message}
+              >
+                <Combobox
+                  valor={formaPagamentoValor}
+                  onValorChange={(valor) => {
+                    form.setValue("formaPagamentoId", valor);
+                    void form.trigger("formaPagamentoId");
+                  }}
+                  opcoes={formasPagamento.map((forma) => ({
+                    valor: forma.id,
+                    rotulo: forma.nome,
+                  }))}
+                  placeholder="Selecione a forma de pagamento"
+                  disabled={salvando}
+                  id="lan-forma-pagamento"
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+          </>
+        )}
 
         <LinhaCampos>
           <CampoFormulario
@@ -762,18 +1013,26 @@ export function LancamentoFormDrawer({
           ) : null}
 
           {/* Ao lado das datas porque é a mesma pergunta: qual documento é este
-              e de quando ele é. Opcional — muito lançamento avulso não tem
-              documento nenhum (rateio interno, acerto, provisão). */}
+              e de quando ele é. Um campo só para os dois tipos, com exigência
+              diferente: no a pagar muito lançamento avulso não tem documento
+              nenhum (rateio interno, acerto, provisão); no a receber ele é
+              obrigatório, porque é o que amarra o recebimento ao papel que gerou
+              o direito, e fn_salvar_lancamento recusa sem ele. */}
           <CampoFormulario
             id="lan-numero-documento"
             rotulo="Número do documento"
-            ajuda="Nota fiscal, boleto ou recibo. Opcional."
+            obrigatorio={aReceber}
+            ajuda={
+              aReceber
+                ? "Nota, medição ou contrato que gerou o direito de receber"
+                : "Nota fiscal, boleto ou recibo. Opcional."
+            }
             erro={form.formState.errors.numeroDocumento?.message}
           >
             <Input
               id="lan-numero-documento"
               maxLength={60}
-              placeholder="Ex.: NF 12345"
+              placeholder={aReceber ? "Ex.: MED-07/2026" : "Ex.: NF 12345"}
               disabled={salvando}
               {...form.register("numeroDocumento")}
             />
@@ -893,25 +1152,29 @@ export function LancamentoFormDrawer({
           )}
         </SecaoFormulario>
 
-        {/* Rateio por centro de custo: colunas homogêneas (centro/valor),
-            mesmo padrão de tabela de itens usado na OC. */}
+        {/* Centro de custo: obrigatório, um só por padrão, tabela de rateio a
+            partir de dois. Mesmo padrão de tabela de itens usado na OC. */}
         <SecaoFormulario
-          titulo="Rateio por centro de custo"
+          titulo="Centro de custo"
           acao={
             <Button
               type="button"
               variant="outline"
               size="sm"
               disabled={salvando}
-              onClick={() => rateios.append(rateioVazio())}
+              onClick={adicionarRateio}
             >
               <Plus />
-              Adicionar rateio
+              {rateioUnico ? "Dividir entre centros" : "Adicionar rateio"}
             </Button>
           }
         >
           <p className="text-legenda text-muted-foreground">
-            Opcional. Quando preenchido, a soma precisa bater com o valor.
+            {rateioUnico
+              ? aReceber
+                ? "Obrigatório. A receita inteira entra neste centro de custo. Divida para repartir entre obras."
+                : "Obrigatório: nenhum custo existe sem centro de custo. O valor inteiro entra neste centro; divida para repartir."
+              : "A soma do rateio precisa fechar com o valor do lançamento."}
           </p>
 
           {typeof erroRateios?.message === "string" ? (
@@ -920,12 +1183,35 @@ export function LancamentoFormDrawer({
             </p>
           ) : null}
 
-          {rateios.fields.length > 0 ? (
+          {rateioUnico ? (
+            <CampoFormulario
+              id="lan-centro-custo-unico"
+              rotulo="Centro de custo"
+              obrigatorio
+              erro={form.formState.errors.rateios?.[0]?.centroCustoId?.message}
+            >
+              <Combobox
+                valor={form.watch("rateios.0.centroCustoId") ?? ""}
+                onValorChange={(valor) =>
+                  form.setValue("rateios.0.centroCustoId", valor, {
+                    shouldValidate: true,
+                  })
+                }
+                opcoes={centrosCusto.map((centro) => ({
+                  valor: centro.id,
+                  rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
+                }))}
+                placeholder="Selecione o centro de custo"
+                disabled={salvando}
+                id="lan-centro-custo-unico"
+              />
+            </CampoFormulario>
+          ) : (
             <TabelaItens
               colunas={COLUNAS_RATEIO}
               linhas={rateios.fields}
               chaveLinha={(linha) => linha.id}
-              onRemover={(indice) => rateios.remove(indice)}
+              onRemover={removerRateio}
               podeRemover={() => !salvando}
               rotuloRemover="Remover rateio"
               erroCelula={(chave, indice) => {
@@ -978,10 +1264,6 @@ export function LancamentoFormDrawer({
                 />
               }
             />
-          ) : (
-            <p className="text-detalhe text-muted-foreground">
-              Sem rateio. O custo fica sem distribuição por centro de custo.
-            </p>
           )}
         </SecaoFormulario>
 

@@ -10,15 +10,19 @@ import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  ClienteOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
 } from "@/modules/financeiro/lancamentos/queries";
+import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 
 export interface LancamentosAcoesCabecalhoProps {
   podeCriar: boolean;
   categorias: CategoriaOpcao[];
   fornecedores: FornecedorOpcao[];
+  clientes: ClienteOpcao[];
+  contas: ContaBancariaOpcao[];
   centrosCusto: CentroCustoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
@@ -39,6 +43,8 @@ export function LancamentosAcoesCabecalho({
   podeCriar,
   categorias,
   fornecedores,
+  clientes,
+  contas,
   centrosCusto,
   formasPagamento,
   condicoesPagamento,
@@ -66,6 +72,8 @@ export function LancamentosAcoesCabecalho({
             lancamento={null}
             categorias={categorias}
             fornecedores={fornecedores}
+            clientes={clientes}
+            contas={contas}
             centrosCusto={centrosCusto}
             formasPagamento={formasPagamento}
             condicoesPagamento={condicoesPagamento}

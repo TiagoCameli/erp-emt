@@ -25,7 +25,13 @@ export function BarraSelecao({
   onLimpar: () => void;
   /** Ex.: o valor somado dos marcados. */
   resumo?: React.ReactNode;
-  children: React.ReactNode;
+  /**
+   * Ações sobre a seleção. Opcional: em Recebimentos a seleção serve para os
+   * cards do topo somarem o que está marcado, e a barra existe só para dizer
+   * quantas linhas são e oferecer o "limpar". Sem isto, uma tela que seleciona
+   * mas não age em lote era obrigada a passar `children` vazio.
+   */
+  children?: React.ReactNode;
   /**
    * Desabilita "Limpar seleção" enquanto a ação da barra está em voo. Limpar
    * a seleção no meio de uma ação em andamento deixa o lote sem as linhas que

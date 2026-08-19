@@ -2026,6 +2026,7 @@ export type Database = {
         Row: {
           categoria_id: string | null;
           centro_custo_id: string | null;
+          cliente_id: string | null;
           condicao_pagamento_id: string | null;
           created_at: string;
           created_by: string | null;
@@ -2049,6 +2050,7 @@ export type Database = {
         Insert: {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
+          cliente_id?: string | null;
           condicao_pagamento_id?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -2072,6 +2074,7 @@ export type Database = {
         Update: {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
+          cliente_id?: string | null;
           condicao_pagamento_id?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -2098,6 +2101,13 @@ export type Database = {
             columns: ["categoria_id"];
             isOneToOne: false;
             referencedRelation: "categorias_financeiras";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamentos_cliente_id_fkey";
+            columns: ["cliente_id"];
+            isOneToOne: false;
+            referencedRelation: "clientes";
             referencedColumns: ["id"];
           },
           {

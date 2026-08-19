@@ -311,6 +311,16 @@ export interface LancamentoDetalhe {
   origemId: string | null;
   fornecedorId: string | null;
   fornecedorNome: string | null;
+  /** Quem paga, no a receber. Null no a pagar, que tem fornecedor. */
+  clienteId: string | null;
+  clienteNome: string | null;
+  /**
+   * Conta de destino do recebimento, lida da primeira parcela (todas nascem com
+   * a mesma). No a pagar é sempre null aqui: lá a conta é por parcela e é
+   * escolhida na revisão, então ler uma só mentiria sobre as outras.
+   */
+  contaBancariaId: string | null;
+  contaBancariaNome: string | null;
   categoriaId: string | null;
   categoriaNome: string | null;
   descricao: string;
@@ -326,6 +336,9 @@ export interface LancamentoDetalhe {
   /**
    * Número do documento do fornecedor (nota fiscal, boleto, recibo). Editável no
    * lançamento avulso; no de origem OC vem da ordem e é somente-leitura aqui.
+   *
+   * No a receber é o documento que gerou o direito de receber (nota, medição,
+   * contrato) e é OBRIGATÓRIO: é o que amarra o recebimento ao papel.
    */
   numeroDocumento: string | null;
   /** Texto livre do lançamento. Só aparece no detalhe, nunca na lista. */
@@ -403,6 +416,12 @@ export interface FornecedorOpcao {
   nome: string;
 }
 
+/** Opção de cliente para o select de "quem está pagando" do recebimento. */
+export interface ClienteOpcao {
+  id: string;
+  nome: string;
+}
+
 /** Opção de centro de custo para o select do rateio. */
 export interface CentroCustoOpcao {
   id: string;
@@ -416,6 +435,19 @@ function nomeFornecedor(fornecedor: {
   nome_fantasia: string | null;
 }): string {
   return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+}
+
+/**
+ * Nome de exibição do cliente: fantasia quando existe, senão o nome. Mesma regra
+ * do fornecedor, porque na tela os dois ocupam o mesmo lugar (quem está do outro
+ * lado do dinheiro) e ler um pelo fantasia e o outro pelo nome faria a mesma
+ * empresa aparecer com dois nomes em telas vizinhas.
+ */
+function nomeCliente(cliente: {
+  nome: string;
+  nome_fantasia: string | null;
+}): string {
+  return cliente.nome_fantasia ?? cliente.nome;
 }
 
 /** Linhas lidas por página nas consultas auxiliares de filtro. */
@@ -1100,13 +1132,14 @@ export async function buscarLancamento(
     .from("lancamentos")
     .select(
       `id, numero, numero_documento, tipo, origem, origem_id, fornecedor_id,
-       categoria_id, forma_pagamento_id, condicao_pagamento_id,
+       cliente_id, categoria_id, forma_pagamento_id, condicao_pagamento_id,
        descricao, observacoes, valor, status, mes_competencia, data_compra,
        created_at, data_vencimento,
        categorias_financeiras(nome),
        condicoes_pagamento(descricao),
        formas_pagamento(nome, tipo),
        fornecedores(razao_social, nome_fantasia),
+       clientes(nome, nome_fantasia),
        lancamento_parcelas(
          id, numero_parcela, valor, desconto, valor_liquido,
          data_vencimento, status,
@@ -1188,6 +1221,19 @@ export async function buscarLancamento(
     origemId: data.origem_id,
     fornecedorId: data.fornecedor_id,
     fornecedorNome: data.fornecedores ? nomeFornecedor(data.fornecedores) : null,
+    clienteId: data.cliente_id,
+    clienteNome: data.clientes ? nomeCliente(data.clientes) : null,
+    // Conta em que o dinheiro entra, no a receber: mora na parcela, e todas as
+    // parcelas de um recebível nascem com a mesma. Ler da primeira é o que o
+    // formulário precisa para reabrir com o campo preenchido. No a pagar fica
+    // null de propósito: lá cada parcela tem a sua conta, escolhida na revisão,
+    // e mostrar a da primeira como se fosse do lançamento mentiria.
+    contaBancariaId:
+      data.tipo === "a_receber" ? (parcelas[0]?.contaBancariaId ?? null) : null,
+    contaBancariaNome:
+      data.tipo === "a_receber"
+        ? (parcelas[0]?.contaBancariaNome ?? null)
+        : null,
     categoriaId: data.categoria_id,
     categoriaNome: data.categorias_financeiras?.nome ?? null,
     descricao: data.descricao,
@@ -1268,6 +1314,36 @@ export async function listarFornecedores(): Promise<FornecedorOpcao[]> {
   return linhas.map((fornecedor) => ({
     id: fornecedor.id,
     nome: nomeFornecedor(fornecedor),
+  }));
+}
+
+/**
+ * Clientes ativos para o seletor de "quem está pagando" do recebimento.
+ *
+ * Lê em PÁGINAS pelo mesmo motivo de listarFornecedores: o PostgREST corta em
+ * 1.000 linhas sem erro nenhum, e cliente que some do seletor faz alguém
+ * cadastrar duplicado. Hoje a base tem poucos clientes; quem cresce é a base,
+ * não este arquivo.
+ */
+export async function listarClientes(): Promise<ClienteOpcao[]> {
+  const supabase = await createClient();
+
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("clientes")
+      .select("id, nome, nome_fantasia")
+      .eq("ativo", true)
+      .order("nome")
+      .range(de, ate),
+  );
+
+  if (erro) {
+    throw new Error("Não foi possível carregar os clientes");
+  }
+
+  return linhas.map((cliente) => ({
+    id: cliente.id,
+    nome: nomeCliente(cliente),
   }));
 }
 

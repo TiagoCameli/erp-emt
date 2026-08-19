@@ -109,8 +109,8 @@ export async function pagarParcela(
   // Parcela que não veio (leitura barrada por RLS, id inexistente) não bloqueia
   // aqui: a `fn_pagar_parcela` faz a MESMA exigência e é a barreira real, então
   // recusar por falta de leitura só trocaria a mensagem certa do banco por uma
-  // pior. Esta ação é a do drawer de contas a pagar; a baixa de recebimento tem
-  // ação própria (`baixarRecebimento`) e não tem data autorizada.
+  // pior. Esta ação é a do drawer de contas a pagar; o recebimento tem ação
+  // própria (`darComoRecebido`) e não tem data autorizada.
   const { data: parcela } = await supabase
     .from("lancamento_parcelas")
     .select("data_programada")

@@ -14,6 +14,7 @@ import {
 import {
   listarCategorias,
   listarCentrosCusto,
+  listarClientes,
   listarCondicoesPagamento,
   listarFormasPagamento,
   listarFornecedores,
@@ -54,6 +55,7 @@ export default async function PaginaLancamentos({
     { itens, total },
     categorias,
     fornecedores,
+    clientes,
     centrosCusto,
     formasPagamento,
     condicoesPagamento,
@@ -62,6 +64,7 @@ export default async function PaginaLancamentos({
     listarLancamentos({ ...filtros, pagina, tamanho }),
     listarCategorias(),
     listarFornecedores(),
+    listarClientes(),
     listarCentrosCusto(),
     listarFormasPagamento(),
     listarCondicoesPagamento(),
@@ -96,6 +99,8 @@ export default async function PaginaLancamentos({
             podeCriar={podeCriar}
             categorias={categorias}
             fornecedores={fornecedores}
+            clientes={clientes}
+            contas={contas}
             centrosCusto={centrosCusto}
             formasPagamento={formasPagamento}
             condicoesPagamento={condicoesPagamento}

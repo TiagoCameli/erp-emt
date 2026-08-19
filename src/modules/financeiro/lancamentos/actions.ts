@@ -34,6 +34,8 @@ import {
 
 const RECURSO = "financeiro.lancamentos" as const;
 const ROTA = "/financeiro/lancamentos";
+/** A outra tela em que um recebível aparece. */
+const ROTA_RECEBIMENTOS = "/financeiro/recebimentos";
 
 export type ResultadoCriacao = { ok: true; id: string } | { erro: string };
 
@@ -44,6 +46,11 @@ function dadosParaRpc(dados: LancamentoInput): Json {
   return {
     tipo: dados.tipo,
     fornecedor_id: dados.fornecedorId ?? null,
+    cliente_id: dados.clienteId ?? null,
+    // A RPC só olha este campo quando o tipo é a_receber. No a pagar a conta é
+    // escolhida na revisão, e mandar uma aqui faria o lançamento nascer
+    // aprovado (dinheiro) ou quitado (cartão) sem ninguém ter revisado.
+    conta_bancaria_id: dados.contaBancariaId ?? null,
     categoria_id: dados.categoriaId ?? null,
     forma_pagamento_id: dados.formaPagamentoId ?? null,
     condicao_pagamento_id: dados.condicaoPagamentoId ?? null,
@@ -52,7 +59,10 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     data_compra: dados.dataCompra,
     mes_competencia: dados.mesCompetencia,
     data_vencimento: dados.dataVencimento ?? null,
-    /** Nota fiscal, boleto, recibo: o documento do fornecedor. */
+    /**
+     * Nota fiscal, boleto, recibo: o documento do fornecedor. No a receber é a
+     * nota, medição ou contrato que gerou o direito, e a RPC o exige.
+     */
     numero_documento: dados.numeroDocumento ?? null,
     observacoes: dados.observacoes ?? null,
   };
@@ -97,14 +107,34 @@ export async function salvarLancamento(
   dados: LancamentoInput,
 ): Promise<ResultadoCriacao> {
   const acao = id === null ? "criar" : "editar";
-  try {
-    await exigirPermissao(RECURSO, acao);
-  } catch {
+  /**
+   * Recebível também se lança de dentro de Financeiro > Recebimentos, e quem só
+   * tem essa aba precisa conseguir. Aceitar os dois recursos aqui é a metade da
+   * checagem na Server Action; a outra metade é fn_pode_lancar_tipo no banco,
+   * que na EDIÇÃO ainda confere o tipo GRAVADO, e é ela que impede alguém de
+   * converter um lançamento a pagar em receita para passar por esta porta.
+   */
+  const recursoDoTipo =
+    dados.tipo === "a_receber"
+      ? ([RECURSO, "financeiro.recebimentos"] as const)
+      : ([RECURSO] as const);
+  let permitido = false;
+  for (const recurso of recursoDoTipo) {
+    try {
+      await exigirPermissao(recurso, acao);
+      permitido = true;
+      break;
+    } catch {
+      // Tenta o recurso seguinte; a mensagem de recusa é dada depois do laço.
+    }
+  }
+  if (!permitido) {
+    const oQue = dados.tipo === "a_receber" ? "recebimentos" : "lançamentos";
     return {
       erro:
         id === null
-          ? "Sem permissão para criar lançamentos"
-          : "Sem permissão para editar lançamentos",
+          ? `Sem permissão para criar ${oQue}`
+          : `Sem permissão para editar ${oQue}`,
     };
   }
 
@@ -156,6 +186,12 @@ export async function salvarLancamento(
   }
 
   revalidatePath(ROTA);
+  // Recebível aparece nas duas telas, e a de Recebimentos é justamente de onde
+  // ele costuma ser lançado: sem isto a lista de lá ficaria com a página em
+  // cache e o recebimento novo só apareceria no próximo refresh cheio.
+  if (validado.data.tipo === "a_receber") {
+    revalidatePath(ROTA_RECEBIMENTOS);
+  }
   return { ok: true, id: data };
 }
 
