@@ -73,20 +73,31 @@ export function PagarParcelaDrawer({
   podeAnexar = false,
   onPago,
 }: PagarParcelaDrawerProps) {
-  const [contaId, setContaId] = React.useState("");
+  // Inicial pela parcela, e não vazio, para o caso de o drawer ser montado já
+  // aberto: o reset abaixo só dispara na TRANSIÇÃO de fechado para aberto, então
+  // sozinho ele deixaria a conta vazia nessa montagem.
+  const [contaId, setContaId] = React.useState(parcela?.contaBancariaId ?? "");
   const [dataPagamento, setDataPagamento] = React.useState(dataHojeISO());
   const [desconto, setDesconto] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
-  // Ao abrir o drawer, zera a conta e o desconto e volta a data para hoje.
-  // Ajuste de estado durante o render (padrão React) na transição de fechado
-  // para aberto, sem efeito: o reset acontece antes da pintura, sem render em
-  // cascata. Zerar o desconto aqui é obrigatório: desconto de um pagamento
-  // vazando para o próximo tiraria dinheiro que ninguém abateu.
+  // Ao abrir o drawer, a conta começa na que a parcela já tem, o desconto zera e
+  // a data volta para hoje. Ajuste de estado durante o render (padrão React) na
+  // transição de fechado para aberto, sem efeito: o reset acontece antes da
+  // pintura, sem render em cascata.
+  //
+  // A conta vem da parcela porque ela já foi escolhida no lançamento ou na
+  // aprovação (fn_aprovar_parcela recebe a conta, fn_definir_conta_lancamento
+  // grava nas parcelas não pagas): pedir de novo era descartar o que o sistema
+  // já sabia. Parcela sem conta (o caso da aba Programados, e o motivo de o
+  // campo ser opcional no contrato) continua vazia pedindo escolha.
+  //
+  // Zerar o DESCONTO aqui continua obrigatório, por outro motivo: desconto de um
+  // pagamento vazando para o próximo tiraria dinheiro que ninguém abateu.
   const [estavaAberto, setEstavaAberto] = React.useState(aberto);
   if (aberto && !estavaAberto) {
     setEstavaAberto(true);
-    setContaId("");
+    setContaId(parcela?.contaBancariaId ?? "");
     setDataPagamento(dataHojeISO());
     setDesconto("");
   } else if (!aberto && estavaAberto) {
