@@ -565,11 +565,26 @@ export function PagamentoDetalheView({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-4">
-          {/* A decisão fica na direita e acompanha a rolagem: numa tela cheia,
-              rolar até o fim da conferência para achar o botão de aprovar é o
-              tipo de atrito que faz a pessoa aprovar sem terminar de ler. */}
-          <div className="flex flex-col gap-3 rounded-md border border-border border-l-[3px] border-l-faixa bg-surface p-4 lg:sticky lg:top-4">
+        {/* A decisão fica na direita e acompanha a rolagem: numa tela cheia,
+            rolar até o fim da conferência para achar o botão de aprovar é o
+            tipo de atrito que faz a pessoa aprovar sem terminar de ler.
+            Quem gruda é a coluna inteira, não só o card: `sticky` num item
+            solto de uma coluna alta desliza por cima dos irmãos, e a Trilha
+            ainda pintava por cima dele (cada `li` dela é `relative`, empata no
+            z-index e ganha por vir depois no DOM) — os eventos saíam
+            embaralhados com os botões de aprovar. Com a coluna grudada, a
+            decisão fica fixa no topo dela e Anexos e Trilha rolam dentro do
+            próprio painel: ninguém invade ninguém.
+            `self-start` não é enfeite: sem ele o grid estica a coluna até a
+            altura da conferência e aí `sticky` não tem folga para grudar.
+            O teto é em `vh` porque quem rola é o `<main>` do AppShell, que no
+            desktop ocupa a tela toda (o header de cima é `md:hidden`). Os 4rem
+            descontados não são chute: o `sticky` prende ABAIXO do padding do
+            scroller, então sobra 1.5rem (`md:p-6`) + 1rem (`top-4`) em cima, e
+            descontar outros 1.5rem embaixo faz o painel terminar na mesma
+            margem do resto da página. Com 2rem ele passava 10px da dobra. */}
+        <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-4rem)] lg:self-start">
+          <div className="flex shrink-0 flex-col gap-3 rounded-md border border-border border-l-[3px] border-l-faixa bg-surface p-4">
             <div>
               <p className="text-legenda tracking-wide text-muted-foreground uppercase">
                 Valor desta parcela
@@ -640,20 +655,24 @@ export function PagamentoDetalheView({
             ) : null}
           </div>
 
-          <Secao titulo="Anexos">
-            {/* `podeEditar` falso de propósito: tela de conferência não mexe no
-                documento que está sendo aprovado. Dá para ver e baixar. */}
-            <Anexos
-              entidade="lancamento"
-              entidadeId={lancamento.id}
-              anexos={anexos}
-              podeEditar={false}
-            />
-          </Secao>
+          {/* `min-h-0` porque item de flex não encolhe abaixo do conteúdo por
+              padrão: sem ele a coluna estoura o teto e o scroll nunca aparece. */}
+          <div className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+            <Secao titulo="Anexos">
+              {/* `podeEditar` falso de propósito: tela de conferência não mexe
+                  no documento que está sendo aprovado. Dá para ver e baixar. */}
+              <Anexos
+                entidade="lancamento"
+                entidadeId={lancamento.id}
+                anexos={anexos}
+                podeEditar={false}
+              />
+            </Secao>
 
-          <Secao titulo="Trilha">
-            <Trilha eventos={trilha} />
-          </Secao>
+            <Secao titulo="Trilha">
+              <Trilha eventos={trilha} />
+            </Secao>
+          </div>
         </div>
       </div>
 
