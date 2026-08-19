@@ -150,10 +150,14 @@ describe("o total segue as parcelas", () => {
 });
 
 describe("o que impede de salvar", () => {
+  // `justificativa` preenchida no base porque LANCAMENTO já tem parcelas, e
+  // alterar parcela existente passou a exigir o motivo (o banco recusa sem ele).
+  // Os testes que provam essa regra passam a justificativa de propósito.
   const base = {
     gravadas: LANCAMENTO,
     origem: "manual",
     valorDoCabecalho: TOTAL_LANCAMENTO,
+    justificativa: "Ajuste combinado com o fornecedor",
   };
 
   it("o caso normal salva", () => {
@@ -166,6 +170,41 @@ describe("o que impede de salvar", () => {
     const editadas = comoFormulario(abertas());
     editadas[0] = { ...editadas[0], valor: "9999,00" };
     expect(motivoParaNaoSalvar({ ...base, editadas })).toBeNull();
+  });
+
+  it("alterar parcelas de um lançamento que já tinha exige justificativa", () => {
+    // O banco recusa sem motivo quando já existe parcela: a tela avisa antes de
+    // o usuário digitar tudo e levar erro no fim.
+    const motivo = motivoParaNaoSalvar({
+      ...base,
+      editadas: comoFormulario(abertas()),
+      justificativa: "   ",
+    });
+    expect(motivo).toContain("por que");
+  });
+
+  it("com justificativa preenchida, salva", () => {
+    expect(
+      motivoParaNaoSalvar({
+        ...base,
+        editadas: comoFormulario(abertas()),
+        justificativa: "Renegociação com a SEFAZ",
+      }),
+    ).toBeNull();
+  });
+
+  it("definir parcelas pela primeira vez NÃO exige justificativa", () => {
+    // Lançamento que nasceu sem parcela nenhuma: é definição inicial, não
+    // alteração de algo combinado. Exigir texto aqui seria burocracia.
+    expect(
+      motivoParaNaoSalvar({
+        gravadas: [],
+        origem: "manual",
+        valorDoCabecalho: 1000,
+        editadas: [{ dataVencimento: "2026-09-29", valor: "1000,00" }],
+        justificativa: "",
+      }),
+    ).toBeNull();
   });
 
   it("em lançamento de origem, o cabeçalho manda e a soma tem que fechar", () => {

@@ -231,6 +231,13 @@ export type ParcelaDefinidaInput = z.infer<typeof parcelaDefinidaSchema>;
 export async function definirParcelasLancamento(
   lancamentoId: string,
   parcelas: ParcelaDefinidaInput[],
+  /**
+   * Por que as parcelas mudaram. O banco EXIGE quando o lançamento já tinha
+   * parcela (aí é alteração de algo combinado), e ignora quando o lançamento
+   * nasceu sem nenhuma (aí é a definição inicial, não há o que explicar).
+   * Quem decide é o banco, que sabe quantas parcelas existem; aqui só repassa.
+   */
+  motivo?: string,
 ): Promise<ResultadoExclusao> {
   await exigirPermissao(RECURSO, "editar");
 
@@ -248,12 +255,14 @@ export async function definirParcelasLancamento(
   }
 
   const supabase = await createClient();
+  const motivoLimpo = motivo?.trim() ?? "";
   const { error } = await supabase.rpc("fn_definir_parcelas_lancamento", {
     p_lanc_id: idValido.data,
     p_parcelas: validado.data.map((parcela) => ({
       data_vencimento: parcela.dataVencimento,
       valor: parcela.valor,
     })),
+    p_motivo: motivoLimpo === "" ? undefined : motivoLimpo,
   });
 
   if (error) {
@@ -621,7 +630,8 @@ export async function gerarPlanilhaLancamentos(
         const lote = await listarLancamentos({ ...filtros, pagina, tamanho });
         // Acima do teto a leitura para na primeira página: não vale enriquecer
         // uma página que vai ser descartada.
-        if (lote.total > LIMITE_PLANILHA) return { itens: [], total: lote.total };
+        if (lote.total > LIMITE_PLANILHA)
+          return { itens: [], total: lote.total };
         const detalhes = await detalharLancamentosParaPlanilha(
           lote.itens.map((item) => item.id),
         );

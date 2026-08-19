@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { paraNumero } from "@/modules/compras/ordens/calculo";
@@ -108,6 +109,7 @@ export function DefinirParcelasDialog({
   const [parcelas, setParcelas] =
     React.useState<ParcelaForm[]>(parcelasIniciais);
   const [salvando, setSalvando] = React.useState(false);
+  const [justificativa, setJustificativa] = React.useState("");
   const [gerando, setGerando] = React.useState(false);
 
   // Recarrega ao abrir, ajustando o estado DURANTE a renderização (padrão
@@ -116,7 +118,11 @@ export function DefinirParcelasDialog({
   const [abertoAnterior, setAbertoAnterior] = React.useState(aberto);
   if (aberto !== abertoAnterior) {
     setAbertoAnterior(aberto);
-    if (aberto) setParcelas(parcelasIniciais());
+    if (aberto) {
+      setParcelas(parcelasIniciais());
+      // Justificativa de uma alteração não vale para a próxima.
+      setJustificativa("");
+    }
   }
 
   const somaEditaveis = somarParcelas(parcelas);
@@ -129,7 +135,9 @@ export function DefinirParcelasDialog({
 
   const dataVazia = temDataVazia(parcelas);
   const valorInvalido = temValorInvalido(parcelas);
+  const ehAlteracao = parcelasAtuais.length > 0;
   const motivo = motivoParaNaoSalvar({
+    justificativa,
     gravadas: parcelasAtuais,
     editadas: parcelas,
     origem,
@@ -172,6 +180,7 @@ export function DefinirParcelasDialog({
         dataVencimento: parcela.dataVencimento,
         valor: paraNumero(parcela.valor),
       })),
+      justificativa,
     );
     setSalvando(false);
 
@@ -355,6 +364,30 @@ export function DefinirParcelasDialog({
               </div>
             ))}
           </div>
+
+          {ehAlteracao ? (
+            <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+              <Label htmlFor="parcelas-justificativa">
+                Por que as parcelas estão mudando
+                <span className="text-destructive" aria-hidden>
+                  {" *"}
+                </span>
+              </Label>
+              <Textarea
+                id="parcelas-justificativa"
+                value={justificativa}
+                onChange={(evento) => setJustificativa(evento.target.value)}
+                disabled={salvando}
+                rows={2}
+                maxLength={500}
+                placeholder="Ex: renegociação com o fornecedor, nota veio com valor diferente"
+              />
+              <p className="text-legenda text-muted-foreground">
+                Fica registrado na trilha de cada parcela alterada, com o seu
+                nome e a hora.
+              </p>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
             <span className="text-detalhe text-muted-foreground">

@@ -132,8 +132,16 @@ export function motivoParaNaoSalvar(params: {
   origem: string;
   /** Valor atual do cabeçalho, que manda quando a origem não é manual. */
   valorDoCabecalho: number;
+  /**
+   * Por que as parcelas estão mudando. Obrigatório quando o lançamento JÁ tinha
+   * parcela, porque aí é alteração de algo combinado; o banco recusa sem ele
+   * (`fn_definir_parcelas_lancamento`). Opcional na definição inicial, quando o
+   * lançamento nasceu sem parcela nenhuma e não há o que explicar.
+   */
+  justificativa?: string;
 }): string | null {
-  const { gravadas, editadas, origem, valorDoCabecalho } = params;
+  const { gravadas, editadas, origem, valorDoCabecalho, justificativa } =
+    params;
 
   const temPreservada = separarParcelas(gravadas).preservadas.length > 0;
 
@@ -151,6 +159,14 @@ export function motivoParaNaoSalvar(params: {
     if (diferenca !== 0) {
       return "Neste lançamento o valor vem da origem, então as parcelas precisam fechar com ele.";
     }
+  }
+
+  // Por último, depois de tudo que é dado: já existir parcela é a mesma fronteira
+  // que o banco usa para separar alteração de definição inicial. Vem no fim de
+  // propósito, porque valor zerado ou parcela faltando é o que o usuário precisa
+  // consertar primeiro; pedir a explicação antes disso esconderia o erro real.
+  if (gravadas.length > 0 && (justificativa ?? "").trim() === "") {
+    return "Explique por que as parcelas estão mudando.";
   }
 
   return null;
