@@ -146,6 +146,7 @@ function valoresIniciais(
       dataCompra: dataHojeISO(),
       mesCompetencia: mesHojeISO(),
       dataVencimento: dataHojeISO(),
+      numeroDocumento: "",
       observacoes: "",
       parcelas: [parcelaVazia()],
       rateios: [],
@@ -174,6 +175,7 @@ function valoresIniciais(
       lancamento.parcelas.length === 1
         ? (lancamento.parcelas[0]?.dataVencimento ?? "")
         : (lancamento.dataVencimento ?? ""),
+    numeroDocumento: lancamento.numeroDocumento ?? "",
     observacoes: lancamento.observacoes ?? "",
     parcelas:
       lancamento.parcelas.length > 0
@@ -454,6 +456,7 @@ export function LancamentoFormDrawer({
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       dataVencimento: vencimentoDoLancamento,
+      numeroDocumento: valores.numeroDocumento || undefined,
       observacoes: valores.observacoes || undefined,
       parcelas: parcelasParaSalvar,
       rateios: valores.rateios.map((rateio) => ({
@@ -757,6 +760,24 @@ export function LancamentoFormDrawer({
               />
             </CampoFormulario>
           ) : null}
+
+          {/* Ao lado das datas porque é a mesma pergunta: qual documento é este
+              e de quando ele é. Opcional — muito lançamento avulso não tem
+              documento nenhum (rateio interno, acerto, provisão). */}
+          <CampoFormulario
+            id="lan-numero-documento"
+            rotulo="Número do documento"
+            ajuda="Nota fiscal, boleto ou recibo. Opcional."
+            erro={form.formState.errors.numeroDocumento?.message}
+          >
+            <Input
+              id="lan-numero-documento"
+              maxLength={60}
+              placeholder="Ex.: NF 12345"
+              disabled={salvando}
+              {...form.register("numeroDocumento")}
+            />
+          </CampoFormulario>
         </LinhaCampos>
 
         {/* Parcelas: mesmo padrão de tabela de itens da OC, na mesma ordem de

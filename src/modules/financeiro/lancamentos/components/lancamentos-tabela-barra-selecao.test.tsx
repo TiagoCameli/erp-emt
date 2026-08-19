@@ -120,6 +120,8 @@ function lancamento(troca: Partial<LancamentoLista> = {}): LancamentoLista {
   return {
     id: ID_A,
     numero: "LAN-2026-0015",
+    numeroDocumento: null,
+    anexos: 0,
     tipo: "a_pagar",
     origem: "manual",
     descricao: "Combustível julho",

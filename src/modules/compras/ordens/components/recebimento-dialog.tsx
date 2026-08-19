@@ -42,12 +42,25 @@ export interface RecebimentoDialogProps {
   valorTotalOc: number;
   /** Parcelas da condição de pagamento da OC, pra prévia ao vivo. */
   parcelasCondicao: ParcelaCondicaoOpcao[];
+  /** Número do documento já digitado na OC, se houver. Vira a sugestão. */
+  numeroDocumentoDaOrdem: string | null;
 }
 
-/** Valores default do form: NF vazia, valor sugerido = total da OC, hoje. */
-function valoresIniciais(valorTotalOc: number): RecebimentoFormInput {
+/**
+ * Valores default: valor sugerido = total da OC, data de hoje, e o número do
+ * documento que já está na OC.
+ *
+ * Vem preenchido de propósito. O número é UM só: se a pessoa digitou o número
+ * do pedido lá atrás e a nota chegou com o mesmo, redigitar aqui só cria chance
+ * de divergir. Quando a nota vem com outro número, ela troca — e o que sai
+ * daqui é o que passa a valer na OC e no lançamento.
+ */
+function valoresIniciais(
+  valorTotalOc: number,
+  numeroDocumentoDaOrdem: string | null,
+): RecebimentoFormInput {
   return {
-    numeroNf: "",
+    numeroNf: numeroDocumentoDaOrdem ?? "",
     valorNf: String(valorTotalOc).replace(".", ","),
     dataRecebimento: dataHojeISO(),
   };
@@ -68,16 +81,17 @@ export function RecebimentoDialog({
   ordemId,
   valorTotalOc,
   parcelasCondicao,
+  numeroDocumentoDaOrdem,
 }: RecebimentoDialogProps) {
   const form = useForm<RecebimentoFormInput>({
     resolver: zodResolver(recebimentoFormSchema),
-    defaultValues: valoresIniciais(valorTotalOc),
+    defaultValues: valoresIniciais(valorTotalOc, numeroDocumentoDaOrdem),
   });
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(valorTotalOc));
+    if (aberto) form.reset(valoresIniciais(valorTotalOc, numeroDocumentoDaOrdem));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aberto, valorTotalOc]);
+  }, [aberto, valorTotalOc, numeroDocumentoDaOrdem]);
 
   const salvando = form.formState.isSubmitting;
   const valorNfTexto = form.watch("valorNf");
@@ -123,8 +137,9 @@ export function RecebimentoDialog({
         <DialogHeader>
           <DialogTitle>Registrar recebimento</DialogTitle>
           <DialogDescription className="text-detalhe text-muted-foreground">
-            Confirma a nota fiscal e gera as parcelas do contas a pagar pela
-            condição de pagamento da ordem.
+            Confirma o documento e gera as parcelas do contas a pagar pela
+            condição de pagamento da ordem. O número confirmado aqui passa a
+            valer na ordem e no lançamento.
           </DialogDescription>
         </DialogHeader>
 
@@ -136,7 +151,7 @@ export function RecebimentoDialog({
         >
           <CampoFormulario
             id="recebimento-numero-nf"
-            rotulo="Número da nota fiscal"
+            rotulo="Número do documento"
             obrigatorio
             erro={form.formState.errors.numeroNf?.message}
           >

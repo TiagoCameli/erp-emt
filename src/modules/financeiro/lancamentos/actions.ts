@@ -52,6 +52,8 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     data_compra: dados.dataCompra,
     mes_competencia: dados.mesCompetencia,
     data_vencimento: dados.dataVencimento ?? null,
+    /** Nota fiscal, boleto, recibo: o documento do fornecedor. */
+    numero_documento: dados.numeroDocumento ?? null,
     observacoes: dados.observacoes ?? null,
   };
 }

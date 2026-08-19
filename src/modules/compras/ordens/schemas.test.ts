@@ -260,6 +260,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     mesCompetencia: "2026-06",
     descricao: DESCRICAO,
     categoriaId: CATEGORIA,
+    numeroDocumento: "",
     observacoes: "",
     centrosCusto: [grupoValido],
     // Parcelas são opcionais no produto (lista vazia = definir no lançamento),
@@ -408,6 +409,7 @@ describe("parcelas da OC no formulário", () => {
     mesCompetencia: "2026-06",
     descricao: DESCRICAO,
     categoriaId: CATEGORIA,
+    numeroDocumento: "",
     observacoes: "",
     // 10 x 100,00 = 1.000,00 de total
     centrosCusto: [
@@ -549,5 +551,49 @@ describe("parcelas da OC no servidor", () => {
       parcelas: [{ dataVencimento: "2026-01-01", valor: 1000 }],
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("ordemCompraSchema: número do documento", () => {
+  it("aceita OC sem número do documento", () => {
+    const r = ordemCompraSchema.safeParse(ocValida);
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.numeroDocumento).toBeUndefined();
+  });
+
+  it("tira o espaço das pontas", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...ocValida,
+      numeroDocumento: "  NF 12345  ",
+    });
+    expect(r.success && r.data.numeroDocumento).toBe("NF 12345");
+  });
+
+  /**
+   * Só espaço tem que virar ausente, não string em branco: o banco grava null e
+   * a coluna da lista não fica com uma célula "preenchida" com nada.
+   */
+  it("só espaço vira ausente", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...ocValida,
+      numeroDocumento: "   ",
+    });
+    expect(r.success && r.data.numeroDocumento).toBeUndefined();
+  });
+
+  it("recusa acima de 60 caracteres", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...ocValida,
+      numeroDocumento: "9".repeat(61),
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("aceita exatamente 60 caracteres", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...ocValida,
+      numeroDocumento: "9".repeat(60),
+    });
+    expect(r.success).toBe(true);
   });
 });

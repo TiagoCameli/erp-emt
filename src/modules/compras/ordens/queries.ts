@@ -9,6 +9,7 @@ import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
 import type { AjustesDaOrdem } from "@/modules/compras/ordens/calculo";
@@ -92,8 +93,14 @@ export interface OrdemLista {
   condicaoPagamentoDescricao: string | null;
   formaPagamentoNome: string | null;
   cotacaoNumero: string | null;
-  /** Número da nota fiscal do recebimento, quando já foi registrado. */
-  notaFiscal: string | null;
+  /**
+   * Número do documento do fornecedor (nota fiscal, boleto, recibo). Digitado
+   * desde a criação; o recebimento confirma e sobrescreve. Não confundir com
+   * `numero`, que é o número da OC no sistema.
+   */
+  numeroDocumento: string | null;
+  /** Quantidade de anexos, para a lista sinalizar quem tem documento junto. */
+  anexos: number;
   /** Data de sistema, imutável. */
   criadoEm: string;
   criadoPorNome: string | null;
@@ -175,6 +182,12 @@ export interface OrdemDetalhe {
   mesCompetencia: string;
   /** Data de sistema (created_at), imutável: a tela mostra como texto. */
   criadoEm: string;
+  /**
+   * Número do documento do fornecedor (nota fiscal, boleto, recibo). Editável
+   * enquanto a OC está em rascunho ou pendente; depois disso quem grava é o
+   * recebimento.
+   */
+  numeroDocumento: string | null;
   observacoes: string | null;
   itens: OrdemItem[];
   /** Vazio quando a OC não tem parcelas definidas (serão definidas no lançamento). */
@@ -314,9 +327,9 @@ async function ordensQuitadasSemNota(
  * `ListarOrdensParams` são aplicados aqui, no banco. O valor_total vem do banco
  * (trigger), nunca recalculado no app.
  *
- * O select também traz condição e forma de pagamento, cotação de origem, nota
- * fiscal e criação: são as colunas opcionais da tabela, todas por join no mesmo
- * round-trip.
+ * O select também traz condição e forma de pagamento, cotação de origem e
+ * criação: são as colunas opcionais da tabela, todas por join no mesmo
+ * round-trip. O número do documento é coluna da própria OC.
  *
  * `oc_itens` e `recebimentos` entram no select sempre, mesmo sem filtro ligado,
  * porque o PostgREST só aceita filtrar por um relacionamento que está no select
@@ -338,14 +351,14 @@ export async function listarOrdens(
   let consulta = supabase
     .from("ordens_compra")
     .select(
-      `id, numero, descricao, valor_total, status, data_compra, mes_competencia,
-       created_at, created_by,
+      `id, numero, numero_documento, descricao, valor_total, status, data_compra,
+       mes_competencia, created_at, created_by,
        fornecedores(razao_social, nome_fantasia),
        categorias_financeiras(nome),
        condicoes_pagamento(descricao),
        formas_pagamento(nome),
        cotacoes(numero),
-       recebimentos(numero_nf),
+       recebimentos(id),
        oc_itens(id)`,
       { count: "exact" },
     )
@@ -414,7 +427,12 @@ export async function listarOrdens(
   if (params.busca) {
     const padrao = padraoBusca(params.busca);
     const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
-    const clausulas = [`numero.ilike.${padrao}`];
+    // O número do documento entra na busca junto com o da OC: quem tem a nota
+    // na mão procura pelo número dela, não pelo número que o sistema deu.
+    const clausulas = [
+      `numero.ilike.${padrao}`,
+      `numero_documento.ilike.${padrao}`,
+    ];
     if (idsFornecedores.length > 0) {
       clausulas.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
     }
@@ -428,7 +446,7 @@ export async function listarOrdens(
   }
 
   const linhas = data ?? [];
-  const [nomesCriadores, quitadasSemNota] = await Promise.all([
+  const [nomesCriadores, quitadasSemNota, anexosPorOrdem] = await Promise.all([
     nomesDosCriadores(
       supabase,
       linhas.map((ordem) => ordem.created_by),
@@ -436,6 +454,10 @@ export async function listarOrdens(
     ordensQuitadasSemNota(
       supabase,
       linhas.filter((ordem) => ordem.status === "aprovado").map((o) => o.id),
+    ),
+    contarAnexosPorDocumento(
+      "ordem_compra",
+      linhas.map((ordem) => ordem.id),
     ),
   ]);
 
@@ -454,7 +476,8 @@ export async function listarOrdens(
     condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
     formaPagamentoNome: ordem.formas_pagamento?.nome ?? null,
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
-    notaFiscal: ordem.recebimentos?.numero_nf ?? null,
+    numeroDocumento: ordem.numero_documento,
+    anexos: anexosPorOrdem[ordem.id] ?? 0,
     criadoEm: ordem.created_at,
     criadoPorNome: ordem.created_by
       ? (nomesCriadores.get(ordem.created_by) ?? null)
@@ -479,7 +502,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
        categoria_id, descricao,
        valor_total, frete, outras_despesas, impostos, desconto,
        status, motivo_rejeicao, data_compra, mes_competencia,
-       created_at, observacoes,
+       created_at, numero_documento, observacoes,
        fornecedores(razao_social, nome_fantasia),
        categorias_financeiras(nome),
        cotacoes(numero),
@@ -548,6 +571,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     dataCompra: ordem.data_compra,
     mesCompetencia: ordem.mes_competencia,
     criadoEm: ordem.created_at,
+    numeroDocumento: ordem.numero_documento,
     observacoes: ordem.observacoes,
     itens,
     parcelas: (ordem.oc_parcelas ?? [])

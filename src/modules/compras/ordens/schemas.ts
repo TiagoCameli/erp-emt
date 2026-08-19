@@ -154,6 +154,13 @@ export const ordemCompraSchema = z
     descricao: descricaoSchema,
     /** Categoria financeira do custo: é ela que classifica a compra no DRE. */
     categoriaId: idSchemaCom("Escolha a categoria do custo"),
+    /**
+     * Número do documento do fornecedor: nota fiscal, boleto, recibo, contrato.
+     * Opcional e sem unicidade, porque o mesmo número repete entre fornecedores
+     * e o mesmo boleto pode cobrir duas compras. Quem confirma o número
+     * definitivo é o recebimento, que sobrescreve o que foi digitado aqui.
+     */
+    numeroDocumento: textoOpcional(60),
     observacoes: textoOpcional(2000),
     itens: z
       .array(ocItemSchema)
@@ -301,6 +308,11 @@ export const ordemCompraFormSchema = z
     /** Mesma trava do servidor: a descrição classifica a compra no DRE. */
     descricao: descricaoSchema,
     categoriaId: idSchemaCom("Selecione a categoria do custo"),
+    /** Número do documento do fornecedor. Vazio no form = null no banco. */
+    numeroDocumento: z
+      .string()
+      .trim()
+      .max(60, { error: "Máximo de 60 caracteres" }),
     observacoes: z
       .string()
       .trim()

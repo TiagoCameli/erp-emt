@@ -141,6 +141,12 @@ export const lancamentoSchema = z
       .trim()
       .regex(/^\d{4}-\d{2}-01$/, { error: "Informe o mês de referência" }),
     dataVencimento: dataOpcionalSchema,
+    /**
+     * Número do documento do fornecedor: nota fiscal, boleto, recibo. Opcional
+     * e sem unicidade, mesma regra da OC. Não confundir com o `numero` do
+     * lançamento, que é o número interno e quem gera é o banco.
+     */
+    numeroDocumento: textoOpcional(60),
     /** Texto livre: o combinado, o que a nota não diz. Só no detalhe. */
     observacoes: textoOpcional(2000),
     parcelas: z
@@ -239,6 +245,11 @@ export const lancamentoFormSchema = z
       .trim()
       .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     dataVencimento: z.string().trim(),
+    /** Número do documento do fornecedor. Vazio no form = null no banco. */
+    numeroDocumento: z
+      .string()
+      .trim()
+      .max(60, { error: "Máximo de 60 caracteres" }),
     observacoes: z
       .string()
       .trim()

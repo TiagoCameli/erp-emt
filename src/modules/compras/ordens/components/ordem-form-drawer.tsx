@@ -133,6 +133,7 @@ function valoresIniciais(
       mesCompetencia: competenciaParaMes(ordem.mesCompetencia),
       descricao: ordem.descricao ?? "",
       categoriaId: ordem.categoriaId ?? "",
+      numeroDocumento: ordem.numeroDocumento ?? "",
       observacoes: ordem.observacoes ?? "",
       centrosCusto: agruparItensPorCentroCusto(ordem.itens),
       parcelas: ordem.parcelas.map((parcela) => ({
@@ -154,6 +155,9 @@ function valoresIniciais(
       // criaria divergência entre a cotação e a OC que saiu dela.
       descricao: prefill.descricao ?? "",
       categoriaId: prefill.categoriaId ?? "",
+      // A cotação não tem número de documento: o documento só existe depois da
+      // compra fechada, então aqui nasce vazio mesmo.
+      numeroDocumento: "",
       observacoes: "",
       centrosCusto:
         prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
@@ -172,6 +176,7 @@ function valoresIniciais(
       : mesHojeISO(),
     descricao: ordem?.descricao ?? "",
     categoriaId: ordem?.categoriaId ?? "",
+    numeroDocumento: ordem?.numeroDocumento ?? "",
     observacoes: ordem?.observacoes ?? "",
     centrosCusto: [grupoVazio()],
     parcelas:
@@ -364,6 +369,7 @@ export function OrdemFormDrawer({
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       descricao: valores.descricao,
       categoriaId: valores.categoriaId,
+      numeroDocumento: valores.numeroDocumento,
       observacoes: valores.observacoes,
       itens: achatarGruposEmItens(valores.centrosCusto),
       parcelas: valores.parcelas.map((parcela) => ({
@@ -550,6 +556,24 @@ export function OrdemFormDrawer({
                 className="tabular-nums"
                 disabled={salvando}
                 {...form.register("mesCompetencia")}
+              />
+            </CampoFormulario>
+
+            {/* Opcional porque nem toda compra já tem documento na hora de
+                emitir a OC. Quando a nota chega depois, quem grava o número é o
+                "Registrar recebimento", que confirma valor e data junto. */}
+            <CampoFormulario
+              id="oc-numero-documento"
+              rotulo="Número do documento"
+              ajuda="Nota fiscal, boleto ou recibo do fornecedor. Pode ficar em branco e ser preenchido no recebimento."
+              erro={form.formState.errors.numeroDocumento?.message}
+            >
+              <Input
+                id="oc-numero-documento"
+                maxLength={60}
+                placeholder="Ex.: NF 12345"
+                disabled={salvando}
+                {...form.register("numeroDocumento")}
               />
             </CampoFormulario>
           </LinhaCampos>

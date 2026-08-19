@@ -53,6 +53,7 @@ function lancamento(troca: Partial<LancamentoDetalhe> = {}): LancamentoDetalhe {
   return {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     numero: "LAN-2026-1362",
+    numeroDocumento: null,
     tipo: "a_pagar",
     origem: "manual",
     origemId: null,

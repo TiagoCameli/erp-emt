@@ -11,6 +11,7 @@ import { dataHojeISO, TIMEZONE } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
+import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
 import {
   tipoFormaPagamento,
@@ -176,6 +177,14 @@ export interface LancamentoLista {
   dataCompra: string;
   /** Mês de referência (dia 1): em que mês o custo entra. */
   mesCompetencia: string;
+  /**
+   * Número do documento do fornecedor (nota fiscal, boleto, recibo). No
+   * lançamento de origem OC vem copiado da ordem. Não confundir com `numero`,
+   * que é o número interno do lançamento.
+   */
+  numeroDocumento: string | null;
+  /** Quantidade de anexos, para a lista sinalizar quem tem documento junto. */
+  anexos: number;
   /** Data de sistema, imutável. */
   criadoEm: string;
   /**
@@ -314,6 +323,11 @@ export interface LancamentoDetalhe {
   /** Data de sistema (created_at), imutável: a tela mostra como texto. */
   criadoEm: string;
   dataVencimento: string | null;
+  /**
+   * Número do documento do fornecedor (nota fiscal, boleto, recibo). Editável no
+   * lançamento avulso; no de origem OC vem da ordem e é somente-leitura aqui.
+   */
+  numeroDocumento: string | null;
   /** Texto livre do lançamento. Só aparece no detalhe, nunca na lista. */
   observacoes: string | null;
   parcelas: ParcelaLancamento[];
@@ -766,8 +780,8 @@ export async function listarLancamentos(
   let consulta = supabase
     .from("lancamentos")
     .select(
-      `id, numero, tipo, origem, descricao, valor, data_vencimento, status,
-       data_compra, mes_competencia, created_at,
+      `id, numero, numero_documento, tipo, origem, descricao, valor,
+       data_vencimento, status, data_compra, mes_competencia, created_at,
        categorias_financeiras(nome),
        fornecedores(razao_social, nome_fantasia),
        lancamento_parcelas(
@@ -850,7 +864,11 @@ export async function listarLancamentos(
   }
   if (params.busca?.trim()) {
     const padrao = `%${params.busca.replace(/[,()"'\\]/g, "").trim()}%`;
-    consulta = consulta.or(`numero.ilike.${padrao},descricao.ilike.${padrao}`);
+    // O número do documento entra junto: quem tem o boleto na mão procura pelo
+    // número dele, não pelo número interno do lançamento.
+    consulta = consulta.or(
+      `numero.ilike.${padrao},numero_documento.ilike.${padrao},descricao.ilike.${padrao}`,
+    );
   }
 
   const { data, error, count } = await consulta;
@@ -858,6 +876,13 @@ export async function listarLancamentos(
   if (error) {
     throw new Error("Não foi possível carregar os lançamentos");
   }
+
+  // Contagem de anexos da PÁGINA, não da base inteira: uma consulta a mais por
+  // listagem, com os ids que já vieram.
+  const anexosPorLancamento = await contarAnexosPorDocumento(
+    "lancamento",
+    (data ?? []).map((lancamento) => lancamento.id),
+  );
 
   const itens: LancamentoLista[] = (data ?? []).map((lancamento) => {
     const parcelas = lancamento.lancamento_parcelas ?? [];
@@ -910,6 +935,8 @@ export async function listarLancamentos(
       qtdParcelas: parcelas.length,
       dataCompra: lancamento.data_compra,
       mesCompetencia: lancamento.mes_competencia,
+      numeroDocumento: lancamento.numero_documento,
+      anexos: anexosPorLancamento[lancamento.id] ?? 0,
       criadoEm: lancamento.created_at,
       valorRecorte: escolherValorRecorte(
         valoresCentro?.get(lancamento.id) ?? null,
@@ -1072,8 +1099,8 @@ export async function buscarLancamento(
   const { data, error } = await supabase
     .from("lancamentos")
     .select(
-      `id, numero, tipo, origem, origem_id, fornecedor_id, categoria_id,
-       forma_pagamento_id, condicao_pagamento_id,
+      `id, numero, numero_documento, tipo, origem, origem_id, fornecedor_id,
+       categoria_id, forma_pagamento_id, condicao_pagamento_id,
        descricao, observacoes, valor, status, mes_competencia, data_compra,
        created_at, data_vencimento,
        categorias_financeiras(nome),
@@ -1170,6 +1197,7 @@ export async function buscarLancamento(
     dataCompra: data.data_compra,
     criadoEm: data.created_at,
     dataVencimento: data.data_vencimento,
+    numeroDocumento: data.numero_documento,
     observacoes: data.observacoes,
     parcelas,
     rateios,
