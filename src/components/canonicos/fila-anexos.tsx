@@ -5,6 +5,10 @@ import { Download, Eye, Paperclip, Trash2, Upload } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import { Button } from "@/components/ui/button";
+import {
+  ANEXO_TAMANHO_MAXIMO_BYTES,
+  ANEXO_TAMANHO_MAXIMO_MB,
+} from "@/lib/anexos-limite";
 import { cn } from "@/lib/utils";
 import { enviarAnexos } from "@/modules/_shared/anexos/actions";
 
@@ -40,7 +44,19 @@ export async function subirFilaDeAnexos(
     dados.append("entidadeId", entidadeId);
     dados.append("arquivo", arquivo);
 
-    const envio = await enviarAnexos(dados);
+    // Aqui o documento JÁ foi criado: um envio que estoura fora da action não
+    // pode derrubar o fluxo de salvar nem sumir calado. Vira falha contada e
+    // mensagem com o nome do arquivo, igual às outras.
+    let envio;
+    try {
+      envio = await enviarAnexos(dados);
+    } catch {
+      falhas += 1;
+      toast.error(
+        `${arquivo.name}: o envio falhou no caminho. Se o arquivo for grande, o limite é ${ANEXO_TAMANHO_MAXIMO_MB} MB`,
+      );
+      continue;
+    }
     if ("erro" in envio) {
       falhas += 1;
       toast.error(`${arquivo.name}: ${envio.erro}`);
@@ -92,9 +108,19 @@ export function FilaAnexos({
     [urls],
   );
 
+  // Recusa o arquivo grande na HORA de escolher, não depois de salvar: na fila
+  // o documento só existe no fim, e descobrir o limite lá na frente é perder o
+  // trabalho todo.
   function adicionar(novos: File[]) {
-    if (novos.length === 0) return;
-    onMudar([...arquivos, ...novos]);
+    const aceitos = novos.filter((arquivo) => {
+      if (arquivo.size <= ANEXO_TAMANHO_MAXIMO_BYTES) return true;
+      toast.error(
+        `${arquivo.name} tem ${tamanhoLegivel(arquivo.size)} e o limite é ${ANEXO_TAMANHO_MAXIMO_MB} MB`,
+      );
+      return false;
+    });
+    if (aceitos.length === 0) return;
+    onMudar([...arquivos, ...aceitos]);
   }
 
   return (

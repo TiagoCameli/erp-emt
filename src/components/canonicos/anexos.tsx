@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ANEXO_TAMANHO_MAXIMO_MB } from "@/lib/anexos-limite";
 import { formatarDataHora } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import {
@@ -34,8 +35,8 @@ import {
 } from "@/modules/_shared/anexos/actions";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 
-/** Limite espelhado do servidor, para avisar antes de gastar upload. */
-const TAMANHO_MAXIMO_MB = 25;
+/** Mesmo limite do servidor: a constante é uma só, o número não pode divergir. */
+const TAMANHO_MAXIMO_MB = ANEXO_TAMANHO_MAXIMO_MB;
 const BYTES_POR_MB = 1024 * 1024;
 
 /** Tamanho legível: 1,2 MB, 340 KB. */
@@ -153,7 +154,21 @@ export function Anexos({
         formData.append("entidadeId", entidadeId);
         formData.append("arquivo", arquivo);
 
-        const resultado = await enviarAnexos(formData);
+        // O try é do arquivo, não da fila: quando um envio explode fora da
+        // action (corpo recusado pelo Next, conexão caída, deploy no meio do
+        // caminho), o erro precisa VIRAR MENSAGEM e o próximo arquivo precisa
+        // continuar. Sem isto a promessa quebrava lá dentro, o spinner sumia e
+        // o anexo não aparecia — sem uma palavra na tela.
+        let resultado;
+        try {
+          resultado = await enviarAnexos(formData);
+        } catch {
+          toast.error(
+            `${arquivo.name}: o envio falhou no caminho. Se o arquivo for grande, o limite é ${TAMANHO_MAXIMO_MB} MB`,
+          );
+          setProgresso({ feitos: indice + 1, total: aceitos.length });
+          continue;
+        }
         setProgresso({ feitos: indice + 1, total: aceitos.length });
 
         if ("erro" in resultado) {

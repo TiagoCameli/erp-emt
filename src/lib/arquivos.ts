@@ -2,15 +2,22 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import {
+  ANEXO_TAMANHO_MAXIMO_BYTES,
+  ANEXO_TAMANHO_MAXIMO_MB,
+} from "@/lib/anexos-limite";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** Bucket privado de anexos. Nenhum client fala com ele direto. */
 export const BUCKET_ARQUIVOS = "anexos";
 
-/** Limite por arquivo. Configurável por env, 25 MB de padrão. */
-export const TAMANHO_MAXIMO_MB = Number(
-  process.env.ANEXO_TAMANHO_MAXIMO_MB ?? 25,
-);
+/**
+ * Limite por arquivo. NÃO é configurável por env: o limite de verdade é o teto
+ * de payload da Vercel, e prometer mais do que a plataforma entrega foi
+ * exatamente o que fez anexo grande sumir em silêncio. O porquê do número está
+ * em `@/lib/anexos-limite`.
+ */
+export const TAMANHO_MAXIMO_MB = ANEXO_TAMANHO_MAXIMO_MB;
 
 const BYTES_POR_MB = 1024 * 1024;
 
@@ -58,8 +65,7 @@ export function validarArquivo(params: {
   if (nome.trim() === "") return "Arquivo sem nome";
   if (tamanhoBytes <= 0) return "Arquivo vazio";
 
-  const limite = TAMANHO_MAXIMO_MB * BYTES_POR_MB;
-  if (tamanhoBytes > limite) {
+  if (tamanhoBytes > ANEXO_TAMANHO_MAXIMO_BYTES) {
     const tamanhoMb = (tamanhoBytes / BYTES_POR_MB).toLocaleString("pt-BR", {
       maximumFractionDigits: 1,
     });
