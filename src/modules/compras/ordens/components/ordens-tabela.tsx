@@ -57,7 +57,14 @@ const OPCOES_STATUS = Object.entries(ROTULO_STATUS_OC).map(([valor, info]) => ({
   rotulo: info.rotulo,
 }));
 
-const colunas: ColumnDef<OrdemLista, unknown>[] = [
+/**
+ * Colunas da listagem de ordens de compra.
+ *
+ * Exportada para o teste poder olhar as colunas e renderizar uma célula sozinha,
+ * sem montar a tela inteira (que precisaria de router, Server Action e
+ * preferência de tabela). Mesmo motivo do `montarColunas` de Lançamentos.
+ */
+export const colunas: ColumnDef<OrdemLista, unknown>[] = [
   {
     accessorKey: "numero",
     header: "Número",
