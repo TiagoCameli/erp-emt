@@ -3554,6 +3554,10 @@ export type Database = {
         Args: { p_tabela: string }
         Returns: undefined
       }
+      fn_limpar_senha_provisoria_propria: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       fn_listar_lancamentos: {
         Args: {
           p_descendente?: boolean
