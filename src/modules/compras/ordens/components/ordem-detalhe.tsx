@@ -48,6 +48,7 @@ import {
   temAjuste,
   totalOrdemCompra,
 } from "@/modules/compras/ordens/calculo";
+import { ratearPorCategoria } from "@/modules/compras/ordens/rateio-categoria";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
@@ -165,6 +166,41 @@ export function OrdemDetalheView({
   const info = infoStatusOC(ordem.status);
   // Só é diferente de `ordem.valorTotal` quando a ordem tem ajuste de rodapé.
   const somaDosItens = totalOrdemCompra(ordem.itens);
+
+  /**
+   * Rateio por categoria de custo, a mesma conta que a aprovação materializa em
+   * `lancamento_rateios`. Mostrar aqui é o que permite conferir antes de aprovar
+   * como o custo vai se dividir no DRE — e o rodapé entra proporcionalmente, senão a
+   * soma das fatias não fecharia com o total.
+   */
+  const rateioPorCategoria = (() => {
+    const nomePorId = new Map(
+      ordem.itens
+        .filter((item) => item.categoriaCustoId)
+        .map((item) => [item.categoriaCustoId!, item.categoriaCustoNome ?? "-"]),
+    );
+    const fatias = ratearPorCategoria(
+      ordem.itens
+        .filter((item) => item.categoriaCustoId)
+        .map((item) => ({
+          centroCustoId: item.centroCustoId,
+          categoriaId: item.categoriaCustoId!,
+          quantidade: item.quantidade,
+          precoUnitario: item.precoUnitario,
+        })),
+      ordem.ajustes,
+    );
+    const porCategoria = new Map<string, number>();
+    for (const fatia of fatias) {
+      porCategoria.set(
+        fatia.categoriaId,
+        (porCategoria.get(fatia.categoriaId) ?? 0) + fatia.valor,
+      );
+    }
+    return [...porCategoria.entries()]
+      .map(([id, valor]) => ({ nome: nomePorId.get(id) ?? "-", valor }))
+      .sort((a, b) => b.valor - a.valor);
+  })();
   const editavel =
     podeEditar &&
     (ordem.status === "rascunho" || ordem.status === "pendente_aprovacao");
@@ -505,6 +541,25 @@ export function OrdemDetalheView({
                     somam R$ 103.835,95 e o total é R$ 100.000,00. As linhas
                     abaixo mostram por quê.
                   */}
+                  {rateioPorCategoria.length > 1 ? (
+                    <>
+                      <tr className="text-muted-foreground">
+                        <td className="px-3 pt-3 pb-1 text-center" colSpan={5}>
+                          Rateio por categoria de custo
+                        </td>
+                      </tr>
+                      {rateioPorCategoria.map((linha) => (
+                        <tr key={linha.nome} className="text-muted-foreground">
+                          <td className="px-3 py-1 text-center" colSpan={4}>
+                            {linha.nome}
+                          </td>
+                          <td className="px-3 py-1 text-right">
+                            <MoneyText valor={linha.valor} />
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  ) : null}
                   {temAjuste(ordem.ajustes) ? (
                     <>
                       <tr className="text-muted-foreground">

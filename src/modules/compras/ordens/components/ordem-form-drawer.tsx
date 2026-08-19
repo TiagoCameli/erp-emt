@@ -67,6 +67,7 @@ import {
   totalComAjustes,
   totalOrdemCompra,
 } from "@/modules/compras/ordens/calculo";
+import { ratearPorCategoria } from "@/modules/compras/ordens/rateio-categoria";
 import {
   achatarGruposEmItens,
   agruparItensPorCentroCusto,
@@ -132,7 +133,6 @@ function valoresIniciais(
       dataCompra: ordem.dataCompra,
       mesCompetencia: competenciaParaMes(ordem.mesCompetencia),
       descricao: ordem.descricao ?? "",
-      categoriaId: ordem.categoriaId ?? "",
       observacoes: ordem.observacoes ?? "",
       centrosCusto: agruparItensPorCentroCusto(ordem.itens),
       parcelas: ordem.parcelas.map((parcela) => ({
@@ -150,10 +150,10 @@ function valoresIniciais(
       cotacaoId: prefill.cotacaoId,
       dataCompra: dataHojeISO(),
       mesCompetencia: mesHojeISO(),
-      // Descrição e categoria vêm da cotação: é a mesma compra, redigitar só
-      // criaria divergência entre a cotação e a OC que saiu dela.
+      // A descrição vem da cotação: é a mesma compra, redigitar só criaria
+      // divergência entre a cotação e a OC que saiu dela. A categoria do custo
+      // não é copiada — ela sai dos insumos dos itens.
       descricao: prefill.descricao ?? "",
-      categoriaId: prefill.categoriaId ?? "",
       observacoes: "",
       centrosCusto:
         prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
@@ -171,7 +171,6 @@ function valoresIniciais(
       ? competenciaParaMes(ordem.mesCompetencia)
       : mesHojeISO(),
     descricao: ordem?.descricao ?? "",
-    categoriaId: ordem?.categoriaId ?? "",
     observacoes: ordem?.observacoes ?? "",
     centrosCusto: [grupoVazio()],
     parcelas:
@@ -324,6 +323,56 @@ export function OrdemFormDrawer({
   const totalPrevia = totalComAjustes(itensObservados, ajustes);
   const mostrarAjustes = temAjuste(ajustes);
 
+  /**
+   * Rateio por categoria de custo, ao vivo. A categoria vem do insumo — ninguém a
+   * digita mais — e a compra que mistura coisas é rateada em vez de cair inteira numa
+   * categoria. O rodapé entra proporcionalmente, pela mesma regra que a aprovação
+   * aplica no banco.
+   *
+   * Só entra no cálculo item com insumo escolhido e categoria de custo conhecida: sem
+   * isso a soma das fatias não fecharia com o total e a prévia mentiria.
+   */
+  const itensParaRateio = (gruposObservados ?? []).flatMap((grupo) =>
+    (grupo.insumos ?? [])
+      .map((insumo) => {
+        const opcao = insumos.find((i) => i.id === insumo.insumoId);
+        return {
+          centroCustoId: grupo.centroCustoId ?? "",
+          categoriaId: opcao?.categoriaCustoId ?? "",
+          quantidade: paraNumero(insumo.quantidade ?? ""),
+          precoUnitario: paraNumero(insumo.precoUnitario ?? ""),
+        };
+      })
+      .filter((item) => item.categoriaId !== ""),
+  );
+  const fatiasDoRateio = ratearPorCategoria(itensParaRateio, ajustes);
+  const rateioPorCategoria = Object.values(
+    fatiasDoRateio.reduce<Record<string, { nome: string; valor: number }>>(
+      (acumulado, fatia) => {
+        const nome =
+          insumos.find((i) => i.categoriaCustoId === fatia.categoriaId)
+            ?.categoriaCustoNome ?? "Sem categoria";
+        const atual = acumulado[fatia.categoriaId];
+        acumulado[fatia.categoriaId] = {
+          nome,
+          valor: (atual?.valor ?? 0) + fatia.valor,
+        };
+        return acumulado;
+      },
+      {},
+    ),
+  ).sort((a, b) => b.valor - a.valor);
+
+  /** Insumos escolhidos que ainda não podem entrar numa compra. */
+  const insumosSemClassificacao = (gruposObservados ?? []).flatMap((grupo) =>
+    (grupo.insumos ?? [])
+      .map((insumo) => insumos.find((i) => i.id === insumo.insumoId))
+      .filter(
+        (opcao): opcao is InsumoOpcao =>
+          opcao !== undefined && (opcao.emAClassificar || !opcao.categoriaCustoId),
+      ),
+  );
+
   // Centros de custo já escolhidos, para não permitir grupo repetido.
   const centrosUsados = new Set(
     (gruposObservados ?? [])
@@ -363,7 +412,6 @@ export function OrdemFormDrawer({
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       descricao: valores.descricao,
-      categoriaId: valores.categoriaId,
       observacoes: valores.observacoes,
       itens: achatarGruposEmItens(valores.centrosCusto),
       parcelas: valores.parcelas.map((parcela) => ({
@@ -414,7 +462,6 @@ export function OrdemFormDrawer({
   }
 
   const fornecedorValor = form.watch("fornecedorId");
-  const categoriaValor = form.watch("categoriaId") ?? "";
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId");
   const dataCompraValor = form.watch("dataCompra") ?? "";
   // Compra muito velha normalmente é digitação errada, mas às vezes é nota
@@ -582,26 +629,6 @@ export function OrdemFormDrawer({
               />
             </CampoFormulario>
 
-            <CampoFormulario
-              id="oc-categoria"
-              rotulo="Categoria do custo"
-              obrigatorio
-              erro={form.formState.errors.categoriaId?.message}
-            >
-              <Combobox
-                valor={categoriaValor}
-                onValorChange={(valor) =>
-                  form.setValue("categoriaId", valor, { shouldValidate: true })
-                }
-                opcoes={categorias.map((categoria) => ({
-                  valor: categoria.id,
-                  rotulo: categoria.nome,
-                }))}
-                placeholder="Selecione a categoria do custo"
-                disabled={salvando}
-                id="oc-categoria"
-              />
-            </CampoFormulario>
           </LinhaCampos>
 
           <LinhaCampos>
@@ -766,6 +793,37 @@ export function OrdemFormDrawer({
                 </span>
               </div>
             ))}
+            {rateioPorCategoria.length > 0 ? (
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-legenda text-muted-foreground">
+                  Rateio por categoria de custo
+                </p>
+                {rateioPorCategoria.map((linha) => (
+                  <div
+                    key={linha.nome}
+                    className="flex items-center justify-between gap-3 pt-1 text-detalhe"
+                  >
+                    <span className="truncate text-muted-foreground">
+                      {linha.nome}
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      {formatarBRL(linha.valor)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {insumosSemClassificacao.length > 0 ? (
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-detalhe text-destructive">
+                  {insumosSemClassificacao.length === 1
+                    ? `O insumo "${insumosSemClassificacao[0].nome}" ainda não tem categoria de custo.`
+                    : `${insumosSemClassificacao.length} insumos ainda não têm categoria de custo.`}{" "}
+                  Classifique em Cadastros &gt; Insumos antes de enviar para aprovação:
+                  sem isso o custo não tem onde cair no DRE.
+                </p>
+              </div>
+            ) : null}
             {mostrarAjustes ? (
               <>
                 <div className="flex items-center justify-between gap-3 px-3 py-2">
@@ -1283,7 +1341,15 @@ function GrupoCentroCusto({
                   }
                   opcoes={insumosDisponiveis.map((insumo) => ({
                     valor: insumo.id,
-                    rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}`,
+                    // A categoria de custo vai no rótulo porque é ela que define onde
+                    // esta linha cai no DRE, e quem monta a compra precisa ver isso na
+                    // hora de escolher — não depois, na tela de aprovação. Insumo sem
+                    // categoria fica marcado: ele impede a aprovação.
+                    rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}${
+                      insumo.emAClassificar || !insumo.categoriaCustoId
+                        ? " · sem categoria de custo"
+                        : ` · ${insumo.categoriaCustoNome}`
+                    }`,
                   }))}
                   rotuloDoValor={nomesDaOrdem.insumos.get(
                     form.watch(`centrosCusto.${indice}.insumos.${j}.insumoId`),

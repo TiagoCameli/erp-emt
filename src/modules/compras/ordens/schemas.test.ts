@@ -189,12 +189,19 @@ describe("ordemCompraSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("exige categoria do custo", () => {
-    const { categoriaId: _, ...semCategoria } = ocValida;
-    const r = ordemCompraSchema.safeParse(semCategoria);
-    expect(r.success).toBe(false);
-    if (!r.success) {
-      expect(r.error.issues[0]?.message).toBe("Escolha a categoria do custo");
+  /**
+   * A categoria do custo saiu do payload: ela vem do insumo de cada item, e a coluna
+   * da ordem é mantida pelo trigger trg_categoria_da_oc_pelos_itens. Mandar
+   * `categoriaId` daqui não classifica nada, então o schema não a aceita mais.
+   */
+  it("não aceita mais categoria do custo no payload", () => {
+    const r = ordemCompraSchema.safeParse({
+      ...ocValida,
+      categoriaId: CATEGORIA,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect("categoriaId" in r.data).toBe(false);
     }
   });
 });
@@ -291,21 +298,18 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     expect(r.success).toBe(false);
   });
 
-  it("exige descrição e categoria no formulário", () => {
+  it("exige descrição, e não pede mais categoria, no formulário", () => {
     expect(
       ordemCompraFormSchema.safeParse({ ...formValido, descricao: "" }).success,
     ).toBe(false);
+    // Sem categoria o formulário continua válido: ela vem dos insumos dos itens.
     const r = ordemCompraFormSchema.safeParse({
       ...formValido,
       categoriaId: "",
     });
-    expect(r.success).toBe(false);
-    if (!r.success) {
-      expect(
-        r.error.issues.some(
-          (issue) => issue.message === "Selecione a categoria do custo",
-        ),
-      ).toBe(true);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect("categoriaId" in r.data).toBe(false);
     }
   });
 

@@ -150,8 +150,6 @@ export const ordemCompraSchema = z
     mesCompetencia: mesSchema,
     /** O que foi comprado, em uma linha. Vai para o lançamento financeiro. */
     descricao: descricaoSchema,
-    /** Categoria financeira do custo: é ela que classifica a compra no DRE. */
-    categoriaId: idSchemaCom("Escolha a categoria do custo"),
     observacoes: textoOpcional(2000),
     itens: z
       .array(ocItemSchema)
@@ -298,7 +296,6 @@ export const ordemCompraFormSchema = z
       .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     /** Mesma trava do servidor: a descrição classifica a compra no DRE. */
     descricao: descricaoSchema,
-    categoriaId: idSchemaCom("Selecione a categoria do custo"),
     observacoes: z
       .string()
       .trim()

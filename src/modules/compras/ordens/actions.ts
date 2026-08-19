@@ -66,10 +66,11 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
     cotacao_id: dados.cotacaoId ?? null,
     data_compra: dados.dataCompra,
     mes_competencia: dados.mesCompetencia,
-    // Descrição e categoria descem para o lançamento gerado na aprovação
-    // (fn_aprovar_ordem_compra): é o que classifica a compra no DRE.
+    // A descrição desce para o lançamento gerado na aprovação. A categoria do custo
+    // não vem daqui: ela é derivada dos insumos dos itens, pelo trigger
+    // trg_categoria_da_oc_pelos_itens, e o rateio por categoria é montado na
+    // aprovação (fn_aprovar_ordem_compra).
     descricao: dados.descricao,
-    categoria_id: dados.categoriaId,
     observacoes: dados.observacoes ?? null,
   };
 }

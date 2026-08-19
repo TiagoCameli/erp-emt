@@ -115,6 +115,9 @@ export interface OrdemItem {
   id: string;
   insumoId: string;
   insumoNome: string;
+  /** Categoria de custo do insumo: define em que fatia do rateio esta linha cai. */
+  categoriaCustoId: string | null;
+  categoriaCustoNome: string | null;
   unidade: string | null;
   quantidade: number;
   precoUnitario: number;
@@ -193,6 +196,15 @@ export interface InsumoOpcao {
   id: string;
   nome: string;
   unidade: string | null;
+  /** Categoria de custo (DRE) do insumo: é ela que rateia a OC por categoria. */
+  categoriaCustoId: string | null;
+  categoriaCustoNome: string | null;
+  /**
+   * Verdadeiro quando a subcategoria do insumo é "A classificar". São 520 insumos
+   * assim: eles não travam nada até alguém tentar comprá-los, que é quando a
+   * informação de onde o custo cai importa e existe.
+   */
+  emAClassificar: boolean;
 }
 
 /** Opção de centro de custo para o select. */
@@ -486,7 +498,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
        condicoes_pagamento(descricao),
        oc_itens(
          id, insumo_id, quantidade, preco_unitario, centro_custo_id,
-         insumos(nome, unidades_medida(sigla)),
+         insumos(nome, categoria_financeira_id, unidades_medida(sigla),
+                 categorias_financeiras(nome)),
          centros_custo(nome, codigo)
        ),
        oc_parcelas(numero_parcela, data_vencimento, valor)`,
@@ -513,6 +526,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     id: item.id,
     insumoId: item.insumo_id,
     insumoNome: item.insumos?.nome ?? "-",
+    categoriaCustoId: item.insumos?.categoria_financeira_id ?? null,
+    categoriaCustoNome: item.insumos?.categorias_financeiras?.nome ?? null,
     unidade: item.insumos?.unidades_medida?.sigla ?? null,
     quantidade: item.quantidade,
     precoUnitario: item.preco_unitario,
@@ -611,7 +626,12 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("insumos")
-      .select("id, nome, unidades_medida(sigla)")
+      .select(
+        `id, nome, categoria_financeira_id,
+         unidades_medida(sigla),
+         categorias_insumo!inner(nome),
+         categorias_financeiras(nome)`,
+      )
       .eq("ativo", true)
       .order("nome")
       .range(de, ate),
@@ -625,6 +645,9 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
     id: insumo.id,
     nome: insumo.nome,
     unidade: insumo.unidades_medida?.sigla ?? null,
+    categoriaCustoId: insumo.categoria_financeira_id,
+    categoriaCustoNome: insumo.categorias_financeiras?.nome ?? null,
+    emAClassificar: insumo.categorias_insumo?.nome === "A classificar",
   }));
 }
 
