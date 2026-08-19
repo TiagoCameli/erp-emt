@@ -13,11 +13,20 @@
  * Só a identidade da empresa, que muda de anos em anos e por decisão do Tiago.
  */
 
-/** Dados cadastrais da empresa, como saem impressos. */
+/**
+ * Dados cadastrais da empresa, como saem impressos.
+ *
+ * O endereço existe em duas formas porque os documentos precisam das duas, e
+ * derivar uma da outra por `split(",")` quebraria no dia em que o endereço
+ * mudar: `logradouro` + `cidade` para o bloco de duas linhas do cabeçalho do
+ * espelho, e `endereco` inteiro para uma linha só (holerite, planilha).
+ */
 export const EMPRESA = {
   nome: "EMT Construtora",
   razaoSocial: "EMT Construtora Ltda",
   cnpj: "05.036.194/0001-07",
+  logradouro: "Rua Pedro Teles, 360",
+  cidade: "Centro, Cruzeiro do Sul/AC – CEP 69980-000",
   endereco: "Rua Pedro Teles, 360, Centro, Cruzeiro do Sul-AC, CEP: 69980-000",
   telefones: "(68) 3322-1020 / (68) 99974-9950",
   email: "tiago@jccempresas.onmicrosoft.com",

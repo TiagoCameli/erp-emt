@@ -5,6 +5,11 @@ import type {
   StatusParcela,
   TipoLancamento,
 } from "@/modules/financeiro/_shared/formato";
+import {
+  resumirParcelas,
+  type EspelhoParcela,
+  type EspelhoResumoParcelas,
+} from "@/modules/financeiro/lancamentos/espelho";
 
 export interface EspelhoPagamentoRateio {
   centroNome: string;
@@ -58,6 +63,21 @@ export interface EspelhoPagamento {
    * "Valor do lançamento", para quem lê comparar os dois.
    */
   somaRateios: number;
+  /**
+   * Como está o LANÇAMENTO INTEIRO em parcelas: quantas já foram pagas, quanto
+   * já saiu da conta e quanto ainda falta.
+   *
+   * É a pergunta que quem assina o pagamento faz e que o papel não respondia:
+   * a folha falava só da parcela em questão, e "R$ 3.881,73 da parcela 19" não
+   * diz se o parcelamento está em dia nem quanto ainda deve. Vem da MESMA
+   * `resumirParcelas` do espelho de lançamento, para os dois papéis nunca
+   * discordarem sobre o mesmo lançamento.
+   *
+   * Nulo quando o lançamento pai não veio (não deveria acontecer): o papel
+   * então omite o bloco em vez de imprimir zeros, que seriam lidos como
+   * "nada pago, nada a pagar".
+   */
+  resumoParcelas: EspelhoResumoParcelas | null;
 }
 
 /** A linha crua do PostgREST. `numeric` chega como string. */
@@ -88,6 +108,26 @@ export interface LinhaEspelhoPagamento {
     lancamento_rateios: {
       valor: string | number;
       centros_custo: { nome: string; codigo: string | null } | null;
+    }[];
+    /**
+     * TODAS as parcelas do lançamento, inclusive a que este espelho imprime.
+     * Só existem para o resumo; o papel não lista parcela a parcela.
+     *
+     * A RLS de `lancamento_parcelas` é por PERMISSÃO, não por linha: quem tem
+     * `financeiro.pagamentos:ver` ou `financeiro.aprovacao-pagamentos:ver` (que
+     * é exatamente quem a rota do espelho deixa entrar) enxerga todas. Então o
+     * resumo não sai pela metade sem avisar.
+     */
+    lancamento_parcelas: {
+      id: string;
+      numero_parcela: number;
+      data_vencimento: string | null;
+      valor: string | number;
+      desconto: string | number | null;
+      juros: string | number | null;
+      valor_liquido: string | number;
+      status: string;
+      data_pagamento: string | null;
     }[];
   } | null;
 }
@@ -142,7 +182,32 @@ export function montarEspelhoPagamento(
     formaPagamentoNome: pai?.formas_pagamento?.nome ?? null,
     rateios,
     somaRateios: rateios.reduce((soma, rateio) => soma + rateio.valor, 0),
+    resumoParcelas: pai ? resumirParcelas(parcelasDoPai(pai)) : null,
   };
+}
+
+/**
+ * As parcelas do lançamento pai no formato que `resumirParcelas` espera.
+ *
+ * `contaNome: null` de propósito: o resumo não usa conta bancária, e trazer
+ * `contas_bancarias(nome)` de todas as parcelas do lançamento seria um join a
+ * mais por linha em um dado que não vai ao papel.
+ */
+function parcelasDoPai(
+  pai: NonNullable<LinhaEspelhoPagamento["lancamentos"]>,
+): EspelhoParcela[] {
+  return (pai.lancamento_parcelas ?? []).map((parcela) => ({
+    id: parcela.id,
+    numeroParcela: parcela.numero_parcela,
+    dataVencimento: parcela.data_vencimento,
+    valor: dinheiro(parcela.valor),
+    desconto: dinheiro(parcela.desconto),
+    juros: dinheiro(parcela.juros),
+    valorLiquido: dinheiro(parcela.valor_liquido),
+    status: parcela.status as StatusParcela,
+    dataPagamento: parcela.data_pagamento,
+    contaNome: null,
+  }));
 }
 
 /**
@@ -172,7 +237,9 @@ export async function buscarPagamentosParaEspelho(
            fornecedores(razao_social),
            categorias_financeiras(nome),
            formas_pagamento(nome),
-           lancamento_rateios(valor, centros_custo(nome, codigo)))`,
+           lancamento_rateios(valor, centros_custo(nome, codigo)),
+           lancamento_parcelas(id, numero_parcela, data_vencimento, valor,
+             desconto, juros, valor_liquido, status, data_pagamento))`,
       )
       .in("id", lote);
 

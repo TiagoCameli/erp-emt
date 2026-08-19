@@ -175,7 +175,10 @@ describe("EspelhoOrdensPage", () => {
 
     await renderPagina(ID_A);
 
-    expect(screen.getByText("Pendente de aprovação")).toBeInTheDocument();
+    // O rótulo sai na tarja, ao lado do tipo do documento e depois do ponto
+    // separador; a situação NÃO se repete em campo próprio, porque repetir
+    // gastaria linha de uma folha que precisa fechar em A4.
+    expect(screen.getByText("· Pendente de aprovação")).toBeInTheDocument();
     expect(screen.queryByText("pendente_aprovacao")).not.toBeInTheDocument();
   });
 
