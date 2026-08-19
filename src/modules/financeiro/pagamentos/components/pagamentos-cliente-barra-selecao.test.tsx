@@ -73,6 +73,7 @@ const PAGAS = [
 
 const VALORES_A_PAGAR = {
   busca: "",
+  situacao: "",
   fornecedor: "",
   conta: "",
   valorDe: "",
@@ -95,6 +96,7 @@ function montar(totalPagas = PAGAS.length) {
       aprovadas={[]}
       pagas={PAGAS}
       totalPagas={totalPagas}
+      somaPagas={0}
       contas={[]}
       fornecedores={[]}
       podePagar={false}

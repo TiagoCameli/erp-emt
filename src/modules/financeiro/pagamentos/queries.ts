@@ -264,40 +264,36 @@ async function idsFornecedoresPorNome(
 }
 
 /**
- * Histórico paginado de parcelas pagas, mais recentes primeiro. Resolve a
- * conta bancária do pagamento e o fornecedor do lançamento via join, e aplica
- * todos os filtros no banco.
+ * O mínimo que uma consulta precisa expor para receber os filtros do histórico.
+ *
+ * Existe para a MESMA aplicação de filtros servir à listagem paginada e à soma
+ * do total: dois lugares montando os mesmos nove filtros divergiriam no
+ * primeiro filtro novo, e o rodapé passaria a somar um conjunto diferente do
+ * que a tabela mostra — do jeito mais silencioso possível, porque os dois
+ * números continuariam plausíveis.
  */
-export async function listarParcelasPagas({
-  pagina,
-  tamanho,
-  filtros = {},
-}: {
-  pagina: number;
-  tamanho: number;
-  filtros?: FiltrosParcelasPagas;
-}): Promise<ParcelasPagasPagina> {
-  const supabase = await createClient();
+interface ConsultaFiltravel<T> {
+  eq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string | number) => T;
+  lte: (coluna: string, valor: string | number) => T;
+  or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
+}
 
-  const de = pagina * tamanho;
-  const ate = de + tamanho - 1;
-
-  let consulta = supabase
-    .from("lancamento_parcelas")
-    .select(
-      `id, numero_parcela, valor, desconto, juros, valor_liquido, data_pagamento,
-       contas_bancarias(nome, banco),
-       lancamentos!inner(
-         numero, descricao,
-         categorias_financeiras(nome),
-         fornecedores(razao_social, nome_fantasia)
-       )`,
-      { count: "exact" },
-    )
-    .eq("status", "pago")
-    .order("data_pagamento", { ascending: false, nullsFirst: false })
-    .order("pago_em", { ascending: false, nullsFirst: false })
-    .range(de, ate);
+/**
+ * Aplica os filtros do histórico de pagas na consulta recebida.
+ *
+ * SÍNCRONA de propósito, com os ids de fornecedor já resolvidos por quem chama.
+ * O builder do PostgREST é "thenable": uma função `async` que devolvesse o
+ * builder o AWAITARIA no return — ou seja, dispararia a consulta ali dentro e
+ * devolveria a resposta no lugar do builder. Foi o que aconteceu na primeira
+ * versão disto.
+ */
+function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
+  consultaInicial: T,
+  filtros: FiltrosParcelasPagas,
+  idsFornecedoresDaBusca: string[],
+): T {
+  let consulta = consultaInicial;
 
   if (filtros.contaBancariaId) {
     consulta = consulta.eq("conta_bancaria_id", filtros.contaBancariaId);
@@ -334,15 +330,126 @@ export async function listarParcelasPagas({
   const termo = filtros.busca?.trim() ?? "";
   if (termo !== "") {
     const padrao = padraoBusca(termo);
-    const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
     const partes = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
-    if (idsFornecedores.length > 0) {
-      partes.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
+    if (idsFornecedoresDaBusca.length > 0) {
+      partes.push(`fornecedor_id.in.(${idsFornecedoresDaBusca.join(",")})`);
     }
     consulta = consulta.or(partes.join(","), {
       referencedTable: "lancamentos",
     });
   }
+
+  return consulta;
+}
+
+/** Ids de fornecedor que a busca do filtro alcança. Vazio quando não há busca. */
+async function fornecedoresDaBusca(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  filtros: FiltrosParcelasPagas,
+): Promise<string[]> {
+  const termo = filtros.busca?.trim() ?? "";
+  if (termo === "") return [];
+  return idsFornecedoresPorNome(supabase, padraoBusca(termo));
+}
+
+/**
+ * Quanto SAIU DA CONTA no recorte do histórico: soma de `valor_liquido`.
+ *
+ * Líquido, e não `valor`, porque é o que o extrato do banco mostra — e é o
+ * mesmo número do cartão "Pago no mês" do Painel (`fn_rel_gestao_financeiro_resumo`
+ * também soma o líquido). Clicar no cartão e cair numa tela que soma diferente
+ * seria trocar uma pergunta respondida por uma dúvida.
+ *
+ * Soma no servidor sobre TODAS as linhas do filtro (paginando acima do teto de
+ * mil do PostgREST), nunca sobre a página carregada: a tabela é paginada, e
+ * somar as 25 linhas da tela chamaria de "total" um pedaço.
+ */
+export async function somaDasParcelasPagas(
+  filtros: FiltrosParcelasPagas = {},
+): Promise<number> {
+  const supabase = await createClient();
+
+  const idsFornecedores = await fornecedoresDaBusca(supabase, filtros);
+
+  const { linhas, erro } = await todasAsLinhas<{ valor_liquido: number }>(
+    (de, ate) =>
+      aplicarFiltrosPagas(
+        supabase
+          .from("lancamento_parcelas")
+          .select("valor_liquido, lancamentos!inner(fornecedor_id)")
+          .eq("status", "pago")
+          .eq("lancamentos.tipo", "a_pagar")
+          .neq("lancamentos.status", "cancelado"),
+        filtros,
+        idsFornecedores,
+      )
+        // Desempate: sem ele, linhas com o mesmo `data_pagamento` (e são
+        // milhares, vindas da carga) mudam de ordem entre uma faixa e a
+        // seguinte, e a soma conta linha repetida e perde outra.
+        .order("id", { ascending: true })
+        .range(de, ate)
+        .returns<{ valor_liquido: number }[]>(),
+  );
+
+  if (erro) {
+    throw new Error("Não foi possível somar o histórico de pagamentos");
+  }
+
+  return linhas.reduce((soma, linha) => soma + Number(linha.valor_liquido), 0);
+}
+
+/**
+ * Histórico paginado de parcelas pagas, mais recentes primeiro. Resolve a
+ * conta bancária do pagamento e o fornecedor do lançamento via join, e aplica
+ * todos os filtros no banco.
+ */
+export async function listarParcelasPagas({
+  pagina,
+  tamanho,
+  filtros = {},
+}: {
+  pagina: number;
+  tamanho: number;
+  filtros?: FiltrosParcelasPagas;
+}): Promise<ParcelasPagasPagina> {
+  const supabase = await createClient();
+
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  let consulta = supabase
+    .from("lancamento_parcelas")
+    .select(
+      `id, numero_parcela, valor, desconto, juros, valor_liquido, data_pagamento,
+       contas_bancarias(nome, banco),
+       lancamentos!inner(
+         numero, descricao,
+         categorias_financeiras(nome),
+         fornecedores(razao_social, nome_fantasia)
+       )`,
+      { count: "exact" },
+    )
+    .eq("status", "pago")
+    // Recebimento baixado NÃO é pagamento: `a_receber` tem tela própria (contas
+    // a receber) e entra aqui como dinheiro que saiu, invertendo o sinal do
+    // histórico. Lançamento cancelado também sai, pelo mesmo critério das
+    // fn_rel_* e do cartão "Pago no mês" do Painel — que é o número que esta
+    // aba tem que reproduzir quando se chega nela pelo cartão.
+    //
+    // Hoje não muda nenhuma linha (não existe recebimento baixado nem
+    // cancelado com parcela paga, medido em 19/08/2026): a trava é para o dia
+    // em que existir.
+    .eq("lancamentos.tipo", "a_pagar")
+    .neq("lancamentos.status", "cancelado")
+    .order("data_pagamento", { ascending: false, nullsFirst: false })
+    .order("pago_em", { ascending: false, nullsFirst: false })
+    .range(de, ate);
+
+  consulta = aplicarFiltrosPagas(
+    consulta,
+    filtros,
+    await fornecedoresDaBusca(supabase, filtros),
+  );
 
   const { data, error, count } = await consulta;
 

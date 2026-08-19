@@ -10,7 +10,12 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
-import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
+import {
+  dataHojeISO,
+  formatarBRL,
+  formatarPercentual,
+} from "@/lib/formatadores";
+import { linksDosCards } from "@/modules/gestao/links-cards";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { formatarCompetencia } from "@/modules/rh/_shared/formato";
 import { rotuloMesCurto } from "@/modules/gestao/calculo";
@@ -95,6 +100,17 @@ export default async function GestaoPage({
   // filtro ela é a mesma dos últimos seis meses que a tela sempre usou.
   const { filtros, valores, temRecorte } = lerFiltrosPainel(await searchParams);
   const { janela } = filtros;
+  // Cada cartão leva para a tela que mostra o MESMO número, já filtrada. A
+  // montagem mora em gestao/links-cards.ts, com teste: link que erra o filtro
+  // manda o operador para uma lista com outro total, e aí ele deixa de confiar
+  // nos dois números.
+  const links = linksDosCards({
+    hoje: dataHojeISO(),
+    mesDoCusto: janela.meses[janela.meses.length - 1].slice(0, 7),
+    centroCustoId: filtros.centroCustoId,
+    categoriaId: filtros.categoriaId,
+  });
+
   const periodo = `${rotuloMesCurto(janela.meses[0])} a ${rotuloMesCurto(
     janela.meses[janela.meses.length - 1],
   )}`;
@@ -193,7 +209,7 @@ export default async function GestaoPage({
               d.mesAnterior.mes,
             ),
           )}
-          href="/financeiro/relatorios?rel=custo-cc"
+          href={links.custoDoMes}
         />
         <KPICard
           titulo="A pagar em aberto"
@@ -209,7 +225,7 @@ export default async function GestaoPage({
               ),
             ),
           )}
-          href="/financeiro/pagamentos"
+          href={links.aPagarEmAberto}
         />
         <KPICard
           titulo="Vence em até 7 dias"
@@ -221,7 +237,7 @@ export default async function GestaoPage({
                 `${d.aPagar.contagem} parcela(s) aprovada(s), ${d.aPagar.vencidas} vencida(s)`,
             ),
           )}
-          href="/financeiro/pagamentos"
+          href={links.venceEmSeteDias}
         />
         <KPICard
           titulo="Pagamentos a aprovar"
@@ -229,7 +245,7 @@ export default async function GestaoPage({
           detalhe={semRecorte(
             ler(financeiro, (d) => <MoneyText valor={d.aAprovar.valor} />),
           )}
-          href="/financeiro/aprovacao-pagamentos"
+          href={links.pagamentosAAprovar}
         />
         <KPICard
           titulo="Pago no mês"
@@ -240,7 +256,7 @@ export default async function GestaoPage({
               (d) => `${d.pagoNoMes.contagem} pagamento(s) no caixa`,
             ),
           )}
-          href="/financeiro/pagamentos"
+          href={links.pagoNoMes}
         />
       </GradeKpis>
 
