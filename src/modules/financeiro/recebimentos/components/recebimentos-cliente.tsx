@@ -538,17 +538,29 @@ export function RecebimentosCliente({
               header: "",
               size: 170,
               meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
-              cell: ({ row }) => (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setParcelaEmBaixa(row.original)}
-                >
-                  <HandCoins />
-                  Dar como recebido
-                </Button>
-              ),
+              cell: ({ row }) => {
+                /**
+                 * Botão só nos status que `fn_pagar_parcela` aceita no a receber
+                 * (pendente e aprovado). `em_revisao` também é "em aberto" e
+                 * entra na lista, mas o banco recusa: oferecer o botão ali seria
+                 * um clique que só produz toast de erro.
+                 */
+                const podeAgora =
+                  row.original.status === "pendente" ||
+                  row.original.status === "aprovado";
+                if (!podeAgora) return null;
+                return (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setParcelaEmBaixa(row.original)}
+                  >
+                    <HandCoins />
+                    Dar como recebido
+                  </Button>
+                );
+              },
             } satisfies ColumnDef<ParcelaAReceber, unknown>,
           ]
         : []),
