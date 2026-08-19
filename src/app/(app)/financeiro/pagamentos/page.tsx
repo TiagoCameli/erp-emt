@@ -8,7 +8,7 @@ import { listarFornecedores } from "@/modules/financeiro/lancamentos/queries";
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import {
   listarContasBancarias,
-  listarParcelasAprovadas,
+  listarParcelasAPagar,
   listarParcelasPagas,
 } from "@/modules/financeiro/pagamentos/queries";
 
@@ -134,7 +134,9 @@ export default async function PaginaPagamentos({
   };
 
   const [aprovadas, pagas, contas, fornecedores] = await Promise.all([
-    listarParcelasAprovadas(),
+    // A fila traz aprovadas E as que ainda aguardam aprovação: quem paga
+    // precisa enxergar o que vem pela frente. Só as aprovadas ganham o botão.
+    listarParcelasAPagar(),
     listarParcelasPagas({
       pagina: 0,
       tamanho: TAMANHO_PAGINA,
@@ -147,7 +149,7 @@ export default async function PaginaPagamentos({
   // Anexos das parcelas a pagar numa consulta só (o pagamento é a parcela).
   const anexosPorParcela = await listarAnexosPorDocumento(
     "pagamento",
-    aprovadas.map((parcela) => parcela.id),
+    aprovadas.map((parcela: { id: string }) => parcela.id),
   );
 
   return (
@@ -155,7 +157,7 @@ export default async function PaginaPagamentos({
       <PageHeader
         modulo="Financeiro"
         titulo="Pagamentos"
-        descricao="Pague as parcelas já aprovadas e acompanhe o histórico de pagamentos"
+        descricao="Veja tudo que há a pagar, aprovado ou aguardando aprovação, pague em lote e acompanhe o histórico"
       />
       <PagamentosCliente
         hoje={dataHojeISO()}
