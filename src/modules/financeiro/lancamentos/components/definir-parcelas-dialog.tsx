@@ -135,7 +135,8 @@ export function DefinirParcelasDialog({
     origem,
     valorDoCabecalho: valor,
   });
-  const podeSalvar = motivo === null && !dataVazia && !valorInvalido && !salvando;
+  const podeSalvar =
+    motivo === null && !dataVazia && !valorInvalido && !salvando;
   const totalMudou = Math.round((novoTotal - valor) * 100) !== 0;
 
   function alterar(indice: number, campo: keyof ParcelaForm, texto: string) {
@@ -188,7 +189,10 @@ export function DefinirParcelasDialog({
 
   return (
     <Dialog open={aberto} onOpenChange={onAbertoChange}>
-      <DialogContent showCloseButton={false} className="sm:max-w-2xl">
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[85svh] flex-col sm:max-w-2xl"
+      >
         <DialogHeader>
           <DialogTitle>
             {temPreservada ? "Editar parcelas em aberto" : "Definir parcelas"}
@@ -204,7 +208,7 @@ export function DefinirParcelasDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
           {temPreservada ? (
             <div className="flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2">
               <span className="flex items-center gap-1.5 text-legenda font-medium text-muted-foreground">
@@ -227,8 +231,8 @@ export function DefinirParcelasDialog({
                     </span>
                     <StatusBadge
                       status={
-                        STATUS_PARCELA[parcela.status as StatusParcela]?.badge ??
-                        "rascunho"
+                        STATUS_PARCELA[parcela.status as StatusParcela]
+                          ?.badge ?? "rascunho"
                       }
                       rotulo={
                         STATUS_PARCELA[parcela.status as StatusParcela]
@@ -279,8 +283,8 @@ export function DefinirParcelasDialog({
             </Button>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <div className="hidden gap-3 px-1 sm:grid sm:grid-cols-[48px_180px_minmax(0,1fr)_auto]">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+            <div className="sticky top-0 z-10 hidden gap-3 bg-background px-1 pb-1 sm:grid sm:grid-cols-[48px_180px_minmax(0,1fr)_auto]">
               <span className="text-legenda font-medium text-muted-foreground">
                 Nº
               </span>

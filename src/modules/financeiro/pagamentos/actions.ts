@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
+import { formatarData } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import { foraDaJanela } from "@/modules/financeiro/pagamentos/janela";
 import {
   listarParcelasPagas,
   type FiltrosParcelasPagas,
@@ -30,6 +32,14 @@ const dataSchema = z.iso.date();
 const descontoSchema = z.number().min(0).max(999999999999.99);
 
 /**
+ * Motivo de pagar fora da data autorizada. Trimado (motivo só de espaços é
+ * motivo nenhum, e o banco aplica o mesmo `btrim`) e com teto de 500
+ * caracteres, que a coluna `parcela_eventos.motivo` não tem: sem teto aqui, um
+ * cliente contornado poderia gravar um texto de megabytes na trilha.
+ */
+const motivoSchema = z.string().trim().min(1).max(500);
+
+/**
  * Registra o pagamento de uma parcela via RPC. A_pagar exige parcela já
  * aprovada (a regra é validada no banco). Repassa a mensagem de erro do
  * banco direto para o toast. Sem anexo de comprovante nesta fase.
@@ -37,12 +47,20 @@ const descontoSchema = z.number().min(0).max(999999999999.99);
  * `desconto` é o abatimento concedido pelo credor no ato do pagamento, em
  * reais: sai do valor que a conta bancária paga, sem mexer no valor devido da
  * parcela. Omitido ou zero, o pagamento é exatamente o de antes.
+ *
+ * `motivo` é a justificativa de pagar em data diferente da autorizada. Pagar
+ * fora da data deixou de ser recusa e passou a ser exceção auditada: com motivo
+ * o banco paga e grava o evento `pagou_fora_da_janela` na trilha da parcela.
+ * Obrigatório só nesse caso, e a exigência é conferida aqui também, não só na
+ * tela: o cliente pode ser contornado, e pagamento fora da data sem
+ * justificativa é exatamente o que a trilha existe para não deixar acontecer.
  */
 export async function pagarParcela(
   id: string,
   contaBancariaId: string,
   dataPagamento: string,
   desconto = 0,
+  motivo?: string,
 ): Promise<ResultadoAcao> {
   try {
     await exigirPermissao(RECURSO, "criar");
@@ -62,12 +80,44 @@ export async function pagarParcela(
   const descontoValido = descontoSchema.safeParse(desconto);
   if (!descontoValido.success) return { erro: "Desconto inválido" };
 
+  const motivoInformado = (motivo ?? "").trim();
+  if (motivoInformado !== "" && !motivoSchema.safeParse(motivoInformado).success) {
+    return { erro: "O motivo deve ter no máximo 500 caracteres" };
+  }
+
   const supabase = await createClient();
+
+  // Quem sabe a data autorizada é o banco, não o formulário: confiar na tela
+  // deixaria passar pagamento fora da data sem justificativa nenhuma. Leitura
+  // separada porque a parcela chega aqui só como id.
+  //
+  // Parcela que não veio (leitura barrada por RLS, id inexistente) não bloqueia
+  // aqui: a `fn_pagar_parcela` faz a MESMA exigência e é a barreira real, então
+  // recusar por falta de leitura só trocaria a mensagem certa do banco por uma
+  // pior. Esta ação é a do drawer de contas a pagar; a baixa de recebimento tem
+  // ação própria (`baixarRecebimento`) e não tem data autorizada.
+  const { data: parcela } = await supabase
+    .from("lancamento_parcelas")
+    .select("data_programada")
+    .eq("id", idValido.data)
+    .maybeSingle();
+
+  const dataAutorizada = parcela?.data_programada ?? null;
+  if (motivoInformado === "" && foraDaJanela(dataValida.data, dataAutorizada)) {
+    return {
+      erro: `Este pagamento está fora da data autorizada (${formatarData(dataAutorizada)}): informe o motivo`,
+    };
+  }
+
   const { error } = await supabase.rpc("fn_pagar_parcela", {
     p_parcela_id: idValido.data,
     p_conta_id: contaValida.data,
     p_data_pagamento: dataValida.data,
     p_desconto: descontoValido.data,
+    // Chave ausente quando não há motivo, para o parâmetro cair no default do
+    // banco: mandar string vazia daria no mesmo, mas ausente é o que o
+    // pagamento na data exata sempre foi.
+    ...(motivoInformado === "" ? {} : { p_motivo: motivoInformado }),
   });
 
   if (error) {

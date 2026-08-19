@@ -1296,7 +1296,11 @@ export async function trilhaLancamento(id: string): Promise<EventoTrilha[]> {
 
   const nomesPorId = new Map<string, string>();
   if (idsUsuarios.length > 0) {
-    const { data: usuarios } = await supabase.rpc("nomes_usuarios_auditoria", {
+    // nomes_usuarios_auditoria é gated em administracao.auditoria/lixeira, que
+    // Financeiro e Gestor não têm: mostrava "Sistema" pra quem realmente usa
+    // esta tela. nomes_usuarios_financeiro é gated na mesma permissão de
+    // quem vê o lançamento (financeiro.lancamentos/aprovacao-pagamentos).
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_financeiro", {
       p_ids: idsUsuarios,
     });
     for (const usuario of usuarios ?? []) {
