@@ -19,8 +19,12 @@ describe("provisaoSchema", () => {
     expect(provisaoSchema.safeParse({ ...base, percentual: 100.001 }).success).toBe(false);
   });
 
-  it("recusa mais de três casas decimais", () => {
-    expect(provisaoSchema.safeParse({ ...base, percentual: 8.3333 }).success).toBe(false);
+  it("aceita quatro casas decimais", () => {
+    expect(provisaoSchema.safeParse({ ...base, percentual: 8.3333 }).success).toBe(true);
+  });
+
+  it("recusa mais de quatro casas decimais", () => {
+    expect(provisaoSchema.safeParse({ ...base, percentual: 8.33335 }).success).toBe(false);
   });
 
   it("aceita o percentual como string digitada em pt-BR", () => {

@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { Input } from "@/components/ui/input";
+import { CASAS_DINHEIRO, CASAS_TAXA } from "@/lib/casas-decimais";
 import {
   formatarNumeroDigitado,
   normalizarNumeroDigitado,
@@ -10,9 +11,7 @@ import {
 } from "@/lib/numero-digitado";
 import { cn } from "@/lib/utils";
 
-/** Casas decimais das colunas do banco: dinheiro (14,2) e quantidade (14,3). */
-const CASAS_DINHEIRO = 2;
-const CASAS_QUANTIDADE = 3;
+// Casas decimais: o porquê da separação valor x taxa está em @/lib/casas-decimais.
 
 interface InputNumericoBaseProps {
   /** Valor cru do formulário ("1234,56"). É o que vai para o servidor. */
@@ -102,13 +101,32 @@ export function InputMoeda(props: InputNumericoBaseProps) {
   );
 }
 
-/** Campo de quantidade: até 3 casas, exibe só o que foi digitado. */
+/** Campo de quantidade: até 4 casas, exibe só o que foi digitado. */
 export function InputQuantidade(props: InputNumericoBaseProps) {
   return (
     <InputNumerico
       {...props}
-      casas={CASAS_QUANTIDADE}
+      casas={CASAS_TAXA}
       placeholder={props.placeholder ?? "0,000"}
+    />
+  );
+}
+
+/**
+ * Campo de PREÇO UNITÁRIO: até 4 casas, exibe no mínimo 2.
+ *
+ * Não é `InputMoeda` porque preço não é valor: R$ 6,3947 por litro é o preço
+ * real do diesel, e as duas casas de dinheiro transformariam em 6,39. Exibe
+ * "10,00" para preço redondo e "6,3947" quando as quatro existem, porque
+ * `casasFixas` aqui é mínimo e não corte.
+ */
+export function InputPreco(props: InputNumericoBaseProps) {
+  return (
+    <InputNumerico
+      {...props}
+      casas={CASAS_TAXA}
+      casasFixas={CASAS_DINHEIRO}
+      placeholder={props.placeholder ?? "0,00"}
     />
   );
 }
@@ -136,7 +154,7 @@ export interface InputDecimalProps extends Omit<
   /**
    * Casas decimais que o campo aceita, para decidir o que é milhar.
    *
-   * 2 é dinheiro e hora, e é o padrão. Passe 3 em percentual (`numeric(6,3)`) e
+   * 2 é dinheiro e hora, e é o padrão. Passe 4 em percentual (`numeric(7,4)`) e
    * em extensão em km: lá "1,500" é 1,5 de verdade, e ler como 1500 seria virar
    * 1,5% em 1500% — do tipo de erro que nenhum refine pega, porque 1500 é um
    * número perfeitamente válido.

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
 
 /** Status possíveis de uma obra. Igual ao default/check do banco. */
@@ -83,7 +84,17 @@ export const obraSchema = z.object({
   extensaoKm: z
     .number({ error: "Extensão inválida" })
     .min(0, { error: "A extensão não pode ser negativa" })
-    .max(99999999.999, { error: "Extensão acima do permitido" })
+    .max(99999999.9999, { error: "Extensão acima do permitido" })
+    // A coluna é NUMERIC(14,4) e arredonda sem avisar: sem esta trava, 12,34567
+    // seria aceita aqui e gravada como 12,3457.
+    .refine(
+      (valor) => {
+        const texto = valor.toString();
+        const ponto = texto.indexOf(".");
+        return ponto === -1 || texto.length - ponto - 1 <= CASAS_TAXA;
+      },
+      { error: `A extensão aceita no máximo ${CASAS_TAXA} casas decimais` },
+    )
     .optional(),
   dataInicio: dataOpcional,
   dataFimPrevista: dataOpcional,

@@ -62,8 +62,9 @@ describe("formatarBRL", () => {
 });
 
 describe("formatarQuantidade", () => {
-  it("usa até 3 casas decimais e milhar pt-BR", () => {
-    expect(formatarQuantidade(1234567.8915)).toBe("1.234.567,892");
+  it("usa até 4 casas decimais e milhar pt-BR", () => {
+    expect(formatarQuantidade(1234567.8915)).toBe("1.234.567,8915");
+    expect(formatarQuantidade(1234567.89155)).toBe("1.234.567,8916");
   });
 
   it("não força casas decimais em inteiros", () => {

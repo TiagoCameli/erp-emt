@@ -47,6 +47,18 @@ describe("normalizarNumeroDigitado", () => {
   it("recusa mais casas decimais do que a coluna aceita", () => {
     expect(normalizarNumeroDigitado("1,2345", 3)).toBeNull();
     expect(normalizarNumeroDigitado("1,23456", 3)).toBeNull();
+    expect(normalizarNumeroDigitado("1,23456", 4)).toBeNull();
+  });
+
+  // Preço de combustível: o campo aceita 4 casas, então o grupo de 3 ou 4
+  // dígitos depois do separador é decimal de verdade, não milhar disfarçado.
+  // Com 2 casas, "6,577" ainda é 6577 — é o que a coluna de dinheiro pede.
+  it("na taxa de 4 casas, o separador é sempre decimal", () => {
+    expect(normalizarNumeroDigitado("6,3947", 4)).toBe("6,3947");
+    expect(normalizarNumeroDigitado("6.3947", 4)).toBe("6,3947");
+    expect(normalizarNumeroDigitado("6,577", 4)).toBe("6,577");
+    expect(normalizarNumeroDigitado("6.577", 4)).toBe("6,577");
+    expect(normalizarNumeroDigitado("6,577", 2)).toBe("6577");
   });
 
   it("em dinheiro, grupo de 3 digitos e milhar, nao decimal", () => {
@@ -94,6 +106,17 @@ describe("formatarNumeroDigitado", () => {
   it("devolve o texto cru quando não dá para interpretar", () => {
     expect(formatarNumeroDigitado("abc", 2, 2)).toBe("abc");
     expect(formatarNumeroDigitado("", 2, 2)).toBe("");
+  });
+
+  // casasFixas é MÍNIMO, não corte: no preço de 4 casas, exibir "6,39" mostraria
+  // na tela um número diferente do que vai ser gravado, que é o oposto do que
+  // este módulo existe para fazer.
+  it("no preço de 4 casas, completa até 2 e não corta as 4", () => {
+    expect(formatarNumeroDigitado("6,3947", 4, 2)).toBe("6,3947");
+    expect(formatarNumeroDigitado("6,5770", 4, 2)).toBe("6,5770");
+    expect(formatarNumeroDigitado("6,5", 4, 2)).toBe("6,50");
+    expect(formatarNumeroDigitado("10", 4, 2)).toBe("10,00");
+    expect(formatarNumeroDigitado("1234,567", 4, 2)).toBe("1.234,567");
   });
 });
 

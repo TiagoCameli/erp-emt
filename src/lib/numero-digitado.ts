@@ -50,7 +50,8 @@ function padraoNormalizado(casas: number): RegExp {
  * A vírgula é separador de MILHAR disfarçado de decimal?
  *
  * Vale quando o grupo depois dela tem exatamente 3 dígitos e o campo não aceita
- * 3 casas — em dinheiro (2 casas) "1,500" não pode ser um decimal, porque real
+ * 3 casas e o campo aceita menos que isso — em dinheiro (2 casas) "1,500" não
+ * pode ser um decimal, porque real
  * não tem três centavos. Então é mil e quinhentos.
  *
  * Existe porque a digitação passou a trocar ponto por vírgula: quem digita
@@ -63,7 +64,8 @@ function padraoNormalizado(casas: number): RegExp {
  * - Parte inteira começando em zero NÃO conta. "0,500" em dinheiro seria 0500,
  *   que não é grupo de milhar nenhum — é valor inválido, e vai ser recusado para
  *   a pessoa corrigir.
- * - Quantidade (3 casas) fica de fora: ali "1,234" é um decimal legítimo, e a
+ * - Taxa (4 casas: preço, quantidade, percentual) fica de fora: ali "1,234" é
+ *   um decimal legítimo, e a
  *   ambiguidade com 1234 não tem como ser resolvida sem chutar. Quantidade em
  *   milhar se digita sem separador.
  */
@@ -91,9 +93,12 @@ function ehMilharDisfarcado(
  * 1. Tem vírgula: vírgula é o decimal, pontos são milhar. Exceção em
  *    `ehMilharDisfarcado`: grupo de exatamente 3 dígitos num campo de 2 casas é
  *    milhar ("1,500" em dinheiro vira 1500).
- * 2. Só ponto, um único, com 1 ou 2 dígitos depois: ponto é decimal
- *    ("1234.5" vira "1234,5"). É o caso que gravava valor 100x maior.
- * 3. Qualquer outro ponto (vários, ou grupo de 3 dígitos): milhar, sai fora.
+ * 2. Só ponto, um único, com no máximo `casas` dígitos depois: ponto é decimal
+ *    ("1234.5" vira "1234,5"). É o caso que gravava valor 100x maior. O limite
+ *    é o do campo, não 2 fixo, senão preço de combustível ("6.3947", 4 casas)
+ *    cairia na regra 3 e viraria 63947.
+ * 3. Qualquer outro ponto (vários, ou grupo maior que o campo aceita): milhar,
+ *    sai fora.
  */
 export function normalizarNumeroDigitado(
   texto: string,
@@ -120,7 +125,11 @@ export function normalizarNumeroDigitado(
     }
   } else {
     const pontos = limpo.split(".");
-    if (pontos.length === 2 && pontos[1].length > 0 && pontos[1].length <= 2) {
+    if (
+      pontos.length === 2 &&
+      pontos[1].length > 0 &&
+      pontos[1].length <= casas
+    ) {
       normalizado = `${pontos[0]},${pontos[1]}`;
     } else {
       normalizado = limpo.replace(/\./g, "");
@@ -136,8 +145,16 @@ export function normalizarNumeroDigitado(
 
 /**
  * Texto de exibição de um valor já normalizado: separador de milhar e vírgula
- * decimal ("1.234,56"). `casasFixas` obriga as casas decimais (dinheiro sempre
- * mostra 2); sem ela, mostra só o que foi digitado (quantidade).
+ * decimal ("1.234,56"). Sem `casasFixas`, mostra só o que foi digitado
+ * (quantidade).
+ *
+ * `casasFixas` é o MÍNIMO de casas, não um corte: dinheiro mostra sempre 2
+ * ("10" vira "10,00"), e preço de 4 casas mostra as 4 quando existem
+ * ("6,3947" continua "6,3947", não vira "6,39"). Cortar aqui exibiria um número
+ * diferente do que vai ser gravado, que é exatamente o que este módulo existe
+ * para impedir — e o corte nunca serviu para nada, porque
+ * `normalizarNumeroDigitado` já garante no máximo `casas` decimais.
+ *
  * Texto irreconhecível volta sem mudança, para não apagar o que a pessoa digitou.
  */
 export function formatarNumeroDigitado(
@@ -157,7 +174,7 @@ export function formatarNumeroDigitado(
   });
 
   if (casasFixas !== undefined) {
-    return `${inteiroFormatado},${decimal.padEnd(casasFixas, "0").slice(0, casasFixas)}`;
+    return `${inteiroFormatado},${decimal.padEnd(casasFixas, "0")}`;
   }
   return decimal === "" ? inteiroFormatado : `${inteiroFormatado},${decimal}`;
 }

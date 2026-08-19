@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { dataHojeISO } from "@/lib/formatadores";
 import { idSchema, idSchemaCom } from "@/lib/id";
 import { paraNumero } from "@/modules/compras/ordens/calculo";
@@ -38,29 +39,30 @@ function casasDecimais(valor: number): number {
 }
 
 /**
- * Quantidade NUMERIC(14,3): positiva, no máximo 3 casas. A trava de casas é
- * necessária porque o banco arredonda silenciosamente ao gravar na coluna
- * (14,3): sem ela, uma entrada como 1.2345 seria aceita aqui e gravada como
- * 1.235, divergindo do valor que o usuário digitou.
+ * Quantidade NUMERIC(14,4): positiva, no máximo 4 casas. A trava de casas é
+ * necessária porque o banco arredonda silenciosamente ao gravar na coluna:
+ * sem ela, uma entrada como 1.23456 seria aceita aqui e gravada como 1.2346,
+ * divergindo do valor que o usuário digitou. O teto é o da coluna (14,4).
  */
 const quantidadeSchema = z
   .number({ error: "Quantidade inválida" })
   .positive({ error: "A quantidade precisa ser maior que zero" })
-  .max(99999999999.999, { error: "Quantidade acima do permitido" })
-  .refine((valor) => casasDecimais(valor) <= 3, {
-    error: "A quantidade aceita no máximo 3 casas decimais",
+  .max(9999999999.9999, { error: "Quantidade acima do permitido" })
+  .refine((valor) => casasDecimais(valor) <= CASAS_TAXA, {
+    error: `A quantidade aceita no máximo ${CASAS_TAXA} casas decimais`,
   });
 
 /**
- * Preço unitário NUMERIC(14,2): não negativo, no máximo 2 casas. Mesma razão
- * da trava acima: a coluna (14,2) arredonda sem avisar.
+ * Preço unitário NUMERIC(14,4): não negativo, no máximo 4 casas. Mesma razão
+ * da trava acima. São 4 e não 2 porque preço é TAXA, não valor: diesel é
+ * vendido a R$ 6,3947 o litro, e cortar em 6,39 erra o total por item.
  */
 const precoSchema = z
   .number({ error: "Preço inválido" })
   .min(0, { error: "O preço não pode ser negativo" })
-  .max(999999999999.99, { error: "Preço acima do permitido" })
-  .refine((valor) => casasDecimais(valor) <= 2, {
-    error: "O preço aceita no máximo 2 casas decimais",
+  .max(9999999999.9999, { error: "Preço acima do permitido" })
+  .refine((valor) => casasDecimais(valor) <= CASAS_TAXA, {
+    error: `O preço aceita no máximo ${CASAS_TAXA} casas decimais`,
   });
 
 /**
@@ -223,8 +225,8 @@ export const ocInsumoFormSchema = z.object({
       },
       { error: "Informe uma quantidade maior que zero" },
     )
-    .refine((valor) => casasDecimaisTexto(valor) <= 3, {
-      error: "A quantidade aceita no máximo 3 casas decimais",
+    .refine((valor) => casasDecimaisTexto(valor) <= CASAS_TAXA, {
+      error: `A quantidade aceita no máximo ${CASAS_TAXA} casas decimais`,
     }),
   precoUnitario: z
     .string()
@@ -236,8 +238,8 @@ export const ocInsumoFormSchema = z.object({
       },
       { error: "Informe um preço válido" },
     )
-    .refine((valor) => casasDecimaisTexto(valor) <= 2, {
-      error: "O preço aceita no máximo 2 casas decimais",
+    .refine((valor) => casasDecimaisTexto(valor) <= CASAS_TAXA, {
+      error: `O preço aceita no máximo ${CASAS_TAXA} casas decimais`,
     }),
 });
 

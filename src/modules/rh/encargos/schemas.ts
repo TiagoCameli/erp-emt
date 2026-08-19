@@ -11,7 +11,7 @@ export const encargoSchema = z.object({
   /**
    * Percentual do encargo: obrigatório — diferente das horas de jornada,
    * vazio não vira 0: não existe encargo sem alíquota cadastrada. A validação
-   * de formato (pt-BR, 0..100, até 3 casas) vem de percentualSchema,
+   * de formato (pt-BR, 0..100, até 4 casas) vem de percentualSchema,
    * compartilhada com rh/provisoes.
    */
   percentual: percentualSchema,

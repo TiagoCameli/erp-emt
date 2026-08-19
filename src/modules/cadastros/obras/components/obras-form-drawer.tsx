@@ -271,7 +271,7 @@ export function ObrasFormDrawer({
             erro={form.formState.errors.extensaoKm?.message}
           >
             <InputDecimal
-              casas={3}
+              casas={4}
               id="obra-extensao"
               placeholder="120,5"
               className="tabular-nums"

@@ -2,6 +2,8 @@ import { format } from "date-fns";
 import { tz, TZDate } from "@date-fns/tz";
 import { ptBR } from "date-fns/locale";
 
+import { CASAS_TAXA } from "@/lib/casas-decimais";
+
 /** Timezone de exibição de todo o sistema. Banco guarda UTC. */
 export const TIMEZONE = "America/Rio_Branco";
 
@@ -22,10 +24,14 @@ export function formatarBRL(valor: number | string | null | undefined): string {
 
 const formatadorQuantidade = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 0,
-  maximumFractionDigits: 3,
+  maximumFractionDigits: CASAS_TAXA,
 });
 
-/** Quantidades com até 3 casas (NUMERIC(14,3) no banco). */
+/**
+ * Quantidades com até 4 casas (NUMERIC(14,4) no banco). Tem que ser o mesmo
+ * número que a coluna aceita: exibir menos casas do que foi gravado mostra na
+ * tela um valor diferente do que multiplica o preço.
+ */
 export function formatarQuantidade(
   valor: number | string | null | undefined,
 ): string {

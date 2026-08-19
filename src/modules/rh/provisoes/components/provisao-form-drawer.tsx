@@ -142,10 +142,10 @@ export function ProvisaoFormDrawer({
           rotulo="Percentual"
           obrigatorio
           erro={form.formState.errors.percentual?.message}
-          ajuda="Percentual do salário lançado como custo do mês, maior que 0 e até 100, com até 3 casas decimais. O percentual já inclui o terço constitucional: férias é 11,111% (8,333% de férias mais 2,778% de terço), não 8,333%. A soma dos percentuais das provisões ativas não pode passar de 100%."
+          ajuda="Percentual do salário lançado como custo do mês, maior que 0 e até 100, com até 4 casas decimais. O percentual já inclui o terço constitucional: férias é 11,111% (8,333% de férias mais 2,778% de terço), não 8,333%. A soma dos percentuais das provisões ativas não pode passar de 100%."
         >
           <InputDecimal
-            casas={3}
+            casas={4}
             id="provisao-percentual"
             autoComplete="off"
             placeholder="8,333"

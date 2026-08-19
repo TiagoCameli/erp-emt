@@ -1,3 +1,4 @@
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import type { ColunaImportacao } from "@/lib/importacao";
 import { casasDecimais, paraNumero } from "@/modules/rh/percentual";
 
@@ -33,13 +34,13 @@ function paraNumeroPercentual(valor: unknown): number {
   return numero;
 }
 
-/** Valida o percentual convertido: 0..100, no máximo 3 casas decimais. */
+/** Valida o percentual convertido: 0..100, no máximo 4 casas decimais. */
 function validarPercentual(valor: unknown): string | null {
   const numero = valor as number;
   if (numero < 0) return "O percentual não pode ser negativo";
   if (numero > PERCENTUAL_MAX) return "O percentual vai de 0 a 100";
-  if (casasDecimais(numero) > 3) {
-    return "O percentual aceita no máximo 3 casas decimais";
+  if (casasDecimais(numero) > CASAS_TAXA) {
+    return `O percentual aceita no máximo ${CASAS_TAXA} casas decimais`;
   }
   return null;
 }
