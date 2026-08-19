@@ -58,6 +58,14 @@ function lancamento(troca: Partial<LancamentoDetalhe> = {}): LancamentoDetalhe {
     origemId: null,
     fornecedorId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
     fornecedorNome: "GUERRA IMPLEMENTOS RODOVIARIOS S.A",
+    // Lançamento a pagar: quem está do outro lado é o fornecedor, e o banco
+    // guarda cliente e conta de destino apenas no a receber. Fixture com cliente
+    // aqui seria um registro que a fn_salvar_lancamento não produz.
+    clienteId: null,
+    clienteNome: null,
+    numeroDocumento: "NF 9351",
+    contaBancariaId: null,
+    contaBancariaNome: null,
     categoriaId: null,
     categoriaNome: "Aquisição de Equipamento",
     descricao: "1 SR LS BASCULHANTE D 2E 9351",

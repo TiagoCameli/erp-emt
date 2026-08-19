@@ -109,6 +109,25 @@ export const lancamentoSchema = z
   .object({
     tipo: z.enum(["a_pagar", "a_receber"], { error: "Tipo inválido" }),
     fornecedorId: idSchemaCom("Fornecedor inválido").optional(),
+    /**
+     * Quem está pagando, no a receber: sai do cadastro Cadastros > Clientes.
+     * Opcional no schema porque conta a pagar não usa (lá quem paga é a EMT e o
+     * outro lado é o fornecedor); a tela exige no a receber.
+     */
+    clienteId: idSchemaCom("Cliente inválido").optional(),
+    /**
+     * Número do documento que gerou o direito ou a dívida (nota, medição,
+     * contrato). Obrigatório no a receber, onde é o que amarra o recebimento ao
+     * papel: sem ele não há como conferir recebido contra documento.
+     */
+    numeroDocumento: textoOpcional(60),
+    /**
+     * Conta em que o dinheiro vai entrar, no a receber. Não é a mesma coisa que a
+     * conta do a pagar: lá ela é escolhida na revisão e é ela que decide se o
+     * lançamento já nasce aprovado ou quitado. Aqui é só o destino esperado, e o
+     * banco ignora este campo quando o tipo é a_pagar.
+     */
+    contaBancariaId: idSchemaCom("Conta bancária inválida").optional(),
     categoriaId: idSchemaCom("Categoria inválida").optional(),
     /**
      * Forma de pagamento: em conta a pagar é ela que decide o caminho (fila de
@@ -146,7 +165,14 @@ export const lancamentoSchema = z
     parcelas: z
       .array(parcelaSchema)
       .min(1, { error: "Adicione ao menos uma parcela" }),
-    rateios: z.array(rateioSchema),
+    /**
+     * Sempre pelo menos um centro de custo: é a mesma exigência que
+     * fn_salvar_lancamento faz no banco. Declarada aqui para o erro sair da
+     * action com mensagem nossa em vez de subir o raise do Postgres.
+     */
+    rateios: z
+      .array(rateioSchema)
+      .min(1, { error: "Escolha o centro de custo" }),
   })
   .refine(
     (dados) => {
@@ -160,12 +186,40 @@ export const lancamentoSchema = z
   )
   .refine(
     (dados) => {
-      if (dados.rateios.length === 0) return true;
       const soma = dados.rateios.reduce((total, r) => total + r.valor, 0);
       return Math.abs(soma - dados.valor) <= TOLERANCIA;
     },
     { error: "A soma do rateio precisa ser igual ao valor", path: ["rateios"] },
-  );
+  )
+  /**
+   * O que só o a receber exige. Mesma regra que fn_salvar_lancamento aplica no
+   * banco, repetida aqui para o erro chegar no campo em vez de vir como toast
+   * cru vindo do Postgres.
+   */
+  .superRefine((dados, ctx) => {
+    if (dados.tipo !== "a_receber") return;
+    if (!dados.numeroDocumento) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Informe o número do documento",
+        path: ["numeroDocumento"],
+      });
+    }
+    if (!dados.contaBancariaId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Escolha a conta em que o dinheiro vai entrar",
+        path: ["contaBancariaId"],
+      });
+    }
+    if (!dados.clienteId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Informe quem está pagando",
+        path: ["clienteId"],
+      });
+    }
+  });
 
 export type LancamentoInput = z.infer<typeof lancamentoSchema>;
 
@@ -195,13 +249,18 @@ export const parcelaFormSchema = z.object({
 
 export type ParcelaFormInput = z.infer<typeof parcelaFormSchema>;
 
-/** Rateio no formulário. Centro de custo + valor como string. */
+/**
+ * Rateio no formulário. Centro de custo + valor como string.
+ *
+ * O valor pode chegar vazio aqui de propósito, mesma razão de `parcelaFormSchema`:
+ * com UM centro de custo a coluna de valor não aparece na tela e o rateio vale o
+ * total do lançamento. A exigência de valor volta a partir de dois, e mora no
+ * superRefine do formulário, que é quem sabe quantas linhas existem e consegue
+ * apontar o erro na linha certa.
+ */
 export const rateioFormSchema = z.object({
   centroCustoId: idSchemaCom("Selecione o centro de custo"),
-  valor: z
-    .string()
-    .trim()
-    .refine(valorStringValido, { error: "Informe um valor válido" }),
+  valor: z.string().trim(),
 });
 
 export type RateioFormInput = z.infer<typeof rateioFormSchema>;
@@ -214,6 +273,13 @@ export const lancamentoFormSchema = z
   .object({
     tipo: z.enum(["a_pagar", "a_receber"], { error: "Selecione o tipo" }),
     fornecedorId: idSchema.optional(),
+    /** Vazio = ninguém escolhido, igual ao Combobox sem seleção. */
+    clienteId: z.union([z.literal(""), idSchema]).optional(),
+    numeroDocumento: z
+      .string()
+      .trim()
+      .max(60, { error: "Máximo de 60 caracteres" }),
+    contaBancariaId: z.union([z.literal(""), idSchema]).optional(),
     categoriaId: idSchema.optional(),
     formaPagamentoId: z.union([z.literal(""), idSchema]).optional(),
     /** Vazio = sem condição, igual ao Combobox quando nada foi escolhido. */
@@ -256,6 +322,36 @@ export const lancamentoFormSchema = z
    * fecha por construção e a linha escondida não precisa de valor. Exigir valor
    * nela travaria o formulário num campo que ninguém vê.
    */
+  /**
+   * O que só o a receber exige, no formulário: pagador, conta de destino e
+   * número do documento. Fica num superRefine (e não como campo obrigatório no
+   * objeto) porque a mesma tela serve os dois tipos, e um `min(1)` fixo travaria
+   * o lançamento a pagar em três campos que ele não tem.
+   */
+  .superRefine((dados, ctx) => {
+    if (dados.tipo !== "a_receber") return;
+    if (!dados.clienteId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Informe quem está pagando",
+        path: ["clienteId"],
+      });
+    }
+    if (!dados.contaBancariaId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Escolha a conta em que o dinheiro vai entrar",
+        path: ["contaBancariaId"],
+      });
+    }
+    if (dados.numeroDocumento.trim() === "") {
+      ctx.addIssue({
+        code: "custom",
+        message: "Informe o número do documento",
+        path: ["numeroDocumento"],
+      });
+    }
+  })
   .superRefine((dados, ctx) => {
     if (dados.parcelas.length < 2) return;
 
@@ -284,20 +380,54 @@ export const lancamentoFormSchema = z
       });
     }
   })
-  .refine(
-    (dados) => {
-      if (dados.rateios.length === 0) return true;
-      const valor = paraNumero(dados.valor);
-      if (Number.isNaN(valor)) return true;
-      const soma = dados.rateios.reduce(
-        (total, r) =>
-          total + (Number.isNaN(paraNumero(r.valor)) ? 0 : paraNumero(r.valor)),
-        0,
-      );
-      return Math.abs(soma - valor) <= TOLERANCIA;
-    },
-    { error: "A soma do rateio precisa ser igual ao valor", path: ["rateios"] },
-  );
+  /**
+   * Centro de custo: sempre pelo menos UM, e a partir de dois a soma tem de
+   * fechar.
+   *
+   * Obrigatório porque o banco já obriga: `fn_salvar_lancamento` recusa lista
+   * vazia com "Escolha o centro de custo: nenhum custo existe sem centro de
+   * custo". O formulário dizia "Opcional" e deixava enviar, então quem lançava
+   * sem centro levava o erro cru do Postgres num toast, sem campo apontado.
+   *
+   * Com UM centro a coluna de valor não aparece na tela (ele vale o total do
+   * lançamento) e a soma fecha por construção, igual à parcela única.
+   */
+  .superRefine((dados, ctx) => {
+    if (dados.rateios.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Escolha o centro de custo",
+        path: ["rateios"],
+      });
+      return;
+    }
+    if (dados.rateios.length < 2) return;
+
+    dados.rateios.forEach((rateio, indice) => {
+      if (!valorStringValido(rateio.valor)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Informe um valor válido",
+          path: ["rateios", indice, "valor"],
+        });
+      }
+    });
+
+    const valor = paraNumero(dados.valor);
+    if (Number.isNaN(valor)) return;
+    const soma = dados.rateios.reduce(
+      (total, r) =>
+        total + (Number.isNaN(paraNumero(r.valor)) ? 0 : paraNumero(r.valor)),
+      0,
+    );
+    if (Math.abs(soma - valor) > TOLERANCIA) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A soma do rateio precisa ser igual ao valor",
+        path: ["rateios"],
+      });
+    }
+  });
 
 export type LancamentoFormInput = z.infer<typeof lancamentoFormSchema>;
 
@@ -364,7 +494,12 @@ export function rotuloStatusLancamento(
   status: StatusLancamento,
   tipo: TipoLancamento,
 ): string {
-  if (status === "a_pagar" && tipo === "a_receber") return "A receber";
+  if (tipo === "a_receber") {
+    if (status === "a_pagar") return "A receber";
+    // Recebível quitado é RECEBIDO, não "pago": quem paga é o cliente, e a aba
+    // Recebimentos usa esta mesma função para rotular a linha.
+    if (status === "pago") return "Recebido";
+  }
   return STATUS_LANCAMENTO[status].rotulo;
 }
 

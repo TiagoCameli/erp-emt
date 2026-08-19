@@ -50,6 +50,7 @@ import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
+  ClienteOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
@@ -144,6 +145,8 @@ export interface LancamentoDetalheViewProps {
   trilhaParcelas: EventoTrilha[];
   categorias: CategoriaOpcao[];
   fornecedores: FornecedorOpcao[];
+  /** Clientes ativos: quem paga, no formulário do a receber. */
+  clientes: ClienteOpcao[];
   centrosCusto: CentroCustoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
@@ -166,6 +169,7 @@ export function LancamentoDetalheView({
   trilhaParcelas,
   categorias,
   fornecedores,
+  clientes,
   centrosCusto,
   formasPagamento,
   condicoesPagamento,
@@ -807,6 +811,8 @@ export function LancamentoDetalheView({
           formasPagamento={formasPagamento}
           condicoesPagamento={condicoesPagamento}
           fornecedores={fornecedores}
+          clientes={clientes}
+          contas={contas}
           centrosCusto={centrosCusto}
         />
       ) : null}

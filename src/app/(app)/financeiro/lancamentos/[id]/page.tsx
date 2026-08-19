@@ -11,6 +11,7 @@ import {
   buscarLancamento,
   listarCategorias,
   listarCentrosCusto,
+  listarClientes,
   listarCondicoesPagamento,
   listarFormasPagamento,
   listarFornecedores,
@@ -36,6 +37,7 @@ export default async function PaginaLancamentoDetalhe({
     trilhaParcelas,
     categorias,
     fornecedores,
+    clientes,
     centrosCusto,
     formasPagamento,
     condicoesPagamento,
@@ -46,6 +48,7 @@ export default async function PaginaLancamentoDetalhe({
     trilhaParcelasDoLancamento(id),
     listarCategorias(),
     listarFornecedores(),
+    listarClientes(),
     listarCentrosCusto(),
     listarFormasPagamento(),
     listarCondicoesPagamento(),
@@ -68,6 +71,7 @@ export default async function PaginaLancamentoDetalhe({
       anexos={anexos}
       categorias={categorias}
       fornecedores={fornecedores}
+      clientes={clientes}
       centrosCusto={centrosCusto}
       formasPagamento={formasPagamento}
       condicoesPagamento={condicoesPagamento}

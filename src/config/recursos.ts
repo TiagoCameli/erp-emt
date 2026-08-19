@@ -210,10 +210,10 @@ export const RECURSOS = [
     acoes: ["ver", "editar"],
   },
   {
-    id: "financeiro.contas-receber",
-    nome: "Contas a receber",
+    id: "financeiro.recebimentos",
+    nome: "Recebimentos",
     modulo: "financeiro",
-    rota: "/financeiro/contas-receber",
+    rota: "/financeiro/recebimentos",
     acoes: ["ver", "criar", "editar"],
   },
   {

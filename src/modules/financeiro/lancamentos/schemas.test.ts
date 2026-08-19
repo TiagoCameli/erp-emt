@@ -22,8 +22,14 @@ const formBase = {
   mesCompetencia: "2026-07",
   dataVencimento: "2026-08-10",
   observacoes: "",
+  numeroDocumento: "",
   parcelas: [{ valor: "", dataVencimento: "" }],
-  rateios: [],
+  // Centro de custo é obrigatório, e com UM a coluna de valor não aparece na
+  // tela: a linha vai com o centro escolhido e o valor vazio, e o envio a
+  // preenche com o total. Fixture com `rateios: []` era um lançamento que
+  // fn_salvar_lancamento recusa ("nenhum custo existe sem centro de custo"),
+  // então provava uma tela impossível.
+  rateios: [{ centroCustoId: CENTRO, valor: "" }],
 };
 
 /**
@@ -125,7 +131,9 @@ describe("lancamentoSchema, servidor", () => {
     mesCompetencia: "2026-07-01",
     dataVencimento: "2026-08-10",
     parcelas: [{ valor: 1000, dataVencimento: "2026-08-10" }],
-    rateios: [],
+    // No servidor o rateio chega já com o valor resolvido pela tela, e ele tem
+    // de fechar com o valor do lançamento.
+    rateios: [{ centroCustoId: CENTRO, valor: 1000 }],
   };
 
   it("aceita a parcela única derivada do cabeçalho", () => {
