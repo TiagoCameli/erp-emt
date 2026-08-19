@@ -40,6 +40,22 @@ describe("eventoParcelaParaTrilha", () => {
     expect(e.descricao).toContain("1.500,50");
   });
 
+  it("nomeia as duas datas no pagamento fora da data, sem parecer remarcação", () => {
+    const e = eventoParcelaParaTrilha(
+      {
+        ...base,
+        tipo: "pagou_fora_da_janela",
+        motivo: "Fornecedor deu desconto para antecipar",
+        dataDe: "2026-08-18",
+        dataPara: "2026-08-17",
+      },
+      2,
+    );
+    expect(e.descricao).toContain("autorizada 18/08/2026, paga 17/08/2026");
+    expect(e.descricao).not.toContain("de 18/08/2026 para");
+    expect(e.descricao).toContain("Fornecedor deu desconto para antecipar");
+  });
+
   it("marca exceção de dinheiro com o tipo de destaque da trilha", () => {
     expect(eventoParcelaParaTrilha({ ...base, tipo: "alterou" }, 1).tipo).toBe("edicao");
     expect(

@@ -68,7 +68,14 @@ export function eventoParcelaParaTrilha(
   const partes: string[] = [];
   if (evento.motivo) partes.push(evento.motivo);
   if (evento.dataDe && evento.dataPara) {
-    partes.push(`de ${formatarData(evento.dataDe)} para ${formatarData(evento.dataPara)}`);
+    // "de X para Y" descreve remarcação, que é o que reprogramou faz. No
+    // pagamento fora da data nada foi remarcado: a data autorizada continuou a
+    // que era e o dinheiro saiu em outra, então o texto nomeia as duas.
+    partes.push(
+      evento.tipo === "pagou_fora_da_janela"
+        ? `autorizada ${formatarData(evento.dataDe)}, paga ${formatarData(evento.dataPara)}`
+        : `de ${formatarData(evento.dataDe)} para ${formatarData(evento.dataPara)}`,
+    );
   }
   if (evento.valorDe !== null && evento.valorPara !== null) {
     partes.push(`de ${formatarBRL(evento.valorDe)} para ${formatarBRL(evento.valorPara)}`);

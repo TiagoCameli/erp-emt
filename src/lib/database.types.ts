@@ -2036,7 +2036,7 @@ export type Database = {
           fornecedor_id: string | null
           id: string
           mes_competencia: string
-          numero: string | null
+          numero: string
           observacoes: string | null
           origem: string
           origem_id: string | null
@@ -2058,7 +2058,7 @@ export type Database = {
           fornecedor_id?: string | null
           id?: string
           mes_competencia?: string
-          numero?: string | null
+          numero: string
           observacoes?: string | null
           origem: string
           origem_id?: string | null
@@ -2080,7 +2080,7 @@ export type Database = {
           fornecedor_id?: string | null
           id?: string
           mes_competencia?: string
-          numero?: string | null
+          numero?: string
           observacoes?: string | null
           origem?: string
           origem_id?: string | null
@@ -2123,6 +2123,35 @@ export type Database = {
             columns: ["fornecedor_id"]
             isOneToOne: false
             referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lancamentos_numero_reparo: {
+        Row: {
+          lancamento_id: string
+          numero_antigo: string
+          numero_novo: string
+          reparado_em: string
+        }
+        Insert: {
+          lancamento_id: string
+          numero_antigo: string
+          numero_novo: string
+          reparado_em?: string
+        }
+        Update: {
+          lancamento_id?: string
+          numero_antigo?: string
+          numero_novo?: string
+          reparado_em?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lancamentos_numero_reparo_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: true
+            referencedRelation: "lancamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -3580,6 +3609,7 @@ export type Database = {
         Args: { p_tabela: string }
         Returns: undefined
       }
+      fn_limpar_senha_provisoria_propria: { Args: never; Returns: number }
       fn_listar_lancamentos: {
         Args: {
           p_descendente?: boolean
@@ -3616,6 +3646,7 @@ export type Database = {
           p_data_pagamento: string
           p_desconto?: number
           p_juros?: number
+          p_motivo?: string
           p_parcela_id: string
         }
         Returns: undefined

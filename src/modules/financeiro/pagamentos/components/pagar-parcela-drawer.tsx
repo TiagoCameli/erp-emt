@@ -16,6 +16,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import { paraNumero } from "@/modules/financeiro/lancamentos/schemas";
@@ -24,6 +25,10 @@ import {
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
 import { pagarParcela } from "@/modules/financeiro/pagamentos/actions";
+import {
+  foraDaJanela,
+  textoDaDiferenca,
+} from "@/modules/financeiro/pagamentos/janela";
 import type {
   ContaBancariaOpcao,
   ParcelaAprovada,
@@ -63,6 +68,11 @@ function rotuloConta(conta: ContaBancariaOpcao): string {
  * Desconto é opcional e sai do que a conta bancária paga, sem mexer no valor
  * devido da parcela. O rodapé mostra o líquido ANTES de confirmar, porque é ele
  * que vai bater com o extrato do banco.
+ *
+ * Data diferente da autorizada não é mais impedimento: é exceção auditada. O
+ * campo de motivo aparece só nesse caso, é obrigatório nele, e o que for
+ * escrito vira evento na trilha da parcela. Quem paga na data autorizada não vê
+ * campo nenhum a mais.
  */
 export function PagarParcelaDrawer({
   aberto,
@@ -79,6 +89,10 @@ export function PagarParcelaDrawer({
   const [contaId, setContaId] = React.useState(parcela?.contaBancariaId ?? "");
   const [dataPagamento, setDataPagamento] = React.useState(dataHojeISO());
   const [desconto, setDesconto] = React.useState("");
+  // Motivo começa vazio (não há de onde herdar) e zera ao abrir, pelo mesmo
+  // argumento do desconto: motivo de um pagamento vazando para o próximo
+  // justificaria uma exceção que ninguém escreveu.
+  const [motivo, setMotivo] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
   // Ao abrir o drawer, a conta começa na que a parcela já tem, o desconto zera e
@@ -100,6 +114,7 @@ export function PagarParcelaDrawer({
     setContaId(parcela?.contaBancariaId ?? "");
     setDataPagamento(dataHojeISO());
     setDesconto("");
+    setMotivo("");
   } else if (!aberto && estavaAberto) {
     setEstavaAberto(false);
   }
@@ -113,6 +128,17 @@ export function PagarParcelaDrawer({
     (parcela === null || descontoNumero <= parcela.valor);
   const liquido =
     parcela && descontoValido ? parcela.valor - descontoNumero : null;
+
+  // Fora da data autorizada o motivo é obrigatório, e o rótulo diz de quanto é
+  // a diferença: "adiantado em 1 dia" é a informação que faz o operador escrever
+  // uma justificativa de verdade em vez de um "ok".
+  const dataAutorizada = parcela?.dataProgramada ?? null;
+  const foraDaData = foraDaJanela(dataPagamento, dataAutorizada);
+  const diferenca =
+    foraDaData && dataAutorizada
+      ? textoDaDiferenca(dataPagamento, dataAutorizada)
+      : "";
+  const motivoOk = !foraDaData || motivo.trim() !== "";
 
   async function aoEnviar(evento: React.FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -136,12 +162,18 @@ export function PagarParcelaDrawer({
       return;
     }
 
+    if (!motivoOk) {
+      toast.error("Informe o motivo do pagamento fora da data autorizada");
+      return;
+    }
+
     setSalvando(true);
     const resultado = await pagarParcela(
       parcela.id,
       contaId,
       dataPagamento,
       descontoNumero,
+      foraDaData ? motivo.trim() : undefined,
     );
     setSalvando(false);
 
@@ -198,7 +230,7 @@ export function PagarParcelaDrawer({
             <Button
               type="submit"
               form={ID_FORM}
-              disabled={salvando || !parcela || !descontoValido}
+              disabled={salvando || !parcela || !descontoValido || !motivoOk}
             >
               {salvando ? (
                 <>
@@ -332,6 +364,25 @@ export function PagarParcelaDrawer({
             disabled={salvando}
           />
         </CampoFormulario>
+
+        {foraDaData ? (
+          <CampoFormulario
+            id="pagamento-motivo"
+            rotulo={`Motivo do pagamento ${diferenca}`}
+            obrigatorio
+            ajuda="A data autorizada é a que foi aprovada. Pagar em outra data é permitido, e fica registrado na trilha da parcela com esta justificativa."
+          >
+            <Textarea
+              id="pagamento-motivo"
+              rows={2}
+              maxLength={500}
+              value={motivo}
+              onChange={(evento) => setMotivo(evento.target.value)}
+              placeholder="Ex.: fornecedor deu desconto para antecipar"
+              disabled={salvando}
+            />
+          </CampoFormulario>
+        ) : null}
       </form>
     </FormDrawer>
   );
