@@ -1,3 +1,7 @@
+-- Aplicada em produção pelo MCP (apply_migration) em 2026-08-18, versão
+-- 20260818190417 no ledger. Este arquivo é o registro versionado do que foi
+-- aplicado; NÃO rode `supabase db push` neste projeto (ver docs/decisoes.md).
+--
 -- Task 1 da frente de exceções auditadas na parcela: a trilha sai da
 -- invisibilidade. Migration aditiva de propósito: acrescenta os dois tipos de
 -- evento e as duas colunas de valor que as exceções de dinheiro (Tasks 3 e 4)

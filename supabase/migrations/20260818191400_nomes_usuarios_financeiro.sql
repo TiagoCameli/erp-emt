@@ -1,3 +1,7 @@
+-- Aplicada em produção pelo MCP (apply_migration) em 2026-08-18, versão
+-- 20260818191400 no ledger. Este arquivo é o registro versionado do que foi
+-- aplicado; NÃO rode `supabase db push` neste projeto (ver docs/decisoes.md).
+--
 -- Espelha nomes_usuarios_compras (não nomes_usuarios_auditoria): quem já
 -- pode ver o evento de parcela (financeiro.lancamentos:ver OU
 -- financeiro.aprovacao-pagamentos:ver) resolve o nome de quem o causou.
