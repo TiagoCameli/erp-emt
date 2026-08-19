@@ -1,3 +1,4 @@
+import * as React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -79,6 +80,7 @@ const FILA: ParcelaAprovada[] = [
 
 const VALORES = {
   busca: "",
+  situacao: "",
   fornecedor: "",
   conta: "",
   valorDe: "",
@@ -89,12 +91,16 @@ const VALORES = {
   progAte: "",
 };
 
-function montar(podePagar = true) {
+function montar(
+  podePagar = true,
+  extras: Partial<React.ComponentProps<typeof PagamentosCliente>> = {},
+) {
   return render(
     <PagamentosCliente
       aprovadas={FILA}
       pagas={[]}
       totalPagas={0}
+      somaPagas={0}
       contas={[
         { id: "conta-1", nome: "Obra 364", banco: "bb", saldoAtual: 50000 },
       ]}
@@ -105,6 +111,7 @@ function montar(podePagar = true) {
       valoresAPagar={VALORES}
       valoresPagas={{ ...VALORES, pagoDe: "", pagoAte: "" }}
       filtrosPagas={{}}
+      {...extras}
     />,
   );
 }
@@ -189,6 +196,42 @@ describe("Fila a pagar com parcelas não aprovadas", () => {
     // sem provar nada.
     expect(valorDoCard("Pronto para pagar")).not.toContain("1.500,00");
     expect(valorDoCard("Vencido")).not.toContain("1.000,00");
+  });
+
+  /**
+   * É este filtro que faz o cartão "Vence em até 7 dias" do Painel (que conta
+   * SÓ aprovadas) cair numa lista cujo total é o número do cartão. Sem ele, o
+   * destino somaria também as pendentes e mostraria mais dinheiro.
+   */
+  it("o filtro de situação recorta a fila", () => {
+    montar(true, { valoresAPagar: { ...VALORES, situacao: "aprovado" } });
+
+    // "Aprovado" aparece duas vezes de propósito: no selo da linha e no próprio
+    // filtro, que mostra a situação escolhida.
+    expect(screen.getAllByText("Aprovado").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Pendente")).not.toBeInTheDocument();
+    expect(screen.queryByText("Em revisão")).not.toBeInTheDocument();
+    // Uma linha só na tabela, e o card acompanha: R$ 1.000,00, não os
+    // R$ 1.500,00 da fila inteira.
+    expect(screen.getAllByRole("button", { name: "Pagar" })).toHaveLength(1);
+    expect(valorDoCard("Total a pagar")).toContain("1.000,00");
+    expect(valorDoCard("Total a pagar")).not.toContain("1.500,00");
+  });
+
+  it("abre direto na aba Pagas quando o Painel manda", () => {
+    montar(true, { abaInicial: "pagas" });
+    expect(screen.getByRole("tab", { name: "Pagas" })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+  });
+
+  it("na aba Pagas os cards falam do histórico, não da fila", () => {
+    montar(true, { abaInicial: "pagas", somaPagas: 1835626.54, totalPagas: 177 });
+    // O número do cartão "Pago no mês" do Painel, confirmado no destino.
+    expect(screen.getByText("Pago no filtro")).toBeInTheDocument();
+    expect(valorDoCard("Pago no filtro")).toContain("1.835.626,54");
+    expect(screen.queryByText("Total a pagar")).not.toBeInTheDocument();
   });
 
   it("marcando linhas, os cards passam a resumir só o marcado", () => {

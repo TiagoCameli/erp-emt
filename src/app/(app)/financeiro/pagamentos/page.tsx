@@ -6,10 +6,12 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { listarFornecedores } from "@/modules/financeiro/lancamentos/queries";
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
+import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
 import {
   listarContasBancarias,
   listarParcelasAPagar,
   listarParcelasPagas,
+  somaDasParcelasPagas,
 } from "@/modules/financeiro/pagamentos/queries";
 
 const TAMANHO_PAGINA = 25;
@@ -46,6 +48,20 @@ function parametroValor(valor: Parametro): number | undefined {
 }
 
 /** Termo de busca vindo da URL, aparado no limite que a action aceita. */
+/**
+ * Situação da parcela vinda da URL, restrita às de fila aberta. Vem do cartão
+ * "Vence em até 7 dias" do Painel (`?situacao=aprovado`), e é digitável na mão.
+ */
+function parametroSituacao(valor: Parametro): string {
+  if (typeof valor !== "string") return "";
+  return (STATUS_PARCELA_ABERTA as string[]).includes(valor) ? valor : "";
+}
+
+/** Aba que abre primeiro. O cartão "Pago no mês" do Painel chega com `aba=pagas`. */
+function parametroAba(valor: Parametro): "a-pagar" | "pagas" {
+  return valor === "pagas" ? "pagas" : "a-pagar";
+}
+
 function parametroBusca(valor: Parametro): string | undefined {
   if (typeof valor !== "string") return undefined;
   const termo = valor.trim().slice(0, MAX_BUSCA);
@@ -105,6 +121,9 @@ export default async function PaginaPagamentos({
   const progAPagar = periodo(params.prog_de, params.prog_ate);
   const aPagar = {
     busca: typeof params.busca === "string" ? params.busca : "",
+    // Só situação de parcela EM ABERTO: `pago` e `cancelado` na fila a pagar
+    // trariam uma lista vazia sem explicar por quê.
+    situacao: parametroSituacao(params.situacao),
     fornecedor: parametroUuid(params.fornecedor) ?? "",
     conta: parametroUuid(params.conta) ?? "",
     valorDe: texto(valorAPagar.de),
@@ -133,7 +152,7 @@ export default async function PaginaPagamentos({
     pagamentoAte: pagoPagas.ate,
   };
 
-  const [aprovadas, pagas, contas, fornecedores] = await Promise.all([
+  const [aprovadas, pagas, somaPagas, contas, fornecedores] = await Promise.all([
     // A fila traz aprovadas E as que ainda aguardam aprovação: quem paga
     // precisa enxergar o que vem pela frente. Só as aprovadas ganham o botão.
     listarParcelasAPagar(),
@@ -142,6 +161,9 @@ export default async function PaginaPagamentos({
       tamanho: TAMANHO_PAGINA,
       filtros: filtrosPagas,
     }),
+    // Soma do recorte inteiro, não da página: é ela que tem que bater com o
+    // cartão "Pago no mês" do Painel quando se chega aqui clicando nele.
+    somaDasParcelasPagas(filtrosPagas),
     listarContasBancarias(),
     listarFornecedores(),
   ]);
@@ -164,6 +186,8 @@ export default async function PaginaPagamentos({
         aprovadas={aprovadas}
         pagas={pagas.itens}
         totalPagas={pagas.total}
+        somaPagas={somaPagas}
+        abaInicial={parametroAba(params.aba)}
         contas={contas}
         fornecedores={fornecedores}
         podePagar={podePagar}

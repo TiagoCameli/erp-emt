@@ -34,6 +34,7 @@ import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   ROTULO_BANCO,
   STATUS_PARCELA,
+  STATUS_PARCELA_ABERTA,
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
 import { programacaoVencida } from "@/modules/financeiro/_shared/janela-pagamento";
@@ -66,6 +67,14 @@ const LARGURA_NOME = "max-w-[15rem]";
 /** Valores dos filtros da aba "A pagar", como vivem na URL. */
 export interface ValoresFiltrosAPagar {
   busca: string;
+  /**
+   * Situação da parcela na fila: vazio é "todas as situações em aberto".
+   *
+   * Existe porque a fila passou a mostrar pendente e em revisão junto com
+   * aprovada, e porque é ele que faz o cartão "Vence em até 7 dias" do Painel
+   * cair numa lista que soma exatamente o número do cartão (só aprovadas).
+   */
+  situacao: string;
   fornecedor: string;
   conta: string;
   valorDe: string;
@@ -77,8 +86,16 @@ export interface ValoresFiltrosAPagar {
   progAte: string;
 }
 
-/** Valores dos filtros da aba "Pagas", como vivem na URL (prefixo h_). */
-export interface ValoresFiltrosPagas extends ValoresFiltrosAPagar {
+/**
+ * Valores dos filtros da aba "Pagas", como vivem na URL (prefixo h_).
+ *
+ * Sem `situacao`: lá toda parcela é `pago`, e um filtro de situação com uma
+ * opção só é decoração que sugere que existe outra coisa para escolher.
+ */
+export interface ValoresFiltrosPagas extends Omit<
+  ValoresFiltrosAPagar,
+  "situacao"
+> {
   pagoDe: string;
   pagoAte: string;
 }
@@ -87,6 +104,15 @@ export interface PagamentosClienteProps {
   aprovadas: ParcelaAprovada[];
   pagas: ParcelaPaga[];
   totalPagas: number;
+  /**
+   * Quanto SAIU DA CONTA no recorte do histórico (soma do líquido de todas as
+   * linhas do filtro, não da página). É o número que o cartão "Pago no mês" do
+   * Painel mostra, e é o que faz clicar no cartão cair numa tela que confirma
+   * aquele valor em vez de deixar o operador somar 25 linhas de cada vez.
+   */
+  somaPagas: number;
+  /** Aba que abre primeiro. O Painel manda `aba=pagas` no cartão "Pago no mês". */
+  abaInicial?: "a-pagar" | "pagas";
   contas: ContaBancariaOpcao[];
   /** Fornecedores ativos, para o seletor de fornecedor das duas abas. */
   fornecedores: FornecedorOpcao[];
@@ -172,8 +198,7 @@ export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
   if (temDesconto) {
     partes.push(
       <React.Fragment key="desconto">
-        desconto{" "}
-        <MoneyText valor={parcela.desconto} className="inline" />
+        desconto <MoneyText valor={parcela.desconto} className="inline" />
       </React.Fragment>,
     );
   }
@@ -189,8 +214,7 @@ export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
   // Sempre termina com o líquido.
   partes.push(
     <React.Fragment key="liquido">
-      líquido{" "}
-      <MoneyText valor={parcela.valorLiquido} className="inline" />
+      líquido <MoneyText valor={parcela.valorLiquido} className="inline" />
     </React.Fragment>,
   );
 
@@ -210,6 +234,18 @@ export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
 }
 
 /**
+ * Situações que aparecem na fila a pagar, para o filtro.
+ *
+ * Sai de STATUS_PARCELA_ABERTA e não de uma lista digitada: é a mesma origem
+ * que a consulta usa, então situação nova entra nas duas ao mesmo tempo. `pago`
+ * e `cancelado` não estão aqui porque não são fila a pagar.
+ */
+const OPCOES_SITUACAO: OpcaoFiltro[] = STATUS_PARCELA_ABERTA.map((status) => ({
+  valor: status,
+  rotulo: STATUS_PARCELA[status].rotulo,
+}));
+
+/**
  * Tela de pagamentos: cards que resumem o que está em aberto (ou o que está
  * marcado), aba "A pagar" com as parcelas aprovadas E as que ainda aguardam
  * aprovação, e aba "Pagas" com o histórico paginado no servidor.
@@ -218,6 +254,8 @@ export function PagamentosCliente({
   aprovadas,
   pagas,
   totalPagas,
+  somaPagas,
+  abaInicial = "a-pagar",
   contas,
   fornecedores,
   podePagar,
@@ -250,6 +288,22 @@ export function PagamentosCliente({
   // listagem não tem rateio, anexo nem trilha.
   const [detalheId, setDetalheId] = React.useState<string | null>(null);
   const [detalheAberto, setDetalheAberto] = React.useState(false);
+
+  // A aba é CONTROLADA porque o Painel manda em qual delas a tela abre: o
+  // cartão "Pago no mês" chega com `aba=pagas`, e um Tabs não controlado
+  // ignoraria isso e abriria sempre na fila a pagar.
+  const [aba, setAba] = React.useState<"a-pagar" | "pagas">(abaInicial);
+
+  /**
+   * Troca de aba limpa as DUAS seleções: mesma razão de lancamentos-tabela.tsx
+   * não persistir seleção entre visitas — imprimir ou pagar o que o usuário não
+   * está mais vendo é o pior tipo de surpresa.
+   */
+  function trocarAba(nova: string) {
+    setAba(nova === "pagas" ? "pagas" : "a-pagar");
+    setSelecionados([]);
+    setSelecionadosAPagar([]);
+  }
 
   // Seleção da fila a pagar, e o drawer de pagamento em lote.
   const [selecionadosAPagar, setSelecionadosAPagar] = React.useState<string[]>(
@@ -424,6 +478,12 @@ export function PagamentosCliente({
       ) {
         return false;
       }
+      if (
+        valoresAPagar.situacao !== "" &&
+        (parcela.status ?? "aprovado") !== valoresAPagar.situacao
+      ) {
+        return false;
+      }
       if (valorDe !== null && parcela.valor < valorDe) return false;
       if (valorAte !== null && parcela.valor > valorAte) return false;
       if (
@@ -463,10 +523,10 @@ export function PagamentosCliente({
     return aprovadasFiltradas.filter((parcela) => marcados.has(parcela.id));
   }, [aprovadasFiltradas, selecionadosAPagar]);
 
-  const resumo = React.useMemo(() => somarParaResumo(resumidas, hoje), [
-    resumidas,
-    hoje,
-  ]);
+  const resumo = React.useMemo(
+    () => somarParaResumo(resumidas, hoje),
+    [resumidas, hoje],
+  );
 
   const temSelecao = selecionadosAPagar.length > 0;
 
@@ -495,6 +555,14 @@ export function PagamentosCliente({
         />
       ),
     },
+    selecao({
+      id: "situacao",
+      chave: "situacao",
+      rotulo: "Situação",
+      valor: valoresAPagar.situacao,
+      opcoes: OPCOES_SITUACAO,
+      todosRotulo: "Todas as situações",
+    }),
     selecao({
       id: "fornecedor",
       chave: "fornecedor",
@@ -800,9 +868,7 @@ export function PagamentosCliente({
         header: "Valor",
         size: 130,
         meta: { alinharDireita: true },
-        cell: ({ row }) => (
-          <CelulaValorPaga parcela={row.original} />
-        ),
+        cell: ({ row }) => <CelulaValorPaga parcela={row.original} />,
       },
       ...(podeEstornar
         ? [
@@ -905,28 +971,41 @@ export function PagamentosCliente({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
-        <KPICard
-          titulo={temSelecao ? "Selecionado" : "Total a pagar"}
-          valor={formatarBRL(resumo.total)}
-          detalhe={contagem(resumo.parcelas)}
-        />
-        <KPICard
-          titulo="Pronto para pagar"
-          valor={formatarBRL(resumo.aprovado)}
-          detalhe={`${contagem(resumo.aprovadas)} aprovada${resumo.aprovadas === 1 ? "" : "s"}`}
-        />
-        <KPICard
-          titulo="Aguardando aprovação"
-          valor={formatarBRL(resumo.aguardando)}
-          detalhe={contagem(resumo.aguardandoParcelas)}
-        />
-        <KPICard
-          titulo="Vencido"
-          valor={formatarBRL(resumo.vencido)}
-          detalhe={contagem(resumo.vencidas)}
-        />
-      </GradeKpis>
+      {/* Os cartões falam da aba que está aberta: na fila, o que há a pagar; no
+          histórico, o que já saiu no recorte. Resumo de uma aba enquanto a
+          outra está na tela é número que ninguém consegue conferir. */}
+      {aba === "pagas" ? (
+        <GradeKpis>
+          <KPICard
+            titulo="Pago no filtro"
+            valor={formatarBRL(somaPagas)}
+            detalhe={`${contagem(totalPagas)} · o que saiu da conta, já com desconto e juros`}
+          />
+        </GradeKpis>
+      ) : (
+        <GradeKpis>
+          <KPICard
+            titulo={temSelecao ? "Selecionado" : "Total a pagar"}
+            valor={formatarBRL(resumo.total)}
+            detalhe={contagem(resumo.parcelas)}
+          />
+          <KPICard
+            titulo="Pronto para pagar"
+            valor={formatarBRL(resumo.aprovado)}
+            detalhe={`${contagem(resumo.aprovadas)} aprovada${resumo.aprovadas === 1 ? "" : "s"}`}
+          />
+          <KPICard
+            titulo="Aguardando aprovação"
+            valor={formatarBRL(resumo.aguardando)}
+            detalhe={contagem(resumo.aguardandoParcelas)}
+          />
+          <KPICard
+            titulo="Vencido"
+            valor={formatarBRL(resumo.vencido)}
+            detalhe={contagem(resumo.vencidas)}
+          />
+        </GradeKpis>
+      )}
 
       {podePagar && semConta ? (
         <p className="rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-muted-foreground">
@@ -934,15 +1013,7 @@ export function PagamentosCliente({
         </p>
       ) : null}
 
-      <Tabs
-        defaultValue="a-pagar"
-        // Troca de aba limpa a seleção da aba "Pagas": mesma razão de
-        // lancamentos-tabela.tsx não persistir seleção entre visitas.
-        onValueChange={() => {
-          setSelecionados([]);
-          setSelecionadosAPagar([]);
-        }}
-      >
+      <Tabs value={aba} onValueChange={trocarAba}>
         <TabsList>
           <TabsTrigger value="a-pagar">A pagar</TabsTrigger>
           <TabsTrigger value="pagas">Pagas</TabsTrigger>
