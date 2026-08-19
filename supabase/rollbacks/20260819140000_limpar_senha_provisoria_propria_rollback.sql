@@ -1,0 +1,22 @@
+-- Rollback de 20260819140000_limpar_senha_provisoria_propria.sql.
+--
+-- Derruba a função de limpeza. Rodar isto traz de volta o defeito que a migration
+-- conserta: quem não tem `administracao.usuarios.ver` volta a ficar marcado como
+-- "1º acesso pendente" para sempre, porque o delete direto na tabela apaga zero
+-- linhas sem devolver erro (a policy de SELECT é só de admin, e um
+-- `delete ... where usuario_id = ...` precisa ler a linha para achar).
+--
+-- ATENÇÃO: o código em src/modules/auth/actions.ts chama esta função. Derrubar só
+-- o banco faz `definirSenha` e `alterarSenha` passarem a logar erro de função
+-- inexistente na limpeza — a senha ainda é trocada, mas a provisória fica.
+-- Reverta o código junto (o PR #124).
+--
+-- A PARTE DE DADOS DA MIGRATION NÃO TEM VOLTA. Ela apagou as senhas provisórias
+-- em texto puro de quem já havia definido a própria senha (Andreia, Brenda, Dora
+-- e Marvin), e o texto puro não existe em nenhum outro lugar — nem na auth, que
+-- guarda hash. Se por algum motivo for preciso ter uma provisória para essas
+-- pessoas de novo, o caminho é o botão de redefinir senha na tela de usuários,
+-- que gera uma nova. Elas não perderam acesso nenhum: a senha que usam é a que
+-- elas mesmas definiram.
+
+drop function if exists public.fn_limpar_senha_provisoria_propria();
