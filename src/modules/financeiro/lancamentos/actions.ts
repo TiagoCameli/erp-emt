@@ -47,7 +47,6 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     tipo: dados.tipo,
     fornecedor_id: dados.fornecedorId ?? null,
     cliente_id: dados.clienteId ?? null,
-    numero_documento: dados.numeroDocumento ?? null,
     // A RPC só olha este campo quando o tipo é a_receber. No a pagar a conta é
     // escolhida na revisão, e mandar uma aqui faria o lançamento nascer
     // aprovado (dinheiro) ou quitado (cartão) sem ninguém ter revisado.
@@ -60,6 +59,11 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     data_compra: dados.dataCompra,
     mes_competencia: dados.mesCompetencia,
     data_vencimento: dados.dataVencimento ?? null,
+    /**
+     * Nota fiscal, boleto, recibo: o documento do fornecedor. No a receber é a
+     * nota, medição ou contrato que gerou o direito, e a RPC o exige.
+     */
+    numero_documento: dados.numeroDocumento ?? null,
     observacoes: dados.observacoes ?? null,
   };
 }

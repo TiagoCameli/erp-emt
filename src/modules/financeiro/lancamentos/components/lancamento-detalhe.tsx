@@ -499,6 +499,15 @@ export function LancamentoDetalheView({
                   <CelulaVazia />
                 )}
               </Dado>
+              <Dado rotulo="Número do documento">
+                {lancamento.numeroDocumento ? (
+                  <span className="codigo-doc">
+                    {lancamento.numeroDocumento}
+                  </span>
+                ) : (
+                  <CelulaVazia />
+                )}
+              </Dado>
               <Dado rotulo="Valor">
                 <MoneyText valor={lancamento.valor} className="font-semibold" />
               </Dado>

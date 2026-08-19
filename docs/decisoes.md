@@ -2344,3 +2344,69 @@ encontradas" — erro que a pessoa não tem como consertar, porque ela baixou o 
 cabeçalho verde com texto branco, que não desloca nada. Trancado por um teste de ida e volta
 (`gerarModeloXlsx` -> `lerEValidarXlsx`), conferido aplicando a marca de propósito: com ela o teste
 falha, o que é o que faz ele valer alguma coisa.
+
+## 2026-08-19 - O espelho vira documento de uma folha, e diz quanto já foi pago
+
+O espelho ganhou a marca da EMT na frente, mas continuava um empilhamento de seções: três a
+cinco blocos de "rótulo: valor" em grade, um atrás do outro. O Tiago mandou um documento de
+referência (espelho de conta a pagar da Amazônia Agroindústria) e o pedido foi: **este desenho, com
+a nossa marca**; nos espelhos de lançamento, aprovação de pagamento e pagamento, **dizer quantas
+parcelas já foram pagas, quanto já foi pago e quanto ainda falta**; e **caber inteiro numa A4**.
+
+**A ordem da folha é a ordem em que a pergunta é feita.** De quem é (cabeçalho com logo e endereço),
+o que é e em que situação está (tarja), quanto é e para quem (faixa verde de destaque), quando vence
+e quanto já saiu (cartões), e só então o detalhe. O valor virou a maior coisa da página, porque num
+maço de espelhos empilhados ele é o único jeito de achar o documento certo sem ler folha por folha.
+
+**O endereço subiu para o cabeçalho e o rodapé virou uma linha.** É assim que se lê um papel que sai
+de uma empresa: quem emitiu está no alto, junto da marca. O rodapé passou a dizer o que o papel é
+("Documento interno — espelho de conta a pagar"), que é o que faltava. `CabecalhoDocumento` ganhou o
+título OPCIONAL em vez de um segundo componente: sem título, a coluna do centro deixa de existir e a
+da direita ocupa o resto — que é exatamente o que o bloco de endereço precisa. O holerite continua
+usando a mesma função com título.
+
+**A cor da tarja vem de `StatusPadrao`, o mesmo do `StatusBadge` da tela** (`tomDoStatus`). Sem isso
+o papel teria um mapa próprio de status e passaria a discordar da tela sobre o mesmo lançamento; com
+isso, status novo entra nos dois de uma vez. A cor nunca é a única portadora: a situação sai escrita
+ao lado do ponto, porque quem imprime pode desligar "gráficos de fundo".
+
+**Os três números que o Tiago pediu.** No espelho de lançamento eles são cartões (Parcelas pagas,
+Já pago, Em aberto, mais Próximo vencimento). No de pagamento — que serve TAMBÉM a aba de aprovação,
+porque as duas telas apontam para `/espelho/pagamentos` — eles saem numa FAIXA, sob o título "No
+lançamento LAN-xxxx". Faixa, e não cartões, por duas razões: cartões dariam sete blocos de número na
+mesma folha sem dizer qual é o dinheiro DESTA parcela, e a faixa devolveu os ~110px que faltavam
+para a folha fechar. Escopo explícito no título é o que impede alguém de ler "R$ 159.201,53" como se
+fosse o valor da parcela.
+
+**O dado do resumo é o mesmo dos dois papéis.** `buscarPagamentosParaEspelho` passou a trazer as
+parcelas do lançamento pai e chama a MESMA `resumirParcelas` do espelho de lançamento. Pagas somam o
+LÍQUIDO (o dinheiro que saiu), em aberto somam o VALOR (a dívida) — bases diferentes de propósito,
+iguais às dos KPIs da tela. A RLS de `lancamento_parcelas` é por PERMISSÃO, não por linha, e quem a
+rota do espelho deixa entrar (`financeiro.pagamentos:ver` ou `financeiro.aprovacao-pagamentos:ver`)
+enxerga todas: o resumo não sai pela metade em silêncio. E `resumoParcelas` é NULO quando não há pai,
+nunca um bloco de zeros, porque zero em "já pago" e "em aberto" seria lido como afirmação.
+
+**"Total das parcelas" ao lado de "Valor total".** É a única linha da folha onde a conta fecha
+(pagas + em aberto + canceladas). Sem ela os cartões seriam três números soltos, e a divergência
+entre o parcelamento e o cabeçalho do lançamento ficaria invisível — que é justamente o que um
+espelho existe para não deixar acontecer.
+
+**Caber em A4 foi medido, não estimado.** O primeiro corte mirou um caso inventado (8 linhas de
+rateio) e me fez apertar o layout à toa. O banco respondeu o que é real: em 5.912 lançamentos o
+MÁXIMO de linhas de rateio é 3 (mediana 1, p99 2); a OC tem no máximo 11 itens (mediana 1, p95 10) e
+3 parcelas previstas; e as 60 parcelas do maior parcelamento já viravam resumo, não linhas. Com isso:
+lançamento e pagamento fecham em uma folha no PIOR caso que existe (3 rateios, parcelamento de 60).
+A OC fecha em uma folha até 6 itens; acima disso ela continua para a segunda folha **sem cortar
+linha**, porque um papel que parece completo sem estar é pior que um papel de duas folhas. A mediana
+de itens por OC é 1, então a segunda folha é exceção, não regra. Medido imprimindo de verdade (PDF do
+Chrome headless) e contando `/Type /Page`, não olhando a tela.
+
+**O que economizou altura, em ordem de ganho:** a faixa no lugar da segunda fileira de cartões
+(~110px); a assinatura dividindo a linha com a nota de anexos, em vez de uma faixa própria (~55px);
+anexo como linha de nomes em vez de tabela de três colunas (~90px); formação do total, rateio e
+parcelas previstas da OC lado a lado numa fileira de três (~200px); e paddings e gaps apertados no
+componente (~60px). Nenhum deles esconde dado.
+
+**Sem emoji no papel.** O clipe do bloco de anexos era um emoji e depende da fonte de emoji do
+sistema que abrir o PDF: sai como retângulo vazio ou borrão preto em impressora monocromática. Virou
+um filete vertical, que imprime em qualquer lugar.

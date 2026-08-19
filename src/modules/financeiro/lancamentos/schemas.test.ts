@@ -21,8 +21,8 @@ const formBase = {
   dataCompra: "2026-07-10",
   mesCompetencia: "2026-07",
   dataVencimento: "2026-08-10",
-  observacoes: "",
   numeroDocumento: "",
+  observacoes: "",
   parcelas: [{ valor: "", dataVencimento: "" }],
   // Centro de custo é obrigatório, e com UM a coluna de valor não aparece na
   // tela: a linha vai com o centro escolhido e o valor vazio, e o envio a
@@ -222,5 +222,59 @@ describe("rótulo de origem do lançamento", () => {
     expect(rotuloOrigemLancamento("origem_que_nao_existe")).toBe(
       "origem_que_nao_existe",
     );
+  });
+});
+
+describe("lancamentoSchema: número do documento", () => {
+  const servidorBase = {
+    tipo: "a_pagar" as const,
+    descricao: "Combustível julho",
+    valor: 1000,
+    dataCompra: "2026-07-10",
+    mesCompetencia: "2026-07-01",
+    dataVencimento: "2026-08-10",
+    parcelas: [{ valor: 1000, dataVencimento: "2026-08-10" }],
+    // Com centro de custo, e fechando com o valor: lançamento sem centro é
+    // recusado por fn_salvar_lancamento desde sempre, então fixture com
+    // `rateios: []` provava um registro que o banco não aceita.
+    rateios: [{ centroCustoId: CENTRO, valor: 1000 }],
+  };
+
+  it("aceita lançamento sem número do documento", () => {
+    const r = lancamentoSchema.safeParse(servidorBase);
+    expect(r.success).toBe(true);
+    expect(r.success && r.data.numeroDocumento).toBeUndefined();
+  });
+
+  it("tira o espaço das pontas", () => {
+    const r = lancamentoSchema.safeParse({
+      ...servidorBase,
+      numeroDocumento: "  BOLETO 998  ",
+    });
+    expect(r.success && r.data.numeroDocumento).toBe("BOLETO 998");
+  });
+
+  it("só espaço vira ausente", () => {
+    const r = lancamentoSchema.safeParse({
+      ...servidorBase,
+      numeroDocumento: "   ",
+    });
+    expect(r.success && r.data.numeroDocumento).toBeUndefined();
+  });
+
+  it("recusa acima de 60 caracteres", () => {
+    const r = lancamentoSchema.safeParse({
+      ...servidorBase,
+      numeroDocumento: "9".repeat(61),
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("no formulário, recusa acima de 60 caracteres", () => {
+    const r = lancamentoFormSchema.safeParse({
+      ...formBase,
+      numeroDocumento: "9".repeat(61),
+    });
+    expect(r.success).toBe(false);
   });
 });

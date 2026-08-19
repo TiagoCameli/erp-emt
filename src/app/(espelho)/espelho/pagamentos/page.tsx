@@ -1,13 +1,20 @@
 import {
   BotaoImprimir,
-  EspelhoCampos,
+  EspelhoAssinatura,
+  EspelhoCartoes,
+  EspelhoColunas,
+  EspelhoDestaque,
   EspelhoDinheiro,
+  EspelhoFaixaResumo,
   EspelhoImpresso,
+  EspelhoLinhas,
+  EspelhoNota,
   EspelhoSecao,
   EspelhoTabela,
   EspelhoVazio,
+  tomDoStatus,
 } from "@/components/canonicos";
-import { formatarData, formatarMesAno } from "@/lib/formatadores";
+import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
 import { lerIdsDoEspelho, MAX_ESPELHOS } from "@/lib/ids-do-espelho";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
@@ -120,108 +127,178 @@ export default async function EspelhoPagamentosPage({
         // não só no botão da tela de detalhe — o papel não pode afirmar um
         // pagamento que não aconteceu.
         const foiPaga = pagamento.status === "pago";
+        const resumo = pagamento.resumoParcelas;
+        const anexos = anexosPorParcela[pagamento.id] ?? [];
+
         return (
           <EspelhoImpresso
             key={pagamento.id}
-            // Parcela não paga não é um "Pagamento": o título diz o que o papel
-            // realmente é, e o documento segue útil (valor, vencimento, status
+            // Parcela não paga não é um "Pagamento": o tipo diz o que o papel
+            // realmente é, e o documento segue útil (valor, vencimento, situação
             // real, lançamento de origem e rateio continuam impressos).
-            tipo={foiPaga ? "Pagamento" : "Parcela"}
+            tipo={foiPaga ? "Pagamento" : "Parcela a pagar"}
             numero={pagamento.titulo}
+            situacao={STATUS_PARCELA[pagamento.status].rotulo}
+            tom={tomDoStatus(STATUS_PARCELA[pagamento.status].badge)}
             emitidoPor={usuario.nome}
             emitidoEm={emitidoEm}
           >
-            {/* Acompanha o título pelo mesmo motivo dele: numa parcela não
-                paga, uma seção chamada "Pagamento" reintroduz em miniatura a
-                afirmação que o título acabou de tirar. */}
-            <EspelhoSecao rotulo={foiPaga ? "Pagamento" : "Parcela"}>
-              <EspelhoCampos
-                campos={[
-                  {
-                    rotulo: "Valor da parcela",
-                    valor: <EspelhoDinheiro valor={pagamento.valor} />,
-                  },
-                  {
-                    rotulo: "Desconto",
-                    valor: <EspelhoDinheiro valor={pagamento.desconto} />,
-                  },
-                  {
-                    rotulo: "Juros e multa",
-                    valor: <EspelhoDinheiro valor={pagamento.juros} />,
-                  },
-                  {
-                    // Os dois campos que AFIRMAM um pagamento. Em parcela não
-                    // paga saem como travessão (ausência), nunca com o líquido
-                    // calculado nem com data: `valor_liquido` é coluna calculada
-                    // e vem preenchida mesmo em parcela em aberto, então imprimir
-                    // "Saiu da conta R$ 1.000,00" seria dizer que saiu dinheiro
-                    // que não saiu — num papel que vai para contador e processo.
-                    rotulo: "Saiu da conta",
-                    valor: foiPaga ? (
-                      <EspelhoDinheiro valor={pagamento.valorLiquido} />
-                    ) : null,
-                  },
-                  { rotulo: "Conta bancária", valor: pagamento.contaNome },
-                  {
-                    rotulo: "Vencimento",
-                    valor: formatarData(pagamento.dataVencimento),
-                  },
-                  {
-                    rotulo: "Pago em",
-                    valor: foiPaga
-                      ? formatarData(pagamento.dataPagamento)
-                      : null,
-                  },
-                  // Rótulo, não o código cru ("pago" já é legível, mas
-                  // "em_revisao" não é): como TEXTO, porque no papel a cor do
-                  // StatusBadge pode não sair.
-                  {
-                    rotulo: "Status",
-                    valor: STATUS_PARCELA[pagamento.status].rotulo,
-                  },
-                ]}
-              />
-            </EspelhoSecao>
+            <EspelhoDestaque
+              rotulo="Fornecedor"
+              titulo={pagamento.fornecedorNome}
+              badge={
+                resumo && resumo.total.quantidade > 1
+                  ? `Parcela ${pagamento.numeroParcela}/${resumo.total.quantidade}`
+                  : null
+              }
+              descricao={pagamento.lancamentoDescricao}
+              rotuloValor="Valor da parcela"
+              valor={pagamento.valor}
+            />
 
-            <EspelhoSecao rotulo="Lançamento de origem">
-              <EspelhoCampos
-                campos={[
-                  { rotulo: "Número", valor: pagamento.lancamentoNumero },
-                  { rotulo: "Fornecedor", valor: pagamento.fornecedorNome },
-                  { rotulo: "Categoria", valor: pagamento.categoriaNome },
-                  { rotulo: "Descrição", valor: pagamento.lancamentoDescricao },
-                  {
-                    rotulo: "Forma de pagamento",
-                    valor: pagamento.formaPagamentoNome,
-                  },
-                  {
-                    rotulo: "Valor do lançamento",
-                    valor: (
-                      <EspelhoDinheiro valor={pagamento.lancamentoValor} />
-                    ),
-                  },
-                  {
-                    rotulo: "Competência",
-                    valor: formatarMesAno(pagamento.mesCompetencia),
-                  },
-                  {
-                    // Status do LANÇAMENTO, não da parcela: precisa do tipo para
-                    // não imprimir "a_pagar" cru e invertido num recebível em
-                    // aberto (rotuloStatusLancamento inverte para "A receber").
-                    // Lançamento pai ausente (não deveria acontecer) degrada
-                    // para travessão em vez de estourar.
-                    rotulo: "Status do lançamento",
-                    valor:
-                      pagamento.lancamentoStatus && pagamento.lancamentoTipo
-                        ? rotuloStatusLancamento(
-                            pagamento.lancamentoStatus,
-                            pagamento.lancamentoTipo,
-                          )
-                        : null,
-                  },
-                ]}
-              />
-            </EspelhoSecao>
+            {/*
+              Cartões da PARCELA. Os dois campos que afirmam um pagamento saem
+              em travessão quando ela não foi paga, nunca com o líquido
+              calculado nem com data: `valorLiquido` é coluna calculada e vem
+              preenchida mesmo em parcela em aberto, então imprimir "saiu da
+              conta R$ 1.000,00" seria dizer que saiu dinheiro que não saiu —
+              num papel que vai para contador e processo.
+            */}
+            <EspelhoCartoes
+              cartoes={[
+                {
+                  rotulo: "Vencimento",
+                  valor: formatarData(pagamento.dataVencimento),
+                  tom: "destaque",
+                },
+                {
+                  rotulo: "Pago em",
+                  valor: foiPaga ? formatarData(pagamento.dataPagamento) : null,
+                  nota: foiPaga ? pagamento.contaNome : "ainda não pago",
+                },
+                {
+                  rotulo: "Saiu da conta",
+                  valor: foiPaga ? formatarBRL(pagamento.valorLiquido) : null,
+                  nota: foiPaga
+                    ? `desconto ${formatarBRL(pagamento.desconto)} · juros ${formatarBRL(pagamento.juros)}`
+                    : "líquido da parcela",
+                },
+              ]}
+            />
+
+            {/*
+              O lançamento inteiro, em seção separada e com o número no título.
+              Misturar o dinheiro da parcela com o do lançamento na mesma
+              fileira de cartões é exatamente como alguém lê "R$ 46.580,76" como
+              se fosse o valor desta parcela.
+            */}
+            {resumo ? (
+              <EspelhoSecao
+                rotulo={`No lançamento ${pagamento.lancamentoNumero ?? "de origem"}`}
+              >
+                {/*
+                  Faixa, e não cartões: cartões aqui dariam SETE blocos de
+                  número na mesma folha e o leitor perderia qual deles é o
+                  dinheiro desta parcela. A faixa tem peso menor de propósito —
+                  é contexto do documento, não o assunto dele — e devolve a
+                  altura que faltava para o papel fechar em A4.
+                */}
+                <EspelhoFaixaResumo
+                  itens={[
+                    {
+                      rotulo: "Parcelas pagas",
+                      valor: `${resumo.pagas.quantidade} de ${resumo.total.quantidade}`,
+                    },
+                    {
+                      rotulo: "Já pago",
+                      valor: formatarBRL(resumo.pagas.valor),
+                    },
+                    {
+                      rotulo: "Em aberto",
+                      valor: formatarBRL(resumo.aPagar.valor),
+                    },
+                    {
+                      rotulo: "Próximo venc.",
+                      valor: formatarData(resumo.proximoVencimento),
+                    },
+                    ...(resumo.canceladas.quantidade > 0
+                      ? [
+                          {
+                            rotulo: "Canceladas",
+                            valor: `${resumo.canceladas.quantidade} · ${formatarBRL(resumo.canceladas.valor)}`,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              </EspelhoSecao>
+            ) : null}
+
+            <EspelhoColunas>
+              <EspelhoSecao rotulo="Identificação">
+                <EspelhoLinhas
+                  linhas={[
+                    {
+                      rotulo: "Nº do lançamento",
+                      valor: pagamento.lancamentoNumero,
+                    },
+                    { rotulo: "Nº da parcela", valor: pagamento.numeroParcela },
+                    {
+                      rotulo: "Competência",
+                      valor: formatarMesAno(pagamento.mesCompetencia),
+                    },
+                    {
+                      rotulo: "Forma de pagamento",
+                      valor: pagamento.formaPagamentoNome,
+                    },
+                  ]}
+                />
+              </EspelhoSecao>
+
+              <EspelhoSecao rotulo="Classificação">
+                <EspelhoLinhas
+                  linhas={[
+                    { rotulo: "Categoria", valor: pagamento.categoriaNome },
+                    { rotulo: "Conta bancária", valor: pagamento.contaNome },
+                    {
+                      // Situação do LANÇAMENTO, não da parcela: precisa do tipo
+                      // para não imprimir "a_pagar" cru e invertido num
+                      // recebível em aberto (rotuloStatusLancamento inverte para
+                      // "A receber"). Lançamento pai ausente (não deveria
+                      // acontecer) degrada para travessão em vez de estourar.
+                      rotulo: "Situação do lançamento",
+                      valor:
+                        pagamento.lancamentoStatus && pagamento.lancamentoTipo
+                          ? rotuloStatusLancamento(
+                              pagamento.lancamentoStatus,
+                              pagamento.lancamentoTipo,
+                            )
+                          : null,
+                    },
+                    {
+                      rotulo: "Valor do lançamento",
+                      valor: (
+                        <EspelhoDinheiro valor={pagamento.lancamentoValor} />
+                      ),
+                    },
+                    // Fecha a conta dos cartões acima (pagas + em aberto +
+                    // canceladas) e deixa comparável com o valor do lançamento
+                    // logo em cima. Omitido quando não há resumo, porque zero
+                    // aqui seria lido como "o lançamento não tem parcelas".
+                    ...(resumo
+                      ? [
+                          {
+                            rotulo: "Total das parcelas",
+                            valor: (
+                              <EspelhoDinheiro valor={resumo.total.valor} />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              </EspelhoSecao>
+            </EspelhoColunas>
 
             <EspelhoSecao rotulo="Rateio por centro de custo">
               <EspelhoTabela
@@ -241,37 +318,30 @@ export default async function EspelhoPagamentosPage({
                   // tem que dizer o que o número é. Ecoar `lancamentoValor` aqui
                   // esconderia justamente a divergência entre rateio e
                   // lançamento; o valor do lançamento continua no papel, na
-                  // seção "Lançamento de origem", para quem lê comparar.
+                  // coluna de classificação, para quem lê comparar.
                   centro: "Total do rateio",
                   valor: <EspelhoDinheiro valor={pagamento.somaRateios} />,
                 }}
               />
             </EspelhoSecao>
 
-            <EspelhoSecao rotulo="Anexos">
-              <EspelhoTabela
-                colunas={[
-                  { chave: "nome", rotulo: "Arquivo" },
-                  { chave: "tamanho", rotulo: "Tamanho", alinharDireita: true },
-                  { chave: "origem", rotulo: "Origem" },
-                ]}
-                linhas={(anexosPorParcela[pagamento.id] ?? []).map((anexo) => ({
-                  nome: anexo.nome,
-                  tamanho: `${Math.max(1, Math.round(anexo.tamanhoBytes / 1024))} KB`,
-                  origem: anexo.propagado
-                    ? "propagado da cadeia"
-                    : "deste pagamento",
-                }))}
-              />
-            </EspelhoSecao>
-
             {pagamento.lancamentoObservacoes ? (
               <EspelhoSecao rotulo="Observações do lançamento">
-                <p className="whitespace-pre-line text-[13px]">
+                <p className="text-[10.5px] leading-[15px] whitespace-pre-line">
                   {pagamento.lancamentoObservacoes}
                 </p>
               </EspelhoSecao>
             ) : null}
+
+            <EspelhoAssinatura
+              rotulo={foiPaga ? "Conferido por" : "Aprovado por"}
+            >
+              <EspelhoNota>
+                {anexos.length === 0
+                  ? "Nenhum anexo neste pagamento."
+                  : `${anexos.length} anexo(s): ${anexos.map((anexo) => anexo.nome).join(", ")}`}
+              </EspelhoNota>
+            </EspelhoAssinatura>
           </EspelhoImpresso>
         );
       })}

@@ -37,6 +37,51 @@ const LINHA = {
         centros_custo: { nome: "003 - Ramal do Gama", codigo: "003" },
       },
     ],
+    /*
+      As TRÊS parcelas do lançamento de R$ 3.000,00, e não só a que este
+      espelho imprime: é delas que sai o resumo "quanto já saiu e quanto
+      falta". A fixture fecha com o pai de propósito (3 x R$ 1.000,00), porque
+      fixture de dinheiro que não poderia existir no banco prova a crença de
+      quem a escreveu, não o código.
+
+      A parcela 2 é a impressa: mesmos valores da linha de cima, com desconto e
+      juros, para o resumo e a parcela nunca discordarem sobre o mesmo dado.
+    */
+    lancamento_parcelas: [
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        numero_parcela: 1,
+        data_vencimento: "2026-06-06",
+        valor: "1000.00",
+        desconto: "0.00",
+        juros: "0.00",
+        valor_liquido: "1000.00",
+        status: "pago",
+        data_pagamento: "2026-05-26",
+      },
+      {
+        id: "9f1b7c2e-6d3a-4f58-9b0e-1c2d3e4f5a6b",
+        numero_parcela: 2,
+        data_vencimento: "2026-07-06",
+        valor: "1000.00",
+        desconto: "50.00",
+        juros: "20.00",
+        valor_liquido: "970.00",
+        status: "pago",
+        data_pagamento: "2026-06-26",
+      },
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        numero_parcela: 3,
+        data_vencimento: "2026-08-06",
+        valor: "1000.00",
+        desconto: "0.00",
+        juros: "0.00",
+        valor_liquido: "1000.00",
+        status: "pendente",
+        data_pagamento: null,
+      },
+    ],
   },
 };
 
@@ -174,5 +219,47 @@ describe("montarEspelhoPagamento", () => {
     expect(
       montarEspelhoPagamento({ ...LINHA, lancamentos: null }).somaRateios,
     ).toBe(0);
+  });
+});
+
+describe("resumo do lançamento no espelho do pagamento", () => {
+  it("diz quantas parcelas foram pagas, quanto saiu e quanto falta", () => {
+    const espelho = montarEspelhoPagamento(LINHA);
+    const resumo = espelho.resumoParcelas;
+    if (!resumo) throw new Error("o resumo não deveria ser nulo com pai");
+
+    // Duas pagas de três: é a pergunta que quem assina o pagamento faz e que o
+    // papel não respondia.
+    expect(resumo.pagas.quantidade).toBe(2);
+    expect(resumo.aPagar.quantidade).toBe(1);
+    expect(resumo.total.quantidade).toBe(3);
+
+    // Pagas somam o LÍQUIDO (1.000,00 + 970,00), que é o dinheiro que saiu da
+    // conta, e não o valor de face. Esta é a linha de controle do teste: se
+    // alguém trocar a base por `valor`, o número vira 2.000,00 e o teste cai.
+    expect(resumo.pagas.valor).toBe(1970);
+    // Em aberto soma o VALOR, que é a dívida.
+    expect(resumo.aPagar.valor).toBe(1000);
+    expect(resumo.total.valor).toBe(2970);
+
+    expect(resumo.proximoVencimento).toBe("2026-08-06");
+    expect(resumo.ultimoPagamento).toBe("2026-06-26");
+  });
+
+  it("o resumo e a parcela impressa contam a mesma parcela", () => {
+    // A parcela deste espelho está DENTRO do resumo do lançamento. Se a
+    // consulta trouxesse só as irmãs, "2 de 3 pagas" excluiria justamente a
+    // que o papel afirma ter sido paga.
+    const espelho = montarEspelhoPagamento(LINHA);
+    const resumo = espelho.resumoParcelas;
+    if (!resumo) throw new Error("o resumo não deveria ser nulo com pai");
+    expect(resumo.pagas.valor).toBeGreaterThanOrEqual(espelho.valorLiquido);
+  });
+
+  it("sem lançamento pai o resumo é nulo, e não um bloco de zeros", () => {
+    // Zero em "já pago" e "em aberto" seria lido como "nada pago, nada a
+    // pagar", que é uma afirmação; nulo faz o papel omitir o bloco.
+    const orfa = { ...LINHA, lancamentos: null };
+    expect(montarEspelhoPagamento(orfa).resumoParcelas).toBeNull();
   });
 });

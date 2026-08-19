@@ -53,6 +53,7 @@ function lancamento(troca: Partial<LancamentoDetalhe> = {}): LancamentoDetalhe {
   return {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     numero: "LAN-2026-1362",
+    numeroDocumento: null,
     tipo: "a_pagar",
     origem: "manual",
     origemId: null,
@@ -63,7 +64,6 @@ function lancamento(troca: Partial<LancamentoDetalhe> = {}): LancamentoDetalhe {
     // aqui seria um registro que a fn_salvar_lancamento não produz.
     clienteId: null,
     clienteNome: null,
-    numeroDocumento: "NF 9351",
     contaBancariaId: null,
     contaBancariaNome: null,
     categoriaId: null,

@@ -12,6 +12,8 @@ function lancamento(troca: Partial<LancamentoLista> = {}): LancamentoLista {
   return {
     id: "11111111-1111-4111-8111-111111111111",
     numero: "LAN-2026-0015",
+    numeroDocumento: null,
+    anexos: 0,
     tipo: "a_pagar",
     origem: "manual",
     descricao: "Combustível julho",
@@ -99,6 +101,7 @@ describe("as colunas de sempre continuam lá", () => {
     // que a pessoa vê, e a preferência salva por usuário se apoia nos ids.
     expect(rotulos()).toEqual([
       "Número",
+      "Número do documento",
       "Tipo",
       "Fornecedor",
       "Descrição e categoria",
@@ -154,5 +157,34 @@ describe("quais colunas ordenam", () => {
     // existe como coluna de `lancamentos` para o `order` do banco.
     expect(ordenaveis()).not.toContain("fornecedorNome");
     expect(ordenaveis()).not.toContain("revisao");
+  });
+});
+
+describe("sinal de anexo e número do documento", () => {
+  it("o clipe fica na coluna Número, que é a que todo mundo vê", () => {
+    // Numa coluna opcional o sinal só apareceria para quem já a ligou, ou seja,
+    // para quem já sabia procurar. A coluna Número aparece para todo mundo.
+    renderizarCelula("Número", lancamento({ anexos: 3 }));
+    expect(screen.getByRole("img", { name: "3 anexos" })).toBeInTheDocument();
+  });
+
+  it("lançamento sem anexo não ganha clipe nenhum", () => {
+    renderizarCelula("Número", lancamento({ anexos: 0 }));
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    // E o número continua lá: o clipe entra ao lado, não no lugar.
+    expect(screen.getByText("LAN-2026-0015")).toBeInTheDocument();
+  });
+
+  it("mostra o número do documento do fornecedor", () => {
+    renderizarCelula(
+      "Número do documento",
+      lancamento({ numeroDocumento: "NF 12345" }),
+    );
+    expect(screen.getByText("NF 12345")).toBeInTheDocument();
+  });
+
+  it("sem documento mostra traço, não célula vazia", () => {
+    renderizarCelula("Número do documento", lancamento({ numeroDocumento: null }));
+    expect(screen.getByText("-")).toBeInTheDocument();
   });
 });

@@ -143,7 +143,6 @@ function valoresIniciais(
       tipo: tipoInicial,
       fornecedorId: undefined,
       clienteId: "",
-      numeroDocumento: "",
       contaBancariaId: "",
       categoriaId: undefined,
       formaPagamentoId: "",
@@ -153,6 +152,7 @@ function valoresIniciais(
       dataCompra: dataHojeISO(),
       mesCompetencia: mesHojeISO(),
       dataVencimento: dataHojeISO(),
+      numeroDocumento: "",
       observacoes: "",
       parcelas: [parcelaVazia()],
       // Nasce com UMA linha: centro de custo é obrigatório (o banco recusa lista
@@ -165,10 +165,6 @@ function valoresIniciais(
     tipo: lancamento.tipo,
     fornecedorId: lancamento.fornecedorId ?? undefined,
     clienteId: lancamento.clienteId ?? "",
-    // Semeado mesmo quando o campo não está na tela (só o a receber o mostra):
-    // sem isto, editar um lançamento a pagar que tem número de documento
-    // apagaria o número, porque o formulário mandaria a string vazia.
-    numeroDocumento: lancamento.numeroDocumento ?? "",
     contaBancariaId: lancamento.contaBancariaId ?? "",
     categoriaId: lancamento.categoriaId ?? undefined,
     formaPagamentoId: lancamento.formaPagamentoId ?? "",
@@ -190,6 +186,7 @@ function valoresIniciais(
       lancamento.parcelas.length === 1
         ? (lancamento.parcelas[0]?.dataVencimento ?? "")
         : (lancamento.dataVencimento ?? ""),
+    numeroDocumento: lancamento.numeroDocumento ?? "",
     observacoes: lancamento.observacoes ?? "",
     parcelas:
       lancamento.parcelas.length > 0
@@ -543,7 +540,6 @@ export function LancamentoFormDrawer({
       tipo: valores.tipo,
       fornecedorId: doTipo ? undefined : valores.fornecedorId,
       clienteId: doTipo ? valores.clienteId || undefined : undefined,
-      numeroDocumento: valores.numeroDocumento || undefined,
       contaBancariaId: doTipo ? valores.contaBancariaId || undefined : undefined,
       categoriaId: valores.categoriaId,
       formaPagamentoId: doTipo ? undefined : valores.formaPagamentoId || undefined,
@@ -553,6 +549,7 @@ export function LancamentoFormDrawer({
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       dataVencimento: vencimentoDoLancamento,
+      numeroDocumento: valores.numeroDocumento || undefined,
       observacoes: valores.observacoes || undefined,
       parcelas: parcelasParaSalvar,
       /**
@@ -880,27 +877,14 @@ export function LancamentoFormDrawer({
               </CampoFormulario>
             </LinhaCampos>
 
+            {/* O número do documento NÃO fica aqui: ele mora na fileira das
+                datas, junto da data do documento, e é um campo só para os dois
+                tipos (obrigatório no a receber). Dois campos com o mesmo
+                `register` e o mesmo id era o que este bloco fazia antes. */}
             <LinhaCampos>
-              <CampoFormulario
-                id="lan-numero-documento"
-                rotulo="Número do documento"
-                obrigatorio
-                ajuda="Nota, medição ou contrato que gerou o direito de receber"
-                erro={form.formState.errors.numeroDocumento?.message}
-              >
-                <Input
-                  id="lan-numero-documento"
-                  placeholder="Ex: NF 1234 ou MED-07/2026"
-                  className="codigo-doc"
-                  disabled={salvando}
-                  {...form.register("numeroDocumento")}
-                />
-              </CampoFormulario>
-
               {campoCategoria}
+              {campoCondicao}
             </LinhaCampos>
-
-            <LinhaCampos>{campoCondicao}</LinhaCampos>
           </>
         ) : (
           <>
@@ -1019,6 +1003,32 @@ export function LancamentoFormDrawer({
               />
             </CampoFormulario>
           ) : null}
+
+          {/* Ao lado das datas porque é a mesma pergunta: qual documento é este
+              e de quando ele é. Um campo só para os dois tipos, com exigência
+              diferente: no a pagar muito lançamento avulso não tem documento
+              nenhum (rateio interno, acerto, provisão); no a receber ele é
+              obrigatório, porque é o que amarra o recebimento ao papel que gerou
+              o direito, e fn_salvar_lancamento recusa sem ele. */}
+          <CampoFormulario
+            id="lan-numero-documento"
+            rotulo="Número do documento"
+            obrigatorio={aReceber}
+            ajuda={
+              aReceber
+                ? "Nota, medição ou contrato que gerou o direito de receber"
+                : "Nota fiscal, boleto ou recibo. Opcional."
+            }
+            erro={form.formState.errors.numeroDocumento?.message}
+          >
+            <Input
+              id="lan-numero-documento"
+              maxLength={60}
+              placeholder={aReceber ? "Ex.: MED-07/2026" : "Ex.: NF 12345"}
+              disabled={salvando}
+              {...form.register("numeroDocumento")}
+            />
+          </CampoFormulario>
         </LinhaCampos>
 
         {/* Parcelas: mesmo padrão de tabela de itens da OC, na mesma ordem de

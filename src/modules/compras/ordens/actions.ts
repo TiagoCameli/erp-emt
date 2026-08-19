@@ -70,6 +70,10 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
     // (fn_aprovar_ordem_compra): é o que classifica a compra no DRE.
     descricao: dados.descricao,
     categoria_id: dados.categoriaId,
+    // Nota fiscal, boleto, recibo: o número que identifica o documento do
+    // fornecedor. Vale nos dois caminhos, porque o mesmo objeto vira o
+    // p_cabecalho da RPC de criação e o update direto da edição.
+    numero_documento: dados.numeroDocumento ?? null,
     observacoes: dados.observacoes ?? null,
   };
 }

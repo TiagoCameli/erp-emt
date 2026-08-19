@@ -116,12 +116,6 @@ export const lancamentoSchema = z
      */
     clienteId: idSchemaCom("Cliente inválido").optional(),
     /**
-     * Número do documento que gerou o direito ou a dívida (nota, medição,
-     * contrato). Obrigatório no a receber, onde é o que amarra o recebimento ao
-     * papel: sem ele não há como conferir recebido contra documento.
-     */
-    numeroDocumento: textoOpcional(60),
-    /**
      * Conta em que o dinheiro vai entrar, no a receber. Não é a mesma coisa que a
      * conta do a pagar: lá ela é escolhida na revisão e é ela que decide se o
      * lançamento já nasce aprovado ou quitado. Aqui é só o destino esperado, e o
@@ -160,6 +154,12 @@ export const lancamentoSchema = z
       .trim()
       .regex(/^\d{4}-\d{2}-01$/, { error: "Informe o mês de referência" }),
     dataVencimento: dataOpcionalSchema,
+    /**
+     * Número do documento do fornecedor: nota fiscal, boleto, recibo. Opcional
+     * e sem unicidade, mesma regra da OC. Não confundir com o `numero` do
+     * lançamento, que é o número interno e quem gera é o banco.
+     */
+    numeroDocumento: textoOpcional(60),
     /** Texto livre: o combinado, o que a nota não diz. Só no detalhe. */
     observacoes: textoOpcional(2000),
     parcelas: z
@@ -275,10 +275,6 @@ export const lancamentoFormSchema = z
     fornecedorId: idSchema.optional(),
     /** Vazio = ninguém escolhido, igual ao Combobox sem seleção. */
     clienteId: z.union([z.literal(""), idSchema]).optional(),
-    numeroDocumento: z
-      .string()
-      .trim()
-      .max(60, { error: "Máximo de 60 caracteres" }),
     contaBancariaId: z.union([z.literal(""), idSchema]).optional(),
     categoriaId: idSchema.optional(),
     formaPagamentoId: z.union([z.literal(""), idSchema]).optional(),
@@ -305,6 +301,11 @@ export const lancamentoFormSchema = z
       .trim()
       .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     dataVencimento: z.string().trim(),
+    /** Número do documento do fornecedor. Vazio no form = null no banco. */
+    numeroDocumento: z
+      .string()
+      .trim()
+      .max(60, { error: "Máximo de 60 caracteres" }),
     observacoes: z
       .string()
       .trim()

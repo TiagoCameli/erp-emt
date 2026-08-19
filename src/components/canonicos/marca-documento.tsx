@@ -58,34 +58,71 @@ export function CabecalhoDocumento({
   subtitulo,
   meta,
 }: {
-  /** O que o papel é: "Pagamento", "Ordem de compra", "Holerite". */
-  titulo: string;
+  /**
+   * O que o papel é: "Holerite". Opcional — quando não vem, a coluna do centro
+   * não existe e a da direita ocupa o resto da largura. É assim que o espelho
+   * usa: lá o tipo do documento é uma tarja logo abaixo (`EspelhoTarja`, que diz
+   * o tipo E a situação numa cor só), e o lado direito é o bloco de endereço da
+   * empresa, que não caberia em 28mm.
+   */
+  titulo?: string;
   /** Número do documento, competência: a segunda linha do centro. */
   subtitulo?: React.ReactNode;
-  /** Canto direito, em letra pequena. Normalmente quando e por quem foi emitido. */
+  /** Canto direito. Emissão em letra pequena, ou o `BlocoEmpresa`. */
   meta?: React.ReactNode;
 }) {
+  const temTitulo = titulo !== undefined;
   return (
     <header className="flex items-start justify-between gap-4">
-      <div className="w-[28mm] shrink-0">
+      <div className={cn("shrink-0", temTitulo && "w-[28mm]")}>
         <LogoEmt titulo={EMPRESA.nome} className="w-[26mm]" />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col items-center pt-1 text-center">
-        <h1 className="text-[19px] leading-tight font-semibold tracking-tight">
-          {titulo}
-        </h1>
-        {subtitulo ? (
-          <span className="font-mono text-[13px] whitespace-nowrap text-[#6B6B6B]">
-            {subtitulo}
-          </span>
-        ) : null}
-      </div>
+      {temTitulo ? (
+        <div className="flex min-w-0 flex-1 flex-col items-center pt-1 text-center">
+          <h1 className="text-[19px] leading-tight font-semibold tracking-tight">
+            {titulo}
+          </h1>
+          {subtitulo ? (
+            <span className="font-mono text-[13px] whitespace-nowrap text-[#6B6B6B]">
+              {subtitulo}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
-      <div className="flex w-[28mm] shrink-0 flex-col items-end pt-1 text-right text-[10px] leading-[14px] text-[#6B6B6B]">
+      <div
+        className={cn(
+          "flex shrink-0 flex-col items-end pt-1 text-right text-[10px] leading-[14px] text-[#6B6B6B]",
+          temTitulo ? "w-[28mm]" : "min-w-0 flex-1",
+        )}
+      >
         {meta}
       </div>
     </header>
+  );
+}
+
+/**
+ * Bloco de identificação da empresa para o CANTO do cabeçalho: razão social,
+ * CNPJ, endereço em duas linhas e telefone.
+ *
+ * Sobe pro topo do documento, e não fica só no rodapé, porque é assim que se lê
+ * um papel que sai da empresa: quem emitiu está no alto, junto da marca. O
+ * rodapé continua existindo, mas em uma linha só (`RodapeDocumento`), dizendo o
+ * que o papel é.
+ */
+export function BlocoEmpresa() {
+  return (
+    <>
+      <span className="text-[11px] leading-[15px] font-bold tracking-wide text-[#1F1F1F] uppercase">
+        {EMPRESA.razaoSocial}
+      </span>
+      <span>CNPJ: {EMPRESA.cnpj}</span>
+      <span>{EMPRESA.logradouro}</span>
+      <span>{EMPRESA.cidade}</span>
+      <span>{EMPRESA.telefones}</span>
+    </>
   );
 }
 
@@ -111,6 +148,22 @@ export function RodapeEmpresa({ className }: { className?: string }) {
       <span>
         Telefone: {EMPRESA.telefones} · E-mail: {EMPRESA.email}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Rodapé de uma linha: quem emitiu e o que o papel é.
+ *
+ * Diferente do `RodapeEmpresa` (bloco de três linhas, usado pelo holerite): no
+ * espelho o endereço já está no cabeçalho, e repetir aqui gastaria três linhas
+ * de uma folha que precisa fechar em A4. O que falta dizer é o que este papel é,
+ * e é o que esta linha diz.
+ */
+export function RodapeDocumento({ tipo }: { tipo: string }) {
+  return (
+    <div className="border-t border-dashed border-[#D4D2CC] pt-[5px] text-center text-[9px] tracking-[0.08em] text-[#8A8A8A] uppercase">
+      {EMPRESA.razaoSocial} · CNPJ {EMPRESA.cnpj} · Documento interno — {tipo}
     </div>
   );
 }

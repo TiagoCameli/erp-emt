@@ -2,38 +2,66 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  EspelhoCampos,
+  EspelhoCartoes,
+  EspelhoDestaque,
   EspelhoDinheiro,
   EspelhoImpresso,
+  EspelhoLinhas,
   EspelhoSecao,
   EspelhoTabela,
+  tomDoStatus,
 } from "@/components/canonicos/espelho-impresso";
+import { EMPRESA } from "@/config/marca";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 
 // Sem globals: true no vitest.config, o cleanup automático da RTL não roda.
 afterEach(cleanup);
 
 describe("EspelhoImpresso", () => {
-  it("mostra tipo, número e quem emitiu", () => {
+  it("mostra tipo, situação, número e quem emitiu", () => {
     render(
       <EspelhoImpresso
-        tipo="Ordem de compra"
-        numero="OC-2026-0001"
+        tipo="Conta a pagar"
+        numero="LAN-2026-0015"
+        situacao="Em aberto"
+        tom="aberto"
         emitidoPor="Tiago Cameli"
         emitidoEm="2026-08-13T14:00:00Z"
       >
         <p>conteúdo</p>
       </EspelhoImpresso>,
     );
-    expect(screen.getByText("Ordem de compra")).toBeInTheDocument();
-    expect(screen.getByText("OC-2026-0001")).toBeInTheDocument();
+    expect(screen.getByText("Conta a pagar")).toBeInTheDocument();
+    expect(screen.getByText("· Em aberto")).toBeInTheDocument();
+    expect(screen.getByText("LAN-2026-0015")).toBeInTheDocument();
     expect(screen.getByText(/Tiago Cameli/)).toBeInTheDocument();
+  });
+
+  it("identifica a empresa no cabeçalho e diz o que o papel é no rodapé", () => {
+    // O endereço subiu para o topo (é assim que se lê um papel que sai da
+    // empresa) e o rodapé virou uma linha só. Se um dia alguém trocar o CNPJ em
+    // src/config/marca.ts, este teste acompanha em vez de brigar.
+    const { container } = render(
+      <EspelhoImpresso
+        tipo="Conta a pagar"
+        numero="LAN-2026-0015"
+        emitidoPor="Tiago"
+        emitidoEm="2026-08-13T14:00:00Z"
+      >
+        <p>conteúdo</p>
+      </EspelhoImpresso>,
+    );
+    expect(screen.getByText(EMPRESA.razaoSocial)).toBeInTheDocument();
+    expect(screen.getByText(EMPRESA.logradouro)).toBeInTheDocument();
+    expect(container.textContent).toContain(
+      "Documento interno — Espelho de conta a pagar",
+    );
   });
 
   it("documento sem número diz que não tem, em vez de deixar buraco", () => {
     render(
       <EspelhoImpresso
-        tipo="Lançamento"
+        tipo="Conta a pagar"
         numero={null}
         emitidoPor="Tiago"
         emitidoEm="2026-08-13T14:00:00Z"
@@ -47,7 +75,7 @@ describe("EspelhoImpresso", () => {
   it("marca o documento com a classe de quebra de página", () => {
     const { container } = render(
       <EspelhoImpresso
-        tipo="Lançamento"
+        tipo="Conta a pagar"
         numero="LAN-2026-0001"
         emitidoPor="Tiago"
         emitidoEm="2026-08-13T14:00:00Z"
@@ -62,23 +90,84 @@ describe("EspelhoImpresso", () => {
   });
 });
 
-describe("EspelhoCampos", () => {
-  it("mostra rótulo e valor de cada campo", () => {
+describe("tomDoStatus", () => {
+  it("segue o status padrão do ERP, e não um mapa próprio do papel", () => {
+    // Mesma semântica do StatusBadge da tela: efetivado verde, pendente âmbar,
+    // recusado vermelho, rascunho neutro. Se o papel tivesse mapa próprio, tela
+    // e documento passariam a discordar sobre a cor do mesmo lançamento.
+    expect(tomDoStatus("pago")).toBe("efetivado");
+    expect(tomDoStatus("recebido")).toBe("efetivado");
+    expect(tomDoStatus("aprovado")).toBe("efetivado");
+    expect(tomDoStatus("pendente_aprovacao")).toBe("aberto");
+    expect(tomDoStatus("rejeitado")).toBe("recusado");
+    expect(tomDoStatus("cancelado")).toBe("recusado");
+    expect(tomDoStatus("rascunho")).toBe("neutro");
+  });
+});
+
+describe("EspelhoDestaque", () => {
+  it("põe o nome, o selo e o valor em destaque", () => {
     render(
-      <EspelhoCampos
-        campos={[
+      <EspelhoDestaque
+        rotulo="Fornecedor"
+        titulo="SEFAZ-AC"
+        badge="Parcela 19/60"
+        descricao="Referente parcelamento"
+        valor={3881.73}
+      />,
+    );
+    expect(screen.getByText("SEFAZ-AC")).toBeInTheDocument();
+    expect(screen.getByText("Parcela 19/60")).toBeInTheDocument();
+    expect(screen.getByText(/3\.881,73/)).toBeInTheDocument();
+  });
+
+  it("sem nome sai travessão, e não um destaque em branco", () => {
+    render(<EspelhoDestaque rotulo="Fornecedor" titulo={null} valor={10} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("EspelhoCartoes", () => {
+  it("mostra rótulo, valor e nota de cada cartão", () => {
+    render(
+      <EspelhoCartoes
+        cartoes={[
+          { rotulo: "Parcelas pagas", valor: "2 de 3", nota: "última em 26/06" },
+          { rotulo: "Em aberto", valor: "R$ 1.000,00" },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Parcelas pagas")).toBeInTheDocument();
+    expect(screen.getByText("2 de 3")).toBeInTheDocument();
+    expect(screen.getByText("última em 26/06")).toBeInTheDocument();
+    expect(screen.getByText("Em aberto")).toBeInTheDocument();
+  });
+
+  it("cartão sem valor sai travessão, e não em branco", () => {
+    // "Pago em" de uma parcela não paga: em branco não distingue "não tem" de
+    // "esqueceram de imprimir", num papel que serve de prova.
+    render(<EspelhoCartoes cartoes={[{ rotulo: "Pago em", valor: null }]} />);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("EspelhoLinhas", () => {
+  it("mostra rótulo e valor de cada linha", () => {
+    render(
+      <EspelhoLinhas
+        linhas={[
           { rotulo: "Fornecedor", valor: "BRITAM" },
-          { rotulo: "Status", valor: "Aprovado" },
+          { rotulo: "Categoria", valor: "Brita" },
         ]}
       />,
     );
     expect(screen.getByText("Fornecedor")).toBeInTheDocument();
     expect(screen.getByText("BRITAM")).toBeInTheDocument();
-    expect(screen.getByText("Status")).toBeInTheDocument();
+    expect(screen.getByText("Categoria")).toBeInTheDocument();
   });
 
-  it("campo sem valor sai como travessão, e não como vazio ambíguo", () => {
-    render(<EspelhoCampos campos={[{ rotulo: "Observações", valor: null }]} />);
+  it("linha sem valor sai como travessão, e não como vazio ambíguo", () => {
+    render(<EspelhoLinhas linhas={[{ rotulo: "Descrição", valor: null }]} />);
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 });

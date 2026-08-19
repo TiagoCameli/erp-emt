@@ -21,6 +21,7 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
+  SeloAnexos,
   StatusBadge,
   useBuscaUrl,
   useFaixaUrl,
@@ -60,14 +61,23 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
   {
     accessorKey: "numero",
     header: "Número",
-    size: 130,
+    // 130 cabia só o número. O clipe (14) mais o gap (6) pedem 20px a mais, e
+    // a coluna é fixa: sem folga aqui o número é que seria cortado.
+    size: 150,
     meta: { fixa: true },
-    cell: ({ row }) =>
-      row.original.numero ? (
-        <span className="codigo-doc">{row.original.numero}</span>
-      ) : (
-        <CelulaVazia />
-      ),
+    cell: ({ row }) => (
+      // O clipe vive nesta coluna porque ela é a única sempre visível: numa
+      // coluna opcional o sinal só apareceria para quem já ligou a coluna, ou
+      // seja, para quem já sabia procurar.
+      <span className="inline-flex items-center gap-1.5">
+        {row.original.numero ? (
+          <span className="codigo-doc">{row.original.numero}</span>
+        ) : (
+          <CelulaVazia />
+        )}
+        <SeloAnexos quantidade={row.original.anexos} />
+      </span>
+    ),
   },
   colunaTexto<OrdemLista>("fornecedorNome", "Fornecedor", {
     size: 260,
@@ -152,14 +162,17 @@ const colunas: ColumnDef<OrdemLista, unknown>[] = [
         <CelulaVazia />
       ),
   }),
-  // Existe para o filtro "Nota fiscal" ser conferível: filtrar por "sem nota" e
-  // não ter onde ver a nota das outras deixaria o usuário no escuro.
-  colunaTexto<OrdemLista>("notaFiscal", "Nota fiscal", {
-    size: 130,
+  // O número do documento do fornecedor: nota fiscal, boleto, recibo. Também é
+  // o que torna o filtro "Nota fiscal" conferível — filtrar por "sem nota" e não
+  // ter onde ver o documento das outras deixaria o usuário no escuro.
+  colunaTexto<OrdemLista>("numeroDocumento", "Número do documento", {
+    // O cabeçalho manda: "Número do documento" (145) mais a seta (14), o gap (4)
+    // e o px-3 (24) pede 187px.
+    size: 190,
     meta: { ocultaPorPadrao: true },
     cell: ({ row }) =>
-      row.original.notaFiscal ? (
-        <span className="codigo-doc">{row.original.notaFiscal}</span>
+      row.original.numeroDocumento ? (
+        <span className="codigo-doc">{row.original.numeroDocumento}</span>
       ) : (
         <CelulaVazia />
       ),

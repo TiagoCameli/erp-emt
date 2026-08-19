@@ -23,6 +23,7 @@ import {
   FiltroSelect,
   FiltroValor,
   MoneyText,
+  SeloAnexos,
   StatusBadge,
   useBuscaUrl,
   useFaixaUrl,
@@ -123,9 +124,28 @@ export function montarColunas(
   {
     accessorKey: "numero",
     header: "Número",
+    cell: ({ row }) => (
+      // O clipe fica aqui, e não numa coluna própria, porque esta é a coluna
+      // que todo mundo enxerga: numa coluna opcional o sinal só apareceria para
+      // quem já a ligou, ou seja, para quem já sabia procurar.
+      <span className="inline-flex items-center gap-1.5">
+        {row.original.numero ? (
+          <span className="codigo-doc">{row.original.numero}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+        <SeloAnexos quantidade={row.original.anexos} />
+      </span>
+    ),
+  },
+  {
+    accessorKey: "numeroDocumento",
+    header: "Número do documento",
+    size: 190,
+    meta: { rotulo: "Número do documento", ocultaPorPadrao: true },
     cell: ({ row }) =>
-      row.original.numero ? (
-        <span className="codigo-doc">{row.original.numero}</span>
+      row.original.numeroDocumento ? (
+        <span className="codigo-doc">{row.original.numeroDocumento}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
       ),

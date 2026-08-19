@@ -387,6 +387,13 @@ export function OrdemDetalheView({
                   <CelulaVazia />
                 )}
               </Dado>
+              <Dado rotulo="Número do documento">
+                {ordem.numeroDocumento ? (
+                  <span className="codigo-doc">{ordem.numeroDocumento}</span>
+                ) : (
+                  <CelulaVazia />
+                )}
+              </Dado>
               <Dado rotulo="Valor total">
                 <MoneyText valor={ordem.valorTotal} className="font-semibold" />
               </Dado>
@@ -676,6 +683,7 @@ export function OrdemDetalheView({
         ordemId={ordem.id}
         valorTotalOc={ordem.valorTotal}
         parcelasCondicao={parcelasCondicao}
+        numeroDocumentoDaOrdem={ordem.numeroDocumento}
       />
     </div>
   );

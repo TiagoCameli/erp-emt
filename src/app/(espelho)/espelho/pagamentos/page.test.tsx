@@ -108,6 +108,17 @@ function pagamentoFixture(
     formaPagamentoNome: "PIX",
     rateios: [],
     somaRateios: 0,
+    // Um parcelamento coerente com o pai de R$ 3.000,00: duas de três pagas,
+    // com a parcela deste espelho (a 2) dentro do grupo das pagas. Fixture que
+    // não fechasse com o lançamento provaria a crença de quem a escreveu.
+    resumoParcelas: {
+      pagas: { quantidade: 2, valor: 1970 },
+      aPagar: { quantidade: 1, valor: 1000 },
+      canceladas: { quantidade: 0, valor: 0 },
+      total: { quantidade: 3, valor: 2970 },
+      proximoVencimento: "2026-08-06",
+      ultimoPagamento: "2026-06-26",
+    },
     ...overrides,
   };
   // `somaRateios` sempre derivado das linhas, igual ao que
@@ -274,16 +285,25 @@ describe("EspelhoPagamentosPage e a parcela que ainda não foi paga", () => {
         status: "pendente",
         lancamentoStatus: "a_pagar",
         dataPagamento: null,
+        // Resumo coerente com a parcela: se a 2 não foi paga, ela conta entre
+        // as em aberto. Fixture que deixasse a parcela impressa dentro das
+        // pagas provaria a crença de quem a escreveu, não o código.
+        resumoParcelas: {
+          pagas: { quantidade: 1, valor: 1000 },
+          aPagar: { quantidade: 2, valor: 2000 },
+          canceladas: { quantidade: 0, valor: 0 },
+          total: { quantidade: 3, valor: 3000 },
+          proximoVencimento: "2026-07-06",
+          ultimoPagamento: "2026-05-26",
+        },
       }),
     ]);
 
     await renderPagina(ID_A);
 
-    // Duas vezes: o título do documento e o rótulo da primeira seção. A seção
-    // acompanha o título de propósito — uma seção chamada "Pagamento" num papel
-    // intitulado "Parcela" reintroduziria em miniatura a afirmação que o título
-    // acabou de tirar.
-    expect(screen.getAllByText("Parcela")).toHaveLength(2);
+    // A tarja diz o que o papel é, e num documento de parcela não paga a
+    // palavra "Pagamento" não pode aparecer sozinha em canto nenhum.
+    expect(screen.getByText("Parcela a pagar")).toBeInTheDocument();
     expect(screen.queryAllByText("Pagamento")).toHaveLength(0);
     expect(valorDoCampo("Saiu da conta")).toBe("—");
     expect(valorDoCampo("Pago em")).toBe("—");
@@ -294,7 +314,9 @@ describe("EspelhoPagamentosPage e a parcela que ainda não foi paga", () => {
     // status real da parcela seguem impressos.
     expect(valorDoCampo("Valor da parcela")).toBe(formatarBRL(1000));
     expect(valorDoCampo("Vencimento")).toBe(formatarData("2026-07-06"));
-    expect(valorDoCampo("Status")).toBe("Pendente");
+    // A situação real da parcela sai na tarja, ao lado do tipo do documento, e
+    // como TEXTO: no papel a cor do ponto pode não sair.
+    expect(screen.getByText("· Pendente")).toBeInTheDocument();
   });
 
   it("parcela paga continua saindo como 'Pagamento', com o líquido e a data", async () => {
@@ -305,10 +327,10 @@ describe("EspelhoPagamentosPage e a parcela que ainda não foi paga", () => {
 
     await renderPagina(ID_A);
 
-    // "Parcela" é o título do documento degradado; num pagamento de verdade ele
-    // não aparece em canto nenhum do papel, nem como rótulo de seção.
-    expect(screen.queryByText("Parcela")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Pagamento")).toHaveLength(2);
+    // "Parcela a pagar" é a tarja degradada; num pagamento de verdade ela não
+    // aparece em canto nenhum do papel.
+    expect(screen.queryByText("Parcela a pagar")).not.toBeInTheDocument();
+    expect(screen.getByText("Pagamento")).toBeInTheDocument();
     expect(valorDoCampo("Saiu da conta")).toBe(formatarBRL(970));
     expect(valorDoCampo("Pago em")).toBe(formatarData("2026-06-26"));
   });
