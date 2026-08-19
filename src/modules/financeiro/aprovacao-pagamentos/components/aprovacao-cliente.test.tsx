@@ -119,6 +119,7 @@ function renderizar() {
             id: "55555555-5555-4555-8555-555555555555",
             nome: "Caixa 1234",
             banco: "caixa",
+            saldoAtual: 0,
           },
         ],
         podeAprovar: true,

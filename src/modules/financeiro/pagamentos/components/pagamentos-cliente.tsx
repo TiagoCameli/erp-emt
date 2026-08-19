@@ -48,6 +48,14 @@ import type {
   ParcelaAprovada,
   ParcelaPaga,
 } from "@/modules/financeiro/pagamentos/queries";
+import { DetalheParcelaDrawer } from "./detalhe-parcela-drawer";
+import { PagarLoteDrawer } from "./pagar-lote-drawer";
+import {
+  contagem,
+  podePagarParcela,
+  somarParaResumo,
+} from "@/modules/financeiro/pagamentos/resumo";
+
 import { PagarParcelaDrawer } from "./pagar-parcela-drawer";
 
 const TAMANHO_PAGINA = 25;
@@ -202,9 +210,9 @@ export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
 }
 
 /**
- * Tela de pagamentos: KPI do total a pagar aprovado, aba "A pagar" com as
- * parcelas aprovadas e o botão de pagar, e aba "Pagas" com o histórico
- * paginado no servidor.
+ * Tela de pagamentos: cards que resumem o que está em aberto (ou o que está
+ * marcado), aba "A pagar" com as parcelas aprovadas E as que ainda aguardam
+ * aprovação, e aba "Pagas" com o histórico paginado no servidor.
  */
 export function PagamentosCliente({
   aprovadas,
@@ -237,6 +245,18 @@ export function PagamentosCliente({
     React.useState<ParcelaPaga | null>(null);
   const [estornoAberto, setEstornoAberto] = React.useState(false);
 
+  // Painel de detalhe: guarda só o ID e carrega sob demanda. Guardar a linha
+  // inteira daria um detalhe montado com o que a listagem por acaso trouxe, e a
+  // listagem não tem rateio, anexo nem trilha.
+  const [detalheId, setDetalheId] = React.useState<string | null>(null);
+  const [detalheAberto, setDetalheAberto] = React.useState(false);
+
+  // Seleção da fila a pagar, e o drawer de pagamento em lote.
+  const [selecionadosAPagar, setSelecionadosAPagar] = React.useState<string[]>(
+    [],
+  );
+  const [loteAberto, setLoteAberto] = React.useState(false);
+
   function abrirEstorno(parcela: ParcelaPaga) {
     setParcelaEstorno(parcela);
     setEstornoAberto(true);
@@ -252,11 +272,6 @@ export function PagamentosCliente({
     toast.success("Pagamento estornado");
     router.refresh();
   }
-
-  const totalAPagar = React.useMemo(
-    () => aprovadas.reduce((soma, parcela) => soma + parcela.valor, 0),
-    [aprovadas],
-  );
 
   const opcoesFornecedor = React.useMemo<OpcaoFiltro[]>(
     () =>
@@ -433,6 +448,36 @@ export function PagamentosCliente({
     });
   }, [aprovadas, buscaAprovadas, valoresAPagar]);
 
+  /**
+   * As parcelas que os cards resumem.
+   *
+   * Sem seleção, o resumo é do FILTRO inteiro: cards zerados numa tela cheia de
+   * linhas não dizem nada, e o número que interessa ao abrir é quanto a empresa
+   * deve no recorte que está vendo. Com linhas marcadas, passa a resumir só o
+   * marcado, que é o que o Tiago pediu — e é exatamente o dinheiro que o botão
+   * de pagar vai mexer.
+   */
+  const resumidas = React.useMemo(() => {
+    if (selecionadosAPagar.length === 0) return aprovadasFiltradas;
+    const marcados = new Set(selecionadosAPagar);
+    return aprovadasFiltradas.filter((parcela) => marcados.has(parcela.id));
+  }, [aprovadasFiltradas, selecionadosAPagar]);
+
+  const resumo = React.useMemo(() => somarParaResumo(resumidas, hoje), [
+    resumidas,
+    hoje,
+  ]);
+
+  const temSelecao = selecionadosAPagar.length > 0;
+
+  /** As marcadas que o banco aceita pagar. As outras nem entram no lote. */
+  const selecionadasPagaveis = React.useMemo(() => {
+    const marcados = new Set(selecionadosAPagar);
+    return aprovadasFiltradas.filter(
+      (parcela) => marcados.has(parcela.id) && podePagarParcela(parcela),
+    );
+  }, [aprovadasFiltradas, selecionadosAPagar]);
+
   const filtrosAprovadas: FiltroConfiguravel[] = [
     {
       id: "busca",
@@ -568,6 +613,12 @@ export function PagamentosCliente({
     setDrawerAberto(true);
   }
 
+  /** Abre o painel de detalhe de qualquer parcela, paga ou não. */
+  function abrirDetalhe(id: string) {
+    setDetalheId(id);
+    setDetalheAberto(true);
+  }
+
   const semConta = contas.length === 0;
 
   // As larguras são declaradas coluna a coluna porque o padrão de 150px em
@@ -653,12 +704,18 @@ export function PagamentosCliente({
         id: "status",
         header: "Status",
         size: 110,
-        cell: () => (
-          <StatusBadge
-            status={STATUS_PARCELA.aprovado.badge}
-            rotulo={STATUS_PARCELA.aprovado.rotulo}
-          />
-        ),
+        cell: ({ row }) => {
+          // A fila deixou de ser só de aprovadas: o selo tem que dizer a
+          // situação DA LINHA. Fixo em "Aprovado" ele afirmaria que uma parcela
+          // pendente já passou pela aprovação — bem em cima do botão de pagar.
+          const status = row.original.status ?? "aprovado";
+          return (
+            <StatusBadge
+              status={STATUS_PARCELA[status].badge}
+              rotulo={STATUS_PARCELA[status].rotulo}
+            />
+          );
+        },
       },
       ...(podePagar
         ? [
@@ -667,15 +724,22 @@ export function PagamentosCliente({
               header: "",
               size: 100,
               meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
-              cell: ({ row }) => (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => abrirPagamento(row.original)}
-                >
-                  Pagar
-                </Button>
-              ),
+              cell: ({ row }) =>
+                // Sem botão no que ainda não foi aprovado: `fn_pagar_parcela`
+                // recusa, então oferecer o botão seria prometer uma ação que o
+                // banco nega. A linha continua clicável para ver o detalhe.
+                podePagarParcela(row.original) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={(evento) => {
+                      evento.stopPropagation();
+                      abrirPagamento(row.original);
+                    }}
+                  >
+                    Pagar
+                  </Button>
+                ) : null,
             } satisfies ColumnDef<ParcelaAprovada, unknown>,
           ]
         : []),
@@ -843,9 +907,24 @@ export function PagamentosCliente({
     <div className="flex flex-col gap-4">
       <GradeKpis>
         <KPICard
-          titulo="Total a pagar aprovado"
-          valor={formatarBRL(totalAPagar)}
-          detalhe={`${aprovadas.length} ${aprovadas.length === 1 ? "parcela aprovada" : "parcelas aprovadas"}`}
+          titulo={temSelecao ? "Selecionado" : "Total a pagar"}
+          valor={formatarBRL(resumo.total)}
+          detalhe={contagem(resumo.parcelas)}
+        />
+        <KPICard
+          titulo="Pronto para pagar"
+          valor={formatarBRL(resumo.aprovado)}
+          detalhe={`${contagem(resumo.aprovadas)} aprovada${resumo.aprovadas === 1 ? "" : "s"}`}
+        />
+        <KPICard
+          titulo="Aguardando aprovação"
+          valor={formatarBRL(resumo.aguardando)}
+          detalhe={contagem(resumo.aguardandoParcelas)}
+        />
+        <KPICard
+          titulo="Vencido"
+          valor={formatarBRL(resumo.vencido)}
+          detalhe={contagem(resumo.vencidas)}
         />
       </GradeKpis>
 
@@ -859,7 +938,10 @@ export function PagamentosCliente({
         defaultValue="a-pagar"
         // Troca de aba limpa a seleção da aba "Pagas": mesma razão de
         // lancamentos-tabela.tsx não persistir seleção entre visitas.
-        onValueChange={() => setSelecionados([])}
+        onValueChange={() => {
+          setSelecionados([]);
+          setSelecionadosAPagar([]);
+        }}
       >
         <TabsList>
           <TabsTrigger value="a-pagar">A pagar</TabsTrigger>
@@ -867,21 +949,53 @@ export function PagamentosCliente({
         </TabsList>
 
         <TabsContent value="a-pagar">
-          <DataTable
-            onLimparFiltros={limparTodos}
-            idTabela="financeiro.pagamentos.a-pagar"
-            columns={colunasAprovadas}
-            data={aprovadasFiltradas}
-            filtros={filtrosAprovadas}
-            emptyState={
-              <EmptyState
-                icone={Wallet}
-                titulo="Nenhuma parcela aprovada"
-                descricao="Parcelas aprovadas aparecem aqui, prontas para pagamento. Compra em dinheiro entra direto, sem passar pela aprovação; compra no cartão de crédito já nasce quitada e não aparece aqui."
-                className="border-none bg-transparent"
+          <div className="flex flex-col gap-2">
+            <BarraSelecao
+              quantidade={selecionadosAPagar.length}
+              onLimpar={() => setSelecionadosAPagar([])}
+            >
+              {podePagar ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={selecionadasPagaveis.length === 0}
+                  onClick={() => setLoteAberto(true)}
+                >
+                  {/* Diz quantas SERÃO pagas, não quantas estão marcadas: o
+                      número menor é a única pista de que as não aprovadas
+                      ficaram de fora. */}
+                  {selecionadasPagaveis.length === selecionadosAPagar.length
+                    ? `Pagar ${selecionadasPagaveis.length}`
+                    : `Pagar ${selecionadasPagaveis.length} aprovadas`}
+                </Button>
+              ) : null}
+              <BotaoEspelho
+                rota="/espelho/pagamentos"
+                ids={selecionadosAPagar}
               />
-            }
-          />
+            </BarraSelecao>
+            <DataTable
+              onLimparFiltros={limparTodos}
+              idTabela="financeiro.pagamentos.a-pagar"
+              columns={colunasAprovadas}
+              data={aprovadasFiltradas}
+              filtros={filtrosAprovadas}
+              onRowClick={(parcela) => abrirDetalhe(parcela.id)}
+              selecao={{
+                idDaLinha: (parcela: ParcelaAprovada) => parcela.id,
+                selecionados: selecionadosAPagar,
+                onSelecionadosChange: setSelecionadosAPagar,
+              }}
+              emptyState={
+                <EmptyState
+                  icone={Wallet}
+                  titulo="Nenhuma parcela em aberto"
+                  descricao="As parcelas a pagar aparecem aqui, aprovadas ou ainda aguardando aprovação. Só as aprovadas ganham o botão de pagar. Compra em dinheiro entra direto, sem passar pela aprovação; compra no cartão de crédito já nasce quitada e não aparece aqui."
+                  className="border-none bg-transparent"
+                />
+              }
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="pagas">
@@ -896,6 +1010,7 @@ export function PagamentosCliente({
               idTabela="financeiro.pagamentos.pagas"
               columns={colunasPagas}
               data={linhasPagas}
+              onRowClick={(parcela) => abrirDetalhe(parcela.id)}
               filtros={filtrosPagasBarra}
               total={totalRegistros}
               pageIndex={paginacao.pageIndex}
@@ -928,6 +1043,34 @@ export function PagamentosCliente({
         anexos={parcelaAlvo ? (anexosPorParcela[parcelaAlvo.id] ?? []) : []}
         podeAnexar={podePagar}
         onPago={() => router.refresh()}
+      />
+
+      <PagarLoteDrawer
+        aberto={loteAberto}
+        onAbertoChange={setLoteAberto}
+        parcelas={selecionadasPagaveis}
+        contas={contas}
+        onPago={() => {
+          setSelecionadosAPagar([]);
+          router.refresh();
+        }}
+      />
+
+      <DetalheParcelaDrawer
+        aberto={detalheAberto}
+        onAbertoChange={setDetalheAberto}
+        parcelaId={detalheId}
+        podeAnexar={podePagar}
+        podePagar={podePagar}
+        onPagar={(id) => {
+          // Do detalhe direto para o pagamento: a parcela está na fila
+          // carregada, então não há segunda ida ao servidor.
+          const parcela = aprovadas.find((linha) => linha.id === id);
+          if (!parcela) return;
+          setDetalheAberto(false);
+          abrirPagamento(parcela);
+        }}
+        onMudou={() => router.refresh()}
       />
 
       <ConfirmDialog

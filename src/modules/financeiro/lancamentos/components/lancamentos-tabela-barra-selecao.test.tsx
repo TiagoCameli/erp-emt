@@ -170,7 +170,7 @@ const LANCAMENTOS_PAGINA_2 = [
   }),
 ];
 
-const CONTA = { id: "conta-1", nome: "Obra 364", banco: "bb" };
+const CONTA = { id: "conta-1", nome: "Obra 364", banco: "bb", saldoAtual: 0 };
 
 /**
  * JSX completo, parametrizado por `lancamentos`: o teste de troca de página
