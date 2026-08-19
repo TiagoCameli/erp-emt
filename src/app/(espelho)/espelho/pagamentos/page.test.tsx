@@ -12,14 +12,13 @@ import {
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import {
   buscarPagamentosParaEspelho,
-  trilhaDeParcelas,
   type EspelhoPagamento,
 } from "@/modules/financeiro/pagamentos/espelho";
 
 // Mocka toda a cadeia de dados da página: o objetivo destes testes é a
 // ORQUESTRAÇÃO da página (permissão antes da consulta, os quatro estados
 // vazios, o rótulo de status certo), não o banco. `buscarPagamentosParaEspelho`
-// e `trilhaDeParcelas` já têm cobertura própria em seus módulos.
+// já tem cobertura própria no módulo.
 vi.mock("@/lib/permissoes", () => ({
   getUsuarioLogado: vi.fn(),
   temPermissao: vi.fn(),
@@ -27,7 +26,6 @@ vi.mock("@/lib/permissoes", () => ({
 
 vi.mock("@/modules/financeiro/pagamentos/espelho", () => ({
   buscarPagamentosParaEspelho: vi.fn(),
-  trilhaDeParcelas: vi.fn(),
 }));
 
 vi.mock("@/modules/_shared/anexos/queries", () => ({
@@ -141,6 +139,50 @@ describe("EspelhoPagamentosPage", () => {
     expect(buscarPagamentosParaEspelho).not.toHaveBeenCalled();
   });
 
+  it("quem tem SÓ a aba de aprovação imprime, porque o botão vive lá também", async () => {
+    // A fila de aprovação e os pagamentos diretos oferecem "Imprimir espelho".
+    // Se esta rota exigisse apenas `financeiro.pagamentos`, quem tem só a aba
+    // de aprovação clicaria no botão e cairia em "Sem permissão" — o botão
+    // existiria só para recusar. Não alarga nada: essa pessoa já lê a mesma
+    // parcela na tela de detalhe da aprovação, e a RLS segue decidindo linha a
+    // linha.
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockImplementation(
+      (_usuario, recurso) => recurso === "financeiro.aprovacao-pagamentos",
+    );
+    vi.mocked(buscarPagamentosParaEspelho).mockResolvedValue([]);
+
+    await renderPagina(ID_A);
+
+    expect(screen.queryByText("Sem permissão")).not.toBeInTheDocument();
+    expect(buscarPagamentosParaEspelho).toHaveBeenCalled();
+  });
+
+  it("quem tem SÓ a listagem de pagas continua imprimindo", async () => {
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockImplementation(
+      (_usuario, recurso) => recurso === "financeiro.pagamentos",
+    );
+    vi.mocked(buscarPagamentosParaEspelho).mockResolvedValue([]);
+
+    await renderPagina(ID_A);
+
+    expect(screen.queryByText("Sem permissão")).not.toBeInTheDocument();
+    expect(buscarPagamentosParaEspelho).toHaveBeenCalled();
+  });
+
+  it("quem não tem NENHUM dos dois recursos continua barrado antes da consulta", async () => {
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockImplementation(
+      (_usuario, recurso) => recurso === "compras.ordens",
+    );
+
+    await renderPagina(ID_A);
+
+    expect(screen.getByText("Sem permissão")).toBeInTheDocument();
+    expect(buscarPagamentosParaEspelho).not.toHaveBeenCalled();
+  });
+
   it("sem ids mostra nada para imprimir", async () => {
     vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
     vi.mocked(temPermissao).mockReturnValue(true);
@@ -204,7 +246,6 @@ describe("EspelhoPagamentosPage", () => {
         lancamentoStatus: "a_pagar",
       }),
     ]);
-    vi.mocked(trilhaDeParcelas).mockResolvedValue({});
     vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
 
     await renderPagina(ID_A);
@@ -218,7 +259,6 @@ describe("EspelhoPagamentosPage e a parcela que ainda não foi paga", () => {
   function prepararUsuario() {
     vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
     vi.mocked(temPermissao).mockReturnValue(true);
-    vi.mocked(trilhaDeParcelas).mockResolvedValue({});
     vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
   }
 
@@ -281,7 +321,6 @@ describe("EspelhoPagamentosPage e o total do rateio", () => {
     // sem provar nada. É justamente a divergência que o papel tem que mostrar.
     vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
     vi.mocked(temPermissao).mockReturnValue(true);
-    vi.mocked(trilhaDeParcelas).mockResolvedValue({});
     vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
     vi.mocked(buscarPagamentosParaEspelho).mockResolvedValue([
       pagamentoFixture({

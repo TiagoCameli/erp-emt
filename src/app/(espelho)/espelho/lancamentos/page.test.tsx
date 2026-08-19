@@ -9,27 +9,30 @@ import {
   type UsuarioLogado,
 } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   buscarLancamentosParaEspelho,
+  resumirParcelas,
   type EspelhoLancamento,
+  type EspelhoParcela,
 } from "@/modules/financeiro/lancamentos/espelho";
-import { trilhaLancamento } from "@/modules/financeiro/lancamentos/queries";
 
 // Mocka toda a cadeia de dados da página: o objetivo destes testes é a
 // ORQUESTRAÇÃO da página (permissão antes da consulta, os quatro estados
 // vazios, o rótulo de status certo), não o banco. `buscarLancamentosParaEspelho`
-// e `trilhaLancamento` já têm cobertura própria em seus módulos.
+// já tem cobertura própria no módulo.
 vi.mock("@/lib/permissoes", () => ({
   getUsuarioLogado: vi.fn(),
   temPermissao: vi.fn(),
 }));
 
-vi.mock("@/modules/financeiro/lancamentos/espelho", () => ({
+// `resumirParcelas` NÃO é mockada de propósito: ela é a conta de dinheiro que
+// o papel imprime, e o teste da página tem que exercitar a conta de verdade a
+// partir das parcelas da fixture, não um resumo declarado à mão que pode
+// discordar delas.
+vi.mock("@/modules/financeiro/lancamentos/espelho", async (original) => ({
+  ...(await original<typeof import("@/modules/financeiro/lancamentos/espelho")>()),
   buscarLancamentosParaEspelho: vi.fn(),
-}));
-
-vi.mock("@/modules/financeiro/lancamentos/queries", () => ({
-  trilhaLancamento: vi.fn(),
 }));
 
 vi.mock("@/modules/_shared/anexos/queries", () => ({
@@ -60,9 +63,29 @@ function idsValidos(quantidade: number): string[] {
   );
 }
 
+/** Uma parcela de teste, com o mínimo que o resumo precisa. */
+function parcelaFixture(
+  overrides: Partial<EspelhoParcela> = {},
+): EspelhoParcela {
+  return {
+    id: "p1",
+    numeroParcela: 1,
+    dataVencimento: "2026-08-12",
+    valor: 1000,
+    desconto: 0,
+    juros: 0,
+    valorLiquido: 1000,
+    status: "pendente",
+    dataPagamento: null,
+    contaNome: null,
+    ...overrides,
+  };
+}
+
 function lancamentoFixture(
   overrides: Partial<EspelhoLancamento> = {},
 ): EspelhoLancamento {
+  const parcelas = overrides.parcelas ?? [];
   return {
     id: ID_A,
     numero: "LAN-2026-0001",
@@ -77,7 +100,11 @@ function lancamentoFixture(
     fornecedorNome: "Fornecedor Teste",
     categoriaNome: "Categoria Teste",
     formaPagamentoNome: "PIX",
-    parcelas: [],
+    parcelas,
+    // Derivado das parcelas, com a MESMA função que a produção usa: fixture
+    // que declara o resumo à mão consegue afirmar um total que não bate com as
+    // linhas, que é justamente a classe de defeito que este espelho já teve.
+    resumoParcelas: resumirParcelas(parcelas),
     rateios: [],
     ...overrides,
   };
@@ -162,12 +189,142 @@ describe("EspelhoLancamentosPage", () => {
     vi.mocked(buscarLancamentosParaEspelho).mockResolvedValue([
       lancamentoFixture({ tipo: "a_receber", status: "a_pagar" }),
     ]);
-    vi.mocked(trilhaLancamento).mockResolvedValue([]);
     vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
 
     await renderPagina(ID_A);
 
     expect(screen.getByText("A receber")).toBeInTheDocument();
     expect(screen.queryByText("a_pagar")).not.toBeInTheDocument();
+  });
+});
+
+/** BRL como o testing-library enxerga: `formatarBRL` usa espaço não separável. */
+function brl(valor: number): string {
+  return formatarBRL(valor).replace(/\u00a0/g, " ");
+}
+
+describe("EspelhoLancamentosPage e o resumo das parcelas", () => {
+  function prepararUsuario() {
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockReturnValue(true);
+    vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
+  }
+
+  it("imprime pagas e a pagar em vez de uma linha por parcela", async () => {
+    // Parcelamento longo é o caso que motivou a troca: o DARF PERT da Receita
+    // tem 150 parcelas, e a tabela antiga de nove colunas enchia folhas.
+    // Aqui, três parcelas bastam para provar o agrupamento.
+    prepararUsuario();
+    vi.mocked(buscarLancamentosParaEspelho).mockResolvedValue([
+      lancamentoFixture({
+        parcelas: [
+          parcelaFixture({
+            id: "1",
+            numeroParcela: 1,
+            status: "pago",
+            valor: 1000,
+            desconto: 50,
+            valorLiquido: 950,
+            dataPagamento: "2026-07-10",
+          }),
+          parcelaFixture({
+            id: "2",
+            numeroParcela: 2,
+            status: "pago",
+            valor: 1000,
+            valorLiquido: 1000,
+            dataPagamento: "2026-08-10",
+          }),
+          parcelaFixture({
+            id: "3",
+            numeroParcela: 3,
+            status: "pendente",
+            valor: 1000,
+            valorLiquido: 1000,
+            dataVencimento: "2026-09-10",
+          }),
+        ],
+      }),
+    ]);
+
+    await renderPagina(ID_A);
+
+    expect(screen.getByText("Pagas")).toBeInTheDocument();
+    // "Em aberto", não "A pagar": "A pagar" é o rótulo do status do
+    // lançamento, que sai no cabeçalho do mesmo papel.
+    expect(screen.getByText("Em aberto")).toBeInTheDocument();
+    // Pagas somam o LÍQUIDO: 950 + 1.000. Somar o valor daria 2.000 e mentiria
+    // sobre o caixa, porque a primeira teve R$ 50 de desconto.
+    expect(screen.getByText(brl(1950))).toBeInTheDocument();
+    expect(screen.queryByText(brl(2000))).not.toBeInTheDocument();
+    // Total fecha com as linhas impressas: 1.950 pagas + 1.000 a pagar.
+    expect(screen.getByText(brl(2950))).toBeInTheDocument();
+
+    // E a coluna "Conta", que antes colidia com o líquido na folha, sumiu
+    // junto com a tabela parcela a parcela.
+    expect(screen.queryByText("Nº")).not.toBeInTheDocument();
+    expect(screen.queryByText("Líquido")).not.toBeInTheDocument();
+  });
+
+  it("mostra o próximo vencimento em aberto e o último pagamento", async () => {
+    prepararUsuario();
+    vi.mocked(buscarLancamentosParaEspelho).mockResolvedValue([
+      lancamentoFixture({
+        parcelas: [
+          parcelaFixture({
+            id: "1",
+            numeroParcela: 1,
+            status: "pago",
+            dataPagamento: "2026-07-10",
+          }),
+          parcelaFixture({
+            id: "2",
+            numeroParcela: 2,
+            status: "pendente",
+            dataVencimento: "2026-10-05",
+          }),
+          parcelaFixture({
+            id: "3",
+            numeroParcela: 3,
+            status: "pendente",
+            dataVencimento: "2026-09-05",
+          }),
+        ],
+      }),
+    ]);
+
+    await renderPagina(ID_A);
+
+    expect(screen.getByText("Próximo vencimento")).toBeInTheDocument();
+    // A mais ANTIGA em aberto, não a da primeira linha nem a do cabeçalho.
+    expect(screen.getByText(formatarData("2026-09-05"))).toBeInTheDocument();
+    expect(screen.getByText("Último pagamento")).toBeInTheDocument();
+    expect(screen.getByText(formatarData("2026-07-10"))).toBeInTheDocument();
+  });
+
+  it("lançamento sem nenhuma parcela paga sai com travessão no último pagamento", async () => {
+    prepararUsuario();
+    vi.mocked(buscarLancamentosParaEspelho).mockResolvedValue([
+      lancamentoFixture({ parcelas: [parcelaFixture()] }),
+    ]);
+
+    await renderPagina(ID_A);
+
+    expect(screen.getByText("Último pagamento")).toBeInTheDocument();
+    // Travessão, nunca em branco: no papel, vazio não distingue "não tem" de
+    // "esqueceram de imprimir".
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("não imprime mais a Trilha", async () => {
+    prepararUsuario();
+    vi.mocked(buscarLancamentosParaEspelho).mockResolvedValue([
+      lancamentoFixture({ parcelas: [parcelaFixture()] }),
+    ]);
+
+    await renderPagina(ID_A);
+
+    expect(screen.queryByText("Trilha")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quem")).not.toBeInTheDocument();
   });
 });

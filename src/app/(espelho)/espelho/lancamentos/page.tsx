@@ -9,15 +9,12 @@ import {
 } from "@/components/canonicos";
 import {
   formatarData,
-  formatarDataHora,
   formatarMesAno,
 } from "@/lib/formatadores";
 import { lerIdsDoEspelho, MAX_ESPELHOS } from "@/lib/ids-do-espelho";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
-import { STATUS_PARCELA } from "@/modules/financeiro/_shared/formato";
 import { buscarLancamentosParaEspelho } from "@/modules/financeiro/lancamentos/espelho";
-import { trilhaLancamento } from "@/modules/financeiro/lancamentos/queries";
 import { rotuloStatusLancamento } from "@/modules/financeiro/lancamentos/schemas";
 
 export default async function EspelhoLancamentosPage({
@@ -72,11 +69,6 @@ export default async function EspelhoLancamentosPage({
     );
   }
 
-  // Trilha por lançamento, reusando a query que a tela de detalhe já usa.
-  const trilhas = await Promise.all(
-    lancamentos.map((lancamento) => trilhaLancamento(lancamento.id)),
-  );
-
   // Anexos dos N documentos em UMA consulta: listarAnexosPorDocumento já existe
   // e agrupa por id. Com 50 ids o `in` dá 1,9 KB de URL, longe do limite do
   // PostgREST, então aqui não precisa de lote.
@@ -101,7 +93,7 @@ export default async function EspelhoLancamentosPage({
         </p>
       ) : null}
 
-      {lancamentos.map((lancamento, indice) => (
+      {lancamentos.map((lancamento) => (
         <EspelhoImpresso
           key={lancamento.id}
           tipo="Lançamento"
@@ -151,41 +143,93 @@ export default async function EspelhoLancamentosPage({
           </EspelhoSecao>
 
           <EspelhoSecao rotulo="Parcelas">
+            {/*
+              Resumo, e não uma linha por parcela. A tabela antiga tinha nove
+              colunas e uma linha por parcela: no DARF PERT da Receita, que tem
+              150 parcelas, ela sozinha enchia folhas, e nenhuma das nove
+              colunas respondia o que quem confere pergunta, que é quanto já
+              saiu e quanto falta.
+
+              As duas bases de valor são diferentes de propósito, e são as
+              mesmas dos KPIs da tela de Lançamentos: pagas somam o LÍQUIDO (o
+              que saiu da conta) e em aberto somam o VALOR (a dívida). Ver o
+              JSDoc de `EspelhoResumoParcelas`.
+            */}
             <EspelhoTabela
               colunas={[
-                { chave: "n", rotulo: "Nº" },
-                { chave: "vencimento", rotulo: "Vencimento" },
+                { chave: "grupo", rotulo: "Situação" },
+                { chave: "quantidade", rotulo: "Qtd.", alinharDireita: true },
                 { chave: "valor", rotulo: "Valor", alinharDireita: true },
-                { chave: "desconto", rotulo: "Desconto", alinharDireita: true },
-                { chave: "juros", rotulo: "Juros", alinharDireita: true },
-                { chave: "liquido", rotulo: "Líquido", alinharDireita: true },
-                { chave: "conta", rotulo: "Conta" },
-                { chave: "status", rotulo: "Status" },
-                { chave: "pagamento", rotulo: "Pago em" },
               ]}
-              linhas={lancamento.parcelas.map((parcela) => ({
-                n: parcela.numeroParcela,
-                vencimento: formatarData(parcela.dataVencimento),
-                valor: <EspelhoDinheiro valor={parcela.valor} />,
-                desconto: <EspelhoDinheiro valor={parcela.desconto} />,
-                juros: <EspelhoDinheiro valor={parcela.juros} />,
-                liquido: <EspelhoDinheiro valor={parcela.valorLiquido} />,
-                conta: parcela.contaNome,
-                // Rótulo, não o código cru ("em_revisao" em vez de "Em revisão").
-                status: STATUS_PARCELA[parcela.status].rotulo,
-                pagamento: formatarData(parcela.dataPagamento),
-              }))}
+              linhas={[
+                {
+                  grupo: "Pagas",
+                  quantidade: lancamento.resumoParcelas.pagas.quantidade,
+                  valor: (
+                    <EspelhoDinheiro
+                      valor={lancamento.resumoParcelas.pagas.valor}
+                    />
+                  ),
+                },
+                {
+                  // "Em aberto", e não "A pagar": "A pagar" já é o rótulo do
+                  // STATUS do lançamento, impresso no cabeçalho deste mesmo
+                  // papel, e dois significados diferentes com o mesmo nome na
+                  // mesma folha é o defeito que este espelho já teve. "Em
+                  // aberto" é o vocabulário do projeto para dívida viva
+                  // (STATUS_PARCELA_ABERTA) e o rótulo do KPI da tela.
+                  grupo: "Em aberto",
+                  quantidade: lancamento.resumoParcelas.aPagar.quantidade,
+                  valor: (
+                    <EspelhoDinheiro
+                      valor={lancamento.resumoParcelas.aPagar.valor}
+                    />
+                  ),
+                },
+                // Canceladas só quando existem. Sem a linha, o total deixaria
+                // de fechar com as linhas impressas na primeira parcela
+                // cancelada (não há nenhuma na base hoje).
+                ...(lancamento.resumoParcelas.canceladas.quantidade > 0
+                  ? [
+                      {
+                        grupo: "Canceladas",
+                        quantidade:
+                          lancamento.resumoParcelas.canceladas.quantidade,
+                        valor: (
+                          <EspelhoDinheiro
+                            valor={lancamento.resumoParcelas.canceladas.valor}
+                          />
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
               totais={{
-                n: "Total",
-                liquido: (
+                grupo: "Total",
+                quantidade: lancamento.resumoParcelas.total.quantidade,
+                valor: (
                   <EspelhoDinheiro
-                    valor={lancamento.parcelas.reduce(
-                      (soma, parcela) => soma + parcela.valorLiquido,
-                      0,
-                    )}
+                    valor={lancamento.resumoParcelas.total.valor}
                   />
                 ),
               }}
+            />
+            <EspelhoCampos
+              campos={[
+                {
+                  // O vencimento em aberto mais antigo, que não depende de
+                  // "hoje": o papel diz a mesma coisa amanhã. Se estiver no
+                  // passado, é a parcela atrasada, e segue sendo a próxima.
+                  rotulo: "Próximo vencimento",
+                  valor: formatarData(
+                    lancamento.resumoParcelas.proximoVencimento,
+                  ),
+                },
+                {
+                  rotulo: "Último pagamento",
+                  valor: formatarData(lancamento.resumoParcelas.ultimoPagamento),
+                },
+              ]}
             />
           </EspelhoSecao>
 
@@ -212,26 +256,6 @@ export default async function EspelhoLancamentosPage({
                   />
                 ),
               }}
-            />
-          </EspelhoSecao>
-
-          <EspelhoSecao rotulo="Trilha">
-            <EspelhoTabela
-              colunas={[
-                { chave: "data", rotulo: "Quando" },
-                { chave: "titulo", rotulo: "O que" },
-                { chave: "usuario", rotulo: "Quem" },
-              ]}
-              linhas={(trilhas[indice] ?? []).map((evento) => ({
-                // Data E hora, como a Trilha canônica em tela: dois eventos do
-                // mesmo dia ficam indistinguíveis só com a data, e este é
-                // justamente o documento que serve de prova de auditoria.
-                data: formatarDataHora(evento.data),
-                titulo: evento.descricao
-                  ? `${evento.titulo}: ${evento.descricao}`
-                  : evento.titulo,
-                usuario: evento.usuario,
-              }))}
             />
           </EspelhoSecao>
 

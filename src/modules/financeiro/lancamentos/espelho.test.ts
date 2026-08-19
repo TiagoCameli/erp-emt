@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { resumirParcelas } from "@/modules/financeiro/lancamentos/espelho";
+
 import { montarEspelhoLancamento } from "@/modules/financeiro/lancamentos/espelho";
 
 const LINHA = {
@@ -113,5 +115,112 @@ describe("montarEspelhoLancamento", () => {
     // único ponto de conversão, e é sobre o texto exato do banco.
     const espelho = montarEspelhoLancamento({ ...LINHA, valor: "1234.56" });
     expect(espelho.valor).toBe(1234.56);
+  });
+});
+
+/** Parcela já no formato do espelho, para exercitar o resumo sem passar pelo banco. */
+function parcela(
+  overrides: Partial<
+    ReturnType<typeof montarEspelhoLancamento>["parcelas"][number]
+  > = {},
+) {
+  return {
+    id: "p",
+    numeroParcela: 1,
+    dataVencimento: "2026-08-12",
+    valor: 1000,
+    desconto: 0,
+    juros: 0,
+    valorLiquido: 1000,
+    status: "pendente" as const,
+    dataPagamento: null,
+    contaNome: null,
+    ...overrides,
+  };
+}
+
+describe("resumirParcelas", () => {
+  it("pagas somam o LÍQUIDO, em aberto somam o VALOR", () => {
+    // As duas bases são diferentes de propósito, e são as mesmas dos KPIs da
+    // tela de Lançamentos. No banco hoje: 23 das 6.858 parcelas pagas têm
+    // líquido diferente do valor (20 com desconto, 3 com juros), somando
+    // R$ 30.810,30 de diferença. Somar o valor nas pagas mentiria sobre o
+    // caixa; somar o líquido nas em aberto trocaria a dívida por uma projeção.
+    const resumo = resumirParcelas([
+      parcela({ id: "1", status: "pago", valor: 1000, desconto: 50, valorLiquido: 950 }),
+      parcela({ id: "2", status: "pendente", valor: 1000, valorLiquido: 1000 }),
+    ]);
+    expect(resumo.pagas).toEqual({ quantidade: 1, valor: 950 });
+    expect(resumo.aPagar).toEqual({ quantidade: 1, valor: 1000 });
+    expect(resumo.total).toEqual({ quantidade: 2, valor: 1950 });
+  });
+
+  it("em_revisao continua sendo dívida viva, não some do resumo", () => {
+    // Usa `ehParcelaAberta`, cuja regra é "não pago e não cancelado": revisão
+    // é pedido de ajuste, não baixa. Escrever `!== "pago"` aqui faria o papel
+    // discordar do filtro de atraso e do resumo do cabeçalho.
+    const resumo = resumirParcelas([
+      parcela({ id: "1", status: "em_revisao", valor: 300 }),
+      parcela({ id: "2", status: "aprovado", valor: 200 }),
+    ]);
+    expect(resumo.aPagar).toEqual({ quantidade: 2, valor: 500 });
+    expect(resumo.pagas.quantidade).toBe(0);
+  });
+
+  it("cancelada não é paga nem devida, e ainda assim o total fecha", () => {
+    // Sem o grupo de canceladas, a linha de total do papel deixaria de bater
+    // com as linhas impressas acima dela na primeira parcela cancelada.
+    const resumo = resumirParcelas([
+      parcela({ id: "1", status: "pago", valorLiquido: 400 }),
+      parcela({ id: "2", status: "pendente", valor: 300 }),
+      parcela({ id: "3", status: "cancelado", valor: 100 }),
+    ]);
+    expect(resumo.pagas.quantidade).toBe(1);
+    expect(resumo.aPagar.quantidade).toBe(1);
+    expect(resumo.canceladas).toEqual({ quantidade: 1, valor: 100 });
+    expect(resumo.total).toEqual({ quantidade: 3, valor: 800 });
+  });
+
+  it("próximo vencimento é o mais ANTIGO em aberto, e ignora as pagas", () => {
+    const resumo = resumirParcelas([
+      // Paga com vencimento antigo: não pode ser escolhida.
+      parcela({ id: "1", status: "pago", dataVencimento: "2026-01-05", dataPagamento: "2026-01-05" }),
+      parcela({ id: "2", status: "pendente", dataVencimento: "2026-10-05" }),
+      parcela({ id: "3", status: "pendente", dataVencimento: "2026-09-05" }),
+    ]);
+    expect(resumo.proximoVencimento).toBe("2026-09-05");
+  });
+
+  it("último pagamento é o mais RECENTE entre as pagas", () => {
+    const resumo = resumirParcelas([
+      parcela({ id: "1", status: "pago", dataPagamento: "2026-07-10" }),
+      parcela({ id: "2", status: "pago", dataPagamento: "2026-08-10" }),
+    ]);
+    expect(resumo.ultimoPagamento).toBe("2026-08-10");
+  });
+
+  it("sem parcela em aberto ou sem parcela paga devolve nulo, não data errada", () => {
+    const tudoPago = resumirParcelas([
+      parcela({ status: "pago", dataPagamento: "2026-07-10" }),
+    ]);
+    expect(tudoPago.proximoVencimento).toBeNull();
+
+    const nadaPago = resumirParcelas([parcela()]);
+    expect(nadaPago.ultimoPagamento).toBeNull();
+
+    const semParcela = resumirParcelas([]);
+    expect(semParcela.total).toEqual({ quantidade: 0, valor: 0 });
+    expect(semParcela.proximoVencimento).toBeNull();
+    expect(semParcela.ultimoPagamento).toBeNull();
+  });
+
+  it("parcela em aberto sem data de vencimento não vira 'sem próximo vencimento'", () => {
+    // Nulo é descartado da comparação, não escolhido como menor: uma parcela
+    // sem data não pode apagar a data das outras.
+    const resumo = resumirParcelas([
+      parcela({ id: "1", status: "pendente", dataVencimento: null }),
+      parcela({ id: "2", status: "pendente", dataVencimento: "2026-09-05" }),
+    ]);
+    expect(resumo.proximoVencimento).toBe("2026-09-05");
   });
 });

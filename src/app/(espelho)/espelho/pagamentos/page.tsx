@@ -7,15 +7,12 @@ import {
   EspelhoTabela,
   EspelhoVazio,
 } from "@/components/canonicos";
-import { formatarData, formatarDataHora, formatarMesAno } from "@/lib/formatadores";
+import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import { lerIdsDoEspelho, MAX_ESPELHOS } from "@/lib/ids-do-espelho";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { STATUS_PARCELA } from "@/modules/financeiro/_shared/formato";
-import {
-  buscarPagamentosParaEspelho,
-  trilhaDeParcelas,
-} from "@/modules/financeiro/pagamentos/espelho";
+import { buscarPagamentosParaEspelho } from "@/modules/financeiro/pagamentos/espelho";
 import { rotuloStatusLancamento } from "@/modules/financeiro/lancamentos/schemas";
 
 export default async function EspelhoPagamentosPage({
@@ -26,7 +23,23 @@ export default async function EspelhoPagamentosPage({
   const { ids: bruto } = await searchParams;
 
   const usuario = await getUsuarioLogado();
-  if (!usuario || !temPermissao(usuario, "financeiro.pagamentos", "ver")) {
+  // Dois recursos, não um: a MESMA parcela é impressa a partir de duas telas
+  // diferentes, e quem chega por cada uma tem a permissão daquela.
+  //
+  // `financeiro.pagamentos` é a listagem de pagas. `financeiro.aprovacao-pagamentos`
+  // é a fila de aprovação e os pagamentos diretos, que também oferecem o botão.
+  // Exigir só o primeiro faria quem tem apenas a aba de aprovação clicar em
+  // "Imprimir espelho" e cair em "Sem permissão" — o botão existiria só para
+  // recusar.
+  //
+  // Isto NÃO alarga o que alguém enxerga: quem tem `aprovacao-pagamentos` já lê
+  // esta parcela e o lançamento pai na tela de detalhe da aprovação, e a
+  // consulta continua passando pela RLS, que é quem decide linha a linha.
+  const podeVer =
+    usuario !== null &&
+    (temPermissao(usuario, "financeiro.pagamentos", "ver") ||
+      temPermissao(usuario, "financeiro.aprovacao-pagamentos", "ver"));
+  if (!usuario || !podeVer) {
     return (
       <EspelhoVazio
         titulo="Sem permissão"
@@ -70,9 +83,6 @@ export default async function EspelhoPagamentosPage({
     );
   }
 
-  const trilhas = await trilhaDeParcelas(
-    pagamentos.map((pagamento) => pagamento.id),
-  );
   // "pagamento" é a entidade de anexo da PARCELA (ver
   // modules/_shared/anexos/entidades.ts): não existe tabela de pagamentos, o
   // pagamento é a baixa da parcela, e é com o id dela que o drawer grava o
@@ -115,7 +125,7 @@ export default async function EspelhoPagamentosPage({
             key={pagamento.id}
             // Parcela não paga não é um "Pagamento": o título diz o que o papel
             // realmente é, e o documento segue útil (valor, vencimento, status
-            // real, lançamento de origem, rateio e trilha continuam impressos).
+            // real, lançamento de origem e rateio continuam impressos).
             tipo={foiPaga ? "Pagamento" : "Parcela"}
             numero={pagamento.titulo}
             emitidoPor={usuario.nome}
@@ -235,32 +245,6 @@ export default async function EspelhoPagamentosPage({
                   centro: "Total do rateio",
                   valor: <EspelhoDinheiro valor={pagamento.somaRateios} />,
                 }}
-              />
-            </EspelhoSecao>
-
-            <EspelhoSecao rotulo="Trilha da parcela">
-              <EspelhoTabela
-                // Mesmo conjunto e ordem de coluna dos espelhos irmãos
-                // (lançamento e OC): "quem aprovou/desaprovou" é a primeira
-                // pergunta de uma revisão contábil ou jurídica, e este é o
-                // espelho cujo trabalho é justamente provar que um pagamento
-                // aconteceu.
-                colunas={[
-                  { chave: "data", rotulo: "Quando" },
-                  { chave: "titulo", rotulo: "O que" },
-                  { chave: "usuario", rotulo: "Quem" },
-                ]}
-                linhas={(trilhas[pagamento.id] ?? []).map((evento) => ({
-                  // Data E hora: dois eventos do mesmo dia (aprovar de manhã,
-                  // reprogramar à tarde) ficam indistinguíveis só com a data, e
-                  // este é justamente o documento que serve de prova de
-                  // auditoria.
-                  data: formatarDataHora(evento.data),
-                  titulo: evento.descricao
-                    ? `${evento.titulo}: ${evento.descricao}`
-                    : evento.titulo,
-                  usuario: evento.usuario,
-                }))}
               />
             </EspelhoSecao>
 
