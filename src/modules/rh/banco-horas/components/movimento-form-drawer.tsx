@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputDecimal,
   LinhaCampos,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -169,9 +170,8 @@ export function MovimentoFormDrawer({
             rotulo="Horas"
             erro={form.formState.errors.horas?.message}
           >
-            <Input
+            <InputDecimal
               id="movimento-horas"
-              inputMode="decimal"
               placeholder="0,00"
               className="text-right tabular-nums"
               {...form.register("horas")}

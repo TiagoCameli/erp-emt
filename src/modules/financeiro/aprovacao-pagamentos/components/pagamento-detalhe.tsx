@@ -15,6 +15,7 @@ import { toast } from "@/components/canonicos/toast";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  BotaoEspelho,
   CelulaVazia,
   ConfirmDialog,
   MoneyText,
@@ -291,15 +292,26 @@ export function PagamentoDetalheView({
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void copiarMensagem()}
-        >
-          <ClipboardCopy />
-          Copiar mensagem de aprovação
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Vale em QUALQUER status, igual à fila e a lancamentos. A
+              proteção não sumiu, mudou de camada: quem garante que o papel não
+              afirma pagamento inexistente é a página do espelho
+              (src/app/(espelho)/espelho/pagamentos/page.tsx), que degrada
+              sozinha quando a parcela não tem status 'pago' — o documento sai
+              intitulado "Parcela" em vez de "Pagamento", e "Saiu da conta" e
+              "Pago em" saem como travessão. A guarda mora lá porque o link é
+              colável: guarda que só existe no botão não é guarda. */}
+          <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void copiarMensagem()}
+          >
+            <ClipboardCopy />
+            Copiar mensagem de aprovação
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

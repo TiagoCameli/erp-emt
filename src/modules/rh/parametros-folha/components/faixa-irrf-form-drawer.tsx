@@ -6,7 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
-import { CampoFormulario, classesFormulario, FormDrawer } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  FormDrawer,
+  InputDecimal,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { salvarFaixaIrrf } from "@/modules/rh/parametros-folha/actions";
@@ -126,10 +131,9 @@ export function FaixaIrrfFormDrawer({
           erro={form.formState.errors.limiteAte?.message}
           ajuda="Teto salarial desta faixa, em reais"
         >
-          <Input
+          <InputDecimal
             id="faixa-irrf-limite"
             autoComplete="off"
-            inputMode="decimal"
             disabled={salvando}
             {...form.register("limiteAte")}
           />
@@ -142,10 +146,10 @@ export function FaixaIrrfFormDrawer({
           erro={form.formState.errors.aliquota?.message}
           ajuda="Percentual desta faixa, de 0 a 100, com até 3 casas decimais"
         >
-          <Input
+          <InputDecimal
+            casas={3}
             id="faixa-irrf-aliquota"
             autoComplete="off"
-            inputMode="decimal"
             disabled={salvando}
             {...form.register("aliquota")}
           />
@@ -158,10 +162,9 @@ export function FaixaIrrfFormDrawer({
           erro={form.formState.errors.parcelaDeduzir?.message}
           ajuda="Valor fixo, em reais, deduzido do imposto apurado nesta faixa"
         >
-          <Input
+          <InputDecimal
             id="faixa-irrf-parcela"
             autoComplete="off"
-            inputMode="decimal"
             disabled={salvando}
             {...form.register("parcelaDeduzir")}
           />

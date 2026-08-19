@@ -241,7 +241,46 @@ describe("PagamentoDetalheView e a decisão de aprovar", () => {
     expect(
       screen.queryByRole("button", { name: /Aprovar pagamento/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText(/não tem permissão para aprovar/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/não tem permissão para aprovar/i),
+    ).toBeInTheDocument();
+  });
+
+  it("oferece o espelho também em parcela que ainda não foi paga", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento()}
+        parcela={parcela()}
+        {...PADRAO}
+      />,
+    );
+
+    // Este teste já afirmou o contrário. Mudou por decisão do dono: a aba de
+    // aprovação imprime o espelho igual à de lançamentos, nos dois lugares
+    // (listagem e detalhe), em qualquer status.
+    //
+    // Continua não gerando papel mentiroso, e a garantia não mora mais aqui:
+    // src/app/(espelho)/espelho/pagamentos/page.tsx degrada sozinha quando a
+    // parcela não tem status 'pago' — o documento sai intitulado "Parcela", e
+    // "Saiu da conta" e "Pago em" saem como travessão. Precisa ser lá porque o
+    // link do espelho é colável, e guarda que só existe no botão não é guarda.
+    expect(
+      screen.getByRole("button", { name: /Imprimir espelho/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("oferece o espelho quando a parcela está paga", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento({ status: "pago" })}
+        parcela={parcela({ status: "pago", dataPagamento: "2026-08-15" })}
+        {...PADRAO}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Imprimir espelho/i }),
+    ).toBeInTheDocument();
   });
 
   it("avisa da nota fiscal sem impedir a aprovação", () => {

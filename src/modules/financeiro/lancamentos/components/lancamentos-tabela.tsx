@@ -11,6 +11,8 @@ import { Receipt, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  BarraSelecao,
+  BotaoEspelho,
   CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
@@ -367,6 +369,14 @@ export function LancamentosTabela({
    * olhando.
    */
   const [marcados, setSelecionados] = React.useState<string[]>([]);
+
+  /**
+   * Espelha o "salvando" que mora dentro de LoteContaBancaria, só pra
+   * BarraSelecao saber quando desabilitar "Limpar seleção": limpar a seleção
+   * no meio da gravação em lote deixaria o lote sem as linhas que está
+   * gravando.
+   */
+  const [salvandoLote, setSalvandoLote] = React.useState(false);
 
   /**
    * Só vale o que está à vista.
@@ -729,24 +739,36 @@ export function LancamentosTabela({
   const selecionadosNaPagina = lancamentos.filter((lancamento) =>
     selecionados.includes(lancamento.id),
   );
+  // Só o resumo da barra usa isto agora: LoteContaBancaria não repete o valor
+  // na própria frase (o resumo já mostra o total o tempo todo, inclusive no
+  // instante de confirmar — repetir ali seria a mesma informação duas vezes).
+  const valorSelecionado = selecionadosNaPagina.reduce(
+    (soma, lancamento) => soma + lancamento.valor,
+    0,
+  );
 
   return (
     <div className="flex flex-col gap-2">
-      <LoteContaBancaria
-        selecionados={selecionados}
-        valorSelecionado={selecionadosNaPagina.reduce(
-          (soma, lancamento) => soma + lancamento.valor,
-          0,
-        )}
-        jaComConta={
-          selecionadosNaPagina.filter(
-            (lancamento) => !ehElegivelParaLote(lancamento),
-          ).length
-        }
-        contas={opcoesConta}
-        onLimparSelecao={() => setSelecionados([])}
-        onConcluido={() => router.refresh()}
-      />
+      <BarraSelecao
+        quantidade={selecionados.length}
+        onLimpar={() => setSelecionados([])}
+        resumo={<MoneyText valor={valorSelecionado} />}
+        limparDesabilitado={salvandoLote}
+      >
+        <BotaoEspelho rota="/espelho/lancamentos" ids={selecionados} />
+        <LoteContaBancaria
+          selecionados={selecionados}
+          jaComConta={
+            selecionadosNaPagina.filter(
+              (lancamento) => !ehElegivelParaLote(lancamento),
+            ).length
+          }
+          contas={opcoesConta}
+          onLimparSelecao={() => setSelecionados([])}
+          onConcluido={() => router.refresh()}
+          onSalvandoChange={setSalvandoLote}
+        />
+      </BarraSelecao>
       <DataTable
         onLimparFiltros={limparTodos}
         idTabela="financeiro.lancamentos"

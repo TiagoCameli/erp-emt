@@ -39,7 +39,7 @@ import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
   emLotes,
   LOTE_IDS_POSTGREST,
-} from "@/modules/financeiro/lancamentos/lotes-de-ids";
+} from "@/lib/lotes-de-ids";
 import {
   lerLancamentosEmPaginas,
   PAGINA_LEITURA,

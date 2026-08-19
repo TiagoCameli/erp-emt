@@ -8,6 +8,7 @@ import {
   CampoFormulario,
   classesFormulario,
   FormDrawer,
+  InputDecimal,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -259,12 +260,11 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
           ajuda="Quando preenchido, habilita o orçado x realizado deste nó."
           erro={erroOrcamento ?? undefined}
         >
-          <Input
+          <InputDecimal
             id="no-orcamento"
             value={orcamento}
             onChange={(evento) => setOrcamento(evento.target.value)}
             placeholder="Opcional, ex: 150000,00"
-            inputMode="decimal"
             className="text-right tabular-nums"
           />
         </CampoFormulario>

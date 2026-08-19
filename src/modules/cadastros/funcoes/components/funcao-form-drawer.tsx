@@ -10,6 +10,7 @@ import {
   CampoFormulario,
   classesFormulario,
   FormDrawer,
+  InputDecimal,
   SelectAtivo,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -149,10 +150,9 @@ export function FuncaoFormDrawer({
           erro={form.formState.errors.salarioBase?.message}
           ajuda="Opcional. Usado como referência ao lançar o colaborador."
         >
-          <Input
+          <InputDecimal
             id="funcao-salario-base"
             autoComplete="off"
-            inputMode="decimal"
             placeholder="0,00"
             disabled={salvando}
             {...form.register("salarioBase")}

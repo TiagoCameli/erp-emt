@@ -1997,6 +1997,151 @@ procurava por `<FilterBar>`, e a segunda barra tem outro nome.
 o que eu media não era o código novo. Os testes cobrem o comportamento, mas quem confirma que o
 clique limpa é a tela.
 
+## 2026-08-13 - Espelho impresso: rota no servidor, sem ação nova de permissão, e por que os ids validam por guid
+
+Lançamento, ordem de compra e pagamento ganharam um espelho impresso: uma folha por documento, com
+tudo que a tela de detalhe mostra (dados, parcelas, rateio por centro de custo, trilha, anexos),
+acessível pela barra de seleção da listagem e pelo próprio detalhe. Quatro decisões de desenho
+valem registro, mais o que as revisões corrigiram.
+
+1. **Rota renderizada no servidor, uma por documento, e não um dialog como o do holerite.** O
+   holerite imprime de DENTRO do app: abre um dialog, `window.print()` roda com a tela ainda atrás,
+   e `.holerite-print`/`visibility: hidden` no `globals.css` escondem tudo que não é o holerite
+   daquele dialog. O espelho vive no grupo `(espelho)`, sem `AppShell`, e a PÁGINA INTEIRA é o
+   documento — nada para esconder. Um dialog foi cogitado e recusado: com os até 50 documentos que
+   `MAX_ESPELHOS` permite, um dialog listando 12 ou 30 documentos é inutilizável, e o truque de
+   `visibility: hidden` sobre `body *` fica frágil quando o conteúdo mora dentro de um portal de
+   dialog. Rota por documento também é a convenção do projeto (Server Component lendo dado), a
+   permissão vem das MESMAS queries e do RLS que a tela de detalhe usa, N documentos em um trabalho
+   de impressão só saem com quebra de página no CSS (`.espelho-documento { break-after: page }`), e
+   listagem e detalhe compartilham o mesmo componente `EspelhoImpresso` sem chance de divergir.
+
+2. **Nenhuma ação `imprimir` nova em `ACOES`.** `ACOES` é `ver, criar, editar, excluir, aprovar,
+   desaprovar` (`src/config/recursos.ts`) e continua assim. O espelho não mostra nenhum dado que o
+   usuário não leia já na tela de detalhe — é o MESMO dado, só formatado para papel — então uma
+   permissão de imprimir seria teatro: um `print screen` da tela de detalhe reproduz o mesmo
+   "vazamento" sem passar por permissão nenhuma. Em troca, `imprimir` no catálogo abriria uma coluna
+   NOVA na matriz de permissão de TODOS os recursos do sistema (não só os três que têm espelho hoje)
+   e obrigaria reconceder todos os perfis existentes para não quebrar quem já usa o recurso. Custo
+   largo, controle real nenhum. A permissão que protege continua sendo a de sempre: `ver` no
+   recurso, checada antes de qualquer busca (primeira coisa em cada `page.tsx` do grupo
+   `(espelho)`).
+
+3. **`print-color-adjust: exact` é obrigatório, e nenhum dado impresso depende de cor.** O navegador
+   remove cor de fundo ao imprimir por padrão; sem a regra (declarada em `.espelho-raiz`, no
+   `globals.css`) a Faixa âmbar do cabeçalho sai branca. Mas a regra sozinha não basta: o usuário
+   pode desligar "gráficos de fundo" no diálogo do sistema operacional, e o espelho não tem como
+   saber se ele desligou. Por isso NENHUM dado do documento pode depender de cor para ser lido:
+   status de lançamento, de OC e de parcela saem sempre como TEXTO (`rotuloStatusLancamento`,
+   `infoStatusOC(...).rotulo`, `STATUS_PARCELA[...].rotulo`), nunca como `StatusBadge`. Se um
+   `StatusBadge` aparecer dentro de um espelho no futuro, é sinal de que a regra foi contrariada.
+
+4. **Os ids da rota (`?ids=`) validam por `z.guid()`, e não pelo `z.uuid()` do Zod — de propósito.**
+   `z.uuid()` no Zod 4 exige os bits de versão e variante do RFC 9562; a coluna `uuid` do Postgres não
+   exige nada disso. A importação da BR-364 (`fn_importar_br364_lote09`, migration
+   `20260804140000`) derivou ids determinísticos com `md5(...)::uuid` para poder rodar duas vezes
+   sem duplicar, e md5 devolve 32 hex crus: os dígitos de versão e variante saem qualquer coisa (ex.
+   real em produção: `c4e0f922-3aec-8c72-7089-225523e04557`, variante 7, quando o RFC só aceita 8, 9,
+   a ou b). São milhares de lançamentos, parcelas e rateios assim — id legítimo para o banco, e
+   exatamente o histórico que o espelho existe para poder imprimir. `z.uuid()` recusaria esses ids
+   com "Identificador inválido" **e passaria em todo teste escrito com uuid novo** (`crypto.randomUUID()`
+   já sai na variante certa), porque o teste nunca usa um id real da BR-364. `src/lib/id.ts`
+   (`idSchema`) documenta isso desde o fix da tela de detalhe (#77); o espelho só reusa o mesmo
+   schema. O papel da validação aqui é barrar lixo antes do banco (vazio, texto solto, tentativa de
+   injeção); quem garante que o id existe e que o usuário pode vê-lo é a FK e a RLS.
+
+**O que as revisões pegaram, porque é a parte que serve para a próxima vez:**
+
+- Um lançamento a receber em aberto imprimia o código cru `"a_pagar"` como status: `"a_pagar"` é o
+  código genérico de pendência tanto de um lançamento a pagar quanto a receber, e sem o `tipo` do
+  lançamento no `select`, `rotuloStatusLancamento` não tinha como inverter o rótulo. Um recebível
+  saía com cara de dívida. Corrigido levando `tipo` ao `select` dos dois espelhos que citam status de
+  lançamento (lançamento e pagamento) — fix `59f5a1d`.
+- O rateio por centro de custo da OC agrupava por NOME do centro, não por id. `centros_custo` é uma
+  árvore (Obra > Etapa > Item) sem unicidade de nome: dois nós de nível 3 em obras diferentes podem
+  se chamar "Diesel". Agrupar por nome mesclava, em silêncio, o custo de dois centros diferentes numa
+  linha só do papel — exatamente o tipo de erro que um documento de auditoria não pode cometer.
+  Corrigido agrupando por `centro_custo_id` — fix `56b2d5b`.
+- Os cinco valores de `tipo` de `parcela_eventos` escritos no plano de implementação estavam todos
+  errados. O valor real, conferido contra o `CHECK` da migration `20260730120001` (linha 90), é
+  `aprovou, revisou, reenviou, desaprovou, reprogramou` — sem `pagamento`, porque `fn_pagar_parcela`
+  só atualiza a parcela e propaga anexos, sem gravar trilha própria. Rótulo de evento errado no
+  código não quebra `tsc` nem lint: só aparece como texto errado (ou o `tipo` cru, sem tradução) na
+  Trilha do espelho de pagamento, e só contra o banco de verdade.
+
+**O que a revisão do branch INTEIRO pegou, e as doze revisões por task não:**
+
+As doze revisões olharam cada task contra o seu próprio plano, e o plano estava errado em dois
+pontos. Revisão por task não tem como pegar isso: ela confirma que o código faz o que o plano
+mandou. Os dois achados abaixo são de coisa que atravessa arquivos que nenhuma task tocou junto.
+
+- **Todo espelho imprimia folha em branco.** `globals.css` tem `body * { visibility: hidden }`
+  dentro de um `@media print`, e o único `visibility: visible` do projeto inteiro era o do
+  `.holerite-print`. A spec deste branch leu essa regra como se fosse escopada ao holerite. Não é:
+  `globals.css` entra uma vez só, pelo layout raiz; o grupo `(espelho)` é layout ANINHADO e
+  renderiza dentro do MESMO `<body>`; e `body *` bate em tudo. As três rotas montavam a página
+  inteira e o navegador imprimia nada. Corrigido reacendendo a árvore do espelho
+  (`.espelho-raiz, .espelho-raiz *`, especificidade 0,1,1 contra 0,0,1 de `body *`, então vence por
+  ter uma classe a mais, não por ordem no arquivo), e os dois blocos de `@media print` ganharam
+  comentário dizendo que a regra é global — a próxima superfície imprimível precisa revertê-la de
+  propósito ou cai no mesmo buraco. **Nenhum dos 1490 testes dizia nada sobre isso: jsdom não avalia
+  CSS de impressão.** É exatamente o que o e2e de Playwright dispensado neste branch teria pego, e
+  fica registrado como o custo daquela decisão.
+- **`@page` removido, não ajustado.** O branch tinha declarado `@page { size: A4; margin: 12mm }`.
+  `@page` não tem como ser escopado a uma subárvore: ele mudaria também a geometria do holerite,
+  num branch que declarou não tocar nele. Removido em vez de "verificar se o holerite aguenta":
+  a geometria do espelho já vem do próprio documento (`max-w-[190mm]` e padding), que É escopável,
+  e assim o risco de regressão desaparece em vez de depender de conferência manual.
+- **O espelho da OC imprimia dois números diferentes com o mesmo rótulo.** A migration
+  `20260817160000`, de 17/08 e já na base quando este branch começou, mudou o que `valor_total`
+  significa: passou a ser `round(soma dos itens + frete + outras + impostos - desconto, 2)`. O plano
+  leu o comentário da migration ANTIGA (`20260618210002`), onde o total era só a soma dos itens.
+  Resultado no papel: o cabeçalho imprimia o total geral rotulado "Total dos itens", o rodapé da
+  tabela imprimia a soma real dos itens com o MESMO rótulo, e nenhum campo dizia quanto vale a
+  ordem. Seis das dezessete OCs carregadas do Mais Controle têm ajuste; na 2592 os dois números
+  diferem em R$ 3.835,95. Corrigido, e corrigido reusando o que a tela de detalhe já usava
+  (`LINHAS_DE_AJUSTE` e `temAjuste`, em `calculo.ts`), em vez de inventar rótulo novo no papel:
+  as duas superfícies agora imprimem a mesma conta, com os mesmos rótulos e os mesmos sinais.
+
+  **A causa raiz de isso sobreviver a doze revisões foi uma fixture mentirosa.** `LINHA`, em
+  `espelho.test.ts`, tinha `valor_total` 100.000 com 500 de frete e 100.000 de itens. Essa OC não
+  pode existir: `trg_total_oc_cabecalho` é BEFORE e recalcula em todo INSERT e UPDATE. A fixture
+  encarnava a crença errada do autor, e dois testes travavam o invariante falso por cima dela — de
+  modo que o teste "provava" o que o código fazia de errado. **Fixture de dinheiro tem que ser
+  aritmeticamente possível sob as triggers vivas**, senão ela vira prova da crença do autor em vez
+  de prova do sistema. Vale para todo o projeto, não só para este espelho.
+- **Célula de tabela vazia saía em branco onde a regra pede travessão.** `EspelhoTabela` usava
+  `linha[chave] ?? "—"`, e `??` não pega string vazia — mas `formatarData(null)` devolve `""`.
+  Parcela em aberto não tem `dataPagamento`, então a coluna "Pago em" saía vazia, e vazio não
+  distingue "não tem" de "esqueceram de imprimir" num papel que serve de prova. `EspelhoCampos` e
+  `EspelhoDinheiro` já tratavam `""`; só a tabela ficou para trás. Como o defeito É a divergência
+  entre três cópias da mesma regra, ela virou um helper único que os três chamam. `0` e `false`
+  continuam sendo valor de verdade, nunca travessão, e a linha de totais segue de fora de propósito.
+- **O espelho afirmava um pagamento que não aconteceu.** A tela de aprovação oferecia "Imprimir
+  espelho" sem olhar o status, e ali a parcela ainda NÃO foi paga. Agrava que `valor_liquido` é
+  coluna calculada: vem preenchida mesmo em parcela em aberto. O papel saía dizendo "Saiu da conta
+  R$ 1.000,00" para dinheiro que não saiu de conta nenhuma. Corrigido nas DUAS camadas — o botão só
+  existe com status `pago` (a mesma regra que a listagem já aplicava), e a página degrada sozinha se
+  receber o id de uma parcela não paga (título "Parcela" em vez de "Pagamento", primeira seção
+  acompanhando o título, "Saiu da conta" e "Pago em" em travessão, resto do documento intacto).
+  **As duas camadas porque o link do espelho é colável**: a regra "o papel não mente" não pode
+  depender de o botão estar escondido. "Está paga" é por STATUS, nunca por "tem `dataPagamento`" —
+  `fn_pagar_parcela` grava os dois juntos e `fn_estornar_pagamento` limpa os dois juntos, e a conta
+  bancária impressa vem da parcela (que o estorno limpa), não do lançamento.
+- **Linha de total tem que reduzir sobre as linhas impressas, nunca ecoar o documento pai.** Apareceu
+  três vezes neste branch: no total dos itens da OC, no total do rateio da OC e no total do rateio do
+  pagamento (este ecoava `lancamentoValor`). Ecoar o pai esconde a divergência exatamente no lugar
+  onde ela apareceria. E o rótulo tem que nomear o que o número é: quando o total do rateio passou a
+  somar as linhas, "Total do lançamento" virou "Total do rateio", senão seria o mesmo defeito do
+  espelho da OC — um número com o nome de outro. O valor do pai continua no papel, em campo próprio,
+  para o leitor comparar.
+
+**A regra geral que sai deste branch, e que vale para qualquer documento impresso do ERP:** o papel
+não pode afirmar mais do que o sistema sabe. Todo campo que AFIRMA um fato (um pagamento, uma
+entrega, uma aprovação) precisa de guarda de estado no servidor, porque a URL é colável; todo total
+tem que ser derivado das linhas que o próprio papel imprimiu; e todo rótulo tem que nomear o número
+que está embaixo dele.
+
 ---
 
 ## 2026-08-18 - Barra de filtros em trilhos, com rótulo em cima, e as ações fora da fileira
@@ -2059,3 +2204,77 @@ devolver a palavra solta do período, devolver as ações para a fileira dos fil
 do campo de busca e devolver o `h-full` derrubam exatamente o teste que os acusa. Confirmado também
 no navegador, nos três hosts: Lançamentos (DataTable com onze filtros), Centros de custo
 (BarraFiltrosConfiguravel) e Lixeira (filtro que não é canônico).
+
+---
+
+## 2026-08-18 - Número de documento repetia a cada dez a partir de 10.000, e o culpado era o `lpad`
+
+**Contexto:** o Tiago viu vários lançamentos com o mesmo número. A leitura fácil seria culpar a carga
+histórica, e ela estaria errada: quatro lançamentos criados **hoje** pelo app, minutos um do outro,
+saíram todos como LAN-2026-1900.
+
+Estado medido antes: **5.911 lançamentos ocupando 594 números**, todos entre LAN-2026-1307 e
+LAN-2026-1900. A distribuição entregou o padrão: 581 números com exatamente dez lançamentos, cinco
+com nove, cinco com oito. Repetição regular assim não é corrida nem carga desastrada, é aritmética.
+
+**A causa é uma linha:** `proximo_numero_documento` formatava com `lpad(v_num::text, 4, '0')`, e o
+`lpad` do Postgres **corta** quando o texto é maior que o tamanho pedido:
+
+```
+lpad('9999',  4, '0') = '9999'
+lpad('10000', 4, '0') = '1000'
+lpad('10009', 4, '0') = '1000'
+lpad('19004', 4, '0') = '1900'
+```
+
+`documento_sequencias` marcava 19.005 para LAN/2026. Enquanto a sequência esteve abaixo de 10.000 o
+número foi único; ao passar disso, cada dez valores consecutivos colapsaram no mesmo texto. É o único
+`lpad` do banco, e ele numera os três tipos de documento que existem hoje (LAN, OC, COT): ordens de
+compra estão em 31 e cotações em 0, então elas ainda não tinham sido atingidas.
+
+**Decisão:**
+
+1. **O tamanho virou piso, não teto** (`greatest(4, length(v_num::text))`). Quatro dígitos continuam
+   sendo o padrão; número com cinco dígitos cresce em vez de perder o último. Recortar número para
+   caber num formato é trocar identidade de documento por alinhamento de coluna.
+
+2. **Renumerar TODOS os 5.911, e não só as repetições.** Não existe "o primeiro de cada grupo" para
+   preservar: todos os 594 números eram compartilhados, então manter um seria escolher no palpite
+   qual dos dez documentos fica com o número. E o resultado seria pior de ler, porque os renumerados
+   começariam em 19.005 (onde a sequência estava) e conviveriam com 594 de quatro dígitos sem
+   nenhum significado na diferença. Renumerando tudo, a numeração volta a 0001 em diante, contígua.
+
+   Seguro porque `numero` não é chave de nada: nenhuma FK aponta para ele, nenhuma outra coluna de
+   texto do schema guarda 'LAN-2026-' (varredura em todas), e o app só EXIBE, busca por ilike e
+   ordena. Quem abre o lançamento clica no id.
+
+3. **A ordem é `created_at`, não `data_compra`.** As compras vão de 2024-10-29 a 2026-08-18 porque
+   são história importada, mas o número é o registro do documento NO ERP, e é isso que a sequência
+   continua fazendo: lançamento novo com compra antiga vai receber número alto de qualquer forma.
+   Numerar pela data da compra criaria uma correlação que o próximo lançamento já quebraria.
+
+4. **`lock table ... in exclusive mode` antes de renumerar.** Um insert que entrasse no meio levaria
+   número da sequência antiga (19.005 em diante), que ficaria plantado no caminho futuro da sequência
+   reiniciada: daqui a treze mil documentos o índice único recusaria uma gravação legítima e ninguém
+   ligaria o erro à renumeração.
+
+5. **Índice único em `numero` e `not null`.** É o que impede a volta do problema por qualquer caminho
+   (numerador com defeito, carga que passe número na mão, insert direto). O trigger já preenchia
+   sempre; agora o banco exige.
+
+**Consequência conhecida:** ordenar por número é ordenação de TEXTO, então quando a sequência passar
+de 9.999 o LAN-2026-10000 vai aparecer antes do LAN-2026-9999 na lista ordenada por número. Fica
+registrado aqui em vez de consertado agora: são uns 4.000 documentos de folga, e a correção pede
+ordenar pelo sufixo numérico dentro de `fn_listar_lancamentos`.
+
+**Verificação:** `supabase/provas/numero_de_documento_e_unico.sql`, 12 asserções em 6 casos, rodando
+contra o banco vivo dentro de `begin ... rollback`. Ela **reproduz o defeito** reinstalando o
+numerador antigo dentro da transação (caso 2: o segundo documento repete o primeiro), prova que o
+numerador de hoje não repete (caso 3), que o índice único recusa insert repetido (caso 6), e tem
+linha de controle (caso 4: abaixo de 9.999 o formato de quatro dígitos NÃO mudou, senão trocar tudo
+para cinco dígitos passaria nos outros casos e estragaria todo número já impresso). Depois do
+rollback, conferido no banco que a função voltou a ser a corrigida e que não sobrou nada da prova.
+
+O de/para de cada linha ficou em `lancamentos_numero_reparo` (RLS ligada, sem policy e sem grant: é
+material de reparo, ninguém lê pelo app), que é o que o rollback usa e pode ser derrubada depois de
+conferido.

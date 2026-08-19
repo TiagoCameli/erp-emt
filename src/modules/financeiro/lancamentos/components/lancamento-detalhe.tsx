@@ -16,6 +16,7 @@ import { toast } from "@/components/canonicos/toast";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import {
+  BotaoEspelho,
   CelulaVazia,
   Combobox,
   ConfirmDialog,
@@ -239,13 +240,25 @@ export function LancamentoDetalheView({
   // ser pago: é um estado a resolver, não um detalhe.
   const semParcelas = lancamento.parcelas.length === 0;
   const temParcelaFechada = temParcelaAprovada || temParcelaPaga;
-  // Lançamento de origem tem o cabeçalho travado, mas as parcelas dele podem
-  // ser definidas aqui enquanto nenhuma foi aprovada ou paga.
-  const podeDefinirParcelas = podeEditar && !ehManual && !temParcelaFechada;
-  // Aprovado também tranca a edição, não só pago: editar regrava as parcelas do
-  // zero, e isso apagaria a aprovação (data programada, conta e quem aprovou).
-  // Quem precisa mudar desaprova o pagamento primeiro. A trava final é o banco
-  // (fn_salvar_lancamento recusa), aqui é para ninguém tentar em vão.
+  /**
+   * O diálogo de parcelas serve dois casos, e por isso não olha mais `ehManual`
+   * nem `temParcelaFechada`:
+   *
+   * - lançamento de ORIGEM que nasceu sem parcelas (era o caso original);
+   * - lançamento com parcela paga ou aprovada, em que só as EM ABERTO abrem para
+   *   editar. É o que destrava um parcelamento de imposto renegociado: 3 pagas não
+   *   podem mais trancar as 38 futuras.
+   *
+   * Quem preserva as fechadas e recalcula o total é a
+   * `fn_definir_parcelas_lancamento`; as guardas de origem do RH também ficam
+   * nela. Aqui é só não esconder o caminho.
+   */
+  const podeDefinirParcelas =
+    podeEditar && (!ehManual || temParcelaFechada || semParcelas);
+  // O cabeçalho (fornecedor, categoria, forma) continua trancado com parcela
+  // fechada: editar por ali regrava as parcelas do zero e apagaria a aprovação.
+  // Para mexer em VALOR e VENCIMENTO existe o diálogo de parcelas, que preserva as
+  // fechadas. A trava final é o banco (fn_salvar_lancamento recusa).
   const editavel = podeEditar && ehManual && !temParcelaFechada;
   /**
    * Selo pela DÍVIDA, não pela etapa. O saldo sai das parcelas, que o detalhe já
@@ -279,9 +292,9 @@ export function LancamentoDetalheView({
   const motivoBloqueio = !ehManual
     ? `Lançamento de origem ${rotuloOrigemLancamento(lancamento.origem)}. Edite na origem.`
     : temParcelaPaga
-      ? "Tem parcela paga. Não dá para editar."
+      ? "Tem parcela paga: o cabeçalho não muda. Use \u201cEditar parcelas\u201d para as em aberto."
       : temParcelaAprovada
-        ? "Pagamento aprovado. Desaprove o pagamento para editar."
+        ? "Pagamento aprovado. Desaprove o pagamento para editar o cabeçalho."
         : null;
 
   const somaRateios = lancamento.rateios.reduce(
@@ -338,6 +351,7 @@ export function LancamentoDetalheView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <BotaoEspelho rota="/espelho/lancamentos" ids={[lancamento.id]} />
           {editavel ? (
             <Button
               type="button"
@@ -817,9 +831,12 @@ export function LancamentoDetalheView({
           }}
           lancamentoId={lancamento.id}
           valor={lancamento.valor}
+          origem={lancamento.origem}
           parcelasAtuais={lancamento.parcelas.map((parcela) => ({
+            numeroParcela: parcela.numeroParcela,
             dataVencimento: parcela.dataVencimento,
             valor: parcela.valor,
+            status: parcela.status,
           }))}
           condicaoDescricao={lancamento.condicaoPagamentoDescricao}
         />

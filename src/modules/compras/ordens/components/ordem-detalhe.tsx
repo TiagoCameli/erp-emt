@@ -17,6 +17,7 @@ import { Anexos } from "@/components/canonicos/anexos";
 import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
 import {
   ApprovalBar,
+  BotaoEspelho,
   CelulaVazia,
   ConfirmDialog,
   MoneyText,
@@ -268,6 +269,7 @@ export function OrdemDetalheView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <BotaoEspelho rota="/espelho/ordens" ids={[ordem.id]} />
           {editavel ? (
             <Button
               type="button"

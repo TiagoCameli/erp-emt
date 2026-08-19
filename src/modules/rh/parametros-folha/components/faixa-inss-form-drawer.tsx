@@ -6,7 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
-import { CampoFormulario, classesFormulario, FormDrawer } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  FormDrawer,
+  InputDecimal,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { salvarFaixaInss } from "@/modules/rh/parametros-folha/actions";
@@ -124,10 +129,9 @@ export function FaixaInssFormDrawer({
           erro={form.formState.errors.limiteAte?.message}
           ajuda="Teto salarial desta faixa, em reais"
         >
-          <Input
+          <InputDecimal
             id="faixa-inss-limite"
             autoComplete="off"
-            inputMode="decimal"
             disabled={salvando}
             {...form.register("limiteAte")}
           />
@@ -140,10 +144,10 @@ export function FaixaInssFormDrawer({
           erro={form.formState.errors.aliquota?.message}
           ajuda="Percentual desta faixa, de 0 a 100, com até 3 casas decimais"
         >
-          <Input
+          <InputDecimal
+            casas={3}
             id="faixa-inss-aliquota"
             autoComplete="off"
-            inputMode="decimal"
             disabled={salvando}
             {...form.register("aliquota")}
           />
