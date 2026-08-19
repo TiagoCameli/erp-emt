@@ -293,15 +293,15 @@ export function PagamentoDetalheView({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Só em parcela PAGA, a mesma regra da listagem (o espelho lá vive
-              na aba "Pagas"). Nesta tela a parcela ainda está em aprovação: o
-              espelho de pagamento imprime "Saiu da conta" e "Pago em", e
-              oferecer o botão aqui gera papel dizendo que saiu dinheiro que
-              não saiu. A página do espelho também degrada sozinha, porque o
-              link é colável — mas o botão não pode convidar para isso. */}
-          {parcela.status === "pago" ? (
-            <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
-          ) : null}
+          {/* Vale em QUALQUER status, igual à fila e a lancamentos. A
+              proteção não sumiu, mudou de camada: quem garante que o papel não
+              afirma pagamento inexistente é a página do espelho
+              (src/app/(espelho)/espelho/pagamentos/page.tsx), que degrada
+              sozinha quando a parcela não tem status 'pago' — o documento sai
+              intitulado "Parcela" em vez de "Pagamento", e "Saiu da conta" e
+              "Pago em" saem como travessão. A guarda mora lá porque o link é
+              colável: guarda que só existe no botão não é guarda. */}
+          <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
           <Button
             type="button"
             variant="outline"
