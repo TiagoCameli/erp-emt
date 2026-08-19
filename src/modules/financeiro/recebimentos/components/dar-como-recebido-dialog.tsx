@@ -22,6 +22,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  ROTULO_BANCO,
+  type BancoConta,
+} from "@/modules/financeiro/_shared/formato";
 import { darComoRecebido } from "@/modules/financeiro/recebimentos/actions";
 import type { ParcelaAReceber } from "@/modules/financeiro/recebimentos/queries";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
@@ -157,9 +161,12 @@ export function DarComoRecebidoDialog({
               onValorChange={(valor) =>
                 form.setValue("contaId", valor, { shouldValidate: true })
               }
+              // "nome - banco", igual ao drawer de pagamento: rotular só pelo
+              // nome faria duas contas de bancos diferentes parecerem a mesma na
+              // hora de dizer onde o dinheiro entrou.
               opcoes={contas.map((conta) => ({
                 valor: conta.id,
-                rotulo: conta.nome,
+                rotulo: `${conta.nome} - ${ROTULO_BANCO[conta.banco as BancoConta] ?? conta.banco}`,
               }))}
               placeholder="Selecione a conta"
               disabled={salvando}

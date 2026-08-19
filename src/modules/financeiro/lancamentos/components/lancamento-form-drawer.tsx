@@ -43,7 +43,11 @@ import { cn } from "@/lib/utils";
 import { criarClienteRapido } from "@/modules/_shared/cliente/actions";
 import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
-import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
+import {
+  ROTULO_BANCO,
+  ROTULO_TIPO_LANCAMENTO,
+  type BancoConta,
+} from "@/modules/financeiro/_shared/formato";
 import {
   parcelasDaCondicaoLancamento,
   salvarLancamento,
@@ -866,9 +870,13 @@ export function LancamentoFormDrawer({
                       shouldValidate: true,
                     })
                   }
+                  // "nome - banco", igual ao drawer de pagamento e ao filtro:
+                  // "Conta movimento" existe em mais de um banco, e rotular só
+                  // pelo nome faria a mesma conta aparecer diferente em telas
+                  // vizinhas — ou duas contas diferentes parecerem a mesma.
                   opcoes={contas.map((conta) => ({
                     valor: conta.id,
-                    rotulo: conta.nome,
+                    rotulo: `${conta.nome} - ${ROTULO_BANCO[conta.banco as BancoConta] ?? conta.banco}`,
                   }))}
                   placeholder="Selecione a conta"
                   disabled={salvando}
