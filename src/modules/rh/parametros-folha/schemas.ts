@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CASAS_TAXA } from "@/lib/casas-decimais";
+
 /**
  * Converte texto digitado (pt-BR: ponto = milhar, vírgula = decimal) em
  * número. Mesmo formato do salário de funções (cadastros/funcoes/schemas.ts).
@@ -63,13 +65,13 @@ function criarDinheiroSchema(opts: {
     });
 }
 
-/** Percentual NUMERIC(6,3) com check 0..100 no banco. */
+/** Percentual NUMERIC(7,4) com check 0..100 no banco. */
 const PERCENTUAL_MAX = 100;
 
 /**
  * Percentual (alíquota/FGTS) obrigatório: aceita a string digitada no
  * formulário (pt-BR) ou o número já convertido. Não negativo, no máximo
- * 100, no máximo 3 casas — a coluna NUMERIC(6,3) arredonda sem avisar.
+ * 100, no máximo 4 casas — a coluna NUMERIC(7,4) arredonda sem avisar.
  *
  * O validador do percentual dos encargos e das provisões é o
  * `percentualSchema` de `rh/percentual.ts`, e este **não é mais o mesmo**: ele
@@ -98,8 +100,8 @@ const percentualSchema = z
   .refine((valor) => valor <= PERCENTUAL_MAX, {
     error: "O percentual vai de 0 a 100",
   })
-  .refine((valor) => casasDecimais(valor) <= 3, {
-    error: "O percentual aceita no máximo 3 casas decimais",
+  .refine((valor) => casasDecimais(valor) <= CASAS_TAXA, {
+    error: `O percentual aceita no máximo ${CASAS_TAXA} casas decimais`,
   });
 
 /** Limite superior de uma faixa progressiva (INSS/IRRF): precisa ser > 0. */

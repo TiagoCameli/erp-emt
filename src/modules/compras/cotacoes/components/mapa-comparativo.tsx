@@ -8,7 +8,7 @@ import {
   CelulaVazia,
   Combobox,
   EmptyState,
-  InputMoeda,
+  InputPreco,
   InputQuantidade,
   MoneyText,
 } from "@/components/canonicos";
@@ -347,7 +347,7 @@ export function MapaComparativo({
                           )}
                         >
                           {editavel ? (
-                            <InputMoeda
+                            <InputPreco
                               valor={precoTexto}
                               onValorChange={(valor) =>
                                 alterarPreco(

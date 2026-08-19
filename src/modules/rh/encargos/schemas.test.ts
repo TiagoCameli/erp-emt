@@ -41,8 +41,14 @@ describe("encargoSchema — percentual", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejeita mais de 3 casas decimais", () => {
+  it("aceita 4 casas decimais (5,8333)", () => {
     const r = encargoSchema.safeParse({ ...base, percentual: "5,8333" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.percentual).toBe(5.8333);
+  });
+
+  it("rejeita mais de 4 casas decimais", () => {
+    const r = encargoSchema.safeParse({ ...base, percentual: "5,83335" });
     expect(r.success).toBe(false);
   });
 
@@ -155,7 +161,7 @@ describe("COLUNAS_ENCARGO — percentual da planilha", () => {
 
   it("recusa notação exponencial por casas decimais, não por teto", () => {
     expect(validarPercentualImportacao(1e-7)).toBe(
-      "O percentual aceita no máximo 3 casas decimais",
+      "O percentual aceita no máximo 4 casas decimais",
     );
   });
 });

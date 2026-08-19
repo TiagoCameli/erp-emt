@@ -20,6 +20,7 @@ import {
   Combobox,
   FormDrawer,
   InputMoeda,
+  InputPreco,
   InputQuantidade,
   LinhaCampos,
   SecaoFormulario,
@@ -1314,7 +1315,7 @@ function GrupoCentroCusto({
               const campo =
                 `centrosCusto.${indice}.insumos.${j}.precoUnitario` as const;
               return (
-                <InputMoeda
+                <InputPreco
                   valor={form.watch(campo) ?? ""}
                   onValorChange={(valor) =>
                     form.setValue(campo, valor, { shouldDirty: true })

@@ -60,9 +60,15 @@ describe("faixaInssSchema — aliquota", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejeita mais de 3 casas decimais", () => {
-    const r = faixaInssSchema.safeParse({ ...base, aliquota: "7,5833" });
+  it("rejeita mais de 4 casas decimais", () => {
+    const r = faixaInssSchema.safeParse({ ...base, aliquota: "7,58335" });
     expect(r.success).toBe(false);
+  });
+
+  it("aceita aliquota com 4 casas decimais", () => {
+    const r = faixaInssSchema.safeParse({ ...base, aliquota: "7,5833" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.aliquota).toBe(7.5833);
   });
 
   it("aceita aliquota com 3 casas decimais", () => {
@@ -223,9 +229,14 @@ describe("parametrosSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejeita FGTS com mais de 3 casas decimais", () => {
-    const r = parametrosSchema.safeParse({ ...base, fgtsPercentual: "8,1234" });
+  it("rejeita FGTS com mais de 4 casas decimais", () => {
+    const r = parametrosSchema.safeParse({ ...base, fgtsPercentual: "8,12345" });
     expect(r.success).toBe(false);
+  });
+
+  it("aceita FGTS com 4 casas decimais", () => {
+    const r = parametrosSchema.safeParse({ ...base, fgtsPercentual: "8,1234" });
+    expect(r.success).toBe(true);
   });
 });
 

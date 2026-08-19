@@ -56,32 +56,34 @@ describe("ocItemSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("aceita quantidade com exatamente 3 casas decimais", () => {
-    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.235 });
+  it("aceita quantidade com exatamente 4 casas decimais", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.2345 });
     expect(r.success).toBe(true);
   });
 
-  it("rejeita quantidade com mais de 3 casas decimais (arredondaria em silêncio no banco)", () => {
-    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.2345 });
+  it("rejeita quantidade com mais de 4 casas decimais (arredondaria em silêncio no banco)", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, quantidade: 1.23456 });
     expect(r.success).toBe(false);
     if (!r.success) {
       expect(r.error.issues[0]?.message).toBe(
-        "A quantidade aceita no máximo 3 casas decimais",
+        "A quantidade aceita no máximo 4 casas decimais",
       );
     }
   });
 
-  it("aceita preço com exatamente 2 casas decimais", () => {
-    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 12.34 });
+  // O caso que motivou as 4 casas: diesel S500 a R$ 6,3947 o litro, recusado na
+  // tela de editar OC em 19/08/2026 com "no máximo 2 casas decimais".
+  it("aceita preço de combustível com 4 casas (6,3947)", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 6.3947 });
     expect(r.success).toBe(true);
   });
 
-  it("rejeita preço com mais de 2 casas decimais (arredondaria em silêncio no banco)", () => {
-    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 12.345 });
+  it("rejeita preço com mais de 4 casas decimais (arredondaria em silêncio no banco)", () => {
+    const r = ocItemSchema.safeParse({ ...itemValido, precoUnitario: 12.34567 });
     expect(r.success).toBe(false);
     if (!r.success) {
       expect(r.error.issues[0]?.message).toBe(
-        "O preço aceita no máximo 2 casas decimais",
+        "O preço aceita no máximo 4 casas decimais",
       );
     }
   });
@@ -202,36 +204,44 @@ describe("ordemCompraSchema", () => {
 describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
   const insumoValido = { insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5" };
 
-  it("aceita quantidade com vírgula e 3 casas decimais", () => {
-    const r = ocInsumoFormSchema.safeParse({
-      ...insumoValido,
-      quantidade: "1,235",
-    });
-    expect(r.success).toBe(true);
-  });
-
-  it("rejeita quantidade com vírgula e mais de 3 casas decimais", () => {
+  it("aceita quantidade com vírgula e 4 casas decimais", () => {
     const r = ocInsumoFormSchema.safeParse({
       ...insumoValido,
       quantidade: "1,2345",
     });
-    expect(r.success).toBe(false);
-    if (!r.success) {
-      expect(r.error.issues[0]?.message).toBe(
-        "A quantidade aceita no máximo 3 casas decimais",
-      );
-    }
+    expect(r.success).toBe(true);
   });
 
-  it("rejeita preço com ponto e mais de 2 casas decimais", () => {
+  it("aceita preço de combustível com vírgula e 4 casas (6,3947)", () => {
     const r = ocInsumoFormSchema.safeParse({
       ...insumoValido,
-      precoUnitario: "12.345",
+      precoUnitario: "6,3947",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejeita quantidade com vírgula e mais de 4 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      quantidade: "1,23456",
     });
     expect(r.success).toBe(false);
     if (!r.success) {
       expect(r.error.issues[0]?.message).toBe(
-        "O preço aceita no máximo 2 casas decimais",
+        "A quantidade aceita no máximo 4 casas decimais",
+      );
+    }
+  });
+
+  it("rejeita preço com ponto e mais de 4 casas decimais", () => {
+    const r = ocInsumoFormSchema.safeParse({
+      ...insumoValido,
+      precoUnitario: "12.34567",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toBe(
+        "O preço aceita no máximo 4 casas decimais",
       );
     }
   });

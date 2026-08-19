@@ -144,10 +144,10 @@ export function FaixaIrrfFormDrawer({
           rotulo="Alíquota"
           obrigatorio
           erro={form.formState.errors.aliquota?.message}
-          ajuda="Percentual desta faixa, de 0 a 100, com até 3 casas decimais"
+          ajuda="Percentual desta faixa, de 0 a 100, com até 4 casas decimais"
         >
           <InputDecimal
-            casas={3}
+            casas={4}
             id="faixa-irrf-aliquota"
             autoComplete="off"
             disabled={salvando}

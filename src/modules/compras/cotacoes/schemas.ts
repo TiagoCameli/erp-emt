@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
 
 /** Status possíveis de uma cotação. Igual ao check do banco. */
@@ -105,8 +106,22 @@ export type FornecedorCotacaoFormInput = z.infer<
 >;
 
 /**
+ * Quantas casas decimais um número tem, contando pela representação decimal
+ * (sem notação científica: os valores desta tela nunca chegam nessa faixa).
+ */
+function casasDecimais(valor: number): number {
+  const texto = valor.toString();
+  const ponto = texto.indexOf(".");
+  return ponto === -1 ? 0 : texto.length - ponto - 1;
+}
+
+/**
  * Um preço lançado: o insumo, a quantidade cotada e o preço unitário de um
  * fornecedor para aquele insumo. A tela salva o mapa inteiro de uma vez.
+ *
+ * As travas de casas existem porque a coluna NUMERIC(14,4) arredonda sem avisar:
+ * antes disto, um preço com 5 casas era aceito aqui e gravado diferente do que
+ * a pessoa digitou. Preço e quantidade aceitam 4 casas (taxa, não valor).
  */
 export const precoCotacaoSchema = z.object({
   cotacaoFornecedorId: idSchemaCom("Fornecedor da cotação inválido"),
@@ -114,11 +129,17 @@ export const precoCotacaoSchema = z.object({
   quantidade: z
     .number({ error: "Quantidade inválida" })
     .gt(0, { error: "A quantidade precisa ser maior que zero" })
-    .max(99999999999.999, { error: "Quantidade acima do permitido" }),
+    .max(9999999999.9999, { error: "Quantidade acima do permitido" })
+    .refine((valor) => casasDecimais(valor) <= CASAS_TAXA, {
+      error: `A quantidade aceita no máximo ${CASAS_TAXA} casas decimais`,
+    }),
   precoUnitario: z
     .number({ error: "Preço inválido" })
     .min(0, { error: "O preço não pode ser negativo" })
-    .max(999999999999.99, { error: "Preço acima do permitido" }),
+    .max(9999999999.9999, { error: "Preço acima do permitido" })
+    .refine((valor) => casasDecimais(valor) <= CASAS_TAXA, {
+      error: `O preço aceita no máximo ${CASAS_TAXA} casas decimais`,
+    }),
 });
 
 export type PrecoCotacaoInput = z.infer<typeof precoCotacaoSchema>;

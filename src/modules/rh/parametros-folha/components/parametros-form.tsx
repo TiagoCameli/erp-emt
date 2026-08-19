@@ -137,10 +137,10 @@ export function ParametrosForm({
               rotulo="FGTS"
               obrigatorio
               erro={form.formState.errors.fgtsPercentual?.message}
-              ajuda="Percentual do FGTS, de 0 a 100, com até 3 casas decimais"
+              ajuda="Percentual do FGTS, de 0 a 100, com até 4 casas decimais"
             >
               <InputDecimal
-                casas={3}
+                casas={4}
                 id="parametros-fgts"
                 autoComplete="off"
                 disabled={camposDesabilitados}
