@@ -1,6 +1,11 @@
 import ExcelJS from "exceljs";
 
+import { EMPRESA } from "@/config/marca";
 import { formatarDataHora, formatarMesAno } from "@/lib/formatadores";
+import {
+  escreverCabecalhoMarca,
+  estilizarCabecalhoColunas,
+} from "@/lib/planilha-marca";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
 import { ROTULO_REVISAO_DA_LINHA } from "@/modules/financeiro/lancamentos/lote";
 import type { LancamentoPlanilha } from "@/modules/financeiro/lancamentos/queries";
@@ -47,9 +52,7 @@ export interface ColunaPlanilha {
  * fracionária e o Excel mostraria o dia anterior. Aqui a data é um dia do
  * calendário, sem hora nenhuma: o instante não interessa, o dia interessa.
  */
-export function dataParaCelula(
-  data: string | null | undefined,
-): Date | null {
+export function dataParaCelula(data: string | null | undefined): Date | null {
   if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return null;
   const [ano, mes, dia] = data.split("-").map(Number);
   return new Date(Date.UTC(ano, mes - 1, dia));
@@ -240,14 +243,17 @@ export const COLUNAS_PLANILHA_LANCAMENTOS: ColunaPlanilha[] = [
 ];
 
 /** Cabeçalhos, na ordem das colunas. */
-export const CABECALHOS_PLANILHA_LANCAMENTOS =
-  COLUNAS_PLANILHA_LANCAMENTOS.map((coluna) => coluna.cabecalho);
+export const CABECALHOS_PLANILHA_LANCAMENTOS = COLUNAS_PLANILHA_LANCAMENTOS.map(
+  (coluna) => coluna.cabecalho,
+);
 
 /** Uma linha da planilha, na ordem das colunas. */
 export function linhaPlanilhaLancamento(
   lancamento: LancamentoPlanilha,
 ): CelulaPlanilha[] {
-  return COLUNAS_PLANILHA_LANCAMENTOS.map((coluna) => coluna.celula(lancamento));
+  return COLUNAS_PLANILHA_LANCAMENTOS.map((coluna) =>
+    coluna.celula(lancamento),
+  );
 }
 
 /**
@@ -264,9 +270,8 @@ export function nomeArquivoPlanilhaLancamentos(dataISO: string): string {
 /* Montagem do arquivo                                                */
 /* ------------------------------------------------------------------ */
 
-const COR_FUNDO_HEADER = "FFF7F7F5";
-const COR_BORDA_HEADER = "FFE8E6E1";
-const COR_TEXTO_HEADER = "FF1F1F1F";
+/* Cor do cabeçalho e a marca no topo vivem em src/lib/planilha-marca.ts, para
+   toda planilha exportada sair igual. */
 /**
  * Formato de moeda. No xlsx o código sempre usa `,` para milhar e `.` para
  * decimal; o Excel renderiza no separador do idioma de quem abre, então em
@@ -279,30 +284,35 @@ const FORMATO_DATA = "dd/mm/yyyy";
 export const ABA_PLANILHA_LANCAMENTOS = "Lançamentos";
 
 /**
- * Monta o .xlsx: cabeçalho destacado e congelado, uma linha por lançamento,
- * filtro do Excel ligado e a linha de total.
+ * Monta o .xlsx: marca da EMT no topo, cabeçalho destacado e congelado, uma
+ * linha por lançamento, filtro do Excel ligado e a linha de total.
+ *
+ * Nenhuma linha aqui é contada na mão. O cabeçalho de marca informa em que linha
+ * o cabeçalho de colunas cai (`linhaCabecalho`), e filtro, congelamento e total
+ * saem dessa linha — a planilha exportada é conferida contra o banco, e uma
+ * fórmula de total apontando uma linha adiante somaria o intervalo errado sem o
+ * arquivo dar erro nenhum.
  */
 export function montarPlanilhaLancamentos(
   itens: LancamentoPlanilha[],
 ): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "ERP EMT";
+  workbook.company = EMPRESA.razaoSocial;
 
   const worksheet = workbook.addWorksheet(ABA_PLANILHA_LANCAMENTOS);
 
-  const linhaHeader = worksheet.addRow(CABECALHOS_PLANILHA_LANCAMENTOS);
-  linhaHeader.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: COR_TEXTO_HEADER } };
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: COR_FUNDO_HEADER },
-    };
-    cell.border = {
-      bottom: { style: "thin", color: { argb: COR_BORDA_HEADER } },
-    };
-    cell.alignment = { vertical: "middle" };
+  escreverCabecalhoMarca(workbook, worksheet, {
+    titulo: "Lançamentos financeiros",
+    colunas: COLUNAS_PLANILHA_LANCAMENTOS.length,
   });
+
+  // `addRow` cai na linha seguinte à última que o cabeçalho de marca escreveu,
+  // e o número dela é quem manda no resto: `linhaHeader.number`, nunca a
+  // constante. Se um dia a marca crescer uma linha, filtro, congelamento e a
+  // fórmula do total acompanham sozinhos.
+  const linhaHeader = worksheet.addRow(CABECALHOS_PLANILHA_LANCAMENTOS);
+  estilizarCabecalhoColunas(linhaHeader);
 
   for (const item of itens) {
     worksheet.addRow(linhaPlanilhaLancamento(item));
@@ -328,15 +338,15 @@ export function montarPlanilhaLancamentos(
       (definicao) => definicao.tipo === "dinheiro",
     ) + 1,
   );
-  const primeiraLinha = 2;
-  const ultimaLinha = itens.length + 1;
+  const primeiraLinha = linhaHeader.number + 1;
+  const ultimaLinha = linhaHeader.number + itens.length;
 
   // Congela o cabeçalho e liga o filtro do Excel: rolar 3.000 linhas sem isso
   // deixa a pessoa sem saber que coluna está lendo. O filtro para na última
   // linha de dados, de fora a linha de total.
-  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  worksheet.views = [{ state: "frozen", ySplit: linhaHeader.number }];
   worksheet.autoFilter = {
-    from: { row: 1, column: 1 },
+    from: { row: linhaHeader.number, column: 1 },
     to: { row: ultimaLinha, column: COLUNAS_PLANILHA_LANCAMENTOS.length },
   };
 

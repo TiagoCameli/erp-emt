@@ -56,9 +56,11 @@ docs/                       PLANO-ERP-EMT.md, decisoes.md
 ## Design system EMT (resumo; detalhe no plano, seção 7)
 
 - Base neutra estilo Notion: fundo #FFFFFF, superfície #F7F7F5, borda #E8E6E1, texto #1F1F1F, secundário #6B6B6B.
-- Marca: âmbar rodoviário. Ação primária #B45309, acento #F59E0B.
-- Assinatura "a Faixa": barra âmbar de 3px no item ativo da sidebar, na aba ativa e na borda esquerda dos KPICards. Sempre igual, em todo o app.
-- Status com badge de texto + cor: aprovado #15803D, pendente #B45309, rejeitado/vencido #B91C1C, rascunho #6B7280.
+- **Marca EMT, medida no arquivo da logo**: verde #3E7744 (ação primária), asfalto #45464B, amarelo do eixo da pista #CF943A. Tokens `--emt-*` no `globals.css`; os mesmos hexes em `src/config/marca.ts` para o exceljs e o pdfmake, que não leem CSS. Os dois têm que concordar.
+- Assinatura "a Faixa": barra âmbar #F59E0B de 3px no item ativo da sidebar, na aba ativa e na borda esquerda dos KPICards. Sempre igual, em todo o app. **Continua âmbar de propósito**: é o eixo da pista do logo.
+- Status com badge de texto + cor: aprovado #15803D, pendente #B45309, rejeitado/vencido #B91C1C, rascunho #6B7280. O verde de "aprovado" **não** é o verde da marca: fundir os dois faz o badge ter a cor do botão primário e a cor deixa de dizer "isto passou pela aprovação".
+- **Logo**: componente canônico `LogoEmt` (SVG inline, variantes `completa` e `simbolo`, mais `mono` para fundo colorido). Nunca `<img>` de `/public`: relatório vai pra impressora e imagem que não chegou a tempo sai como retângulo vazio.
+- **Todo documento que o app emite** (espelho, holerite, planilha) usa a moldura canônica `marca-documento` (`CabecalhoDocumento`, `PistaEmt`, `RodapeEmpresa`, `EmissaoDocumento`) e lê os dados cadastrais de `EMPRESA`. Cabeçalho próprio por tela é proibido: dois relatórios com CNPJ diferente é problema de contabilidade. Nada da marca pode carregar dado, porque quem imprime pode desligar "gráficos de fundo".
 - Inter na UI (escala 24/18/15/13/12, hierarquia por peso), JetBrains Mono para códigos de documento e placas.
 - Densidade de ERP: tabelas compactas, filtros persistentes, sem decoração. Mobile-first apenas nas telas de campo; telas pesadas avisam que são desktop.
 

@@ -39,3 +39,5 @@ export * from "./espelho-impresso";
 export * from "./botao-imprimir";
 export * from "./barra-selecao";
 export * from "./botao-espelho";
+export * from "./logo-emt";
+export * from "./marca-documento";

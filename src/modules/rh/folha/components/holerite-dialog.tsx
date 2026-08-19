@@ -3,6 +3,11 @@
 import { Printer } from "lucide-react";
 
 import { MoneyText } from "@/components/canonicos";
+import {
+  CabecalhoDocumento,
+  PistaEmt,
+  RodapeEmpresa,
+} from "@/components/canonicos/marca-documento";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -59,7 +64,10 @@ function Linha({
       <span className={forte ? "font-medium" : "text-muted-foreground"}>
         {rotulo}
       </span>
-      <MoneyText valor={valor} className={forte ? "font-semibold" : undefined} />
+      <MoneyText
+        valor={valor}
+        className={forte ? "font-semibold" : undefined}
+      />
     </div>
   );
 }
@@ -97,12 +105,25 @@ export function HoleriteDialog({
     <Dialog open={aberto} onOpenChange={onAbertoChange}>
       <DialogContent className="max-w-md">
         <div className="holerite-print flex flex-col gap-4">
+          {/*
+            A mesma moldura do espelho, pelo mesmo motivo: o holerite sai da
+            impressora e vai pra mão do funcionário, então precisa dizer de qual
+            empresa ele é. Cabeçalho e rodapé vêm do canônico (marca-documento),
+            nunca desenhados aqui, senão holerite e espelho passam a divergir.
+          */}
+          <CabecalhoDocumento
+            titulo="Holerite"
+            subtitulo={`Competência ${formatarCompetencia(competencia)}`}
+          />
+          <PistaEmt />
+
           <DialogHeader>
             <DialogTitle>{item.colaboradorNome}</DialogTitle>
+            {/* Só a função: a competência já está no subtítulo do cabeçalho,
+                logo acima, e repetir aqui gasta uma linha do papel dizendo duas
+                vezes a mesma coisa. */}
             <DialogDescription>
-              {(item.colaboradorFuncao ?? "Sem função") +
-                " · Competência " +
-                formatarCompetencia(competencia)}
+              {item.colaboradorFuncao ?? "Sem função"}
             </DialogDescription>
           </DialogHeader>
 
@@ -151,10 +172,18 @@ export function HoleriteDialog({
               />
             </section>
           </div>
+
+          <footer className="mt-1 border-t border-border pt-2">
+            <RodapeEmpresa />
+          </footer>
         </div>
 
         <DialogFooter className="nao-imprime">
-          <Button type="button" variant="outline" onClick={() => window.print()}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => window.print()}
+          >
             <Printer />
             Imprimir
           </Button>

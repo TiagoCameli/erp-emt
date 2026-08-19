@@ -2278,3 +2278,69 @@ rollback, conferido no banco que a função voltou a ser a corrigida e que não 
 O de/para de cada linha ficou em `lancamentos_numero_reparo` (RLS ligada, sem policy e sem grant: é
 material de reparo, ninguém lê pelo app), que é o que o rollback usa e pode ser derrubada depois de
 conferido.
+
+## 2026-08-19 - A identidade da EMT entra no app e em todo papel que ele emite
+
+O espelho impresso saía sem a marca: uma barra âmbar, o tipo do documento e as palavras "EMT
+CONSTRUTORA" em caixa alta no canto. O documento que o Tiago usa hoje como padrão (o espelho de
+pagamento do Mais Controle) traz a logo, o título no centro da folha e o rodapé com razão social,
+CNPJ, endereço, telefone e email. O pedido foi nivelar por cima disso, e estender: **todo relatório
+que o sistema emite** carrega a marca, e **o app** também.
+
+**As cores são medidas no arquivo da logo, não estimadas.** Verde das letras `#3E7744`, cinza do
+asfalto `#45464B`, amarelo do eixo da pista `#CF943A`. A `brand-config` do Tiago trazia `#3C7A4E`,
+`#3F4248` e `#D9A441`, que eram aproximações de quem olhou o logo; com o logo e o app abertos lado a
+lado a diferença aparece. Os hexes vivem em dois lugares que precisam concordar: os tokens `--emt-*`
+do `globals.css` (a tela) e `src/config/marca.ts` (o exceljs e o pdfmake, que não leem CSS).
+
+**Verde é a cor primária; o âmbar continua sendo a Faixa.** O design system nasceu "âmbar rodoviário"
+com ação primária `#B45309`, o que não é cor nenhuma da empresa. Agora `--primary` é o verde EMT. Mas
+a Faixa (a barra de 3px no item ativo da sidebar, na aba ativa e na borda dos KPICards) **fica
+âmbar**: ela é o eixo da pista do logo, ou seja, era a única peça do desenho do app que já era marca.
+Trocá-la por verde apagaria isso e deixaria a tela monocromática.
+
+**`--status-aprovado` NÃO virou o verde da marca.** Continua `#15803D`, mais saturado e mais frio.
+Fundir os dois faria o badge de "aprovado" ter a mesma cor de um botão primário, e a cor perderia a
+função de dizer "isto passou pela aprovação" — que é informação, não decoração.
+
+**A logo é SVG inline (`LogoEmt`), não `<img>` de `/public`.** Dois motivos que valem mais que bytes:
+o espelho e o holerite vão pra impressora, e imagem externa que não chegou a tempo sai como
+retângulo vazio num papel que vai pro contador e pro processo; e a variante `mono` recolore a marca
+com `currentColor`, o que arquivo raster não faz. Os paths saem de um traço do arquivo de marca
+(contorno por arestas unitárias + Douglas-Peucker); a pista é geometria medida, porque retângulo
+traçado só carrega a serrilha do JPEG. A variante `simbolo` só troca o `viewBox` e deixa de desenhar
+o wordmark — é o que ainda se lê nos 36px da sidebar recolhida.
+
+**A moldura é um canônico só (`marca-documento`), não um cabeçalho por relatório.** `CabecalhoDocumento`,
+`PistaEmt`, `RodapeEmpresa` e `EmissaoDocumento` servem o espelho (três telas) e o holerite. A
+exigência aqui é de IGUALDADE, não de estilo: no dia em que cada tela desenhar o seu próprio
+cabeçalho, os documentos divergem, e um maço com dois CNPJs diferentes é problema de contabilidade.
+Por isso os dados cadastrais saem de `EMPRESA`, nunca escritos na tela que imprime.
+
+**Nada da marca carrega dado.** Quem imprime pode desligar "gráficos de fundo" no diálogo do sistema.
+Então: a Pista são dois elementos com cor de fundo e não um `linear-gradient` (gradiente é o primeiro
+a ser descartado nesse modo, e a divisória sumiria inteira em vez de sair sem cor); e o painel dos
+campos, a tarja do cabeçalho da tabela e o verde dos títulos são decoração sobre um documento que já
+se explica em texto. Conferido imprimindo de verdade (PDF do Chrome headless): a marca sai.
+
+**Na planilha exportada a marca ocupa 5 linhas, e nenhuma linha é contada na mão.**
+`escreverCabecalhoMarca` devolve em que linha o cabeçalho de COLUNAS cai, e filtro, congelamento e a
+fórmula `SUBTOTAL` saem de `linhaHeader.number`. A planilha é conferida contra o banco: um total
+apontando uma linha adiante somaria o intervalo errado **sem o arquivo dar erro nenhum**. O teste
+também deriva a linha de `LINHAS_CABECALHO_MARCA` em vez de escrever 6, e há uma asserção de que a
+logo viaja DENTRO do `.xlsx` (a planilha vai anexada em email; logo por URL abriria como moldura
+vazia). Cabeçalho de colunas em verde chapado com texto branco aqui, e não o verde lavado do papel:
+planilha é lida na tela, rolando, e o contraste é o que faz o cabeçalho aguentar 3.000 linhas.
+
+**O favicon não é a logo.** Em 16px o "Construtora Ltda" desaparece, o tracejado vira borrão e as
+letras, que no arquivo original encostam nas duas bordas, saem cortadas. `src/app/icon.svg` é um selo:
+quadrado verde, EMT em branco com folga lateral e o eixo amarelo embaixo. Fidelidade trocada por
+legibilidade no tamanho em que ele é visto.
+
+**O modelo de importação leva a COR da marca e nada mais.** Ele é o único arquivo que sai e volta:
+`lerEValidarXlsx` casa as colunas pelo `getRow(1)`. As cinco linhas do cabeçalho de marca empurrariam
+o header e o sistema passaria a recusar o próprio modelo que entregou, com "Colunas obrigatórias não
+encontradas" — erro que a pessoa não tem como consertar, porque ela baixou o arquivo certo. Fica o
+cabeçalho verde com texto branco, que não desloca nada. Trancado por um teste de ida e volta
+(`gerarModeloXlsx` -> `lerEValidarXlsx`), conferido aplicando a marca de propósito: com ela o teste
+falha, o que é o que faz ele valer alguma coisa.

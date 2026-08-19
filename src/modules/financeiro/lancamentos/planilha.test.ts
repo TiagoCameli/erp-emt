@@ -1,7 +1,9 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
+import { EMPRESA } from "@/config/marca";
 import { formatarDataHora } from "@/lib/formatadores";
+import { LINHAS_CABECALHO_MARCA } from "@/lib/planilha-marca";
 import type { LancamentoPlanilha } from "@/modules/financeiro/lancamentos/queries";
 import {
   ABA_PLANILHA_LANCAMENTOS,
@@ -49,6 +51,13 @@ const lancamento: LancamentoPlanilha = {
   rateios: [],
 };
 
+/**
+ * Linha do cabeçalho de colunas no arquivo gerado. Derivada da marca, para o
+ * teste não voltar a contar linha na mão: a marca ocupa
+ * `LINHAS_CABECALHO_MARCA` linhas e os títulos entram na seguinte.
+ */
+const LINHA_HEADER = LINHAS_CABECALHO_MARCA + 1;
+
 /** Índice de uma coluna pelo cabeçalho, para o teste não contar posição na mão. */
 function coluna(cabecalho: string): number {
   const indice = CABECALHOS_PLANILHA_LANCAMENTOS.indexOf(cabecalho);
@@ -79,7 +88,9 @@ describe("linhaPlanilhaLancamento", () => {
     expect(linha[coluna("Revisão")]).toBe("Revisado");
     expect(linha[coluna("Origem")]).toBe("Ordem de compra");
     // Pelo formatador, não por literal: o texto sai no fuso de Rio Branco.
-    expect(linha[coluna("Criado em")]).toBe(formatarDataHora(lancamento.criadoEm));
+    expect(linha[coluna("Criado em")]).toBe(
+      formatarDataHora(lancamento.criadoEm),
+    );
   });
 
   it("manda o valor como NÚMERO, para a planilha somar", () => {
@@ -207,24 +218,57 @@ describe("montarPlanilhaLancamentos, arquivo relido", () => {
     return aba;
   }
 
+  it("embute a logo no arquivo, não um link para ela", async () => {
+    const buffer = await montarPlanilhaLancamentos([
+      lancamento,
+    ]).xlsx.writeBuffer();
+    const lido = new ExcelJS.Workbook();
+    await lido.xlsx.load(buffer);
+
+    // A imagem tem que viajar DENTRO do .xlsx: a planilha é aberta no Excel de
+    // outra máquina, muitas vezes anexada em email, e logo por URL abriria como
+    // moldura vazia justo no documento que a pessoa vai imprimir.
+    expect(lido.model.media).toHaveLength(1);
+    expect(lido.model.media[0].extension).toBe("png");
+  });
+
+  it("abre com a marca da EMT antes de qualquer dado", async () => {
+    const aba = await relerPlanilha([lancamento]);
+
+    // A razão social sai do config, não escrita aqui: se alguém trocar o CNPJ
+    // em src/config/marca.ts, este teste acompanha em vez de brigar.
+    expect(aba.getRow(2).getCell(1).value).toBe(
+      `${EMPRESA.razaoSocial} · CNPJ: ${EMPRESA.cnpj}`,
+    );
+    expect(String(aba.getRow(3).getCell(1).value)).toContain(
+      "Lançamentos financeiros",
+    );
+    // A marca ocupa exatamente as linhas que ela promete ocupar. Sem esta
+    // conferência, um cabeçalho que crescesse uma linha escreveria o cabeçalho
+    // de colunas em cima da Pista e ninguém notaria pelo tipo.
+    expect(aba.getRow(LINHA_HEADER).getCell(1).value).toBe("Número");
+  });
+
   it("grava cabeçalho, uma linha por lançamento e a linha de total", async () => {
     const aba = await relerPlanilha([lancamento, segundo]);
 
-    expect(aba.getRow(1).getCell(1).value).toBe("Número");
-    expect(aba.getRow(2).getCell(coluna("Número") + 1).value).toBe(
-      "LAN-2026-0015",
+    expect(aba.getRow(LINHA_HEADER).getCell(1).value).toBe("Número");
+    expect(
+      aba.getRow(LINHA_HEADER + 1).getCell(coluna("Número") + 1).value,
+    ).toBe("LAN-2026-0015");
+    expect(
+      aba.getRow(LINHA_HEADER + 2).getCell(coluna("Número") + 1).value,
+    ).toBe("LAN-2026-0016");
+    // Marca + cabeçalho + 2 lançamentos + total.
+    expect(aba.rowCount).toBe(LINHA_HEADER + 3);
+    expect(aba.getRow(LINHA_HEADER + 3).getCell(1).value).toBe(
+      "Total (2 lançamentos)",
     );
-    expect(aba.getRow(3).getCell(coluna("Número") + 1).value).toBe(
-      "LAN-2026-0016",
-    );
-    // Cabeçalho + 2 lançamentos + total.
-    expect(aba.rowCount).toBe(4);
-    expect(aba.getRow(4).getCell(1).value).toBe("Total (2 lançamentos)");
   });
 
   it("valor é número com formato de moeda, não texto", async () => {
     const aba = await relerPlanilha([lancamento, segundo]);
-    const celula = aba.getRow(2).getCell(coluna("Valor") + 1);
+    const celula = aba.getRow(LINHA_HEADER + 1).getCell(coluna("Valor") + 1);
 
     expect(celula.value).toBe(1234.56);
     expect(typeof celula.value).toBe("number");
@@ -233,7 +277,9 @@ describe("montarPlanilhaLancamentos, arquivo relido", () => {
 
   it("data cai no dia certo (e não no anterior) com formato de data", async () => {
     const aba = await relerPlanilha([lancamento]);
-    const celula = aba.getRow(2).getCell(coluna("Data da compra") + 1);
+    const celula = aba
+      .getRow(LINHA_HEADER + 1)
+      .getCell(coluna("Data da compra") + 1);
 
     expect(celula.value).toBeInstanceOf(Date);
     expect((celula.value as Date).toISOString()).toBe(
@@ -244,31 +290,43 @@ describe("montarPlanilhaLancamentos, arquivo relido", () => {
 
   it("total é fórmula SUBTOTAL sobre as linhas de dados", async () => {
     const aba = await relerPlanilha([lancamento, segundo]);
-    const total = aba.getRow(4).getCell(coluna("Valor") + 1);
+    const total = aba.getRow(LINHA_HEADER + 3).getCell(coluna("Valor") + 1);
+    const colunaValor = aba.getColumn(coluna("Valor") + 1).letter;
 
     // Fórmula e não valor fixo: acompanha o filtro e as linhas que sobrarem.
-    expect(total.formula).toBe("SUBTOTAL(109,F2:F3)");
+    expect(total.formula).toBe(
+      `SUBTOTAL(109,${colunaValor}${LINHA_HEADER + 1}:${colunaValor}${LINHA_HEADER + 2})`,
+    );
     // A fórmula precisa cobrir exatamente as linhas de dados: se pegar a própria
     // linha de total, o Excel abre com erro de referência circular.
-    expect(total.formula).not.toContain("F4");
+    expect(total.formula).not.toContain(`${colunaValor}${LINHA_HEADER + 3}`);
   });
 
   it("congela o cabeçalho e liga o filtro sem incluir a linha de total", async () => {
     const aba = await relerPlanilha([lancamento, segundo]);
 
-    // Uma vista só, com o cabeçalho congelado (ySplit: 1 = a primeira linha).
-    expect(aba.views[0]).toMatchObject({ state: "frozen", ySplit: 1 });
-    // Relido do arquivo o filtro volta como faixa ("A1:N3"), não como o objeto
-    // que foi gravado. Linha 3 é a última de dados: a 4 é o total, e total dentro
-    // do filtro seria somado como se fosse mais um lançamento.
-    const ultimaColuna = aba.getColumn(COLUNAS_PLANILHA_LANCAMENTOS.length)
-      .letter;
-    expect(aba.autoFilter).toBe(`A1:${ultimaColuna}3`);
+    // Uma vista só, congelada na linha do cabeçalho de colunas: rolar a
+    // planilha tem que deixar a marca E os títulos das colunas na tela.
+    expect(aba.views[0]).toMatchObject({
+      state: "frozen",
+      ySplit: LINHA_HEADER,
+    });
+    // Relido do arquivo o filtro volta como faixa ("A6:N8"), não como o objeto
+    // que foi gravado. A última linha do filtro é a última de DADOS: a de total
+    // dentro do filtro seria somada como se fosse mais um lançamento.
+    const ultimaColuna = aba.getColumn(
+      COLUNAS_PLANILHA_LANCAMENTOS.length,
+    ).letter;
+    expect(aba.autoFilter).toBe(
+      `A${LINHA_HEADER}:${ultimaColuna}${LINHA_HEADER + 2}`,
+    );
   });
 
   it("vencimento vazio fica em branco, sem virar data de 1900", async () => {
     const aba = await relerPlanilha([segundo]);
-    const celula = aba.getRow(2).getCell(coluna("Vencimento") + 1);
+    const celula = aba
+      .getRow(LINHA_HEADER + 1)
+      .getCell(coluna("Vencimento") + 1);
 
     expect(celula.value).toBeNull();
   });
