@@ -98,17 +98,15 @@ export async function definirSenha(
   }
 
   // Acesso deixou de ser pendente: some a provisória da visão do admin.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
-    const { error: erroLimpeza } = await supabase
-      .from("usuario_senha_provisoria")
-      .delete()
-      .eq("usuario_id", user.id);
-    if (erroLimpeza) {
-      logErroServidor("auth.definir-senha.limpar-provisoria", erroLimpeza);
-    }
+  // Via RPC, não delete direto: a policy de SELECT da tabela é só de admin, e um
+  // "delete where usuario_id = ..." precisa ler a linha para achar — quem não é
+  // admin apagava zero linhas SEM ERRO e o badge "1º acesso pendente" ficava
+  // para sempre.
+  const { error: erroLimpeza } = await supabase.rpc(
+    "fn_limpar_senha_provisoria_propria",
+  );
+  if (erroLimpeza) {
+    logErroServidor("auth.definir-senha.limpar-provisoria", erroLimpeza);
   }
 
   revalidatePath("/", "layout");
@@ -129,10 +127,7 @@ export async function alterarSenha(
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.updateUser({
+  const { error } = await supabase.auth.updateUser({
     password: resultado.data.senha,
     data: { senha_temporaria: false },
   });
@@ -151,15 +146,13 @@ export async function alterarSenha(
     );
   }
 
-  // Some com qualquer senha provisória pendente do próprio usuário.
-  if (user) {
-    const { error: erroLimpeza } = await supabase
-      .from("usuario_senha_provisoria")
-      .delete()
-      .eq("usuario_id", user.id);
-    if (erroLimpeza) {
-      logErroServidor("auth.alterar-senha.limpar-provisoria", erroLimpeza);
-    }
+  // Some com qualquer senha provisória pendente do próprio usuário. Mesma
+  // armadilha de RLS de definirSenha: pela RPC, não por delete direto.
+  const { error: erroLimpeza } = await supabase.rpc(
+    "fn_limpar_senha_provisoria_propria",
+  );
+  if (erroLimpeza) {
+    logErroServidor("auth.alterar-senha.limpar-provisoria", erroLimpeza);
   }
 
   revalidatePath("/", "layout");
