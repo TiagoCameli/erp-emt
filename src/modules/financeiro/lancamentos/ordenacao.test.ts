@@ -56,6 +56,7 @@ describe("COLUNA_DO_BANCO", () => {
       "descricao",
       "mes_competencia",
       "numero",
+      "numero_documento",
       "status",
       "tipo",
       "valor",

@@ -25,6 +25,7 @@
 /** Coluna da tela -> coluna da tabela `lancamentos`. Lista fechada. */
 export const COLUNA_DO_BANCO = {
   numero: "numero",
+  numeroDocumento: "numero_documento",
   tipo: "tipo",
   descricao: "descricao",
   valor: "valor",

@@ -98,6 +98,14 @@ export const COLUNAS_PLANILHA_LANCAMENTOS: ColunaPlanilha[] = [
     celula: (l) => l.numero ?? "",
   },
   {
+    // Logo depois do número interno, porque é a pergunta seguinte de quem
+    // confere a planilha: "esse lançamento é de qual nota?".
+    cabecalho: "Número do documento",
+    largura: 22,
+    tipo: "texto",
+    celula: (l) => l.numeroDocumento ?? "",
+  },
+  {
     cabecalho: "Tipo",
     largura: 12,
     tipo: "texto",

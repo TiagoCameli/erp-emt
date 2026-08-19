@@ -30,6 +30,8 @@ function linha(l: Partial<LancamentoLista>): LancamentoLista {
   return {
     id: "id-1",
     numero: "LAN-2026-0001",
+    numeroDocumento: null,
+    anexos: 0,
     tipo: "a_pagar",
     origem: "manual",
     descricao: "Linha",

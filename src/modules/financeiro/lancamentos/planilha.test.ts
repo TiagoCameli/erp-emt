@@ -19,6 +19,8 @@ import {
 const lancamento: LancamentoPlanilha = {
   id: "11111111-1111-4111-8111-111111111111",
   numero: "LAN-2026-0015",
+  numeroDocumento: "NF 98765",
+  anexos: 2,
   tipo: "a_pagar",
   origem: "oc",
   descricao: "Combustível julho",

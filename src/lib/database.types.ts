@@ -2037,6 +2037,7 @@ export type Database = {
           id: string;
           mes_competencia: string;
           numero: string;
+          numero_documento: string | null;
           observacoes: string | null;
           origem: string;
           origem_id: string | null;
@@ -2059,6 +2060,7 @@ export type Database = {
           id?: string;
           mes_competencia?: string;
           numero: string;
+          numero_documento?: string | null;
           observacoes?: string | null;
           origem: string;
           origem_id?: string | null;
@@ -2081,6 +2083,7 @@ export type Database = {
           id?: string;
           mes_competencia?: string;
           numero?: string;
+          numero_documento?: string | null;
           observacoes?: string | null;
           origem?: string;
           origem_id?: string | null;
@@ -2370,6 +2373,7 @@ export type Database = {
           mes_competencia: string;
           motivo_rejeicao: string | null;
           numero: string | null;
+          numero_documento: string | null;
           observacoes: string | null;
           outras_despesas: number;
           status: string;
@@ -2395,6 +2399,7 @@ export type Database = {
           mes_competencia?: string;
           motivo_rejeicao?: string | null;
           numero?: string | null;
+          numero_documento?: string | null;
           observacoes?: string | null;
           outras_despesas?: number;
           status?: string;
@@ -2420,6 +2425,7 @@ export type Database = {
           mes_competencia?: string;
           motivo_rejeicao?: string | null;
           numero?: string | null;
+          numero_documento?: string | null;
           observacoes?: string | null;
           outras_despesas?: number;
           status?: string;

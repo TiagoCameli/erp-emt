@@ -7,6 +7,8 @@ import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
 const base: LancamentoLista = {
   id: "id-0",
   numero: "LAN-2026-0001",
+  numeroDocumento: null,
+  anexos: 0,
   tipo: "a_pagar",
   origem: "manual",
   descricao: "Linha de teste",

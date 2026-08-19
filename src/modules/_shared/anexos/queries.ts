@@ -1,6 +1,8 @@
 import "server-only";
 
+import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   rotuloDaEntidade,
   type EntidadeAnexo,
@@ -159,6 +161,60 @@ export async function listarAnexosDoDocumento(
       origemRotulo: origem ? rotuloDaEntidade(origem.tipo) : null,
     };
   });
+}
+
+/**
+ * Quantos anexos cada documento tem, para uma listagem sinalizar as linhas que
+ * têm documento junto sem carregar nome, tamanho e autor de cada arquivo.
+ *
+ * Só o id do documento viaja de volta. A RLS dos vínculos continua valendo,
+ * então quem não vê o documento não vê a contagem dele, e documento sem anexo
+ * simplesmente não aparece no mapa — quem lê usa `?? 0`.
+ *
+ * Duas travas de tamanho, e as duas importam:
+ *
+ * - `emLotes` nos ids que VÃO: mil uuids numa URL viram 37 KB e o PostgREST
+ *   responde 400 antes de olhar a RLS.
+ * - `todasAsLinhas` nas linhas que VOLTAM: aqui volta uma linha por VÍNCULO, não
+ *   por documento. Uma página de 100 documentos com muitos arquivos cada passa
+ *   de mil linhas, e o corte do PostgREST é silencioso: a contagem simplesmente
+ *   viria menor e algumas linhas ficariam sem o clipe, sem erro nenhum.
+ */
+export async function contarAnexosPorDocumento(
+  entidade: EntidadeAnexo,
+  entidadeIds: string[],
+): Promise<Record<string, number>> {
+  if (entidadeIds.length === 0) return {};
+
+  const supabase = await createClient();
+  const porDocumento: Record<string, number> = {};
+
+  for (const lote of emLotes(entidadeIds, LOTE_IDS_POSTGREST)) {
+    const { linhas, erro } = await todasAsLinhas<{ entidade_id: string }>(
+      (de, ate) =>
+        supabase
+          .from("anexo_vinculos")
+          .select("entidade_id")
+          .eq("entidade_tipo", entidade)
+          .in("entidade_id", lote)
+          // O `range` precisa de ordem estável, senão a paginação repete e perde
+          // linha — e aqui isso viraria contagem errada, não lista fora de ordem.
+          .order("entidade_id")
+          .order("id")
+          .range(de, ate),
+    );
+
+    // Contagem parcial mentiria dizendo "sem anexo" para quem tem: melhor não
+    // desenhar clipe nenhum do que desenhar o conjunto errado.
+    if (erro) return {};
+
+    for (const linha of linhas) {
+      porDocumento[linha.entidade_id] =
+        (porDocumento[linha.entidade_id] ?? 0) + 1;
+    }
+  }
+
+  return porDocumento;
 }
 
 /**
