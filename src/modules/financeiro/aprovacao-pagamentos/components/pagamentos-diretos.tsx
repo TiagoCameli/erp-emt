@@ -16,6 +16,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  BotaoEspelho,
   CelulaDescricaoCategoria,
   DataTable,
   EmptyState,
@@ -1118,6 +1119,23 @@ export function PagamentosDiretos({
               </span>
             </p>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Mesma posição e mesmo motivo da fila ao lado (e de lancamentos,
+                  ordens e da aba "Pagas"): imprimir é leitura, vem antes das
+                  ações que carimbam.
+
+                  Aqui o papel sai completo: dinheiro e cartão já nascem
+                  quitados, então a parcela desta aba está paga e o espelho
+                  imprime "Pagamento" com "Saiu da conta" e "Pago em". A guarda
+                  para o caso não pago mora na página
+                  (src/app/(espelho)/espelho/pagamentos/page.tsx), não aqui.
+
+                  Ids de `selecionadosVisiveis`, não do Set cru, pelo mesmo
+                  motivo da fila: id escondido pelo filtro não pode ir para o
+                  maço. */}
+              <BotaoEspelho
+                rota="/espelho/pagamentos"
+                ids={selecionadosVisiveis.map((pagamento) => pagamento.id)}
+              />
               {podeConferir && algumSelecionadoConferido ? (
                 <Button
                   type="button"

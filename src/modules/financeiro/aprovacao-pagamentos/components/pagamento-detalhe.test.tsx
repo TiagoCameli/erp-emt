@@ -246,7 +246,7 @@ describe("PagamentoDetalheView e a decisão de aprovar", () => {
     ).toBeInTheDocument();
   });
 
-  it("não oferece o espelho de pagamento em parcela que ainda não foi paga", () => {
+  it("oferece o espelho também em parcela que ainda não foi paga", () => {
     render(
       <PagamentoDetalheView
         lancamento={lancamento()}
@@ -255,13 +255,18 @@ describe("PagamentoDetalheView e a decisão de aprovar", () => {
       />,
     );
 
-    // Nesta tela a parcela está EM APROVAÇÃO: o espelho de pagamento imprime
-    // "Saiu da conta" e "Pago em", então o botão aqui gerava papel dizendo que
-    // saiu dinheiro que não saiu. A listagem já só oferece o espelho na aba
-    // "Pagas"; o detalhe é que tinha escapado da regra.
+    // Este teste já afirmou o contrário. Mudou por decisão do dono: a aba de
+    // aprovação imprime o espelho igual à de lançamentos, nos dois lugares
+    // (listagem e detalhe), em qualquer status.
+    //
+    // Continua não gerando papel mentiroso, e a garantia não mora mais aqui:
+    // src/app/(espelho)/espelho/pagamentos/page.tsx degrada sozinha quando a
+    // parcela não tem status 'pago' — o documento sai intitulado "Parcela", e
+    // "Saiu da conta" e "Pago em" saem como travessão. Precisa ser lá porque o
+    // link do espelho é colável, e guarda que só existe no botão não é guarda.
     expect(
-      screen.queryByRole("button", { name: /Imprimir espelho/i }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: /Imprimir espelho/i }),
+    ).toBeInTheDocument();
   });
 
   it("oferece o espelho quando a parcela está paga", () => {

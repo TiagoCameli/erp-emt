@@ -19,6 +19,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  BotaoEspelho,
   CelulaDescricaoCategoria,
   ConfirmDialog,
   DataTable,
@@ -1258,6 +1259,23 @@ export function FilaAprovacao({
               </span>
             </p>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Primeiro da fileira, igual a lancamentos, ordens e à aba
+                  "Pagas": imprimir não muta nada e é o que a mão procura antes
+                  das ações que mexem no dinheiro.
+
+                  Vale em parcela ainda não paga porque a página do espelho
+                  degrada sozinha (src/app/(espelho)/espelho/pagamentos/page.tsx):
+                  sem status 'pago' ela intitula o papel de "Parcela", não de
+                  "Pagamento", e imprime travessão em "Saiu da conta" e "Pago
+                  em". O papel não afirma pagamento que não aconteceu.
+
+                  Os ids vêm de `selecionadasNaFila`, não do Set cru: o Set
+                  guarda id que o filtro tirou da tela, e imprimir linha que
+                  sumiu da vista é maço com folha que ninguém conferiu. */}
+              <BotaoEspelho
+                rota="/espelho/pagamentos"
+                ids={selecionadasNaFila.map((parcela) => parcela.id)}
+              />
               {/* Sem permissão: montar a mensagem não muta nada. É o caminho de
                   quem confere e repassa para quem aprova. */}
               <Button

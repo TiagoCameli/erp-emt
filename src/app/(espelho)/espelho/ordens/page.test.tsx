@@ -14,12 +14,11 @@ import {
   buscarOrdensParaEspelho,
   type EspelhoOrdem,
 } from "@/modules/compras/ordens/espelho";
-import { trilhaOrdem } from "@/modules/compras/ordens/queries";
 
 // Mocka toda a cadeia de dados da página: o objetivo destes testes é a
 // ORQUESTRAÇÃO da página (permissão antes da consulta, os quatro estados
 // vazios, o rótulo de status certo), não o banco. `buscarOrdensParaEspelho`
-// e `trilhaOrdem` já têm cobertura própria em seus módulos.
+// já tem cobertura própria no módulo.
 vi.mock("@/lib/permissoes", () => ({
   getUsuarioLogado: vi.fn(),
   temPermissao: vi.fn(),
@@ -27,10 +26,6 @@ vi.mock("@/lib/permissoes", () => ({
 
 vi.mock("@/modules/compras/ordens/espelho", () => ({
   buscarOrdensParaEspelho: vi.fn(),
-}));
-
-vi.mock("@/modules/compras/ordens/queries", () => ({
-  trilhaOrdem: vi.fn(),
 }));
 
 vi.mock("@/modules/_shared/anexos/queries", () => ({
@@ -176,7 +171,6 @@ describe("EspelhoOrdensPage", () => {
     vi.mocked(buscarOrdensParaEspelho).mockResolvedValue([
       ordemFixture({ status: "pendente_aprovacao" }),
     ]);
-    vi.mocked(trilhaOrdem).mockResolvedValue([]);
     vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
 
     await renderPagina(ID_A);
@@ -222,7 +216,6 @@ describe("EspelhoOrdensPage", () => {
         ],
       }),
     ]);
-    vi.mocked(trilhaOrdem).mockResolvedValue([]);
     vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
 
     await renderPagina(ID_A);
@@ -259,7 +252,6 @@ describe("EspelhoOrdensPage", () => {
         ajustes: { frete: 0, outrasDespesas: 0, impostos: 0, desconto: 0 },
       }),
     ]);
-    vi.mocked(trilhaOrdem).mockResolvedValue([]);
     vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
 
     await renderPagina(ID_A);

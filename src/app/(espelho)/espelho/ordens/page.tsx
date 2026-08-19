@@ -10,7 +10,6 @@ import {
 import {
   formatarBRL,
   formatarData,
-  formatarDataHora,
   formatarMesAno,
   formatarQuantidade,
 } from "@/lib/formatadores";
@@ -20,7 +19,6 @@ import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
 import { LINHAS_DE_AJUSTE, temAjuste } from "@/modules/compras/ordens/calculo";
 import { buscarOrdensParaEspelho } from "@/modules/compras/ordens/espelho";
-import { trilhaOrdem } from "@/modules/compras/ordens/queries";
 
 export default async function EspelhoOrdensPage({
   searchParams,
@@ -74,9 +72,6 @@ export default async function EspelhoOrdensPage({
     );
   }
 
-  const trilhas = await Promise.all(
-    ordens.map((ordem) => trilhaOrdem(ordem.id)),
-  );
   const anexosPorOrdem = await listarAnexosPorDocumento(
     "ordem_compra",
     ordens.map((ordem) => ordem.id),
@@ -98,7 +93,7 @@ export default async function EspelhoOrdensPage({
         </p>
       ) : null}
 
-      {ordens.map((ordem, indice) => (
+      {ordens.map((ordem) => (
         <EspelhoImpresso
           key={ordem.id}
           tipo="Ordem de compra"
@@ -263,26 +258,6 @@ export default async function EspelhoOrdensPage({
                 n: parcela.numeroParcela,
                 vencimento: formatarData(parcela.dataVencimento),
                 valor: <EspelhoDinheiro valor={parcela.valor} />,
-              }))}
-            />
-          </EspelhoSecao>
-
-          <EspelhoSecao rotulo="Trilha">
-            <EspelhoTabela
-              colunas={[
-                { chave: "data", rotulo: "Quando" },
-                { chave: "titulo", rotulo: "O que" },
-                { chave: "usuario", rotulo: "Quem" },
-              ]}
-              linhas={(trilhas[indice] ?? []).map((evento) => ({
-                // Data E hora, como a Trilha canônica em tela: dois eventos do
-                // mesmo dia ficam indistinguíveis só com a data, e este é
-                // justamente o documento que serve de prova de auditoria.
-                data: formatarDataHora(evento.data),
-                titulo: evento.descricao
-                  ? `${evento.titulo}: ${evento.descricao}`
-                  : evento.titulo,
-                usuario: evento.usuario,
               }))}
             />
           </EspelhoSecao>
