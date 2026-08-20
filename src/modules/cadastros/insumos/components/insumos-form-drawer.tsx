@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { criar, editar } from "@/modules/cadastros/insumos/actions";
 import type { GrupoOpcao } from "@/modules/cadastros/categorias/queries";
 import type {
+  CategoriaCustoOpcao,
   CategoriaOpcao,
   InsumoLista,
   UnidadeOpcao,
@@ -40,6 +41,7 @@ export interface InsumosFormDrawerProps {
   /** Insumo em edição. Null cria um novo. */
   insumo: InsumoLista | null;
   categorias: CategoriaOpcao[];
+  categoriasCusto: CategoriaCustoOpcao[];
   grupos: GrupoOpcao[];
   unidades: UnidadeOpcao[];
 }
@@ -50,6 +52,7 @@ export function InsumosFormDrawer({
   onAbertoChange,
   insumo,
   categorias,
+  categoriasCusto,
   grupos,
   unidades,
 }: InsumosFormDrawerProps) {
@@ -70,6 +73,7 @@ export function InsumosFormDrawer({
       codigo: insumo?.codigo ?? "",
       nome: insumo?.nome ?? "",
       categoriaId: insumo?.categoriaId ?? "",
+      categoriaCustoId: insumo?.categoriaCustoId ?? "",
       unidadeId: insumo?.unidadeId ?? "",
       descricao: insumo?.descricao ?? "",
       ativo: insumo?.ativo ?? true,
@@ -101,6 +105,7 @@ export function InsumosFormDrawer({
   const categoriasDoGrupo = categorias.filter(
     (categoria) => categoria.grupoId === grupoId,
   );
+  const categoriaCustoValor = form.watch("categoriaCustoId");
   const unidadeValor = form.watch("unidadeId");
 
   return (
@@ -108,7 +113,7 @@ export function InsumosFormDrawer({
       aberto={aberto}
       onAbertoChange={aoMudarAberto}
       titulo={editando ? "Editar insumo" : "Novo insumo"}
-      descricao="Escolha o grupo e depois a subcategoria dentro dele"
+      descricao="Escolha o grupo e a subcategoria dentro dele, e a categoria de custo que classifica a compra no DRE"
       rodape={
         <>
           <Button
@@ -220,6 +225,29 @@ export function InsumosFormDrawer({
             disabled={salvando || categoriasDoGrupo.length === 0}
             className="w-full"
             id="insumo-categoria"
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="insumo-categoria-custo"
+          rotulo="Categoria de custo"
+          obrigatorio
+          ajuda="É por aqui que a compra deste insumo entra no DRE. A ordem de compra não pode ser aprovada enquanto algum item estiver sem esta categoria."
+          erro={form.formState.errors.categoriaCustoId?.message}
+        >
+          <Combobox
+            valor={categoriaCustoValor}
+            onValorChange={(valor) =>
+              form.setValue("categoriaCustoId", valor, { shouldValidate: true })
+            }
+            opcoes={categoriasCusto.map((categoria) => ({
+              valor: categoria.id,
+              rotulo: categoria.nome,
+            }))}
+            placeholder="Selecione a categoria de custo"
+            disabled={salvando}
+            className="w-full"
+            id="insumo-categoria-custo"
           />
         </CampoFormulario>
 

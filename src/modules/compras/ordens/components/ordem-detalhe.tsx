@@ -10,6 +10,7 @@ import {
   Pencil,
   ReceiptText,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
@@ -175,6 +176,21 @@ export function OrdemDetalheView({
       ordem.status === "rejeitado");
   const recebivel = podeReceber && ordem.status === "aprovado";
 
+  /**
+   * Itens cujo insumo está sem categoria de custo no cadastro.
+   *
+   * `fn_aprovar_ordem_compra` recusa a ordem inteira por causa deles, e a
+   * categoria não mora aqui: mora no cadastro do insumo. Antes disto o único
+   * sinal era o erro genérico no clique de Aprovar, sem dizer qual item nem
+   * onde resolver — e não havia onde resolver.
+   */
+  const itensSemCategoriaCusto = ordem.itens.filter(
+    (item) => item.semCategoriaCusto,
+  );
+  const avisoDeClassificacao =
+    itensSemCategoriaCusto.length > 0 &&
+    (ordem.status === "rascunho" || ordem.status === "pendente_aprovacao");
+
   async function aoEnviarParaAprovacao() {
     if (enviando) return;
     setEnviando(true);
@@ -326,6 +342,42 @@ export function OrdemDetalheView({
           ) : null}
         </div>
       </div>
+
+      {avisoDeClassificacao ? (
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-status-pendente/30 bg-status-pendente/5 px-3 py-3">
+          <div className="flex items-start gap-2">
+            <TriangleAlert
+              className="mt-0.5 size-4 shrink-0 text-status-pendente"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="text-detalhe font-medium">
+                {itensSemCategoriaCusto.length === 1
+                  ? "1 item está sem categoria de custo"
+                  : `${itensSemCategoriaCusto.length} itens estão sem categoria de custo`}
+              </p>
+              <p className="text-legenda text-muted-foreground">
+                A ordem não pode ser aprovada assim: é a categoria de custo do
+                insumo que classifica a compra no DRE. Ela fica no cadastro do
+                insumo, não aqui na ordem.
+              </p>
+              <ul className="mt-2 flex flex-col gap-1">
+                {itensSemCategoriaCusto.map((item) => (
+                  <li key={item.id} className="text-legenda">
+                    <Link
+                      href={`/cadastros/insumos?busca=${encodeURIComponent(item.insumoNome)}`}
+                      className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
+                    >
+                      {item.insumoNome}
+                      <ExternalLink className="size-3" aria-hidden="true" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {ordem.status === "pendente_aprovacao" || ordem.status === "aprovado" ? (
         <ApprovalBar
@@ -486,6 +538,11 @@ export function OrdemDetalheView({
                           <span className="text-muted-foreground">
                             {" "}
                             ({item.unidade})
+                          </span>
+                        ) : null}
+                        {item.semCategoriaCusto ? (
+                          <span className="ml-1.5 whitespace-nowrap rounded-md bg-status-pendente/10 px-1.5 py-0.5 text-legenda font-medium text-status-pendente">
+                            Sem categoria de custo
                           </span>
                         ) : null}
                       </td>

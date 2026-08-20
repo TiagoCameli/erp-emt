@@ -503,39 +503,72 @@ async function idsPorContaBancaria(
 }
 
 /**
- * Valor rateado no centro, por lançamento: é ao mesmo tempo o FILTRO de centro de
- * custo (as chaves do mapa) e o RECORTE dele (os valores).
+ * A subárvore de um centro de custo: ele mesmo e todos os descendentes.
  *
- * Os dois saem da mesma leitura de propósito. Uma segunda consulta só para o
- * valor leria os mesmos rateios de novo e, pior, poderia ler um conjunto
- * diferente no dia em que alguém mexesse num dos dois lugares — e aí a lista
- * mostraria um conjunto e somaria outro.
+ * Filtrar por centro é filtrar a subárvore, não o nó: escolher a obra tem que
+ * trazer as etapas dela, e escolher o centro de manutenção tem que trazer o
+ * custo de cada equipamento (que é etapa dele). É o mesmo recorte que o
+ * relatório de custo por centro usa — `fn_rel_custo_centro_custo` agrupa na
+ * raiz —, e se os dois divergissem, clicar num centro do relatório abriria uma
+ * lista que soma MENOS que o número clicado, sem nada na tela dizendo isso.
+ *
+ * Lida UMA vez e passada adiante de propósito: o filtro da listagem e o recorte
+ * de valor precisam do mesmo conjunto, e duas leituras poderiam ler conjuntos
+ * diferentes no dia em que alguém mexesse num dos dois lugares.
+ */
+async function subarvoreDoCentro(
+  supabase: ClienteSupabase,
+  centroCustoId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc("fn_centro_custo_subarvore", {
+    p_centro: centroCustoId,
+  });
+  // Erro não pode virar lista vazia, pelo mesmo motivo do `lerEmPaginas`: a tela
+  // mostraria "nenhum lançamento" para um filtro que não chegou a ser aplicado.
+  if (error) throw new Error("Não foi possível aplicar o filtro");
+  return (data ?? []).map((linha) => linha.id);
+}
+
+/**
+ * Valor rateado na subárvore do centro, por lançamento: é o RECORTE do filtro de
+ * centro de custo (o `valorRecorte` de cada linha).
+ *
+ * Só o valor, não o filtro. O filtro de centro mora na consulta da listagem, num
+ * embed — ver `listarLancamentos`. Já foi as duas coisas, e as chaves deste mapa
+ * iam para a interseção de ids: com 1.871 lançamentos no Escritório Central isso
+ * virava uma URL de 69 KB no `in.(...)` e a requisição morria sem nem chegar ao
+ * servidor.
  */
 async function valoresPorCentroCusto(
   supabase: ClienteSupabase,
-  centroCustoId: string,
+  idsDaArvore: string[],
 ): Promise<Map<string, number>> {
+  // Soma em vez de sobrescrever: nada no banco impede o mesmo lançamento de ter
+  // duas linhas de rateio no mesmo centro — e nem em dois centros da mesma
+  // árvore (um lançamento rateado entre dois equipamentos da manutenção) —, e
+  // sobrescrever perderia uma delas.
+  const porLancamento = new Map<string, number>();
+
   // O centro de custo do lançamento vive no rateio, nunca na tabela mãe: um
   // lançamento pode ser dividido entre várias obras.
-  const rateios = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_rateios")
-      .select("lancamento_id, valor")
-      .eq("centro_custo_id", centroCustoId)
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
-  );
-
-  // Soma em vez de sobrescrever: nada no banco impede o mesmo lançamento de ter
-  // duas linhas de rateio no MESMO centro, e sobrescrever perderia uma delas.
-  const porLancamento = new Map<string, number>();
-  for (const rateio of rateios) {
-    const atual = porLancamento.get(rateio.lancamento_id) ?? 0;
-    porLancamento.set(
-      rateio.lancamento_id,
-      paraReais(paraCentavos(atual) + paraCentavos(rateio.valor)),
+  for (const lote of emLotes(idsDaArvore, LOTE_IDS_POSTGREST)) {
+    const rateios = await lerEmPaginas((de, ate) =>
+      supabase
+        .from("lancamento_rateios")
+        .select("lancamento_id, valor")
+        .in("centro_custo_id", lote)
+        .order("lancamento_id")
+        .order("id")
+        .range(de, ate),
     );
+
+    for (const rateio of rateios) {
+      const atual = porLancamento.get(rateio.lancamento_id) ?? 0;
+      porLancamento.set(
+        rateio.lancamento_id,
+        paraReais(paraCentavos(atual) + paraCentavos(rateio.valor)),
+      );
+    }
   }
   return porLancamento;
 }
@@ -762,9 +795,16 @@ export async function listarLancamentos(
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
-  // Filtros que moram em tabela filha (parcela, rateio) viram lista de ids.
-  // Não dá para filtrar pelo join embutido no select: ele é o que alimenta a
-  // coluna "Revisão", e filtrá-lo esconderia parcelas do cálculo.
+  // Filtros que moram na PARCELA viram lista de ids. Não dá para filtrar pelo
+  // join embutido no select: `lancamento_parcelas` é o que alimenta a coluna
+  // "Revisão" e o cálculo de dinheiro da linha, e filtrar o embed esconderia
+  // parcelas da conta.
+  //
+  // O rateio é o oposto e por isso saiu daqui: o embed
+  // `lancamento_rateios(centro_custo_id)` existe SÓ para filtrar, ninguém lê o
+  // valor dele, então filtrá-lo não mexe em nenhum número da tela. E precisava
+  // sair: a lista de ids do centro viaja na query string, e o Escritório Central
+  // tem 1.871 lançamentos.
   // Uma leitura do relógio para a consulta toda: serve o filtro de atraso e o
   // cálculo por linha. Com duas chamadas de `dataHojeISO()`, uma consulta que
   // virasse a meia-noite filtraria por um dia e classificaria as linhas pelo
@@ -786,14 +826,21 @@ export async function listarLancamentos(
   if (params.comSaldoAberto) {
     listasDeIds.push(await idsComSaldoAberto(supabase));
   }
-  // O centro é filtro E recorte: as chaves entram na interseção de ids, e o valor
-  // rateado vira o `valorRecorte` de cada linha mais abaixo.
-  const valoresCentro = params.centroCustoId
-    ? await valoresPorCentroCusto(supabase, params.centroCustoId)
+  // O centro é FILTRO e RECORTE, mas os dois entram por caminhos diferentes: o
+  // filtro vai no embed da consulta (mais abaixo) e o recorte vira o
+  // `valorRecorte` de cada linha. A subárvore é lida uma vez e serve aos dois,
+  // para nunca filtrar por um conjunto e somar por outro.
+  //
+  // As chaves deste mapa NÃO podem voltar para `listasDeIds`: o `in.(...)` viaja
+  // na query string, e o Escritório Central tem 1.871 lançamentos — 69 KB de URL,
+  // que morre antes de chegar ao servidor (medido: 1.115 ids dão HTTP 400, 1.753
+  // dão 520 e 1.871 não completam a requisição).
+  const subarvoreCentro = params.centroCustoId
+    ? await subarvoreDoCentro(supabase, params.centroCustoId)
     : null;
-  if (valoresCentro) {
-    listasDeIds.push([...valoresCentro.keys()]);
-  }
+  const valoresCentro = subarvoreCentro?.length
+    ? await valoresPorCentroCusto(supabase, subarvoreCentro)
+    : null;
   // O recorte de parcela também é filtro E medida, pelo mesmo motivo do centro.
   const valoresRecorte = params.recorte
     ? await valoresDoRecorte(supabase, params.recorte, params.contaBancariaId)
@@ -819,7 +866,8 @@ export async function listarLancamentos(
        lancamento_parcelas(
          status, conta_bancaria_id, valor, valor_liquido, desconto,
          data_vencimento
-       )`,
+       ),
+       lancamento_rateios(centro_custo_id)`,
       { count: "exact" },
     )
     // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
@@ -844,6 +892,24 @@ export async function listarLancamentos(
     .range(de, ate);
 
   if (idsFiltrados) consulta = consulta.in("id", idsFiltrados);
+  // Centro de custo vive no RATEIO, não no lançamento: o filtro cai no embed e o
+  // `lancamento_rateios=not.is.null` é o que descarta o lançamento sem nenhum
+  // rateio batendo — mesmo efeito de um `!inner`, o mesmo par que a listagem de
+  // ordens de compra usa para filtrar por centro pelo item.
+  //
+  // Aqui, e não na interseção de ids, porque só a subárvore viaja na URL (61 ids
+  // no maior caso hoje) em vez dos lançamentos do centro (1.871 no Escritório
+  // Central, 69 KB, requisição morta). O embed é subconsulta lateral
+  // independente, então filtrá-lo não mexe no `count: "exact"` nem multiplica a
+  // linha do lançamento.
+  if (subarvoreCentro) {
+    // Centro que não existe mais (ou sem nenhum id) não pode virar "sem filtro":
+    // a resposta certa é lista vazia, não a lista inteira.
+    if (subarvoreCentro.length === 0) return { itens: [], total: 0 };
+    consulta = consulta
+      .in("lancamento_rateios.centro_custo_id", subarvoreCentro)
+      .not("lancamento_rateios", "is", null);
+  }
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
   if (params.mesCompetencia) {

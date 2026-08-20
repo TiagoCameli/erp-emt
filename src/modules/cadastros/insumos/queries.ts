@@ -13,6 +13,13 @@ export interface InsumoLista {
   nome: string;
   categoriaId: string;
   categoriaNome: string | null;
+  /**
+   * Categoria de custo (financeira). É ela que classifica a compra no DRE
+   * quando a OC é aprovada; nula trava a aprovação de qualquer OC que use o
+   * insumo. Nula só nos insumos anteriores ao campo virar obrigatório.
+   */
+  categoriaCustoId: string | null;
+  categoriaCustoNome: string | null;
   /** Grupo vem por join da categoria: não existe grupo_id no insumo. */
   grupoId: string | null;
   grupoNome: string | null;
@@ -32,6 +39,15 @@ export interface CategoriaOpcao {
   nome: string;
   grupoId: string;
   grupoNome: string;
+}
+
+/**
+ * Categoria de custo (financeira) disponível para o select do formulário.
+ * Mesma forma da opção usada no cabeçalho da OC.
+ */
+export interface CategoriaCustoOpcao {
+  id: string;
+  nome: string;
 }
 
 /** Unidade de medida disponível para o select do formulário. */
@@ -81,8 +97,10 @@ export async function listar(
   let consulta = supabase
     .from("insumos")
     .select(
-      `id, codigo, nome, categoria_id, unidade_id, descricao, ativo,
+      `id, codigo, nome, categoria_id, categoria_financeira_id, unidade_id,
+       descricao, ativo,
        categorias_insumo!inner(nome, grupo_id, insumo_grupos(id, nome, cor)),
+       categorias_financeiras(nome),
        unidades_medida(sigla)`,
       { count: "exact" },
     )
@@ -117,6 +135,8 @@ export async function listar(
     nome: insumo.nome,
     categoriaId: insumo.categoria_id,
     categoriaNome: insumo.categorias_insumo?.nome ?? null,
+    categoriaCustoId: insumo.categoria_financeira_id,
+    categoriaCustoNome: insumo.categorias_financeiras?.nome ?? null,
     grupoId: insumo.categorias_insumo?.insumo_grupos?.id ?? null,
     grupoNome: insumo.categorias_insumo?.insumo_grupos?.nome ?? null,
     grupoCor: corGrupo(insumo.categorias_insumo?.insumo_grupos?.cor),
@@ -153,6 +173,28 @@ export async function listarCategorias(): Promise<CategoriaOpcao[]> {
     }))
     .sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, "pt-BR"))
     .map(({ ordem: _ordem, ...opcao }) => opcao);
+}
+
+/**
+ * Categorias de custo ativas do tipo 'despesa', para o select do formulário.
+ * Só despesa: insumo é sempre custo, categoria de receita na lista só
+ * atrapalharia quem está classificando — mesma regra do select da OC.
+ */
+export async function listarCategoriasCusto(): Promise<CategoriaCustoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("categorias_financeiras")
+    .select("id, nome")
+    .eq("ativo", true)
+    .eq("tipo", "despesa")
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar as categorias de custo");
+  }
+
+  return data ?? [];
 }
 
 /** Unidades de medida ativas, para o select do formulário. */

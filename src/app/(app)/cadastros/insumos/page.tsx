@@ -6,11 +6,11 @@ import { InsumosTabela } from "@/modules/cadastros/insumos/components/insumos-ta
 import {
   listar,
   listarCategorias,
+  listarCategoriasCusto,
   listarUnidades,
 } from "@/modules/cadastros/insumos/queries";
 
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const STATUS_VALIDOS = ["ativos", "inativos", "todos"] as const;
 const TAMANHO_PADRAO = 25;
@@ -61,20 +61,22 @@ export default async function PaginaInsumos({
       ? tamanhoParam
       : TAMANHO_PADRAO;
 
-  const [{ itens, total }, categorias, grupos, unidades] = await Promise.all([
-    listar({
-      pagina,
-      tamanho,
-      busca: busca === "" ? undefined : busca,
-      ativo: status === "todos" ? undefined : status === "ativos",
-      grupoId: grupo === "" ? undefined : grupo,
-      categoriaId: categoria === "" ? undefined : categoria,
-      unidadeId: unidade === "" ? undefined : unidade,
-    }),
-    listarCategorias(),
-    listarGrupos(),
-    listarUnidades(),
-  ]);
+  const [{ itens, total }, categorias, categoriasCusto, grupos, unidades] =
+    await Promise.all([
+      listar({
+        pagina,
+        tamanho,
+        busca: busca === "" ? undefined : busca,
+        ativo: status === "todos" ? undefined : status === "ativos",
+        grupoId: grupo === "" ? undefined : grupo,
+        categoriaId: categoria === "" ? undefined : categoria,
+        unidadeId: unidade === "" ? undefined : unidade,
+      }),
+      listarCategorias(),
+      listarCategoriasCusto(),
+      listarGrupos(),
+      listarUnidades(),
+    ]);
 
   return (
     <InsumosTabela
@@ -88,6 +90,7 @@ export default async function PaginaInsumos({
       categoria={categoria}
       unidade={unidade}
       categorias={categorias}
+      categoriasCusto={categoriasCusto}
       grupos={grupos}
       unidades={unidades}
       podeCriar={temPermissao(usuario, "cadastros.insumos", "criar")}
