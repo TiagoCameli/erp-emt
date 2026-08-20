@@ -3454,6 +3454,12 @@ export type Database = {
       };
       fn_centro_custo_bloqueio: { Args: { p_id: string }; Returns: string };
       fn_centro_custo_dependencias: { Args: { p_id: string }; Returns: Json };
+      fn_centro_custo_subarvore: {
+        Args: { p_centro: string };
+        Returns: {
+          id: string;
+        }[];
+      };
       fn_centros_custo_bloqueios: {
         Args: { p_ids?: string[] };
         Returns: {
