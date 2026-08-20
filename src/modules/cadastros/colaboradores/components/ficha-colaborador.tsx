@@ -163,6 +163,22 @@ export function FichaColaborador({
               "-"
             )}
           </Dado>
+          <Dado rotulo="Gratificação">
+            {colaborador.gratificacao > 0 ? (
+              <MoneyText valor={colaborador.gratificacao} />
+            ) : (
+              "-"
+            )}
+          </Dado>
+          <Dado rotulo="Encargo individual">
+            {/* Vazio não é zero: em branco a folha usa os encargos
+                configurados, e é isso que o texto tem de dizer. Mostrar "-"
+                nos dois casos deixaria "0%" e "usa a config" com a mesma
+                aparência, que é a diferença entre custo zero e custo de CLT. */}
+            {colaborador.encargosPercentual !== null
+              ? `${formatarQuantidade(colaborador.encargosPercentual)}%`
+              : "Usa a configuração da folha"}
+          </Dado>
           <Dado rotulo="Banco">
             {colaborador.banco ?? "-"}
             {colaborador.agencia ? ` · Ag. ${colaborador.agencia}` : ""}

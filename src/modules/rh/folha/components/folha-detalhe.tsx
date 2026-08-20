@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, FileText, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronDown, FileText, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -16,7 +16,11 @@ import {
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { formatarDataHora, formatarQuantidade } from "@/lib/formatadores";
+import { formatarBRL, formatarDataHora, formatarQuantidade } from "@/lib/formatadores";
+import {
+  ROTULO_VINCULO,
+  type Vinculo,
+} from "@/modules/cadastros/colaboradores/schemas";
 import { STATUS_FOLHA } from "@/modules/rh/_shared/formato";
 import {
   aprovarFolha,
@@ -37,6 +41,7 @@ import type {
 } from "@/modules/rh/folha/queries";
 import { podeTransicionar } from "@/modules/rh/folha/transicoes";
 import { BotaoPlanilha } from "./botao-planilha";
+import { EditarItemFolhaDrawer } from "./editar-item-folha-drawer";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
 import { HoleriteDialog } from "./holerite-dialog";
 import { LancamentosGerados } from "./lancamentos-gerados";
@@ -166,9 +171,30 @@ export function FolhaDetalheView({
     { principal: 0, encargos: 0, total: 0 },
   );
 
+  // Alterar valor de linha só em rascunho: aprovado editado é folha que fecha
+  // diferente do lançamento que já saiu no Financeiro. Mesma trava está na
+  // fn_editar_item_folha, e as duas concordam de propósito.
+  const podeEditarLinha = podeEditar && rascunho;
+  // Com encargo individual em jogo, `folha.encargosPercentual` (a soma da
+  // config) deixa de valer para todo mundo. Dizer "26,8% aplicado" no KPI
+  // enquanto metade da folha usa outro número é o tipo de rótulo que faz o
+  // operador conferir a conta errada.
+  const itensComPercentualProprio = folha.itens.filter(
+    (item) => item.encargosPercentual !== null,
+  ).length;
+  const detalheEncargos =
+    itensComPercentualProprio === 0
+      ? `${formatarQuantidade(folha.encargosPercentual)}% aplicado`
+      : itensComPercentualProprio === folha.itens.length
+        ? "percentual individual em todas as linhas"
+        : `${formatarQuantidade(folha.encargosPercentual)}% da config, e ${itensComPercentualProprio} ${
+            itensComPercentualProprio === 1 ? "linha" : "linhas"
+          } com percentual próprio`;
+
   const [dialogEnviar, setDialogEnviar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
   const [holeriteItem, setHoleriteItem] = React.useState<FolhaItem | null>(null);
+  const [itemEmEdicao, setItemEmEdicao] = React.useState<FolhaItem | null>(null);
 
   async function aoEnviarParaAprovacao() {
     const resultado = await enviarFolhaParaAprovacao(folha.id);
@@ -312,12 +338,16 @@ export function FolhaDetalheView({
         <KPICard
           titulo="Bruto"
           valor={<MoneyText valor={folha.valorBruto} />}
-          detalhe="Salário base + extras"
+          detalhe={
+            folha.valorGratificacoes > 0
+              ? `Salário base + extras + gratificação (${formatarBRL(folha.valorGratificacoes)})`
+              : "Salário base + extras + gratificação"
+          }
         />
         <KPICard
           titulo="Encargos"
           valor={<MoneyText valor={folha.valorEncargos} />}
-          detalhe={`${formatarQuantidade(folha.encargosPercentual)}% aplicado`}
+          detalhe={detalheEncargos}
         />
         <KPICard
           titulo="Custo total"
@@ -349,8 +379,10 @@ export function FolhaDetalheView({
       <Secao titulo="Itens por colaborador">
         {folha.itens.length === 0 ? (
           <p className="text-detalhe text-muted-foreground">
-            Nenhum colaborador nesta folha. Verifique os colaboradores CLT
-            ativos e regere a folha.
+            Nenhum colaborador nesta folha. Entram os colaboradores ativos de
+            vínculo CLT, terceiro e diarista: CLT e terceiro pelo salário do
+            cadastro, diarista pela soma das diárias em aberto do mês. Confira o
+            cadastro e regere a folha.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-md border border-border">
@@ -363,12 +395,16 @@ export function FolhaDetalheView({
                   <th className="px-3 py-2 text-center font-medium">
                     Colaborador
                   </th>
+                  <th className="px-3 py-2 text-center font-medium">Vínculo</th>
                   <th className="px-3 py-2 text-center font-medium">Função</th>
                   <th className="px-3 py-2 text-center font-medium">
                     Centro de custo
                   </th>
                   <th className="px-3 py-2 text-right font-medium">
                     Salário base
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    Gratificação
                   </th>
                   <th className="px-3 py-2 text-right font-medium">
                     Horas normais
@@ -389,7 +425,7 @@ export function FolhaDetalheView({
                   </th>
                   <th className="px-3 py-2 text-right font-medium">Líquido</th>
                   <th className="px-3 py-2 text-right font-medium">
-                    <span className="sr-only">Holerite</span>
+                    <span className="sr-only">Ações da linha</span>
                   </th>
                 </tr>
               </thead>
@@ -401,6 +437,22 @@ export function FolhaDetalheView({
                   >
                     <td className="px-3 py-2 text-center font-medium">
                       {item.colaboradorNome}
+                      {/* Selo de linha editada à mão: sem ele, um salário
+                          ajustado e um salário vindo do cadastro ficam
+                          indistinguíveis, e o Regerar trata os dois de formas
+                          diferentes (preserva um, recalcula o outro). */}
+                      {item.editadoManualmente ? (
+                        <span
+                          className="ml-1.5 align-middle text-legenda font-normal text-status-pendente"
+                          title="Valores desta linha foram alterados à mão. Regerar a folha preserva o que foi digitado."
+                        >
+                          editado
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2 text-center text-muted-foreground">
+                      {ROTULO_VINCULO[item.colaboradorVinculo as Vinculo] ??
+                        item.colaboradorVinculo}
                     </td>
                     <td className="px-3 py-2 text-center text-muted-foreground">
                       {item.colaboradorFuncao ?? <CelulaVazia />}
@@ -422,6 +474,15 @@ export function FolhaDetalheView({
                     <td className="px-3 py-2 text-right">
                       <MoneyText valor={item.salarioBase} />
                     </td>
+                    <td className="px-3 py-2 text-right">
+                      {item.gratificacao > 0 ? (
+                        <MoneyText valor={item.gratificacao} />
+                      ) : (
+                        <span className="text-muted-foreground">
+                          <MoneyText valor={0} />
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {formatarQuantidade(item.horasNormais)}
                     </td>
@@ -432,7 +493,20 @@ export function FolhaDetalheView({
                       <MoneyText valor={item.valorExtras} />
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      {item.encargosDetalhe.length > 0 ? (
+                      {/* Percentual próprio rende UMA linha de encargo, e um
+                          <details> de um item só é ruído: mostra o valor com o
+                          percentual embaixo, que é o que explica um encargo de
+                          R$ 0,00 num terceiro. O caminho da config continua
+                          expansível, porque ali são várias linhas. */}
+                      {item.encargosPercentual !== null ? (
+                        <div className="flex flex-col items-end">
+                          <MoneyText valor={item.encargos} />
+                          <span className="text-legenda">
+                            {formatarQuantidade(item.encargosPercentual)}% desta
+                            pessoa
+                          </span>
+                        </div>
+                      ) : item.encargosDetalhe.length > 0 ? (
                         <details className="group">
                           <summary className="flex cursor-pointer list-none items-center justify-end gap-1 select-none [&::-webkit-details-marker]:hidden">
                             <MoneyText valor={item.encargos} />
@@ -499,15 +573,28 @@ export function FolhaDetalheView({
                       />
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setHoleriteItem(item)}
-                      >
-                        <FileText />
-                        Holerite
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        {podeEditarLinha ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setItemEmEdicao(item)}
+                          >
+                            <Pencil />
+                            Valores
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setHoleriteItem(item)}
+                        >
+                          <FileText />
+                          Holerite
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -687,6 +774,19 @@ export function FolhaDetalheView({
           onAbertoChange={setDrawerRegerar}
           competenciaInicial={folha.competencia.slice(0, 7)}
           onGerada={() => router.refresh()}
+        />
+      ) : null}
+
+      {podeEditarLinha ? (
+        <EditarItemFolhaDrawer
+          aberto={itemEmEdicao !== null}
+          onAbertoChange={(aberto) => {
+            if (!aberto) setItemEmEdicao(null);
+          }}
+          item={itemEmEdicao}
+          folhaId={folha.id}
+          encargosPercentualConfig={folha.encargosPercentual}
+          onSalvo={() => router.refresh()}
         />
       ) : null}
 

@@ -63,10 +63,22 @@ export interface FolhaItem {
   colaboradorNome: string;
   /** Nome da função, vindo do join com `funcoes` (Bloco 3, Task 3). */
   colaboradorFuncao: string | null;
+  /**
+   * Vínculo do colaborador (`clt` | `terceiro` | `diarista`). A folha deixou de
+   * ser só CLT: a coluna existe porque com os três misturados na mesma tabela
+   * não há como ler um encargo de 0% ou um salário base de R$ 550,00 sem saber
+   * de qual vínculo a linha é.
+   */
+  colaboradorVinculo: string;
   centroCustoId: string | null;
   centroCustoNome: string | null;
   centroCustoCodigo: string | null;
   salarioBase: number;
+  /**
+   * Gratificação salarial da competência. Soma no bruto, no custo total e no
+   * líquido, e NÃO entra na base dos encargos nem da provisão — regra do Tiago.
+   */
+  gratificacao: number;
   horasNormais: number;
   horasExtras: number;
   valorExtras: number;
@@ -81,6 +93,12 @@ export interface FolhaItem {
    * linhas: nesse caso vem `[]` e a UI mostra só o total.
    */
   encargosDetalhe: EncargoDetalhe[];
+  /**
+   * Percentual de encargo aplicado NESTE item, quando é individual. `null`
+   * significa que o encargo veio discriminado dos `folha_encargos` ativos —
+   * que é o caso da maioria e o único que gera guia no Financeiro.
+   */
+  encargosPercentual: number | null;
   /** Provisão de 13º/férias deste item (Bloco 8b): custo do mês, sem caixa. */
   provisoes: number;
   /**
@@ -106,6 +124,13 @@ export interface FolhaItem {
   adiantamentoParcelas?: { ordinal: number; total: number }[];
   custoTotal: number;
   valorLiquido: number;
+  /**
+   * `true` quando o Tiago ajustou salário base / gratificação / % de encargo
+   * desta linha pela tela. Importa na exibição porque o Regerar preserva essas
+   * linhas em vez de recalculá-las do cadastro: sem o selo, o número editado e
+   * o número calculado ficam indistinguíveis na tabela.
+   */
+  editadoManualmente: boolean;
   /**
    * Id do lançamento a_pagar do salário deste colaborador (Task 4), ou null
    * se ainda não existe (folha em rascunho/pendente_aprovacao, ou líquido
@@ -134,6 +159,12 @@ export interface FolhaDetalhe {
   valorAdiantamentos: number;
   valorLiquido: number;
   custoTotal: number;
+  /**
+   * Soma das gratificações da folha. Já embutida em `valorBruto` e em
+   * `custoTotal`; existe separada para o KPI de bruto dizer quanto do bruto é
+   * gratificação, em vez de deixar o total crescer sem explicação.
+   */
+  valorGratificacoes: number;
   /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
   aprovadoEm: string | null;
   /**
@@ -326,7 +357,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .from("folhas")
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
-       valor_encargos, valor_provisoes, valor_adiantamentos, valor_liquido,
+       valor_encargos, valor_provisoes, valor_gratificacoes,
+       valor_adiantamentos, valor_liquido,
        custo_total, aprovado_em, motivo_rejeicao,
        usuarios!folhas_aprovado_por_fkey(nome)`,
     )
@@ -338,10 +370,11 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
   const { data: itensRaw, error: erroItens } = await supabase
     .from("folha_itens")
     .select(
-      `id, colaborador_id, centro_custo_id, salario_base, horas_normais,
-       horas_extras, valor_extras, inss, irrf, encargos, provisoes,
-       adiantamentos, custo_total, valor_liquido, lancamento_id,
-       colaboradores(nome, funcoes(nome)),
+      `id, colaborador_id, centro_custo_id, salario_base, gratificacao,
+       horas_normais, horas_extras, valor_extras, inss, irrf, encargos,
+       encargos_percentual, provisoes, adiantamentos, custo_total,
+       valor_liquido, editado_manualmente, lancamento_id,
+       colaboradores(nome, vinculo, funcoes(nome)),
        centros_custo(nome, codigo),
        folha_item_encargos(nome, valor),
        folha_item_provisoes(nome, valor_principal, valor_encargos)`,
@@ -360,10 +393,15 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       colaboradorId: item.colaborador_id,
       colaboradorNome: item.colaboradores?.nome ?? "Colaborador removido",
       colaboradorFuncao: item.colaboradores?.funcoes?.nome ?? null,
+      // Colaborador apagado não deixa o vínculo legível: cai em "clt", o
+      // vínculo que a folha sempre teve, para a tabela não quebrar por causa
+      // de uma linha órfã.
+      colaboradorVinculo: item.colaboradores?.vinculo ?? "clt",
       centroCustoId: item.centro_custo_id,
       centroCustoNome: item.centros_custo?.nome ?? null,
       centroCustoCodigo: item.centros_custo?.codigo ?? null,
       salarioBase: item.salario_base,
+      gratificacao: item.gratificacao,
       horasNormais: item.horas_normais,
       horasExtras: item.horas_extras,
       valorExtras: item.valor_extras,
@@ -374,6 +412,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       encargosDetalhe: (item.folha_item_encargos ?? [])
         .map((encargo) => ({ nome: encargo.nome, valor: encargo.valor }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+      encargosPercentual: item.encargos_percentual,
       provisoes: item.provisoes,
       // Folhas geradas antes desta frente (Bloco 8b) não têm linhas aqui: [].
       provisoesDetalhe: (item.folha_item_provisoes ?? [])
@@ -387,6 +426,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       adiantamentoParcelas: parcelasPorColaborador.get(item.colaborador_id) ?? [],
       custoTotal: item.custo_total,
       valorLiquido: item.valor_liquido,
+      editadoManualmente: item.editado_manualmente,
       lancamentoId: item.lancamento_id,
     }))
     .sort((a, b) =>
@@ -401,6 +441,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     valorBruto: folha.valor_bruto,
     valorEncargos: folha.valor_encargos,
     valorProvisoes: folha.valor_provisoes,
+    valorGratificacoes: folha.valor_gratificacoes,
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,

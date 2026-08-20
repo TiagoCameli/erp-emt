@@ -46,7 +46,7 @@ export interface GerarFolhaFormDrawerProps {
 /**
  * Drawer de gerar folha gerencial: só o mês da competência. Os encargos são
  * discriminados pela config (folha_encargos ativos) dentro da fn_gerar_folha,
- * não há mais % global digitado aqui. Gerar consolida os colaboradores CLT
+ * não há mais % global digitado aqui. Gerar consolida os colaboradores
  * ativos da competência em um rascunho; regerar (mesma competência) substitui o
  * rascunho. Fecha no sucesso e navega para o detalhe.
  */
@@ -88,7 +88,7 @@ export function GerarFolhaFormDrawer({
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={regerar ? "Regerar folha" : "Gerar folha"}
-      descricao="Consolida os colaboradores CLT ativos da competência, com ponto e adiantamentos. Os encargos são discriminados automaticamente pela config. Regerar substitui o rascunho da mesma competência."
+      descricao="Consolida os colaboradores ativos da competência: CLT e terceiro pelo salário do cadastro, diarista pela soma das diárias em aberto. Traz ponto, adiantamentos, gratificação e o encargo de cada um. Regerar substitui o rascunho da mesma competência, preservando as linhas alteradas à mão."
       rodape={
         <>
           <Button

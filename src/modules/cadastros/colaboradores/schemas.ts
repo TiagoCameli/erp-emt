@@ -1,6 +1,11 @@
 import { z } from "zod";
 
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
+import {
+  casasDecimais as casasDecimaisPercentual,
+  paraNumero as paraNumeroPercentual,
+} from "@/modules/rh/percentual";
 
 /** Vínculos aceitos no cadastro de colaboradores (RH completo vem na Fase 7). */
 export const VINCULOS = ["clt", "diarista", "terceiro"] as const;
@@ -171,6 +176,47 @@ const dinheiroOpcionalSchema = z
     error: "O valor aceita no máximo 2 casas decimais",
   });
 
+/** Percentual NUMERIC(7,4) com check 0..100 no banco. */
+const PERCENTUAL_MAX = 100;
+
+/**
+ * Percentual de encargo do colaborador: opcional, e o vazio tem significado —
+ * `null` é "usa os encargos configurados na folha", que é diferente de 0 ("esta
+ * pessoa não tem encargo"). É a distinção que deixa cadastrar um terceiro sem
+ * encargo sem apagar a configuração de todo mundo.
+ *
+ * Usa o `paraNumero` de `rh/percentual`, e não o daqui, de propósito: aquele
+ * valida o agrupamento do ponto de milhar, então "0.5" vira NaN (erro na tela)
+ * em vez de 5 — dez vezes o percentual digitado, aprovado por todos os refines
+ * e pelo check da coluna. Esta coluna multiplica salário dentro da folha, então
+ * é o parser da folha que tem de valer aqui.
+ */
+const percentualOpcionalSchema = z
+  .union([z.string(), z.number()])
+  .nullable()
+  .transform((valor, ctx) => {
+    if (valor === null) return null;
+    if (typeof valor === "number") return valor;
+    const texto = valor.trim();
+    if (texto === "") return null;
+    const numero = paraNumeroPercentual(texto);
+    if (!Number.isFinite(numero)) {
+      ctx.addIssue({ code: "custom", message: "Percentual inválido" });
+      return z.NEVER;
+    }
+    return numero;
+  })
+  .refine((valor) => valor === null || valor >= 0, {
+    error: "O percentual não pode ser negativo",
+  })
+  .refine((valor) => valor === null || valor <= PERCENTUAL_MAX, {
+    error: "O percentual vai de 0 a 100",
+  })
+  .refine(
+    (valor) => valor === null || casasDecimaisPercentual(valor) <= CASAS_TAXA,
+    { error: `O percentual aceita no máximo ${CASAS_TAXA} casas decimais` },
+  );
+
 /** Schema do formulário de colaborador (criar e editar). */
 export const colaboradorSchema = z.object({
   nome: z
@@ -192,6 +238,20 @@ export const colaboradorSchema = z.object({
   ativo: z.boolean().default(true),
   salario: dinheiroOpcionalSchema,
   valorDiaria: dinheiroOpcionalSchema,
+  /**
+   * Gratificação salarial fixa mensal. Entra na folha somando no bruto, no
+   * líquido e no custo, e FORA da base dos encargos e da provisão. Vazio vira
+   * null aqui e 0 na gravação: a coluna é `not null default 0`, e um cadastro
+   * sem gratificação não é "gratificação desconhecida", é zero.
+   * `.optional()` porque o formulário existente não enviava esta chave.
+   */
+  gratificacao: dinheiroOpcionalSchema.optional(),
+  /**
+   * Percentual de encargo próprio desta pessoa. null/ausente = usa os encargos
+   * configurados na folha. É o campo que deixa terceiro e diarista entrarem na
+   * folha sem carregar encargo de CLT.
+   */
+  encargosPercentual: percentualOpcionalSchema.optional(),
   banco: textoOpcional,
   agencia: textoOpcional,
   conta: textoOpcional,

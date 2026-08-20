@@ -321,3 +321,119 @@ describe("colaboradorSchema — dados pessoais novos (Bloco 2)", () => {
     }
   });
 });
+
+describe("colaboradorSchema — gratificação e encargo individual", () => {
+  const remuneracao = { ...base, salario: "3.500,00", valorDiaria: "" };
+
+  it("aceita as duas chaves ausentes: o formulário antigo não as enviava", () => {
+    const r = colaboradorSchema.safeParse(remuneracao);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.gratificacao).toBeUndefined();
+      expect(r.data.encargosPercentual).toBeUndefined();
+    }
+  });
+
+  it("gratificação vazia vira null (a gravação troca por 0, que é o default da coluna)", () => {
+    const r = colaboradorSchema.safeParse({ ...remuneracao, gratificacao: "" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.gratificacao).toBeNull();
+  });
+
+  it("lê a gratificação em pt-BR", () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      gratificacao: "1.250,50",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.gratificacao).toBe(1250.5);
+  });
+
+  it("recusa gratificação com 3 casas: NUMERIC(14,2) arredondaria calado", () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      gratificacao: "10,999",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("recusa gratificação negativa", () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      gratificacao: "-1",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it('encargo vazio vira null: "usa os encargos configurados na folha"', () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      encargosPercentual: "",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.encargosPercentual).toBeNull();
+  });
+
+  it('encargo "0" vira 0, que é DIFERENTE de vazio: "esta pessoa não tem encargo"', () => {
+    // As duas coisas precisam ser dizíveis. Se vazio e zero fossem a mesma,
+    // cadastrar um terceiro sem encargo obrigaria a apagar a configuração de
+    // todo mundo, ou o terceiro carregaria encargo de CLT.
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      encargosPercentual: "0",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.encargosPercentual).toBe(0);
+  });
+
+  it("aceita 4 casas no encargo (26,8% e 8,3333% são alíquotas reais)", () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      encargosPercentual: "8,3333",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.encargosPercentual).toBe(8.3333);
+  });
+
+  it('recusa "0.5" no encargo em vez de aceitar como 5', () => {
+    // Agrupamento de milhar inválido. É a razão de este campo usar o paraNumero
+    // de rh/percentual e não o local: com o local, 0.5 viraria 5 e o encargo
+    // sairia dez vezes maior, aprovado pelo check da coluna.
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      encargosPercentual: "0.5",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("recusa encargo acima de 100", () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      encargosPercentual: "101",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("recusa encargo negativo", () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      encargosPercentual: "-1",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("aceita os números já convertidos (reparse na Server Action)", () => {
+    const r = colaboradorSchema.safeParse({
+      ...remuneracao,
+      salario: 3500,
+      valorDiaria: null,
+      gratificacao: 500,
+      encargosPercentual: 0,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.gratificacao).toBe(500);
+      expect(r.data.encargosPercentual).toBe(0);
+    }
+  });
+});

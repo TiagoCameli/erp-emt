@@ -37,6 +37,10 @@ export interface ColaboradorLista {
   ativo: boolean;
   salario: number | null;
   valorDiaria: number | null;
+  /** Gratificação salarial fixa mensal, fora da base de encargos da folha. */
+  gratificacao: number;
+  /** % de encargo próprio. null = usa os encargos configurados na folha. */
+  encargosPercentual: number | null;
   banco: string | null;
   agencia: string | null;
   conta: string | null;
@@ -91,7 +95,7 @@ export async function listar(): Promise<ColaboradorLista[]> {
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao_id, jornada_id, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base), jornadas(nome)",
+      "id, nome, cpf, funcao_id, jornada_id, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, gratificacao, encargos_percentual, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base), jornadas(nome)",
     )
     .order("nome");
 
@@ -118,6 +122,8 @@ export async function listar(): Promise<ColaboradorLista[]> {
     ativo: colaborador.ativo,
     salario: colaborador.salario,
     valorDiaria: colaborador.valor_diaria,
+    gratificacao: colaborador.gratificacao,
+    encargosPercentual: colaborador.encargos_percentual,
     banco: colaborador.banco,
     agencia: colaborador.agencia,
     conta: colaborador.conta,

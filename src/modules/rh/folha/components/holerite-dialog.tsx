@@ -25,7 +25,14 @@ function formatarCompetencia(competencia: string): string {
   return `${mes}/${ano}`;
 }
 
-/** FGTS informativo do mês: salário × %/100, 2 casas. Não é desconto. */
+/**
+ * FGTS informativo do mês: salário BASE × %/100, 2 casas. Não é desconto.
+ *
+ * A base é o salário base, sem gratificação, pela mesma razão dos encargos: a
+ * regra declarada pelo Tiago é que a gratificação não é afetada por encargo, e
+ * o FGTS é depósito do empregador. Se essa regra mudar, muda aqui e na
+ * fn_folha_aplicar_encargos_e_provisoes juntas — hoje as duas concordam.
+ */
 function fgtsDoMes(salarioBase: number, fgtsPercentual: number): number {
   return Math.round(salarioBase * (fgtsPercentual / 100) * 100) / 100;
 }
@@ -81,8 +88,9 @@ export interface HoleriteDialogProps {
 }
 
 /**
- * Holerite (contracheque) do colaborador na competência: proventos (salário),
- * descontos (INSS, IRRF, adiantamentos), líquido a receber, e o FGTS do mês
+ * Holerite (contracheque) do colaborador na competência: proventos (salário e
+ * gratificação, quando houver), descontos (INSS, IRRF, adiantamentos), líquido
+ * a receber, e o FGTS do mês
  * como informativo (depósito do empregador, não desconta do líquido). Só
  * exibe o que a folha já calculou; nenhum cálculo fiscal aqui. O botão
  * Imprimir usa a impressão do navegador (isolada via .holerite-print no CSS
@@ -100,6 +108,11 @@ export function HoleriteDialog({
   const totalDescontos =
     Math.round((item.inss + item.irrf + item.adiantamentos) * 100) / 100;
   const fgts = fgtsDoMes(item.salarioBase, fgtsPercentual);
+  // Total de proventos só aparece quando há gratificação: com salário sozinho a
+  // linha repetiria o número de cima, e holerite com número repetido é onde o
+  // funcionário para de conferir.
+  const totalProventos =
+    Math.round((item.salarioBase + item.gratificacao) * 100) / 100;
 
   return (
     <Dialog open={aberto} onOpenChange={onAbertoChange}>
@@ -133,6 +146,18 @@ export function HoleriteDialog({
                 Proventos
               </h3>
               <Linha rotulo="Salário" valor={item.salarioBase} />
+              {item.gratificacao > 0 ? (
+                <>
+                  <Linha rotulo="Gratificação" valor={item.gratificacao} />
+                  <div className="mt-1 border-t border-border pt-1">
+                    <Linha
+                      rotulo="Total de proventos"
+                      valor={totalProventos}
+                      forte
+                    />
+                  </div>
+                </>
+              ) : null}
             </section>
 
             <section>
@@ -167,7 +192,7 @@ export function HoleriteDialog({
                 Informativo
               </h3>
               <Linha
-                rotulo="FGTS do mês (depósito, não desconta)"
+                rotulo="FGTS do mês sobre o salário base (depósito, não desconta)"
                 valor={fgts}
               />
             </section>
