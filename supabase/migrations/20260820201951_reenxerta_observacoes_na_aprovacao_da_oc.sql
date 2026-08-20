@@ -23,6 +23,25 @@
 -- Convivencia provada em 20/08/2026 contra producao, OC COM forma bancaria e
 -- duas parcelas: nasceu 1 bloco de forma, as 2 parcelas amarradas nele, e a
 -- observacao desceu junto. 3 de 3 PASSOU.
+--
+-- ============================================================================
+-- DEPENDENCIA NAO SATISFEITA NO REPO (lido em 20/08/2026, 20h)
+-- ============================================================================
+-- Este arquivo referencia a tabela `oc_formas`, e as migrations que a CRIAM
+-- (oc_com_varias_formas_estrutura, oc_salva_formas_com_as_parcelas,
+-- aprovar_oc_desce_a_divisao_por_forma) estao APLICADAS NO BANCO VIVO mas
+-- ainda NAO estao em main nem em PR aberto -- vivem numa frente de trabalho
+-- paralela.
+--
+-- Consequencia: no banco vivo esta funcao esta correta e provada. Num replay
+-- do repo do zero, ela estouraria em `from public.oc_formas` -- a tabela nao
+-- existiria ainda. Nao consertei reordenando nem embarcando as migrations da
+-- outra frente: elas nao sao minhas para commitar.
+--
+-- Quando a frente do multi-forma da OC entrar em main, esta ordem se resolve
+-- sozinha (as dela sao 2002xx, anteriores a esta 201951). Se por algum motivo
+-- ela NAO entrar, este arquivo tem de ser reescrito sem os portoes de forma.
+-- Ver docs/decisoes.md.
 
 create or replace function public.fn_aprovar_ordem_compra(p_oc_id uuid)
  returns void

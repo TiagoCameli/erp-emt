@@ -2812,3 +2812,54 @@ de um sintoma e não da causa.
 coluna de valor. Um centro de custo → campo só. Uma parcela → sem tabela. Nos três, o segundo item é
 que traz a tabela e a coluna de valor, e o primeiro herda o total. 5.050 dos 5.930 lançamentos têm
 exatamente uma forma: cobrar duas digitações deles para servir o caso raro seria piorar o comum.
+
+## 20/08/2026 — A observação da OC desce até o pagamento
+
+**As telas já estavam prontas; o dado é que não descia.** Detalhe da OC, espelho da OC, detalhe do
+lançamento, espelho do lançamento, Excel de lançamentos, fila de aprovação, drawer da parcela em
+Pagamentos e espelho do pagamento — todos os oito já renderizavam "Observações". O elo quebrado era um
+só: `fn_aprovar_ordem_compra` copiava descrição, categoria, número do documento e os anexos, e deixava
+`observacoes` para trás. Lição de investigação: **antes de construir a superfície, verifique se ela já
+existe.** O pedido chegou como "fazer aparecer em todo o caminho" e o trabalho real era uma linha de
+`insert`, não oito telas.
+
+**Não há risco de divergência depois da cópia, e é por isso que copiar basta.** OC aprovada não pode
+ser editada (`editarOrdem` exige rascunho ou pendente), lançamento de origem `oc` é somente-leitura no
+Financeiro, e desaprovar APAGA o lançamento — a reaprovação o recria com o texto novo. Sem essas três
+travas, a escolha certa seria ler da OC por join, não copiar.
+
+**`btrim(x)` corta só espaço, não `\n` nem `\t`.** A normalização ingênua deixava `E'   \n  \t '`
+sobreviver como `E'\n  \t'`, que passa pelo `nullif` e chega na tela como conteúdo — e o front decide
+desenhar a seção com `observacoes ? ... : null`, onde string de branco é **truthy**. Resultado seria uma
+seção "Observações" visivelmente vazia. O padrão correto é `btrim(x, E' \t\r\n')` explícito, nos dois
+lados de um backfill (no `set` e no `where`). Quem pegou isso foi a prova, porque ela tinha um caso de
+whitespace puro além dos casos "tem texto" e "não tem nada".
+
+**Presente mas ilegível não é presente.** Três telas exibiam a observação achatada numa linha só: o
+`Dado` da OC é `flex items-center`, e a `Linha` do detalhe de pagamento alinha o valor à direita — num
+bloco de várias linhas isso desalinha cada linha. A observação real traz "PAGAMENTO PARA DIA 19/08",
+o CNPJ e a chave PIX em linhas **separadas**, e é conferida de olho antes de o dinheiro sair.
+`whitespace-pre-line` em campo vindo de textarea é regra, não enfeite.
+
+**O selo na lista é o que faz a observação existir.** Quem paga varre dezenas de linhas e não abre o
+detalhe de cada uma: informação que só aparece no drawer só serve para quem já desconfiava que ela
+existia. Novo canônico `SeloObservacoes` (balão + tooltip preservando quebras, corte anunciado em 600
+caracteres) na fila de Pagamentos, na fila de Aprovação e em Pagamentos diretos.
+
+**`CREATE OR REPLACE FUNCTION` apaga trabalho alheio sem conflito, sem erro e sem aviso.** A
+`fn_aprovar_ordem_compra` foi sobrescrita TRÊS vezes nesta tarde, nos dois sentidos: eu apaguei o bloco
+de forma da outra frente, mesclei, e depois a divisão por forma apagou a minha cópia. Não existe merge
+de três vias em Postgres — o replace troca o corpo inteiro. **A checagem que não protege** é
+`pg_get_functiondef(...) like '%a minha mudança%'`: ela só prova que a minha alteração não está lá, e
+passa em silêncio por cima do trabalho de terceiros. **A que protege** é reler `pg_get_functiondef` na
+chamada imediatamente anterior ao apply, guardar o `md5`, e conferir depois por TODAS as partes que a
+função deveria ter, não só pela própria. Quando já aconteceu, `select array_to_string(statements, ...)
+from supabase_migrations.schema_migrations where version = '<a apagada>'` devolve o SQL alheio inteiro
+para mesclar.
+
+**Pendência de ordem, declarada em vez de escondida.** A migration `20260820201951` referencia
+`oc_formas`, cujas migrations de criação estão aplicadas no banco vivo mas ainda **não estão em main
+nem em PR aberto** (frente paralela do multi-forma da OC). No banco vivo a função está correta e
+provada; num replay do repo do zero, ela estouraria. Não reordenei nem embarquei migration de outra
+frente. Quando o multi-forma da OC entrar em main a ordem se resolve sozinha (as dela são 2002xx,
+anteriores). Se não entrar, o arquivo tem de ser reescrito sem os portões de forma.
