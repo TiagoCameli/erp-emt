@@ -444,15 +444,42 @@ export function LancamentoDetalheView({
                 {lancamento.fornecedorNome ?? <CelulaVazia />}
               </Dado>
               <Dado rotulo="Categoria">{lancamento.categoriaNome ?? <CelulaVazia />}</Dado>
+              {/* Com mais de uma forma, o `formaPagamentoNome` do cabeçalho é
+                  NULO de propósito (não existe "a forma" deste lançamento), e
+                  mostrar um traço aqui esconderia justamente a informação que
+                  explica por que uma parte do pagamento foi para a aprovação e a
+                  outra não. Então a linha passa a listar as formas com o valor
+                  de cada uma. */}
               <Dado
-                rotulo="Forma de pagamento"
+                rotulo={
+                  lancamento.formas.length > 1
+                    ? "Formas de pagamento"
+                    : "Forma de pagamento"
+                }
                 legenda={
-                  lancamento.formaPagamentoTipo
-                    ? CAMINHO_DO_PAGAMENTO[lancamento.formaPagamentoTipo]
-                    : null
+                  lancamento.formas.length > 1
+                    ? `${lancamento.formas.length} formas neste lançamento`
+                    : lancamento.formaPagamentoTipo
+                      ? CAMINHO_DO_PAGAMENTO[lancamento.formaPagamentoTipo]
+                      : null
                 }
               >
-                {lancamento.formaPagamentoNome ?? <CelulaVazia />}
+                {lancamento.formas.length > 1 ? (
+                  <div className="flex flex-col gap-0.5">
+                    {lancamento.formas.map((forma) => (
+                      <span key={forma.id} className="flex flex-wrap gap-x-1.5">
+                        <span>{forma.formaPagamentoNome}</span>
+                        <MoneyText valor={forma.valor} className="inline" />
+                        <span className="text-legenda text-muted-foreground">
+                          {CAMINHO_DO_PAGAMENTO[forma.formaPagamentoTipo]}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  (lancamento.formas[0]?.formaPagamentoNome ??
+                  lancamento.formaPagamentoNome ?? <CelulaVazia />)
+                )}
               </Dado>
               {/* Vale para os dois casos: no avulso a condição é a do próprio
                   lançamento, no de OC é a da ordem de origem. A legenda diz de

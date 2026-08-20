@@ -122,8 +122,9 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     .from("lancamento_parcelas")
     .select(
       `id, numero_parcela, valor, data_vencimento, data_programada, lancamento_id,
-       conta_bancaria_id,
+       conta_bancaria_id, lancamento_forma_id,
        contas_bancarias(nome),
+       lancamento_formas(formas_pagamento(nome)),
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
          mes_competencia, data_compra, observacoes,
@@ -187,7 +188,19 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
           ? (numeroOc.get(origemId) ?? null)
           : null,
       categoriaNome: lancamento?.categorias_financeiras?.nome ?? null,
-      formaPagamentoNome: lancamento?.formas_pagamento?.nome ?? null,
+      /**
+       * A forma vem do BLOCO da parcela, com o cabeçalho como reserva.
+       *
+       * Um lançamento pago por duas formas tem o `forma_pagamento_id` do
+       * cabeçalho NULO de propósito (não existe "a forma" dele), então ler só o
+       * cabeçalho deixaria a fila mostrando "-" justamente no caso em que saber a
+       * forma mais importa: é ela que explica por que uma metade do pagamento
+       * apareceu aqui e a outra não.
+       */
+      formaPagamentoNome:
+        parcela.lancamento_formas?.formas_pagamento?.nome ??
+        lancamento?.formas_pagamento?.nome ??
+        null,
       contaBancariaId: parcela.conta_bancaria_id,
       contaBancariaNome: parcela.contas_bancarias?.nome ?? null,
       dataCompra: lancamento?.data_compra ?? null,
@@ -551,21 +564,34 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
     .select(
       `id, numero_parcela, valor, desconto, valor_liquido,
        data_vencimento, data_pagamento, status,
-       lancamento_id, conta_bancaria_id, conferido_em,
+       lancamento_id, conta_bancaria_id, conferido_em, lancamento_forma_id,
        usuarios!lancamento_parcelas_conferido_por_fkey(nome),
        contas_bancarias(nome),
+       lancamento_formas!inner(formas_pagamento!inner(nome, tipo)),
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
          mes_competencia, data_compra, observacoes,
          categorias_financeiras(nome),
-         formas_pagamento!inner(nome, tipo),
+         formas_pagamento(nome, tipo),
          fornecedores(razao_social, nome_fantasia),
          lancamento_rateios(valor, centros_custo(nome))
        )`,
     )
     .eq("lancamentos.tipo", "a_pagar")
     .neq("lancamentos.status", "cancelado")
-    .in("lancamentos.formas_pagamento.tipo", ["dinheiro", "cartao_credito"])
+    // O filtro de TIPO olha o BLOCO da parcela, nao o cabecalho do lancamento.
+    //
+    // Era `lancamentos.formas_pagamento!inner(...)`, um join obrigatorio com a
+    // forma do CABECALHO. Num lancamento pago por duas formas o cabecalho e NULO
+    // de proposito, e o inner join descartaria o documento inteiro: a parte em
+    // dinheiro dele nunca apareceria nesta aba, calada. A forma mora no bloco
+    // agora, e a decisao e por PARCELA -- que e justamente o que esta aba lista.
+    //
+    // O `!inner` no bloco nao perde nada: desde a aprovacao de OC criar o bloco,
+    // todo lancamento com forma tem um. Lancamento SEM forma (o que o RH cria)
+    // fica de fora, exatamente como ficava antes -- sem forma no cabecalho o
+    // join antigo tambem o descartava.
+    .in("lancamento_formas.formas_pagamento.tipo", ["dinheiro", "cartao_credito"])
     .order("data_vencimento", { ascending: false, nullsFirst: false });
 
   if (error) {
@@ -575,13 +601,13 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
   }
 
   // Segunda tranca no tipo, do lado do app. O filtro de cima atravessa dois
-  // níveis de embed (parcela > lançamento > forma), e é o único lugar do projeto
-  // que faz isso: se o PostgREST não aplicar o `in` como esperado, uma parcela
-  // bancária apareceria numa aba que diz "não passa pela aprovação". O default
-  // de tipoFormaPagamento é 'bancario', então o desconhecido também fica fora.
+  // níveis de embed (parcela > bloco de forma > forma): se o PostgREST não
+  // aplicar o `in` como esperado, uma parcela bancária apareceria numa aba que
+  // diz "não passa pela aprovação". O default de tipoFormaPagamento é 'bancario',
+  // então o desconhecido também fica fora.
   const linhas = (data ?? []).filter((parcela) => {
     const tipo = tipoFormaPagamento(
-      parcela.lancamentos?.formas_pagamento?.tipo,
+      parcela.lancamento_formas?.formas_pagamento?.tipo,
     );
     return tipo === "dinheiro" || tipo === "cartao_credito";
   });
@@ -626,9 +652,11 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
           ? (numeroOc.get(origemId) ?? null)
           : null,
       categoriaNome: lancamento?.categorias_financeiras?.nome ?? null,
-      formaPagamentoNome: lancamento?.formas_pagamento?.nome ?? null,
+      // Do BLOCO: e a forma DESTA parcela. O cabecalho fica nulo quando o
+      // lancamento tem mais de uma forma.
+      formaPagamentoNome: parcela.lancamento_formas?.formas_pagamento?.nome ?? null,
       formaPagamentoTipo: tipoFormaPagamento(
-        lancamento?.formas_pagamento?.tipo,
+        parcela.lancamento_formas?.formas_pagamento?.tipo,
       ),
       contaBancariaId: parcela.conta_bancaria_id,
       contaBancariaNome: parcela.contas_bancarias?.nome ?? null,

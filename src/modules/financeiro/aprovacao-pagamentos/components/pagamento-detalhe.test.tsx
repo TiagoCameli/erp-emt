@@ -45,6 +45,11 @@ function parcela(troca: Partial<ParcelaLancamento> = {}): ParcelaLancamento {
     contaBancariaId: "55555555-5555-4555-8555-555555555555",
     contaBancariaNome: "Bradesco 1234",
     dataPagamento: null,
+    // Sem bloco de forma: este lançamento não declara formas (o campo
+    // `formaPagamentoId` dele é null), e é assim que a base guarda os 880
+    // lançamentos antigos. Fixture com bloco aqui seria um registro incoerente
+    // com o cabeçalho.
+    lancamentoFormaId: null,
     ...troca,
   };
 }
@@ -77,6 +82,7 @@ function lancamento(troca: Partial<LancamentoDetalhe> = {}): LancamentoDetalhe {
     dataVencimento: "2026-08-15",
     observacoes: null,
     parcelas: [parcela(), parcela({ id: ID_OUTRA, numeroParcela: 3 })],
+    formas: [],
     rateios: [
       {
         id: "rrrrrrrr-rrrr-4rrr-8rrr-rrrrrrrrrrrr",

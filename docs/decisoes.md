@@ -2731,3 +2731,84 @@ para evitar. Diarista continua fora: salário vazio nele é o estado normal.
 novas. Ela hoje importa nome, CPF, função, vínculo e obra — não importa nem `salario` nem
 `valor_diaria`, então acrescentar gratificação sem salário seria incoerente. Expandir aquela planilha é
 decisão separada.
+
+## 2026-08-20 - Um lançamento pago por várias formas, e a aprovação por parte
+
+**O que o Tiago pediu**: mais de uma forma de pagamento por OC ou lançamento, com o valor de cada
+uma, e a aprovação gerando aprovações diferentes por método. **O modelo que ele escolheu**: duas
+camadas — as formas com o valor de cada uma, e as parcelas morando DENTRO de uma forma. A alternativa
+(forma na parcela, com o "quanto de cada forma" virando soma derivada) foi recusada por ele: o valor
+por forma é um número que a pessoa digita e confere, e precisa de lugar próprio para existir.
+
+**Entregue em dois blocos, e o corte não é arbitrário.** Bloco 1 é o lado do lançamento; bloco 2 é
+dividir a OC. O que torna o corte seguro é que a OC continua com UMA forma e ela desce como um bloco
+único — então o caminho do dinheiro está inteiro nos dois estados, nunca meio feito.
+
+**A compatibilidade não custou um segundo caminho de código.** `fn_aplicar_regra_pagamento` monta a
+lista de blocos com um `union all`: os blocos declarados, OU um pseudo-bloco do cabeçalho quando não
+existe nenhum. O predicado `lancamento_forma_id is not distinct from bloco` serve os dois casos, porque
+num lançamento sem blocos TODA parcela tem `lancamento_forma_id` nulo. Sem esse truque seriam dois
+ramos com a mesma regra escrita duas vezes, e eles divergiriam no primeiro ajuste.
+
+**O status do lançamento deixou de ser escrito e passou a ser derivado.** Com formas de tipos
+diferentes ele pode ter parte quitada (cartão), parte aprovada (dinheiro) e parte esperando (boleto) ao
+mesmo tempo, e nenhum ramo do código sabe dizer o que ele "é". Quem sabe é a contagem das parcelas, e
+`fn_recalcular_status_lancamento` já fazia essa conta para pagamento parcial. O ramo que sobrou escrito
+à mão é o `previsto`, que a função de recálculo não produz.
+
+**A conta bancária continua sendo o portão do atalho, mas POR BLOCO.** Sem o recorte, uma parcela de
+boleto sem conta travaria o atalho da parte em dinheiro — duas coisas que não têm nada a ver uma com a
+outra passariam a depender uma da outra.
+
+**Duas travas de soma, as duas como constraint trigger DEFERRABLE.** A soma das formas fecha com o
+valor, e as parcelas de CADA forma fecham com o valor daquela forma. A segunda é o que faz o modelo de
+duas camadas ser honesto: sem ela, "R$ 6.000 no boleto" poderia ter R$ 4.000 de parcelas e a tela
+mostraria os dois números sem se contradizer em lugar nenhum. Deferido pelo mesmo motivo da trava do
+rateio: apagar e reescrever as parcelas (que é o que a edição faz) estouraria no meio, num estado que
+nem chegou a existir. E lançamento com ZERO formas nunca dispara nada disso, porque o gatilho é a linha
+de forma — o que deu compatibilidade de graça aos 880 antigos.
+
+**O gatilho da parcela confere o bloco ANTIGO e o NOVO.** Numa parcela que troca de forma, olhar só o
+destino deixaria o bloco de origem curto e a trava passaria: os dois lados mudaram de soma. O
+`where lf.id in (old.lancamento_forma_id, new.lancamento_forma_id)` resolve três casos de uma vez —
+nulo (INSERT não tem old, DELETE não tem new, parcela do caminho antigo não tem bloco), forma apagada
+em cascata, e os dois iguais.
+
+**O cabeçalho `forma_pagamento_id` virou uma projeção, não uma segunda verdade.** Com UMA forma ele
+guarda ela (as listas, filtros, relatórios e o RH continuam lendo dali, e são 46 arquivos). Com DUAS ou
+mais ele vai NULO de propósito: não existe "a forma" desse lançamento, e gravar uma delas faria a lista
+afirmar algo falso. Quem quer o detalhe lê `lancamento_formas`.
+
+**O furo que esse nulo abriu, e que a leitura pegou antes de a tela mentir.** A aba "Pagamentos
+diretos" filtrava por `lancamentos.formas_pagamento!inner` — join OBRIGATÓRIO com a forma do cabeçalho.
+Com o cabeçalho nulo, o inner join descartaria o documento inteiro, e a parte em dinheiro de um
+lançamento misto nunca apareceria ali, sem erro nenhum. Lição geral: **quando um campo passa a poder
+ser nulo, todo `!inner` que passa por ele muda de significado em silêncio.** O conserto foi filtrar
+pelo bloco da parcela (a granularidade certa: a aba lista parcelas, não documentos), o que exigiu a
+aprovação de OC criar o bloco também — e isso deixou a invariante limpa: *tem forma no cabeçalho ⟺ tem
+bloco*.
+
+**Parâmetro novo em RPC entra com DEFAULT quando a migration precede o deploy.** `p_formas` tem
+`default '[]'` porque a migration entra no banco antes de o app subir: sem o default, toda gravação de
+lançamento quebraria na janela entre as duas coisas. E foi DROP+CREATE, não `create or replace` — com a
+assinatura de 4 argumentos viva, o PostgREST veria duas sobrecargas e escolheria uma em runtime, com o
+build verde. Uma função, um parâmetro opcional.
+
+**`min(uuid)` não existe no Postgres, e o CREATE FUNCTION aceita.** Quebrou na primeira execução, e só
+a prova pegou. É a mesma família de "Postgres aceita SQL embutido inválido" registrada em 13/08: o
+corpo da função não é verificado na criação.
+
+**Numeração da parcela continua sendo do lançamento inteiro**, e não por forma. "Parcela 2 de 4" já
+significa isso em toda tela e em todo espelho; reiniciar por bloco faria dois documentos diferentes
+chamarem a mesma coisa de "parcela 1".
+
+**Duas recusas declaradas, em vez de dois palpites.** "Gerar pela condição" fica desabilitado com 2+
+formas (um parcelamento plano não sabe quanto de cada forma cai em cada parcela), e o diálogo "Definir
+parcelas" recusa em lançamento multi-forma e manda para o formulário. Recusa visível é melhor que
+parcela nascendo sem bloco e a trava de soma acusando depois com uma mensagem sobre valores, que fala
+de um sintoma e não da causa.
+
+**Progressividade é a regra da tela, e já era o idioma do arquivo.** Uma forma → Combobox só, sem
+coluna de valor. Um centro de custo → campo só. Uma parcela → sem tabela. Nos três, o segundo item é
+que traz a tabela e a coluna de valor, e o primeiro herda o total. 5.050 dos 5.930 lançamentos têm
+exatamente uma forma: cobrar duas digitações deles para servir o caso raro seria piorar o comum.
