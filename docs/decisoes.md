@@ -2594,3 +2594,45 @@ barras horizontais a altura tem que crescer com o número de barras, e se o grá
 altura o carregamento mediria uma coisa e o gráfico outra — a página pularia na troca. Quem sabe quantos
 centros existem é o wrapper, então é ele que reserva o espaço, lendo o mesmo `alturaDoGrafico` que tem
 teste.
+
+## 20/08/2026 — Filtro de centro na listagem sai da URL e vai para o embed
+
+**O drill de custo por centro morria nos três maiores centros, e não era o `in.()` estourar: a
+requisição não chegava a existir.** Clicar em Escritório Central abria "Algo deu errado ao carregar esta
+tela" e **nada** aparecia nos logs do Postgres nem do gateway. O motivo: `.in("id", idsFiltrados)` viaja
+na query string de um GET, e o Escritório Central tem 1.871 lançamentos — 69 KB de URL. Medido contra o
+projeto vivo, sem autenticação (o corte é ANTES da auth, então é sobre tamanho, não permissão): 100 ids
+= 401, 453 ids = 401, **1.115 = HTTP 400, 1.753 = HTTP 520, 1.871 = a requisição não completa**. É por
+isso que os centros pequenos funcionavam e ninguém tinha percebido: só 3 dos 12 passam do limite.
+
+**Não foi regressão da subárvore.** Escritório Central e 009 não têm filhos, então a subárvore devolve
+exatamente a mesma lista de ids que o `.eq` antigo devolvia — o drill já estava quebrado para os três
+maiores antes. O que a mudança de ontem fez foi me levar a olhar para ele.
+
+**A correção é o par que a listagem de ordens de compra já usa: filtro no embed +
+`not.is.null`.** `lancamento_rateios(centro_custo_id)` entra no select e o filtro cai nele, então o que
+viaja é a SUBÁRVORE (61 ids no maior caso, ~2,3 KB), não os lançamentos do centro. O embed é subconsulta
+lateral independente, então filtrá-lo não mexe no `count: "exact"` nem multiplica a linha do lançamento.
+
+**Por que confiar nisso sem poder logar no app:** o padrão já roda em produção no caso que duplicaria.
+`oc_itens` está sempre no select das OCs com `count: "exact"`, e existem **10 OCs com dois ou mais itens
+no mesmo centro de custo, uma delas com 11** — se o embed duplicasse o pai, aquela OC apareceria 11
+vezes com o total inflado. E a prova em SQL tem linha de controle que TEM que diferir: na subárvore da
+Manutenção, ids distintos = 1.116, `EXISTS` = 1.116, e o join cru (que duplica) = **1.120**. Os 4 de
+diferença são lançamentos já rateados entre dois equipamentos — o caso vai deixar de ser raro.
+
+**A regra que sai daqui: lista de ids que cresce com o volume de dado não pode ser filtro de URL.** O
+teto do `in.()` já tinha mordido quatro vezes neste repo por CORTE SILENCIOSO (mil linhas voltando de
+uma consulta); esta é a quinta, e a mais desagradável, porque falha do outro lado — a requisição morre
+sem log. Filtro que mora em tabela filha e pode casar muitas linhas vai no embed. Sobra a mesma dívida
+em `idsPorContaBancaria`, `idsPorRevisao`, `idsPorAtraso` e `idsComSaldoAberto`: nenhum passa do limite
+hoje, mas todos vão pelo mesmo caminho.
+
+**O rateio podia ir para o embed e a parcela não, e a diferença é o que a tela LÊ.**
+`lancamento_parcelas` alimenta a coluna "Revisão" e o dinheiro da linha, então filtrar aquele embed
+esconderia parcela da conta. O embed de rateio existe SÓ para filtrar — ninguém lê o valor dele —, então
+filtrá-lo não mexe em número nenhum. O comentário antigo dizia "não dá para filtrar pelo join embutido"
+sem essa distinção, e foi corrigido.
+
+**A subárvore é lida uma vez e serve ao filtro e ao recorte.** Eram a mesma leitura antes por um motivo
+que continua valendo: filtrar por um conjunto e somar por outro é o defeito que ninguém confere.
