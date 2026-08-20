@@ -10,6 +10,7 @@ import {
 } from "@/modules/financeiro/lancamentos/schemas";
 
 const CENTRO = "33333333-3333-4333-8333-333333333333";
+const FORMA = "aaaa1111-aaaa-4aaa-8aaa-aaaaaaaa1111";
 
 /** Formulário válido no estado de parcela única (o mais comum). */
 const formBase = {
@@ -23,13 +24,15 @@ const formBase = {
   dataVencimento: "2026-08-10",
   numeroDocumento: "",
   observacoes: "",
-  parcelas: [{ valor: "", dataVencimento: "" }],
+  parcelas: [{ valor: "", dataVencimento: "", formaPagamentoId: FORMA }],
   // Centro de custo é obrigatório, e com UM a coluna de valor não aparece na
   // tela: a linha vai com o centro escolhido e o valor vazio, e o envio a
   // preenche com o total. Fixture com `rateios: []` era um lançamento que
   // fn_salvar_lancamento recusa ("nenhum custo existe sem centro de custo"),
   // então provava uma tela impossível.
   rateios: [{ centroCustoId: CENTRO, valor: "" }],
+  // Uma forma so: a coluna de valor dela nao aparece na tela (ela vale o total).
+  formas: [{ formaPagamentoId: FORMA, valor: "" }],
 };
 
 /**
@@ -47,7 +50,7 @@ describe("lancamentoFormSchema, parcela única", () => {
   it("não cobra que a parcela única feche com o valor, porque ela é derivada", () => {
     const r = lancamentoFormSchema.safeParse({
       ...formBase,
-      parcelas: [{ valor: "1,00", dataVencimento: "" }],
+      parcelas: [{ valor: "1,00", dataVencimento: "", formaPagamentoId: FORMA }],
     });
     expect(r.success).toBe(true);
   });
@@ -66,8 +69,8 @@ describe("lancamentoFormSchema, duas ou mais parcelas", () => {
     const r = lancamentoFormSchema.safeParse({
       ...formBase,
       parcelas: [
-        { valor: "600,00", dataVencimento: "2026-08-10" },
-        { valor: "400,00", dataVencimento: "2026-09-10" },
+        { valor: "600,00", dataVencimento: "2026-08-10", formaPagamentoId: FORMA },
+        { valor: "400,00", dataVencimento: "2026-09-10", formaPagamentoId: FORMA },
       ],
     });
     expect(r.success).toBe(true);
@@ -77,8 +80,8 @@ describe("lancamentoFormSchema, duas ou mais parcelas", () => {
     const r = lancamentoFormSchema.safeParse({
       ...formBase,
       parcelas: [
-        { valor: "600,00", dataVencimento: "2026-08-10" },
-        { valor: "300,00", dataVencimento: "2026-09-10" },
+        { valor: "600,00", dataVencimento: "2026-08-10", formaPagamentoId: FORMA },
+        { valor: "300,00", dataVencimento: "2026-09-10", formaPagamentoId: FORMA },
       ],
     });
     expect(r.success).toBe(false);
@@ -93,8 +96,8 @@ describe("lancamentoFormSchema, duas ou mais parcelas", () => {
     const r = lancamentoFormSchema.safeParse({
       ...formBase,
       parcelas: [
-        { valor: "1.000,00", dataVencimento: "2026-08-10" },
-        { valor: "", dataVencimento: "2026-09-10" },
+        { valor: "1.000,00", dataVencimento: "2026-08-10", formaPagamentoId: FORMA },
+        { valor: "", dataVencimento: "2026-09-10", formaPagamentoId: FORMA },
       ],
     });
     expect(r.success).toBe(false);
@@ -109,8 +112,8 @@ describe("lancamentoFormSchema, duas ou mais parcelas", () => {
     const r = lancamentoFormSchema.safeParse({
       ...formBase,
       parcelas: [
-        { valor: "600,00", dataVencimento: "2026-08-10" },
-        { valor: "400,00", dataVencimento: "" },
+        { valor: "600,00", dataVencimento: "2026-08-10", formaPagamentoId: FORMA },
+        { valor: "400,00", dataVencimento: "", formaPagamentoId: FORMA },
       ],
     });
     expect(r.success).toBe(true);
@@ -134,6 +137,7 @@ describe("lancamentoSchema, servidor", () => {
     // No servidor o rateio chega já com o valor resolvido pela tela, e ele tem
     // de fechar com o valor do lançamento.
     rateios: [{ centroCustoId: CENTRO, valor: 1000 }],
+    formas: [],
   };
 
   it("aceita a parcela única derivada do cabeçalho", () => {
@@ -238,6 +242,7 @@ describe("lancamentoSchema: número do documento", () => {
     // recusado por fn_salvar_lancamento desde sempre, então fixture com
     // `rateios: []` provava um registro que o banco não aceita.
     rateios: [{ centroCustoId: CENTRO, valor: 1000 }],
+    formas: [],
   };
 
   it("aceita lançamento sem número do documento", () => {

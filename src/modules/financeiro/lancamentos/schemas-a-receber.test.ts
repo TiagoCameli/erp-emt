@@ -7,6 +7,7 @@ import {
 } from "@/modules/financeiro/lancamentos/schemas";
 
 const CENTRO = "33333333-3333-4333-8333-333333333333";
+const FORMA = "aaaa1111-aaaa-4aaa-8aaa-aaaaaaaa1111";
 const CLIENTE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const CONTA = "55555555-5555-4555-8555-555555555555";
 
@@ -22,8 +23,13 @@ const formAPagar = {
   dataVencimento: "2026-08-10",
   observacoes: "",
   numeroDocumento: "",
-  parcelas: [{ valor: "", dataVencimento: "" }],
+  // Com UMA forma a coluna de valor dela nao aparece na tela (ela vale o total),
+  // e a parcela ja nasce apontando para ela -- e o que o Combobox de forma unica
+  // faz no onValorChange. Fixture sem forma seria uma tela que nao existe: o
+  // formulario do a pagar sempre mostra o campo.
+  parcelas: [{ valor: "", dataVencimento: "", formaPagamentoId: FORMA }],
   rateios: [{ centroCustoId: CENTRO, valor: "" }],
+  formas: [{ formaPagamentoId: FORMA, valor: "" }],
 };
 
 /** O mesmo formulário como A RECEBER, com a trinca que só ele exige. */
@@ -34,6 +40,9 @@ const formAReceber = {
   clienteId: CLIENTE,
   contaBancariaId: CONTA,
   numeroDocumento: "MED-07/2026",
+  // Recebimento nao tem forma de pagamento: a forma diz como a EMT PAGA.
+  formas: [],
+  parcelas: [{ valor: "", dataVencimento: "", formaPagamentoId: "" }],
 };
 
 /**
@@ -113,6 +122,7 @@ describe("a receber no schema de servidor", () => {
     numeroDocumento: "MED-07/2026",
     parcelas: [{ valor: 1000, dataVencimento: "2026-08-10" }],
     rateios: [{ centroCustoId: CENTRO, valor: 1000 }],
+    formas: [],
   };
 
   it("aceita o recebimento completo", () => {
@@ -198,6 +208,7 @@ describe("centro de custo obrigatório", () => {
       mesCompetencia: "2026-07-01",
       parcelas: [{ valor: 1000, dataVencimento: "2026-08-10" }],
       rateios: [],
+      formas: [],
     });
     expect(r.success).toBe(false);
   });

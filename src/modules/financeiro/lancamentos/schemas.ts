@@ -89,6 +89,13 @@ function textoOpcional(maximo: number) {
 export const parcelaSchema = z.object({
   valor: valorSchema,
   dataVencimento: dataOpcionalSchema,
+  /**
+   * De qual FORMA esta parcela é. Obrigatório quando o lançamento declara formas,
+   * e ausente quando não declara nenhuma (caminho antigo, que o banco continua
+   * aceitando). Quem cobra é o superRefine do lançamento, que é quem sabe se há
+   * formas.
+   */
+  formaPagamentoId: idSchemaCom("Forma de pagamento inválida").optional(),
 });
 
 export type ParcelaInput = z.infer<typeof parcelaSchema>;
@@ -100,6 +107,26 @@ export const rateioSchema = z.object({
 });
 
 export type RateioInput = z.infer<typeof rateioSchema>;
+
+/**
+ * Uma forma de pagamento do lançamento, com quanto sai por ela.
+ *
+ * O lançamento pode ser pago por VÁRIAS formas (pedido do Tiago, 20/08/2026), e o
+ * modelo é de duas camadas: aqui ficam as formas com o valor de cada uma, e cada
+ * parcela diz de qual forma ela é. A soma das formas fecha com o valor do
+ * lançamento, e as parcelas de cada forma fecham com o valor daquela forma — as
+ * duas somas também são travadas no banco, por constraint trigger.
+ */
+export const formaPagamentoLancamentoSchema = z.object({
+  formaPagamentoId: idSchemaCom("Forma de pagamento inválida"),
+  valor: valorSchema.refine((v) => v > 0, {
+    error: "O valor da forma precisa ser maior que zero",
+  }),
+});
+
+export type FormaPagamentoLancamentoInput = z.infer<
+  typeof formaPagamentoLancamentoSchema
+>;
 
 /**
  * Lançamento validado no servidor. A soma das parcelas precisa bater com o
@@ -173,6 +200,12 @@ export const lancamentoSchema = z
     rateios: z
       .array(rateioSchema)
       .min(1, { error: "Escolha o centro de custo" }),
+    /**
+     * As formas de pagamento e quanto sai por cada uma. Vazio é válido: é o
+     * lançamento que não declara forma, que o banco aceita e roteia como
+     * bancário (vai para a fila de aprovação).
+     */
+    formas: z.array(formaPagamentoLancamentoSchema),
   })
   .refine(
     (dados) => {
@@ -191,6 +224,75 @@ export const lancamentoSchema = z
     },
     { error: "A soma do rateio precisa ser igual ao valor", path: ["rateios"] },
   )
+  /**
+   * As formas de pagamento, quando existem: as mesmas três regras que
+   * fn_salvar_lancamento cobra no banco, repetidas aqui para o erro sair da
+   * Server Action com mensagem nossa em vez de subir o raise do Postgres.
+   *
+   * Recebimento não tem forma: a forma diz como a EMT PAGA, e num recebível quem
+   * paga é o cliente. O que o recebimento tem é conta de destino.
+   */
+  .superRefine((dados, ctx) => {
+    if (dados.tipo === "a_receber" && dados.formas.length > 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Recebimento não tem forma de pagamento",
+        path: ["formas"],
+      });
+      return;
+    }
+    if (dados.formas.length === 0) return;
+
+    const soma = dados.formas.reduce((total, f) => total + f.valor, 0);
+    if (Math.abs(soma - dados.valor) > TOLERANCIA) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A soma das formas de pagamento precisa ser igual ao valor",
+        path: ["formas"],
+      });
+    }
+
+    const ids = dados.formas.map((f) => f.formaPagamentoId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A mesma forma aparece duas vezes: some os valores numa linha só",
+        path: ["formas"],
+      });
+    }
+
+    // Toda parcela tem de dizer de qual forma ela é, e as parcelas de cada forma
+    // fecham com o valor dela. Sem a segunda, "R$ 6.000 no boleto" poderia ter
+    // R$ 4.000 de parcelas sem se contradizer em lugar nenhum.
+    const conhecidas = new Set(ids);
+    dados.parcelas.forEach((parcela, indice) => {
+      if (
+        !parcela.formaPagamentoId ||
+        !conhecidas.has(parcela.formaPagamentoId)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Diga por qual forma de pagamento esta parcela sai",
+          path: ["parcelas", indice, "formaPagamentoId"],
+        });
+      }
+    });
+
+    for (const forma of dados.formas) {
+      const somaDaForma = dados.parcelas
+        .filter((p) => p.formaPagamentoId === forma.formaPagamentoId)
+        .reduce((total, p) => total + p.valor, 0);
+      if (Math.abs(somaDaForma - forma.valor) > TOLERANCIA) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "As parcelas de cada forma precisam fechar com o valor da forma",
+          path: ["formas"],
+        });
+        break;
+      }
+    }
+  })
   /**
    * O que só o a receber exige. Mesma regra que fn_salvar_lancamento aplica no
    * banco, repetida aqui para o erro chegar no campo em vez de vir como toast
@@ -245,9 +347,27 @@ function valorStringValido(valor: string): boolean {
 export const parcelaFormSchema = z.object({
   valor: z.string().trim(),
   dataVencimento: z.string().trim(),
+  /** Vazio = nenhuma forma escolhida, igual ao Combobox sem seleção. */
+  formaPagamentoId: z.string().trim(),
 });
 
 export type ParcelaFormInput = z.infer<typeof parcelaFormSchema>;
+
+/**
+ * Uma forma de pagamento no formulário. Valor como string, igual às parcelas e
+ * ao rateio, para casar input e output do react-hook-form.
+ *
+ * O valor pode chegar vazio de propósito: com UMA forma a coluna de valor não
+ * aparece na tela (ela vale o total do lançamento), mesmo tratamento da parcela
+ * única e do centro de custo único. A exigência volta a partir de duas, e mora no
+ * superRefine, que é quem sabe quantas linhas existem.
+ */
+export const formaFormSchema = z.object({
+  formaPagamentoId: idSchemaCom("Selecione a forma de pagamento"),
+  valor: z.string().trim(),
+});
+
+export type FormaFormInput = z.infer<typeof formaFormSchema>;
 
 /**
  * Rateio no formulário. Centro de custo + valor como string.
@@ -314,6 +434,12 @@ export const lancamentoFormSchema = z
       .array(parcelaFormSchema)
       .min(1, { error: "Adicione ao menos uma parcela" }),
     rateios: z.array(rateioFormSchema),
+    /**
+     * As formas de pagamento. No a pagar a tela nasce com UMA (que é o caso
+     * esmagadoramente mais comum) e o botão "Dividir entre formas" acrescenta as
+     * outras. No a receber fica vazio: recebimento não tem forma.
+     */
+    formas: z.array(formaFormSchema),
   })
   /**
    * Parcelas: só há o que conferir a partir de DUAS.
@@ -323,6 +449,92 @@ export const lancamentoFormSchema = z
    * fecha por construção e a linha escondida não precisa de valor. Exigir valor
    * nela travaria o formulário num campo que ninguém vê.
    */
+  /**
+   * As formas de pagamento no formulário.
+   *
+   * Com UMA forma nada é cobrado: ela vale o total, a coluna de valor não está na
+   * tela e a soma fecha por construção — mesmo tratamento da parcela única e do
+   * centro de custo único. A partir de DUAS, três coisas passam a valer: cada
+   * linha precisa de valor, a soma delas fecha com o total, e as parcelas de cada
+   * forma fecham com o valor daquela forma.
+   */
+  .superRefine((dados, ctx) => {
+    if (dados.formas.length === 0) return;
+
+    const valor = paraNumero(dados.valor);
+
+    if (dados.formas.length < 2) {
+      // Com uma forma só, a única exigência é a parcela apontar para ela — e a
+      // tela faz isso sozinha. Nada a cobrar aqui.
+      return;
+    }
+
+    dados.formas.forEach((forma, indice) => {
+      if (!valorStringValido(forma.valor)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Informe um valor válido",
+          path: ["formas", indice, "valor"],
+        });
+      }
+    });
+
+    const ids = dados.formas.map((f) => f.formaPagamentoId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A mesma forma aparece duas vezes: some os valores numa linha só",
+        path: ["formas"],
+      });
+    }
+
+    if (!Number.isNaN(valor)) {
+      const soma = dados.formas.reduce(
+        (total, f) =>
+          total + (Number.isNaN(paraNumero(f.valor)) ? 0 : paraNumero(f.valor)),
+        0,
+      );
+      if (Math.abs(soma - valor) > TOLERANCIA) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A soma das formas precisa ser igual ao valor do lançamento",
+          path: ["formas"],
+        });
+      }
+    }
+
+    // Cada parcela aponta uma forma, e as parcelas de cada forma fecham com ela.
+    const conhecidas = new Set(ids);
+    dados.parcelas.forEach((parcela, indice) => {
+      if (!conhecidas.has(parcela.formaPagamentoId)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Escolha a forma desta parcela",
+          path: ["parcelas", indice, "formaPagamentoId"],
+        });
+      }
+    });
+
+    for (const [indice, forma] of dados.formas.entries()) {
+      const somaDaForma = dados.parcelas
+        .filter((p) => p.formaPagamentoId === forma.formaPagamentoId)
+        .reduce(
+          (total, p) =>
+            total + (Number.isNaN(paraNumero(p.valor)) ? 0 : paraNumero(p.valor)),
+          0,
+        );
+      const alvo = Number.isNaN(paraNumero(forma.valor))
+        ? 0
+        : paraNumero(forma.valor);
+      if (Math.abs(somaDaForma - alvo) > TOLERANCIA) {
+        ctx.addIssue({
+          code: "custom",
+          message: "As parcelas desta forma não fecham com o valor dela",
+          path: ["formas", indice, "valor"],
+        });
+      }
+    }
+  })
   /**
    * O que só o a receber exige, no formulário: pagador, conta de destino e
    * número do documento. Fica num superRefine (e não como campo obrigatório no

@@ -81,6 +81,9 @@ function parcelasParaRpc(dados: LancamentoInput): Json {
   return dados.parcelas.map((parcela) => ({
     valor: parcela.valor,
     data_vencimento: parcela.dataVencimento ?? null,
+    // De qual FORMA esta parcela e. Null quando o lancamento nao declara formas
+    // (caminho antigo). A RPC resolve o bloco por este id.
+    forma_pagamento_id: parcela.formaPagamentoId ?? null,
   }));
 }
 
@@ -89,6 +92,20 @@ function rateiosParaRpc(dados: LancamentoInput): Json {
   return dados.rateios.map((rateio) => ({
     centro_custo_id: rateio.centroCustoId,
     valor: rateio.valor,
+  }));
+}
+
+/**
+ * Formas de pagamento no formato que a RPC espera (p_formas).
+ *
+ * Lista vazia é o lançamento que não declara forma, e a RPC aceita: ele roteia
+ * pelo `forma_pagamento_id` do cabeçalho, como sempre fez. É por isso que o
+ * parâmetro tem default no banco — a migration entra antes do deploy.
+ */
+function formasParaRpc(dados: LancamentoInput): Json {
+  return dados.formas.map((forma) => ({
+    forma_pagamento_id: forma.formaPagamentoId,
+    valor: forma.valor,
   }));
 }
 
@@ -175,6 +192,7 @@ export async function salvarLancamento(
     p_dados: dadosParaRpc(validado.data),
     p_parcelas: parcelasParaRpc(validado.data),
     p_rateios: rateiosParaRpc(validado.data),
+    p_formas: formasParaRpc(validado.data),
   });
 
   if (error || !data) {

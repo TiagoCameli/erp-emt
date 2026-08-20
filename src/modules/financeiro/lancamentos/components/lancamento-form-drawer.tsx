@@ -80,9 +80,19 @@ function somar(valores: { valor: string }[]): number {
   }, 0);
 }
 
-/** Parcela em branco para o array de parcelas. */
-function parcelaVazia(): LancamentoFormInput["parcelas"][number] {
-  return { valor: "", dataVencimento: "" };
+/**
+ * Parcela em branco. `formaPagamentoId` diz de qual forma ela e; com uma forma
+ * so, quem preenche e a tela (a pessoa nao escolhe duas vezes a mesma coisa).
+ */
+function parcelaVazia(
+  formaPagamentoId = "",
+): LancamentoFormInput["parcelas"][number] {
+  return { valor: "", dataVencimento: "", formaPagamentoId };
+}
+
+/** Forma em branco para o array de formas de pagamento. */
+function formaVazia(): LancamentoFormInput["formas"][number] {
+  return { formaPagamentoId: "", valor: "" };
 }
 
 /** Rateio em branco para o array de rateios. */
@@ -106,6 +116,37 @@ const COLUNAS_PARCELA: ColunaItem[] = [
     chave: "dataVencimento",
     rotulo: "Vencimento",
     largura: "180px",
+    alinhamento: "left",
+  },
+  {
+    chave: "valor",
+    rotulo: "Valor",
+    largura: "minmax(0,1fr)",
+    alinhamento: "right",
+    obrigatorio: true,
+  },
+];
+
+/**
+ * Colunas da tabela de formas: a forma, o que acontece com ela e o valor.
+ *
+ * A coluna do meio não é decoração: é o TIPO da forma que decide o caminho de
+ * cada parte (dinheiro pula a fila, cartão nasce quitado, boleto e cheque vão
+ * para a aprovação). Sem ela, quem divide um pagamento em duas formas não tem
+ * como saber por que uma metade apareceu na aprovação e a outra não.
+ */
+const COLUNAS_FORMA: ColunaItem[] = [
+  {
+    chave: "forma",
+    rotulo: "Forma",
+    largura: "minmax(0,1.2fr)",
+    alinhamento: "left",
+    obrigatorio: true,
+  },
+  {
+    chave: "caminho",
+    rotulo: "O que acontece",
+    largura: "minmax(0,1.6fr)",
     alinhamento: "left",
   },
   {
@@ -163,6 +204,13 @@ function valoresIniciais(
       // vazia), então o campo tem de estar na tela desde o começo, não escondido
       // atrás de um "Adicionar rateio".
       rateios: [rateioVazio()],
+      // Uma forma, em branco: é o caso esmagadoramente comum (5.050 dos 5.930
+      // lançamentos têm exatamente uma), e ela aparece como um Combobox só, sem
+      // coluna de valor. "Dividir entre formas" é que abre a segunda.
+      //
+      // No a receber fica vazio: recebimento não tem forma de pagamento (a forma
+      // diz como a EMT paga). O efeito de trocar o tipo está no `useEffect`.
+      formas: tipoInicial === "a_receber" ? [] : [formaVazia()],
     };
   }
   return {
@@ -197,8 +245,31 @@ function valoresIniciais(
         ? lancamento.parcelas.map((parcela) => ({
             valor: String(parcela.valor).replace(".", ","),
             dataVencimento: parcela.dataVencimento ?? "",
+            // A parcela guarda o id do BLOCO; o formulário trabalha com o id da
+            // FORMA, que é o que o seletor mostra. A tradução é por aqui.
+            formaPagamentoId:
+              lancamento.formas.find(
+                (forma) => forma.id === parcela.lancamentoFormaId,
+              )?.formaPagamentoId ?? "",
           }))
         : [parcelaVazia()],
+    formas:
+      lancamento.formas.length > 0
+        ? lancamento.formas.map((forma) => ({
+            formaPagamentoId: forma.formaPagamentoId,
+            valor: String(forma.valor).replace(".", ","),
+          }))
+        : lancamento.tipo === "a_receber"
+          ? []
+          : // Lançamento antigo, sem forma declarada: abre com a linha semeada
+            // pelo cabeçalho quando ele tem uma, para editar não apagar a forma
+            // que estava lá.
+            [
+              {
+                formaPagamentoId: lancamento.formaPagamentoId ?? "",
+                valor: String(lancamento.valor).replace(".", ","),
+              },
+            ],
     rateios:
       lancamento.rateios.length > 0
         ? lancamento.rateios.map((rateio) => ({
@@ -322,6 +393,7 @@ export function LancamentoFormDrawer({
 
   const parcelas = useFieldArray({ control: form.control, name: "parcelas" });
   const rateios = useFieldArray({ control: form.control, name: "rateios" });
+  const formas = useFieldArray({ control: form.control, name: "formas" });
 
   React.useEffect(() => {
     if (aberto) form.reset(valoresIniciais(lancamento, tipoInicial));
@@ -335,8 +407,10 @@ export function LancamentoFormDrawer({
   const valorAlvo = Number.isNaN(valorObservado) ? 0 : valorObservado;
   const parcelasObservadas = form.watch("parcelas") ?? [];
   const rateiosObservados = form.watch("rateios") ?? [];
+  const formasObservadas = form.watch("formas") ?? [];
   const somaParcelas = somar(parcelasObservadas);
   const somaRateios = somar(rateiosObservados);
+  const somaFormas = somar(formasObservadas);
 
   const tipoValor = form.watch("tipo");
   /**
@@ -352,11 +426,15 @@ export function LancamentoFormDrawer({
   const clienteValor = form.watch("clienteId") ?? "";
   const contaValor = form.watch("contaBancariaId") ?? "";
   const categoriaValor = form.watch("categoriaId") ?? SEM_VINCULO;
-  const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId") ?? "";
   const dataCompraValor = form.watch("dataCompra") ?? "";
+  /**
+   * O tipo da forma, quando ha UMA so: e ele que a ajuda do campo usa para dizer
+   * o que vai acontecer com o pagamento. Com duas ou mais nao existe "o tipo" do
+   * lancamento, e quem diz o caminho e a coluna "O que acontece" de cada linha.
+   */
   const tipoFormaEscolhida = formasPagamento.find(
-    (forma) => forma.id === formaPagamentoValor,
+    (forma) => forma.id === (form.watch("formas.0.formaPagamentoId") ?? ""),
   )?.tipo;
   const erroParcelas = form.formState.errors.parcelas;
   const erroRateios = form.formState.errors.rateios;
@@ -375,10 +453,26 @@ export function LancamentoFormDrawer({
    * de dois a tabela mostra o valor de cada um e a soma tem de bater.
    */
   const rateioUnico = rateios.fields.length <= 1;
+  /**
+   * Mesma regra da parcela unica e do centro unico: com UMA forma ela leva o
+   * total, a coluna de valor nao aparece e a soma fecha por construcao. A partir
+   * de duas, a tabela mostra o valor de cada uma e as parcelas passam a ser
+   * agrupadas por forma.
+   */
+  const formaUnica = formas.fields.length <= 1;
+  const erroFormas = form.formState.errors.formas;
   // Sem condição escolhida ou sem valor não há o que dividir, e a action
   // recusaria com um toast. Melhor o botão já nascer desabilitado.
+  //
+  // Com DUAS ou mais formas também nasce desabilitado: um parcelamento plano não
+  // sabe dizer quanto de cada forma cai em cada parcela, e gerar um chute faria
+  // as somas por forma pararem de fechar sem a pessoa ter pedido nada. Nesse
+  // estado as parcelas são acrescentadas dentro de cada forma.
   const podeGerarParcelas =
-    condicaoPagamentoValor !== "" && valorAlvo > 0 && dataCompraValor !== "";
+    condicaoPagamentoValor !== "" &&
+    valorAlvo > 0 &&
+    dataCompraValor !== "" &&
+    formaUnica;
 
   /**
    * Gera as parcelas pela condição de pagamento com o que está NO FORMULÁRIO
@@ -398,10 +492,15 @@ export function LancamentoFormDrawer({
       toast.error(resultado.erro);
       return;
     }
+    // Todas na forma unica: "Gerar pela condicao" fica desabilitado quando ha
+    // duas ou mais formas, porque um parcelamento plano nao sabe dizer quanto de
+    // cada forma cai em cada parcela.
+    const forma = formaHerdada();
     parcelas.replace(
       resultado.parcelas.map((parcela) => ({
         valor: String(parcela.valor).replace(".", ","),
         dataVencimento: parcela.dataVencimento,
+        formaPagamentoId: forma,
       })),
     );
     // Condição de uma parcela só (à vista, 30 dias): a tabela não vai aparecer,
@@ -417,6 +516,17 @@ export function LancamentoFormDrawer({
   }
 
   /**
+   * A forma que uma parcela nova herda quando ninguem escolheu: a unica que
+   * existe. Com duas ou mais nao ha palpite honesto, e ai a parcela nasce sem
+   * forma -- mas nesse estado as parcelas sao acrescentadas DENTRO de uma forma
+   * (`adicionarParcelaNaForma`), entao este caminho nao e usado.
+   */
+  function formaHerdada(): string {
+    const atuais = form.getValues("formas") ?? [];
+    return atuais.length === 1 ? (atuais[0]?.formaPagamentoId ?? "") : "";
+  }
+
+  /**
    * Adiciona uma parcela.
    *
    * Saindo de parcela única, a linha que estava escondida assume o valor e o
@@ -425,17 +535,23 @@ export function LancamentoFormDrawer({
    * tela, que é o oposto de dividir o que já estava lá.
    */
   function adicionarParcela() {
+    const forma = formaHerdada();
     if (parcelas.fields.length <= 1) {
       parcelas.replace([
         {
           valor: form.getValues("valor"),
           dataVencimento: form.getValues("dataVencimento"),
+          formaPagamentoId: forma,
         },
-        { valor: "", dataVencimento: dataCompraValor },
+        { valor: "", dataVencimento: dataCompraValor, formaPagamentoId: forma },
       ]);
       return;
     }
-    parcelas.append({ valor: "", dataVencimento: dataCompraValor });
+    parcelas.append({
+      valor: "",
+      dataVencimento: dataCompraValor,
+      formaPagamentoId: forma,
+    });
   }
 
   /**
@@ -492,6 +608,144 @@ export function LancamentoFormDrawer({
     rateios.remove(indice);
   }
 
+  /**
+   * Divide o lancamento entre formas.
+   *
+   * Saindo de forma unica, a linha que estava sem coluna de valor assume o total,
+   * e a segunda nasce em branco -- mesmo movimento de `adicionarParcela` e
+   * `adicionarRateio`. As parcelas que ja existem ficam TODAS na primeira forma:
+   * e o unico palpite honesto, porque nada na tela diz que alguma delas deveria
+   * mudar de forma.
+   */
+  function adicionarForma() {
+    if (formas.fields.length <= 1) {
+      const escolhida = form.getValues("formas.0.formaPagamentoId") ?? "";
+      formas.replace([
+        { formaPagamentoId: escolhida, valor: form.getValues("valor") },
+        formaVazia(),
+      ]);
+      const atuais = form.getValues("parcelas") ?? [];
+      parcelas.replace(
+        atuais.map((parcela) => ({ ...parcela, formaPagamentoId: escolhida })),
+      );
+      return;
+    }
+    formas.append(formaVazia());
+  }
+
+  /**
+   * Remove uma forma, e com ela as parcelas que eram dela.
+   *
+   * Deixar as parcelas orfas travaria o envio numa mensagem sobre soma, para quem
+   * so apagou uma forma. Sobrando uma forma, o que restou passa a ser dela e a
+   * coluna de valor desaparece.
+   */
+  function removerForma(indice: number) {
+    const removida = form.getValues(`formas.${indice}.formaPagamentoId`);
+    const restantes = (form.getValues("formas") ?? []).filter(
+      (_, posicao) => posicao !== indice,
+    );
+    formas.remove(indice);
+
+    const sobrando = (form.getValues("parcelas") ?? []).filter(
+      (parcela) => parcela.formaPagamentoId !== removida,
+    );
+    const unica = restantes.length === 1 ? restantes[0]?.formaPagamentoId : null;
+    parcelas.replace(
+      (sobrando.length > 0 ? sobrando : [parcelaVazia(unica ?? "")]).map(
+        (parcela) =>
+          unica === null ? parcela : { ...parcela, formaPagamentoId: unica },
+      ),
+    );
+  }
+
+  /** Acrescenta uma parcela JA dentro de uma forma. */
+  function adicionarParcelaNaForma(formaPagamentoId: string) {
+    parcelas.append({
+      valor: "",
+      dataVencimento: dataCompraValor,
+      formaPagamentoId,
+    });
+  }
+
+  /** Soma, ao vivo, o que as parcelas de uma forma totalizam. */
+  function somaDaForma(formaPagamentoId: string): number {
+    return somar(
+      parcelasObservadas.filter(
+        (parcela) => parcela.formaPagamentoId === formaPagamentoId,
+      ),
+    );
+  }
+
+  /**
+   * A tabela de parcelas, sobre um SUBCONJUNTO das linhas.
+   *
+   * Existe como função porque a mesma tabela serve dois estados: com uma forma
+   * ela mostra todas as parcelas de uma vez; com duas ou mais, uma tabela por
+   * forma, cada uma fechando com o valor da SUA forma. Os `indice` continuam
+   * sendo os do array inteiro — é com eles que o `form.register` escreve, e
+   * renumerar aqui gravaria numa linha vizinha.
+   */
+  function tabelaDeParcelas(
+    posicoes: number[],
+    rodape: React.ReactNode,
+  ): React.ReactNode {
+    return (
+      <TabelaItens
+        colunas={COLUNAS_PARCELA}
+        linhas={posicoes.map((indice) => ({
+          id: parcelas.fields[indice]?.id ?? String(indice),
+          indice,
+        }))}
+        chaveLinha={(linha) => linha.id}
+        onRemover={(posicaoNaLista) =>
+          removerParcela(posicoes[posicaoNaLista] ?? 0)
+        }
+        podeRemover={() => !salvando && parcelas.fields.length > 1}
+        rotuloRemover="Remover parcela"
+        erroCelula={(chave, posicaoNaLista) => {
+          const indice = posicoes[posicaoNaLista] ?? 0;
+          const errosParcela = form.formState.errors.parcelas?.[indice];
+          if (chave === "valor") return errosParcela?.valor?.message;
+          return undefined;
+        }}
+        renderCelula={(chave, posicaoNaLista) => {
+          const indice = posicoes[posicaoNaLista] ?? 0;
+          if (chave === "numero") {
+            return (
+              <span className="text-detalhe text-muted-foreground tabular-nums">
+                {posicaoNaLista + 1}
+              </span>
+            );
+          }
+          if (chave === "valor") {
+            return (
+              <InputDecimal
+                id={`lan-parcela-valor-${indice}`}
+                aria-label="Valor"
+                placeholder="0,00"
+                className="tabular-nums text-right"
+                disabled={salvando}
+                {...form.register(`parcelas.${indice}.valor`)}
+              />
+            );
+          }
+          // dataVencimento
+          return (
+            <Input
+              id={`lan-parcela-venc-${indice}`}
+              aria-label="Vencimento"
+              type="date"
+              disabled={salvando}
+              {...form.register(`parcelas.${indice}.dataVencimento`)}
+            />
+          );
+        }}
+        rodape={rodape}
+      />
+    );
+  }
+
   async function aoEnviar(valores: LancamentoFormInput) {
     /**
      * Com uma parcela a tabela não está na tela, então a parcela é montada aqui
@@ -499,12 +753,52 @@ export function LancamentoFormDrawer({
      * garante que a soma feche com o valor e que a parcela não vá com data vazia
      * enquanto o topo mostra uma data, que era exatamente o que acontecia antes.
      */
+    /**
+     * As formas do a pagar. No a receber vai vazio: recebimento nao tem forma.
+     *
+     * Com UMA forma o valor dela e o total do lancamento -- a coluna nao esta na
+     * tela, mesmo tratamento da parcela unica e do centro de custo unico. Forma
+     * sem nada escolhido e descartada: e a linha em branco de quem nao quis
+     * declarar forma, e o banco aceita lancamento sem forma (roteia como
+     * bancario, indo para a fila de aprovacao).
+     */
+    const doTipoAPagar = valores.tipo === "a_pagar";
+    const formasPreenchidas = doTipoAPagar
+      ? valores.formas.filter((forma) => forma.formaPagamentoId !== "")
+      : [];
+    const formasParaSalvar =
+      formasPreenchidas.length === 1
+        ? [
+            {
+              formaPagamentoId: formasPreenchidas[0]!.formaPagamentoId,
+              valor: paraNumero(valores.valor),
+            },
+          ]
+        : formasPreenchidas.map((forma) => ({
+            formaPagamentoId: forma.formaPagamentoId,
+            valor: paraNumero(forma.valor),
+          }));
+
+    /**
+     * Com uma forma so, TODA parcela e dela: a pessoa nao escolhe duas vezes a
+     * mesma coisa, e a tela nem mostra o seletor de forma na parcela nesse caso.
+     */
+    const formaUnicaId =
+      formasParaSalvar.length === 1 ? formasParaSalvar[0]!.formaPagamentoId : null;
+    const formaDaParcela = (escolhida: string): string | undefined => {
+      if (formasParaSalvar.length === 0) return undefined;
+      return formaUnicaId ?? (escolhida === "" ? undefined : escolhida);
+    };
+
     const parcelasParaSalvar =
       valores.parcelas.length <= 1
         ? [
             {
               valor: paraNumero(valores.valor),
               dataVencimento: valores.dataVencimento,
+              formaPagamentoId: formaDaParcela(
+                valores.parcelas[0]?.formaPagamentoId ?? "",
+              ),
             },
           ]
         : // A ordem das linhas na tela não vira número de parcela: o banco
@@ -512,6 +806,7 @@ export function LancamentoFormDrawer({
           valores.parcelas.map((parcela) => ({
             valor: paraNumero(parcela.valor),
             dataVencimento: parcela.dataVencimento,
+            formaPagamentoId: formaDaParcela(parcela.formaPagamentoId),
           }));
 
     /**
@@ -546,7 +841,14 @@ export function LancamentoFormDrawer({
       clienteId: doTipo ? valores.clienteId || undefined : undefined,
       contaBancariaId: doTipo ? valores.contaBancariaId || undefined : undefined,
       categoriaId: valores.categoriaId,
-      formaPagamentoId: doTipo ? undefined : valores.formaPagamentoId || undefined,
+      // O cabecalho so vai quando NAO ha forma declarada: com formas, quem
+      // decide o `forma_pagamento_id` do lancamento e a RPC (a unica forma
+      // quando ha uma, nulo quando ha varias).
+      formaPagamentoId:
+        doTipo || formasParaSalvar.length > 0
+          ? undefined
+          : valores.formaPagamentoId || undefined,
+      formas: formasParaSalvar,
       condicaoPagamentoId: valores.condicaoPagamentoId || undefined,
       descricao: valores.descricao,
       valor: paraNumero(valores.valor),
@@ -926,35 +1228,10 @@ export function LancamentoFormDrawer({
               {campoCategoria}
             </LinhaCampos>
 
-            <LinhaCampos>
-              {campoCondicao}
-
-              <CampoFormulario
-                id="lan-forma-pagamento"
-                rotulo="Forma de pagamento"
-                ajuda={
-                  tipoFormaEscolhida
-                    ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
-                    : undefined
-                }
-                erro={form.formState.errors.formaPagamentoId?.message}
-              >
-                <Combobox
-                  valor={formaPagamentoValor}
-                  onValorChange={(valor) => {
-                    form.setValue("formaPagamentoId", valor);
-                    void form.trigger("formaPagamentoId");
-                  }}
-                  opcoes={formasPagamento.map((forma) => ({
-                    valor: forma.id,
-                    rotulo: forma.nome,
-                  }))}
-                  placeholder="Selecione a forma de pagamento"
-                  disabled={salvando}
-                  id="lan-forma-pagamento"
-                />
-              </CampoFormulario>
-            </LinhaCampos>
+            {/* A forma de pagamento saiu daqui: ela virou uma SEÇÃO própria,
+                porque o lançamento pode ser pago por várias e cada uma tem o
+                seu valor e as suas parcelas. Ver "Formas de pagamento" abaixo. */}
+            <LinhaCampos>{campoCondicao}</LinhaCampos>
           </>
         )}
 
@@ -1039,6 +1316,163 @@ export function LancamentoFormDrawer({
           </CampoFormulario>
         </LinhaCampos>
 
+        {/* Formas de pagamento: quanto sai por cada uma.
+
+            Com UMA forma isto é um Combobox só, sem coluna de valor (ela vale o
+            total) — é o caso de 5.050 dos 5.930 lançamentos, e cobrar duas
+            digitações dele seria piorar o comum para servir o raro. "Dividir
+            entre formas" abre a tabela, e aí cada forma ganha valor e as parcelas
+            passam a ser agrupadas por forma.
+
+            O TIPO da forma é que decide o caminho de cada parte: dinheiro pula a
+            fila, cartão nasce quitado, boleto e cheque vão para a aprovação. Com
+            formas de tipos diferentes, um lançamento tem partes em estados
+            diferentes ao mesmo tempo — e é por isso que a coluna "O que acontece"
+            existe. */}
+        {aReceber ? null : (
+          <SecaoFormulario
+            titulo="Formas de pagamento"
+            acao={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={salvando}
+                onClick={adicionarForma}
+              >
+                <Plus />
+                {formaUnica ? "Dividir entre formas" : "Adicionar forma"}
+              </Button>
+            }
+          >
+            {typeof erroFormas?.message === "string" ? (
+              <p className="text-legenda text-destructive" role="alert">
+                {erroFormas.message}
+              </p>
+            ) : null}
+
+            {formaUnica ? (
+              <CampoFormulario
+                id="lan-forma-unica"
+                rotulo="Forma de pagamento"
+                ajuda={
+                  tipoFormaEscolhida
+                    ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
+                    : "Divida entre formas quando o pagamento sair por mais de uma"
+                }
+                erro={
+                  form.formState.errors.formas?.[0]?.formaPagamentoId?.message
+                }
+              >
+                <Combobox
+                  valor={form.watch("formas.0.formaPagamentoId") ?? ""}
+                  onValorChange={(valor) => {
+                    form.setValue("formas.0.formaPagamentoId", valor, {
+                      shouldValidate: true,
+                    });
+                    // A parcela acompanha: com uma forma só, toda parcela é dela,
+                    // e a pessoa não escolhe duas vezes a mesma coisa.
+                    const atuais = form.getValues("parcelas") ?? [];
+                    atuais.forEach((_, indice) =>
+                      form.setValue(`parcelas.${indice}.formaPagamentoId`, valor),
+                    );
+                  }}
+                  opcoes={formasPagamento.map((forma) => ({
+                    valor: forma.id,
+                    rotulo: forma.nome,
+                  }))}
+                  placeholder="Selecione a forma de pagamento"
+                  disabled={salvando}
+                  id="lan-forma-unica"
+                />
+              </CampoFormulario>
+            ) : (
+              <TabelaItens
+                colunas={COLUNAS_FORMA}
+                linhas={formas.fields}
+                chaveLinha={(linha) => linha.id}
+                onRemover={removerForma}
+                podeRemover={() => !salvando}
+                rotuloRemover="Remover forma"
+                erroCelula={(chave, indice) => {
+                  const erro = form.formState.errors.formas?.[indice];
+                  if (chave === "forma") return erro?.formaPagamentoId?.message;
+                  if (chave === "valor") return erro?.valor?.message;
+                  return undefined;
+                }}
+                renderCelula={(chave, indice) => {
+                  const escolhida =
+                    form.watch(`formas.${indice}.formaPagamentoId`) ?? "";
+                  if (chave === "forma") {
+                    return (
+                      <Combobox
+                        valor={escolhida}
+                        onValorChange={(valor) => {
+                          const anterior = escolhida;
+                          form.setValue(
+                            `formas.${indice}.formaPagamentoId`,
+                            valor,
+                            { shouldValidate: true },
+                          );
+                          // As parcelas que eram da forma antiga passam a ser da
+                          // nova: sem isto elas ficariam apontando para uma forma
+                          // que saiu da tela, e o envio travaria numa mensagem
+                          // sobre soma em vez de sobre a troca que a pessoa fez.
+                          const atuais = form.getValues("parcelas") ?? [];
+                          atuais.forEach((parcela, posicao) => {
+                            if (parcela.formaPagamentoId === anterior) {
+                              form.setValue(
+                                `parcelas.${posicao}.formaPagamentoId`,
+                                valor,
+                              );
+                            }
+                          });
+                        }}
+                        opcoes={formasPagamento.map((forma) => ({
+                          valor: forma.id,
+                          rotulo: forma.nome,
+                        }))}
+                        placeholder="Selecione"
+                        disabled={salvando}
+                        ariaLabel="Forma de pagamento"
+                        id={`lan-forma-${indice}`}
+                      />
+                    );
+                  }
+                  if (chave === "caminho") {
+                    const tipo = formasPagamento.find(
+                      (forma) => forma.id === escolhida,
+                    )?.tipo;
+                    return (
+                      <span className="text-legenda text-muted-foreground">
+                        {tipo ? CAMINHO_DO_PAGAMENTO[tipo] : "-"}
+                      </span>
+                    );
+                  }
+                  // valor
+                  return (
+                    <InputDecimal
+                      id={`lan-forma-valor-${indice}`}
+                      aria-label="Valor"
+                      placeholder="0,00"
+                      className="tabular-nums text-right"
+                      disabled={salvando}
+                      {...form.register(`formas.${indice}.valor`)}
+                    />
+                  );
+                }}
+                rodape={
+                  <IndicadorSoma
+                    soma={somaFormas}
+                    valor={valorAlvo}
+                    rotulo="Soma das formas"
+                  />
+                }
+              />
+            )}
+          </SecaoFormulario>
+        )}
+
         {/* Parcelas: mesmo padrão de tabela de itens da OC, na mesma ordem de
             colunas (número, vencimento, valor) e com o mesmo par de ações
             (gerar pela condição, adicionar na mão). */}
@@ -1097,58 +1531,86 @@ export function LancamentoFormDrawer({
             </p>
           ) : null}
 
-          {parcelaUnica ? null : (
-            <TabelaItens
-              colunas={COLUNAS_PARCELA}
-              linhas={parcelas.fields}
-              chaveLinha={(linha) => linha.id}
-              onRemover={removerParcela}
-              podeRemover={() => !salvando && parcelas.fields.length > 1}
-              rotuloRemover="Remover parcela"
-              erroCelula={(chave, indice) => {
-                const errosParcela = form.formState.errors.parcelas?.[indice];
-                if (chave === "valor") return errosParcela?.valor?.message;
-                return undefined;
-              }}
-              renderCelula={(chave, indice) => {
-                if (chave === "numero") {
-                  return (
-                    <span className="text-detalhe text-muted-foreground tabular-nums">
-                      {indice + 1}
-                    </span>
-                  );
-                }
-                if (chave === "valor") {
-                  return (
-                    <InputDecimal
-                      id={`lan-parcela-valor-${indice}`}
-                      aria-label="Valor"
-                      placeholder="0,00"
-                      className="tabular-nums text-right"
-                      disabled={salvando}
-                      {...form.register(`parcelas.${indice}.valor`)}
-                    />
-                  );
-                }
-                // dataVencimento
+          {parcelaUnica ? null : formaUnica ? (
+            tabelaDeParcelas(
+              parcelas.fields.map((_, indice) => indice),
+              <IndicadorSoma
+                soma={somaParcelas}
+                valor={valorAlvo}
+                rotulo="Soma das parcelas"
+              />,
+            )
+          ) : (
+            // Uma tabela por FORMA, cada uma fechando com o valor da sua forma.
+            // É o que o modelo de duas camadas pede: "R$ 6.000 no boleto, em 3x"
+            // se lê como um bloco, e não como três linhas soltas no meio das
+            // outras.
+            <div className="flex flex-col gap-4">
+              {formasObservadas.map((forma, indiceForma) => {
+                const nome =
+                  formasPagamento.find(
+                    (opcao) => opcao.id === forma.formaPagamentoId,
+                  )?.nome ?? "Forma não escolhida";
+                const posicoes = parcelasObservadas
+                  .map((parcela, indice) => ({ parcela, indice }))
+                  .filter(
+                    ({ parcela }) =>
+                      parcela.formaPagamentoId === forma.formaPagamentoId,
+                  )
+                  .map(({ indice }) => indice);
+                const alvoDaForma = Number.isNaN(paraNumero(forma.valor))
+                  ? 0
+                  : paraNumero(forma.valor);
+
                 return (
-                  <Input
-                    id={`lan-parcela-venc-${indice}`}
-                    aria-label="Vencimento"
-                    type="date"
-                    disabled={salvando}
-                    {...form.register(`parcelas.${indice}.dataVencimento`)}
-                  />
+                  <div
+                    key={formas.fields[indiceForma]?.id ?? indiceForma}
+                    className="flex flex-col gap-2 rounded-md border border-border bg-surface/40 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-detalhe font-medium">
+                        {nome}{" "}
+                        <span className="text-muted-foreground tabular-nums">
+                          · {formatarBRL(alvoDaForma)} em{" "}
+                          {posicoes.length === 1
+                            ? "1 parcela"
+                            : `${posicoes.length} parcelas`}
+                        </span>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={salvando || forma.formaPagamentoId === ""}
+                        onClick={() =>
+                          adicionarParcelaNaForma(forma.formaPagamentoId)
+                        }
+                      >
+                        <Plus />
+                        Adicionar parcela
+                      </Button>
+                    </div>
+
+                    {posicoes.length === 0 ? (
+                      <p className="text-legenda text-muted-foreground">
+                        {forma.formaPagamentoId === ""
+                          ? "Escolha a forma acima para dividir o valor dela em parcelas."
+                          : "Nenhuma parcela nesta forma ainda. Acrescente ao menos uma."}
+                      </p>
+                    ) : (
+                      tabelaDeParcelas(
+                        posicoes,
+                        <IndicadorSoma
+                          soma={somaDaForma(forma.formaPagamentoId)}
+                          valor={alvoDaForma}
+                          rotulo={`Soma em ${nome}`}
+                        />,
+                      )
+                    )}
+                  </div>
                 );
-              }}
-              rodape={
-                <IndicadorSoma
-                  soma={somaParcelas}
-                  valor={valorAlvo}
-                  rotulo="Soma das parcelas"
-                />
-              }
-            />
+              })}
+            </div>
           )}
         </SecaoFormulario>
 
