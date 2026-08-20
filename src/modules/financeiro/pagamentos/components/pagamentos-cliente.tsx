@@ -20,6 +20,7 @@ import {
   GradeKpis,
   KPICard,
   MoneyText,
+  SeloObservacoes,
   StatusBadge,
   useBuscaUrl,
   useFaixaUrl,
@@ -698,12 +699,25 @@ export function PagamentosCliente({
       {
         accessorKey: "lancamentoNumero",
         header: "Lançamento",
-        size: 120,
-        cell: ({ row }) =>
-          rotuloParcela(
-            row.original.lancamentoNumero,
-            row.original.numeroParcela,
-          ),
+        size: 140,
+        // `naoTruncar` porque o selo entra numa fileira flex ao lado do número:
+        // o truncate de uma linha da DataTable cortaria o balão fora da tela.
+        meta: { rotulo: "Lançamento", naoTruncar: true },
+        cell: ({ row }) => (
+          // justify-center porque flex não herda o text-center da célula.
+          <div className="flex items-center justify-center gap-1.5">
+            {rotuloParcela(
+              row.original.lancamentoNumero,
+              row.original.numeroParcela,
+            )}
+            {/*
+              O selo é o que faz a observação existir para quem paga: ela traz
+              chave PIX, CNPJ e data combinada, e ninguém abre o drawer de
+              cinquenta linhas para descobrir se tem recado.
+            */}
+            <SeloObservacoes observacoes={row.original.observacoes} />
+          </div>
+        ),
       },
       {
         accessorKey: "descricao",

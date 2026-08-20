@@ -32,6 +32,7 @@ import {
   GradeKpis,
   KPICard,
   MoneyText,
+  SeloObservacoes,
   StatusBadge,
   type FiltroConfiguravel,
   type OpcaoFiltro,
@@ -591,6 +592,13 @@ export function FilaAprovacao({
                 row.original.totalParcelas,
               )}
             </Link>
+            {/*
+              Selo da observação, junto do número. Quem aprova varre a fila
+              inteira e decide por linha: a observação traz chave PIX, CNPJ e a
+              data combinada de pagamento, e sem o selo ela só existe para quem
+              abre o detalhe.
+            */}
+            <SeloObservacoes observacoes={row.original.observacoes} />
             {row.original.semNota ? (
               <Tooltip>
                 <TooltipTrigger asChild>

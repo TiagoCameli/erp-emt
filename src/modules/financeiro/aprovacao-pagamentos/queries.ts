@@ -33,6 +33,13 @@ export interface ParcelaPendente {
   lancamentoId: string;
   lancamentoNumero: string | null;
   lancamentoDescricao: string;
+  /**
+   * Observação do lançamento — no lançamento nascido de OC é a observação que
+   * Compras escreveu na ordem, copiada na aprovação. Traz chave PIX, CNPJ, data
+   * combinada de pagamento e avisos endereçados a quem aprova e a quem paga,
+   * então vem para a fila e não só para o detalhe.
+   */
+  observacoes: string | null;
   fornecedorNome: string;
   /** 'oc' | 'cotacao' | 'manual': define se existe documento para linkar. */
   origem: string;
@@ -120,7 +127,7 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
        lancamento_formas(formas_pagamento(nome)),
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
-         mes_competencia, data_compra,
+         mes_competencia, data_compra, observacoes,
          categorias_financeiras(nome),
          formas_pagamento(nome),
          fornecedores(razao_social, nome_fantasia),
@@ -172,6 +179,7 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
       lancamentoId: parcela.lancamento_id,
       lancamentoNumero: lancamento?.numero ?? null,
       lancamentoDescricao: lancamento?.descricao ?? "-",
+      observacoes: lancamento?.observacoes ?? null,
       fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
       origem: lancamento?.origem ?? "manual",
       origemId,
@@ -488,6 +496,13 @@ export interface PagamentoDireto {
   lancamentoId: string;
   lancamentoNumero: string | null;
   lancamentoDescricao: string;
+  /**
+   * Observação do lançamento — no lançamento nascido de OC é a observação que
+   * Compras escreveu na ordem, copiada na aprovação. Traz chave PIX, CNPJ, data
+   * combinada de pagamento e avisos endereçados a quem aprova e a quem paga,
+   * então vem para a fila e não só para o detalhe.
+   */
+  observacoes: string | null;
   fornecedorNome: string;
   origem: string;
   origemId: string | null;
@@ -555,7 +570,7 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
        lancamento_formas!inner(formas_pagamento!inner(nome, tipo)),
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
-         mes_competencia, data_compra,
+         mes_competencia, data_compra, observacoes,
          categorias_financeiras(nome),
          formas_pagamento(nome, tipo),
          fornecedores(razao_social, nome_fantasia),
@@ -628,6 +643,7 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
       lancamentoId: parcela.lancamento_id,
       lancamentoNumero: lancamento?.numero ?? null,
       lancamentoDescricao: lancamento?.descricao ?? "-",
+      observacoes: lancamento?.observacoes ?? null,
       fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
       origem: lancamento?.origem ?? "manual",
       origemId,

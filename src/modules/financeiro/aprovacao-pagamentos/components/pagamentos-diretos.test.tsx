@@ -94,6 +94,7 @@ function pagamento(
     lancamentoId: "22222222-2222-4222-8222-222222222222",
     lancamentoNumero: "LAN-2026-0031",
     lancamentoDescricao: "Diesel do caminhão pipa",
+    observacoes: null,
     fornecedorNome: "POSTO CENTRAL",
     origem: "manual",
     origemId: null,
