@@ -1,4 +1,8 @@
 import { mesParaCompetencia } from "@/lib/formatadores";
+import {
+  lerCatalogoDaUrl,
+  lerUuidsDaUrl,
+} from "@/modules/financeiro/_shared/listas-na-url";
 import type { ListarLancamentosParams } from "@/modules/financeiro/lancamentos/queries";
 import { lerRecorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
@@ -57,11 +61,23 @@ export interface ValoresFiltrosLancamentos {
   /** Situação de atraso das parcelas (vencido, a_vencer). */
   atraso: string;
   origem: string;
-  fornecedor: string;
-  categoria: string;
-  centro: string;
+  /**
+   * Escolhas de múltipla marcação, na ordem de escolha. Vazio = todos.
+   *
+   * Viraram lista porque o relatório de custo por centro de custo passou a
+   * filtrar vários de cada um, e o clique numa barra dele abre ESTA lista: com um
+   * valor só aqui, o drill de "três fornecedores" abriria uma lista maior que a
+   * célula clicada, sem dizer que abriu.
+   */
+  fornecedores: string[];
+  categorias: string[];
+  centros: string[];
+  formas: string[];
+  /** "1" quando os lançamentos SEM forma de pagamento estão incluídos. */
+  semForma: string;
+  /** Status literais aceitos, quando o recorte vem de um relatório. */
+  statusIn: string[];
   conta: string;
-  forma: string;
   valorDe: string;
   valorAte: string;
   vencDe: string;
@@ -232,11 +248,26 @@ export function lerFiltrosLancamentos(
   const busca = typeof params.busca === "string" ? params.busca : "";
   const mes = typeof params.mes === "string" ? params.mes : "";
   const mesCompetencia = mesParaCompetencia(mes);
-  const fornecedorId = parametroUuid(params.fornecedor);
-  const categoriaId = parametroUuid(params.categoria);
-  const centroCustoId = parametroUuid(params.centro);
+  // Múltipla escolha, no mesmo formato do relatório de custo (`listas-na-url.ts`):
+  // ids por vírgula ou chave repetida, dedup, teto de 50. Um id só continua
+  // valendo, então todo link antigo desta tela continua abrindo o mesmo conjunto.
+  const fornecedorIds = lerUuidsDaUrl(params.fornecedor);
+  const categoriaIds = lerUuidsDaUrl(params.categoria);
+  const centroCustoIds = lerUuidsDaUrl(params.centro);
+  const formaPagamentoIds = lerUuidsDaUrl(params.forma);
+  // "Sem forma informada" é escolha, não resto: são 880 lançamentos a pagar
+  // (R$ 13,4 mi em 20/08/2026), e o relatório de custo sabe marcá-los.
+  const semForma = params.sem_forma === "1" ? true : undefined;
+  /**
+   * Status LITERAIS, e num parâmetro separado do `status` de cima.
+   *
+   * O `status` desta tela significa a situação do dinheiro ("A pagar" inclui
+   * `aprovado` com saldo em aberto), e o relatório de custo filtra pelo status
+   * exato da coluna. Reusar a mesma chave para os dois sentidos faria o clique no
+   * relatório abrir um conjunto diferente do que a célula somou.
+   */
+  const statusIn = lerCatalogoDaUrl(params.status_in, STATUS_VALIDOS);
   const contaBancariaId = parametroUuid(params.conta);
-  const formaPagamentoId = parametroUuid(params.forma);
   const valor = faixaValor(params.valor_de, params.valor_ate);
   const vencimento = periodo(params.venc_de, params.venc_ate);
   const compra = periodo(params.compra_de, params.compra_ate);
@@ -277,11 +308,13 @@ export function lerFiltrosLancamentos(
       status,
       busca,
       mesCompetencia: mesCompetencia === "" ? undefined : mesCompetencia,
-      fornecedorId,
-      categoriaId,
-      centroCustoId,
+      fornecedorIds,
+      categoriaIds,
+      centroCustoIds,
       contaBancariaId,
-      formaPagamentoId,
+      formaPagamentoIds,
+      semForma,
+      statusIn,
       origem,
       valorDe: valor.de,
       valorAte: valor.ate,
@@ -311,11 +344,13 @@ export function lerFiltrosLancamentos(
       revisao: revisao ?? "",
       atraso: atraso ?? "",
       origem: origem ?? "",
-      fornecedor: fornecedorId ?? "",
-      categoria: categoriaId ?? "",
-      centro: centroCustoId ?? "",
+      fornecedores: fornecedorIds,
+      categorias: categoriaIds,
+      centros: centroCustoIds,
+      formas: formaPagamentoIds,
+      semForma: semForma ? "1" : "",
+      statusIn,
       conta: contaBancariaId ?? "",
-      forma: formaPagamentoId ?? "",
       valorDe: texto(valor.de),
       valorAte: texto(valor.ate),
       vencDe: texto(vencimento.de),

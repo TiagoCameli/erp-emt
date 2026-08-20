@@ -38,6 +38,7 @@ const { listarLancamentos } =
   await import("@/modules/financeiro/lancamentos/queries");
 
 const RAIZ = "fbd2556a-3e96-474b-818f-ff536a288dff";
+const OUTRA_RAIZ = "0a327d7e-6e2d-40d9-a87b-cf9b4a76be2e";
 
 /** Um uuid sintético estável, para o fixture não depender de sorteio. */
 function uuid(prefixo: string, i: number): string {
@@ -135,7 +136,7 @@ describe("filtro de centro de custo na listagem", () => {
   it("filtra pelo embed do rateio, não por lista de ids de lançamento", async () => {
     const filtros = bancoCom({ centros: 61, lancamentos: 1871 });
 
-    await listarLancamentos({ pagina: 0, tamanho: 25, centroCustoId: RAIZ });
+    await listarLancamentos({ pagina: 0, tamanho: 25, centroCustoIds: [RAIZ] });
 
     const noEmbed = filtros.find(
       (f) => f.coluna === "lancamento_rateios.centro_custo_id",
@@ -161,18 +162,42 @@ describe("filtro de centro de custo na listagem", () => {
     // A linha de controle desta prova. Antes, este número era 1.871 num caso e
     // 45 no outro — era exatamente isso que estourava a URL.
     const grande = bancoCom({ centros: 61, lancamentos: 1871 });
-    await listarLancamentos({ pagina: 0, tamanho: 25, centroCustoId: RAIZ });
+    await listarLancamentos({ pagina: 0, tamanho: 25, centroCustoIds: [RAIZ] });
     const maiorNoGrande = maiorLista(grande);
 
     from.mockReset();
     rpc.mockReset();
 
     const pequeno = bancoCom({ centros: 61, lancamentos: 45 });
-    await listarLancamentos({ pagina: 0, tamanho: 25, centroCustoId: RAIZ });
+    await listarLancamentos({ pagina: 0, tamanho: 25, centroCustoIds: [RAIZ] });
 
     expect(maiorNoGrande).toBe(maiorLista(pequeno));
     // 61 ids = ~2,3 KB de URL, dentro da faixa medida como segura.
     expect(maiorNoGrande).toBe(61);
+  });
+
+  it("vários centros: a união das subárvores viaja uma vez, sem repetição", async () => {
+    // O filtro agora aceita vários centros, e a mesma regra de tamanho continua
+    // valendo: o que viaja é a união das SUBÁRVORES (subconjunto dos 74 centros
+    // do cadastro), nunca os lançamentos deles. O fixture devolve a mesma árvore
+    // para os dois centros, que é o caso ruim de propósito: escolher a obra e uma
+    // etapa dela não pode mandar o mesmo id duas vezes.
+    const filtros = bancoCom({ centros: 61, lancamentos: 1871 });
+
+    await listarLancamentos({
+      pagina: 0,
+      tamanho: 25,
+      centroCustoIds: [RAIZ, OUTRA_RAIZ],
+    });
+
+    expect(rpc).toHaveBeenCalledTimes(2);
+    const noEmbed = filtros.find(
+      (f) => f.coluna === "lancamento_rateios.centro_custo_id",
+    );
+    expect(noEmbed?.valor).toHaveLength(61);
+    expect(filtros.some((f) => f.metodo === "in" && f.coluna === "id")).toBe(
+      false,
+    );
   });
 
   it("centro sem nenhum id devolve lista vazia, não a lista inteira", async () => {
@@ -184,7 +209,7 @@ describe("filtro de centro de custo na listagem", () => {
     const pagina = await listarLancamentos({
       pagina: 0,
       tamanho: 25,
-      centroCustoId: RAIZ,
+      centroCustoIds: [RAIZ],
     });
 
     expect(pagina).toEqual({ itens: [], total: 0 });
@@ -200,7 +225,7 @@ describe("filtro de centro de custo na listagem", () => {
     );
 
     await expect(
-      listarLancamentos({ pagina: 0, tamanho: 25, centroCustoId: RAIZ }),
+      listarLancamentos({ pagina: 0, tamanho: 25, centroCustoIds: [RAIZ] }),
     ).rejects.toThrow("Não foi possível aplicar o filtro");
   });
 

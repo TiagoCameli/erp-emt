@@ -73,20 +73,38 @@ export interface ListarLancamentosParams {
   busca?: string;
   /** Mês de referência exato (yyyy-MM-01). */
   mesCompetencia?: string;
-  fornecedorId?: string;
-  /** Categoria do custo (categorias_financeiras). */
-  categoriaId?: string;
   /**
-   * Centro de custo do rateio. Mora em lancamento_rateios (um lançamento pode
-   * ser rateado entre vários centros), então vira consulta de ids + `in`.
+   * Filtros de MÚLTIPLA escolha. Vazio (ou ausente) = todos.
+   *
+   * São listas porque o relatório de custo por centro de custo filtra vários de
+   * cada um, e o clique numa barra dele abre esta lista: com um valor só, o drill
+   * de "três fornecedores" abriria um conjunto maior que a célula clicada.
    */
-  centroCustoId?: string;
+  fornecedorIds?: string[];
+  /** Categorias do custo (categorias_financeiras). */
+  categoriaIds?: string[];
+  /**
+   * Centros de custo do rateio. Cada um vale pela SUBÁRVORE dele. Mora em
+   * lancamento_rateios (um lançamento pode ser rateado entre vários centros),
+   * então o filtro cai no embed da consulta.
+   */
+  centroCustoIds?: string[];
   /**
    * Conta bancária de alguma parcela do lançamento (paga ou a pagar). Mora em
    * lancamento_parcelas, então também vira consulta de ids + `in`.
    */
   contaBancariaId?: string;
-  formaPagamentoId?: string;
+  formaPagamentoIds?: string[];
+  /** Inclui também os lançamentos SEM forma de pagamento informada. */
+  semForma?: boolean;
+  /**
+   * Status LITERAIS aceitos, para o drill dos relatórios.
+   *
+   * Separado do `status` acima porque os dois querem coisas diferentes: `status`
+   * é a situação do dinheiro (o "A pagar" da tela inclui `aprovado` com saldo em
+   * aberto) e este é a coluna crua, que é o que o relatório de custo soma.
+   */
+  statusIn?: string[];
   origem?: OrigemLancamento;
   /** Faixa de valor do lançamento, em reais (comparação gte/lte no banco). */
   valorDe?: number;
@@ -538,17 +556,29 @@ async function idsPorContaBancaria(
  * de valor precisam do mesmo conjunto, e duas leituras poderiam ler conjuntos
  * diferentes no dia em que alguém mexesse num dos dois lugares.
  */
-async function subarvoreDoCentro(
+async function subarvoreDosCentros(
   supabase: ClienteSupabase,
-  centroCustoId: string,
+  centroCustoIds: string[],
 ): Promise<string[]> {
-  const { data, error } = await supabase.rpc("fn_centro_custo_subarvore", {
-    p_centro: centroCustoId,
-  });
-  // Erro não pode virar lista vazia, pelo mesmo motivo do `lerEmPaginas`: a tela
-  // mostraria "nenhum lançamento" para um filtro que não chegou a ser aplicado.
-  if (error) throw new Error("Não foi possível aplicar o filtro");
-  return (data ?? []).map((linha) => linha.id);
+  // A união das subárvores é um SUBCONJUNTO da tabela de centros de custo (74
+  // linhas em 20/08/2026), então ela não estoura a URL do `in` por mais centros
+  // que a pessoa marque — diferente da lista de LANÇAMENTOS do centro, que chega
+  // a 1.871 no Escritório Central e mata a requisição.
+  const arvores = await Promise.all(
+    centroCustoIds.map(async (centroCustoId) => {
+      const { data, error } = await supabase.rpc("fn_centro_custo_subarvore", {
+        p_centro: centroCustoId,
+      });
+      // Erro não pode virar lista vazia, pelo mesmo motivo do `lerEmPaginas`: a
+      // tela mostraria "nenhum lançamento" para um filtro que não chegou a ser
+      // aplicado.
+      if (error) throw new Error("Não foi possível aplicar o filtro");
+      return (data ?? []).map((linha) => linha.id);
+    }),
+  );
+  // Dedup porque duas escolhas podem se sobrepor (a obra e uma etapa dela): id
+  // repetido no `in` não muda o resultado, mas engorda a URL de graça.
+  return [...new Set(arvores.flat())];
 }
 
 /**
@@ -857,8 +887,8 @@ export async function listarLancamentos(
   // na query string, e o Escritório Central tem 1.871 lançamentos — 69 KB de URL,
   // que morre antes de chegar ao servidor (medido: 1.115 ids dão HTTP 400, 1.753
   // dão 520 e 1.871 não completam a requisição).
-  const subarvoreCentro = params.centroCustoId
-    ? await subarvoreDoCentro(supabase, params.centroCustoId)
+  const subarvoreCentro = params.centroCustoIds?.length
+    ? await subarvoreDosCentros(supabase, params.centroCustoIds)
     : null;
   const valoresCentro = subarvoreCentro?.length
     ? await valoresPorCentroCusto(supabase, subarvoreCentro)
@@ -937,14 +967,29 @@ export async function listarLancamentos(
   if (params.mesCompetencia) {
     consulta = consulta.eq("mes_competencia", params.mesCompetencia);
   }
-  if (params.fornecedorId) {
-    consulta = consulta.eq("fornecedor_id", params.fornecedorId);
+  // `in` e não `eq` porque estes filtros são de múltipla escolha. Um id só cai no
+  // mesmo resultado do `eq` de antes, e a lista viaja na URL do PostgREST: por
+  // isso o teto de 50 do contrato (uuid ocupa 37 caracteres ali).
+  if (params.fornecedorIds?.length) {
+    consulta = consulta.in("fornecedor_id", params.fornecedorIds);
   }
-  if (params.categoriaId) {
-    consulta = consulta.eq("categoria_id", params.categoriaId);
+  if (params.categoriaIds?.length) {
+    consulta = consulta.in("categoria_id", params.categoriaIds);
   }
-  if (params.formaPagamentoId) {
-    consulta = consulta.eq("forma_pagamento_id", params.formaPagamentoId);
+  // Forma é a única com duas pernas, e `in` não casa nulo: "sem forma informada"
+  // (880 lançamentos, R$ 13,4 mi) só entra por `is.null`, então as duas viram um
+  // `or` só. Dois `or` na mesma consulta (este e o da busca) o PostgREST aceita:
+  // conferido contra a API do projeto, cada um vira uma condição AND-ada.
+  if (params.formaPagamentoIds?.length || params.semForma) {
+    const pernas: string[] = [];
+    if (params.formaPagamentoIds?.length) {
+      pernas.push(`forma_pagamento_id.in.(${params.formaPagamentoIds.join(",")})`);
+    }
+    if (params.semForma) pernas.push("forma_pagamento_id.is.null");
+    consulta = consulta.or(pernas.join(","));
+  }
+  if (params.statusIn?.length) {
+    consulta = consulta.in("status", params.statusIn);
   }
   if (params.origem) consulta = consulta.eq("origem", params.origem);
   if (params.valorDe !== undefined) {

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
 import { salvarQuerySessao } from "@/components/canonicos/filtros-sessao";
+import { toast } from "@/components/canonicos/toast";
 import {
   escreverPreferenciasTabela,
   lerPreferenciasTabela,
@@ -241,6 +242,86 @@ export function FiltroSelect({
         // `w-full`, não `w-fit`: o trilho manda na largura. Com `w-fit` o gatilho
         // media o texto da opção escolhida, então o MESMO filtro mudava de
         // tamanho ao ser preenchido e empurrava todos os filtros da linha.
+        className={cn("h-8 w-full gap-1.5 text-detalhe", className)}
+      />
+    </CampoFiltro>
+  );
+}
+
+interface FiltroSelectMultiProps {
+  /** Valores escolhidos, na ordem de escolha. Vazio = todos. */
+  valores: string[];
+  onValoresChange: (valores: string[]) => void;
+  opcoes: OpcaoFiltro[];
+  placeholder?: string;
+  todosRotulo?: string;
+  /** Teto de itens. Marcar além dele avisa e ignora, em vez de cortar calado. */
+  maximo?: number;
+  /** Classe extra no gatilho (ex.: limitar largura em lista de nome comprido). */
+  className?: string;
+}
+
+/**
+ * Select de filtro com marcação MÚLTIPLA. Lista vazia representa "todos".
+ *
+ * O gatilho é o do `Combobox`: nada marcado mostra o rótulo de "todos", um
+ * marcado mostra o nome dele (informa mais que "1 selecionado") e daí para cima
+ * mostra a contagem, porque três nomes longos não cabem no botão.
+ *
+ * A ESCOLHA LOCAL À FRENTE DA URL é a parte que não pode faltar. Sem ela não dá
+ * para marcar dois seguidos, e foi o defeito que o Tiago pegou no extrato:
+ * gravar na URL é assíncrono (`router.replace`, ida ao servidor), então o segundo
+ * clique ainda enxergava a lista ANTIGA vinda do servidor e gravava só ele,
+ * apagando o primeiro. Marcar devagar funcionava; marcar rápido, não.
+ *
+ * O estado local responde na hora e a URL vai atrás. Quando a volta do servidor
+ * chega diferente do que temos (link colado, voltar do navegador, outra aba), o
+ * local se rende a ela — comparando pelo CONTEÚDO, porque o array vem novo a cada
+ * render e comparar referência ressincronizaria sempre, matando o efeito.
+ */
+export function FiltroSelectMulti({
+  valores,
+  onValoresChange,
+  opcoes,
+  placeholder,
+  todosRotulo = "Todos",
+  maximo,
+  className,
+}: FiltroSelectMultiProps) {
+  const chaveDoServidor = valores.join(",");
+  const [escolhidos, setEscolhidos] = React.useState(valores);
+  // Guarda o que o servidor mandou por último em ESTADO, não em ref: é o padrão
+  // da doc do React para "ajustar estado quando a prop muda", e o lint do projeto
+  // (com razão) barra tocar em ref durante o render. Efeito também não serve:
+  // renderizaria a lista velha por um quadro.
+  const [chaveAnterior, setChaveAnterior] = React.useState(chaveDoServidor);
+  if (chaveAnterior !== chaveDoServidor) {
+    setChaveAnterior(chaveDoServidor);
+    setEscolhidos(valores);
+  }
+
+  function aoMudar(novos: string[]) {
+    if (maximo !== undefined && novos.length > maximo) {
+      // Avisar é melhor que ignorar o clique em silêncio: o teto é técnico (o
+      // `in` do PostgREST viaja na URL), e sem aviso a pessoa marca e nada muda.
+      toast.error(`Este filtro aceita no máximo ${maximo} itens por vez`);
+      return;
+    }
+    setEscolhidos(novos);
+    onValoresChange(novos);
+  }
+
+  return (
+    <CampoFiltro largura={TRILHO_FILTRO}>
+      <Combobox
+        valor=""
+        onValorChange={() => {}}
+        valores={escolhidos}
+        onValoresChange={aoMudar}
+        opcoes={opcoes}
+        placeholder={placeholder ?? todosRotulo}
+        size="sm"
+        // `w-full` pelo mesmo motivo do FiltroSelect: o trilho manda na largura.
         className={cn("h-8 w-full gap-1.5 text-detalhe", className)}
       />
     </CampoFiltro>

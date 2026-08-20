@@ -3957,13 +3957,16 @@ export type Database = {
       };
       fn_rel_custo_centro_custo: {
         Args: {
-          p_categoria?: string;
-          p_centro_custo?: string;
+          p_categorias?: string[];
+          p_centros?: string[];
           p_excluir_previsto?: boolean;
           p_fim?: string;
-          p_fornecedor?: string;
+          p_formas?: string[];
+          p_fornecedores?: string[];
           p_inicio?: string;
-          p_tipo_centro?: string;
+          p_sem_forma?: boolean;
+          p_status?: string[];
+          p_tipos_centro?: string[];
         };
         Returns: {
           centro_custo_id: string;
@@ -3973,13 +3976,32 @@ export type Database = {
         }[];
       };
       fn_rel_custo_centro_serie: {
-        Args: { p_centro: string; p_fim?: string; p_inicio?: string };
+        Args: {
+          p_categorias?: string[];
+          p_centros: string[];
+          p_excluir_previsto?: boolean;
+          p_fim?: string;
+          p_formas?: string[];
+          p_fornecedores?: string[];
+          p_inicio?: string;
+          p_sem_forma?: boolean;
+          p_status?: string[];
+        };
         Returns: {
+          centro_custo_id: string;
+          codigo: string;
           mes: string;
+          nome: string;
           total: number;
         }[];
       };
-      fn_rel_custo_centro_vida: { Args: { p_centro: string }; Returns: string };
+      fn_rel_custo_centro_vida: {
+        Args: { p_centros: string[] };
+        Returns: {
+          centro_custo_id: string;
+          primeiro_mes: string;
+        }[];
+      };
       fn_rel_custo_por_grupo: {
         Args: {
           p_categoria?: string;

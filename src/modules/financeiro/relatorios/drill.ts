@@ -42,10 +42,29 @@ export interface PeriodoCompetencia {
   ate?: string;
 }
 
-/** Os filtros do relatório de custo que viajam no clique. */
+/**
+ * Os filtros do relatório de custo que viajam no clique.
+ *
+ * Todos os de escolha são LISTAS, como no relatório. A lista de lançamentos lê o
+ * mesmo formato (`listas-na-url.ts`), então o clique com três fornecedores
+ * marcados abre a lista com os três — e não com todos, que é o que aconteceria se
+ * só o primeiro viajasse.
+ */
 export interface FiltrosDoRelatorioDeCusto {
-  categoriaId?: string;
-  fornecedorId?: string;
+  categoriaIds?: string[];
+  fornecedorIds?: string[];
+  formaIds?: string[];
+  /** O relatório está incluindo os lançamentos sem forma informada? */
+  semForma?: boolean;
+  /**
+   * Status LITERAIS que o relatório está somando.
+   *
+   * Viaja em `status_in`, e não no `status` da lista, porque lá "A pagar" quer
+   * dizer a situação do dinheiro (inclui `aprovado` com saldo em aberto) e aqui é
+   * a coluna crua. Mesma chave para dois sentidos abriria um conjunto diferente
+   * do que a célula somou.
+   */
+  status?: string[];
   /**
    * O relatório está somando SEM os previstos? Então a lista também tem que
    * excluí-los, senão ela traz linha que a célula não contou.
@@ -55,6 +74,11 @@ export interface FiltrosDoRelatorioDeCusto {
    * tela — e é por isso que o teste trava o parâmetro em vez de confiar no olho.
    */
   excluirPrevisto?: boolean;
+}
+
+/** Lista de valores no formato da URL, ou `undefined` quando não filtra nada. */
+function lista(valores?: string[]): string | undefined {
+  return valores && valores.length > 0 ? valores.join(",") : undefined;
 }
 
 function montar(params: Record<string, string | undefined>): string {
@@ -95,22 +119,34 @@ function periodoNaUrl(
  */
 const IMPLICITOS_CUSTO = { tipo: "a_pagar", sem_cancelado: "1" } as const;
 
-/** Custo por centro de custo: a linha da tabela e a barra do gráfico. */
+/**
+ * Custo por centro de custo: a linha da tabela, a barra do gráfico e o mês da
+ * série.
+ *
+ * `centroCustoIds` é uma LISTA porque o destino aceita lista e porque os cliques
+ * desta tela não têm todos a mesma cardinalidade: a linha da tabela e a barra são
+ * de um centro só, e o mês do gráfico de vida é dos centros que estão desenhados
+ * ali. Em qualquer um dos casos, o que vai na URL é exatamente o conjunto que a
+ * coisa clicada somou.
+ */
 export function drillCentroCusto({
-  centroCustoId,
+  centroCustoIds,
   periodo,
   filtros,
 }: {
-  centroCustoId: string;
+  centroCustoIds: string[];
   periodo: PeriodoCompetencia;
   filtros: FiltrosDoRelatorioDeCusto;
 }): string {
   return montar({
     ...IMPLICITOS_CUSTO,
-    centro: centroCustoId,
+    centro: lista(centroCustoIds),
     ...periodoNaUrl(periodo),
-    categoria: filtros.categoriaId,
-    fornecedor: filtros.fornecedorId,
+    categoria: lista(filtros.categoriaIds),
+    fornecedor: lista(filtros.fornecedorIds),
+    forma: lista(filtros.formaIds),
+    sem_forma: filtros.semForma ? "1" : undefined,
+    status_in: lista(filtros.status),
     sem_previsto: filtros.excluirPrevisto ? "1" : undefined,
   });
 }
