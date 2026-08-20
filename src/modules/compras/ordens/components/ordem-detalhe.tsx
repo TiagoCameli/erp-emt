@@ -457,9 +457,17 @@ export function OrdemDetalheView({
                 <Dado rotulo="Descrição da compra">{ordem.descricao}</Dado>
               </div>
             ) : null}
+            {/*
+              whitespace-pre-line: o texto foi escrito num textarea e as quebras
+              de linha fazem parte do recado. A observação real da OC traz CNPJ e
+              chave PIX em linhas separadas, e o span do Dado é `flex
+              items-center`, que colapsa tudo numa linha.
+            */}
             {ordem.observacoes ? (
               <div className="mt-4">
-                <Dado rotulo="Observações">{ordem.observacoes}</Dado>
+                <Dado rotulo="Observações">
+                  <p className="whitespace-pre-line">{ordem.observacoes}</p>
+                </Dado>
               </div>
             ) : null}
           </SecaoDetalhe>

@@ -362,10 +362,26 @@ export function PagamentoDetalheView({
                   rotuloOrigemLancamento(lancamento.origem)
                 )}
               </Linha>
-              {lancamento.observacoes ? (
-                <Linha rotulo="Observações">{lancamento.observacoes}</Linha>
-              ) : null}
             </Campos>
+            {/*
+              Fora da grade de Linha, e não dentro dela, porque a observação é um
+              BLOCO de texto: a Linha alinha o valor à direita e num campo de
+              várias linhas isso desalinha cada linha do bloco. Aqui o texto sai
+              alinhado à esquerda, com `whitespace-pre-line` preservando as
+              quebras que a pessoa deu no textarea — a observação da OC traz
+              CNPJ e chave PIX em linhas separadas, e achatar tudo numa linha
+              entrega a informação ilegível justamente para quem vai pagar.
+            */}
+            {lancamento.observacoes ? (
+              <div className="mt-1 flex flex-col gap-0.5">
+                <span className="text-detalhe text-muted-foreground">
+                  Observações
+                </span>
+                <p className="whitespace-pre-line text-detalhe font-medium">
+                  {lancamento.observacoes}
+                </p>
+              </div>
+            ) : null}
           </Secao>
 
           <Secao titulo="Datas">
