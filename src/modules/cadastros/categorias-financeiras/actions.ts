@@ -10,10 +10,10 @@ import { createClient } from "@/lib/supabase/server";
 import {
   categoriaFinanceiraSchema,
   type CategoriaFinanceiraInput,
-} from "@/modules/financeiro/categorias/schemas";
+} from "@/modules/cadastros/categorias-financeiras/schemas";
 
-const RECURSO = "financeiro.categorias" as const;
-const ROTA = "/financeiro/categorias";
+const RECURSO = "cadastros.categorias-financeiras" as const;
+const ROTA = "/cadastros/categorias-financeiras";
 const TABELA = "categorias_financeiras" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
@@ -54,7 +54,7 @@ export async function criarCategoria(
       return { erro: "Já existe uma categoria com este nome e tipo" };
     }
     return erroAcao(
-      "financeiro.categorias.criarCategoria",
+      "cadastros.categorias-financeiras.criarCategoria",
       error,
       "Não foi possível salvar a categoria. Tente novamente",
     );
@@ -102,7 +102,7 @@ export async function editarCategoria(
       return { erro: "Já existe uma categoria com este nome e tipo" };
     }
     return erroAcao(
-      "financeiro.categorias.editarCategoria",
+      "cadastros.categorias-financeiras.editarCategoria",
       error,
       "Não foi possível salvar a categoria. Tente novamente",
     );
@@ -132,7 +132,7 @@ export async function alternarAtivo(
 
   if (error) {
     return erroAcao(
-      "financeiro.categorias.alternarAtivo",
+      "cadastros.categorias-financeiras.alternarAtivo",
       error,
       "Não foi possível alterar o status. Tente novamente",
     );

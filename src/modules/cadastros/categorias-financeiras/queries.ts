@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { TipoCategoriaFinanceira } from "@/modules/financeiro/categorias/schemas";
+import type { TipoCategoriaFinanceira } from "@/modules/cadastros/categorias-financeiras/schemas";
 
 /** Linha da listagem de categorias financeiras. */
 export interface CategoriaFinanceiraLista {

@@ -17,7 +17,7 @@ import {
 import {
   dentroDaFaixaValor,
   usePaginacaoCliente,
-} from "@/modules/financeiro/_shared/filtros-cliente";
+} from "@/modules/_shared/filtros-cliente";
 import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
 import type { ContaLista } from "@/modules/financeiro/contas-bancarias/queries";
 import { ROTULO_TIPO_CONTA } from "@/modules/financeiro/contas-bancarias/schemas";

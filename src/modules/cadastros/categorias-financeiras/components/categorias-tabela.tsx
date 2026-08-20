@@ -14,7 +14,7 @@ import {
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
-import { usePaginacaoCliente } from "@/modules/financeiro/_shared/filtros-cliente";
+import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,16 +22,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { alternarAtivo } from "@/modules/financeiro/categorias/actions";
+import { alternarAtivo } from "@/modules/cadastros/categorias-financeiras/actions";
 import type {
   CategoriaFinanceiraLista,
   CategoriaPaiOpcao,
-} from "@/modules/financeiro/categorias/queries";
+} from "@/modules/cadastros/categorias-financeiras/queries";
 import {
   ROTULO_TIPO_CATEGORIA_FINANCEIRA,
   TIPOS_CATEGORIA_FINANCEIRA,
   type TipoCategoriaFinanceira,
-} from "@/modules/financeiro/categorias/schemas";
+} from "@/modules/cadastros/categorias-financeiras/schemas";
 import { CategoriasFormDrawer } from "./categorias-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -366,7 +366,7 @@ export function CategoriasTabela({
   return (
     <>
       <DataTable
-        idTabela="financeiro.categorias"
+        idTabela="cadastros.categorias-financeiras"
         columns={colunas}
         data={dados}
         filtros={filtros}
