@@ -2919,3 +2919,17 @@ corpo que estou mandando, e reler a definição viva quando não baterem.
 `oc_formas` entram em main aqui, e com timestamps anteriores (`1800xx`, `1900xx`) — o replay do repo do
 zero passa a funcionar na ordem natural.
 
+**Cabeçalho nulo de propósito cria buraco de EXIBIÇÃO em todo lugar que lia o cabeçalho.** A projeção
+resolve o schema e a compatibilidade, mas cada tela que imprimia `formaPagamentoNome` passa a ter uma
+célula vazia — e vazio já significava "sem forma", não "tem duas". Dois lugares consertados aqui: a
+listagem de OCs diz **"2 formas"**, e o espelho do lançamento imprime **"Boleto R$ 800,00 + Dinheiro
+R$ 200,00"** (maior primeiro; acima de três formas vira a contagem, porque o espelho é documento de uma
+folha). O espelho é o caso mais duro: quem lê no papel não tem para onde clicar.
+
+**Conferido e sem defeito, para não ficar como suspeita aberta:** `fn_aprovar_folha`,
+`fn_fechar_diarias` e `fn_registrar_adiantamento` criam parcela SEM bloco de forma, e o filtro de
+"Pagamentos diretos" usa `!inner` no bloco da parcela — o que sumiria com a parcela em silêncio. As
+três nascem com `forma_pagamento_id` NULO no cabeçalho, então nunca estiveram naquela aba (que é por
+definição dinheiro e cartão): a invariante "tem forma no cabeçalho ⟺ tem bloco" vale trivialmente para
+elas. Medido no banco: das 884 parcelas sem bloco, ZERO cairiam em diretos.
+
