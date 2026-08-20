@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { formatarBRL } from "@/lib/formatadores";
+
 import { resumirParcelas } from "@/modules/financeiro/lancamentos/espelho";
 
 import { montarEspelhoLancamento } from "@/modules/financeiro/lancamentos/espelho";
@@ -18,6 +20,8 @@ const LINHA = {
   fornecedores: { razao_social: "AUTO POSTO PROGRESSO" },
   categorias_financeiras: { nome: "Combustível" },
   formas_pagamento: { nome: "PIX" },
+  // Uma forma: o cabeçalho guarda ela e o bloco espelha o total.
+  lancamento_formas: [{ valor: "1000.00", formas_pagamento: { nome: "PIX" } }],
   lancamento_parcelas: [
     {
       id: "9f1b7c2e-6d3a-4f58-9b0e-1c2d3e4f5a6b",
@@ -98,6 +102,44 @@ describe("montarEspelhoLancamento", () => {
     expect(espelho.fornecedorNome).toBeNull();
     expect(espelho.categoriaNome).toBeNull();
     expect(espelho.formaPagamentoNome).toBeNull();
+  });
+
+  it("pago por duas formas, o papel diz a divisão em vez de ficar em branco", () => {
+    // O cabeçalho vai NULO de propósito num lançamento de várias formas. Sem
+    // esta linha o espelho imprimiria "Forma de pagamento: —" num documento que
+    // tem duas, e quem lê no papel não tem para onde clicar.
+    const espelho = montarEspelhoLancamento({
+      ...LINHA,
+      formas_pagamento: null,
+      lancamento_formas: [
+        { valor: "200.00", formas_pagamento: { nome: "Dinheiro" } },
+        { valor: "800.00", formas_pagamento: { nome: "Boleto" } },
+      ],
+    });
+    // Maior primeiro, e com o valor de cada uma.
+    expect(espelho.formaPagamentoNome).toBe(
+      `Boleto ${formatarBRL(800)} + Dinheiro ${formatarBRL(200)}`,
+    );
+  });
+
+  it("acima de três formas vira a contagem: o espelho é de uma folha", () => {
+    const espelho = montarEspelhoLancamento({
+      ...LINHA,
+      formas_pagamento: null,
+      lancamento_formas: [
+        { valor: "250.00", formas_pagamento: { nome: "Dinheiro" } },
+        { valor: "250.00", formas_pagamento: { nome: "Boleto" } },
+        { valor: "250.00", formas_pagamento: { nome: "PIX" } },
+        { valor: "250.00", formas_pagamento: { nome: "TED" } },
+      ],
+    });
+    expect(espelho.formaPagamentoNome).toBe("4 formas de pagamento");
+  });
+
+  it("LINHA DE CONTROLE: com UMA forma, quem manda é o cabeçalho", () => {
+    // Se a divisão vazasse para o caso comum, todo espelho passaria a imprimir
+    // "PIX R$ 1.000,00" onde sempre imprimiu "PIX".
+    expect(montarEspelhoLancamento(LINHA).formaPagamentoNome).toBe("PIX");
   });
 
   it("lançamento sem parcela e sem rateio sai com listas vazias, não com erro", () => {
