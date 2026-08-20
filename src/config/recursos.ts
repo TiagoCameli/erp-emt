@@ -193,6 +193,19 @@ export const RECURSOS = [
     rota: "/financeiro/pagamentos",
     acoes: ["ver", "criar", "excluir"],
   },
+  /**
+   * Recebimentos vem logo depois de Pagamentos porque é o par dele: o dinheiro
+   * que sai e o dinheiro que entra, lidos na mesma sequência. A ordem desta
+   * lista É a ordem do submenu da sidebar (`abasVisiveis` só filtra por
+   * permissão, não reordena), então mover o item aqui é o que move a aba na tela.
+   */
+  {
+    id: "financeiro.recebimentos",
+    nome: "Recebimentos",
+    modulo: "financeiro",
+    rota: "/financeiro/recebimentos",
+    acoes: ["ver", "criar", "editar"],
+  },
   {
     id: "financeiro.competencias",
     nome: "Fechamento de competência",
@@ -208,13 +221,6 @@ export const RECURSOS = [
     modulo: "financeiro",
     rota: "/financeiro/programados",
     acoes: ["ver", "editar"],
-  },
-  {
-    id: "financeiro.recebimentos",
-    nome: "Recebimentos",
-    modulo: "financeiro",
-    rota: "/financeiro/recebimentos",
-    acoes: ["ver", "criar", "editar"],
   },
   {
     id: "financeiro.contas-bancarias",
