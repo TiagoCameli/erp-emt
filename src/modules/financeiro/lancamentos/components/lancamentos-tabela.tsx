@@ -21,6 +21,7 @@ import {
   FiltroMes,
   FiltroPeriodo,
   FiltroSelect,
+  FiltroSelectMulti,
   FiltroValor,
   MoneyText,
   SeloAnexos,
@@ -65,6 +66,10 @@ import {
   ordenacaoParaUrl,
 } from "@/modules/financeiro/lancamentos/ordenacao";
 import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
+import {
+  escreverListaNaUrl,
+  MAX_ITENS_FILTRO,
+} from "@/modules/financeiro/_shared/listas-na-url";
 import type { ValoresFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
@@ -555,6 +560,49 @@ export function LancamentosTabela({
     };
   }
 
+  /**
+   * Seletor de MÚLTIPLA marcação preso a um parâmetro da URL, no formato de
+   * lista de `listas-na-url.ts` (ids por vírgula, teto de 50).
+   *
+   * Existe porque o relatório de custo por centro de custo filtra vários de cada
+   * dimensão, e o clique numa barra dele abre esta lista: se a barra daqui só
+   * soubesse mostrar um valor, um drill de três fornecedores abriria a lista
+   * filtrada pelos três com a barra dizendo "todos os fornecedores".
+   */
+  function selecaoMulti(config: {
+    chave: string;
+    rotulo: string;
+    valores: string[];
+    opcoes: OpcaoFiltro[];
+    todosRotulo: string;
+    oculto?: boolean;
+    largura?: string;
+  }): FiltroConfiguravel {
+    return {
+      id: config.chave,
+      rotulo: config.rotulo,
+      ocultoPorPadrao: config.oculto,
+      temValor: config.valores.length > 0,
+      onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
+      elemento: (
+        <FiltroSelectMulti
+          valores={config.valores}
+          onValoresChange={(valores) =>
+            setMuitos({
+              [config.chave]: escreverListaNaUrl(valores),
+              pagina: "1",
+            })
+          }
+          maximo={MAX_ITENS_FILTRO}
+          opcoes={config.opcoes}
+          placeholder={config.rotulo}
+          todosRotulo={config.todosRotulo}
+          className={config.largura}
+        />
+      ),
+    };
+  }
+
   /** Período (de/até) em duas chaves da URL, gravadas numa navegação só. */
   function periodo(config: {
     id: string;
@@ -660,28 +708,28 @@ export function LancamentosTabela({
       todosRotulo: "Qualquer revisão",
       oculto: true,
     }),
-    selecao({
+    selecaoMulti({
       chave: "fornecedor",
       rotulo: "Fornecedor",
-      valor: valores.fornecedor,
+      valores: valores.fornecedores,
       opcoes: opcoesFornecedor,
       todosRotulo: "Todos os fornecedores",
       oculto: true,
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       chave: "categoria",
       rotulo: "Categoria",
-      valor: valores.categoria,
+      valores: valores.categorias,
       opcoes: opcoesCategoria,
       todosRotulo: "Todas as categorias",
       oculto: true,
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       chave: "centro",
       rotulo: "Centro de custo",
-      valor: valores.centro,
+      valores: valores.centros,
       opcoes: opcoesCentro,
       todosRotulo: "Todos os centros de custo",
       oculto: true,
@@ -696,10 +744,10 @@ export function LancamentosTabela({
       oculto: true,
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       chave: "forma",
       rotulo: "Forma de pagamento",
-      valor: valores.forma,
+      valores: valores.formas,
       opcoes: opcoesForma,
       todosRotulo: "Todas as formas",
       oculto: true,

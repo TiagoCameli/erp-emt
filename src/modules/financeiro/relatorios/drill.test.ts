@@ -11,8 +11,11 @@ import {
 } from "@/modules/financeiro/relatorios/drill";
 
 const CENTRO = "fbfb8cad-6ecb-40f0-984c-f4f0e87dc2c0";
+const OUTRO_CENTRO = "bfbd54dc-f303-4d5b-a505-f441d0f81142";
 const CATEGORIA = "11111111-1111-4111-8111-111111111111";
+const OUTRA_CATEGORIA = "55555555-5555-4555-8555-555555555555";
 const FORNECEDOR = "22222222-2222-4222-8222-222222222222";
+const FORMA = "33333333-3333-4333-8333-333333333333";
 const CONTA = "44444444-4444-4444-4444-444444444444";
 
 /**
@@ -36,7 +39,7 @@ function params(url: string): Record<string, string> {
 describe("drillCentroCusto", () => {
   it("carrega centro, mês, tipo a_pagar e sem_cancelado", () => {
     const url = drillCentroCusto({
-      centroCustoId: CENTRO,
+      centroCustoIds: [CENTRO],
       periodo: { mes: "2026-07" },
       filtros: {},
     });
@@ -51,7 +54,7 @@ describe("drillCentroCusto", () => {
   it("traduz o período de/até em faixa de mês de referência", () => {
     const p = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: { de: "2025-01", ate: "2026-07" },
         filtros: {},
       }),
@@ -67,7 +70,7 @@ describe("drillCentroCusto", () => {
   it("acerta o último dia em fevereiro e em ano bissexto", () => {
     const naoBissexto = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: { de: "2026-02", ate: "2026-02" },
         filtros: {},
       }),
@@ -76,7 +79,7 @@ describe("drillCentroCusto", () => {
 
     const bissexto = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: { de: "2028-02", ate: "2028-02" },
         filtros: {},
       }),
@@ -87,7 +90,7 @@ describe("drillCentroCusto", () => {
   it("período total não manda limite nenhum de data", () => {
     const p = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: {},
         filtros: {},
       }),
@@ -103,7 +106,7 @@ describe("drillCentroCusto", () => {
   it("uma ponta só do período também vale", () => {
     const p = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: { de: "2025-01" },
         filtros: {},
       }),
@@ -115,9 +118,9 @@ describe("drillCentroCusto", () => {
   it("leva os filtros do relatório junto", () => {
     const p = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: { mes: "2026-07" },
-        filtros: { categoriaId: CATEGORIA, fornecedorId: FORNECEDOR },
+        filtros: { categoriaIds: [CATEGORIA], fornecedorIds: [FORNECEDOR] },
       }),
     );
     expect(p.categoria).toBe(CATEGORIA);
@@ -130,7 +133,7 @@ describe("drillCentroCusto", () => {
     // previsto na base a mudança não apareceria na tela hoje.
     const p = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: { mes: "2026-07" },
         filtros: {},
       }),
@@ -143,13 +146,86 @@ describe("drillCentroCusto", () => {
   it("com excluirPrevisto, a lista também exclui previsto", () => {
     const p = params(
       drillCentroCusto({
-        centroCustoId: CENTRO,
+        centroCustoIds: [CENTRO],
         periodo: { mes: "2026-07" },
         filtros: { excluirPrevisto: true },
       }),
     );
     expect(p.sem_previsto).toBe("1");
     expect(p.sem_cancelado).toBe("1");
+  });
+
+  it("vários centros viajam na mesma chave, separados por vírgula", () => {
+    // É o clique num mês do gráfico de vida, que tem várias obras desenhadas: a
+    // lista tem que abrir as mesmas obras que estavam no ponto.
+    const p = params(
+      drillCentroCusto({
+        centroCustoIds: [CENTRO, OUTRO_CENTRO],
+        periodo: { mes: "2026-07" },
+        filtros: {},
+      }),
+    );
+    expect(p.centro).toBe(`${CENTRO},${OUTRO_CENTRO}`);
+  });
+
+  it("leva os filtros de lista inteiros, e não só o primeiro", () => {
+    // Este é o defeito que o drill existe para não ter: com só o primeiro
+    // fornecedor na URL, a lista abriria um conjunto MAIOR que a célula clicada,
+    // sem nada na tela dizendo isso.
+    const p = params(
+      drillCentroCusto({
+        centroCustoIds: [CENTRO],
+        periodo: { mes: "2026-07" },
+        filtros: {
+          categoriaIds: [CATEGORIA, OUTRA_CATEGORIA],
+          fornecedorIds: [FORNECEDOR],
+          formaIds: [FORMA],
+          status: ["aprovado", "pago"],
+        },
+      }),
+    );
+    expect(p.categoria).toBe(`${CATEGORIA},${OUTRA_CATEGORIA}`);
+    expect(p.fornecedor).toBe(FORNECEDOR);
+    expect(p.forma).toBe(FORMA);
+    // `status_in`, e não `status`: na lista de lançamentos o `status` significa a
+    // situação do dinheiro ("A pagar" inclui aprovado com saldo em aberto), e o
+    // relatório soma pelo status literal da coluna.
+    expect(p.status_in).toBe("aprovado,pago");
+    expect(p.status).toBeUndefined();
+  });
+
+  it("sem forma informada viaja como parâmetro próprio", () => {
+    // São 880 lançamentos a pagar sem forma (R$ 13,4 mi): se a marcação não
+    // viajasse, a lista traria linha que a célula não contou.
+    const p = params(
+      drillCentroCusto({
+        centroCustoIds: [CENTRO],
+        periodo: { mes: "2026-07" },
+        filtros: { formaIds: [FORMA], semForma: true },
+      }),
+    );
+    expect(p.forma).toBe(FORMA);
+    expect(p.sem_forma).toBe("1");
+  });
+
+  it("lista vazia não vira parâmetro nenhum", () => {
+    const p = params(
+      drillCentroCusto({
+        centroCustoIds: [CENTRO],
+        periodo: { mes: "2026-07" },
+        filtros: {
+          categoriaIds: [],
+          fornecedorIds: [],
+          formaIds: [],
+          status: [],
+        },
+      }),
+    );
+    expect(p.categoria).toBeUndefined();
+    expect(p.fornecedor).toBeUndefined();
+    expect(p.forma).toBeUndefined();
+    expect(p.status_in).toBeUndefined();
+    expect(p.sem_forma).toBeUndefined();
   });
 });
 

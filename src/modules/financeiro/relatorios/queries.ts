@@ -434,10 +434,25 @@ export interface CustoPorCentroCusto {
 export interface FiltrosCustoCentroCusto {
   inicio?: string;
   fim?: string;
-  categoriaId?: string;
-  fornecedorId?: string;
+  /**
+   * Centros escolhidos. Cada um vale pela SUBÁRVORE dele. Vazio = todos.
+   *
+   * Este campo já existiu como `centroCustoId` e era MONTADO por quem chamava e
+   * jogado fora aqui: a RPC tinha `p_centro_custo` e nunca recebia. Escolher um
+   * centro na tela mudava a URL, mudava o link do drill e não mudava número
+   * nenhum. Medido em 07/2026: 9 linhas e R$ 6.918.483,54 com filtro e sem
+   * filtro, quando o certo era 1 linha e R$ 3.372.968,17.
+   */
+  centroIds?: string[];
+  categoriaIds?: string[];
+  fornecedorIds?: string[];
+  formaIds?: string[];
+  /** Incluir os lançamentos SEM forma de pagamento (880 deles, R$ 13,4 mi). */
+  semForma?: boolean;
+  /** Status literais aceitos. Vazio = todos, menos cancelado (que é sempre fora). */
+  status?: string[];
   excluirPrevisto?: boolean;
-  tipoCentro?: "obra" | "escritorio" | "manutencao";
+  tiposCentro?: string[];
 }
 
 export async function custoPorCentroCusto(
@@ -449,10 +464,14 @@ export async function custoPorCentroCusto(
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo", {
     p_inicio: periodo?.inicio,
     p_fim: periodo?.fim,
-    p_categoria: periodo?.categoriaId,
-    p_fornecedor: periodo?.fornecedorId,
+    p_centros: periodo?.centroIds,
+    p_categorias: periodo?.categoriaIds,
+    p_fornecedores: periodo?.fornecedorIds,
+    p_formas: periodo?.formaIds,
+    p_sem_forma: periodo?.semForma,
+    p_status: periodo?.status,
     p_excluir_previsto: periodo?.excluirPrevisto,
-    p_tipo_centro: periodo?.tipoCentro,
+    p_tipos_centro: periodo?.tiposCentro,
   });
 
   if (error) {
@@ -475,25 +494,31 @@ export async function custoPorCentroCusto(
 }
 
 /**
- * Primeiro mês (yyyy-MM) com custo naquele centro: o início da vida dele.
+ * Primeiro mês (yyyy-MM) com custo em cada centro pedido: o início da vida dele.
  *
- * `null` quando o centro nunca teve lançamento. Quem chama trata isso como "sem
- * período", e NÃO como "tudo": um centro sem lançamento não tem vida, e mostrar o
- * total geral no lugar trocaria a pergunta do usuário por outra.
+ * Centro que nunca teve lançamento NÃO volta no mapa. Quem chama trata a ausência
+ * como "sem período", e não como "tudo": um centro sem lançamento não tem vida, e
+ * mostrar o total geral no lugar trocaria a pergunta do usuário por outra.
  */
-export async function primeiroMesDoCentro(
-  centroId: string,
-): Promise<string | null> {
+export async function primeirosMesesDosCentros(
+  centroIds: string[],
+): Promise<Map<string, string>> {
+  if (centroIds.length === 0) return new Map();
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_vida", {
-    p_centro: centroId,
+    p_centros: centroIds,
   });
   if (error) {
     throw new Error(
-      `Não foi possível ler o início do centro de custo: ${error.message}`,
+      `Não foi possível ler o início dos centros de custo: ${error.message}`,
     );
   }
-  return typeof data === "string" ? data.slice(0, 7) : null;
+  return new Map(
+    (data ?? []).map((linha) => [
+      linha.centro_custo_id,
+      linha.primeiro_mes.slice(0, 7),
+    ]),
+  );
 }
 
 /** Um mês da série do centro. Mês sem custo vem com valor zero, não omitido. */
@@ -503,32 +528,75 @@ export interface PontoSerieCentro {
   valor: number;
 }
 
+/** A série de um centro escolhido, para uma linha do gráfico. */
+export interface SerieDeCentro {
+  centroCustoId: string;
+  nome: string;
+  codigo: string | null;
+  pontos: PontoSerieCentro[];
+}
+
 /**
- * Série mensal de UM centro de custo, para o gráfico do modo "vida do centro".
+ * Série mensal de cada centro escolhido, para o gráfico do modo "vida do centro".
  *
- * Mês sem custo vem como zero (a RPC preenche): série com buraco faz o gráfico
- * ligar dois meses distantes por uma reta e some com a informação de que a obra
- * parou naquele intervalo — que numa obra rodoviária é o que se quer ver.
+ * Uma linha por centro, e cada uma começa na vida DELA: a RPC não devolve ponto
+ * antes do primeiro lançamento daquele centro. Zero antes de existir desenharia
+ * uma reta rasteira desde o começo da janela, que se lê como obra que já existia
+ * e não gastava.
+ *
+ * Depois que a linha nasce, mês sem custo vem como zero (a RPC preenche): série
+ * com buraco faz o gráfico ligar dois meses distantes por uma reta e some com a
+ * informação de que a obra parou naquele intervalo — que numa obra rodoviária é
+ * justamente o que se quer ver.
+ *
+ * Os filtros vêm junto de propósito. Sem eles, o gráfico somava categoria e
+ * fornecedor que os cartões ao lado tinham excluído, e as duas metades da mesma
+ * tela discordavam.
  */
-export async function serieDoCentro(
-  centroId: string,
-  periodo?: { inicio?: string; fim?: string },
-): Promise<PontoSerieCentro[]> {
+export async function serieDosCentros(
+  centroIds: string[],
+  filtros?: FiltrosCustoCentroCusto,
+): Promise<SerieDeCentro[]> {
+  if (centroIds.length === 0) return [];
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_serie", {
-    p_centro: centroId,
-    p_inicio: periodo?.inicio,
-    p_fim: periodo?.fim,
+    p_centros: centroIds,
+    p_inicio: filtros?.inicio,
+    p_fim: filtros?.fim,
+    p_categorias: filtros?.categoriaIds,
+    p_fornecedores: filtros?.fornecedorIds,
+    p_formas: filtros?.formaIds,
+    p_sem_forma: filtros?.semForma,
+    p_status: filtros?.status,
+    p_excluir_previsto: filtros?.excluirPrevisto,
   });
   if (error) {
     throw new Error(
-      `Não foi possível ler a série do centro de custo: ${error.message}`,
+      `Não foi possível ler a série dos centros de custo: ${error.message}`,
     );
   }
-  return (data ?? []).map((linha) => ({
-    mes: linha.mes,
-    valor: paraReais(paraCentavos(linha.total)),
-  }));
+
+  // Agrupa preservando a ordem em que os centros aparecem, que é a ordem da RPC
+  // (por nome). Cor de linha por posição estável é o que faz o mesmo centro
+  // manter a cor entre um filtro e outro.
+  const series = new Map<string, SerieDeCentro>();
+  for (const linha of data ?? []) {
+    let serie = series.get(linha.centro_custo_id);
+    if (!serie) {
+      serie = {
+        centroCustoId: linha.centro_custo_id,
+        nome: linha.nome,
+        codigo: linha.codigo,
+        pontos: [],
+      };
+      series.set(linha.centro_custo_id, serie);
+    }
+    serie.pontos.push({
+      mes: linha.mes,
+      valor: paraReais(paraCentavos(linha.total)),
+    });
+  }
+  return [...series.values()];
 }
 
 // =====================================================================

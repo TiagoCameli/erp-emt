@@ -13,6 +13,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
   listarCentrosCusto,
+  listarFormasPagamento,
   listarFornecedores,
 } from "@/modules/financeiro/lancamentos/queries";
 import { rotuloMes } from "@/modules/financeiro/relatorios/calculo";
@@ -58,8 +59,8 @@ import {
   listarFornecedoresComLancamentos,
   mesCorrente,
   posicaoBancaria,
-  primeiroMesDoCentro,
-  serieDoCentro,
+  primeirosMesesDosCentros,
+  serieDosCentros,
 } from "@/modules/financeiro/relatorios/queries";
 
 interface RelatoriosPageProps {
@@ -364,52 +365,69 @@ async function ConteudoCustoCc({
     );
   }
 
-  // No modo vida o período NASCE do centro: primeiro descobre quando ele começou.
+  // No modo vida o período NASCE dos centros: primeiro descobre quando cada um
+  // começou. A janela cabe a vida mais antiga, e cada linha do gráfico começa na
+  // dela (o recorte por centro é feito na RPC da série).
+  const primeirosMeses =
+    filtros.modo === "vida" && filtros.centroIds.length > 0
+      ? await primeirosMesesDosCentros(filtros.centroIds)
+      : undefined;
   const primeiroMes =
-    filtros.modo === "vida" && filtros.centroId
-      ? await primeiroMesDoCentro(filtros.centroId)
+    primeirosMeses && primeirosMeses.size > 0
+      ? [...primeirosMeses.values()].sort()[0]
       : undefined;
 
-  if (filtros.modo === "vida" && primeiroMes === null) {
+  if (filtros.modo === "vida" && primeiroMes === undefined) {
     return (
       <EmptyState
         icone={BarChart3}
-        titulo="Este centro de custo ainda não tem custo"
-        descricao="Nenhum lançamento a pagar foi rateado neste centro, então ele ainda não tem uma vida para mostrar."
+        titulo={
+          filtros.centroIds.length > 1
+            ? "Estes centros de custo ainda não têm custo"
+            : "Este centro de custo ainda não tem custo"
+        }
+        descricao="Nenhum lançamento a pagar foi rateado neles, então ainda não existe uma vida para mostrar."
       />
     );
   }
 
-  const periodo = periodoDoModo(filtros, primeiroMes ?? undefined);
+  const periodo = periodoDoModo(filtros, primeiroMes);
   const pontas = pontasDaRpc(periodo);
 
   const filtrosDoDrill: FiltrosDoRelatorioDeCusto = {
-    categoriaId: filtros.categoriaId,
-    fornecedorId: filtros.fornecedorId,
+    categoriaIds: filtros.categoriaIds,
+    fornecedorIds: filtros.fornecedorIds,
+    formaIds: filtros.formaIds,
+    semForma: filtros.semForma,
+    status: filtros.status,
     excluirPrevisto: filtros.excluirPrevisto,
   };
 
   const filtrosDaRpc = {
     ...pontas,
-    // No modo vida o relatório é de UM centro: filtrar aqui é o que faz a tabela
-    // e os cartões falarem só dele, e não de todos no período dele.
-    centroCustoId: filtros.modo === "vida" ? filtros.centroId : filtros.centroId,
-    categoriaId: filtros.categoriaId,
-    fornecedorId: filtros.fornecedorId,
+    // Os centros escolhidos são o que faz a tabela e os cartões falarem só deles.
+    // Este parâmetro já existiu e era jogado fora antes de chegar ao banco: a
+    // escolha mudava a URL e não mudava número nenhum.
+    centroIds: filtros.centroIds,
+    categoriaIds: filtros.categoriaIds,
+    fornecedorIds: filtros.fornecedorIds,
+    formaIds: filtros.formaIds,
+    semForma: filtros.semForma,
+    status: filtros.status,
     excluirPrevisto: filtros.excluirPrevisto,
-    tipoCentro: filtros.tipoCentro,
+    tiposCentro: filtros.tiposCentro,
   };
 
   const comparar = filtros.comparar && comparacaoPermitida(filtros.modo);
   const anterior = comparar ? periodoAnterior(periodo) : null;
 
-  const [custo, custoAnterior, serie] = await Promise.all([
+  const [custo, custoAnterior, series] = await Promise.all([
     custoPorCentroCusto(filtrosDaRpc),
     anterior
       ? custoPorCentroCusto({ ...filtrosDaRpc, ...pontasDaRpc(anterior) })
       : Promise.resolve(null),
-    filtros.modo === "vida" && filtros.centroId
-      ? serieDoCentro(filtros.centroId, pontas)
+    filtros.modo === "vida" && filtros.centroIds.length > 0
+      ? serieDosCentros(filtros.centroIds, filtrosDaRpc)
       : Promise.resolve(null),
   ]);
 
@@ -457,7 +475,7 @@ async function ConteudoCustoCc({
           .map((centro) => [
             centro.centroCustoId,
             drillCentroCusto({
-              centroCustoId: centro.centroCustoId,
+              centroCustoIds: [centro.centroCustoId],
               periodo,
               filtros: filtrosDoDrill,
             }),
@@ -475,7 +493,11 @@ async function ConteudoCustoCc({
           valor={<MoneyText valor={custo.total} />}
           detalhe={
             filtros.modo === "vida" && primeiroMes
-              ? `Desde ${rotuloMes(primeiroMes)}, o primeiro lançamento deste centro`
+              ? `Desde ${rotuloMes(primeiroMes)}, o primeiro lançamento ${
+                  filtros.centroIds.length > 1
+                    ? "do mais antigo destes centros"
+                    : "deste centro"
+                }`
               : descricaoPeriodo
           }
         />
@@ -500,11 +522,11 @@ async function ConteudoCustoCc({
         ) : null}
       </GradeKpis>
 
-      {serie && filtros.centroId ? (
+      {series && series.length > 0 ? (
         <Painel>
           <CustoCcSerie
-            serie={serie}
-            centroCustoId={filtros.centroId}
+            series={series}
+            filtros={filtrosDoDrill}
             podeVerLancamentos={podeVerLancamentos}
           />
         </Painel>
@@ -663,14 +685,15 @@ export default async function RelatoriosPage({
   );
 
   // As opções dos seletores só são lidas na aba que as usa: as outras cinco não
-  // precisam de centro, categoria nem fornecedor, e três consultas em toda
-  // navegação de relatório seriam trabalho jogado fora.
+  // precisam de centro, categoria, fornecedor nem forma de pagamento, e quatro
+  // consultas em toda navegação de relatório seriam trabalho jogado fora.
   const opcoesCustoCc =
     relatorio === "custo-cc"
       ? await Promise.all([
           listarCentrosCusto(),
           listarCategorias(),
           listarFornecedores(),
+          listarFormasPagamento(),
         ])
       : null;
 
@@ -744,6 +767,7 @@ export default async function RelatoriosPage({
             centrosCusto={opcoesCustoCc[0]}
             categorias={opcoesCustoCc[1]}
             fornecedores={opcoesCustoCc[2]}
+            formasPagamento={opcoesCustoCc[3]}
           />
           <ConteudoCustoCc
             filtros={filtrosCustoCc}

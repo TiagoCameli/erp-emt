@@ -79,14 +79,21 @@ export default async function PaginaLancamentos({
    * leitura do banco no navegador. Precedência igual à de `escolherValorRecorte`:
    * o centro ganha do recorte de parcela.
    */
-  const rotuloRecorte = filtros.centroCustoId
-    ? `No centro ${
-        centrosCusto.find((centro) => centro.id === filtros.centroCustoId)
-          ?.nome ?? "de custo"
-      }`
-    : filtros.recorte
-      ? rotuloRecorte_(filtros.recorte)
-      : null;
+  // Com vários centros escolhidos a coluna soma o rateio de TODOS eles, então o
+  // rótulo conta quantos em vez de nomear um: nomear o primeiro faria a coluna
+  // parecer ser só dele, e o número embaixo é dinheiro.
+  const centrosEscolhidos = filtros.centroCustoIds ?? [];
+  const rotuloRecorte =
+    centrosEscolhidos.length === 1
+      ? `No centro ${
+          centrosCusto.find((centro) => centro.id === centrosEscolhidos[0])
+            ?.nome ?? "de custo"
+        }`
+      : centrosEscolhidos.length > 1
+        ? `Nos ${centrosEscolhidos.length} centros escolhidos`
+        : filtros.recorte
+          ? rotuloRecorte_(filtros.recorte)
+          : null;
 
   return (
     <>

@@ -174,7 +174,7 @@ export function CustoCcTabela({
                 {centro.centroCustoId && podeVerLancamentos ? (
                   <LinkDrill
                     href={drillCentroCusto({
-                      centroCustoId: centro.centroCustoId,
+                      centroCustoIds: [centro.centroCustoId],
                       periodo,
                       filtros,
                     })}

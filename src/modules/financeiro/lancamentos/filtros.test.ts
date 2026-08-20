@@ -42,12 +42,12 @@ describe("lerFiltrosLancamentos", () => {
     expect(filtros.status).toBe("pago");
     expect(filtros.revisao).toBe("nao_revisado");
     expect(filtros.origem).toBe("oc");
-    expect(filtros.fornecedorId).toBe(FORNECEDOR);
+    expect(filtros.fornecedorIds).toEqual([FORNECEDOR]);
     // O banco guarda a competência normalizada no dia 1; a tela mostra yyyy-MM.
     expect(filtros.mesCompetencia).toBe("2026-07-01");
     expect(valores.mes).toBe("2026-07");
     expect(valores.status).toBe("pago");
-    expect(valores.fornecedor).toBe(FORNECEDOR);
+    expect(valores.fornecedores).toEqual([FORNECEDOR]);
   });
 
   it("aceita o filtro de atraso e devolve para a barra", () => {
@@ -93,9 +93,9 @@ describe("lerFiltrosLancamentos", () => {
       centro: FORNECEDOR,
     });
 
-    expect(filtros.fornecedorId).toBeUndefined();
-    expect(filtros.categoriaId).toBeUndefined();
-    expect(filtros.centroCustoId).toBe(FORNECEDOR);
+    expect(filtros.fornecedorIds).toEqual([]);
+    expect(filtros.categoriaIds).toEqual([]);
+    expect(filtros.centroCustoIds).toEqual([FORNECEDOR]);
   });
 
   it("endireita período invertido em vez de devolver lista vazia", () => {
@@ -255,7 +255,9 @@ describe("lerFiltrosLancamentos: sem_cancelado, recorte e faixa de competência"
       tipo: "a_pagar",
       sem_cancelado: "1",
     });
-    expect(filtros.centroCustoId).toBe("0a327d7e-6e2d-40d9-a87b-cf9b4a76be2e");
+    expect(filtros.centroCustoIds).toEqual([
+      "0a327d7e-6e2d-40d9-a87b-cf9b4a76be2e",
+    ]);
     expect(filtros.mesCompetencia).toBe("2026-07-01");
     expect(filtros.tipo).toBe("a_pagar");
     expect(filtros.semCancelado).toBe(true);
@@ -294,5 +296,67 @@ describe("lerFiltrosLancamentos: 'A pagar' é situação, não status exato", ()
     const { filtros } = lerFiltrosLancamentos({});
     expect(filtros.comSaldoAberto).toBeUndefined();
     expect(filtros.status).toBeUndefined();
+  });
+});
+
+/**
+ * Os filtros de múltipla escolha e os parâmetros que o clique num relatório usa.
+ *
+ * Existem porque o relatório de custo por centro de custo filtra vários de cada
+ * dimensão. Se esta lista lesse só o primeiro valor, o clique numa barra do
+ * relatório abriria um conjunto MAIOR que a célula clicada, e nada na tela diria
+ * isso.
+ */
+describe("lerFiltrosLancamentos: filtros de múltipla escolha", () => {
+  const A = "11111111-1111-4111-8111-111111111111";
+  const B = "22222222-2222-4222-8222-222222222222";
+
+  it("lê lista por vírgula em centro, categoria, fornecedor e forma", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({
+      centro: `${A},${B}`,
+      categoria: `${B},${A}`,
+      fornecedor: A,
+      forma: `${A},${B}`,
+    });
+    expect(filtros.centroCustoIds).toEqual([A, B]);
+    expect(filtros.categoriaIds).toEqual([B, A]);
+    expect(filtros.fornecedorIds).toEqual([A]);
+    expect(filtros.formaPagamentoIds).toEqual([A, B]);
+    // A barra mostra a lista inteira: mostrar um valor só faria a tela dizer que
+    // está filtrada por um quando está filtrada por dois.
+    expect(valores.centros).toEqual([A, B]);
+    expect(valores.formas).toEqual([A, B]);
+  });
+
+  it("sem_forma entra como filtro próprio e volta para a barra", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({ sem_forma: "1" });
+    expect(filtros.semForma).toBe(true);
+    expect(valores.semForma).toBe("1");
+  });
+
+  it("sem_forma liga só no literal 1", () => {
+    for (const valor of ["0", "true", "sim", ""]) {
+      const { filtros } = lerFiltrosLancamentos({ sem_forma: valor });
+      expect(filtros.semForma).toBeUndefined();
+    }
+  });
+
+  it("status_in é status LITERAL e não mexe no status de situação", () => {
+    const { filtros } = lerFiltrosLancamentos({ status_in: "aprovado,pago" });
+    expect(filtros.statusIn).toEqual(["aprovado", "pago"]);
+    // O `status` da tela (situação do dinheiro) continua intocado: são duas
+    // perguntas diferentes, e misturá-las abriria outro conjunto.
+    expect(filtros.status).toBeUndefined();
+    expect(filtros.comSaldoAberto).toBeUndefined();
+  });
+
+  it("status_in fora do catálogo é descartado", () => {
+    const { filtros } = lerFiltrosLancamentos({ status_in: "inventado,pago" });
+    expect(filtros.statusIn).toEqual(["pago"]);
+  });
+
+  it("sem status_in na URL, o filtro não existe", () => {
+    const { filtros } = lerFiltrosLancamentos({});
+    expect(filtros.statusIn).toEqual([]);
   });
 });
