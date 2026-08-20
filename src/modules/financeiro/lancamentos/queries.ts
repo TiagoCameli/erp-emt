@@ -291,6 +291,23 @@ export interface ParcelaLancamento {
   contaBancariaId: string | null;
   contaBancariaNome: string | null;
   dataPagamento: string | null;
+  /** De qual forma esta parcela sai. Nulo no lançamento sem formas declaradas. */
+  lancamentoFormaId: string | null;
+}
+
+/**
+ * Uma forma de pagamento do lançamento, com quanto sai por ela.
+ *
+ * O lançamento pode ter VÁRIAS (20/08/2026). Uma só é o caso comum, e aí o
+ * `forma_pagamento_id` do cabeçalho também guarda ela; com duas ou mais o
+ * cabeçalho fica nulo de propósito, porque não existe "a forma" do lançamento.
+ */
+export interface FormaDoLancamento {
+  id: string;
+  formaPagamentoId: string;
+  formaPagamentoNome: string;
+  formaPagamentoTipo: TipoFormaPagamento;
+  valor: number;
 }
 
 /** Rateio do lançamento, com o nome do centro de custo resolvido. */
@@ -345,6 +362,11 @@ export interface LancamentoDetalhe {
   observacoes: string | null;
   parcelas: ParcelaLancamento[];
   rateios: RateioLancamento[];
+  /**
+   * As formas de pagamento e quanto sai por cada uma. Vazio = lançamento que não
+   * declara forma (caminho antigo), e aí quem manda é `formaPagamentoId`.
+   */
+  formas: FormaDoLancamento[];
   /**
    * Condição de pagamento que vale para este lançamento, e é o que o "Gerar
    * pela condição" usa. Em lançamento de OC ela vem da ordem de origem (a
@@ -1206,9 +1228,13 @@ export async function buscarLancamento(
        formas_pagamento(nome, tipo),
        fornecedores(razao_social, nome_fantasia),
        clientes(nome, nome_fantasia),
+       lancamento_formas(
+         id, valor, forma_pagamento_id,
+         formas_pagamento(nome, tipo)
+       ),
        lancamento_parcelas(
          id, numero_parcela, valor, desconto, valor_liquido,
-         data_vencimento, status,
+         data_vencimento, status, lancamento_forma_id,
          data_programada, data_programada_origem,
          conta_bancaria_id, data_pagamento,
          contas_bancarias(nome)
@@ -1238,6 +1264,7 @@ export async function buscarLancamento(
       contaBancariaId: parcela.conta_bancaria_id,
       contaBancariaNome: parcela.contas_bancarias?.nome ?? null,
       dataPagamento: parcela.data_pagamento,
+      lancamentoFormaId: parcela.lancamento_forma_id,
     }))
     .sort((a, b) => a.numeroParcela - b.numeroParcela);
 
@@ -1268,6 +1295,18 @@ export async function buscarLancamento(
     origemNumero = ordem?.numero ?? null;
     notaRegistrada = (count ?? 0) > 0;
   }
+
+  // Ordenadas por valor decrescente: a forma que leva mais dinheiro aparece
+  // primeiro, que e como a pessoa le a divisao ("a maior parte sai no boleto").
+  const formas: FormaDoLancamento[] = (data.lancamento_formas ?? [])
+    .map((forma) => ({
+      id: forma.id,
+      formaPagamentoId: forma.forma_pagamento_id,
+      formaPagamentoNome: forma.formas_pagamento?.nome ?? "-",
+      formaPagamentoTipo: tipoFormaPagamento(forma.formas_pagamento?.tipo),
+      valor: forma.valor,
+    }))
+    .sort((a, b) => b.valor - a.valor);
 
   const rateios: RateioLancamento[] = (data.lancamento_rateios ?? []).map(
     (rateio) => ({
@@ -1313,6 +1352,7 @@ export async function buscarLancamento(
     observacoes: data.observacoes,
     parcelas,
     rateios,
+    formas,
     condicaoPagamentoId,
     condicaoPagamentoDescricao,
     formaPagamentoId: data.forma_pagamento_id,

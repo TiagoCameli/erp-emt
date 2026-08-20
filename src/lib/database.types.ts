@@ -1893,6 +1893,7 @@ export type Database = {
           desconto: number;
           id: string;
           juros: number;
+          lancamento_forma_id: string | null;
           lancamento_id: string;
           numero_parcela: number;
           pago_em: string | null;
@@ -1917,6 +1918,7 @@ export type Database = {
           desconto?: number;
           id?: string;
           juros?: number;
+          lancamento_forma_id?: string | null;
           lancamento_id: string;
           numero_parcela?: number;
           pago_em?: string | null;
@@ -1941,6 +1943,7 @@ export type Database = {
           desconto?: number;
           id?: string;
           juros?: number;
+          lancamento_forma_id?: string | null;
           lancamento_id?: string;
           numero_parcela?: number;
           pago_em?: string | null;
@@ -1966,6 +1969,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "lancamento_parcelas_lancamento_forma_id_fkey";
+            columns: ["lancamento_forma_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamento_formas";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "lancamento_parcelas_conta_bancaria_id_fkey";
             columns: ["conta_bancaria_id"];
             isOneToOne: false;
@@ -1984,6 +1994,51 @@ export type Database = {
             columns: ["pago_por"];
             isOneToOne: false;
             referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lancamento_formas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          forma_pagamento_id: string;
+          id: string;
+          lancamento_id: string;
+          updated_at: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id: string;
+          id?: string;
+          lancamento_id: string;
+          updated_at?: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id?: string;
+          id?: string;
+          lancamento_id?: string;
+          updated_at?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lancamento_formas_forma_pagamento_id_fkey";
+            columns: ["forma_pagamento_id"];
+            isOneToOne: false;
+            referencedRelation: "formas_pagamento";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamento_formas_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
             referencedColumns: ["id"];
           },
         ];
@@ -3948,6 +4003,7 @@ export type Database = {
           p_id: string;
           p_parcelas: Json;
           p_rateios: Json;
+          p_formas?: Json;
         };
         Returns: string;
       };
