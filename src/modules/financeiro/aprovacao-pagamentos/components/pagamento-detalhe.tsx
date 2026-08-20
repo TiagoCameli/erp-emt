@@ -221,6 +221,7 @@ export function PagamentoDetalheView({
           lancamentoId: lancamento.id,
           lancamentoNumero: lancamento.numero,
           lancamentoDescricao: lancamento.descricao,
+          observacoes: lancamento.observacoes,
           fornecedorNome: lancamento.fornecedorNome ?? "-",
           origem: lancamento.origem,
           origemId: lancamento.origemId,

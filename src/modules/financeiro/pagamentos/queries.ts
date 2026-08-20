@@ -38,6 +38,18 @@ export interface ParcelaAprovada {
   fornecedorId?: string | null;
   contaBancariaId?: string | null;
   dataVencimento: string | null;
+  /**
+   * Observação do lançamento — no lançamento nascido de OC é a observação que
+   * Compras escreveu na ordem, copiada na aprovação.
+   *
+   * Vem para a fila, e não só para o drawer, porque é aqui que ela é lida: a
+   * observação carrega chave PIX, CNPJ e data combinada de pagamento, e quem
+   * paga varre dezenas de linhas sem abrir o detalhe de cada uma.
+   *
+   * Opcional porque esta interface também é o contrato de entrada do drawer de
+   * pagamento, e quem abre o drawer pela aba Programados não carrega o campo.
+   */
+  observacoes?: string | null;
   /** Data em que o pagamento está autorizado. É ela que a trava do banco usa. */
   dataProgramada: string | null;
   dataProgramadaOrigem: OrigemDataProgramada | null;
@@ -159,6 +171,7 @@ interface LinhaAPagar {
     descricao: string | null;
     tipo: string;
     fornecedor_id: string | null;
+    observacoes: string | null;
     categorias_financeiras: { nome: string } | null;
     fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
   } | null;
@@ -169,7 +182,7 @@ const SELECT_A_PAGAR = `id, numero_parcela, valor, status, data_vencimento,
    data_programada, data_programada_origem, aprovado_em, lancamento_id,
    conta_bancaria_id,
    lancamentos!inner(
-     numero, descricao, tipo, fornecedor_id,
+     numero, descricao, tipo, fornecedor_id, observacoes,
      categorias_financeiras(nome),
      fornecedores(razao_social, nome_fantasia)
    )`;
@@ -221,6 +234,7 @@ export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
     numeroParcela: parcela.numero_parcela,
     descricao: parcela.lancamentos?.descricao ?? "-",
+    observacoes: parcela.lancamentos?.observacoes ?? null,
     categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
     fornecedorId: parcela.lancamentos?.fornecedor_id ?? null,
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),

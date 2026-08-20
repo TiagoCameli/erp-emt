@@ -23,6 +23,7 @@ function parcela(troca: Partial<ParcelaPendente> = {}): ParcelaPendente {
     lancamentoId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     lancamentoNumero: "LAN-2026-0142",
     lancamentoDescricao: "Locação de escavadeira",
+    observacoes: null,
     fornecedorNome: "Transterra Ltda",
     origem: "manual",
     origemId: null,

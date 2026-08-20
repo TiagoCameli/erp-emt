@@ -64,6 +64,7 @@ function parcela(sobrescreve: Partial<ParcelaPendente> = {}): ParcelaPendente {
     lancamentoId: "22222222-2222-4222-8222-222222222222",
     lancamentoNumero: "LAN-2026-0015",
     lancamentoDescricao: "Compra de cimento",
+    observacoes: null,
     fornecedorNome: "A CRUZEIRENSE",
     origem: "oc",
     origemId: "33333333-3333-4333-8333-333333333333",
@@ -204,6 +205,7 @@ function outraParcela() {
     lancamentoNumero: "LAN-2026-0099",
     fornecedorNome: "POSTO IPE",
     lancamentoDescricao: "Diesel S10",
+    observacoes: null,
   });
 }
 
