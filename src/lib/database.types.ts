@@ -1896,6 +1896,7 @@ export type Database = {
           lancamento_forma_id: string | null;
           lancamento_id: string;
           numero_parcela: number;
+          outras_despesas: number;
           pago_em: string | null;
           pago_por: string | null;
           status: string;
@@ -1921,6 +1922,7 @@ export type Database = {
           lancamento_forma_id?: string | null;
           lancamento_id: string;
           numero_parcela?: number;
+          outras_despesas?: number;
           pago_em?: string | null;
           pago_por?: string | null;
           status?: string;
@@ -1946,6 +1948,7 @@ export type Database = {
           lancamento_forma_id?: string | null;
           lancamento_id?: string;
           numero_parcela?: number;
+          outras_despesas?: number;
           pago_em?: string | null;
           pago_por?: string | null;
           status?: string;
@@ -3876,6 +3879,7 @@ export type Database = {
           p_desconto?: number;
           p_juros?: number;
           p_motivo?: string;
+          p_outras_despesas?: number;
           p_parcela_id: string;
         };
         Returns: undefined;

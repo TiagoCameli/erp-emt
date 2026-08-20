@@ -57,6 +57,7 @@ function parcelaPaga(troca: Partial<ParcelaPaga> = {}): ParcelaPaga {
     valor: 1000,
     desconto: 0,
     juros: 0,
+    outrasDespesas: 0,
     valorLiquido: 1000,
     ...troca,
   };

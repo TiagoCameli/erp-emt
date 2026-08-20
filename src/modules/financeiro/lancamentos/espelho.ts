@@ -16,6 +16,9 @@ export interface EspelhoParcela {
   valor: number;
   desconto: number;
   juros: number;
+  /** Tarifa, cartório, protesto: despesa que não é juros nem multa. */
+  outrasDespesas: number;
+  /** valor - desconto + juros + outrasDespesas: o que saiu da conta. */
   valorLiquido: number;
   status: StatusParcela;
   dataPagamento: string | null;
@@ -50,10 +53,11 @@ export interface EspelhoGrupoParcelas {
  *   23 das 6.858 parcelas pagas têm líquido diferente do valor (20 com
  *   desconto, 3 com juros), somando R$ 30.810,30 de diferença. Somar o valor
  *   aqui mentiria sobre o caixa.
- * - `aPagar` soma o VALOR, que é a dívida. Nas 914 parcelas em aberto do banco
- *   desconto e juros são zero em todas, então hoje líquido e valor coincidem —
- *   mas a dívida é o valor, e essa é a leitura que continua certa se algum dia
- *   alguém preencher juros antes de pagar.
+ * - `aPagar` soma o VALOR, que é a dívida. Nas parcelas em aberto do banco os
+ *   três ajustes (desconto, juros, outras despesas) são zero em todas, porque
+ *   eles só são preenchidos no ato de pagar, então hoje líquido e valor
+ *   coincidem — mas a dívida é o valor, e essa é a leitura que continua certa
+ *   no dia em que alguém preencher um deles antes de pagar.
  *
  * `canceladas` existe porque parcela cancelada não é paga nem devida: sem esse
  * grupo, o total impresso não fecharia com as linhas impressas assim que a
@@ -128,6 +132,7 @@ export interface LinhaEspelhoLancamento {
     valor: string | number;
     desconto: string | number | null;
     juros: string | number | null;
+    outras_despesas: string | number | null;
     valor_liquido: string | number;
     status: string;
     data_pagamento: string | null;
@@ -246,6 +251,7 @@ export function montarEspelhoLancamento(
       valor: dinheiro(parcela.valor),
       desconto: dinheiro(parcela.desconto),
       juros: dinheiro(parcela.juros),
+      outrasDespesas: dinheiro(parcela.outras_despesas),
       valorLiquido: dinheiro(parcela.valor_liquido),
       status: parcela.status as StatusParcela,
       dataPagamento: parcela.data_pagamento,
@@ -307,7 +313,7 @@ export async function buscarLancamentosParaEspelho(
          formas_pagamento(nome),
          lancamento_formas(valor, formas_pagamento(nome)),
          lancamento_parcelas(id, numero_parcela, data_vencimento, valor,
-           desconto, juros, valor_liquido, status, data_pagamento,
+           desconto, juros, outras_despesas, valor_liquido, status, data_pagamento,
            contas_bancarias(nome)),
          lancamento_rateios(valor, centros_custo(nome, codigo))`,
       )

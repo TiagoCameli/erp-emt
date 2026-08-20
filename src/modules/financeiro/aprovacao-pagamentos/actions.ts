@@ -156,6 +156,62 @@ export async function revisarParcela(
 }
 
 /**
+ * Desfaz a aprovação de uma parcela: ela volta para a fila de aprovação.
+ *
+ * É o caminho de volta que faltava. `revisarParcela` só aceita parcela
+ * `pendente` (ela manda para quem lançou ajustar), e não havia nada para uma
+ * parcela JÁ APROVADA que não deveria estar liberada para pagamento — o caso
+ * real: aprovaram um lançamento cuja forma é cartão de crédito, que não é pago
+ * pela fila de pagamentos. Sem isto, a única saída era pagar e estornar.
+ *
+ * `fn_desaprovar_parcela` exige status `aprovado` (então parcela já paga é
+ * recusada pelo banco, não por esta tela), devolve a parcela a `pendente`,
+ * LIMPA a data programada e quem aprovou, e grava o evento `desaprovou` com o
+ * motivo na trilha. O motivo é obrigatório: desaprovação sem justificativa é o
+ * tipo de coisa que ninguém consegue explicar uma semana depois.
+ *
+ * Permissão de `desaprovar`, a mesma da revisão: quem pode tirar da fila é quem
+ * pode aprovar para ela.
+ */
+export async function desaprovarParcela(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("desaprovar"))) {
+    return { erro: "Sem permissão para desaprovar pagamentos" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Parcela inválida" };
+
+  // Trimado e com teto: a coluna `parcela_eventos.motivo` não tem limite, e um
+  // cliente contornado gravaria megabytes na trilha. Mesmo cuidado do motivo do
+  // pagamento fora da data.
+  const motivoLimpo = motivo.trim();
+  if (motivoLimpo === "") return { erro: "Informe o motivo" };
+  if (motivoLimpo.length > 500) {
+    return { erro: "O motivo deve ter no máximo 500 caracteres" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_desaprovar_parcela", {
+    p_parcela_id: idValido.data,
+    p_motivo: motivoLimpo,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.aprovacao-pagamentos.desaprovarParcela",
+      error,
+      error.message || "Não foi possível devolver o pagamento para aprovação",
+    );
+  }
+
+  revalidar();
+  return { ok: true };
+}
+
+/**
  * Reprograma a data autorizada de uma parcela já aprovada, com motivo.
  *
  * Só quem aprova pagamento pode (item 12). Substitui a antiga programação da aba

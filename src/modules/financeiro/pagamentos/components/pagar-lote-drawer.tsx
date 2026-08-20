@@ -48,10 +48,10 @@ interface Falha {
 /**
  * Pagamento em LOTE: uma conta e uma data para todas as parcelas marcadas.
  *
- * Desconto e juros ficam de fora de propósito: são negociação de uma parcela
- * específica, e aplicar um número igual em vinte parcelas é o tipo de coisa que
- * ninguém consegue conferir depois. Quem precisa de desconto paga aquela
- * parcela sozinha, pelo drawer individual.
+ * Desconto, juros e outras despesas ficam de fora de propósito: são acerto de
+ * uma parcela específica, e aplicar um número igual em vinte parcelas é o tipo
+ * de coisa que ninguém consegue conferir depois. Quem precisa de qualquer um
+ * dos três paga aquela parcela sozinha, pelo drawer individual.
  *
  * ## Por que o laço é aqui e não numa action de lote
  *
@@ -130,13 +130,9 @@ export function PagarLoteDrawer({
     for (const [indice, parcela] of parcelas.entries()) {
       const titulo = `${parcela.lancamentoNumero ?? "Parcela"} ${parcela.numeroParcela}`;
       try {
-        const resultado = await pagarParcela(
-          parcela.id,
-          contaId,
-          dataPagamento,
-          0,
-          motivo.trim() === "" ? undefined : motivo.trim(),
-        );
+        const resultado = await pagarParcela(parcela.id, contaId, dataPagamento, {
+          motivo: motivo.trim() === "" ? undefined : motivo.trim(),
+        });
         if ("erro" in resultado) recusadas.push({ titulo, motivo: resultado.erro });
         else pagas += 1;
       } catch {
@@ -172,7 +168,7 @@ export function PagarLoteDrawer({
           ? "Pagar 1 parcela"
           : `Pagar ${parcelas.length} parcelas`
       }
-      descricao="Uma conta e uma data para todas. Desconto e juros só no pagamento individual."
+      descricao="Uma conta e uma data para todas. Desconto, juros e despesas só no pagamento individual."
       rodape={
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-detalhe text-muted-foreground">

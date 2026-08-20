@@ -37,6 +37,8 @@ function parcela(troca: Partial<ParcelaLancamento> = {}): ParcelaLancamento {
     numeroParcela: 2,
     valor: 7204.66,
     desconto: 0,
+    juros: 0,
+    outrasDespesas: 0,
     valorLiquido: 7204.66,
     dataVencimento: "2026-08-15",
     status: "pendente",

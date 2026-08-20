@@ -91,7 +91,8 @@ function pagamentoFixture(
     valor: 1000,
     desconto: 50,
     juros: 20,
-    valorLiquido: 970,
+    outrasDespesas: 20,
+    valorLiquido: 990,
     status: "pago",
     dataPagamento: "2026-06-26",
     contaNome: "BANCO DO BRASIL 102.124-9",
@@ -112,10 +113,10 @@ function pagamentoFixture(
     // com a parcela deste espelho (a 2) dentro do grupo das pagas. Fixture que
     // não fechasse com o lançamento provaria a crença de quem a escreveu.
     resumoParcelas: {
-      pagas: { quantidade: 2, valor: 1970 },
+      pagas: { quantidade: 2, valor: 1990 },
       aPagar: { quantidade: 1, valor: 1000 },
       canceladas: { quantidade: 0, valor: 0 },
-      total: { quantidade: 3, valor: 2970 },
+      total: { quantidade: 3, valor: 2990 },
       proximoVencimento: "2026-08-06",
       ultimoPagamento: "2026-06-26",
     },
@@ -309,7 +310,7 @@ describe("EspelhoPagamentosPage e a parcela que ainda não foi paga", () => {
     expect(valorDoCampo("Pago em")).toBe("—");
     // Nem em outro canto do papel: o líquido de um pagamento que não houve não
     // pode aparecer em lugar nenhum.
-    expect(screen.queryByText(brl(970))).not.toBeInTheDocument();
+    expect(screen.queryByText(brl(990))).not.toBeInTheDocument();
     // E o resto do documento continua útil: valor da parcela, vencimento e o
     // status real da parcela seguem impressos.
     expect(valorDoCampo("Valor da parcela")).toBe(formatarBRL(1000));
@@ -331,7 +332,7 @@ describe("EspelhoPagamentosPage e a parcela que ainda não foi paga", () => {
     // aparece em canto nenhum do papel.
     expect(screen.queryByText("Parcela a pagar")).not.toBeInTheDocument();
     expect(screen.getByText("Pagamento")).toBeInTheDocument();
-    expect(valorDoCampo("Saiu da conta")).toBe(formatarBRL(970));
+    expect(valorDoCampo("Saiu da conta")).toBe(formatarBRL(990));
     expect(valorDoCampo("Pago em")).toBe(formatarData("2026-06-26"));
   });
 });

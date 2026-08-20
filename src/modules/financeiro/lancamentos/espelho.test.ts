@@ -30,7 +30,8 @@ const LINHA = {
       valor: "1000.00",
       desconto: "50.00",
       juros: "20.00",
-      valor_liquido: "970.00",
+      outras_despesas: "20.00",
+      valor_liquido: "990.00",
       status: "pago",
       data_pagamento: "2026-08-12",
       contas_bancarias: { nome: "BANCO DO BRASIL 102.124-9" },
@@ -58,12 +59,21 @@ describe("montarEspelhoLancamento", () => {
     expect(espelho.valor).toBe(1000);
   });
 
-  it("traz as parcelas com desconto, juros e líquido", () => {
+  it("traz as parcelas com desconto, juros, despesas e líquido", () => {
     const [parcela] = montarEspelhoLancamento(LINHA).parcelas;
     expect(parcela.valor).toBe(1000);
     expect(parcela.desconto).toBe(50);
     expect(parcela.juros).toBe(20);
-    expect(parcela.valorLiquido).toBe(970);
+    expect(parcela.outrasDespesas).toBe(20);
+    // 1000 - 50 + 20 + 20. Os quatro termos, senão a asserção passa sobre uma
+    // fixture impossível.
+    expect(parcela.valorLiquido).toBe(990);
+    expect(
+      parcela.valor -
+        parcela.desconto +
+        parcela.juros +
+        parcela.outrasDespesas,
+    ).toBe(parcela.valorLiquido);
     expect(parcela.contaNome).toBe("BANCO DO BRASIL 102.124-9");
   });
 
@@ -173,6 +183,7 @@ function parcela(
     valor: 1000,
     desconto: 0,
     juros: 0,
+    outrasDespesas: 0,
     valorLiquido: 1000,
     status: "pendente" as const,
     dataPagamento: null,

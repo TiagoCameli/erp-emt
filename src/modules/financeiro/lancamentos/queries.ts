@@ -298,7 +298,17 @@ export interface ParcelaLancamento {
   valor: number;
   /** Desconto concedido no pagamento. Zero quando não houve. */
   desconto: number;
-  /** Valor menos desconto: o que saiu da conta bancária. */
+  /** Juros e multa pagos no atraso. Zero quando não houve. */
+  juros: number;
+  /** Tarifa, cartório, protesto: despesa que não é juros nem multa. */
+  outrasDespesas: number;
+  /**
+   * valor − desconto + juros + outras despesas: o que saiu da conta bancária.
+   *
+   * Os três ajustes vêm com ele porque a linha da parcela imprime a composição:
+   * sem `juros` e `outrasDespesas`, uma parcela paga com multa aparecia pelo
+   * valor devido, sem nenhuma pista de que saiu mais dinheiro da conta.
+   */
   valorLiquido: number;
   dataVencimento: string | null;
   status: StatusParcela;
@@ -1278,7 +1288,8 @@ export async function buscarLancamento(
          formas_pagamento(nome, tipo)
        ),
        lancamento_parcelas(
-         id, numero_parcela, valor, desconto, valor_liquido,
+         id, numero_parcela, valor, desconto, juros, outras_despesas,
+         valor_liquido,
          data_vencimento, status, lancamento_forma_id,
          data_programada, data_programada_origem,
          conta_bancaria_id, data_pagamento,
@@ -1300,6 +1311,8 @@ export async function buscarLancamento(
       numeroParcela: parcela.numero_parcela,
       valor: parcela.valor,
       desconto: parcela.desconto ?? 0,
+      juros: parcela.juros ?? 0,
+      outrasDespesas: parcela.outras_despesas ?? 0,
       valorLiquido: parcela.valor_liquido ?? parcela.valor,
       dataVencimento: parcela.data_vencimento,
       status: parcela.status as StatusParcela,
