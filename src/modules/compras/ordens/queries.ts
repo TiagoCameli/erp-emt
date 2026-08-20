@@ -128,6 +128,15 @@ export interface OrdemItem {
   subtotal: number;
   centroCustoId: string;
   centroCustoNome: string;
+  /**
+   * Insumo sem categoria de custo (categoria financeira) no cadastro.
+   *
+   * `fn_aprovar_ordem_compra` recusa a OC inteira quando isto é verdade em
+   * qualquer item — e o campo não vive na OC, vive no cadastro do insumo.
+   * Sem este sinal a tela só avisava no clique de Aprovar, sem dizer QUAL item
+   * estava travando.
+   */
+  semCategoriaCusto: boolean;
 }
 
 /** Lançamento financeiro vinculado à OC (origem='oc'). Read-only nas telas. */
@@ -509,7 +518,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
        condicoes_pagamento(descricao),
        oc_itens(
          id, insumo_id, quantidade, preco_unitario, centro_custo_id,
-         insumos(nome, unidades_medida(sigla)),
+         insumos(nome, categoria_financeira_id, unidades_medida(sigla)),
          centros_custo(nome, codigo)
        ),
        oc_parcelas(numero_parcela, data_vencimento, valor)`,
@@ -542,6 +551,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     subtotal: item.quantidade * item.preco_unitario,
     centroCustoId: item.centro_custo_id,
     centroCustoNome: item.centros_custo?.nome ?? "-",
+    semCategoriaCusto: item.insumos?.categoria_financeira_id == null,
   }));
 
   return {
@@ -798,8 +808,11 @@ interface LinhaPagamentoParcela {
 }
 
 /** Lê o campo `status` de um dados_antes/dados_depois do audit_log, se houver. */
-function statusDoAuditLog(dados: RegistroAuditLog["dados_depois"]): string | undefined {
-  if (!dados || typeof dados !== "object" || Array.isArray(dados)) return undefined;
+function statusDoAuditLog(
+  dados: RegistroAuditLog["dados_depois"],
+): string | undefined {
+  if (!dados || typeof dados !== "object" || Array.isArray(dados))
+    return undefined;
   const status = (dados as Record<string, unknown>).status;
   return typeof status === "string" ? status : undefined;
 }
@@ -895,10 +908,9 @@ export async function trilhaOrdem(id: string): Promise<EventoTrilha[]> {
 
   const nomesPorId = new Map<string, string>();
   if (idsUsuarios.length > 0) {
-    const { data: usuarios } = await supabase.rpc(
-      "nomes_usuarios_auditoria",
-      { p_ids: idsUsuarios },
-    );
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_auditoria", {
+      p_ids: idsUsuarios,
+    });
     for (const usuario of usuarios ?? []) {
       nomesPorId.set(usuario.id, usuario.nome);
     }
@@ -928,14 +940,19 @@ export async function trilhaOrdem(id: string): Promise<EventoTrilha[]> {
 
   const eventosPagamento: EventoTrilha[] = linhasPagamento.map((linha) => {
     const depois =
-      linha.dados_depois && typeof linha.dados_depois === "object" && !Array.isArray(linha.dados_depois)
+      linha.dados_depois &&
+      typeof linha.dados_depois === "object" &&
+      !Array.isArray(linha.dados_depois)
         ? (linha.dados_depois as Record<string, unknown>)
         : {};
-    const valor = typeof depois.valor === "number" || typeof depois.valor === "string"
-      ? depois.valor
-      : null;
+    const valor =
+      typeof depois.valor === "number" || typeof depois.valor === "string"
+        ? depois.valor
+        : null;
     const dataVencimento =
-      typeof depois.data_vencimento === "string" ? depois.data_vencimento : null;
+      typeof depois.data_vencimento === "string"
+        ? depois.data_vencimento
+        : null;
     return {
       id: `pag-${linha.id}`,
       data: linha.criado_em,
