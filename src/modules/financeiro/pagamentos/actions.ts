@@ -38,13 +38,18 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 const dataSchema = z.iso.date();
 
 /**
- * Desconto do pagamento: dinheiro, então nunca negativo e no teto do
- * NUMERIC(14,2). O "não pode passar do valor da parcela" NÃO é checado aqui de
+ * Dinheiro do ato do pagamento (desconto, juros e multa, outras despesas):
+ * nunca negativo e no teto do NUMERIC(14,2).
+ *
+ * O "desconto não pode passar do valor da parcela" NÃO é checado aqui de
  * propósito: quem sabe o valor da parcela é o banco (a Server Action não pode
  * confiar no valor que o cliente mandou), e lá existem as duas barreiras, a
  * recusa da fn_pagar_parcela e o check da tabela.
+ *
+ * Juros e outras despesas não têm teto de valor da parcela: uma parcela de
+ * R$ 100 protestada pode custar mais em multa e custas do que ela mesma.
  */
-const descontoSchema = z.number().min(0).max(999999999999.99);
+const dinheiroSchema = z.number().min(0).max(999999999999.99);
 
 /**
  * Motivo de pagar fora da data autorizada. Trimado (motivo só de espaços é
@@ -55,13 +60,34 @@ const descontoSchema = z.number().min(0).max(999999999999.99);
 const motivoSchema = z.string().trim().min(1).max(500);
 
 /**
+ * O que o operador acerta no ato do pagamento, além da conta e da data.
+ *
+ * Objeto, e não argumentos posicionais: são TRÊS valores em reais seguidos,
+ * todos opcionais, e num `pagarParcela(id, conta, data, 0, 0, 250)` ninguém
+ * enxerga em qual campo os R$ 250 caíram. Aqui o nome vai junto.
+ *
+ * Nenhum deles reescreve o valor devido da parcela: eles compõem o LÍQUIDO, que
+ * é o que sai da conta bancária e bate com o extrato.
+ */
+export interface AjustesDoPagamento {
+  /** Abatimento concedido pelo credor. Não pode passar do valor da parcela. */
+  desconto?: number;
+  /** Juros e multa do atraso. */
+  juros?: number;
+  /** Tarifa bancária, cartório, protesto: despesa que não é juros nem multa. */
+  outrasDespesas?: number;
+  /** Justificativa de pagar em data diferente da autorizada. */
+  motivo?: string;
+}
+
+/**
  * Registra o pagamento de uma parcela via RPC. A_pagar exige parcela já
  * aprovada (a regra é validada no banco). Repassa a mensagem de erro do
  * banco direto para o toast. Sem anexo de comprovante nesta fase.
  *
- * `desconto` é o abatimento concedido pelo credor no ato do pagamento, em
- * reais: sai do valor que a conta bancária paga, sem mexer no valor devido da
- * parcela. Omitido ou zero, o pagamento é exatamente o de antes.
+ * `desconto`, `juros` e `outrasDespesas` são o acerto do ato do pagamento, em
+ * reais: entram no que a conta bancária paga, sem mexer no valor devido da
+ * parcela. Omitidos ou zero, o pagamento é exatamente o de antes.
  *
  * `motivo` é a justificativa de pagar em data diferente da autorizada. Pagar
  * fora da data deixou de ser recusa e passou a ser exceção auditada: com motivo
@@ -74,9 +100,9 @@ export async function pagarParcela(
   id: string,
   contaBancariaId: string,
   dataPagamento: string,
-  desconto = 0,
-  motivo?: string,
+  ajustes: AjustesDoPagamento = {},
 ): Promise<ResultadoAcao> {
+  const { desconto = 0, juros = 0, outrasDespesas = 0, motivo } = ajustes;
   try {
     await exigirPermissao(RECURSO, "criar");
   } catch {
@@ -92,8 +118,14 @@ export async function pagarParcela(
   const dataValida = dataSchema.safeParse(dataPagamento);
   if (!dataValida.success) return { erro: "Informe a data do pagamento" };
 
-  const descontoValido = descontoSchema.safeParse(desconto);
+  const descontoValido = dinheiroSchema.safeParse(desconto);
   if (!descontoValido.success) return { erro: "Desconto inválido" };
+
+  const jurosValido = dinheiroSchema.safeParse(juros);
+  if (!jurosValido.success) return { erro: "Juros e multa inválidos" };
+
+  const outrasValido = dinheiroSchema.safeParse(outrasDespesas);
+  if (!outrasValido.success) return { erro: "Outras despesas inválidas" };
 
   const motivoInformado = (motivo ?? "").trim();
   if (motivoInformado !== "" && !motivoSchema.safeParse(motivoInformado).success) {
@@ -129,6 +161,8 @@ export async function pagarParcela(
     p_conta_id: contaValida.data,
     p_data_pagamento: dataValida.data,
     p_desconto: descontoValido.data,
+    p_juros: jurosValido.data,
+    p_outras_despesas: outrasValido.data,
     // Chave ausente quando não há motivo, para o parâmetro cair no default do
     // banco: mandar string vazia daria no mesmo, mas ausente é o que o
     // pagamento na data exata sempre foi.

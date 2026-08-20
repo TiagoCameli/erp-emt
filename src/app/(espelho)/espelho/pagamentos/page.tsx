@@ -179,8 +179,11 @@ export default async function EspelhoPagamentosPage({
                 {
                   rotulo: "Saiu da conta",
                   valor: foiPaga ? formatarBRL(pagamento.valorLiquido) : null,
+                  // Os três ajustes, sempre, inclusive zerados: no papel, zero
+                  // é informação ("não houve desconto"), e o campo em branco
+                  // deixaria quem confere sem saber se houve e não foi impresso.
                   nota: foiPaga
-                    ? `desconto ${formatarBRL(pagamento.desconto)} · juros ${formatarBRL(pagamento.juros)}`
+                    ? `desconto ${formatarBRL(pagamento.desconto)} · juros ${formatarBRL(pagamento.juros)} · despesas ${formatarBRL(pagamento.outrasDespesas)}`
                     : "líquido da parcela",
                 },
               ]}

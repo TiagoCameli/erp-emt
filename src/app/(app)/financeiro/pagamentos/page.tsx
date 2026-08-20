@@ -110,6 +110,17 @@ export default async function PaginaPagamentos({
 
   const podePagar = temPermissao(usuario, "financeiro.pagamentos", "criar");
   const podeEstornar = temPermissao(usuario, "financeiro.pagamentos", "excluir");
+  /**
+   * Devolver uma parcela aprovada para a fila de aprovação é ação de QUEM
+   * APROVA, então a permissão é a do outro recurso (`desaprovar` em
+   * aprovacao-pagamentos) e não uma do módulo de pagamentos: quem só paga não
+   * pode desfazer a autorização que recebeu.
+   */
+  const podeDesaprovar = temPermissao(
+    usuario,
+    "financeiro.aprovacao-pagamentos",
+    "desaprovar",
+  );
 
   // As duas abas têm filtros próprios, em parâmetros próprios (o histórico usa
   // o prefixo h_): compartilhar os mesmos parâmetros faria filtrar uma aba
@@ -192,6 +203,7 @@ export default async function PaginaPagamentos({
         fornecedores={fornecedores}
         podePagar={podePagar}
         podeEstornar={podeEstornar}
+        podeDesaprovar={podeDesaprovar}
         anexosPorParcela={anexosPorParcela}
         valoresAPagar={aPagar}
         // Vai o texto para os campos e o objeto já validado para a action que

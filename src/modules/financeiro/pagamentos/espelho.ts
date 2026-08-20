@@ -27,7 +27,9 @@ export interface EspelhoPagamento {
   valor: number;
   desconto: number;
   juros: number;
-  /** valor - desconto + juros: o que de fato saiu da conta. */
+  /** Tarifa, cartório, protesto: despesa que não é juros nem multa. */
+  outrasDespesas: number;
+  /** valor - desconto + juros + outrasDespesas: o que de fato saiu da conta. */
   valorLiquido: number;
   status: StatusParcela;
   dataPagamento: string | null;
@@ -88,6 +90,7 @@ export interface LinhaEspelhoPagamento {
   valor: string | number;
   desconto: string | number | null;
   juros: string | number | null;
+  outras_despesas: string | number | null;
   valor_liquido: string | number;
   status: string;
   data_pagamento: string | null;
@@ -125,6 +128,7 @@ export interface LinhaEspelhoPagamento {
       valor: string | number;
       desconto: string | number | null;
       juros: string | number | null;
+      outras_despesas: string | number | null;
       valor_liquido: string | number;
       status: string;
       data_pagamento: string | null;
@@ -165,6 +169,7 @@ export function montarEspelhoPagamento(
     valor: dinheiro(linha.valor),
     desconto: dinheiro(linha.desconto),
     juros: dinheiro(linha.juros),
+    outrasDespesas: dinheiro(linha.outras_despesas),
     valorLiquido: dinheiro(linha.valor_liquido),
     status: linha.status as StatusParcela,
     dataPagamento: linha.data_pagamento,
@@ -203,6 +208,7 @@ function parcelasDoPai(
     valor: dinheiro(parcela.valor),
     desconto: dinheiro(parcela.desconto),
     juros: dinheiro(parcela.juros),
+    outrasDespesas: dinheiro(parcela.outras_despesas),
     valorLiquido: dinheiro(parcela.valor_liquido),
     status: parcela.status as StatusParcela,
     dataPagamento: parcela.data_pagamento,
@@ -230,7 +236,7 @@ export async function buscarPagamentosParaEspelho(
       .from("lancamento_parcelas")
       .select(
         `id, numero_parcela, data_vencimento, valor, desconto, juros,
-         valor_liquido, status, data_pagamento,
+         outras_despesas, valor_liquido, status, data_pagamento,
          contas_bancarias(nome),
          lancamentos(id, numero, tipo, descricao, valor, status, mes_competencia,
            observacoes,
@@ -239,7 +245,8 @@ export async function buscarPagamentosParaEspelho(
            formas_pagamento(nome),
            lancamento_rateios(valor, centros_custo(nome, codigo)),
            lancamento_parcelas(id, numero_parcela, data_vencimento, valor,
-             desconto, juros, valor_liquido, status, data_pagamento))`,
+             desconto, juros, outras_despesas, valor_liquido, status,
+             data_pagamento))`,
       )
       .in("id", lote);
 

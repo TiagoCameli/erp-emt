@@ -266,13 +266,17 @@ describe("PagarParcelaDrawer, motivo fora da data autorizada", () => {
         "parcela-1",
         "conta-1",
         dataHojeISO(),
-        0,
-        "Fornecedor deu desconto para antecipar",
+        {
+          desconto: 0,
+          juros: 0,
+          outrasDespesas: 0,
+          motivo: "Fornecedor deu desconto para antecipar",
+        },
       ),
     );
 
-    // Na data autorizada o último argumento não vai: pagamento na data nunca
-    // teve motivo, e mandar string vazia faria a action recusar por Zod.
+    // Na data autorizada o motivo vai `undefined`: pagamento na data nunca teve
+    // motivo, e mandar string vazia faria a action recusar por Zod.
     tela.rerender(
       <PagarParcelaDrawer
         aberto={false}
@@ -295,8 +299,147 @@ describe("PagarParcelaDrawer, motivo fora da data autorizada", () => {
         "parcela-1",
         "conta-1",
         dataHojeISO(),
-        0,
-        undefined,
+        {
+          desconto: 0,
+          juros: 0,
+          outrasDespesas: 0,
+          motivo: undefined,
+        },
+      ),
+    );
+  });
+});
+
+describe("PagarParcelaDrawer, os três ajustes do pagamento", () => {
+  /** Abre o drawer com a parcela de R$ 6.757,73, na data autorizada. */
+  function abrir() {
+    return render(
+      <PagarParcelaDrawer
+        aberto
+        onAbertoChange={() => {}}
+        parcela={comProgramada(dataHojeISO())}
+        contas={CONTAS}
+      />,
+    );
+  }
+
+  it("manda desconto, juros e outras despesas para a action", async () => {
+    abrir();
+
+    fireEvent.change(screen.getByLabelText("Desconto"), {
+      target: { value: "100,00" },
+    });
+    fireEvent.change(screen.getByLabelText("Juros e multa"), {
+      target: { value: "42,50" },
+    });
+    fireEvent.change(screen.getByLabelText("Outras despesas"), {
+      target: { value: "3,90" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar pagamento" }));
+
+    await vi.waitFor(() =>
+      expect(vi.mocked(pagarParcela)).toHaveBeenCalledWith(
+        "parcela-1",
+        "conta-1",
+        dataHojeISO(),
+        {
+          desconto: 100,
+          juros: 42.5,
+          outrasDespesas: 3.9,
+          motivo: undefined,
+        },
+      ),
+    );
+  });
+
+  it("o rodapé mostra o líquido composto antes de confirmar", () => {
+    abrir();
+
+    fireEvent.change(screen.getByLabelText("Juros e multa"), {
+      target: { value: "42,27" },
+    });
+    fireEvent.change(screen.getByLabelText("Outras despesas"), {
+      target: { value: "10,00" },
+    });
+
+    // 6.757,73 + 42,27 + 10,00 = 6.810,00. Escrito à mão: é o número que o
+    // operador vai conferir no extrato, e calculá-lo aqui provaria só que duas
+    // multiplicações iguais dão o mesmo resultado.
+    // Pelo body, e não pelo container do render: o FormDrawer monta em portal,
+    // e o container fica vazio (foi o que fez esta asserção falhar primeiro).
+    const texto = contaNaTela().replace(/\u00a0/g, " ");
+    expect(texto).toContain("mais juros");
+    expect(texto).toContain("mais despesas");
+    expect(texto).toContain("R$ 6.810,00");
+  });
+
+  it("juros e despesa PODEM passar do valor da parcela; o desconto não", () => {
+    abrir();
+
+    // Boleto de R$ 6.757,73 protestado: custas maiores que a própria parcela é
+    // caso real, e recusar aqui obrigaria a mentir o número.
+    fireEvent.change(screen.getByLabelText("Juros e multa"), {
+      target: { value: "9.000,00" },
+    });
+    expect(
+      screen.getByRole("button", { name: "Confirmar pagamento" }),
+    ).not.toBeDisabled();
+
+    // Desconto maior que a dívida é dinheiro que ninguém deve.
+    fireEvent.change(screen.getByLabelText("Desconto"), {
+      target: { value: "9.000,00" },
+    });
+    expect(
+      screen.getByRole("button", { name: "Confirmar pagamento" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText("O desconto não pode ser maior que o valor da parcela"),
+    ).toBeInTheDocument();
+  });
+
+  it("os três zeram ao reabrir: ajuste não vaza para o próximo pagamento", () => {
+    const tela = render(
+      <PagarParcelaDrawer
+        aberto
+        onAbertoChange={() => {}}
+        parcela={comProgramada(dataHojeISO())}
+        contas={CONTAS}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Juros e multa"), {
+      target: { value: "500,00" },
+    });
+    fireEvent.change(screen.getByLabelText("Outras despesas"), {
+      target: { value: "20,00" },
+    });
+
+    // Fecha e reabre: é a transição fechado -> aberto que dispara o reset.
+    tela.rerender(
+      <PagarParcelaDrawer
+        aberto={false}
+        onAbertoChange={() => {}}
+        parcela={comProgramada(dataHojeISO())}
+        contas={CONTAS}
+      />,
+    );
+    tela.rerender(
+      <PagarParcelaDrawer
+        aberto
+        onAbertoChange={() => {}}
+        parcela={comProgramada(dataHojeISO())}
+        contas={CONTAS}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar pagamento" }));
+
+    return vi.waitFor(() =>
+      expect(vi.mocked(pagarParcela)).toHaveBeenLastCalledWith(
+        "parcela-1",
+        "conta-1",
+        dataHojeISO(),
+        { desconto: 0, juros: 0, outrasDespesas: 0, motivo: undefined },
       ),
     );
   });

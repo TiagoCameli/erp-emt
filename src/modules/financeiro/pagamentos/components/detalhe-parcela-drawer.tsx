@@ -5,6 +5,7 @@ import { toast } from "@/components/canonicos/toast";
 
 import {
   BotaoEspelho,
+  ConfirmDialog,
   FormDrawer,
   MoneyText,
   StatusBadge,
@@ -16,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import { STATUS_PARCELA } from "@/modules/financeiro/_shared/formato";
 import { rotuloStatusLancamento } from "@/modules/financeiro/lancamentos/schemas";
+import { desaprovarParcela } from "@/modules/financeiro/aprovacao-pagamentos/actions";
 import {
   detalheDaParcela,
   type DetalheParcela,
@@ -81,6 +83,12 @@ export interface DetalheParcelaDrawerProps {
   podeAnexar: boolean;
   /** Mostra o botão de pagar quando a parcela ainda pode ser paga. */
   podePagar: boolean;
+  /**
+   * Libera devolver uma parcela aprovada para a fila de aprovação. Permissão de
+   * `desaprovar` em financeiro.aprovacao-pagamentos, que é de quem aprova — não
+   * de quem paga.
+   */
+  podeDesaprovar?: boolean;
   /** Chamado ao clicar em "Pagar esta parcela". Abre o drawer de pagamento. */
   onPagar?: (parcelaId: string) => void;
   /** Chamado quando algo mudou aqui dentro (anexo entrou ou saiu). */
@@ -104,11 +112,13 @@ export function DetalheParcelaDrawer({
   parcelaId,
   podeAnexar,
   podePagar,
+  podeDesaprovar = false,
   onPagar,
   onMudou,
 }: DetalheParcelaDrawerProps) {
   const [detalhe, setDetalhe] = React.useState<DetalheParcela | null>(null);
   const [carregando, setCarregando] = React.useState(false);
+  const [devolverAberto, setDevolverAberto] = React.useState(false);
 
   // Trocou de parcela? O conteúdo antigo sai AGORA, na renderização, e não
   // dentro do efeito: limpar no efeito deixaria um quadro com o detalhe da
@@ -162,6 +172,29 @@ export function DetalheParcelaDrawer({
   const foiPaga = espelho?.status === "pago";
   const podePagarEsta = podePagar && espelho?.status === "aprovado";
 
+  /**
+   * Devolver para a aprovação só existe em parcela APROVADA e não paga: é o
+   * único estado em que a `fn_desaprovar_parcela` aceita. Oferecer o botão numa
+   * paga seria prometer uma ação que o banco recusa.
+   */
+  const podeDevolverEsta = podeDesaprovar && espelho?.status === "aprovado";
+
+  async function confirmarDevolucao(motivo?: string) {
+    if (!espelho) return;
+    const resultado = await desaprovarParcela(espelho.id, motivo ?? "");
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Pagamento devolvido para a fila de aprovação");
+    setDevolverAberto(false);
+    // Fecha o painel: a parcela que ele descreve não está mais aprovada, e o
+    // conteúdo em tela (inclusive o botão de pagar) ficaria descrevendo um
+    // estado que acabou de deixar de existir.
+    onAbertoChange(false);
+    onMudou?.();
+  }
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -177,6 +210,15 @@ export function DetalheParcelaDrawer({
         espelho ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <BotaoEspelho rota="/espelho/pagamentos" ids={[espelho.id]} />
+            {podeDevolverEsta ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDevolverAberto(true)}
+              >
+                Voltar para aprovação
+              </Button>
+            ) : null}
             {podePagarEsta && onPagar ? (
               <Button type="button" onClick={() => onPagar(espelho.id)}>
                 Pagar esta parcela
@@ -214,6 +256,9 @@ export function DetalheParcelaDrawer({
               </Dado>
               <Dado rotulo="Juros e multa">
                 <MoneyText valor={espelho.juros} />
+              </Dado>
+              <Dado rotulo="Outras despesas">
+                <MoneyText valor={espelho.outrasDespesas} />
               </Dado>
               <Dado
                 rotulo="Saiu da conta"
@@ -323,6 +368,19 @@ export function DetalheParcelaDrawer({
           </Secao>
         </div>
       )}
+
+      {/* Dentro do FormDrawer, como no detalhe de usuário: o diálogo pertence a
+          este painel, e montá-lo fora exigiria içar o estado para o pai só para
+          pedir um motivo. */}
+      <ConfirmDialog
+        aberto={devolverAberto}
+        onAbertoChange={setDevolverAberto}
+        titulo="Voltar este pagamento para aprovação?"
+        descricao="A parcela sai da fila de pagamento e volta para a fila de aprovação. A aprovação e a data autorizada são apagadas, e quem aprovar de novo escolhe a data outra vez. O lançamento continua vivo e continua contando na previsão de caixa."
+        textoConfirmar="Voltar para aprovação"
+        exigeMotivo
+        onConfirmar={confirmarDevolucao}
+      />
     </FormDrawer>
   );
 }

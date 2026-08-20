@@ -112,13 +112,16 @@ describe("PagarLoteDrawer", () => {
     await waitFor(() => {
       expect(vi.mocked(pagarParcela)).toHaveBeenCalledTimes(2);
     });
-    // Mesma conta e mesma data para as duas; desconto zero no lote.
+    // Mesma conta e mesma data para as duas, e NENHUM ajuste de dinheiro no
+    // lote: desconto, juros e despesas são acerto de uma parcela só.
     const [primeira, segunda] = vi.mocked(pagarParcela).mock.calls;
     expect(primeira[0]).toBe(DUAS[0].id);
     expect(segunda[0]).toBe(DUAS[1].id);
     expect(primeira[1]).toBe(CONTA.id);
     expect(segunda[1]).toBe(CONTA.id);
-    expect(primeira[3]).toBe(0);
+    expect(primeira[3]?.desconto).toBeUndefined();
+    expect(primeira[3]?.juros).toBeUndefined();
+    expect(primeira[3]?.outrasDespesas).toBeUndefined();
   });
 
   it("recusa de uma não impede as outras, e o motivo fica na tela", async () => {
@@ -175,7 +178,10 @@ describe("PagarLoteDrawer", () => {
     await waitFor(() => {
       expect(vi.mocked(pagarParcela)).toHaveBeenCalledTimes(1);
     });
-    expect(vi.mocked(pagarParcela).mock.calls[0][4]).toBe(
+    // Pelo NOME do campo, não pela posição: o motivo virou uma chave de
+    // `ajustes` junto com desconto, juros e despesas, e uma asserção posicional
+    // passaria a apontar para dinheiro sem que o teste mudasse de cor.
+    expect(vi.mocked(pagarParcela).mock.calls[0][3]?.motivo).toBe(
       "Fornecedor antecipou a cobrança",
     );
   });

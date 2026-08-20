@@ -9,7 +9,8 @@ const LINHA = {
   valor: "1000.00",
   desconto: "50.00",
   juros: "20.00",
-  valor_liquido: "970.00",
+  outras_despesas: "20.00",
+  valor_liquido: "990.00",
   status: "pago",
   data_pagamento: "2026-06-26",
   contas_bancarias: { nome: "BANCO DO BRASIL 102.124-9" },
@@ -55,6 +56,7 @@ const LINHA = {
         valor: "1000.00",
         desconto: "0.00",
         juros: "0.00",
+        outras_despesas: "0.00",
         valor_liquido: "1000.00",
         status: "pago",
         data_pagamento: "2026-05-26",
@@ -66,7 +68,8 @@ const LINHA = {
         valor: "1000.00",
         desconto: "50.00",
         juros: "20.00",
-        valor_liquido: "970.00",
+        outras_despesas: "20.00",
+        valor_liquido: "990.00",
         status: "pago",
         data_pagamento: "2026-06-26",
       },
@@ -77,6 +80,7 @@ const LINHA = {
         valor: "1000.00",
         desconto: "0.00",
         juros: "0.00",
+        outras_despesas: "0.00",
         valor_liquido: "1000.00",
         status: "pendente",
         data_pagamento: null,
@@ -86,25 +90,34 @@ const LINHA = {
 };
 
 describe("montarEspelhoPagamento", () => {
-  it("traz a parcela paga com desconto, juros e líquido", () => {
+  it("traz a parcela paga com desconto, juros, despesas e líquido", () => {
     const espelho = montarEspelhoPagamento(LINHA);
     expect(espelho.numeroParcela).toBe(2);
     expect(espelho.valor).toBe(1000);
     expect(espelho.desconto).toBe(50);
     expect(espelho.juros).toBe(20);
-    expect(espelho.valorLiquido).toBe(970);
+    expect(espelho.outrasDespesas).toBe(20);
+    expect(espelho.valorLiquido).toBe(990);
     expect(espelho.contaNome).toBe("BANCO DO BRASIL 102.124-9");
     expect(espelho.dataPagamento).toBe("2026-06-26");
   });
 
   it("o líquido fecha com as partes impressas ao lado", () => {
-    // Trava a semântica de 11/08/2026: valor - desconto + juros. Se o papel
-    // mostrar partes que não somam o líquido, quem lê perde a confiança no
-    // documento inteiro.
+    // Trava a semântica de 20/08/2026: valor - desconto + juros + outras
+    // despesas. Se o papel mostrar partes que não somam o líquido, quem lê
+    // perde a confiança no documento inteiro.
+    //
+    // Os QUATRO termos, e não três: enquanto a conta aqui ignorava as outras
+    // despesas, esta asserção passava com uma fixture impossível (1.000 − 50 +
+    // 20 + 20 declarando líquido de 970), que é o jeito de um teste verde
+    // afirmar a crença de quem o escreveu em vez do comportamento do sistema.
     const espelho = montarEspelhoPagamento(LINHA);
-    expect(espelho.valor - espelho.desconto + espelho.juros).toBe(
-      espelho.valorLiquido,
-    );
+    expect(
+      espelho.valor -
+        espelho.desconto +
+        espelho.juros +
+        espelho.outrasDespesas,
+    ).toBe(espelho.valorLiquido);
   });
 
   it("carrega o cabeçalho do lançamento pai, porque parcela sozinha não comprova nada", () => {
@@ -234,13 +247,13 @@ describe("resumo do lançamento no espelho do pagamento", () => {
     expect(resumo.aPagar.quantidade).toBe(1);
     expect(resumo.total.quantidade).toBe(3);
 
-    // Pagas somam o LÍQUIDO (1.000,00 + 970,00), que é o dinheiro que saiu da
+    // Pagas somam o LÍQUIDO (1.000,00 + 990,00), que é o dinheiro que saiu da
     // conta, e não o valor de face. Esta é a linha de controle do teste: se
     // alguém trocar a base por `valor`, o número vira 2.000,00 e o teste cai.
-    expect(resumo.pagas.valor).toBe(1970);
+    expect(resumo.pagas.valor).toBe(1990);
     // Em aberto soma o VALOR, que é a dívida.
     expect(resumo.aPagar.valor).toBe(1000);
-    expect(resumo.total.valor).toBe(2970);
+    expect(resumo.total.valor).toBe(2990);
 
     expect(resumo.proximoVencimento).toBe("2026-08-06");
     expect(resumo.ultimoPagamento).toBe("2026-06-26");

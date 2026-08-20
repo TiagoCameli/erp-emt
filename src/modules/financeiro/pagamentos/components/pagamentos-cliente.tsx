@@ -38,6 +38,7 @@ import {
   STATUS_PARCELA_ABERTA,
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
+import { ComposicaoDoLiquido } from "@/modules/financeiro/_shared/composicao-liquido";
 import { programacaoVencida } from "@/modules/financeiro/_shared/janela-pagamento";
 import type { FornecedorOpcao } from "@/modules/financeiro/lancamentos/queries";
 import {
@@ -119,6 +120,12 @@ export interface PagamentosClienteProps {
   fornecedores: FornecedorOpcao[];
   podePagar: boolean;
   podeEstornar: boolean;
+  /**
+   * Libera o "Voltar para aprovação" no detalhe de uma parcela aprovada. Vem da
+   * permissão de `desaprovar` em financeiro.aprovacao-pagamentos, que é de quem
+   * aprova: quem só paga não desfaz a autorização que recebeu.
+   */
+  podeDesaprovar?: boolean;
   /** Hoje em "YYYY-MM-DD" (America/Rio_Branco), calculado no server component. */
   hoje: string;
   /** Anexos por parcela, para o drawer de pagamento mostrar o comprovante. */
@@ -171,65 +178,51 @@ function rotuloParcela(
 }
 
 /**
- * Célula do valor na tabela de pagamentos pagas. Mostra o valor da parcela e,
- * quando houve ajuste (desconto e/ou juros), exibe a composição da linha líquida:
+ * O que o estorno vai APAGAR desta parcela, em texto, ou null quando não há
+ * nada a apagar.
  *
- * - Se há desconto mas sem juros: "desconto X, líquido Y"
- * - Se há juros mas sem desconto: "juros X, líquido Y"
- * - Se há ambos: "desconto X, juros Z, líquido Y"
+ * `fn_estornar_pagamento` zera os TRÊS ajustes junto com a data e a conta.
+ * Enquanto o aviso citava só o desconto, estornar uma parcela paga com multa
+ * apagava dinheiro que a confirmação nunca mencionou.
+ */
+function textoDosAjustes(parcela: ParcelaPaga): string | null {
+  const itens: string[] = [];
+  if (parcela.desconto > 0) {
+    itens.push(`o desconto de ${formatarBRL(parcela.desconto)}`);
+  }
+  if (parcela.juros > 0) {
+    itens.push(`os juros de ${formatarBRL(parcela.juros)}`);
+  }
+  if (parcela.outrasDespesas > 0) {
+    itens.push(`as despesas de ${formatarBRL(parcela.outrasDespesas)}`);
+  }
+  if (itens.length === 0) return null;
+  const lista =
+    itens.length === 1
+      ? itens[0]
+      : `${itens.slice(0, -1).join(", ")} e ${itens.at(-1)}`;
+  return `${lista} ${itens.length === 1 ? "é apagado" : "são apagados"}`;
+}
+
+/**
+ * Célula do valor na tabela de pagamentos pagas: o valor da parcela e, quando
+ * houve ajuste no ato do pagamento (desconto, juros e multa, outras despesas), a
+ * composição do líquido logo abaixo.
  *
- * Desconto e juros vivem como linha extra DENTRO da célula de valor (não como
- * coluna própria) porque quase nenhum pagamento tem ambos, e uma coluna própria
- * apareceria vazia na maioria das linhas, mexendo no conjunto de colunas salvo
- * nas preferências do usuário. Juros entra aqui pelo mesmo motivo que desconto:
- * sem ele, os três números (valor, desconto/juros, líquido) não somam na tela,
- * e o usuário não consegue reconciliar a linha com o que realmente saiu da conta.
+ * A frase inteira vive em `ComposicaoDoLiquido`, compartilhada com a linha de
+ * parcela do detalhe do lançamento: as duas telas afirmam o mesmo fato sobre a
+ * mesma parcela, e duas versões da frase divergiriam no primeiro ajuste novo.
  */
 export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
-  const temDesconto = parcela.desconto > 0;
-  const temJuros = parcela.juros > 0;
-
-  if (!temDesconto && !temJuros) {
-    return <MoneyText valor={parcela.valor} />;
-  }
-
-  // Monta a linha de ajustes dinamicamente. Começa vazia, acumula cada item.
-  const partes: React.ReactNode[] = [];
-
-  if (temDesconto) {
-    partes.push(
-      <React.Fragment key="desconto">
-        desconto <MoneyText valor={parcela.desconto} className="inline" />
-      </React.Fragment>,
-    );
-  }
-
-  if (temJuros) {
-    partes.push(
-      <React.Fragment key="juros">
-        juros <MoneyText valor={parcela.juros} className="inline" />
-      </React.Fragment>,
-    );
-  }
-
-  // Sempre termina com o líquido.
-  partes.push(
-    <React.Fragment key="liquido">
-      líquido <MoneyText valor={parcela.valorLiquido} className="inline" />
-    </React.Fragment>,
-  );
-
   return (
     <>
       <MoneyText valor={parcela.valor} />
-      <span className="block text-legenda text-muted-foreground">
-        {partes.map((parte, index) => (
-          <React.Fragment key={index}>
-            {index > 0 && ", "}
-            {parte}
-          </React.Fragment>
-        ))}
-      </span>
+      <ComposicaoDoLiquido
+        desconto={parcela.desconto}
+        juros={parcela.juros}
+        outrasDespesas={parcela.outrasDespesas}
+        valorLiquido={parcela.valorLiquido}
+      />
     </>
   );
 }
@@ -261,6 +254,7 @@ export function PagamentosCliente({
   fornecedores,
   podePagar,
   podeEstornar,
+  podeDesaprovar = false,
   hoje,
   anexosPorParcela = {},
   valoresAPagar,
@@ -993,7 +987,7 @@ export function PagamentosCliente({
           <KPICard
             titulo="Pago no filtro"
             valor={formatarBRL(somaPagas)}
-            detalhe={`${contagem(totalPagas)} · o que saiu da conta, já com desconto e juros`}
+            detalhe={`${contagem(totalPagas)} · o que saiu da conta, já com desconto, juros e despesas`}
           />
         </GradeKpis>
       ) : (
@@ -1147,6 +1141,7 @@ export function PagamentosCliente({
         parcelaId={detalheId}
         podeAnexar={podePagar}
         podePagar={podePagar}
+        podeDesaprovar={podeDesaprovar}
         onPagar={(id) => {
           // Do detalhe direto para o pagamento: a parcela está na fila
           // carregada, então não há segunda ida ao servidor.
@@ -1163,8 +1158,8 @@ export function PagamentosCliente({
         onAbertoChange={setEstornoAberto}
         titulo="Estornar este pagamento?"
         descricao={
-          parcelaEstorno && parcelaEstorno.desconto > 0
-            ? `O líquido de ${formatarBRL(parcelaEstorno.valorLiquido)} volta para o saldo da conta bancária, o desconto de ${formatarBRL(parcelaEstorno.desconto)} é apagado e a parcela volta a valer ${formatarBRL(parcelaEstorno.valor)} em aberto.`
+          parcelaEstorno && textoDosAjustes(parcelaEstorno) !== null
+            ? `O líquido de ${formatarBRL(parcelaEstorno.valorLiquido)} volta para o saldo da conta bancária, ${textoDosAjustes(parcelaEstorno)} e a parcela volta a valer ${formatarBRL(parcelaEstorno.valor)} em aberto.`
             : "O valor volta para o saldo da conta bancária e a parcela retorna ao estado anterior ao pagamento."
         }
         textoConfirmar="Estornar"

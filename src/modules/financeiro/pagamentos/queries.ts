@@ -91,7 +91,16 @@ export interface ParcelaPaga {
    * (valor − desconto ≠ líquido), mentindo sobre o que saiu da conta.
    */
   juros: number;
-  /** Valor menos desconto: o que saiu da conta bancária. */
+  /**
+   * Tarifa bancária, cartório, protesto: despesa cobrada junto com a parcela
+   * que não é juros nem multa. Zero quando não houve.
+   *
+   * Está aqui pelo mesmo motivo de `juros`: a aba "Pagas" exibe a composição
+   * na mesma linha, e sem este campo os números não somam
+   * (valor − desconto + juros ≠ líquido), mentindo sobre o que saiu da conta.
+   */
+  outrasDespesas: number;
+  /** valor − desconto + juros + outras despesas: o que saiu da conta. */
   valorLiquido: number;
 }
 
@@ -434,7 +443,8 @@ export async function listarParcelasPagas({
   let consulta = supabase
     .from("lancamento_parcelas")
     .select(
-      `id, numero_parcela, valor, desconto, juros, valor_liquido, data_pagamento,
+      `id, numero_parcela, valor, desconto, juros, outras_despesas,
+       valor_liquido, data_pagamento,
        contas_bancarias(nome, banco),
        lancamentos!inner(
          numero, descricao,
@@ -485,6 +495,7 @@ export async function listarParcelasPagas({
     valor: parcela.valor,
     desconto: parcela.desconto ?? 0,
     juros: Number(parcela.juros ?? 0),
+    outrasDespesas: Number(parcela.outras_despesas ?? 0),
     valorLiquido: parcela.valor_liquido ?? parcela.valor,
   }));
 

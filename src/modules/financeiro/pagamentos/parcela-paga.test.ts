@@ -20,10 +20,16 @@ describe("ParcelaPaga", () => {
       valor: 1000,
       desconto: 50,
       juros: 20,
-      valorLiquido: 970,
+      outrasDespesas: 20,
+      // 1000 - 50 + 20 + 20. À mão: fixture que ignora um dos termos afirma a
+      // crença de quem a escreveu, e passa verde sobre uma conta impossível.
+      valorLiquido: 990,
     };
-    expect(parcela.valor - parcela.desconto + parcela.juros).toBe(
-      parcela.valorLiquido,
-    );
+    expect(
+      parcela.valor -
+        parcela.desconto +
+        parcela.juros +
+        parcela.outrasDespesas,
+    ).toBe(parcela.valorLiquido);
   });
 });

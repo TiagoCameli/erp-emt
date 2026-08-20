@@ -40,6 +40,7 @@ import {
   ROTULO_TIPO_LANCAMENTO,
   STATUS_PARCELA,
 } from "@/modules/financeiro/_shared/formato";
+import { ComposicaoDoLiquido } from "@/modules/financeiro/_shared/composicao-liquido";
 import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
@@ -682,24 +683,20 @@ export function LancamentoDetalheView({
                           </td>
                           <td className="px-3 py-2 text-right">
                             <MoneyText valor={parcela.valor} />
-                            {/* Desconto só aparece quando existe: linha extra em
-                                toda parcela viraria ruído numa coluna de
-                                dinheiro. Mostra a conta feita porque é o líquido
-                                que saiu da conta bancária. */}
-                            {parcela.desconto > 0 ? (
-                              <span className="block text-legenda text-muted-foreground">
-                                desconto{" "}
-                                <MoneyText
-                                  valor={parcela.desconto}
-                                  className="inline"
-                                />
-                                , líquido{" "}
-                                <MoneyText
-                                  valor={parcela.valorLiquido}
-                                  className="inline"
-                                />
-                              </span>
-                            ) : null}
+                            {/* Os ajustes só aparecem quando existem: linha
+                                extra em toda parcela viraria ruído numa coluna
+                                de dinheiro. Mostra a conta feita porque é o
+                                líquido que saiu da conta bancária — e é por isso
+                                que juros e despesas entram junto com o desconto:
+                                enquanto só o desconto aparecia aqui, uma parcela
+                                paga com multa era exibida pelo valor devido, sem
+                                nenhuma pista de que saiu mais dinheiro. */}
+                            <ComposicaoDoLiquido
+                              desconto={parcela.desconto}
+                              juros={parcela.juros}
+                              outrasDespesas={parcela.outrasDespesas}
+                              valorLiquido={parcela.valorLiquido}
+                            />
                           </td>
                           <td className="px-3 py-2 text-right">
                             {parcela.status === "em_revisao" && podeEditar ? (
