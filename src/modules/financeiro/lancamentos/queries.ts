@@ -515,27 +515,51 @@ async function valoresPorCentroCusto(
   supabase: ClienteSupabase,
   centroCustoId: string,
 ): Promise<Map<string, number>> {
-  // O centro de custo do lançamento vive no rateio, nunca na tabela mãe: um
-  // lançamento pode ser dividido entre várias obras.
-  const rateios = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_rateios")
-      .select("lancamento_id, valor")
-      .eq("centro_custo_id", centroCustoId)
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
+  // Filtra a SUBÁRVORE do centro, não só o nó: escolher a obra tem que trazer as
+  // etapas dela, e escolher o centro de manutenção tem que trazer o custo de
+  // cada equipamento (que é etapa dele). É o mesmo recorte que o relatório usa —
+  // `fn_rel_custo_centro_custo` agrupa na raiz. Com `eq` aqui, clicar num centro
+  // do relatório abria uma lista que soma MENOS que o número clicado, e a
+  // diferença não aparece em lugar nenhum da tela.
+  const { data: arvore, error: erroArvore } = await supabase.rpc(
+    "fn_centro_custo_subarvore",
+    { p_centro: centroCustoId },
   );
+  // Erro não pode virar lista vazia, pelo mesmo motivo do `lerEmPaginas`: a tela
+  // mostraria "nenhum lançamento" para um filtro que não chegou a ser aplicado.
+  if (erroArvore) throw new Error("Não foi possível aplicar o filtro");
+
+  const idsDaArvore = (arvore ?? []).map((linha) => linha.id);
+  // Nenhum id não é o mesmo que nenhum filtro: `in.()` vazio é erro no PostgREST,
+  // e sem centro nenhum a resposta certa é lista vazia, não a lista inteira.
+  if (idsDaArvore.length === 0) return new Map();
 
   // Soma em vez de sobrescrever: nada no banco impede o mesmo lançamento de ter
-  // duas linhas de rateio no MESMO centro, e sobrescrever perderia uma delas.
+  // duas linhas de rateio no mesmo centro — e agora nem em dois centros da mesma
+  // árvore (um lançamento rateado entre dois equipamentos da manutenção) —, e
+  // sobrescrever perderia uma delas.
   const porLancamento = new Map<string, number>();
-  for (const rateio of rateios) {
-    const atual = porLancamento.get(rateio.lancamento_id) ?? 0;
-    porLancamento.set(
-      rateio.lancamento_id,
-      paraReais(paraCentavos(atual) + paraCentavos(rateio.valor)),
+
+  // O centro de custo do lançamento vive no rateio, nunca na tabela mãe: um
+  // lançamento pode ser dividido entre várias obras.
+  for (const lote of emLotes(idsDaArvore, LOTE_IDS_POSTGREST)) {
+    const rateios = await lerEmPaginas((de, ate) =>
+      supabase
+        .from("lancamento_rateios")
+        .select("lancamento_id, valor")
+        .in("centro_custo_id", lote)
+        .order("lancamento_id")
+        .order("id")
+        .range(de, ate),
     );
+
+    for (const rateio of rateios) {
+      const atual = porLancamento.get(rateio.lancamento_id) ?? 0;
+      porLancamento.set(
+        rateio.lancamento_id,
+        paraReais(paraCentavos(atual) + paraCentavos(rateio.valor)),
+      );
+    }
   }
   return porLancamento;
 }

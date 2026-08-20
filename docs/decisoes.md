@@ -2539,3 +2539,58 @@ categorias igual ao usuário autorizado. Só com `set local role authenticated` 
 **E foi a linha de controle que denunciou.** Sem uma linha que TEM que dar diferente de zero, eu teria
 reportado uma prova de RLS que não provava nada — o mesmo padrão registrado em 13/08, agora numa
 segunda forma.
+
+## 20/08/2026 — Custo por centro de custo soma a subárvore, não o nó exato
+
+**O relatório mostrava uma ETAPA como se fosse um centro de primeiro nível.** "Caminhão Pipa L1318/50
+MZO-4486 - 02" aparecia com R$ 326,50 ao lado das obras. O dado no banco estava certo: ele é nível 2,
+com pai "Manutenção/Documentação de Equipamentos" — que é exatamente como o plano modela manutenção
+(cada equipamento é uma etapa do centro de manutenção). O defeito era o `group by r.centro_custo_id`
+cru, que mistura níveis. Agora o relatório sobe cada rateio até a raiz e agrupa por ela.
+
+**O filtro por tipo era um buraco silencioso de dinheiro, e foi o achado maior.** Só a raiz tem `tipo`
+preenchido; etapa tem `tipo` null. Então `cc.tipo = p_tipo_centro` DESCARTAVA todo rateio feito em
+etapa: quem filtrasse "Manutenção" via R$ 4.353.614,09 em vez de R$ 4.353.940,59. Sem erro, sem aviso,
+R$ 326,50 a menos — o tipo de defeito que só aparece quando alguém soma na mão. O tipo passou a ser lido
+na raiz.
+
+**A regra que sai daqui: filtrar por centro de custo é filtrar a SUBÁRVORE.** Escolher a obra tem que
+trazer as etapas dela; escolher o centro de manutenção tem que trazer os equipamentos. Isso não é
+preferência, é o que a espinha dorsal Obra > Etapa > Item significa. Valeu para as cinco RPCs que
+filtravam `centro_custo_id = p_centro` (`fn_rel_custo_centro_custo`, `_serie`, `_vida`,
+`fn_rel_custo_por_mes`, `fn_rel_custo_por_grupo`) e para o `valoresPorCentroCusto` do TS. Em
+`fn_rel_custo_por_grupo` eram DOIS filtros, porque o grão muda: vindo de OC o centro está no item da OC,
+no avulso está no rateio — trocar só um deixaria metade do painel respondendo a árvore e a outra metade
+o nó.
+
+**O drill tinha que fechar com o relatório, e essa era a parte que dava para errar.** A lista de
+lançamentos filtrava `.eq("centro_custo_id", ...)`. Somar na raiz sem mexer nisso faria o card mostrar
+R$ 4.353.940,59 e abrir uma lista que soma R$ 4.353.614,09 — o padrão "card leva para número diferente"
+já registrado. Provado nos dois sentidos: drill e relatório dão 4.353.940,59, e a linha de controle (o
+jeito antigo, `eq`) dá 4.353.614,09. Prova em que o controle TEM que diferir, senão não prova nada.
+
+**O tamanho real da mudança hoje é uma linha, e é isso que a tornou segura de fazer inteira.** Existe UM
+rateio abaixo da raiz (R$ 326,50) contra 6.052 na raiz (R$ 63,7 mi), e o total geral não se moveu:
+R$ 63.777.075,05 antes e depois, com 12 linhas virando 11. Mas as 60 etapas de equipamento já estão
+cadastradas e só uma foi usada — o buraco ia crescer a cada rateio por equipamento, e cresceria calado.
+
+**Nenhuma assinatura mudou, então `create or replace` preservou os grants.** É o caminho oposto ao de
+14/08 (parâmetro novo exige DROP+CREATE e re-grant, e sem o grant o painel fica em branco sem erro):
+manter a assinatura idêntica é o que evita aquele problema.
+
+**No gráfico, cor por POSIÇÃO era o defeito de fundo, não só o rótulo cortado.** As barras eram
+verticais com rótulo girado -30°, e o navegador cortava o COMEÇO do nome — sobrava
+"…-364/AC - Lote 09 & 10", justamente sem o "009 - " que identifica a obra. Deitando as barras o nome
+corre na horizontal e cabe. Mas o pior era a cor: um ciclo de 5 cores atribuído pelo índice fazia a cor
+significar "5º lugar" em vez de identificar o centro (filtrar repintava todos os outros), e o 5º slot
+era o vermelho de status — a mesma cor de "rejeitado" e "vencido" — num centro que não tem nada de
+errado. O que se compara ali é grandeza, e grandeza já está no comprimento da barra: uma cor só, com
+cinza reservado para "Outros", que é agregado e não clica. O cinza é sobre o dado ser agregado, NÃO
+sobre a barra clicar: quem não tem permissão de ver lançamentos recebe `destinos` vazio, e pintar por
+`href` deixaria o gráfico inteiro cinza para essa pessoa.
+
+**A altura do gráfico saiu do componente porque o Skeleton do `next/dynamic` não recebe props.** Com
+barras horizontais a altura tem que crescer com o número de barras, e se o gráfico decidisse a própria
+altura o carregamento mediria uma coisa e o gráfico outra — a página pularia na troca. Quem sabe quantos
+centros existem é o wrapper, então é ele que reserva o espaço, lendo o mesmo `alturaDoGrafico` que tem
+teste.
