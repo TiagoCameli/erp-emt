@@ -3293,6 +3293,66 @@ export type Database = {
           },
         ];
       };
+      transferencias_contas: {
+        Row: {
+          conta_destino_id: string;
+          conta_origem_id: string;
+          created_at: string;
+          created_by: string | null;
+          data_transferencia: string;
+          descricao: string | null;
+          id: string;
+          numero: string;
+          observacoes: string | null;
+          tarifa: number;
+          updated_at: string;
+          valor: number;
+        };
+        Insert: {
+          conta_destino_id: string;
+          conta_origem_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_transferencia: string;
+          descricao?: string | null;
+          id?: string;
+          numero: string;
+          observacoes?: string | null;
+          tarifa?: number;
+          updated_at?: string;
+          valor: number;
+        };
+        Update: {
+          conta_destino_id?: string;
+          conta_origem_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_transferencia?: string;
+          descricao?: string | null;
+          id?: string;
+          numero?: string;
+          observacoes?: string | null;
+          tarifa?: number;
+          updated_at?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transferencias_contas_conta_destino_id_fkey";
+            columns: ["conta_destino_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transferencias_contas_conta_origem_id_fkey";
+            columns: ["conta_origem_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       unidades_medida: {
         Row: {
           ativo: boolean;
@@ -3645,6 +3705,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined };
+      fn_excluir_transferencia: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
       fn_excluir_usuario: { Args: { p_id: string }; Returns: boolean };
       fn_exigir_competencia_aberta: {
         Args: { p_entidade: string; p_id: string; p_mes: string };
@@ -4014,6 +4078,22 @@ export type Database = {
       fn_salvar_preferencia_tabela: {
         Args: { p_preferencia: Json; p_tabela: string };
         Returns: undefined;
+      };
+      fn_salvar_transferencia: {
+        Args: {
+          p_conta_destino_id: string;
+          p_conta_origem_id: string;
+          p_data: string;
+          p_descricao?: string;
+          // Null cria uma transferencia nova; preenchido edita a existente. O
+          // parametro nao pode ter DEFAULT no Postgres porque vem antes de
+          // parametros obrigatorios, entao quem cria manda null explicito.
+          p_id: string | null;
+          p_observacoes?: string;
+          p_tarifa?: number;
+          p_valor: number;
+        };
+        Returns: string;
       };
       fn_total_da_oc: {
         Args: {

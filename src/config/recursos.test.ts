@@ -103,7 +103,8 @@ describe("recursosDoModulo", () => {
    * pelo Tiago (20/08/2026), não é acidente de digitação.
    *
    * Recebimentos vem logo depois de Pagamentos porque é o par dele: o dinheiro
-   * que sai e o dinheiro que entra, lidos na mesma sequência.
+   * que sai e o dinheiro que entra, lidos na mesma sequência. Transferências
+   * fecha o trio na sequência seguinte: o dinheiro que só muda de conta.
    */
   it("o Financeiro sai na ordem pedida, com Recebimentos logo depois de Pagamentos", () => {
     expect(recursosDoModulo("financeiro").map((r) => r.id)).toEqual([
@@ -111,6 +112,7 @@ describe("recursosDoModulo", () => {
       "financeiro.aprovacao-pagamentos",
       "financeiro.pagamentos",
       "financeiro.recebimentos",
+      "financeiro.transferencias",
       "financeiro.competencias",
       "financeiro.programados",
       "financeiro.contas-bancarias",

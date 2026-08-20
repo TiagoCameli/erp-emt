@@ -29,9 +29,10 @@ import {
 } from "@/modules/financeiro/relatorios/calculo";
 
 /**
- * Uma linha de `fn_rel_posicao_bancaria`: o total JÁ SOMADO no banco das
- * parcelas pagas de uma conta num tipo de lançamento. São no máximo duas linhas
- * por conta (a_pagar e a_receber), não uma por parcela.
+ * Uma linha de `fn_rel_posicao_bancaria`: o total JÁ SOMADO no banco de uma
+ * conta num tipo de movimento. São no máximo quatro linhas por conta (a_pagar,
+ * a_receber, transferencia_entrada, transferencia_saida), nunca uma por
+ * parcela.
  *
  * `total` aceita string porque NUMERIC pode chegar assim do PostgREST; o tipo
  * gerado diz `number` e essa é a parte em que ele mente.
@@ -43,14 +44,26 @@ export interface MovimentoContaAgregado {
 }
 
 /**
- * Movimento de cada conta, em CENTAVOS inteiros, a partir das linhas agregadas
- * da RPC. Soma (em vez de sobrescrever) porque cada conta chega em até duas
- * linhas, uma por tipo, e o movimento da conta é a junção das duas.
+ * Os tipos que ENTRAM dinheiro na conta. Todo o resto sai.
  *
- * Sinal: a_receber entra somando (dinheiro entrou na conta), qualquer outro
- * tipo entra subtraindo (saiu). `lancamentos.tipo` só admite a_pagar e
- * a_receber, então "qualquer outro" é a_pagar; é o mesmo tratamento do
- * relatório Posição bancária.
+ * `a_receber` é a parcela recebida. `transferencia_entrada` é o lado de quem
+ * recebeu numa transferência entre contas da própria EMT — a RPC devolve o par
+ * entrada/saída desde a migration 20260820210000. Sem o tipo listado aqui, a
+ * entrada cairia no `else` e seria SUBTRAÍDA: a conta que recebeu apareceria
+ * com o dobro do valor a menos, sem erro nenhum na tela.
+ */
+const TIPOS_QUE_ENTRAM = new Set(["a_receber", "transferencia_entrada"]);
+
+/**
+ * Movimento de cada conta, em CENTAVOS inteiros, a partir das linhas agregadas
+ * da RPC. Soma (em vez de sobrescrever) porque cada conta chega em até quatro
+ * linhas (a_pagar, a_receber, transferencia_entrada, transferencia_saida) e o
+ * movimento da conta é a junção de todas.
+ *
+ * Sinal: ver TIPOS_QUE_ENTRAM. O que sai é a parcela paga (a_pagar) e o que a
+ * conta mandou numa transferência — e nessa saída a TARIFA já vem somada pela
+ * RPC, porque o banco debita valor mais tarifa da origem e credita só o valor
+ * no destino.
  */
 export function movimentoPorContaEmCentavos(
   linhas: readonly MovimentoContaAgregado[],
@@ -58,7 +71,7 @@ export function movimentoPorContaEmCentavos(
   const movimento = new Map<string, number>();
 
   for (const linha of linhas) {
-    const sinal = linha.tipo === "a_receber" ? 1 : -1;
+    const sinal = TIPOS_QUE_ENTRAM.has(linha.tipo) ? 1 : -1;
     const centavos = paraCentavos(linha.total) * sinal;
     movimento.set(
       linha.contaBancariaId,

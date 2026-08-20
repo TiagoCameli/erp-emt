@@ -88,3 +88,98 @@ describe("saldo atual da conta bancária", () => {
     ).toBe(0.4);
   });
 });
+
+/**
+ * Transferência entre contas, que a RPC passou a devolver em 20/08/2026.
+ *
+ * O erro que estes testes existem para pegar é de SINAL: `transferencia_entrada`
+ * precisa somar. Se ela cair no `else` junto com as saídas, a conta que recebeu
+ * aparece com o DOBRO do valor a menos — e não há erro na tela, só um saldo
+ * errado que ninguém consegue explicar olhando a lista.
+ */
+describe("saldo com transferência entre contas", () => {
+  it("a entrada SOMA no destino", () => {
+    expect(
+      saldo(1000, [
+        { contaBancariaId: CONTA, tipo: "transferencia_entrada", total: 300 },
+      ]),
+    ).toBe(1300);
+  });
+
+  it("a saída SUBTRAI na origem, com a tarifa já embutida pela RPC", () => {
+    // A RPC soma valor + tarifa numa linha só: o banco debita os dois da
+    // origem. Aqui entram R$ 300 de transferência mais R$ 5 de tarifa.
+    expect(
+      saldo(1000, [
+        { contaBancariaId: CONTA, tipo: "transferencia_saida", total: 305 },
+      ]),
+    ).toBe(695);
+  });
+
+  it("as quatro linhas da mesma conta se juntam", () => {
+    expect(
+      saldo(1000, [
+        { contaBancariaId: CONTA, tipo: "a_receber", total: 200 },
+        { contaBancariaId: CONTA, tipo: "a_pagar", total: 100 },
+        { contaBancariaId: CONTA, tipo: "transferencia_entrada", total: 50 },
+        { contaBancariaId: CONTA, tipo: "transferencia_saida", total: 30 },
+      ]),
+    ).toBe(1120);
+  });
+
+  /**
+   * A prova de que a transferência é soma zero entre as duas contas quando não
+   * há tarifa: o que sai de uma entra na outra, e o total das duas não muda.
+   */
+  it("sem tarifa, o total das duas contas não muda", () => {
+    const linhas: MovimentoContaAgregado[] = [
+      { contaBancariaId: CONTA, tipo: "transferencia_saida", total: 1000 },
+      { contaBancariaId: OUTRA, tipo: "transferencia_entrada", total: 1000 },
+    ];
+    const origem = saldo(5000, linhas, CONTA);
+    const destino = saldo(2000, linhas, OUTRA);
+
+    expect(origem).toBe(4000);
+    expect(destino).toBe(3000);
+    expect(origem + destino).toBe(7000);
+  });
+
+  /**
+   * LINHA DE CONTROLE: com tarifa, o total das duas contas TEM que cair, e cair
+   * exatamente a tarifa. Se este teste desse zero como o de cima, seria sinal de
+   * que a tarifa sumiu do cálculo em vez de estar sendo cobrada de alguém.
+   */
+  it("com tarifa, o total das duas contas cai exatamente a tarifa", () => {
+    const linhas: MovimentoContaAgregado[] = [
+      // 1.000 de transferência + 8,90 de tarifa saindo da origem.
+      { contaBancariaId: CONTA, tipo: "transferencia_saida", total: 1008.9 },
+      { contaBancariaId: OUTRA, tipo: "transferencia_entrada", total: 1000 },
+    ];
+    const origem = saldo(5000, linhas, CONTA);
+    const destino = saldo(2000, linhas, OUTRA);
+
+    expect(origem).toBe(3991.1);
+    expect(destino).toBe(3000);
+
+    // A diferença se confere em CENTAVOS INTEIROS, não em reais: 7000 -
+    // (3991.1 + 3000) dá 8.899999999999636 em ponto flutuante, e a primeira
+    // versão deste teste falhou por isso. O módulo estava certo -- os dois
+    // saldos acima vieram exatos, porque a soma dele já é em centavos. Quem
+    // errou foi a asserção, e é o mesmo erro que a tela cometeria se somasse
+    // reais para montar um total.
+    const centavos = (reais: number) => Math.round(reais * 100);
+    expect(centavos(7000) - (centavos(origem) + centavos(destino))).toBe(890);
+  });
+
+  it("NUMERIC string na transferência também vira o real certo", () => {
+    expect(
+      saldo(1000, [
+        {
+          contaBancariaId: CONTA,
+          tipo: "transferencia_entrada",
+          total: "1234.56",
+        },
+      ]),
+    ).toBe(2234.56);
+  });
+});
