@@ -62,9 +62,9 @@ const motivoSchema = z.string().trim().min(1).max(500);
 /**
  * O que o operador acerta no ato do pagamento, além da conta e da data.
  *
- * Objeto, e não mais quatro argumentos posicionais: são TRÊS valores em reais
- * seguidos, todos opcionais, e num `pagarParcela(id, conta, data, 0, 0, 250)`
- * ninguém enxerga em qual campo os R$ 250 caíram. Aqui o nome vai junto.
+ * Objeto, e não argumentos posicionais: são TRÊS valores em reais seguidos,
+ * todos opcionais, e num `pagarParcela(id, conta, data, 0, 0, 250)` ninguém
+ * enxerga em qual campo os R$ 250 caíram. Aqui o nome vai junto.
  *
  * Nenhum deles reescreve o valor devido da parcela: eles compõem o LÍQUIDO, que
  * é o que sai da conta bancária e bate com o extrato.
@@ -102,12 +102,7 @@ export async function pagarParcela(
   dataPagamento: string,
   ajustes: AjustesDoPagamento = {},
 ): Promise<ResultadoAcao> {
-  const {
-    desconto = 0,
-    juros = 0,
-    outrasDespesas = 0,
-    motivo,
-  } = ajustes;
+  const { desconto = 0, juros = 0, outrasDespesas = 0, motivo } = ajustes;
   try {
     await exigirPermissao(RECURSO, "criar");
   } catch {
