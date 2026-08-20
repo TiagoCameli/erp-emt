@@ -33,6 +33,9 @@ const ocValida = {
   descricao: DESCRICAO,
   categoriaId: CATEGORIA,
   itens: [itemValido],
+  // 5 x 12,50 = 62,50, tudo por uma forma so: e o que o formulario manda quando
+  // ninguem dividiu (a linha unica assume o total dos itens).
+  formas: [{ formaPagamentoId: FORMA, valor: 62.5 }],
 };
 
 describe("ocItemSchema", () => {
@@ -266,6 +269,9 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     // Parcelas são opcionais no produto (lista vazia = definir no lançamento),
     // mas o campo é sempre enviado pelo formulário.
     parcelas: [],
+    // Uma forma, sem valor: com forma única o valor não é digitado (vale o total
+    // dos itens), e é o `aoEnviar` do drawer que o preenche.
+    formas: [{ formaPagamentoId: FORMA, valor: "" }],
   };
 
   it("aceita OC com um centro de custo e um insumo", () => {
@@ -418,6 +424,7 @@ describe("parcelas da OC no formulário", () => {
         insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100" }],
       },
     ],
+    formas: [{ formaPagamentoId: FORMA, valor: "" }],
   };
 
   it("lista vazia é válida: parcelas são opcionais", () => {
@@ -430,9 +437,9 @@ describe("parcelas da OC no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
       parcelas: [
-        { dataVencimento: "2026-07-18", valor: "333,33" },
-        { dataVencimento: "2026-08-18", valor: "333,33" },
-        { dataVencimento: "2026-09-18", valor: "333,34" },
+        { dataVencimento: "2026-07-18", valor: "333,33", formaPagamentoId: "" },
+        { dataVencimento: "2026-08-18", valor: "333,33", formaPagamentoId: "" },
+        { dataVencimento: "2026-09-18", valor: "333,34", formaPagamentoId: "" },
       ],
     });
     expect(r.success).toBe(true);
@@ -442,8 +449,8 @@ describe("parcelas da OC no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
       parcelas: [
-        { dataVencimento: "2026-07-18", valor: "500,00" },
-        { dataVencimento: "2026-08-18", valor: "488,00" },
+        { dataVencimento: "2026-07-18", valor: "500,00", formaPagamentoId: "" },
+        { dataVencimento: "2026-08-18", valor: "488,00", formaPagamentoId: "" },
       ],
     });
     expect(r.success).toBe(false);
@@ -455,7 +462,7 @@ describe("parcelas da OC no formulário", () => {
   it("recusa soma que passa do total", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
-      parcelas: [{ dataVencimento: "2026-07-18", valor: "1012,00" }],
+      parcelas: [{ dataVencimento: "2026-07-18", valor: "1012,00", formaPagamentoId: "" }],
     });
     expect(r.success).toBe(false);
     expect(
@@ -467,8 +474,8 @@ describe("parcelas da OC no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
       parcelas: [
-        { dataVencimento: "2026-06-01", valor: "500,00" },
-        { dataVencimento: "2026-07-18", valor: "500,00" },
+        { dataVencimento: "2026-06-01", valor: "500,00", formaPagamentoId: "" },
+        { dataVencimento: "2026-07-18", valor: "500,00", formaPagamentoId: "" },
       ],
     });
     expect(r.success).toBe(false);
@@ -484,7 +491,7 @@ describe("parcelas da OC no formulário", () => {
   it("vencimento no dia da compra é aceito", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
-      parcelas: [{ dataVencimento: "2026-06-18", valor: "1000,00" }],
+      parcelas: [{ dataVencimento: "2026-06-18", valor: "1000,00", formaPagamentoId: "" }],
     });
     expect(r.success).toBe(true);
   });
@@ -493,8 +500,8 @@ describe("parcelas da OC no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...base,
       parcelas: [
-        { dataVencimento: "2026-07-18", valor: "0" },
-        { dataVencimento: "2026-08-18", valor: "1000,00" },
+        { dataVencimento: "2026-07-18", valor: "0", formaPagamentoId: "" },
+        { dataVencimento: "2026-08-18", valor: "1000,00", formaPagamentoId: "" },
       ],
     });
     expect(r.success).toBe(false);
@@ -518,6 +525,7 @@ describe("parcelas da OC no servidor", () => {
         centroCustoId: CENTRO,
       },
     ],
+    formas: [{ formaPagamentoId: FORMA, valor: 1000 }],
   };
 
   it("sem parcelas passa e vira lista vazia", () => {

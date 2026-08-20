@@ -43,6 +43,9 @@ function comoFormulario(parcelas: ParcelaGravada[]): ParcelaForm[] {
   return parcelas.map((parcela) => ({
     dataVencimento: parcela.dataVencimento ?? "",
     valor: parcela.valor.toFixed(2).replace(".", ","),
+    // O diálogo de definir parcelas não escolhe forma: quem herda o bloco é a
+    // função do banco. Ver o comentário em `parcelasIniciais`.
+    formaPagamentoId: "",
   }));
 }
 
@@ -125,7 +128,7 @@ describe("o total segue as parcelas", () => {
   it("acrescentar parcela sobe o total", () => {
     const editadas = [
       ...comoFormulario(abertas()),
-      { dataVencimento: "2029-11-29", valor: "1000,00" },
+      { dataVencimento: "2029-11-29", valor: "1000,00", formaPagamentoId: "" },
     ];
     expect(totalDepoisDaEdicao(LANCAMENTO, editadas)).toBe(
       TOTAL_LANCAMENTO + 1000,
@@ -137,7 +140,7 @@ describe("o total segue as parcelas", () => {
   });
 
   it("o que foi pago é o piso: nunca sai do total", () => {
-    const so_uma: ParcelaForm[] = [{ dataVencimento: "2026-08-29", valor: "0,01" }];
+    const so_uma: ParcelaForm[] = [{ dataVencimento: "2026-08-29", valor: "0,01", formaPagamentoId: "" }];
     expect(totalDepoisDaEdicao(LANCAMENTO, so_uma)).toBe(TOTAL_PAGO + 0.01);
   });
 
@@ -201,7 +204,7 @@ describe("o que impede de salvar", () => {
         gravadas: [],
         origem: "manual",
         valorDoCabecalho: 1000,
-        editadas: [{ dataVencimento: "2026-09-29", valor: "1000,00" }],
+        editadas: [{ dataVencimento: "2026-09-29", valor: "1000,00", formaPagamentoId: "" }],
         justificativa: "",
       }),
     ).toBeNull();
@@ -247,7 +250,7 @@ describe("o que impede de salvar", () => {
     expect(
       motivoParaNaoSalvar({
         gravadas: abertas(1),
-        editadas: [{ dataVencimento: "2026-08-29", valor: "0" }],
+        editadas: [{ dataVencimento: "2026-08-29", valor: "0", formaPagamentoId: "" }],
         origem: "manual",
         valorDoCabecalho: ABERTA_VALOR,
       }),

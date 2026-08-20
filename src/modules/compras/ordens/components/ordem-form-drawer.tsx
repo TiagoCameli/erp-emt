@@ -13,6 +13,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
+import { cn } from "@/lib/utils";
 
 import {
   CampoFormulario,
@@ -139,7 +140,9 @@ function valoresIniciais(
       parcelas: ordem.parcelas.map((parcela) => ({
         dataVencimento: parcela.dataVencimento,
         valor: String(parcela.valor).replace(".", ","),
+        formaPagamentoId: parcela.formaPagamentoId ?? "",
       })),
+      formas: formasIniciais(ordem),
     };
   }
 
@@ -162,6 +165,9 @@ function valoresIniciais(
       centrosCusto:
         prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
       parcelas: [],
+      // A cotação traz UMA forma: ela nasce como a única, e "Dividir entre
+      // formas" abre a segunda se a compra for paga em mais de uma.
+      formas: [{ formaPagamentoId: prefill.formaPagamentoId ?? "", valor: "" }],
     };
   }
 
@@ -183,8 +189,37 @@ function valoresIniciais(
       ordem?.parcelas.map((parcela) => ({
         dataVencimento: parcela.dataVencimento,
         valor: String(parcela.valor).replace(".", ","),
+        formaPagamentoId: parcela.formaPagamentoId ?? "",
       })) ?? [],
+    formas: formasIniciais(ordem),
   };
+}
+
+/**
+ * As formas iniciais do formulário.
+ *
+ * Ordem que já tem formas declaradas abre com elas. Ordem antiga (sem bloco) abre
+ * com UMA linha semeada pelo `formaPagamentoId` do cabeçalho — editar não pode
+ * apagar a forma que estava lá. Ordem nova abre com uma linha em branco: a forma
+ * é obrigatória na OC, então o campo tem de estar na tela desde o começo.
+ *
+ * Com uma forma só, o `valor` vai vazio: a coluna não aparece na tela, porque ela
+ * vale o total dos itens. Mesmo tratamento do centro de custo único e da parcela
+ * única no lançamento.
+ */
+function formasIniciais(
+  ordem: OrdemDetalhe | null,
+): OrdemCompraFormInput["formas"] {
+  if (ordem && ordem.formas.length > 0) {
+    return ordem.formas.map((forma) => ({
+      formaPagamentoId: forma.formaPagamentoId,
+      valor:
+        ordem.formas.length === 1
+          ? ""
+          : String(forma.valor).replace(".", ","),
+    }));
+  }
+  return [{ formaPagamentoId: ordem?.formaPagamentoId ?? "", valor: "" }];
 }
 
 /** Nome de exibição de um centro de custo: "CÓDIGO Nome". */
@@ -360,10 +395,48 @@ export function OrdemFormDrawer({
   );
 
   async function aoEnviar(valores: OrdemCompraFormInput) {
+    /**
+     * Com UMA forma ela leva o total dos itens: a coluna de valor dela não está
+     * na tela, mesmo tratamento do centro de custo único. Com duas ou mais, cada
+     * uma leva o valor digitado.
+     */
+    const itens = achatarGruposEmItens(valores.centrosCusto);
+    const totalDosItens =
+      Math.round(
+        itens.reduce(
+          (soma, item) =>
+            soma + Math.round(item.quantidade * item.precoUnitario * 100),
+          0,
+        ),
+      ) / 100;
+
+    const formas =
+      valores.formas.length === 1
+        ? [
+            {
+              formaPagamentoId: valores.formas[0]!.formaPagamentoId,
+              valor: totalDosItens,
+            },
+          ]
+        : valores.formas.map((forma) => ({
+            formaPagamentoId: forma.formaPagamentoId,
+            valor: paraNumero(forma.valor),
+          }));
+
+    /**
+     * Com uma forma só, TODA parcela é dela: a pessoa não escolhe duas vezes a
+     * mesma coisa, e a tela nem mostra a coluna de forma nesse caso.
+     */
+    const formaUnicaId =
+      formas.length === 1 ? formas[0]!.formaPagamentoId : null;
+
     const dados = {
       fornecedorId: valores.fornecedorId,
       condicaoPagamentoId: valores.condicaoPagamentoId,
-      formaPagamentoId: valores.formaPagamentoId,
+      // Projeção: quem manda é `formas`. `fn_salvar_parcelas_oc` reescreve o
+      // cabeçalho no banco (a única forma, ou nulo quando há várias), então o
+      // que vai aqui só serve para a ordem nascer com algo coerente.
+      formaPagamentoId: formas[0]?.formaPagamentoId ?? "",
       cotacaoId: valores.cotacaoId,
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
@@ -371,11 +444,13 @@ export function OrdemFormDrawer({
       categoriaId: valores.categoriaId,
       numeroDocumento: valores.numeroDocumento,
       observacoes: valores.observacoes,
-      itens: achatarGruposEmItens(valores.centrosCusto),
+      itens,
       parcelas: valores.parcelas.map((parcela) => ({
         dataVencimento: parcela.dataVencimento,
         valor: paraNumero(parcela.valor),
+        formaPagamentoId: formaUnicaId ?? (parcela.formaPagamentoId || undefined),
       })),
+      formas,
     };
 
     if (editando) {
@@ -431,11 +506,91 @@ export function OrdemFormDrawer({
       : undefined;
 
   const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
+  const formasObservadas = form.watch("formas") ?? [];
+  /**
+   * Com UMA forma ela vale o total dos itens e aparece como um Combobox só, sem
+   * coluna de valor -- mesmo padrão do centro de custo único. "Dividir entre
+   * formas" abre a tabela, e aí cada forma ganha valor e as parcelas passam a
+   * dizer de qual são.
+   */
+  const formaUnica = formasObservadas.length <= 1;
+  const {
+    fields: linhasFormas,
+    append: acrescentarForma,
+    remove: removerLinhaForma,
+    replace: trocarFormas,
+  } = useFieldArray({ control: form.control, name: "formas" });
+  const somaDasFormas =
+    Math.round(
+      formasObservadas.reduce(
+        (soma, forma) => soma + Math.round(paraNumero(forma.valor ?? "") * 100),
+        0,
+      ),
+    ) / 100;
+
+  /**
+   * Divide a ordem entre formas.
+   *
+   * Saindo de forma unica, a linha que estava sem coluna de valor assume o total
+   * dos itens e a segunda nasce em branco. As parcelas que ja existem ficam TODAS
+   * na primeira forma: e o unico palpite honesto, porque nada na tela diz que
+   * alguma delas deveria mudar.
+   */
+  function adicionarForma() {
+    if (formasObservadas.length <= 1) {
+      const escolhida = form.getValues("formas.0.formaPagamentoId") ?? "";
+      trocarFormas([
+        {
+          formaPagamentoId: escolhida,
+          valor: String(totalPrevia.toFixed(2)).replace(".", ","),
+        },
+        { formaPagamentoId: "", valor: "" },
+      ]);
+      const atuais = form.getValues("parcelas") ?? [];
+      if (atuais.length > 0) {
+        form.setValue(
+          "parcelas",
+          atuais.map((parcela) => ({
+            ...parcela,
+            formaPagamentoId: escolhida,
+          })),
+        );
+      }
+      return;
+    }
+    acrescentarForma({ formaPagamentoId: "", valor: "" });
+  }
+
+  /**
+   * Remove uma forma, e com ela as parcelas que eram dela. Deixar parcela orfa
+   * travaria o envio numa mensagem sobre soma, para quem so apagou uma forma.
+   */
+  function removerForma(indice: number) {
+    const removida = form.getValues(`formas.${indice}.formaPagamentoId`);
+    const restantes = (form.getValues("formas") ?? []).filter(
+      (_, posicao) => posicao !== indice,
+    );
+    removerLinhaForma(indice);
+
+    const sobrando = (form.getValues("parcelas") ?? []).filter(
+      (parcela) => parcela.formaPagamentoId !== removida,
+    );
+    const unica = restantes.length === 1 ? restantes[0]?.formaPagamentoId : null;
+    form.setValue(
+      "parcelas",
+      sobrando.map((parcela) =>
+        unica === null ? parcela : { ...parcela, formaPagamentoId: unica },
+      ),
+    );
+  }
   // O tipo da forma escolhida decide o caminho do pagamento. A tela diz isso
   // aqui, antes de salvar, em vez de o usuário descobrir depois procurando a
   // parcela numa fila onde ela nunca vai aparecer.
+  // O tipo da forma quando ha UMA so: e ele que a ajuda do campo usa para dizer o
+  // que vai acontecer com o pagamento. Com duas ou mais nao existe "o tipo" da
+  // ordem, e quem diz o caminho e a coluna de cada linha da tabela de formas.
   const tipoFormaEscolhida = formasPagamento.find(
-    (forma) => forma.id === formaPagamentoValor,
+    (forma) => forma.id === (formasObservadas[0]?.formaPagamentoId ?? ""),
   )?.tipo;
   // Cotação de origem só entra por "Gerar OC" (prefill) ou vem da OC em
   // edição; nunca é escolhida à mão. Mostramos apenas como leitura.
@@ -662,21 +817,36 @@ export function OrdemFormDrawer({
               />
             </CampoFormulario>
 
+            {/* Forma de pagamento: com UMA e este Combobox; a partir de duas, a
+                seção "Formas de pagamento" abaixo é que manda. Ver `formaUnica`. */}
             <CampoFormulario
               id="oc-forma-pagamento"
               rotulo="Forma de pagamento"
               ajuda={
-                tipoFormaEscolhida
-                  ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
-                  : undefined
+                formaUnica
+                  ? tipoFormaEscolhida
+                    ? CAMINHO_DO_PAGAMENTO[tipoFormaEscolhida]
+                    : "Divida entre formas quando a compra sair por mais de uma"
+                  : `Dividida em ${formasObservadas.length} formas: veja a seção abaixo`
               }
-              erro={form.formState.errors.formaPagamentoId?.message}
+              erro={
+                form.formState.errors.formas?.[0]?.formaPagamentoId?.message
+              }
             >
               <Combobox
-                valor={formaPagamentoValor}
+                valor={
+                  formaUnica ? (formasObservadas[0]?.formaPagamentoId ?? "") : ""
+                }
+                disabled={salvando || !formaUnica}
                 onValorChange={(valor) => {
-                  form.setValue("formaPagamentoId", valor);
-                  void form.trigger("formaPagamentoId");
+                  form.setValue("formas.0.formaPagamentoId", valor, {
+                    shouldValidate: true,
+                  });
+                  // A parcela acompanha: com uma forma só, toda parcela é dela.
+                  const atuais = form.getValues("parcelas") ?? [];
+                  atuais.forEach((_, indice) =>
+                    form.setValue(`parcelas.${indice}.formaPagamentoId`, valor),
+                  );
                 }}
                 opcoes={formasPagamento.map((forma) => ({
                   valor: forma.id,
@@ -695,8 +865,11 @@ export function OrdemFormDrawer({
                   );
                   return r.id;
                 }}
-                placeholder="Selecione a forma de pagamento"
-                disabled={salvando}
+                placeholder={
+                  formaUnica
+                    ? "Selecione a forma de pagamento"
+                    : "Mais de uma forma"
+                }
                 id="oc-forma-pagamento"
               />
             </CampoFormulario>
@@ -839,12 +1012,160 @@ export function OrdemFormDrawer({
           </div>
         </SecaoFormulario>
 
+        {/* Formas de pagamento: quanto sai por cada uma.
+
+            Com UMA forma nao ha secao: ela vive no Combobox "Forma de pagamento"
+            lá em cima, sem coluna de valor (vale o total dos itens). E o caso de
+            33 das 36 ordens, e cobrar duas digitacoes delas seria piorar o comum
+            para servir o raro.
+
+            A partir de duas, a tabela aparece com O QUE ACONTECE de cada forma --
+            e o TIPO que decide o caminho (fila de aprovacao, direto, ou quitado
+            no cartao), e sem essa coluna ninguem entende por que meia compra foi
+            para a aprovacao e a outra metade nao. */}
+        <SecaoFormulario
+          titulo="Formas de pagamento"
+          acao={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={salvando}
+              onClick={adicionarForma}
+            >
+              <Plus />
+              {formaUnica ? "Dividir entre formas" : "Adicionar forma"}
+            </Button>
+          }
+        >
+          {typeof form.formState.errors.formas?.message === "string" ? (
+            <p className="text-legenda text-destructive" role="alert">
+              {form.formState.errors.formas.message}
+            </p>
+          ) : null}
+
+          {formaUnica ? (
+            <p className="text-legenda text-muted-foreground">
+              A compra inteira sai por{" "}
+              <span className="font-medium text-foreground">
+                {formasPagamento.find(
+                  (forma) =>
+                    forma.id === (formasObservadas[0]?.formaPagamentoId ?? ""),
+                )?.nome ?? "uma forma só"}
+              </span>
+              . Divida entre formas quando o pagamento sair por mais de uma.
+            </p>
+          ) : (
+            <TabelaItens
+              colunas={COLUNAS_FORMA_OC}
+              linhas={linhasFormas}
+              chaveLinha={(linha) => linha.id}
+              onRemover={removerForma}
+              podeRemover={() => !salvando}
+              rotuloRemover="Remover forma"
+              erroCelula={(chave, indice) => {
+                const erro = form.formState.errors.formas?.[indice];
+                if (chave === "forma") return erro?.formaPagamentoId?.message;
+                if (chave === "valor") return erro?.valor?.message;
+                return undefined;
+              }}
+              renderCelula={(chave, indice) => {
+                const escolhida =
+                  form.watch(`formas.${indice}.formaPagamentoId`) ?? "";
+                if (chave === "forma") {
+                  return (
+                    <Combobox
+                      valor={escolhida}
+                      onValorChange={(valor) => {
+                        const anterior = escolhida;
+                        form.setValue(
+                          `formas.${indice}.formaPagamentoId`,
+                          valor,
+                          { shouldValidate: true },
+                        );
+                        // As parcelas que eram da forma antiga passam a ser da
+                        // nova: senão ficariam apontando para uma forma que saiu
+                        // da tela, e o envio travaria numa mensagem sobre soma em
+                        // vez de sobre a troca que a pessoa fez.
+                        const atuais = form.getValues("parcelas") ?? [];
+                        atuais.forEach((parcela, posicao) => {
+                          if (parcela.formaPagamentoId === anterior) {
+                            form.setValue(
+                              `parcelas.${posicao}.formaPagamentoId`,
+                              valor,
+                            );
+                          }
+                        });
+                      }}
+                      opcoes={formasPagamento.map((forma) => ({
+                        valor: forma.id,
+                        rotulo: forma.nome,
+                      }))}
+                      placeholder="Selecione"
+                      disabled={salvando}
+                      ariaLabel="Forma de pagamento"
+                      id={`oc-forma-${indice}`}
+                    />
+                  );
+                }
+                if (chave === "caminho") {
+                  const tipo = formasPagamento.find(
+                    (forma) => forma.id === escolhida,
+                  )?.tipo;
+                  return (
+                    <span className="text-legenda text-muted-foreground">
+                      {tipo ? CAMINHO_DO_PAGAMENTO[tipo] : "-"}
+                    </span>
+                  );
+                }
+                const campo = `formas.${indice}.valor` as const;
+                return (
+                  <InputMoeda
+                    valor={form.watch(campo) ?? ""}
+                    onValorChange={(valor) =>
+                      form.setValue(campo, valor, { shouldDirty: true })
+                    }
+                    onBlur={() => void form.trigger("formas")}
+                    ariaLabel="Valor da forma"
+                    disabled={salvando}
+                  />
+                );
+              }}
+              rodape={
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <span className="text-detalhe text-muted-foreground">
+                    Soma das formas{" "}
+                    <span className="font-medium text-foreground tabular-nums">
+                      {formatarBRL(somaDasFormas)}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "text-detalhe font-medium",
+                      Math.abs(somaDasFormas - totalPrevia) < 0.005
+                        ? "text-status-aprovado"
+                        : "text-status-pendente",
+                    )}
+                  >
+                    {Math.abs(somaDasFormas - totalPrevia) < 0.005
+                      ? "Fecha com o total da ordem"
+                      : somaDasFormas < totalPrevia
+                        ? `Faltam ${formatarBRL(totalPrevia - somaDasFormas)}`
+                        : `Passa ${formatarBRL(somaDasFormas - totalPrevia)} do total`}
+                  </span>
+                </div>
+              }
+            />
+          )}
+        </SecaoFormulario>
+
         <SecaoParcelas
           form={form}
           total={totalPrevia}
           dataCompra={form.watch("dataCompra")}
           condicaoPagamentoId={condicaoPagamentoValor}
           salvando={salvando}
+          formasPagamento={formasPagamento}
         />
 
         <SecaoFormulario titulo="Anexos">
@@ -887,6 +1208,49 @@ export function OrdemFormDrawer({
   );
 }
 
+/**
+ * Colunas da tabela de formas da ordem: a forma, o que acontece com ela e o valor.
+ *
+ * A coluna do meio nao e decoracao: e o TIPO da forma que decide o caminho de
+ * cada parte, e sem ela ninguem entende por que meia compra foi para a aprovacao
+ * e a outra metade nao.
+ */
+const COLUNAS_FORMA_OC: ColunaItem[] = [
+  {
+    chave: "forma",
+    rotulo: "Forma",
+    largura: "minmax(0,1.2fr)",
+    alinhamento: "left",
+    obrigatorio: true,
+  },
+  {
+    chave: "caminho",
+    rotulo: "O que acontece",
+    largura: "minmax(0,1.6fr)",
+    alinhamento: "left",
+  },
+  {
+    chave: "valor",
+    rotulo: "Valor",
+    largura: "minmax(0,1fr)",
+    alinhamento: "right",
+    obrigatorio: true,
+  },
+];
+
+/**
+ * Coluna "Forma", acrescentada as parcelas SO quando a ordem e paga por duas ou
+ * mais formas. Com uma, toda parcela e dela e a coluna seria uma escolha sem
+ * alternativa.
+ */
+const COLUNA_FORMA_DA_PARCELA: ColunaItem = {
+  chave: "forma",
+  rotulo: "Forma",
+  largura: "minmax(0,1fr)",
+  alinhamento: "left",
+  obrigatorio: true,
+};
+
 /** Colunas da tabela de parcelas: número, vencimento e valor. */
 const COLUNAS_PARCELA: ColunaItem[] = [
   { chave: "numero", rotulo: "Nº", largura: "48px" },
@@ -926,12 +1290,15 @@ function SecaoParcelas({
   dataCompra,
   condicaoPagamentoId,
   salvando,
+  formasPagamento,
 }: {
   form: UseFormReturn<OrdemCompraFormInput>;
   total: number;
   dataCompra: string;
   condicaoPagamentoId: string;
   salvando: boolean;
+  /** Catálogo de formas, para o seletor da coluna "Forma". */
+  formasPagamento: FormaPagamentoOpcao[];
 }) {
   const {
     fields: linhas,
@@ -942,6 +1309,16 @@ function SecaoParcelas({
   const [gerando, setGerando] = React.useState(false);
 
   const parcelasObservadas = form.watch("parcelas") ?? [];
+  const formasObservadasNaSecao = form.watch("formas") ?? [];
+  /**
+   * Com UMA forma a coluna "Forma" nao aparece: toda parcela e dela, e a pessoa
+   * nao escolhe duas vezes a mesma coisa. A coluna entra a partir de duas, junto
+   * com a exigencia de cada parcela dizer de qual forma sai.
+   */
+  const formaUnica = formasObservadasNaSecao.length <= 1;
+  const formaHerdada = formaUnica
+    ? (formasObservadasNaSecao[0]?.formaPagamentoId ?? "")
+    : "";
   const soma = somarParcelas(parcelasObservadas);
   const diferenca = diferencaParaTotal(parcelasObservadas, total);
   const temParcelas = linhas.length > 0;
@@ -968,10 +1345,14 @@ function SecaoParcelas({
       toast.error(resultado.erro);
       return;
     }
+    // Todas na forma unica: "Gerar pela condicao" fica desabilitado quando ha
+    // duas ou mais formas, porque um parcelamento plano nao sabe dizer quanto de
+    // cada forma cai em cada parcela.
     trocarParcelas(
       resultado.parcelas.map((parcela) => ({
         dataVencimento: parcela.dataVencimento,
         valor: String(parcela.valor).replace(".", ","),
+        formaPagamentoId: formaHerdada,
       })),
     );
     void form.trigger("parcelas");
@@ -991,7 +1372,7 @@ function SecaoParcelas({
             type="button"
             variant="outline"
             size="sm"
-            disabled={salvando || gerando}
+            disabled={salvando || gerando || !formaUnica}
             onClick={() => void gerarPelaCondicao()}
           >
             {gerando ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
@@ -1003,7 +1384,11 @@ function SecaoParcelas({
             size="sm"
             disabled={salvando}
             onClick={() =>
-              adicionarParcela({ dataVencimento: dataCompra, valor: "" })
+              adicionarParcela({
+                dataVencimento: dataCompra,
+                valor: "",
+                formaPagamentoId: formaHerdada,
+              })
             }
           >
             <Plus />
@@ -1021,7 +1406,11 @@ function SecaoParcelas({
       ) : (
         <>
           <TabelaItens
-            colunas={COLUNAS_PARCELA}
+            colunas={
+              formaUnica
+                ? COLUNAS_PARCELA
+                : [...COLUNAS_PARCELA, COLUNA_FORMA_DA_PARCELA]
+            }
             linhas={linhas}
             chaveLinha={(linha) => linha.id}
             onRemover={(indice) => removerParcela(indice)}
@@ -1031,6 +1420,7 @@ function SecaoParcelas({
               const erro = errosParcelas?.[indice];
               if (chave === "vencimento") return erro?.dataVencimento?.message;
               if (chave === "valor") return erro?.valor?.message;
+              if (chave === "forma") return erro?.formaPagamentoId?.message;
               return undefined;
             }}
             renderCelula={(chave, indice) => {
@@ -1050,6 +1440,36 @@ function SecaoParcelas({
                     min={dataCompra || undefined}
                     disabled={salvando}
                     {...form.register(`parcelas.${indice}.dataVencimento`)}
+                  />
+                );
+              }
+              if (chave === "forma") {
+                // So aparece com DUAS ou mais formas: com uma, toda parcela e
+                // dela e a coluna seria uma escolha sem alternativa.
+                const campoForma =
+                  `parcelas.${indice}.formaPagamentoId` as const;
+                return (
+                  <Combobox
+                    valor={form.watch(campoForma) ?? ""}
+                    onValorChange={(valor) =>
+                      form.setValue(campoForma, valor, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      })
+                    }
+                    opcoes={formasObservadasNaSecao
+                      .filter((forma) => forma.formaPagamentoId !== "")
+                      .map((forma) => ({
+                        valor: forma.formaPagamentoId,
+                        rotulo:
+                          formasPagamento.find(
+                            (opcao) => opcao.id === forma.formaPagamentoId,
+                          )?.nome ?? "Forma",
+                      }))}
+                    placeholder="Selecione"
+                    disabled={salvando}
+                    ariaLabel={`Forma da parcela ${indice + 1}`}
+                    id={`oc-parcela-forma-${indice}`}
                   />
                 );
               }

@@ -2398,6 +2398,51 @@ export type Database = {
           },
         ];
       };
+      oc_formas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          forma_pagamento_id: string;
+          id: string;
+          ordem_compra_id: string;
+          updated_at: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id: string;
+          id?: string;
+          ordem_compra_id: string;
+          updated_at?: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id?: string;
+          id?: string;
+          ordem_compra_id?: string;
+          updated_at?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "oc_formas_forma_pagamento_id_fkey";
+            columns: ["forma_pagamento_id"];
+            isOneToOne: false;
+            referencedRelation: "formas_pagamento";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "oc_formas_ordem_compra_id_fkey";
+            columns: ["ordem_compra_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_compra";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       oc_parcelas: {
         Row: {
           created_at: string;
@@ -2405,6 +2450,7 @@ export type Database = {
           data_vencimento: string;
           id: string;
           numero_parcela: number;
+          oc_forma_id: string | null;
           ordem_compra_id: string;
           valor: number;
         };
@@ -2414,6 +2460,7 @@ export type Database = {
           data_vencimento: string;
           id?: string;
           numero_parcela: number;
+          oc_forma_id: string | null;
           ordem_compra_id: string;
           valor: number;
         };
@@ -2423,10 +2470,18 @@ export type Database = {
           data_vencimento?: string;
           id?: string;
           numero_parcela?: number;
+          oc_forma_id?: string | null;
           ordem_compra_id?: string;
           valor?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "oc_parcelas_oc_forma_id_fkey";
+            columns: ["oc_forma_id"];
+            isOneToOne: false;
+            referencedRelation: "oc_formas";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "oc_parcelas_ordem_compra_id_fkey";
             columns: ["ordem_compra_id"];
@@ -4008,7 +4063,7 @@ export type Database = {
         Returns: string;
       };
       fn_salvar_parcelas_oc: {
-        Args: { p_oc_id: string; p_parcelas: Json };
+        Args: { p_oc_id: string; p_parcelas: Json; p_formas?: Json };
         Returns: undefined;
       };
       fn_salvar_preferencia_tabela: {

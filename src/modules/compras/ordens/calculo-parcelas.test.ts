@@ -11,7 +11,9 @@ import {
 } from "./calculo-parcelas";
 
 function parcela(dataVencimento: string, valor: string): ParcelaForm {
-  return { dataVencimento, valor };
+  // Sem forma: estes calculos nao olham a forma, e o spread deles preserva o
+  // campo. O que se testa aqui e a aritmetica dos centavos.
+  return { dataVencimento, valor, formaPagamentoId: "" };
 }
 
 describe("somarParcelas", () => {

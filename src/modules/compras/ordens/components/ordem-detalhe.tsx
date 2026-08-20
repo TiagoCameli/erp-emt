@@ -607,6 +607,54 @@ export function OrdemDetalheView({
             </div>
           </SecaoDetalhe>
 
+          {/* A divisao por forma aparece so quando existe divisao. Com uma
+              forma so, ela ja esta no cabecalho da ordem, e repetir aqui
+              acrescentaria um card que nao diz nada de novo. */}
+          {ordem.formas.length > 1 ? (
+            <SecaoDetalhe card titulo="Formas de pagamento">
+              <div className="overflow-hidden rounded-md border border-border bg-card">
+                <table className="w-full text-detalhe">
+                  <thead>
+                    <tr className="border-b border-border text-legenda text-muted-foreground">
+                      <th className="px-3 py-2 text-left font-medium">Forma</th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Valor
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordem.formas.map((forma) => (
+                      <tr
+                        key={forma.id}
+                        className="border-b border-border last:border-b-0"
+                      >
+                        <td className="px-3 py-2">
+                          {forma.formaPagamentoNome}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <MoneyText valor={forma.valor} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-surface font-semibold">
+                      <td className="px-3 py-2">Soma das formas</td>
+                      <td className="px-3 py-2 text-right">
+                        <MoneyText
+                          valor={ordem.formas.reduce(
+                            (soma, forma) => soma + forma.valor,
+                            0,
+                          )}
+                        />
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </SecaoDetalhe>
+          ) : null}
+
           <SecaoDetalhe card titulo="Parcelas">
             {ordem.parcelas.length === 0 ? (
               <p className="text-detalhe text-muted-foreground">
@@ -622,6 +670,11 @@ export function OrdemDetalheView({
                       <th className="px-3 py-2 text-center font-medium">
                         Vencimento
                       </th>
+                      {ordem.formas.length > 1 ? (
+                        <th className="px-3 py-2 text-left font-medium">
+                          Forma
+                        </th>
+                      ) : null}
                       <th className="px-3 py-2 text-right font-medium">
                         Valor
                       </th>
@@ -639,6 +692,15 @@ export function OrdemDetalheView({
                         <td className="px-3 py-2 text-center tabular-nums">
                           {formatarData(parcela.dataVencimento)}
                         </td>
+                        {ordem.formas.length > 1 ? (
+                          <td className="px-3 py-2">
+                            {ordem.formas.find(
+                              (forma) =>
+                                forma.formaPagamentoId ===
+                                parcela.formaPagamentoId,
+                            )?.formaPagamentoNome ?? "-"}
+                          </td>
+                        ) : null}
                         <td className="px-3 py-2 text-right">
                           <MoneyText valor={parcela.valor} />
                         </td>
@@ -647,7 +709,10 @@ export function OrdemDetalheView({
                   </tbody>
                   <tfoot>
                     <tr className="bg-surface font-semibold">
-                      <td className="px-3 py-2 text-center" colSpan={2}>
+                      <td
+                        className="px-3 py-2 text-center"
+                        colSpan={ordem.formas.length > 1 ? 3 : 2}
+                      >
                         Soma das parcelas
                       </td>
                       <td className="px-3 py-2 text-right">

@@ -96,14 +96,19 @@ export function DefinirParcelasDialog({
 
   /** As editáveis que já existem, ou uma linha em branco para começar. */
   function parcelasIniciais(): ParcelaForm[] {
+    // `formaPagamentoId` vazio de propósito: este diálogo não escolhe forma.
+    // Quem atribui é `fn_definir_parcelas_lancamento`, que herda o bloco único do
+    // lançamento — e RECUSA quando há duas ou mais formas, mandando editar a
+    // divisão no formulário. Um seletor aqui prometeria algo que a função não faz.
     return grupos.editaveis.length > 0
       ? grupos.editaveis.map((parcela) => ({
           dataVencimento: parcela.dataVencimento ?? "",
           valor: String(parcela.valor).replace(".", ","),
+          formaPagamentoId: "",
         }))
       : temPreservada
         ? []
-        : [{ dataVencimento: "", valor: "" }];
+        : [{ dataVencimento: "", valor: "", formaPagamentoId: "" }];
   }
 
   const [parcelas, setParcelas] =
@@ -168,6 +173,7 @@ export function DefinirParcelasDialog({
       resultado.parcelas.map((parcela) => ({
         dataVencimento: parcela.dataVencimento,
         valor: String(parcela.valor).replace(".", ","),
+        formaPagamentoId: "",
       })),
     );
   }
@@ -283,7 +289,7 @@ export function DefinirParcelasDialog({
               onClick={() =>
                 setParcelas((atual) => [
                   ...atual,
-                  { dataVencimento: "", valor: "" },
+                  { dataVencimento: "", valor: "", formaPagamentoId: "" },
                 ])
               }
             >

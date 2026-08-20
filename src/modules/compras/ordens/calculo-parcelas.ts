@@ -17,6 +17,13 @@ import { paraNumero } from "@/modules/compras/ordens/calculo";
 export interface ParcelaForm {
   dataVencimento: string;
   valor: string;
+  /**
+   * De qual forma de pagamento esta parcela sai. Vazio = nenhuma escolhida.
+   *
+   * Os cálculos daqui só mexem em `valor` e preservam o resto pelo spread, então
+   * redistribuir ou gerar pela condição não perde a forma de cada linha.
+   */
+  formaPagamentoId: string;
 }
 
 /** Converte reais para centavos inteiros. */
