@@ -29,6 +29,16 @@
 -- tela testa `observacoes ? ...`, entao string de branco e truthy e a secao
 -- "Observacoes" apareceria vazia. Corrigido para btrim(x, E' \t\r\n').
 --
+-- Rerodada em 20/08/2026 depois de fn_aprovar_ordem_compra ser reescrita pela
+-- frente do multi-forma (que apagou a copia de observacoes) e da 201951
+-- reenxertar: os mesmos 6 casos, 6 PASSOU.
+--
+-- ATENCAO ao usar esta prova como base para outra: a OC das fixtures NAO tem
+-- forma de pagamento, entao ela nao exercita o bloco de forma -- sem forma no
+-- cabecalho e sem oc_formas, a aprovacao nao cria bloco nenhum, e isso e o
+-- comportamento correto, nao falha. Para provar o bloco a OC precisa nascer com
+-- 'forma_pagamento_id' no cabecalho.
+--
 -- IMPORTANTE: fn_criar_ordem_compra e fn_aprovar_ordem_compra checam
 -- tem_permissao(), que depende de auth.uid(). Fora de sessao autenticada, o
 -- bloco assume um usuario ativo com a permissao de cada passo.
