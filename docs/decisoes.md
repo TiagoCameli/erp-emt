@@ -2495,3 +2495,47 @@ chave duplicada em seis arquivos e DOIS campos "Número do documento" com o mesm
 fileira das datas, com `obrigatorio={aReceber}`. Lição: merge limpo em arquivo que a outra frente
 também tocou não significa merge correto — rodar o typecheck logo depois do merge é o que separa os
 dois.
+
+## 2026-08-20 - Duas abas de Categoria em Cadastros, e a prova de RLS que não provava nada
+
+**Categorias do Financeiro virou "Categorias financeiras", em Cadastros** (pedido do Tiago). Plano de
+contas É cadastro: tabela de referência que classifica receita e despesa, do mesmo naipe de Unidades
+de medida e Condições de pagamento. Rename até a chave, como no de Recebimentos:
+`financeiro.categorias` → `cadastros.categorias-financeiras`, rota `/cadastros/categorias-financeiras`,
+módulo em `modules/cadastros/`.
+
+**O risco não era mover, era o nome.** Cadastros JÁ tinha uma aba "Categorias", e ela é outra coisa:
+categoria de INSUMO (Material, Mão de obra, Equipamentos, Outros e as subcategorias). Duas abas
+"Categorias" no mesmo submenu fazem escolher a errada, e aí um custo é classificado no lugar errado do
+relatório. As duas ganharam sobrenome ("Categorias de insumo" e "Categorias financeiras") e as chaves
+seguem SEPARADAS: fundi-las faria a permissão de uma abrir a outra. Há teste travando o par de nomes e
+a distinção — nome duplicado no mesmo módulo é defeito, não estética.
+
+**A ordem do submenu é a ordem de `RECURSOS`.** `abasVisiveis` só filtra por permissão, não reordena,
+então mover o item no catálogo é o que move a aba na tela. Isso valeu também para Recebimentos, que foi
+para logo depois de Pagamentos: é o par dele, o dinheiro que sai e o que entra. Os dois casos têm teste,
+um enumerando a lista e outro exigindo só a vizinhança — o segundo sobrevive a uma aba nova entrar.
+
+**Mover módulo entre módulos cria dependência que a convenção proíbe.** `categorias-tabela.tsx`
+importava `usePaginacaoCliente` de `financeiro/_shared`; com o módulo em Cadastros isso virou
+Cadastros dependendo de Financeiro. O arquivo foi para `modules/_shared/filtros-cliente.ts` (8
+arquivos, todos troca de caminho). Regra que sai daqui: ao mover um módulo, os imports de `_shared` do
+módulo ANTIGO viram dependência cruzada e precisam subir para o `_shared` de cima.
+
+**`idTabela` é chave de preferência do usuário, e trocá-la reseta a escolha de colunas dele.** Aqui
+custou zero porque `financeiro.categorias` não tinha nenhuma preferência salva (medido:
+`preferencias_tabela` só tinha `cadastros.categorias`, de 1 usuário). E não podia herdar
+`cadastros.categorias`, que é da tabela de insumo — aquela chave é compartilhada de propósito entre as
+DataTables por grupo de insumo. Conferir a tabela de preferências antes de renomear um `idTabela` é
+barato e evita reclamação de coluna que "sumiu".
+
+**A prova de RLS passou nas duas linhas, inclusive na que tinha que falhar.** `set_config` de
+`request.jwt.claims` muda o que `auth.uid()` devolve, mas NÃO subjuga a consulta à RLS: a conexão do MCP
+roda como owner e passa por cima de policy. Resultado: o controle "uuid sem permissão nenhuma" leu as 57
+categorias igual ao usuário autorizado. Só com `set local role authenticated` a prova virou real (0 e
+57). Regra: prova de RLS exige troca de ROLE, não só de claims — prova de permissão via função definer
+(que chama `tem_permissao` explicitamente e faz `raise`) é válida sem isso, prova de POLICY não é.
+
+**E foi a linha de controle que denunciou.** Sem uma linha que TEM que dar diferente de zero, eu teria
+reportado uma prova de RLS que não provava nada — o mesmo padrão registrado em 13/08, agora numa
+segunda forma.
