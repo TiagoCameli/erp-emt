@@ -223,6 +223,19 @@ export const RECURSOS = [
     rota: "/financeiro/recebimentos",
     acoes: ["ver", "criar", "editar"],
   },
+  /**
+   * Transferencia entre contas vem logo depois de Recebimentos porque fecha o
+   * trio do dinheiro: o que sai, o que entra e o que so muda de conta. Nao ha
+   * acao de aprovar: por decisao do Tiago em 20/08/2026 a transferencia e
+   * registro direto (movimentacao entre contas da propria empresa).
+   */
+  {
+    id: "financeiro.transferencias",
+    nome: "Transferências",
+    modulo: "financeiro",
+    rota: "/financeiro/transferencias",
+    acoes: CRUD,
+  },
   {
     id: "financeiro.competencias",
     nome: "Fechamento de competência",

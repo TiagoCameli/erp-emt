@@ -335,9 +335,17 @@ export interface PosicaoBancaria {
 }
 
 /**
- * Saldo por conta bancária ativa: saldo_inicial mais o efeito das parcelas
- * pagas nela. Entradas (a_receber) somam, saídas (a_pagar) subtraem. Só conta
- * parcelas pagas (status='pago') com conta_bancaria_id preenchida.
+ * Saldo por conta bancária ativa: saldo_inicial mais o efeito de tudo que
+ * movimentou a conta.
+ *
+ * ENTRA: parcela recebida (a_receber) e o lado de quem recebeu numa
+ * transferência entre contas (transferencia_entrada).
+ * SAI: parcela paga (a_pagar) e o lado de quem mandou numa transferência
+ * (transferencia_saida) -- nessa, a tarifa já vem somada pela RPC, porque o
+ * banco debita valor mais tarifa da origem e credita só o valor no destino.
+ *
+ * Só conta parcela paga (status='pago') com conta_bancaria_id preenchida. As
+ * transferências entram todas: elas não têm status, são registro direto.
  */
 export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   const supabase = await createClient();
@@ -364,13 +372,23 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   const entradasPorConta = new Map<string, number>();
   const saidasPorConta = new Map<string, number>();
 
+  // SOMA, não `set`: desde que a transferência entrou na RPC, a mesma conta
+  // pode chegar em duas linhas do mesmo lado (a_receber e transferencia_entrada
+  // são as duas entradas). Sobrescrever descartaria uma delas em silêncio.
+  function acumular(mapa: Map<string, number>, chave: string, valor: number) {
+    mapa.set(chave, (mapa.get(chave) ?? 0) + valor);
+  }
+
   for (const movimento of movimentos ?? []) {
     const centavos = paraCentavos(movimento.total);
-    if (movimento.tipo === "a_receber") {
-      entradasPorConta.set(movimento.conta_bancaria_id, centavos);
-    } else {
-      saidasPorConta.set(movimento.conta_bancaria_id, centavos);
-    }
+    const entra =
+      movimento.tipo === "a_receber" ||
+      movimento.tipo === "transferencia_entrada";
+    acumular(
+      entra ? entradasPorConta : saidasPorConta,
+      movimento.conta_bancaria_id,
+      centavos,
+    );
   }
 
   const resultado: PosicaoBancariaConta[] = (contas ?? []).map((conta) => {
