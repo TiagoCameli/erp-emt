@@ -19,17 +19,17 @@ import { Input } from "@/components/ui/input";
 import {
   criarCategoria,
   editarCategoria,
-} from "@/modules/financeiro/categorias/actions";
+} from "@/modules/cadastros/categorias-financeiras/actions";
 import type {
   CategoriaFinanceiraLista,
   CategoriaPaiOpcao,
-} from "@/modules/financeiro/categorias/queries";
+} from "@/modules/cadastros/categorias-financeiras/queries";
 import {
   categoriaFinanceiraSchema,
   ROTULO_TIPO_CATEGORIA_FINANCEIRA,
   TIPOS_CATEGORIA_FINANCEIRA,
   type CategoriaFinanceiraInput,
-} from "@/modules/financeiro/categorias/schemas";
+} from "@/modules/cadastros/categorias-financeiras/schemas";
 
 const ID_FORM = "form-categoria-financeira";
 

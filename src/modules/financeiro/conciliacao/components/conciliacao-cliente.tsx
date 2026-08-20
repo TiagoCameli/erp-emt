@@ -35,7 +35,7 @@ import {
   dentroDaFaixaValor,
   dentroDoPeriodo,
   usePaginacaoCliente,
-} from "@/modules/financeiro/_shared/filtros-cliente";
+} from "@/modules/_shared/filtros-cliente";
 import {
   buscarSugestoes,
   desconciliar,

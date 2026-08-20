@@ -119,11 +119,28 @@ export const RECURSOS = [
     rota: "/cadastros/unidades",
     acoes: CRUD,
   },
+  /**
+   * Duas abas de categoria vivem aqui, e são cadastros de coisas diferentes: uma
+   * classifica INSUMO (Material, Mão de obra, Equipamentos, Outros e as
+   * subcategorias), a outra é o PLANO DE CONTAS de receitas e despesas, que veio
+   * do Financeiro em 20/08/2026 a pedido do Tiago.
+   *
+   * Por isso as duas ganharam sobrenome no menu: "Categorias" sozinho, com as
+   * duas lado a lado, não diz qual é qual — e escolher a errada classifica um
+   * custo no lugar errado do relatório.
+   */
   {
     id: "cadastros.categorias",
-    nome: "Categorias",
+    nome: "Categorias de insumo",
     modulo: "cadastros",
     rota: "/cadastros/categorias",
+    acoes: CRUD,
+  },
+  {
+    id: "cadastros.categorias-financeiras",
+    nome: "Categorias financeiras",
+    modulo: "cadastros",
+    rota: "/cadastros/categorias-financeiras",
     acoes: CRUD,
   },
   {
@@ -235,13 +252,6 @@ export const RECURSOS = [
     modulo: "financeiro",
     rota: "/financeiro/conciliacao",
     acoes: ["ver", "criar", "editar"],
-  },
-  {
-    id: "financeiro.categorias",
-    nome: "Categorias",
-    modulo: "financeiro",
-    rota: "/financeiro/categorias",
-    acoes: CRUD,
   },
   {
     id: "financeiro.relatorios",

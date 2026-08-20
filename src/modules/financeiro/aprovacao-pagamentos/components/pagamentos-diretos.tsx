@@ -59,7 +59,7 @@ import {
   mesmoMesReferencia,
   opcoesDeNomes,
   usePaginacaoCliente,
-} from "@/modules/financeiro/_shared/filtros-cliente";
+} from "@/modules/_shared/filtros-cliente";
 import {
   rotuloParcela,
   STATUS_PARCELA,

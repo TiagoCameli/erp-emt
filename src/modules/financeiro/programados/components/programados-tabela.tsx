@@ -27,7 +27,7 @@ import {
   dentroDoPeriodo,
   opcoesDeNomes,
   usePaginacaoCliente,
-} from "@/modules/financeiro/_shared/filtros-cliente";
+} from "@/modules/_shared/filtros-cliente";
 import { PagarParcelaDrawer } from "@/modules/financeiro/pagamentos/components/pagar-parcela-drawer";
 import type {
   ContaBancariaOpcao,

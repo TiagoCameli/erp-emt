@@ -27,7 +27,7 @@ import {
   dentroDoPeriodo,
   mesmoMesReferencia,
   usePaginacaoCliente,
-} from "@/modules/financeiro/_shared/filtros-cliente";
+} from "@/modules/_shared/filtros-cliente";
 import {
   STATUS_LANCAMENTO,
   type StatusLancamento,

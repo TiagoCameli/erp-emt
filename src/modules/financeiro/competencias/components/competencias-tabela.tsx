@@ -24,7 +24,7 @@ import {
   dentroDaFaixaValor,
   mesmoMesReferencia,
   usePaginacaoCliente,
-} from "@/modules/financeiro/_shared/filtros-cliente";
+} from "@/modules/_shared/filtros-cliente";
 import {
   fecharCompetencia,
   reabrirCompetencia,

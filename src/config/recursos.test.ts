@@ -115,9 +115,40 @@ describe("recursosDoModulo", () => {
       "financeiro.programados",
       "financeiro.contas-bancarias",
       "financeiro.conciliacao",
-      "financeiro.categorias",
       "financeiro.relatorios",
     ]);
+  });
+
+  /**
+   * As duas categorias moram em Cadastros e são cadastros diferentes: insumo e
+   * plano de contas. O que se testa aqui é que elas continuam DUAS e vizinhas —
+   * fundir as chaves faria a permissão de uma abrir a outra.
+   */
+  it("Cadastros tem as duas categorias, com nomes que se distinguem", () => {
+    const cadastros = recursosDoModulo("cadastros");
+    const ids = cadastros.map((r) => r.id);
+
+    const posInsumo = ids.indexOf("cadastros.categorias");
+    const posFinanceiras = ids.indexOf("cadastros.categorias-financeiras");
+    expect(posInsumo).toBeGreaterThanOrEqual(0);
+    expect(posFinanceiras).toBe(posInsumo + 1);
+
+    // Nome distinto é requisito, não estética: "Categorias" duas vezes no mesmo
+    // submenu faz escolher a errada, e aí um custo é classificado no lugar
+    // errado do relatório.
+    const nomes = cadastros
+      .filter((r) => r.id.startsWith("cadastros.categorias"))
+      .map((r) => r.nome);
+    expect(nomes).toEqual(["Categorias de insumo", "Categorias financeiras"]);
+    expect(new Set(nomes).size).toBe(nomes.length);
+  });
+
+  it("LINHA DE CONTROLE: nenhum recurso sobrou no Financeiro chamado Categorias", () => {
+    // Se a entrada antiga tivesse ficado para trás, a aba apareceria nos dois
+    // módulos e as duas apontariam para rotas diferentes da mesma tabela.
+    expect(
+      recursosDoModulo("financeiro").map((r) => r.id),
+    ).not.toContain("financeiro.categorias");
   });
 
   it("LINHA DE CONTROLE: Recebimentos é o vizinho imediato de Pagamentos", () => {

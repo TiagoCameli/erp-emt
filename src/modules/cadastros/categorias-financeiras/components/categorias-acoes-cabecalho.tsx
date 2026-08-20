@@ -4,7 +4,7 @@ import * as React from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { CategoriaPaiOpcao } from "@/modules/financeiro/categorias/queries";
+import type { CategoriaPaiOpcao } from "@/modules/cadastros/categorias-financeiras/queries";
 import { CategoriasFormDrawer } from "./categorias-form-drawer";
 
 export interface CategoriasAcoesCabecalhoProps {

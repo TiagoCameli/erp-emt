@@ -74,7 +74,7 @@ import {
   mesmoMesReferencia,
   opcoesDeNomes,
   usePaginacaoCliente,
-} from "@/modules/financeiro/_shared/filtros-cliente";
+} from "@/modules/_shared/filtros-cliente";
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
 import { AprovarDialog } from "./aprovar-dialog";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
