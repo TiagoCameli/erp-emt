@@ -259,8 +259,14 @@ export function DetalheParcelaDrawer({
             {espelho.lancamentoDescricao ? (
               <p className="mt-3 text-detalhe">{espelho.lancamentoDescricao}</p>
             ) : null}
+            {/*
+              whitespace-pre-line: este é o texto que quem paga lê antes de
+              mandar o dinheiro, e ele vem com CNPJ e chave PIX em linhas
+              separadas. Sem isto as linhas colam umas nas outras e a chave fica
+              impossível de conferir de olho.
+            */}
             {espelho.lancamentoObservacoes ? (
-              <p className="mt-1 text-legenda text-muted-foreground">
+              <p className="mt-1 whitespace-pre-line text-legenda text-muted-foreground">
                 {espelho.lancamentoObservacoes}
               </p>
             ) : null}

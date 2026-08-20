@@ -28,6 +28,7 @@ import {
   GradeKpis,
   KPICard,
   MoneyText,
+  SeloObservacoes,
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
@@ -454,6 +455,12 @@ export function PagamentosDiretos({
               ) : (
                 <span className="codigo-doc">{rotulo}</span>
               )}
+              {/*
+                Mesmo selo da fila de aprovação. Aqui o pagamento já saiu (é
+                dinheiro ou cartão), e a observação é o que diz para quem
+                confere POR QUE saiu daquele jeito.
+              */}
+              <SeloObservacoes observacoes={row.original.observacoes} />
             </div>
           );
         },
