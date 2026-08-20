@@ -2863,3 +2863,73 @@ nem em PR aberto** (frente paralela do multi-forma da OC). No banco vivo a funç
 provada; num replay do repo do zero, ela estouraria. Não reordenei nem embarquei migration de outra
 frente. Quando o multi-forma da OC entrar em main a ordem se resolve sozinha (as dela são 2002xx,
 anteriores). Se não entrar, o arquivo tem de ser reescrito sem os portões de forma.
+## 2026-08-20 - A ordem de compra também se divide entre formas, e a divisão desce para o lançamento
+
+Segunda metade do pedido do Tiago ("nas OC e lançamentos eu tenho que poder adicionar mais de uma
+forma de pagamento"). A OC espelha o modelo do lançamento: `oc_formas` guarda quanto sai por cada
+forma, `oc_parcelas.oc_forma_id` diz de qual forma cada parcela é, e o cabeçalho
+`ordens_compra.forma_pagamento_id` virou projeção (uma forma → ela; duas ou mais → nulo).
+
+**A OC não tem constraint trigger de soma, e isso é diferente do lançamento de propósito.**
+`ordens_compra.valor_total` é DERIVADO dos itens por trigger. Uma trava contínua de soma estouraria ao
+editar um item — num momento em que a pessoa nem estava mexendo em forma. A OC já tratava as parcelas
+assim: confere ao SALVAR e de novo na APROVAÇÃO, que é o portão real. As formas seguem a mesma regra, e
+o gate da aprovação passou a conferir soma das formas, parcela sem forma, e parcela de cada forma.
+
+**Formas e parcelas gravam na MESMA RPC.** `oc_parcelas.oc_forma_id` referencia `oc_formas` com
+ON DELETE CASCADE. Duas RPCs fariam a primeira apagar as formas, levar as parcelas em cascata, e um
+erro na segunda deixaria a ordem SEM parcela nenhuma — sem transação entre chamadas do supabase-js não
+há como desfazer. `fn_salvar_parcelas_oc(p_oc_id, p_parcelas, p_formas)`: uma função, uma transação.
+
+**A ligação entre os dois lados é o `forma_pagamento_id`, não o id do bloco.** Na aprovação, cada
+parcela do lançamento acha seu bloco por `(lancamento_id, forma_pagamento_id)`, que é único. Não
+precisa de tabela de mapeamento, e o join é exato. A linha de controle da prova é justamente essa: as
+duas parcelas TÊM que cair em blocos diferentes — se o fallback `limit 1` mordesse, daria 1 bloco e a
+divisão viraria enfeite, com o dinheiro indo pelo caminho do boleto sem erro nenhum.
+
+**Dividiu entre formas → parcela deixa de ser opcional.** Buraco achado depois de aplicar as
+migrations: OC com duas formas e zero parcela era aceita (parcela é opcional na OC), virava lançamento
+com dois blocos e nenhuma parcela, e ali não havia mais caminho — lançamento de origem `oc` só edita
+parcelas pelo diálogo, e o diálogo recusa lançamento multi-forma. A divisão ficava declarada e não
+pagável. Agora as três camadas recusam (form, schema do servidor, `fn_salvar_parcelas_oc` e o gate da
+aprovação). Com UMA forma nada muda: parcela continua opcional, e o lançamento define depois.
+
+**Mensagem de erro tem que falar do que a pessoa fez.** Antes dessa regra, quem dividia sem parcela
+levava "as parcelas desta forma não fecham com o valor dela" contra uma lista vazia: verdade inútil,
+porque quem dividiu ainda não chegou nas parcelas. A mensagem certa fala de parcela, não de soma.
+
+**Advisor achou três funções abertas ao `anon`.** Rodando os advisors depois das migrations:
+`fn_definir_parcelas_lancamento(uuid, jsonb, text)` (criada em 19/08 com o motivo obrigatório) tinha
+`grant execute to authenticated` e nenhum `revoke from public` — e no Postgres função nova já vem com
+EXECUTE para PUBLIC, então só o grant não fecha nada. O ACL mostra: `=X/postgres` é o PUBLIC. Dano real
+era limitado (`tem_permissao` com `auth.uid()` nulo recusa), mas SECURITY DEFINER que mexe em parcela
+de dinheiro não fica aberto por causa de um default. Revogado, junto com duas funções de TRIGGER
+(`fn_audit_senha_provisoria`, `fn_total_oc_cabecalho`), que não precisam de EXECUTE para ninguém — e a
+prova mediu que os dois triggers continuam disparando depois do revoke (total da OC 500 → 1.000).
+
+**Quarta sobrescrita da mesma função no mesmo dia, e a quarta pelo mesmo motivo.** Apliquei a regra de
+"dividiu entre formas, então precisa de parcela" partindo do MEU `180200`, sem ver que a outra frente já
+havia reenxertado as observações na `201951`: o apply apagou a cópia de observações da função viva, sem
+conflito, sem erro e sem aviso. `CREATE OR REPLACE` troca o corpo INTEIRO, e não existe merge de três
+vias em Postgres. O conserto (`20260820210000`) parte do corpo DELA, letra por letra, e acrescenta só a
+minha checagem. O hábito que fecha isso: antes de aplicar, comparar o md5 do corpo vivo com o md5 do
+corpo que estou mandando, e reler a definição viva quando não baterem.
+
+**A pendência de ordem que a `201951` declarou está resolvida por este PR.** As migrations que criam
+`oc_formas` entram em main aqui, e com timestamps anteriores (`1800xx`, `1900xx`) — o replay do repo do
+zero passa a funcionar na ordem natural.
+
+**Cabeçalho nulo de propósito cria buraco de EXIBIÇÃO em todo lugar que lia o cabeçalho.** A projeção
+resolve o schema e a compatibilidade, mas cada tela que imprimia `formaPagamentoNome` passa a ter uma
+célula vazia — e vazio já significava "sem forma", não "tem duas". Dois lugares consertados aqui: a
+listagem de OCs diz **"2 formas"**, e o espelho do lançamento imprime **"Boleto R$ 800,00 + Dinheiro
+R$ 200,00"** (maior primeiro; acima de três formas vira a contagem, porque o espelho é documento de uma
+folha). O espelho é o caso mais duro: quem lê no papel não tem para onde clicar.
+
+**Conferido e sem defeito, para não ficar como suspeita aberta:** `fn_aprovar_folha`,
+`fn_fechar_diarias` e `fn_registrar_adiantamento` criam parcela SEM bloco de forma, e o filtro de
+"Pagamentos diretos" usa `!inner` no bloco da parcela — o que sumiria com a parcela em silêncio. As
+três nascem com `forma_pagamento_id` NULO no cabeçalho, então nunca estiveram naquela aba (que é por
+definição dinheiro e cartão): a invariante "tem forma no cabeçalho ⟺ tem bloco" vale trivialmente para
+elas. Medido no banco: das 884 parcelas sem bloco, ZERO cairiam em diretos.
+

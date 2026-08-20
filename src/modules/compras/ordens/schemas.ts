@@ -126,9 +126,39 @@ export const ocParcelaSchema = z.object({
     .refine((valor) => casasDecimais(valor) <= 2, {
       error: "O valor da parcela aceita no máximo 2 casas decimais",
     }),
+  /**
+   * De qual FORMA de pagamento esta parcela sai. A ordem pode ser paga por
+   * várias (20/08/2026), e é o `forma_pagamento_id` que liga a parcela ao bloco
+   * — `fn_salvar_parcelas_oc` resolve o id do bloco a partir dele.
+   */
+  formaPagamentoId: idSchemaCom("Forma de pagamento inválida").optional(),
 });
 
 export type OcParcelaInput = z.infer<typeof ocParcelaSchema>;
+
+/**
+ * Uma forma de pagamento da ordem, com quanto sai por ela.
+ *
+ * Modelo de duas camadas, igual ao do lançamento: aqui ficam as formas com o
+ * valor de cada uma, e cada parcela diz de qual forma é. A soma das formas fecha
+ * com o total da ordem, e as parcelas de cada forma fecham com o valor dela.
+ *
+ * Diferente do lançamento, a OC NÃO tem trava contínua no banco: o `valor_total`
+ * é derivado dos itens, então a conferência acontece ao salvar e de novo na
+ * aprovação — que é como as parcelas da OC já se comportavam.
+ */
+export const ocFormaSchema = z.object({
+  formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
+  valor: z
+    .number({ error: "Valor da forma inválido" })
+    .positive({ error: "O valor da forma precisa ser maior que zero" })
+    .max(999999999999.99, { error: "Valor de forma acima do permitido" })
+    .refine((valor) => casasDecimais(valor) <= 2, {
+      error: "O valor da forma aceita no máximo 2 casas decimais",
+    }),
+});
+
+export type OcFormaInput = z.infer<typeof ocFormaSchema>;
 
 /** Centavos inteiros: comparar dinheiro somado em float mente. */
 function emCentavos(valor: number): number {
@@ -167,14 +197,63 @@ export const ordemCompraSchema = z
       .min(1, { error: "Adicione ao menos um item à ordem de compra" }),
     /** Opcional: OC sem parcelas gera lançamento sem parcela definida. */
     parcelas: z.array(ocParcelaSchema).default([]),
+    /**
+     * As formas de pagamento da ordem e quanto sai por cada uma. Ao menos uma:
+     * é o TIPO da forma que decide o caminho do pagamento (fila de aprovação,
+     * direto, ou já quitado no cartão), e ordem sem forma nenhuma deixaria essa
+     * decisão sem dono.
+     */
+    formas: z
+      .array(ocFormaSchema)
+      .min(1, { error: "Escolha a forma de pagamento" }),
   })
   .superRefine((ordem, ctx) => {
-    if (ordem.parcelas.length === 0) return;
-
     const total = ordem.itens.reduce(
       (soma, item) => soma + emCentavos(item.quantidade * item.precoUnitario),
       0,
     );
+
+    // As formas fecham com o total dos itens. Vale sempre, inclusive sem
+    // parcela: é a divisão do que vai ser pago, e ela não depende de existir
+    // parcelamento.
+    const somaFormas = ordem.formas.reduce(
+      (soma, forma) => soma + emCentavos(forma.valor),
+      0,
+    );
+    if (somaFormas !== total) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A soma das formas precisa fechar com o total da ordem",
+        path: ["formas"],
+      });
+    }
+
+    const ids = ordem.formas.map((forma) => forma.formaPagamentoId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A mesma forma aparece duas vezes: some os valores numa linha só",
+        path: ["formas"],
+      });
+    }
+
+    // Com DUAS ou mais formas, parcela deixa de ser opcional. Quem tem
+    // vencimento e quem se paga é a PARCELA: sem ela a parte em boleto não entra
+    // na fila e a parte em dinheiro não tem o que baixar. E depois de aprovada,
+    // lançamento de OC só edita parcelas pelo diálogo, que recusa lançamento de
+    // várias formas — a divisão ficaria declarada e não pagável.
+    // `fn_salvar_parcelas_oc` recusa igual.
+    if (ordem.formas.length > 1 && ordem.parcelas.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Ordem paga por mais de uma forma precisa de parcelas: diga quando e por qual forma cada parte sai",
+        path: ["parcelas"],
+      });
+    }
+
+    if (ordem.parcelas.length === 0) return;
+
     const somaParcelas = ordem.parcelas.reduce(
       (soma, parcela) => soma + emCentavos(parcela.valor),
       0,
@@ -194,6 +273,38 @@ export const ordemCompraSchema = z
           code: "custom",
           message: "A parcela não pode vencer antes da emissão da ordem",
           path: ["parcelas", i, "dataVencimento"],
+        });
+      }
+    });
+
+    // Com DUAS ou mais formas, cada parcela diz de qual é e as parcelas de cada
+    // forma fecham com o valor dela. Com uma só isso é automático: a tela
+    // preenche, e a soma já foi conferida contra o total acima.
+    if (ordem.formas.length < 2) return;
+
+    const conhecidas = new Set(ids);
+    ordem.parcelas.forEach((parcela, i) => {
+      if (
+        !parcela.formaPagamentoId ||
+        !conhecidas.has(parcela.formaPagamentoId)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Diga por qual forma de pagamento esta parcela sai",
+          path: ["parcelas", i, "formaPagamentoId"],
+        });
+      }
+    });
+
+    ordem.formas.forEach((forma, i) => {
+      const soma = ordem.parcelas
+        .filter((p) => p.formaPagamentoId === forma.formaPagamentoId)
+        .reduce((total_, p) => total_ + emCentavos(p.valor), 0);
+      if (soma !== emCentavos(forma.valor)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "As parcelas desta forma não fecham com o valor dela",
+          path: ["formas", i, "valor"],
         });
       }
     });
@@ -359,10 +470,135 @@ export const ordemCompraFormSchema = z
           .refine((valor) => casasDecimaisTexto(valor) <= 2, {
             error: "O valor aceita no máximo 2 casas decimais",
           }),
+        /** Vazio = nenhuma forma escolhida, igual ao Combobox sem seleção. */
+        formaPagamentoId: z.string().trim(),
+      }),
+    ),
+    /**
+     * Formas de pagamento (client). Nasce com UMA, em branco: é o caso comum, e
+     * ela aparece como um Combobox só, sem coluna de valor (ela vale o total).
+     * "Dividir entre formas" abre a segunda.
+     */
+    formas: z.array(
+      z.object({
+        formaPagamentoId: z.string().trim(),
+        valor: z.string().trim(),
       }),
     ),
   })
   .superRefine((form, ctx) => {
+    const emCentavosDoTexto = (texto: string) =>
+      Math.round(paraNumero(texto ?? "") * 100);
+    const totalDosItens = form.centrosCusto.reduce(
+      (soma, grupo) =>
+        soma +
+        grupo.insumos.reduce(
+          (subtotal, insumo) =>
+            subtotal +
+            Math.round(
+              paraNumero(insumo.quantidade ?? "") *
+                paraNumero(insumo.precoUnitario ?? "") *
+                100,
+            ),
+          0,
+        ),
+      0,
+    );
+
+    // A primeira forma precisa estar escolhida sempre: é o tipo dela que decide
+    // o caminho do pagamento, e ordem sem forma deixaria essa decisão sem dono.
+    if (form.formas.length === 0 || !form.formas[0]?.formaPagamentoId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Escolha a forma de pagamento",
+        path: ["formas", 0, "formaPagamentoId"],
+      });
+    }
+
+    // A partir de DUAS: cada linha precisa de valor, a soma fecha com o total, e
+    // as parcelas de cada forma fecham com o valor dela. Com uma só, ela vale o
+    // total e a coluna de valor não está na tela.
+    if (form.formas.length > 1) {
+      form.formas.forEach((forma, i) => {
+        if (!forma.formaPagamentoId) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Escolha a forma",
+            path: ["formas", i, "formaPagamentoId"],
+          });
+        }
+        if (emCentavosDoTexto(forma.valor) <= 0) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Informe um valor maior que zero",
+            path: ["formas", i, "valor"],
+          });
+        }
+      });
+
+      const ids = form.formas.map((forma) => forma.formaPagamentoId);
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A mesma forma aparece duas vezes: some os valores numa linha só",
+          path: ["formas"],
+        });
+      }
+
+      const somaFormas = form.formas.reduce(
+        (soma, forma) => soma + emCentavosDoTexto(forma.valor),
+        0,
+      );
+      if (somaFormas !== totalDosItens) {
+        const diferenca = (totalDosItens - somaFormas) / 100;
+        ctx.addIssue({
+          code: "custom",
+          message:
+            diferenca > 0
+              ? `Faltam ${formatarDiferenca(diferenca)} para as formas fecharem com o total`
+              : `As formas passam ${formatarDiferenca(-diferenca)} do total`,
+          path: ["formas"],
+        });
+      }
+
+      // Dividiu, então parcela deixa de ser opcional: é a parcela que tem
+      // vencimento e é ela que se paga. Sem esta mensagem, o erro que apareceria
+      // era "as parcelas desta forma não fecham com o valor dela" contra uma
+      // lista vazia — verdade inútil para quem nem chegou nas parcelas.
+      if (form.parcelas.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "Dividiu entre formas: informe as parcelas e diga por qual forma cada uma sai",
+          path: ["parcelas"],
+        });
+      } else {
+        const conhecidas = new Set(ids);
+        form.parcelas.forEach((parcela, i) => {
+          if (!conhecidas.has(parcela.formaPagamentoId)) {
+            ctx.addIssue({
+              code: "custom",
+              message: "Escolha a forma desta parcela",
+              path: ["parcelas", i, "formaPagamentoId"],
+            });
+          }
+        });
+
+        form.formas.forEach((forma, i) => {
+          const soma = form.parcelas
+            .filter((p) => p.formaPagamentoId === forma.formaPagamentoId)
+            .reduce((total_, p) => total_ + emCentavosDoTexto(p.valor), 0);
+          if (soma !== emCentavosDoTexto(forma.valor)) {
+            ctx.addIssue({
+              code: "custom",
+              message: "As parcelas desta forma não fecham com o valor dela",
+              path: ["formas", i, "valor"],
+            });
+          }
+        });
+      }
+    }
+
     if (form.parcelas.length === 0) return;
 
     // Total dos itens e soma das parcelas em centavos inteiros: comparar

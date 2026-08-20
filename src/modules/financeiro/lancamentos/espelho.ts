@@ -1,3 +1,4 @@
+import { formatarBRL } from "@/lib/formatadores";
 import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -116,6 +117,10 @@ export interface LinhaEspelhoLancamento {
   fornecedores: { razao_social: string } | null;
   categorias_financeiras: { nome: string } | null;
   formas_pagamento: { nome: string } | null;
+  lancamento_formas: {
+    valor: string | number;
+    formas_pagamento: { nome: string } | null;
+  }[];
   lancamento_parcelas: {
     id: string;
     numero_parcela: number;
@@ -137,6 +142,34 @@ export interface LinhaEspelhoLancamento {
 /** Conversão única de dinheiro: sobre o texto exato que o banco mandou. */
 function dinheiro(valor: string | number | null | undefined): number {
   return Number(valor ?? 0);
+}
+
+/**
+ * A linha "Forma de pagamento" quando o lançamento é pago por VÁRIAS.
+ *
+ * O cabeçalho `forma_pagamento_id` vai nulo de propósito nesse caso, e o papel
+ * ficaria com o campo vazio: quem lê o espelho concluiria "sem forma" de um
+ * documento que tem duas. Aqui a divisão vai na própria linha, com o valor de
+ * cada forma, porque o espelho é o que sai da impressora e não tem para onde
+ * clicar.
+ *
+ * Acima de TRÊS formas vira a contagem: o espelho é documento de uma folha, e
+ * uma enumeração longa quebraria a linha do Dado e empurraria o resto da página.
+ */
+function formasDivididas(
+  blocos: LinhaEspelhoLancamento["lancamento_formas"] | null | undefined,
+): string | null {
+  const lista = (blocos ?? []).filter((bloco) => bloco.formas_pagamento?.nome);
+  if (lista.length < 2) return null;
+  if (lista.length > 3) return `${lista.length} formas de pagamento`;
+  return lista
+    .slice()
+    .sort((a, b) => dinheiro(b.valor) - dinheiro(a.valor))
+    .map(
+      (bloco) =>
+        `${bloco.formas_pagamento?.nome} ${formatarBRL(dinheiro(bloco.valor))}`,
+    )
+    .join(" + ");
 }
 
 /**
@@ -233,7 +266,8 @@ export function montarEspelhoLancamento(
     observacoes: linha.observacoes,
     fornecedorNome: linha.fornecedores?.razao_social ?? null,
     categoriaNome: linha.categorias_financeiras?.nome ?? null,
-    formaPagamentoNome: linha.formas_pagamento?.nome ?? null,
+    formaPagamentoNome:
+      linha.formas_pagamento?.nome ?? formasDivididas(linha.lancamento_formas),
     parcelas,
     resumoParcelas: resumirParcelas(parcelas),
     // "Sem centro de custo", igual ao fallback de detalharLancamentosParaPlanilha
@@ -271,6 +305,7 @@ export async function buscarLancamentosParaEspelho(
          fornecedores(razao_social),
          categorias_financeiras(nome),
          formas_pagamento(nome),
+         lancamento_formas(valor, formas_pagamento(nome)),
          lancamento_parcelas(id, numero_parcela, data_vencimento, valor,
            desconto, juros, valor_liquido, status, data_pagamento,
            contas_bancarias(nome)),

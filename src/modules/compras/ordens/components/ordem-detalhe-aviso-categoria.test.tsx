@@ -76,6 +76,8 @@ function ordem(troca: Partial<OrdemDetalhe> = {}): OrdemDetalhe {
     observacoes: null,
     itens: [item()],
     parcelas: [],
+    // Ordem sem formas declaradas: e o estado das ordens antigas.
+    formas: [],
     lancamento: null,
     ...troca,
   };

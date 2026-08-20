@@ -91,6 +91,11 @@ export interface OrdemLista {
   /** Mês de referência (dia 1), que define em que mês o custo entra. */
   mesCompetencia: string;
   condicaoPagamentoDescricao: string | null;
+  /**
+   * Como a ordem é paga. Com uma forma, o nome dela; com DUAS ou mais, "2
+   * formas", porque o `forma_pagamento_id` do cabeçalho é nulo de propósito
+   * nesse caso e a célula vazia diria "sem forma" para uma ordem que tem duas.
+   */
   formaPagamentoNome: string | null;
   cotacaoNumero: string | null;
   /**
@@ -161,6 +166,22 @@ export interface OrdemParcela {
   numeroParcela: number;
   dataVencimento: string;
   valor: number;
+  /** De qual forma esta parcela sai. Nulo na ordem sem formas declaradas. */
+  formaPagamentoId: string | null;
+}
+
+/**
+ * Uma forma de pagamento da ordem, com quanto sai por ela.
+ *
+ * A ordem pode ter VÁRIAS (20/08/2026). Com uma só, o `formaPagamentoId` do
+ * cabeçalho também guarda ela; com duas ou mais o cabeçalho fica nulo, porque
+ * não existe "a forma" da ordem.
+ */
+export interface OrdemForma {
+  id: string;
+  formaPagamentoId: string;
+  formaPagamentoNome: string;
+  valor: number;
 }
 
 /** OC completa para a tela de detalhe. */
@@ -201,6 +222,8 @@ export interface OrdemDetalhe {
   itens: OrdemItem[];
   /** Vazio quando a OC não tem parcelas definidas (serão definidas no lançamento). */
   parcelas: OrdemParcela[];
+  /** As formas de pagamento e quanto sai por cada uma. */
+  formas: OrdemForma[];
   lancamento: LancamentoVinculado | null;
 }
 
@@ -368,6 +391,7 @@ export async function listarOrdens(
        formas_pagamento(nome),
        cotacoes(numero),
        recebimentos(id),
+       oc_formas(id),
        oc_itens(id)`,
       { count: "exact" },
     )
@@ -483,7 +507,11 @@ export async function listarOrdens(
     dataCompra: ordem.data_compra,
     mesCompetencia: ordem.mes_competencia,
     condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
-    formaPagamentoNome: ordem.formas_pagamento?.nome ?? null,
+    formaPagamentoNome:
+      ordem.formas_pagamento?.nome ??
+      ((ordem.oc_formas?.length ?? 0) > 1
+        ? `${ordem.oc_formas.length} formas`
+        : null),
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
     numeroDocumento: ordem.numero_documento,
     anexos: anexosPorOrdem[ordem.id] ?? 0,
@@ -521,7 +549,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
          insumos(nome, categoria_financeira_id, unidades_medida(sigla)),
          centros_custo(nome, codigo)
        ),
-       oc_parcelas(numero_parcela, data_vencimento, valor)`,
+       oc_parcelas(numero_parcela, data_vencimento, valor, oc_forma_id),
+       oc_formas(id, valor, forma_pagamento_id, formas_pagamento(nome))`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -589,8 +618,24 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
         numeroParcela: parcela.numero_parcela,
         dataVencimento: parcela.data_vencimento,
         valor: parcela.valor,
+        // A parcela guarda o id do BLOCO; a tela trabalha com o id da FORMA,
+        // que é o que o seletor mostra. A tradução é por aqui.
+        formaPagamentoId:
+          (ordem.oc_formas ?? []).find(
+            (forma) => forma.id === parcela.oc_forma_id,
+          )?.forma_pagamento_id ?? null,
       }))
       .sort((a, b) => a.numeroParcela - b.numeroParcela),
+    // Maior valor primeiro: é como a pessoa lê a divisão ("a maior parte sai no
+    // boleto").
+    formas: (ordem.oc_formas ?? [])
+      .map((forma) => ({
+        id: forma.id,
+        formaPagamentoId: forma.forma_pagamento_id,
+        formaPagamentoNome: forma.formas_pagamento?.nome ?? "-",
+        valor: forma.valor,
+      }))
+      .sort((a, b) => b.valor - a.valor),
     lancamento: lancamento
       ? {
           id: lancamento.id,

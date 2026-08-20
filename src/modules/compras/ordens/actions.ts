@@ -93,6 +93,24 @@ function parcelasParaRegistro(parcelas: OrdemCompraInput["parcelas"]) {
   return parcelas.map((parcela) => ({
     data_vencimento: parcela.dataVencimento,
     valor: parcela.valor,
+    // Por qual forma esta parcela sai. Vai o id da FORMA, nao o do bloco: quem
+    // resolve o bloco e a funcao do banco, que grava os dois na mesma transacao.
+    forma_pagamento_id: parcela.formaPagamentoId ?? null,
+  }));
+}
+
+/**
+ * Formas no formato que fn_salvar_parcelas_oc espera.
+ *
+ * Com uma forma so, o valor que vai e o total da ordem -- a tela nem pede,
+ * porque nao ha o que dividir. Quem calcula esse total e o formulario, a partir
+ * dos itens, e o banco confere a soma contra o valor_total ja recalculado pelo
+ * trigger dos itens.
+ */
+function formasParaRegistro(formas: OrdemCompraInput["formas"]) {
+  return formas.map((forma) => ({
+    forma_pagamento_id: forma.formaPagamentoId,
+    valor: forma.valor,
   }));
 }
 
@@ -108,10 +126,12 @@ async function salvarParcelas(
   supabase: Awaited<ReturnType<typeof createClient>>,
   ordemId: string,
   parcelas: OrdemCompraInput["parcelas"],
+  formas: OrdemCompraInput["formas"],
 ): Promise<string | null> {
   const { error } = await supabase.rpc("fn_salvar_parcelas_oc", {
     p_oc_id: ordemId,
     p_parcelas: parcelasParaRegistro(parcelas),
+    p_formas: formasParaRegistro(formas),
   });
   return error
     ? (error.message ?? "Não foi possível salvar as parcelas")
@@ -148,13 +168,14 @@ export async function criarOrdem(
     supabase,
     id,
     validado.data.parcelas,
+    validado.data.formas,
   );
   if (erroParcelas) {
-    // A OC existe (o RPC de criação é atômico); só as parcelas não entraram.
-    // Melhor dizer isso do que fingir que nada foi salvo.
+    // A OC existe (o RPC de criação é atômico); só parcelas e formas não
+    // entraram. Melhor dizer isso do que fingir que nada foi salvo.
     revalidatePath(ROTA);
     return {
-      erro: `A ordem foi criada, mas as parcelas não: ${erroParcelas}. Abra a ordem e ajuste as parcelas.`,
+      erro: `A ordem foi criada, mas o pagamento não: ${erroParcelas}. Abra a ordem e ajuste as parcelas.`,
     };
   }
 
@@ -260,10 +281,11 @@ export async function editarOrdem(
     supabase,
     idValido.data,
     validado.data.parcelas,
+    validado.data.formas,
   );
   if (erroParcelas) {
     revalidatePath(ROTA);
-    return { erro: `As parcelas não foram salvas: ${erroParcelas}` };
+    return { erro: `O pagamento não foi salvo: ${erroParcelas}` };
   }
 
   revalidatePath(ROTA);
