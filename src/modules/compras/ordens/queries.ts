@@ -91,6 +91,11 @@ export interface OrdemLista {
   /** Mês de referência (dia 1), que define em que mês o custo entra. */
   mesCompetencia: string;
   condicaoPagamentoDescricao: string | null;
+  /**
+   * Como a ordem é paga. Com uma forma, o nome dela; com DUAS ou mais, "2
+   * formas", porque o `forma_pagamento_id` do cabeçalho é nulo de propósito
+   * nesse caso e a célula vazia diria "sem forma" para uma ordem que tem duas.
+   */
   formaPagamentoNome: string | null;
   cotacaoNumero: string | null;
   /**
@@ -386,6 +391,7 @@ export async function listarOrdens(
        formas_pagamento(nome),
        cotacoes(numero),
        recebimentos(id),
+       oc_formas(id),
        oc_itens(id)`,
       { count: "exact" },
     )
@@ -501,7 +507,11 @@ export async function listarOrdens(
     dataCompra: ordem.data_compra,
     mesCompetencia: ordem.mes_competencia,
     condicaoPagamentoDescricao: ordem.condicoes_pagamento?.descricao ?? null,
-    formaPagamentoNome: ordem.formas_pagamento?.nome ?? null,
+    formaPagamentoNome:
+      ordem.formas_pagamento?.nome ??
+      ((ordem.oc_formas?.length ?? 0) > 1
+        ? `${ordem.oc_formas.length} formas`
+        : null),
     cotacaoNumero: ordem.cotacoes?.numero ?? null,
     numeroDocumento: ordem.numero_documento,
     anexos: anexosPorOrdem[ordem.id] ?? 0,
