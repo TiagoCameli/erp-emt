@@ -95,6 +95,42 @@ describe("recursosDoModulo", () => {
       "administracao.usuarios",
     ]);
   });
+
+  /**
+   * A ORDEM desta lista é a ordem do submenu da sidebar: `abasVisiveis` só
+   * filtra por permissão, não reordena. Por isso ela se testa — mover um item
+   * aqui move a aba na tela de todo mundo, e a ordem do Financeiro foi pedida
+   * pelo Tiago (20/08/2026), não é acidente de digitação.
+   *
+   * Recebimentos vem logo depois de Pagamentos porque é o par dele: o dinheiro
+   * que sai e o dinheiro que entra, lidos na mesma sequência.
+   */
+  it("o Financeiro sai na ordem pedida, com Recebimentos logo depois de Pagamentos", () => {
+    expect(recursosDoModulo("financeiro").map((r) => r.id)).toEqual([
+      "financeiro.lancamentos",
+      "financeiro.aprovacao-pagamentos",
+      "financeiro.pagamentos",
+      "financeiro.recebimentos",
+      "financeiro.competencias",
+      "financeiro.programados",
+      "financeiro.contas-bancarias",
+      "financeiro.conciliacao",
+      "financeiro.categorias",
+      "financeiro.relatorios",
+    ]);
+  });
+
+  it("LINHA DE CONTROLE: Recebimentos é o vizinho imediato de Pagamentos", () => {
+    // Asserção independente da lista inteira: se alguém acrescentar uma aba
+    // nova ao Financeiro, o teste de cima passa a falhar por um motivo legítimo
+    // (a lista cresceu) e este continua guardando o que foi pedido de fato.
+    const ids = recursosDoModulo("financeiro").map((r) => r.id);
+    const posPagamentos = ids.indexOf("financeiro.pagamentos");
+    const posRecebimentos = ids.indexOf("financeiro.recebimentos");
+
+    expect(posPagamentos).toBeGreaterThanOrEqual(0);
+    expect(posRecebimentos).toBe(posPagamentos + 1);
+  });
 });
 
 describe("módulo Gestão", () => {
