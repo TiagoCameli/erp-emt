@@ -88,6 +88,25 @@ function dinheiroOpcionalValido(valor: string): boolean {
 }
 
 /**
+ * Percentual opcional na tela: vazio é válido (significa "usa os encargos
+ * configurados na folha"), e o preenchido vai de 0 a 100 com até 4 casas.
+ * Mesma trava do percentualOpcionalSchema do domínio (schemas.ts), para o erro
+ * aparecer no campo em vez de sobrar só no `colaboradorSchema.parse` do
+ * paraInput, onde a mensagem chega sem apontar o campo.
+ */
+function percentualOpcionalValido(valor: string): boolean {
+  const texto = valor.trim();
+  if (texto === "") return true;
+  const numero = paraNumero(texto);
+  return (
+    Number.isFinite(numero) &&
+    numero >= 0 &&
+    numero <= 100 &&
+    casasDecimaisTexto(texto) <= 4
+  );
+}
+
+/**
  * Schema só do formulário: todos os campos são strings preenchidas (com
  * sentinelas nos selects opcionais), sem transforms. A conversão para o
  * payload do servidor acontece em paraInput, validando com o schema de
@@ -112,6 +131,12 @@ const formSchema = z.object({
   }),
   valorDiaria: z.string().refine(dinheiroOpcionalValido, {
     error: "Informe um valor válido (até 2 casas decimais)",
+  }),
+  gratificacao: z.string().refine(dinheiroOpcionalValido, {
+    error: "Informe um valor válido (até 2 casas decimais)",
+  }),
+  encargosPercentual: z.string().refine(percentualOpcionalValido, {
+    error: "Informe um percentual de 0 a 100 (até 4 casas decimais)",
   }),
   banco: z.string(),
   agencia: z.string(),
@@ -164,6 +189,19 @@ function valoresIniciais(colaborador: ColaboradorLista | null): FormValues {
       colaborador?.valorDiaria != null
         ? String(colaborador.valorDiaria).replace(".", ",")
         : "",
+    // Gratificação 0 aparece como campo vazio: "sem gratificação" e "R$ 0,00"
+    // são a mesma coisa, e mostrar 0 num campo opcional convida a apagar.
+    gratificacao:
+      colaborador?.gratificacao != null && colaborador.gratificacao !== 0
+        ? String(colaborador.gratificacao).replace(".", ",")
+        : "",
+    // Aqui 0 NÃO é vazio: zero significa "esta pessoa não tem encargo", e vazio
+    // significa "usa a configuração da folha". Apagar essa diferença ao carregar
+    // o formulário trocaria uma pela outra no próximo salvamento.
+    encargosPercentual:
+      colaborador?.encargosPercentual != null
+        ? String(colaborador.encargosPercentual).replace(".", ",")
+        : "",
     banco: colaborador?.banco ?? "",
     agencia: colaborador?.agencia ?? "",
     conta: colaborador?.conta ?? "",
@@ -207,6 +245,8 @@ function paraInput(valores: FormValues): ColaboradorInput {
     ativo: valores.ativo,
     salario: valores.salario,
     valorDiaria: valores.valorDiaria,
+    gratificacao: valores.gratificacao,
+    encargosPercentual: valores.encargosPercentual,
     banco: valores.banco,
     agencia: valores.agencia,
     conta: valores.conta,
@@ -616,6 +656,41 @@ export function ColaboradoresFormDrawer({
                   className="tabular-nums text-right"
                   disabled={salvando}
                   {...form.register("valorDiaria")}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+
+            <LinhaCampos>
+              <CampoFormulario
+                id="colaborador-gratificacao"
+                rotulo="Gratificação salarial"
+                ajuda="Valor fixo mensal que soma no líquido e no custo da folha. Não entra na base dos encargos nem da provisão."
+                erro={form.formState.errors.gratificacao?.message}
+              >
+                <InputDecimal
+                  id="colaborador-gratificacao"
+                  autoComplete="off"
+                  placeholder="0,00"
+                  className="tabular-nums text-right"
+                  disabled={salvando}
+                  {...form.register("gratificacao")}
+                />
+              </CampoFormulario>
+
+              <CampoFormulario
+                id="colaborador-encargos-percentual"
+                rotulo="Encargo individual (%)"
+                ajuda="Em branco usa os encargos configurados na folha. Preencha para dar um percentual próprio — 0 para quem não tem encargo, como terceiro e diarista. Percentual próprio não gera guia no Financeiro."
+                erro={form.formState.errors.encargosPercentual?.message}
+              >
+                <InputDecimal
+                  casas={4}
+                  id="colaborador-encargos-percentual"
+                  autoComplete="off"
+                  placeholder="Usa a configuração da folha"
+                  className="tabular-nums text-right"
+                  disabled={salvando}
+                  {...form.register("encargosPercentual")}
                 />
               </CampoFormulario>
             </LinhaCampos>

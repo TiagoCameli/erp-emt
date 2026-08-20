@@ -83,7 +83,7 @@ describe("cadastroFaltando", () => {
     ).toEqual({ semSalario: false, semBanco: false });
   });
 
-  it("terceiro ativo sem salário não acusa semSalario (não entra na folha por salário, fn_gerar_folha só processa CLT)", () => {
+  it("terceiro ativo sem salário acusa semSalario: a folha passou a incluí-lo pelo salário, e sem salário a linha dele não é criada", () => {
     expect(
       cadastroFaltando({
         ativo: true,
@@ -92,10 +92,34 @@ describe("cadastroFaltando", () => {
         banco: "x",
         chavePix: null,
       }),
+    ).toEqual({ semSalario: true, semBanco: false });
+  });
+
+  it("terceiro ativo com salário zero também acusa semSalario (o `continue when` da fn_gerar_folha pula a linha, calado)", () => {
+    expect(
+      cadastroFaltando({
+        ativo: true,
+        vinculo: "terceiro",
+        salario: 0,
+        banco: "x",
+        chavePix: null,
+      }),
+    ).toEqual({ semSalario: true, semBanco: false });
+  });
+
+  it("terceiro ativo com salário não acusa semSalario", () => {
+    expect(
+      cadastroFaltando({
+        ativo: true,
+        vinculo: "terceiro",
+        salario: 7000,
+        banco: "x",
+        chavePix: null,
+      }),
     ).toEqual({ semSalario: false, semBanco: false });
   });
 
-  it("diarista ativo sem salário não acusa semSalario (pago por diária, não entra na folha por salário)", () => {
+  it("diarista ativo sem salário não acusa semSalario (entra na folha pela soma das diárias, não por salário)", () => {
     expect(
       cadastroFaltando({
         ativo: true,
@@ -136,7 +160,11 @@ describe("cadastroFaltando", () => {
       cadastroFaltando({
         ativo: true,
         vinculo: "terceiro",
-        salario: null,
+        // Com salário de propósito: este caso é sobre semBanco, e terceiro sem
+        // salário passou a acusar semSalario quando a folha começou a incluí-lo.
+        // Sem o salário aqui, a falha do outro alerta apareceria neste teste e
+        // esconderia o que ele mede.
+        salario: 7000,
         banco: null,
         chavePix: null,
       }),

@@ -48,18 +48,28 @@ export interface CadastroFaltando {
 }
 
 /**
- * Vínculos que entram na folha por salário mensal. `fn_gerar_folha` faz o
- * loop de geração de folha só `where ativo and vinculo = 'clt'` — diarista
- * (valor_diaria) e terceiro não entram por salário. Não é regra fiscal
+ * Vínculos que entram na folha POR SALÁRIO MENSAL. A `fn_gerar_folha` percorre
+ * `vinculo in ('clt', 'terceiro', 'diarista')`, mas os três não entram pelo
+ * mesmo número: CLT e terceiro entram pelo `salario` do cadastro, e diarista
+ * entra pela soma das diárias em aberto da competência. Não é regra fiscal
  * inventada, é o que a folha realmente processa.
+ *
+ * Terceiro entrou nesta lista quando a folha passou a incluí-lo: antes, um
+ * terceiro sem salário cadastrado não era problema porque ele não entrava na
+ * folha de jeito nenhum. Agora ele entra, e sem salário a linha dele
+ * simplesmente não é criada — silenciosamente, o que é exatamente o que este
+ * alerta existe para evitar.
+ *
+ * Diarista continua fora: salário vazio nele é o estado NORMAL, e acusar seria
+ * ruído em cima de quem está certo.
  */
-const VINCULOS_FOLHA_SALARIO = ["clt"] as const;
+const VINCULOS_FOLHA_SALARIO = ["clt", "terceiro"] as const;
 
 /**
  * Cadastro incompleto de um colaborador ativo:
- * - semSalario: ativo, vínculo CLT (o único que entra na folha por salário
- *   mensal — ver `VINCULOS_FOLHA_SALARIO`) e sem salário registrado (null ou
- *   zero). Diarista e terceiro nunca acusam semSalario.
+ * - semSalario: ativo, vínculo que entra na folha por salário mensal (CLT ou
+ *   terceiro — ver `VINCULOS_FOLHA_SALARIO`) e sem salário registrado (null ou
+ *   zero). Diarista nunca acusa semSalario: ele entra na folha pelas diárias.
  * - semBanco: ativo e sem nenhum meio de recebimento (nem banco, nem chave
  *   Pix), qualquer vínculo.
  * Colaborador inativo nunca acusa (não é alerta de quem já saiu).

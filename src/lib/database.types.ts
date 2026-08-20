@@ -404,6 +404,7 @@ export type Database = {
           cpf: string | null;
           created_at: string;
           created_by: string | null;
+          encargos_percentual: number | null;
           ctps_numero: string | null;
           ctps_serie: string | null;
           ctps_uf: string | null;
@@ -412,6 +413,7 @@ export type Database = {
           escolaridade: string | null;
           estado_civil: string | null;
           funcao_id: string | null;
+          gratificacao: number;
           id: string;
           jornada_id: string | null;
           nacionalidade: string | null;
@@ -445,6 +447,7 @@ export type Database = {
           cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
+          encargos_percentual?: number | null;
           ctps_numero?: string | null;
           ctps_serie?: string | null;
           ctps_uf?: string | null;
@@ -453,6 +456,7 @@ export type Database = {
           escolaridade?: string | null;
           estado_civil?: string | null;
           funcao_id?: string | null;
+          gratificacao?: number;
           id?: string;
           jornada_id?: string | null;
           nacionalidade?: string | null;
@@ -486,6 +490,7 @@ export type Database = {
           cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
+          encargos_percentual?: number | null;
           ctps_numero?: string | null;
           ctps_serie?: string | null;
           ctps_uf?: string | null;
@@ -494,6 +499,7 @@ export type Database = {
           escolaridade?: string | null;
           estado_civil?: string | null;
           funcao_id?: string | null;
+          gratificacao?: number;
           id?: string;
           jornada_id?: string | null;
           nacionalidade?: string | null;
@@ -1373,8 +1379,11 @@ export type Database = {
           colaborador_id: string;
           created_at: string;
           custo_total: number;
+          editado_manualmente: boolean;
+          encargos_percentual: number | null;
           encargos: number;
           folha_id: string;
+          gratificacao: number;
           horas_extras: number;
           horas_normais: number;
           id: string;
@@ -1392,8 +1401,11 @@ export type Database = {
           colaborador_id: string;
           created_at?: string;
           custo_total?: number;
+          editado_manualmente?: boolean;
+          encargos_percentual?: number | null;
           encargos?: number;
           folha_id: string;
+          gratificacao: number;
           horas_extras?: number;
           horas_normais?: number;
           id?: string;
@@ -1411,8 +1423,11 @@ export type Database = {
           colaborador_id?: string;
           created_at?: string;
           custo_total?: number;
+          editado_manualmente?: boolean;
+          encargos_percentual?: number | null;
           encargos?: number;
           folha_id?: string;
+          gratificacao?: number;
           horas_extras?: number;
           horas_normais?: number;
           id?: string;
@@ -1551,6 +1566,7 @@ export type Database = {
           valor_adiantamentos: number;
           valor_bruto: number;
           valor_encargos: number;
+          valor_gratificacoes: number;
           valor_liquido: number;
           valor_provisoes: number;
         };
@@ -1569,6 +1585,7 @@ export type Database = {
           valor_adiantamentos?: number;
           valor_bruto?: number;
           valor_encargos?: number;
+          valor_gratificacoes?: number;
           valor_liquido?: number;
           valor_provisoes?: number;
         };
@@ -1587,6 +1604,7 @@ export type Database = {
           valor_adiantamentos?: number;
           valor_bruto?: number;
           valor_encargos?: number;
+          valor_gratificacoes?: number;
           valor_liquido?: number;
           valor_provisoes?: number;
         };
@@ -2902,6 +2920,7 @@ export type Database = {
           competencia: string;
           created_at: string;
           created_by: string | null;
+          folha_id: string | null;
           data: string;
           id: string;
           lancamento_id: string | null;
@@ -2915,6 +2934,7 @@ export type Database = {
           competencia: string;
           created_at?: string;
           created_by?: string | null;
+          folha_id?: string | null;
           data?: string;
           id?: string;
           lancamento_id?: string | null;
@@ -2928,6 +2948,7 @@ export type Database = {
           competencia?: string;
           created_at?: string;
           created_by?: string | null;
+          folha_id?: string | null;
           data?: string;
           id?: string;
           lancamento_id?: string | null;
@@ -3551,6 +3572,15 @@ export type Database = {
       fn_excluir_lancamento: { Args: { p_id: string }; Returns: undefined };
       fn_excluir_obra: {
         Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_editar_item_folha: {
+        Args: {
+          p_encargos_percentual?: number | null;
+          p_gratificacao: number;
+          p_item: string;
+          p_salario_base: number;
+        };
         Returns: undefined;
       };
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined };

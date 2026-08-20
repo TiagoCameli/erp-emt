@@ -18,10 +18,16 @@ import {
   formatarDataHora,
   formatarQuantidade,
 } from "@/lib/formatadores";
+import {
+  ROTULO_VINCULO,
+  type Vinculo,
+} from "@/modules/cadastros/colaboradores/schemas";
 import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
 import { buscarFolha } from "@/modules/rh/folha/queries";
 import {
+  editarItemFolhaSchema,
   gerarFolhaSchema,
+  type EditarItemFolhaInput,
   type GerarFolhaInput,
 } from "@/modules/rh/folha/schemas";
 
@@ -76,9 +82,12 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
 
 /**
  * Gera a folha gerencial da competência via fn_gerar_folha: cria (ou regenera)
- * o rascunho consolidando os colaboradores CLT ativos. Os encargos são
- * discriminados pela config (folha_encargos ativos) dentro da fn, não mais por
- * um % global digitado. Reaplicar regenera a folha em rascunho. Retorna o id.
+ * o rascunho consolidando os colaboradores ativos de vínculo CLT, terceiro e
+ * diarista. CLT e terceiro entram pelo salário do cadastro; diarista entra pela
+ * soma das diárias em aberto da competência. Os encargos são discriminados pela
+ * config (folha_encargos ativos) ou pelo percentual individual do colaborador,
+ * dentro da fn. Reaplicar regenera a folha em rascunho, PRESERVANDO as linhas
+ * que foram editadas à mão. Retorna o id.
  */
 export async function gerarFolha(
   dados: GerarFolhaInput,
@@ -111,6 +120,66 @@ export async function gerarFolha(
   revalidatePath(ROTA);
   revalidatePath(rotaDetalhe(data));
   return { ok: true, id: data };
+}
+
+/* ------------------------------------------------------------------ */
+/* Editar a linha de um colaborador na folha em rascunho              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Altera salário base, gratificação e percentual de encargo de UM item da
+ * folha, via fn_editar_item_folha.
+ *
+ * A conta inteira acontece no banco de propósito: mexer nesses três campos
+ * refaz INSS, IRRF, as linhas de encargo, as de provisão, o custo total, o
+ * líquido e os sete totais do cabeçalho. Calcular aqui e mandar um UPDATE
+ * seria uma segunda cópia das fórmulas da geração, e duas cópias de uma conta
+ * de dinheiro divergem na primeira vez que uma das duas for corrigida.
+ *
+ * `encargosPercentual` null significa "volta a usar os folha_encargos globais",
+ * e é diferente de zero — o schema preserva essa distinção.
+ *
+ * `folhaId` serve SÓ para revalidar a rota do detalhe. Quem autoriza e quem
+ * localiza o item é o `itemId` dentro da fn (que confere permissão, status de
+ * rascunho e trava a folha); um folhaId errado aqui no máximo revalida a página
+ * errada, não move dinheiro nenhum.
+ */
+export async function editarItemFolha(
+  folhaId: string,
+  dados: EditarItemFolhaInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para alterar valores da folha" };
+  }
+
+  const validado = editarItemFolhaSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_editar_item_folha", {
+    p_item: validado.data.itemId,
+    p_salario_base: validado.data.salarioBase,
+    p_gratificacao: validado.data.gratificacao,
+    p_encargos_percentual: validado.data.encargosPercentual,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.editarItem",
+      error,
+      // As travas desta fn (rascunho, adiantamento maior que o disponível,
+      // linha zerada) só são úteis se o texto delas chegar na tela: cada uma
+      // diz o que fazer em seguida.
+      mensagemDeNegocio(error, "Não foi possível alterar os valores da linha"),
+    );
+  }
+
+  const idFolha = idSchema.safeParse(folhaId);
+  revalidatePath(ROTA);
+  if (idFolha.success) revalidatePath(rotaDetalhe(idFolha.data));
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------------ */
@@ -308,10 +377,10 @@ function nomeArquivoFolha(competencia: string): string {
 /**
  * Gera a planilha gerencial da folha em .xlsx para o contador: cabeçalho com a
  * competência, o status e o percentual de encargos; uma tabela por colaborador
- * com salário base, horas, encargos, adiantamentos, custo total (custo da
- * empresa) e líquido (o que o colaborador recebe); e a linha de totais. Devolve
- * o arquivo em base64 para o client baixar via Blob. Disponível em qualquer
- * status.
+ * com vínculo, salário base, gratificação, horas, encargos, adiantamentos,
+ * custo total (custo da empresa) e líquido (o que o colaborador recebe); e a
+ * linha de totais. Devolve o arquivo em base64 para o client baixar via Blob.
+ * Disponível em qualquer status.
  */
 export async function gerarPlanilhaFolha(
   id: string,
@@ -355,9 +424,14 @@ export async function gerarPlanilhaFolha(
 
   const cabecalhos = [
     "Colaborador",
+    // Vínculo é a primeira coluna nova porque sem ela a planilha fica
+    // ilegível: com CLT, terceiro e diarista na mesma lista, um encargo de
+    // R$ 0,00 ou um salário base de R$ 550,00 não têm explicação.
+    "Vínculo",
     "Função",
     "Centro de custo",
     "Salário base",
+    "Gratificação",
     "Horas normais",
     "Horas extras",
     "Valor extras",
@@ -379,9 +453,12 @@ export async function gerarPlanilhaFolha(
 
     worksheet.addRow([
       item.colaboradorNome,
+      ROTULO_VINCULO[item.colaboradorVinculo as Vinculo] ??
+        item.colaboradorVinculo,
       item.colaboradorFuncao ?? "",
       centro,
       formatarBRL(item.salarioBase),
+      formatarBRL(item.gratificacao),
       formatarQuantidade(item.horasNormais),
       formatarQuantidade(item.horasExtras),
       formatarBRL(item.valorExtras),
@@ -394,11 +471,17 @@ export async function gerarPlanilhaFolha(
   }
 
   worksheet.addRow([]);
+  // O total da coluna "Salário base" é o bruto MENOS as gratificações: bruto
+  // já embute gratificação (é salário base + extras + gratificação), e repetir
+  // o bruto na coluna de salário base faria a linha de totais somar a
+  // gratificação duas vezes na horizontal.
   const linhaTotais = worksheet.addRow([
     "Totais",
     "",
     "",
-    formatarBRL(folha.valorBruto),
+    "",
+    formatarBRL(folha.valorBruto - folha.valorGratificacoes),
+    formatarBRL(folha.valorGratificacoes),
     "",
     "",
     "",
@@ -413,9 +496,10 @@ export async function gerarPlanilhaFolha(
   });
 
   worksheet.getColumn(1).width = 28;
-  worksheet.getColumn(2).width = 22;
-  worksheet.getColumn(3).width = 26;
-  for (const indice of [4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+  worksheet.getColumn(2).width = 12;
+  worksheet.getColumn(3).width = 22;
+  worksheet.getColumn(4).width = 26;
+  for (const indice of [5, 6, 7, 8, 9, 10, 11, 12, 13, 14]) {
     const coluna = worksheet.getColumn(indice);
     coluna.width = Math.max(coluna.width ?? 0, 16);
   }

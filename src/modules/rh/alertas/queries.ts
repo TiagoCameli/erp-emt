@@ -155,7 +155,8 @@ export interface AlertaCadastro {
 
 /**
  * Alertas de cadastro incompleto: colaboradores ativos sem salário
- * registrado (só para vínculo CLT — ver `VINCULOS_FOLHA_SALARIO` em
+ * registrado (só para os vínculos que entram na folha por salário, CLT e
+ * terceiro — ver `VINCULOS_FOLHA_SALARIO` em
  * `calculo.ts`) e/ou sem nenhum meio de recebimento (banco ou chave Pix,
  * qualquer vínculo). Só devolve quem tem pelo menos um dos dois problemas.
  */

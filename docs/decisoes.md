@@ -2539,3 +2539,98 @@ categorias igual ao usuário autorizado. Só com `set local role authenticated` 
 **E foi a linha de controle que denunciou.** Sem uma linha que TEM que dar diferente de zero, eu teria
 reportado uma prova de RLS que não provava nada — o mesmo padrão registrado em 13/08, agora numa
 segunda forma.
+
+## 2026-08-20 - Folha gerencial passa a ter terceiro, diarista, gratificação e encargo individual
+
+**Pedido do Tiago, quatro coisas de uma vez:** terceiro e diarista aparecendo na folha; poder alterar
+os valores da linha para lançar gratificação; encargo individual por pessoa; e gratificação salarial
+que NÃO é afetada pelos encargos. As três primeiras são mecânica; a quarta é regra de negócio dele, e
+está aplicada num lugar só (`fn_folha_aplicar_encargos_e_provisoes` recebe a base como parâmetro, e a
+base é o salário base).
+
+**Encargo individual é o que torna os outros vínculos possíveis.** Não é um requisito paralelo: um
+terceiro não carrega o encargo patronal de um CLT, então incluir terceiro na folha com o `%` global da
+config inflaria o custo da empresa em ~27% sobre gente que não gera encargo nenhum. `colaboradores.
+encargos_percentual` nulo = usa os `folha_encargos` ativos discriminados (caminho histórico, com grupo
+de recolhimento, o único que gera guia); preenchido = UMA linha "Encargos" sem grupo. **Sem grupo, a
+`fn_aprovar_folha` não gera guia** — e é intencional: percentual próprio de uma pessoa é custo
+gerencial, não guia que a empresa recolhe. Não existe "a guia dos encargos do João".
+
+**Vazio e zero são valores DIFERENTES no percentual, e essa distinção atravessa quatro camadas.**
+Vazio = "usa a configuração da folha"; zero = "esta pessoa não tem encargo". Se as duas colapsassem, ou
+o terceiro carregaria encargo de CLT, ou cadastrar um terceiro sem encargo apagaria a config de todo
+mundo. A distinção está no schema (dois testes), no default do formulário (0 NÃO vira campo vazio ao
+carregar), na ficha ("Usa a configuração da folha" em vez de "-") e no banco (`null` não leva coalesce
+no `paraLinhaBanco`, ao contrário da gratificação, que leva porque a coluna é `not null default 0`).
+
+**Diarista entra pela soma das diárias, e isso criou um segundo pagador da mesma diária.** Antes havia
+um só: o fechamento em `/rh/diaristas` (`fn_fechar_diarias`). Com o diarista na folha, a aprovação
+também gera "Salário X". A coordenação é `rh_diarias.folha_id`, e ela existe por causa de um caso
+específico: **`lancamento_id` sozinho não serve como marca de "já paga"**, porque um item de folha com
+líquido zero (o adiantamento do mês comeu tudo) não gera lançamento nenhum, e a diária ficaria com
+`lancamento_id` nulo — em aberto aos olhos do fechamento — mesmo tendo sido consumida pela folha. Por
+isso o loop 1b da `fn_aprovar_folha` percorre TODOS os itens de diarista, não só os que geraram
+lançamento. A desaprovação solta as duas colunas, e tem de fazer isso ANTES do `delete` dos
+lançamentos: a FK `rh_diarias_lancamento_id_fkey` é simples, sem `on delete set null`.
+
+**A linha de controle da aprovação: as diárias ainda batem com a folha?** Entre gerar e aprovar, alguém
+pode lançar uma diária nova, excluir uma, ou fechar o mês em `/rh/diaristas`. Nesses casos o
+`salario_base` do item deixou de ser a soma das diárias, e aprovar pagaria um valor que não corresponde
+a nada. A conferência roda ANTES de criar lançamento nenhum, para uma folha desatualizada parar sem
+deixar meio pagamento atrás de si. Item editado à mão fica fora dela: ali o valor é escolha declarada.
+
+**Regerar preservando a edição manual, e por quê.** A gratificação é digitada NA FOLHA, e regerar apaga
+os itens. Sem o snapshot, o Tiago digitaria a gratificação, clicaria em Regerar e o valor voltaria ao do
+cadastro **em silêncio** — a única pista seria o total do rodapé ter mudado. `folha_itens.
+editado_manualmente` marca a linha, e a `fn_gerar_folha` guarda `jsonb_object_agg` por
+`colaborador_id` antes do `delete` (não por id do item, que morre no delete) e reaplica no loop.
+
+**INSS/IRRF continuam só para CLT.** Retenção de terceiro e de diarista é regra fiscal que o Tiago
+ainda vai declarar, e regra fiscal não se inventa. A base do desconto do CLT passou a incluir a
+gratificação (gratificação habitual integra a remuneração do trabalhador); o que ela não afeta é o
+encargo PATRONAL. Hoje isso não muda número nenhum, porque não há faixa de INSS/IRRF cadastrada — mas
+muda no dia em que houver, e é a decisão que fica registrada. Mesmo raciocínio para o FGTS informativo
+do holerite, que segue sobre o salário base.
+
+**Editar valor de linha exigiu extrair as fórmulas do loop da geração.** Mexer em salário base ou
+gratificação refaz INSS, IRRF, as linhas de encargo, as de provisão, o custo total, o líquido e os sete
+totais do cabeçalho. Escrever isso de novo dentro da `fn_editar_item_folha` seria uma segunda cópia de
+uma conta de dinheiro, e duas cópias divergem na primeira vez que uma das duas for corrigida. Saíram
+quatro funções INTERNAS (`fn_folha_inss`, `fn_folha_irrf`,
+`fn_folha_aplicar_encargos_e_provisoes`, `fn_folha_recalcular_totais`), com `revoke` de `public`,
+`anon` E `authenticated` — `from public` sozinho não basta, porque as default privileges podem ter dado
+EXECUTE nominal. Conferido: as quatro ficaram com `{postgres=X/postgres}` e nenhuma aparece no advisor
+de função definer executável por anon.
+
+**A edição NÃO recalcula o adiantamento, e recusa em vez de encolher.** A cascata de desconto atravessa
+competências (o que não cabe vira parcela nova na próxima folha, marcada com a folha que a empurrou), e
+refazer isso a cada edição de linha moveria dinheiro de OUTROS meses sem ninguém pedir. Quando o valor
+novo não cobre o que a folha já descontou, a função para e manda regerar. Alternativa recusada: cortar o
+adiantamento para caber, que cobraria do colaborador menos do que o plano diz sem registrar em lugar
+nenhum que o plano mudou.
+
+**A prova rodou no banco vivo, em transação desfeita, com linha de controle.** Dez verificações num
+`DO` block que termina em `raise`: diarista com base 550,00 = soma de três diárias e alocado no centro
+da obra DA DIÁRIA (não do cadastro); gratificação de 500,00 sobre base 2.000,00 gerando encargo de
+400,00 — 20% de 2.000, não de 2.500, que é a regra provada em número; encargo individual 0% rendendo uma
+linha e zero linhas com grupo; edição refazendo tudo; Regerar preservando; aprovação marcando 3/3
+diárias; `fn_fechar_diarias` recusando depois disso; desaprovação soltando as 3; e o cabeçalho fechando
+com a soma das linhas. **A linha de controle era um CLT sem gratificação e sem percentual próprio, cujo
+encargo TINHA que dar 324,20 (20% de 1.621) e diferente de zero** — sem ela, uma config que não chegou a
+ser aplicada faria as outras nove passarem sem provar nada.
+
+**Um teste novo pegou um defeito real antes do commit:** `gratificacao` estava usando o schema de
+dinheiro obrigatório, então campo vazio virava erro de validação em vez de zero — e vazio é o estado da
+maioria das pessoas. Virou um schema próprio (`dinheiroComZeroSchema`) que trata vazio como 0. Salário
+base continua obrigatório de propósito: apagar o salário e ele virar R$ 0,00 calado é como se paga
+alguém a menos.
+
+**Terceiro entrou em `VINCULOS_FOLHA_SALARIO` (alertas de cadastro incompleto).** Antes, terceiro sem
+salário não era problema porque ele não entrava na folha; agora entra, e sem salário a linha dele
+simplesmente não é criada pelo `continue when` — silenciosamente, que é exatamente o que o alerta existe
+para evitar. Diarista continua fora: salário vazio nele é o estado normal.
+
+**Fora de escopo, declarado:** a planilha de importação de colaboradores não recebeu as duas colunas
+novas. Ela hoje importa nome, CPF, função, vínculo e obra — não importa nem `salario` nem
+`valor_diaria`, então acrescentar gratificação sem salário seria incoerente. Expandir aquela planilha é
+decisão separada.

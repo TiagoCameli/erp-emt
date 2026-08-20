@@ -113,6 +113,28 @@ export function InputQuantidade(props: InputNumericoBaseProps) {
 }
 
 /**
+ * Campo de PERCENTUAL: até 4 casas, exibe só o que foi digitado.
+ *
+ * Percentual é TAXA, não valor (ver @/lib/casas-decimais): 8,3333% de provisão
+ * e 26,8% de encargo patronal são os números reais, e cortar em duas casas erra
+ * o valor final. Não exibe casas fixas porque "20%" tem de aparecer como 20, e
+ * não como 20,00 — aqui o zero à direita não é centavo, é ruído.
+ *
+ * Existe separado de `InputQuantidade` (que hoje se comporta igual) porque o
+ * ponto do canônico é o call site dizer o que o campo É: um percentual com
+ * placeholder "0,000" de quantidade confunde quem preenche.
+ */
+export function InputPercentual(props: InputNumericoBaseProps) {
+  return (
+    <InputNumerico
+      {...props}
+      casas={CASAS_TAXA}
+      placeholder={props.placeholder ?? "0"}
+    />
+  );
+}
+
+/**
  * Campo de PREÇO UNITÁRIO: até 4 casas, exibe no mínimo 2.
  *
  * Não é `InputMoeda` porque preço não é valor: R$ 6,3947 por litro é o preço

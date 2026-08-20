@@ -178,6 +178,14 @@ function paraLinhaBanco(dados: ColaboradorInput) {
     ativo: dados.ativo,
     salario: dados.salario,
     valor_diaria: dados.valorDiaria,
+    // Coluna `not null default 0`: vazio no formulário é zero, não null.
+    // Mandar null aqui violaria o NOT NULL e o erro chegaria na tela como
+    // falha genérica de gravação.
+    gratificacao: dados.gratificacao ?? 0,
+    // Aqui null é valor de verdade ("usa os encargos configurados na folha"),
+    // então NÃO leva coalesce: trocar por 0 daria encargo zero a quem devia
+    // seguir a configuração, e a diferença só apareceria no custo da folha.
+    encargos_percentual: dados.encargosPercentual ?? null,
     banco: dados.banco,
     agencia: dados.agencia,
     conta: dados.conta,
