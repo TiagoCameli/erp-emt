@@ -421,3 +421,80 @@ describe("as mesmas regras no formulário", () => {
     expect(r.success).toBe(true);
   });
 });
+
+/**
+ * O formulário do jeito que a TELA o monta, e não do jeito que a fixture o
+ * monta.
+ *
+ * Depois que a divisão por formas entrou, a forma passou a ser escolhida em
+ * `formas[0].formaPagamentoId`. O `formaPagamentoId` do cabeçalho continuou
+ * exigido no schema, e nenhum controle da tela o preenche: para uma OC nova ele
+ * nasce "" (ver `valoresIniciais` no drawer) e fica "".
+ *
+ * O efeito é o pior possível: `handleSubmit` recusa antes de chamar a ação, e
+ * como não existe campo na tela para esse erro, ele não aparece em lugar nenhum.
+ * Clicar em "Criar ordem" não fazia NADA, sem aviso. Medido no banco: a última
+ * OC criada é de 20/08/2026 21:10 UTC, sete minutos antes de a divisão por
+ * formas entrar no main (21:17 UTC), e nenhuma depois.
+ *
+ * Passou por todos os testes de cima porque a fixture `formulario` preenche o
+ * campo do cabeçalho — ela provava a crença do autor, não o que a tela manda.
+ */
+describe("a forma do cabeçalho não é preenchida pela tela", () => {
+  /** O que o drawer monta numa OC nova: cabeçalho vazio, forma na linha 0. */
+  const comoATelaManda = { ...formulario, formaPagamentoId: "" };
+
+  it("OC nova, com tudo preenchido na tela, passa", () => {
+    const r = ordemCompraFormSchema.safeParse(comoATelaManda);
+    expect(caminhos(r)).toEqual([]);
+    expect(r.success).toBe(true);
+  });
+
+  it("LINHA DE CONTROLE: faltando o que a tela PEDE, continua recusando", () => {
+    // Sem esta, um schema que aceitasse qualquer coisa passaria no teste de cima.
+    const r = ordemCompraFormSchema.safeParse({
+      ...comoATelaManda,
+      fornecedorId: "",
+    });
+    expect(r.success).toBe(false);
+    expect(mensagens(r)).toContain("Selecione o fornecedor");
+  });
+
+  it("a forma continua obrigatória, e o erro cai no campo que existe na tela", () => {
+    const r = ordemCompraFormSchema.safeParse({
+      ...comoATelaManda,
+      formas: [{ formaPagamentoId: "", valor: "" }],
+    });
+    expect(r.success).toBe(false);
+    expect(mensagens(r)).toContain("Escolha a forma de pagamento");
+    // O caminho importa tanto quanto a mensagem: é ele que faz o erro aparecer
+    // embaixo do Combobox de forma, em vez de em nenhum lugar.
+    expect(caminhos(r)).toContain("formas.0.formaPagamentoId");
+  });
+
+  it("editar uma OC dividida (cabeçalho nulo no banco) também passa", () => {
+    // Com duas formas, `fn_salvar_parcelas_oc` grava NULL no cabeçalho, então ao
+    // reabrir a OC o formulário nasce com "" — o mesmo silêncio da OC nova.
+    const r = ordemCompraFormSchema.safeParse({
+      ...comoATelaManda,
+      formas: [
+        { formaPagamentoId: BOLETO, valor: "500,00" },
+        { formaPagamentoId: DINHEIRO, valor: "500,00" },
+      ],
+      parcelas: [
+        {
+          dataVencimento: "2026-07-18",
+          valor: "500,00",
+          formaPagamentoId: BOLETO,
+        },
+        {
+          dataVencimento: "2026-06-18",
+          valor: "500,00",
+          formaPagamentoId: DINHEIRO,
+        },
+      ],
+    });
+    expect(caminhos(r)).toEqual([]);
+    expect(r.success).toBe(true);
+  });
+});

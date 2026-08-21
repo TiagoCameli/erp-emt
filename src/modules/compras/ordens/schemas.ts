@@ -403,7 +403,23 @@ export const ordemCompraFormSchema = z
     fornecedorId: idSchemaCom("Selecione o fornecedor"),
     condicaoPagamentoId: idSchemaCom("Escolha a condição de pagamento"),
     cotacaoId: idSchema.optional(),
-    formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
+    /**
+     * A forma de pagamento NÃO é campo deste formulário: quem manda é
+     * `formas[0]`, que é o Combobox que a tela mostra. O cabeçalho da OC é
+     * DERIVADO dela no submit (`aoEnviar`), e no banco quem reescreve é
+     * `fn_salvar_parcelas_oc`.
+     *
+     * Ela já foi um campo aqui, exigido por `idSchemaCom`, e ficou exigida depois
+     * que a divisão por formas mudou a tela. Nenhum controle a preenchia, então
+     * toda OC nova era recusada pelo `handleSubmit` por um campo que não existe
+     * na tela — e como não existe, o erro não aparecia em lugar nenhum: clicar em
+     * "Criar ordem" não fazia nada, calado. A última OC criada antes disso foi em
+     * 20/08/2026 21:10 UTC, sete minutos antes do deploy.
+     *
+     * Campo que a tela não preenche não pode ser campo do formulário. Quem
+     * garante que existe uma forma escolhida é o `superRefine` lá embaixo, com o
+     * erro caindo em `formas.0.formaPagamentoId`, que TEM lugar na tela.
+     */
     dataCompra: z
       .string()
       .trim()
