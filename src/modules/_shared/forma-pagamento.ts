@@ -52,6 +52,49 @@ export const CAMINHO_DO_PAGAMENTO: Record<TipoFormaPagamento, string> = {
     "Nasce quitado no cartão: sem aprovação e sem pagamento a fazer.",
 };
 
+/**
+ * A forma passa pela FILA DE APROVAÇÃO de pagamento?
+ *
+ * Só `bancario` e `cheque`. Dinheiro vai direto para Pagamentos e cartão nasce
+ * quitado — nenhum dos dois espera aval, e os dois vivem na aba "Dinheiro e
+ * cartão", que existe para conferência depois do fato.
+ *
+ * Existe como predicado, e não como condição repetida em cada consulta, porque
+ * a fila e a aba de dinheiro e cartão têm que ser COMPLEMENTARES: enquanto a
+ * regra vivia só na aba de dinheiro e cartão, a fila não filtrava forma nenhuma
+ * e as duas abas se sobrepunham — 8 parcelas de cartão de crédito
+ * (R$ 7.189,04, medido em 20/08/2026) apareciam nas duas, contra o que a própria
+ * descrição da tela de aprovação promete.
+ *
+ * O default de `tipoFormaPagamento` é `bancario`, então parcela sem forma (o que
+ * o RH cria) e tipo desconhecido continuam PASSANDO pela fila. É o default
+ * seguro: esconder de quem aprova é pior do que mostrar demais.
+ */
+export function passaPelaAprovacao(tipo: TipoFormaPagamento): boolean {
+  return tipo === "bancario" || tipo === "cheque";
+}
+
+/**
+ * A forma vive na aba "Dinheiro e cartão", que é conferência depois do fato?
+ *
+ * O NEGADO de `passaPelaAprovacao`, e escrito assim de propósito em vez de
+ * repetir a lista: os dois destinos são COMPLEMENTARES, e foi a lista repetida
+ * (a fila sem filtro nenhum, a aba com `in ('dinheiro','cartao_credito')`) que
+ * deixou parcela de cartão aparecer nas duas ao mesmo tempo. Derivando um do
+ * outro, tipo novo cai em exatamente um destino sem ninguém precisar lembrar de
+ * mexer nos dois lugares.
+ */
+export function ehPagamentoDireto(tipo: TipoFormaPagamento): boolean {
+  return !passaPelaAprovacao(tipo);
+}
+
+/**
+ * Os tipos que vão para a aba "Dinheiro e cartão", para o filtro da consulta.
+ * Derivado do catálogo, e não digitado, pelo mesmo motivo acima.
+ */
+export const TIPOS_PAGAMENTO_DIRETO: readonly TipoFormaPagamento[] =
+  TIPOS_FORMA_PAGAMENTO.filter(ehPagamentoDireto);
+
 export function ehTipoFormaPagamento(
   valor: unknown,
 ): valor is TipoFormaPagamento {
