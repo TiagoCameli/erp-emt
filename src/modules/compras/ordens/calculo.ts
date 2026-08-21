@@ -96,6 +96,13 @@ export function temAjuste(ajustes: AjustesDaOrdem): boolean {
  * 2. O desconto SUBTRAI. Sem ele a ordem 2592 mostraria R$ 103.835,95 em vez de
  *    R$ 100.000,00 — R$ 3.835,95 de diferença numa prévia que a pessoa usa para
  *    conferir antes de aprovar.
+ *
+ * GÊMEA NO BANCO: `fn_total_da_oc` faz esta MESMA conta em SQL, e é ela que grava
+ * o `valor_total`. As duas têm que arredondar no MESMO ponto: quando divergem, a
+ * tela diz "fecha com o total da ordem" em verde e o servidor recusa as parcelas
+ * por não fechar. Foi o que aconteceu em 21/08/2026, quando a criação da OC ainda
+ * tinha uma terceira conta, que arredondava o PREÇO antes de multiplicar: 25 mil
+ * litros de diesel a R$ 6,1880 davam R$ 154.700,00 aqui e R$ 154.750,00 lá.
  */
 export function totalComAjustes(
   itens: ItemTotalizavel[],
