@@ -55,6 +55,17 @@ export interface MovimentoContaAgregado {
 const TIPOS_QUE_ENTRAM = new Set(["a_receber", "transferencia_entrada"]);
 
 /**
+ * GÊMEA NO BANCO: `fn_saldo_conta` repete esta MESMA regra de sinal em SQL,
+ * porque quem barra pagamento por saldo (`fn_pagar_parcela`) precisa dela sem
+ * passar pelo Node. Tipo novo de movimento tem que entrar nos DOIS lugares.
+ *
+ * Não é zelo teórico: o guard do pagamento já teve fórmula própria, sem as
+ * transferências, e em 21/08/2026 a conta operacional apareceu com R$ 22.326,46
+ * na tela e R$ -33.173.201,31 no guard. Nenhum pagamento passava, e a tela não
+ * tinha como saber.
+ */
+
+/**
  * Movimento de cada conta, em CENTAVOS inteiros, a partir das linhas agregadas
  * da RPC. Soma (em vez de sobrescrever) porque cada conta chega em até quatro
  * linhas (a_pagar, a_receber, transferencia_entrada, transferencia_saida) e o
