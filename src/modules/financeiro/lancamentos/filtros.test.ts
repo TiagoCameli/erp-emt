@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   TAMANHO_PADRAO,
+  TIPO_PADRAO,
   lerFiltrosLancamentos,
   parametrosDaQueryString,
 } from "@/modules/financeiro/lancamentos/filtros";
@@ -15,14 +16,22 @@ const FORNECEDOR = "11111111-1111-4111-8111-111111111111";
  * menos. Nos dois casos o relatório contradiz o sistema sem avisar ninguém.
  */
 describe("lerFiltrosLancamentos", () => {
-  it("sem parâmetro nenhum, não filtra nada e usa a primeira página", () => {
+  it("sem parâmetro nenhum, só o TIPO vem preenchido, no padrão", () => {
     const { filtros, valores, pagina, tamanho } = lerFiltrosLancamentos({});
 
-    expect(filtros.tipo).toBeUndefined();
+    // Tipo é o único filtro obrigatório desta tela: a lista é sempre de "a
+    // pagar" ou de "a receber", nunca das duas juntas, porque os cartões do topo
+    // somam o filtro inteiro e misturar entrada com saída faz "Total no filtro"
+    // não querer dizer nada.
+    expect(filtros.tipo).toBe(TIPO_PADRAO);
+    expect(valores.tipo).toBe(TIPO_PADRAO);
+    // Linha de controle: o padrão é "a pagar" mesmo, e não "o primeiro da lista"
+    // por acidente.
+    expect(TIPO_PADRAO).toBe("a_pagar");
+
     expect(filtros.status).toBeUndefined();
     expect(filtros.mesCompetencia).toBeUndefined();
     expect(filtros.busca).toBe("");
-    expect(valores.tipo).toBe("");
     expect(pagina).toBe(0);
     expect(tamanho).toBe(TAMANHO_PADRAO);
   });
@@ -77,12 +86,13 @@ describe("lerFiltrosLancamentos", () => {
       revisao: "quase",
     });
 
-    expect(filtros.tipo).toBeUndefined();
+    // Tipo inválido cai no PADRÃO, e não em "todos": esta tela não tem "todos".
+    expect(filtros.tipo).toBe(TIPO_PADRAO);
+    expect(valores.tipo).toBe(TIPO_PADRAO);
     expect(filtros.status).toBeUndefined();
     expect(filtros.origem).toBeUndefined();
     expect(filtros.revisao).toBeUndefined();
     // E não pode aparecer preenchido na barra como se estivesse valendo.
-    expect(valores.tipo).toBe("");
     expect(valores.status).toBe("");
   });
 
@@ -136,7 +146,54 @@ describe("lerFiltrosLancamentos", () => {
     const { filtros } = lerFiltrosLancamentos({
       tipo: ["a_pagar", "a_receber"],
     });
-    expect(filtros.tipo).toBeUndefined();
+    // Não vale como escolha, então cai no padrão -- nunca em "os dois tipos",
+    // que é exatamente o que este parâmetro repetido parecia pedir.
+    expect(filtros.tipo).toBe(TIPO_PADRAO);
+  });
+
+  /**
+   * O tipo tem três degraus de precedência, e o do meio existe para não quebrar o
+   * drill-down do relatório de aging.
+   */
+  describe("de onde vem o tipo quando a URL não escolhe", () => {
+    it("a escolha da URL ganha de tudo", () => {
+      const { filtros } = lerFiltrosLancamentos({
+        tipo: "a_receber",
+        recorte: "aging:v_1_7:a_pagar",
+      });
+      expect(filtros.tipo).toBe("a_receber");
+    });
+
+    it("sem tipo na URL, o recorte de AGING manda o dele", () => {
+      const { filtros, valores } = lerFiltrosLancamentos({
+        recorte: "aging:v_1_7:a_receber",
+      });
+      // Sem este degrau, clicar numa faixa de aging de A RECEBER abriria a lista
+      // filtrada em "a pagar" e ela viria vazia -- o pior tipo de defeito, o que
+      // não dá erro. `drillAging` é o único drill que não manda `tipo` na URL,
+      // justamente porque o recorte já carrega ele dentro.
+      expect(filtros.tipo).toBe("a_receber");
+      expect(valores.tipo).toBe("a_receber");
+    });
+
+    it("recorte que NÃO carrega tipo cai no padrão", () => {
+      // Fluxo e conta paga misturam os dois tipos por natureza, e por isso os
+      // drills deles mandam `tipo` na URL. Chegando aqui sem ele, o padrão vale.
+      expect(
+        lerFiltrosLancamentos({ recorte: "fluxo:2026-08:realizado" }).filtros
+          .tipo,
+      ).toBe(TIPO_PADRAO);
+      expect(
+        lerFiltrosLancamentos({ recorte: "conta_paga" }).filtros.tipo,
+      ).toBe(TIPO_PADRAO);
+    });
+
+    it("recorte de aging inválido não sequestra o tipo", () => {
+      const { filtros } = lerFiltrosLancamentos({
+        recorte: "aging:faixa_inventada:a_receber",
+      });
+      expect(filtros.tipo).toBe(TIPO_PADRAO);
+    });
   });
 });
 

@@ -118,6 +118,15 @@ export interface LeituraFiltrosLancamentos {
 }
 
 const TIPOS_VALIDOS: TipoLancamento[] = ["a_pagar", "a_receber"];
+
+/**
+ * O tipo com que a tela abre quando ninguém escolheu.
+ *
+ * `a_pagar` porque é a leitura de quase toda a base: 5.957 dos 6.041 lançamentos
+ * em 21/08/2026. Exportado porque a tabela precisa saber qual é o padrão para
+ * decidir se o filtro conta como "ativo" na barra.
+ */
+export const TIPO_PADRAO: TipoLancamento = "a_pagar";
 const STATUS_VALIDOS: StatusLancamento[] = [
   "previsto",
   "a_pagar",
@@ -228,7 +237,7 @@ export function parametrosDaQueryString(query: string): ParametrosUrl {
 export function lerFiltrosLancamentos(
   params: ParametrosUrl,
 ): LeituraFiltrosLancamentos {
-  const tipo = parametroValido(params.tipo, TIPOS_VALIDOS);
+  const tipoDaUrl = parametroValido(params.tipo, TIPOS_VALIDOS);
   const statusEscolhido = parametroValido(params.status, STATUS_VALIDOS);
   /**
    * "A pagar" no seletor significa A SITUAÇÃO DO DINHEIRO, não o status exato do
@@ -285,6 +294,35 @@ export function lerFiltrosLancamentos(
   // entrega chave repetida como array e o contrato inteiro recusa array.
   const semPrevisto = params.sem_previsto === "1" ? true : undefined;
   const recorte = lerRecorte(params.recorte);
+
+  /**
+   * O TIPO NUNCA FICA VAZIO nesta tela (regra do Tiago, 21/08/2026): a lista é
+   * sempre de "a pagar" ou de "a receber", nunca das duas juntas.
+   *
+   * Não é preferência de tela: os cartões do topo somam o filtro inteiro, e
+   * misturar dinheiro que entra com dinheiro que sai faz "TOTAL NO FILTRO" virar
+   * um número que não quer dizer nada. Sem tipo, ele somava os dois sentidos.
+   *
+   * A precedência tem três degraus, e o do meio é o que evita quebrar o
+   * drill-down dos relatórios:
+   *
+   * 1. O que a URL escolheu. Todos os drills de relatório passam `tipo`
+   *    explicitamente (ver `relatorios/drill.ts`) -- menos um.
+   * 2. O recorte de AGING, que é justamente esse um: ele carrega o
+   *    `tipoLancamento` dentro da própria chave, então o tipo vem de lá em vez de
+   *    cair no padrão. Sem este degrau, clicar numa faixa de aging DE A RECEBER
+   *    abriria a lista filtrada em "a pagar" e ela viria vazia.
+   * 3. O padrão, `a_pagar`, que é a leitura que essa tela tem quase sempre.
+   *
+   * Os recortes de FLUXO e CONTA PAGA misturam os dois tipos por natureza (medido
+   * em 21/08/2026: 3 de 204 no fluxo e 133 de 4.854 na conta paga são a receber),
+   * e por isso os drills deles mandam o `tipo` na URL -- degrau 1 -- em vez de
+   * depender daqui.
+   */
+  const tipo: TipoLancamento =
+    tipoDaUrl ??
+    (recorte?.tipo === "aging" ? recorte.tipoLancamento : undefined) ??
+    TIPO_PADRAO;
   // Ordenação escolhida no cabeçalho da tabela. Mora na URL como os filtros, por
   // dois motivos: o link compartilhado abre com a MESMA ordem que a pessoa viu, e
   // a exportação para Excel lê estes mesmos filtros, então a planilha sai na
@@ -337,7 +375,8 @@ export function lerFiltrosLancamentos(
     },
     valores: {
       busca,
-      tipo: tipo ?? "",
+      // Nunca vazio: a barra de filtros mostra sempre "A pagar" ou "A receber".
+      tipo,
       // A barra mostra a escolha da pessoa, e não o que foi para o banco.
       status: statusEscolhido ?? "",
       mes: mesCompetencia === "" ? "" : mes,
