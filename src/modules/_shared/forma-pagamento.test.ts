@@ -54,7 +54,12 @@ describe("textos por tipo", () => {
 
   it("dinheiro e cartão explicam que não passam", () => {
     expect(CAMINHO_DO_PAGAMENTO.dinheiro).toContain("Não passa");
-    expect(CAMINHO_DO_PAGAMENTO.cartao_credito).toContain("sem aprovação");
+    // Desde 21/08/2026 o cartão diz a mesma coisa que o dinheiro: ele deixou de
+    // nascer quitado e passou a ser pago parcela por parcela, em Pagamentos.
+    expect(CAMINHO_DO_PAGAMENTO.cartao_credito).toContain("Não passa");
+    expect(CAMINHO_DO_PAGAMENTO.cartao_credito).toContain("Pagamentos");
+    // E não pode voltar a prometer que já está quitado.
+    expect(CAMINHO_DO_PAGAMENTO.cartao_credito).not.toContain("quitado");
   });
 });
 

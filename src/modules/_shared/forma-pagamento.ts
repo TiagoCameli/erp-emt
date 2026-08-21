@@ -5,9 +5,9 @@
  * "Espécie"...), então nenhuma regra pode depender do nome digitado. Quem manda
  * é o tipo, e é ele que decide o caminho do lançamento:
  *
- *   bancario, cheque  -> passa pela fila de aprovação de pagamento
- *   dinheiro          -> não passa pela fila, vai direto para Pagamentos
- *   cartao_credito    -> nasce quitado (a fatura do cartão não é controlada aqui)
+ *   bancario, cheque            -> passa pela fila de aprovação de pagamento
+ *   dinheiro, cartao_credito    -> não passa pela fila: a parcela nasce
+ *                                  aprovada e já pode ser paga em Pagamentos
  *
  * Espelha o check de `formas_pagamento.tipo` e a função
  * `fn_aplicar_regra_pagamento` no banco.
@@ -48,8 +48,11 @@ export const CAMINHO_DO_PAGAMENTO: Record<TipoFormaPagamento, string> = {
   bancario: "Passa pela aprovação de pagamento antes de ser pago.",
   cheque: "Passa pela aprovação de pagamento antes de ser pago.",
   dinheiro: "Não passa pela aprovação: vai direto para Pagamentos.",
+  // Mudou em 21/08/2026: cartão deixou de nascer quitado na compra. Uma compra
+  // em 12x não sai do caixa na data da compra, sai na fatura, parcela por
+  // parcela — quitar tudo de uma vez dava data de pagamento errada em 11 das 12.
   cartao_credito:
-    "Nasce quitado no cartão: sem aprovação e sem pagamento a fazer.",
+    "Não passa pela aprovação: vai direto para Pagamentos, parcela por parcela.",
 };
 
 /**
