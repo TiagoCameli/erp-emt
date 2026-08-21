@@ -213,13 +213,24 @@ interface FiltroSelectProps {
   opcoes: OpcaoFiltro[];
   placeholder?: string;
   todosRotulo?: string;
+  /**
+   * Filtro que NÃO aceita "todos": a opção some do topo e o valor vazio deixa de
+   * existir como escolha possível.
+   *
+   * Existe para a lista de lançamentos, onde "a pagar" e "a receber" juntos fazem
+   * os cartões do topo somarem dinheiro que entra com dinheiro que sai. Quem usa
+   * responde pelo padrão: com `obrigatorio`, o host tem que garantir que `valor`
+   * nunca chega vazio, senão o gatilho fica sem rótulo.
+   */
+  obrigatorio?: boolean;
   /** Classe extra no gatilho (ex.: limitar largura em lista de nome comprido). */
   className?: string;
 }
 
 /**
  * Select compacto de filtro com opção "todos" no topo.
- * Valor vazio ("") representa "todos".
+ * Valor vazio ("") representa "todos" — exceto com `obrigatorio`, que remove
+ * essa opção e exige que o host sempre mande um valor.
  */
 export function FiltroSelect({
   valor,
@@ -227,16 +238,21 @@ export function FiltroSelect({
   opcoes,
   placeholder,
   todosRotulo = "Todos",
+  obrigatorio = false,
   className,
 }: FiltroSelectProps) {
   return (
     <CampoFiltro largura={TRILHO_FILTRO}>
       <Combobox
-        valor={valor === "" ? VALOR_TODOS : valor}
+        valor={valor === "" && !obrigatorio ? VALOR_TODOS : valor}
         onValorChange={(novoValor) =>
           onValorChange(novoValor === VALOR_TODOS ? "" : novoValor)
         }
-        opcoes={[{ valor: VALOR_TODOS, rotulo: todosRotulo }, ...opcoes]}
+        opcoes={
+          obrigatorio
+            ? opcoes
+            : [{ valor: VALOR_TODOS, rotulo: todosRotulo }, ...opcoes]
+        }
         placeholder={placeholder ?? todosRotulo}
         size="sm"
         // `w-full`, não `w-fit`: o trilho manda na largura. Com `w-fit` o gatilho

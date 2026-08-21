@@ -70,7 +70,10 @@ import {
   escreverListaNaUrl,
   MAX_ITENS_FILTRO,
 } from "@/modules/financeiro/_shared/listas-na-url";
-import type { ValoresFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
+import {
+  TIPO_PADRAO,
+  type ValoresFiltrosLancamentos,
+} from "@/modules/financeiro/lancamentos/filtros";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { LoteContaBancaria } from "@/modules/financeiro/lancamentos/components/lote-conta-bancaria";
 import {
@@ -535,12 +538,24 @@ export function LancamentosTabela({
     /** Filtro novo nasce escondido; os que já apareciam continuam visíveis. */
     oculto?: boolean;
     largura?: string;
+    /**
+     * Filtro sem opção "todos". O `padrao` é o valor que a URL assume quando
+     * ninguém escolheu, e é ele que decide se o filtro conta como ATIVO na
+     * barra: sem isso, um filtro obrigatório apareceria eternamente como
+     * "filtro aplicado" e o contador de filtros nunca voltaria ao normal.
+     * Limpar devolve ao padrão, não a "todos" — que não existe mais.
+     */
+    obrigatorio?: boolean;
+    padrao?: string;
   }): FiltroConfiguravel {
     return {
       id: config.chave,
       rotulo: config.rotulo,
       ocultoPorPadrao: config.oculto,
-      temValor: config.valor !== "",
+      temValor:
+        config.padrao === undefined
+          ? config.valor !== ""
+          : config.valor !== config.padrao,
       onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
       elemento: (
         <FiltroSelect
@@ -554,6 +569,7 @@ export function LancamentosTabela({
           opcoes={config.opcoes}
           placeholder={config.rotulo}
           todosRotulo={config.todosRotulo}
+          obrigatorio={config.obrigatorio}
           className={config.largura}
         />
       ),
@@ -661,12 +677,17 @@ export function LancamentosTabela({
         />
       ),
     },
+    // TIPO É OBRIGATÓRIO: a lista é sempre de "a pagar" ou de "a receber". Os
+    // cartões do topo somam o filtro inteiro, e com os dois tipos juntos "Total
+    // no filtro" somava dinheiro que entra com dinheiro que sai.
     selecao({
       chave: "tipo",
       rotulo: "Tipo",
       valor: valores.tipo,
       opcoes: OPCOES_TIPO,
       todosRotulo: "Todos os tipos",
+      obrigatorio: true,
+      padrao: TIPO_PADRAO,
     }),
     selecao({
       chave: "status",
