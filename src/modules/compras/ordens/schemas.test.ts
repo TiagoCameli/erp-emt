@@ -302,10 +302,27 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     ).toBe(false);
   });
 
-  it("exige forma de pagamento no formulário", () => {
-    const { formaPagamentoId: _, ...semForma } = formValido;
-    const r = ordemCompraFormSchema.safeParse(semForma);
+  it("exige forma de pagamento no formulário, no campo que a tela mostra", () => {
+    // A forma é escolhida em `formas[0]`, que é o Combobox da tela. O cabeçalho
+    // da OC é DERIVADO dela no submit e não é campo do formulário: enquanto era,
+    // toda OC nova era recusada por um campo invisível e o clique em "Criar
+    // ordem" não fazia nada, sem aviso.
+    const r = ordemCompraFormSchema.safeParse({ ...formValido, formas: [] });
     expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(
+        r.error.issues.some(
+          (issue) => issue.path.join(".") === "formas.0.formaPagamentoId",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("LINHA DE CONTROLE: sem a forma do cabeçalho, o formulário passa", () => {
+    // O que a tela manda de verdade numa OC nova. Sem esta linha, voltar a
+    // exigir o cabeçalho passaria por todos os outros testes deste arquivo.
+    const { formaPagamentoId: _cabecalho, ...comoATelaManda } = formValido;
+    expect(ordemCompraFormSchema.safeParse(comoATelaManda).success).toBe(true);
   });
 
   it("exige descrição e categoria no formulário", () => {

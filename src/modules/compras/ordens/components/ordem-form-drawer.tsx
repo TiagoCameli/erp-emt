@@ -128,7 +128,6 @@ function valoresIniciais(
     return {
       fornecedorId: ordem.fornecedorId,
       condicaoPagamentoId: ordem.condicaoPagamentoId ?? "",
-      formaPagamentoId: ordem.formaPagamentoId ?? "",
       cotacaoId: ordem.cotacaoId ?? undefined,
       dataCompra: ordem.dataCompra,
       mesCompetencia: competenciaParaMes(ordem.mesCompetencia),
@@ -150,7 +149,6 @@ function valoresIniciais(
     return {
       fornecedorId: prefill.fornecedorId,
       condicaoPagamentoId: prefill.condicaoPagamentoId ?? "",
-      formaPagamentoId: prefill.formaPagamentoId ?? "",
       cotacaoId: prefill.cotacaoId,
       dataCompra: dataHojeISO(),
       mesCompetencia: mesHojeISO(),
@@ -174,7 +172,6 @@ function valoresIniciais(
   return {
     fornecedorId: ordem?.fornecedorId ?? "",
     condicaoPagamentoId: ordem?.condicaoPagamentoId ?? "",
-    formaPagamentoId: ordem?.formaPagamentoId ?? "",
     cotacaoId: ordem?.cotacaoId ?? undefined,
     dataCompra: ordem?.dataCompra ?? dataHojeISO(),
     mesCompetencia: ordem
@@ -505,7 +502,6 @@ export function OrdemFormDrawer({
       ? `Essa compra tem ${diasAtras(dataCompraValor)} dias. Confirme se a data está certa.`
       : undefined;
 
-  const formaPagamentoValor = form.watch("formaPagamentoId") ?? "";
   const formasObservadas = form.watch("formas") ?? [];
   /**
    * Com UMA forma ela vale o total dos itens e aparece como um Combobox só, sem
