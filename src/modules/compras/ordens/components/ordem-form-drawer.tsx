@@ -818,6 +818,11 @@ export function OrdemFormDrawer({
             <CampoFormulario
               id="oc-forma-pagamento"
               rotulo="Forma de pagamento"
+              // A forma É obrigatória (o `superRefine` do schema exige a
+              // primeira), e a tela era o único lugar que não dizia isso: todos
+              // os outros campos exigidos marcam o asterisco. Tela que esconde o
+              // que exige é o mesmo defeito que fazia o botão não responder.
+              obrigatorio
               ajuda={
                 formaUnica
                   ? tipoFormaEscolhida
