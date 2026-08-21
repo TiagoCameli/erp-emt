@@ -2,7 +2,11 @@ import "server-only";
 
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
+  ehPagamentoDireto,
+  passaPelaAprovacao,
+  TIPOS_PAGAMENTO_DIRETO,
   tipoFormaPagamento,
   type TipoFormaPagamento,
 } from "@/modules/_shared/forma-pagamento";
@@ -96,6 +100,37 @@ export interface ParcelaForaDaFila {
   naoEncontrada: boolean;
 }
 
+/**
+ * O tipo da forma que decide o caminho DESTA parcela: bloco da parcela primeiro,
+ * cabeçalho do lançamento como reserva, `bancario` como default.
+ *
+ * A ordem não é gosto. Num lançamento pago por DUAS formas o
+ * `forma_pagamento_id` do cabeçalho é nulo de propósito, então só o bloco sabe
+ * que metade foi em cartão; e num lançamento de forma única antigo pode existir
+ * cabeçalho sem bloco. Ler só um dos dois erra num dos dois casos.
+ *
+ * É a MESMA cadeia que monta `formaPagamentoNome` na linha da fila: se ela
+ * divergisse, a tela mostraria uma forma e a regra usaria outra.
+ */
+function formaQuePassa(parcela: {
+  lancamento_formas?: { formas_pagamento?: { tipo?: string | null } | null } | null;
+  lancamentos?: { formas_pagamento?: { tipo?: string | null } | null } | null;
+}): TipoFormaPagamento {
+  return tipoFormaPagamento(
+    parcela.lancamento_formas?.formas_pagamento?.tipo ??
+      parcela.lancamentos?.formas_pagamento?.tipo,
+  );
+}
+
+/**
+ * O mínimo para decidir o caminho da parcela: o valor, o tipo da forma do bloco
+ * e o do cabeçalho como reserva. Uma constante só para os contadores de "fora
+ * da fila" não divergirem entre si no dia em que a cadeia da forma mudar.
+ */
+const EMBED_FORMA = `valor,
+       lancamento_formas(formas_pagamento(tipo)),
+       lancamentos!inner(tipo, status, formas_pagamento(tipo))` as const;
+
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
 function nomeFornecedor(
   fornecedor: { razao_social: string; nome_fantasia: string | null } | null,
@@ -118,37 +153,56 @@ function nomeFornecedor(
 export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("lancamento_parcelas")
-    .select(
-      `id, numero_parcela, valor, data_vencimento, data_programada, lancamento_id,
+  // Em páginas, e não numa tirada só: o PostgREST corta em 1.000 linhas sem
+  // avisar, e a fila já estava em 842 parcelas pendentes em 20/08/2026. O
+  // `order("id")` no fim é o desempate que a paginação exige — vencimento
+  // empata em massa (a carga histórica trouxe centenas no mesmo dia), e sem
+  // desempate a página 2 repete linha da 1 e perde outra.
+  const { linhas: brutas, erro } = await todasAsLinhas(
+    (de, ate) =>
+      supabase
+        .from("lancamento_parcelas")
+        .select(
+          `id, numero_parcela, valor, data_vencimento, data_programada, lancamento_id,
        conta_bancaria_id, lancamento_forma_id,
        contas_bancarias(nome),
-       lancamento_formas(formas_pagamento(nome)),
+       lancamento_formas(formas_pagamento(nome, tipo)),
        lancamentos!inner(
          numero, descricao, tipo, status, origem, origem_id,
          mes_competencia, data_compra, observacoes,
          categorias_financeiras(nome),
-         formas_pagamento(nome),
+         formas_pagamento(nome, tipo),
          fornecedores(razao_social, nome_fantasia),
          lancamento_rateios(valor, centros_custo(nome))
        )`,
-    )
-    .eq("status", "pendente")
-    .eq("lancamentos.tipo", "a_pagar")
-    .neq("lancamentos.status", "cancelado")
-    .neq("lancamentos.status", "previsto")
-    // Sem conta bancária escolhida o pagamento não entra na fila: a conta é o
-    // passo de revisão do lançamento, e o banco recusa aprovar sem ela
-    // (fn_aprovar_parcela). Aqui é a mesma trava na consulta.
-    .not("conta_bancaria_id", "is", null)
-    .order("data_vencimento", { ascending: true, nullsFirst: false });
+        )
+        .eq("status", "pendente")
+        .eq("lancamentos.tipo", "a_pagar")
+        .neq("lancamentos.status", "cancelado")
+        .neq("lancamentos.status", "previsto")
+        // Sem conta bancária escolhida o pagamento não entra na fila: a conta é o
+        // passo de revisão do lançamento, e o banco recusa aprovar sem ela
+        // (fn_aprovar_parcela). Aqui é a mesma trava na consulta.
+        .not("conta_bancaria_id", "is", null)
+        .order("data_vencimento", { ascending: true, nullsFirst: false })
+        .order("id")
+        .range(de, ate),
+  );
 
-  if (error) {
+  if (erro) {
     throw new Error("Não foi possível carregar os pagamentos para aprovação");
   }
 
-  const linhas = data ?? [];
+  // A FILA É SÓ DE QUEM ESPERA AVAL. O filtro de forma é feito aqui e não no
+  // PostgREST de propósito: ele precisa ser um NÃO ("não é dinheiro nem
+  // cartão") e precisa MANTER a parcela sem forma. Um `not.in` no embed sem
+  // `!inner` não descarta a linha pai (só anula o embed), e com `!inner`
+  // descartaria justamente as parcelas sem bloco de forma, que por regra
+  // passam. `formaQuePassa` resolve bloco > cabeçalho > default bancário, que é
+  // exatamente a mesma cadeia que preenche `formaPagamentoNome` na linha.
+  const linhas = brutas.filter((parcela) =>
+    passaPelaAprovacao(formaQuePassa(parcela)),
+  );
 
   const idsOc = linhas.map((parcela) =>
     parcela.lancamentos?.origem === "oc"
@@ -413,13 +467,19 @@ export async function contarParcelasIncompletas(): Promise<ParcelasIncompletas> 
     .from("lancamento_parcelas")
     .select(
       `valor, lancamento_id,
-       lancamentos!inner(tipo, status)`,
+       lancamento_formas(formas_pagamento(tipo)),
+       lancamentos!inner(tipo, status, formas_pagamento(tipo))`,
     )
     .eq("status", "pendente")
     .eq("lancamentos.tipo", "a_pagar")
     .eq("lancamentos.status", "previsto");
 
-  const linhas = data ?? [];
+  // Mesmo filtro da fila: os cards dizem o que está FORA DELA e por quê, então
+  // contar dinheiro e cartão aqui prometeria que resolver o motivo faria a
+  // parcela aparecer na fila — e ela nunca vai aparecer.
+  const linhas = (data ?? []).filter((parcela) =>
+    passaPelaAprovacao(formaQuePassa(parcela)),
+  );
   const valor = linhas.reduce((total, parcela) => total + parcela.valor, 0);
   const lancamentos = new Set(linhas.map((parcela) => parcela.lancamento_id));
 
@@ -436,14 +496,16 @@ export async function contarAguardandoConta(): Promise<ResumoFora> {
 
   const { data } = await supabase
     .from("lancamento_parcelas")
-    .select(`valor, lancamentos!inner(tipo, status)`)
+    .select(`${EMBED_FORMA}`)
     .eq("status", "pendente")
     .eq("lancamentos.tipo", "a_pagar")
     .neq("lancamentos.status", "cancelado")
     .neq("lancamentos.status", "previsto")
     .is("conta_bancaria_id", null);
 
-  const linhas = data ?? [];
+  const linhas = (data ?? []).filter((parcela) =>
+    passaPelaAprovacao(formaQuePassa(parcela)),
+  );
   return {
     parcelas: linhas.length,
     valor: linhas.reduce((total, parcela) => total + parcela.valor, 0),
@@ -460,12 +522,14 @@ export async function contarEmRevisao(): Promise<ResumoFora> {
 
   const { data } = await supabase
     .from("lancamento_parcelas")
-    .select(`valor, lancamentos!inner(tipo, status)`)
+    .select(`${EMBED_FORMA}`)
     .eq("status", "em_revisao")
     .eq("lancamentos.tipo", "a_pagar")
     .neq("lancamentos.status", "cancelado");
 
-  const linhas = data ?? [];
+  const linhas = (data ?? []).filter((parcela) =>
+    passaPelaAprovacao(formaQuePassa(parcela)),
+  );
   return {
     parcelas: linhas.length,
     valor: linhas.reduce((total, parcela) => total + parcela.valor, 0),
@@ -591,7 +655,7 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
     // todo lancamento com forma tem um. Lancamento SEM forma (o que o RH cria)
     // fica de fora, exatamente como ficava antes -- sem forma no cabecalho o
     // join antigo tambem o descartava.
-    .in("lancamento_formas.formas_pagamento.tipo", ["dinheiro", "cartao_credito"])
+    .in("lancamento_formas.formas_pagamento.tipo", [...TIPOS_PAGAMENTO_DIRETO])
     .order("data_vencimento", { ascending: false, nullsFirst: false });
 
   if (error) {
@@ -605,12 +669,11 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
   // aplicar o `in` como esperado, uma parcela bancária apareceria numa aba que
   // diz "não passa pela aprovação". O default de tipoFormaPagamento é 'bancario',
   // então o desconhecido também fica fora.
-  const linhas = (data ?? []).filter((parcela) => {
-    const tipo = tipoFormaPagamento(
-      parcela.lancamento_formas?.formas_pagamento?.tipo,
-    );
-    return tipo === "dinheiro" || tipo === "cartao_credito";
-  });
+  const linhas = (data ?? []).filter((parcela) =>
+    ehPagamentoDireto(
+      tipoFormaPagamento(parcela.lancamento_formas?.formas_pagamento?.tipo),
+    ),
+  );
 
   const idsOc = linhas.map((parcela) =>
     parcela.lancamentos?.origem === "oc"
@@ -686,13 +749,17 @@ export async function contarAguardandoData(): Promise<ResumoFora> {
 
   const { data } = await supabase
     .from("lancamento_parcelas")
-    .select(`valor, data_programada, lancamentos!inner(tipo, status)`)
+    .select(
+      `data_programada, ${EMBED_FORMA}`,
+    )
     .eq("status", "aprovado")
     .eq("lancamentos.tipo", "a_pagar")
     .neq("lancamentos.status", "cancelado")
     .gt("data_programada", dataHojeISO());
 
-  const linhas = data ?? [];
+  const linhas = (data ?? []).filter((parcela) =>
+    passaPelaAprovacao(formaQuePassa(parcela)),
+  );
   return {
     parcelas: linhas.length,
     valor: linhas.reduce((total, parcela) => total + parcela.valor, 0),
