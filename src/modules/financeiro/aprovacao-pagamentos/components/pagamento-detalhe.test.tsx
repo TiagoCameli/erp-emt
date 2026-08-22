@@ -77,6 +77,17 @@ function lancamento(troca: Partial<LancamentoDetalhe> = {}): LancamentoDetalhe {
     categoriaNome: "Aquisição de Equipamento",
     descricao: "1 SR LS BASCULHANTE D 2E 9351",
     valor: 410665.62,
+    // Sem retencao: lancamento a pagar de fornecedor nao sofre retencao na
+    // fonte por parte da EMT. `valorBruto` null e o que a base guarda em 6.463
+    // dos 6.467 lancamentos.
+    valorBruto: null,
+    retencaoIss: 0,
+    retencaoPis: 0,
+    retencaoCofins: 0,
+    retencaoCsll: 0,
+    retencaoIr: 0,
+    retencaoInss: 0,
+    retencaoOutras: 0,
     status: "a_pagar",
     mesCompetencia: "2026-04-01",
     dataCompra: "2026-04-07",

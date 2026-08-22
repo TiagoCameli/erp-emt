@@ -132,6 +132,84 @@ export type FormaPagamentoLancamentoInput = z.infer<
  * Lançamento validado no servidor. A soma das parcelas precisa bater com o
  * valor e, quando há rateio, a soma do rateio também. A RPC revalida.
  */
+/**
+ * As retenções na fonte que um documento pode sofrer. A ordem é a que aparece na
+ * nota fiscal de serviço, para quem digita seguir o papel de cima para baixo.
+ *
+ * Uma retenção não é desconto: desconto é abatimento negociado e reduz a dívida;
+ * retenção é imposto que o PAGADOR recolhe no lugar de quem recebe. O bruto
+ * continua sendo o faturado, e a diferença virou tributo pago por outro.
+ */
+export const CAMPOS_RETENCAO = [
+  "retencaoIss",
+  "retencaoPis",
+  "retencaoCofins",
+  "retencaoCsll",
+  "retencaoIr",
+  "retencaoInss",
+  "retencaoOutras",
+] as const;
+
+export type CampoRetencao = (typeof CAMPOS_RETENCAO)[number];
+
+export const ROTULO_RETENCAO: Record<CampoRetencao, string> = {
+  retencaoIss: "ISS",
+  retencaoPis: "PIS",
+  retencaoCofins: "COFINS",
+  retencaoCsll: "CSLL",
+  retencaoIr: "IR",
+  retencaoInss: "INSS",
+  retencaoOutras: "Outras",
+};
+
+/**
+ * A diferença que o ERP aceita entre "bruto menos retenções" e o líquido
+ * informado. NÃO é folga de digitação: é o arredondamento do pagador.
+ *
+ * Medido nas nove notas de medição do DNIT: a diferença chega a 3 centavos e vai
+ * para os dois lados (numa delas o DNIT creditou um centavo A MAIS do que a
+ * própria nota calculou). Exigir igualdade exata impediria gravar o valor real do
+ * extrato; aceitar qualquer diferença deixaria passar erro de digitação. Um real
+ * separa os dois casos com folga — e não é hipótese: existe hoje um lançamento
+ * R$ 40.021,27 acima do que o banco creditou.
+ *
+ * A MESMA constante vive no banco, na constraint
+ * `lancamentos_liquido_confere_com_bruto` e em `fn_salvar_lancamento`.
+ */
+export const TOLERANCIA_RETENCAO = 1;
+
+/**
+ * O líquido de um documento com retenção: bruto menos tudo o que foi retido.
+ *
+ * Função pura de propósito, e não um cálculo dentro do componente: é ela que o
+ * formulário usa para preencher o campo de líquido enquanto a pessoa digita, e é
+ * ela que o teste cobre.
+ */
+export function liquidoDeRetencao(
+  bruto: number,
+  retencoes: Partial<Record<CampoRetencao, number>>,
+): number {
+  const total = CAMPOS_RETENCAO.reduce(
+    (soma, campo) => soma + (retencoes[campo] ?? 0),
+    0,
+  );
+  return Math.round((bruto - total) * 100) / 100;
+}
+
+/** Soma das retenções informadas, em reais. */
+export function totalRetencoes(
+  retencoes: Partial<Record<CampoRetencao, number>>,
+): number {
+  return (
+    Math.round(
+      CAMPOS_RETENCAO.reduce(
+        (soma, campo) => soma + (retencoes[campo] ?? 0),
+        0,
+      ) * 100,
+    ) / 100
+  );
+}
+
 export const lancamentoSchema = z
   .object({
     tipo: z.enum(["a_pagar", "a_receber"], { error: "Tipo inválido" }),
@@ -189,6 +267,21 @@ export const lancamentoSchema = z
     numeroDocumento: textoOpcional(60),
     /** Texto livre: o combinado, o que a nota não diz. Só no detalhe. */
     observacoes: textoOpcional(2000),
+    /**
+     * Valor faturado antes das retenções. Ausente = documento sem retenção, e aí
+     * `valor` é o valor cheio. Quando vem, `valor` continua sendo o LÍQUIDO: é
+     * ele que as parcelas somam e que move o saldo bancário.
+     */
+    valorBruto: valorSchema.refine((v) => v > 0, {
+      error: "O valor bruto precisa ser maior que zero",
+    }).optional(),
+    retencaoIss: valorSchema.optional(),
+    retencaoPis: valorSchema.optional(),
+    retencaoCofins: valorSchema.optional(),
+    retencaoCsll: valorSchema.optional(),
+    retencaoIr: valorSchema.optional(),
+    retencaoInss: valorSchema.optional(),
+    retencaoOutras: valorSchema.optional(),
     parcelas: z
       .array(parcelaSchema)
       .min(1, { error: "Adicione ao menos uma parcela" }),
@@ -224,6 +317,54 @@ export const lancamentoSchema = z
     },
     { error: "A soma do rateio precisa ser igual ao valor", path: ["rateios"] },
   )
+  /**
+   * Retenção sem bruto não diz de que valor ela saiu. As três regras abaixo são
+   * as MESMAS que `fn_salvar_lancamento` e a constraint do banco cobram: aqui
+   * elas existem para o erro sair da Server Action com mensagem nossa em vez de
+   * subir o raise do Postgres.
+   */
+  .superRefine((dados, ctx) => {
+    const retencoes = {
+      retencaoIss: dados.retencaoIss,
+      retencaoPis: dados.retencaoPis,
+      retencaoCofins: dados.retencaoCofins,
+      retencaoCsll: dados.retencaoCsll,
+      retencaoIr: dados.retencaoIr,
+      retencaoInss: dados.retencaoInss,
+      retencaoOutras: dados.retencaoOutras,
+    };
+    const total = totalRetencoes(retencoes);
+
+    if (dados.valorBruto === undefined) {
+      if (total > 0) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Informe o valor bruto para lançar retenção",
+          path: ["valorBruto"],
+        });
+      }
+      return;
+    }
+
+    if (dados.valorBruto < dados.valor) {
+      ctx.addIssue({
+        code: "custom",
+        message: "O valor líquido não pode ser maior que o bruto",
+        path: ["valorBruto"],
+      });
+      return;
+    }
+
+    const calculado = liquidoDeRetencao(dados.valorBruto, retencoes);
+    if (Math.abs(calculado - dados.valor) > TOLERANCIA_RETENCAO) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Bruto menos retenções não fecha com o valor líquido. Confira as retenções.",
+        path: ["valorBruto"],
+      });
+    }
+  })
   /**
    * As formas de pagamento, quando existem: as mesmas três regras que
    * fn_salvar_lancamento cobra no banco, repetidas aqui para o erro sair da
@@ -430,6 +571,25 @@ export const lancamentoFormSchema = z
       .string()
       .trim()
       .max(2000, { error: "Máximo de 2000 caracteres" }),
+    /**
+     * Bruto e retenções continuam string no formulário, como todo campo de
+     * dinheiro da tela: a coerção para número acontece no envio. Vazio significa
+     * "não informado", e o documento sem retenção passa igual a antes.
+     *
+     * `.optional()` e NÃO `.default("")`: com default, a entrada do zod passa a
+     * divergir da saída e o react-hook-form perde o tipo do campo (já mordeu
+     * antes neste projeto). Sem default, entrada e saída são as duas
+     * `string | undefined`, e quem garante que o campo existe na tela é
+     * `valoresIniciais`, que sempre preenche com "".
+     */
+    valorBruto: z.string().trim().optional(),
+    retencaoIss: z.string().trim().optional(),
+    retencaoPis: z.string().trim().optional(),
+    retencaoCofins: z.string().trim().optional(),
+    retencaoCsll: z.string().trim().optional(),
+    retencaoIr: z.string().trim().optional(),
+    retencaoInss: z.string().trim().optional(),
+    retencaoOutras: z.string().trim().optional(),
     parcelas: z
       .array(parcelaFormSchema)
       .min(1, { error: "Adicione ao menos uma parcela" }),
