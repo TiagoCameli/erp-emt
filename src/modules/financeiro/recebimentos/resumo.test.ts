@@ -16,6 +16,7 @@ function parcela(troca: Partial<ParcelaAReceber> = {}): ParcelaAReceber {
     numeroParcela: 1,
     descricao: "Medição 7 da BR-364 lote 4",
     categoriaNome: "Receita de obra",
+    centroCustoRotulo: "BR-364 Lote 9",
     numeroDocumento: "MED-07/2026",
     clienteId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     clienteNome: "DNIT",

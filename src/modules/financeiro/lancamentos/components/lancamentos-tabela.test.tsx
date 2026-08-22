@@ -18,6 +18,7 @@ function lancamento(troca: Partial<LancamentoLista> = {}): LancamentoLista {
     origem: "manual",
     descricao: "Combustível julho",
     categoriaNome: "Combustível",
+    centroCustoRotulo: "BR-364 Lote 9",
     fornecedorNome: "GUERRA IMPLEMENTOS RODOVIARIOS S.A",
     valor: 1234.56,
     dataVencimento: "2026-08-10",
@@ -105,6 +106,9 @@ describe("as colunas de sempre continuam lá", () => {
       "Tipo",
       "Fornecedor",
       "Descrição e categoria",
+      // Entrou em 22/08/2026, entre a descrição e o valor: "o que é", "onde
+      // cai" e "quanto" se leem nessa ordem.
+      "Centro de custo",
       "Valor",
       "Data da compra",
       "Mês de referência",

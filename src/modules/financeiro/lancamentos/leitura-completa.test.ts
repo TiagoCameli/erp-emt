@@ -13,6 +13,7 @@ const base: LancamentoLista = {
   origem: "manual",
   descricao: "Linha de teste",
   categoriaNome: null,
+  centroCustoRotulo: "BR-364 Lote 9",
   fornecedorNome: null,
   valor: 100,
   dataVencimento: "2026-08-10",

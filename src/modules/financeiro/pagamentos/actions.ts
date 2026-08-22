@@ -6,7 +6,11 @@ import { z } from "zod";
 import { erroAcao } from "@/lib/erros";
 import { formatarData } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
-import { exigirPermissao } from "@/lib/permissoes";
+import {
+  exigirPermissao,
+  getUsuarioLogado,
+  temPermissao,
+} from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import type { EventoTrilha } from "@/components/canonicos/trilha";
 import { anexosDoDocumento } from "@/modules/_shared/anexos/actions";
@@ -277,10 +281,23 @@ export async function buscarParcelasPagas(
 export async function detalheDaParcela(
   id: string,
 ): Promise<DetalheParcela | { erro: string }> {
-  try {
-    await exigirPermissao(RECURSO, "ver");
-  } catch {
-    return { erro: "Sem permissão para ver pagamentos" };
+  /**
+   * A permissão depende do TIPO do lançamento, não da tela que chamou.
+   *
+   * O mesmo painel serve Pagamentos e Recebimentos desde 22/08/2026, e as duas
+   * abas são recursos diferentes. Exigir `financeiro.pagamentos` fecharia o
+   * detalhe do recebimento para quem cuida só de recebimento — que é justamente
+   * quem mais precisa dele.
+   *
+   * A checagem final vem DEPOIS de carregar, porque quem sabe o tipo é o
+   * documento. Antes de carregar, exige só ter uma das duas: sem nenhuma, não
+   * há o que mostrar, e a RLS já não devolveria a parcela de qualquer forma.
+   */
+  const usuario = await getUsuarioLogado();
+  const vePagamentos = temPermissao(usuario, "financeiro.pagamentos", "ver");
+  const veRecebimentos = temPermissao(usuario, "financeiro.recebimentos", "ver");
+  if (!vePagamentos && !veRecebimentos) {
+    return { erro: "Sem permissão para ver este documento" };
   }
 
   const idValido = idSchema.safeParse(id);
@@ -288,6 +305,14 @@ export async function detalheDaParcela(
 
   const [espelho] = await buscarPagamentosParaEspelho([idValido.data]);
   if (!espelho) return { erro: "Parcela não encontrada" };
+
+  const ehReceber = espelho.lancamentoTipo === "a_receber";
+  if (ehReceber && !veRecebimentos) {
+    return { erro: "Sem permissão para ver recebimentos" };
+  }
+  if (!ehReceber && !vePagamentos) {
+    return { erro: "Sem permissão para ver pagamentos" };
+  }
 
   // Anexos e trilha em paralelo: são leituras independentes. A trilha é do
   // LANÇAMENTO porque os eventos de uma parcela vivem junto com os das irmãs —

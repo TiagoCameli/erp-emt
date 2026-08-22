@@ -14,6 +14,7 @@ describe("ParcelaPaga", () => {
       numeroParcela: 1,
       descricao: "REFERENTE ABASTECIMENTO",
       categoriaNome: "Combustível",
+      centroCustoRotulo: "BR-364 Lote 9",
       fornecedorNome: "AUTO POSTO PROGRESSO",
       contaNome: "BANCO DO BRASIL 102.124-9",
       dataPagamento: "2026-08-12",

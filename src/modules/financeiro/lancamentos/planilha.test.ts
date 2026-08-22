@@ -25,6 +25,7 @@ const lancamento: LancamentoPlanilha = {
   origem: "oc",
   descricao: "Combustível julho",
   categoriaNome: "Combustível",
+  centroCustoRotulo: "BR-364 Lote 9",
   fornecedorNome: "Posto Rio Branco",
   valor: 1234.56,
   dataVencimento: "2026-08-10",
@@ -147,6 +148,7 @@ describe("linhaPlanilhaLancamento", () => {
       ...lancamento,
       numero: null,
       categoriaNome: null,
+      centroCustoRotulo: "BR-364 Lote 9",
       fornecedorNome: null,
       dataVencimento: null,
     });

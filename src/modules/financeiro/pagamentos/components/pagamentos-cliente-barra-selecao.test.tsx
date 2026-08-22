@@ -51,6 +51,7 @@ function parcelaPaga(troca: Partial<ParcelaPaga> = {}): ParcelaPaga {
     numeroParcela: 1,
     descricao: "Combustível julho",
     categoriaNome: "Combustível",
+    centroCustoRotulo: "BR-364 Lote 9",
     fornecedorNome: "GUERRA IMPLEMENTOS RODOVIARIOS S.A",
     contaNome: "Obra 364",
     dataPagamento: "2026-08-10",

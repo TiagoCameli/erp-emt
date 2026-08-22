@@ -2,6 +2,10 @@ import "server-only";
 
 import type { EventoTrilha } from "@/components/canonicos/trilha";
 import { createClient } from "@/lib/supabase/server";
+import {
+  nomesDoRateio,
+  rotuloCentroCusto,
+} from "@/modules/financeiro/_shared/centro-de-custo";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   movimentoPorContaEmCentavos,
@@ -66,6 +70,15 @@ export interface ParcelaAprovada {
    * quem abre o drawer pela aba Programados não carrega este campo.
    */
   status?: StatusParcela;
+  /**
+   * Centro de custo do lançamento: o nome quando é um, "N centros de custo"
+   * quando rateia. Regra compartilhada em `_shared/centro-de-custo.ts` para
+   * Pagamentos, Recebimentos e Lançamentos nunca discordarem sobre a mesma
+   * linha. Opcional porque esta interface também é o contrato de entrada do
+   * drawer de pagamento, e quem abre pela aba Programados não carrega o campo.
+   */
+  centroCustoRotulo?: string | null;
+  centroCustoNomes?: string;
 }
 
 /** Parcela já paga, para o histórico. */
@@ -102,6 +115,9 @@ export interface ParcelaPaga {
   outrasDespesas: number;
   /** valor − desconto + juros + outras despesas: o que saiu da conta. */
   valorLiquido: number;
+  /** Centro de custo do lançamento, pela regra de `_shared/centro-de-custo.ts`. */
+  centroCustoRotulo: string | null;
+  centroCustoNomes?: string;
 }
 
 /**
@@ -149,6 +165,20 @@ export interface ContaBancariaOpcao {
   saldoAtual: number;
 }
 
+/**
+ * O rateio do embed no formato que `rotuloCentroCusto` espera.
+ *
+ * Existe porque as duas listagens (a pagar e pagas) leem o MESMO embed e tinham
+ * que montar o mesmo array de duas formas diferentes.
+ */
+function rateiosDoEmbed(
+  lancamento: { lancamento_rateios?: { centros_custo: { nome: string } | null }[] | null } | null,
+): { centroNome: string | null }[] {
+  return (lancamento?.lancamento_rateios ?? []).map((rateio) => ({
+    centroNome: rateio.centros_custo?.nome ?? null,
+  }));
+}
+
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
 function nomeFornecedor(
   fornecedor: { razao_social: string; nome_fantasia: string | null } | null,
@@ -183,6 +213,7 @@ interface LinhaAPagar {
     observacoes: string | null;
     categorias_financeiras: { nome: string } | null;
     fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
+    lancamento_rateios: { centros_custo: { nome: string } | null }[] | null;
   } | null;
 }
 
@@ -193,7 +224,8 @@ const SELECT_A_PAGAR = `id, numero_parcela, valor, status, data_vencimento,
    lancamentos!inner(
      numero, descricao, tipo, fornecedor_id, observacoes,
      categorias_financeiras(nome),
-     fornecedores(razao_social, nome_fantasia)
+     fornecedores(razao_social, nome_fantasia),
+     lancamento_rateios(centros_custo(nome))
    )`;
 
 /**
@@ -245,6 +277,8 @@ export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
     descricao: parcela.lancamentos?.descricao ?? "-",
     observacoes: parcela.lancamentos?.observacoes ?? null,
     categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
+    centroCustoRotulo: rotuloCentroCusto(rateiosDoEmbed(parcela.lancamentos)),
+    centroCustoNomes: nomesDoRateio(rateiosDoEmbed(parcela.lancamentos)),
     fornecedorId: parcela.lancamentos?.fornecedor_id ?? null,
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
     contaBancariaId: parcela.conta_bancaria_id,
@@ -449,7 +483,8 @@ export async function listarParcelasPagas({
        lancamentos!inner(
          numero, descricao,
          categorias_financeiras(nome),
-         fornecedores(razao_social, nome_fantasia)
+         fornecedores(razao_social, nome_fantasia),
+         lancamento_rateios(centros_custo(nome))
        )`,
       { count: "exact" },
     )
@@ -487,6 +522,8 @@ export async function listarParcelasPagas({
     numeroParcela: parcela.numero_parcela,
     descricao: parcela.lancamentos?.descricao ?? "-",
     categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
+    centroCustoRotulo: rotuloCentroCusto(rateiosDoEmbed(parcela.lancamentos)),
+    centroCustoNomes: nomesDoRateio(rateiosDoEmbed(parcela.lancamentos)),
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
     contaNome: parcela.contas_bancarias
       ? rotuloConta(parcela.contas_bancarias.nome, parcela.contas_bancarias.banco)

@@ -26,6 +26,7 @@ const LINHA = {
     mes_competencia: "2026-07-01",
     observacoes: null,
     fornecedores: { razao_social: "JOAO SANTIAGO DE OLIVEIRA" },
+    clientes: null,
     categorias_financeiras: { nome: "Salário Mão de Obra" },
     formas_pagamento: { nome: "PIX" },
     lancamento_rateios: [

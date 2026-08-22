@@ -36,6 +36,10 @@ import {
   type DirecaoOrdem,
   type OrdemLancamentos,
 } from "@/modules/financeiro/lancamentos/ordenacao";
+import {
+  nomesDoRateio,
+  rotuloCentroCusto,
+} from "@/modules/financeiro/_shared/centro-de-custo";
 import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
   emLotes,
@@ -186,6 +190,15 @@ export interface LancamentoLista {
   origem: string;
   descricao: string;
   categoriaNome: string | null;
+  /**
+   * Centro de custo para a coluna: o nome quando é um, "N centros de custo"
+   * quando o lançamento rateia entre vários. A regra mora em
+   * `_shared/centro-de-custo.ts`, compartilhada com Pagamentos e Recebimentos,
+   * porque as três telas descrevem o MESMO lançamento e não podem divergir.
+   */
+  centroCustoRotulo: string | null;
+  /** Nomes do rateio para o `title` da célula, quando são de dois a cinco. */
+  centroCustoNomes?: string;
   fornecedorNome: string | null;
   valor: number;
   dataVencimento: string | null;
@@ -260,11 +273,16 @@ export interface RateioPlanilha {
  * O lançamento como a PLANILHA precisa dele: a linha da lista mais o que a tela
  * não mostra (observações, rateio, forma, condição, conta, documento de origem).
  *
- * Existe separado de `LancamentoLista` de propósito. A listagem é a tela mais
- * usada do módulo e não mostra nenhum destes campos: pendurar rateio no select
- * dela sairia caro em toda navegação para servir uma exportação que acontece de
- * vez em quando. Quem enriquece é `detalharLancamentosParaPlanilha`, página por
- * página, sobre os ids que a lista já devolveu.
+ * Existe separado de `LancamentoLista` de propósito: a listagem é a tela mais
+ * usada do módulo e não mostra observação, forma, condição nem conta, então
+ * pendurar isso no select dela sairia caro em toda navegação para servir uma
+ * exportação que acontece de vez em quando. Quem enriquece é
+ * `detalharLancamentosParaPlanilha`, página por página, sobre os ids que a lista
+ * já devolveu.
+ *
+ * O RATEIO saiu desta lista em 22/08/2026: ele passou a ser coluna da tela
+ * (pedido do Tiago), e o embed já existia ali para o filtro de centro de custo,
+ * então trazer o nome junto custa um join sobre um embed que já vinha.
  */
 export interface LancamentoPlanilha extends LancamentoLista {
   observacoes: string | null;
@@ -929,7 +947,7 @@ export async function listarLancamentos(
          status, conta_bancaria_id, valor, valor_liquido, desconto,
          data_vencimento
        ),
-       lancamento_rateios(centro_custo_id)`,
+       lancamento_rateios(centro_custo_id, centros_custo(nome))`,
       { count: "exact" },
     )
     // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
@@ -1092,6 +1110,10 @@ export async function listarLancamentos(
       hojeISO,
     );
 
+    const rateiosDaLinha = (lancamento.lancamento_rateios ?? []).map(
+      (rateio) => ({ centroNome: rateio.centros_custo?.nome ?? null }),
+    );
+
     return {
       revisao,
       ...dinheiro,
@@ -1101,6 +1123,8 @@ export async function listarLancamentos(
       origem: lancamento.origem,
       descricao: lancamento.descricao,
       categoriaNome: lancamento.categorias_financeiras?.nome ?? null,
+      centroCustoRotulo: rotuloCentroCusto(rateiosDaLinha),
+      centroCustoNomes: nomesDoRateio(rateiosDaLinha),
       fornecedorNome: lancamento.fornecedores
         ? nomeFornecedor(lancamento.fornecedores)
         : null,

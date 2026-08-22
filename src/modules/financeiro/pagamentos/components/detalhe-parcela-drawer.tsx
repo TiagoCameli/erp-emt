@@ -169,15 +169,24 @@ export function DetalheParcelaDrawer({
    * em aberto. Exibir "saiu da conta" numa parcela não paga afirma um pagamento
    * que não aconteceu.
    */
+  /**
+   * A receber ou a pagar? O painel serve os dois desde 22/08/2026, e a diferença
+   * não é cosmética: no a receber o dinheiro ENTRA, quem aparece é o cliente e
+   * não o fornecedor, e as ações de pagar e de devolver para aprovação não
+   * existem — elas pertencem ao fluxo de pagamento.
+   */
+  const ehReceber = espelho?.lancamentoTipo === "a_receber";
   const foiPaga = espelho?.status === "pago";
-  const podePagarEsta = podePagar && espelho?.status === "aprovado";
+  const podePagarEsta =
+    podePagar && !ehReceber && espelho?.status === "aprovado";
 
   /**
    * Devolver para a aprovação só existe em parcela APROVADA e não paga: é o
    * único estado em que a `fn_desaprovar_parcela` aceita. Oferecer o botão numa
    * paga seria prometer uma ação que o banco recusa.
    */
-  const podeDevolverEsta = podeDesaprovar && espelho?.status === "aprovado";
+  const podeDevolverEsta =
+    podeDesaprovar && !ehReceber && espelho?.status === "aprovado";
 
   async function confirmarDevolucao(motivo?: string) {
     if (!espelho) return;
@@ -202,7 +211,14 @@ export function DetalheParcelaDrawer({
       titulo={espelho?.titulo ?? "Detalhe do pagamento"}
       descricao={
         espelho
-          ? `${espelho.fornecedorNome ?? "Sem fornecedor"} · ${STATUS_PARCELA[espelho.status].rotulo}`
+          ? `${
+              (espelho.lancamentoTipo === "a_receber"
+                ? espelho.clienteNome
+                : espelho.fornecedorNome) ??
+              (espelho.lancamentoTipo === "a_receber"
+                ? "Sem cliente"
+                : "Sem fornecedor")
+            } · ${STATUS_PARCELA[espelho.status].rotulo}`
           : "Carregando..."
       }
       larguraClassName="sm:max-w-5xl"
@@ -239,7 +255,13 @@ export function DetalheParcelaDrawer({
       ) : (
         <div className="flex flex-col gap-3">
           <Secao
-            titulo={foiPaga ? "Pagamento" : "Parcela"}
+            titulo={
+              foiPaga
+                ? ehReceber
+                  ? "Recebimento"
+                  : "Pagamento"
+                : "Parcela"
+            }
             acao={
               <StatusBadge
                 status={STATUS_PARCELA[espelho.status].badge}
@@ -261,8 +283,14 @@ export function DetalheParcelaDrawer({
                 <MoneyText valor={espelho.outrasDespesas} />
               </Dado>
               <Dado
-                rotulo="Saiu da conta"
-                legenda={foiPaga ? null : "A parcela ainda não foi paga"}
+                rotulo={ehReceber ? "Entrou na conta" : "Saiu da conta"}
+                legenda={
+                  foiPaga
+                    ? null
+                    : ehReceber
+                      ? "O recebimento ainda não entrou"
+                      : "A parcela ainda não foi paga"
+                }
               >
                 {foiPaga ? <MoneyText valor={espelho.valorLiquido} /> : "-"}
               </Dado>
@@ -270,7 +298,7 @@ export function DetalheParcelaDrawer({
               <Dado rotulo="Vencimento">
                 {formatarData(espelho.dataVencimento)}
               </Dado>
-              <Dado rotulo="Pago em">
+              <Dado rotulo={ehReceber ? "Recebido em" : "Pago em"}>
                 {foiPaga ? formatarData(espelho.dataPagamento) : "-"}
               </Dado>
             </Grade>
@@ -279,7 +307,10 @@ export function DetalheParcelaDrawer({
           <Secao titulo="Lançamento de origem">
             <Grade>
               <Dado rotulo="Número">{espelho.lancamentoNumero ?? "-"}</Dado>
-              <Dado rotulo="Fornecedor">{espelho.fornecedorNome ?? "-"}</Dado>
+              <Dado rotulo={ehReceber ? "Quem paga" : "Fornecedor"}>
+                {(ehReceber ? espelho.clienteNome : espelho.fornecedorNome) ??
+                  "-"}
+              </Dado>
               <Dado rotulo="Categoria">{espelho.categoriaNome ?? "-"}</Dado>
               <Dado rotulo="Forma de pagamento">
                 {espelho.formaPagamentoNome ?? "-"}
