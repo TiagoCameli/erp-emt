@@ -4036,6 +4036,28 @@ export type Database = {
           primeiro_mes: string;
         }[];
       };
+      fn_rel_custo_receita: {
+        Args: {
+          p_centros_custo?: string[];
+          p_centros_receita?: string[];
+          p_meses: string[];
+        };
+        Returns: {
+          centro_custo_id: string;
+          codigo: string;
+          mes: string;
+          nome: string;
+          retencao: number;
+          tipo: string;
+          total: number;
+        }[];
+      };
+      fn_rel_meses_competencia: {
+        Args: never;
+        Returns: {
+          mes: string;
+        }[];
+      };
       fn_rel_custo_por_grupo: {
         Args: {
           p_categoria?: string;

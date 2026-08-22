@@ -152,6 +152,34 @@ export function drillCentroCusto({
 }
 
 /**
+ * Custo x receita: a linha de um centro numa das duas tabelas.
+ *
+ * O `tipo` vem da TABELA clicada, não de um padrão: as duas tabelas da tela são
+ * de dinheiros opostos, e o mesmo centro aparece nas duas.
+ *
+ * Os meses viajam como LISTA (`comp_in`), e não como faixa, porque a tela deixa
+ * escolher meses não contíguos. Com uma faixa, clicar em "jan, mar e jul"
+ * abriria fevereiro junto e a lista traria linha que a célula não somou.
+ */
+export function drillCustoReceita({
+  centroCustoId,
+  meses,
+  tipo,
+}: {
+  centroCustoId: string;
+  /** yyyy-MM, os meses que a célula somou. */
+  meses: readonly string[];
+  tipo: TipoLancamentoRecorte;
+}): string {
+  return montar({
+    tipo,
+    sem_cancelado: "1",
+    centro: centroCustoId,
+    comp_in: meses.length > 0 ? meses.map((mes) => `${mes}-01`).join(",") : undefined,
+  });
+}
+
+/**
  * DRE gerencial: a linha de categoria. O `tipo` vem da seção clicada (receita ou
  * despesa) e não de um padrão, porque a mesma categoria pode aparecer nas duas.
  */

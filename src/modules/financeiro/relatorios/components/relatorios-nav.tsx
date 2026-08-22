@@ -7,6 +7,7 @@ import {
   CalendarClock,
   LineChart,
   Scale,
+  Scale3d,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> =
     aging: { rotulo: "Aging", icone: CalendarClock },
     "posicao-bancaria": { rotulo: "Posição bancária", icone: Banknote },
     "custo-cc": { rotulo: "Custo por centro de custo", icone: Building2 },
+    "custo-receita": { rotulo: "Custo x receita", icone: Scale3d },
     "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
     "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
   };

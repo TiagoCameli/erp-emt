@@ -22,6 +22,7 @@ export type RelatorioId =
   | "aging"
   | "posicao-bancaria"
   | "custo-cc"
+  | "custo-receita"
   | "custo-grupo"
   | "extrato-fornecedor";
 
@@ -32,6 +33,7 @@ export const RELATORIOS: readonly RelatorioId[] = [
   "aging",
   "posicao-bancaria",
   "custo-cc",
+  "custo-receita",
   "custo-grupo",
   "extrato-fornecedor",
 ];

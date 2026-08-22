@@ -11,6 +11,7 @@ import {
   corGrupo,
   type CorGrupo,
 } from "@/modules/cadastros/_shared/insumo-grupos";
+import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 import {
   agregarAging,
   agruparDrePorNatureza,
@@ -628,6 +629,75 @@ export async function serieDosCentros(
     });
   }
   return [...series.values()];
+}
+
+// =====================================================================
+// 5b. Custo x receita por centro de custo
+// =====================================================================
+
+/**
+ * Os meses de referência que EXISTEM em lançamento não cancelado (yyyy-MM).
+ *
+ * Alimenta o seletor de meses e o padrão do relatório. Só mês com lançamento
+ * entra: um calendário aberto deixaria a pessoa escolher março de 2019 e ler
+ * "sem dados" como resposta, quando a resposta é "esse mês não existe aqui".
+ */
+export async function mesesDeCompetencia(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_meses_competencia");
+  if (error) {
+    throw new Error("Não foi possível carregar os meses de referência");
+  }
+  return (data ?? []).map((linha) => linha.mes.slice(0, 7));
+}
+
+/**
+ * O grão fino do relatório de custo x receita: uma linha por mês, centro-raiz e
+ * tipo.
+ *
+ * Não agrega aqui de propósito. Cartões, gráfico e tabelas somam ESTAS linhas
+ * (ver `custo-receita.ts`), então as três leituras não têm como divergir. Com 21
+ * meses e 13 centros são 183 linhas hoje: agregar no banco por visão só criaria
+ * três fontes do mesmo número.
+ *
+ * `centrosCusto` e `centrosReceita` são independentes: é o pedido do dono, e a
+ * base explica por quê (sete centros têm custo e receita zero).
+ */
+export async function custoReceita({
+  meses,
+  centrosCusto,
+  centrosReceita,
+}: {
+  /** yyyy-MM. Lista vazia devolve nada, sem ir ao banco. */
+  meses: readonly string[];
+  centrosCusto?: readonly string[];
+  centrosReceita?: readonly string[];
+}): Promise<LinhaCustoReceita[]> {
+  if (meses.length === 0) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_custo_receita", {
+    // A coluna é `date` no dia 1: o mês da tela vira a data que a RPC compara.
+    p_meses: meses.map((mes) => `${mes}-01`),
+    p_centros_custo: centrosCusto ? [...centrosCusto] : undefined,
+    p_centros_receita: centrosReceita ? [...centrosReceita] : undefined,
+  });
+
+  if (error) {
+    throw new Error("Não foi possível carregar o custo x receita");
+  }
+
+  return (data ?? []).map((linha) => ({
+    mes: linha.mes.slice(0, 7),
+    // A RPC devolve o `tipo` da coluna, que só tem estes dois valores nos
+    // lançamentos. O cast é o mesmo dos outros relatórios do módulo.
+    tipo: linha.tipo as LinhaCustoReceita["tipo"],
+    centroCustoId: linha.centro_custo_id,
+    nome: linha.nome ?? "Sem centro de custo",
+    codigo: linha.codigo,
+    total: paraReais(paraCentavos(linha.total)),
+    retencao: paraReais(paraCentavos(linha.retencao)),
+  }));
 }
 
 // =====================================================================
