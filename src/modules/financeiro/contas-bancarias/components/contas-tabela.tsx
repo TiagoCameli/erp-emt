@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Filter, Landmark } from "lucide-react";
+import { Filter, Landmark, TriangleAlert } from "lucide-react";
 
 import {
   DataTable,
@@ -29,6 +29,32 @@ const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativas" },
   { valor: "inativos", rotulo: "Inativas" },
 ];
+
+/**
+ * O rótulo da posição em aplicação. Ele carrega DUAS informações porque elas só
+ * fazem sentido juntas: quanto está aplicado e, quando o número é negativo, o que
+ * isso significa para o saldo ao lado.
+ *
+ * Negativo é impossível (não se resgata mais principal do que se aplica), então é
+ * medida de aplicação que ninguém importou do extrato — e é exatamente o quanto o
+ * saldo da conta está abaixo do real. Sem esta frase, a conta da Caixa mostraria
+ * −R$ 3,57 milhões de saldo sem nada na tela explicando de onde vem.
+ */
+function rotuloAplicacao(conta: ContaLista): string {
+  const pos = conta.posicaoAplicacao;
+  if (!pos) {
+    return "Nenhuma aplicação ou resgate registrado nesta conta.";
+  }
+  const base =
+    `Aplicado ${formatarBRL(pos.aplicado)}, resgatado ${formatarBRL(pos.resgatado)}. ` +
+    "Não soma no saldo: o saldo inicial já vem do extrato com o que está aplicado.";
+  if (pos.posicao >= 0) return base;
+  return (
+    `${base} ATENÇÃO: negativo é impossível. Faltam ${formatarBRL(-pos.posicao)} ` +
+    "de aplicações que não foram importadas do extrato, e o saldo desta conta " +
+    "está esse tanto abaixo do real."
+  );
+}
 
 /**
  * O que o corte deixou de fora, para o `title` da data. Sem esta frase a pessoa
@@ -114,6 +140,34 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
         ) : null}
       </div>
     ),
+  },
+  {
+    id: "aplicacao",
+    header: "Em aplicação",
+    size: 160,
+    meta: { alinharDireita: true, rotulo: "Em aplicação" },
+    cell: ({ row }) => {
+      const pos = row.original.posicaoAplicacao;
+      if (!pos) return <span className="text-muted-foreground">-</span>;
+      const impossivel = pos.posicao < 0;
+      return (
+        <span
+          className="inline-flex items-center gap-1.5"
+          title={rotuloAplicacao(row.original)}
+        >
+          {impossivel ? (
+            <TriangleAlert
+              className="size-3.5 shrink-0 text-status-rejeitado"
+              aria-label="Valor impossível: falta importar aplicação do extrato"
+            />
+          ) : null}
+          <MoneyText
+            valor={pos.posicao}
+            className={impossivel ? "text-status-rejeitado" : undefined}
+          />
+        </span>
+      );
+    },
   },
   {
     accessorKey: "ativo",

@@ -319,6 +319,13 @@ export interface PosicaoBancariaConta {
   nome: string;
   banco: string;
   saldoInicial: number;
+  /**
+   * Data do extrato de onde o saldo inicial foi lido. Quando existe, "Saldo
+   * inicial" NÃO é a abertura da conta e "Entradas"/"Saídas" não são o histórico
+   * todo: as três colunas passam a falar de um período. Sem mostrar a data, o
+   * relatório ficaria certo na aritmética e mudo sobre o recorte.
+   */
+  saldoInicialData: string | null;
   entradas: number;
   saidas: number;
   saldoAtual: number;
@@ -333,8 +340,7 @@ export interface PosicaoBancaria {
 }
 
 /**
- * Saldo por conta bancária ativa: saldo_inicial mais o efeito de tudo que
- * movimentou a conta.
+ * Saldo por conta bancária ativa: saldo_inicial mais o movimento da conta.
  *
  * ENTRA: parcela recebida (a_receber) e o lado de quem recebeu numa
  * transferência entre contas (transferencia_entrada).
@@ -344,13 +350,21 @@ export interface PosicaoBancaria {
  *
  * Só conta parcela paga (status='pago') com conta_bancaria_id preenchida. As
  * transferências entram todas: elas não têm status, são registro direto.
+ *
+ * NÃO é "o efeito de tudo que movimentou a conta", e o que a RPC recorta desde
+ * 22/08/2026 é o que faz esta tela e a aba Contas bancárias concordarem:
+ *   1. só movimento POSTERIOR a `saldo_inicial_data` (null = tudo);
+ *   2. nada de categoria com natureza `movimentacao` -- aplicação e resgate do
+ *      principal não mexem no saldo, porque o dinheiro não saiu da empresa.
+ * O saldo daqui é o dinheiro que a empresa TEM naquele banco, corrente mais
+ * aplicado, que é o número que o extrato chama de "Saldo".
  */
 export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   const supabase = await createClient();
 
   const { data: contas, error: erroContas } = await supabase
     .from("contas_bancarias")
-    .select("id, nome, banco, saldo_inicial")
+    .select("id, nome, banco, saldo_inicial, saldo_inicial_data")
     .eq("ativo", true)
     .order("nome");
 
@@ -398,6 +412,7 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
       nome: conta.nome,
       banco: conta.banco,
       saldoInicial: paraReais(inicialCentavos),
+      saldoInicialData: conta.saldo_inicial_data,
       entradas: paraReais(entradasCentavos),
       saidas: paraReais(saidasCentavos),
       saldoAtual: paraReais(

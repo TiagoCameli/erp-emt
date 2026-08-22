@@ -253,7 +253,7 @@ export function ContasFormDrawer({
           <CampoFormulario
             id="conta-saldo-inicial"
             rotulo="Saldo inicial"
-            ajuda="O saldo que o extrato mostrava na data ao lado."
+            ajuda="O saldo que o extrato mostrava na data ao lado, somando a conta corrente com o que estava aplicado."
             erro={form.formState.errors.saldoInicial?.message}
           >
             <InputDecimal
