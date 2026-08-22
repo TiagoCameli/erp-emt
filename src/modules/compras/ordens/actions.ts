@@ -8,6 +8,12 @@ import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  MAX_EXCLUSAO_LOTE,
+  separarParaExclusao,
+  type RecusadaNoLote,
+  type ResumoExclusaoLote,
+} from "@/modules/compras/ordens/exclusao-lote";
+import {
   ordemCompraSchema,
   recebimentoSchema,
   type OrdemCompraInput,
@@ -596,4 +602,103 @@ export async function excluirOrdemCompra(id: string): Promise<ResultadoAcao> {
 
   revalidatePath(ROTA);
   return { ok: true };
+}
+
+/** O "Nao da para excluir: " que a RPC põe na frente já é dito pelo resumo. */
+function motivoCurto(mensagem: string): string {
+  return mensagem.replace(/^N[ãa]o d[áa] para excluir:\s*/i, "").trim();
+}
+
+/**
+ * Exclui em LOTE as ordens selecionadas que estão em rascunho, cancelada ou
+ * rejeitada.
+ *
+ * Três decisões que valem ser lidas juntas:
+ *
+ * 1. O STATUS é relido no banco, e a lista da tela só serve para o diálogo
+ *    mostrar a prévia. Status é justamente o campo que muda por baixo (outra
+ *    pessoa aprovando enquanto esta seleção estava na tela), e confiar no que o
+ *    cliente mandou seria deixar o cliente escolher o que é elegível.
+ * 2. Uma chamada de `fn_excluir_ordem_compra` POR OC, e não uma RPC de array.
+ *    Cada OC tem que passar pela própria guarda (recebimento, parcela aprovada
+ *    ou paga, conciliação); reimplementar essa guarda em lote é a receita de duas
+ *    regras divergirem, e uma delas ser a mais frouxa.
+ * 3. Recusa de uma não aborta as outras: o lote continua e o resumo diz, no fim,
+ *    quantas saíram e o que impediu cada uma que ficou.
+ */
+export async function excluirOrdensCompraLote(
+  ids: string[],
+): Promise<{ resumo: ResumoExclusaoLote } | { erro: string }> {
+  if (!(await checarPermissao("excluir"))) {
+    return { erro: "Sem permissão para excluir ordens de compra" };
+  }
+
+  // Dedup preservando a ordem, descartando o que não é uuid.
+  const escolhidos: string[] = [];
+  const vistos = new Set<string>();
+  for (const id of ids) {
+    const valido = idSchema.safeParse(id);
+    if (!valido.success || vistos.has(valido.data)) continue;
+    vistos.add(valido.data);
+    escolhidos.push(valido.data);
+  }
+
+  if (escolhidos.length === 0) {
+    return { erro: "Nenhuma ordem de compra selecionada" };
+  }
+
+  // Recusa em vez de cortar em silêncio: apagar 50 de 60 e dizer "pronto" é a
+  // pior saída possível numa ação definitiva.
+  if (escolhidos.length > MAX_EXCLUSAO_LOTE) {
+    return {
+      erro: `Selecione no máximo ${MAX_EXCLUSAO_LOTE} ordens por vez (você marcou ${escolhidos.length})`,
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from(TABELA)
+    .select("id, numero, status")
+    .in("id", escolhidos);
+
+  if (error) {
+    return erroAcao(
+      "compras.ordens.excluirOrdensCompraLote",
+      error,
+      "Não foi possível ler as ordens selecionadas. Tente novamente",
+    );
+  }
+
+  const encontradas = data ?? [];
+  const { elegiveis, puladas } = separarParaExclusao(encontradas);
+
+  let excluidas = 0;
+  const recusadas: RecusadaNoLote[] = [];
+
+  for (const ordem of elegiveis) {
+    const { error: erroDaOrdem } = await supabase.rpc(
+      "fn_excluir_ordem_compra",
+      { p_id: ordem.id },
+    );
+    if (erroDaOrdem) {
+      recusadas.push({
+        numero: ordem.numero ?? "(sem número)",
+        motivo: motivoCurto(erroDaOrdem.message ?? "recusada pelo banco"),
+      });
+      continue;
+    }
+    excluidas += 1;
+  }
+
+  revalidatePath(ROTA);
+
+  return {
+    resumo: {
+      excluidas,
+      puladasPorStatus: puladas,
+      recusadas,
+      naoEncontradas: escolhidos.length - encontradas.length,
+    },
+  };
 }
