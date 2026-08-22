@@ -587,6 +587,14 @@ interface FiltroMesProps {
   valor: string;
   onValorChange: (mes: string) => void;
   rotulo?: string;
+  /**
+   * Desabilita o campo. Existe para a tela que tem DOIS controles de tempo (uma
+   * janela e uma lista de meses): quando um manda, o outro fica visível mas
+   * apagado, em vez de os dois valerem ao mesmo tempo e brigarem calados.
+   */
+  desabilitado?: boolean;
+  /** Por que está desabilitado, no title. Some quando habilitado. */
+  motivo?: string;
 }
 
 /**
@@ -597,21 +605,27 @@ export function FiltroMes({
   valor,
   onValorChange,
   rotulo = "Mês de referência",
+  desabilitado,
+  motivo,
 }: FiltroMesProps) {
   return (
     <CampoFiltro largura={TRILHO_FILTRO}>
-      <div className="flex items-center gap-1.5">
+      <div
+        className="flex items-center gap-1.5"
+        title={desabilitado ? motivo : undefined}
+      >
         <Input
           type="month"
           value={valor}
           onChange={(evento) => onValorChange(evento.target.value)}
           aria-label={rotulo}
+          disabled={desabilitado}
           className="h-8 flex-1 text-detalhe tabular-nums"
         />
         {/* O X divide o trilho com o campo em vez de crescer para fora dele:
             antes, escolher o mês alargava o filtro em 2rem e empurrava para o
             lado todos os filtros que vinham depois na mesma linha. */}
-        {valor === "" ? null : (
+        {valor === "" || desabilitado ? null : (
           <Button
             type="button"
             variant="ghost"

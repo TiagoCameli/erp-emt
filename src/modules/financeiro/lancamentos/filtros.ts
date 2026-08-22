@@ -1,7 +1,9 @@
 import { mesParaCompetencia } from "@/lib/formatadores";
 import {
   lerCatalogoDaUrl,
+  lerListaDaUrl,
   lerUuidsDaUrl,
+  MAX_ITENS_FILTRO,
 } from "@/modules/financeiro/_shared/listas-na-url";
 import type { ListarLancamentosParams } from "@/modules/financeiro/lancamentos/queries";
 import { lerRecorte } from "@/modules/financeiro/lancamentos/recorte";
@@ -93,6 +95,8 @@ export interface ValoresFiltrosLancamentos {
   /** A fatia de parcela recortada por um relatório, como veio na URL. */
   recorte: string;
   /** Faixa de MÊS DE REFERÊNCIA, como data yyyy-MM-dd. */
+  /** Meses de referência exatos escolhidos, como vieram na URL (yyyy-MM-dd). */
+  compIn: string[];
   compDe: string;
   compAte: string;
   /**
@@ -285,6 +289,19 @@ export function lerFiltrosLancamentos(
   // ela existe porque o relatório de centro de custo passou a somar período
   // ("acumulado da obra no ano") e o clique precisa de um destino equivalente.
   const competencia = periodo(params.comp_de, params.comp_ate);
+  /**
+   * Lista de MESES de referência exatos (yyyy-MM-01).
+   *
+   * Irmã do `comp_de`/`comp_ate`, e existe porque o relatório de custo x receita
+   * deixa escolher meses NÃO contíguos ("jan, mar e jul"). Uma faixa não expressa
+   * isso: o clique abriria fevereiro junto, e a lista traria linha que a célula
+   * clicada não somou.
+   */
+  const competenciaIn = lerListaDaUrl(
+    params.comp_in,
+    (item) => DATA_ISO.test(item),
+    MAX_ITENS_FILTRO,
+  );
   // Só o literal "1" liga: qualquer outro texto é URL mal montada, e ligar um
   // filtro por engano some com linha da lista sem dizer por quê.
   const semCancelado = params.sem_cancelado === "1" ? true : undefined;
@@ -363,6 +380,7 @@ export function lerFiltrosLancamentos(
       criadoDe: criado.de,
       criadoAte: criado.ate,
       competenciaDe: competencia.de,
+      competenciaIn,
       competenciaAte: competencia.ate,
       revisao,
       atraso,
@@ -398,6 +416,7 @@ export function lerFiltrosLancamentos(
       compraAte: texto(compra.ate),
       criadoDe: texto(criado.de),
       criadoAte: texto(criado.ate),
+      compIn: competenciaIn,
       compDe: texto(competencia.de),
       compAte: texto(competencia.ate),
       semCancelado: semCancelado ? "1" : "",

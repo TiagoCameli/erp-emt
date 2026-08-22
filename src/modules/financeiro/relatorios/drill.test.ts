@@ -4,6 +4,7 @@ import {
   drillAging,
   drillCategoriaCompetencia,
   drillCentroCusto,
+  drillCustoReceita,
   drillContaBancaria,
   drillFluxoCaixa,
   drillGrupoInsumo,
@@ -343,5 +344,51 @@ describe("drillContaBancaria", () => {
       recorte: "conta_paga",
       tipo: "a_pagar",
     });
+  });
+});
+
+/**
+ * Custo x receita: o clique nas duas tabelas.
+ *
+ * O que estes testes travam é a diferença entre elas: o `tipo` vem da tabela
+ * clicada, e os meses viajam como LISTA. Com uma faixa, "jan, mar e jul" abriria
+ * fevereiro junto e a lista traria linha que a célula não somou.
+ */
+describe("drillCustoReceita", () => {
+  it("da tabela de custo, leva tipo a_pagar e a lista de meses", () => {
+    const p = params(
+      drillCustoReceita({
+        centroCustoId: CENTRO,
+        meses: ["2026-01", "2026-03", "2026-07"],
+        tipo: "a_pagar",
+      }),
+    );
+    expect(p.tipo).toBe("a_pagar");
+    expect(p.centro).toBe(CENTRO);
+    expect(p.comp_in).toBe("2026-01-01,2026-03-01,2026-07-01");
+    // Faixa NAO viaja: ela traria fevereiro, que a celula nao somou.
+    expect(p.comp_de).toBeUndefined();
+    expect(p.comp_ate).toBeUndefined();
+    expect(p.sem_cancelado).toBe("1");
+  });
+
+  it("da tabela de receita, leva tipo a_receber", () => {
+    const p = params(
+      drillCustoReceita({
+        centroCustoId: CENTRO,
+        meses: ["2026-07"],
+        tipo: "a_receber",
+      }),
+    );
+    expect(p.tipo).toBe("a_receber");
+    expect(p.comp_in).toBe("2026-07-01");
+  });
+
+  it("sem mes nenhum, nao manda a chave dos meses", () => {
+    const p = params(
+      drillCustoReceita({ centroCustoId: CENTRO, meses: [], tipo: "a_pagar" }),
+    );
+    expect(p.comp_in).toBeUndefined();
+    expect(p.centro).toBe(CENTRO);
   });
 });

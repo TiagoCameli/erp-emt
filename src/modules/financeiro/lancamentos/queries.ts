@@ -134,6 +134,14 @@ export interface ListarLancamentosParams {
   competenciaDe?: string;
   competenciaAte?: string;
   /**
+   * Meses de referência EXATOS (yyyy-MM-01). Vazio = sem filtro.
+   *
+   * Existe para o drill do relatório de custo x receita, que deixa escolher meses
+   * não contíguos: uma faixa (`competenciaDe`/`Ate`) traria os meses do meio que a
+   * célula clicada não somou.
+   */
+  competenciaIn?: string[];
+  /**
    * Tira os cancelados da lista. Os relatórios de custo somam
    * `status <> 'cancelado'`, e o filtro de `status` só sabe escolher UM status,
    * não excluir um.
@@ -1051,6 +1059,9 @@ export async function listarLancamentos(
   }
   if (params.compraDe) consulta = consulta.gte("data_compra", params.compraDe);
   if (params.compraAte) consulta = consulta.lte("data_compra", params.compraAte);
+  if (params.competenciaIn?.length) {
+    consulta = consulta.in("mes_competencia", params.competenciaIn);
+  }
   if (params.competenciaDe) {
     consulta = consulta.gte("mes_competencia", params.competenciaDe);
   }

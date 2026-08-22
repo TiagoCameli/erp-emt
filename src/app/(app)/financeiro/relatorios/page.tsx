@@ -8,7 +8,7 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
-import { formatarBRL } from "@/lib/formatadores";
+import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
@@ -29,8 +29,20 @@ import {
   periodoDoModo,
   type FiltrosCustoCc,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
+import {
+  lerFiltrosCustoReceita,
+  type FiltrosCustoReceita,
+} from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import {
+  porCentro,
+  porMes,
+  totais,
+} from "@/modules/financeiro/relatorios/custo-receita";
 import { CustoCcSerie } from "@/modules/financeiro/relatorios/components/custo-cc-serie";
 import { FiltrosCustoCcBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-cc-barra";
+import { FiltrosCustoReceitaBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-receita-barra";
+import { CustoReceitaGrafico } from "@/modules/financeiro/relatorios/components/custo-receita-grafico";
+import { CustoReceitaTabela } from "@/modules/financeiro/relatorios/components/custo-receita-tabela";
 import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-grafico";
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
 import { proximoMes } from "@/modules/financeiro/relatorios/calculo";
@@ -53,11 +65,13 @@ import {
   aging,
   custoPorCentroCusto,
   custoPorGrupo,
+  custoReceita,
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
   listarFornecedoresComLancamentos,
   mesCorrente,
+  mesesDeCompetencia,
   posicaoBancaria,
   primeirosMesesDosCentros,
   serieDosCentros,
@@ -562,6 +576,117 @@ async function ConteudoCustoCc({
   );
 }
 
+/**
+ * Custo x receita: cartões, gráfico por mês e as duas tabelas.
+ *
+ * As três leituras somam as MESMAS linhas do grão fino que a RPC devolve (ver
+ * `custo-receita.ts`), então não existe caminho para o gráfico discordar do
+ * cartão. Foi a terceira vez em dois dias que duas contas do mesmo dinheiro
+ * divergiram neste projeto; aqui a divergência é impossível por construção.
+ */
+async function ConteudoCustoReceita({
+  filtros,
+  meses,
+  podeVerLancamentos,
+}: {
+  filtros: FiltrosCustoReceita;
+  meses: string[];
+  podeVerLancamentos: boolean;
+}) {
+  if (meses.length === 0) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Nenhum mês de referência no recorte"
+        descricao="A janela escolhida não cobre nenhum mês com lançamento. Troque o período ou marque os meses direto."
+      />
+    );
+  }
+
+  const linhas = await custoReceita({
+    meses,
+    centrosCusto: filtros.centrosCusto,
+    centrosReceita: filtros.centrosReceita,
+  });
+
+  if (linhas.length === 0) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Sem custo e sem receita neste recorte"
+        descricao="Nenhum lançamento operacional cai nos centros e meses escolhidos. Afrouxe os filtros ou marque outros meses."
+      />
+    );
+  }
+
+  const total = totais(linhas);
+  const porMesDoRelatorio = porMes(linhas);
+  const custos = porCentro(linhas, "a_pagar");
+  const receitas = porCentro(linhas, "a_receber");
+
+  return (
+    <>
+      <GradeKpis>
+        <KPICard
+          titulo="Receita líquida"
+          valor={<MoneyText valor={total.receitaLiquida} />}
+          detalhe={
+            total.retencao > 0
+              ? `Retido ${formatarBRL(total.retencao)}, somando ${formatarBRL(total.receitaFaturada)}`
+              : "Sem retenção na fonte no recorte"
+          }
+        />
+        <KPICard
+          titulo="Custo"
+          valor={<MoneyText valor={total.custo} />}
+          detalhe={`${porMesDoRelatorio.length} ${porMesDoRelatorio.length === 1 ? "mês de referência" : "meses de referência"}`}
+        />
+        <KPICard
+          titulo="Resultado"
+          valor={<MoneyText valor={total.resultado} />}
+          detalhe={
+            total.resultado >= 0
+              ? "Receita líquida menos custo"
+              : "Custo acima da receita líquida"
+          }
+        />
+        <KPICard
+          titulo="Margem"
+          valor={
+            total.margem === null ? "—" : formatarPercentual(total.margem)
+          }
+          detalhe={
+            total.margem === null
+              ? "Sem receita no recorte: não há margem"
+              : "Resultado sobre a receita líquida"
+          }
+        />
+      </GradeKpis>
+
+      <Painel>
+        <CustoReceitaGrafico meses={porMesDoRelatorio} />
+      </Painel>
+
+      {/* Lado a lado no desktop, empilhado no mobile: as duas tabelas são de
+          dinheiros opostos e se leem em par. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <CustoReceitaTabela
+          linhas={custos}
+          lado="custo"
+          meses={meses}
+          podeVerLancamentos={podeVerLancamentos}
+        />
+        <CustoReceitaTabela
+          linhas={receitas}
+          lado="receita"
+          meses={meses}
+          podeVerLancamentos={podeVerLancamentos}
+        />
+      </div>
+    </>
+  );
+}
+
 async function ConteudoCustoGrupo({
   mes,
   podeVerLancamentos,
@@ -712,6 +837,23 @@ export default async function RelatoriosPage({
         ])
       : null;
 
+  /**
+   * Custo x receita: os meses que existem e o cadastro de centros.
+   *
+   * Os meses vêm ANTES da leitura da URL porque é deles que sai o padrão do
+   * relatório (todos) e a ponta aberta da janela ("de julho em diante" termina no
+   * último mês que existe, não no fim dos tempos).
+   */
+  const mesesDisponiveis =
+    relatorio === "custo-receita" ? await mesesDeCompetencia() : [];
+  const centrosParaCustoReceita =
+    relatorio === "custo-receita" ? await listarCentrosCusto() : null;
+  const {
+    filtros: filtrosCustoReceita,
+    mesesEfetivos: mesesCustoReceita,
+    periodoDesabilitado,
+  } = lerFiltrosCustoReceita(params, mesesDisponiveis);
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -787,6 +929,25 @@ export default async function RelatoriosPage({
           <ConteudoCustoCc
             filtros={filtrosCustoCc}
             erroDoModo={erroDoModo}
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "custo-receita" && centrosParaCustoReceita ? (
+        <SecaoRelatorio
+          titulo="Custo x receita por centro de custo"
+          descricao="Regime de COMPETÊNCIA, pelo MÊS DE REFERÊNCIA do lançamento. Os centros do custo e os da receita são escolhidos separadamente: é o custo de um conjunto contra a receita de outro. Conta só categoria de natureza operacional, e a receita é a líquida (a retenção aparece ao lado)."
+        >
+          <FiltrosCustoReceitaBarra
+            filtros={filtrosCustoReceita}
+            mesesDisponiveis={mesesDisponiveis}
+            centrosCusto={centrosParaCustoReceita}
+            periodoDesabilitado={periodoDesabilitado}
+          />
+          <ConteudoCustoReceita
+            filtros={filtrosCustoReceita}
+            meses={mesesCustoReceita}
             podeVerLancamentos={podeVerLancamentos}
           />
         </SecaoRelatorio>
