@@ -45,6 +45,9 @@ export default async function PaginaOrdens({
   }
 
   const podeCriar = temPermissao(usuario, "compras.ordens", "criar");
+  // Governa o botão de exclusão em lote da barra de seleção. A Server Action e a
+  // RPC checam de novo: aqui a permissão só esconde o que a pessoa não pode.
+  const podeExcluir = temPermissao(usuario, "compras.ordens", "excluir");
 
   const params = await searchParams;
   const { pagina, tamanho, busca, fornecedorId, de, ate, mesCompetencia } =
@@ -136,6 +139,7 @@ export default async function PaginaOrdens({
         acoes={<BotaoNovaOrdem />}
       />
       <OrdensTabela
+        podeExcluir={podeExcluir}
         ordens={itens}
         total={total}
         pagina={pagina}

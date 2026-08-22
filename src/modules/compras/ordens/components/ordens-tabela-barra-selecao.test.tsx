@@ -88,6 +88,7 @@ function props(ordens: OrdemLista[]) {
   return (
     <OrdensTabela
       ordens={ordens}
+      podeExcluir={false}
       total={ordens.length}
       pagina={0}
       tamanho={25}

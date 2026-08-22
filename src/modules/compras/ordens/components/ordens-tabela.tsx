@@ -49,6 +49,7 @@ import type {
   InsumoOpcao,
   OrdemLista,
 } from "@/modules/compras/ordens/queries";
+import { LoteExcluirOrdens } from "./lote-excluir-ordens";
 import { useNovaOrdem } from "./nova-ordem-provider";
 
 /** Opções do filtro de status, derivadas do mapa único de status da OC. */
@@ -228,6 +229,12 @@ export interface OrdensTabelaProps {
   insumos: InsumoOpcao[];
   /** Usuário logado: a personalização da tabela é lembrada por pessoa. */
   idUsuario: string;
+  /**
+   * Tem permissão de excluir OC? Governa o botão de exclusão em lote da barra de
+   * seleção. A permissão é checada de novo na Server Action e na RPC: aqui ela só
+   * esconde o que a pessoa não pode fazer.
+   */
+  podeExcluir: boolean;
 }
 
 /**
@@ -266,6 +273,7 @@ export function OrdensTabela({
   centrosCusto,
   insumos,
   idUsuario,
+  podeExcluir,
 }: OrdensTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
@@ -302,6 +310,21 @@ export function OrdensTabela({
     [marcados, idsVisiveis],
   );
 
+  /**
+   * As LINHAS marcadas, e não só os ids: a exclusão em lote precisa do status de
+   * cada uma para dizer quantas apaga e quantas pula antes de confirmar.
+   */
+  const ordensSelecionadas = React.useMemo(
+    () => ordens.filter((ordem) => selecionados.includes(ordem.id)),
+    [ordens, selecionados],
+  );
+
+  /**
+   * Lote em voo. Serve para a BarraSelecao desabilitar "Limpar seleção": limpar
+   * no meio da exclusão deixaria o lote sem as linhas que ele está apagando.
+   */
+  const [excluindoLote, setExcluindoLote] = React.useState(false);
+
   // A faixa de valor é digitada dígito a dígito, então vai para a URL com
   // espera (o canônico cuida disso): escrevendo a cada tecla, o input voltaria
   // do servidor no meio da digitação e perderia caracteres.
@@ -337,8 +360,17 @@ export function OrdensTabela({
       <BarraSelecao
         quantidade={selecionados.length}
         onLimpar={() => setSelecionados([])}
+        limparDesabilitado={excluindoLote}
       >
         <BotaoEspelho rota="/espelho/ordens" ids={selecionados} />
+        {podeExcluir ? (
+          <LoteExcluirOrdens
+            ordensSelecionadas={ordensSelecionadas}
+            onLimparSelecao={() => setSelecionados([])}
+            onConcluido={() => router.refresh()}
+            onExcluindoChange={setExcluindoLote}
+          />
+        ) : null}
       </BarraSelecao>
       <DataTable
         onLimparFiltros={limparTodos}
