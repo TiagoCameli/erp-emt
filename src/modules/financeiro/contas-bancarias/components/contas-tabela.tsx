@@ -145,7 +145,13 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
     id: "aplicacao",
     header: "Em aplicação",
     size: 160,
-    meta: { alinharDireita: true, rotulo: "Em aplicação" },
+    // Nasce OCULTA: desde 22/08/2026 a varredura do banco não está mais em
+    // `lancamentos` (foi para arquivo_morto a pedido do Tiago), então a coluna
+    // mostraria "-" nas cinco contas. Ela continua existindo porque volta a
+    // servir no dia em que entrar uma aplicação de verdade, e uma posição
+    // aplicada NEGATIVA é impossível e precisa aparecer. Coluna que só mostra
+    // traço é ruído; coluna que não existe some com o alerta junto.
+    meta: { alinharDireita: true, rotulo: "Em aplicação", ocultaPorPadrao: true },
     cell: ({ row }) => {
       const pos = row.original.posicaoAplicacao;
       if (!pos) return <span className="text-muted-foreground">-</span>;
