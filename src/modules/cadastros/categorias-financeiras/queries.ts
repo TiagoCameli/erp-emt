@@ -1,13 +1,19 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { TipoCategoriaFinanceira } from "@/modules/cadastros/categorias-financeiras/schemas";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import type {
+  NaturezaCategoriaFinanceira,
+  TipoCategoriaFinanceira,
+} from "@/modules/cadastros/categorias-financeiras/schemas";
 
 /** Linha da listagem de categorias financeiras. */
 export interface CategoriaFinanceiraLista {
   id: string;
   nome: string;
   tipo: TipoCategoriaFinanceira;
+  /** Onde ela entra no DRE: operacional, financeira ou movimentação. */
+  natureza: NaturezaCategoriaFinanceira;
   paiId: string | null;
   paiNome: string | null;
   ativo: boolean;
@@ -32,7 +38,7 @@ export async function listarCategorias(): Promise<CategoriaFinanceiraLista[]> {
 
   const { data, error } = await supabase
     .from("categorias_financeiras")
-    .select("id, nome, tipo, pai_id, ativo, created_at")
+    .select("id, nome, tipo, natureza, pai_id, ativo, created_at")
     .order("nome");
 
   if (error) {
@@ -42,16 +48,26 @@ export async function listarCategorias(): Promise<CategoriaFinanceiraLista[]> {
   const categorias = data ?? [];
   const nomePorId = new Map(categorias.map((c) => [c.id, c.nome]));
 
-  const { data: lancamentos, error: erroLancamentos } = await supabase
-    .from("lancamentos")
-    .select("categoria_id");
+  // Paginado: são 6.462 lançamentos e o PostgREST corta em 1.000 sem erro
+  // nenhum. Sem isto a coluna "Usos" mostrava a contagem de um sexto da base e
+  // uma categoria muito usada apareceria como pouco usada -- que é justamente o
+  // número que decide se dá para desativar a categoria. `.order("id")` porque
+  // paginação sem desempate repete linha numa página e perde na seguinte.
+  const { linhas: lancamentos, erro: erroLancamentos } = await todasAsLinhas(
+    (de, ate) =>
+      supabase
+        .from("lancamentos")
+        .select("categoria_id")
+        .order("id")
+        .range(de, ate),
+  );
 
   if (erroLancamentos) {
     throw new Error("Não foi possível carregar o uso das categorias");
   }
 
   const usoPorCategoria = new Map<string, number>();
-  for (const lancamento of lancamentos ?? []) {
+  for (const lancamento of lancamentos) {
     if (!lancamento.categoria_id) continue;
     usoPorCategoria.set(
       lancamento.categoria_id,
@@ -63,6 +79,7 @@ export async function listarCategorias(): Promise<CategoriaFinanceiraLista[]> {
     id: categoria.id,
     nome: categoria.nome,
     tipo: categoria.tipo as TipoCategoriaFinanceira,
+    natureza: categoria.natureza as NaturezaCategoriaFinanceira,
     paiId: categoria.pai_id,
     paiNome: categoria.pai_id ? (nomePorId.get(categoria.pai_id) ?? null) : null,
     ativo: categoria.ativo,

@@ -14,6 +14,7 @@ import {
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   dentroDaFaixaValor,
   usePaginacaoCliente,
@@ -28,6 +29,25 @@ const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativas" },
   { valor: "inativos", rotulo: "Inativas" },
 ];
+
+/**
+ * O que o corte deixou de fora, para o `title` da data. Sem esta frase a pessoa
+ * vê "desde 31/12/2025" e não tem como saber se isso escondeu R$ 10 ou R$ 4
+ * milhões — e nesta base a resposta real é R$ 4,29 milhões numa conta só.
+ */
+function rotuloForaDoSaldo(conta: ContaLista): string {
+  const desde = formatarData(conta.saldoInicialData);
+  const fora = conta.movimentoAnteriorAoCorte;
+  if (!fora) {
+    return `O saldo parte do extrato de ${desde} e soma só o movimento posterior. Nenhum pagamento anterior a essa data está registrado.`;
+  }
+  return (
+    `O saldo parte do extrato de ${desde} e soma só o movimento posterior. ` +
+    `Fora do saldo: ${fora.parcelas} pagamento(s) anteriores, ` +
+    `${formatarBRL(fora.recebido)} recebidos e ${formatarBRL(fora.pago)} pagos ` +
+    `(já representados pelo saldo de abertura).`
+  );
+}
 
 /** Texto "Ag. 0001 / Conta 12345-6" com o que existir, senão um traço. */
 function agenciaConta(conta: ContaLista): React.ReactNode {
@@ -73,13 +93,26 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
   {
     accessorKey: "saldoAtual",
     header: "Saldo atual",
-    size: 150,
+    size: 190,
     meta: { alinharDireita: true },
     cell: ({ row }) => (
-      <MoneyText
-        valor={row.original.saldoAtual}
-        className="font-semibold text-foreground"
-      />
+      <div className="flex flex-col items-end gap-0.5">
+        <MoneyText
+          valor={row.original.saldoAtual}
+          className="font-semibold text-foreground"
+        />
+        {/* A data de corte MOSTRA A CARA. Um saldo que ignora movimento antigo
+            sem dizer que ignora é o mesmo defeito que ele veio consertar: o
+            saldo inicial já era um plug justamente por não ter data. */}
+        {row.original.saldoInicialData ? (
+          <span
+            className="text-legenda text-muted-foreground"
+            title={rotuloForaDoSaldo(row.original)}
+          >
+            desde {formatarData(row.original.saldoInicialData)}
+          </span>
+        ) : null}
+      </div>
     ),
   },
   {

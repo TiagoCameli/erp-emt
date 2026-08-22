@@ -10,7 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { drillCategoriaCompetencia } from "@/modules/financeiro/relatorios/drill";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
-import type { DreGerencial, DreLinha } from "../queries";
+import type { BlocoDre, DreGerencial, DreLinha } from "../queries";
 
 interface DreTabelaProps {
   dre: DreGerencial;
@@ -97,16 +97,48 @@ function SecaoDre({
   );
 }
 
+/** Linha de subtotal de um bloco (resultado operacional, resultado financeiro). */
+function SubtotalDre({ rotulo, valor }: { rotulo: string; valor: number }) {
+  return (
+    <TableRow className="border-t bg-surface/60 hover:bg-surface/60">
+      <TableCell className="py-2 text-center text-detalhe font-semibold text-foreground">
+        {rotulo}
+      </TableCell>
+      <TableCell className="py-2 text-right">
+        <MoneyText
+          valor={valor}
+          className={cn(
+            "text-detalhe font-semibold",
+            valor >= 0 ? "text-status-aprovado" : "text-status-rejeitado",
+          )}
+        />
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** Um bloco vazio não vira três linhas dizendo "sem lançamentos" três vezes. */
+function blocoTemLinha(bloco: BlocoDre): boolean {
+  return bloco.receitas.length > 0 || bloco.despesas.length > 0;
+}
+
 /**
- * DRE gerencial do mês em tabela: receitas por categoria, despesas por
- * categoria e o resultado. Sem interatividade, renderiza no servidor.
+ * DRE gerencial do mês em tabela, em três blocos: operacional (a obra),
+ * financeiro (juros e tarifa) e movimentação patrimonial.
+ *
+ * O bloco de movimentação aparece DEPOIS do resultado do mês e fora da soma dele
+ * de propósito. Aplicar R$ 1 milhão do saldo à noite e resgatar na manhã
+ * seguinte movimenta R$ 2 milhões na conta e não gera um centavo de resultado —
+ * era o que fazia a varredura automática do banco responder por 31,7% da
+ * "receita" de 2026. Ele continua na tela porque é dinheiro que passou pela
+ * conta, e o extrato vai mostrá-lo de todo jeito.
+ *
+ * Sem interatividade, renderiza no servidor.
  */
-export function DreTabela({
-  dre,
-  mes,
-  podeVerLancamentos,
-}: DreTabelaProps) {
+export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
   const resultadoPositivo = dre.resultado >= 0;
+  const temFinanceiro = blocoTemLinha(dre.financeiro);
+  const temMovimentacao = blocoTemLinha(dre.movimentacao);
 
   return (
     <div className="overflow-x-auto rounded-md border border-border">
@@ -126,8 +158,8 @@ export function DreTabela({
         <TableBody className="[&_td]:px-3">
           <SecaoDre
             titulo="Receitas"
-            linhas={dre.receitas}
-            total={dre.totalReceitas}
+            linhas={dre.operacional.receitas}
+            total={dre.operacional.totalReceitas}
             rotuloTotal="Total de receitas"
             tipo="a_receber"
             mes={mes}
@@ -135,13 +167,49 @@ export function DreTabela({
           />
           <SecaoDre
             titulo="Despesas"
-            linhas={dre.despesas}
-            total={dre.totalDespesas}
+            linhas={dre.operacional.despesas}
+            total={dre.operacional.totalDespesas}
             rotuloTotal="Total de despesas"
             tipo="a_pagar"
             mes={mes}
             podeVerLancamentos={podeVerLancamentos}
           />
+          {/* O subtotal operacional só faz sentido se houver um segundo bloco
+              somando com ele. Sozinho, ele repetiria o resultado do mês. */}
+          {temFinanceiro ? (
+            <SubtotalDre
+              rotulo="Resultado operacional"
+              valor={dre.operacional.resultado}
+            />
+          ) : null}
+
+          {temFinanceiro ? (
+            <>
+              <SecaoDre
+                titulo="Receitas financeiras"
+                linhas={dre.financeiro.receitas}
+                total={dre.financeiro.totalReceitas}
+                rotuloTotal="Total de receitas financeiras"
+                tipo="a_receber"
+                mes={mes}
+                podeVerLancamentos={podeVerLancamentos}
+              />
+              <SecaoDre
+                titulo="Despesas financeiras"
+                linhas={dre.financeiro.despesas}
+                total={dre.financeiro.totalDespesas}
+                rotuloTotal="Total de despesas financeiras"
+                tipo="a_pagar"
+                mes={mes}
+                podeVerLancamentos={podeVerLancamentos}
+              />
+              <SubtotalDre
+                rotulo="Resultado financeiro"
+                valor={dre.financeiro.resultado}
+              />
+            </>
+          ) : null}
+
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
             <TableCell className="py-2.5 text-center text-corpo font-semibold text-foreground">
               Resultado do mês
@@ -158,6 +226,42 @@ export function DreTabela({
               />
             </TableCell>
           </TableRow>
+
+          {temMovimentacao ? (
+            <>
+              <TableRow className="hover:bg-transparent">
+                <TableCell
+                  colSpan={2}
+                  className="pt-4 pb-1 text-center text-detalhe text-muted-foreground"
+                >
+                  Abaixo, dinheiro que passou pela conta e{" "}
+                  <strong className="font-medium text-foreground">
+                    não é resultado
+                  </strong>
+                  : principal de aplicação, resgate e empréstimo. Não entra no
+                  resultado do mês acima.
+                </TableCell>
+              </TableRow>
+              <SecaoDre
+                titulo="Entradas de movimentação"
+                linhas={dre.movimentacao.receitas}
+                total={dre.movimentacao.totalReceitas}
+                rotuloTotal="Total de entradas"
+                tipo="a_receber"
+                mes={mes}
+                podeVerLancamentos={podeVerLancamentos}
+              />
+              <SecaoDre
+                titulo="Saídas de movimentação"
+                linhas={dre.movimentacao.despesas}
+                total={dre.movimentacao.totalDespesas}
+                rotuloTotal="Total de saídas"
+                tipo="a_pagar"
+                mes={mes}
+                podeVerLancamentos={podeVerLancamentos}
+              />
+            </>
+          ) : null}
         </TableBody>
       </Table>
     </div>

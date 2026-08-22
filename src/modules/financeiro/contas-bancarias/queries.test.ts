@@ -10,6 +10,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * Este teste trava as duas metades da correção: a soma tem que vir pronta do
  * banco (nenhum `.from()` em lancamento_parcelas) e o NUMERIC que chega como
  * string tem que virar o real certo.
+ *
+ * Desde 22/08/2026 ele também cobre a DATA DE CORTE. O corte é aplicado DENTRO
+ * de `fn_rel_posicao_bancaria` (a RPC já devolve só o movimento posterior), então
+ * o que se testa aqui é o resto: a data chegar na linha e o movimento anterior
+ * ao corte vir junto, para a tela poder dizer o que ficou de fora.
+ *
+ * O mock despacha por NOME da RPC de propósito. Um `mockResolvedValue` único
+ * responderia a mesma coisa para as duas funções, e o teste passaria com a
+ * segunda RPC recebendo linhas da primeira — verde, medindo nada.
  */
 
 const { rpc, from } = vi.hoisted(() => ({
@@ -29,7 +38,12 @@ const CONTA = "11111111-1111-1111-1111-111111111111";
 const OUTRA = "22222222-2222-2222-2222-222222222222";
 
 /** Uma conta como a tabela devolve; NUMERIC pode chegar como string. */
-function conta(id: string, nome: string, saldoInicial: number | string) {
+function conta(
+  id: string,
+  nome: string,
+  saldoInicial: number | string,
+  saldoInicialData: string | null = null,
+) {
   return {
     id,
     nome,
@@ -38,8 +52,28 @@ function conta(id: string, nome: string, saldoInicial: number | string) {
     conta: null,
     tipo: "corrente",
     saldo_inicial: saldoInicial,
+    saldo_inicial_data: saldoInicialData,
     ativo: true,
   };
+}
+
+/**
+ * Responde por NOME: `posicao` é o movimento agregado (já com o corte aplicado
+ * no banco) e `antes` é o que o corte deixou de fora.
+ */
+function respostas(opcoes: {
+  posicao?: { data: unknown[] | null; error: { message: string } | null };
+  antes?: { data: unknown[] | null; error: { message: string } | null };
+}) {
+  rpc.mockImplementation(async (nome: string) => {
+    if (nome === "fn_rel_posicao_bancaria") {
+      return opcoes.posicao ?? { data: [], error: null };
+    }
+    if (nome === "fn_rel_movimento_antes_do_corte") {
+      return opcoes.antes ?? { data: [], error: null };
+    }
+    throw new Error(`RPC inesperada: ${nome}`);
+  });
 }
 
 beforeEach(() => {
@@ -69,16 +103,18 @@ describe("listarContas", () => {
   it("tira o saldo da RPC agregada, não de uma varredura das parcelas", async () => {
     // As 1.696 parcelas pagas da BR-364 chegam como UMA linha, com o total já
     // somado no banco pelo valor líquido.
-    rpc.mockResolvedValue({
-      data: [
-        {
-          conta_bancaria_id: CONTA,
-          tipo: "a_pagar",
-          total: "1696000.00",
-        },
-        { conta_bancaria_id: CONTA, tipo: "a_receber", total: "500.00" },
-      ],
-      error: null,
+    respostas({
+      posicao: {
+        data: [
+          {
+            conta_bancaria_id: CONTA,
+            tipo: "a_pagar",
+            total: "1696000.00",
+          },
+          { conta_bancaria_id: CONTA, tipo: "a_receber", total: "500.00" },
+        ],
+        error: null,
+      },
     });
 
     const contas = await listarContas();
@@ -95,7 +131,7 @@ describe("listarContas", () => {
   });
 
   it("conta sem parcela paga fica com o saldo inicial", async () => {
-    rpc.mockResolvedValue({ data: [], error: null });
+    respostas({});
 
     const contas = await listarContas();
 
@@ -103,10 +139,74 @@ describe("listarContas", () => {
   });
 
   it("erro na RPC do saldo não devolve saldo errado, estoura", async () => {
-    rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+    respostas({ posicao: { data: null, error: { message: "boom" } } });
 
     await expect(listarContas()).rejects.toThrow(
       "Não foi possível calcular o saldo das contas",
+    );
+  });
+
+  it("sem data de corte, a linha diz isso: null, e nada fora do saldo", async () => {
+    respostas({});
+
+    const contas = await listarContas();
+
+    expect(contas[0]?.saldoInicialData).toBeNull();
+    expect(contas[0]?.movimentoAnteriorAoCorte).toBeNull();
+  });
+
+  it("com data de corte, a data e o movimento de fora chegam na linha", async () => {
+    from.mockImplementation(() => ({
+      select: () => ({
+        order: () => ({
+          data: [conta(CONTA, "BB 30.893-5", "0.00", "2025-12-31")],
+          error: null,
+        }),
+      }),
+    }));
+    respostas({
+      // A RPC já devolve só o posterior ao corte: são R$ 300 mil de saída.
+      posicao: {
+        data: [
+          { conta_bancaria_id: CONTA, tipo: "a_pagar", total: "300000.00" },
+        ],
+        error: null,
+      },
+      antes: {
+        data: [
+          {
+            conta_bancaria_id: CONTA,
+            corte: "2025-12-31",
+            parcelas: 19,
+            recebido: "4297142.81",
+            pago: "119056.58",
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const contas = await listarContas();
+
+    // Saldo = abertura do extrato (0) mais o que veio DEPOIS. O R$ 4,29 milhões
+    // anterior ao corte NÃO entra: ele já está representado na abertura.
+    expect(contas[0]?.saldoAtual).toBe(-300000);
+    expect(contas[0]?.saldoInicialData).toBe("2025-12-31");
+    expect(contas[0]?.movimentoAnteriorAoCorte).toEqual({
+      parcelas: 19,
+      recebido: 4297142.81,
+      pago: 119056.58,
+    });
+  });
+
+  it("erro ao apurar o que ficou fora do corte estoura em vez de dizer 'nada'", async () => {
+    // Devolver null calado faria a tela mostrar "desde 31/12/2025" sem dizer
+    // que escondeu R$ 4,29 milhões. É o defeito que a data de corte veio
+    // consertar, cometido de novo um nível acima.
+    respostas({ antes: { data: null, error: { message: "boom" } } });
+
+    await expect(listarContas()).rejects.toThrow(
+      "Não foi possível apurar o movimento anterior ao corte",
     );
   });
 });

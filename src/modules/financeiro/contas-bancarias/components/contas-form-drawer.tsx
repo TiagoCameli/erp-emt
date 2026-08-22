@@ -45,6 +45,7 @@ function valoresIniciais(conta: ContaLista | null): ContaFormInput {
       conta?.saldoInicial !== undefined
         ? String(conta.saldoInicial).replace(".", ",")
         : "",
+    saldoInicialData: conta?.saldoInicialData ?? "",
     ativo: conta?.ativo ?? true,
   };
 }
@@ -92,6 +93,12 @@ export function ContasFormDrawer({
       conta: valores.conta,
       tipo: valores.tipo,
       saldoInicial,
+      // Vazio no formulário significa "sem data de corte": vira null e o saldo
+      // volta a somar todo o movimento da conta, como antes.
+      saldoInicialData:
+        valores.saldoInicialData.trim() === ""
+          ? null
+          : valores.saldoInicialData.trim(),
       ativo: valores.ativo,
     };
 
@@ -242,20 +249,36 @@ export function ContasFormDrawer({
           </CampoFormulario>
         </LinhaCampos>
 
-        <CampoFormulario
-          id="conta-saldo-inicial"
-          rotulo="Saldo inicial"
-          ajuda="Saldo de abertura da conta. O saldo atual soma a partir daqui as parcelas pagas nesta conta."
-          erro={form.formState.errors.saldoInicial?.message}
-        >
-          <InputDecimal
+        <LinhaCampos colunas={2}>
+          <CampoFormulario
             id="conta-saldo-inicial"
-            placeholder="0,00"
-            className="tabular-nums text-right"
-            disabled={salvando}
-            {...form.register("saldoInicial")}
-          />
-        </CampoFormulario>
+            rotulo="Saldo inicial"
+            ajuda="O saldo que o extrato mostrava na data ao lado."
+            erro={form.formState.errors.saldoInicial?.message}
+          >
+            <InputDecimal
+              id="conta-saldo-inicial"
+              placeholder="0,00"
+              className="tabular-nums text-right"
+              disabled={salvando}
+              {...form.register("saldoInicial")}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="conta-saldo-inicial-data"
+            rotulo="Saldo em"
+            ajuda="Data do extrato. O saldo atual conta só o que veio DEPOIS dela. Em branco, conta tudo desde o primeiro lançamento."
+            erro={form.formState.errors.saldoInicialData?.message}
+          >
+            <Input
+              id="conta-saldo-inicial-data"
+              type="date"
+              disabled={salvando}
+              {...form.register("saldoInicialData")}
+            />
+          </CampoFormulario>
+        </LinhaCampos>
 
         <SelectAtivo
           value={form.watch("ativo")}

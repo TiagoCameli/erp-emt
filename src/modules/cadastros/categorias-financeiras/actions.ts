@@ -45,6 +45,7 @@ export async function criarCategoria(
   const { error } = await supabase.from(TABELA).insert({
     nome: validado.data.nome,
     tipo: validado.data.tipo,
+    natureza: validado.data.natureza,
     pai_id: validado.data.paiId,
     ativo: validado.data.ativo,
   });
@@ -92,6 +93,7 @@ export async function editarCategoria(
     .update({
       nome: validado.data.nome,
       tipo: validado.data.tipo,
+      natureza: validado.data.natureza,
       pai_id: validado.data.paiId,
       ativo: validado.data.ativo,
     })

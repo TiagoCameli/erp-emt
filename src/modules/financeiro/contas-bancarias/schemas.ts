@@ -45,6 +45,16 @@ export const contaSchema = z.object({
     .number({ error: "Saldo inicial inválido" })
     .min(-9999999999.99, { error: "Saldo abaixo do permitido" })
     .max(9999999999.99, { error: "Saldo acima do permitido" }),
+  /**
+   * Data do extrato de onde o saldo inicial foi lido. Sem ela, o saldo inicial
+   * é um número sem data: o saldo atual passa a somar TODO movimento da conta
+   * desde o primeiro registro e não se compara com extrato nenhum. Foi assim que
+   * R$ 21,5 milhões de abertura fictícia entraram na base.
+   *
+   * Continua opcional porque as contas existentes estão sem ela e a conversão é
+   * decisão de quem tem o extrato na mão, não do formulário.
+   */
+  saldoInicialData: z.string().trim().nullable(),
   ativo: z.boolean(),
 });
 
@@ -72,6 +82,15 @@ export const contaFormSchema = z.object({
       (valor) => valor === "" || !Number.isNaN(Number(valor.replace(",", "."))),
       { error: "Informe um número, ex: 1.000,00" },
     ),
+  // Vazio significa "sem data de corte", que é o comportamento antigo: soma
+  // tudo. Campo obrigatório aceitando vazio, e não opcional, porque input e
+  // output do zod precisam bater para o react-hook-form.
+  saldoInicialData: z
+    .string()
+    .trim()
+    .refine((valor) => valor === "" || /^\d{4}-\d{2}-\d{2}$/.test(valor), {
+      error: "Informe uma data válida",
+    }),
   ativo: z.boolean(),
 });
 
