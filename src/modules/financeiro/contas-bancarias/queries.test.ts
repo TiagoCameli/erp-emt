@@ -64,6 +64,7 @@ function conta(
 function respostas(opcoes: {
   posicao?: { data: unknown[] | null; error: { message: string } | null };
   antes?: { data: unknown[] | null; error: { message: string } | null };
+  aplicacao?: { data: unknown[] | null; error: { message: string } | null };
 }) {
   rpc.mockImplementation(async (nome: string) => {
     if (nome === "fn_rel_posicao_bancaria") {
@@ -71,6 +72,9 @@ function respostas(opcoes: {
     }
     if (nome === "fn_rel_movimento_antes_do_corte") {
       return opcoes.antes ?? { data: [], error: null };
+    }
+    if (nome === "fn_rel_posicao_aplicacao") {
+      return opcoes.aplicacao ?? { data: [], error: null };
     }
     throw new Error(`RPC inesperada: ${nome}`);
   });
@@ -197,6 +201,67 @@ describe("listarContas", () => {
       recebido: 4297142.81,
       pago: 119056.58,
     });
+  });
+
+  it("a posição em aplicação chega na linha, e negativa não é arredondada para zero", async () => {
+    // Opção A (22/08/2026): a varredura não mexe mais no saldo, então a posição
+    // em aplicação é número de CONFERÊNCIA. Negativa é impossível e mede o
+    // extrato que falta importar: é o caso real da conta da Caixa. Se algum dia
+    // alguém "consertar" isso com Math.max(0, ...), este teste cai.
+    respostas({
+      aplicacao: {
+        data: [
+          {
+            conta_bancaria_id: CONTA,
+            aplicado: "4522847.75",
+            resgatado: "8093863.71",
+            posicao: "-3571015.96",
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const contas = await listarContas();
+
+    expect(contas[0]?.posicaoAplicacao).toEqual({
+      aplicado: 4522847.75,
+      resgatado: 8093863.71,
+      posicao: -3571015.96,
+    });
+    // A conta que não aparece na RPC fica null, não zero: "nunca teve aplicação"
+    // e "aplicou e resgatou o mesmo valor" são fatos diferentes.
+    expect(contas[1]?.posicaoAplicacao).toBeNull();
+  });
+
+  it("a posição em aplicação NÃO entra no saldo", async () => {
+    // O saldo inicial já vem do extrato com o que está aplicado (opção A), então
+    // somar a posição aqui contaria o mesmo dinheiro duas vezes.
+    respostas({
+      aplicacao: {
+        data: [
+          {
+            conta_bancaria_id: CONTA,
+            aplicado: "900000.00",
+            resgatado: "100000.00",
+            posicao: "800000.00",
+          },
+        ],
+        error: null,
+      },
+    });
+
+    const contas = await listarContas();
+
+    expect(contas[0]?.saldoAtual).toBe(2000000);
+  });
+
+  it("erro ao apurar a posição em aplicação estoura em vez de dizer 'nada'", async () => {
+    respostas({ aplicacao: { data: null, error: { message: "boom" } } });
+
+    await expect(listarContas()).rejects.toThrow(
+      "Não foi possível apurar a posição em aplicação",
+    );
   });
 
   it("erro ao apurar o que ficou fora do corte estoura em vez de dizer 'nada'", async () => {

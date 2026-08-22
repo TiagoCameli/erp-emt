@@ -97,6 +97,14 @@ export function movimentoPorContaEmCentavos(
  * Saldo atual de uma conta em reais: saldo inicial mais o movimento das
  * parcelas pagas nela. Conta sem nenhuma parcela paga não aparece na RPC e fica
  * com o próprio saldo inicial, que é o certo.
+ *
+ * O QUE A RPC JÁ DECIDIU, e por isso não aparece aqui: desde 22/08/2026 ela
+ * conta só o movimento posterior a `saldo_inicial_data` e ignora categoria de
+ * natureza `movimentacao`. Ou seja, este saldo é o DINHEIRO QUE A EMPRESA TEM
+ * naquele banco (corrente mais aplicado, que é o que o extrato chama de
+ * "Saldo"), e não o saldo da conta corrente: aplicar o saldo à noite e resgatar
+ * na manhã seguinte não muda quanto ela tem. Somar a posição em aplicação a este
+ * número contaria o mesmo dinheiro duas vezes.
  */
 export function saldoAtualDaConta(
   saldoInicial: number | string | null,

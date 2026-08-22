@@ -21,6 +21,23 @@ export interface MovimentoAnteriorAoCorte {
   pago: number;
 }
 
+/**
+ * Principal aplicado menos resgatado, por conta. NÃO é parcela do saldo: desde a
+ * opção A (22/08/2026) o `saldoInicial` já vem do extrato COM o que está
+ * aplicado, e a varredura não mexe no saldo. Este número é de CONFERÊNCIA, e a
+ * regra dele é simples: tem que ser maior ou igual a zero, porque não existe
+ * resgatar mais principal do que se aplicou.
+ *
+ * Negativo significa aplicação que ninguém importou do extrato, e mede
+ * exatamente quanto o saldo da conta está abaixo do real por isso.
+ */
+export interface PosicaoAplicacao {
+  aplicado: number;
+  resgatado: number;
+  /** aplicado − resgatado. Negativo é impossível, e é o tamanho do furo. */
+  posicao: number;
+}
+
 /** Linha da listagem de contas, já com o saldo atual calculado. */
 export interface ContaLista {
   id: string;
@@ -36,6 +53,8 @@ export interface ContaLista {
   saldoAtual: number;
   /** Null quando não há corte, ou quando o corte não deixou nada de fora. */
   movimentoAnteriorAoCorte: MovimentoAnteriorAoCorte | null;
+  /** Null quando a conta nunca teve aplicação nem resgate registrado. */
+  posicaoAplicacao: PosicaoAplicacao | null;
   ativo: boolean;
 }
 
@@ -76,12 +95,22 @@ export interface ContaLista {
  * naquele dia mais o que veio depois". Por isso o corte não aparece na
  * aritmética daqui — ele já veio aplicado. O que esta função busca a mais é o
  * movimento que ficou de fora, para a tela mostrar a escolha em vez de esconder.
+ *
+ * OPÇÃO A (22/08/2026): a RPC também ignora categoria de natureza
+ * `movimentacao`, então aplicação e resgate do principal não mexem no saldo. O
+ * saldo aqui é o DINHEIRO QUE A EMPRESA TEM naquele banco (corrente mais
+ * aplicado), que é o número que o próprio extrato chama de "Saldo". A posição em
+ * aplicação vem à parte, como conferência — ver `PosicaoAplicacao`.
  */
 export async function listarContas(): Promise<ContaLista[]> {
   const supabase = await createClient();
 
-  const [contasResultado, movimentosResultado, anterioresResultado] =
-    await Promise.all([
+  const [
+    contasResultado,
+    movimentosResultado,
+    anterioresResultado,
+    aplicacaoResultado,
+  ] = await Promise.all([
     supabase
       .from("contas_bancarias")
       .select(
@@ -90,6 +119,7 @@ export async function listarContas(): Promise<ContaLista[]> {
       .order("nome"),
     supabase.rpc("fn_rel_posicao_bancaria"),
     supabase.rpc("fn_rel_movimento_antes_do_corte"),
+    supabase.rpc("fn_rel_posicao_aplicacao"),
   ]);
 
   if (contasResultado.error) {
@@ -101,6 +131,9 @@ export async function listarContas(): Promise<ContaLista[]> {
   if (anterioresResultado.error) {
     throw new Error("Não foi possível apurar o movimento anterior ao corte");
   }
+  if (aplicacaoResultado.error) {
+    throw new Error("Não foi possível apurar a posição em aplicação");
+  }
 
   const anteriorPorConta = new Map<string, MovimentoAnteriorAoCorte>();
   for (const linha of anterioresResultado.data ?? []) {
@@ -108,6 +141,15 @@ export async function listarContas(): Promise<ContaLista[]> {
       parcelas: linha.parcelas,
       recebido: Number(linha.recebido),
       pago: Number(linha.pago),
+    });
+  }
+
+  const aplicacaoPorConta = new Map<string, PosicaoAplicacao>();
+  for (const linha of aplicacaoResultado.data ?? []) {
+    aplicacaoPorConta.set(linha.conta_bancaria_id, {
+      aplicado: Number(linha.aplicado),
+      resgatado: Number(linha.resgatado),
+      posicao: Number(linha.posicao),
     });
   }
 
@@ -134,6 +176,7 @@ export async function listarContas(): Promise<ContaLista[]> {
       movimentoCentavos.get(conta.id) ?? 0,
     ),
     movimentoAnteriorAoCorte: anteriorPorConta.get(conta.id) ?? null,
+    posicaoAplicacao: aplicacaoPorConta.get(conta.id) ?? null,
     ativo: conta.ativo,
   }));
 }
