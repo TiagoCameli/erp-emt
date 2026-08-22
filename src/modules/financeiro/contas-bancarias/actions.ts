@@ -37,6 +37,7 @@ function paraRegistro(dados: ContaInput) {
     conta: dados.conta ?? null,
     tipo: dados.tipo,
     saldo_inicial: dados.saldoInicial,
+    saldo_inicial_data: dados.saldoInicialData,
     ativo: dados.ativo,
   };
 }

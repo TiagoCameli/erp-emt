@@ -28,6 +28,8 @@ import type {
   CategoriaPaiOpcao,
 } from "@/modules/cadastros/categorias-financeiras/queries";
 import {
+  NATUREZAS_CATEGORIA_FINANCEIRA,
+  ROTULO_NATUREZA_CATEGORIA_FINANCEIRA,
   ROTULO_TIPO_CATEGORIA_FINANCEIRA,
   TIPOS_CATEGORIA_FINANCEIRA,
   type TipoCategoriaFinanceira,
@@ -45,6 +47,11 @@ export interface CategoriasTabelaProps {
 const OPCOES_TIPO = TIPOS_CATEGORIA_FINANCEIRA.map((tipo) => ({
   valor: tipo,
   rotulo: ROTULO_TIPO_CATEGORIA_FINANCEIRA[tipo],
+}));
+
+const OPCOES_NATUREZA = NATUREZAS_CATEGORIA_FINANCEIRA.map((natureza) => ({
+  valor: natureza,
+  rotulo: ROTULO_NATUREZA_CATEGORIA_FINANCEIRA[natureza],
 }));
 
 const OPCOES_STATUS = [
@@ -87,6 +94,7 @@ export function CategoriasTabela({
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [tipo, setTipo] = useFiltroSessao("tipo", "");
+  const [natureza, setNatureza] = useFiltroSessao("natureza", "");
   const [status, setStatus] = React.useState("ativos");
   const [paiId, setPaiId] = useFiltroSessao("paiId", "");
   const [nivel, setNivel] = useFiltroSessao("nivel", "");
@@ -127,6 +135,10 @@ export function CategoriasTabela({
     setTipo(valor);
     zerarPagina();
   }
+  function mudarNatureza(valor: string) {
+    setNatureza(valor);
+    zerarPagina();
+  }
   function mudarStatus(valor: string) {
     setStatus(valor === "" ? "todos" : valor);
     zerarPagina();
@@ -163,6 +175,7 @@ export function CategoriasTabela({
       if (status === "ativos" && !categoria.ativo) return false;
       if (status === "inativos" && categoria.ativo) return false;
       if (tipo && categoria.tipo !== tipo) return false;
+      if (natureza && categoria.natureza !== natureza) return false;
       if (paiId !== "" && categoria.paiId !== paiId) return false;
       if (nivel === "raiz" && categoria.paiId !== null) return false;
       if (nivel === "filha" && categoria.paiId === null) return false;
@@ -180,7 +193,7 @@ export function CategoriasTabela({
       }
       return true;
     });
-  }, [categorias, busca, tipo, status, paiId, nivel, uso]);
+  }, [categorias, busca, tipo, natureza, status, paiId, nivel, uso]);
 
   const colunas = React.useMemo<
     ColumnDef<CategoriaFinanceiraLista, unknown>[]
@@ -197,6 +210,15 @@ export function CategoriasTabela({
         accessorKey: "tipo",
         header: "Tipo",
         cell: ({ row }) => badgeTipo(row.original.tipo),
+      },
+      {
+        accessorKey: "natureza",
+        header: "Natureza",
+        // Texto simples e não badge: operacional é a esmagadora maioria das
+        // linhas, e um badge em toda linha viraria ruído em vez de sinal. O que
+        // precisa saltar é a exceção, e ela salta por ser a palavra diferente.
+        cell: ({ row }) =>
+          ROTULO_NATUREZA_CATEGORIA_FINANCEIRA[row.original.natureza],
       },
       {
         accessorKey: "paiNome",
@@ -264,7 +286,7 @@ export function CategoriasTabela({
 
   // Filtros declarados aqui (e não numa FilterBar solta) para entrarem no menu
   // "Filtros" da tabela, junto com a personalização de colunas. Busca, tipo e
-  // status seguem visíveis; pai, nível e uso nascem escondidos.
+  // status seguem visíveis; natureza, pai, nível e uso nascem escondidos.
   const filtros: FiltroConfiguravel[] = [
     {
       id: "busca",
@@ -294,6 +316,22 @@ export function CategoriasTabela({
           opcoes={OPCOES_TIPO}
           placeholder="Tipo"
           todosRotulo="Todos os tipos"
+        />
+      ),
+    },
+    {
+      id: "natureza",
+      rotulo: "Natureza",
+      ocultoPorPadrao: true,
+      temValor: natureza !== "",
+      onLimpar: () => mudarNatureza(""),
+      elemento: (
+        <FiltroSelect
+          valor={natureza}
+          onValorChange={mudarNatureza}
+          opcoes={OPCOES_NATUREZA}
+          placeholder="Natureza"
+          todosRotulo="Todas as naturezas"
         />
       ),
     },

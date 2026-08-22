@@ -187,6 +187,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           id: string;
+          natureza: string;
           nome: string;
           pai_id: string | null;
           tipo: string;
@@ -197,6 +198,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
+          natureza?: string;
           nome: string;
           pai_id?: string | null;
           tipo: string;
@@ -207,6 +209,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
+          natureza?: string;
           nome?: string;
           pai_id?: string | null;
           tipo?: string;
@@ -731,6 +734,7 @@ export type Database = {
           id: string;
           nome: string;
           saldo_inicial: number;
+          saldo_inicial_data: string | null;
           tipo: string;
           updated_at: string;
         };
@@ -744,6 +748,7 @@ export type Database = {
           id?: string;
           nome: string;
           saldo_inicial?: number;
+          saldo_inicial_data?: string | null;
           tipo?: string;
           updated_at?: string;
         };
@@ -757,6 +762,7 @@ export type Database = {
           id?: string;
           nome?: string;
           saldo_inicial?: number;
+          saldo_inicial_data?: string | null;
           tipo?: string;
           updated_at?: string;
         };
@@ -4067,6 +4073,7 @@ export type Database = {
         Returns: {
           categoria: string;
           categoria_id: string;
+          natureza: string;
           tipo: string;
           total: number;
         }[];
@@ -4085,6 +4092,16 @@ export type Database = {
         Returns: {
           id: string;
           nome: string;
+        }[];
+      };
+      fn_rel_movimento_antes_do_corte: {
+        Args: never;
+        Returns: {
+          conta_bancaria_id: string;
+          corte: string;
+          pago: number;
+          parcelas: number;
+          recebido: number;
         }[];
       };
       fn_rel_gestao_compras_resumo: {
@@ -4107,6 +4124,15 @@ export type Database = {
           a_pagar_vencidas: number;
           pago_mes_contagem: number;
           pago_mes_valor: number;
+        }[];
+      };
+      fn_rel_posicao_aplicacao: {
+        Args: never;
+        Returns: {
+          aplicado: number;
+          conta_bancaria_id: string;
+          posicao: number;
+          resgatado: number;
         }[];
       };
       fn_rel_posicao_bancaria: {

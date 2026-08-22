@@ -13,6 +13,7 @@ import {
 } from "@/modules/cadastros/_shared/insumo-grupos";
 import {
   agregarAging,
+  agruparDrePorNatureza,
   paraCentavos,
   paraReais,
   proximoMes,
@@ -22,6 +23,7 @@ import {
   totalCategorias,
   vencidoAging,
   type AgingFaixa,
+  type BlocoDre,
   type DreLinha,
   type LancamentoCategoria,
   type LinhaFaixaAging,
@@ -33,6 +35,7 @@ export {
   ORDEM_FAIXA_AGING,
   ROTULO_FAIXA_AGING,
   type AgingFaixa,
+  type BlocoDre,
   type DreLinha,
   type FaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
@@ -175,10 +178,17 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
 
 export interface DreGerencial {
   mes: string;
-  receitas: DreLinha[];
-  despesas: DreLinha[];
-  totalReceitas: number;
-  totalDespesas: number;
+  /** A obra: medição, custo, despesa. É o resultado que o Tiago administra. */
+  operacional: BlocoDre;
+  /** Juros ganhos, tarifa, IOF. É resultado, mas não é da obra. */
+  financeiro: BlocoDre;
+  /**
+   * Principal de aplicação, resgate e empréstimo. Entra e sai da conta e NÃO é
+   * resultado: é patrimônio trocando de lugar. Fica no relatório para o dinheiro
+   * não desaparecer da vista, mas fora da soma do resultado.
+   */
+  movimentacao: BlocoDre;
+  /** Operacional mais financeiro. A movimentação não entra, de propósito. */
   resultado: number;
 }
 
@@ -192,11 +202,22 @@ interface OpcaoMesParam {
  * valor do lançamento (regime de competência), não das parcelas. Lançamentos
  * cancelados ficam de fora. `mes` no formato "YYYY-MM".
  *
- * A competência é a data de referência, mas lançamentos antigos podem tê-la
- * nula (ex: OC anterior à correção que passou a preenchê-la). Para não sumir
- * com despesa nenhuma do DRE, quando a competência é nula caímos no vencimento
- * e, na falta deste, na data de emissão. O filtro de mês é aplicado em memória
- * sobre essa data efetiva.
+ * TRÊS BLOCOS, e é o ponto todo desta função: `fn_rel_dre` devolve a NATUREZA
+ * da categoria, e a natureza decide em qual bloco a linha cai. Enquanto o DRE
+ * era só "a_receber contra a_pagar", a varredura automática da conta bancária
+ * (aplicar o saldo à noite, resgatar na manhã seguinte) respondia por 31,7% da
+ * receita de 2026 e 14,3% da despesa. O mesmo dinheiro indo e voltando aparecia
+ * como faturamento, e a margem era ficção — sem nenhum relatório reclamar,
+ * porque a soma fechava dos dois lados.
+ *
+ * `movimentacao` continua VISÍVEL num bloco próprio em vez de ser descartada:
+ * ela é dinheiro que passou na conta, e sumir com ela criaria a pergunta
+ * "por que o extrato tem movimento que o sistema não tem".
+ *
+ * O filtro é por `mes_competencia` dentro do SQL. Não existe lançamento com
+ * competência nula (medido: zero em 6.462), então não há queda para o
+ * vencimento — o que o comentário antigo aqui descrevia nunca chegou a ser o
+ * comportamento da função.
  */
 export async function dreGerencial({
   mes,
@@ -217,37 +238,14 @@ export async function dreGerencial({
     throw new Error("Não foi possível carregar o DRE gerencial");
   }
 
-  const receitasBrutas: LancamentoCategoria[] = [];
-  const despesasBrutas: LancamentoCategoria[] = [];
+  // A separação em três blocos é lógica pura e mora em calculo.ts, com teste.
+  // Aqui só a chamada: esta função é a que fala com o banco.
+  const { operacional, financeiro, movimentacao, resultado } =
+    agruparDrePorNatureza(data ?? []);
 
-  for (const agregado of data ?? []) {
-    const linha: LancamentoCategoria = {
-      categoriaId: agregado.categoria_id,
-      categoria: agregado.categoria,
-      valor: agregado.total,
-    };
-    if (agregado.tipo === "a_receber") {
-      receitasBrutas.push(linha);
-    } else {
-      despesasBrutas.push(linha);
-    }
-  }
-
-  const receitas = somarPorCategoria(receitasBrutas);
-  const despesas = somarPorCategoria(despesasBrutas);
-
-  const totalReceitas = totalCategorias(receitas);
-  const totalDespesas = totalCategorias(despesas);
-
-  return {
-    mes,
-    receitas,
-    despesas,
-    totalReceitas,
-    totalDespesas,
-    resultado: totalReceitas - totalDespesas,
-  };
+  return { mes, operacional, financeiro, movimentacao, resultado };
 }
+
 
 // =====================================================================
 // 3. Aging (idade dos vencimentos)

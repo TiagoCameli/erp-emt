@@ -61,6 +61,7 @@ import {
   posicaoBancaria,
   primeirosMesesDosCentros,
   serieDosCentros,
+  type DreGerencial,
 } from "@/modules/financeiro/relatorios/queries";
 
 interface RelatoriosPageProps {
@@ -168,6 +169,17 @@ async function ConteudoFluxoCaixa({
   );
 }
 
+/**
+ * O mês só está vazio se NENHUM dos três blocos do DRE tiver linha. Olhar só o
+ * operacional mostraria "sem lançamentos no mês" num mês em que a conta girou
+ * milhões em aplicação — o extrato teria movimento e a tela diria que não há.
+ */
+function temLancamentoNoDre(dre: DreGerencial): boolean {
+  return [dre.operacional, dre.financeiro, dre.movimentacao].some(
+    (bloco) => bloco.receitas.length > 0 || bloco.despesas.length > 0,
+  );
+}
+
 async function ConteudoDre({
   mes,
   podeVerLancamentos,
@@ -179,14 +191,17 @@ async function ConteudoDre({
   return (
     <>
       <GradeKpis>
+        {/* Receita e despesa OPERACIONAIS: é o que a obra fez. A aplicação
+            financeira da conta não entra, senão o cartão de receita mostraria a
+            varredura noturna do banco como faturamento. */}
         <KPICard
           titulo="Receitas"
-          valor={<MoneyText valor={dre.totalReceitas} />}
+          valor={<MoneyText valor={dre.operacional.totalReceitas} />}
           detalhe="Lançamentos a receber no mês"
         />
         <KPICard
           titulo="Despesas"
-          valor={<MoneyText valor={dre.totalDespesas} />}
+          valor={<MoneyText valor={dre.operacional.totalDespesas} />}
           detalhe="Lançamentos a pagar no mês"
         />
         <KPICard
@@ -195,7 +210,7 @@ async function ConteudoDre({
           detalhe={dre.resultado >= 0 ? "Superávit" : "Déficit"}
         />
       </GradeKpis>
-      {dre.receitas.length === 0 && dre.despesas.length === 0 ? (
+      {!temLancamentoNoDre(dre) ? (
         <EmptyState
           icone={BarChart3}
           titulo="Sem lançamentos no mês"

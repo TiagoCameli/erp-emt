@@ -197,3 +197,140 @@ export function somarPorCategoria(
 export function totalCategorias(linhas: DreLinha[]): number {
   return linhas.reduce((soma, l) => soma + l.valor, 0);
 }
+
+// =====================================================================
+// Os três blocos do DRE (por natureza da categoria)
+// =====================================================================
+
+/**
+ * Um bloco do DRE: entradas, saídas e o que sobra. Os três blocos têm a mesma
+ * forma porque a diferença entre eles não é estrutura, é significado.
+ */
+export interface BlocoDre {
+  receitas: DreLinha[];
+  despesas: DreLinha[];
+  totalReceitas: number;
+  totalDespesas: number;
+  resultado: number;
+}
+
+/** Uma linha agregada de `fn_rel_dre`, do jeito que o PostgREST devolve. */
+export interface LinhaDreAgregada {
+  tipo: string;
+  categoria_id: string | null;
+  categoria: string | null;
+  natureza: string;
+  total: number | string | null;
+}
+
+export interface DrePorNatureza {
+  operacional: BlocoDre;
+  financeiro: BlocoDre;
+  movimentacao: BlocoDre;
+  /** Operacional mais financeiro. A movimentação NÃO entra, de propósito. */
+  resultado: number;
+}
+
+const BLOCO_VAZIO: BlocoDre = {
+  receitas: [],
+  despesas: [],
+  totalReceitas: 0,
+  totalDespesas: 0,
+  resultado: 0,
+};
+
+/** Agrupa por categoria e fecha os totais de um bloco. */
+function montarBloco(
+  receitasBrutas: LancamentoCategoria[],
+  despesasBrutas: LancamentoCategoria[],
+): BlocoDre {
+  if (receitasBrutas.length === 0 && despesasBrutas.length === 0) {
+    return { ...BLOCO_VAZIO };
+  }
+  const receitas = somarPorCategoria(receitasBrutas);
+  const despesas = somarPorCategoria(despesasBrutas);
+  const totalReceitas = totalCategorias(receitas);
+  const totalDespesas = totalCategorias(despesas);
+  return {
+    receitas,
+    despesas,
+    totalReceitas,
+    totalDespesas,
+    resultado: totalReceitas - totalDespesas,
+  };
+}
+
+/** As três naturezas, na ordem em que aparecem no relatório. */
+const NATUREZAS = ["operacional", "financeira", "movimentacao"] as const;
+
+type Natureza = (typeof NATUREZAS)[number];
+
+/**
+ * Natureza desconhecida cai em operacional. É natureza nova no banco com código
+ * velho aqui: a linha não pode DESAPARECER por isso — sumir com despesa por
+ * causa de cadastro é exatamente o erro que esta separação existe para não
+ * cometer, ao contrário.
+ */
+function naturezaDe(valor: string): Natureza {
+  return (NATUREZAS as readonly string[]).includes(valor)
+    ? (valor as Natureza)
+    : "operacional";
+}
+
+/**
+ * Separa as linhas agregadas do DRE nos três blocos, pela natureza da categoria.
+ *
+ * O RESULTADO soma só operacional e financeiro. A movimentação (principal de
+ * aplicação, resgate, empréstimo) fica de fora: aplicar R$ 1 milhão do saldo à
+ * noite e resgatar na manhã seguinte movimenta R$ 2 milhões na conta e não gera
+ * um centavo de resultado. Enquanto entrava na soma, a varredura automática do
+ * banco respondia por 31,7% da "receita" de 2026 e 14,3% da "despesa".
+ */
+export function agruparDrePorNatureza(
+  linhas: readonly LinhaDreAgregada[],
+): DrePorNatureza {
+  const gavetas: Record<
+    Natureza,
+    { receitas: LancamentoCategoria[]; despesas: LancamentoCategoria[] }
+  > = {
+    operacional: { receitas: [], despesas: [] },
+    financeira: { receitas: [], despesas: [] },
+    movimentacao: { receitas: [], despesas: [] },
+  };
+
+  for (const linha of linhas) {
+    const gaveta = gavetas[naturezaDe(linha.natureza)];
+    const item: LancamentoCategoria = {
+      categoriaId: linha.categoria_id,
+      categoria: linha.categoria,
+      valor: linha.total,
+    };
+    // Só a_receber entra como receita. Qualquer outro tipo é saída: o `else`
+    // é de propósito, para tipo novo de lançamento não sumir da tela.
+    if (linha.tipo === "a_receber") {
+      gaveta.receitas.push(item);
+    } else {
+      gaveta.despesas.push(item);
+    }
+  }
+
+  const operacional = montarBloco(
+    gavetas.operacional.receitas,
+    gavetas.operacional.despesas,
+  );
+  const financeiro = montarBloco(
+    gavetas.financeira.receitas,
+    gavetas.financeira.despesas,
+  );
+  const movimentacao = montarBloco(
+    gavetas.movimentacao.receitas,
+    gavetas.movimentacao.despesas,
+  );
+
+  return {
+    operacional,
+    financeiro,
+    movimentacao,
+    resultado: operacional.resultado + financeiro.resultado,
+  };
+}

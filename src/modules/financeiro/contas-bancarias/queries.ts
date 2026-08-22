@@ -10,6 +10,17 @@ import type {
   TipoConta,
 } from "@/modules/financeiro/contas-bancarias/schemas";
 
+/**
+ * Movimento que a data de corte deixou FORA do saldo. Existe para a tela poder
+ * dizer isso em voz alta: uma data de corte que esconde pagamento em silêncio é
+ * um segundo plug, e o primeiro passou meses sem ninguém notar.
+ */
+export interface MovimentoAnteriorAoCorte {
+  parcelas: number;
+  recebido: number;
+  pago: number;
+}
+
 /** Linha da listagem de contas, já com o saldo atual calculado. */
 export interface ContaLista {
   id: string;
@@ -19,8 +30,12 @@ export interface ContaLista {
   conta: string | null;
   tipo: TipoConta;
   saldoInicial: number;
+  /** Data do extrato de onde `saldoInicial` foi lido. Null = conta tudo. */
+  saldoInicialData: string | null;
   /** Saldo inicial + movimento das parcelas pagas nesta conta. Ver listarContas. */
   saldoAtual: number;
+  /** Null quando não há corte, ou quando o corte não deixou nada de fora. */
+  movimentoAnteriorAoCorte: MovimentoAnteriorAoCorte | null;
   ativo: boolean;
 }
 
@@ -55,16 +70,26 @@ export interface ContaLista {
  * A listagem traz conta ativa e inativa, porque dinheiro parado em conta
  * desativada continua existindo; a RPC cobre as duas do mesmo jeito. O sinal e
  * a aritmética em centavos moram em ./saldo.ts, que tem teste.
+ *
+ * DATA DE CORTE: quando a conta tem `saldo_inicial_data`, a própria RPC só soma
+ * o movimento POSTERIOR àquela data, e o saldo passa a ser "o saldo do extrato
+ * naquele dia mais o que veio depois". Por isso o corte não aparece na
+ * aritmética daqui — ele já veio aplicado. O que esta função busca a mais é o
+ * movimento que ficou de fora, para a tela mostrar a escolha em vez de esconder.
  */
 export async function listarContas(): Promise<ContaLista[]> {
   const supabase = await createClient();
 
-  const [contasResultado, movimentosResultado] = await Promise.all([
+  const [contasResultado, movimentosResultado, anterioresResultado] =
+    await Promise.all([
     supabase
       .from("contas_bancarias")
-      .select("id, nome, banco, agencia, conta, tipo, saldo_inicial, ativo")
+      .select(
+        "id, nome, banco, agencia, conta, tipo, saldo_inicial, saldo_inicial_data, ativo",
+      )
       .order("nome"),
     supabase.rpc("fn_rel_posicao_bancaria"),
+    supabase.rpc("fn_rel_movimento_antes_do_corte"),
   ]);
 
   if (contasResultado.error) {
@@ -72,6 +97,18 @@ export async function listarContas(): Promise<ContaLista[]> {
   }
   if (movimentosResultado.error) {
     throw new Error("Não foi possível calcular o saldo das contas");
+  }
+  if (anterioresResultado.error) {
+    throw new Error("Não foi possível apurar o movimento anterior ao corte");
+  }
+
+  const anteriorPorConta = new Map<string, MovimentoAnteriorAoCorte>();
+  for (const linha of anterioresResultado.data ?? []) {
+    anteriorPorConta.set(linha.conta_bancaria_id, {
+      parcelas: linha.parcelas,
+      recebido: Number(linha.recebido),
+      pago: Number(linha.pago),
+    });
   }
 
   // Movimento por conta, em centavos, a partir das linhas já agregadas.
@@ -91,10 +128,12 @@ export async function listarContas(): Promise<ContaLista[]> {
     conta: conta.conta,
     tipo: conta.tipo as TipoConta,
     saldoInicial: Number(conta.saldo_inicial),
+    saldoInicialData: conta.saldo_inicial_data,
     saldoAtual: saldoAtualDaConta(
       conta.saldo_inicial,
       movimentoCentavos.get(conta.id) ?? 0,
     ),
+    movimentoAnteriorAoCorte: anteriorPorConta.get(conta.id) ?? null,
     ativo: conta.ativo,
   }));
 }

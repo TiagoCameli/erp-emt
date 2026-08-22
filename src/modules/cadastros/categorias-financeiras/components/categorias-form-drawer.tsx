@@ -25,7 +25,10 @@ import type {
   CategoriaPaiOpcao,
 } from "@/modules/cadastros/categorias-financeiras/queries";
 import {
+  AJUDA_NATUREZA_CATEGORIA_FINANCEIRA,
   categoriaFinanceiraSchema,
+  NATUREZAS_CATEGORIA_FINANCEIRA,
+  ROTULO_NATUREZA_CATEGORIA_FINANCEIRA,
   ROTULO_TIPO_CATEGORIA_FINANCEIRA,
   TIPOS_CATEGORIA_FINANCEIRA,
   type CategoriaFinanceiraInput,
@@ -66,7 +69,13 @@ export function CategoriasFormDrawer({
 
   const form = useForm<CategoriaFormInput, unknown, CategoriaFinanceiraInput>({
     resolver: zodResolver(categoriaFinanceiraSchema),
-    defaultValues: { nome: "", tipo: "despesa", paiId: null, ativo: true },
+    defaultValues: {
+      nome: "",
+      tipo: "despesa",
+      natureza: "operacional",
+      paiId: null,
+      ativo: true,
+    },
   });
 
   // Sincroniza o formulário sempre que o drawer abre ou troca de categoria.
@@ -76,15 +85,23 @@ export function CategoriasFormDrawer({
       form.reset({
         nome: categoria.nome,
         tipo: categoria.tipo,
+        natureza: categoria.natureza,
         paiId: categoria.paiId,
         ativo: categoria.ativo,
       });
     } else {
-      form.reset({ nome: "", tipo: "despesa", paiId: null, ativo: true });
+      form.reset({
+        nome: "",
+        tipo: "despesa",
+        natureza: "operacional",
+        paiId: null,
+        ativo: true,
+      });
     }
   }, [aberto, categoria, form]);
 
   const tipoSelecionado = form.watch("tipo");
+  const naturezaSelecionada = form.watch("natureza") ?? "operacional";
 
   // Pai só pode ser categoria raiz do mesmo tipo e nunca a própria categoria.
   const opcoesPai = React.useMemo(
@@ -184,6 +201,31 @@ export function CategoriasFormDrawer({
             placeholder="Combustível"
             autoFocus
             {...form.register("nome")}
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="categoria-natureza"
+          rotulo="Natureza"
+          ajuda={AJUDA_NATUREZA_CATEGORIA_FINANCEIRA[naturezaSelecionada]}
+          erro={form.formState.errors.natureza?.message}
+        >
+          <Combobox
+            valor={naturezaSelecionada}
+            onValorChange={(valor) =>
+              form.setValue(
+                "natureza",
+                valor as CategoriaFinanceiraInput["natureza"],
+                { shouldValidate: true },
+              )
+            }
+            opcoes={NATUREZAS_CATEGORIA_FINANCEIRA.map((natureza) => ({
+              valor: natureza,
+              rotulo: ROTULO_NATUREZA_CATEGORIA_FINANCEIRA[natureza],
+            }))}
+            placeholder="Escolha a natureza"
+            className="w-full"
+            id="categoria-natureza"
           />
         </CampoFormulario>
 
