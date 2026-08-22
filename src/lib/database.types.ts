@@ -2124,10 +2124,18 @@ export type Database = {
           observacoes: string | null;
           origem: string;
           origem_id: string | null;
+          retencao_cofins: number;
+          retencao_csll: number;
+          retencao_inss: number;
+          retencao_ir: number;
+          retencao_iss: number;
+          retencao_outras: number;
+          retencao_pis: number;
           status: string;
           tipo: string;
           updated_at: string;
           valor: number;
+          valor_bruto: number | null;
         };
         Insert: {
           categoria_id?: string | null;
@@ -2148,10 +2156,18 @@ export type Database = {
           observacoes?: string | null;
           origem: string;
           origem_id?: string | null;
+          retencao_cofins?: number;
+          retencao_csll?: number;
+          retencao_inss?: number;
+          retencao_ir?: number;
+          retencao_iss?: number;
+          retencao_outras?: number;
+          retencao_pis?: number;
           status?: string;
           tipo?: string;
           updated_at?: string;
           valor: number;
+          valor_bruto?: number | null;
         };
         Update: {
           categoria_id?: string | null;
@@ -2172,10 +2188,18 @@ export type Database = {
           observacoes?: string | null;
           origem?: string;
           origem_id?: string | null;
+          retencao_cofins?: number;
+          retencao_csll?: number;
+          retencao_inss?: number;
+          retencao_ir?: number;
+          retencao_iss?: number;
+          retencao_outras?: number;
+          retencao_pis?: number;
           status?: string;
           tipo?: string;
           updated_at?: string;
           valor?: number;
+          valor_bruto?: number | null;
         };
         Relationships: [
           {

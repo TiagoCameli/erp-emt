@@ -62,6 +62,7 @@ import type {
   LancamentoDetalhe,
 } from "@/modules/financeiro/lancamentos/queries";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
+import { RetencaoPainel } from "@/modules/financeiro/lancamentos/components/retencao-painel";
 import {
   lancamentoFormSchema,
   paraNumero,
@@ -178,6 +179,30 @@ const COLUNAS_RATEIO: ColunaItem[] = [
   },
 ];
 
+/**
+ * Retenção digitada para número; vazio (ou ausente) continua vazio, nunca zero.
+ *
+ * Aceita `undefined` porque o campo é opcional no schema do formulário: um
+ * lançamento salvo antes destes campos existirem não tem a chave, e transformar
+ * isso em zero mandaria sete zeros para o banco em toda edição de documento
+ * antigo.
+ */
+function retencaoOuUndefined(valor: string | undefined): number | undefined {
+  return valor ? paraNumero(valor) : undefined;
+}
+
+/**
+ * Dinheiro para o input: vazio quando não há valor, e nunca "0" para zero.
+ *
+ * O painel de retenção nasce fechado quando não há retenção, e quem decide isso é
+ * o campo estar vazio. Devolver "0,00" abriria o painel em todo lançamento
+ * antigo, com sete zeros na tela que ninguém digitou.
+ */
+function dinheiroOuVazio(valor: number | null | undefined): string {
+  if (valor === null || valor === undefined || valor === 0) return "";
+  return String(valor).replace(".", ",");
+}
+
 /** Valores iniciais do formulário, a partir de um lançamento ou em branco. */
 function valoresIniciais(
   lancamento: LancamentoDetalhe | null,
@@ -199,6 +224,17 @@ function valoresIniciais(
       dataVencimento: dataHojeISO(),
       numeroDocumento: "",
       observacoes: "",
+      // Retenção nasce vazia: a esmagadora maioria dos documentos não tem, e o
+      // painel só abre quando a pessoa clica. Vazio significa "não informado",
+      // não zero.
+      valorBruto: "",
+      retencaoIss: "",
+      retencaoPis: "",
+      retencaoCofins: "",
+      retencaoCsll: "",
+      retencaoIr: "",
+      retencaoInss: "",
+      retencaoOutras: "",
       parcelas: [parcelaVazia()],
       // Nasce com UMA linha: centro de custo é obrigatório (o banco recusa lista
       // vazia), então o campo tem de estar na tela desde o começo, não escondido
@@ -240,6 +276,16 @@ function valoresIniciais(
         : (lancamento.dataVencimento ?? ""),
     numeroDocumento: lancamento.numeroDocumento ?? "",
     observacoes: lancamento.observacoes ?? "",
+    // Retenção: string vazia quando não há, para o painel nascer fechado. Zero
+    // digitado e "não informado" são coisas diferentes na tela.
+    valorBruto: dinheiroOuVazio(lancamento.valorBruto),
+    retencaoIss: dinheiroOuVazio(lancamento.retencaoIss),
+    retencaoPis: dinheiroOuVazio(lancamento.retencaoPis),
+    retencaoCofins: dinheiroOuVazio(lancamento.retencaoCofins),
+    retencaoCsll: dinheiroOuVazio(lancamento.retencaoCsll),
+    retencaoIr: dinheiroOuVazio(lancamento.retencaoIr),
+    retencaoInss: dinheiroOuVazio(lancamento.retencaoInss),
+    retencaoOutras: dinheiroOuVazio(lancamento.retencaoOutras),
     parcelas:
       lancamento.parcelas.length > 0
         ? lancamento.parcelas.map((parcela) => ({
@@ -857,6 +903,20 @@ export function LancamentoFormDrawer({
       dataVencimento: vencimentoDoLancamento,
       numeroDocumento: valores.numeroDocumento || undefined,
       observacoes: valores.observacoes || undefined,
+      /**
+       * Retenção: campo vazio vira `undefined`, e não zero. A diferença importa,
+       * porque `valorBruto` undefined é o que diz ao banco "documento sem
+       * retenção" — mandar zero cairia na constraint (o líquido não pode ser
+       * maior que o bruto).
+       */
+      valorBruto: valores.valorBruto ? paraNumero(valores.valorBruto) : undefined,
+      retencaoIss: retencaoOuUndefined(valores.retencaoIss),
+      retencaoPis: retencaoOuUndefined(valores.retencaoPis),
+      retencaoCofins: retencaoOuUndefined(valores.retencaoCofins),
+      retencaoCsll: retencaoOuUndefined(valores.retencaoCsll),
+      retencaoIr: retencaoOuUndefined(valores.retencaoIr),
+      retencaoInss: retencaoOuUndefined(valores.retencaoInss),
+      retencaoOutras: retencaoOuUndefined(valores.retencaoOutras),
       parcelas: parcelasParaSalvar,
       /**
        * Com UM centro de custo a coluna de valor não está na tela, então ele
@@ -1101,6 +1161,33 @@ export function LancamentoFormDrawer({
             />
           </CampoFormulario>
         </LinhaCampos>
+
+        {/* Retenção só no a receber: aqui é a EMT que recebe e o pagador retém.
+            No a pagar quem reteria seria a EMT do fornecedor, que é outro assunto
+            e outra tela. */}
+        {aReceber ? (
+          <RetencaoPainel
+            valores={{
+              valorBruto: form.watch("valorBruto") ?? "",
+              retencaoIss: form.watch("retencaoIss") ?? "",
+              retencaoPis: form.watch("retencaoPis") ?? "",
+              retencaoCofins: form.watch("retencaoCofins") ?? "",
+              retencaoCsll: form.watch("retencaoCsll") ?? "",
+              retencaoIr: form.watch("retencaoIr") ?? "",
+              retencaoInss: form.watch("retencaoInss") ?? "",
+              retencaoOutras: form.watch("retencaoOutras") ?? "",
+            }}
+            onValorChange={(campo, valor) =>
+              form.setValue(campo, valor, { shouldValidate: false })
+            }
+            liquido={form.watch("valor") ?? ""}
+            onLiquidoChange={(valor) =>
+              form.setValue("valor", valor, { shouldValidate: true })
+            }
+            desabilitado={salvando}
+            erroBruto={form.formState.errors.valorBruto?.message}
+          />
+        ) : null}
 
         <CampoFormulario
           id="lan-descricao"

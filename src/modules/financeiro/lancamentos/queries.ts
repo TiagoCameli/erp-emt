@@ -387,7 +387,24 @@ export interface LancamentoDetalhe {
   categoriaId: string | null;
   categoriaNome: string | null;
   descricao: string;
+  /**
+   * O que TRANSITA: com retenção, é o líquido (o que entra na conta). Sem
+   * retenção, é o valor cheio. É este número que as parcelas somam, que o rateio
+   * divide e que move o saldo bancário.
+   */
   valor: number;
+  /**
+   * Valor faturado antes das retenções na fonte. Null = documento sem retenção.
+   * A diferença contra `valor` é imposto que o PAGADOR recolheu, não desconto.
+   */
+  valorBruto: number | null;
+  retencaoIss: number;
+  retencaoPis: number;
+  retencaoCofins: number;
+  retencaoCsll: number;
+  retencaoIr: number;
+  retencaoInss: number;
+  retencaoOutras: number;
   status: StatusLancamento;
   /** Mês de referência (dia 1). Obrigatório: define em que mês o custo entra. */
   mesCompetencia: string;
@@ -1302,6 +1319,8 @@ export async function buscarLancamento(
        cliente_id, categoria_id, forma_pagamento_id, condicao_pagamento_id,
        descricao, observacoes, valor, status, mes_competencia, data_compra,
        created_at, data_vencimento,
+       valor_bruto, retencao_iss, retencao_pis, retencao_cofins,
+       retencao_csll, retencao_ir, retencao_inss, retencao_outras,
        categorias_financeiras(nome),
        condicoes_pagamento(descricao),
        formas_pagamento(nome, tipo),
@@ -1425,6 +1444,14 @@ export async function buscarLancamento(
     categoriaNome: data.categorias_financeiras?.nome ?? null,
     descricao: data.descricao,
     valor: data.valor,
+    valorBruto: data.valor_bruto,
+    retencaoIss: data.retencao_iss,
+    retencaoPis: data.retencao_pis,
+    retencaoCofins: data.retencao_cofins,
+    retencaoCsll: data.retencao_csll,
+    retencaoIr: data.retencao_ir,
+    retencaoInss: data.retencao_inss,
+    retencaoOutras: data.retencao_outras,
     status: data.status as StatusLancamento,
     mesCompetencia: data.mes_competencia,
     dataCompra: data.data_compra,

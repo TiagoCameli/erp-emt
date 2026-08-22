@@ -164,6 +164,25 @@ export interface LancamentoDetalheViewProps {
  * diferente de 'manual' (ex: vindos de uma OC) ou com alguma parcela já
  * aprovada ou paga: aprovado se edita desaprovando primeiro.
  */
+/**
+ * As retenções na ordem da nota fiscal, com o rótulo que o papel usa. Lista
+ * própria e não `CAMPOS_RETENCAO` porque aqui as chaves são as do
+ * `LancamentoDetalhe` (camelCase), e amarrar as duas faria uma renomeação de
+ * campo do formulário quebrar a leitura do detalhe.
+ */
+const RETENCOES_DO_DETALHE = [
+  { campo: "retencaoIss", rotulo: "ISS retido" },
+  { campo: "retencaoPis", rotulo: "PIS retido" },
+  { campo: "retencaoCofins", rotulo: "COFINS retido" },
+  { campo: "retencaoCsll", rotulo: "CSLL retido" },
+  { campo: "retencaoIr", rotulo: "IR retido" },
+  { campo: "retencaoInss", rotulo: "INSS retido" },
+  { campo: "retencaoOutras", rotulo: "Outras retenções" },
+] as const satisfies readonly {
+  campo: keyof LancamentoDetalhe;
+  rotulo: string;
+}[];
+
 export function LancamentoDetalheView({
   lancamento,
   trilha,
@@ -536,11 +555,56 @@ export function LancamentoDetalheView({
                   <CelulaVazia />
                 )}
               </Dado>
-              <Dado rotulo="Valor">
+              <Dado
+                rotulo={
+                  lancamento.valorBruto === null ? "Valor" : "Valor líquido"
+                }
+              >
                 <MoneyText valor={lancamento.valor} className="font-semibold" />
               </Dado>
             </div>
           </Secao>
+
+          {/* A retenção só aparece quando existe. Num documento sem retenção uma
+              seção com sete zeros seria ruído, e é a exceção que precisa ser
+              vista: o líquido da linha acima difere do faturado, e sem esta
+              seção não há nada na tela explicando por quê. */}
+          {lancamento.valorBruto !== null ? (
+            <Secao titulo="Retenção na fonte">
+              <div className="flex flex-col gap-1.5 text-detalhe">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Valor bruto</span>
+                  <MoneyText valor={lancamento.valorBruto} />
+                </div>
+                {RETENCOES_DO_DETALHE.map(({ campo, rotulo }) => {
+                  const valor = lancamento[campo];
+                  if (valor === 0) return null;
+                  return (
+                    <div key={campo} className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">{rotulo}</span>
+                      <span className="tabular-nums text-status-rejeitado">
+                        {"\u2212 "}
+                        {formatarBRL(valor)}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-between gap-3 border-t border-border pt-1.5">
+                  <span className="font-medium text-foreground">
+                    Líquido recebido
+                  </span>
+                  <MoneyText
+                    valor={lancamento.valor}
+                    className="font-semibold"
+                  />
+                </div>
+                <p className="text-legenda text-muted-foreground">
+                  Retenção é imposto que o pagador recolheu, não desconto: o
+                  faturado continua sendo o bruto.
+                </p>
+              </div>
+            </Secao>
+          ) : null}
 
           <Secao titulo="Conta bancária do pagamento">
             {/* Passo de revisão: sem conta escolhida a parcela não entra na fila

@@ -65,6 +65,19 @@ function dadosParaRpc(dados: LancamentoInput): Json {
      */
     numero_documento: dados.numeroDocumento ?? null,
     observacoes: dados.observacoes ?? null,
+    /**
+     * Retenção na fonte. `valor_bruto` null é o documento sem retenção, que é a
+     * esmagadora maioria; as retenções vão como zero e não como null porque a
+     * coluna é `not null default 0` e mandar null quebraria o insert.
+     */
+    valor_bruto: dados.valorBruto ?? null,
+    retencao_iss: dados.retencaoIss ?? 0,
+    retencao_pis: dados.retencaoPis ?? 0,
+    retencao_cofins: dados.retencaoCofins ?? 0,
+    retencao_csll: dados.retencaoCsll ?? 0,
+    retencao_ir: dados.retencaoIr ?? 0,
+    retencao_inss: dados.retencaoInss ?? 0,
+    retencao_outras: dados.retencaoOutras ?? 0,
   };
 }
 
