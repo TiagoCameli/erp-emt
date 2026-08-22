@@ -11,6 +11,7 @@ import {
   ROTULO_BANCO,
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
+import { formatarData } from "@/lib/formatadores";
 import { drillContaBancaria } from "@/modules/financeiro/relatorios/drill";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { PosicaoBancaria } from "../queries";
@@ -85,10 +86,25 @@ export function PosicaoBancariaTabela({
                 {rotuloBanco(conta.banco)}
               </TableCell>
               <TableCell className="py-2 text-right">
-                <MoneyText
-                  valor={conta.saldoInicial}
-                  className="text-detalhe"
-                />
+                <div className="flex flex-col items-end gap-0.5">
+                  <MoneyText
+                    valor={conta.saldoInicial}
+                    className="text-detalhe"
+                  />
+                  {/* Com data de corte, "Saldo inicial" não é a abertura da conta
+                      e as colunas ao lado não são o histórico todo: as três
+                      falam de um período. Certo na aritmética e mudo sobre o
+                      recorte seria a mesma armadilha do plug antigo, que também
+                      era um número sem data. */}
+                  {conta.saldoInicialData ? (
+                    <span
+                      className="text-legenda text-muted-foreground"
+                      title={`Saldo lido do extrato de ${formatarData(conta.saldoInicialData)}. As colunas ao lado somam só o movimento posterior a essa data.`}
+                    >
+                      em {formatarData(conta.saldoInicialData)}
+                    </span>
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell className="py-2 text-right">
                 <MoneyText valor={conta.entradas} className="text-detalhe" />
