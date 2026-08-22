@@ -126,6 +126,7 @@ function lancamento(troca: Partial<LancamentoLista> = {}): LancamentoLista {
     origem: "manual",
     descricao: "Combustível julho",
     categoriaNome: "Combustível",
+    centroCustoRotulo: "BR-364 Lote 9",
     fornecedorNome: "GUERRA IMPLEMENTOS RODOVIARIOS S.A",
     valor: 1000,
     dataVencimento: "2026-08-10",

@@ -13,6 +13,7 @@ function parcela(
     numeroParcela: 1,
     descricao: "Teste",
     categoriaNome: "Teste",
+    centroCustoRotulo: "BR-364 Lote 9",
     fornecedorNome: "Fornecedor",
     contaNome: "Conta",
     dataPagamento: "2026-08-18",

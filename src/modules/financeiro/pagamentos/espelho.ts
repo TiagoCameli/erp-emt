@@ -52,6 +52,12 @@ export interface EspelhoPagamento {
   lancamentoObservacoes: string | null;
   mesCompetencia: string | null;
   fornecedorNome: string | null;
+  /**
+   * Quem PAGA, no lançamento a receber. O a pagar tem fornecedor, o a receber tem
+   * cliente, e são colunas diferentes — sem esta, o detalhe do recebimento
+   * mostrava "Sem fornecedor" no lugar do nome de quem está pagando.
+   */
+  clienteNome: string | null;
   categoriaNome: string | null;
   formaPagamentoNome: string | null;
   rateios: EspelhoPagamentoRateio[];
@@ -106,6 +112,7 @@ export interface LinhaEspelhoPagamento {
     mes_competencia: string | null;
     observacoes: string | null;
     fornecedores: { razao_social: string } | null;
+    clientes: { nome: string; nome_fantasia: string | null } | null;
     categorias_financeiras: { nome: string } | null;
     formas_pagamento: { nome: string } | null;
     lancamento_rateios: {
@@ -183,6 +190,8 @@ export function montarEspelhoPagamento(
     lancamentoObservacoes: pai?.observacoes ?? null,
     mesCompetencia: pai?.mes_competencia ?? null,
     fornecedorNome: pai?.fornecedores?.razao_social ?? null,
+    clienteNome:
+      pai?.clientes?.nome_fantasia ?? pai?.clientes?.nome ?? null,
     categoriaNome: pai?.categorias_financeiras?.nome ?? null,
     formaPagamentoNome: pai?.formas_pagamento?.nome ?? null,
     rateios,
@@ -241,6 +250,7 @@ export async function buscarPagamentosParaEspelho(
          lancamentos(id, numero, tipo, descricao, valor, status, mes_competencia,
            observacoes,
            fornecedores(razao_social),
+           clientes(nome, nome_fantasia),
            categorias_financeiras(nome),
            formas_pagamento(nome),
            lancamento_rateios(valor, centros_custo(nome, codigo)),

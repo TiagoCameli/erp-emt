@@ -211,6 +211,26 @@ export function montarColunas(
     ),
   },
   {
+    // Depois da descrição e antes do valor: "o que é" e "onde cai" se leem
+    // juntos, e o valor vem em seguida já sabendo a que obra pertence.
+    accessorKey: "centroCustoRotulo",
+    header: "Centro de custo",
+    size: 190,
+    // Não ordena: o nome vem de embed de rateio e esta lista ordena no SERVIDOR
+    // sobre o filtro inteiro. A seta ordenaria só as 25 linhas da página, o que
+    // numa lista de milhares responde errado com cara de certo.
+    enableSorting: false,
+    meta: { rotulo: "Centro de custo" },
+    cell: ({ row }) =>
+      row.original.centroCustoRotulo ? (
+        <span title={row.original.centroCustoNomes}>
+          {row.original.centroCustoRotulo}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      ),
+  },
+  {
     accessorKey: "valor",
     header: "Valor",
     meta: { alinharDireita: true },

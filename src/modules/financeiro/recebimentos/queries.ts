@@ -3,6 +3,10 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
+  nomesDoRateio,
+  rotuloCentroCusto,
+} from "@/modules/financeiro/_shared/centro-de-custo";
+import {
   ROTULO_BANCO,
   STATUS_PARCELA_ABERTA,
   type BancoConta,
@@ -44,6 +48,13 @@ export interface ParcelaAReceber {
   dataVencimento: string | null;
   valor: number;
   status: StatusParcela;
+  /**
+   * Centro de custo do lançamento: o nome quando é um, "N centros de custo"
+   * quando rateia. Mesma regra de Pagamentos e Lançamentos
+   * (`_shared/centro-de-custo.ts`): as três telas falam do mesmo lançamento.
+   */
+  centroCustoRotulo: string | null;
+  centroCustoNomes?: string;
 }
 
 /** Parcela já recebida, para a aba "Recebidos". */
@@ -67,6 +78,9 @@ export interface ParcelaRecebida {
   juros: number;
   /** Valor menos desconto mais juros: o que ENTROU na conta bancária. */
   valorLiquido: number;
+  /** Centro de custo do lançamento, pela regra de `_shared/centro-de-custo.ts`. */
+  centroCustoRotulo: string | null;
+  centroCustoNomes?: string;
 }
 
 /**
@@ -133,6 +147,7 @@ interface LinhaAReceber {
     cliente_id: string | null;
     categorias_financeiras: { nome: string } | null;
     clientes: { nome: string; nome_fantasia: string | null } | null;
+    lancamento_rateios: { centros_custo: { nome: string } | null }[] | null;
   } | null;
 }
 
@@ -150,7 +165,8 @@ const SELECT_A_RECEBER = `id, numero_parcela, valor, status, data_vencimento,
    lancamentos!inner(
      numero, descricao, numero_documento, cliente_id, tipo, status,
      categorias_financeiras(nome),
-     clientes(nome, nome_fantasia)
+     clientes(nome, nome_fantasia),
+     lancamento_rateios(centros_custo(nome))
    )`;
 
 const SELECT_RECEBIDA = `id, numero_parcela, valor, status, data_vencimento,
@@ -160,8 +176,18 @@ const SELECT_RECEBIDA = `id, numero_parcela, valor, status, data_vencimento,
    lancamentos!inner(
      numero, descricao, numero_documento, cliente_id, tipo, status, categoria_id,
      categorias_financeiras(nome),
-     clientes(nome, nome_fantasia)
+     clientes(nome, nome_fantasia),
+     lancamento_rateios(centros_custo(nome))
    )`;
+
+/** O rateio do embed no formato que `rotuloCentroCusto` espera. */
+function rateiosDoEmbed(
+  lancamento: { lancamento_rateios?: { centros_custo: { nome: string } | null }[] | null } | null,
+): { centroNome: string | null }[] {
+  return (lancamento?.lancamento_rateios ?? []).map((rateio) => ({
+    centroNome: rateio.centros_custo?.nome ?? null,
+  }));
+}
 
 /** Converte o status cru do banco num StatusParcela conhecido. */
 function comoStatusParcela(status: string): StatusParcela {
@@ -196,6 +222,8 @@ function comum(parcela: LinhaAReceber) {
       : "-",
     dataVencimento: parcela.data_vencimento,
     valor: parcela.valor,
+    centroCustoRotulo: rotuloCentroCusto(rateiosDoEmbed(parcela.lancamentos)),
+    centroCustoNomes: nomesDoRateio(rateiosDoEmbed(parcela.lancamentos)),
   };
 }
 

@@ -105,6 +105,7 @@ function pagamentoFixture(
     lancamentoObservacoes: null,
     mesCompetencia: "2026-07-01",
     fornecedorNome: "João Santiago de Oliveira",
+    clienteNome: null,
     categoriaNome: "Salário Mão de Obra",
     formaPagamentoNome: "PIX",
     rateios: [],

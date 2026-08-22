@@ -178,6 +178,37 @@ function rotuloParcela(
 }
 
 /**
+ * A coluna de centro de custo, igual nas duas abas.
+ *
+ * Uma definição para as duas tabelas de propósito: "a pagar" e "pagas" mostram o
+ * mesmo lançamento, e duas cópias da coluna divergiriam em largura, rótulo ou
+ * regra no primeiro ajuste feito de um lado só. A regra do texto mora em
+ * `_shared/centro-de-custo.ts`, compartilhada também com Lançamentos e
+ * Recebimentos.
+ */
+function colunaCentroCusto<
+  T extends { centroCustoRotulo?: string | null; centroCustoNomes?: string },
+>(): ColumnDef<T, unknown> {
+  return {
+    id: "centroCusto",
+    header: "Centro de custo",
+    size: 180,
+    // Não ordena: o nome vem de embed de rateio e a lista é paginada no
+    // servidor. A seta ordenaria só a página visível.
+    enableSorting: false,
+    meta: { rotulo: "Centro de custo" },
+    cell: ({ row }) =>
+      row.original.centroCustoRotulo ? (
+        <span title={row.original.centroCustoNomes}>
+          {row.original.centroCustoRotulo}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      ),
+  };
+}
+
+/**
  * O que o estorno vai APAGAR desta parcela, em texto, ou null quando não há
  * nada a apagar.
  *
@@ -730,6 +761,7 @@ export function PagamentosCliente({
         header: "Fornecedor",
         size: 170,
       },
+      colunaCentroCusto(),
       {
         accessorKey: "dataVencimento",
         header: "Vencimento",
@@ -854,6 +886,7 @@ export function PagamentosCliente({
         header: "Fornecedor",
         size: 170,
       },
+      colunaCentroCusto(),
       {
         accessorKey: "contaNome",
         header: "Conta",

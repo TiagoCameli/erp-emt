@@ -34,6 +34,7 @@ import {
   STATUS_PARCELA,
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
+import { DetalheParcelaDrawer } from "@/modules/financeiro/pagamentos/components/detalhe-parcela-drawer";
 import { LancamentoFormDrawer } from "@/modules/financeiro/lancamentos/components/lancamento-form-drawer";
 import type {
   CategoriaOpcao,
@@ -78,6 +79,33 @@ export interface ValoresFiltrosRecebidos extends ValoresFiltrosAReceber {
   categoria: string;
   recDe: string;
   recAte: string;
+}
+
+/**
+ * A coluna de centro de custo, igual nas duas abas de Recebimentos.
+ *
+ * A regra do texto (nome quando é um, contagem quando são vários) mora em
+ * `_shared/centro-de-custo.ts` e é a mesma de Pagamentos e Lançamentos: as três
+ * telas descrevem o mesmo lançamento e não podem discordar.
+ */
+function colunaCentroCusto<
+  T extends { centroCustoRotulo?: string | null; centroCustoNomes?: string },
+>(): ColumnDef<T, unknown> {
+  return {
+    id: "centroCusto",
+    header: "Centro de custo",
+    size: 180,
+    enableSorting: false,
+    meta: { rotulo: "Centro de custo" },
+    cell: ({ row }) =>
+      row.original.centroCustoRotulo ? (
+        <span title={row.original.centroCustoNomes}>
+          {row.original.centroCustoRotulo}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      ),
+  };
 }
 
 export interface RecebimentosClienteProps {
@@ -203,6 +231,22 @@ export function RecebimentosCliente({
   condicoesPagamento,
 }: RecebimentosClienteProps) {
   const router = useRouter();
+  /**
+   * Painel de detalhe do recebimento, aberto ao clicar na linha.
+   *
+   * Guarda só o ID e carrega sob demanda: a listagem traz centenas de linhas e
+   * puxar rateio, anexo e trilha de todas para exibir uma seria pagar o custo
+   * inteiro pelo caso raro. Mesmo desenho de Pagamentos — é o MESMO painel
+   * canônico, que passou a servir os dois lados.
+   */
+  const [detalheId, setDetalheId] = React.useState<string | null>(null);
+  const [detalheAberto, setDetalheAberto] = React.useState(false);
+
+  function abrirDetalhe(id: string) {
+    setDetalheId(id);
+    setDetalheAberto(true);
+  }
+
   const { setMuitos, limparTodos } = useFiltrosUrl();
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
@@ -490,6 +534,7 @@ export function RecebimentosCliente({
         ),
       },
       { accessorKey: "clienteNome", header: "Quem paga", size: 170 },
+      colunaCentroCusto(),
       {
         accessorKey: "contaBancariaNome",
         header: "Entra na conta",
@@ -718,6 +763,7 @@ export function RecebimentosCliente({
         ),
       },
       { accessorKey: "clienteNome", header: "Quem pagou", size: 170 },
+      colunaCentroCusto(),
       {
         accessorKey: "contaBancariaNome",
         header: "Entrou na conta",
@@ -830,6 +876,7 @@ export function RecebimentosCliente({
               idTabela="financeiro.recebimentos.a-receber"
               columns={colunasAReceber}
               data={aReceberFiltradas}
+              onRowClick={(parcela) => abrirDetalhe(parcela.id)}
               filtros={filtrosAReceber}
               selecao={{
                 idDaLinha: (parcela: ParcelaAReceber) => parcela.id,
@@ -865,6 +912,7 @@ export function RecebimentosCliente({
             idTabela="financeiro.recebimentos.recebidos"
             columns={colunasRecebidas}
             data={linhasRecebidas}
+            onRowClick={(parcela) => abrirDetalhe(parcela.id)}
             filtros={filtrosRecebidosBarra}
             total={totalRegistros}
             pageIndex={paginacao.pageIndex}
@@ -917,6 +965,22 @@ export function RecebimentosCliente({
           onSalvo={() => router.refresh()}
         />
       ) : null}
+
+      {/*
+        O MESMO painel de Pagamentos. Ele lê o tipo do lançamento e se ajusta:
+        "Entrou na conta" no lugar de "Saiu da conta", "Quem paga" no lugar de
+        "Fornecedor", e nada de pagar nem de devolver para aprovação, que são
+        ações do fluxo de pagamento. Duplicar um painel de recebimento seria
+        criar um segundo lugar para o rateio, a trilha e os anexos divergirem.
+      */}
+      <DetalheParcelaDrawer
+        aberto={detalheAberto}
+        onAbertoChange={setDetalheAberto}
+        parcelaId={detalheId}
+        podeAnexar={podeReceber}
+        podePagar={false}
+        onMudou={() => router.refresh()}
+      />
     </div>
   );
 }

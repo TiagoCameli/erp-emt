@@ -49,6 +49,7 @@ function espelho(status: StatusParcela): EspelhoPagamento {
     lancamentoObservacoes: null,
     mesCompetencia: "2026-08-01",
     fornecedorNome: "NISSEY CAMINHOES LTDA",
+    clienteNome: null,
     categoriaNome: "Aquisição de Equipamento",
     formaPagamentoNome: "Cartão de crédito",
     rateios: [],
@@ -215,5 +216,78 @@ describe("DetalheParcelaDrawer, os ajustes do pagamento", () => {
     const texto = (document.body.textContent ?? "").replace(/ /g, " ");
     // O que saiu da conta, com os três ajustes dentro.
     expect(texto).toContain("R$ 29.646,40");
+  });
+});
+
+describe("DetalheParcelaDrawer no lançamento A RECEBER", () => {
+  /** O mesmo painel, com o tipo do lançamento invertido. */
+  function comoReceber(status: StatusParcela) {
+    return {
+      ...espelho(status),
+      lancamentoTipo: "a_receber" as const,
+      clienteNome: "DEPART. NAC. INFRA ESTRUTURA",
+      fornecedorNome: null,
+      dataPagamento: status === "pago" ? "2026-08-20" : null,
+    };
+  }
+
+  async function abrirReceber(status: StatusParcela) {
+    vi.mocked(detalheDaParcela).mockResolvedValue({
+      espelho: comoReceber(status),
+      anexos: [],
+      trilha: [],
+    });
+    render(
+      <DetalheParcelaDrawer
+        aberto
+        onAbertoChange={() => {}}
+        parcelaId={ID}
+        podeAnexar={false}
+        // Mesmo com as duas permissões ligadas, as ações de pagamento não
+        // aparecem num recebimento: elas são de outro fluxo.
+        podePagar
+        podeDesaprovar
+        onPagar={() => {}}
+      />,
+    );
+    await screen.findByText("LAN-2026-4839 parcela 3");
+  }
+
+  it("o dinheiro ENTRA: o rótulo não diz que saiu", async () => {
+    await abrirReceber("pago");
+
+    expect(screen.getByText("Entrou na conta")).toBeInTheDocument();
+    expect(screen.queryByText("Saiu da conta")).not.toBeInTheDocument();
+    expect(screen.getByText("Recebido em")).toBeInTheDocument();
+    expect(screen.queryByText("Pago em")).not.toBeInTheDocument();
+  });
+
+  it("mostra QUEM PAGA, e não um fornecedor que não existe", async () => {
+    await abrirReceber("pago");
+
+    // Antes de 22/08/2026 o espelho só lia `fornecedores`, então o recebimento
+    // exibia "Sem fornecedor" no lugar do nome de quem estava pagando.
+    expect(screen.getByText("Quem paga")).toBeInTheDocument();
+    expect(
+      screen.getByText("DEPART. NAC. INFRA ESTRUTURA"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Fornecedor")).not.toBeInTheDocument();
+  });
+
+  it("não oferece pagar nem devolver para aprovação", async () => {
+    await abrirReceber("aprovado");
+
+    expect(
+      screen.queryByRole("button", { name: "Pagar esta parcela" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Voltar para aprovação" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("a seção se chama Recebimento quando já entrou", async () => {
+    await abrirReceber("pago");
+    expect(screen.getByText("Recebimento")).toBeInTheDocument();
+    expect(screen.queryByText("Pagamento")).not.toBeInTheDocument();
   });
 });
