@@ -2933,3 +2933,46 @@ três nascem com `forma_pagamento_id` NULO no cabeçalho, então nunca estiveram
 definição dinheiro e cartão): a invariante "tem forma no cabeçalho ⟺ tem bloco" vale trivialmente para
 elas. Medido no banco: das 884 parcelas sem bloco, ZERO cairiam em diretos.
 
+
+## 24/08/2026 — O filtro de centro dos relatórios oferece só RAIZ
+
+O dono abriu o seletor de "Centros do custo" e viu 73 opções, com cada equipamento solto:
+"Assoprador", "Bobcat MC110C - 01", "Caminhão Caçamba 2...". O pedido foi juntar tudo num centro só,
+"manutenção de equipamentos".
+
+**O cadastro já estava certo.** Medido no banco: 12 raízes ativas e 61 etapas, e as 61 etapas são um
+equipamento cada, todas penduradas na raiz `Manutenção/Documentação de Equipamentos` (tipo
+`manutencao`, `sistema = true`). É exatamente o modelo do CLAUDE.md — "Manutenção é um centro com cada
+equipamento como etapa". Não havia nada para mover.
+
+**O defeito era o seletor, e ele veio de reusar a lista errada.** O filtro dos dois relatórios de
+centro (Custo por centro de custo e Custo x receita) chamava `listarCentrosCusto()`, que é a lista do
+RATEIO. O rateio precisa de todos os níveis, porque o custo é apontado na etapa. Mas **todo relatório
+de centro agrupa na raiz** (decisão de 20/08, `fn_centro_custo_subarvore`), então oferecer etapa num
+filtro que agrupa na raiz mente na tela: escolher `CAMINHÃO BOIADEIRO/MIILHO - L1620` devolvia uma
+linha chamada `Manutenção/Documentação de Equipamentos` com R$ 1.757,95. Sessenta e uma opções
+diferentes voltavam vestindo o mesmo nome.
+
+Nasceu `listarCentrosCustoRaiz()` em `relatorios/queries.ts`, separada da do rateio de propósito. A
+regra para daqui pra frente: **filtro de relatório que agrupa na raiz oferece raiz.**
+
+**A troca não esconde dinheiro** — e isso é o que precisava de prova, não de opinião. As 12 raízes
+ativas dão o mesmo total que não filtrar nada: R$ 53.089.404,61 dos dois jeitos. Nenhum centro inativo
+tem rateio (a raiz de obra inativa tem zero), então filtrar por `ativo` também não perde nada. E
+escolher a raiz de manutenção traz R$ 2.352.419,95, contra R$ 2.322.017,25 do nó raiz sozinho: a
+diferença de R$ 30.402,70 é o custo das 24 linhas apontadas direto em equipamento, e ela aparecer é a
+linha de controle de que a subárvore é real. As três provas estão em
+`supabase/provas/filtro_centro_raiz.sql`.
+
+**Filtrar por etapa continua valendo na URL.** Quem valida é `filtros-*.ts` e quem expande a subárvore
+é o banco, então link antigo segue funcionando; e o `Combobox` canônico já rotula o id que não está na
+lista em vez de imprimir UUID. O que mudou é só o que o seletor OFERECE.
+
+**Sem migration.** Nenhuma tabela, função ou dado mudou: o conserto é uma query de leitura e duas
+linhas de ligação na página. A prova é read-only e pode rodar quantas vezes quiser.
+
+**O que fica em aberto:** custo POR equipamento não existe em relatório nenhum, porque os dois agrupam
+na raiz. Hoje isso quase não tem dado (R$ 30.402,70 de R$ 2,35 mi em manutenção estão apontados em
+equipamento; o resto vai direto na raiz), então não vale uma tela nova sem pedido. No dia em que a
+manutenção passar a apontar por equipamento, o caminho é um relatório que agrupe no NÍVEL ESCOLHIDO, e
+não afrouxar o filtro de volta.
