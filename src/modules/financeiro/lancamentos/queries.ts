@@ -515,12 +515,14 @@ export interface ClienteOpcao {
   nome: string;
 }
 
-/** Opção de centro de custo para o select do rateio. */
-export interface CentroCustoOpcao {
-  id: string;
-  nome: string;
-  codigo: string | null;
-}
+// Centro de custo vive em `_shared`: a mesma consulta e o mesmo tipo estavam
+// duplicados aqui e em outro módulo, e agora a hierarquia (pai e tipo) entrou
+// neles para a escolha em dois passos. Duas cópias divergiriam na primeira
+// mudança.
+export {
+  listarCentrosCusto,
+  type CentroCustoOpcao,
+} from "@/modules/_shared/centro-custo/queries";
 
 /** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
 function nomeFornecedor(fornecedor: {
@@ -1573,27 +1575,6 @@ export async function listarClientes(): Promise<ClienteOpcao[]> {
   }));
 }
 
-/** Centros de custo ativos para o rateio, em ordem de código. */
-export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("centros_custo")
-    .select("id, nome, codigo")
-    .eq("ativo", true)
-    .order("codigo", { ascending: true, nullsFirst: false })
-    .order("nome");
-
-  if (error) {
-    throw new Error("Não foi possível carregar os centros de custo");
-  }
-
-  return (data ?? []).map((centro) => ({
-    id: centro.id,
-    nome: centro.nome,
-    codigo: centro.codigo,
-  }));
-}
 
 /**
  * Trilha de auditoria do lançamento: lê o audit_log só do próprio lançamento
