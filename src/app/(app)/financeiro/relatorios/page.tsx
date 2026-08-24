@@ -12,7 +12,6 @@ import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
-  listarCentrosCusto,
   listarFormasPagamento,
   listarFornecedores,
 } from "@/modules/financeiro/lancamentos/queries";
@@ -69,6 +68,7 @@ import {
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
+  listarCentrosCustoRaiz,
   listarFornecedoresComLancamentos,
   mesCorrente,
   mesesDeCompetencia,
@@ -830,7 +830,7 @@ export default async function RelatoriosPage({
   const opcoesCustoCc =
     relatorio === "custo-cc"
       ? await Promise.all([
-          listarCentrosCusto(),
+          listarCentrosCustoRaiz(),
           listarCategorias(),
           listarFornecedores(),
           listarFormasPagamento(),
@@ -847,7 +847,7 @@ export default async function RelatoriosPage({
   const mesesDisponiveis =
     relatorio === "custo-receita" ? await mesesDeCompetencia() : [];
   const centrosParaCustoReceita =
-    relatorio === "custo-receita" ? await listarCentrosCusto() : null;
+    relatorio === "custo-receita" ? await listarCentrosCustoRaiz() : null;
   const {
     filtros: filtrosCustoReceita,
     mesesEfetivos: mesesCustoReceita,

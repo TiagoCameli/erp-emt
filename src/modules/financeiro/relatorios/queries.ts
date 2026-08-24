@@ -11,6 +11,7 @@ import {
   corGrupo,
   type CorGrupo,
 } from "@/modules/cadastros/_shared/insumo-grupos";
+import type { CentroCustoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 import {
   agregarAging,
@@ -634,6 +635,52 @@ export async function serieDosCentros(
 // =====================================================================
 // 5b. Custo x receita por centro de custo
 // =====================================================================
+
+/**
+ * Só os centros de custo RAIZ ativos, em ordem de código.
+ *
+ * É a lista dos FILTROS de relatório, e ela é diferente da lista do rateio de
+ * propósito. O rateio precisa de todos os níveis, porque o custo é apontado na
+ * etapa; mas todo relatório de centro agrupa na RAIZ, subindo a árvore antes de
+ * somar.
+ *
+ * Oferecer etapa num filtro que agrupa na raiz mente na tela. Medido em
+ * 24/08/2026: o cadastro tem 12 raízes ativas e 61 etapas (um equipamento cada,
+ * todas sob "Manutenção/Documentação de Equipamentos"), então o seletor mostrava
+ * 73 opções -- e escolher "CAMINHÃO BOIADEIRO/MIILHO - L1620" devolvia uma linha
+ * chamada "Manutenção/Documentação de Equipamentos", com R$ 1.757,95. Sessenta e
+ * uma opções diferentes voltavam vestindo o mesmo nome.
+ *
+ * A troca não esconde dinheiro: as 12 raízes ativas dão o mesmo total que não
+ * filtrar nada (R$ 53.089.404,61 dos dois jeitos) e nenhum centro inativo tem
+ * rateio. A prova está em `supabase/provas/filtro_centro_raiz.sql`.
+ *
+ * Filtrar por etapa continua VALENDO na URL: quem valida é `filtros-*.ts` e quem
+ * expande a subárvore é o banco, então link antigo segue funcionando e o
+ * Combobox canônico rotula o id fora da lista em vez de mostrar UUID. O que muda
+ * é só o que o seletor OFERECE.
+ */
+export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("centros_custo")
+    .select("id, nome, codigo")
+    .is("pai_id", null)
+    .eq("ativo", true)
+    .order("codigo", { ascending: true, nullsFirst: false })
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar os centros de custo");
+  }
+
+  return (data ?? []).map((centro) => ({
+    id: centro.id,
+    nome: centro.nome,
+    codigo: centro.codigo,
+  }));
+}
 
 /**
  * Os meses de referência que EXISTEM em lançamento não cancelado (yyyy-MM).
