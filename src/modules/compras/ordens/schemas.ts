@@ -3,7 +3,11 @@ import { z } from "zod";
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { dataHojeISO } from "@/lib/formatadores";
 import { idSchema, idSchemaCom } from "@/lib/id";
-import { paraNumero } from "@/modules/compras/ordens/calculo";
+import {
+  paraNumero,
+  totalEmCentavos,
+  type AjustesDaOrdem,
+} from "@/modules/compras/ordens/calculo";
 
 /** R$ 1.234,56 para as mensagens de erro do formulário. */
 function formatarDiferenca(valor: number): string {
@@ -165,6 +169,48 @@ function emCentavos(valor: number): number {
   return Math.round(valor * 100);
 }
 
+/**
+ * Um ajuste do rodapé no SERVIDOR. Sempre positivo, inclusive o desconto: quem
+ * põe o sinal de menos é a conta, não o valor guardado.
+ */
+function ajusteSchema(nome: string) {
+  return z
+    .number({ error: `${nome} inválido` })
+    .min(0, { error: `${nome} não pode ser negativo` })
+    .max(999999999999.99, { error: `${nome} acima do permitido` })
+    .refine((valor) => casasDecimais(valor) <= 2, {
+      error: `${nome} aceita no máximo 2 casas decimais`,
+    })
+    .default(0);
+}
+
+/**
+ * Um ajuste do rodapé no FORMULÁRIO: texto, porque é o que o InputMoeda guarda
+ * ("1.234,56"). Campo vazio vale zero — a maioria das ordens não tem ajuste
+ * nenhum, e obrigar a digitar "0,00" em quatro campos seria pior.
+ */
+const ajusteFormSchema = z
+  .string()
+  .trim()
+  .refine((valor) => casasDecimaisTexto(valor) <= 2, {
+    error: "O valor aceita no máximo 2 casas decimais",
+  });
+
+/** Os ajustes do formulário (texto) na forma que o cálculo entende (número). */
+export function ajustesDoForm(form: {
+  frete?: string;
+  outrasDespesas?: string;
+  impostos?: string;
+  desconto?: string;
+}): AjustesDaOrdem {
+  return {
+    frete: paraNumero(form.frete ?? ""),
+    outrasDespesas: paraNumero(form.outrasDespesas ?? ""),
+    impostos: paraNumero(form.impostos ?? ""),
+    desconto: paraNumero(form.desconto ?? ""),
+  };
+}
+
 /** Schema da OC validado no servidor (criar e editar). */
 export const ordemCompraSchema = z
   .object({
@@ -192,6 +238,17 @@ export const ordemCompraSchema = z
      */
     numeroDocumento: textoOpcional(60),
     observacoes: textoOpcional(2000),
+    /**
+     * Os quatro ajustes do rodapé. Somam ao total, menos o desconto, que
+     * subtrai — a mesma conta de `fn_total_da_oc` no banco. O desconto NÃO é
+     * aplicado item a item: ele entra no total, e a aprovação o distribui
+     * proporcionalmente entre os centros de custo, porque o rateio usa
+     * `bruto_da_fatia * valor_total / soma_dos_brutos`.
+     */
+    frete: ajusteSchema("Frete"),
+    outrasDespesas: ajusteSchema("Outras despesas"),
+    impostos: ajusteSchema("Impostos"),
+    desconto: ajusteSchema("Desconto"),
     itens: z
       .array(ocItemSchema)
       .min(1, { error: "Adicione ao menos um item à ordem de compra" }),
@@ -208,12 +265,28 @@ export const ordemCompraSchema = z
       .min(1, { error: "Escolha a forma de pagamento" }),
   })
   .superRefine((ordem, ctx) => {
-    const total = ordem.itens.reduce(
-      (soma, item) => soma + emCentavos(item.quantidade * item.precoUnitario),
-      0,
-    );
+    // O total é o que o BANCO vai gravar: itens + frete + outras + impostos
+    // − desconto. Antes esta conta era só a soma dos itens, e isso já era um
+    // desalinhamento à espera de acontecer: `fn_salvar_parcelas_oc` sempre
+    // conferiu formas e parcelas contra `valor_total`, que inclui os ajustes.
+    // Enquanto a tela não deixava editar ajuste ninguém batia nisso; com o
+    // desconto editável, toda ordem com desconto seria recusada pelo banco
+    // depois de passar aqui.
+    const total = totalEmCentavos(ordem.itens, ordem);
 
-    // As formas fecham com o total dos itens. Vale sempre, inclusive sem
+    // Desconto maior que o resto deixaria a ordem negativa. Barrar aqui é o que
+    // sobra: o banco não tem CHECK de total não-negativo, porque a edição passa
+    // por um instante sem itens em que o total fica negativo de forma legítima.
+    if (total < 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: `O desconto é maior que a ordem: sobraria ${formatarDiferenca(total / 100)}`,
+        path: ["desconto"],
+      });
+      return;
+    }
+
+    // As formas fecham com o total da ordem. Vale sempre, inclusive sem
     // parcela: é a divisão do que vai ser pago, e ela não depende de existir
     // parcelamento.
     const somaFormas = ordem.formas.reduce(
@@ -232,7 +305,8 @@ export const ordemCompraSchema = z
     if (new Set(ids).size !== ids.length) {
       ctx.addIssue({
         code: "custom",
-        message: "A mesma forma aparece duas vezes: some os valores numa linha só",
+        message:
+          "A mesma forma aparece duas vezes: some os valores numa linha só",
         path: ["formas"],
       });
     }
@@ -444,6 +518,11 @@ export const ordemCompraFormSchema = z
       .string()
       .trim()
       .max(2000, { error: "Máximo de 2000 caracteres" }),
+    /** Ajustes do rodapé, em texto. Vazio vale zero. */
+    frete: ajusteFormSchema,
+    outrasDespesas: ajusteFormSchema,
+    impostos: ajusteFormSchema,
+    desconto: ajusteFormSchema,
     centrosCusto: z
       .array(ocGrupoCentroCustoFormSchema)
       .min(1, { error: "Adicione ao menos um centro de custo" })
@@ -505,21 +584,27 @@ export const ordemCompraFormSchema = z
   .superRefine((form, ctx) => {
     const emCentavosDoTexto = (texto: string) =>
       Math.round(paraNumero(texto ?? "") * 100);
-    const totalDosItens = form.centrosCusto.reduce(
-      (soma, grupo) =>
-        soma +
-        grupo.insumos.reduce(
-          (subtotal, insumo) =>
-            subtotal +
-            Math.round(
-              paraNumero(insumo.quantidade ?? "") *
-                paraNumero(insumo.precoUnitario ?? "") *
-                100,
-            ),
-          0,
-        ),
-      0,
+
+    // Itens do formulário na forma que o cálculo entende. A conta em si mora em
+    // `totalEmCentavos`, uma só, para a prévia da tela e a validação nunca
+    // discordarem — antes eram duas fórmulas diferentes no mesmo arquivo.
+    const itensDoForm = form.centrosCusto.flatMap((grupo) =>
+      grupo.insumos.map((insumo) => ({
+        quantidade: paraNumero(insumo.quantidade ?? ""),
+        precoUnitario: paraNumero(insumo.precoUnitario ?? ""),
+      })),
     );
+    const ajustes = ajustesDoForm(form);
+    const totalDosItens = totalEmCentavos(itensDoForm, ajustes);
+
+    if (totalDosItens < 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: `O desconto é maior que a ordem: sobraria ${formatarDiferenca(totalDosItens / 100)}`,
+        path: ["desconto"],
+      });
+      return;
+    }
 
     // A primeira forma precisa estar escolhida sempre: é o tipo dela que decide
     // o caminho do pagamento, e ordem sem forma deixaria essa decisão sem dono.
@@ -556,7 +641,8 @@ export const ordemCompraFormSchema = z
       if (new Set(ids).size !== ids.length) {
         ctx.addIssue({
           code: "custom",
-          message: "A mesma forma aparece duas vezes: some os valores numa linha só",
+          message:
+            "A mesma forma aparece duas vezes: some os valores numa linha só",
           path: ["formas"],
         });
       }
@@ -617,28 +703,13 @@ export const ordemCompraFormSchema = z
 
     if (form.parcelas.length === 0) return;
 
-    // Total dos itens e soma das parcelas em centavos inteiros: comparar
-    // dinheiro somado em float acusaria diferença que não existe.
-    const emCentavosTexto = (texto: string) =>
-      Math.round(paraNumero(texto ?? "") * 100);
-
-    const total = form.centrosCusto.reduce(
-      (soma, grupo) =>
-        soma +
-        grupo.insumos.reduce(
-          (subtotal, insumo) =>
-            subtotal +
-            Math.round(
-              paraNumero(insumo.quantidade ?? "") *
-                paraNumero(insumo.precoUnitario ?? "") *
-                100,
-            ),
-          0,
-        ),
-      0,
-    );
+    // As parcelas fecham com o total DA ORDEM, ajustes incluídos: é contra ele
+    // que `fn_salvar_parcelas_oc` confere no banco. Mesma variável de cima,
+    // mesma conta -- duplicar aqui foi o que deixou as duas fórmulas
+    // divergirem no passado.
+    const total = totalDosItens;
     const somaParcelas = form.parcelas.reduce(
-      (soma, parcela) => soma + emCentavosTexto(parcela.valor),
+      (soma, parcela) => soma + emCentavosDoTexto(parcela.valor),
       0,
     );
 

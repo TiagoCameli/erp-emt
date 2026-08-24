@@ -265,6 +265,12 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     categoriaId: CATEGORIA,
     numeroDocumento: "",
     observacoes: "",
+    // Os quatro ajustes do rodapé: vazio vale zero, que é o caso da maioria das
+    // ordens. O formulário sempre envia os quatro (ver valoresIniciais).
+    frete: "",
+    outrasDespesas: "",
+    impostos: "",
+    desconto: "",
     centrosCusto: [grupoValido],
     // Parcelas são opcionais no produto (lista vazia = definir no lançamento),
     // mas o campo é sempre enviado pelo formulário.
@@ -434,6 +440,10 @@ describe("parcelas da OC no formulário", () => {
     categoriaId: CATEGORIA,
     numeroDocumento: "",
     observacoes: "",
+    frete: "",
+    outrasDespesas: "",
+    impostos: "",
+    desconto: "",
     // 10 x 100,00 = 1.000,00 de total
     centrosCusto: [
       {

@@ -84,6 +84,7 @@ import type {
   PrefillOrdemCotacao,
 } from "@/modules/compras/ordens/queries";
 import {
+  ajustesDoForm,
   ordemCompraFormSchema,
   type OrdemCompraFormInput,
 } from "@/modules/compras/ordens/schemas";
@@ -117,6 +118,15 @@ function grupoDoPrefill(prefill: PrefillOrdemCotacao): GrupoForm {
 }
 
 /**
+ * Um ajuste do rodapé no formato do campo. Zero vira VAZIO de propósito: a
+ * maioria das ordens não tem ajuste nenhum, e quatro campos mostrando "0,00"
+ * sugerem que há algo preenchido ali.
+ */
+function ajusteParaCampo(valor: number): string {
+  return valor === 0 ? "" : String(valor).replace(".", ",");
+}
+
+/**
  * Valores iniciais do formulário: a partir de uma OC (edição), de um prefill
  * de cotação (Gerar OC) ou em branco (Nova ordem).
  */
@@ -135,6 +145,10 @@ function valoresIniciais(
       categoriaId: ordem.categoriaId ?? "",
       numeroDocumento: ordem.numeroDocumento ?? "",
       observacoes: ordem.observacoes ?? "",
+      frete: ajusteParaCampo(ordem.ajustes.frete),
+      outrasDespesas: ajusteParaCampo(ordem.ajustes.outrasDespesas),
+      impostos: ajusteParaCampo(ordem.ajustes.impostos),
+      desconto: ajusteParaCampo(ordem.ajustes.desconto),
       centrosCusto: agruparItensPorCentroCusto(ordem.itens),
       parcelas: ordem.parcelas.map((parcela) => ({
         dataVencimento: parcela.dataVencimento,
@@ -160,6 +174,12 @@ function valoresIniciais(
       // compra fechada, então aqui nasce vazio mesmo.
       numeroDocumento: "",
       observacoes: "",
+      // A cotação não tem ajuste de rodapé: frete e desconto aparecem na hora de
+      // fechar a compra, não na cotação.
+      frete: "",
+      outrasDespesas: "",
+      impostos: "",
+      desconto: "",
       centrosCusto:
         prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
       parcelas: [],
@@ -181,6 +201,10 @@ function valoresIniciais(
     categoriaId: ordem?.categoriaId ?? "",
     numeroDocumento: ordem?.numeroDocumento ?? "",
     observacoes: ordem?.observacoes ?? "",
+    frete: ajusteParaCampo(ordem?.ajustes.frete ?? 0),
+    outrasDespesas: ajusteParaCampo(ordem?.ajustes.outrasDespesas ?? 0),
+    impostos: ajusteParaCampo(ordem?.ajustes.impostos ?? 0),
+    desconto: ajusteParaCampo(ordem?.ajustes.desconto ?? 0),
     centrosCusto: [grupoVazio()],
     parcelas:
       ordem?.parcelas.map((parcela) => ({
@@ -344,13 +368,23 @@ export function OrdemFormDrawer({
   // reusa a referência do array observado.
   const gruposObservados = form.watch("centrosCusto");
 
-  // Ajustes do rodapé (frete, outras despesas, imposto, desconto). A tela não os
-  // edita — só as ordens vindas do Mais Controle os têm. Mas a prévia PRECISA
-  // somá-los, senão ela diverge do total que o banco grava: na ordem do Mais
-  // Controle 2592 a diferença é o desconto de R$ 3.835,95, e quem visse a
-  // prévia poderia "consertar" quantidade para fechar uma conta que já fecha.
+  // Ajustes do rodapé, agora EDITÁVEIS e observados ao vivo: o total da prévia
+  // muda enquanto a pessoa digita o desconto. A prévia tem que somá-los porque
+  // é ela que a pessoa usa para conferir antes de aprovar — na ordem 2592 do
+  // Mais Controle a diferença é o desconto de R$ 3.835,95, e quem visse a
+  // prévia sem ele poderia "consertar" quantidade para fechar uma conta que já
+  // fecha.
   const nomesDaOrdem = React.useMemo(() => nomesDaOrdemDe(ordem), [ordem]);
-  const ajustes = ordem?.ajustes ?? SEM_AJUSTES;
+  const freteObservado = form.watch("frete");
+  const outrasObservadas = form.watch("outrasDespesas");
+  const impostosObservados = form.watch("impostos");
+  const descontoObservado = form.watch("desconto");
+  const ajustes = ajustesDoForm({
+    frete: freteObservado,
+    outrasDespesas: outrasObservadas,
+    impostos: impostosObservados,
+    desconto: descontoObservado,
+  });
   const itensObservados = (gruposObservados ?? []).flatMap((grupo) =>
     (grupo.insumos ?? []).map((insumo) => ({
       quantidade: paraNumero(insumo.quantidade ?? ""),
@@ -360,6 +394,9 @@ export function OrdemFormDrawer({
   const totalDosItens = totalOrdemCompra(itensObservados);
   const totalPrevia = totalComAjustes(itensObservados, ajustes);
   const mostrarAjustes = temAjuste(ajustes);
+  // Desconto maior que o resto: a ordem ficaria negativa e nenhuma parcela
+  // fecharia com o total. O schema recusa no submit; aqui a pessoa vê antes.
+  const descontoPassaDoTotal = totalPrevia < 0;
 
   // Centros de custo já escolhidos, para não permitir grupo repetido.
   const centrosUsados = new Set(
@@ -441,11 +478,15 @@ export function OrdemFormDrawer({
       categoriaId: valores.categoriaId,
       numeroDocumento: valores.numeroDocumento,
       observacoes: valores.observacoes,
+      // Os quatro ajustes do rodapé, de texto para número. O desconto sobe
+      // POSITIVO: quem subtrai é a conta do total, aqui e no banco.
+      ...ajustesDoForm(valores),
       itens,
       parcelas: valores.parcelas.map((parcela) => ({
         dataVencimento: parcela.dataVencimento,
         valor: paraNumero(parcela.valor),
-        formaPagamentoId: formaUnicaId ?? (parcela.formaPagamentoId || undefined),
+        formaPagamentoId:
+          formaUnicaId ?? (parcela.formaPagamentoId || undefined),
       })),
       formas,
     };
@@ -571,7 +612,8 @@ export function OrdemFormDrawer({
     const sobrando = (form.getValues("parcelas") ?? []).filter(
       (parcela) => parcela.formaPagamentoId !== removida,
     );
-    const unica = restantes.length === 1 ? restantes[0]?.formaPagamentoId : null;
+    const unica =
+      restantes.length === 1 ? restantes[0]?.formaPagamentoId : null;
     form.setValue(
       "parcelas",
       sobrando.map((parcela) =>
@@ -836,7 +878,9 @@ export function OrdemFormDrawer({
             >
               <Combobox
                 valor={
-                  formaUnica ? (formasObservadas[0]?.formaPagamentoId ?? "") : ""
+                  formaUnica
+                    ? (formasObservadas[0]?.formaPagamentoId ?? "")
+                    : ""
                 }
                 disabled={salvando || !formaUnica}
                 onValorChange={(valor) => {
@@ -964,34 +1008,38 @@ export function OrdemFormDrawer({
                 </span>
               </div>
             ))}
-            {mostrarAjustes ? (
-              <>
-                <div className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="text-detalhe font-medium">
-                    Soma dos itens
-                  </span>
-                  <span className="text-detalhe tabular-nums">
-                    {formatarBRL(totalDosItens)}
-                  </span>
-                </div>
-                {LINHAS_DE_AJUSTE.map(({ chave, rotulo, sinal }) =>
-                  ajustes[chave] === 0 ? null : (
-                    <div
-                      key={chave}
-                      className="flex items-center justify-between gap-3 px-3 py-2"
-                    >
-                      <span className="text-detalhe text-muted-foreground">
-                        {rotulo}
-                      </span>
-                      <span className="text-detalhe tabular-nums text-muted-foreground">
-                        {sinal === "-" ? "− " : "+ "}
-                        {formatarBRL(ajustes[chave])}
-                      </span>
-                    </div>
-                  ),
-                )}
-              </>
-            ) : null}
+            <div className="flex items-center justify-between gap-3 px-3 py-2">
+              <span className="text-detalhe font-medium">Soma dos itens</span>
+              <span className="text-detalhe tabular-nums">
+                {formatarBRL(totalDosItens)}
+              </span>
+            </div>
+
+            {/* Os quatro ajustes do rodapé, editáveis. Ficam numa fileira só
+                porque na maioria das ordens todos são zero: quatro linhas de
+                formulário para o caso raro empurrariam o total para fora da
+                tela. O sinal de cada um vem de LINHAS_DE_AJUSTE, a mesma fonte
+                que o detalhe da OC usa. */}
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3 py-2 sm:grid-cols-4">
+              {LINHAS_DE_AJUSTE.map(({ chave, rotulo, sinal }) => (
+                <CampoFormulario
+                  key={chave}
+                  id={`oc-ajuste-${chave}`}
+                  rotulo={`${sinal === "-" ? "− " : "+ "}${rotulo}`}
+                  erro={form.formState.errors[chave]?.message}
+                >
+                  <InputMoeda
+                    id={`oc-ajuste-${chave}`}
+                    valor={form.watch(chave) ?? ""}
+                    onValorChange={(valor) =>
+                      form.setValue(chave, valor, { shouldValidate: true })
+                    }
+                    disabled={salvando}
+                  />
+                </CampoFormulario>
+              ))}
+            </div>
+
             <div className="flex items-center justify-between gap-3 bg-surface px-3 py-2.5">
               <span className="text-detalhe font-medium">
                 Total geral
@@ -1000,14 +1048,24 @@ export function OrdemFormDrawer({
                   · {qtdItens} {qtdItens === 1 ? "item" : "itens"}
                 </span>
               </span>
-              <span className="text-corpo font-semibold tabular-nums">
+              <span
+                className={cn(
+                  "text-corpo font-semibold tabular-nums",
+                  descontoPassaDoTotal && "text-destructive",
+                )}
+              >
                 {formatarBRL(totalPrevia)}
               </span>
             </div>
-            {mostrarAjustes ? (
+            {descontoPassaDoTotal ? (
+              <p className="px-3 py-2 text-detalhe text-destructive">
+                O desconto é maior que a ordem. Diminua o desconto ou revise os
+                itens: o total não pode ficar negativo.
+              </p>
+            ) : mostrarAjustes ? (
               <p className="px-3 py-2 text-detalhe text-muted-foreground">
-                Os ajustes vieram junto com a ordem e não são editáveis por
-                aqui. Mexer nos itens recalcula o total mantendo os ajustes.
+                O desconto entra no total e é distribuído entre os centros de
+                custo na proporção do que cada um representa na ordem.
               </p>
             ) : null}
           </div>

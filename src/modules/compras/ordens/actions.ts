@@ -81,6 +81,13 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
     // p_cabecalho da RPC de criação e o update direto da edição.
     numero_documento: dados.numeroDocumento ?? null,
     observacoes: dados.observacoes ?? null,
+    // Os quatro ajustes do rodapé. Na EDIÇÃO isto vira um update direto na
+    // tabela e a trigger `trg_total_oc_cabecalho` recalcula o valor_total; na
+    // CRIAÇÃO quem lê estes campos do p_cabecalho é fn_criar_ordem_compra.
+    frete: dados.frete,
+    outras_despesas: dados.outrasDespesas,
+    impostos: dados.impostos,
+    desconto: dados.desconto,
   };
 }
 
