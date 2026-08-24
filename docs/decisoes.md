@@ -2976,3 +2976,52 @@ na raiz. Hoje isso quase não tem dado (R$ 30.402,70 de R$ 2,35 mi em manutenç�
 equipamento; o resto vai direto na raiz), então não vale uma tela nova sem pedido. No dia em que a
 manutenção passar a apontar por equipamento, o caminho é um relatório que agrupe no NÍVEL ESCOLHIDO, e
 não afrouxar o filtro de volta.
+
+## 24/08/2026 — Centro de custo se escolhe em dois passos
+
+O dono pediu: ao lançar ou emitir OC, primeiro escolher o centro "manutenção de
+equipamentos" e só então aparecer um campo para o equipamento específico. É o outro
+lado do conserto do filtro dos relatórios do mesmo dia — lá os 61 equipamentos foram
+juntados na raiz; aqui a ENTRADA passa a alcançá-los sem despejar os 73 numa lista só.
+
+**O que muda na tela.** O primeiro campo oferece as 12 raízes. Quando a raiz escolhida
+tem etapa, aparece um segundo campo com as etapas dela. O que grava continua sendo UM
+`centro_custo_id`, como o banco sempre guardou: o da etapa quando escolhida, o da raiz
+quando não.
+
+**Genérico pela hierarquia, não chumbado em "manutenção".** Hoje só a raiz de manutenção
+tem etapas (61 equipamentos) e obra nenhuma tem, então na prática o segundo campo só
+aparece na manutenção. No dia em que uma obra ganhar etapas ele aparece lá sozinho. O
+rótulo segue o `tipo` da raiz: **"Equipamento"** na manutenção, **"Etapa"** nas outras —
+no schema são a mesma linha com um pai, mas quem lança manutenção procura "Equipamento"
+e quem lança obra procura "Etapa", e um rótulo genérico faria as duas pessoas hesitarem.
+
+**O equipamento é OPCIONAL, e essa foi decisão do dono.** Existe custo que é da oficina
+inteira, e o centro se chama "Manutenção/**Documentação** de Equipamentos". Medido antes
+de decidir: 1.097 dos 1.121 rateios de manutenção estão na raiz e só 24 em equipamento
+(R$ 30.402,70 de R$ 2,35 mi). Obrigar a máquina faria quem está com pressa escolher
+qualquer uma, e custo atribuído à máquina errada é pior que custo sem máquina.
+
+Daí a regra que amarra o resto: **esvaziar a etapa devolve o valor para a raiz, nunca
+para vazio.** Se limpar zerasse o campo, o formulário ficaria inválido por causa de um
+clique que a pessoa entende como "tirar o detalhe". A regra vive em
+`_shared/centro-custo/selecao.ts` com 18 testes, incluindo o de ida e volta (gravar e
+reabrir devolve os mesmos dois campos) — sem ele, reabrir um documento poderia cair na
+raiz e o custo do equipamento viraria custo de manutenção geral, calado.
+
+**Onde vale.** Lançamentos (campo único e a tabela de rateio), Recebimentos (que reusa o
+mesmo formulário) e a OC (por grupo de centro). Fora: Colaboradores, porque o centro de
+uma pessoa não é uma máquina.
+
+**Duplicação removida no caminho.** `CentroCustoOpcao` e `listarCentrosCusto` existiam
+IDÊNTICOS em `financeiro/lancamentos/queries.ts` e `compras/ordens/queries.ts`. Como os
+dois precisavam ganhar `paiId` e `tipo`, duas cópias divergiriam na primeira mudança:
+viraram um só em `_shared/centro-custo/queries.ts`, e os módulos reexportam para não
+mexer em quem importava.
+
+**Um detalhe de layout que custou uma ida e volta.** A célula da `TabelaItens` é
+`flex flex-col items-start`, e `items-start` desliga o esticamento: a fileira dos dois
+comboboxes encolheu até o conteúdo, com um vão até a coluna de valor. Antes funcionava
+porque o gatilho do `Combobox` já é `w-full` e media a célula direto. Só se vê na tela —
+o jsdom não pega layout. A coluna também passou de 2fr para 3fr, senão dois comboboxes
+não cabem e "Caminhão Caçamba 2..." não diz qual caminhão é.

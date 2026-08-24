@@ -21,6 +21,7 @@ import {
   InputDecimal,
   LinhaCampos,
   SecaoFormulario,
+  SeletorCentroCusto,
   TabelaItens,
 } from "@/components/canonicos";
 import { Anexos } from "@/components/canonicos/anexos";
@@ -164,7 +165,10 @@ const COLUNAS_RATEIO: ColunaItem[] = [
   {
     chave: "centroCusto",
     rotulo: "Centro de custo",
-    largura: "minmax(0,2fr)",
+    // 3fr, e não 2fr: a célula tem DOIS comboboxes quando o centro escolhido tem
+    // etapa (equipamento), e com 2fr os dois ficam estreitos demais para o nome
+    // caber -- "Caminhão Caçamba 2..." não diz qual caminhão é.
+    largura: "minmax(0,3fr)",
     // Combobox de largura cheia, com o nome do centro na esquerda: o rótulo
     // acompanha o texto, igual à coluna Insumo da OC.
     alinhamento: "left",
@@ -1733,28 +1737,19 @@ export function LancamentoFormDrawer({
           ) : null}
 
           {rateioUnico ? (
-            <CampoFormulario
-              id="lan-centro-custo-unico"
-              rotulo="Centro de custo"
+            <SeletorCentroCusto
+              centros={centrosCusto}
+              valor={form.watch("rateios.0.centroCustoId") ?? ""}
+              onValorChange={(valor) =>
+                form.setValue("rateios.0.centroCustoId", valor, {
+                  shouldValidate: true,
+                })
+              }
+              disabled={salvando}
+              idBase="lan-centro-custo-unico"
               obrigatorio
               erro={form.formState.errors.rateios?.[0]?.centroCustoId?.message}
-            >
-              <Combobox
-                valor={form.watch("rateios.0.centroCustoId") ?? ""}
-                onValorChange={(valor) =>
-                  form.setValue("rateios.0.centroCustoId", valor, {
-                    shouldValidate: true,
-                  })
-                }
-                opcoes={centrosCusto.map((centro) => ({
-                  valor: centro.id,
-                  rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
-                }))}
-                placeholder="Selecione o centro de custo"
-                disabled={salvando}
-                id="lan-centro-custo-unico"
-              />
-            </CampoFormulario>
+            />
           ) : (
             <TabelaItens
               colunas={COLUNAS_RATEIO}
@@ -1773,7 +1768,8 @@ export function LancamentoFormDrawer({
               renderCelula={(chave, indice) => {
                 if (chave === "centroCusto") {
                   return (
-                    <Combobox
+                    <SeletorCentroCusto
+                      centros={centrosCusto}
                       valor={form.watch(`rateios.${indice}.centroCustoId`)}
                       onValorChange={(valor) =>
                         form.setValue(
@@ -1782,14 +1778,9 @@ export function LancamentoFormDrawer({
                           { shouldValidate: true },
                         )
                       }
-                      opcoes={centrosCusto.map((centro) => ({
-                        valor: centro.id,
-                        rotulo: `${centro.codigo ? `${centro.codigo} ` : ""}${centro.nome}`,
-                      }))}
-                      placeholder="Selecione"
                       disabled={salvando}
-                      ariaLabel="Centro de custo"
-                      id={`lan-rateio-cc-${indice}`}
+                      idBase={`lan-rateio-cc-${indice}`}
+                      variante="celula"
                     />
                   );
                 }

@@ -25,6 +25,7 @@ import {
   InputQuantidade,
   LinhaCampos,
   SecaoFormulario,
+  SeletorCentroCusto,
   TabelaItens,
   type ColunaItem,
 } from "@/components/canonicos";
@@ -1644,33 +1645,30 @@ function GrupoCentroCusto({
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border bg-surface px-3 py-3">
       <div className="flex items-start gap-2">
-        <div className="flex-1">
-          <CampoFormulario
-            id={`oc-grupo-cc-${indice}`}
-            rotulo="Centro de custo"
+        {/*
+          `centrosDisponiveis` já vem sem os centros usados pelos OUTROS grupos, e
+          é essa lista que entra no seletor: a raiz e o equipamento saem da oferta
+          pelo mesmo filtro. Dois grupos podem ficar sob a mesma manutenção desde
+          que o equipamento seja diferente, porque o que não repete é o centro
+          FINAL, que é o que grava no item.
+        */}
+        <div className="grid flex-1 gap-3 sm:grid-cols-2">
+          <SeletorCentroCusto
+            centros={centrosDisponiveis}
+            valor={form.watch(`centrosCusto.${indice}.centroCustoId`)}
+            onValorChange={(valor) =>
+              form.setValue(`centrosCusto.${indice}.centroCustoId`, valor, {
+                shouldValidate: true,
+              })
+            }
+            disabled={salvando}
+            idBase={`oc-grupo-cc-${indice}`}
             obrigatorio
-            largura="longo"
             erro={errosGrupo?.centroCustoId?.message}
-          >
-            <Combobox
-              valor={form.watch(`centrosCusto.${indice}.centroCustoId`)}
-              onValorChange={(valor) =>
-                form.setValue(`centrosCusto.${indice}.centroCustoId`, valor, {
-                  shouldValidate: true,
-                })
-              }
-              opcoes={centrosDisponiveis.map((centro) => ({
-                valor: centro.id,
-                rotulo: rotuloCentro(centro),
-              }))}
-              rotuloDoValor={nomesDaOrdem.centrosCusto.get(
-                form.watch(`centrosCusto.${indice}.centroCustoId`),
-              )}
-              placeholder="Selecione o centro de custo"
-              disabled={salvando}
-              id={`oc-grupo-cc-${indice}`}
-            />
-          </CampoFormulario>
+            rotuloDoValor={nomesDaOrdem.centrosCusto.get(
+              form.watch(`centrosCusto.${indice}.centroCustoId`),
+            )}
+          />
         </div>
         <Button
           type="button"

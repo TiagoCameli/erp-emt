@@ -665,7 +665,7 @@ export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
 
   const { data, error } = await supabase
     .from("centros_custo")
-    .select("id, nome, codigo")
+    .select("id, nome, codigo, pai_id, tipo")
     .is("pai_id", null)
     .eq("ativo", true)
     .order("codigo", { ascending: true, nullsFirst: false })
@@ -679,6 +679,8 @@ export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
     id: centro.id,
     nome: centro.nome,
     codigo: centro.codigo,
+    paiId: centro.pai_id,
+    tipo: centro.tipo,
   }));
 }
 

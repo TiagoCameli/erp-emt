@@ -240,12 +240,14 @@ export interface InsumoOpcao {
   unidade: string | null;
 }
 
-/** Opção de centro de custo para o select. */
-export interface CentroCustoOpcao {
-  id: string;
-  nome: string;
-  codigo: string | null;
-}
+// Centro de custo vive em `_shared`: a mesma consulta e o mesmo tipo estavam
+// duplicados aqui e em outro módulo, e agora a hierarquia (pai e tipo) entrou
+// neles para a escolha em dois passos. Duas cópias divergiriam na primeira
+// mudança.
+export {
+  listarCentrosCusto,
+  type CentroCustoOpcao,
+} from "@/modules/_shared/centro-custo/queries";
 
 /**
  * Prefill de uma OC gerada a partir de uma cotação finalizada: fornecedor
@@ -707,27 +709,6 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
   }));
 }
 
-/** Centros de custo ativos para o select dos itens, em ordem de código. */
-export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("centros_custo")
-    .select("id, nome, codigo")
-    .eq("ativo", true)
-    .order("codigo", { ascending: true, nullsFirst: false })
-    .order("nome");
-
-  if (error) {
-    throw new Error("Não foi possível carregar os centros de custo");
-  }
-
-  return (data ?? []).map((centro) => ({
-    id: centro.id,
-    nome: centro.nome,
-    codigo: centro.codigo,
-  }));
-}
 
 /**
  * Categorias de despesa ativas para o select da OC, em ordem alfabética. Só

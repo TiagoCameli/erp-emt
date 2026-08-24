@@ -11,6 +11,7 @@ export * from "./estado-erro";
 export * from "./skeleton-pagina";
 export * from "./combobox";
 export * from "./combobox-criavel";
+export * from "./seletor-centro-custo";
 export * from "./data-table";
 export * from "./celula-descricao-categoria";
 export * from "./selo-anexos";
