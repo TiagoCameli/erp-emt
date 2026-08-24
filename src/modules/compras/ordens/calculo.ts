@@ -19,7 +19,10 @@ export function paraNumero(texto: string): number {
 }
 
 /** Subtotal de um item: quantidade x preço unitário. */
-export function subtotalItem(quantidade: number, precoUnitario: number): number {
+export function subtotalItem(
+  quantidade: number,
+  precoUnitario: number,
+): number {
   return quantidade * precoUnitario;
 }
 
@@ -45,13 +48,56 @@ export interface AjustesDaOrdem {
   desconto: number;
 }
 
-/** Ordem sem nenhum ajuste — o caso de toda OC criada pela tela. */
+/** Ordem sem nenhum ajuste: os quatro em zero. */
 export const SEM_AJUSTES: AjustesDaOrdem = {
   frete: 0,
   outrasDespesas: 0,
   impostos: 0,
   desconto: 0,
 };
+
+/**
+ * O total da ordem em CENTAVOS INTEIROS — a fonte única desta conta.
+ *
+ * Existe porque a mesma conta estava escrita em três lugares com duas fórmulas
+ * DIFERENTES: `totalComAjustes` somava os itens sem arredondar e arredondava uma
+ * vez no fim (igual ao banco), enquanto os dois `superRefine` do schema
+ * arredondavam item a item e somavam. Com preço de quatro casas — combustível —
+ * as duas divergem em centavos, e a divergência aparece do pior jeito possível:
+ * a tela mostra um total, a validação recusa por outro, e a pessoa fica
+ * mexendo em quantidade para fechar uma conta que já fecha.
+ *
+ * A fórmula é a do banco (`fn_total_da_oc`), porque é ela que decide se a OC
+ * salva: soma tudo em precisão cheia e arredonda UMA vez, no fim.
+ */
+export function totalEmCentavos(
+  itens: ItemTotalizavel[],
+  ajustes: AjustesDaOrdem,
+): number {
+  const bruto =
+    totalOrdemCompra(itens) +
+    ajustes.frete +
+    ajustes.outrasDespesas +
+    ajustes.impostos -
+    ajustes.desconto;
+  return Math.round(bruto * 100);
+}
+
+/**
+ * O desconto cabe na ordem? Ele é o único ajuste que subtrai, e um desconto
+ * maior que o resto deixaria o total negativo — a partir daí nenhuma parcela
+ * fecha com o total e a ordem não sai do lugar, sem a pessoa entender por quê.
+ *
+ * Quem barra é a aplicação: o banco NÃO tem CHECK de total não-negativo, porque
+ * a edição apaga todos os itens antes de inserir os novos e o total fica
+ * legitimamente negativo nesse instante.
+ */
+export function descontoCabeNaOrdem(
+  itens: ItemTotalizavel[],
+  ajustes: AjustesDaOrdem,
+): boolean {
+  return totalEmCentavos(itens, ajustes) >= 0;
+}
 
 /**
  * As linhas do rodapé, na ordem em que a conta acontece. Fica aqui e não em cada
@@ -108,11 +154,5 @@ export function totalComAjustes(
   itens: ItemTotalizavel[],
   ajustes: AjustesDaOrdem,
 ): number {
-  const bruto =
-    totalOrdemCompra(itens) +
-    ajustes.frete +
-    ajustes.outrasDespesas +
-    ajustes.impostos -
-    ajustes.desconto;
-  return Math.round(bruto * 100) / 100;
+  return totalEmCentavos(itens, ajustes) / 100;
 }

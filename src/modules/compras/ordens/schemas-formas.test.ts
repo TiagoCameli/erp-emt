@@ -61,6 +61,11 @@ const formulario = {
   categoriaId: CATEGORIA,
   numeroDocumento: "",
   observacoes: "",
+  // Ajustes do rodapé: vazio vale zero. O formulário sempre envia os quatro.
+  frete: "",
+  outrasDespesas: "",
+  impostos: "",
+  desconto: "",
   centrosCusto: [
     {
       centroCustoId: CENTRO,
