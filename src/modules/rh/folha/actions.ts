@@ -127,8 +127,8 @@ export async function gerarFolha(
 /* ------------------------------------------------------------------ */
 
 /**
- * Altera salário base, gratificação e percentual de encargo de UM item da
- * folha, via fn_editar_item_folha.
+ * Altera salário base, gratificação e percentual descontado do salário de UM
+ * item da folha, via fn_editar_item_folha.
  *
  * A conta inteira acontece no banco de propósito: mexer nesses três campos
  * refaz INSS, IRRF, as linhas de encargo, as de provisão, o custo total, o
@@ -136,8 +136,13 @@ export async function gerarFolha(
  * seria uma segunda cópia das fórmulas da geração, e duas cópias de uma conta
  * de dinheiro divergem na primeira vez que uma das duas for corrigida.
  *
- * `encargosPercentual` null significa "volta a usar os folha_encargos globais",
- * e é diferente de zero — o schema preserva essa distinção.
+ * `descontoPercentual` null significa "esta pessoa não tem desconto", e é
+ * diferente de zero — o schema preserva essa distinção.
+ *
+ * O desconto sai do LÍQUIDO e não do custo da empresa (25/08/2026): o dinheiro
+ * sai da conta igual, o desconto só muda quem fica com ele. Antes desta data o
+ * mesmo campo era encargo patronal e SOMAVA no custo — foi o que fez uma folha
+ * mostrar custo R$ 2.028,58 para um bruto de R$ 1.907,00.
  *
  * `folhaId` serve SÓ para revalidar a rota do detalhe. Quem autoriza e quem
  * localiza o item é o `itemId` dentro da fn (que confere permissão, status de
@@ -162,7 +167,12 @@ export async function editarItemFolha(
     p_item: validado.data.itemId,
     p_salario_base: validado.data.salarioBase,
     p_gratificacao: validado.data.gratificacao,
-    p_encargos_percentual: validado.data.encargosPercentual,
+    // `?? undefined` OMITE o parâmetro, e o DEFAULT dele no banco é null — que
+    // é exatamente "sem desconto". Não é o mesmo que mandar `null`: o tipo
+    // gerado marca o parâmetro como opcional (porque tem DEFAULT) e recusa
+    // null, e editar o database.types.ts à mão para aceitar seria apagado na
+    // próxima regeneração. Zero sobrevive: `??` só troca null e undefined.
+    p_desconto_percentual: validado.data.descontoPercentual ?? undefined,
   });
 
   if (error) {
@@ -376,8 +386,8 @@ function nomeArquivoFolha(competencia: string): string {
 
 /**
  * Gera a planilha gerencial da folha em .xlsx para o contador: cabeçalho com a
- * competência, o status e o percentual de encargos; uma tabela por colaborador
- * com vínculo, salário base, gratificação, horas, encargos, adiantamentos,
+ * competência, o status e o total descontado dos salários; uma tabela por
+ * colaborador com vínculo, salário base, gratificação, horas, desconto, adiantamentos,
  * custo total (custo da empresa) e líquido (o que o colaborador recebe); e a
  * linha de totais. Devolve o arquivo em base64 para o client baixar via Blob.
  * Disponível em qualquer status.
@@ -413,10 +423,10 @@ export async function gerarPlanilhaFolha(
 
   worksheet.addRow(["Competência", competenciaMesAno(folha.competencia)]);
   worksheet.addRow(["Status", STATUS_FOLHA[folha.status].rotulo]);
-  worksheet.addRow([
-    "Encargos (%)",
-    `${formatarQuantidade(folha.encargosPercentual)}%`,
-  ]);
+  // Desconto de salário é por PESSOA: não há um percentual único da folha para
+  // pôr aqui, então o cabeçalho diz o total em dinheiro e a coluna por linha
+  // mostra de quem saiu.
+  worksheet.addRow(["Descontos de salário", formatarBRL(folha.valorDescontos)]);
   if (folha.aprovadoEm) {
     worksheet.addRow(["Aprovada em", formatarDataHora(folha.aprovadoEm)]);
   }
@@ -425,7 +435,7 @@ export async function gerarPlanilhaFolha(
   const cabecalhos = [
     "Colaborador",
     // Vínculo é a primeira coluna nova porque sem ela a planilha fica
-    // ilegível: com CLT, terceiro e diarista na mesma lista, um encargo de
+    // ilegível: com CLT, terceiro e diarista na mesma lista, um desconto de
     // R$ 0,00 ou um salário base de R$ 550,00 não têm explicação.
     "Vínculo",
     "Função",
@@ -435,7 +445,7 @@ export async function gerarPlanilhaFolha(
     "Horas normais",
     "Horas extras",
     "Valor extras",
-    "Encargos",
+    "Desconto do salário",
     "Provisão (13º/férias)",
     "Adiantamentos",
     "Custo total",
@@ -462,7 +472,7 @@ export async function gerarPlanilhaFolha(
       formatarQuantidade(item.horasNormais),
       formatarQuantidade(item.horasExtras),
       formatarBRL(item.valorExtras),
-      formatarBRL(item.encargos),
+      formatarBRL(item.descontos),
       formatarBRL(item.provisoes),
       formatarBRL(item.adiantamentos),
       formatarBRL(item.custoTotal),
@@ -485,7 +495,7 @@ export async function gerarPlanilhaFolha(
     "",
     "",
     "",
-    formatarBRL(folha.valorEncargos),
+    formatarBRL(folha.valorDescontos),
     formatarBRL(folha.valorProvisoes),
     formatarBRL(folha.valorAdiantamentos),
     formatarBRL(folha.custoTotal),

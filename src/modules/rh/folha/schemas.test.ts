@@ -10,35 +10,37 @@ function base(overrides: Record<string, unknown> = {}) {
     itemId: ITEM,
     salarioBase: "2.000,00",
     gratificacao: "",
-    encargosPercentual: "",
+    descontoPercentual: "",
     ...overrides,
   };
 }
 
 describe("editarItemFolhaSchema — percentual vazio não é zero", () => {
   it("percentual vazio vira null: a linha volta a usar os encargos da config", () => {
-    const r = editarItemFolhaSchema.safeParse(base({ encargosPercentual: "" }));
+    const r = editarItemFolhaSchema.safeParse(base({ descontoPercentual: "" }));
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.encargosPercentual).toBeNull();
+    if (r.success) expect(r.data.descontoPercentual).toBeNull();
   });
 
   it("percentual null vira null (o caminho do reparse na Server Action)", () => {
     const r = editarItemFolhaSchema.safeParse(
-      base({ encargosPercentual: null }),
+      base({ descontoPercentual: null }),
     );
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.encargosPercentual).toBeNull();
+    if (r.success) expect(r.data.descontoPercentual).toBeNull();
   });
 
   it('percentual "0" vira 0, e 0 é DIFERENTE de vazio: é "esta pessoa não tem encargo"', () => {
-    const r = editarItemFolhaSchema.safeParse(base({ encargosPercentual: "0" }));
+    const r = editarItemFolhaSchema.safeParse(
+      base({ descontoPercentual: "0" }),
+    );
     expect(r.success).toBe(true);
     // A distinção é o que faz um terceiro entrar na folha sem encargo sem
     // apagar a configuração de todo mundo. Se as duas virassem a mesma coisa,
     // ou o terceiro carregaria encargo de CLT, ou a folha inteira ficaria sem
     // encargo — e as duas versões passariam por qualquer teste que só olhasse
     // "é falsy".
-    if (r.success) expect(r.data.encargosPercentual).toBe(0);
+    if (r.success) expect(r.data.descontoPercentual).toBe(0);
   });
 });
 
@@ -92,22 +94,22 @@ describe("editarItemFolhaSchema — parsing pt-BR", () => {
     // digita 0.5 querendo 0,5% cadastra 5% e o encargo sai dez vezes maior,
     // aprovado pelo check da coluna e por qualquer refine de faixa.
     const r = editarItemFolhaSchema.safeParse(
-      base({ encargosPercentual: "0.5" }),
+      base({ descontoPercentual: "0.5" }),
     );
     expect(r.success).toBe(false);
   });
 
   it("aceita 4 casas no percentual (8,3333% é alíquota real)", () => {
     const r = editarItemFolhaSchema.safeParse(
-      base({ encargosPercentual: "8,3333" }),
+      base({ descontoPercentual: "8,3333" }),
     );
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.encargosPercentual).toBe(8.3333);
+    if (r.success) expect(r.data.descontoPercentual).toBe(8.3333);
   });
 
   it("recusa 5 casas no percentual: a coluna NUMERIC(7,4) arredondaria calada", () => {
     const r = editarItemFolhaSchema.safeParse(
-      base({ encargosPercentual: "8,33333" }),
+      base({ descontoPercentual: "8,33333" }),
     );
     expect(r.success).toBe(false);
   });
@@ -133,14 +135,14 @@ describe("editarItemFolhaSchema — faixas", () => {
 
   it("recusa percentual acima de 100", () => {
     const r = editarItemFolhaSchema.safeParse(
-      base({ encargosPercentual: "101" }),
+      base({ descontoPercentual: "101" }),
     );
     expect(r.success).toBe(false);
   });
 
   it("aceita percentual 100 (o limite do check da coluna)", () => {
     const r = editarItemFolhaSchema.safeParse(
-      base({ encargosPercentual: "100" }),
+      base({ descontoPercentual: "100" }),
     );
     expect(r.success).toBe(true);
   });
@@ -159,13 +161,13 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       itemId: ITEM,
       salarioBase: 1621,
       gratificacao: 500,
-      encargosPercentual: 10,
+      descontoPercentual: 10,
     });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.salarioBase).toBe(1621);
       expect(r.data.gratificacao).toBe(500);
-      expect(r.data.encargosPercentual).toBe(10);
+      expect(r.data.descontoPercentual).toBe(10);
     }
   });
 
@@ -174,12 +176,12 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       itemId: ITEM,
       salarioBase: 1621,
       gratificacao: 0,
-      encargosPercentual: 0,
+      descontoPercentual: 0,
     });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.gratificacao).toBe(0);
-      expect(r.data.encargosPercentual).toBe(0);
+      expect(r.data.descontoPercentual).toBe(0);
     }
   });
 });

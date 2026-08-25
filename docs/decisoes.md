@@ -3026,6 +3026,83 @@ porque o gatilho do `Combobox` já é `w-full` e media a célula direto. Só se 
 o jsdom não pega layout. A coluna também passou de 2fr para 3fr, senão dois comboboxes
 não cabem e "Caminhão Caçamba 2..." não diz qual caminhão é.
 
+
+## 25/08/2026 — O percentual por pessoa na folha desconta do salário, e não soma no custo
+
+**O que o Tiago viu**: CLELTON, bruto R$ 1.907,00, digitou 7,5% e a tela mostrou custo R$ 2.028,58 e
+líquido R$ 1.907,00. "Quando eu coloco o valor da porcentagem que vai descontado do salário, ao invés
+de subtrair o aplicativo tá somando."
+
+**Não era erro de conta, e a distinção importa.** O campo era "Percentual de encargo desta pessoa":
+encargo PATRONAL (FGTS, INSS patronal), que por definição soma no custo da empresa e nunca sai do
+salário de ninguém. O desconto do empregado tinha lugar próprio — `folha_itens.inss`, calculado pelas
+faixas de `/rh/parametros-folha` — e estava zerado porque **as faixas nunca foram cadastradas**:
+`fn_folha_inss(10.000)` devolvia R$ 0,00, em silêncio. Os 7,5% que ele digitou são justamente a 1ª
+faixa do INSS do empregado; ele foi ao único campo de percentual que a tela oferecia.
+
+Medido no banco antes de decidir: `folha_encargos`, `folha_inss_faixas`, `folha_irrf_faixas` e
+`folha_parametros` todas VAZIAS; 58 colaboradores ativos, ZERO com percentual no cadastro; uma folha,
+em rascunho, e UM item com percentual próprio. Nada aprovado, nada pago, nenhum lançamento gerado — foi
+isso que tornou a troca de significado segura.
+
+**A decisão foi dele, com os números na frente.** Três opções ofertadas (cadastrar as faixas de INSS /
+campo novo de desconto ao lado do encargo / trocar o significado do campo atual), cada uma com a conta
+do CLELTON no preview. Ele escolheu trocar o significado, e confirmou na segunda pergunta que **não usa
+encargo patronal na folha**. O aviso de que perderia o registro de FGTS/INSS patronal estava escrito na
+opção que ele marcou.
+
+**Base do desconto = SALÁRIO BASE, não bruto.** É o número que ele aprovou (7,5% de 1.621,00 = 121,58,
+o mesmo que já estava na tela; sobre o bruto daria 143,03) e é a mesma base do encargo e da provisão. A
+fórmula está em DOIS lugares (`fn_editar_item_folha` e `fn_gerar_folha`) e os dois comentários dizem
+isso; mudar de base é mudar nos dois.
+
+**O custo da empresa NÃO cai com o desconto.** O dinheiro sai da conta igual: o desconto muda quem
+fica com ele, não quanto a empresa gasta. `custo_total` segue sendo bruto + encargos + provisão, e o
+KPI passou a dizer "bruto + provisão" porque encargo é zero enquanto a config estiver vazia.
+
+**A estrutura de encargo patronal fica no banco, só sai da tela.** `folha_encargos`,
+`folha_item_encargos` e `folha_guias` continuam de pé: a folha oficial / eSocial do roadmap exige FGTS
+e INSS patronal, e apagar agora seria refazer depois. A seção "Encargos por tipo" já era condicional
+(`length > 0`), então desapareceu sozinha e volta no dia que ele cadastrar os encargos — sem código
+novo. O percentual que a geração passa para o helper virou NULL: encargo agora vem só da configuração,
+para todos, em vez de linha por linha.
+
+**Colunas novas em vez de renomear.** `folha_itens.desconto_percentual` + `descontos`,
+`colaboradores.desconto_percentual`, `folhas.valor_descontos`. Renomear `encargos_percentual` arrastaria
+o significado por seis lugares (o total da folha, o resumo por tipo, `folha_item_encargos`, a guia) e
+faria "encargo" virar "desconto" em dado histórico. Grants: as ACLs dessas três tabelas são de TABELA
+(`authenticated=rm` em `folha_itens`), então coluna nova herda o SELECT e nada de escrita foi aberto.
+
+**Nulo continua sendo diferente de zero**, e o motivo mudou de dono: era "usa a config" x "não tem
+encargo"; agora é "não tem desconto" x "tem, e é 0%". O Regerar depende dessa distinção para saber o
+que foi decidido à mão e o que nunca foi tocado.
+
+**O desconto entra na trava do adiantamento.** `v_disponivel` subtrai o desconto ANTES de comparar com
+o adiantamento já descontado. Sem isso, um percentual alto passaria a guarda e o líquido fecharia
+negativo — colaborador devendo para a folha, estado que ninguém cobra. Provado em transação desfeita:
+100% com adiantamento de R$ 1.500 é recusado com a mensagem que manda regerar, e a linha de controle
+(5%, que cabe) grava desconto R$ 81,05 e líquido R$ 325,95.
+
+**Dois erros meus no caminho, os dois achados por conferência e não por erro do banco.**
+
+1. A conversão do dado mudou `encargos_percentual` para `desconto_percentual` e zerou o encargo, mas
+   **não refez os valores derivados**: o item ficou com custo R$ 2.028,58 (ainda com o encargo que não
+   existe mais) e líquido R$ 1.907,00 (ainda sem o desconto), e os totais da folha idem. `UPDATE` que
+   mexe na coluna de origem sem refazer a derivada não dá erro nenhum — o `success` do apply não prova
+   nada. Consertado na 20260825120200, com guarda que faz a migration parar se algum líquido ficar
+   negativo.
+2. A prévia do drawer arredondava depois de dividir por 10.000 e devolvia **121,575** em vez de 121,58:
+   um centavo de divergência entre a tela e o `round(...,2)` do banco, exatamente no campo que a pessoa
+   está conferindo. Pegou porque a prévia saiu de dentro do componente para `previa-desconto.ts`, com
+   teste ancorado no valor que o banco gravou de verdade.
+
+**Regenerar `database.types.ts` apaga edição manual.** Rodei o gerador para pegar as colunas novas e
+isso apagou um `p_id: string | null` que outra frente havia escrito à mão em `fn_salvar_transferencia`,
+com comentário e tudo — o gerador não sabe que a função aceita null num parâmetro sem DEFAULT. O `tsc`
+pegou. Restaurei com um comentário avisando que regerar apaga de novo, e no meu caso usei
+`?? undefined` no lado da action (omitir o parâmetro = DEFAULT null no banco = sem desconto), que
+sobrevive a qualquer regeneração.
+
 ## 25/08/2026 — A forma única da OC leva o total da ORDEM, não o dos itens
 
 O dono ficou travado numa OC de R$ 5.825,06: a tela mostrava "Soma das parcelas

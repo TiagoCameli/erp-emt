@@ -9,6 +9,7 @@ import {
   RodapeEmpresa,
 } from "@/components/canonicos/marca-documento";
 import { Button } from "@/components/ui/button";
+import { formatarQuantidade } from "@/lib/formatadores";
 import {
   Dialog,
   DialogContent,
@@ -106,7 +107,9 @@ export function HoleriteDialog({
   if (!item) return null;
 
   const totalDescontos =
-    Math.round((item.inss + item.irrf + item.adiantamentos) * 100) / 100;
+    Math.round(
+      (item.inss + item.irrf + item.descontos + item.adiantamentos) * 100,
+    ) / 100;
   const fgts = fgtsDoMes(item.salarioBase, fgtsPercentual);
   // Total de proventos só aparece quando há gratificação: com salário sozinho a
   // linha repetiria o número de cima, e holerite com número repetido é onde o
@@ -166,6 +169,16 @@ export function HoleriteDialog({
               </h3>
               <Linha rotulo="INSS" valor={item.inss} />
               <Linha rotulo="IRRF" valor={item.irrf} />
+              {/* Só quando existe: um "Desconto R$ 0,00" em todo holerite de
+                  quem não tem desconto faria o funcionário procurar o que foi
+                  descontado dele. O percentual vai no rótulo porque é o que ele
+                  confere contra o combinado. */}
+              {item.descontoPercentual !== null ? (
+                <Linha
+                  rotulo={`Desconto (${formatarQuantidade(item.descontoPercentual)}% do salário base)`}
+                  valor={item.descontos}
+                />
+              ) : null}
               <Linha
                 rotulo={rotuloAdiantamento(item.adiantamentoParcelas)}
                 valor={item.adiantamentos}

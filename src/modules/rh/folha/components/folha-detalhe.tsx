@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, FileText, Pencil, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  FileText,
+  Pencil,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -16,7 +22,11 @@ import {
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { formatarBRL, formatarDataHora, formatarQuantidade } from "@/lib/formatadores";
+import {
+  formatarBRL,
+  formatarDataHora,
+  formatarQuantidade,
+} from "@/lib/formatadores";
 import {
   ROTULO_VINCULO,
   type Vinculo,
@@ -175,26 +185,27 @@ export function FolhaDetalheView({
   // diferente do lançamento que já saiu no Financeiro. Mesma trava está na
   // fn_editar_item_folha, e as duas concordam de propósito.
   const podeEditarLinha = podeEditar && rascunho;
-  // Com encargo individual em jogo, `folha.encargosPercentual` (a soma da
-  // config) deixa de valer para todo mundo. Dizer "26,8% aplicado" no KPI
-  // enquanto metade da folha usa outro número é o tipo de rótulo que faz o
-  // operador conferir a conta errada.
-  const itensComPercentualProprio = folha.itens.filter(
-    (item) => item.encargosPercentual !== null,
+  // Quantas pessoas têm desconto de salário neste mês. O KPI diz isso em vez de
+  // um percentual único, porque o desconto é por pessoa: "7,5% aplicado" seria
+  // falso para as outras 57 linhas.
+  const itensComDesconto = folha.itens.filter(
+    (item) => item.descontos > 0,
   ).length;
-  const detalheEncargos =
-    itensComPercentualProprio === 0
-      ? `${formatarQuantidade(folha.encargosPercentual)}% aplicado`
-      : itensComPercentualProprio === folha.itens.length
-        ? "percentual individual em todas as linhas"
-        : `${formatarQuantidade(folha.encargosPercentual)}% da config, e ${itensComPercentualProprio} ${
-            itensComPercentualProprio === 1 ? "linha" : "linhas"
-          } com percentual próprio`;
+  const detalheDescontos =
+    itensComDesconto === 0
+      ? "Ninguém com desconto neste mês"
+      : `${itensComDesconto} ${
+          itensComDesconto === 1 ? "pessoa" : "pessoas"
+        } com desconto no salário`;
 
   const [dialogEnviar, setDialogEnviar] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
-  const [holeriteItem, setHoleriteItem] = React.useState<FolhaItem | null>(null);
-  const [itemEmEdicao, setItemEmEdicao] = React.useState<FolhaItem | null>(null);
+  const [holeriteItem, setHoleriteItem] = React.useState<FolhaItem | null>(
+    null,
+  );
+  const [itemEmEdicao, setItemEmEdicao] = React.useState<FolhaItem | null>(
+    null,
+  );
 
   async function aoEnviarParaAprovacao() {
     const resultado = await enviarFolhaParaAprovacao(folha.id);
@@ -261,9 +272,7 @@ export function FolhaDetalheView({
               {folha.itens.length === 1 ? "colaborador" : "colaboradores"}
               {folha.status === "aprovado" && folha.aprovadoEm
                 ? ` · aprovada em ${formatarDataHora(folha.aprovadoEm)}${
-                    folha.aprovadoPorNome
-                      ? ` por ${folha.aprovadoPorNome}`
-                      : ""
+                    folha.aprovadoPorNome ? ` por ${folha.aprovadoPorNome}` : ""
                   }`
                 : ""}
             </p>
@@ -324,9 +333,9 @@ export function FolhaDetalheView({
             {impostosSemGrupo.length > 1
               ? "os grupos de recolhimento estão"
               : "o grupo de recolhimento está"}{" "}
-            sem configuração. O desconto continua no holerite e no líquido, mas a
-            guia que a empresa recolhe não aparece no Financeiro. Configure em RH
-            &gt; Parâmetros da Folha (/rh/parametros-folha)
+            sem configuração. O desconto continua no holerite e no líquido, mas
+            a guia que a empresa recolhe não aparece no Financeiro. Configure em
+            RH &gt; Parâmetros da Folha (/rh/parametros-folha)
             {folha.status === "aprovado"
               ? " e depois desaprove e reaprove esta folha, para a aprovação gerar a guia."
               : " antes de aprovar."}
@@ -345,22 +354,22 @@ export function FolhaDetalheView({
           }
         />
         <KPICard
-          titulo="Encargos"
-          valor={<MoneyText valor={folha.valorEncargos} />}
-          detalhe={detalheEncargos}
+          titulo="Descontos"
+          valor={<MoneyText valor={folha.valorDescontos} />}
+          detalhe={detalheDescontos}
         />
         <KPICard
           titulo="Custo total"
           valor={<MoneyText valor={folha.custoTotal} />}
-          detalhe="Custo da empresa (bruto + encargos + provisão)"
+          detalhe="Custo da empresa (bruto + provisão)"
         />
         <KPICard
           titulo="Líquido"
           valor={<MoneyText valor={folha.valorLiquido} />}
           detalhe={
             semDescontosLegais
-              ? "A receber (sem INSS/IRRF cadastrados)"
-              : "A receber (bruto − INSS − IRRF − adiantamentos)"
+              ? "A receber (bruto − descontos − adiantamentos)"
+              : "A receber (bruto − INSS − IRRF − descontos − adiantamentos)"
           }
         />
       </div>
@@ -370,9 +379,7 @@ export function FolhaDetalheView({
           <p className="text-legenda font-medium text-destructive">
             Motivo do registro
           </p>
-          <p className="text-detalhe text-foreground">
-            {folha.motivoRejeicao}
-          </p>
+          <p className="text-detalhe text-foreground">{folha.motivoRejeicao}</p>
         </div>
       ) : null}
 
@@ -415,7 +422,7 @@ export function FolhaDetalheView({
                   <th className="px-3 py-2 text-right font-medium">
                     Valor extras
                   </th>
-                  <th className="px-3 py-2 text-right font-medium">Encargos</th>
+                  <th className="px-3 py-2 text-right font-medium">Desconto</th>
                   <th className="px-3 py-2 text-right font-medium">Provisão</th>
                   <th className="px-3 py-2 text-right font-medium">
                     Adiantamentos
@@ -493,39 +500,23 @@ export function FolhaDetalheView({
                       <MoneyText valor={item.valorExtras} />
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      {/* Percentual próprio rende UMA linha de encargo, e um
-                          <details> de um item só é ruído: mostra o valor com o
-                          percentual embaixo, que é o que explica um encargo de
-                          R$ 0,00 num terceiro. O caminho da config continua
-                          expansível, porque ali são várias linhas. */}
-                      {item.encargosPercentual !== null ? (
+                      {/* O percentual vai embaixo do valor: é ele que explica
+                          POR QUE saíram R$ 121,58 do salário desta pessoa e
+                          nada do salário da linha de cima. Sem desconto, um
+                          R$ 0,00 apagado — dizer "0%" para 57 linhas que não
+                          têm desconto só polui a tabela. */}
+                      {item.descontoPercentual !== null ? (
                         <div className="flex flex-col items-end">
-                          <MoneyText valor={item.encargos} />
+                          <MoneyText valor={item.descontos} />
                           <span className="text-legenda">
-                            {formatarQuantidade(item.encargosPercentual)}% desta
+                            {formatarQuantidade(item.descontoPercentual)}% desta
                             pessoa
                           </span>
                         </div>
-                      ) : item.encargosDetalhe.length > 0 ? (
-                        <details className="group">
-                          <summary className="flex cursor-pointer list-none items-center justify-end gap-1 select-none [&::-webkit-details-marker]:hidden">
-                            <MoneyText valor={item.encargos} />
-                            <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180" />
-                          </summary>
-                          <ul className="mt-1.5 space-y-1 border-t border-border pt-1.5 text-left text-legenda">
-                            {item.encargosDetalhe.map((encargo) => (
-                              <li
-                                key={encargo.nome}
-                                className="flex items-center justify-between gap-3"
-                              >
-                                <span>{encargo.nome}</span>
-                                <MoneyText valor={encargo.valor} />
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
                       ) : (
-                        <MoneyText valor={item.encargos} />
+                        <span className="text-muted-foreground">
+                          <MoneyText valor={0} />
+                        </span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
@@ -537,7 +528,10 @@ export function FolhaDetalheView({
                           </summary>
                           <ul className="mt-1.5 space-y-1 border-t border-border pt-1.5 text-left text-legenda">
                             {item.provisoesDetalhe.map((provisao) => (
-                              <li key={provisao.nome} className="flex flex-col gap-0.5">
+                              <li
+                                key={provisao.nome}
+                                className="flex flex-col gap-0.5"
+                              >
                                 <span className="font-medium text-foreground">
                                   {provisao.nome}
                                 </span>
@@ -700,9 +694,7 @@ export function FolhaDetalheView({
                   <th className="px-3 py-2 text-right font-medium">
                     Principal
                   </th>
-                  <th className="px-3 py-2 text-right font-medium">
-                    Encargos
-                  </th>
+                  <th className="px-3 py-2 text-right font-medium">Encargos</th>
                   <th className="px-3 py-2 text-right font-medium">Total</th>
                 </tr>
               </thead>
@@ -720,7 +712,10 @@ export function FolhaDetalheView({
                       <MoneyText valor={provisao.encargos} />
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <MoneyText valor={provisao.total} className="font-medium" />
+                      <MoneyText
+                        valor={provisao.total}
+                        className="font-medium"
+                      />
                     </td>
                   </tr>
                 ))}
@@ -785,7 +780,6 @@ export function FolhaDetalheView({
           }}
           item={itemEmEdicao}
           folhaId={folha.id}
-          encargosPercentualConfig={folha.encargosPercentual}
           onSalvo={() => router.refresh()}
         />
       ) : null}
