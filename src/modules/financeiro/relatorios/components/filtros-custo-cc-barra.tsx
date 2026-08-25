@@ -38,6 +38,7 @@ const ROTULO_TIPO_CENTRO: Record<(typeof TIPOS_CENTRO)[number], string> = {
   obra: "Obra",
   escritorio: "Escritório",
   manutencao: "Manutenção",
+  financeiro: "Financeiro",
 };
 
 /**

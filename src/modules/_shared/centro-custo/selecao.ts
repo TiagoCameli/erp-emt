@@ -64,16 +64,22 @@ export function etapasDaRaiz(
 /**
  * O nome do segundo campo, pela boca de quem preenche.
  *
- * No schema, equipamento e etapa de obra são a mesma linha com um pai. Na tela
- * não são: quem lança manutenção procura "Equipamento", e quem lança obra procura
- * "Etapa". Um rótulo genérico faria as duas pessoas hesitarem.
+ * No schema, equipamento, empréstimo e etapa de obra são a mesma linha com um
+ * pai. Na tela não são: quem lança manutenção procura "Equipamento", quem lança
+ * uma parcela de dívida procura "Empréstimo", e quem lança obra procura
+ * "Etapa". Um rótulo genérico faria as três pessoas hesitarem.
  */
+const ROTULO_DO_NIVEL_2: Record<string, string> = {
+  manutencao: "Equipamento",
+  financeiro: "Empréstimo",
+};
+
 export function rotuloDaEtapa(
   centros: readonly CentroCustoOpcao[],
   raizId: string,
 ): string {
   const raiz = centros.find((c) => c.id === raizId);
-  return raiz?.tipo === "manutencao" ? "Equipamento" : "Etapa";
+  return ROTULO_DO_NIVEL_2[raiz?.tipo ?? ""] ?? "Etapa";
 }
 
 /**
