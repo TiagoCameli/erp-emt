@@ -441,6 +441,12 @@ export interface LancamentoDetalhe {
   numeroDocumento: string | null;
   /** Texto livre do lançamento. Só aparece no detalhe, nunca na lista. */
   observacoes: string | null;
+  /**
+   * Marca de dívida: empréstimo, financiamento ou consórcio. É uma dimensão à
+   * parte de categoria e centro de custo, e alimenta o relatório de
+   * endividamento.
+   */
+  eDivida: boolean;
   parcelas: ParcelaLancamento[];
   rateios: RateioLancamento[];
   /**
@@ -1343,7 +1349,7 @@ export async function buscarLancamento(
       `id, numero, numero_documento, tipo, origem, origem_id, fornecedor_id,
        colaborador_id,
        cliente_id, categoria_id, forma_pagamento_id, condicao_pagamento_id,
-       descricao, observacoes, valor, status, mes_competencia, data_compra,
+       descricao, observacoes, e_divida, valor, status, mes_competencia, data_compra,
        created_at, data_vencimento,
        valor_bruto, retencao_iss, retencao_pis, retencao_cofins,
        retencao_csll, retencao_ir, retencao_inss, retencao_outras,
@@ -1488,6 +1494,7 @@ export async function buscarLancamento(
     dataVencimento: data.data_vencimento,
     numeroDocumento: data.numero_documento,
     observacoes: data.observacoes,
+    eDivida: data.e_divida,
     parcelas,
     rateios,
     formas,

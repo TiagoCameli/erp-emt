@@ -268,6 +268,14 @@ export const lancamentoSchema = z
     /** Texto livre: o combinado, o que a nota não diz. Só no detalhe. */
     observacoes: textoOpcional(2000),
     /**
+     * Marca que este lançamento é uma dívida: empréstimo, financiamento ou
+     * consórcio. NÃO substitui categoria nem centro de custo — o financiamento
+     * da escavadeira continua sendo custo de "Aquisição de Equipamentos", que é
+     * onde o dinheiro virou máquina. É uma dimensão à parte, que responde
+     * "quanto a empresa deve" e alimenta o relatório de endividamento.
+     */
+    eDivida: z.boolean().default(false),
+    /**
      * Valor faturado antes das retenções. Ausente = documento sem retenção, e aí
      * `valor` é o valor cheio. Quando vem, `valor` continua sendo o LÍQUIDO: é
      * ele que as parcelas somam e que move o saldo bancário.
@@ -571,6 +579,8 @@ export const lancamentoFormSchema = z
       .string()
       .trim()
       .max(2000, { error: "Máximo de 2000 caracteres" }),
+    /** A caixinha "É dívida". Booleano nos dois lados: não passa por texto. */
+    eDivida: z.boolean(),
     /**
      * Bruto e retenções continuam string no formulário, como todo campo de
      * dinheiro da tela: a coerção para número acontece no envio. Vazio significa

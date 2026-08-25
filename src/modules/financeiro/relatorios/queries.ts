@@ -14,6 +14,10 @@ import {
 import type { CentroCustoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 import {
+  montarEndividamento,
+  type Endividamento,
+} from "@/modules/financeiro/relatorios/endividamento";
+import {
   agregarAging,
   agruparDrePorNatureza,
   paraCentavos,
@@ -1046,4 +1050,49 @@ export async function custoPorInsumo(
     quantidade: Number(linha.quantidade ?? 0),
     valor: paraReais(paraCentavos(linha.total)),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Endividamento
+// ---------------------------------------------------------------------------
+
+/** Quantos meses o corte "o que vence pela frente" enxerga. */
+const MESES_DO_ENDIVIDAMENTO = 12;
+
+/**
+ * Empréstimos, financiamentos e consórcios: quanto a empresa deve e quanto
+ * vence pela frente.
+ *
+ * Entra só o lançamento com a caixinha "É empréstimo, financiamento ou
+ * consórcio" marcada. NÃO é um recorte por categoria nem por centro de custo,
+ * de propósito: o financiamento de uma escavadeira é custo de equipamento e
+ * continua lá para o DRE e para o custo por centro. A marca é uma dimensão à
+ * parte, que responde a pergunta que nenhuma das duas respondia.
+ *
+ * O saldo devedor é a soma das PARCELAS EM ABERTO, não um campo: um
+ * financiamento de 57 parcelas com 3 pagas deve o que falta, não o contratado.
+ * Por isso contratado menos pago não dá exatamente o saldo quando alguém pagou
+ * uma parcela com juros ou desconto (o pago é o líquido, o que saiu da conta).
+ *
+ * As duas RPCs são SECURITY INVOKER: quem não pode ver lançamento não vê dívida
+ * nenhuma, e a tela vem vazia em vez de furar a permissão.
+ */
+export async function endividamento(): Promise<Endividamento> {
+  const supabase = await createClient();
+
+  const [contratosRpc, mesesRpc] = await Promise.all([
+    supabase.rpc("fn_rel_endividamento"),
+    supabase.rpc("fn_rel_endividamento_por_mes", {
+      p_meses: MESES_DO_ENDIVIDAMENTO,
+    }),
+  ]);
+
+  if (contratosRpc.error) {
+    throw new Error("Não foi possível carregar as dívidas");
+  }
+  if (mesesRpc.error) {
+    throw new Error("Não foi possível carregar os vencimentos das dívidas");
+  }
+
+  return montarEndividamento(contratosRpc.data ?? [], mesesRpc.data ?? []);
 }

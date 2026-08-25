@@ -3148,6 +3148,57 @@ fechar com um total que não existe e o erro apareceria longe da causa.
 então uma OC de teste queima um número; o teste que reproduz a mensagem exata do servidor
 prova o mesmo sem sujar a base.
 
+---
+
+## 25/08/2026 — Dívida é uma marca no lançamento, não um centro de custo nem uma categoria
+
+**O pedido.** Uma caixinha para marcar os lançamentos de empréstimo, financiamento e
+consórcio, e um relatório só para eles.
+
+**Por que não reaproveitei o que já existia.** A tentação era resolver com o que o
+sistema já tem: um centro de custo "Empréstimos" (criado na véspera) ou uma categoria
+financeira. As duas dariam o relatório de graça e as duas mentiriam.
+
+O financiamento de uma escavadeira **é** custo de "Aquisição de Equipamentos" — o dinheiro
+virou máquina, e é isso que o DRE e o custo por centro precisam enxergar. Movê-lo para um
+centro "Empréstimos" para vê-lo junto tiraria R$ 5,37 mi de um centro que os relatórios já
+usam. Categoria tem o mesmo problema, do outro lado.
+
+"Quanto a empresa deve" é uma **terceira pergunta**, ortogonal às outras duas. Daí uma
+coluna própria, `lancamentos.e_divida`, que não move nada: o lançamento continua onde
+está, e ganha um sim/não que nenhuma das duas dimensões respondia.
+
+**Por enquanto é sim/não, e não a espécie.** O Tiago falou em três (empréstimo,
+financiamento, consórcio) e escolheu começar pela caixinha. Quando a espécie vier, a
+coluna vira `natureza_divida text` e todo `true` de hoje continua valendo.
+
+**O saldo devedor não é um campo.** É a soma das parcelas ainda não pagas. Um
+financiamento de 57 parcelas com 3 pagas deve o que falta, não o contratado — e por isso
+`contratado − pago` **não** dá exatamente o saldo quando alguém pagou com juros ou
+desconto (o pago é o líquido, o que saiu da conta). As duas RPCs contam parcela.
+
+**Parcela vencida e não paga cai no mês corrente**, e não no mês em que venceu: para o
+caixa ela é compromisso de agora, não passado.
+
+**As duas RPCs são SECURITY INVOKER**, como as outras de relatório: quem não pode ver
+lançamento não vê dívida nenhuma. Definer furaria a permissão de quem só tem a aba de
+relatórios.
+
+**Como `fn_salvar_lancamento` foi alterada.** Reescrita **a partir dela mesma**: a
+migration lê `pg_get_functiondef`, aplica três substituições de texto conferidas uma a uma
+e executa o resultado. Reescrever o corpo de cabeça é como se apaga o trabalho de outra
+frente sem gerar conflito nenhum no git — `CREATE OR REPLACE` aceita calado.
+
+**Os doze marcados por ID, não por regex.** "REFERENTE CONTRATO Nº 85901000-7" e "COMPRA
+DE UMA ESCAVADEIRA HIDRAULICA" não têm nada em comum no texto, e um padrão largo o
+bastante para pegar os dois pegaria compra à vista junto. Parcelamento de imposto
+(Prefeitura, SEFAZ) ficou de fora: é dívida com o fisco, de outra natureza.
+
+**Provas.** Contratado R$ 11.426.682,45 − pago R$ 2.284.106,61 = saldo R$ 9.142.575,84,
+idêntico à soma das parcelas em aberto lida direto da tabela na mesma consulta (linha de
+controle). Rodado com `set local role authenticated` impersonando o usuário real, porque
+o MCP conecta como owner e não se subjuga à RLS.
+
 ## 25/08/2026 — Lançamento criado pelo RH nasce completo
 
 O dono abriu o LAN-2026-6522, "Diarias MARIA EVANILDE SILVA NASCIMENTO 08/2026", R$ 432,24,

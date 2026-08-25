@@ -24,6 +24,7 @@ const formDuasFormas = {
   dataVencimento: "",
   numeroDocumento: "",
   observacoes: "",
+  eDivida: false,
   parcelas: [
     { valor: "2.000,00", dataVencimento: "2026-09-10", formaPagamentoId: BOLETO },
     { valor: "2.000,00", dataVencimento: "2026-10-10", formaPagamentoId: BOLETO },

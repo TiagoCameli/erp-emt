@@ -96,6 +96,7 @@ function lancamento(troca: Partial<LancamentoDetalhe> = {}): LancamentoDetalhe {
     criadoEm: "2026-08-11T14:52:00Z",
     dataVencimento: "2026-08-15",
     observacoes: null,
+    eDivida: false,
     parcelas: [parcela(), parcela({ id: ID_OUTRA, numeroParcela: 3 })],
     formas: [],
     rateios: [

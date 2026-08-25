@@ -6,7 +6,12 @@ import { idSchemaCom } from "@/lib/id";
  * Tipos de nível 1 (CENTRO) da árvore de centros de custo.
  * Etapas (nível 2) e itens (nível 3) têm tipo null.
  */
-export const TIPOS_CENTRO = ["obra", "escritorio", "manutencao"] as const;
+export const TIPOS_CENTRO = [
+  "obra",
+  "escritorio",
+  "manutencao",
+  "financeiro",
+] as const;
 
 export type TipoCentro = (typeof TIPOS_CENTRO)[number];
 
@@ -15,6 +20,12 @@ export const ROTULO_TIPO_CENTRO: Record<TipoCentro, string> = {
   obra: "Obra",
   escritorio: "Escritório",
   manutencao: "Manutenção",
+  /**
+   * Dívida: um centro por natureza de compromisso financeiro, com uma etapa
+   * por contrato. Não é obra nem escritório — o dinheiro não virou custo de
+   * nada ainda, virou parcela a pagar.
+   */
+  financeiro: "Financeiro",
 };
 
 const nomeSchema = z

@@ -33,7 +33,7 @@ export type ParametrosUrl = Record<string, string | string[] | undefined>;
  */
 export type ModoPeriodo = "mes" | "periodo" | "total" | "vida";
 
-export type TipoCentro = "obra" | "escritorio" | "manutencao";
+export type TipoCentro = "obra" | "escritorio" | "manutencao" | "financeiro";
 
 /**
  * Status de lançamento que o filtro oferece.
@@ -101,6 +101,7 @@ export const TIPOS_CENTRO: readonly TipoCentro[] = [
   "obra",
   "escritorio",
   "manutencao",
+  "financeiro",
 ];
 export const STATUS_CUSTO: readonly StatusCusto[] = [
   "a_pagar",
