@@ -71,6 +71,7 @@ import {
 } from "@/modules/compras/ordens/calculo";
 import {
   achatarGruposEmItens,
+  formasDoFormulario,
   agruparItensPorCentroCusto,
   type GrupoForm,
 } from "@/modules/compras/ordens/form-mapeamento";
@@ -430,33 +431,12 @@ export function OrdemFormDrawer({
   );
 
   async function aoEnviar(valores: OrdemCompraFormInput) {
-    /**
-     * Com UMA forma ela leva o total dos itens: a coluna de valor dela não está
-     * na tela, mesmo tratamento do centro de custo único. Com duas ou mais, cada
-     * uma leva o valor digitado.
-     */
     const itens = achatarGruposEmItens(valores.centrosCusto);
-    const totalDosItens =
-      Math.round(
-        itens.reduce(
-          (soma, item) =>
-            soma + Math.round(item.quantidade * item.precoUnitario * 100),
-          0,
-        ),
-      ) / 100;
-
-    const formas =
-      valores.formas.length === 1
-        ? [
-            {
-              formaPagamentoId: valores.formas[0]!.formaPagamentoId,
-              valor: totalDosItens,
-            },
-          ]
-        : valores.formas.map((forma) => ({
-            formaPagamentoId: forma.formaPagamentoId,
-            valor: paraNumero(forma.valor),
-          }));
+    // A conta de quanto vale a forma única mora em `formasDoFormulario`, junto
+    // dos testes. Aqui havia uma soma de `quantidade * preço` escrita à mão, sem
+    // os ajustes do rodapé, e o servidor conferia contra o total COM ajustes:
+    // toda ordem com desconto paga por uma forma só era recusada no salvamento.
+    const formas = formasDoFormulario(valores);
 
     /**
      * Com uma forma só, TODA parcela é dela: a pessoa não escolhe duas vezes a

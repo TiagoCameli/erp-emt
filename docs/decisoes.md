@@ -3102,3 +3102,48 @@ com comentário e tudo — o gerador não sabe que a função aceita null num pa
 pegou. Restaurei com um comentário avisando que regerar apaga de novo, e no meu caso usei
 `?? undefined` no lado da action (omitir o parâmetro = DEFAULT null no banco = sem desconto), que
 sobrevive a qualquer regeneração.
+
+## 25/08/2026 — A forma única da OC leva o total da ORDEM, não o dos itens
+
+O dono ficou travado numa OC de R$ 5.825,06: a tela mostrava "Soma das parcelas
+R$ 5.825,06" com o selo verde **"Fecha com o total da ordem"** e, ao lado, o aviso
+vermelho **"A soma das formas precisa fechar com o total da ordem"**. A mesma tela dando
+razão a duas contas contraditórias do mesmo dinheiro.
+
+**A causa.** No submit do formulário (`aoEnviar`), a forma única levava uma soma de
+`quantidade × preço` escrita à mão ali mesmo — **sem os ajustes do rodapé**. O
+`superRefine` do servidor confere `soma das formas` contra `totalEmCentavos(itens,
+ajustes)`, que inclui frete, outras despesas, impostos e desconto. Resultado: toda ordem
+com desconto ou outras despesas paga por **uma forma só** era recusada no salvamento.
+
+Nada estava errado nas pontas: o refine do cliente sempre contou os ajustes, o rodapé
+sempre contou, o servidor sempre conferiu contra `valor_total`. O que estava errado era a
+**ponte** entre eles — e é por isso que nenhum teste de camada isolada pegava.
+
+**O conserto.** A conta saiu do componente e virou `formasDoFormulario` em
+`form-mapeamento.ts`, usando o `totalComAjustes` canônico. Uma fórmula só, do jeito que os
+outros quatro consertos desta semana terminaram: apagar a segunda conta em vez de alinhar
+as duas.
+
+**O que os testes provam.** Sete casos novos, e os dois que valem são:
+
+1. O payload que a tela monta passa pelo `ordemCompraSchema` — o **mesmo juiz** que
+   recusou. Testar as pontas separadas foi o que deixou o furo passar; o que pega é
+   submeter o payload inteiro.
+2. **Linha de controle:** com a forma levando só o total dos itens (o defeito
+   reproduzido de propósito), o schema recusa com a mensagem literal
+   "A soma das formas precisa fechar com o total da ordem". Sem essa asserção, o caso 1
+   passaria também numa versão em que o servidor tivesse parado de conferir a soma — e
+   não estaria provando nada.
+
+Mais uma amarra: a soma das formas é asserida contra a **expressão** `totalEmCentavos(itens,
+ajustesDoForm(form))`, não contra um número escrito à mão, então as duas contas não têm
+como divergir de novo sem o teste cair.
+
+**Valor negativo passa de propósito** quando o desconto é maior que a ordem: quem recusa é
+o schema, com a mensagem que fala do desconto. Truncar em zero na conversão faria a soma
+fechar com um total que não existe e o erro apareceria longe da causa.
+
+**Não criei OC de verdade para provar.** A numeração é `UPDATE` em `documento_sequencias`,
+então uma OC de teste queima um número; o teste que reproduz a mensagem exata do servidor
+prova o mesmo sem sujar a base.
