@@ -3198,3 +3198,62 @@ bastante para pegar os dois pegaria compra à vista junto. Parcelamento de impos
 idêntico à soma das parcelas em aberto lida direto da tabela na mesma consulta (linha de
 controle). Rodado com `set local role authenticated` impersonando o usuário real, porque
 o MCP conecta como owner e não se subjuga à RLS.
+
+## 25/08/2026 — Lançamento criado pelo RH nasce completo
+
+O dono abriu o LAN-2026-6522, "Diarias MARIA EVANILDE SILVA NASCIMENTO 08/2026", R$ 432,24,
+e encontrou fornecedor, categoria, forma de pagamento, condição e vencimento **todos vazios**.
+Pedido: lançamento que vem do RH tem que vir com essas informações.
+
+**O que a medição mudou no desenho.** Antes de propor qualquer coisa: existia UM lançamento de
+origem `diaria` (esse), então havia tempo de acertar o padrão antes do volume. E três funções do
+RH criam lançamento (`fn_fechar_diarias`, `fn_aprovar_folha`, `fn_registrar_adiantamento`) e
+**nenhuma** preenchia forma, categoria ou fornecedor.
+
+**A divisão que organizou tudo: derivável vira trigger, escolhido vira parâmetro.**
+
+- **Derivável** (colaborador e categoria) → trigger `trg_rh_completar_lancamento` em
+  `lancamentos`. Um lugar cobre os TRÊS caminhos, e cobre o que alguém criar amanhã. Editar
+  `fn_aprovar_folha` (8.975 caracteres) para isso seria reescrever uma função grande por dois
+  campos, com risco de apagar trabalho de outra frente.
+- **Escolhido** (forma e vencimento) → parâmetro de função, porque vem da tela. Decisão do dono:
+  quem fecha escolhe. Derivar do cadastro erraria na maioria — 40 dos 59 colaboradores não têm
+  dado bancário nenhum.
+
+**Colaborador é coluna nova, não `fornecedor_id`.** Conferido por CPF (não por nome, que casa
+"MARIA" com meio cadastro): só **9 dos 59** colaboradores existem também como fornecedor. Apontar
+`fornecedor_id` exigiria cadastrar ~50 pessoas em dobro, e toda admissão passaria a precisar de
+dois cadastros — esquecer um devolve o campo vazio que esta mudança fecha. Na tela é UMA coluna:
+empresa aparece pelo fornecedor, pessoa da folha pelo colaborador, e o rótulo do detalhe muda de
+"Fornecedor" para "Colaborador".
+
+**A categoria vem de ONDE a pessoa trabalha.** O cadastro já vinha no par "Salário Mão de Obra" x
+"Salário Pessoal Administrativo", o que é sinal de que essa era a intenção desde o começo. Quem
+responde é o centro de custo **raiz** (`tipo` só existe na raiz). Diária ganhou categoria própria
+("Diárias Mão de Obra", decisão do dono) para o DRE poder comparar diarista contra CLT.
+
+**Categoria que não existe RECUSA, não grava nulo.** É o coração da correção: era a categoria nula
+que fazia R$ 432,24 entrar no DRE como "sem categoria". A exceção diz o nome exato da categoria a
+cadastrar. Isso já tem um caso esperando: existe "Férias Mão de Obra" e **não** existe "Férias
+Pessoal Administrativo" — no dia em que a folha gerar férias de alguém do escritório, o sistema
+avisa em vez de classificar como mão de obra.
+
+**Vencimento era opcional, e "opcional" virou "vazio".** A action só mandava o parâmetro quando a
+tela tinha valor, e a tela não tinha. Agora o schema exige, a função recusa, e o botão do diálogo
+fica desligado até os dois campos estarem preenchidos — recusar depois do clique seria a mesma dor
+com uma volta a mais.
+
+**Prova: 7 casos, 4 linhas de controle, tudo em transação desfeita.** As medições viajam no TEXTO
+da exceção, porque tabela temporária seria desfeita junto. Numeração não queima: é UPDATE em
+`documento_sequencias`, não `nextval`. O caso que mais importa é o 5 — item de folha do escritório
+tem de dar "Salário **Pessoal Administrativo**". Sem ele, a derivação poderia devolver "Mão de
+Obra" fixo e os outros casos passariam igual. E o 6: `folha_guia` fica **intacto**, porque a guia é
+a empresa pagando o governo e não tem pessoa.
+
+**O que ficou de fora, e por quê.** Os lançamentos de guia (`origem = 'folha_guia'`) continuam sem
+categoria: qual categoria cada grupo de recolhimento usa é decisão contábil em aberto, e hoje eles
+nem nascem — `folha_parametros` está **vazia** (nenhum dia de pagamento, nenhum grupo de INSS/IRRF
+configurado). O `when` do trigger lista as origens nominalmente, então a guia fica fora por
+construção, não por esquecimento. A folha também continua lendo o vencimento do salário dessa
+tabela vazia: o trigger já dá a ela colaborador e categoria, mas forma e vencimento da folha
+precisam da mesma mudança de parâmetro que as diárias receberam.

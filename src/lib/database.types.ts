@@ -2121,6 +2121,7 @@ export type Database = {
           categoria_id: string | null;
           centro_custo_id: string | null;
           cliente_id: string | null;
+          colaborador_id: string | null;
           condicao_pagamento_id: string | null;
           created_at: string;
           created_by: string | null;
@@ -2154,6 +2155,7 @@ export type Database = {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
           cliente_id?: string | null;
+          colaborador_id?: string | null;
           condicao_pagamento_id?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -2187,6 +2189,7 @@ export type Database = {
           categoria_id?: string | null;
           centro_custo_id?: string | null;
           cliente_id?: string | null;
+          colaborador_id?: string | null;
           condicao_pagamento_id?: string | null;
           created_at?: string;
           created_by?: string | null;
@@ -2236,6 +2239,13 @@ export type Database = {
             columns: ["cliente_id"];
             isOneToOne: false;
             referencedRelation: "clientes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamentos_colaborador_id_fkey";
+            columns: ["colaborador_id"];
+            isOneToOne: false;
+            referencedRelation: "colaboradores";
             referencedColumns: ["id"];
           },
           {
@@ -3828,11 +3838,19 @@ export type Database = {
         Args: { p_mes: string; p_observacao?: string };
         Returns: undefined;
       };
+      fn_categoria_do_rh: {
+        Args: { p_colaborador: string; p_evento: string };
+        Returns: string;
+      };
       fn_fechar_diarias: {
         Args: {
           p_colaborador: string;
           p_competencia: string;
-          p_data_vencimento?: string;
+          // Os dois SEM `?`: desde 25/08/2026 a funcao recusa vencimento ou
+          // forma nulos. Deixar opcional aqui devolveria o furo que fez o
+          // LAN-2026-6522 nascer sem data.
+          p_data_vencimento: string;
+          p_forma_pagamento: string;
         };
         Returns: string;
       };

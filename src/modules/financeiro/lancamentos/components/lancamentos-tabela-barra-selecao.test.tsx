@@ -128,6 +128,7 @@ function lancamento(troca: Partial<LancamentoLista> = {}): LancamentoLista {
     categoriaNome: "Combustível",
     centroCustoRotulo: "BR-364 Lote 9",
     fornecedorNome: "GUERRA IMPLEMENTOS RODOVIARIOS S.A",
+    colaboradorNome: null,
     valor: 1000,
     dataVencimento: "2026-08-10",
     status: "a_pagar",

@@ -27,6 +27,7 @@ const lancamento: LancamentoPlanilha = {
   categoriaNome: "Combustível",
   centroCustoRotulo: "BR-364 Lote 9",
   fornecedorNome: "Posto Rio Branco",
+  colaboradorNome: null,
   valor: 1234.56,
   dataVencimento: "2026-08-10",
   status: "aprovado",

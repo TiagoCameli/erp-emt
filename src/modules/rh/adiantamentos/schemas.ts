@@ -57,6 +57,7 @@ export const adiantamentoSchema = z
       .int({ error: "Parcelas precisa ser um número inteiro" })
       .min(1, { error: "No mínimo 1 parcela" })
       .max(MAX_PARCELAS, { error: `No máximo ${MAX_PARCELAS} parcelas` }),
+    formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
   })
   .refine((dados) => quantidadeCabeNoTotal(dados.valor, dados.parcelas), {
     error: "Parcelas demais para este valor: cada parcela ficaria em zero",
@@ -92,6 +93,13 @@ export const adiantamentoFormSchema = z.object({
       },
       { error: `Informe um número de parcelas entre 1 e ${MAX_PARCELAS}` },
     ),
+  /**
+   * Quem cria o adiantamento escolhe por qual forma o dinheiro sai (decisão do
+   * dono). Não é derivada do cadastro: 40 dos 59 colaboradores não têm dado
+   * bancário, então adivinhar erraria na maioria. `fn_registrar_adiantamento`
+   * recusa vazio, então a regra vale mesmo se alguém chamar por fora da tela.
+   */
+  formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
 });
 
 export type AdiantamentoFormInput = z.infer<typeof adiantamentoFormSchema>;
@@ -107,5 +115,6 @@ export function adiantamentoFormParaInput(
     data: dados.data,
     descricao: dados.descricao === "" ? undefined : dados.descricao,
     parcelas: Number(dados.parcelas.trim()),
+    formaPagamentoId: dados.formaPagamentoId,
   };
 }

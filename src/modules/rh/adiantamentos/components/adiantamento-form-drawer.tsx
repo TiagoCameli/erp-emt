@@ -33,6 +33,7 @@ import {
   mesParaCompetencia,
   type AdiantamentoFormInput,
 } from "@/modules/rh/adiantamentos/schemas";
+import type { FormaPagamentoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 
 const ID_FORM = "form-adiantamento";
@@ -50,6 +51,7 @@ function valoresIniciais(): AdiantamentoFormInput {
     data: dataHojeISO(),
     descricao: "",
     parcelas: "1",
+    formaPagamentoId: "",
   };
 }
 
@@ -103,6 +105,8 @@ export interface AdiantamentoFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   colaboradores: ColaboradorOpcao[];
+  /** Formas ativas: quem cria escolhe por qual o dinheiro sai. */
+  formasPagamento: FormaPagamentoOpcao[];
   /** Adiantamento em edição. Ausente significa criar. */
   adiantamento?: AdiantamentoLista | null;
 }
@@ -116,6 +120,7 @@ export function AdiantamentoFormDrawer({
   aberto,
   onAbertoChange,
   colaboradores,
+  formasPagamento,
   adiantamento,
 }: AdiantamentoFormDrawerProps) {
   const editando = Boolean(adiantamento);
@@ -250,6 +255,33 @@ export function AdiantamentoFormDrawer({
               id="adiantamento-data"
               type="date"
               {...form.register("data")}
+            />
+          </CampoFormulario>
+
+          {/*
+            Obrigatória: é ela que decide o caminho do pagamento no financeiro.
+            Não é derivada do cadastro do colaborador porque 40 dos 59 não têm
+            dado bancário -- adivinhar erraria na maioria.
+          */}
+          <CampoFormulario
+            id="adiantamento-forma"
+            rotulo="Forma de pagamento"
+            obrigatorio
+            erro={form.formState.errors.formaPagamentoId?.message}
+          >
+            <Combobox
+              valor={form.watch("formaPagamentoId") ?? ""}
+              onValorChange={(valor) =>
+                form.setValue("formaPagamentoId", valor, {
+                  shouldValidate: true,
+                })
+              }
+              opcoes={formasPagamento.map((forma) => ({
+                valor: forma.id,
+                rotulo: forma.nome,
+              }))}
+              placeholder="Selecione a forma"
+              id="adiantamento-forma"
             />
           </CampoFormulario>
 

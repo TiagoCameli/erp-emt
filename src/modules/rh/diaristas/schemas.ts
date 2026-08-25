@@ -85,6 +85,19 @@ const VENC_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * Schema do fechamento (servidor). Gera UM lançamento a pagar somando as
  * diárias em aberto do colaborador na competência. Vencimento é opcional.
  */
+/**
+ * Fechamento das diárias: o que a tela precisa mandar.
+ *
+ * `dataVencimento` e `formaPagamentoId` são OBRIGATÓRIOS, e isso é mudança. O
+ * vencimento era opcional, e foi por isso que o LAN-2026-6522 nasceu sem data:
+ * a action só mandava o parâmetro quando a tela tinha valor, e a tela não tinha.
+ * Campo opcional naquilo que todo lançamento precisa é um vazio esperando a vez.
+ *
+ * Quem escolhe a forma é quem fecha (decisão do dono): 40 dos 59 colaboradores
+ * não têm dado bancário cadastrado, então derivar a forma do cadastro erraria na
+ * maioria. `fn_fechar_diarias` recusa os dois vazios, então a regra vale mesmo
+ * que alguém chame a action por fora da tela.
+ */
 export const fecharSchema = z.object({
   colaboradorId: idSchemaCom("Diarista inválido"),
   competencia: z
@@ -94,8 +107,8 @@ export const fecharSchema = z.object({
   dataVencimento: z
     .string()
     .trim()
-    .regex(VENC_REGEX, { error: "Data de vencimento inválida" })
-    .optional(),
+    .regex(VENC_REGEX, { error: "Informe o vencimento do pagamento" }),
+  formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
 });
 
 export type FecharInput = z.infer<typeof fecharSchema>;

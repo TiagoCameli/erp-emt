@@ -215,6 +215,10 @@ export async function criarAdiantamento(
       data: validado.data.data,
       descricao: validado.data.descricao ?? null,
       parcelas: validado.data.parcelas,
+      // A forma vai no payload; o banco recusa nulo. Quem recebe e a categoria
+      // do custo NAO vao: o trigger trg_rh_completar_lancamento deriva os dois
+      // do cadastro, para os tres caminhos do RH no mesmo lugar.
+      forma_pagamento_id: validado.data.formaPagamentoId,
     },
   });
 
