@@ -2127,6 +2127,7 @@ export type Database = {
           data_compra: string;
           data_vencimento: string | null;
           descricao: string;
+          e_divida: boolean;
           forma_pagamento_id: string | null;
           fornecedor_id: string | null;
           id: string;
@@ -2159,6 +2160,7 @@ export type Database = {
           data_compra?: string;
           data_vencimento?: string | null;
           descricao: string;
+          e_divida?: boolean;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;
@@ -2191,6 +2193,7 @@ export type Database = {
           data_compra?: string;
           data_vencimento?: string | null;
           descricao?: string;
+          e_divida?: boolean;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;
@@ -4215,6 +4218,30 @@ export type Database = {
           conta_bancaria_id: string;
           posicao: number;
           resgatado: number;
+        }[];
+      };
+      fn_rel_endividamento: {
+        Args: never;
+        Returns: {
+          categoria: string;
+          credor: string;
+          descricao: string;
+          lancamento_id: string;
+          numero: string;
+          parcelas: number;
+          parcelas_pagas: number;
+          proximo_vencimento: string | null;
+          saldo_devedor: number;
+          total_pago: number;
+          valor_contratado: number;
+        }[];
+      };
+      fn_rel_endividamento_por_mes: {
+        Args: { p_meses?: number };
+        Returns: {
+          mes: string;
+          parcelas: number;
+          valor: number;
         }[];
       };
       fn_rel_posicao_bancaria: {

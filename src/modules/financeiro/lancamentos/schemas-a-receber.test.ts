@@ -22,6 +22,7 @@ const formAPagar = {
   mesCompetencia: "2026-07",
   dataVencimento: "2026-08-10",
   observacoes: "",
+  eDivida: false,
   numeroDocumento: "",
   // Com UMA forma a coluna de valor dela nao aparece na tela (ela vale o total),
   // e a parcela ja nasce apontando para ela -- e o que o Combobox de forma unica

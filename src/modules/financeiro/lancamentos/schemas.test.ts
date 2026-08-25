@@ -24,6 +24,7 @@ const formBase = {
   dataVencimento: "2026-08-10",
   numeroDocumento: "",
   observacoes: "",
+  eDivida: false,
   parcelas: [{ valor: "", dataVencimento: "", formaPagamentoId: FORMA }],
   // Centro de custo é obrigatório, e com UM a coluna de valor não aparece na
   // tela: a linha vai com o centro escolhido e o valor vazio, e o envio a

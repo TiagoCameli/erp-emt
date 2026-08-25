@@ -52,6 +52,11 @@ import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
+import { EndividamentoGrafico } from "@/modules/financeiro/relatorios/components/endividamento-grafico";
+import {
+  EndividamentoPorMesTabela,
+  EndividamentoTabela,
+} from "@/modules/financeiro/relatorios/components/endividamento-tabela";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
@@ -66,6 +71,7 @@ import {
   custoPorGrupo,
   custoReceita,
   dreGerencial,
+  endividamento,
   extratoPorFornecedor,
   fluxoCaixa,
   listarCentrosCustoRaiz,
@@ -333,6 +339,70 @@ async function ConteudoPosicaoBancaria({
         posicao={posicao}
         podeVerLancamentos={podeVerLancamentos}
       />
+    </>
+  );
+}
+
+async function ConteudoEndividamento({
+  podeVerLancamentos,
+}: {
+  podeVerLancamentos: boolean;
+}) {
+  const dados = await endividamento();
+  if (dados.contratos.length === 0) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Nenhuma dívida marcada"
+        descricao="Marque a caixinha “É empréstimo, financiamento ou consórcio” no lançamento para ele aparecer aqui."
+      />
+    );
+  }
+  const emAberto = dados.contratos.filter(
+    (contrato) => contrato.proximoVencimento !== null,
+  ).length;
+  return (
+    <>
+      <GradeKpis>
+        <KPICard
+          titulo="Saldo devedor"
+          valor={<MoneyText valor={dados.totalSaldo} />}
+          detalhe="Soma das parcelas ainda não pagas"
+        />
+        <KPICard
+          titulo="Vence em 12 meses"
+          valor={<MoneyText valor={dados.totalProximosMeses} />}
+          detalhe="O compromisso do próximo ano"
+        />
+        <KPICard
+          titulo="Já pago"
+          valor={<MoneyText valor={dados.totalPago} />}
+          detalhe="Pelo líquido: o que saiu da conta"
+        />
+        <KPICard
+          titulo="Contratos"
+          valor={`${emAberto} de ${dados.contratos.length}`}
+          detalhe="Em aberto, do total marcado como dívida"
+        />
+      </GradeKpis>
+
+      <EndividamentoTabela
+        endividamento={dados}
+        podeVerLancamentos={podeVerLancamentos}
+      />
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-corpo font-medium text-foreground">
+          O que vence pela frente
+        </h3>
+        <Painel>
+          <EndividamentoGrafico meses={dados.proximosMeses} />
+        </Painel>
+        <EndividamentoPorMesTabela
+          meses={dados.proximosMeses}
+          total={dados.totalProximosMeses}
+        />
+      </div>
     </>
   );
 }
@@ -859,7 +929,7 @@ export default async function RelatoriosPage({
       <PageHeader
         modulo="Financeiro"
         titulo="Relatórios"
-        descricao="Como está o caixa: fluxo, DRE, aging, posição bancária, custo por centro de custo e extrato por fornecedor."
+        descricao="Como está o caixa: fluxo, DRE, aging, posição bancária, endividamento, custo por centro de custo e extrato por fornecedor."
       />
 
       <RelatoriosNav ativo={relatorio} />
@@ -911,6 +981,15 @@ export default async function RelatoriosPage({
           descricao="Saldo por conta: saldo inicial mais o efeito das parcelas pagas."
         >
           <ConteudoPosicaoBancaria podeVerLancamentos={podeVerLancamentos} />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "endividamento" ? (
+        <SecaoRelatorio
+          titulo="Endividamento"
+          descricao="Empréstimos, financiamentos e consórcios marcados no lançamento: quanto se deve hoje e quanto vence pela frente. É uma dimensão à parte da categoria e do centro de custo — o financiamento de uma máquina continua sendo custo de equipamento."
+        >
+          <ConteudoEndividamento podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 
