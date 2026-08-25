@@ -19,6 +19,8 @@ const CENTROS: CentroCustoOpcao[] = [
   { id: "manut", nome: "Manutenção/Documentação de Equipamentos", codigo: null, paiId: null, tipo: "manutencao" },
   { id: "bobcat", nome: "Bobcat MC110C - 01", codigo: null, paiId: "manut", tipo: null },
   { id: "cacamba", nome: "Caminhão Caçamba 2", codigo: null, paiId: "manut", tipo: null },
+  { id: "emprestimos", nome: "Empréstimos", codigo: null, paiId: null, tipo: "financeiro" },
+  { id: "bb-giro", nome: "BB - Capital de giro", codigo: null, paiId: "emprestimos", tipo: null },
 ];
 
 describe("resolverSelecao", () => {
@@ -57,6 +59,7 @@ describe("raizes e etapas", () => {
       "obra-11",
       "escritorio",
       "manut",
+      "emprestimos",
     ]);
   });
 
@@ -85,8 +88,36 @@ describe("rotuloDaEtapa", () => {
     expect(rotuloDaEtapa(CENTROS, "obra-9")).toBe("Etapa");
   });
 
+  /**
+   * O centro de Empréstimos tem o mesmo desenho do de manutenção: a raiz é o
+   * grupo e cada CONTRATO é uma linha de nível 2. Quem vai lançar a parcela
+   * procura "Empréstimo" na tela, não "Etapa".
+   */
+  it("financeiro chama de Empréstimo", () => {
+    expect(rotuloDaEtapa(CENTROS, "emprestimos")).toBe("Empréstimo");
+  });
+
+  it("escritório continua chamando de Etapa", () => {
+    expect(rotuloDaEtapa(CENTROS, "escritorio")).toBe("Etapa");
+  });
+
   it("raiz desconhecida também chama de Etapa, sem quebrar", () => {
     expect(rotuloDaEtapa(CENTROS, "nao-existe")).toBe("Etapa");
+  });
+});
+
+describe("as etapas do centro de Empréstimos", () => {
+  it("o contrato aparece como etapa da raiz financeira", () => {
+    expect(etapasDaRaiz(CENTROS, "emprestimos").map((c) => c.id)).toEqual([
+      "bb-giro",
+    ]);
+  });
+
+  it("escolher o contrato preenche os dois campos", () => {
+    expect(resolverSelecao(CENTROS, "bb-giro")).toEqual({
+      raizId: "emprestimos",
+      etapaId: "bb-giro",
+    });
   });
 });
 
