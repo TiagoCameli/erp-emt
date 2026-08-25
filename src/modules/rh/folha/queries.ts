@@ -7,7 +7,10 @@ import {
 } from "@/components/canonicos";
 import { createClient } from "@/lib/supabase/server";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
-import { STATUS_PARCELA, type StatusParcela } from "@/modules/financeiro/_shared/formato";
+import {
+  STATUS_PARCELA,
+  type StatusParcela,
+} from "@/modules/financeiro/_shared/formato";
 import { type StatusFolha, STATUS_FOLHA } from "@/modules/rh/_shared/formato";
 
 /** Linha da listagem de folhas, com a contagem de itens. */
@@ -99,6 +102,17 @@ export interface FolhaItem {
    * que é o caso da maioria e o único que gera guia no Financeiro.
    */
   encargosPercentual: number | null;
+  /**
+   * Percentual descontado do SALÁRIO desta pessoa neste mês (25/08/2026). Sai
+   * do líquido e NÃO muda o custo da empresa: o dinheiro sai da conta igual, o
+   * desconto só muda quem fica com ele.
+   *
+   * `null` é diferente de `0`: nulo é "esta pessoa não tem desconto", zero é
+   * "tem, e vale zero" — e a tela mostra os dois de jeitos diferentes.
+   */
+  descontoPercentual: number | null;
+  /** Valor descontado do salário: salarioBase × descontoPercentual / 100. */
+  descontos: number;
   /** Provisão de 13º/férias deste item (Bloco 8b): custo do mês, sem caixa. */
   provisoes: number;
   /**
@@ -150,6 +164,11 @@ export interface FolhaDetalhe {
   encargosPercentual: number;
   valorBruto: number;
   valorEncargos: number;
+  /**
+   * Soma dos descontos de salário do mês (25/08/2026). NÃO entra no custo
+   * total: é dinheiro que sai do salário, não da empresa.
+   */
+  valorDescontos: number;
   /**
    * Provisão de 13º/férias do mês (Bloco 8b), somando `folha_itens.provisoes`
    * de todos os itens. Já embutida em `custoTotal` (= bruto + encargos +
@@ -310,14 +329,20 @@ async function identificarParcelasDaFolha(
 
   // Ordem por competência (e id como desempate) dentro de cada adiantamento,
   // para achar a posição de cada parcela no plano ATUAL — não o `numero`.
-  const porAdiantamento = new Map<string, { id: string; competencia: string }[]>();
+  const porAdiantamento = new Map<
+    string,
+    { id: string; competencia: string }[]
+  >();
   for (const parcela of todasParcelas ?? []) {
     const lista = porAdiantamento.get(parcela.adiantamento_id) ?? [];
     lista.push({ id: parcela.id, competencia: parcela.competencia });
     porAdiantamento.set(parcela.adiantamento_id, lista);
   }
 
-  const posicaoPorParcelaId = new Map<string, { ordinal: number; total: number }>();
+  const posicaoPorParcelaId = new Map<
+    string,
+    { ordinal: number; total: number }
+  >();
   for (const lista of porAdiantamento.values()) {
     const ordenada = [...lista].sort((a, b) =>
       a.competencia === b.competencia
@@ -339,7 +364,10 @@ async function identificarParcelasDaFolha(
     const colaboradorId = linha.rh_adiantamentos.colaborador_id;
     const lista = resultado.get(colaboradorId) ?? [];
     lista.push(posicao);
-    resultado.set(colaboradorId, lista.sort((a, b) => a.ordinal - b.ordinal));
+    resultado.set(
+      colaboradorId,
+      lista.sort((a, b) => a.ordinal - b.ordinal),
+    );
   }
 
   return resultado;
@@ -357,7 +385,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .from("folhas")
     .select(
       `id, competencia, status, encargos_percentual, valor_bruto,
-       valor_encargos, valor_provisoes, valor_gratificacoes,
+       valor_encargos, valor_descontos, valor_provisoes, valor_gratificacoes,
        valor_adiantamentos, valor_liquido,
        custo_total, aprovado_em, motivo_rejeicao,
        usuarios!folhas_aprovado_por_fkey(nome)`,
@@ -372,7 +400,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .select(
       `id, colaborador_id, centro_custo_id, salario_base, gratificacao,
        horas_normais, horas_extras, valor_extras, inss, irrf, encargos,
-       encargos_percentual, provisoes, adiantamentos, custo_total,
+       encargos_percentual, desconto_percentual, descontos,
+       provisoes, adiantamentos, custo_total,
        valor_liquido, editado_manualmente, lancamento_id,
        colaboradores(nome, vinculo, funcoes(nome)),
        centros_custo(nome, codigo),
@@ -413,6 +442,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
         .map((encargo) => ({ nome: encargo.nome, valor: encargo.valor }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       encargosPercentual: item.encargos_percentual,
+      descontoPercentual: item.desconto_percentual,
+      descontos: item.descontos,
       provisoes: item.provisoes,
       // Folhas geradas antes desta frente (Bloco 8b) não têm linhas aqui: [].
       provisoesDetalhe: (item.folha_item_provisoes ?? [])
@@ -423,7 +454,8 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
         }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       adiantamentos: item.adiantamentos,
-      adiantamentoParcelas: parcelasPorColaborador.get(item.colaborador_id) ?? [],
+      adiantamentoParcelas:
+        parcelasPorColaborador.get(item.colaborador_id) ?? [],
       custoTotal: item.custo_total,
       valorLiquido: item.valor_liquido,
       editadoManualmente: item.editado_manualmente,
@@ -440,6 +472,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     encargosPercentual: folha.encargos_percentual,
     valorBruto: folha.valor_bruto,
     valorEncargos: folha.valor_encargos,
+    valorDescontos: folha.valor_descontos,
     valorProvisoes: folha.valor_provisoes,
     valorGratificacoes: folha.valor_gratificacoes,
     valorAdiantamentos: folha.valor_adiantamentos,
@@ -574,10 +607,9 @@ export async function trilhaFolha(id: string): Promise<EventoTrilha[]> {
 
   const nomesPorId = new Map<string, string>();
   if (idsUsuarios.length > 0) {
-    const { data: usuarios } = await supabase.rpc(
-      "nomes_usuarios_auditoria",
-      { p_ids: idsUsuarios },
-    );
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_auditoria", {
+      p_ids: idsUsuarios,
+    });
     for (const usuario of usuarios ?? []) {
       nomesPorId.set(usuario.id, usuario.nome);
     }

@@ -15,9 +15,16 @@ import {
   SecaoFormulario,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { ROTULO_VINCULO, type Vinculo } from "@/modules/cadastros/colaboradores/schemas";
+import {
+  ROTULO_VINCULO,
+  type Vinculo,
+} from "@/modules/cadastros/colaboradores/schemas";
 import { editarItemFolha } from "@/modules/rh/folha/actions";
 import type { FolhaItem } from "@/modules/rh/folha/queries";
+import {
+  descontoDoSalario,
+  liquidoPrevisto,
+} from "@/modules/rh/folha/previa-desconto";
 import { paraNumero } from "@/modules/rh/percentual";
 
 const ID_FORM = "form-editar-item-folha";
@@ -35,28 +42,30 @@ export interface EditarItemFolhaDrawerProps {
   item: FolhaItem | null;
   /** Folha do item, só para revalidar a rota do detalhe depois de salvar. */
   folhaId: string;
-  /** Soma dos percentuais dos encargos ativos, para explicar o campo vazio. */
-  encargosPercentualConfig: number;
   /** Chamado depois de salvar com sucesso. */
   onSalvo?: () => void;
 }
 
 /**
  * Altera a linha de um colaborador na folha em rascunho: salário base,
- * gratificação salarial e percentual de encargo individual.
+ * gratificação salarial e percentual descontado do salário.
  *
  * O drawer é o lugar onde a gratificação de quem tem gratificação é lançada. A
- * gratificação NÃO entra na base dos encargos nem da provisão (regra do Tiago),
- * e o rodapé mostra isso em números ANTES de confirmar: é a única forma de o
- * operador ver que somar R$ 500 de gratificação não aumentou o encargo.
+ * gratificação NÃO entra na base do desconto nem da provisão (regra do Tiago),
+ * e o rodapé mostra isso em números ANTES de confirmar.
  *
- * O percentual de encargo vazio não é zero: é "usa a configuração". Zero é uma
- * escolha ("este terceiro não tem encargo"), e as duas coisas precisam ser
- * dizíveis, senão não há como cadastrar um terceiro sem encargo sem também
- * apagar a config de todo mundo.
+ * O percentual DESCONTA do salário: o líquido da pessoa cai, e o custo da
+ * empresa não muda (o dinheiro sai da conta igual, o desconto só muda quem
+ * fica com ele). Até 25/08/2026 este mesmo campo era encargo patronal e SOMAVA
+ * no custo — o que fez a folha mostrar custo R$ 2.028,58 num bruto de
+ * R$ 1.907,00 e não descontar nada de ninguém.
+ *
+ * Vazio não é zero: vazio é "não tem desconto", zero é "tem, e é 0%". A
+ * distinção existe porque o Regerar preserva o que foi digitado, e precisa
+ * saber diferenciar "não mexeram nisso" de "decidiram que é zero".
  *
  * Quem calcula é o banco (`fn_editar_item_folha`, as mesmas funções da
- * geração). O que aparece aqui é PRÉVIA: encargo e custo estimados para a
+ * geração). O que aparece aqui é PRÉVIA: desconto e líquido estimados para a
  * pessoa conferir a ordem de grandeza. Os valores oficiais chegam no
  * `router.refresh()` de quem chamou.
  */
@@ -65,7 +74,6 @@ export function EditarItemFolhaDrawer({
   onAbertoChange,
   item,
   folhaId,
-  encargosPercentualConfig,
   onSalvo,
 }: EditarItemFolhaDrawerProps) {
   const [salarioBase, setSalarioBase] = React.useState("");
@@ -85,7 +93,7 @@ export function EditarItemFolhaDrawer({
     if (item) {
       setSalarioBase(paraCampo(item.salarioBase));
       setGratificacao(paraCampo(item.gratificacao));
-      setPercentual(paraCampo(item.encargosPercentual));
+      setPercentual(paraCampo(item.descontoPercentual));
     }
   }
 
@@ -102,20 +110,34 @@ export function EditarItemFolhaDrawer({
       percentualNumero >= 0 &&
       percentualNumero <= 100);
   // Linha zerada não existe na folha: a mesma trava está no schema e no banco.
-  const temValor = baseValida && gratValida && (baseNumero > 0 || gratNumero > 0);
+  const temValor =
+    baseValida && gratValida && (baseNumero > 0 || gratNumero > 0);
   const podeSalvar =
     item !== null && baseValida && gratValida && percentualValido && temValor;
 
-  // Prévia: o encargo incide só sobre o salário base. `percentualNumero` null
-  // cai na soma da config, que é o que a geração vai usar nesse caso.
-  const percentualAplicado = percentualNumero ?? encargosPercentualConfig;
-  const encargoPrevisto =
+  // Prévia: o desconto incide só sobre o salário base, e vazio vale zero aqui
+  // (a diferença entre vazio e zero está no que se GRAVA, não no que se desconta).
+  //
+  // As contas moram em `previa-desconto.ts`, com teste ancorado no que o banco
+  // gravou de verdade: é o teste que impede a prévia de divergir da fórmula
+  // oficial por um centavo, no número que a pessoa está conferindo.
+  const percentualAplicado = percentualNumero ?? 0;
+  const descontoPrevisto =
     baseValida && percentualValido
-      ? Math.round(baseNumero * (percentualAplicado / 100) * 100) / 100
+      ? descontoDoSalario(baseNumero, percentualAplicado)
       : null;
-  const custoPrevisto =
-    encargoPrevisto !== null && temValor
-      ? baseNumero + gratNumero + encargoPrevisto + (item?.provisoes ?? 0)
+  // INSS e IRRF vêm do item, não são recalculados aqui: quem os calcula são as
+  // faixas do banco, e chutar daria um número que a tela desmente no refresh.
+  const liquidoEstimado =
+    descontoPrevisto !== null && temValor
+      ? liquidoPrevisto({
+          salarioBase: baseNumero,
+          gratificacao: gratNumero,
+          desconto: descontoPrevisto,
+          inss: item?.inss ?? 0,
+          irrf: item?.irrf ?? 0,
+          adiantamentos: item?.adiantamentos ?? 0,
+        })
       : null;
 
   async function aoEnviar(evento: React.FormEvent<HTMLFormElement>) {
@@ -131,7 +153,7 @@ export function EditarItemFolhaDrawer({
       return;
     }
     if (!percentualValido) {
-      toast.error("O percentual de encargo vai de 0 a 100");
+      toast.error("O percentual de desconto vai de 0 a 100");
       return;
     }
     if (!temValor) {
@@ -146,7 +168,7 @@ export function EditarItemFolhaDrawer({
       itemId: item.id,
       salarioBase: baseNumero,
       gratificacao: gratNumero,
-      encargosPercentual: percentualNumero,
+      descontoPercentual: percentualNumero,
     });
     setSalvando(false);
 
@@ -177,21 +199,21 @@ export function EditarItemFolhaDrawer({
       }
       rodape={
         <div className="flex w-full flex-wrap items-center justify-between gap-4">
-          {/* A prévia existe por causa da regra da gratificação: ver "encargo
-              sobre R$ X" ao lado de "gratificação R$ Y" é o que mostra, sem
-              precisar acreditar, que a gratificação ficou fora do encargo. */}
+          {/* A prévia existe para o desconto aparecer como número ANTES de
+              salvar: é o que mostra que o percentual sai do salário, e não do
+              bolso da empresa. */}
           <div className="text-detalhe text-muted-foreground">
-            {encargoPrevisto !== null && custoPrevisto !== null ? (
+            {descontoPrevisto !== null && liquidoEstimado !== null ? (
               <>
-                Encargo{" "}
-                <MoneyText valor={encargoPrevisto} className="inline" /> sobre o
-                salário base ({percentualAplicado}%) · custo estimado{" "}
+                Desconto{" "}
+                <MoneyText valor={descontoPrevisto} className="inline" /> sobre
+                o salário base ({percentualAplicado}%) · líquido estimado{" "}
                 <span className="font-semibold text-foreground">
-                  <MoneyText valor={custoPrevisto} className="inline" />
+                  <MoneyText valor={liquidoEstimado} className="inline" />
                 </span>
               </>
             ) : (
-              "Preencha os valores para ver o encargo e o custo estimados"
+              "Preencha os valores para ver o desconto e o líquido estimados"
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -203,7 +225,11 @@ export function EditarItemFolhaDrawer({
             >
               Cancelar
             </Button>
-            <Button type="submit" form={ID_FORM} disabled={salvando || !podeSalvar}>
+            <Button
+              type="submit"
+              form={ID_FORM}
+              disabled={salvando || !podeSalvar}
+            >
               {salvando ? (
                 <>
                   <LoaderCircle className="animate-spin" />
@@ -217,7 +243,12 @@ export function EditarItemFolhaDrawer({
         </div>
       }
     >
-      <form id={ID_FORM} onSubmit={aoEnviar} className={classesFormulario} noValidate>
+      <form
+        id={ID_FORM}
+        onSubmit={aoEnviar}
+        className={classesFormulario}
+        noValidate
+      >
         <SecaoFormulario titulo="Remuneração do mês">
           <LinhaCampos>
             <CampoFormulario
@@ -228,7 +259,7 @@ export function EditarItemFolhaDrawer({
               ajuda={
                 item?.colaboradorVinculo === "diarista"
                   ? "Para diarista, a folha traz a soma das diárias em aberto do mês. Alterar aqui desliga essa soma para esta folha."
-                  : "Base dos encargos e da provisão."
+                  : "Base do desconto e da provisão."
               }
             >
               <InputMoeda
@@ -243,7 +274,7 @@ export function EditarItemFolhaDrawer({
               id="item-folha-gratificacao"
               rotulo="Gratificação salarial"
               largura="medio"
-              ajuda="Soma no líquido e no custo. NÃO entra na base dos encargos nem da provisão."
+              ajuda="Soma no líquido e no custo. NÃO entra na base do desconto nem da provisão."
             >
               <InputMoeda
                 id="item-folha-gratificacao"
@@ -255,19 +286,19 @@ export function EditarItemFolhaDrawer({
           </LinhaCampos>
         </SecaoFormulario>
 
-        <SecaoFormulario titulo="Encargo">
+        <SecaoFormulario titulo="Desconto do salário">
           <CampoFormulario
-            id="item-folha-encargo"
-            rotulo="Percentual de encargo desta pessoa"
+            id="item-folha-desconto"
+            rotulo="Percentual descontado do salário"
             largura="medio"
-            ajuda={`Em branco usa a configuração da folha (${encargosPercentualConfig}% hoje, discriminado por encargo). Preencha para dar um percentual próprio — 0 para quem não tem encargo. Percentual próprio não gera guia no Financeiro.`}
+            ajuda="Incide sobre o salário base e sai do líquido: a pessoa recebe menos. Não muda o custo da empresa. Em branco = sem desconto."
           >
             <InputPercentual
-              id="item-folha-encargo"
+              id="item-folha-desconto"
               valor={percentual}
               onValorChange={setPercentual}
               disabled={salvando}
-              placeholder={String(encargosPercentualConfig)}
+              placeholder="0"
             />
           </CampoFormulario>
         </SecaoFormulario>

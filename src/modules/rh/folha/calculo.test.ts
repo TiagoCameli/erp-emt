@@ -32,6 +32,10 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     encargos: 0,
     encargosDetalhe: [],
     encargosPercentual: null,
+    // Sem desconto de salario: nulo, nao zero. Os testes deste arquivo somam
+    // encargo, provisao e centro de custo, e o desconto nao entra em nenhum.
+    descontoPercentual: null,
+    descontos: 0,
     provisoes: 0,
     provisoesDetalhe: [],
     lancamentoId: null,
@@ -51,6 +55,7 @@ function criarFolha(itens: FolhaItem[]): FolhaDetalhe {
     encargosPercentual: 20,
     valorBruto: 0,
     valorEncargos: 0,
+    valorDescontos: 0,
     valorProvisoes: 0,
     valorGratificacoes: 0,
     valorAdiantamentos: 0,
@@ -253,7 +258,9 @@ describe("resumoPorProvisao", () => {
       }),
       criarItem({
         id: "2",
-        provisoesDetalhe: [{ nome: "13º", valorPrincipal: 50, valorEncargos: 14 }],
+        provisoesDetalhe: [
+          { nome: "13º", valorPrincipal: 50, valorEncargos: 14 },
+        ],
       }),
     ]);
     folha.valorProvisoes = 334;

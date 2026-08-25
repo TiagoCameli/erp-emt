@@ -407,12 +407,13 @@ export type Database = {
           cpf: string | null;
           created_at: string;
           created_by: string | null;
-          encargos_percentual: number | null;
           ctps_numero: string | null;
           ctps_serie: string | null;
           ctps_uf: string | null;
           data_admissao: string | null;
           data_nascimento: string | null;
+          desconto_percentual: number | null;
+          encargos_percentual: number | null;
           escolaridade: string | null;
           estado_civil: string | null;
           funcao_id: string | null;
@@ -450,12 +451,13 @@ export type Database = {
           cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
-          encargos_percentual?: number | null;
           ctps_numero?: string | null;
           ctps_serie?: string | null;
           ctps_uf?: string | null;
           data_admissao?: string | null;
           data_nascimento?: string | null;
+          desconto_percentual?: number | null;
+          encargos_percentual?: number | null;
           escolaridade?: string | null;
           estado_civil?: string | null;
           funcao_id?: string | null;
@@ -493,12 +495,13 @@ export type Database = {
           cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
-          encargos_percentual?: number | null;
           ctps_numero?: string | null;
           ctps_serie?: string | null;
           ctps_uf?: string | null;
           data_admissao?: string | null;
           data_nascimento?: string | null;
+          desconto_percentual?: number | null;
+          encargos_percentual?: number | null;
           escolaridade?: string | null;
           estado_civil?: string | null;
           funcao_id?: string | null;
@@ -1385,9 +1388,11 @@ export type Database = {
           colaborador_id: string;
           created_at: string;
           custo_total: number;
+          desconto_percentual: number | null;
+          descontos: number;
           editado_manualmente: boolean;
-          encargos_percentual: number | null;
           encargos: number;
+          encargos_percentual: number | null;
           folha_id: string;
           gratificacao: number;
           horas_extras: number;
@@ -1407,9 +1412,11 @@ export type Database = {
           colaborador_id: string;
           created_at?: string;
           custo_total?: number;
+          desconto_percentual?: number | null;
+          descontos?: number;
           editado_manualmente?: boolean;
-          encargos_percentual?: number | null;
           encargos?: number;
+          encargos_percentual?: number | null;
           folha_id: string;
           gratificacao?: number;
           horas_extras?: number;
@@ -1429,9 +1436,11 @@ export type Database = {
           colaborador_id?: string;
           created_at?: string;
           custo_total?: number;
+          desconto_percentual?: number | null;
+          descontos?: number;
           editado_manualmente?: boolean;
-          encargos_percentual?: number | null;
           encargos?: number;
+          encargos_percentual?: number | null;
           folha_id?: string;
           gratificacao?: number;
           horas_extras?: number;
@@ -1571,6 +1580,7 @@ export type Database = {
           updated_at: string;
           valor_adiantamentos: number;
           valor_bruto: number;
+          valor_descontos: number;
           valor_encargos: number;
           valor_gratificacoes: number;
           valor_liquido: number;
@@ -1590,6 +1600,7 @@ export type Database = {
           updated_at?: string;
           valor_adiantamentos?: number;
           valor_bruto?: number;
+          valor_descontos?: number;
           valor_encargos?: number;
           valor_gratificacoes?: number;
           valor_liquido?: number;
@@ -1609,6 +1620,7 @@ export type Database = {
           updated_at?: string;
           valor_adiantamentos?: number;
           valor_bruto?: number;
+          valor_descontos?: number;
           valor_encargos?: number;
           valor_gratificacoes?: number;
           valor_liquido?: number;
@@ -1883,6 +1895,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      lancamento_formas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          forma_pagamento_id: string;
+          id: string;
+          lancamento_id: string;
+          updated_at: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id: string;
+          id?: string;
+          lancamento_id: string;
+          updated_at?: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id?: string;
+          id?: string;
+          lancamento_id?: string;
+          updated_at?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lancamento_formas_forma_pagamento_id_fkey";
+            columns: ["forma_pagamento_id"];
+            isOneToOne: false;
+            referencedRelation: "formas_pagamento";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamento_formas_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       lancamento_parcelas: {
         Row: {
           aprovado_em: string | null;
@@ -1978,17 +2035,17 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "lancamento_parcelas_lancamento_forma_id_fkey";
-            columns: ["lancamento_forma_id"];
-            isOneToOne: false;
-            referencedRelation: "lancamento_formas";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "lancamento_parcelas_conta_bancaria_id_fkey";
             columns: ["conta_bancaria_id"];
             isOneToOne: false;
             referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamento_parcelas_lancamento_forma_id_fkey";
+            columns: ["lancamento_forma_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamento_formas";
             referencedColumns: ["id"];
           },
           {
@@ -2003,51 +2060,6 @@ export type Database = {
             columns: ["pago_por"];
             isOneToOne: false;
             referencedRelation: "usuarios";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      lancamento_formas: {
-        Row: {
-          created_at: string;
-          created_by: string | null;
-          forma_pagamento_id: string;
-          id: string;
-          lancamento_id: string;
-          updated_at: string;
-          valor: number;
-        };
-        Insert: {
-          created_at?: string;
-          created_by?: string | null;
-          forma_pagamento_id: string;
-          id?: string;
-          lancamento_id: string;
-          updated_at?: string;
-          valor: number;
-        };
-        Update: {
-          created_at?: string;
-          created_by?: string | null;
-          forma_pagamento_id?: string;
-          id?: string;
-          lancamento_id?: string;
-          updated_at?: string;
-          valor?: number;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "lancamento_formas_forma_pagamento_id_fkey";
-            columns: ["forma_pagamento_id"];
-            isOneToOne: false;
-            referencedRelation: "formas_pagamento";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "lancamento_formas_lancamento_id_fkey";
-            columns: ["lancamento_id"];
-            isOneToOne: false;
-            referencedRelation: "lancamentos";
             referencedColumns: ["id"];
           },
         ];
@@ -2210,17 +2222,17 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "lancamentos_cliente_id_fkey";
-            columns: ["cliente_id"];
-            isOneToOne: false;
-            referencedRelation: "clientes";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "lancamentos_centro_custo_id_fkey";
             columns: ["centro_custo_id"];
             isOneToOne: false;
             referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lancamentos_cliente_id_fkey";
+            columns: ["cliente_id"];
+            isOneToOne: false;
+            referencedRelation: "clientes";
             referencedColumns: ["id"];
           },
           {
@@ -2376,6 +2388,51 @@ export type Database = {
           },
         ];
       };
+      oc_formas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          forma_pagamento_id: string;
+          id: string;
+          ordem_compra_id: string;
+          updated_at: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id: string;
+          id?: string;
+          ordem_compra_id: string;
+          updated_at?: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          forma_pagamento_id?: string;
+          id?: string;
+          ordem_compra_id?: string;
+          updated_at?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "oc_formas_forma_pagamento_id_fkey";
+            columns: ["forma_pagamento_id"];
+            isOneToOne: false;
+            referencedRelation: "formas_pagamento";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "oc_formas_ordem_compra_id_fkey";
+            columns: ["ordem_compra_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_compra";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       oc_itens: {
         Row: {
           centro_custo_id: string;
@@ -2431,51 +2488,6 @@ export type Database = {
           },
         ];
       };
-      oc_formas: {
-        Row: {
-          created_at: string;
-          created_by: string | null;
-          forma_pagamento_id: string;
-          id: string;
-          ordem_compra_id: string;
-          updated_at: string;
-          valor: number;
-        };
-        Insert: {
-          created_at?: string;
-          created_by?: string | null;
-          forma_pagamento_id: string;
-          id?: string;
-          ordem_compra_id: string;
-          updated_at?: string;
-          valor: number;
-        };
-        Update: {
-          created_at?: string;
-          created_by?: string | null;
-          forma_pagamento_id?: string;
-          id?: string;
-          ordem_compra_id?: string;
-          updated_at?: string;
-          valor?: number;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "oc_formas_forma_pagamento_id_fkey";
-            columns: ["forma_pagamento_id"];
-            isOneToOne: false;
-            referencedRelation: "formas_pagamento";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "oc_formas_ordem_compra_id_fkey";
-            columns: ["ordem_compra_id"];
-            isOneToOne: false;
-            referencedRelation: "ordens_compra";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       oc_parcelas: {
         Row: {
           created_at: string;
@@ -2493,7 +2505,7 @@ export type Database = {
           data_vencimento: string;
           id?: string;
           numero_parcela: number;
-          oc_forma_id: string | null;
+          oc_forma_id?: string | null;
           ordem_compra_id: string;
           valor: number;
         };
@@ -3063,8 +3075,8 @@ export type Database = {
           competencia: string;
           created_at: string;
           created_by: string | null;
-          folha_id: string | null;
           data: string;
+          folha_id: string | null;
           id: string;
           lancamento_id: string | null;
           obra_id: string | null;
@@ -3077,8 +3089,8 @@ export type Database = {
           competencia: string;
           created_at?: string;
           created_by?: string | null;
-          folha_id?: string | null;
           data?: string;
+          folha_id?: string | null;
           id?: string;
           lancamento_id?: string | null;
           obra_id?: string | null;
@@ -3091,8 +3103,8 @@ export type Database = {
           competencia?: string;
           created_at?: string;
           created_by?: string | null;
-          folha_id?: string | null;
           data?: string;
+          folha_id?: string | null;
           id?: string;
           lancamento_id?: string | null;
           obra_id?: string | null;
@@ -3106,6 +3118,13 @@ export type Database = {
             columns: ["colaborador_id"];
             isOneToOne: false;
             referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_diarias_folha_id_fkey";
+            columns: ["folha_id"];
+            isOneToOne: false;
+            referencedRelation: "folhas";
             referencedColumns: ["id"];
           },
           {
@@ -3729,7 +3748,7 @@ export type Database = {
         Returns: Json;
       };
       fn_definir_parcelas_lancamento: {
-        Args: { p_lanc_id: string; p_parcelas: Json };
+        Args: { p_lanc_id: string; p_motivo?: string; p_parcelas: Json };
         Returns: undefined;
       };
       fn_desaprovar_folha: {
@@ -3750,6 +3769,15 @@ export type Database = {
       };
       fn_desvincular_arquivo: {
         Args: { p_vinculo_id: string };
+        Returns: undefined;
+      };
+      fn_editar_item_folha: {
+        Args: {
+          p_desconto_percentual?: number;
+          p_gratificacao: number;
+          p_item: string;
+          p_salario_base: number;
+        };
         Returns: undefined;
       };
       fn_epis_a_recolher: {
@@ -3783,15 +3811,6 @@ export type Database = {
         Args: { p_id: string; p_motivo: string };
         Returns: undefined;
       };
-      fn_editar_item_folha: {
-        Args: {
-          p_encargos_percentual?: number | null;
-          p_gratificacao: number;
-          p_item: string;
-          p_salario_base: number;
-        };
-        Returns: undefined;
-      };
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined };
       fn_excluir_transferencia: {
         Args: { p_id: string; p_motivo: string };
@@ -3813,6 +3832,19 @@ export type Database = {
           p_data_vencimento?: string;
         };
         Returns: string;
+      };
+      fn_folha_aplicar_encargos_e_provisoes: {
+        Args: { p_base: number; p_encargos_percentual: number; p_item: string };
+        Returns: undefined;
+      };
+      fn_folha_inss: { Args: { p_base: number }; Returns: number };
+      fn_folha_irrf: {
+        Args: { p_base: number; p_colaborador: string; p_inss: number };
+        Returns: number;
+      };
+      fn_folha_recalcular_totais: {
+        Args: { p_folha: string };
+        Returns: undefined;
       };
       fn_gerar_folha: {
         Args: { p_competencia: string; p_encargos_pct?: number };
@@ -3921,6 +3953,10 @@ export type Database = {
           numero_parcela: number;
           valor: number;
         }[];
+      };
+      fn_pode_lancar_tipo: {
+        Args: { p_acao: string; p_tipo: string };
+        Returns: boolean;
       };
       fn_propagar_anexos: {
         Args: {
@@ -4036,28 +4072,6 @@ export type Database = {
           primeiro_mes: string;
         }[];
       };
-      fn_rel_custo_receita: {
-        Args: {
-          p_centros_custo?: string[];
-          p_centros_receita?: string[];
-          p_meses: string[];
-        };
-        Returns: {
-          centro_custo_id: string;
-          codigo: string;
-          mes: string;
-          nome: string;
-          retencao: number;
-          tipo: string;
-          total: number;
-        }[];
-      };
-      fn_rel_meses_competencia: {
-        Args: never;
-        Returns: {
-          mes: string;
-        }[];
-      };
       fn_rel_custo_por_grupo: {
         Args: {
           p_categoria?: string;
@@ -4114,6 +4128,22 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_rel_custo_receita: {
+        Args: {
+          p_centros_custo?: string[];
+          p_centros_receita?: string[];
+          p_meses: string[];
+        };
+        Returns: {
+          centro_custo_id: string;
+          codigo: string;
+          mes: string;
+          nome: string;
+          retencao: number;
+          tipo: string;
+          total: number;
+        }[];
+      };
       fn_rel_dre: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {
@@ -4140,16 +4170,6 @@ export type Database = {
           nome: string;
         }[];
       };
-      fn_rel_movimento_antes_do_corte: {
-        Args: never;
-        Returns: {
-          conta_bancaria_id: string;
-          corte: string;
-          pago: number;
-          parcelas: number;
-          recebido: number;
-        }[];
-      };
       fn_rel_gestao_compras_resumo: {
         Args: never;
         Returns: {
@@ -4170,6 +4190,22 @@ export type Database = {
           a_pagar_vencidas: number;
           pago_mes_contagem: number;
           pago_mes_valor: number;
+        }[];
+      };
+      fn_rel_meses_competencia: {
+        Args: never;
+        Returns: {
+          mes: string;
+        }[];
+      };
+      fn_rel_movimento_antes_do_corte: {
+        Args: never;
+        Returns: {
+          conta_bancaria_id: string;
+          corte: string;
+          pago: number;
+          parcelas: number;
+          recebido: number;
         }[];
       };
       fn_rel_posicao_aplicacao: {
@@ -4205,6 +4241,7 @@ export type Database = {
         Args: { p_motivo: string; p_parcela_id: string };
         Returns: undefined;
       };
+      fn_saldo_conta: { Args: { p_conta: string }; Returns: number };
       fn_salvar_forma_pagamento: {
         Args: {
           p_ativo: boolean;
@@ -4217,15 +4254,15 @@ export type Database = {
       fn_salvar_lancamento: {
         Args: {
           p_dados: Json;
+          p_formas?: Json;
           p_id: string;
           p_parcelas: Json;
           p_rateios: Json;
-          p_formas?: Json;
         };
         Returns: string;
       };
       fn_salvar_parcelas_oc: {
-        Args: { p_oc_id: string; p_parcelas: Json; p_formas?: Json };
+        Args: { p_formas?: Json; p_oc_id: string; p_parcelas: Json };
         Returns: undefined;
       };
       fn_salvar_preferencia_tabela: {
@@ -4241,6 +4278,10 @@ export type Database = {
           // Null cria uma transferencia nova; preenchido edita a existente. O
           // parametro nao pode ter DEFAULT no Postgres porque vem antes de
           // parametros obrigatorios, entao quem cria manda null explicito.
+          //
+          // Escrito a mao de proposito: o gerador de tipos nao sabe que a funcao
+          // aceita null num parametro sem DEFAULT, e escreve `string`. Regerar
+          // este arquivo apaga esta linha -- foi o que aconteceu em 25/08/2026.
           p_id: string | null;
           p_observacoes?: string;
           p_tarifa?: number;
