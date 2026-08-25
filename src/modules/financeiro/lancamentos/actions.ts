@@ -66,6 +66,11 @@ function dadosParaRpc(dados: LancamentoInput): Json {
     numero_documento: dados.numeroDocumento ?? null,
     observacoes: dados.observacoes ?? null,
     /**
+     * Marca de dívida. Vai sempre, inclusive `false`: na edição a RPC grava o
+     * que chegar, e omitir faria desmarcar a caixinha não ter efeito nenhum.
+     */
+    e_divida: dados.eDivida,
+    /**
      * Retenção na fonte. `valor_bruto` null é o documento sem retenção, que é a
      * esmagadora maioria; as retenções vão como zero e não como null porque a
      * coluna é `not null default 0` e mandar null quebraria o insert.

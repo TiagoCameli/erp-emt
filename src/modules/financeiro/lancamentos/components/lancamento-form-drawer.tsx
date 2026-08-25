@@ -32,6 +32,8 @@ import {
 } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   competenciaParaMes,
@@ -251,10 +253,13 @@ function valoresIniciais(
       // No a receber fica vazio: recebimento não tem forma de pagamento (a forma
       // diz como a EMT paga). O efeito de trocar o tipo está no `useEffect`.
       formas: tipoInicial === "a_receber" ? [] : [formaVazia()],
+      // Desmarcada por padrão: dívida é a exceção (12 lançamentos de ~6.000).
+      eDivida: false,
     };
   }
   return {
     tipo: lancamento.tipo,
+    eDivida: lancamento.eDivida,
     fornecedorId: lancamento.fornecedorId ?? undefined,
     clienteId: lancamento.clienteId ?? "",
     contaBancariaId: lancamento.contaBancariaId ?? "",
@@ -907,6 +912,7 @@ export function LancamentoFormDrawer({
       dataVencimento: vencimentoDoLancamento,
       numeroDocumento: valores.numeroDocumento || undefined,
       observacoes: valores.observacoes || undefined,
+      eDivida: doTipo ? false : valores.eDivida,
       /**
        * Retenção: campo vazio vira `undefined`, e não zero. A diferença importa,
        * porque `valorBruto` undefined é o que diz ao banco "documento sem
@@ -1323,6 +1329,31 @@ export function LancamentoFormDrawer({
                 porque o lançamento pode ser pago por várias e cada uma tem o
                 seu valor e as suas parcelas. Ver "Formas de pagamento" abaixo. */}
             <LinhaCampos>{campoCondicao}</LinhaCampos>
+
+            {/* Só no a pagar: dívida é compromisso da empresa, e recebimento
+                nunca é um. Quem troca o tipo depois de marcar não leva a marca
+                junto — o envio força `false` no a receber. */}
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="lan-e-divida"
+                checked={form.watch("eDivida")}
+                onCheckedChange={(marcado) =>
+                  form.setValue("eDivida", marcado === true)
+                }
+                disabled={salvando}
+                className="mt-0.5"
+              />
+              <div>
+                <Label htmlFor="lan-e-divida" className="font-normal">
+                  É empréstimo, financiamento ou consórcio
+                </Label>
+                <p className="text-legenda text-muted-foreground">
+                  Entra no relatório de endividamento. Não muda a categoria nem
+                  o centro de custo: o financiamento de uma máquina continua
+                  sendo custo de equipamento.
+                </p>
+              </div>
+            </div>
           </>
         )}
 
