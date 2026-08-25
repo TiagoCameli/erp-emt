@@ -4,11 +4,13 @@ import * as React from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { FormaPagamentoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { AdiantamentoFormDrawer } from "./adiantamento-form-drawer";
 
 export interface AdiantamentosAcoesCabecalhoProps {
   colaboradores: ColaboradorOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
 }
 
 /**
@@ -17,6 +19,7 @@ export interface AdiantamentosAcoesCabecalhoProps {
  */
 export function AdiantamentosAcoesCabecalho({
   colaboradores,
+  formasPagamento,
 }: AdiantamentosAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
@@ -27,6 +30,7 @@ export function AdiantamentosAcoesCabecalho({
         Novo adiantamento
       </Button>
       <AdiantamentoFormDrawer
+        formasPagamento={formasPagamento}
         aberto={aberto}
         onAbertoChange={setAberto}
         colaboradores={colaboradores}

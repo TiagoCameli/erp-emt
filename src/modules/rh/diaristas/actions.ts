@@ -169,7 +169,13 @@ export async function removerDiaria(id: string): Promise<ResultadoAcao> {
 /**
  * Fecha as diárias em aberto de um diarista numa competência via
  * fn_fechar_diarias, que cria UM lançamento a pagar somando os valores e marca
- * as diárias. Vencimento é opcional (null = sem vencimento definido).
+ * as diárias.
+ *
+ * Vencimento e forma de pagamento são obrigatórios e vão SEMPRE. Antes o
+ * vencimento só era enviado quando a tela tinha valor, e o lançamento nascia sem
+ * data -- o `if` que faltava era o defeito. Quem recebe e em que categoria o
+ * custo entra não vêm daqui: o trigger `trg_rh_completar_lancamento` deriva os
+ * dois do cadastro, para os três caminhos do RH no mesmo lugar.
  */
 export async function fecharDiarias(
   dados: FecharInput,
@@ -184,18 +190,12 @@ export async function fecharDiarias(
   }
 
   const supabase = await createClient();
-  const args: {
-    p_colaborador: string;
-    p_competencia: string;
-    p_data_vencimento?: string;
-  } = {
+  const { error } = await supabase.rpc("fn_fechar_diarias", {
     p_colaborador: validado.data.colaboradorId,
     p_competencia: validado.data.competencia,
-  };
-  if (validado.data.dataVencimento) {
-    args.p_data_vencimento = validado.data.dataVencimento;
-  }
-  const { error } = await supabase.rpc("fn_fechar_diarias", args);
+    p_data_vencimento: validado.data.dataVencimento,
+    p_forma_pagamento: validado.data.formaPagamentoId,
+  });
 
   if (error) {
     return erroAcao(

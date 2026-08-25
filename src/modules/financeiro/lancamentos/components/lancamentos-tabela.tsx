@@ -184,12 +184,19 @@ export function montarColunas(
     // errado com cara de certo. Melhor não ter seta do que ter seta que mente.
     enableSorting: false,
     meta: { rotulo: "Fornecedor" },
-    cell: ({ row }) =>
-      row.original.fornecedorNome ? (
-        <span className="font-medium">{row.original.fornecedorNome}</span>
+    // Uma coluna, dois cadastros: empresa vem pelo fornecedor, pessoa da folha
+    // vem pelo colaborador. São mutuamente exclusivos na prática -- lançamento do
+    // RH não tem fornecedor e compra não tem colaborador -- então dividir em duas
+    // colunas deixaria as duas metade vazias numa lista de milhares de linhas.
+    cell: ({ row }) => {
+      const quemRecebe =
+        row.original.fornecedorNome ?? row.original.colaboradorNome;
+      return quemRecebe ? (
+        <span className="font-medium">{quemRecebe}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
-      ),
+      );
+    },
   },
   {
     // Descrição e categoria numa coluna só: quem lê a lista quer as duas juntas

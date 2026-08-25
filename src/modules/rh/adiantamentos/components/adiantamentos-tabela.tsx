@@ -38,6 +38,7 @@ import { removerAdiantamento } from "@/modules/rh/adiantamentos/actions";
 import { dividirEmParcelas } from "@/modules/rh/adiantamentos/parcelamento";
 import type { AdiantamentoLista } from "@/modules/rh/adiantamentos/queries";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
+import type { FormaPagamentoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { AdiantamentoFormDrawer } from "./adiantamento-form-drawer";
 import { AdiantamentoParcelasDialog } from "./adiantamento-parcelas-dialog";
@@ -53,6 +54,7 @@ const OPCOES_SITUACAO = [
 export interface AdiantamentosTabelaProps {
   adiantamentos: AdiantamentoLista[];
   colaboradores: ColaboradorOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
@@ -101,6 +103,7 @@ function opcoesCompetencia(adiantamentos: AdiantamentoLista[]) {
 export function AdiantamentosTabela({
   adiantamentos,
   colaboradores,
+  formasPagamento,
   podeCriar,
   podeEditar,
   podeExcluir,
@@ -478,6 +481,7 @@ export function AdiantamentosTabela({
 
       {podeEditar || podeCriar ? (
         <AdiantamentoFormDrawer
+          formasPagamento={formasPagamento}
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           colaboradores={colaboradores}

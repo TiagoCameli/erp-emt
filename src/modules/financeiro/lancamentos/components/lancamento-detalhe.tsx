@@ -460,8 +460,17 @@ export function LancamentoDetalheView({
               <Dado rotulo="Tipo">
                 {ROTULO_TIPO_LANCAMENTO[lancamento.tipo]}
               </Dado>
-              <Dado rotulo="Fornecedor">
-                {lancamento.fornecedorNome ?? <CelulaVazia />}
+              {/* O rótulo segue quem recebe: "Fornecedor" numa compra,
+                  "Colaborador" num lançamento do RH. Chamar a pessoa da folha de
+                  fornecedor confundiria com o cadastro de fornecedores, que é
+                  outro (só 9 dos 59 colaboradores existem nos dois). */}
+              <Dado
+                rotulo={
+                  lancamento.colaboradorNome ? "Colaborador" : "Fornecedor"
+                }
+              >
+                {lancamento.fornecedorNome ??
+                  lancamento.colaboradorNome ?? <CelulaVazia />}
               </Dado>
               <Dado rotulo="Categoria">{lancamento.categoriaNome ?? <CelulaVazia />}</Dado>
               {/* Com mais de uma forma, o `formaPagamentoNome` do cabeçalho é

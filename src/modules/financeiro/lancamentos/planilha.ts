@@ -124,10 +124,13 @@ export const COLUNAS_PLANILHA_LANCAMENTOS: ColunaPlanilha[] = [
     celula: (l) => l.categoriaNome ?? "",
   },
   {
+    // Mesma regra da tela: a coluna diz QUEM RECEBE, e isso é o fornecedor numa
+    // compra e o colaborador num lançamento do RH. Exportar só o fornecedor
+    // deixaria a folha inteira com a célula vazia na planilha.
     cabecalho: "Fornecedor",
     largura: 30,
     tipo: "texto",
-    celula: (l) => l.fornecedorNome ?? "",
+    celula: (l) => l.fornecedorNome ?? l.colaboradorNome ?? "",
   },
   {
     cabecalho: "Valor",

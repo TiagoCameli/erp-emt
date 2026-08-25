@@ -38,6 +38,7 @@ function linha(l: Partial<LancamentoLista>): LancamentoLista {
     categoriaNome: null,
     centroCustoRotulo: "BR-364 Lote 9",
     fornecedorNome: null,
+    colaboradorNome: null,
     valor: 100,
     dataVencimento: "2026-09-10",
     status: "a_pagar",

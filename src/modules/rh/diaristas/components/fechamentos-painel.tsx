@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
-import { MoneyText } from "@/components/canonicos";
+import { Combobox, MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,11 +18,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fecharDiarias } from "@/modules/rh/diaristas/actions";
+import type { FormaPagamentoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { FechamentoPendente } from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
 
 export interface FechamentosPainelProps {
   fechamentos: FechamentoPendente[];
+  /** Formas ativas: quem fecha escolhe por qual o pagamento sai. */
+  formasPagamento: FormaPagamentoOpcao[];
 }
 
 /** Texto plural das diárias de um fechamento. */
@@ -33,19 +36,36 @@ function rotuloDiarias(qtd: number): string {
 /**
  * Painel "A fechar": lista as diárias em aberto agregadas por diarista e
  * competência, com o total. Fechar gera UM lançamento a pagar (RPC
- * fn_fechar_diarias) e some da lista no refresh. A data de vencimento é
- * opcional. Só aparece para quem pode criar diárias.
+ * fn_fechar_diarias) e some da lista no refresh. Só aparece para quem pode criar
+ * diárias.
+ *
+ * Vencimento e forma de pagamento são OBRIGATÓRIOS, e o botão fica desligado até
+ * os dois estarem preenchidos. O vencimento era opcional, e foi assim que o
+ * LAN-2026-6522 nasceu sem data nenhuma -- deixar o botão clicável e recusar
+ * depois seria a mesma dor com uma volta a mais.
+ *
+ * Quem recebe e a categoria do custo NÃO são perguntados: o banco deriva os dois
+ * do cadastro do colaborador (trigger `trg_rh_completar_lancamento`). Perguntar o
+ * que já está cadastrado é convite a divergir do cadastro.
  */
-export function FechamentosPainel({ fechamentos }: FechamentosPainelProps) {
+export function FechamentosPainel({
+  fechamentos,
+  formasPagamento,
+}: FechamentosPainelProps) {
   const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
   const [alvo, setAlvo] = React.useState<FechamentoPendente | null>(null);
   const [dataVencimento, setDataVencimento] = React.useState("");
+  const [formaPagamentoId, setFormaPagamentoId] = React.useState("");
   const [fechando, setFechando] = React.useState(false);
+
+  const podeFechar =
+    dataVencimento.trim() !== "" && formaPagamentoId !== "" && !fechando;
 
   function pedirFechamento(fechamento: FechamentoPendente) {
     setAlvo(fechamento);
     setDataVencimento("");
+    setFormaPagamentoId("");
     setAberto(true);
   }
 
@@ -58,11 +78,11 @@ export function FechamentosPainel({ fechamentos }: FechamentosPainelProps) {
     if (!alvo || fechando) return;
     setFechando(true);
     try {
-      const venc = dataVencimento.trim();
       const resultado = await fecharDiarias({
         colaboradorId: alvo.colaboradorId,
         competencia: alvo.competencia,
-        ...(venc === "" ? {} : { dataVencimento: venc }),
+        dataVencimento: dataVencimento.trim(),
+        formaPagamentoId,
       });
       if ("erro" in resultado) {
         toast.error(resultado.erro);
@@ -134,17 +154,35 @@ export function FechamentosPainel({ fechamentos }: FechamentosPainelProps) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-2">
-            <Label htmlFor="data-vencimento-fechamento">
-              Data de vencimento (opcional)
-            </Label>
-            <Input
-              id="data-vencimento-fechamento"
-              type="date"
-              value={dataVencimento}
-              onChange={(evento) => setDataVencimento(evento.target.value)}
-              disabled={fechando}
-            />
+          <div className="grid gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="data-vencimento-fechamento">
+                Data de vencimento
+              </Label>
+              <Input
+                id="data-vencimento-fechamento"
+                type="date"
+                value={dataVencimento}
+                onChange={(evento) => setDataVencimento(evento.target.value)}
+                disabled={fechando}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="forma-pagamento-fechamento">
+                Forma de pagamento
+              </Label>
+              <Combobox
+                valor={formaPagamentoId}
+                onValorChange={setFormaPagamentoId}
+                opcoes={formasPagamento.map((forma) => ({
+                  valor: forma.id,
+                  rotulo: forma.nome,
+                }))}
+                placeholder="Selecione a forma de pagamento"
+                disabled={fechando}
+                id="forma-pagamento-fechamento"
+              />
+            </div>
           </div>
 
           <DialogFooter>
@@ -158,7 +196,7 @@ export function FechamentosPainel({ fechamentos }: FechamentosPainelProps) {
             </Button>
             <Button
               type="button"
-              disabled={fechando}
+              disabled={!podeFechar}
               onClick={confirmarFechamento}
             >
               {fechando ? (

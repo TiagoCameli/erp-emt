@@ -9,6 +9,7 @@ import {
   listarDiarias,
   listarFechamentosPendentes,
 } from "@/modules/rh/diaristas/queries";
+import { listarFormasPagamento } from "@/modules/financeiro/lancamentos/queries";
 import { listarDiaristas, listarObras } from "@/modules/rh/_shared/queries";
 
 export default async function PaginaDiaristas() {
@@ -20,12 +21,15 @@ export default async function PaginaDiaristas() {
   const podeCriar = temPermissao(usuario, "rh.diaristas", "criar");
   const podeEditar = temPermissao(usuario, "rh.diaristas", "editar");
 
-  const [diarias, fechamentos, diaristas, obras] = await Promise.all([
-    listarDiarias(),
-    listarFechamentosPendentes(),
-    listarDiaristas(),
-    listarObras(),
-  ]);
+  const [diarias, fechamentos, diaristas, obras, formasPagamento] =
+    await Promise.all([
+      listarDiarias(),
+      listarFechamentosPendentes(),
+      listarDiaristas(),
+      listarObras(),
+      // O fechamento exige a forma de pagamento, então a lista vem com a página.
+      listarFormasPagamento(),
+    ]);
 
   return (
     <>
@@ -43,7 +47,10 @@ export default async function PaginaDiaristas() {
       {podeCriar ? (
         <section className="mb-6 flex flex-col gap-3">
           <h2 className="text-secao font-semibold">A fechar</h2>
-          <FechamentosPainel fechamentos={fechamentos} />
+          <FechamentosPainel
+            fechamentos={fechamentos}
+            formasPagamento={formasPagamento}
+          />
         </section>
       ) : null}
 

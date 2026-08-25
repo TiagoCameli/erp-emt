@@ -11,6 +11,9 @@ describe("adiantamentoSchema com parcelas", () => {
     competencia: "2026-09-01",
     valor: 1200,
     data: "2026-09-15",
+    // Obrigatória desde 25/08/2026: é ela que decide o caminho do pagamento no
+    // financeiro, e sem ela o lançamento do RH nascia sem forma nenhuma.
+    formaPagamentoId: "22222222-2222-2222-2222-222222222222",
   };
 
   it("aceita parcelamento válido", () => {
@@ -53,8 +56,12 @@ describe("adiantamentoSchema com parcelas", () => {
       data: "2026-09-15",
       descricao: "",
       parcelas: "3",
+      formaPagamentoId: base.colaboradorId,
     });
     expect(input.parcelas).toBe(3);
     expect(input.valor).toBe(1200);
+    // A forma atravessa a conversão intacta: é ela que decide o caminho do
+    // pagamento no financeiro, e perder no meio devolveria o lançamento sem forma.
+    expect(input.formaPagamentoId).toBe(base.colaboradorId);
   });
 });

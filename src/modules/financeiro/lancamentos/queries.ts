@@ -208,6 +208,13 @@ export interface LancamentoLista {
   /** Nomes do rateio para o `title` da célula, quando são de dois a cinco. */
   centroCustoNomes?: string;
   fornecedorNome: string | null;
+  /**
+   * Quem recebe, quando o lançamento vem do RH (folha, diária, adiantamento).
+   * A coluna da tela é uma só: empresa aparece pelo fornecedor, pessoa da folha
+   * aparece por aqui. Sem isto o lançamento do RH mostrava "—" na coluna de quem
+   * recebe, e o nome só existia no meio da descrição.
+   */
+  colaboradorNome: string | null;
   valor: number;
   dataVencimento: string | null;
   status: StatusLancamento;
@@ -382,6 +389,9 @@ export interface LancamentoDetalhe {
   origemId: string | null;
   fornecedorId: string | null;
   fornecedorNome: string | null;
+  /** Quem recebe, quando o lançamento vem do RH. Ver `colaboradorNome` na lista. */
+  colaboradorId: string | null;
+  colaboradorNome: string | null;
   /** Quem paga, no a receber. Null no a pagar, que tem fornecedor. */
   clienteId: string | null;
   clienteNome: string | null;
@@ -970,6 +980,7 @@ export async function listarLancamentos(
        data_vencimento, status, data_compra, mes_competencia, created_at,
        categorias_financeiras(nome),
        fornecedores(razao_social, nome_fantasia),
+       colaboradores(nome),
        lancamento_parcelas(
          status, conta_bancaria_id, valor, valor_liquido, desconto,
          data_vencimento
@@ -1158,6 +1169,7 @@ export async function listarLancamentos(
       fornecedorNome: lancamento.fornecedores
         ? nomeFornecedor(lancamento.fornecedores)
         : null,
+      colaboradorNome: lancamento.colaboradores?.nome ?? null,
       valor: lancamento.valor,
       dataVencimento: lancamento.data_vencimento,
       status: lancamento.status as StatusLancamento,
@@ -1329,6 +1341,7 @@ export async function buscarLancamento(
     .from("lancamentos")
     .select(
       `id, numero, numero_documento, tipo, origem, origem_id, fornecedor_id,
+       colaborador_id,
        cliente_id, categoria_id, forma_pagamento_id, condicao_pagamento_id,
        descricao, observacoes, valor, status, mes_competencia, data_compra,
        created_at, data_vencimento,
@@ -1338,6 +1351,7 @@ export async function buscarLancamento(
        condicoes_pagamento(descricao),
        formas_pagamento(nome, tipo),
        fornecedores(razao_social, nome_fantasia),
+       colaboradores(nome),
        clientes(nome, nome_fantasia),
        lancamento_formas(
          id, valor, forma_pagamento_id,
@@ -1440,6 +1454,8 @@ export async function buscarLancamento(
     origemId: data.origem_id,
     fornecedorId: data.fornecedor_id,
     fornecedorNome: data.fornecedores ? nomeFornecedor(data.fornecedores) : null,
+    colaboradorId: data.colaborador_id,
+    colaboradorNome: data.colaboradores?.nome ?? null,
     clienteId: data.cliente_id,
     clienteNome: data.clientes ? nomeCliente(data.clientes) : null,
     // Conta em que o dinheiro entra, no a receber: mora na parcela, e todas as
