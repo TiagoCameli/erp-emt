@@ -105,18 +105,20 @@ const dinheiroSchema = z
  */
 const dinheiroComZeroSchema = z
   .union([z.string(), z.number()])
-  .transform((valor) => (typeof valor === "string" && valor.trim() === "" ? 0 : valor))
+  .transform((valor) =>
+    typeof valor === "string" && valor.trim() === "" ? 0 : valor,
+  )
   .pipe(dinheiroSchema);
 
 /** Percentual NUMERIC(7,4) com check 0..100 no banco. */
 const PERCENTUAL_MAX = 100;
 
 /**
- * Percentual de encargo INDIVIDUAL, opcional de um jeito específico: vazio (ou
- * null) não é erro nem zero — é "esta pessoa volta a usar os `folha_encargos`
- * globais". Zero e vazio são valores DIFERENTES aqui, e é essa distinção que
- * deixa a tela dizer as duas coisas: "o encargo dele é 0%" e "o encargo dele é
- * o da configuração".
+ * Percentual DESCONTADO DO SALÁRIO desta pessoa, opcional de um jeito
+ * específico: vazio (ou null) não é erro nem zero — é "esta pessoa não tem
+ * desconto". Zero e vazio são valores DIFERENTES aqui, e é essa distinção que
+ * deixa a tela dizer as duas coisas: "o desconto dele é 0%, declarado" e "ele
+ * não tem desconto nenhum".
  *
  * Não reusa o `percentualSchema` de `rh/percentual` porque aquele exige o campo
  * preenchido ("Informe o percentual"), o oposto do que se quer aqui. As três
@@ -161,7 +163,7 @@ export const editarItemFolhaSchema = z
     itemId: idSchemaCom("Item da folha inválido"),
     salarioBase: dinheiroSchema,
     gratificacao: dinheiroComZeroSchema,
-    encargosPercentual: percentualIndividualSchema,
+    descontoPercentual: percentualIndividualSchema,
   })
   .refine((dados) => dados.salarioBase > 0 || dados.gratificacao > 0, {
     error:
