@@ -8,6 +8,10 @@ import { listarFornecedores } from "@/modules/financeiro/lancamentos/queries";
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
 import {
+  lerCatalogoDaUrl,
+  lerUuidsDaUrl,
+} from "@/modules/financeiro/_shared/listas-na-url";
+import {
   listarContasBancarias,
   listarParcelasAPagar,
   listarParcelasPagas,
@@ -17,19 +21,12 @@ import {
 const TAMANHO_PAGINA = 25;
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
 const VALOR_MAXIMO = 999999999999.99;
 /** Tamanho máximo do termo de busca aceito (o mesmo da action). */
 const MAX_BUSCA = 120;
 
 type Parametro = string | string[] | undefined;
-
-/** Uuid vindo da URL, ou undefined. Evita mandar lixo pro filtro do PostgREST. */
-function parametroUuid(valor: Parametro): string | undefined {
-  return typeof valor === "string" && UUID.test(valor) ? valor : undefined;
-}
 
 /** Data yyyy-MM-dd vinda da URL, ou undefined se não for uma data. */
 function parametroData(valor: Parametro): string | undefined {
@@ -49,12 +46,12 @@ function parametroValor(valor: Parametro): number | undefined {
 
 /** Termo de busca vindo da URL, aparado no limite que a action aceita. */
 /**
- * Situação da parcela vinda da URL, restrita às de fila aberta. Vem do cartão
- * "Vence em até 7 dias" do Painel (`?situacao=aprovado`), e é digitável na mão.
+ * Situações da parcela vindas da URL, restritas às de fila aberta e na ordem do
+ * catálogo. Aceita uma (`?situacao=aprovado`, que é como o cartão "Vence em até
+ * 7 dias" do Painel chega) ou várias (`?situacao=aprovado,pendente`).
  */
-function parametroSituacao(valor: Parametro): string {
-  if (typeof valor !== "string") return "";
-  return (STATUS_PARCELA_ABERTA as string[]).includes(valor) ? valor : "";
+function parametroSituacoes(valor: Parametro): string[] {
+  return lerCatalogoDaUrl(valor, STATUS_PARCELA_ABERTA);
 }
 
 /** Aba que abre primeiro. O cartão "Pago no mês" do Painel chega com `aba=pagas`. */
@@ -134,9 +131,9 @@ export default async function PaginaPagamentos({
     busca: typeof params.busca === "string" ? params.busca : "",
     // Só situação de parcela EM ABERTO: `pago` e `cancelado` na fila a pagar
     // trariam uma lista vazia sem explicar por quê.
-    situacao: parametroSituacao(params.situacao),
-    fornecedor: parametroUuid(params.fornecedor) ?? "",
-    conta: parametroUuid(params.conta) ?? "",
+    situacoes: parametroSituacoes(params.situacao),
+    fornecedorIds: lerUuidsDaUrl(params.fornecedor),
+    contaIds: lerUuidsDaUrl(params.conta),
     valorDe: texto(valorAPagar.de),
     valorAte: texto(valorAPagar.ate),
     vencDe: texto(vencAPagar.de),
@@ -151,8 +148,8 @@ export default async function PaginaPagamentos({
   const pagoPagas = periodo(params.h_pago_de, params.h_pago_ate);
   const filtrosPagas = {
     busca: parametroBusca(params.h_busca),
-    fornecedorId: parametroUuid(params.h_fornecedor),
-    contaBancariaId: parametroUuid(params.h_conta),
+    fornecedorIds: lerUuidsDaUrl(params.h_fornecedor),
+    contaBancariaIds: lerUuidsDaUrl(params.h_conta),
     valorDe: valorPagas.de,
     valorAte: valorPagas.ate,
     vencimentoDe: vencPagas.de,
@@ -210,8 +207,8 @@ export default async function PaginaPagamentos({
         // pagina o histórico: a página é a única a interpretar a URL.
         valoresPagas={{
           busca: filtrosPagas.busca ?? "",
-          fornecedor: filtrosPagas.fornecedorId ?? "",
-          conta: filtrosPagas.contaBancariaId ?? "",
+          fornecedorIds: filtrosPagas.fornecedorIds,
+          contaIds: filtrosPagas.contaBancariaIds,
           valorDe: texto(filtrosPagas.valorDe),
           valorAte: texto(filtrosPagas.valorAte),
           vencDe: texto(filtrosPagas.vencimentoDe),

@@ -75,9 +75,9 @@ const PAGAS = [
 
 const VALORES_A_PAGAR = {
   busca: "",
-  situacao: "",
-  fornecedor: "",
-  conta: "",
+  situacoes: [],
+  fornecedorIds: [],
+  contaIds: [],
   valorDe: "",
   valorAte: "",
   vencDe: "",

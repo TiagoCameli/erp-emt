@@ -15,7 +15,7 @@ import {
   EmptyState,
   FiltroBusca,
   FiltroPeriodo,
-  FiltroSelect,
+  FiltroSelectMulti,
   FiltroValor,
   GradeKpis,
   KPICard,
@@ -39,6 +39,10 @@ import {
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
 import { ComposicaoDoLiquido } from "@/modules/financeiro/_shared/composicao-liquido";
+import {
+  escreverListaNaUrl,
+  MAX_ITENS_FILTRO,
+} from "@/modules/financeiro/_shared/listas-na-url";
 import { programacaoVencida } from "@/modules/financeiro/_shared/janela-pagamento";
 import type { FornecedorOpcao } from "@/modules/financeiro/lancamentos/queries";
 import {
@@ -70,15 +74,18 @@ const LARGURA_NOME = "max-w-[15rem]";
 export interface ValoresFiltrosAPagar {
   busca: string;
   /**
-   * Situação da parcela na fila: vazio é "todas as situações em aberto".
+   * Situações da parcela na fila: lista VAZIA é "todas as situações em aberto".
    *
    * Existe porque a fila passou a mostrar pendente e em revisão junto com
    * aprovada, e porque é ele que faz o cartão "Vence em até 7 dias" do Painel
    * cair numa lista que soma exatamente o número do cartão (só aprovadas).
+   *
+   * Lista, e não valor único, porque "o que já posso pagar" costuma ser mais de
+   * uma situação ao mesmo tempo.
    */
-  situacao: string;
-  fornecedor: string;
-  conta: string;
+  situacoes: string[];
+  fornecedorIds: string[];
+  contaIds: string[];
   valorDe: string;
   valorAte: string;
   vencDe: string;
@@ -91,12 +98,12 @@ export interface ValoresFiltrosAPagar {
 /**
  * Valores dos filtros da aba "Pagas", como vivem na URL (prefixo h_).
  *
- * Sem `situacao`: lá toda parcela é `pago`, e um filtro de situação com uma
+ * Sem `situacoes`: lá toda parcela é `pago`, e um filtro de situação com uma
  * opção só é decoração que sugere que existe outra coisa para escolher.
  */
 export interface ValoresFiltrosPagas extends Omit<
   ValoresFiltrosAPagar,
-  "situacao"
+  "situacoes"
 > {
   pagoDe: string;
   pagoAte: string;
@@ -372,14 +379,19 @@ export function PagamentosCliente({
   );
 
   /**
-   * Seletor de valor único preso a um parâmetro da URL. Trocar o filtro zera a
-   * página: filtrar e cair numa página vazia parece lista sem resultado.
+   * Seletor de MÚLTIPLA escolha preso a um parâmetro da URL. Lista vazia é
+   * "todos", e some da URL em vez de virar string vazia.
+   *
+   * O teto de `MAX_ITENS_FILTRO` não é gosto: na aba "Pagas" a lista vira um
+   * `in` que o PostgREST manda na própria URL, e lista grande vira HTTP 400 por
+   * tamanho antes de chegar na RLS. O `FiltroSelectMulti` avisa ao bater no
+   * teto em vez de cortar calado.
    */
-  function selecao(config: {
+  function selecaoMulti(config: {
     id: string;
     chave: string;
     rotulo: string;
-    valor: string;
+    valores: string[];
     opcoes: OpcaoFiltro[];
     todosRotulo: string;
     largura?: string;
@@ -388,20 +400,21 @@ export function PagamentosCliente({
       id: config.id,
       rotulo: config.rotulo,
       ocultoPorPadrao: true,
-      temValor: config.valor !== "",
+      temValor: config.valores.length > 0,
       onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
       elemento: (
-        <FiltroSelect
-          valor={config.valor}
-          onValorChange={(valor) =>
+        <FiltroSelectMulti
+          valores={config.valores}
+          onValoresChange={(valores) =>
             setMuitos({
-              [config.chave]: valor === "" ? null : valor,
+              [config.chave]: escreverListaNaUrl(valores),
               pagina: "1",
             })
           }
           opcoes={config.opcoes}
           placeholder={config.rotulo}
           todosRotulo={config.todosRotulo}
+          maximo={MAX_ITENS_FILTRO}
           className={config.largura}
         />
       ),
@@ -483,6 +496,19 @@ export function PagamentosCliente({
     const valorAte =
       valoresAPagar.valorAte === "" ? null : Number(valoresAPagar.valorAte);
 
+    /*
+     * `null` quando o filtro está em branco, `Set` quando tem escolha. Duas
+     * coisas de propósito: o `null` distingue "todos" de "nenhum marcado"
+     * (com lista vazia, `has` recusaria tudo e a fila apareceria zerada), e o
+     * `Set` faz a busca ser O(1) — com `includes`, cada uma das ~840 parcelas
+     * varreria a lista inteira a cada tecla digitada na busca.
+     */
+    const conjunto = (itens: string[]) =>
+      itens.length === 0 ? null : new Set(itens);
+    const fornecedoresEscolhidos = conjunto(valoresAPagar.fornecedorIds);
+    const contasEscolhidas = conjunto(valoresAPagar.contaIds);
+    const situacoesEscolhidas = conjunto(valoresAPagar.situacoes);
+
     return aprovadas.filter((parcela) => {
       if (
         termo !== "" &&
@@ -492,21 +518,23 @@ export function PagamentosCliente({
       ) {
         return false;
       }
+      // Lista vazia é "todos": a checagem de conjunto só entra quando há
+      // escolha, senão nenhuma parcela passaria com o filtro em branco.
       if (
-        valoresAPagar.fornecedor !== "" &&
-        parcela.fornecedorId !== valoresAPagar.fornecedor
+        fornecedoresEscolhidos !== null &&
+        !fornecedoresEscolhidos.has(parcela.fornecedorId ?? "")
       ) {
         return false;
       }
       if (
-        valoresAPagar.conta !== "" &&
-        parcela.contaBancariaId !== valoresAPagar.conta
+        contasEscolhidas !== null &&
+        !contasEscolhidas.has(parcela.contaBancariaId ?? "")
       ) {
         return false;
       }
       if (
-        valoresAPagar.situacao !== "" &&
-        (parcela.status ?? "aprovado") !== valoresAPagar.situacao
+        situacoesEscolhidas !== null &&
+        !situacoesEscolhidas.has(parcela.status ?? "aprovado")
       ) {
         return false;
       }
@@ -581,28 +609,28 @@ export function PagamentosCliente({
         />
       ),
     },
-    selecao({
+    selecaoMulti({
       id: "situacao",
       chave: "situacao",
       rotulo: "Situação",
-      valor: valoresAPagar.situacao,
+      valores: valoresAPagar.situacoes,
       opcoes: OPCOES_SITUACAO,
       todosRotulo: "Todas as situações",
     }),
-    selecao({
+    selecaoMulti({
       id: "fornecedor",
       chave: "fornecedor",
       rotulo: "Fornecedor",
-      valor: valoresAPagar.fornecedor,
+      valores: valoresAPagar.fornecedorIds,
       opcoes: opcoesFornecedor,
       todosRotulo: "Todos os fornecedores",
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       id: "conta",
       chave: "conta",
       rotulo: "Conta bancária",
-      valor: valoresAPagar.conta,
+      valores: valoresAPagar.contaIds,
       opcoes: opcoesConta,
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
@@ -654,20 +682,20 @@ export function PagamentosCliente({
         />
       ),
     },
-    selecao({
+    selecaoMulti({
       id: "fornecedor",
       chave: "h_fornecedor",
       rotulo: "Fornecedor",
-      valor: valoresPagas.fornecedor,
+      valores: valoresPagas.fornecedorIds,
       opcoes: opcoesFornecedor,
       todosRotulo: "Todos os fornecedores",
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       id: "conta",
       chave: "h_conta",
       rotulo: "Conta bancária",
-      valor: valoresPagas.conta,
+      valores: valoresPagas.contaIds,
       opcoes: opcoesConta,
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,

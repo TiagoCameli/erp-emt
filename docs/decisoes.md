@@ -3278,3 +3278,51 @@ coluna mexeria em `fn_salvar_lancamento` sem ninguém ter pedido.
 Efeito colateral aceito: uma URL antiga com `?rel=endividamento` cai no relatório padrão
 (fluxo de caixa), porque `normalizarRelatorio` não conhece mais esse id. O relatório tinha
 um dia de vida.
+
+---
+
+## 26/08/2026 — Pagamentos: situação, fornecedor e conta aceitam mais de um
+
+O Tiago mandou a tela da fila "A pagar" com o seletor de fornecedor aberto: "tem que
+selecionar mais de um fornecedor, situação ou conta bancária".
+
+Nada de novo precisou ser inventado. `FiltroSelectMulti` (com a escolha local à frente da
+URL, que é o que permite marcar dois seguidos) e `_shared/listas-na-url.ts` (vírgula,
+dedup, teto de 50) já existiam desde o extrato e os relatórios. O trabalho foi ligar
+Pagamentos neles.
+
+**As duas abas, e não só a que ele mostrou.** Os mesmos filtros de fornecedor e conta
+existem na aba "Pagas". Deixar uma aceitando dois e a outra um só, lado a lado na mesma
+tela, é a incoerência que faz alguém achar que o filtro está quebrado. "Situação" continua
+só na fila: em "Pagas" toda parcela é `pago`.
+
+**As duas abas filtram em lugares diferentes, e isso muda o risco.**
+
+A fila "A pagar" vem inteira do servidor e filtra em memória: virou conjunto (`Set`), com
+`null` para "todos". O `null` não é estilo — com lista vazia, `has` recusaria toda parcela
+e a fila apareceria em branco com o filtro em branco.
+
+"Pagas" é paginada no servidor, então o filtro virou `in` no PostgREST. É aí que mora o
+erro que não grita: `in` com lista vazia, ou na coluna errada, devolve lista VAZIA, que na
+tela é idêntico a "não há pagamento assim". O teto de 50 itens também é técnico — o `in`
+viaja na URL do PostgREST, e lista grande vira HTTP 400 por tamanho antes de chegar na RLS
+(já aconteceu neste projeto com mil ids).
+
+**`aplicarFiltrosPagas` saiu do `queries.ts` para `filtros-pagas.ts`.** O `queries.ts` tem
+`import "server-only"`, então nada dele pode ser importado num teste — só tipo, que some
+na compilação. Enquanto o montador morava lá, a única forma de saber se ele monta o filtro
+certo era abrir a tela. Agora um dublê registra cada chamada do builder e o teste afirma o
+filtro que SAIU, não o resultado que ele traria.
+
+**Compatibilidade preservada.** O cartão "Vence em até 7 dias" do Painel manda
+`?situacao=aprovado`; `lerCatalogoDaUrl` lê isso como lista de um item. Os testes de
+`links-cards` continuam passando sem alteração.
+
+**Provas.** No banco, os dois fornecedores com mais parcelas pagas têm 392 e 191; o `in`
+dos dois devolve 583, e a consulta carrega a linha de controle "583 é maior que o maior
+sozinho?" — sem ela, um `in` que ignorasse o segundo id passaria igual.
+
+Nos testes, dez casos novos, todos com o mesmo desenho: o total tem que ser diferente do
+de UMA escolha e diferente do da lista inteira (R$ 1.300 contra R$ 1.000 e R$ 1.500).
+Verificado por sabotagem que eles caem — cortando a lista no primeiro item, trocando o
+`in` por `eq`, e removendo a guarda de lista vazia.
