@@ -175,6 +175,12 @@ export async function editarItemFolha(
     // deixar o DEFAULT null do banco significar "sem desconto", distinção que o
     // modelo em valor não tem mais.
     p_desconto: validado.data.desconto,
+    // `?? undefined` OMITE o parâmetro, e o DEFAULT dele no banco é null — que é
+    // exatamente "não foi informado por horas". O tipo gerado marca o parâmetro
+    // como opcional (tem DEFAULT) e recusa null; editar o database.types.ts à
+    // mão para aceitar seria apagado na próxima regeneração. Zero sobrevive:
+    // `??` só troca null e undefined.
+    p_desconto_horas: validado.data.descontoHoras ?? undefined,
   });
 
   if (error) {
@@ -420,7 +426,9 @@ export async function gerarPlanilhaFolha(
   // solta aqui — ela repetiria o título logo abaixo dele.
   escreverCabecalhoMarca(workbook, worksheet, {
     titulo: "Folha gerencial",
-    colunas: 12,
+    // O número REAL de colunas da tabela abaixo (a faixa da marca é mesclada
+    // nessa largura). Estava 12 com 13 colunas, e a coluna de horas fez 14.
+    colunas: 14,
   });
 
   worksheet.addRow(["Competência", competenciaMesAno(folha.competencia)]);
@@ -447,6 +455,7 @@ export async function gerarPlanilhaFolha(
     "Horas normais",
     "Horas extras",
     "Valor extras",
+    "Horas não trabalhadas",
     "Desconto do salário",
     "Provisão (13º/férias)",
     "Adiantamentos",
@@ -474,6 +483,10 @@ export async function gerarPlanilhaFolha(
       formatarQuantidade(item.horasNormais),
       formatarQuantidade(item.horasExtras),
       formatarBRL(item.valorExtras),
+      // Vazio quando o desconto não foi informado por horas: um "0" aqui
+      // afirmaria que a pessoa não faltou, e o que se sabe é que ninguém
+      // declarou o motivo.
+      item.descontoHoras === null ? "" : formatarQuantidade(item.descontoHoras),
       formatarBRL(item.descontos),
       formatarBRL(item.provisoes),
       formatarBRL(item.adiantamentos),
@@ -494,6 +507,7 @@ export async function gerarPlanilhaFolha(
     "",
     formatarBRL(folha.valorBruto - folha.valorGratificacoes),
     formatarBRL(folha.valorGratificacoes),
+    "",
     "",
     "",
     "",
