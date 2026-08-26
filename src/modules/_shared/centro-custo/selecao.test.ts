@@ -8,6 +8,7 @@ import {
   rotuloCentro,
   rotuloDaEtapa,
   subarvoreDeCentro,
+  subarvoreDeCentros,
   valorAoEscolherEtapa,
   valorAoEscolherRaiz,
 } from "@/modules/_shared/centro-custo/selecao";
@@ -208,5 +209,35 @@ describe("subarvoreDeCentro", () => {
       { id: "item-1", nome: "Item", codigo: null, paiId: "bobcat", tipo: null },
     ];
     expect(subarvoreDeCentro(comNeto, "manut").has("item-1")).toBe(true);
+  });
+});
+
+describe("subarvoreDeCentros (varios)", () => {
+  it("une as subarvores das raizes marcadas", () => {
+    const dentro = subarvoreDeCentros(CENTROS, ["manut", "obra-9"]);
+    expect([...dentro].sort()).toEqual(
+      ["bobcat", "cacamba", "manut", "obra-9"].sort(),
+    );
+  });
+
+  it("CONTROLE: uma raiz so devolve menos que duas", () => {
+    // Sem este par, uma funcao que ignorasse tudo depois do primeiro id passaria
+    // no caso de cima tambem.
+    const uma = subarvoreDeCentros(CENTROS, ["manut"]);
+    const duas = subarvoreDeCentros(CENTROS, ["manut", "obra-9"]);
+    expect(duas.size).toBeGreaterThan(uma.size);
+  });
+
+  it("lista vazia devolve conjunto vazio, que e o \"sem filtro\"", () => {
+    expect(subarvoreDeCentros(CENTROS, []).size).toBe(0);
+  });
+
+  it("nao duplica quando as raizes se sobrepoem", () => {
+    // Marcar a raiz E uma etapa dela e possivel via link antigo; o conjunto tem
+    // de continuar com um id de cada.
+    const dentro = subarvoreDeCentros(CENTROS, ["manut", "bobcat"]);
+    expect([...dentro].sort()).toEqual(
+      ["bobcat", "cacamba", "manut"].sort(),
+    );
   });
 });

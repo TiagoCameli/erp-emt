@@ -166,8 +166,8 @@ export interface FiltrosParcelasPagas {
   pagamentoAte?: string;
   /** Dimensões do LANÇAMENTO. O join com `lancamentos` é `!inner`, então
    *  filtrá-lo restringe as parcelas de verdade, não só o embed. */
-  categoriaId?: string;
-  formaPagamentoId?: string;
+  categoriaIds?: string[];
+  formaPagamentoIds?: string[];
   /** yyyy-MM-dd, primeiro dia do mês de referência. */
   mesCompetencia?: string;
   compraDe?: string;
@@ -179,7 +179,7 @@ export interface FiltrosParcelasPagas {
    * `subarvoreDosCentros`, porque duas implementações divergiriam no primeiro
    * centro novo.
    */
-  centroCustoId?: string;
+  centroCustoIds?: string[];
   /** `manual`, `oc`, `folha`, `diaria`, `adiantamento`, `folha_guia`. */
   origem?: string;
 }
@@ -403,11 +403,17 @@ async function idsFornecedoresPorNome(
 async function aplicarCentroCusto<T extends ConsultaFiltravel<T>>(
   supabase: Awaited<ReturnType<typeof createClient>>,
   consulta: T,
-  centroCustoId: string | undefined,
+  centroCustoIds: readonly string[] | undefined,
 ): Promise<{ consulta: T; vazio: boolean }> {
-  if (!centroCustoId) return { consulta, vazio: false };
+  if (!centroCustoIds || centroCustoIds.length === 0) {
+    return { consulta, vazio: false };
+  }
 
-  const subarvore = await subarvoreDosCentros(supabase, [centroCustoId]);
+  // União das subárvores: marcar duas obras é "quero as duas", não "o que está
+  // nas duas ao mesmo tempo". A função do servidor já recebe lista, e é a MESMA
+  // que a listagem de Lançamentos usa -- o recorte não pode divergir entre as
+  // duas telas.
+  const subarvore = await subarvoreDosCentros(supabase, [...centroCustoIds]);
   if (subarvore.length === 0) return { consulta, vazio: true };
 
   return {
@@ -471,7 +477,7 @@ export async function somaDasParcelasPagas(
       filtros,
       idsFornecedores,
     ),
-    filtros.centroCustoId,
+    filtros.centroCustoIds,
   );
   // Centro que não existe mais soma zero, igual à lista que vem vazia.
   if (centro.vazio) return 0;
@@ -553,7 +559,7 @@ export async function listarParcelasPagas({
   const comCentro = await aplicarCentroCusto(
     supabase,
     consulta,
-    filtros.centroCustoId,
+    filtros.centroCustoIds,
   );
   if (comCentro.vazio) return { itens: [], total: 0 };
   consulta = comCentro.consulta;

@@ -135,3 +135,64 @@ describe("aplicarFiltrosPagas", () => {
     expect(chamadas[0].valor).toContain(`fornecedor_id.in.(${FORN_A})`);
   });
 });
+
+/**
+ * Categoria e forma passaram a aceitar mais de uma escolha, como fornecedor e
+ * conta já aceitavam. O que se afirma aqui é o FILTRO que sai: `in` na coluna
+ * certa, com todos os ids -- um filtro que mandasse só o primeiro devolveria uma
+ * lista curta, que na tela é indistinguível de "não há pagamento assim".
+ */
+describe("categoria e forma em multipla escolha", () => {
+  const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+  it("duas categorias viram um `in` com os dois ids", () => {
+    const consulta = aplicarFiltrosPagas(
+      new ConsultaFalsa(),
+      { categoriaIds: [A, B] },
+      [],
+    );
+    expect(consulta.chamadas).toContainEqual({
+      metodo: "in",
+      coluna: "lancamentos.categoria_id",
+      valor: [A, B],
+    });
+  });
+
+  it("duas formas filtram o EMBED e ainda exigem o `not is null`", () => {
+    // O par é obrigatório: `in` sozinho num embed não-inner só esvazia o embed, e
+    // a parcela continua vindo na lista.
+    const consulta = aplicarFiltrosPagas(
+      new ConsultaFalsa(),
+      { formaPagamentoIds: [A, B] },
+      [],
+    );
+    expect(consulta.chamadas).toContainEqual({
+      metodo: "in",
+      coluna: "lancamento_formas.forma_pagamento_id",
+      valor: [A, B],
+    });
+    expect(consulta.chamadas).toContainEqual({
+      metodo: "not",
+      coluna: "lancamento_formas",
+      // O dublê guarda o par operador+valor como texto ("is null").
+      valor: "is null",
+    });
+  });
+
+  it("CONTROLE: lista VAZIA não filtra nada", () => {
+    // Sem isto, uma lista vazia viraria `in (...)` sem valor e a tela apareceria
+    // zerada -- que é o oposto de "sem filtro".
+    const consulta = aplicarFiltrosPagas(
+      new ConsultaFalsa(),
+      { categoriaIds: [], formaPagamentoIds: [] },
+      [],
+    );
+    expect(
+      consulta.chamadas.filter((c) => c.coluna.includes("categoria_id")),
+    ).toEqual([]);
+    expect(
+      consulta.chamadas.filter((c) => c.coluna.includes("forma_pagamento_id")),
+    ).toEqual([]);
+  });
+});

@@ -50,7 +50,7 @@ import {
   ORIGENS_LANCAMENTO,
   ROTULO_ORIGEM_LANCAMENTO,
 } from "@/modules/financeiro/lancamentos/schemas";
-import { subarvoreDeCentro } from "@/modules/_shared/centro-custo/selecao";
+import { subarvoreDeCentros } from "@/modules/_shared/centro-custo/selecao";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
@@ -121,10 +121,14 @@ export interface ValoresFiltrosAPagar {
    * mesmas perguntas de quem lança: de que obra é, que tipo de custo é, por qual
    * forma sai.
    */
-  categoria: string;
-  /** Um centro de custo. O filtro pega a SUBÁRVORE dele (obra traz as etapas). */
-  centro: string;
-  forma: string;
+  categoriaIds: string[];
+  /**
+   * Centros de custo escolhidos. O filtro pega a SUBÁRVORE de cada um (obra traz
+   * as etapas, manutenção traz cada equipamento) e a UNIÃO dos conjuntos: marcar
+   * duas obras é "quero as duas".
+   */
+  centroIds: string[];
+  formaIds: string[];
   /** Mês de referência no formato do campo da tela: yyyy-MM. */
   mes: string;
   origem: string;
@@ -168,9 +172,9 @@ export const FILTROS_A_PAGAR_VAZIOS: ValoresFiltrosAPagar = {
   vencAte: "",
   progDe: "",
   progAte: "",
-  categoria: "",
-  centro: "",
-  forma: "",
+  categoriaIds: [],
+  centroIds: [],
+  formaIds: [],
   mes: "",
   origem: "",
   compraDe: "",
@@ -679,10 +683,10 @@ export function PagamentosCliente({
    */
   const centroDoFiltro = React.useMemo(
     () =>
-      valoresAPagar.centro === ""
+      valoresAPagar.centroIds.length === 0
         ? null
-        : subarvoreDeCentro(centrosCusto, valoresAPagar.centro),
-    [centrosCusto, valoresAPagar.centro],
+        : subarvoreDeCentros(centrosCusto, valoresAPagar.centroIds),
+    [centrosCusto, valoresAPagar.centroIds],
   );
 
   const aprovadasFiltradas = React.useMemo(() => {
@@ -704,6 +708,8 @@ export function PagamentosCliente({
     const fornecedoresEscolhidos = conjunto(valoresAPagar.fornecedorIds);
     const contasEscolhidas = conjunto(valoresAPagar.contaIds);
     const situacoesEscolhidas = conjunto(valoresAPagar.situacoes);
+    const categoriasEscolhidas = conjunto(valoresAPagar.categoriaIds);
+    const formasEscolhidas = conjunto(valoresAPagar.formaIds);
 
     return aprovadas.filter((parcela) => {
       if (
@@ -755,8 +761,8 @@ export function PagamentosCliente({
         return false;
       }
       if (
-        valoresAPagar.categoria !== "" &&
-        parcela.categoriaId !== valoresAPagar.categoria
+        categoriasEscolhidas !== null &&
+        !categoriasEscolhidas.has(parcela.categoriaId ?? "")
       ) {
         return false;
       }
@@ -770,8 +776,8 @@ export function PagamentosCliente({
         return false;
       }
       if (
-        valoresAPagar.forma !== "" &&
-        parcela.formaPagamentoId !== valoresAPagar.forma
+        formasEscolhidas !== null &&
+        !formasEscolhidas.has(parcela.formaPagamentoId ?? "")
       ) {
         return false;
       }
@@ -895,29 +901,29 @@ export function PagamentosCliente({
     }),
     // As seis dimensões do LANÇAMENTO, iguais às de Lançamentos: quem paga faz
     // as mesmas perguntas de quem lança.
-    selecao({
+    selecaoMulti({
       id: "centro",
       chave: "centro",
       rotulo: "Centro de custo",
-      valor: valoresAPagar.centro,
+      valores: valoresAPagar.centroIds,
       opcoes: opcoesCentro,
       todosRotulo: "Todos os centros",
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       id: "categoria",
       chave: "categoria",
       rotulo: "Categoria",
-      valor: valoresAPagar.categoria,
+      valores: valoresAPagar.categoriaIds,
       opcoes: opcoesCategoria,
       todosRotulo: "Todas as categorias",
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       id: "forma",
       chave: "forma",
       rotulo: "Forma de pagamento",
-      valor: valoresAPagar.forma,
+      valores: valoresAPagar.formaIds,
       opcoes: opcoesForma,
       todosRotulo: "Todas as formas",
     }),
@@ -1015,29 +1021,29 @@ export function PagamentosCliente({
     }),
     // As MESMAS seis da outra aba, nas chaves h_ dela. Filtros diferentes entre
     // as duas abas fariam a pessoa procurar na aba errada o filtro que usou.
-    selecao({
+    selecaoMulti({
       id: "centro",
       chave: "h_centro",
       rotulo: "Centro de custo",
-      valor: valoresPagas.centro,
+      valores: valoresPagas.centroIds,
       opcoes: opcoesCentro,
       todosRotulo: "Todos os centros",
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       id: "categoria",
       chave: "h_categoria",
       rotulo: "Categoria",
-      valor: valoresPagas.categoria,
+      valores: valoresPagas.categoriaIds,
       opcoes: opcoesCategoria,
       todosRotulo: "Todas as categorias",
       largura: LARGURA_NOME,
     }),
-    selecao({
+    selecaoMulti({
       id: "forma",
       chave: "h_forma",
       rotulo: "Forma de pagamento",
-      valor: valoresPagas.forma,
+      valores: valoresPagas.formaIds,
       opcoes: opcoesForma,
       todosRotulo: "Todas as formas",
     }),

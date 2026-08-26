@@ -78,14 +78,14 @@ export function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
   if (filtros.pagamentoAte) {
     consulta = consulta.lte("data_pagamento", filtros.pagamentoAte);
   }
-  if (filtros.formaPagamentoId) {
+  if (filtros.formaPagamentoIds && filtros.formaPagamentoIds.length > 0) {
     // A forma é da PARCELA, não do lançamento: um lançamento pode sair por duas
     // formas, e é o bloco (`lancamento_forma_id`) que diz por qual esta parcela
     // saiu. `!inner` no embed é de propósito aqui e SÓ aqui: parcela sem bloco
     // (884 delas, da carga histórica) não tem forma nenhuma, então ela não
     // pertence a nenhum recorte de forma -- some do filtro, como deve.
     consulta = consulta
-      .eq("lancamento_formas.forma_pagamento_id", filtros.formaPagamentoId)
+      .in("lancamento_formas.forma_pagamento_id", filtros.formaPagamentoIds)
       // Sem este `not`, filtrar um embed NÃO-inner só esvazia o embed e a linha
       // continua vindo. É o mesmo par (`eq` no embed + `not is null`) que a
       // listagem de Lançamentos usa para o centro de custo.
@@ -96,8 +96,8 @@ export function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
   if (filtros.fornecedorIds && filtros.fornecedorIds.length > 0) {
     consulta = consulta.in("lancamentos.fornecedor_id", filtros.fornecedorIds);
   }
-  if (filtros.categoriaId) {
-    consulta = consulta.eq("lancamentos.categoria_id", filtros.categoriaId);
+  if (filtros.categoriaIds && filtros.categoriaIds.length > 0) {
+    consulta = consulta.in("lancamentos.categoria_id", filtros.categoriaIds);
   }
   if (filtros.mesCompetencia) {
     consulta = consulta.eq("lancamentos.mes_competencia", filtros.mesCompetencia);

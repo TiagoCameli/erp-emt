@@ -3389,3 +3389,39 @@ Nos testes, dez casos novos, todos com o mesmo desenho: o total tem que ser dife
 de UMA escolha e diferente do da lista inteira (R$ 1.300 contra R$ 1.000 e R$ 1.500).
 Verificado por sabotagem que eles caem — cortando a lista no primeiro item, trocando o
 `in` por `eq`, e removendo a guarda de lista vazia.
+
+## 26/08/2026 — Categoria, centro de custo e forma também aceitam mais de uma escolha
+
+O dono: "ainda não consigo selecionar mais de um fornecedor".
+
+**Primeiro achado: o pedido dele já estava construído.** O PR #184, de outra frente, tornou
+Situação, Fornecedor e Conta bancária de múltipla escolha em Pagamentos, e já havia incorporado o
+#183. Estava aberto esperando CI. Não refiz nada disso — foi mergeado por quem o abriu.
+
+**O que sobrava:** os três filtros que o #183 adicionou — **categoria, centro de custo e forma de
+pagamento** — continuaram de escolha única. Em Lançamentos esses três são multi, e "iguais a
+Lançamentos" foi o pedido original. Ou seja: depois do #184 ele bateria na mesma parede em três
+outros campos. É isso que este commit fecha.
+
+Segue a convenção que o #184 estabeleceu no mesmo arquivo (nomes plurais `*Ids`, helper
+`selecaoMulti`, `conjunto()` devolvendo `null` para "sem filtro"): duas convenções no mesmo
+componente seriam pior que a falta que havia.
+
+**Uma armadilha que o `tsc` não pega.** A página monta `filtrosPagas` numa VARIÁVEL antes de passar
+para a consulta. Object literal atribuído a variável não sofre excess property check: renomear
+`categoriaId` → `categoriaIds` no tipo deixou a página mandando a chave velha, e o `tsc` passou
+limpo. Os três filtros teriam parado de funcionar em silêncio — a página manda `categoriaId`, a
+consulta procura `categoriaIds`, ninguém reclama. Só apareceu porque fui conferir os usos em vez de
+confiar no typecheck verde.
+
+**A prova que vale: a união deduplica.** Manutenção sozinha dá 1.503 parcelas pagas
+(R$ 1.769.042,28); o Ramal do Gama sozinho dá 302 (R$ 3.164.684,38); as duas juntas dão **1.795** e
+não 1.805, porque 10 parcelas têm rateio nos dois centros. A tela mostra exatamente 1.795 e
+R$ 4.896.870,08, e a aba "A pagar" mostra 174 / R$ 1.077.132,61 — os dois conferidos contra consulta
+independente no banco. Se o filtro somasse em vez de unir, apareceriam as 10 duplicadas.
+
+`subarvoreDeCentros` (plural) entrou no módulo compartilhado espelhando `subarvoreDosCentros` do
+servidor: com o filtro em múltipla escolha, as duas pontas têm de responder o mesmo conjunto.
+
+**Fica pendente:** fornecedor continua de escolha única na Fila de aprovação, em Pagamentos diretos
+e em Programados. O #184 não as tocou e este commit também não.
