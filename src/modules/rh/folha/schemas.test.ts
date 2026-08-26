@@ -10,37 +10,49 @@ function base(overrides: Record<string, unknown> = {}) {
     itemId: ITEM,
     salarioBase: "2.000,00",
     gratificacao: "",
-    descontoPercentual: "",
+    desconto: "",
     ...overrides,
   };
 }
 
-describe("editarItemFolhaSchema — percentual vazio não é zero", () => {
-  it("percentual vazio vira null: a linha volta a usar os encargos da config", () => {
-    const r = editarItemFolhaSchema.safeParse(base({ descontoPercentual: "" }));
+describe("editarItemFolhaSchema — desconto vazio vale zero", () => {
+  // Aqui havia três testes defendendo a distinção entre vazio (null, "sem
+  // desconto") e zero ("tem, e é 0%"). Ela existia porque o desconto era um
+  // parâmetro de configuração — um percentual — e não o resultado. Com valor não
+  // sobrou o que distinguir: R$ 0,00 é R$ 0,00, e quem marca a linha como mexida
+  // à mão (o que o Regerar consulta) é `editado_manualmente`, não o desconto.
+  it("desconto vazio vira 0", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ desconto: "" }));
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.descontoPercentual).toBeNull();
+    if (r.success) expect(r.data.desconto).toBe(0);
   });
 
-  it("percentual null vira null (o caminho do reparse na Server Action)", () => {
-    const r = editarItemFolhaSchema.safeParse(
-      base({ descontoPercentual: null }),
-    );
+  it("desconto null vira 0 (o caminho do reparse na Server Action)", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ desconto: null }));
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.descontoPercentual).toBeNull();
+    if (r.success) expect(r.data.desconto).toBe(0);
   });
 
-  it('percentual "0" vira 0, e 0 é DIFERENTE de vazio: é "esta pessoa não tem encargo"', () => {
+  it("os três jeitos de dizer nada dão o mesmo zero", () => {
+    for (const nada of ["", null, "0"]) {
+      const r = editarItemFolhaSchema.safeParse(base({ desconto: nada }));
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.data.desconto).toBe(0);
+    }
+  });
+
+  it("O CASO QUE ORIGINOU A MUDANÇA: 121,57 atravessa intacto", () => {
+    // 7,5% de R$ 1.621,00 é 121,575, a metade exata do centavo: o percentual
+    // arredondava para 121,58 e o contracheque paga 121,57. Se o schema
+    // arredondar, truncar ou recalcular qualquer coisa aqui, o centavo volta.
     const r = editarItemFolhaSchema.safeParse(
-      base({ descontoPercentual: "0" }),
+      base({ salarioBase: "1.621,00", desconto: "121,57" }),
     );
     expect(r.success).toBe(true);
-    // A distinção é o que faz um terceiro entrar na folha sem encargo sem
-    // apagar a configuração de todo mundo. Se as duas virassem a mesma coisa,
-    // ou o terceiro carregaria encargo de CLT, ou a folha inteira ficaria sem
-    // encargo — e as duas versões passariam por qualquer teste que só olhasse
-    // "é falsy".
-    if (r.success) expect(r.data.descontoPercentual).toBe(0);
+    if (r.success) {
+      expect(r.data.desconto).toBe(121.57);
+      expect(r.data.desconto).not.toBe(121.58);
+    }
   });
 });
 
@@ -89,29 +101,27 @@ describe("editarItemFolhaSchema — parsing pt-BR", () => {
     }
   });
 
-  it('recusa "0.5" no percentual em vez de aceitar como 5', () => {
+  it('recusa "0.5" no desconto em vez de aceitar como 5', () => {
     // Agrupamento de milhar inválido (grupo de 1 dígito). Sem esta trava, quem
-    // digita 0.5 querendo 0,5% cadastra 5% e o encargo sai dez vezes maior,
-    // aprovado pelo check da coluna e por qualquer refine de faixa.
-    const r = editarItemFolhaSchema.safeParse(
-      base({ descontoPercentual: "0.5" }),
-    );
+    // digita 0.5 querendo R$ 0,50 desconta R$ 5,00 — dez vezes mais, aprovado
+    // pelo check da coluna e por qualquer refine de faixa.
+    const r = editarItemFolhaSchema.safeParse(base({ desconto: "0.5" }));
     expect(r.success).toBe(false);
   });
 
-  it("aceita 4 casas no percentual (8,3333% é alíquota real)", () => {
-    const r = editarItemFolhaSchema.safeParse(
-      base({ descontoPercentual: "8,3333" }),
-    );
+  it("recusa 3 casas no desconto: agora é dinheiro, e NUMERIC(14,2) arredondaria calado", () => {
+    // Quando era percentual, 4 casas eram legítimas (8,3333% é alíquota real).
+    // Virou dinheiro: 2 casas, porque centavo é a unidade em que o desconto sai
+    // do salário. Aceitar a terceira casa aqui devolveria pela porta do schema
+    // exatamente o arredondamento silencioso que esta frente foi tirar.
+    const r = editarItemFolhaSchema.safeParse(base({ desconto: "8,3333" }));
+    expect(r.success).toBe(false);
+  });
+
+  it("aceita as 2 casas do centavo", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ desconto: "1.234,56" }));
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.descontoPercentual).toBe(8.3333);
-  });
-
-  it("recusa 5 casas no percentual: a coluna NUMERIC(7,4) arredondaria calada", () => {
-    const r = editarItemFolhaSchema.safeParse(
-      base({ descontoPercentual: "8,33333" }),
-    );
-    expect(r.success).toBe(false);
+    if (r.success) expect(r.data.desconto).toBe(1234.56);
   });
 
   it("recusa 3 casas no dinheiro: NUMERIC(14,2) arredondaria calado", () => {
@@ -133,16 +143,20 @@ describe("editarItemFolhaSchema — faixas", () => {
     expect(r.success).toBe(false);
   });
 
-  it("recusa percentual acima de 100", () => {
-    const r = editarItemFolhaSchema.safeParse(
-      base({ descontoPercentual: "101" }),
-    );
+  it("recusa desconto negativo", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ desconto: "-1" }));
     expect(r.success).toBe(false);
   });
 
-  it("aceita percentual 100 (o limite do check da coluna)", () => {
+  it("aceita desconto maior que o salário: quem recusa é o banco, com o número na mão", () => {
+    // O percentual tinha teto de 100 e isso, sozinho, impedia o desconto de
+    // passar do salário. Em reais não há teto natural, e o schema não tem como
+    // saber o teto: ele depende de INSS e IRRF, que só existem no banco. Então
+    // a trava mora na fn_editar_item_folha, que recusa dizendo quanto sobrava.
+    // Aceitar aqui é deliberado — o schema valida FORMA, não regra de negócio
+    // que depende de outras linhas.
     const r = editarItemFolhaSchema.safeParse(
-      base({ descontoPercentual: "100" }),
+      base({ salarioBase: "1.000,00", desconto: "99.999,00" }),
     );
     expect(r.success).toBe(true);
   });
@@ -161,13 +175,13 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       itemId: ITEM,
       salarioBase: 1621,
       gratificacao: 500,
-      descontoPercentual: 10,
+      desconto: 121.57,
     });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.salarioBase).toBe(1621);
       expect(r.data.gratificacao).toBe(500);
-      expect(r.data.descontoPercentual).toBe(10);
+      expect(r.data.desconto).toBe(121.57);
     }
   });
 
@@ -176,12 +190,12 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       itemId: ITEM,
       salarioBase: 1621,
       gratificacao: 0,
-      descontoPercentual: 0,
+      desconto: 0,
     });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.gratificacao).toBe(0);
-      expect(r.data.descontoPercentual).toBe(0);
+      expect(r.data.desconto).toBe(0);
     }
   });
 });

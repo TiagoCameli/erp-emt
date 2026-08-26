@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CASAS_DINHEIRO, CASAS_TAXA } from "@/lib/casas-decimais";
+import { CASAS_DINHEIRO } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
 import { casasDecimais, paraNumero } from "@/modules/rh/percentual";
 
@@ -110,43 +110,28 @@ const dinheiroComZeroSchema = z
   )
   .pipe(dinheiroSchema);
 
-/** Percentual NUMERIC(7,4) com check 0..100 no banco. */
-const PERCENTUAL_MAX = 100;
-
 /**
- * Percentual DESCONTADO DO SALÁRIO desta pessoa, opcional de um jeito
- * específico: vazio (ou null) não é erro nem zero — é "esta pessoa não tem
- * desconto". Zero e vazio são valores DIFERENTES aqui, e é essa distinção que
- * deixa a tela dizer as duas coisas: "o desconto dele é 0%, declarado" e "ele
- * não tem desconto nenhum".
+ * VALOR descontado do salário desta pessoa, em reais. Vazio e null valem os
+ * dois zero: "sem desconto" é R$ 0,00, e não existe mais um segundo jeito de
+ * dizer a mesma coisa.
  *
- * Não reusa o `percentualSchema` de `rh/percentual` porque aquele exige o campo
- * preenchido ("Informe o percentual"), o oposto do que se quer aqui. As três
- * travas de faixa e de casas são as mesmas.
+ * Era percentual até 26/08/2026, e a troca não foi cosmética. 7,5% sobre o
+ * salário mínimo de R$ 1.621,00 dá 121,575 — exatamente a metade do centavo,
+ * onde nenhuma regra de arredondamento é "a certa". O banco subia para 121,58 e
+ * o contracheque descia para 121,57, e a folha do sistema divergia da folha real
+ * por um centavo por pessoa. Quem decide esse centavo é o sistema que emite o
+ * contracheque, então o número entra digitado em vez de calculado.
+ *
+ * Duas casas, não quatro: isto é dinheiro que alguém deixa de receber, não uma
+ * taxa que multiplica (`docs/PLANO-ERP-EMT.md`, regra de ouro 3).
  */
-const percentualIndividualSchema = z
+const descontoSchema = z
   .union([z.string(), z.number(), z.null()])
-  .transform((valor, ctx) => {
-    if (valor === null) return null;
-    if (typeof valor === "number") return valor;
-    const texto = valor.trim();
-    if (texto === "") return null;
-    const numero = paraNumero(texto);
-    if (!Number.isFinite(numero)) {
-      ctx.addIssue({ code: "custom", message: "Percentual inválido" });
-      return z.NEVER;
-    }
-    return numero;
+  .transform((valor) => {
+    if (valor === null) return 0;
+    return typeof valor === "string" && valor.trim() === "" ? 0 : valor;
   })
-  .refine((valor) => valor === null || valor >= 0, {
-    error: "O percentual não pode ser negativo",
-  })
-  .refine((valor) => valor === null || valor <= PERCENTUAL_MAX, {
-    error: "O percentual vai de 0 a 100",
-  })
-  .refine((valor) => valor === null || casasDecimais(valor) <= CASAS_TAXA, {
-    error: `O percentual aceita no máximo ${CASAS_TAXA} casas decimais`,
-  });
+  .pipe(dinheiroSchema);
 
 /**
  * Alteração de UMA linha da folha em rascunho. Só três campos: é o que a
@@ -163,7 +148,7 @@ export const editarItemFolhaSchema = z
     itemId: idSchemaCom("Item da folha inválido"),
     salarioBase: dinheiroSchema,
     gratificacao: dinheiroComZeroSchema,
-    descontoPercentual: percentualIndividualSchema,
+    desconto: descontoSchema,
   })
   .refine((dados) => dados.salarioBase > 0 || dados.gratificacao > 0, {
     error:
