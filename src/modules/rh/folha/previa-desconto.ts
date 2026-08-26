@@ -1,12 +1,19 @@
 /**
- * Prévia do desconto de salário e do líquido, para o drawer mostrar o número
- * ANTES de salvar. Sem React, sem `use server`.
+ * Prévia do líquido, para o drawer mostrar o número ANTES de salvar. Sem React,
+ * sem `use server`.
  *
- * Estas contas são uma SEGUNDA implementação das fórmulas que valem de verdade
+ * Esta conta é uma SEGUNDA implementação da fórmula que vale de verdade
  * (`fn_editar_item_folha` no banco), e isso é deliberado: a tela precisa
  * responder enquanto a pessoa digita. O preço é que as duas podem divergir, e é
- * por isso que elas moram aqui, numa função pura com teste, em vez de inline no
+ * por isso que ela mora aqui, numa função pura com teste, em vez de inline no
  * componente — o teste é o que prende a prévia à fórmula do banco.
+ *
+ * Aqui morava também um `descontoDoSalario`, que aplicava o percentual sobre o
+ * salário base. Ele saiu em 26/08/2026 junto com o percentual: o desconto passou
+ * a ser digitado em reais, e não há mais o que derivar. Era exatamente essa
+ * derivação que fazia 7,5% de R$ 1.621,00 virar R$ 121,58 na tela e no banco,
+ * contra os R$ 121,57 do contracheque — 121,575 é a metade exata do centavo, e
+ * nenhum arredondamento é "o certo" ali.
  *
  * Tudo em centavos inteiros: dinheiro em ponto flutuante mente.
  */
@@ -16,30 +23,11 @@ function centavos(valor: number): number {
   return Math.round(valor * 100);
 }
 
-/**
- * Quanto sai do salário. Incide sobre o SALÁRIO BASE, sem gratificação — mesma
- * base do `fn_editar_item_folha` e da provisão.
- *
- * `null` (sem desconto) e `0` (desconto de zero) dão os dois R$ 0,00. A
- * diferença entre eles é o que se GRAVA, não o que se desconta.
- */
-export function descontoDoSalario(
-  salarioBase: number,
-  percentual: number | null,
-): number {
-  if (percentual === null) return 0;
-  // Divide por 100 (o percentual) ANTES de arredondar, e só então volta para
-  // reais. Arredondar depois da divisão por 10.000 devolvia 121,575 em vez de
-  // 121,58 — um centavo de diferença entre a tela e o `round(...,2)` do banco,
-  // exatamente no número que a pessoa está conferindo.
-  return Math.round((centavos(salarioBase) * percentual) / 100) / 100;
-}
-
 /** O que o colaborador recebe, depois de tudo que sai do salário dele. */
 export interface ParcelasDoLiquido {
   salarioBase: number;
   gratificacao: number;
-  /** Desconto por pessoa (o percentual desta tela). */
+  /** Desconto por pessoa, em reais, como foi digitado nesta tela. */
   desconto: number;
   /** INSS retido, calculado pelas faixas no banco. */
   inss: number;

@@ -444,7 +444,7 @@ export interface LancamentoDetalhe {
   /**
    * Marca de dívida: empréstimo, financiamento ou consórcio. É uma dimensão à
    * parte de categoria e centro de custo, e alimenta o relatório de
-   * endividamento.
+   * créditos.
    */
   eDivida: boolean;
   parcelas: ParcelaLancamento[];

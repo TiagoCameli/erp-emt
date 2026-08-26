@@ -127,8 +127,8 @@ export async function gerarFolha(
 /* ------------------------------------------------------------------ */
 
 /**
- * Altera salário base, gratificação e percentual descontado do salário de UM
- * item da folha, via fn_editar_item_folha.
+ * Altera salário base, gratificação e valor descontado do salário de UM item da
+ * folha, via fn_editar_item_folha.
  *
  * A conta inteira acontece no banco de propósito: mexer nesses três campos
  * refaz INSS, IRRF, as linhas de encargo, as de provisão, o custo total, o
@@ -136,8 +136,11 @@ export async function gerarFolha(
  * seria uma segunda cópia das fórmulas da geração, e duas cópias de uma conta
  * de dinheiro divergem na primeira vez que uma das duas for corrigida.
  *
- * `descontoPercentual` null significa "esta pessoa não tem desconto", e é
- * diferente de zero — o schema preserva essa distinção.
+ * O desconto é um VALOR em reais desde 26/08/2026, não mais um percentual: 7,5%
+ * sobre o salário mínimo dá 121,575, a metade exata do centavo, e o banco subia
+ * (121,58) enquanto o contracheque descia (121,57). Não existe arredondamento
+ * "certo" nesse ponto, então o número passou a ser digitado. Vazio vale R$ 0,00
+ * — não há mais a distinção entre "sem desconto" e "desconto de zero".
  *
  * O desconto sai do LÍQUIDO e não do custo da empresa (25/08/2026): o dinheiro
  * sai da conta igual, o desconto só muda quem fica com ele. Antes desta data o
@@ -167,12 +170,11 @@ export async function editarItemFolha(
     p_item: validado.data.itemId,
     p_salario_base: validado.data.salarioBase,
     p_gratificacao: validado.data.gratificacao,
-    // `?? undefined` OMITE o parâmetro, e o DEFAULT dele no banco é null — que
-    // é exatamente "sem desconto". Não é o mesmo que mandar `null`: o tipo
-    // gerado marca o parâmetro como opcional (porque tem DEFAULT) e recusa
-    // null, e editar o database.types.ts à mão para aceitar seria apagado na
-    // próxima regeneração. Zero sobrevive: `??` só troca null e undefined.
-    p_desconto_percentual: validado.data.descontoPercentual ?? undefined,
+    // O schema já resolveu vazio e null para 0, então aqui sempre chega um
+    // número. Nada de `?? undefined`: aquilo existia para omitir o parâmetro e
+    // deixar o DEFAULT null do banco significar "sem desconto", distinção que o
+    // modelo em valor não tem mais.
+    p_desconto: validado.data.desconto,
   });
 
   if (error) {

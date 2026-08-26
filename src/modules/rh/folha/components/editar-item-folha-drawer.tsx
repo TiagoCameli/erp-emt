@@ -9,7 +9,6 @@ import {
   classesFormulario,
   FormDrawer,
   InputMoeda,
-  InputPercentual,
   LinhaCampos,
   MoneyText,
   SecaoFormulario,
@@ -21,15 +20,12 @@ import {
 } from "@/modules/cadastros/colaboradores/schemas";
 import { editarItemFolha } from "@/modules/rh/folha/actions";
 import type { FolhaItem } from "@/modules/rh/folha/queries";
-import {
-  descontoDoSalario,
-  liquidoPrevisto,
-} from "@/modules/rh/folha/previa-desconto";
+import { liquidoPrevisto } from "@/modules/rh/folha/previa-desconto";
 import { paraNumero } from "@/modules/rh/percentual";
 
 const ID_FORM = "form-editar-item-folha";
 
-/** Número do banco no formato que o InputMoeda/InputPercentual editam. */
+/** Número do banco no formato que o InputMoeda edita. */
 function paraCampo(valor: number | null): string {
   if (valor === null) return "";
   return String(valor).replace(".", ",");
@@ -48,21 +44,24 @@ export interface EditarItemFolhaDrawerProps {
 
 /**
  * Altera a linha de um colaborador na folha em rascunho: salário base,
- * gratificação salarial e percentual descontado do salário.
+ * gratificação salarial e valor descontado do salário.
  *
  * O drawer é o lugar onde a gratificação de quem tem gratificação é lançada. A
  * gratificação NÃO entra na base do desconto nem da provisão (regra do Tiago),
  * e o rodapé mostra isso em números ANTES de confirmar.
  *
- * O percentual DESCONTA do salário: o líquido da pessoa cai, e o custo da
- * empresa não muda (o dinheiro sai da conta igual, o desconto só muda quem
- * fica com ele). Até 25/08/2026 este mesmo campo era encargo patronal e SOMAVA
- * no custo — o que fez a folha mostrar custo R$ 2.028,58 num bruto de
- * R$ 1.907,00 e não descontar nada de ninguém.
+ * O desconto SAI do salário: o líquido da pessoa cai, e o custo da empresa não
+ * muda (o dinheiro sai da conta igual, o desconto só muda quem fica com ele).
+ * Até 25/08/2026 este mesmo campo era encargo patronal e SOMAVA no custo — o que
+ * fez a folha mostrar custo R$ 2.028,58 num bruto de R$ 1.907,00 e não descontar
+ * nada de ninguém.
  *
- * Vazio não é zero: vazio é "não tem desconto", zero é "tem, e é 0%". A
- * distinção existe porque o Regerar preserva o que foi digitado, e precisa
- * saber diferenciar "não mexeram nisso" de "decidiram que é zero".
+ * O campo é VALOR EM REAIS desde 26/08/2026, e era percentual antes. 7,5% sobre
+ * o salário mínimo de R$ 1.621,00 dá 121,575: a metade exata do centavo, onde
+ * nenhum arredondamento é "o certo". O sistema subia para R$ 121,58 e o
+ * contracheque descia para R$ 121,57. Quem decide esse centavo é quem emite o
+ * contracheque, então o número entra digitado — e vazio vale R$ 0,00, sem a
+ * antiga distinção entre "não tem desconto" e "tem, e é zero".
  *
  * Quem calcula é o banco (`fn_editar_item_folha`, as mesmas funções da
  * geração). O que aparece aqui é PRÉVIA: desconto e líquido estimados para a
@@ -78,7 +77,7 @@ export function EditarItemFolhaDrawer({
 }: EditarItemFolhaDrawerProps) {
   const [salarioBase, setSalarioBase] = React.useState("");
   const [gratificacao, setGratificacao] = React.useState("");
-  const [percentual, setPercentual] = React.useState("");
+  const [desconto, setDesconto] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
   // Ajuste de estado durante o render na transição de fechado para aberto
@@ -93,39 +92,31 @@ export function EditarItemFolhaDrawer({
     if (item) {
       setSalarioBase(paraCampo(item.salarioBase));
       setGratificacao(paraCampo(item.gratificacao));
-      setPercentual(paraCampo(item.descontoPercentual));
+      setDesconto(paraCampo(item.descontos));
     }
   }
 
   const baseNumero = paraNumero(salarioBase);
   const gratNumero = gratificacao.trim() === "" ? 0 : paraNumero(gratificacao);
-  const percentualInformado = percentual.trim() !== "";
-  const percentualNumero = percentualInformado ? paraNumero(percentual) : null;
+  // Vazio vale zero, igual à gratificação: "sem desconto" e "R$ 0,00" são a
+  // mesma coisa desde que o campo deixou de ser percentual.
+  const descontoNumero = desconto.trim() === "" ? 0 : paraNumero(desconto);
 
   const baseValida = Number.isFinite(baseNumero) && baseNumero >= 0;
   const gratValida = Number.isFinite(gratNumero) && gratNumero >= 0;
-  const percentualValido =
-    percentualNumero === null ||
-    (Number.isFinite(percentualNumero) &&
-      percentualNumero >= 0 &&
-      percentualNumero <= 100);
+  const descontoValido = Number.isFinite(descontoNumero) && descontoNumero >= 0;
   // Linha zerada não existe na folha: a mesma trava está no schema e no banco.
   const temValor =
     baseValida && gratValida && (baseNumero > 0 || gratNumero > 0);
   const podeSalvar =
-    item !== null && baseValida && gratValida && percentualValido && temValor;
+    item !== null && baseValida && gratValida && descontoValido && temValor;
 
-  // Prévia: o desconto incide só sobre o salário base, e vazio vale zero aqui
-  // (a diferença entre vazio e zero está no que se GRAVA, não no que se desconta).
-  //
-  // As contas moram em `previa-desconto.ts`, com teste ancorado no que o banco
-  // gravou de verdade: é o teste que impede a prévia de divergir da fórmula
-  // oficial por um centavo, no número que a pessoa está conferindo.
-  const percentualAplicado = percentualNumero ?? 0;
-  const descontoPrevisto =
-    baseValida && percentualValido
-      ? descontoDoSalario(baseNumero, percentualAplicado)
-      : null;
+  // O desconto não tem mais prévia para calcular: o número digitado é o próprio
+  // desconto. Sobrou a prévia do LÍQUIDO, que mora em `previa-desconto.ts` com
+  // teste ancorado no que o banco gravou de verdade — é o teste que impede a
+  // tela de divergir da fórmula oficial por um centavo, justamente no número que
+  // a pessoa está conferindo.
+  const descontoPrevisto = descontoValido ? descontoNumero : null;
   // INSS e IRRF vêm do item, não são recalculados aqui: quem os calcula são as
   // faixas do banco, e chutar daria um número que a tela desmente no refresh.
   const liquidoEstimado =
@@ -152,8 +143,8 @@ export function EditarItemFolhaDrawer({
       toast.error("Informe a gratificação como número (ex: 500,00)");
       return;
     }
-    if (!percentualValido) {
-      toast.error("O percentual de desconto vai de 0 a 100");
+    if (!descontoValido) {
+      toast.error("Informe o desconto como número (ex: 121,57)");
       return;
     }
     if (!temValor) {
@@ -168,7 +159,7 @@ export function EditarItemFolhaDrawer({
       itemId: item.id,
       salarioBase: baseNumero,
       gratificacao: gratNumero,
-      descontoPercentual: percentualNumero,
+      desconto: descontoNumero,
     });
     setSalvando(false);
 
@@ -199,15 +190,15 @@ export function EditarItemFolhaDrawer({
       }
       rodape={
         <div className="flex w-full flex-wrap items-center justify-between gap-4">
-          {/* A prévia existe para o desconto aparecer como número ANTES de
-              salvar: é o que mostra que o percentual sai do salário, e não do
-              bolso da empresa. */}
+          {/* A prévia existe para o líquido aparecer ANTES de salvar: é o que
+              mostra que o desconto sai do salário da pessoa, e não do bolso da
+              empresa. */}
           <div className="text-detalhe text-muted-foreground">
             {descontoPrevisto !== null && liquidoEstimado !== null ? (
               <>
                 Desconto{" "}
-                <MoneyText valor={descontoPrevisto} className="inline" /> sobre
-                o salário base ({percentualAplicado}%) · líquido estimado{" "}
+                <MoneyText valor={descontoPrevisto} className="inline" /> ·
+                líquido estimado{" "}
                 <span className="font-semibold text-foreground">
                   <MoneyText valor={liquidoEstimado} className="inline" />
                 </span>
@@ -289,16 +280,16 @@ export function EditarItemFolhaDrawer({
         <SecaoFormulario titulo="Desconto do salário">
           <CampoFormulario
             id="item-folha-desconto"
-            rotulo="Percentual descontado do salário"
+            rotulo="Valor descontado do salário"
             largura="medio"
-            ajuda="Incide sobre o salário base e sai do líquido: a pessoa recebe menos. Não muda o custo da empresa. Em branco = sem desconto."
+            ajuda="Sai do líquido: a pessoa recebe menos. Não muda o custo da empresa. Digite o valor exato do contracheque — em branco = sem desconto."
           >
-            <InputPercentual
+            <InputMoeda
               id="item-folha-desconto"
-              valor={percentual}
-              onValorChange={setPercentual}
+              valor={desconto}
+              onValorChange={setDesconto}
               disabled={salvando}
-              placeholder="0"
+              placeholder="0,00"
             />
           </CampoFormulario>
         </SecaoFormulario>

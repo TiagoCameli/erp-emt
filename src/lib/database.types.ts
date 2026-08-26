@@ -412,7 +412,7 @@ export type Database = {
           ctps_uf: string | null;
           data_admissao: string | null;
           data_nascimento: string | null;
-          desconto_percentual: number | null;
+          desconto_valor: number | null;
           encargos_percentual: number | null;
           escolaridade: string | null;
           estado_civil: string | null;
@@ -456,7 +456,7 @@ export type Database = {
           ctps_uf?: string | null;
           data_admissao?: string | null;
           data_nascimento?: string | null;
-          desconto_percentual?: number | null;
+          desconto_valor?: number | null;
           encargos_percentual?: number | null;
           escolaridade?: string | null;
           estado_civil?: string | null;
@@ -500,7 +500,7 @@ export type Database = {
           ctps_uf?: string | null;
           data_admissao?: string | null;
           data_nascimento?: string | null;
-          desconto_percentual?: number | null;
+          desconto_valor?: number | null;
           encargos_percentual?: number | null;
           escolaridade?: string | null;
           estado_civil?: string | null;
@@ -1388,7 +1388,6 @@ export type Database = {
           colaborador_id: string;
           created_at: string;
           custo_total: number;
-          desconto_percentual: number | null;
           descontos: number;
           editado_manualmente: boolean;
           encargos: number;
@@ -1412,7 +1411,6 @@ export type Database = {
           colaborador_id: string;
           created_at?: string;
           custo_total?: number;
-          desconto_percentual?: number | null;
           descontos?: number;
           editado_manualmente?: boolean;
           encargos?: number;
@@ -1436,7 +1434,6 @@ export type Database = {
           colaborador_id?: string;
           created_at?: string;
           custo_total?: number;
-          desconto_percentual?: number | null;
           descontos?: number;
           editado_manualmente?: boolean;
           encargos?: number;
@@ -3786,7 +3783,7 @@ export type Database = {
       };
       fn_editar_item_folha: {
         Args: {
-          p_desconto_percentual?: number;
+          p_desconto?: number;
           p_gratificacao: number;
           p_item: string;
           p_salario_base: number;
@@ -4238,7 +4235,7 @@ export type Database = {
           resgatado: number;
         }[];
       };
-      fn_rel_endividamento: {
+      fn_rel_creditos: {
         Args: never;
         Returns: {
           categoria: string;
@@ -4254,7 +4251,7 @@ export type Database = {
           valor_contratado: number;
         }[];
       };
-      fn_rel_endividamento_por_mes: {
+      fn_rel_creditos_por_mes: {
         Args: { p_meses?: number };
         Returns: {
           mes: string;

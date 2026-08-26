@@ -11,7 +11,7 @@ import {
 } from "recharts";
 
 import { formatarBRL } from "@/lib/formatadores";
-import type { DividaMes } from "../endividamento";
+import type { CreditoMes } from "../creditos";
 
 function rotuloEixoValor(valor: number): string {
   const abs = Math.abs(valor);
@@ -26,7 +26,7 @@ function ConteudoTooltip({
   label,
 }: {
   active?: boolean;
-  payload?: { payload?: DividaMes }[];
+  payload?: { payload?: CreditoMes }[];
   label?: string;
 }) {
   const ponto = payload?.[0]?.payload;
@@ -43,11 +43,11 @@ function ConteudoTooltip({
 }
 
 /**
- * O que vence de dívida mês a mês. Uma série só, então a cor é fixa: ela não
+ * O que vence de crédito mês a mês. Uma série só, então a cor é fixa: ela não
  * distingue entidade nenhuma, e variar por posição faria a cor querer dizer
  * "mês mais caro", que não é o que ela diz.
  */
-export function EndividamentoGrafico({ meses }: { meses: DividaMes[] }) {
+export function CreditosGrafico({ meses }: { meses: CreditoMes[] }) {
   return (
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">

@@ -1,23 +1,34 @@
 /**
- * A prévia do desconto tem que dar o MESMO número que o banco grava.
+ * A prévia do líquido tem que dar o MESMO número que o banco grava.
  *
- * A âncora é o caso real que originou a mudança: CLELTON PEREIRA DE OLIVEIRA,
- * salário base R$ 1.621,00, gratificação R$ 286,00, 7,5% descontados. O banco
- * gravou desconto R$ 121,58 e líquido R$ 1.785,42 (medido em produção, folha de
- * agosto de 2026). Se a prévia divergir disso, ela mente na tela.
+ * A âncora é o caso real que originou a mudança de percentual para valor:
+ * CLELTON PEREIRA DE OLIVEIRA, salário base R$ 1.621,00, gratificação R$ 286,00,
+ * desconto de R$ 121,57 — o valor do contracheque. Medido na
+ * `fn_editar_item_folha` do projeto vivo em 26/08/2026: desconto 121,57, líquido
+ * 1.785,43.
+ *
+ * O NÚMERO ANTIGO ESTÁ AQUI DE PROPÓSITO. Enquanto o desconto era um percentual,
+ * 7,5% de R$ 1.621,00 dava 121,575, o `round()` do banco subia para R$ 121,58 e
+ * o líquido saía R$ 1.785,42 — um centavo a menos do que o contracheque paga.
+ * O teste que segura a diferença é o "um centavo importa" mais abaixo: se alguém
+ * reintroduzir a conta por percentual, ele quebra com a diferença nomeada em vez
+ * de a folha voltar a divergir calada.
+ *
+ * Note que já não existe função de desconto para testar: o valor digitado É o
+ * desconto. O que resta de conta é o líquido.
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  descontoDoSalario,
-  liquidoPrevisto,
-} from "@/modules/rh/folha/previa-desconto";
+import { liquidoPrevisto } from "@/modules/rh/folha/previa-desconto";
 
 const SALARIO = 1621;
 const GRATIFICACAO = 286;
-/** O que o banco gravou para 7,5% sobre 1.621,00. */
-const DESCONTO_REAL = 121.58;
-const LIQUIDO_REAL = 1785.42;
+/** O valor do contracheque, digitado. */
+const DESCONTO = 121.57;
+/** O que o banco gravou de líquido com esse desconto. */
+const LIQUIDO_REAL = 1785.43;
+/** O que a era do percentual produzia: 7,5% arredondado para cima. */
+const DESCONTO_ANTIGO = 121.58;
 
 const semOutrosDescontos = {
   inss: 0,
@@ -26,24 +37,20 @@ const semOutrosDescontos = {
 };
 
 describe("o caso do CLELTON fecha com o banco", () => {
-  it("7,5% de 1.621,00 dá os R$ 121,58 que o banco gravou", () => {
-    expect(descontoDoSalario(SALARIO, 7.5)).toBe(DESCONTO_REAL);
-  });
-
-  it("o líquido dá os R$ 1.785,42 que o banco gravou", () => {
+  it("com o desconto do contracheque, o líquido dá os R$ 1.785,43 gravados", () => {
     expect(
       liquidoPrevisto({
         salarioBase: SALARIO,
         gratificacao: GRATIFICACAO,
-        desconto: DESCONTO_REAL,
+        desconto: DESCONTO,
         ...semOutrosDescontos,
       }),
     ).toBe(LIQUIDO_REAL);
   });
 
   it("LINHA DE CONTROLE: sem desconto, o líquido é o bruto inteiro", () => {
-    // Se esta linha desse 1.785,42 também, os dois testes acima estariam
-    // passando por acidente — e o desconto não estaria saindo de lugar nenhum.
+    // Se esta linha desse 1.785,43 também, o teste acima estaria passando por
+    // acidente — e o desconto não estaria saindo de lugar nenhum.
     expect(
       liquidoPrevisto({
         salarioBase: SALARIO,
@@ -53,47 +60,47 @@ describe("o caso do CLELTON fecha com o banco", () => {
       }),
     ).toBe(1907);
   });
-});
 
-describe("a base do desconto é o salário, não o bruto", () => {
-  it("a gratificação NÃO entra na base", () => {
-    // 7,5% de 1.907 daria 143,03. A regra é 7,5% de 1.621 = 121,58, e é essa
-    // diferença de R$ 21,45 que o teste protege.
-    expect(descontoDoSalario(SALARIO, 7.5)).toBe(121.58);
-    expect(descontoDoSalario(SALARIO + GRATIFICACAO, 7.5)).toBe(143.03);
+  it("um centavo importa: o valor antigo dá um líquido DIFERENTE", () => {
+    // É a mudança inteira num teste. R$ 121,58 (o percentual arredondado) e
+    // R$ 121,57 (o contracheque) não podem dar o mesmo líquido — se derem, a
+    // prévia está arredondando por conta própria e o centavo que motivou toda
+    // esta frente voltou.
+    const comAntigo = liquidoPrevisto({
+      salarioBase: SALARIO,
+      gratificacao: GRATIFICACAO,
+      desconto: DESCONTO_ANTIGO,
+      ...semOutrosDescontos,
+    });
+    expect(comAntigo).toBe(1785.42);
+    expect(comAntigo).not.toBe(LIQUIDO_REAL);
+    expect(LIQUIDO_REAL - comAntigo).toBeCloseTo(0.01, 10);
   });
 });
 
-describe("nulo e zero", () => {
-  it("nulo desconta zero", () => {
-    expect(descontoDoSalario(SALARIO, null)).toBe(0);
+describe("o valor digitado entra inteiro, sem conta nenhuma", () => {
+  it("o desconto sai do líquido pelo valor exato, com 2 casas quaisquer", () => {
+    // Nenhum destes é 7,5% de nada: é o ponto. Qualquer centavo que o
+    // contracheque disser tem de atravessar a tela intacto.
+    expect(
+      liquidoPrevisto({
+        salarioBase: 1000,
+        gratificacao: 0,
+        desconto: 0.01,
+        ...semOutrosDescontos,
+      }),
+    ).toBe(999.99);
+    expect(
+      liquidoPrevisto({
+        salarioBase: 1000,
+        gratificacao: 0,
+        desconto: 333.33,
+        ...semOutrosDescontos,
+      }),
+    ).toBe(666.67);
   });
 
-  it("zero desconta zero", () => {
-    expect(descontoDoSalario(SALARIO, 0)).toBe(0);
-  });
-
-  it("os dois dão o mesmo dinheiro: a diferença é só no que se grava", () => {
-    expect(descontoDoSalario(SALARIO, null)).toBe(
-      descontoDoSalario(SALARIO, 0),
-    );
-  });
-});
-
-describe("centavos", () => {
-  it("arredonda em 2 casas, igual ao round() do banco", () => {
-    // 7,5% de 1.621,00 = 121,575 exatos. O banco faz round(...,2) = 121,58, e
-    // truncar aqui daria 121,57: um centavo de diferença entre a tela e o que
-    // foi gravado, no campo que a pessoa está justamente conferindo.
-    expect(descontoDoSalario(1621, 7.5)).toBe(121.58);
-    // 3,33% de 1.000,00 = 33,30
-    expect(descontoDoSalario(1000, 3.33)).toBe(33.3);
-    // percentual com 4 casas (o máximo que o campo aceita)
-    expect(descontoDoSalario(2500, 1.2345)).toBe(30.86);
-  });
-
-  it("100% desconta o salário base inteiro, e a gratificação sobra", () => {
-    expect(descontoDoSalario(SALARIO, 100)).toBe(SALARIO);
+  it("desconto igual ao salário base deixa só a gratificação", () => {
     expect(
       liquidoPrevisto({
         salarioBase: SALARIO,
@@ -150,8 +157,7 @@ describe("o líquido não fica negativo", () => {
 
 describe("INSS e IRRF continuam saindo do líquido", () => {
   it("os três descontos se somam", () => {
-    // Salário 5.000, INSS 500, IRRF 300, desconto por pessoa 250 (5%).
-    expect(descontoDoSalario(5000, 5)).toBe(250);
+    // Salário 5.000, INSS 500, IRRF 300, desconto por pessoa 250.
     expect(
       liquidoPrevisto({
         salarioBase: 5000,

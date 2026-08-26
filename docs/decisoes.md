@@ -3258,6 +3258,27 @@ construção, não por esquecimento. A folha também continua lendo o vencimento
 tabela vazia: o trigger já dá a ela colaborador e categoria, mas forma e vencimento da folha
 precisam da mesma mudança de parâmetro que as diárias receberam.
 
+### 26/08/2026 — o relatório passou a se chamar "Créditos"
+
+Mesmo relatório, mesmo conteúdo: o Tiago pediu o nome dele em vez de "Endividamento".
+O que mudou é o vocabulário da tela e do código do relatório — rótulo, título, id do
+parâmetro `rel` (`?rel=creditos`), os cinco arquivos e as duas RPCs, que viraram
+`fn_rel_creditos` e `fn_rel_creditos_por_mes`.
+
+**`ALTER FUNCTION … RENAME`, não `DROP` + `CREATE`.** O objeto continua com o mesmo oid,
+então os privilégios acompanham: não existe janela sem grant nem o risco de esquecer o
+`grant execute to authenticated` na recriação, que é a falha que deixa o painel em branco
+sem erro nenhum na tela. A migration confere o ACL antes e depois e para se ele mudar.
+
+**A coluna `lancamentos.e_divida` NÃO mudou.** O que foi renomeado é o relatório, não a
+marca no lançamento: a caixinha continua dizendo "é empréstimo, financiamento ou
+consórcio", que é o fato, e "dívida" segue sendo o nome certo do que ela marca. Trocar a
+coluna mexeria em `fn_salvar_lancamento` sem ninguém ter pedido.
+
+Efeito colateral aceito: uma URL antiga com `?rel=endividamento` cai no relatório padrão
+(fluxo de caixa), porque `normalizarRelatorio` não conhece mais esse id. O relatório tinha
+um dia de vida.
+
 ## 26/08/2026 — Pagamentos e Transferências ganham os filtros que faltavam
 
 Pedido do dono, nas duas telas: "as tabelas da aba de pagamentos tem que ser iguais a tabela da

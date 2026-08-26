@@ -10,10 +10,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
-import type { Endividamento } from "../endividamento";
+import type { Creditos } from "../creditos";
 
-interface EndividamentoTabelaProps {
-  endividamento: Endividamento;
+interface CreditosTabelaProps {
+  creditos: Creditos;
   /** Sem permissão de ver lançamentos, o contrato não vira link (daria 404). */
   podeVerLancamentos: boolean;
 }
@@ -28,10 +28,10 @@ const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
  * documento só, com as parcelas dele. É lá que se paga, se anexa o contrato e
  * se vê o histórico.
  */
-export function EndividamentoTabela({
-  endividamento,
+export function CreditosTabela({
+  creditos,
   podeVerLancamentos,
-}: EndividamentoTabelaProps) {
+}: CreditosTabelaProps) {
   const hoje = dataHojeISO();
 
   return (
@@ -59,7 +59,7 @@ export function EndividamentoTabela({
           </TableRow>
         </TableHeader>
         <TableBody className="[&_td]:px-3">
-          {endividamento.contratos.map((contrato) => {
+          {creditos.contratos.map((contrato) => {
             const quitado = contrato.proximoVencimento === null;
             const vencido =
               contrato.proximoVencimento !== null &&
@@ -136,19 +136,19 @@ export function EndividamentoTabela({
             </TableCell>
             <TableCell className="py-2 text-right">
               <MoneyText
-                valor={endividamento.totalContratado}
+                valor={creditos.totalContratado}
                 className="text-detalhe font-semibold"
               />
             </TableCell>
             <TableCell className="py-2 text-right">
               <MoneyText
-                valor={endividamento.totalPago}
+                valor={creditos.totalPago}
                 className="text-detalhe font-semibold"
               />
             </TableCell>
             <TableCell className="py-2 text-right">
               <MoneyText
-                valor={endividamento.totalSaldo}
+                valor={creditos.totalSaldo}
                 className="text-detalhe font-semibold"
               />
             </TableCell>
@@ -164,11 +164,11 @@ export function EndividamentoTabela({
  * O que vence pela frente, mês a mês. Parcela vencida e não paga aparece no mês
  * CORRENTE, e não no mês em que venceu: para o caixa ela é compromisso de agora.
  */
-export function EndividamentoPorMesTabela({
+export function CreditosPorMesTabela({
   meses,
   total,
 }: {
-  meses: Endividamento["proximosMeses"];
+  meses: Creditos["proximosMeses"];
   total: number;
 }) {
   return (
