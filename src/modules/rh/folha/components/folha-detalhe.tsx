@@ -500,19 +500,19 @@ export function FolhaDetalheView({
                       <MoneyText valor={item.valorExtras} />
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      {/* O percentual vai embaixo do valor: é ele que explica
-                          POR QUE saíram R$ 121,58 do salário desta pessoa e
-                          nada do salário da linha de cima. Sem desconto, um
-                          R$ 0,00 apagado — dizer "0%" para 57 linhas que não
-                          têm desconto só polui a tabela. */}
-                      {item.descontoPercentual !== null ? (
-                        <div className="flex flex-col items-end">
-                          <MoneyText valor={item.descontos} />
-                          <span className="text-legenda">
-                            {formatarQuantidade(item.descontoPercentual)}% desta
-                            pessoa
-                          </span>
-                        </div>
+                      {/* Só o valor, sem legenda. Aqui havia o percentual
+                          embaixo ("7,5% desta pessoa"), que explicava de onde
+                          vinham os R$ 121,58 — mas desde 26/08/2026 não vêm de
+                          conta nenhuma: o desconto é digitado em reais, porque
+                          7,5% de R$ 1.621,00 dá 121,575 e o centavo que o
+                          contracheque usa não se deduz por fórmula. Repetir
+                          "121,58 (7,5%)" agora seria afirmar uma origem que o
+                          número não tem.
+                          Quem não tem desconto fica com um R$ 0,00 apagado, e
+                          não em branco: coluna de dinheiro com célula vazia se
+                          lê como dado faltando. */}
+                      {item.descontos > 0 ? (
+                        <MoneyText valor={item.descontos} />
                       ) : (
                         <span className="text-muted-foreground">
                           <MoneyText valor={0} />

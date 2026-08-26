@@ -9,7 +9,6 @@ import {
   RodapeEmpresa,
 } from "@/components/canonicos/marca-documento";
 import { Button } from "@/components/ui/button";
-import { formatarQuantidade } from "@/lib/formatadores";
 import {
   Dialog,
   DialogContent,
@@ -171,13 +170,15 @@ export function HoleriteDialog({
               <Linha rotulo="IRRF" valor={item.irrf} />
               {/* Só quando existe: um "Desconto R$ 0,00" em todo holerite de
                   quem não tem desconto faria o funcionário procurar o que foi
-                  descontado dele. O percentual vai no rótulo porque é o que ele
-                  confere contra o combinado. */}
-              {item.descontoPercentual !== null ? (
-                <Linha
-                  rotulo={`Desconto (${formatarQuantidade(item.descontoPercentual)}% do salário base)`}
-                  valor={item.descontos}
-                />
+                  descontado dele.
+                  O rótulo trazia o percentual ("Desconto (7,5% do salário
+                  base)"), e não traz mais: desde 26/08/2026 o desconto é
+                  digitado em reais, e anunciar um percentual que ninguém aplicou
+                  daria ao funcionário uma conta para fazer que não fecha — 7,5%
+                  de R$ 1.621,00 dá R$ 121,575, e o valor real é o do
+                  contracheque. */}
+              {item.descontos > 0 ? (
+                <Linha rotulo="Desconto" valor={item.descontos} />
               ) : null}
               <Linha
                 rotulo={rotuloAdiantamento(item.adiantamentoParcelas)}

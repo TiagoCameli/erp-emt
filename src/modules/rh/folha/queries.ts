@@ -103,15 +103,15 @@ export interface FolhaItem {
    */
   encargosPercentual: number | null;
   /**
-   * Percentual descontado do SALÁRIO desta pessoa neste mês (25/08/2026). Sai
-   * do líquido e NÃO muda o custo da empresa: o dinheiro sai da conta igual, o
+   * VALOR descontado do salário desta pessoa neste mês, em reais. Sai do
+   * líquido e NÃO muda o custo da empresa: o dinheiro sai da conta igual, o
    * desconto só muda quem fica com ele.
    *
-   * `null` é diferente de `0`: nulo é "esta pessoa não tem desconto", zero é
-   * "tem, e vale zero" — e a tela mostra os dois de jeitos diferentes.
+   * Era um percentual até 26/08/2026, com este valor derivado dele. Deixou de
+   * ser: 7,5% sobre R$ 1.621,00 dá 121,575, a metade exata do centavo, e o
+   * banco subia (121,58) enquanto o contracheque descia (121,57). Agora é
+   * digitado. R$ 0,00 é "sem desconto" — não há mais um segundo estado.
    */
-  descontoPercentual: number | null;
-  /** Valor descontado do salário: salarioBase × descontoPercentual / 100. */
   descontos: number;
   /** Provisão de 13º/férias deste item (Bloco 8b): custo do mês, sem caixa. */
   provisoes: number;
@@ -400,7 +400,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .select(
       `id, colaborador_id, centro_custo_id, salario_base, gratificacao,
        horas_normais, horas_extras, valor_extras, inss, irrf, encargos,
-       encargos_percentual, desconto_percentual, descontos,
+       encargos_percentual, descontos,
        provisoes, adiantamentos, custo_total,
        valor_liquido, editado_manualmente, lancamento_id,
        colaboradores(nome, vinculo, funcoes(nome)),
@@ -442,7 +442,6 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
         .map((encargo) => ({ nome: encargo.nome, valor: encargo.valor }))
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       encargosPercentual: item.encargos_percentual,
-      descontoPercentual: item.desconto_percentual,
       descontos: item.descontos,
       provisoes: item.provisoes,
       // Folhas geradas antes desta frente (Bloco 8b) não têm linhas aqui: [].

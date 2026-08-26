@@ -34,7 +34,6 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     encargosPercentual: null,
     // Sem desconto de salario: nulo, nao zero. Os testes deste arquivo somam
     // encargo, provisao e centro de custo, e o desconto nao entra em nenhum.
-    descontoPercentual: null,
     descontos: 0,
     provisoes: 0,
     provisoesDetalhe: [],
