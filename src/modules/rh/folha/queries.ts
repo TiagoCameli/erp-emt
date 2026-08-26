@@ -113,6 +113,16 @@ export interface FolhaItem {
    * digitado. R$ 0,00 é "sem desconto" — não há mais um segundo estado.
    */
   descontos: number;
+  /**
+   * Horas não trabalhadas que motivaram o desconto (26/08/2026), ou `null`
+   * quando o valor foi digitado direto sem dizer o motivo.
+   *
+   * NÃO há invariante com `descontos`: o valor continua sendo a fonte da
+   * verdade, e estas horas são o motivo. O contracheque pode dizer "8h,
+   * R$ 64,83" e os dois números vão como vieram — forçar a multiplicação aqui
+   * recriaria o problema do meio centavo que tirou o percentual da folha.
+   */
+  descontoHoras: number | null;
   /** Provisão de 13º/férias deste item (Bloco 8b): custo do mês, sem caixa. */
   provisoes: number;
   /**
@@ -400,7 +410,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     .select(
       `id, colaborador_id, centro_custo_id, salario_base, gratificacao,
        horas_normais, horas_extras, valor_extras, inss, irrf, encargos,
-       encargos_percentual, descontos,
+       encargos_percentual, descontos, desconto_horas,
        provisoes, adiantamentos, custo_total,
        valor_liquido, editado_manualmente, lancamento_id,
        colaboradores(nome, vinculo, funcoes(nome)),
@@ -443,6 +453,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
       encargosPercentual: item.encargos_percentual,
       descontos: item.descontos,
+      descontoHoras: item.desconto_horas,
       provisoes: item.provisoes,
       // Folhas geradas antes desta frente (Bloco 8b) não têm linhas aqui: [].
       provisoesDetalhe: (item.folha_item_provisoes ?? [])
