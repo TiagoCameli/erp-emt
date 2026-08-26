@@ -142,3 +142,22 @@ export function subarvoreDeCentro(
   }
   return dentro;
 }
+
+/**
+ * A união das subárvores de VÁRIOS centros escolhidos.
+ *
+ * Espelha `subarvoreDosCentros` do lado servidor, que também recebe lista: com o
+ * filtro de centro em múltipla escolha, as duas pontas têm de responder o mesmo
+ * conjunto. União, e não interseção: marcar duas obras é "quero as duas", não
+ * "quero o que está nas duas ao mesmo tempo".
+ */
+export function subarvoreDeCentros(
+  centros: readonly CentroCustoOpcao[],
+  raizIds: readonly string[],
+): Set<string> {
+  const dentro = new Set<string>();
+  for (const raizId of raizIds) {
+    for (const id of subarvoreDeCentro(centros, raizId)) dentro.add(id);
+  }
+  return dentro;
+}

@@ -363,7 +363,7 @@ describe("o filtro de centro de custo da fila", () => {
     }),
   ];
 
-  function montarComCentro(centro: string) {
+  function montarComCentro(centroIds: string[]) {
     render(
       <PagamentosCliente
         aprovadas={DUAS}
@@ -378,7 +378,7 @@ describe("o filtro de centro de custo da fila", () => {
         podePagar
         podeEstornar={false}
         hoje="2026-08-26"
-        valoresAPagar={{ ...FILTROS_A_PAGAR_VAZIOS, centro }}
+        valoresAPagar={{ ...FILTROS_A_PAGAR_VAZIOS, centroIds }}
         valoresPagas={{ ...FILTROS_A_PAGAR_VAZIOS, pagoDe: "", pagoAte: "" }}
         filtrosPagas={{}}
       />,
@@ -386,20 +386,42 @@ describe("o filtro de centro de custo da fila", () => {
   }
 
   it("escolher a manutenção acha a parcela do EQUIPAMENTO", () => {
-    montarComCentro(MANUT);
+    montarComCentro([MANUT]);
     expect(screen.getByText("LAN-DO-EQUIPAMENTO")).toBeInTheDocument();
     expect(screen.queryByText("LAN-DA-OBRA")).not.toBeInTheDocument();
   });
 
   it("CONTROLE: escolher a obra deixa de fora a do equipamento", () => {
-    montarComCentro(OBRA);
+    montarComCentro([OBRA]);
     expect(screen.getByText("LAN-DA-OBRA")).toBeInTheDocument();
     expect(screen.queryByText("LAN-DO-EQUIPAMENTO")).not.toBeInTheDocument();
   });
 
   it("sem filtro de centro, as duas aparecem", () => {
-    montarComCentro("");
+    montarComCentro([]);
     expect(screen.getByText("LAN-DO-EQUIPAMENTO")).toBeInTheDocument();
     expect(screen.getByText("LAN-DA-OBRA")).toBeInTheDocument();
+  });
+
+  /**
+   * A capacidade nova: DOIS centros marcados ao mesmo tempo.
+   *
+   * O par com o caso de um centro só é o que dá valor a este: se o filtro
+   * ignorasse tudo menos o primeiro id, o caso de um centro passaria e este
+   * traria uma linha a menos. E é UNIÃO, não interseção -- marcar duas obras é
+   * "quero as duas", e nenhuma parcela pertence às duas ao mesmo tempo aqui.
+   */
+  it("marcar a manutenção E a obra traz as duas linhas", () => {
+    montarComCentro([MANUT, OBRA]);
+    expect(screen.getByText("LAN-DO-EQUIPAMENTO")).toBeInTheDocument();
+    expect(screen.getByText("LAN-DA-OBRA")).toBeInTheDocument();
+  });
+
+  it("CONTROLE: um centro que não é de ninguém esvazia a lista", () => {
+    // Sem este caso, um filtro que devolvesse a lista inteira quando não achasse
+    // nada passaria em todos os outros.
+    montarComCentro(["99999999-9999-4999-8999-999999999999"]);
+    expect(screen.queryByText("LAN-DO-EQUIPAMENTO")).not.toBeInTheDocument();
+    expect(screen.queryByText("LAN-DA-OBRA")).not.toBeInTheDocument();
   });
 });
