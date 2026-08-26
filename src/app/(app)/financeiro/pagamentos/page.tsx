@@ -4,7 +4,12 @@ import { PageHeader } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
-import { listarFornecedores } from "@/modules/financeiro/lancamentos/queries";
+import {
+  listarCategorias,
+  listarCentrosCusto,
+  listarFormasPagamento,
+  listarFornecedores,
+} from "@/modules/financeiro/lancamentos/queries";
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
 import {
@@ -21,12 +26,43 @@ import {
 const TAMANHO_PAGINA = 25;
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
 const VALOR_MAXIMO = 999999999999.99;
 /** Tamanho máximo do termo de busca aceito (o mesmo da action). */
 const MAX_BUSCA = 120;
 
 type Parametro = string | string[] | undefined;
+
+const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/**
+ * Mês de referência da URL (yyyy-MM) para o primeiro dia (yyyy-MM-01), que é o
+ * que a coluna `mes_competencia` guarda.
+ */
+function parametroMes(valor: Parametro): string | undefined {
+  return typeof valor === "string" && MES.test(valor) ? `${valor}-01` : undefined;
+}
+
+/** Origem do lançamento aceita no filtro. Lista fechada: o resto é lixo de URL. */
+const ORIGENS = new Set([
+  "manual",
+  "oc",
+  "folha",
+  "folha_guia",
+  "diaria",
+  "adiantamento",
+]);
+
+function parametroOrigem(valor: Parametro): string | undefined {
+  return typeof valor === "string" && ORIGENS.has(valor) ? valor : undefined;
+}
+
+/** Uuid vindo da URL, ou undefined. Evita mandar lixo pro filtro do PostgREST. */
+function parametroUuid(valor: Parametro): string | undefined {
+  return typeof valor === "string" && UUID.test(valor) ? valor : undefined;
+}
 
 /** Data yyyy-MM-dd vinda da URL, ou undefined se não for uma data. */
 function parametroData(valor: Parametro): string | undefined {
@@ -127,6 +163,7 @@ export default async function PaginaPagamentos({
   const valorAPagar = faixaValor(params.valor_de, params.valor_ate);
   const vencAPagar = periodo(params.venc_de, params.venc_ate);
   const progAPagar = periodo(params.prog_de, params.prog_ate);
+  const compraAPagar = periodo(params.compra_de, params.compra_ate);
   const aPagar = {
     busca: typeof params.busca === "string" ? params.busca : "",
     // Só situação de parcela EM ABERTO: `pago` e `cancelado` na fila a pagar
@@ -140,12 +177,22 @@ export default async function PaginaPagamentos({
     vencAte: texto(vencAPagar.ate),
     progDe: texto(progAPagar.de),
     progAte: texto(progAPagar.ate),
+    // Dimensões do lançamento. Esta aba filtra em memória (carrega tudo), então
+    // aqui só o texto do campo importa -- quem compara é o cliente.
+    categoria: parametroUuid(params.categoria) ?? "",
+    centro: parametroUuid(params.centro) ?? "",
+    forma: parametroUuid(params.forma) ?? "",
+    mes: typeof params.mes === "string" && MES.test(params.mes) ? params.mes : "",
+    origem: parametroOrigem(params.origem) ?? "",
+    compraDe: texto(compraAPagar.de),
+    compraAte: texto(compraAPagar.ate),
   };
 
   const valorPagas = faixaValor(params.h_valor_de, params.h_valor_ate);
   const vencPagas = periodo(params.h_venc_de, params.h_venc_ate);
   const progPagas = periodo(params.h_prog_de, params.h_prog_ate);
   const pagoPagas = periodo(params.h_pago_de, params.h_pago_ate);
+  const compraPagas = periodo(params.h_compra_de, params.h_compra_ate);
   const filtrosPagas = {
     busca: parametroBusca(params.h_busca),
     fornecedorIds: lerUuidsDaUrl(params.h_fornecedor),
@@ -158,9 +205,25 @@ export default async function PaginaPagamentos({
     programadaAte: progPagas.ate,
     pagamentoDe: pagoPagas.de,
     pagamentoAte: pagoPagas.ate,
+    categoriaId: parametroUuid(params.h_categoria),
+    centroCustoId: parametroUuid(params.h_centro),
+    formaPagamentoId: parametroUuid(params.h_forma),
+    mesCompetencia: parametroMes(params.h_mes),
+    origem: parametroOrigem(params.h_origem),
+    compraDe: compraPagas.de,
+    compraAte: compraPagas.ate,
   };
 
-  const [aprovadas, pagas, somaPagas, contas, fornecedores] = await Promise.all([
+  const [
+    aprovadas,
+    pagas,
+    somaPagas,
+    contas,
+    fornecedores,
+    categorias,
+    centrosCusto,
+    formasPagamento,
+  ] = await Promise.all([
     // A fila traz aprovadas E as que ainda aguardam aprovação: quem paga
     // precisa enxergar o que vem pela frente. Só as aprovadas ganham o botão.
     listarParcelasAPagar(),
@@ -174,6 +237,9 @@ export default async function PaginaPagamentos({
     somaDasParcelasPagas(filtrosPagas),
     listarContasBancarias(),
     listarFornecedores(),
+    listarCategorias(),
+    listarCentrosCusto(),
+    listarFormasPagamento(),
   ]);
 
   // Anexos das parcelas a pagar numa consulta só (o pagamento é a parcela).
@@ -198,6 +264,9 @@ export default async function PaginaPagamentos({
         abaInicial={parametroAba(params.aba)}
         contas={contas}
         fornecedores={fornecedores}
+        categorias={categorias}
+        centrosCusto={centrosCusto}
+        formasPagamento={formasPagamento}
         podePagar={podePagar}
         podeEstornar={podeEstornar}
         podeDesaprovar={podeDesaprovar}
@@ -217,6 +286,14 @@ export default async function PaginaPagamentos({
           progAte: texto(filtrosPagas.programadaAte),
           pagoDe: texto(filtrosPagas.pagamentoDe),
           pagoAte: texto(filtrosPagas.pagamentoAte),
+          categoria: filtrosPagas.categoriaId ?? "",
+          centro: filtrosPagas.centroCustoId ?? "",
+          forma: filtrosPagas.formaPagamentoId ?? "",
+          // O campo da tela é yyyy-MM; o filtro do banco é o primeiro dia.
+          mes: filtrosPagas.mesCompetencia?.slice(0, 7) ?? "",
+          origem: filtrosPagas.origem ?? "",
+          compraDe: texto(filtrosPagas.compraDe),
+          compraAte: texto(filtrosPagas.compraAte),
         }}
         filtrosPagas={filtrosPagas}
       />

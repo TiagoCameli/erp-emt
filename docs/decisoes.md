@@ -3279,6 +3279,69 @@ Efeito colateral aceito: uma URL antiga com `?rel=endividamento` cai no relatór
 (fluxo de caixa), porque `normalizarRelatorio` não conhece mais esse id. O relatório tinha
 um dia de vida.
 
+## 26/08/2026 — Pagamentos e Transferências ganham os filtros que faltavam
+
+Pedido do dono, nas duas telas: "as tabelas da aba de pagamentos tem que ser iguais a tabela da
+área de lançamentos com mais filtros" e "também quero mais filtros para a aba de transferências".
+
+**A medição que definiu o alvo:** Lançamentos tinha **16** filtros, Pagamentos **7** e
+Transferências **4**. E um detalhe que a captura de tela dele mostrava sem ele notar: Pagamentos
+dizia "Filtros 2/7" — cinco dos sete já existiam, escondidos atrás do botão "Filtros". O pedido era
+por mais, não por revelar os que havia.
+
+### Pagamentos: 7 → 13
+
+Seis dimensões do LANÇAMENTO, nas duas abas: **centro de custo, categoria, forma de pagamento, mês
+de referência, origem e período da compra**. As mesmas nas duas, nas chaves de URL de cada uma
+(`h_` no histórico): filtros diferentes entre abas fariam a pessoa procurar na aba errada o filtro
+que acabou de usar.
+
+As duas abas filtram por caminhos diferentes, e isso não é acidente: "A pagar" carrega tudo e filtra
+em MEMÓRIA (é uma fila de trabalho, e o resumo do topo precisa do recorte inteiro); "Pagas" pagina no
+SERVIDOR (é histórico, com milhares de linhas). Então cada filtro novo foi implementado duas vezes,
+de propósito.
+
+**O que quase passou:** `somaDasParcelasPagas` — o cartão "Pago no filtro" — recebia os filtros por
+`aplicarFiltrosPagas`, mas o centro de custo eu havia posto FORA daquela função (ele precisa de uma
+ida ao banco para expandir a subárvore, e a função é síncrona de propósito). Resultado: a lista
+filtraria por centro e o cartão mostraria o total sem filtro. É a mesma doença da semana — o mesmo
+dinheiro contado em dois lugares — e a cura foi a mesma: um helper `aplicarCentroCusto` usado pelos
+dois. Conferido no banco: 1.503 parcelas e R$ 1.769.042,28 na manutenção, idênticos ao cartão.
+
+**Centro de custo oferece só RAIZ e casa pela SUBÁRVORE.** No servidor quem responde é
+`fn_centro_custo_subarvore`; em memória, `subarvoreDeCentro` no módulo compartilhado, com teste. Duas
+implementações do mesmo conceito é risco assumido e vigiado: elas TÊM de concordar, e é por isso que
+a versão em memória não é um `filter` solto dentro do componente. O casamento é contra TODOS os
+centros do rateio, não o primeiro: custo dividido entre duas obras tem de aparecer filtrando por
+qualquer uma delas — e a tela mostrou exatamente isso, com uma linha "3 centros de custo" dentro do
+recorte da manutenção.
+
+**Forma de pagamento é da PARCELA, não do lançamento.** Um lançamento sai por até duas formas, e é o
+bloco (`lancamento_forma_id`) que diz por qual esta parcela saiu. O embed não é `!inner`: parcela sem
+bloco (884 delas, da carga histórica) tem de continuar aparecendo com o filtro desligado. Com o
+filtro ligado, o par `eq` no embed + `not(embed, is, null)` é que restringe a linha — `eq` sozinho num
+embed não-inner só esvazia o embed e a linha continua vindo.
+
+### Transferências: 4 → 7
+
+**Conta de origem**, **conta de destino** e **período de criação**. O filtro "Conta" que já existia
+pega os dois lados de propósito ("tudo que passou por esta conta"), e continua. Os dois novos existem
+porque um filtro que casa qualquer lado não expressa um PAR: "da CAIXA para o BB" era impossível de
+perguntar. Conferido com a linha de controle que importa — pôr como ORIGEM a conta que era o destino
+das linhas visíveis trocou a lista inteira.
+
+`criadoEm` entrou na consulta para isso, e o filtro compara os 10 primeiros caracteres do timestamp:
+comparar a string inteira contra "2026-08-26" deixaria de fora tudo que foi criado depois da
+meia-noite daquele dia.
+
+### Uma dor removida no caminho
+
+Os filtros de Pagamentos viviam como objetos literais repetidos em três arquivos de teste. Cada
+filtro novo quebrava os três, e o erro do `tsc` falava de "propriedade faltando" em vez do que
+mudou. Agora existe `FILTROS_A_PAGAR_VAZIOS` exportado, e os testes usam ele.
+
+---
+
 ---
 
 ## 26/08/2026 — Pagamentos: situação, fornecedor e conta aceitam mais de um

@@ -44,6 +44,11 @@ class ConsultaFalsa implements ConsultaFiltravel<ConsultaFalsa> {
   or(filtro: string, opcoes?: { referencedTable?: string }) {
     return this.registrar("or", opcoes?.referencedTable ?? "", filtro);
   }
+  // O par de `eq` em embed NÃO-inner: sem o `not`, a linha do pai vem mesmo com
+  // o embed vazio. Quem usa é o filtro de forma de pagamento.
+  not(coluna: string, operador: string, valor: null) {
+    return this.registrar("not", coluna, `${operador} ${valor}`);
+  }
 }
 
 const FORN_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";

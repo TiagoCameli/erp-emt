@@ -14,7 +14,9 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroMes,
   FiltroPeriodo,
+  FiltroSelect,
   FiltroSelectMulti,
   FiltroValor,
   GradeKpis,
@@ -44,7 +46,17 @@ import {
   MAX_ITENS_FILTRO,
 } from "@/modules/financeiro/_shared/listas-na-url";
 import { programacaoVencida } from "@/modules/financeiro/_shared/janela-pagamento";
-import type { FornecedorOpcao } from "@/modules/financeiro/lancamentos/queries";
+import {
+  ORIGENS_LANCAMENTO,
+  ROTULO_ORIGEM_LANCAMENTO,
+} from "@/modules/financeiro/lancamentos/schemas";
+import { subarvoreDeCentro } from "@/modules/_shared/centro-custo/selecao";
+import type {
+  CategoriaOpcao,
+  CentroCustoOpcao,
+  FormaPagamentoOpcao,
+  FornecedorOpcao,
+} from "@/modules/financeiro/lancamentos/queries";
 import {
   buscarParcelasPagas,
   estornarPagamento,
@@ -71,6 +83,16 @@ const TAMANHO_PAGINA = 25;
 const LARGURA_NOME = "max-w-[15rem]";
 
 /** Valores dos filtros da aba "A pagar", como vivem na URL. */
+/**
+ * Origens do lançamento, reusando a lista e os rótulos de `lancamentos/schemas`.
+ * Uma segunda lista aqui divergiria na primeira origem nova -- e origem nova
+ * aconteceu duas vezes este mês (diária e adiantamento).
+ */
+const OPCOES_ORIGEM: OpcaoFiltro[] = ORIGENS_LANCAMENTO.map((valor) => ({
+  valor,
+  rotulo: ROTULO_ORIGEM_LANCAMENTO[valor],
+}));
+
 export interface ValoresFiltrosAPagar {
   busca: string;
   /**
@@ -93,6 +115,22 @@ export interface ValoresFiltrosAPagar {
   /** Período da data programada (data autorizada do pagamento). */
   progDe: string;
   progAte: string;
+  /**
+   * Dimensões do LANÇAMENTO por trás da parcela. Existem porque a tela de
+   * Pagamentos tinha 7 filtros contra os 16 de Lançamentos, e quem paga faz as
+   * mesmas perguntas de quem lança: de que obra é, que tipo de custo é, por qual
+   * forma sai.
+   */
+  categoria: string;
+  /** Um centro de custo. O filtro pega a SUBÁRVORE dele (obra traz as etapas). */
+  centro: string;
+  forma: string;
+  /** Mês de referência no formato do campo da tela: yyyy-MM. */
+  mes: string;
+  origem: string;
+  /** Período da data da compra (o fato, não o vencimento). */
+  compraDe: string;
+  compraAte: string;
 }
 
 /**
@@ -108,6 +146,42 @@ export interface ValoresFiltrosPagas extends Omit<
   pagoDe: string;
   pagoAte: string;
 }
+
+/**
+ * Todos os filtros vazios, que é o estado "sem filtro nenhum".
+ *
+ * Exportado para os testes montarem as props sem repetir a lista de campos: a
+ * cada filtro novo, três arquivos de teste quebravam por causa de um objeto
+ * literal desatualizado, e o erro do `tsc` falava de propriedade faltando em vez
+ * do que realmente mudou.
+ */
+export const FILTROS_A_PAGAR_VAZIOS: ValoresFiltrosAPagar = {
+  busca: "",
+  // Os três de múltipla escolha são LISTA vazia, e não string vazia: aqui "sem
+  // filtro" tem que ser o mesmo valor que a tela trata como "todos".
+  situacoes: [],
+  fornecedorIds: [],
+  contaIds: [],
+  valorDe: "",
+  valorAte: "",
+  vencDe: "",
+  vencAte: "",
+  progDe: "",
+  progAte: "",
+  categoria: "",
+  centro: "",
+  forma: "",
+  mes: "",
+  origem: "",
+  compraDe: "",
+  compraAte: "",
+};
+
+export const FILTROS_PAGAS_VAZIOS: ValoresFiltrosPagas = {
+  ...FILTROS_A_PAGAR_VAZIOS,
+  pagoDe: "",
+  pagoAte: "",
+};
 
 export interface PagamentosClienteProps {
   aprovadas: ParcelaAprovada[];
@@ -125,6 +199,11 @@ export interface PagamentosClienteProps {
   contas: ContaBancariaOpcao[];
   /** Fornecedores ativos, para o seletor de fornecedor das duas abas. */
   fornecedores: FornecedorOpcao[];
+  /** Categorias de despesa, para o filtro de categoria das duas abas. */
+  categorias: CategoriaOpcao[];
+  /** Centros de custo (raízes e etapas), para o filtro de centro. */
+  centrosCusto: CentroCustoOpcao[];
+  formasPagamento: FormaPagamentoOpcao[];
   podePagar: boolean;
   podeEstornar: boolean;
   /**
@@ -290,6 +369,9 @@ export function PagamentosCliente({
   abaInicial = "a-pagar",
   contas,
   fornecedores,
+  categorias,
+  centrosCusto,
+  formasPagamento,
   podePagar,
   podeEstornar,
   podeDesaprovar = false,
@@ -369,6 +451,45 @@ export function PagamentosCliente({
     [fornecedores],
   );
 
+  const opcoesCategoria = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      categorias.map((categoria) => ({
+        valor: categoria.id,
+        rotulo: categoria.nome,
+      })),
+    [categorias],
+  );
+
+  /**
+   * Só os centros de custo RAIZ.
+   *
+   * O filtro expande a SUBÁRVORE no banco, então escolher a manutenção alcança
+   * as parcelas de cada equipamento e escolher a obra alcança as etapas dela --
+   * sem despejar os 73 centros numa lista onde 61 são equipamentos. É o mesmo
+   * corte que os filtros dos relatórios usam, pelo mesmo motivo.
+   */
+  const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      centrosCusto
+        .filter((centro) => centro.paiId === null)
+        .map((centro) => ({
+          valor: centro.id,
+          rotulo: centro.codigo
+            ? `${centro.codigo} ${centro.nome}`
+            : centro.nome,
+        })),
+    [centrosCusto],
+  );
+
+  const opcoesForma = React.useMemo<OpcaoFiltro[]>(
+    () =>
+      formasPagamento.map((forma) => ({
+        valor: forma.id,
+        rotulo: forma.nome,
+      })),
+    [formasPagamento],
+  );
+
   const opcoesConta = React.useMemo<OpcaoFiltro[]>(
     () =>
       contas.map((conta) => ({
@@ -377,6 +498,43 @@ export function PagamentosCliente({
       })),
     [contas],
   );
+
+  /**
+   * Seletor de valor único preso a um parâmetro da URL. Trocar o filtro zera a
+   * página: filtrar e cair numa página vazia parece lista sem resultado.
+   */
+  function selecao(config: {
+    id: string;
+    chave: string;
+    rotulo: string;
+    valor: string;
+    opcoes: OpcaoFiltro[];
+    todosRotulo: string;
+    largura?: string;
+  }): FiltroConfiguravel {
+    return {
+      id: config.id,
+      rotulo: config.rotulo,
+      ocultoPorPadrao: true,
+      temValor: config.valor !== "",
+      onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
+      elemento: (
+        <FiltroSelect
+          valor={config.valor}
+          onValorChange={(valor) =>
+            setMuitos({
+              [config.chave]: valor === "" ? null : valor,
+              pagina: "1",
+            })
+          }
+          opcoes={config.opcoes}
+          placeholder={config.rotulo}
+          todosRotulo={config.todosRotulo}
+          className={config.largura}
+        />
+      ),
+    };
+  }
 
   /**
    * Seletor de MÚLTIPLA escolha preso a um parâmetro da URL. Lista vazia é
@@ -461,6 +619,32 @@ export function PagamentosCliente({
     };
   }
 
+  /** Mês de referência (yyyy-MM) numa chave da URL. */
+  function mesReferencia(config: {
+    id: string;
+    chave: string;
+    valor: string;
+  }): FiltroConfiguravel {
+    return {
+      id: config.id,
+      rotulo: "Mês de referência",
+      ocultoPorPadrao: true,
+      temValor: config.valor !== "",
+      onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
+      elemento: (
+        <FiltroMes
+          valor={config.valor}
+          onValorChange={(valor) =>
+            setMuitos({
+              [config.chave]: valor === "" ? null : valor,
+              pagina: "1",
+            })
+          }
+        />
+      ),
+    };
+  }
+
   /** Faixa de valor (de/até) da aba, presa às chaves de URL dela. */
   function faixaValor(
     id: string,
@@ -489,6 +673,18 @@ export function PagamentosCliente({
   const { busca: buscaAprovadas, setBusca: setBuscaAprovadas } = useBuscaUrl(
     valoresAPagar.busca,
   );
+  /**
+   * A subárvore do centro escolhido, uma vez por render em vez de por linha.
+   * `null` quando não há filtro de centro -- assim o laço nem entra no teste.
+   */
+  const centroDoFiltro = React.useMemo(
+    () =>
+      valoresAPagar.centro === ""
+        ? null
+        : subarvoreDeCentro(centrosCusto, valoresAPagar.centro),
+    [centrosCusto, valoresAPagar.centro],
+  );
+
   const aprovadasFiltradas = React.useMemo(() => {
     const termo = buscaAprovadas.trim().toLowerCase();
     const valorDe =
@@ -558,9 +754,52 @@ export function PagamentosCliente({
       ) {
         return false;
       }
+      if (
+        valoresAPagar.categoria !== "" &&
+        parcela.categoriaId !== valoresAPagar.categoria
+      ) {
+        return false;
+      }
+      // O centro casa pela SUBÁRVORE, e contra TODOS os centros do rateio:
+      // escolher a manutenção acha a parcela pendurada num equipamento, e um
+      // custo dividido entre duas obras aparece filtrando por qualquer uma.
+      if (
+        centroDoFiltro !== null &&
+        !(parcela.centroCustoIds ?? []).some((id) => centroDoFiltro.has(id))
+      ) {
+        return false;
+      }
+      if (
+        valoresAPagar.forma !== "" &&
+        parcela.formaPagamentoId !== valoresAPagar.forma
+      ) {
+        return false;
+      }
+      // O campo da tela é yyyy-MM e a coluna é o primeiro dia do mês.
+      if (
+        valoresAPagar.mes !== "" &&
+        (parcela.mesCompetencia ?? "").slice(0, 7) !== valoresAPagar.mes
+      ) {
+        return false;
+      }
+      if (
+        valoresAPagar.origem !== "" &&
+        parcela.origem !== valoresAPagar.origem
+      ) {
+        return false;
+      }
+      if (
+        !dentroDoPeriodo(
+          parcela.dataCompra ?? null,
+          valoresAPagar.compraDe,
+          valoresAPagar.compraAte,
+        )
+      ) {
+        return false;
+      }
       return true;
     });
-  }, [aprovadas, buscaAprovadas, valoresAPagar]);
+  }, [aprovadas, buscaAprovadas, valoresAPagar, centroDoFiltro]);
 
   /**
    * As parcelas que os cards resumem.
@@ -654,6 +893,52 @@ export function PagamentosCliente({
       de: valoresAPagar.progDe,
       ate: valoresAPagar.progAte,
     }),
+    // As seis dimensões do LANÇAMENTO, iguais às de Lançamentos: quem paga faz
+    // as mesmas perguntas de quem lança.
+    selecao({
+      id: "centro",
+      chave: "centro",
+      rotulo: "Centro de custo",
+      valor: valoresAPagar.centro,
+      opcoes: opcoesCentro,
+      todosRotulo: "Todos os centros",
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      id: "categoria",
+      chave: "categoria",
+      rotulo: "Categoria",
+      valor: valoresAPagar.categoria,
+      opcoes: opcoesCategoria,
+      todosRotulo: "Todas as categorias",
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      id: "forma",
+      chave: "forma",
+      rotulo: "Forma de pagamento",
+      valor: valoresAPagar.forma,
+      opcoes: opcoesForma,
+      todosRotulo: "Todas as formas",
+    }),
+    mesReferencia({ id: "mes", chave: "mes", valor: valoresAPagar.mes }),
+    selecao({
+      id: "origem",
+      chave: "origem",
+      rotulo: "Origem",
+      valor: valoresAPagar.origem,
+      opcoes: OPCOES_ORIGEM,
+      todosRotulo: "Todas as origens",
+    }),
+    periodo({
+      id: "compra",
+      rotulo: "Período da compra",
+      campo: "Compra",
+      chaveDe: "compra_de",
+      chaveAte: "compra_ate",
+      de: valoresAPagar.compraDe,
+      ate: valoresAPagar.compraAte,
+    }),
   ];
 
   // Aba "Pagas": paginação no servidor, então todo filtro daqui vai ao banco
@@ -727,6 +1012,52 @@ export function PagamentosCliente({
       chaveAte: "h_pago_ate",
       de: valoresPagas.pagoDe,
       ate: valoresPagas.pagoAte,
+    }),
+    // As MESMAS seis da outra aba, nas chaves h_ dela. Filtros diferentes entre
+    // as duas abas fariam a pessoa procurar na aba errada o filtro que usou.
+    selecao({
+      id: "centro",
+      chave: "h_centro",
+      rotulo: "Centro de custo",
+      valor: valoresPagas.centro,
+      opcoes: opcoesCentro,
+      todosRotulo: "Todos os centros",
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      id: "categoria",
+      chave: "h_categoria",
+      rotulo: "Categoria",
+      valor: valoresPagas.categoria,
+      opcoes: opcoesCategoria,
+      todosRotulo: "Todas as categorias",
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      id: "forma",
+      chave: "h_forma",
+      rotulo: "Forma de pagamento",
+      valor: valoresPagas.forma,
+      opcoes: opcoesForma,
+      todosRotulo: "Todas as formas",
+    }),
+    mesReferencia({ id: "mes", chave: "h_mes", valor: valoresPagas.mes }),
+    selecao({
+      id: "origem",
+      chave: "h_origem",
+      rotulo: "Origem",
+      valor: valoresPagas.origem,
+      opcoes: OPCOES_ORIGEM,
+      todosRotulo: "Todas as origens",
+    }),
+    periodo({
+      id: "compra",
+      rotulo: "Período da compra",
+      campo: "Compra",
+      chaveDe: "h_compra_de",
+      chaveAte: "h_compra_ate",
+      de: valoresPagas.compraDe,
+      ate: valoresPagas.compraAte,
     }),
   ];
 
