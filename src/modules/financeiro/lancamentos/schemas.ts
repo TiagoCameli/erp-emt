@@ -272,7 +272,7 @@ export const lancamentoSchema = z
      * consórcio. NÃO substitui categoria nem centro de custo — o financiamento
      * da escavadeira continua sendo custo de "Aquisição de Equipamentos", que é
      * onde o dinheiro virou máquina. É uma dimensão à parte, que responde
-     * "quanto a empresa deve" e alimenta o relatório de endividamento.
+     * "quanto a empresa deve" e alimenta o relatório de créditos.
      */
     eDivida: z.boolean().default(false),
     /**

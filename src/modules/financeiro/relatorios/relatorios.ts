@@ -21,7 +21,7 @@ export type RelatorioId =
   | "dre"
   | "aging"
   | "posicao-bancaria"
-  | "endividamento"
+  | "creditos"
   | "custo-cc"
   | "custo-receita"
   | "custo-grupo"
@@ -33,7 +33,7 @@ export const RELATORIOS: readonly RelatorioId[] = [
   "dre",
   "aging",
   "posicao-bancaria",
-  "endividamento",
+  "creditos",
   "custo-cc",
   "custo-receita",
   "custo-grupo",
