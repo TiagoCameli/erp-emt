@@ -15,6 +15,11 @@
  * contra os R$ 121,57 do contracheque — 121,575 é a metade exata do centavo, e
  * nenhum arredondamento é "o certo" ali.
  *
+ * A conversão entre HORAS não trabalhadas e valor mora em `horas-e-valor.ts`,
+ * separada desta: aqui é a soma do líquido, lá é o atalho de digitação do
+ * desconto. As duas são puras e testadas, e nenhuma das duas é a fonte da
+ * verdade do dinheiro — quem grava é o banco.
+ *
  * Tudo em centavos inteiros: dinheiro em ponto flutuante mente.
  */
 
