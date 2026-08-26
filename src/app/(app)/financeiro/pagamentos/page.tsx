@@ -13,6 +13,10 @@ import {
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
 import {
+  lerCatalogoDaUrl,
+  lerUuidsDaUrl,
+} from "@/modules/financeiro/_shared/listas-na-url";
+import {
   listarContasBancarias,
   listarParcelasAPagar,
   listarParcelasPagas,
@@ -78,12 +82,12 @@ function parametroValor(valor: Parametro): number | undefined {
 
 /** Termo de busca vindo da URL, aparado no limite que a action aceita. */
 /**
- * Situação da parcela vinda da URL, restrita às de fila aberta. Vem do cartão
- * "Vence em até 7 dias" do Painel (`?situacao=aprovado`), e é digitável na mão.
+ * Situações da parcela vindas da URL, restritas às de fila aberta e na ordem do
+ * catálogo. Aceita uma (`?situacao=aprovado`, que é como o cartão "Vence em até
+ * 7 dias" do Painel chega) ou várias (`?situacao=aprovado,pendente`).
  */
-function parametroSituacao(valor: Parametro): string {
-  if (typeof valor !== "string") return "";
-  return (STATUS_PARCELA_ABERTA as string[]).includes(valor) ? valor : "";
+function parametroSituacoes(valor: Parametro): string[] {
+  return lerCatalogoDaUrl(valor, STATUS_PARCELA_ABERTA);
 }
 
 /** Aba que abre primeiro. O cartão "Pago no mês" do Painel chega com `aba=pagas`. */
@@ -164,9 +168,9 @@ export default async function PaginaPagamentos({
     busca: typeof params.busca === "string" ? params.busca : "",
     // Só situação de parcela EM ABERTO: `pago` e `cancelado` na fila a pagar
     // trariam uma lista vazia sem explicar por quê.
-    situacao: parametroSituacao(params.situacao),
-    fornecedor: parametroUuid(params.fornecedor) ?? "",
-    conta: parametroUuid(params.conta) ?? "",
+    situacoes: parametroSituacoes(params.situacao),
+    fornecedorIds: lerUuidsDaUrl(params.fornecedor),
+    contaIds: lerUuidsDaUrl(params.conta),
     valorDe: texto(valorAPagar.de),
     valorAte: texto(valorAPagar.ate),
     vencDe: texto(vencAPagar.de),
@@ -191,8 +195,8 @@ export default async function PaginaPagamentos({
   const compraPagas = periodo(params.h_compra_de, params.h_compra_ate);
   const filtrosPagas = {
     busca: parametroBusca(params.h_busca),
-    fornecedorId: parametroUuid(params.h_fornecedor),
-    contaBancariaId: parametroUuid(params.h_conta),
+    fornecedorIds: lerUuidsDaUrl(params.h_fornecedor),
+    contaBancariaIds: lerUuidsDaUrl(params.h_conta),
     valorDe: valorPagas.de,
     valorAte: valorPagas.ate,
     vencimentoDe: vencPagas.de,
@@ -272,8 +276,8 @@ export default async function PaginaPagamentos({
         // pagina o histórico: a página é a única a interpretar a URL.
         valoresPagas={{
           busca: filtrosPagas.busca ?? "",
-          fornecedor: filtrosPagas.fornecedorId ?? "",
-          conta: filtrosPagas.contaBancariaId ?? "",
+          fornecedorIds: filtrosPagas.fornecedorIds,
+          contaIds: filtrosPagas.contaBancariaIds,
           valorDe: texto(filtrosPagas.valorDe),
           valorAte: texto(filtrosPagas.valorAte),
           vencDe: texto(filtrosPagas.vencimentoDe),

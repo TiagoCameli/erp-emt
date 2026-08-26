@@ -35,7 +35,7 @@ export default async function PaginaContasBancarias() {
       <PageHeader
         modulo="Financeiro"
         titulo="Contas bancárias"
-        descricao="Contas e caixas da empresa, com o saldo atualizado pelas parcelas pagas"
+        descricao="Contas e caixas da empresa, com o saldo atualizado pelas parcelas pagas. Clique numa conta para ver o extrato dela."
         acoes={<ContasAcoesCabecalho podeCriar={podeCriar} />}
       />
 

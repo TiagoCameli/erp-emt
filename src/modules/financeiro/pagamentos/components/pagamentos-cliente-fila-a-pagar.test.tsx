@@ -80,6 +80,27 @@ const FILA: ParcelaAprovada[] = [
   }),
 ];
 
+const FORN_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const FORN_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const FORN_C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const CONTA_A = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const CONTA_B = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const CONTA_C = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+
+/** Mesma fila, com um fornecedor DIFERENTE em cada parcela. */
+const FILA_POR_FORNECEDOR: ParcelaAprovada[] = [
+  { ...FILA[0], fornecedorId: FORN_A, fornecedorNome: "Areacre" },
+  { ...FILA[1], fornecedorId: FORN_B, fornecedorNome: "Vibra" },
+  { ...FILA[2], fornecedorId: FORN_C, fornecedorNome: "Fox Pneus" },
+];
+
+/** Mesma fila, com uma conta bancária DIFERENTE em cada parcela. */
+const FILA_POR_CONTA: ParcelaAprovada[] = [
+  { ...FILA[0], contaBancariaId: CONTA_A },
+  { ...FILA[1], contaBancariaId: CONTA_B },
+  { ...FILA[2], contaBancariaId: CONTA_C },
+];
+
 const VALORES = FILTROS_A_PAGAR_VAZIOS;
 
 function montar(
@@ -198,7 +219,7 @@ describe("Fila a pagar com parcelas não aprovadas", () => {
    * destino somaria também as pendentes e mostraria mais dinheiro.
    */
   it("o filtro de situação recorta a fila", () => {
-    montar(true, { valoresAPagar: { ...VALORES, situacao: "aprovado" } });
+    montar(true, { valoresAPagar: { ...VALORES, situacoes: ["aprovado"] } });
 
     // "Aprovado" aparece duas vezes de propósito: no selo da linha e no próprio
     // filtro, que mostra a situação escolhida.
@@ -210,6 +231,72 @@ describe("Fila a pagar com parcelas não aprovadas", () => {
     expect(screen.getAllByRole("button", { name: "Pagar" })).toHaveLength(1);
     expect(valorDoCard("Total a pagar")).toContain("1.000,00");
     expect(valorDoCard("Total a pagar")).not.toContain("1.500,00");
+  });
+
+  /*
+   * Os três testes abaixo prendem a MÚLTIPLA escolha, que é o que o Tiago pediu
+   * na fila: "tem que selecionar mais de um fornecedor, situação ou conta".
+   *
+   * Cada um deles tem uma LINHA DE CONTROLE: o total do card precisa ser
+   * diferente do total de UMA escolha e diferente do total da fila inteira.
+   * Sem isso, um filtro que ignorasse a segunda escolha (o defeito antigo) ou um
+   * que ignorasse o filtro todo passariam nos dois casos.
+   */
+
+  it("duas situações trazem as duas, e só elas", () => {
+    montar(true, {
+      valoresAPagar: { ...VALORES, situacoes: ["aprovado", "pendente"] },
+    });
+
+    expect(screen.getAllByText("Aprovado").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Pendente").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Em revisão")).not.toBeInTheDocument();
+    // 1.000 + 300. Nem 1.000 (só aprovado) nem 1.500 (a fila toda).
+    expect(valorDoCard("Total a pagar")).toContain("1.300,00");
+    expect(valorDoCard("Total a pagar")).not.toContain("1.000,00");
+    expect(valorDoCard("Total a pagar")).not.toContain("1.500,00");
+  });
+
+  it("dois fornecedores trazem os dois, e só eles", () => {
+    montar(true, {
+      aprovadas: FILA_POR_FORNECEDOR,
+      valoresAPagar: { ...VALORES, fornecedorIds: [FORN_A, FORN_B] },
+    });
+
+    expect(screen.getByText("Areacre")).toBeInTheDocument();
+    expect(screen.getByText("Vibra")).toBeInTheDocument();
+    expect(screen.queryByText("Fox Pneus")).not.toBeInTheDocument();
+    // 1.000 + 300, com os R$ 200 do terceiro fornecedor de fora.
+    expect(valorDoCard("Total a pagar")).toContain("1.300,00");
+    expect(valorDoCard("Total a pagar")).not.toContain("1.500,00");
+  });
+
+  it("duas contas bancárias trazem as duas, e só elas", () => {
+    montar(true, {
+      aprovadas: FILA_POR_CONTA,
+      valoresAPagar: { ...VALORES, contaIds: [CONTA_A, CONTA_B] },
+    });
+
+    expect(screen.getAllByRole("row")).toHaveLength(3); // cabeçalho + 2 linhas
+    expect(valorDoCard("Total a pagar")).toContain("1.300,00");
+    expect(valorDoCard("Total a pagar")).not.toContain("1.500,00");
+  });
+
+  it("lista vazia é TODOS, e não nenhum", () => {
+    // A armadilha do `Set`: com lista vazia, `has` recusaria toda parcela e a
+    // fila apareceria em branco — filtro nenhum aplicado parecendo "sem
+    // resultado". O total tem que ser o da fila inteira.
+    montar(true, {
+      valoresAPagar: {
+        ...VALORES,
+        situacoes: [],
+        fornecedorIds: [],
+        contaIds: [],
+      },
+    });
+
+    expect(screen.getAllByText("Aprovado").length).toBeGreaterThanOrEqual(1);
+    expect(valorDoCard("Total a pagar")).toContain("1.500,00");
   });
 
   it("abre direto na aba Pagas quando o Painel manda", () => {

@@ -3839,6 +3839,26 @@ export type Database = {
         Args: { p_entidade: string; p_id: string; p_mes: string };
         Returns: undefined;
       };
+      fn_extrato_conta: {
+        Args: { p_conta: string; p_incluir_anteriores?: boolean };
+        Returns: {
+          chave: string;
+          tipo_movimento: string;
+          lancamento_id: string | null;
+          data_movimento: string | null;
+          sentido: string;
+          // NUMERIC. O gerador escreve `number`, e nisto ele mente: o PostgREST
+          // devolve NUMERIC como string em algumas rotas. Quem le converte.
+          valor: number;
+          no_saldo: boolean;
+          numero: string | null;
+          numero_documento: string | null;
+          descricao: string | null;
+          categoria_nome: string | null;
+          contraparte: string | null;
+          parcela: string | null;
+        }[];
+      };
       fn_fechar_competencia: {
         Args: { p_mes: string; p_observacao?: string };
         Returns: undefined;

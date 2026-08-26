@@ -1,6 +1,13 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import {
+  extratoFechaNoSaldo,
+  montarExtrato,
+  type MovimentoExtrato,
+  type TipoMovimento,
+} from "@/modules/financeiro/contas-bancarias/extrato";
 import {
   movimentoPorContaEmCentavos,
   saldoAtualDaConta,
@@ -179,4 +186,116 @@ export async function listarContas(): Promise<ContaLista[]> {
     posicaoAplicacao: aplicacaoPorConta.get(conta.id) ?? null,
     ativo: conta.ativo,
   }));
+}
+
+/**
+ * Uma conta pela chave, com o saldo atual calculado.
+ *
+ * Chama `listarContas()` e escolhe a linha, em vez de ter uma consulta própria de
+ * uma conta. Isso é DE PROPÓSITO, e o motivo é o número: a tela de extrato mostra
+ * o saldo atual da conta no cartão e fecha o saldo acumulado da tabela nele. Uma
+ * segunda consulta com fórmula própria seria uma segunda fonte do mesmo saldo, e
+ * duas fontes divergem na primeira regra acrescentada de um lado só — foi assim
+ * que o guard de `fn_pagar_parcela` passou a recusar todo pagamento da conta
+ * operacional, com R$ 22.326,46 na tela e R$ -33.173.201,31 no guard.
+ *
+ * O custo é o de quatro RPCs agregadas, as mesmas que a listagem já roda: elas
+ * devolvem no máximo duas linhas por conta, não uma por pagamento.
+ */
+export async function buscarConta(id: string): Promise<ContaLista | null> {
+  const contas = await listarContas();
+  return contas.find((conta) => conta.id === id) ?? null;
+}
+
+/** O extrato de uma conta, pronto para a tela. */
+export interface ExtratoDaConta {
+  movimentos: MovimentoExtrato[];
+  /**
+   * Onde o saldo acumulado fechou. Tem que ser igual a `conta.saldoAtual`; ver
+   * `fechaNoSaldo`.
+   */
+  saldoFinal: number;
+  /**
+   * LINHA DE CONTROLE: o saldo acumulado do extrato fechou no saldo que a
+   * listagem de contas mostra? False é bug de regra de dinheiro, e a tela diz
+   * isso em voz alta em vez de exibir dois números diferentes calada.
+   */
+  fechaNoSaldo: boolean;
+}
+
+/** Só os três valores que `fn_extrato_conta` devolve em `tipo_movimento`. */
+function tipoDoMovimento(valor: string): TipoMovimento {
+  return valor === "transferencia" || valor === "tarifa" ? valor : "parcela";
+}
+
+/**
+ * Extrato de uma conta: uma linha por movimento, com o saldo acumulado.
+ *
+ * As linhas saem de `fn_extrato_conta`, gêmea DETALHADA de
+ * `fn_rel_posicao_bancaria` (a que dá o saldo da listagem), repetindo o WHERE
+ * dela: parcela paga pelo valor líquido, sem lançamento cancelado, sem categoria
+ * de natureza 'movimentacao', mais as transferências das duas pontas e a tarifa.
+ * É a FUNÇÃO DO BANCO o contrato compartilhado entre extrato e saldo; em
+ * PostgREST dois desses filtros não se escrevem sem mentir (o porquê está no
+ * comentário da migration 20260826170000).
+ *
+ * `todasAsLinhas` não é zelo: a BB 102.124-9 tem 5.939 movimentos registrados, e
+ * o PostgREST corta a resposta em 1.000 SEM ERRO NENHUM. Uma consulta solta
+ * esconderia 4.939 linhas de dinheiro em silêncio, e o extrato fecharia num saldo
+ * inventado.
+ *
+ * A ordenação é repetida aqui, igual à de dentro da função, porque a paginação
+ * depende dela: `range()` sem ordem estável repete linha numa página e perde
+ * outra na seguinte. O desempate por `chave` é o que dá a estabilidade quando
+ * dezenas de movimentos caem no mesmo dia — e uma transferência com tarifa gera
+ * duas linhas na mesma data, então nem a data mais o id bastariam.
+ */
+export async function listarExtratoDaConta(
+  conta: ContaLista,
+  incluirAnteriores: boolean,
+): Promise<ExtratoDaConta> {
+  const supabase = await createClient();
+
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .rpc("fn_extrato_conta", {
+        p_conta: conta.id,
+        p_incluir_anteriores: incluirAnteriores,
+      })
+      .order("data_movimento", { nullsFirst: true })
+      .order("chave")
+      .range(de, ate),
+  );
+
+  // Erro no meio da paginação devolve o que já veio. Meio extrato exibido como se
+  // fosse o extrato inteiro é pior que tela de erro: o saldo acumulado fecharia
+  // num número que não é o da conta e ninguém teria como saber.
+  if (erro) {
+    throw new Error("Não foi possível carregar o extrato da conta");
+  }
+
+  const { movimentos, saldoFinal } = montarExtrato(
+    conta.saldoInicial,
+    linhas.map((linha) => ({
+      chave: linha.chave,
+      tipo: tipoDoMovimento(linha.tipo_movimento),
+      lancamentoId: linha.lancamento_id,
+      data: linha.data_movimento,
+      entrada: linha.sentido === "entrada",
+      valor: linha.valor,
+      noSaldo: linha.no_saldo,
+      numero: linha.numero,
+      numeroDocumento: linha.numero_documento,
+      descricao: linha.descricao,
+      categoriaNome: linha.categoria_nome,
+      contraparte: linha.contraparte,
+      parcela: linha.parcela,
+    })),
+  );
+
+  return {
+    movimentos,
+    saldoFinal,
+    fechaNoSaldo: extratoFechaNoSaldo(saldoFinal, conta.saldoAtual),
+  };
 }
