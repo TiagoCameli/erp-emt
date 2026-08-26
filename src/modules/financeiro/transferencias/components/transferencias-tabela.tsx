@@ -134,6 +134,14 @@ export function TransferenciasTabela({
   const [ate, setAte] = useFiltroSessao("ate", "");
   const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
   const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
+  // Origem e destino separados do filtro "Conta" (que pega os dois lados de
+  // propósito). Com os três, dá para perguntar "o que saiu da CAIXA", "o que
+  // entrou no BB" e "da CAIXA PARA o BB" -- esta última era impossível antes,
+  // porque um filtro que casa qualquer lado não expressa um PAR.
+  const [origem, setOrigem] = useFiltroSessao("origem", "");
+  const [destino, setDestino] = useFiltroSessao("destino", "");
+  const [criadoDe, setCriadoDe] = useFiltroSessao("criadoDe", "");
+  const [criadoAte, setCriadoAte] = useFiltroSessao("criadoAte", "");
 
   // Deriva da prop para refletir a edição depois do revalidatePath.
   const selecionada =
@@ -155,6 +163,12 @@ export function TransferenciasTabela({
   const mudarValor = comZerar((novoDe: string, novoAte: string) => {
     setValorDe(novoDe);
     setValorAte(novoAte);
+  });
+  const mudarOrigem = comZerar(setOrigem);
+  const mudarDestino = comZerar(setDestino);
+  const mudarCriado = comZerar((novoDe: string, novoAte: string) => {
+    setCriadoDe(novoDe);
+    setCriadoAte(novoAte);
   });
 
   // As opções saem das contas que aparecem nas transferências, não do cadastro
@@ -182,8 +196,16 @@ export function TransferenciasTabela({
       ) {
         return false;
       }
+      if (origem !== "" && linha.contaOrigemId !== origem) return false;
+      if (destino !== "" && linha.contaDestinoId !== destino) return false;
       if (de !== "" && linha.dataTransferencia < de) return false;
       if (ate !== "" && linha.dataTransferencia > ate) return false;
+      // `criadoEm` é timestamp; o filtro é por DIA. Comparar os 10 primeiros
+      // caracteres é o corte certo: comparar a string inteira contra "2026-08-26"
+      // deixaria de fora tudo que foi criado depois da meia-noite daquele dia.
+      const diaCriacao = linha.criadoEm.slice(0, 10);
+      if (criadoDe !== "" && diaCriacao < criadoDe) return false;
+      if (criadoAte !== "" && diaCriacao > criadoAte) return false;
       if (!dentroDaFaixaValor(linha.valor, valorDe, valorAte)) return false;
       if (
         termo &&
@@ -195,7 +217,19 @@ export function TransferenciasTabela({
       }
       return true;
     });
-  }, [transferencias, busca, conta, de, ate, valorDe, valorAte]);
+  }, [
+    transferencias,
+    busca,
+    conta,
+    origem,
+    destino,
+    de,
+    ate,
+    valorDe,
+    valorAte,
+    criadoDe,
+    criadoAte,
+  ]);
 
   const totais = React.useMemo(
     () =>
@@ -271,6 +305,53 @@ export function TransferenciasTabela({
           ate={ate}
           onPeriodoChange={mudarPeriodo}
           rotulo="Transferência"
+        />
+      ),
+    },
+    {
+      id: "origem",
+      rotulo: "Conta de origem",
+      ocultoPorPadrao: true,
+      temValor: origem !== "",
+      onLimpar: () => mudarOrigem(""),
+      elemento: (
+        <FiltroSelect
+          valor={origem}
+          onValorChange={mudarOrigem}
+          opcoes={opcoesConta}
+          placeholder="Saiu de"
+          todosRotulo="Qualquer origem"
+        />
+      ),
+    },
+    {
+      id: "destino",
+      rotulo: "Conta de destino",
+      ocultoPorPadrao: true,
+      temValor: destino !== "",
+      onLimpar: () => mudarDestino(""),
+      elemento: (
+        <FiltroSelect
+          valor={destino}
+          onValorChange={mudarDestino}
+          opcoes={opcoesConta}
+          placeholder="Entrou em"
+          todosRotulo="Qualquer destino"
+        />
+      ),
+    },
+    {
+      id: "criacao",
+      rotulo: "Período de criação",
+      ocultoPorPadrao: true,
+      temValor: criadoDe !== "" || criadoAte !== "",
+      onLimpar: () => mudarCriado("", ""),
+      elemento: (
+        <FiltroPeriodo
+          de={criadoDe}
+          ate={criadoAte}
+          onPeriodoChange={mudarCriado}
+          rotulo="Registro"
         />
       ),
     },

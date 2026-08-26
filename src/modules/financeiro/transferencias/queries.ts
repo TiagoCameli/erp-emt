@@ -22,6 +22,13 @@ export interface TransferenciaLista {
   totalSaida: number;
   descricao: string | null;
   observacoes: string | null;
+  /**
+   * Quando a transferência foi REGISTRADA no sistema, que não é quando ela
+   * aconteceu no banco (`dataTransferencia`). Serve ao filtro "Período de
+   * criação": quem lançou dez transferências hoje precisa achar as dez, e a data
+   * da transferência delas pode ser de meses atrás.
+   */
+  criadoEm: string;
 }
 
 /** Conta bancária ativa, para os dois seletores do formulário. */
@@ -64,7 +71,7 @@ export async function listarTransferencias(): Promise<TransferenciaLista[]> {
       .from("transferencias_contas")
       .select(
         `id, numero, data_transferencia, valor, tarifa, descricao, observacoes,
-         conta_origem_id, conta_destino_id,
+         created_at, conta_origem_id, conta_destino_id,
          origem:contas_bancarias!transferencias_contas_conta_origem_id_fkey(nome),
          destino:contas_bancarias!transferencias_contas_conta_destino_id_fkey(nome)`,
       )
@@ -95,6 +102,7 @@ export async function listarTransferencias(): Promise<TransferenciaLista[]> {
       totalSaida: valor + tarifa,
       descricao: linha.descricao,
       observacoes: linha.observacoes,
+      criadoEm: linha.created_at,
     };
   });
 }
