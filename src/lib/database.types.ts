@@ -4235,7 +4235,7 @@ export type Database = {
           resgatado: number;
         }[];
       };
-      fn_rel_endividamento: {
+      fn_rel_creditos: {
         Args: never;
         Returns: {
           categoria: string;
@@ -4251,7 +4251,7 @@ export type Database = {
           valor_contratado: number;
         }[];
       };
-      fn_rel_endividamento_por_mes: {
+      fn_rel_creditos_por_mes: {
         Args: { p_meses?: number };
         Returns: {
           mes: string;

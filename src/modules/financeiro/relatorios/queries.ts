@@ -14,9 +14,9 @@ import {
 import type { CentroCustoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 import {
-  montarEndividamento,
-  type Endividamento,
-} from "@/modules/financeiro/relatorios/endividamento";
+  montarCreditos,
+  type Creditos,
+} from "@/modules/financeiro/relatorios/creditos";
 import {
   agregarAging,
   agruparDrePorNatureza,
@@ -1053,11 +1053,11 @@ export async function custoPorInsumo(
 }
 
 // ---------------------------------------------------------------------------
-// Endividamento
+// Créditos
 // ---------------------------------------------------------------------------
 
 /** Quantos meses o corte "o que vence pela frente" enxerga. */
-const MESES_DO_ENDIVIDAMENTO = 12;
+const MESES_DOS_CREDITOS = 12;
 
 /**
  * Empréstimos, financiamentos e consórcios: quanto a empresa deve e quanto
@@ -1074,25 +1074,25 @@ const MESES_DO_ENDIVIDAMENTO = 12;
  * Por isso contratado menos pago não dá exatamente o saldo quando alguém pagou
  * uma parcela com juros ou desconto (o pago é o líquido, o que saiu da conta).
  *
- * As duas RPCs são SECURITY INVOKER: quem não pode ver lançamento não vê dívida
- * nenhuma, e a tela vem vazia em vez de furar a permissão.
+ * As duas RPCs são SECURITY INVOKER: quem não pode ver lançamento não vê crédito
+ * nenhum, e a tela vem vazia em vez de furar a permissão.
  */
-export async function endividamento(): Promise<Endividamento> {
+export async function creditos(): Promise<Creditos> {
   const supabase = await createClient();
 
   const [contratosRpc, mesesRpc] = await Promise.all([
-    supabase.rpc("fn_rel_endividamento"),
-    supabase.rpc("fn_rel_endividamento_por_mes", {
-      p_meses: MESES_DO_ENDIVIDAMENTO,
+    supabase.rpc("fn_rel_creditos"),
+    supabase.rpc("fn_rel_creditos_por_mes", {
+      p_meses: MESES_DOS_CREDITOS,
     }),
   ]);
 
   if (contratosRpc.error) {
-    throw new Error("Não foi possível carregar as dívidas");
+    throw new Error("Não foi possível carregar os créditos");
   }
   if (mesesRpc.error) {
-    throw new Error("Não foi possível carregar os vencimentos das dívidas");
+    throw new Error("Não foi possível carregar os vencimentos dos créditos");
   }
 
-  return montarEndividamento(contratosRpc.data ?? [], mesesRpc.data ?? []);
+  return montarCreditos(contratosRpc.data ?? [], mesesRpc.data ?? []);
 }

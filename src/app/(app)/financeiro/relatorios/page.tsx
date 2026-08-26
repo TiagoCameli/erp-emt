@@ -52,11 +52,11 @@ import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
-import { EndividamentoGrafico } from "@/modules/financeiro/relatorios/components/endividamento-grafico";
+import { CreditosGrafico } from "@/modules/financeiro/relatorios/components/creditos-grafico";
 import {
-  EndividamentoPorMesTabela,
-  EndividamentoTabela,
-} from "@/modules/financeiro/relatorios/components/endividamento-tabela";
+  CreditosPorMesTabela,
+  CreditosTabela,
+} from "@/modules/financeiro/relatorios/components/creditos-tabela";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
@@ -70,8 +70,8 @@ import {
   custoPorCentroCusto,
   custoPorGrupo,
   custoReceita,
+  creditos,
   dreGerencial,
-  endividamento,
   extratoPorFornecedor,
   fluxoCaixa,
   listarCentrosCustoRaiz,
@@ -343,17 +343,17 @@ async function ConteudoPosicaoBancaria({
   );
 }
 
-async function ConteudoEndividamento({
+async function ConteudoCreditos({
   podeVerLancamentos,
 }: {
   podeVerLancamentos: boolean;
 }) {
-  const dados = await endividamento();
+  const dados = await creditos();
   if (dados.contratos.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
-        titulo="Nenhuma dívida marcada"
+        titulo="Nenhum crédito marcado"
         descricao="Marque a caixinha “É empréstimo, financiamento ou consórcio” no lançamento para ele aparecer aqui."
       />
     );
@@ -382,12 +382,12 @@ async function ConteudoEndividamento({
         <KPICard
           titulo="Contratos"
           valor={`${emAberto} de ${dados.contratos.length}`}
-          detalhe="Em aberto, do total marcado como dívida"
+          detalhe="Em aberto, do total marcado como crédito"
         />
       </GradeKpis>
 
-      <EndividamentoTabela
-        endividamento={dados}
+      <CreditosTabela
+        creditos={dados}
         podeVerLancamentos={podeVerLancamentos}
       />
 
@@ -396,9 +396,9 @@ async function ConteudoEndividamento({
           O que vence pela frente
         </h3>
         <Painel>
-          <EndividamentoGrafico meses={dados.proximosMeses} />
+          <CreditosGrafico meses={dados.proximosMeses} />
         </Painel>
-        <EndividamentoPorMesTabela
+        <CreditosPorMesTabela
           meses={dados.proximosMeses}
           total={dados.totalProximosMeses}
         />
@@ -929,7 +929,7 @@ export default async function RelatoriosPage({
       <PageHeader
         modulo="Financeiro"
         titulo="Relatórios"
-        descricao="Como está o caixa: fluxo, DRE, aging, posição bancária, endividamento, custo por centro de custo e extrato por fornecedor."
+        descricao="Como está o caixa: fluxo, DRE, aging, posição bancária, créditos, custo por centro de custo e extrato por fornecedor."
       />
 
       <RelatoriosNav ativo={relatorio} />
@@ -984,12 +984,12 @@ export default async function RelatoriosPage({
         </SecaoRelatorio>
       ) : null}
 
-      {relatorio === "endividamento" ? (
+      {relatorio === "creditos" ? (
         <SecaoRelatorio
-          titulo="Endividamento"
-          descricao="Empréstimos, financiamentos e consórcios marcados no lançamento: quanto se deve hoje e quanto vence pela frente. É uma dimensão à parte da categoria e do centro de custo — o financiamento de uma máquina continua sendo custo de equipamento."
+          titulo="Créditos"
+          descricao="Empréstimos, financiamentos e consórcios tomados pela empresa: quanto se deve hoje e quanto vence pela frente. É uma dimensão à parte da categoria e do centro de custo — o financiamento de uma máquina continua sendo custo de equipamento."
         >
-          <ConteudoEndividamento podeVerLancamentos={podeVerLancamentos} />
+          <ConteudoCreditos podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 

@@ -1,5 +1,5 @@
 /**
- * A aritmética do relatório de endividamento, separada da consulta.
+ * A aritmética do relatório de créditos, separada da consulta.
  *
  * Módulo puro de propósito: as duas RPCs já devolvem agregado, e o que sobra
  * para o app é somar, ordenar e rotular. Sem `server-only` aqui, é isso que o
@@ -8,7 +8,7 @@
 
 import { paraCentavos, paraReais, rotuloMes } from "./calculo";
 
-/** Uma linha de `fn_rel_endividamento`, como o Postgres devolve. */
+/** Uma linha de `fn_rel_creditos`, como o Postgres devolve. */
 export interface LinhaContratoRpc {
   lancamento_id: string;
   numero: string;
@@ -23,15 +23,15 @@ export interface LinhaContratoRpc {
   proximo_vencimento: string | null;
 }
 
-/** Uma linha de `fn_rel_endividamento_por_mes`. */
+/** Uma linha de `fn_rel_creditos_por_mes`. */
 export interface LinhaMesRpc {
   mes: string;
   valor: number;
   parcelas: number;
 }
 
-/** Um contrato: empréstimo, financiamento ou consórcio marcado como dívida. */
-export interface DividaContrato {
+/** Um contrato: empréstimo, financiamento ou consórcio tomado pela empresa. */
+export interface CreditoContrato {
   lancamentoId: string;
   numero: string;
   credor: string;
@@ -47,7 +47,7 @@ export interface DividaContrato {
 }
 
 /** O que vence num mês, somando todos os contratos. */
-export interface DividaMes {
+export interface CreditoMes {
   /** Primeiro dia do mês, "YYYY-MM-DD". */
   mes: string;
   /** "08/2026", como nos outros relatórios. */
@@ -56,9 +56,9 @@ export interface DividaMes {
   parcelas: number;
 }
 
-export interface Endividamento {
-  contratos: DividaContrato[];
-  proximosMeses: DividaMes[];
+export interface Creditos {
+  contratos: CreditoContrato[];
+  proximosMeses: CreditoMes[];
   totalContratado: number;
   totalPago: number;
   totalSaldo: number;
@@ -74,15 +74,15 @@ export interface Endividamento {
  * discordar do total do banco por um centavo, e num relatório de R$ 11 mi
  * ninguém enxerga de onde veio.
  */
-export function montarEndividamento(
+export function montarCreditos(
   linhasContratos: LinhaContratoRpc[],
   linhasMeses: LinhaMesRpc[],
-): Endividamento {
+): Creditos {
   let contratadoCentavos = 0;
   let pagoCentavos = 0;
   let saldoCentavos = 0;
 
-  const contratos: DividaContrato[] = linhasContratos.map((linha) => {
+  const contratos: CreditoContrato[] = linhasContratos.map((linha) => {
     const contratado = paraCentavos(linha.valor_contratado);
     const pago = paraCentavos(linha.total_pago);
     const saldo = paraCentavos(linha.saldo_devedor);
@@ -109,7 +109,7 @@ export function montarEndividamento(
   contratos.sort((a, b) => b.saldoDevedor - a.saldoDevedor);
 
   let proximosCentavos = 0;
-  const proximosMeses: DividaMes[] = linhasMeses.map((linha) => {
+  const proximosMeses: CreditoMes[] = linhasMeses.map((linha) => {
     const centavos = paraCentavos(linha.valor);
     proximosCentavos += centavos;
     return {

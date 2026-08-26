@@ -1348,7 +1348,7 @@ export function LancamentoFormDrawer({
                   É empréstimo, financiamento ou consórcio
                 </Label>
                 <p className="text-legenda text-muted-foreground">
-                  Entra no relatório de endividamento. Não muda a categoria nem
+                  Entra no relatório de créditos. Não muda a categoria nem
                   o centro de custo: o financiamento de uma máquina continua
                   sendo custo de equipamento.
                 </p>

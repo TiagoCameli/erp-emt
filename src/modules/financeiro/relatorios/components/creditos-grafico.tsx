@@ -9,11 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
  * biblioteca do bundle inicial da rota. O Skeleton tem a mesma altura do
  * gráfico (h-72) pra não pular layout.
  */
-export const EndividamentoGrafico = dynamic(
-  () =>
-    import("./endividamento-grafico-impl").then(
-      (mod) => mod.EndividamentoGrafico,
-    ),
+export const CreditosGrafico = dynamic(
+  () => import("./creditos-grafico-impl").then((mod) => mod.CreditosGrafico),
   {
     ssr: false,
     loading: () => <Skeleton className="h-72 w-full" />,
