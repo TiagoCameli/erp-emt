@@ -6,6 +6,7 @@ import {
   nomesDoRateio,
   rotuloCentroCusto,
 } from "@/modules/financeiro/_shared/centro-de-custo";
+import { subarvoreDosCentros } from "@/modules/financeiro/lancamentos/queries";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   movimentoPorContaEmCentavos,
@@ -79,6 +80,19 @@ export interface ParcelaAprovada {
    */
   centroCustoRotulo?: string | null;
   centroCustoNomes?: string;
+  /**
+   * Dimensoes do lancamento que a fila filtra em memoria. Opcionais pelo mesmo
+   * motivo dos outros ids: esta interface tambem e o contrato de entrada do
+   * drawer de pagamento, e quem abre pela aba Programados nao carrega nada disto.
+   */
+  categoriaId?: string | null;
+  /** TODOS os centros do rateio, para o filtro casar quando o custo e dividido. */
+  centroCustoIds?: string[];
+  formaPagamentoId?: string | null;
+  /** yyyy-MM-dd (primeiro dia do mes de referencia). */
+  mesCompetencia?: string | null;
+  dataCompra?: string | null;
+  origem?: string | null;
 }
 
 /** Parcela já paga, para o histórico. */
@@ -140,6 +154,24 @@ export interface FiltrosParcelasPagas {
   programadaAte?: string;
   pagamentoDe?: string;
   pagamentoAte?: string;
+  /** Dimensões do LANÇAMENTO. O join com `lancamentos` é `!inner`, então
+   *  filtrá-lo restringe as parcelas de verdade, não só o embed. */
+  categoriaId?: string;
+  formaPagamentoId?: string;
+  /** yyyy-MM-dd, primeiro dia do mês de referência. */
+  mesCompetencia?: string;
+  compraDe?: string;
+  compraAte?: string;
+  /**
+   * Um centro de custo. A consulta expande a SUBÁRVORE dele antes de filtrar:
+   * escolher a obra traz as etapas, escolher a manutenção traz cada equipamento.
+   * É o mesmo recorte de Lançamentos e dos relatórios -- e usa a MESMA função,
+   * `subarvoreDosCentros`, porque duas implementações divergiriam no primeiro
+   * centro novo.
+   */
+  centroCustoId?: string;
+  /** `manual`, `oc`, `folha`, `diaria`, `adiantamento`, `folha_guia`. */
+  origem?: string;
 }
 
 /** Histórico paginado de pagamentos. */
@@ -205,27 +237,42 @@ interface LinhaAPagar {
   aprovado_em: string | null;
   lancamento_id: string;
   conta_bancaria_id: string | null;
+  lancamento_forma_id: string | null;
+  lancamento_formas: { forma_pagamento_id: string | null } | null;
   lancamentos: {
     numero: string | null;
     descricao: string | null;
     tipo: string;
     fornecedor_id: string | null;
     observacoes: string | null;
+    categoria_id: string | null;
+    mes_competencia: string | null;
+    data_compra: string | null;
+    origem: string;
     categorias_financeiras: { nome: string } | null;
     fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
-    lancamento_rateios: { centros_custo: { nome: string } | null }[] | null;
+    lancamento_rateios:
+      | { centro_custo_id: string | null; centros_custo: { nome: string } | null }[]
+      | null;
   } | null;
 }
 
 /** Colunas da fila a pagar. Uma constante só, porque a query é montada em lotes. */
+// Os IDs (categoria, centro, forma, origem, competencia, compra) vem para a
+// fila porque esta aba filtra no CLIENTE: ela carrega todas as parcelas em
+// aberto de uma vez (`todasAsLinhas`) e o filtro roda em memoria. Sem o id na
+// linha, filtrar por categoria compararia NOME, que muda quando alguem renomeia
+// o cadastro.
 const SELECT_A_PAGAR = `id, numero_parcela, valor, status, data_vencimento,
    data_programada, data_programada_origem, aprovado_em, lancamento_id,
-   conta_bancaria_id,
+   conta_bancaria_id, lancamento_forma_id,
+   lancamento_formas(forma_pagamento_id),
    lancamentos!inner(
      numero, descricao, tipo, fornecedor_id, observacoes,
+     categoria_id, mes_competencia, data_compra, origem,
      categorias_financeiras(nome),
      fornecedores(razao_social, nome_fantasia),
-     lancamento_rateios(centros_custo(nome))
+     lancamento_rateios(centro_custo_id, centros_custo(nome))
    )`;
 
 /**
@@ -289,6 +336,16 @@ export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
     valor: parcela.valor,
     aprovadoEm: parcela.aprovado_em,
     status: parcela.status as StatusParcela,
+    categoriaId: parcela.lancamentos?.categoria_id ?? null,
+    // TODOS os centros do rateio, não o primeiro: com custo dividido entre duas
+    // obras, filtrar por qualquer uma das duas tem que achar esta parcela.
+    centroCustoIds: (parcela.lancamentos?.lancamento_rateios ?? [])
+      .map((rateio) => rateio.centro_custo_id)
+      .filter((id): id is string => id !== null),
+    formaPagamentoId: parcela.lancamento_formas?.forma_pagamento_id ?? null,
+    mesCompetencia: parcela.lancamentos?.mes_competencia ?? null,
+    dataCompra: parcela.lancamentos?.data_compra ?? null,
+    origem: parcela.lancamentos?.origem ?? null,
   }));
 }
 
@@ -334,6 +391,41 @@ interface ConsultaFiltravel<T> {
   gte: (coluna: string, valor: string | number) => T;
   lte: (coluna: string, valor: string | number) => T;
   or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
+  /**
+   * Necessário para filtrar embed NÃO-inner: `eq` no embed sozinho só esvazia o
+   * embed, e a linha do pai continua vindo. O par é `eq` + `not(embed,is,null)`.
+   */
+  not: (coluna: string, operador: string, valor: null) => T;
+  in: (coluna: string, valores: readonly string[]) => T;
+}
+
+/**
+ * Aplica o filtro de centro de custo, expandindo a SUBÁRVORE.
+ *
+ * Separado de `aplicarFiltrosPagas` porque precisa de uma ida ao banco e aquela
+ * função é síncrona de propósito. Mas usado pelos DOIS lados -- a lista e a soma
+ * do rodapé --, porque um filtro que recorta a lista e não recorta o total
+ * mostra um número que não pertence ao que está na tela.
+ *
+ * Devolve `vazio: true` quando o centro não existe mais: a resposta certa é
+ * lista vazia, não a lista inteira.
+ */
+async function aplicarCentroCusto<T extends ConsultaFiltravel<T>>(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  consulta: T,
+  centroCustoId: string | undefined,
+): Promise<{ consulta: T; vazio: boolean }> {
+  if (!centroCustoId) return { consulta, vazio: false };
+
+  const subarvore = await subarvoreDosCentros(supabase, [centroCustoId]);
+  if (subarvore.length === 0) return { consulta, vazio: true };
+
+  return {
+    consulta: consulta
+      .in("lancamentos.lancamento_rateios.centro_custo_id", subarvore)
+      .not("lancamentos.lancamento_rateios", "is", null),
+    vazio: false,
+  };
 }
 
 /**
@@ -379,10 +471,38 @@ function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
   if (filtros.pagamentoAte) {
     consulta = consulta.lte("data_pagamento", filtros.pagamentoAte);
   }
+  if (filtros.formaPagamentoId) {
+    // A forma é da PARCELA, não do lançamento: um lançamento pode sair por duas
+    // formas, e é o bloco (`lancamento_forma_id`) que diz por qual esta parcela
+    // saiu. `!inner` no embed é de propósito aqui e SÓ aqui: parcela sem bloco
+    // (884 delas, da carga histórica) não tem forma nenhuma, então ela não
+    // pertence a nenhum recorte de forma -- some do filtro, como deve.
+    consulta = consulta
+      .eq("lancamento_formas.forma_pagamento_id", filtros.formaPagamentoId)
+      // Sem este `not`, filtrar um embed NÃO-inner só esvazia o embed e a linha
+      // continua vindo. É o mesmo par (`eq` no embed + `not is null`) que a
+      // listagem de Lançamentos usa para o centro de custo.
+      .not("lancamento_formas", "is", null);
+  }
   // Fornecedor e busca moram no lançamento. O join já é !inner, então filtrar a
   // tabela embutida filtra as parcelas de verdade (não só o que aparece nela).
   if (filtros.fornecedorId) {
     consulta = consulta.eq("lancamentos.fornecedor_id", filtros.fornecedorId);
+  }
+  if (filtros.categoriaId) {
+    consulta = consulta.eq("lancamentos.categoria_id", filtros.categoriaId);
+  }
+  if (filtros.mesCompetencia) {
+    consulta = consulta.eq("lancamentos.mes_competencia", filtros.mesCompetencia);
+  }
+  if (filtros.origem) {
+    consulta = consulta.eq("lancamentos.origem", filtros.origem);
+  }
+  if (filtros.compraDe) {
+    consulta = consulta.gte("lancamentos.data_compra", filtros.compraDe);
+  }
+  if (filtros.compraAte) {
+    consulta = consulta.lte("lancamentos.data_compra", filtros.compraAte);
   }
   const termo = filtros.busca?.trim() ?? "";
   if (termo !== "") {
@@ -428,18 +548,38 @@ export async function somaDasParcelasPagas(
 
   const idsFornecedores = await fornecedoresDaBusca(supabase, filtros);
 
+  // Os embeds de forma e de rateio entram no select porque FILTRAR um embed
+  // exige que ele esteja no select. Ninguém lê estes campos aqui -- a soma só
+  // precisa de `valor_liquido` --, eles existem para o recorte desta soma ser
+  // idêntico ao da lista. Total que não obedece ao mesmo filtro da lista é um
+  // número que não pertence ao que está na tela.
+  const centro = await aplicarCentroCusto(
+    supabase,
+    aplicarFiltrosPagas(
+      supabase
+        .from("lancamento_parcelas")
+        .select(
+          `valor_liquido,
+           lancamento_formas(forma_pagamento_id),
+           lancamentos!inner(
+             fornecedor_id,
+             lancamento_rateios(centro_custo_id)
+           )`,
+        )
+        .eq("status", "pago")
+        .eq("lancamentos.tipo", "a_pagar")
+        .neq("lancamentos.status", "cancelado"),
+      filtros,
+      idsFornecedores,
+    ),
+    filtros.centroCustoId,
+  );
+  // Centro que não existe mais soma zero, igual à lista que vem vazia.
+  if (centro.vazio) return 0;
+
   const { linhas, erro } = await todasAsLinhas<{ valor_liquido: number }>(
     (de, ate) =>
-      aplicarFiltrosPagas(
-        supabase
-          .from("lancamento_parcelas")
-          .select("valor_liquido, lancamentos!inner(fornecedor_id)")
-          .eq("status", "pago")
-          .eq("lancamentos.tipo", "a_pagar")
-          .neq("lancamentos.status", "cancelado"),
-        filtros,
-        idsFornecedores,
-      )
+      centro.consulta
         // Desempate: sem ele, linhas com o mesmo `data_pagamento` (e são
         // milhares, vindas da carga) mudam de ordem entre uma faixa e a
         // seguinte, e a soma conta linha repetida e perde outra.
@@ -480,11 +620,12 @@ export async function listarParcelasPagas({
       `id, numero_parcela, valor, desconto, juros, outras_despesas,
        valor_liquido, data_pagamento,
        contas_bancarias(nome, banco),
+       lancamento_formas(forma_pagamento_id),
        lancamentos!inner(
          numero, descricao,
          categorias_financeiras(nome),
          fornecedores(razao_social, nome_fantasia),
-         lancamento_rateios(centros_custo(nome))
+         lancamento_rateios(centro_custo_id, centros_custo(nome))
        )`,
       { count: "exact" },
     )
@@ -509,6 +650,14 @@ export async function listarParcelasPagas({
     filtros,
     await fornecedoresDaBusca(supabase, filtros),
   );
+
+  const comCentro = await aplicarCentroCusto(
+    supabase,
+    consulta,
+    filtros.centroCustoId,
+  );
+  if (comCentro.vazio) return { itens: [], total: 0 };
+  consulta = comCentro.consulta;
 
   const { data, error, count } = await consulta;
 

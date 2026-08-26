@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
-import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
+import { PagamentosCliente,
+  FILTROS_A_PAGAR_VAZIOS,
+} from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import type { ParcelaAprovada } from "@/modules/financeiro/pagamentos/queries";
 
 /**
@@ -78,18 +80,7 @@ const FILA: ParcelaAprovada[] = [
   }),
 ];
 
-const VALORES = {
-  busca: "",
-  situacao: "",
-  fornecedor: "",
-  conta: "",
-  valorDe: "",
-  valorAte: "",
-  vencDe: "",
-  vencAte: "",
-  progDe: "",
-  progAte: "",
-};
+const VALORES = FILTROS_A_PAGAR_VAZIOS;
 
 function montar(
   podePagar = true,
@@ -105,6 +96,9 @@ function montar(
         { id: "conta-1", nome: "Obra 364", banco: "bb", saldoAtual: 50000 },
       ]}
       fornecedores={[]}
+      categorias={[]}
+      centrosCusto={[]}
+      formasPagamento={[]}
       podePagar={podePagar}
       podeEstornar={false}
       hoje="2026-08-19"
@@ -244,5 +238,81 @@ describe("Fila a pagar com parcelas não aprovadas", () => {
     expect(valorDoCard("Pronto para pagar")).toContain("0,00");
     expect(valorDoCard("Aguardando aprovação")).toContain("300,00");
     expect(screen.queryByText("Total a pagar")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * O filtro de centro de custo é o único da fila que não compara igualdade: ele
+ * compara a SUBÁRVORE do centro escolhido contra TODOS os centros do rateio.
+ *
+ * Os dois casos que importam: a parcela pendurada num EQUIPAMENTO tem de
+ * aparecer quando se escolhe a manutenção (é a pergunta do dono), e a parcela de
+ * outra obra tem de sair. Sem o segundo, um filtro que ignorasse o parâmetro
+ * passaria no primeiro.
+ */
+describe("o filtro de centro de custo da fila", () => {
+  const MANUT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const BOBCAT = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const OBRA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  const CENTROS = [
+    { id: MANUT, nome: "Manutenção", codigo: null, paiId: null, tipo: "manutencao" },
+    { id: BOBCAT, nome: "Bobcat MC110C - 01", codigo: null, paiId: MANUT, tipo: null },
+    { id: OBRA, nome: "009 - BR-364", codigo: null, paiId: null, tipo: "obra" },
+  ];
+
+  const DUAS = [
+    parcela({
+      id: APROVADA,
+      lancamentoNumero: "LAN-DO-EQUIPAMENTO",
+      // Pendurada no EQUIPAMENTO, não na raiz.
+      centroCustoIds: [BOBCAT],
+    }),
+    parcela({
+      id: PENDENTE,
+      status: "pendente",
+      lancamentoNumero: "LAN-DA-OBRA",
+      centroCustoIds: [OBRA],
+    }),
+  ];
+
+  function montarComCentro(centro: string) {
+    render(
+      <PagamentosCliente
+        aprovadas={DUAS}
+        pagas={[]}
+        totalPagas={0}
+        somaPagas={0}
+        contas={[]}
+        fornecedores={[]}
+        categorias={[]}
+        centrosCusto={CENTROS}
+        formasPagamento={[]}
+        podePagar
+        podeEstornar={false}
+        hoje="2026-08-26"
+        valoresAPagar={{ ...FILTROS_A_PAGAR_VAZIOS, centro }}
+        valoresPagas={{ ...FILTROS_A_PAGAR_VAZIOS, pagoDe: "", pagoAte: "" }}
+        filtrosPagas={{}}
+      />,
+    );
+  }
+
+  it("escolher a manutenção acha a parcela do EQUIPAMENTO", () => {
+    montarComCentro(MANUT);
+    expect(screen.getByText("LAN-DO-EQUIPAMENTO")).toBeInTheDocument();
+    expect(screen.queryByText("LAN-DA-OBRA")).not.toBeInTheDocument();
+  });
+
+  it("CONTROLE: escolher a obra deixa de fora a do equipamento", () => {
+    montarComCentro(OBRA);
+    expect(screen.getByText("LAN-DA-OBRA")).toBeInTheDocument();
+    expect(screen.queryByText("LAN-DO-EQUIPAMENTO")).not.toBeInTheDocument();
+  });
+
+  it("sem filtro de centro, as duas aparecem", () => {
+    montarComCentro("");
+    expect(screen.getByText("LAN-DO-EQUIPAMENTO")).toBeInTheDocument();
+    expect(screen.getByText("LAN-DA-OBRA")).toBeInTheDocument();
   });
 });

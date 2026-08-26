@@ -105,3 +105,40 @@ export function valorAoEscolherEtapa(raizId: string, etapaId: string): string {
 export function rotuloCentro(centro: CentroCustoOpcao): string {
   return centro.codigo ? `${centro.codigo} ${centro.nome}` : centro.nome;
 }
+
+/**
+ * O centro escolhido MAIS todos os descendentes dele, por id.
+ *
+ * Existe para o filtro que roda em MEMÓRIA (a fila a pagar carrega tudo e filtra
+ * no cliente). Filtrar por centro é filtrar a subárvore: escolher a manutenção
+ * tem que achar a parcela cujo rateio aponta um equipamento, e escolher a obra
+ * tem que achar a etapa dela.
+ *
+ * No servidor quem responde isso é `fn_centro_custo_subarvore`. As duas têm de
+ * concordar, e é por isso que esta função existe aqui, testada, em vez de um
+ * `filter` solto dentro do componente: divergir faria a mesma pergunta dar
+ * respostas diferentes em duas abas da mesma tela.
+ *
+ * Percorre por nível em vez de recursão para não depender da profundidade -- hoje
+ * a árvore tem 3 níveis, e o dia em que tiver 4 não deve exigir mudança aqui.
+ */
+export function subarvoreDeCentro(
+  centros: readonly CentroCustoOpcao[],
+  raizId: string,
+): Set<string> {
+  const dentro = new Set<string>();
+  if (!raizId) return dentro;
+
+  dentro.add(raizId);
+  let cresceu = true;
+  while (cresceu) {
+    cresceu = false;
+    for (const centro of centros) {
+      if (centro.paiId && dentro.has(centro.paiId) && !dentro.has(centro.id)) {
+        dentro.add(centro.id);
+        cresceu = true;
+      }
+    }
+  }
+  return dentro;
+}

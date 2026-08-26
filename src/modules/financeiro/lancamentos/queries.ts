@@ -627,7 +627,7 @@ async function idsPorContaBancaria(
  * de valor precisam do mesmo conjunto, e duas leituras poderiam ler conjuntos
  * diferentes no dia em que alguém mexesse num dos dois lugares.
  */
-async function subarvoreDosCentros(
+export async function subarvoreDosCentros(
   supabase: ClienteSupabase,
   centroCustoIds: string[],
 ): Promise<string[]> {

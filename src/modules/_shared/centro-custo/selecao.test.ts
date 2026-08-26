@@ -7,6 +7,7 @@ import {
   resolverSelecao,
   rotuloCentro,
   rotuloDaEtapa,
+  subarvoreDeCentro,
   valorAoEscolherEtapa,
   valorAoEscolherRaiz,
 } from "@/modules/_shared/centro-custo/selecao";
@@ -171,5 +172,41 @@ describe("ida e volta", () => {
         etapaId: etapa,
       });
     }
+  });
+});
+
+describe("subarvoreDeCentro", () => {
+  it("traz a raiz e as etapas dela", () => {
+    expect([...subarvoreDeCentro(CENTROS, "manut")].sort()).toEqual(
+      ["bobcat", "cacamba", "manut"].sort(),
+    );
+  });
+
+  it("raiz sem etapa devolve so ela mesma", () => {
+    expect([...subarvoreDeCentro(CENTROS, "obra-9")]).toEqual(["obra-9"]);
+  });
+
+  it("partindo de uma ETAPA devolve so a etapa, nao os irmaos", () => {
+    // Filtrar por um equipamento e filtrar aquele equipamento. Subir para o pai
+    // aqui traria as parcelas dos outros 60.
+    expect([...subarvoreDeCentro(CENTROS, "bobcat")]).toEqual(["bobcat"]);
+  });
+
+  it("raiz vazia devolve conjunto vazio", () => {
+    expect(subarvoreDeCentro(CENTROS, "").size).toBe(0);
+  });
+
+  it("id que nao existe devolve so ele, sem varrer a arvore", () => {
+    expect([...subarvoreDeCentro(CENTROS, "fantasma")]).toEqual(["fantasma"]);
+  });
+
+  it("desce mais de um nivel", () => {
+    // A arvore de hoje tem 3 niveis (obra > etapa > item). O laco por nivel
+    // garante que o terceiro entra sem ninguem mexer nesta funcao.
+    const comNeto = [
+      ...CENTROS,
+      { id: "item-1", nome: "Item", codigo: null, paiId: "bobcat", tipo: null },
+    ];
+    expect(subarvoreDeCentro(comNeto, "manut").has("item-1")).toBe(true);
   });
 });

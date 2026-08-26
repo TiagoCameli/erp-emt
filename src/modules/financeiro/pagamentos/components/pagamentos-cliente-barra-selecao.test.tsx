@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
+import {
+  FILTROS_A_PAGAR_VAZIOS,
+  PagamentosCliente,
+} from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { buscarParcelasPagas } from "@/modules/financeiro/pagamentos/actions";
 import type { ParcelaPaga } from "@/modules/financeiro/pagamentos/queries";
@@ -73,18 +76,7 @@ const PAGAS = [
   }),
 ];
 
-const VALORES_A_PAGAR = {
-  busca: "",
-  situacao: "",
-  fornecedor: "",
-  conta: "",
-  valorDe: "",
-  valorAte: "",
-  vencDe: "",
-  vencAte: "",
-  progDe: "",
-  progAte: "",
-};
+const VALORES_A_PAGAR = FILTROS_A_PAGAR_VAZIOS;
 
 /**
  * `totalPagas` é parâmetro (e não sempre `PAGAS.length`) para o teste de troca
@@ -101,6 +93,9 @@ function montar(totalPagas = PAGAS.length) {
       somaPagas={0}
       contas={[]}
       fornecedores={[]}
+      categorias={[]}
+      centrosCusto={[]}
+      formasPagamento={[]}
       podePagar={false}
       podeEstornar={false}
       hoje="2026-08-18"
