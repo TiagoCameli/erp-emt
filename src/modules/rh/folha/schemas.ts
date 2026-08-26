@@ -134,7 +134,41 @@ const descontoSchema = z
   .pipe(dinheiroSchema);
 
 /**
- * Alteração de UMA linha da folha em rascunho. Só três campos: é o que a
+ * HORAS não trabalhadas que motivaram o desconto. Opcional de um jeito
+ * específico: vazio é `null`, e null significa "o desconto foi digitado em reais
+ * sem dizer o motivo" — diferente de `0`, que é "declarei zero hora".
+ *
+ * O teto de 200 é o mês inteiro (`HORAS_MES` em `horas-e-valor.ts`, e o mesmo
+ * número no CHECK da coluna): mais que isso é erro de digitação, não falta.
+ *
+ * Duas casas de hora, porque meia hora e 15 minutos (0,25) são faltas reais.
+ */
+const descontoHorasSchema = z
+  .union([z.string(), z.number(), z.null()])
+  .transform((valor, ctx) => {
+    if (valor === null) return null;
+    if (typeof valor === "number") return valor;
+    const texto = valor.trim();
+    if (texto === "") return null;
+    const numero = paraNumero(texto);
+    if (!Number.isFinite(numero)) {
+      ctx.addIssue({ code: "custom", message: "Horas inválidas" });
+      return z.NEVER;
+    }
+    return numero;
+  })
+  .refine((valor) => valor === null || valor >= 0, {
+    error: "As horas não podem ser negativas",
+  })
+  .refine((valor) => valor === null || valor <= 200, {
+    error: "As horas não trabalhadas vão de 0 a 200 (o mês inteiro)",
+  })
+  .refine((valor) => valor === null || casasDecimais(valor) <= 2, {
+    error: "As horas aceitam no máximo 2 casas decimais",
+  });
+
+/**
+ * Alteração de UMA linha da folha em rascunho. Só quatro campos: é o que a
  * `fn_editar_item_folha` sabe recalcular sem mexer na cascata de adiantamento.
  *
  * Salário base e gratificação não podem ser os dois zero — uma linha de R$ 0,00
@@ -149,6 +183,7 @@ export const editarItemFolhaSchema = z
     salarioBase: dinheiroSchema,
     gratificacao: dinheiroComZeroSchema,
     desconto: descontoSchema,
+    descontoHoras: descontoHorasSchema,
   })
   .refine((dados) => dados.salarioBase > 0 || dados.gratificacao > 0, {
     error:

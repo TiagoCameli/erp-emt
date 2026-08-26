@@ -14,9 +14,31 @@ import {
 
 const RECURSO = "financeiro.contas-bancarias" as const;
 const ROTA = "/financeiro/contas-bancarias";
+/**
+ * Rota do extrato de uma conta, na forma DINÂMICA que o `revalidatePath` exige.
+ *
+ * `revalidatePath("/financeiro/contas-bancarias")` invalida só aquela página, e
+ * não os filhos: o extrato tem o próprio cache por id. Sem esta segunda chamada,
+ * editar a conta pelo cabeçalho do extrato salvava no banco e a tela continuava
+ * mostrando o saldo inicial e a data de corte antigos — o pior tipo de defeito de
+ * dinheiro, porque a gravação deu certo e nada na tela disse o contrário.
+ */
+const ROTA_EXTRATO = "/financeiro/contas-bancarias/[id]";
 const TABELA = "contas_bancarias" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
+
+/**
+ * Invalida as duas telas que leem conta bancária: a listagem e o extrato de cada
+ * conta. Sempre as duas, porque toda alteração de conta (nome, saldo inicial,
+ * data de corte, ativo) muda o que as duas mostram.
+ */
+function revalidarTelasDaConta(): void {
+  revalidatePath(ROTA);
+  // O segundo argumento é obrigatório em rota dinâmica: sem ele o Next procura
+  // uma página literalmente chamada "[id]", que não existe, e não invalida nada.
+  revalidatePath(ROTA_EXTRATO, "page");
+}
 
 /** Converte o throw de exigirPermissao no contrato { erro } das actions. */
 async function checarPermissao(acao: Acao): Promise<boolean> {
@@ -68,7 +90,7 @@ export async function criarConta(dados: ContaInput): Promise<ResultadoAcao> {
     );
   }
 
-  revalidatePath(ROTA);
+  revalidarTelasDaConta();
   return { ok: true };
 }
 
@@ -103,7 +125,7 @@ export async function editarConta(
     );
   }
 
-  revalidatePath(ROTA);
+  revalidarTelasDaConta();
   return { ok: true };
 }
 
@@ -136,6 +158,6 @@ export async function alternarAtivo(
     );
   }
 
-  revalidatePath(ROTA);
+  revalidarTelasDaConta();
   return { ok: true };
 }

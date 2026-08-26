@@ -113,6 +113,26 @@ export function InputQuantidade(props: InputNumericoBaseProps) {
 }
 
 /**
+ * Campo de HORAS: 2 casas, exibe o que foi digitado.
+ *
+ * Duas casas porque hora não é taxa de quatro casas nem dinheiro com centavo
+ * fixo: 0,5 é meia hora, 0,25 é quinze minutos, e "8,00" com zeros forçados num
+ * campo de falta só ocupa espaço. O teto de casas importa porque as colunas de
+ * hora do banco são `numeric(_,2)` (folha_itens.horas_normais,
+ * folha_itens.desconto_horas, jornadas.horas_segunda) — digitar 8,255 aqui
+ * gravaria um número que a coluna arredonda sem avisar.
+ */
+export function InputHoras(props: InputNumericoBaseProps) {
+  return (
+    <InputNumerico
+      {...props}
+      casas={CASAS_DINHEIRO}
+      placeholder={props.placeholder ?? "0"}
+    />
+  );
+}
+
+/**
  * Campo de PERCENTUAL: até 4 casas, exibe só o que foi digitado.
  *
  * Percentual é TAXA, não valor (ver @/lib/casas-decimais): 8,3333% de provisão

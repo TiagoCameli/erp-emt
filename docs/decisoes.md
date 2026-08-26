@@ -3390,6 +3390,59 @@ de UMA escolha e diferente do da lista inteira (R$ 1.300 contra R$ 1.000 e R$ 1.
 Verificado por sabotagem que eles caem — cortando a lista no primeiro item, trocando o
 `in` por `eq`, e removendo a guarda de lista vazia.
 
+## 26/08/2026 — O desconto da folha aceita horas não trabalhadas, e converte nos dois sentidos
+
+Pedido do Tiago: "eu posso tanto colocar o desconto de faltas pelas horas não trabalhadas como pelo
+valor das horas e o app deve fazer o cálculo inverso". Divisor, decidido por ele: **200 h fixas para
+todos, por agora** — o "por agora" é dele, e está no comentário da constante.
+
+**200 fixo em vez da jornada cadastrada, e isso foi escolha informada.** As jornadas reais dariam 225 h
+(Padrão EMT, 45 h/semana, 41 pessoas) e 220 h (Padrão EMT 2, 44 h/semana, 4 pessoas), e **14 das 58
+pessoas não têm jornada nenhuma** — para elas não haveria de onde derivar. As três opções foram
+oferecidas com a conta do CLELTON em cada uma; ele escolheu o divisor fixo.
+
+**QUEM MANDA CONTINUA SENDO O VALOR, e é por isso que as duas colunas convivem sem invariante.**
+`descontos` (reais) é o que sai do líquido e segue digitável; `desconto_horas` guarda o MOTIVO e serve
+de atalho. Forçar `descontos = horas × valor_hora` no banco recriaria exatamente o problema que a
+migration da manhã resolveu: 7,5% de R$ 1.621,00 dá 121,575, a metade exata do centavo, e o
+contracheque desceu para 121,57 enquanto o sistema subia para 121,58. O contracheque pode legitimamente
+dizer "8 h, R$ 64,83", e o sistema tem de gravar os dois números como vieram — o que está provado em
+transação desfeita: gravei 8 h com R$ 64,83 e o banco **não corrigiu** o valor pela conta.
+
+**A conversão vive na tela, não no banco.** `src/modules/rh/folha/horas-e-valor.ts` tem as três funções
+puras (`valorDaHora`, `valorDasHoras`, `horasDoValor`) e a constante `HORAS_MES`; o banco recebe os dois
+números já resolvidos e só guarda. Assim a constante existe em UM lugar no app, e a única coisa que ela
+faz na migration é a trava de sanidade (0 a 200 h). Quando o divisor virar configurável, é lá que muda.
+
+**Regra de UI: quem foi digitado por último manda, e não há ciclo.** Digitar horas preenche o valor;
+digitar valor preenche as horas; apagar o valor apaga as horas (deixar "8 h" ao lado de R$ 0,00 seria
+uma linha que se contradiz). A tela **nunca** reescreve o valor a partir de horas que ela mesma derivou,
+porque a volta não é exata: R$ 100,00 → 12,34 h → R$ 100,02.
+
+**O valor da hora aparece na tela.** "A hora desta pessoa vale R$ 8,105 (salário base ÷ 200 h)" é o que
+explica por que 8 horas viraram R$ 64,84, e é o número que se confere contra o contracheque antes de
+aceitar a sugestão.
+
+**Erro meu, e o mesmo de ontem: ordem do arredondamento.** `valorDasHoras` arredondava o produto antes
+de dividir por 200, e devolvia R$ 100,0157 em vez de R$ 100,02 — o `round` caía em centavos de HORA e
+não de real. Pegou porque a função nasceu com teste, e o caso do ciclo estava entre eles. É o segundo
+tropeço idêntico em dois dias: **em conta de dinheiro, a divisão que dá a unidade vem antes do
+arredondamento, sempre.**
+
+**Canônico novo, em vez de reusar o errado.** `InputHoras` (2 casas) entrou em
+`components/canonicos/input-numerico.tsx`: `InputQuantidade` aceita 4 e as colunas de hora do banco são
+`numeric(_,2)` — digitar 8,255 gravaria um número que a coluna arredonda sem avisar. Hora não é taxa de
+quatro casas nem dinheiro com centavo fixo, e as três colunas de hora do RH (`horas_normais`,
+`desconto_horas`, `jornadas.horas_*`) já pediam esse campo.
+
+**De brinde:** a faixa de marca da planilha da folha mesclava 12 colunas numa tabela de 13 (agora 14).
+O parâmetro documenta que é o número real de colunas, então passou a ser.
+
+**Regenerar `database.types.ts` apagou o `p_id: string | null` da transferência pela segunda vez em dois
+dias.** Restaurei com o comentário atualizado (agora diz as duas datas). No lado da action de folha usei
+`?? undefined`, que sobrevive a regeneração: omitir o parâmetro faz o Postgres usar o DEFAULT null, que
+é exatamente "não foi informado por horas".
+
 ## 26/08/2026 — Categoria, centro de custo e forma também aceitam mais de uma escolha
 
 O dono: "ainda não consigo selecionar mais de um fornecedor".

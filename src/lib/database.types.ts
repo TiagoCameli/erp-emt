@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
+    PostgrestVersion: "14.17";
   };
   public: {
     Tables: {
@@ -1388,6 +1388,7 @@ export type Database = {
           colaborador_id: string;
           created_at: string;
           custo_total: number;
+          desconto_horas: number | null;
           descontos: number;
           editado_manualmente: boolean;
           encargos: number;
@@ -1411,6 +1412,7 @@ export type Database = {
           colaborador_id: string;
           created_at?: string;
           custo_total?: number;
+          desconto_horas?: number | null;
           descontos?: number;
           editado_manualmente?: boolean;
           encargos?: number;
@@ -1434,6 +1436,7 @@ export type Database = {
           colaborador_id?: string;
           created_at?: string;
           custo_total?: number;
+          desconto_horas?: number | null;
           descontos?: number;
           editado_manualmente?: boolean;
           encargos?: number;
@@ -3705,6 +3708,10 @@ export type Database = {
         Args: { p_motivo: string; p_oc_id: string };
         Returns: undefined;
       };
+      fn_categoria_do_rh: {
+        Args: { p_colaborador: string; p_evento: string };
+        Returns: string;
+      };
       fn_centro_custo_bloqueio: { Args: { p_id: string }; Returns: string };
       fn_centro_custo_dependencias: { Args: { p_id: string }; Returns: Json };
       fn_centro_custo_subarvore: {
@@ -3784,6 +3791,7 @@ export type Database = {
       fn_editar_item_folha: {
         Args: {
           p_desconto?: number;
+          p_desconto_horas?: number;
           p_gratificacao: number;
           p_item: string;
           p_salario_base: number;
@@ -3831,21 +3839,34 @@ export type Database = {
         Args: { p_entidade: string; p_id: string; p_mes: string };
         Returns: undefined;
       };
+      fn_extrato_conta: {
+        Args: { p_conta: string; p_incluir_anteriores?: boolean };
+        Returns: {
+          chave: string;
+          tipo_movimento: string;
+          lancamento_id: string | null;
+          data_movimento: string | null;
+          sentido: string;
+          // NUMERIC. O gerador escreve `number`, e nisto ele mente: o PostgREST
+          // devolve NUMERIC como string em algumas rotas. Quem le converte.
+          valor: number;
+          no_saldo: boolean;
+          numero: string | null;
+          numero_documento: string | null;
+          descricao: string | null;
+          categoria_nome: string | null;
+          contraparte: string | null;
+          parcela: string | null;
+        }[];
+      };
       fn_fechar_competencia: {
         Args: { p_mes: string; p_observacao?: string };
         Returns: undefined;
-      };
-      fn_categoria_do_rh: {
-        Args: { p_colaborador: string; p_evento: string };
-        Returns: string;
       };
       fn_fechar_diarias: {
         Args: {
           p_colaborador: string;
           p_competencia: string;
-          // Os dois SEM `?`: desde 25/08/2026 a funcao recusa vencimento ou
-          // forma nulos. Deixar opcional aqui devolveria o furo que fez o
-          // LAN-2026-6522 nascer sem data.
           p_data_vencimento: string;
           p_forma_pagamento: string;
         };
@@ -4043,6 +4064,30 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_rel_creditos: {
+        Args: never;
+        Returns: {
+          categoria: string;
+          credor: string;
+          descricao: string;
+          lancamento_id: string;
+          numero: string;
+          parcelas: number;
+          parcelas_pagas: number;
+          proximo_vencimento: string;
+          saldo_devedor: number;
+          total_pago: number;
+          valor_contratado: number;
+        }[];
+      };
+      fn_rel_creditos_por_mes: {
+        Args: { p_meses?: number };
+        Returns: {
+          mes: string;
+          parcelas: number;
+          valor: number;
+        }[];
+      };
       fn_rel_custo_centro_custo: {
         Args: {
           p_categorias?: string[];
@@ -4235,30 +4280,6 @@ export type Database = {
           resgatado: number;
         }[];
       };
-      fn_rel_creditos: {
-        Args: never;
-        Returns: {
-          categoria: string;
-          credor: string;
-          descricao: string;
-          lancamento_id: string;
-          numero: string;
-          parcelas: number;
-          parcelas_pagas: number;
-          proximo_vencimento: string | null;
-          saldo_devedor: number;
-          total_pago: number;
-          valor_contratado: number;
-        }[];
-      };
-      fn_rel_creditos_por_mes: {
-        Args: { p_meses?: number };
-        Returns: {
-          mes: string;
-          parcelas: number;
-          valor: number;
-        }[];
-      };
       fn_rel_posicao_bancaria: {
         Args: never;
         Returns: {
@@ -4323,7 +4344,7 @@ export type Database = {
           //
           // Escrito a mao de proposito: o gerador de tipos nao sabe que a funcao
           // aceita null num parametro sem DEFAULT, e escreve `string`. Regerar
-          // este arquivo apaga esta linha -- foi o que aconteceu em 25/08/2026.
+          // este arquivo apaga esta linha -- ja aconteceu em 25/08 e 26/08/2026.
           p_id: string | null;
           p_observacoes?: string;
           p_tarifa?: number;

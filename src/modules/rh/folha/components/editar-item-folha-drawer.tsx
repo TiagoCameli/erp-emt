@@ -8,18 +8,26 @@ import {
   CampoFormulario,
   classesFormulario,
   FormDrawer,
+  InputHoras,
   InputMoeda,
   LinhaCampos,
   MoneyText,
   SecaoFormulario,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { formatarBRL } from "@/lib/formatadores";
 import {
   ROTULO_VINCULO,
   type Vinculo,
 } from "@/modules/cadastros/colaboradores/schemas";
 import { editarItemFolha } from "@/modules/rh/folha/actions";
 import type { FolhaItem } from "@/modules/rh/folha/queries";
+import {
+  HORAS_MES,
+  horasDoValor,
+  valorDaHora,
+  valorDasHoras,
+} from "@/modules/rh/folha/horas-e-valor";
 import { liquidoPrevisto } from "@/modules/rh/folha/previa-desconto";
 import { paraNumero } from "@/modules/rh/percentual";
 
@@ -78,6 +86,7 @@ export function EditarItemFolhaDrawer({
   const [salarioBase, setSalarioBase] = React.useState("");
   const [gratificacao, setGratificacao] = React.useState("");
   const [desconto, setDesconto] = React.useState("");
+  const [horas, setHoras] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
   // Ajuste de estado durante o render na transição de fechado para aberto
@@ -93,6 +102,9 @@ export function EditarItemFolhaDrawer({
       setSalarioBase(paraCampo(item.salarioBase));
       setGratificacao(paraCampo(item.gratificacao));
       setDesconto(paraCampo(item.descontos));
+      setHoras(
+        item.descontoHoras === null ? "" : paraCampo(item.descontoHoras),
+      );
     }
   }
 
@@ -105,11 +117,57 @@ export function EditarItemFolhaDrawer({
   const baseValida = Number.isFinite(baseNumero) && baseNumero >= 0;
   const gratValida = Number.isFinite(gratNumero) && gratNumero >= 0;
   const descontoValido = Number.isFinite(descontoNumero) && descontoNumero >= 0;
+  // Horas vazias são `null` (o desconto não foi informado por horas), e isso é
+  // diferente de zero. Só o campo em branco vira null: "0" é uma declaração.
+  const horasNumero = horas.trim() === "" ? null : paraNumero(horas);
+  const horasValidas =
+    horasNumero === null ||
+    (Number.isFinite(horasNumero) &&
+      horasNumero >= 0 &&
+      horasNumero <= HORAS_MES);
   // Linha zerada não existe na folha: a mesma trava está no schema e no banco.
   const temValor =
     baseValida && gratValida && (baseNumero > 0 || gratNumero > 0);
   const podeSalvar =
-    item !== null && baseValida && gratValida && descontoValido && temValor;
+    item !== null &&
+    baseValida &&
+    gratValida &&
+    descontoValido &&
+    horasValidas &&
+    temValor;
+
+  /**
+   * Digitou HORAS: preenche o valor com a conversão (salário base ÷ 200 × horas).
+   *
+   * O valor fica editável depois disso, de propósito. Se o contracheque descontar
+   * um centavo diferente do que a conta dá, quem vale é o contracheque — foi
+   * exatamente por isso que o percentual saiu desta tela.
+   */
+  function aoMudarHoras(texto: string) {
+    setHoras(texto);
+    const novasHoras = texto.trim() === "" ? null : paraNumero(texto);
+    if (novasHoras === null || !Number.isFinite(novasHoras)) return;
+    if (!baseValida || baseNumero <= 0) return;
+    setDesconto(paraCampo(valorDasHoras(baseNumero, novasHoras)));
+  }
+
+  /**
+   * Digitou o VALOR: preenche as horas equivalentes — o cálculo inverso.
+   *
+   * Só mexe nas horas quando o valor dá para converter. Apagar o valor apaga as
+   * horas junto: desconto zerado sem motivo é o estado de "não tem desconto", e
+   * deixar "8h" ao lado de R$ 0,00 seria uma linha que se contradiz.
+   */
+  function aoMudarValor(texto: string) {
+    setDesconto(texto);
+    const novoValor = texto.trim() === "" ? 0 : paraNumero(texto);
+    if (!Number.isFinite(novoValor) || novoValor <= 0) {
+      setHoras("");
+      return;
+    }
+    if (!baseValida || baseNumero <= 0) return;
+    setHoras(paraCampo(horasDoValor(baseNumero, novoValor)));
+  }
 
   // O desconto não tem mais prévia para calcular: o número digitado é o próprio
   // desconto. Sobrou a prévia do LÍQUIDO, que mora em `previa-desconto.ts` com
@@ -147,6 +205,12 @@ export function EditarItemFolhaDrawer({
       toast.error("Informe o desconto como número (ex: 121,57)");
       return;
     }
+    if (!horasValidas) {
+      toast.error(
+        `Informe as horas não trabalhadas entre 0 e ${HORAS_MES} (o mês inteiro)`,
+      );
+      return;
+    }
     if (!temValor) {
       toast.error(
         "Salário base e gratificação não podem ser os dois zero. Se a pessoa não entra nesta folha, ajuste o cadastro dela e regere",
@@ -160,6 +224,7 @@ export function EditarItemFolhaDrawer({
       salarioBase: baseNumero,
       gratificacao: gratNumero,
       desconto: descontoNumero,
+      descontoHoras: horasNumero,
     });
     setSalvando(false);
 
@@ -278,20 +343,52 @@ export function EditarItemFolhaDrawer({
         </SecaoFormulario>
 
         <SecaoFormulario titulo="Desconto do salário">
-          <CampoFormulario
-            id="item-folha-desconto"
-            rotulo="Valor descontado do salário"
-            largura="medio"
-            ajuda="Sai do líquido: a pessoa recebe menos. Não muda o custo da empresa. Digite o valor exato do contracheque — em branco = sem desconto."
-          >
-            <InputMoeda
+          <LinhaCampos>
+            <CampoFormulario
+              id="item-folha-horas"
+              rotulo="Horas não trabalhadas"
+              largura="medio"
+              ajuda={`Digite as horas e o valor sai pronto (${HORAS_MES}h no mês). Em branco = o desconto não foi por horas.`}
+            >
+              <InputHoras
+                id="item-folha-horas"
+                valor={horas}
+                onValorChange={aoMudarHoras}
+                disabled={salvando}
+                placeholder="0"
+              />
+            </CampoFormulario>
+
+            <CampoFormulario
               id="item-folha-desconto"
-              valor={desconto}
-              onValorChange={setDesconto}
-              disabled={salvando}
-              placeholder="0,00"
-            />
-          </CampoFormulario>
+              rotulo="Valor descontado do salário"
+              largura="medio"
+              ajuda="Sai do líquido: a pessoa recebe menos. Não muda o custo da empresa. Digitar aqui preenche as horas de volta."
+            >
+              <InputMoeda
+                id="item-folha-desconto"
+                valor={desconto}
+                onValorChange={aoMudarValor}
+                disabled={salvando}
+                placeholder="0,00"
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+
+          {/* O valor da hora à mostra: é ele que explica por que 8 horas viraram
+              R$ 64,84, e é o número que a pessoa confere contra o contracheque
+              antes de aceitar a sugestão. */}
+          {baseValida && baseNumero > 0 ? (
+            <p className="text-legenda text-muted-foreground">
+              A hora desta pessoa vale{" "}
+              <span className="font-medium text-foreground">
+                {formatarBRL(valorDaHora(baseNumero))}
+              </span>{" "}
+              (salário base ÷ {HORAS_MES}h). Um campo preenche o outro, e o
+              valor manda: se o contracheque tiver outro centavo, ajuste o valor
+              e as horas ficam como referência.
+            </p>
+          ) : null}
         </SecaoFormulario>
 
         {item && item.adiantamentos > 0 ? (

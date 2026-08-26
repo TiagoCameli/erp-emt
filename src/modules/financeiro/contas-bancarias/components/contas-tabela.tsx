@@ -1,8 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Filter, Landmark, TriangleAlert } from "lucide-react";
+import {
+  Filter,
+  Landmark,
+  Pencil,
+  ReceiptText,
+  TriangleAlert,
+} from "lucide-react";
 
 import {
   DataTable,
@@ -14,6 +21,7 @@ import {
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   dentroDaFaixaValor,
@@ -195,10 +203,17 @@ export interface ContasTabelaProps {
 }
 
 /**
- * Listagem de contas bancárias. Clicar numa linha abre o drawer de edição
- * quando o usuário tem permissão de editar.
+ * Listagem de contas bancárias. Clicar numa linha abre o EXTRATO da conta, com
+ * todo o dinheiro que entrou e saiu dela.
+ *
+ * Até 26/08/2026 o clique abria o formulário de edição. A troca é intencional: a
+ * pergunta que a linha provoca é "de onde vem esse saldo", não "quero corrigir o
+ * cadastro" — o saldo é o que se confere contra o extrato do banco, e cadastro de
+ * conta se mexe uma vez por ano. A edição não sumiu: está no menu "..." da linha
+ * e no cabeçalho do próprio extrato.
  */
 export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
+  const router = useRouter();
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
@@ -279,6 +294,10 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
     if (!podeEditar) return;
     setSelecionadaId(conta.id);
     setAberto(true);
+  }
+
+  function abrirExtrato(conta: ContaLista) {
+    router.push(`/financeiro/contas-bancarias/${conta.id}`);
   }
 
   // Filtros declarados aqui (e não numa FilterBar solta) para entrarem no menu
@@ -375,7 +394,24 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
         pageIndex={paginacao.pageIndex}
         pageSize={paginacao.pageSize}
         onPaginationChange={setPaginacao}
-        onRowClick={podeEditar ? abrirEdicao : undefined}
+        onRowClick={abrirExtrato}
+        // A edição ficou aqui quando a linha passou a abrir o extrato. "Abrir
+        // extrato" também aparece no menu, e é de propósito: o menu é o lugar em
+        // que quem não sabe que a linha clica descobre que dá.
+        acoesLinha={(conta) => (
+          <>
+            <DropdownMenuItem onSelect={() => abrirExtrato(conta)}>
+              <ReceiptText />
+              Abrir extrato
+            </DropdownMenuItem>
+            {podeEditar ? (
+              <DropdownMenuItem onSelect={() => abrirEdicao(conta)}>
+                <Pencil />
+                Editar conta
+              </DropdownMenuItem>
+            ) : null}
+          </>
+        )}
         emptyState={
           // Existe conta cadastrada e nada na tela é filtro (a tela já abre
           // filtrada em "Ativas"), não cadastro vazio.

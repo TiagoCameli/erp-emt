@@ -11,6 +11,9 @@ function base(overrides: Record<string, unknown> = {}) {
     salarioBase: "2.000,00",
     gratificacao: "",
     desconto: "",
+    // Vazio = o desconto não foi informado por horas. O campo sempre vai (a
+    // tela sempre manda), e é o valor dele que pode ser nulo.
+    descontoHoras: "",
     ...overrides,
   };
 }
@@ -167,6 +170,77 @@ describe("editarItemFolhaSchema — faixas", () => {
   });
 });
 
+describe("editarItemFolhaSchema — horas não trabalhadas", () => {
+  it("vazio é null: o desconto não foi informado por horas", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ descontoHoras: "" }));
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.descontoHoras).toBeNull();
+  });
+
+  it("zero NÃO é vazio: é uma declaração de zero hora", () => {
+    // A distinção existe porque a coluna é nullable de propósito: nulo é "não
+    // disseram o motivo", zero é "disseram, e foi zero".
+    const r = editarItemFolhaSchema.safeParse(base({ descontoHoras: "0" }));
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.descontoHoras).toBe(0);
+  });
+
+  it("aceita meia hora e um quarto de hora", () => {
+    for (const [texto, esperado] of [
+      ["0,5", 0.5],
+      ["0,25", 0.25],
+      ["8", 8],
+      ["8,5", 8.5],
+    ] as const) {
+      const r = editarItemFolhaSchema.safeParse(base({ descontoHoras: texto }));
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.data.descontoHoras).toBe(esperado);
+    }
+  });
+
+  it("recusa negativo", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ descontoHoras: "-1" }));
+    expect(r.success).toBe(false);
+  });
+
+  it("recusa mais que o mês inteiro", () => {
+    // 200 é o mês; 201 é erro de digitação, não falta.
+    expect(
+      editarItemFolhaSchema.safeParse(base({ descontoHoras: "200" })).success,
+    ).toBe(true);
+    const r = editarItemFolhaSchema.safeParse(base({ descontoHoras: "201" }));
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toContain("0 a 200");
+    }
+  });
+
+  it("recusa 3 casas decimais: a coluna guarda 2", () => {
+    // 8,255 seria arredondado pela coluna sem ninguém avisar.
+    const r = editarItemFolhaSchema.safeParse(base({ descontoHoras: "8,255" }));
+    expect(r.success).toBe(false);
+  });
+
+  it("lê o decimal com vírgula, igual ao resto do app", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ descontoHoras: "12,34" }));
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.descontoHoras).toBe(12.34);
+  });
+
+  it("horas e valor são independentes: o schema não exige coerência", () => {
+    // De propósito. O contracheque pode dizer "8h, R$ 64,83" e os dois números
+    // vão como vieram — foi o meio centavo do percentual que ensinou isso.
+    const r = editarItemFolhaSchema.safeParse(
+      base({ salarioBase: "1.621,00", descontoHoras: "8", desconto: "64,83" }),
+    );
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.descontoHoras).toBe(8);
+      expect(r.data.desconto).toBe(64.83);
+    }
+  });
+});
+
 describe("editarItemFolhaSchema — reparse na Server Action", () => {
   it("aceita os números já convertidos, sem virar string de novo", () => {
     // A action valida o Input já processado: se o schema só aceitasse string,
@@ -176,12 +250,14 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       salarioBase: 1621,
       gratificacao: 500,
       desconto: 121.57,
+      descontoHoras: 8,
     });
     expect(r.success).toBe(true);
     if (r.success) {
       expect(r.data.salarioBase).toBe(1621);
       expect(r.data.gratificacao).toBe(500);
       expect(r.data.desconto).toBe(121.57);
+      expect(r.data.descontoHoras).toBe(8);
     }
   });
 
@@ -191,6 +267,7 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       salarioBase: 1621,
       gratificacao: 0,
       desconto: 0,
+      descontoHoras: null,
     });
     expect(r.success).toBe(true);
     if (r.success) {

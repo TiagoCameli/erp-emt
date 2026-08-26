@@ -35,6 +35,10 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     // Sem desconto de salario: nulo, nao zero. Os testes deste arquivo somam
     // encargo, provisao e centro de custo, e o desconto nao entra em nenhum.
     descontos: 0,
+    // Sem horas declaradas: o desconto destes testes é zero, e nulo é "não foi
+    // informado por horas". Estes testes somam encargo, provisão e centro de
+    // custo, e o desconto não entra em nenhum deles.
+    descontoHoras: null,
     provisoes: 0,
     provisoesDetalhe: [],
     lancamentoId: null,

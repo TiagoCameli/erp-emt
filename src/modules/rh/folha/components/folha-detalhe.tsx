@@ -512,7 +512,22 @@ export function FolhaDetalheView({
                           não em branco: coluna de dinheiro com célula vazia se
                           lê como dado faltando. */}
                       {item.descontos > 0 ? (
-                        <MoneyText valor={item.descontos} />
+                        // As HORAS embaixo do valor, quando o desconto foi
+                        // informado por elas (26/08/2026). Diferente do
+                        // percentual que ficava aqui antes: hora não é uma
+                        // fórmula que reproduz o valor, é o motivo do desconto —
+                        // e é o que responde "por que saíram R$ 64,84 desta
+                        // pessoa" sem abrir a linha.
+                        <div className="flex flex-col items-end">
+                          <MoneyText valor={item.descontos} />
+                          {item.descontoHoras !== null &&
+                          item.descontoHoras > 0 ? (
+                            <span className="text-legenda">
+                              {formatarQuantidade(item.descontoHoras)}h não
+                              trabalhadas
+                            </span>
+                          ) : null}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground">
                           <MoneyText valor={0} />

@@ -9,6 +9,7 @@ import {
   RodapeEmpresa,
 } from "@/components/canonicos/marca-documento";
 import { Button } from "@/components/ui/button";
+import { formatarQuantidade } from "@/lib/formatadores";
 import {
   Dialog,
   DialogContent,
@@ -178,7 +179,17 @@ export function HoleriteDialog({
                   de R$ 1.621,00 dá R$ 121,575, e o valor real é o do
                   contracheque. */}
               {item.descontos > 0 ? (
-                <Linha rotulo="Desconto" valor={item.descontos} />
+                <Linha
+                  rotulo={
+                    // As horas entram no rótulo quando existem: é o que o
+                    // funcionário confere. Sem elas, "Desconto" pelado — o
+                    // rótulo não inventa um motivo que ninguém declarou.
+                    item.descontoHoras !== null && item.descontoHoras > 0
+                      ? `Desconto (${formatarQuantidade(item.descontoHoras)}h não trabalhadas)`
+                      : "Desconto"
+                  }
+                  valor={item.descontos}
+                />
               ) : null}
               <Linha
                 rotulo={rotuloAdiantamento(item.adiantamentoParcelas)}
