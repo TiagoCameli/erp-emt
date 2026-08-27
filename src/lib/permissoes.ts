@@ -21,6 +21,18 @@ export interface UsuarioLogado {
   email: string;
   ativo: boolean;
   perfilId: string | null;
+  /**
+   * Caminho da foto de perfil no bucket, ou null.
+   *
+   * É o CAMINHO, não a URL: URL do Storage é assinada e expira, então guardar ou
+   * passar URL adiante é o defeito. Quem precisa exibir assina na hora, com
+   * `urlAssinadaDaFoto`.
+   *
+   * Vive aqui, e não numa consulta separada, porque o avatar está no LAYOUT: uma
+   * segunda consulta só para isso rodaria em toda página, ao lado desta que já
+   * roda. A coluna a mais não custa nada; a consulta a mais, sim.
+   */
+  fotoPath: string | null;
   permissoes: PermissaoUsuario[];
 }
 
@@ -43,7 +55,7 @@ export const getUsuarioLogado = cache(
     const [{ data: usuario }, { data: permissoes }] = await Promise.all([
       supabase
         .from("usuarios")
-        .select("id, nome, email, ativo, perfil_id")
+        .select("id, nome, email, ativo, perfil_id, foto_path")
         .eq("id", user.id)
         .single(),
       supabase
@@ -60,6 +72,7 @@ export const getUsuarioLogado = cache(
       email: usuario.email ?? "",
       ativo: usuario.ativo,
       perfilId: usuario.perfil_id,
+      fotoPath: usuario.foto_path,
       permissoes: (permissoes ?? []) as PermissaoUsuario[],
     };
   },

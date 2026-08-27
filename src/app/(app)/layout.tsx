@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
 import { AppShell, type ModuloNavegacao } from "@/components/canonicos";
+import { urlAssinadaDaFoto } from "@/lib/foto-perfil";
 import { abasVisiveis, getUsuarioLogado, modulosVisiveis } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { sair } from "@/modules/auth/actions";
@@ -50,9 +51,19 @@ export default async function AppLayout({
     })),
   }));
 
+  // A URL da foto é assinada AQUI, no servidor, e só quando existe foto: o
+  // AppShell é componente de cliente e não pode falar com o Storage, e o
+  // caminho da coluna não serve como src (o bucket é privado). O `if` evita uma
+  // ida ao Storage em toda página de quem não tem foto, que hoje é quase todo
+  // mundo. Se a assinatura falhar, `urlAssinadaDaFoto` devolve null e o avatar
+  // cai nas iniciais — o layout não pode quebrar por causa de um avatar.
+  const fotoUrl = usuario.fotoPath
+    ? await urlAssinadaDaFoto(usuario.fotoPath)
+    : null;
+
   return (
     <AppShell
-      usuario={{ nome: usuario.nome, email: usuario.email }}
+      usuario={{ nome: usuario.nome, email: usuario.email, fotoUrl }}
       modulos={modulos}
       onSair={sair}
     >

@@ -20,6 +20,7 @@ function criarUsuario(permissoes: PermissaoUsuario[] = []): UsuarioLogado {
     email: "teste@emtconstrutora.com",
     ativo: true,
     perfilId: null,
+    fotoPath: null,
     permissoes,
   };
 }
