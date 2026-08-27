@@ -435,3 +435,58 @@ export async function salvarMatrizUsuario(
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+/**
+ * Substitui as contas bancárias cujo SALDO este usuário pode ver.
+ *
+ * A permissão é por LINHA (usuário x conta), então não cabe na matriz de
+ * recurso x ação: ela mora em `usuario_conta_saldo`, e quem grava é
+ * `salvar_saldos_usuario`, que checa `administracao.usuarios / editar` no banco
+ * também — a checagem daqui é a camada 2, não a única.
+ *
+ * Marcar ou desmarcar não muda o que os ADMINS veem: quem tem
+ * `administracao.usuarios / editar` vê o saldo de todas as contas por
+ * `fn_pode_ver_saldo`, decisão do Tiago em 27/08/2026. A tela avisa isso, senão
+ * testar a marcação num Admin dá a impressão de que ela não funciona.
+ *
+ * Revalida a ROTA de usuários e também "/financeiro/contas-bancarias": o saldo
+ * que o próprio editor vê pode ter mudado se ele editou a si mesmo, e a listagem
+ * de contas é onde isso aparece.
+ */
+export async function salvarSaldosUsuario(
+  usuarioId: string,
+  contaIds: string[],
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar usuários" };
+  }
+
+  const usuarioValido = idSchema.safeParse(usuarioId);
+  if (!usuarioValido.success) return { erro: "Usuário inválido" };
+
+  // Só uuid, e sem repetição: o array vem do cliente, e a RPC já ignora id que
+  // não é conta — mas mandar lixo pela rede não ajuda ninguém a depurar.
+  const validos = Array.from(
+    new Set(
+      contaIds.filter((id) => idSchema.safeParse(id).success),
+    ),
+  );
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("salvar_saldos_usuario", {
+    p_usuario_id: usuarioValido.data,
+    p_contas: validos,
+  });
+
+  if (error) {
+    return erroAcao(
+      "administracao.usuarios.salvar-saldos",
+      error,
+      "Não foi possível salvar as contas. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath("/financeiro/contas-bancarias");
+  return { ok: true };
+}

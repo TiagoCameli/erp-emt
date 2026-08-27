@@ -64,8 +64,15 @@ function valoresIniciais(
   };
 }
 
-/** Rótulo da conta no seletor: nome e saldo, para decidir de onde tirar. */
+/**
+ * Rótulo da conta no seletor: nome e saldo, para decidir de onde tirar.
+ *
+ * Sem permissão de ver o saldo, fica só o nome. `formatarBRL(null)` devolveria
+ * "R$ 0,00" e a conta apareceria zerada no seletor — número errado com cara de
+ * certo, exatamente no lugar em que se decide de onde tirar o dinheiro.
+ */
 function rotuloConta(conta: ContaOpcao): string {
+  if (conta.saldoAtual === null) return conta.nome;
   return `${conta.nome} (${formatarBRL(conta.saldoAtual)})`;
 }
 
@@ -316,14 +323,21 @@ export function TransferenciaFormDrawer({
                   <MoneyText valor={valor} />
                 </dd>
               </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">
-                  Saldo da origem depois
-                </dt>
-                <dd>
-                  <MoneyText valor={contaOrigem.saldoAtual - valor - tarifa} />
-                </dd>
-              </div>
+              {/* A projeção só existe se o saldo da origem for visível. Sem
+                  permissão, a linha inteira sai: mostrá-la partindo de zero daria
+                  um "saldo depois" negativo e assustador que não é verdade. */}
+              {contaOrigem.saldoAtual === null ? null : (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">
+                    Saldo da origem depois
+                  </dt>
+                  <dd>
+                    <MoneyText
+                      valor={contaOrigem.saldoAtual - valor - tarifa}
+                    />
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
         ) : null}

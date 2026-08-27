@@ -2,10 +2,6 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
-import {
-  movimentoPorContaEmCentavos,
-  saldoAtualDaConta,
-} from "@/modules/financeiro/contas-bancarias/saldo";
 
 /** Uma transferência da listagem, com o nome das duas contas resolvido. */
 export interface TransferenciaLista {
@@ -36,8 +32,14 @@ export interface ContaOpcao {
   id: string;
   nome: string;
   banco: string;
-  /** Saldo atual, para o formulário mostrar de quanto a conta dispõe. */
-  saldoAtual: number;
+  /**
+   * Saldo atual, para o formulário mostrar de quanto a conta dispõe.
+   *
+   * NULL = sem permissão de ver o saldo desta conta. A conta continua nos dois
+   * seletores (origem e destino): transferir é escolher contas pelo NOME, e
+   * bloquear a transferência seria uma restrição que ninguém pediu.
+   */
+  saldoAtual: number | null;
 }
 
 /**
@@ -118,37 +120,37 @@ export async function listarTransferencias(): Promise<TransferenciaLista[]> {
 export async function listarContasAtivas(): Promise<ContaOpcao[]> {
   const supabase = await createClient();
 
-  const [contas, movimentos] = await Promise.all([
+  // `saldo_inicial` saiu do select: desde 27/08/2026 o `authenticated` não tem
+  // SELECT nessa coluna, e o saldo vem somado por `fn_saldos_das_contas`, já
+  // filtrada por permissão.
+  const [contas, saldos] = await Promise.all([
     supabase
       .from("contas_bancarias")
-      .select("id, nome, banco, saldo_inicial")
+      .select("id, nome, banco")
       .eq("ativo", true)
       .order("nome"),
-    supabase.rpc("fn_rel_posicao_bancaria"),
+    supabase.rpc("fn_saldos_das_contas"),
   ]);
 
   if (contas.error) {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
-  if (movimentos.error) {
+  if (saldos.error) {
     throw new Error("Não foi possível carregar o saldo das contas");
   }
 
-  const movimento = movimentoPorContaEmCentavos(
-    (movimentos.data ?? []).map((linha) => ({
-      contaBancariaId: linha.conta_bancaria_id,
-      tipo: linha.tipo,
-      total: linha.total,
-    })),
+  // Conta ausente do mapa é conta sem permissão de ver o saldo, não conta zerada.
+  const saldoPorConta = new Map(
+    (saldos.data ?? []).map((linha) => [
+      linha.conta_bancaria_id,
+      Number(linha.saldo),
+    ]),
   );
 
   return (contas.data ?? []).map((conta) => ({
     id: conta.id,
     nome: conta.nome,
     banco: conta.banco,
-    saldoAtual: saldoAtualDaConta(
-      conta.saldo_inicial,
-      movimento.get(conta.id) ?? 0,
-    ),
+    saldoAtual: saldoPorConta.get(conta.id) ?? null,
   }));
 }

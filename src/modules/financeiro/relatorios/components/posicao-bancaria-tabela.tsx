@@ -35,125 +35,142 @@ export function PosicaoBancariaTabela({
   podeVerLancamentos,
 }: PosicaoBancariaTabelaProps) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+    <div className="flex flex-col gap-2">
+      {/*
+        Contas que o usuário não pode ver o saldo ficam FORA da tabela e dos
+        totais. A frase existe porque relatório que some linha em silêncio é pior
+        que relatório restrito: sem ela, os totais pareceriam "todo o dinheiro da
+        empresa" quando são de um recorte.
+      */}
+      {posicao.contasOcultas > 0 ? (
+        <p className="text-detalhe text-muted-foreground">
+          {posicao.contasOcultas === 1
+            ? "1 conta ativa está fora deste relatório porque você não tem permissão de ver o saldo dela."
+            : `${posicao.contasOcultas} contas ativas estão fora deste relatório porque você não tem permissão de ver o saldo delas.`}{" "}
+          Os totais abaixo somam só as contas listadas.
+        </p>
+      ) : null}
+
+      <div className="overflow-x-auto rounded-md border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              {/* Centralizado é o padrão de tabela do app (ver DataTable); só
                 dinheiro, quantidade, total, percentual e horas vão à direita. */}
-            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
-              Conta
-            </TableHead>
-            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
-              Banco
-            </TableHead>
-            <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
-              Saldo inicial
-            </TableHead>
-            <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
-              Entradas
-            </TableHead>
-            <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
-              Saídas
-            </TableHead>
-            <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
-              Saldo atual
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {posicao.contas.map((conta) => (
-            <TableRow key={conta.contaId}>
-              <TableCell className="py-2 text-center text-detalhe text-foreground">
-                {/* O clique abre as parcelas PAGAS por esta conta, que é o que a
+              <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
+                Conta
+              </TableHead>
+              <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
+                Banco
+              </TableHead>
+              <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
+                Saldo inicial
+              </TableHead>
+              <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
+                Entradas
+              </TableHead>
+              <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
+                Saídas
+              </TableHead>
+              <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
+                Saldo atual
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="[&_td]:px-3">
+            {posicao.contas.map((conta) => (
+              <TableRow key={conta.contaId}>
+                <TableCell className="py-2 text-center text-detalhe text-foreground">
+                  {/* O clique abre as parcelas PAGAS por esta conta, que é o que a
                     posição soma (pelo líquido). Sem o recorte a lista traria
                     também o que ainda não passou por ela. */}
-                {podeVerLancamentos ? (
-                  <LinkDrill
-                    href={drillContaBancaria({
-                      contaId: conta.contaId,
-                      tipo: "a_pagar",
-                    })}
-                    titulo={`Ver os pagamentos feitos por ${conta.nome}`}
-                  >
-                    {conta.nome}
-                  </LinkDrill>
-                ) : (
-                  conta.nome
-                )}
-              </TableCell>
-              <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
-                {rotuloBanco(conta.banco)}
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <div className="flex flex-col items-end gap-0.5">
-                  <MoneyText
-                    valor={conta.saldoInicial}
-                    className="text-detalhe"
-                  />
-                  {/* Com data de corte, "Saldo inicial" não é a abertura da conta
+                  {podeVerLancamentos ? (
+                    <LinkDrill
+                      href={drillContaBancaria({
+                        contaId: conta.contaId,
+                        tipo: "a_pagar",
+                      })}
+                      titulo={`Ver os pagamentos feitos por ${conta.nome}`}
+                    >
+                      {conta.nome}
+                    </LinkDrill>
+                  ) : (
+                    conta.nome
+                  )}
+                </TableCell>
+                <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
+                  {rotuloBanco(conta.banco)}
+                </TableCell>
+                <TableCell className="py-2 text-right">
+                  <div className="flex flex-col items-end gap-0.5">
+                    <MoneyText
+                      valor={conta.saldoInicial}
+                      className="text-detalhe"
+                    />
+                    {/* Com data de corte, "Saldo inicial" não é a abertura da conta
                       e as colunas ao lado não são o histórico todo: as três
                       falam de um período. Certo na aritmética e mudo sobre o
                       recorte seria a mesma armadilha do plug antigo, que também
                       era um número sem data. */}
-                  {conta.saldoInicialData ? (
-                    <span
-                      className="text-legenda text-muted-foreground"
-                      title={`Saldo lido do extrato de ${formatarData(conta.saldoInicialData)}. As colunas ao lado somam só o movimento posterior a essa data.`}
-                    >
-                      em {formatarData(conta.saldoInicialData)}
-                    </span>
-                  ) : null}
-                </div>
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={conta.entradas} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={conta.saidas} className="text-detalhe" />
+                    {conta.saldoInicialData ? (
+                      <span
+                        className="text-legenda text-muted-foreground"
+                        title={`Saldo lido do extrato de ${formatarData(conta.saldoInicialData)}. As colunas ao lado somam só o movimento posterior a essa data.`}
+                      >
+                        em {formatarData(conta.saldoInicialData)}
+                      </span>
+                    ) : null}
+                  </div>
+                </TableCell>
+                <TableCell className="py-2 text-right">
+                  <MoneyText valor={conta.entradas} className="text-detalhe" />
+                </TableCell>
+                <TableCell className="py-2 text-right">
+                  <MoneyText valor={conta.saidas} className="text-detalhe" />
+                </TableCell>
+                <TableCell className="py-2 text-right">
+                  <MoneyText
+                    valor={conta.saldoAtual}
+                    className="text-detalhe font-medium"
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+            <TableRow className="border-t-2 bg-surface hover:bg-surface">
+              <TableCell
+                colSpan={2}
+                className="py-2 text-center text-detalhe font-semibold text-foreground"
+              >
+                Total
               </TableCell>
               <TableCell className="py-2 text-right">
                 <MoneyText
-                  valor={conta.saldoAtual}
-                  className="text-detalhe font-medium"
+                  valor={posicao.totalSaldoInicial}
+                  className="text-detalhe font-semibold"
+                />
+              </TableCell>
+              <TableCell className="py-2 text-right">
+                <MoneyText
+                  valor={posicao.totalEntradas}
+                  className="text-detalhe font-semibold"
+                />
+              </TableCell>
+              <TableCell className="py-2 text-right">
+                <MoneyText
+                  valor={posicao.totalSaidas}
+                  className="text-detalhe font-semibold"
+                />
+              </TableCell>
+              <TableCell className="py-2 text-right">
+                <MoneyText
+                  valor={posicao.totalSaldoAtual}
+                  className="text-detalhe font-semibold"
                 />
               </TableCell>
             </TableRow>
-          ))}
-          <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell
-              colSpan={2}
-              className="py-2 text-center text-detalhe font-semibold text-foreground"
-            >
-              Total
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={posicao.totalSaldoInicial}
-                className="text-detalhe font-semibold"
-              />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={posicao.totalEntradas}
-                className="text-detalhe font-semibold"
-              />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={posicao.totalSaidas}
-                className="text-detalhe font-semibold"
-              />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={posicao.totalSaldoAtual}
-                className="text-detalhe font-semibold"
-              />
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

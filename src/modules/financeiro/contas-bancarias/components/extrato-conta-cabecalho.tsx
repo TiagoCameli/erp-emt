@@ -14,8 +14,11 @@ import { ContasFormDrawer } from "./contas-form-drawer";
 
 export interface ExtratoContaCabecalhoProps {
   conta: ContaLista;
-  /** Onde o saldo acumulado do extrato fechou. Ver `alertaDivergencia`. */
-  saldoFinal: number;
+  /**
+   * Onde o saldo acumulado do extrato fechou. Null sem permissão de ver o saldo
+   * desta conta — o extrato abre, só sem os números de saldo.
+   */
+  saldoFinal: number | null;
   fechaNoSaldo: boolean;
   podeEditar: boolean;
 }
@@ -101,8 +104,12 @@ export function ExtratoContaCabecalho({
 
         Por isso ela aparece, com os dois números e o tamanho da diferença. Em
         operação normal este bloco não existe.
+
+        Sem permissão de ver o saldo desta conta, `fechaNoSaldo` vem true (não há
+        o que conferir) e o bloco também não aparece — um alerta vermelho com dois
+        travessões não ajudaria ninguém.
       */}
-      {fechaNoSaldo ? null : (
+      {fechaNoSaldo || saldoFinal === null || conta.saldoAtual === null ? null : (
         <div
           role="alert"
           className="flex items-start gap-2 rounded-md border border-status-rejeitado/40 bg-status-rejeitado/5 p-3 text-detalhe"
@@ -133,14 +140,29 @@ export function ExtratoContaCabecalho({
       */}
       {conta.saldoInicialData ? (
         <p className="text-detalhe text-muted-foreground">
-          O saldo parte do extrato de{" "}
-          <span className="font-medium text-foreground">
-            {formatarData(conta.saldoInicialData)}
-          </span>{" "}
-          ({formatarBRL(conta.saldoInicial)}) e soma só o movimento posterior.
-          {conta.movimentoAnteriorAoCorte
-            ? ` Antes dessa data há ${conta.movimentoAnteriorAoCorte.parcelas} pagamento(s) registrados (${formatarBRL(conta.movimentoAnteriorAoCorte.recebido)} recebidos e ${formatarBRL(conta.movimentoAnteriorAoCorte.pago)} pagos), já representados pelo saldo de abertura; troque o filtro "Movimento" para vê-los.`
-            : " Nenhum pagamento anterior a essa data está registrado."}
+          {conta.saldoAtual === null ? (
+            <>
+              As movimentações abaixo são só as posteriores a{" "}
+              <span className="font-medium text-foreground">
+                {formatarData(conta.saldoInicialData)}
+              </span>
+              , a data do extrato de onde o saldo inicial desta conta foi lido.
+              Você não tem permissão de ver o saldo dela, então a coluna de saldo
+              não aparece.
+            </>
+          ) : (
+            <>
+              O saldo parte do extrato de{" "}
+              <span className="font-medium text-foreground">
+                {formatarData(conta.saldoInicialData)}
+              </span>{" "}
+              ({formatarBRL(conta.saldoInicial)}) e soma só o movimento
+              posterior.
+              {conta.movimentoAnteriorAoCorte
+                ? ` Antes dessa data há ${conta.movimentoAnteriorAoCorte.parcelas} pagamento(s) registrados (${formatarBRL(conta.movimentoAnteriorAoCorte.recebido)} recebidos e ${formatarBRL(conta.movimentoAnteriorAoCorte.pago)} pagos), já representados pelo saldo de abertura; troque o filtro "Movimento" para vê-los.`
+                : " Nenhum pagamento anterior a essa data está registrado."}
+            </>
+          )}
         </p>
       ) : null}
 

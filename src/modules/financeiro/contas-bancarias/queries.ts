@@ -8,10 +8,6 @@ import {
   type MovimentoExtrato,
   type TipoMovimento,
 } from "@/modules/financeiro/contas-bancarias/extrato";
-import {
-  movimentoPorContaEmCentavos,
-  saldoAtualDaConta,
-} from "@/modules/financeiro/contas-bancarias/saldo";
 import type {
   BancoConta,
   TipoConta,
@@ -45,7 +41,19 @@ export interface PosicaoAplicacao {
   posicao: number;
 }
 
-/** Linha da listagem de contas, já com o saldo atual calculado. */
+/**
+ * Linha da listagem de contas.
+ *
+ * TODO CAMPO DE DINHEIRO É `number | null`, e o null tem UM significado só:
+ * "você não tem permissão de ver o saldo desta conta". Nunca é saldo zero — a
+ * CAIXINHA DE DINHEIRO tem saldo R$ 0,00 de verdade, e confundir os dois faria
+ * a tela mostrar zero para uma conta com milhões.
+ *
+ * O nome, o banco, a agência e o tipo NUNCA são nulos por permissão: a conta
+ * aparece com nome em todo lugar do app, e é só o valor que fica escondido.
+ * `podeVerSaldo` existe para a tela não ter que deduzir isso de `=== null` em
+ * cinco lugares.
+ */
 export interface ContaLista {
   id: string;
   nome: string;
@@ -53,15 +61,23 @@ export interface ContaLista {
   agencia: string | null;
   conta: string | null;
   tipo: TipoConta;
-  saldoInicial: number;
-  /** Data do extrato de onde `saldoInicial` foi lido. Null = conta tudo. */
+  /** Null sem permissão de ver o saldo desta conta. */
+  saldoInicial: number | null;
+  /**
+   * Data do extrato de onde `saldoInicial` foi lido. Null = conta tudo.
+   *
+   * Continua visível sem permissão de saldo: é uma DATA, não conta dinheiro, e
+   * ela explica o recorte do extrato para quem pode abri-lo.
+   */
   saldoInicialData: string | null;
-  /** Saldo inicial + movimento das parcelas pagas nesta conta. Ver listarContas. */
-  saldoAtual: number;
-  /** Null quando não há corte, ou quando o corte não deixou nada de fora. */
+  /** Saldo inicial + movimento. Null sem permissão. Ver listarContas. */
+  saldoAtual: number | null;
+  /** Null quando não há corte, quando o corte nada deixou de fora, ou sem permissão. */
   movimentoAnteriorAoCorte: MovimentoAnteriorAoCorte | null;
-  /** Null quando a conta nunca teve aplicação nem resgate registrado. */
+  /** Null quando a conta nunca teve aplicação nem resgate, ou sem permissão. */
   posicaoAplicacao: PosicaoAplicacao | null;
+  /** O usuário logado pode ver o saldo desta conta? */
+  podeVerSaldo: boolean;
   ativo: boolean;
 }
 
@@ -112,80 +128,80 @@ export interface ContaLista {
 export async function listarContas(): Promise<ContaLista[]> {
   const supabase = await createClient();
 
-  const [
-    contasResultado,
-    movimentosResultado,
-    anterioresResultado,
-    aplicacaoResultado,
-  ] = await Promise.all([
+  // DUAS consultas, e a divisão é a da permissão: a primeira traz o CADASTRO de
+  // todas as contas (nome, banco, agência, tipo), que todo mundo vê; a segunda
+  // traz o DINHEIRO só das contas cujo saldo o usuário pode ver.
+  //
+  // `saldo_inicial` não está no select de propósito, e não é economia: desde
+  // 27/08/2026 o `authenticated` não tem SELECT nessa coluna (o revoke é o que
+  // impede ler o saldo por consulta direta), então pedi-la aqui devolveria
+  // "permission denied for table contas_bancarias" e derrubaria a tela inteira.
+  const [contasResultado, saldosResultado] = await Promise.all([
     supabase
       .from("contas_bancarias")
-      .select(
-        "id, nome, banco, agencia, conta, tipo, saldo_inicial, saldo_inicial_data, ativo",
-      )
+      .select("id, nome, banco, agencia, conta, tipo, saldo_inicial_data, ativo")
       .order("nome"),
-    supabase.rpc("fn_rel_posicao_bancaria"),
-    supabase.rpc("fn_rel_movimento_antes_do_corte"),
-    supabase.rpc("fn_rel_posicao_aplicacao"),
+    supabase.rpc("fn_saldos_das_contas"),
   ]);
 
   if (contasResultado.error) {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
-  if (movimentosResultado.error) {
+  if (saldosResultado.error) {
     throw new Error("Não foi possível calcular o saldo das contas");
   }
-  if (anterioresResultado.error) {
-    throw new Error("Não foi possível apurar o movimento anterior ao corte");
-  }
-  if (aplicacaoResultado.error) {
-    throw new Error("Não foi possível apurar a posição em aplicação");
-  }
 
-  const anteriorPorConta = new Map<string, MovimentoAnteriorAoCorte>();
-  for (const linha of anterioresResultado.data ?? []) {
-    anteriorPorConta.set(linha.conta_bancaria_id, {
-      parcelas: linha.parcelas,
-      recebido: Number(linha.recebido),
-      pago: Number(linha.pago),
-    });
-  }
-
-  const aplicacaoPorConta = new Map<string, PosicaoAplicacao>();
-  for (const linha of aplicacaoResultado.data ?? []) {
-    aplicacaoPorConta.set(linha.conta_bancaria_id, {
-      aplicado: Number(linha.aplicado),
-      resgatado: Number(linha.resgatado),
-      posicao: Number(linha.posicao),
-    });
-  }
-
-  // Movimento por conta, em centavos, a partir das linhas já agregadas.
-  const movimentoCentavos = movimentoPorContaEmCentavos(
-    (movimentosResultado.data ?? []).map((linha) => ({
-      contaBancariaId: linha.conta_bancaria_id,
-      tipo: linha.tipo,
-      total: linha.total,
-    })),
+  /**
+   * Dinheiro por conta, indexado por id. Conta AUSENTE deste mapa é conta sem
+   * permissão de ver o saldo — nunca conta com saldo zero.
+   */
+  const dinheiroPorConta = new Map(
+    (saldosResultado.data ?? []).map((linha) => [
+      linha.conta_bancaria_id,
+      linha,
+    ]),
   );
 
-  return (contasResultado.data ?? []).map((conta) => ({
-    id: conta.id,
-    nome: conta.nome,
-    banco: conta.banco as BancoConta,
-    agencia: conta.agencia,
-    conta: conta.conta,
-    tipo: conta.tipo as TipoConta,
-    saldoInicial: Number(conta.saldo_inicial),
-    saldoInicialData: conta.saldo_inicial_data,
-    saldoAtual: saldoAtualDaConta(
-      conta.saldo_inicial,
-      movimentoCentavos.get(conta.id) ?? 0,
-    ),
-    movimentoAnteriorAoCorte: anteriorPorConta.get(conta.id) ?? null,
-    posicaoAplicacao: aplicacaoPorConta.get(conta.id) ?? null,
-    ativo: conta.ativo,
-  }));
+  return (contasResultado.data ?? []).map((conta) => {
+    const dinheiro = dinheiroPorConta.get(conta.id);
+
+    return {
+      id: conta.id,
+      nome: conta.nome,
+      banco: conta.banco as BancoConta,
+      agencia: conta.agencia,
+      conta: conta.conta,
+      tipo: conta.tipo as TipoConta,
+      saldoInicial: dinheiro ? Number(dinheiro.saldo_inicial) : null,
+      saldoInicialData: conta.saldo_inicial_data,
+      // O saldo vem SOMADO do banco, por `fn_saldos_das_contas`, com a mesma
+      // fórmula de `fn_saldo_conta` (a do guard do pagamento). A aritmética de
+      // sinal que morava em ./saldo.ts saiu daqui: ter a regra em SQL e em
+      // TypeScript era ter duas cópias que divergem na primeira alteração feita
+      // de um lado só.
+      saldoAtual: dinheiro ? Number(dinheiro.saldo) : null,
+      // `anterior_parcelas` nulo é LEFT JOIN sem linha (nada antes do corte),
+      // não permissão: a permissão já foi resolvida pela ausência da conta.
+      movimentoAnteriorAoCorte:
+        dinheiro && dinheiro.anterior_parcelas !== null
+          ? {
+              parcelas: dinheiro.anterior_parcelas,
+              recebido: Number(dinheiro.anterior_recebido),
+              pago: Number(dinheiro.anterior_pago),
+            }
+          : null,
+      posicaoAplicacao:
+        dinheiro && dinheiro.posicao_aplicacao !== null
+          ? {
+              aplicado: Number(dinheiro.aplicado),
+              resgatado: Number(dinheiro.resgatado),
+              posicao: Number(dinheiro.posicao_aplicacao),
+            }
+          : null,
+      podeVerSaldo: dinheiro !== undefined,
+      ativo: conta.ativo,
+    };
+  });
 }
 
 /**
@@ -212,9 +228,10 @@ export interface ExtratoDaConta {
   movimentos: MovimentoExtrato[];
   /**
    * Onde o saldo acumulado fechou. Tem que ser igual a `conta.saldoAtual`; ver
-   * `fechaNoSaldo`.
+   * `fechaNoSaldo`. Null sem permissão de ver o saldo desta conta: o extrato
+   * abre mostrando as movimentações, e a coluna de saldo não existe.
    */
-  saldoFinal: number;
+  saldoFinal: number | null;
   /**
    * LINHA DE CONTROLE: o saldo acumulado do extrato fechou no saldo que a
    * listagem de contas mostra? False é bug de regra de dinheiro, e a tela diz

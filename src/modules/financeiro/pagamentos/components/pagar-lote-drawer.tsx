@@ -23,9 +23,17 @@ import type {
   ParcelaAprovada,
 } from "@/modules/financeiro/pagamentos/queries";
 
-/** Rótulo da conta no seletor: nome, banco e o saldo que ela tem hoje. */
+/**
+ * Rótulo da conta no seletor: nome, banco e o saldo que ela tem hoje.
+ *
+ * Sem permissão de ver o saldo, o rótulo fica só com nome e banco. É por aqui
+ * que o saldo vazaria com mais facilidade: ele está DENTRO do texto da opção, e
+ * `formatarBRL(null)` devolve "R$ 0,00" — a conta apareceria como se estivesse
+ * zerada, o que é pior que não mostrar nada.
+ */
 function rotuloConta(conta: ContaBancariaOpcao): string {
   const banco = ROTULO_BANCO[conta.banco as BancoConta] ?? conta.banco;
+  if (conta.saldoAtual === null) return `${conta.nome} - ${banco}`;
   return `${conta.nome} - ${banco} (${formatarBRL(conta.saldoAtual)})`;
 }
 
@@ -102,7 +110,11 @@ export function PagarLoteDrawer({
 
   const total = parcelas.reduce((soma, parcela) => soma + parcela.valor, 0);
   const conta = contas.find((opcao) => opcao.id === contaId) ?? null;
-  const saldoDepois = conta ? conta.saldoAtual - total : null;
+  // Null aqui é "não dá para projetar": ou não escolheu conta, ou não pode ver o
+  // saldo dela. Nos dois casos a tela não avisa nada antes — quem recusa segue
+  // sendo o guard de `fn_pagar_parcela`, com mensagem que não conta o valor.
+  const saldoDepois =
+    conta && conta.saldoAtual !== null ? conta.saldoAtual - total : null;
   const saldoNaoCobre = saldoDepois !== null && saldoDepois < 0;
 
   // Quais parcelas seriam pagas fora da data autorizada. É a MESMA regra do
@@ -238,11 +250,11 @@ export function PagarLoteDrawer({
             <span className="text-legenda text-muted-foreground">
               Saldo da conta
             </span>
-            {conta ? (
+            {conta && conta.saldoAtual !== null ? (
               <MoneyText valor={conta.saldoAtual} />
             ) : (
               <span className="text-detalhe text-muted-foreground">
-                Escolha a conta
+                {conta ? "Sem permissão" : "Escolha a conta"}
               </span>
             )}
           </div>

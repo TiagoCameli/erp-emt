@@ -131,14 +131,29 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
     meta: { alinharDireita: true },
     cell: ({ row }) => (
       <div className="flex flex-col items-end gap-0.5">
-        <MoneyText
-          valor={row.original.saldoAtual}
-          className="font-semibold text-foreground"
-        />
+        {/* Sem permissão, TRAVESSÃO e não R$ 0,00. A CAIXINHA DE DINHEIRO tem
+            saldo zero de verdade, então zero aqui significaria "conta vazia" e
+            esconderia milhões atrás de um número que parece certo. O `title`
+            explica, porque travessão sem explicação parece defeito da tela. */}
+        {row.original.podeVerSaldo ? (
+          <MoneyText
+            valor={row.original.saldoAtual}
+            className="font-semibold text-foreground"
+          />
+        ) : (
+          <span
+            className="text-muted-foreground"
+            title="Você não tem permissão de ver o saldo desta conta. Quem libera é a Administração, na aba Usuários."
+          >
+            —
+          </span>
+        )}
         {/* A data de corte MOSTRA A CARA. Um saldo que ignora movimento antigo
             sem dizer que ignora é o mesmo defeito que ele veio consertar: o
-            saldo inicial já era um plug justamente por não ter data. */}
-        {row.original.saldoInicialData ? (
+            saldo inicial já era um plug justamente por não ter data.
+            Sem permissão de saldo ela não aparece: sozinha, "desde 21/08" não
+            informa nada e o `title` dela fala de valores. */}
+        {row.original.saldoInicialData && row.original.podeVerSaldo ? (
           <span
             className="text-legenda text-muted-foreground"
             title={rotuloForaDoSaldo(row.original)}
@@ -275,7 +290,19 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
       if (status === "inativos" && conta.ativo) return false;
       if (banco !== "" && conta.banco !== banco) return false;
       if (tipo !== "" && conta.tipo !== tipo) return false;
-      if (!dentroDaFaixaValor(conta.saldoAtual, saldoDe, saldoAte)) return false;
+      // Faixa de saldo: conta sem permissão fica de fora quando existe alguma
+      // ponta preenchida, e entra quando não existe. É a mesma regra de
+      // `dentroDoPeriodo` para registro sem data — dizer que um saldo
+      // desconhecido cabe na faixa pedida seria mentira, e pior: filtrar
+      // "de 1 milhão" e ver quais contas escondidas sobram DIRIA o saldo delas.
+      const temFaixa = saldoDe.trim() !== "" || saldoAte.trim() !== "";
+      if (temFaixa && !conta.podeVerSaldo) return false;
+      if (
+        conta.saldoAtual !== null &&
+        !dentroDaFaixaValor(conta.saldoAtual, saldoDe, saldoAte)
+      ) {
+        return false;
+      }
       // A busca cobre nome, agência e conta: quem procura "1234" está com o
       // extrato na mão, não lembrando o apelido da conta.
       if (

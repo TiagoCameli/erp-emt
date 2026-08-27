@@ -263,26 +263,38 @@ export function ExtratoContaTabela({
           />
         ),
       },
-      {
-        accessorKey: "saldoAcumulado",
-        header: "Saldo",
-        size: 160,
-        meta: { alinharDireita: true, atomico: true },
-        cell: ({ row }) => {
-          const saldo = row.original.saldoAcumulado;
-          if (saldo === null) {
-            return (
-              <span
-                className="text-muted-foreground"
-                title={motivoSemSaldo(conta)}
-              >
-                —
-              </span>
-            );
-          }
-          return <MoneyText valor={saldo} />;
-        },
-      },
+      // A coluna "Saldo" só EXISTE com permissão de ver o saldo da conta.
+      // Deixá-la presente com travessão em todas as linhas seria pior: coluna
+      // vazia do começo ao fim parece defeito, e quem lê fica procurando o
+      // número. Spread condicional, e não `.filter()` depois: filtrar quebra a
+      // inferência do `ColumnDef` (a união não expõe `accessorKey`) e o array
+      // inteiro cai para `any`.
+      ...(conta.podeVerSaldo
+        ? [
+            {
+              accessorKey: "saldoAcumulado",
+              header: "Saldo",
+              size: 160,
+              meta: { alinharDireita: true, atomico: true },
+              cell: ({ row }: { row: { original: MovimentoExtrato } }) => {
+                const saldo = row.original.saldoAcumulado;
+                // Aqui o null significa só "linha anterior ao corte": a falta
+                // de permissão já tirou a coluna inteira.
+                if (saldo === null) {
+                  return (
+                    <span
+                      className="text-muted-foreground"
+                      title={motivoSemSaldo(conta)}
+                    >
+                      —
+                    </span>
+                  );
+                }
+                return <MoneyText valor={saldo} />;
+              },
+            } satisfies ColumnDef<MovimentoExtrato, unknown>,
+          ]
+        : []),
     ],
     [conta],
   );
@@ -441,18 +453,27 @@ export function ExtratoContaTabela({
   return (
     <div className="flex flex-col gap-4">
       <GradeKpis>
-        <KPICard
-          titulo="Saldo atual"
-          valor={<MoneyText valor={conta.saldoAtual} />}
-          // Este cartão é o único que NÃO obedece aos filtros: o saldo é da
-          // conta, não do recorte. É o mesmo número da coluna "Saldo atual" da
-          // listagem de contas, pela mesma função do banco.
-          detalhe={
-            conta.saldoInicialData
-              ? `Extrato de ${formatarData(conta.saldoInicialData)} (${formatarBRL(conta.saldoInicial)}) mais o movimento posterior`
-              : "Saldo inicial mais todo o movimento registrado"
-          }
-        />
+        {/*
+          O cartão de saldo SOME sem permissão, e não vira travessão: com
+          `MoneyText valor={null}` ele mostraria "R$ 0,00", que é o pior
+          resultado possível — número com cara de certo no lugar do saldo real.
+          O `tsc` não pega isso, porque `MoneyText` aceita null de propósito.
+
+          Este cartão é o único que NÃO obedece aos filtros: o saldo é da conta,
+          não do recorte. É o mesmo número da coluna "Saldo atual" da listagem de
+          contas, pela mesma função do banco.
+        */}
+        {conta.saldoAtual === null ? null : (
+          <KPICard
+            titulo="Saldo atual"
+            valor={<MoneyText valor={conta.saldoAtual} />}
+            detalhe={
+              conta.saldoInicialData
+                ? `Extrato de ${formatarData(conta.saldoInicialData)} (${formatarBRL(conta.saldoInicial)}) mais o movimento posterior`
+                : "Saldo inicial mais todo o movimento registrado"
+            }
+          />
+        )}
         <KPICard
           titulo="Entradas"
           valor={<MoneyText valor={soma.entradas} />}
