@@ -648,21 +648,29 @@ export async function serieDosCentros(
  * etapa; mas todo relatório de centro agrupa na RAIZ, subindo a árvore antes de
  * somar.
  *
+ * ## Por que ela só oferecia raiz até 27/08/2026, e por que voltou a oferecer etapa
+ *
  * Oferecer etapa num filtro que agrupa na raiz mente na tela. Medido em
  * 24/08/2026: o cadastro tem 12 raízes ativas e 61 etapas (um equipamento cada,
  * todas sob "Manutenção/Documentação de Equipamentos"), então o seletor mostrava
  * 73 opções -- e escolher "CAMINHÃO BOIADEIRO/MIILHO - L1620" devolvia uma linha
  * chamada "Manutenção/Documentação de Equipamentos", com R$ 1.757,95. Sessenta e
- * uma opções diferentes voltavam vestindo o mesmo nome.
+ * uma opções diferentes voltavam vestindo o mesmo nome. Tirar a opção foi o certo:
+ * melhor não oferecer do que devolver número com nome errado.
  *
- * A troca não esconde dinheiro: as 12 raízes ativas dão o mesmo total que não
- * filtrar nada (R$ 53.089.404,61 dos dois jeitos) e nenhum centro inativo tem
- * rateio. A prova está em `supabase/provas/filtro_centro_raiz.sql`.
+ * O que mudou em 27/08/2026 foi a CAUSA, não a decisão: a `fn_rel_custo_receita`
+ * passou a agrupar pelo centro ESCOLHIDO, e não pela raiz. Escolher uma etapa
+ * agora devolve uma linha com o nome DELA e o valor DELA -- há prova disso dentro
+ * da migration `20260827180000`, que aborta se a etapa voltar vestindo o nome do
+ * pai. Com a causa resolvida, a etapa volta ao seletor, que era o pedido dele.
  *
- * Filtrar por etapa continua VALENDO na URL: quem valida é `filtros-*.ts` e quem
- * expande a subárvore é o banco, então link antigo segue funcionando e o
- * Combobox canônico rotula o id fora da lista em vez de mostrar UUID. O que muda
- * é só o que o seletor OFERECE.
+ * O rótulo da etapa carrega o pai ("Empréstimos › Caixa - SIEMP"): sem isso, duas
+ * etapas de pais diferentes com nome parecido ficam indistinguíveis numa lista de
+ * 73 linhas.
+ *
+ * O centro de tipo `financeiro` NÃO entra: desde 27/08/2026 o empréstimo saiu dos
+ * relatórios operacionais e a análise dele vive em Créditos, então oferecê-lo aqui
+ * seria oferecer um filtro que sempre devolve vazio.
  */
 export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
   const supabase = await createClient();
@@ -670,8 +678,8 @@ export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
   const { data, error } = await supabase
     .from("centros_custo")
     .select("id, nome, codigo, pai_id, tipo")
-    .is("pai_id", null)
     .eq("ativo", true)
+    .lte("nivel", 2)
     .order("codigo", { ascending: true, nullsFirst: false })
     .order("nome");
 
@@ -679,13 +687,30 @@ export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
     throw new Error("Não foi possível carregar os centros de custo");
   }
 
-  return (data ?? []).map((centro) => ({
-    id: centro.id,
-    nome: centro.nome,
-    codigo: centro.codigo,
-    paiId: centro.pai_id,
-    tipo: centro.tipo,
-  }));
+  const linhas = data ?? [];
+  const nomePorId = new Map(linhas.map((centro) => [centro.id, centro.nome]));
+  // O tipo mora na RAIZ (etapa tem tipo nulo), então para saber se uma etapa é de
+  // centro financeiro eu tenho de olhar o pai dela.
+  const tipoPorId = new Map(linhas.map((centro) => [centro.id, centro.tipo]));
+
+  return linhas
+    .filter((centro) => {
+      const tipoDaRaiz = centro.pai_id
+        ? tipoPorId.get(centro.pai_id)
+        : centro.tipo;
+      return tipoDaRaiz !== "financeiro";
+    })
+    .map((centro) => ({
+      id: centro.id,
+      // A etapa vai rotulada com o pai. Numa lista de 73 opções, "Contrato
+      // 28102020" sozinho não diz de quem é.
+      nome: centro.pai_id
+        ? `${nomePorId.get(centro.pai_id) ?? "?"} › ${centro.nome}`
+        : centro.nome,
+      codigo: centro.codigo,
+      paiId: centro.pai_id,
+      tipo: centro.tipo,
+    }));
 }
 
 /**
@@ -1080,6 +1105,81 @@ const MESES_DOS_CREDITOS = 12;
  * As duas RPCs são SECURITY INVOKER: quem não pode ver lançamento não vê crédito
  * nenhum, e a tela vem vazia em vez de furar a permissão.
  */
+/**
+ * Um contrato de empréstimo do centro de custo financeiro, com as duas pernas.
+ *
+ * Existe porque `fn_rel_creditos` responde por LANÇAMENTO e só do lado a pagar:
+ * ela mede saldo devedor, e não sabe dizer quanto entrou. A análise que o Tiago
+ * pediu em 27/08/2026 ("fazer toda a analise do cc de emprestimo dentro do
+ * relatorio de credito") precisa das duas, e o que casa uma com a outra é a
+ * ETAPA: desde 26/08 cada contrato tem a sua.
+ */
+export interface EmprestimoContrato {
+  centroCustoId: string;
+  contrato: string;
+  /** Quanto o banco liberou: a entrada de dinheiro lançada nesta etapa. */
+  tomado: number;
+  /** Quanto já foi amortizado, pelo líquido das parcelas pagas. */
+  pago: number;
+  /** O que falta pagar: soma das parcelas ainda não pagas. */
+  aPagar: number;
+  parcelas: number;
+  parcelasPagas: number;
+  proximoVencimento: string | null;
+}
+
+export interface EmprestimosPorContrato {
+  contratos: EmprestimoContrato[];
+  totalTomado: number;
+  totalPago: number;
+  totalAPagar: number;
+}
+
+/**
+ * Os contratos do centro de Empréstimos, um por etapa.
+ *
+ * Os totais somam em CENTAVOS inteiros, como todo o resto deste módulo: somar
+ * reais em ponto flutuante sobre várias linhas acumula resto, e aí o total do
+ * cartão deixa de bater com a tabela por um centavo.
+ *
+ * Note que `tomado` e `pago` NÃO se comparam diretamente: hoje três contratos têm
+ * a entrada registrada e nenhuma prestação lançada, e outros três o contrário --
+ * as prestações antigas estão nos extratos e ainda não entraram no ERP. A tela
+ * mostra as duas colunas lado a lado justamente para essa lacuna ficar visível em
+ * vez de virar um "saldo" que ninguém sabe de onde veio.
+ */
+export async function emprestimosPorContrato(): Promise<EmprestimosPorContrato> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_emprestimos_por_contrato");
+
+  if (error) {
+    throw new Error("Não foi possível carregar os contratos de empréstimo");
+  }
+
+  const contratos = (data ?? []).map((linha) => ({
+    centroCustoId: linha.centro_custo_id,
+    contrato: linha.contrato,
+    tomado: paraReais(paraCentavos(linha.tomado)),
+    pago: paraReais(paraCentavos(linha.pago)),
+    aPagar: paraReais(paraCentavos(linha.a_pagar)),
+    parcelas: linha.parcelas,
+    parcelasPagas: linha.parcelas_pagas,
+    proximoVencimento: linha.proximo_vencimento ?? null,
+  }));
+
+  const somar = (campo: "tomado" | "pago" | "aPagar") =>
+    paraReais(
+      contratos.reduce((soma, c) => soma + paraCentavos(c[campo]), 0),
+    );
+
+  return {
+    contratos,
+    totalTomado: somar("tomado"),
+    totalPago: somar("pago"),
+    totalAPagar: somar("aPagar"),
+  };
+}
+
 export async function creditos(): Promise<Creditos> {
   const supabase = await createClient();
 

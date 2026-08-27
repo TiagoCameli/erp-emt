@@ -4250,6 +4250,19 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_rel_emprestimos_por_contrato: {
+        Args: never;
+        Returns: {
+          a_pagar: number;
+          centro_custo_id: string;
+          contrato: string;
+          pago: number;
+          parcelas: number;
+          parcelas_pagas: number;
+          proximo_vencimento: string;
+          tomado: number;
+        }[];
+      };
       fn_rel_dre: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {
