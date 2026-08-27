@@ -23,6 +23,13 @@ const RAISE_EXCEPTION = "P0001";
 /** SQLSTATE de violação de check constraint. */
 const CHECK_VIOLATION = "23514";
 
+/**
+ * SQLSTATE de recusa por permissão. É o MESMO código para grant negado
+ * ("permission denied for table x") e para violação de RLS ("new row violates
+ * row-level security policy for table x"): o Postgres não separa os dois.
+ */
+const INSUFFICIENT_PRIVILEGE = "42501";
+
 /** Check do salário: o nome vem dentro da mensagem do 23514. */
 const CHECK_SALARIO = "colaboradores_salario_nao_negativo";
 
@@ -69,4 +76,23 @@ export function traduzErroSalario(
   if (!ehCheck) return null;
   if (!mensagem.includes(CHECK_SALARIO)) return null;
   return ERRO_SALARIO_NEGATIVO;
+}
+
+/**
+ * Diz se o Postgres recusou a operação por PERMISSÃO — grant ou RLS.
+ *
+ * Serve para o chamador trocar o texto cru do banco por uma frase que diz o que
+ * fazer. A regra de `mensagemDeNegocio` continua valendo (o texto do Postgres
+ * nunca vai para a tela); isto não é uma exceção a ela, é o contrário: é como
+ * distinguir "você não pode" de "deu errado" sem repassar a mensagem técnica.
+ *
+ * Nasceu na criação rápida de fornecedor pelo formulário de OC: quem emite OC
+ * não necessariamente tem `cadastros.fornecedores / criar` (a Andreia é o caso
+ * real), e sem isto o toast era "new row violates row-level security policy for
+ * table \"fornecedores\"" — que não diz a ninguém para escolher um da lista.
+ */
+export function ehErroDePermissao(
+  erro: ErroDeBanco | null | undefined,
+): boolean {
+  return erro?.code === INSUFFICIENT_PRIVILEGE;
 }

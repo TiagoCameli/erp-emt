@@ -50,6 +50,7 @@ import { criarFormaPagamento } from "@/modules/compras/_shared/pagamento-actions
 import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
+import { criarFornecedorRapido } from "@/modules/_shared/fornecedor/actions";
 import {
   criarOrdem,
   editarOrdem,
@@ -693,6 +694,22 @@ export function OrdemFormDrawer({
                   rotulo: fornecedor.nome,
                 }))}
                 rotuloDoValor={nomeUtil(ordem?.fornecedorNome)}
+                /* Cadastra o fornecedor sem sair do formulário, igual ao
+                   lançamento. Aqui pesa mais: fornecedor é OBRIGATÓRIO na OC,
+                   então quem vai comprar de um fornecedor novo não tem a saída
+                   de emitir "sem fornecedor" — ou abandona a OC no meio e vai a
+                   Cadastros, ou escolhe um parecido, que é pior. O cadastro
+                   nasce só com a razão social; o resto se completa em
+                   Cadastros > Fornecedores. */
+                onCriar={async (texto) => {
+                  const r = await criarFornecedorRapido(texto);
+                  if ("erro" in r) {
+                    toast.error(r.erro);
+                    return null;
+                  }
+                  toast.success("Fornecedor criado");
+                  return r.id;
+                }}
                 placeholder="Selecione o fornecedor"
                 disabled={salvando}
                 id="oc-fornecedor"
