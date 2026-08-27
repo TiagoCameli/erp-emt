@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ehErroDePermissao,
   ERRO_SALARIO_NEGATIVO,
   mensagemDeNegocio,
   traduzErroSalario,
@@ -53,6 +54,37 @@ describe("mensagemDeNegocio", () => {
     ).toBe("fallback");
     expect(mensagemDeNegocio(null, "fallback")).toBe("fallback");
     expect(mensagemDeNegocio(undefined, "fallback")).toBe("fallback");
+  });
+});
+
+describe("ehErroDePermissao", () => {
+  it("reconhece as DUAS recusas de permissão, que compartilham o 42501", () => {
+    // Grant negado e violação de RLS chegam com o mesmo código: o Postgres não
+    // separa os dois, e para a tela dá no mesmo ("você não pode").
+    expect(
+      ehErroDePermissao({
+        code: "42501",
+        message: "permission denied for table fornecedores",
+      }),
+    ).toBe(true);
+    expect(
+      ehErroDePermissao({
+        code: "42501",
+        message:
+          'new row violates row-level security policy for table "fornecedores"',
+      }),
+    ).toBe(true);
+  });
+
+  it("não confunde com erro de negócio, de conexão ou com erro ausente", () => {
+    expect(ehErroDePermissao({ code: "P0001", message: "trava de soma" })).toBe(
+      false,
+    );
+    expect(ehErroDePermissao({ code: "08006", message: "connection" })).toBe(
+      false,
+    );
+    expect(ehErroDePermissao(null)).toBe(false);
+    expect(ehErroDePermissao(undefined)).toBe(false);
   });
 });
 

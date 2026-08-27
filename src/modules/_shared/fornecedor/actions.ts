@@ -1,5 +1,6 @@
 "use server";
 
+import { ehErroDePermissao } from "@/lib/erros-banco";
 import { logErroServidor } from "@/lib/erros";
 import { createClient } from "@/lib/supabase/server";
 
@@ -97,7 +98,20 @@ export async function criarFornecedorRapido(
 
   if (error || !data) {
     logErroServidor("fornecedor.criarRapido", error);
-    return { erro: error?.message || "Não foi possível criar o fornecedor" };
+    /**
+     * Recusa por permissão tem frase própria, e não o texto do Postgres.
+     *
+     * Quem emite OC não necessariamente tem `cadastros.fornecedores / criar`, e
+     * na OC o fornecedor é OBRIGATÓRIO: a pessoa está travada no meio do
+     * documento. "new row violates row-level security policy" não diz o que
+     * fazer; "escolha um da lista ou peça a quem cuida de Cadastros" diz.
+     */
+    if (ehErroDePermissao(error)) {
+      return {
+        erro: "Você não tem permissão para cadastrar fornecedor. Escolha um da lista ou peça a quem cuida de Cadastros.",
+      };
+    }
+    return { erro: "Não foi possível criar o fornecedor" };
   }
 
   return { id: data.id };
