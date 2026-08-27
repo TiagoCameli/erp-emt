@@ -28,6 +28,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
+import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
 import {
   definirContaLancamento,
@@ -145,6 +146,8 @@ export interface LancamentoDetalheViewProps {
   /** Trilha das parcelas (aprovação, revisão, reprogramação...), lida de `parcela_eventos`. */
   trilhaParcelas: EventoTrilha[];
   categorias: CategoriaOpcao[];
+  /** Cartões de crédito ativos, para o pagamento no crédito. */
+  cartoes: CartaoOpcao[];
   fornecedores: FornecedorOpcao[];
   /** Clientes ativos: quem paga, no formulário do a receber. */
   clientes: ClienteOpcao[];
@@ -188,6 +191,7 @@ export function LancamentoDetalheView({
   trilha,
   trilhaParcelas,
   categorias,
+  cartoes,
   fornecedores,
   clientes,
   centrosCusto,
@@ -498,6 +502,13 @@ export function LancamentoDetalheView({
                     {lancamento.formas.map((forma) => (
                       <span key={forma.id} className="flex flex-wrap gap-x-1.5">
                         <span>{forma.formaPagamentoNome}</span>
+                        {/* O cartão entra junto do nome da forma: é ele que
+                            identifica a compra na fatura. */}
+                        {forma.cartaoRotulo ? (
+                          <span className="text-legenda text-muted-foreground">
+                            {forma.cartaoRotulo}
+                          </span>
+                        ) : null}
                         <MoneyText valor={forma.valor} className="inline" />
                         <span className="text-legenda text-muted-foreground">
                           {CAMINHO_DO_PAGAMENTO[forma.formaPagamentoTipo]}
@@ -506,8 +517,17 @@ export function LancamentoDetalheView({
                     ))}
                   </div>
                 ) : (
-                  (lancamento.formas[0]?.formaPagamentoNome ??
-                  lancamento.formaPagamentoNome ?? <CelulaVazia />)
+                  <span className="flex flex-wrap gap-x-1.5">
+                    <span>
+                      {lancamento.formas[0]?.formaPagamentoNome ??
+                        lancamento.formaPagamentoNome ?? <CelulaVazia />}
+                    </span>
+                    {lancamento.formas[0]?.cartaoRotulo ? (
+                      <span className="text-legenda text-muted-foreground">
+                        {lancamento.formas[0].cartaoRotulo}
+                      </span>
+                    ) : null}
+                  </span>
                 )}
               </Dado>
               {/* Vale para os dois casos: no avulso a condição é a do próprio
@@ -914,6 +934,7 @@ export function LancamentoDetalheView({
           }}
           lancamento={lancamento}
           categorias={categorias}
+          cartoes={cartoes}
           formasPagamento={formasPagamento}
           condicoesPagamento={condicoesPagamento}
           fornecedores={fornecedores}

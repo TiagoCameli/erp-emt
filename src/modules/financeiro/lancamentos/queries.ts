@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
+import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
 import {
   tipoFormaPagamento,
@@ -368,6 +369,10 @@ export interface FormaDoLancamento {
   formaPagamentoId: string;
   formaPagamentoNome: string;
   formaPagamentoTipo: TipoFormaPagamento;
+  /** Qual cartão pagou esta parte. Nulo em tudo que não é cartão de crédito. */
+  cartaoId: string | null;
+  /** "Cartão obra (7712)", já montado: a tela e o formulário leem o mesmo texto. */
+  cartaoRotulo: string | null;
   valor: number;
 }
 
@@ -1360,8 +1365,9 @@ export async function buscarLancamento(
        colaboradores(nome),
        clientes(nome, nome_fantasia),
        lancamento_formas(
-         id, valor, forma_pagamento_id,
-         formas_pagamento(nome, tipo)
+         id, valor, forma_pagamento_id, cartao_id,
+         formas_pagamento(nome, tipo),
+         cartoes_credito(nome, ultimos_digitos)
        ),
        lancamento_parcelas(
          id, numero_parcela, valor, desconto, juros, outras_despesas,
@@ -1438,6 +1444,13 @@ export async function buscarLancamento(
       formaPagamentoId: forma.forma_pagamento_id,
       formaPagamentoNome: forma.formas_pagamento?.nome ?? "-",
       formaPagamentoTipo: tipoFormaPagamento(forma.formas_pagamento?.tipo),
+      cartaoId: forma.cartao_id,
+      cartaoRotulo: forma.cartoes_credito
+        ? rotuloDoCartao({
+            nome: forma.cartoes_credito.nome,
+            ultimosDigitos: forma.cartoes_credito.ultimos_digitos,
+          })
+        : null,
       valor: forma.valor,
     }))
     .sort((a, b) => b.valor - a.valor);

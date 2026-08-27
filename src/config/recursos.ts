@@ -173,6 +173,17 @@ export const RECURSOS = [
     // é desativada (o histórico continua apontando para ela).
     acoes: ["ver", "criar", "editar"],
   },
+  {
+    id: "cadastros.cartoes",
+    nome: "Cartões de crédito",
+    modulo: "cadastros",
+    rota: "/cadastros/cartoes",
+    // Logo depois de Formas de pagamento porque é onde se procura: o cartão é
+    // atributo do pagamento em cartão, não uma forma de pagar diferente.
+    // Sem 'excluir', pela mesma razão da forma: documento aponta para o cartão,
+    // e apagar deixaria o histórico apontando para nada. Desativar basta.
+    acoes: ["ver", "criar", "editar"],
+  },
   // Compras
   {
     id: "compras.cotacoes",

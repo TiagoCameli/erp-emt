@@ -119,6 +119,14 @@ export type RateioInput = z.infer<typeof rateioSchema>;
  */
 export const formaPagamentoLancamentoSchema = z.object({
   formaPagamentoId: idSchemaCom("Forma de pagamento inválida"),
+  /**
+   * Qual cartão pagou esta parte, quando a forma é cartão de crédito.
+   *
+   * Opcional AQUI e obrigatório no banco, pela mesma razão da OC: só o banco
+   * sabe o TIPO da forma, e é `trg_lancamento_formas_cartao` que exige o cartão
+   * quando o tipo é cartao_credito e o recusa quando não é.
+   */
+  cartaoId: idSchemaCom("Cartão inválido").optional(),
   valor: valorSchema.refine((v) => v > 0, {
     error: "O valor da forma precisa ser maior que zero",
   }),
@@ -513,6 +521,8 @@ export type ParcelaFormInput = z.infer<typeof parcelaFormSchema>;
  */
 export const formaFormSchema = z.object({
   formaPagamentoId: idSchemaCom("Selecione a forma de pagamento"),
+  /** Vazio = nenhum cartão escolhido, igual ao Combobox sem seleção. */
+  cartaoId: z.string().trim(),
   valor: z.string().trim(),
 });
 
@@ -813,6 +823,31 @@ export const lancamentoFormSchema = z
   });
 
 export type LancamentoFormInput = z.infer<typeof lancamentoFormSchema>;
+
+/**
+ * O schema do formulário COM a exigência do cartão nas formas de cartão.
+ *
+ * Mesmo desenho do `ordemCompraFormSchemaCom` das ordens de compra, e pela mesma
+ * razão: a regra depende do TIPO da forma escolhida, que não está no formulário
+ * — está no catálogo de `formas_pagamento`, que a tela recebe por prop. A tela
+ * monta o `Set` dos ids de forma do tipo cartão e memoiza o schema.
+ *
+ * O banco exige a mesma coisa por `trg_lancamento_formas_cartao`. Aqui é só para
+ * o erro cair no campo, em vez de voltar do servidor como texto solto.
+ */
+export function lancamentoFormSchemaCom(formasDeCartao: ReadonlySet<string>) {
+  return lancamentoFormSchema.superRefine((dados, ctx) => {
+    dados.formas.forEach((forma, i) => {
+      if (!formasDeCartao.has(forma.formaPagamentoId)) return;
+      if (forma.cartaoId) return;
+      ctx.addIssue({
+        code: "custom",
+        message: "Escolha o cartão que pagou",
+        path: ["formas", i, "cartaoId"],
+      });
+    });
+  });
+}
 
 export { TOLERANCIA as TOLERANCIA_SOMA };
 

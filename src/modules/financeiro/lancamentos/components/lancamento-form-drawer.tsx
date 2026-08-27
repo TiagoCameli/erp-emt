@@ -47,6 +47,9 @@ import { cn } from "@/lib/utils";
 import { criarClienteRapido } from "@/modules/_shared/cliente/actions";
 import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
+import { criarCartaoRapido } from "@/modules/cadastros/cartoes/actions";
+import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
+import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import { criarFornecedorRapido } from "@/modules/_shared/fornecedor/actions";
 import {
   ROTULO_BANCO,
@@ -69,7 +72,7 @@ import type {
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { RetencaoPainel } from "@/modules/financeiro/lancamentos/components/retencao-painel";
 import {
-  lancamentoFormSchema,
+  lancamentoFormSchemaCom,
   paraNumero,
   TOLERANCIA_SOMA,
   type LancamentoFormInput,
@@ -98,7 +101,7 @@ function parcelaVazia(
 
 /** Forma em branco para o array de formas de pagamento. */
 function formaVazia(): LancamentoFormInput["formas"][number] {
-  return { formaPagamentoId: "", valor: "" };
+  return { formaPagamentoId: "", cartaoId: "", valor: "" };
 }
 
 /** Rateio em branco para o array de rateios. */
@@ -163,6 +166,18 @@ const COLUNAS_FORMA: ColunaItem[] = [
     obrigatorio: true,
   },
 ];
+
+/**
+ * Coluna "Cartao", acrescentada a tabela de FORMAS so quando alguma das formas
+ * escolhidas e cartao de credito. Fora disso a coluna ficaria inteira em branco.
+ */
+const COLUNA_CARTAO_DA_FORMA: ColunaItem = {
+  chave: "cartao",
+  rotulo: "Cartao",
+  largura: "minmax(0,1.2fr)",
+  alinhamento: "left",
+  obrigatorio: true,
+};
 
 /** Colunas da tabela de rateio: centro de custo e valor. */
 const COLUNAS_RATEIO: ColunaItem[] = [
@@ -314,6 +329,7 @@ function valoresIniciais(
       lancamento.formas.length > 0
         ? lancamento.formas.map((forma) => ({
             formaPagamentoId: forma.formaPagamentoId,
+            cartaoId: forma.cartaoId ?? "",
             valor: String(forma.valor).replace(".", ","),
           }))
         : lancamento.tipo === "a_receber"
@@ -324,6 +340,9 @@ function valoresIniciais(
             [
               {
                 formaPagamentoId: lancamento.formaPagamentoId ?? "",
+                // Lançamento antigo não tem cartão: os 59 blocos de cartão que
+                // existiam em 27/08/2026 nasceram antes do cadastro.
+                cartaoId: "",
                 valor: String(lancamento.valor).replace(".", ","),
               },
             ],
@@ -397,6 +416,13 @@ export interface LancamentoFormDrawerProps {
   lancamento: LancamentoDetalhe | null;
   categorias: CategoriaOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
+  /**
+   * Cartões de crédito ATIVOS, para dizer por qual deles o pagamento saiu.
+   *
+   * Só é pedido quando a forma escolhida é do tipo cartão de crédito — e aí é
+   * obrigatório, porque `trg_lancamento_formas_cartao` recusa o bloco sem cartão.
+   */
+  cartoes: CartaoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   fornecedores: FornecedorOpcao[];
   /** Clientes ativos: quem está pagando, no a receber. */
@@ -428,6 +454,7 @@ export function LancamentoFormDrawer({
   lancamento,
   categorias,
   formasPagamento,
+  cartoes,
   condicoesPagamento,
   fornecedores,
   clientes,
@@ -443,8 +470,27 @@ export function LancamentoFormDrawer({
   const [gerandoParcelas, setGerandoParcelas] = React.useState(false);
   const tipoInicial = tipoFixo ?? "a_pagar";
 
+  /**
+   * Quais formas são cartão de crédito. É o que o schema precisa saber para
+   * exigir o cartão: o formulário guarda só o id da forma, e o tipo mora no
+   * catálogo que chega por prop.
+   */
+  const formasDeCartao = React.useMemo(
+    () =>
+      new Set(
+        formasPagamento
+          .filter((forma) => forma.tipo === "cartao_credito")
+          .map((forma) => forma.id),
+      ),
+    [formasPagamento],
+  );
+  const schema = React.useMemo(
+    () => lancamentoFormSchemaCom(formasDeCartao),
+    [formasDeCartao],
+  );
+
   const form = useForm<LancamentoFormInput>({
-    resolver: zodResolver(lancamentoFormSchema),
+    resolver: zodResolver(schema),
     defaultValues: valoresIniciais(lancamento, tipoInicial),
   });
 
@@ -493,6 +539,46 @@ export function LancamentoFormDrawer({
   const tipoFormaEscolhida = formasPagamento.find(
     (forma) => forma.id === (form.watch("formas.0.formaPagamentoId") ?? ""),
   )?.tipo;
+  // As opções do seletor de cartão, montadas uma vez: o mesmo rótulo aparece no
+  // campo de forma única e na coluna da tabela de formas.
+  const opcoesCartao = cartoes.map((cartao) => ({
+    valor: cartao.id,
+    rotulo: rotuloDoCartao(cartao),
+  }));
+  /**
+   * O rótulo que o PRÓPRIO lançamento traz para um cartão que saiu da lista (foi
+   * inativado depois de usado). Sem isto o seletor cairia no uuid.
+   */
+  const rotuloCartaoDoLancamento = React.useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const forma of lancamento?.formas ?? []) {
+      if (forma.cartaoId && forma.cartaoRotulo) {
+        mapa.set(forma.cartaoId, forma.cartaoRotulo);
+      }
+    }
+    return mapa;
+  }, [lancamento]);
+  /** Cadastro rápido do cartão sem sair do lançamento. */
+  async function cadastrarCartao(texto: string): Promise<string | null> {
+    const r = await criarCartaoRapido(texto);
+    if ("erro" in r) {
+      toast.error(r.erro);
+      return null;
+    }
+    toast.success("Cartão criado");
+    return r.id;
+  }
+  /**
+   * A tabela de formas ganha a coluna "Cartao" só quando alguma linha é cartão
+   * de crédito. Uma quarta coluna em branco na maioria dos lançamentos seria
+   * ruído permanente pelo caso raro.
+   */
+  const formasObservadasParaCartao = form.watch("formas") ?? [];
+  const colunasDaTabelaDeFormas = formasObservadasParaCartao.some((forma) =>
+    formasDeCartao.has(forma.formaPagamentoId),
+  )
+    ? [COLUNAS_FORMA[0]!, COLUNA_CARTAO_DA_FORMA, ...COLUNAS_FORMA.slice(1)]
+    : COLUNAS_FORMA;
   const erroParcelas = form.formState.errors.parcelas;
   const erroRateios = form.formState.errors.rateios;
   /**
@@ -678,7 +764,12 @@ export function LancamentoFormDrawer({
     if (formas.fields.length <= 1) {
       const escolhida = form.getValues("formas.0.formaPagamentoId") ?? "";
       formas.replace([
-        { formaPagamentoId: escolhida, valor: form.getValues("valor") },
+        {
+          formaPagamentoId: escolhida,
+          // O cartão já escolhido acompanha a linha que continua sendo dela.
+          cartaoId: form.getValues("formas.0.cartaoId") ?? "",
+          valor: form.getValues("valor"),
+        },
         formaVazia(),
       ]);
       const atuais = form.getValues("parcelas") ?? [];
@@ -823,16 +914,21 @@ export function LancamentoFormDrawer({
     const formasPreenchidas = doTipoAPagar
       ? valores.formas.filter((forma) => forma.formaPagamentoId !== "")
       : [];
+    // Campo vazio vira `undefined`, nao string vazia: `idSchemaCom(...).optional()`
+    // recusa "" com "Cartao invalido", e a forma que nao e cartao SEMPRE manda "".
+    const cartaoDaForma = (valor: string) => (valor === "" ? undefined : valor);
     const formasParaSalvar =
       formasPreenchidas.length === 1
         ? [
             {
               formaPagamentoId: formasPreenchidas[0]!.formaPagamentoId,
+              cartaoId: cartaoDaForma(formasPreenchidas[0]!.cartaoId),
               valor: paraNumero(valores.valor),
             },
           ]
         : formasPreenchidas.map((forma) => ({
             formaPagamentoId: forma.formaPagamentoId,
+            cartaoId: cartaoDaForma(forma.cartaoId),
             valor: paraNumero(forma.valor),
           }));
 
@@ -1510,6 +1606,12 @@ export function LancamentoFormDrawer({
                     form.setValue("formas.0.formaPagamentoId", valor, {
                       shouldValidate: true,
                     });
+                    // Trocou de cartão para PIX: o cartão que estava escolhido
+                    // sai junto. `trg_lancamento_formas_cartao` recusa cartão em
+                    // forma que não é cartão.
+                    if (!formasDeCartao.has(valor)) {
+                      form.setValue("formas.0.cartaoId", "");
+                    }
                     // A parcela acompanha: com uma forma só, toda parcela é dela,
                     // e a pessoa não escolhe duas vezes a mesma coisa.
                     const atuais = form.getValues("parcelas") ?? [];
@@ -1525,10 +1627,44 @@ export function LancamentoFormDrawer({
                   disabled={salvando}
                   id="lan-forma-unica"
                 />
+                {/* O cartão só aparece quando a forma é cartão de crédito, e aí
+                    é obrigatório. Fica DENTRO do mesmo campo, logo abaixo do
+                    seletor de forma, porque é atributo dela: um campo irmão no
+                    mesmo nível sugeriria que a compra tem forma E cartão como
+                    duas escolhas independentes. */}
+                {tipoFormaEscolhida === "cartao_credito" ? (
+                  <div className="pt-2">
+                    <CampoFormulario
+                      id="lan-cartao"
+                      rotulo="Cartão"
+                      obrigatorio
+                      ajuda="Por qual cartão da empresa este pagamento sai. É o final de quatro dígitos que casa com a fatura."
+                      erro={form.formState.errors.formas?.[0]?.cartaoId?.message}
+                    >
+                      <Combobox
+                        valor={form.watch("formas.0.cartaoId") ?? ""}
+                        onValorChange={(valor) =>
+                          form.setValue("formas.0.cartaoId", valor, {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          })
+                        }
+                        opcoes={opcoesCartao}
+                        rotuloDoValor={rotuloCartaoDoLancamento.get(
+                          form.watch("formas.0.cartaoId") ?? "",
+                        )}
+                        onCriar={cadastrarCartao}
+                        placeholder="Selecione o cartão"
+                        disabled={salvando}
+                        id="lan-cartao"
+                      />
+                    </CampoFormulario>
+                  </div>
+                ) : null}
               </CampoFormulario>
             ) : (
               <TabelaItens
-                colunas={COLUNAS_FORMA}
+                colunas={colunasDaTabelaDeFormas}
                 linhas={formas.fields}
                 chaveLinha={(linha) => linha.id}
                 onRemover={removerForma}
@@ -1537,6 +1673,7 @@ export function LancamentoFormDrawer({
                 erroCelula={(chave, indice) => {
                   const erro = form.formState.errors.formas?.[indice];
                   if (chave === "forma") return erro?.formaPagamentoId?.message;
+                  if (chave === "cartao") return erro?.cartaoId?.message;
                   if (chave === "valor") return erro?.valor?.message;
                   return undefined;
                 }}
@@ -1554,6 +1691,10 @@ export function LancamentoFormDrawer({
                             valor,
                             { shouldValidate: true },
                           );
+                          // Deixou de ser cartão: o cartão escolhido sai junto.
+                          if (!formasDeCartao.has(valor)) {
+                            form.setValue(`formas.${indice}.cartaoId`, "");
+                          }
                           // As parcelas que eram da forma antiga passam a ser da
                           // nova: sem isto elas ficariam apontando para uma forma
                           // que saiu da tela, e o envio travaria numa mensagem
@@ -1587,6 +1728,40 @@ export function LancamentoFormDrawer({
                       <span className="text-legenda text-muted-foreground">
                         {tipo ? CAMINHO_DO_PAGAMENTO[tipo] : "-"}
                       </span>
+                    );
+                  }
+                  if (chave === "cartao") {
+                    // A coluna existe porque ALGUMA linha é cartão; nas outras a
+                    // célula fica com um traço em vez de um seletor sem o que
+                    // oferecer.
+                    if (!formasDeCartao.has(escolhida)) {
+                      return (
+                        <span className="text-legenda text-muted-foreground">
+                          -
+                        </span>
+                      );
+                    }
+                    const campoCartao = `formas.${indice}.cartaoId` as const;
+                    const cartaoEscolhido = form.watch(campoCartao) ?? "";
+                    return (
+                      <Combobox
+                        valor={cartaoEscolhido}
+                        onValorChange={(valor) =>
+                          form.setValue(campoCartao, valor, {
+                            shouldValidate: true,
+                            shouldDirty: true,
+                          })
+                        }
+                        opcoes={opcoesCartao}
+                        rotuloDoValor={rotuloCartaoDoLancamento.get(
+                          cartaoEscolhido,
+                        )}
+                        onCriar={cadastrarCartao}
+                        placeholder="Selecione"
+                        disabled={salvando}
+                        ariaLabel="Cartão de crédito"
+                        id={`lan-forma-cartao-${indice}`}
+                      />
                     );
                   }
                   // valor

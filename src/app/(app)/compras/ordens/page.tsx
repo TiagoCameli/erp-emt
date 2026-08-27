@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { competenciaParaMes } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ROTULO_STATUS_OC, type StatusOC } from "@/modules/compras/_shared/formato";
+import { listarCartoesAtivos } from "@/modules/cadastros/cartoes/queries";
 import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import {
   lerParametrosLista,
@@ -85,6 +86,7 @@ export default async function PaginaOrdens({
     condicoesPagamento,
     formasPagamento,
     categorias,
+    cartoes,
     prefill,
   ] = await Promise.all([
     listarOrdens({
@@ -116,6 +118,7 @@ export default async function PaginaOrdens({
     listarCondicoesPagamento(),
     listarFormasPagamento(),
     listarCategoriasCusto(),
+    listarCartoesAtivos(),
     gerarCotacaoId && podeCriar
       ? montarPrefillDaCotacao(gerarCotacaoId)
       : Promise.resolve(null),
@@ -130,6 +133,7 @@ export default async function PaginaOrdens({
       condicoesPagamento={condicoesPagamento}
       formasPagamento={formasPagamento}
       categorias={categorias}
+      cartoes={cartoes}
       prefill={prefill}
     >
       <PageHeader

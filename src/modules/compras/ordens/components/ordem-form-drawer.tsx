@@ -52,6 +52,9 @@ import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/act
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { criarFornecedorRapido } from "@/modules/_shared/fornecedor/actions";
+import { criarCartaoRapido } from "@/modules/cadastros/cartoes/actions";
+import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
+import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import {
   criarOrdem,
   editarOrdem,
@@ -89,7 +92,7 @@ import type {
 } from "@/modules/compras/ordens/queries";
 import {
   ajustesDoForm,
-  ordemCompraFormSchema,
+  ordemCompraFormSchemaCom,
   type OrdemCompraFormInput,
 } from "@/modules/compras/ordens/schemas";
 
@@ -189,7 +192,15 @@ function valoresIniciais(
       parcelas: [],
       // A cotação traz UMA forma: ela nasce como a única, e "Dividir entre
       // formas" abre a segunda se a compra for paga em mais de uma.
-      formas: [{ formaPagamentoId: prefill.formaPagamentoId ?? "", valor: "" }],
+      formas: [
+        {
+          formaPagamentoId: prefill.formaPagamentoId ?? "",
+          // A cotação não escolhe cartão: o cartão é uma decisão do pagamento,
+          // que só existe quando a compra fecha.
+          cartaoId: "",
+          valor: "",
+        },
+      ],
     };
   }
 
@@ -238,13 +249,16 @@ function formasIniciais(
   if (ordem && ordem.formas.length > 0) {
     return ordem.formas.map((forma) => ({
       formaPagamentoId: forma.formaPagamentoId,
+      cartaoId: forma.cartaoId ?? "",
       valor:
         ordem.formas.length === 1
           ? ""
           : String(forma.valor).replace(".", ","),
     }));
   }
-  return [{ formaPagamentoId: ordem?.formaPagamentoId ?? "", valor: "" }];
+  return [
+    { formaPagamentoId: ordem?.formaPagamentoId ?? "", cartaoId: "", valor: "" },
+  ];
 }
 
 /** Nome de exibição de um centro de custo: "CÓDIGO Nome". */
@@ -308,6 +322,13 @@ export interface OrdemFormDrawerProps {
   /** Categorias de despesa para classificar o custo da compra. */
   categorias: CategoriaOpcao[];
   /**
+   * Cartões de crédito ATIVOS, para dizer por qual deles a compra saiu.
+   *
+   * Só é pedido quando a forma escolhida é do tipo cartão de crédito — e aí é
+   * obrigatório, porque `trg_oc_formas_cartao` recusa o bloco sem cartão.
+   */
+  cartoes: CartaoOpcao[];
+  /**
    * Preenchimento vindo de "Gerar OC" numa cotação finalizada. Só vale na
    * criação (ordem === null): trava a cotação de origem e traz fornecedor,
    * condição/forma e itens do vencedor.
@@ -335,6 +356,7 @@ export function OrdemFormDrawer({
   condicoesPagamento,
   formasPagamento,
   categorias,
+  cartoes,
   prefill,
   anexos = [],
   onCriada,
@@ -348,8 +370,28 @@ export function OrdemFormDrawer({
   const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
   const [subindoAnexos, setSubindoAnexos] = React.useState(false);
 
+  /**
+   * Quais formas são cartão de crédito. É o que o schema precisa saber para
+   * exigir o cartão: o formulário guarda só o id da forma, e o tipo mora no
+   * catálogo que chega por prop.
+   */
+  const formasDeCartao = React.useMemo(
+    () =>
+      new Set(
+        formasPagamento
+          .filter((forma) => forma.tipo === "cartao_credito")
+          .map((forma) => forma.id),
+      ),
+    [formasPagamento],
+  );
+
+  const schema = React.useMemo(
+    () => ordemCompraFormSchemaCom(formasDeCartao),
+    [formasDeCartao],
+  );
+
   const form = useForm<OrdemCompraFormInput>({
-    resolver: zodResolver(ordemCompraFormSchema),
+    resolver: zodResolver(schema),
     defaultValues: valoresIniciais(ordem, prefillAtivo),
     // Erro aparece ao sair do campo, não só no submit: a pessoa corrige na hora.
     mode: "onBlur",
@@ -562,9 +604,11 @@ export function OrdemFormDrawer({
       trocarFormas([
         {
           formaPagamentoId: escolhida,
+          // O cartão já escolhido acompanha a linha que continua sendo dela.
+          cartaoId: form.getValues("formas.0.cartaoId") ?? "",
           valor: String(totalPrevia.toFixed(2)).replace(".", ","),
         },
-        { formaPagamentoId: "", valor: "" },
+        { formaPagamentoId: "", cartaoId: "", valor: "" },
       ]);
       const atuais = form.getValues("parcelas") ?? [];
       if (atuais.length > 0) {
@@ -578,7 +622,7 @@ export function OrdemFormDrawer({
       }
       return;
     }
-    acrescentarForma({ formaPagamentoId: "", valor: "" });
+    acrescentarForma({ formaPagamentoId: "", cartaoId: "", valor: "" });
   }
 
   /**
@@ -613,6 +657,52 @@ export function OrdemFormDrawer({
   const tipoFormaEscolhida = formasPagamento.find(
     (forma) => forma.id === (formasObservadas[0]?.formaPagamentoId ?? ""),
   )?.tipo;
+  // As opções do seletor de cartão, montadas uma vez: o mesmo rótulo aparece no
+  // campo de forma única e na coluna da tabela de formas.
+  const opcoesCartao = cartoes.map((cartao) => ({
+    valor: cartao.id,
+    rotulo: rotuloDoCartao(cartao),
+  }));
+  /**
+   * O rótulo que a PRÓPRIA ordem traz para um cartão que saiu da lista (foi
+   * inativado depois de usado). Sem isto o seletor cairia no uuid, que é o que
+   * aconteceu com a condição "Boleto 30 dias" em 22/08/2026.
+   */
+  const rotuloCartaoDaOrdem = React.useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const forma of ordem?.formas ?? []) {
+      if (forma.cartaoId && forma.cartaoRotulo) {
+        mapa.set(forma.cartaoId, forma.cartaoRotulo);
+      }
+    }
+    return mapa;
+  }, [ordem]);
+  /**
+   * A tabela de formas ganha a coluna "Cartao" só quando alguma linha é cartão
+   * de crédito. As três colunas fixas já ocupam a largura toda; uma quarta em
+   * branco em 33 das 36 ordens seria ruído permanente pelo caso raro.
+   */
+  const algumaFormaEhCartao = formasObservadas.some((forma) =>
+    formasDeCartao.has(forma.formaPagamentoId),
+  );
+  const colunasDaTabelaDeFormas = algumaFormaEhCartao
+    ? [
+        COLUNAS_FORMA_OC[0]!,
+        COLUNA_CARTAO_DA_FORMA,
+        ...COLUNAS_FORMA_OC.slice(1),
+      ]
+    : COLUNAS_FORMA_OC;
+
+  /** Cadastro rápido do cartão sem sair da compra. Mesmo caminho do fornecedor. */
+  async function cadastrarCartao(texto: string): Promise<string | null> {
+    const r = await criarCartaoRapido(texto);
+    if ("erro" in r) {
+      toast.error(r.erro);
+      return null;
+    }
+    toast.success("Cartão criado");
+    return r.id;
+  }
   // Cotação de origem só entra por "Gerar OC" (prefill) ou vem da OC em
   // edição; nunca é escolhida à mão. Mostramos apenas como leitura.
   const origemNumero =
@@ -886,6 +976,13 @@ export function OrdemFormDrawer({
                   form.setValue("formas.0.formaPagamentoId", valor, {
                     shouldValidate: true,
                   });
+                  // Trocou de cartão para PIX: o cartão que estava escolhido tem
+                  // que sair junto. `trg_oc_formas_cartao` recusa cartão em forma
+                  // que não é cartão, e o erro chegaria depois do servidor,
+                  // falando de uma escolha que a tela já nem mostra mais.
+                  if (!formasDeCartao.has(valor)) {
+                    form.setValue("formas.0.cartaoId", "");
+                  }
                   // A parcela acompanha: com uma forma só, toda parcela é dela.
                   const atuais = form.getValues("parcelas") ?? [];
                   atuais.forEach((_, indice) =>
@@ -918,6 +1015,40 @@ export function OrdemFormDrawer({
               />
             </CampoFormulario>
           </LinhaCampos>
+
+          {/* O cartão só aparece quando a forma é cartão de crédito, e aí é
+              obrigatório. Fora desse caso o campo não existe: pedir cartão numa
+              compra em PIX seria pedir dado que não tem resposta. Com a compra
+              dividida entre formas, quem pergunta é a coluna da tabela abaixo. */}
+          {formaUnica && tipoFormaEscolhida === "cartao_credito" ? (
+            <LinhaCampos>
+              <CampoFormulario
+                id="oc-cartao"
+                rotulo="Cartão"
+                obrigatorio
+                ajuda="Por qual cartão da empresa esta compra saiu. É o final de quatro dígitos que casa com a fatura."
+                erro={form.formState.errors.formas?.[0]?.cartaoId?.message}
+              >
+                <Combobox
+                  valor={formasObservadas[0]?.cartaoId ?? ""}
+                  onValorChange={(valor) =>
+                    form.setValue("formas.0.cartaoId", valor, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    })
+                  }
+                  opcoes={opcoesCartao}
+                  rotuloDoValor={rotuloCartaoDaOrdem.get(
+                    formasObservadas[0]?.cartaoId ?? "",
+                  )}
+                  onCriar={cadastrarCartao}
+                  placeholder="Selecione o cartão"
+                  disabled={salvando}
+                  id="oc-cartao"
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+          ) : null}
 
           {origemNumero ? (
             <div className="w-fit rounded-md border border-border bg-surface px-3 py-2.5">
@@ -1115,7 +1246,7 @@ export function OrdemFormDrawer({
             </p>
           ) : (
             <TabelaItens
-              colunas={COLUNAS_FORMA_OC}
+              colunas={colunasDaTabelaDeFormas}
               linhas={linhasFormas}
               chaveLinha={(linha) => linha.id}
               onRemover={removerForma}
@@ -1124,6 +1255,7 @@ export function OrdemFormDrawer({
               erroCelula={(chave, indice) => {
                 const erro = form.formState.errors.formas?.[indice];
                 if (chave === "forma") return erro?.formaPagamentoId?.message;
+                if (chave === "cartao") return erro?.cartaoId?.message;
                 if (chave === "valor") return erro?.valor?.message;
                 return undefined;
               }}
@@ -1141,6 +1273,10 @@ export function OrdemFormDrawer({
                           valor,
                           { shouldValidate: true },
                         );
+                        // Deixou de ser cartão: o cartão escolhido sai junto.
+                        if (!formasDeCartao.has(valor)) {
+                          form.setValue(`formas.${indice}.cartaoId`, "");
+                        }
                         // As parcelas que eram da forma antiga passam a ser da
                         // nova: senão ficariam apontando para uma forma que saiu
                         // da tela, e o envio travaria numa mensagem sobre soma em
@@ -1174,6 +1310,41 @@ export function OrdemFormDrawer({
                     <span className="text-legenda text-muted-foreground">
                       {tipo ? CAMINHO_DO_PAGAMENTO[tipo] : "-"}
                     </span>
+                  );
+                }
+                if (chave === "cartao") {
+                  const tipo = formasPagamento.find(
+                    (forma) => forma.id === escolhida,
+                  )?.tipo;
+                  // A coluna existe porque ALGUMA linha é cartão; nas outras a
+                  // célula fica com um traço em vez de um seletor que não tem o
+                  // que oferecer.
+                  if (tipo !== "cartao_credito") {
+                    return (
+                      <span className="text-legenda text-muted-foreground">
+                        -
+                      </span>
+                    );
+                  }
+                  const campoCartao = `formas.${indice}.cartaoId` as const;
+                  const cartaoEscolhido = form.watch(campoCartao) ?? "";
+                  return (
+                    <Combobox
+                      valor={cartaoEscolhido}
+                      onValorChange={(valor) =>
+                        form.setValue(campoCartao, valor, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        })
+                      }
+                      opcoes={opcoesCartao}
+                      rotuloDoValor={rotuloCartaoDaOrdem.get(cartaoEscolhido)}
+                      onCriar={cadastrarCartao}
+                      placeholder="Selecione"
+                      disabled={salvando}
+                      ariaLabel="Cartão de crédito"
+                      id={`oc-forma-cartao-${indice}`}
+                    />
                   );
                 }
                 const campo = `formas.${indice}.valor` as const;
@@ -1295,6 +1466,19 @@ const COLUNAS_FORMA_OC: ColunaItem[] = [
     obrigatorio: true,
   },
 ];
+
+/**
+ * Coluna "Cartao", acrescentada a tabela de FORMAS so quando alguma das formas
+ * escolhidas e cartao de credito. Fora disso a coluna ficaria inteira em branco,
+ * e coluna vazia em tabela de dinheiro sempre vira pergunta.
+ */
+const COLUNA_CARTAO_DA_FORMA: ColunaItem = {
+  chave: "cartao",
+  rotulo: "Cartao",
+  largura: "minmax(0,1.2fr)",
+  alinhamento: "left",
+  obrigatorio: true,
+};
 
 /**
  * Coluna "Forma", acrescentada as parcelas SO quando a ordem e paga por duas ou

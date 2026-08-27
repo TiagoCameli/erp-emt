@@ -34,6 +34,7 @@ import {
   formatarQuantidade,
 } from "@/lib/formatadores";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
 import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
@@ -117,6 +118,8 @@ export interface OrdemDetalheViewProps {
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
   categorias: CategoriaOpcao[];
+  /** Cartões de crédito ativos, para o formulário de edição. */
+  cartoes: CartaoOpcao[];
   parcelasCondicao: ParcelaCondicaoOpcao[];
   anexosIniciais: AnexoDoDocumento[];
   podeEditar: boolean;
@@ -146,6 +149,7 @@ export function OrdemDetalheView({
   condicoesPagamento,
   formasPagamento,
   categorias,
+  cartoes,
   parcelasCondicao,
   anexosIniciais,
   podeEditar,
@@ -638,6 +642,14 @@ export function OrdemDetalheView({
                       >
                         <td className="px-3 py-2">
                           {forma.formaPagamentoNome}
+                          {/* O cartão sai na mesma célula, abaixo do nome da
+                              forma: é atributo dela, não uma segunda coluna que
+                              ficaria vazia em toda ordem que não é no crédito. */}
+                          {forma.cartaoRotulo ? (
+                            <span className="block text-legenda text-muted-foreground">
+                              {forma.cartaoRotulo}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2 text-right">
                           <MoneyText valor={forma.valor} />
@@ -771,6 +783,7 @@ export function OrdemDetalheView({
           condicoesPagamento={condicoesPagamento}
           formasPagamento={formasPagamento}
           categorias={categorias}
+          cartoes={cartoes}
         />
       ) : null}
 

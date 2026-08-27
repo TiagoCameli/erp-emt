@@ -33,8 +33,8 @@ const formDuasFormas = {
   ],
   rateios: [{ centroCustoId: CENTRO, valor: "" }],
   formas: [
-    { formaPagamentoId: BOLETO, valor: "6.000,00" },
-    { formaPagamentoId: DINHEIRO, valor: "4.000,00" },
+    { formaPagamentoId: BOLETO, cartaoId: "", valor: "6.000,00" },
+    { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "4.000,00" },
   ],
 };
 
@@ -76,8 +76,8 @@ describe("formulário com duas ou mais formas de pagamento", () => {
     const r = lancamentoFormSchema.safeParse({
       ...formDuasFormas,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "6.000,00" },
-        { formaPagamentoId: DINHEIRO, valor: "3.000,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "6.000,00" },
+        { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "3.000,00" },
       ],
     });
     expect(r.success).toBe(false);
@@ -117,8 +117,8 @@ describe("formulário com duas ou mais formas de pagamento", () => {
     const r = lancamentoFormSchema.safeParse({
       ...formDuasFormas,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "6.000,00" },
-        { formaPagamentoId: BOLETO, valor: "4.000,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "6.000,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "4.000,00" },
       ],
     });
     expect(r.success).toBe(false);
@@ -154,7 +154,7 @@ describe("formulário com duas ou mais formas de pagamento", () => {
       ...formDuasFormas,
       parcelas: [{ valor: "", dataVencimento: "", formaPagamentoId: BOLETO }],
       dataVencimento: "2026-09-10",
-      formas: [{ formaPagamentoId: BOLETO, valor: "" }],
+      formas: [{ formaPagamentoId: BOLETO, cartaoId: "", valor: "" }],
     });
     expect(r.success).toBe(true);
   });

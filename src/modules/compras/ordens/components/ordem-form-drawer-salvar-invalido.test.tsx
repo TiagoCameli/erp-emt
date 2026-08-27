@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -45,6 +53,7 @@ vi.mock("@/components/canonicos/toast", () => ({
   DURACAO_TOAST: { sucesso: 2000, info: 3000, aviso: 5000, erro: 6000 },
 }));
 
+import { instalarLayoutDeLista } from "@/components/canonicos/combobox-jsdom-teste";
 import { OrdemFormDrawer } from "@/modules/compras/ordens/components/ordem-form-drawer";
 import type { OrdemDetalhe } from "@/modules/compras/ordens/queries";
 
@@ -55,9 +64,15 @@ const CONDICAO = "44444444-4444-4444-8444-444444444444";
 const CATEGORIA = "55555555-5555-4555-8555-555555555555";
 const CENTRO = "66666666-6666-4666-8666-666666666666";
 const INSUMO = "77777777-7777-4777-8777-777777777777";
+/** O CARTÃO em si, do cadastro. `CARTAO` acima é a FORMA de pagamento. */
+const CARTAO_OBRA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-/** A OC-2026-0026 como estava no banco: R$ 15.400,00 em PIX (400) + cartão (15.000). */
-function ordemDividida(precoDoItem: number): OrdemDetalhe {
+/**
+ * A OC-2026-0026 como estava no banco: R$ 15.400,00 em PIX (400) + cartão
+ * (15.000). O `comCartao` diz se a linha do cartão de crédito já tem cartão
+ * escolhido — sem ele o formulário recusa o envio, que é a regra de 27/08/2026.
+ */
+function ordemDividida(precoDoItem: number, comCartao = true): OrdemDetalhe {
   return {
     id: "88888888-8888-4888-8888-888888888888",
     numero: "OC-2026-0026",
@@ -137,12 +152,16 @@ function ordemDividida(precoDoItem: number): OrdemDetalhe {
         id: "f-pix",
         formaPagamentoId: PIX,
         formaPagamentoNome: "PIX",
+        cartaoId: null,
+        cartaoRotulo: null,
         valor: 400,
       },
       {
         id: "f-cc",
         formaPagamentoId: CARTAO,
         formaPagamentoNome: "Cartão de Crédito",
+        cartaoId: comCartao ? CARTAO_OBRA : null,
+        cartaoRotulo: comCartao ? "Cartão obra (7712)" : null,
         valor: 15000,
       },
     ],
@@ -173,11 +192,17 @@ function abrirEdicao(ordem: OrdemDetalhe) {
         { id: CARTAO, nome: "Cartão de Crédito", tipo: "cartao_credito" },
       ]}
       categorias={[{ id: CATEGORIA, nome: "Outras despesas" }]}
+      cartoes={[
+        { id: CARTAO_OBRA, nome: "Cartão obra", ultimosDigitos: "7712" },
+      ]}
     />,
   );
 }
 
 describe("editar OC: salvar com o formulário inválido", () => {
+  // O Combobox é uma lista virtualizada: sem layout falso o jsdom não desenha
+  // opção nenhuma e o teste falharia por um motivo que não é o dele.
+  beforeAll(instalarLayoutDeLista);
   beforeEach(() => {
     editarOrdem.mockClear();
     avisos.length = 0;
@@ -195,6 +220,45 @@ describe("editar OC: salvar com o formulário inválido", () => {
     await waitFor(() => expect(avisos.length).toBe(1));
     expect(editarOrdem).not.toHaveBeenCalled();
     expect(avisos[0]).toMatch(/R\$/);
+  });
+
+  it("avisa quando a compra é no cartão e ninguém disse qual cartão", async () => {
+    // A regra de 27/08/2026: forma do tipo cartão de crédito exige o cartão. Sem
+    // este teste, um envio sem cartão só quebraria no banco, com a mensagem da
+    // trigger e depois da ida ao servidor.
+    abrirEdicao(ordemDividida(15400, false));
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /salvar ordem/i }),
+    );
+
+    await waitFor(() => expect(avisos.length).toBe(1));
+    expect(editarOrdem).not.toHaveBeenCalled();
+    expect(avisos[0]).toMatch(/cart[ãa]o/i);
+  });
+
+  it("trocar a forma de cartão para PIX limpa o cartão escolhido", async () => {
+    // Sem isto, o cartão fica pendurado numa forma que não é cartão e
+    // `trg_oc_formas_cartao` recusa o salvamento com "So forma do tipo cartao de
+    // credito aceita cartao" — falando de uma escolha que a tela já nem mostra.
+    abrirEdicao(ordemDividida(15400));
+
+    const seletores = await screen.findAllByRole("combobox", {
+      name: /forma de pagamento/i,
+    });
+    // O último é o da linha do cartão na tabela de formas (a de R$ 15.000,00).
+    const daLinhaDoCartao = seletores[seletores.length - 1]!;
+    fireEvent.click(daLinhaDoCartao);
+    fireEvent.click(await screen.findByRole("option", { name: "PIX" }));
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /salvar ordem/i }),
+    );
+
+    await waitFor(() => expect(avisos.length).toBe(1));
+    // Duas linhas de PIX: o erro agora é sobre a forma repetida, NÃO sobre o
+    // cartão. Se o cartão tivesse ficado, ele apareceria antes.
+    expect(avisos[0]).not.toMatch(/cart[ãa]o/i);
   });
 
   it("salva sem avisar nada quando está tudo fechado", async () => {

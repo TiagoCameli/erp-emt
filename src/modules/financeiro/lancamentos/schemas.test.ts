@@ -33,7 +33,7 @@ const formBase = {
   // então provava uma tela impossível.
   rateios: [{ centroCustoId: CENTRO, valor: "" }],
   // Uma forma so: a coluna de valor dela nao aparece na tela (ela vale o total).
-  formas: [{ formaPagamentoId: FORMA, valor: "" }],
+  formas: [{ formaPagamentoId: FORMA, cartaoId: "", valor: "" }],
 };
 
 /**

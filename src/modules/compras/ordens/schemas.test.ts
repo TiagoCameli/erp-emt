@@ -277,7 +277,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     parcelas: [],
     // Uma forma, sem valor: com forma única o valor não é digitado (vale o total
     // dos itens), e é o `aoEnviar` do drawer que o preenche.
-    formas: [{ formaPagamentoId: FORMA, valor: "" }],
+    formas: [{ formaPagamentoId: FORMA, cartaoId: "", valor: "" }],
   };
 
   it("aceita OC com um centro de custo e um insumo", () => {
@@ -451,7 +451,7 @@ describe("parcelas da OC no formulário", () => {
         insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100" }],
       },
     ],
-    formas: [{ formaPagamentoId: FORMA, valor: "" }],
+    formas: [{ formaPagamentoId: FORMA, cartaoId: "", valor: "" }],
   };
 
   it("lista vazia é válida: parcelas são opcionais", () => {

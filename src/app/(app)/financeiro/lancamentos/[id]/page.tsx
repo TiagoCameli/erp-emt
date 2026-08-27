@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarCartoesAtivos } from "@/modules/cadastros/cartoes/queries";
 import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import {
   listarContasBancarias,
@@ -40,6 +41,7 @@ export default async function PaginaLancamentoDetalhe({
     clientes,
     centrosCusto,
     formasPagamento,
+    cartoes,
     condicoesPagamento,
     anexos,
     contas,
@@ -51,6 +53,7 @@ export default async function PaginaLancamentoDetalhe({
     listarClientes(),
     listarCentrosCusto(),
     listarFormasPagamento(),
+    listarCartoesAtivos(),
     listarCondicoesPagamento(),
     listarAnexosDoDocumento("lancamento", id),
     listarContasBancarias(),
@@ -74,6 +77,7 @@ export default async function PaginaLancamentoDetalhe({
       clientes={clientes}
       centrosCusto={centrosCusto}
       formasPagamento={formasPagamento}
+      cartoes={cartoes}
       condicoesPagamento={condicoesPagamento}
       contas={contas}
       podeEditar={podeEditar}

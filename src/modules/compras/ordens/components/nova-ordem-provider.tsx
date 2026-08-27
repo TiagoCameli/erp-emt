@@ -14,6 +14,7 @@ import type {
   InsumoOpcao,
   PrefillOrdemCotacao,
 } from "@/modules/compras/ordens/queries";
+import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { OrdemFormDrawer } from "./ordem-form-drawer";
 
 interface ContextoNovaOrdem {
@@ -39,6 +40,8 @@ export interface NovaOrdemProviderProps {
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
   categorias: CategoriaOpcao[];
+  /** Cartões de crédito ativos, para a compra paga no crédito. */
+  cartoes: CartaoOpcao[];
   /**
    * Prefill vindo de "Gerar OC" numa cotação finalizada (URL ?gerar=<id>).
    * Quando presente, o drawer abre já preenchido; o botão "Nova ordem" sempre
@@ -64,6 +67,7 @@ export function NovaOrdemProvider({
   condicoesPagamento,
   formasPagamento,
   categorias,
+  cartoes,
   prefill,
   children,
 }: NovaOrdemProviderProps) {
@@ -110,6 +114,7 @@ export function NovaOrdemProvider({
           condicoesPagamento={condicoesPagamento}
           formasPagamento={formasPagamento}
           categorias={categorias}
+          cartoes={cartoes}
           onCriada={(id) => router.push(`/compras/ordens/${id}`)}
         />
       ) : null}
