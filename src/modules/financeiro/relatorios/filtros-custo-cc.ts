@@ -65,6 +65,16 @@ export interface FiltrosCustoCc {
    * a obra traz as etapas dela. Obrigatório ter pelo menos um no modo `vida`.
    */
   centroIds: string[];
+  /**
+   * Etapas escolhidas dentro dos centros acima. Vazio = o centro inteiro.
+   *
+   * Vive em parâmetro PRÓPRIO (`etapa`) e não misturada no `centro` porque as
+   * duas coisas significam diferente: a raiz é o conjunto e a etapa é o recorte
+   * dentro dele. Escolher etapa substitui a raiz na consulta — a tradução é de
+   * `centros-e-etapas.ts`, que é quem conhece o cadastro; esta leitura é pura e
+   * só garante que são uuids.
+   */
+  etapaIds: string[];
   categoriaIds: string[];
   fornecedorIds: string[];
   /** Formas de pagamento escolhidas. Vazio + `semForma` falso = todas. */
@@ -168,6 +178,7 @@ export function lerFiltrosCustoCc(
     de,
     ate,
     centroIds,
+    etapaIds: lerUuidsDaUrl(params.etapa),
     categoriaIds: lerUuidsDaUrl(params.categoria),
     fornecedorIds: lerUuidsDaUrl(params.fornecedor),
     formaIds: lerUuidsDaUrl(params.forma),

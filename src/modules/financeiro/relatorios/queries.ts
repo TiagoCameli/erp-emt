@@ -641,38 +641,42 @@ export async function serieDosCentros(
 // =====================================================================
 
 /**
- * Só os centros de custo RAIZ ativos, em ordem de código.
+ * O cadastro que alimenta os filtros de centro dos relatórios: as raízes e as
+ * etapas delas, ativas, em ordem de código.
  *
- * É a lista dos FILTROS de relatório, e ela é diferente da lista do rateio de
- * propósito. O rateio precisa de todos os níveis, porque o custo é apontado na
- * etapa; mas todo relatório de centro agrupa na RAIZ, subindo a árvore antes de
- * somar.
+ * É uma lista só, com `paiId` em cada linha, e não duas consultas: quem monta a
+ * tela precisa das duas coisas ao mesmo tempo (as raízes no primeiro campo, as
+ * etapas da raiz escolhida no segundo), e ir ao banco de novo a cada marcação
+ * faria o segundo campo piscar vazio no meio da escolha. Quem separa os níveis é
+ * `centros-e-etapas.ts`.
  *
- * ## Por que ela só oferecia raiz até 27/08/2026, e por que voltou a oferecer etapa
+ * ## O nome aqui é o nome PRÓPRIO do centro
  *
- * Oferecer etapa num filtro que agrupa na raiz mente na tela. Medido em
- * 24/08/2026: o cadastro tem 12 raízes ativas e 61 etapas (um equipamento cada,
- * todas sob "Manutenção/Documentação de Equipamentos"), então o seletor mostrava
- * 73 opções -- e escolher "CAMINHÃO BOIADEIRO/MIILHO - L1620" devolvia uma linha
- * chamada "Manutenção/Documentação de Equipamentos", com R$ 1.757,95. Sessenta e
- * uma opções diferentes voltavam vestindo o mesmo nome. Tirar a opção foi o certo:
- * melhor não oferecer do que devolver número com nome errado.
+ * Entre a manhã e a tarde de 27/08/2026 a etapa saía daqui já rotulada com o pai
+ * ("Manutenção/Documentação de Equipamentos › ESCAVADEIRA CAT 320"), porque tudo
+ * caía num campo só e o prefixo era o que desempatava. Num seletor de 13rem isso
+ * desenhava 61 linhas idênticas, todas cortadas em "Manutenção/Docume…", e o
+ * Tiago pegou na primeira olhada. Com dois campos o prefixo virou ruído, então
+ * ele saiu daqui: quem precisar dele (duas raízes com etapa escolhidas ao mesmo
+ * tempo) monta na hora, em `opcoesDeEtapa`.
  *
- * O que mudou em 27/08/2026 foi a CAUSA, não a decisão: a `fn_rel_custo_receita`
- * passou a agrupar pelo centro ESCOLHIDO, e não pela raiz. Escolher uma etapa
- * agora devolve uma linha com o nome DELA e o valor DELA -- há prova disso dentro
- * da migration `20260827180000`, que aborta se a etapa voltar vestindo o nome do
- * pai. Com a causa resolvida, a etapa volta ao seletor, que era o pedido dele.
+ * ## Por que a etapa pode ser escolhida
  *
- * O rótulo da etapa carrega o pai ("Empréstimos › Caixa - SIEMP"): sem isso, duas
- * etapas de pais diferentes com nome parecido ficam indistinguíveis numa lista de
- * 73 linhas.
+ * Oferecer etapa num relatório que agrupa na RAIZ mente na tela: até 27/08/2026
+ * escolher "CAMINHÃO BOIADEIRO/MIILHO - L1620" devolvia uma linha chamada
+ * "Manutenção/Documentação de Equipamentos". A causa foi resolvida no banco — as
+ * duas RPCs de centro (`fn_rel_custo_receita` e `fn_rel_custo_centro_custo`)
+ * agrupam pelo centro ESCOLHIDO mais fundo, com prova dentro das migrations
+ * `20260827180000` e `20260827200000`, que abortam se a etapa voltar vestindo o
+ * nome do pai.
  *
  * O centro de tipo `financeiro` NÃO entra: desde 27/08/2026 o empréstimo saiu dos
  * relatórios operacionais e a análise dele vive em Créditos, então oferecê-lo aqui
  * seria oferecer um filtro que sempre devolve vazio.
  */
-export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
+export async function listarCentrosCustoParaFiltro(): Promise<
+  CentroCustoOpcao[]
+> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -688,7 +692,6 @@ export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
   }
 
   const linhas = data ?? [];
-  const nomePorId = new Map(linhas.map((centro) => [centro.id, centro.nome]));
   // O tipo mora na RAIZ (etapa tem tipo nulo), então para saber se uma etapa é de
   // centro financeiro eu tenho de olhar o pai dela.
   const tipoPorId = new Map(linhas.map((centro) => [centro.id, centro.tipo]));
@@ -702,11 +705,7 @@ export async function listarCentrosCustoRaiz(): Promise<CentroCustoOpcao[]> {
     })
     .map((centro) => ({
       id: centro.id,
-      // A etapa vai rotulada com o pai. Numa lista de 73 opções, "Contrato
-      // 28102020" sozinho não diz de quem é.
-      nome: centro.pai_id
-        ? `${nomePorId.get(centro.pai_id) ?? "?"} › ${centro.nome}`
-        : centro.nome,
+      nome: centro.nome,
       codigo: centro.codigo,
       paiId: centro.pai_id,
       tipo: centro.tipo,

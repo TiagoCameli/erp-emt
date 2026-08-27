@@ -13,6 +13,7 @@ const OUTRO_CENTRO = "bfbd54dc-f303-4d5b-a505-f441d0f81142";
 const CATEGORIA = "11111111-1111-4111-8111-111111111111";
 const FORNECEDOR = "22222222-2222-4222-8222-222222222222";
 const FORMA = "33333333-3333-4333-8333-333333333333";
+const ETAPA = "44444444-4444-4444-8444-444444444444";
 
 /**
  * Mesmo contrato do de lançamentos: só o que passou na validação chega na tela,
@@ -115,6 +116,31 @@ describe("lerFiltrosCustoCc", () => {
     expect(filtros.tiposCentro).toEqual(["obra", "escritorio"]);
     expect(filtros.excluirPrevisto).toBe(true);
     expect(filtros.comparar).toBe(true);
+  });
+
+  it("a etapa viaja em parâmetro PRÓPRIO, separada do centro", () => {
+    // Separadas porque significam coisas diferentes: a raiz é o conjunto e a
+    // etapa é o recorte dentro dele. Num parâmetro só, a barra não teria como
+    // abrir cada campo da escada marcado com o que é dele.
+    const { filtros } = lerFiltrosCustoCc(
+      { centro: CENTRO, etapa: ETAPA },
+      MES_CORRENTE,
+    );
+    expect(filtros.centroIds).toEqual([CENTRO]);
+    expect(filtros.etapaIds).toEqual([ETAPA]);
+  });
+
+  it("sem etapa na URL, o centro vale inteiro", () => {
+    const { filtros } = lerFiltrosCustoCc({ centro: CENTRO }, MES_CORRENTE);
+    expect(filtros.etapaIds).toEqual([]);
+  });
+
+  it("etapa com uuid inválido não vira filtro", () => {
+    const { filtros } = lerFiltrosCustoCc(
+      { centro: CENTRO, etapa: "escavadeira" },
+      MES_CORRENTE,
+    );
+    expect(filtros.etapaIds).toEqual([]);
   });
 
   it("link antigo com um valor por filtro continua valendo", () => {

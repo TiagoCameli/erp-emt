@@ -29,8 +29,9 @@ export interface CentroCustoOpcao {
  * Todos os centros de custo ativos, raízes e etapas, em ordem de código.
  *
  * É a lista de ESCRITA: quem aponta custo precisa alcançar a etapa, porque é lá
- * que o custo de uma máquina mora. Não confundir com `listarCentrosCustoRaiz`
- * dos relatórios, que oferece só raiz porque relatório de centro agrupa na raiz.
+ * que o custo de uma máquina mora. Não confundir com
+ * `listarCentrosCustoParaFiltro` dos relatórios, que deixa o centro financeiro de
+ * fora (a análise de empréstimo vive em Créditos desde 27/08/2026).
  *
  * Uma consulta só para os dois níveis: são 73 linhas hoje (12 raízes e 61
  * etapas), então paginar ou buscar a etapa sob demanda só adicionaria estado.
