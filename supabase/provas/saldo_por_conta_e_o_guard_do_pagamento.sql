@@ -15,7 +15,7 @@
 --
 -- ATENÇÃO À ORDEM DAS DUAS MIGRATIONS. Os controles B e B2 (leitura direta da
 -- coluna e das agregadas) só passam DEPOIS de
--- `20260827210000_saldo_por_conta_fecha_as_portas.sql` rodar, o que só pode
+-- `20260827230000_saldo_por_conta_fecha_as_portas.sql` rodar, o que só pode
 -- acontecer com o código já em produção. Antes disso eles devolvem "PASSOU", e
 -- isso é o esperado, não defeito: a tela já obedece à permissão, e o que falta é
 -- fechar a porta de quem consulta o banco direto. O porquê da separação está no

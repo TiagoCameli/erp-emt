@@ -11,7 +11,7 @@
 -- existir tela para alguém liberá-la. Restrição sem o controle que a libera é
 -- interrupção de trabalho, não segurança.
 --
--- A trava volta em `20260827210000_saldo_por_conta_fecha_as_portas.sql`, que roda
+-- A trava volta em `20260827230000_saldo_por_conta_fecha_as_portas.sql`, que roda
 -- DEPOIS do deploy — quando a aba Usuários já tem o bloco "Saldo por conta
 -- bancária" para marcar quem pode.
 --
