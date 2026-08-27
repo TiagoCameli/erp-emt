@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { PageHeader, SecaoFormulario } from "@/components/canonicos";
+import { urlAssinadaDaFoto } from "@/lib/foto-perfil";
 import { getUsuarioLogado } from "@/lib/permissoes";
 import { AlterarSenhaForm } from "@/modules/auth/components/alterar-senha-form";
+import { FotoForm } from "@/modules/conta/components/foto-form";
 import { PerfilForm } from "@/modules/conta/components/perfil-form";
 import { buscarMeuPerfil } from "@/modules/conta/queries";
 
@@ -30,6 +32,12 @@ export default async function PaginaConta() {
   // para não renderizar meia tela se a ordem mudar algum dia.
   if (!perfil) redirect("/conta-desativada");
 
+  // Assina só quando existe foto: o bucket é privado, o caminho da coluna não
+  // serve como `src`, e quem não tem foto não precisa de uma ida ao Storage.
+  const fotoUrl = perfil.fotoPath
+    ? await urlAssinadaDaFoto(perfil.fotoPath)
+    : null;
+
   return (
     <>
       <PageHeader
@@ -56,6 +64,8 @@ export default async function PaginaConta() {
             </div>
           </div>
         </SecaoFormulario>
+
+        <FotoForm nome={perfil.nome} fotoUrl={fotoUrl} />
 
         <PerfilForm perfil={perfil} />
 

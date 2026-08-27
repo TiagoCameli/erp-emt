@@ -17,7 +17,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,6 +75,14 @@ export interface AppShellProps {
   usuario: {
     nome: string;
     email: string;
+    /**
+     * URL ASSINADA da foto de perfil, ou null/ausente para cair nas iniciais.
+     *
+     * Já assinada porque este componente é de cliente e não pode falar com o
+     * Storage: quem assina é o layout, com a chave de serviço. Opcional para não
+     * quebrar quem monta o AppShell sem foto.
+     */
+    fotoUrl?: string | null;
   };
   modulos: ModuloNavegacao[];
   children: ReactNode;
@@ -91,6 +99,35 @@ function iniciaisDoNome(nome: string): string {
   const primeira = partes[0].charAt(0);
   const ultima = partes.length > 1 ? partes[partes.length - 1].charAt(0) : "";
   return (primeira + ultima).toUpperCase();
+}
+
+/**
+ * Avatar do usuário: a foto quando existe, as iniciais quando não.
+ *
+ * Um componente só porque o gatilho do menu aparece em DOIS lugares (a sidebar
+ * do desktop e o topo do mobile), e avatar duplicado é a forma clássica de a
+ * foto aparecer num e não no outro.
+ *
+ * As iniciais ficam no `AvatarFallback`, que o Radix mostra sozinho quando a
+ * imagem não carrega — e isso não é só para "sem foto": a URL assinada expira, e
+ * uma aba aberta há horas volta às iniciais em vez de mostrar um ícone de imagem
+ * quebrada.
+ */
+function AvatarUsuario({
+  nome,
+  fotoUrl,
+}: {
+  nome: string;
+  fotoUrl?: string | null;
+}) {
+  return (
+    <Avatar className="size-8">
+      {fotoUrl ? <AvatarImage src={fotoUrl} alt="" /> : null}
+      <AvatarFallback className="bg-accent text-legenda font-medium text-accent-foreground">
+        {iniciaisDoNome(nome)}
+      </AvatarFallback>
+    </Avatar>
+  );
 }
 
 /**
@@ -392,11 +429,7 @@ export function AppShell({
               className="flex h-14 w-full items-center justify-center outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
               aria-label={`Menu do usuário: ${usuario.nome}`}
             >
-              <Avatar className="size-8">
-                <AvatarFallback className="bg-accent text-legenda font-medium text-accent-foreground">
-                  {iniciaisDoNome(usuario.nome)}
-                </AvatarFallback>
-              </Avatar>
+              <AvatarUsuario nome={usuario.nome} fotoUrl={usuario.fotoUrl} />
               <ChevronsUpDown className="sr-only" aria-hidden="true" />
             </DropdownMenuTrigger>
             {/* Pra direita e pra cima, com desvio da borda da tela. */}
@@ -429,11 +462,7 @@ export function AppShell({
               className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Menu do usuário"
             >
-              <Avatar className="size-8">
-                <AvatarFallback className="bg-accent text-legenda font-medium text-accent-foreground">
-                  {iniciaisDoNome(usuario.nome)}
-                </AvatarFallback>
-              </Avatar>
+              <AvatarUsuario nome={usuario.nome} fotoUrl={usuario.fotoUrl} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <ItensMenuUsuario usuario={usuario} onSair={onSair} />

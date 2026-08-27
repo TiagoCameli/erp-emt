@@ -22,6 +22,11 @@ export interface MeuPerfil {
   enderecoBairro: string | null;
   enderecoCidade: string | null;
   enderecoUf: string | null;
+  /**
+   * Caminho da foto no bucket, ou null. É o CAMINHO, não a URL: o bucket é
+   * privado e a URL assinada expira, então quem exibe assina na hora.
+   */
+  fotoPath: string | null;
 }
 
 /**
@@ -52,7 +57,7 @@ export async function buscarMeuPerfil(): Promise<MeuPerfil | null> {
     .select(
       `id, nome, email, celular, data_nascimento, cargo, ramal, cpf, rg,
        endereco_cep, endereco_logradouro, endereco_numero, endereco_complemento,
-       endereco_bairro, endereco_cidade, endereco_uf`,
+       endereco_bairro, endereco_cidade, endereco_uf, foto_path`,
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -83,5 +88,6 @@ export async function buscarMeuPerfil(): Promise<MeuPerfil | null> {
     enderecoBairro: data.endereco_bairro,
     enderecoCidade: data.endereco_cidade,
     enderecoUf: data.endereco_uf,
+    fotoPath: data.foto_path,
   };
 }

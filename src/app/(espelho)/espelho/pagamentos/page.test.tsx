@@ -43,6 +43,7 @@ const USUARIO: UsuarioLogado = {
   email: "fulano@emtconstrutora.com",
   ativo: true,
   perfilId: null,
+  fotoPath: null,
   permissoes: [],
 };
 

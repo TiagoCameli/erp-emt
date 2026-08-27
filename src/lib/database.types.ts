@@ -3589,6 +3589,7 @@ export type Database = {
           endereco_uf: string | null;
           excluido_em: string | null;
           excluido_por: string | null;
+          foto_path: string | null;
           id: string;
           nome: string;
           perfil_id: string | null;
@@ -3614,6 +3615,7 @@ export type Database = {
           endereco_uf?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
+          foto_path?: string | null;
           id: string;
           nome: string;
           perfil_id?: string | null;
@@ -3639,6 +3641,7 @@ export type Database = {
           endereco_uf?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
+          foto_path?: string | null;
           id?: string;
           nome?: string;
           perfil_id?: string | null;
@@ -4327,6 +4330,13 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_remover_minha_foto: {
+        Args: never;
+        // O caminho que ESTAVA na linha, para o chamador apagar o binário.
+        // `null` é resposta legítima: não havia foto. O gerador escreveria
+        // `string`, porque não sabe que a função pode devolver null.
+        Returns: string | null;
+      };
       fn_reprogramar_parcela: {
         Args: {
           p_data_programada: string;
@@ -4384,6 +4394,11 @@ export type Database = {
           p_rg: string | null;
         };
         Returns: undefined;
+      };
+      fn_salvar_minha_foto: {
+        Args: never;
+        /** O caminho GRAVADO, para o chamador conferir que é onde o binário foi posto. */
+        Returns: string;
       };
       fn_salvar_parcelas_oc: {
         Args: { p_formas?: Json; p_oc_id: string; p_parcelas: Json };
