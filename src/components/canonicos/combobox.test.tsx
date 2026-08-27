@@ -582,6 +582,106 @@ describe("valor fora das opcoes", () => {
   });
 });
 
+describe("Combobox: largura do painel", () => {
+  /**
+   * A régua de canvas do jsdom mora no `vitest.setup.ts` e cobra 7px por
+   * caractere. A conta do componente é `caracteres * 7 + LARGURA_FORA_DO_ROTULO`,
+   * limitada por `LARGURA_MAX_PAINEL`.
+   */
+  const POR_CARACTERE = 7;
+  const FORA_DO_ROTULO = 66;
+  const TETO = 768;
+
+  function painel() {
+    const conteudo = document.querySelector<HTMLElement>(
+      '[data-slot="popover-content"]',
+    );
+    if (!conteudo) throw new Error("painel não abriu");
+    return conteudo;
+  }
+
+  function abrirCom(rotulos: string[]) {
+    render(
+      <Combobox
+        valor=""
+        onValorChange={vi.fn()}
+        opcoes={rotulos.map((rotulo, indice) => ({
+          valor: `id-${indice}`,
+          rotulo,
+        }))}
+      />,
+    );
+    fireEvent.click(screen.getByRole("combobox"));
+    return painel();
+  }
+
+  /** Largura que o painel declarou ao abrir com estes rótulos. */
+  function painelAbertoCom(rotulos: string[]) {
+    return abrirCom(rotulos).style.width;
+  }
+
+  it("cresce para caber o centro de custo que aparecia cortado", () => {
+    // O caso da reclamação, com o rótulo REAL mais longo daquele filtro (87
+    // caracteres, tirado do banco com a mesma regra da tela: a etapa vai
+    // rotulada com o nome do pai). Preso ao trilho de 13rem (208px) ele sobrava
+    // 158px de rótulo e saía cortado com reticência.
+    const CENTRO =
+      "Manutenção/Documentação de Equipamentos › Carga Semi-Reboque SR/GUERRA BASC B2T093 - 03";
+    expect(CENTRO).toHaveLength(87);
+
+    const esperado = CENTRO.length * POR_CARACTERE + FORA_DO_ROTULO;
+    // O pior rótulo real tem de caber ABAIXO do teto: é isso que o teto de
+    // 48rem foi dimensionado para garantir.
+    expect(esperado).toBeLessThanOrEqual(TETO);
+    expect(painelAbertoCom([CENTRO])).toContain(`${esperado}px`);
+    // E o que ele pede é muito mais que o trilho, que era a causa do corte.
+    expect(esperado).toBeGreaterThan(208);
+  });
+
+  it("mede pelo rótulo mais longo, não pelo primeiro da lista", () => {
+    const largura = painelAbertoCom(["ABC", "Rótulo bem mais comprido", "DE"]);
+    expect(largura).toContain(
+      `${"Rótulo bem mais comprido".length * POR_CARACTERE + FORA_DO_ROTULO}px`,
+    );
+  });
+
+  it("para no teto quando o rótulo é o nome SINAPI inteiro", () => {
+    // Insumo tem cauda de 254 caracteres. Sem teto o painel viraria uma faixa
+    // de quase 1.800px atravessando a tela.
+    const SINAPI = "x".repeat(254);
+    expect(SINAPI.length * POR_CARACTERE + FORA_DO_ROTULO).toBeGreaterThan(TETO);
+    expect(painelAbertoCom([SINAPI])).toContain(`${TETO}px`);
+  });
+
+  it("nunca fica mais estreito que o gatilho, nem sai da janela", () => {
+    // Lista curta: a conta dá menos que o trilho, e quem tem que ganhar é a
+    // largura do gatilho — senão o painel nasceria menor que o botão que o
+    // abriu. E o espaço disponível limita por cima, para não vazar da tela.
+    const largura = painelAbertoCom(["Sim", "Não"]);
+    expect(largura).toContain("max(var(--radix-popover-trigger-width)");
+    expect(largura).toContain("var(--radix-popover-content-available-width");
+  });
+
+  it("o gatilho leva o rótulo escolhido no title, para ler o que ele corta", () => {
+    render(
+      <Combobox
+        valor="id-0"
+        onValorChange={vi.fn()}
+        opcoes={[{ valor: "id-0", rotulo: "Centro de custo de nome comprido" }]}
+      />,
+    );
+    expect(screen.getByRole("combobox")).toHaveAttribute(
+      "title",
+      "Centro de custo de nome comprido",
+    );
+  });
+
+  it("sem nada escolhido o gatilho não ganha title do placeholder", () => {
+    render(<Combobox valor="" onValorChange={vi.fn()} opcoes={OPCOES} />);
+    expect(screen.getByRole("combobox")).not.toHaveAttribute("title");
+  });
+});
+
 describe("rotuloOrfao", () => {
   it("UUID em qualquer caixa vira o aviso", () => {
     expect(rotuloOrfao("EB121ACD-11E8-4B41-9F69-8AEDE125BA3D")).toBe(

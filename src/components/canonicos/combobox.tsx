@@ -27,6 +27,38 @@ const ALTURA_MAX_LISTA = 300;
 /** Acima disso o rodapé mostra a contagem: em lista curta é ruído. */
 const MINIMO_PARA_CONTAGEM = 30;
 
+/**
+ * Largura que a linha gasta fora do texto do rótulo, em px.
+ *
+ * Conferido no painel aberto do filtro de centros: `px-2` da linha (16) +
+ * `gap-2` até o ícone (8) + o ícone `size-4` (16) + `px-1` da área rolável (8)
+ * + as duas bordas do popover (2) = 50, e num painel de 208px sobravam
+ * exatamente 158px de rótulo. Os outros 16 são folga para a barra de rolagem:
+ * no macOS ela é sobreposta e mede 0, mas em Windows ocupa espaço e sem a folga
+ * o rótulo mais longo voltaria a cortar por alguns pixels só lá.
+ */
+const LARGURA_FORA_DO_ROTULO = 66;
+
+/**
+ * Teto do painel, em px (48rem).
+ *
+ * O painel não tem por que seguir a largura do gatilho. Em filtro o gatilho é
+ * um trilho de 13rem (`TRILHO_FILTRO`), medida da BARRA e não do conteúdo — ela
+ * existe para as linhas de filtro caírem no prumo, e era ela que cortava 15 das
+ * 20 linhas visíveis do filtro de centros de custo.
+ *
+ * O teto sai da medição, não de gosto: o rótulo mais longo daquela lista é
+ * "Manutenção/Documentação de Equipamentos › Carga Semi-Reboque SR/GUERRA BASC
+ * B2T093 - 03" (87 caracteres), que mede 682px em Inter 14px e pede 748px de
+ * painel. 768 cobre ele e ainda sobra.
+ *
+ * E o teto precisa existir porque a lista mais longa do app não é essa: insumo
+ * tem 3.389 opções com cauda de 254 caracteres (o nome SINAPI inteiro), que
+ * pediria quase 2.000px e viraria uma faixa atravessando a tela. Lá o rótulo
+ * continua cortando, só que depois de 48rem em vez de 13.
+ */
+const LARGURA_MAX_PAINEL = 768;
+
 const CLASSE_LINHA =
   "flex cursor-pointer items-center gap-2 overflow-hidden rounded-sm px-2 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground data-[destacado=true]:bg-accent data-[destacado=true]:text-accent-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
@@ -51,6 +83,57 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export function rotuloOrfao(valor: string): string {
   return UUID.test(valor) ? ROTULO_VALOR_ORFAO : valor;
+}
+
+/**
+ * Régua de texto, criada uma vez e reaproveitada. Canvas mede SEM tocar no DOM
+ * — nada de reflow — então medir os 3.389 rótulos de insumo custa poucos
+ * milissegundos, e só na abertura do painel.
+ *
+ * `undefined` = ainda não tentou; `null` = ambiente sem canvas (o jsdom dos
+ * testes), e aí o painel volta a valer a largura do gatilho, como antes.
+ */
+let regua: CanvasRenderingContext2D | null | undefined;
+
+function obterRegua(): CanvasRenderingContext2D | null {
+  if (regua === undefined) {
+    try {
+      regua = document.createElement("canvas").getContext("2d");
+    } catch {
+      regua = null;
+    }
+  }
+  return regua;
+}
+
+/**
+ * Largura de painel que faz o rótulo mais longo caber inteiro, já limitada pelo
+ * teto. Volta null quando não dá para medir; quem chama trata como "sem
+ * opinião" e deixa o CSS decidir.
+ *
+ * A fonte sai do próprio gatilho, que é `text-sm` como a linha da lista e herda
+ * a mesma família. O peso vai fixo em 500 porque a linha SELECIONADA é
+ * `font-medium`: é ela a mais larga, e medir com o peso normal deixaria
+ * justamente o rótulo escolhido cortando.
+ */
+function medirLarguraDoPainel(
+  opcoes: ComboboxOpcao[],
+  gatilho: HTMLElement | null,
+): number | null {
+  const ctx = obterRegua();
+  if (!ctx || !gatilho || opcoes.length === 0) return null;
+  const estilo = window.getComputedStyle(gatilho);
+  if (!estilo.fontSize) return null;
+  ctx.font = `500 ${estilo.fontSize} ${estilo.fontFamily}`;
+  let maiorRotulo = 0;
+  for (const opcao of opcoes) {
+    const largura = ctx.measureText(opcao.rotulo).width;
+    if (largura > maiorRotulo) maiorRotulo = largura;
+  }
+  return Math.min(
+    Math.ceil(maiorRotulo) + LARGURA_FORA_DO_ROTULO,
+    LARGURA_MAX_PAINEL,
+  );
 }
 
 export interface ComboboxProps {
@@ -184,6 +267,16 @@ export function Combobox({
     return `${selecionados.size} selecionados`;
   }, [multi, todasOpcoes, valor, selecionados]);
 
+  /**
+   * Largura que o painel precisa para mostrar o rótulo inteiro, medida na
+   * ABERTURA (ver o `onOpenChange` lá embaixo). Combobox fechado não paga a
+   * conta, e são 45 arquivos usando este componente.
+   *
+   * `null` = não deu para medir; aí o painel fica com a largura do gatilho,
+   * como sempre foi.
+   */
+  const [larguraPainel, setLarguraPainel] = React.useState<number | null>(null);
+
   const selecionar = React.useCallback(
     (novoValor: string) => {
       onValorChange(novoValor);
@@ -247,6 +340,21 @@ export function Combobox({
               '[role="dialog"],[role="alertdialog"]',
             ) ?? null,
           );
+          // A largura é medida AQUI, junto com o container, e não durante a
+          // renderização: ler ref enquanto renderiza é proibido (o compilador
+          // do React reclama, com razão). Medindo no evento, o valor já está no
+          // estado quando o painel monta — ele nunca chega a pintar estreito
+          // para depois esticar.
+          //
+          // O gatilho é a fonte da fonte, e é o `<button>` de dentro do âncora
+          // que interessa: é ele que carrega o `text-sm`. O âncora é um
+          // `display: contents` e devolveria o tamanho de fonte do pai.
+          setLarguraPainel(
+            medirLarguraDoPainel(
+              todasOpcoes,
+              anchorRef.current?.querySelector("button") ?? null,
+            ),
+          );
         }
         setAberto(estado);
       }}
@@ -262,6 +370,12 @@ export function Combobox({
             aria-label={ariaLabel}
             disabled={disabled}
             id={id}
+            // O botão continua sendo a largura que o host mandou (em filtro, um
+            // trilho), então rótulo longo segue cortando AQUI de propósito. O
+            // `title` é a saída para ler o escolhido por inteiro sem abrir a
+            // lista. Não mexe no nome acessível: o botão já tem texto e
+            // `aria-label`, que ganham do `title`.
+            title={rotuloSelecionado || undefined}
             className={cn("w-full justify-between font-normal", className)}
           >
             <span
@@ -275,8 +389,22 @@ export function Combobox({
       </span>
       <PopoverContent
         container={container}
+        // A classe é o piso de sempre, e continua valendo sozinha quando não dá
+        // para medir (jsdom). Quando dá, o `style` abaixo manda nela.
         className="w-(--radix-popover-trigger-width) min-w-[12rem] p-0"
         align="start"
+        style={
+          larguraPainel
+            ? {
+                // `max` com a largura do gatilho: o painel CRESCE para o rótulo
+                // caber, mas nunca fica mais estreito que o botão que o abriu.
+                // `min` com o espaço que sobra até a borda da janela: perto dela
+                // o painel encolhe em vez de sair da tela — mesma ideia do teto
+                // de altura logo abaixo, na área rolável.
+                width: `max(var(--radix-popover-trigger-width), min(${larguraPainel}px, var(--radix-popover-content-available-width, ${larguraPainel}px)))`,
+              }
+            : undefined
+        }
       >
         {/* O painel monta a cada abertura (o Radix desmonta o conteúdo ao
             fechar), então busca e destaque nascem limpos sem efeito de reset. */}

@@ -32,10 +32,8 @@ import {
   periodoDoModo,
   type FiltrosCustoCc,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
-import {
-  lerFiltrosCustoReceita,
-  type FiltrosCustoReceita,
-} from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import { centrosEfetivos } from "@/modules/financeiro/relatorios/centros-e-etapas";
 import {
   porCentro,
   porMes,
@@ -79,7 +77,7 @@ import {
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
-  listarCentrosCustoRaiz,
+  listarCentrosCustoParaFiltro,
   listarFornecedoresComLancamentos,
   mesCorrente,
   mesesDeCompetencia,
@@ -557,10 +555,18 @@ function descreverPeriodo(
 
 async function ConteudoCustoCc({
   filtros,
+  centroIds,
   erroDoModo,
   podeVerLancamentos,
 }: {
   filtros: FiltrosCustoCc;
+  /**
+   * Os centros que vão ao banco, já traduzidos da escada da tela: a raiz, ou as
+   * etapas dela quando alguma foi escolhida (ver `centrosEfetivos`). Vem por
+   * fora de `filtros` porque `filtros` é o que a BARRA mostra de volta — lá os
+   * dois níveis precisam continuar separados para cada campo abrir marcado.
+   */
+  centroIds: string[];
   erroDoModo?: string;
   podeVerLancamentos: boolean;
 }) {
@@ -578,8 +584,8 @@ async function ConteudoCustoCc({
   // começou. A janela cabe a vida mais antiga, e cada linha do gráfico começa na
   // dela (o recorte por centro é feito na RPC da série).
   const primeirosMeses =
-    filtros.modo === "vida" && filtros.centroIds.length > 0
-      ? await primeirosMesesDosCentros(filtros.centroIds)
+    filtros.modo === "vida" && centroIds.length > 0
+      ? await primeirosMesesDosCentros(centroIds)
       : undefined;
   const primeiroMes =
     primeirosMeses && primeirosMeses.size > 0
@@ -591,7 +597,7 @@ async function ConteudoCustoCc({
       <EmptyState
         icone={BarChart3}
         titulo={
-          filtros.centroIds.length > 1
+          centroIds.length > 1
             ? "Estes centros de custo ainda não têm custo"
             : "Este centro de custo ainda não tem custo"
         }
@@ -617,7 +623,7 @@ async function ConteudoCustoCc({
     // Os centros escolhidos são o que faz a tabela e os cartões falarem só deles.
     // Este parâmetro já existiu e era jogado fora antes de chegar ao banco: a
     // escolha mudava a URL e não mudava número nenhum.
-    centroIds: filtros.centroIds,
+    centroIds,
     categoriaIds: filtros.categoriaIds,
     fornecedorIds: filtros.fornecedorIds,
     formaIds: filtros.formaIds,
@@ -635,8 +641,8 @@ async function ConteudoCustoCc({
     anterior
       ? custoPorCentroCusto({ ...filtrosDaRpc, ...pontasDaRpc(anterior) })
       : Promise.resolve(null),
-    filtros.modo === "vida" && filtros.centroIds.length > 0
-      ? serieDosCentros(filtros.centroIds, filtrosDaRpc)
+    filtros.modo === "vida" && centroIds.length > 0
+      ? serieDosCentros(centroIds, filtrosDaRpc)
       : Promise.resolve(null),
   ]);
 
@@ -703,7 +709,7 @@ async function ConteudoCustoCc({
           detalhe={
             filtros.modo === "vida" && primeiroMes
               ? `Desde ${rotuloMes(primeiroMes)}, o primeiro lançamento ${
-                  filtros.centroIds.length > 1
+                  centroIds.length > 1
                     ? "do mais antigo destes centros"
                     : "deste centro"
                 }`
@@ -765,11 +771,20 @@ async function ConteudoCustoCc({
  * divergiram neste projeto; aqui a divergência é impossível por construção.
  */
 async function ConteudoCustoReceita({
-  filtros,
+  centrosCusto,
+  centrosReceita,
   meses,
   podeVerLancamentos,
 }: {
-  filtros: FiltrosCustoReceita;
+  /**
+   * Os centros que vão ao banco, já traduzidos da escada da tela: a raiz, ou as
+   * etapas dela quando alguma foi escolhida (ver `centrosEfetivos`). Chegam
+   * prontos, e não como o par raiz+etapa cru, porque duas traduções da mesma
+   * escolha divergiriam no primeiro detalhe que alguém acrescentasse de um lado
+   * só — e o sintoma seria a tabela somando um conjunto e a barra dizendo outro.
+   */
+  centrosCusto: string[];
+  centrosReceita: string[];
   meses: string[];
   podeVerLancamentos: boolean;
 }) {
@@ -785,8 +800,8 @@ async function ConteudoCustoReceita({
 
   const linhas = await custoReceita({
     meses,
-    centrosCusto: filtros.centrosCusto,
-    centrosReceita: filtros.centrosReceita,
+    centrosCusto,
+    centrosReceita,
   });
 
   if (linhas.length === 0) {
@@ -843,51 +858,13 @@ async function ConteudoCustoReceita({
         />
       </GradeKpis>
 
-      {/* Empréstimo tomado, e o outro lado da movimentação. Só aparece quando
-          existe: uma faixa de zeros em todo relatório de obra seria ruído, e a
-          maioria dos centros não tem dívida.
-
-          FORA dos quatro cartões de propósito. Dinheiro que entrou e tem de ser
-          devolvido não é receita, e somá-lo faria o centro Empréstimos parecer
-          lucrativo. Antes de 27/08/2026 ele não aparecia em lugar nenhum deste
-          relatório: o centro mostrava custo de R$ 2,84 milhões e receita zero. */}
-      {total.movimentacaoEntrada > 0 || total.movimentacaoSaida > 0 ? (
-        <Painel>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-detalhe font-medium">
-                Movimentação de dívida
-              </h3>
-              <p className="text-legenda text-muted-foreground">
-                Empréstimo tomado e devolvido no recorte. Não entra na receita,
-                no resultado nem na margem: é dinheiro que precisa voltar.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-x-10 gap-y-3">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-legenda text-muted-foreground uppercase">
-                  Tomado
-                </span>
-                <MoneyText valor={total.movimentacaoEntrada} />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-legenda text-muted-foreground uppercase">
-                  Devolvido
-                </span>
-                <MoneyText valor={total.movimentacaoSaida} />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-legenda text-muted-foreground uppercase">
-                  Em aberto
-                </span>
-                <MoneyText
-                  valor={total.movimentacaoEntrada - total.movimentacaoSaida}
-                />
-              </div>
-            </div>
-          </div>
-        </Painel>
-      ) : null}
+      {/* SEM faixa de movimentação de dívida aqui, e é decisão, não esquecimento.
+          Ela existiu por um dia (26/08/2026) para o empréstimo aparecer sem somar
+          na receita. Em 27/08 o Tiago decidiu que a análise inteira do centro de
+          Empréstimos vive no relatório de Créditos, e a faixa passou a mostrar só
+          resíduo: um pagamento de empréstimo de R$ 37.300,00 parado no Escritório
+          Central, que o corte por centro financeiro não pegava. Hoje a RPC só
+          devolve categoria operacional, então não há o que mostrar. */}
 
       <Painel>
         <CustoReceitaGrafico meses={porMesDoRelatorio} />
@@ -1056,7 +1033,7 @@ export default async function RelatoriosPage({
   const opcoesCustoCc =
     relatorio === "custo-cc"
       ? await Promise.all([
-          listarCentrosCustoRaiz(),
+          listarCentrosCustoParaFiltro(),
           listarCategorias(),
           listarFornecedores(),
           listarFormasPagamento(),
@@ -1073,7 +1050,7 @@ export default async function RelatoriosPage({
   const mesesDisponiveis =
     relatorio === "custo-receita" ? await mesesDeCompetencia() : [];
   const centrosParaCustoReceita =
-    relatorio === "custo-receita" ? await listarCentrosCustoRaiz() : null;
+    relatorio === "custo-receita" ? await listarCentrosCustoParaFiltro() : null;
   const {
     filtros: filtrosCustoReceita,
     mesesEfetivos: mesesCustoReceita,
@@ -1163,6 +1140,11 @@ export default async function RelatoriosPage({
           />
           <ConteudoCustoCc
             filtros={filtrosCustoCc}
+            centroIds={centrosEfetivos(
+              opcoesCustoCc[0],
+              filtrosCustoCc.centroIds,
+              filtrosCustoCc.etapaIds,
+            )}
             erroDoModo={erroDoModo}
             podeVerLancamentos={podeVerLancamentos}
           />
@@ -1181,7 +1163,16 @@ export default async function RelatoriosPage({
             periodoDesabilitado={periodoDesabilitado}
           />
           <ConteudoCustoReceita
-            filtros={filtrosCustoReceita}
+            centrosCusto={centrosEfetivos(
+              centrosParaCustoReceita,
+              filtrosCustoReceita.centrosCusto,
+              filtrosCustoReceita.etapasCusto,
+            )}
+            centrosReceita={centrosEfetivos(
+              centrosParaCustoReceita,
+              filtrosCustoReceita.centrosReceita,
+              filtrosCustoReceita.etapasReceita,
+            )}
             meses={mesesCustoReceita}
             podeVerLancamentos={podeVerLancamentos}
           />

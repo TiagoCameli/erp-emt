@@ -9,6 +9,8 @@ import {
 const CUSTO_A = "11111111-1111-4111-8111-111111111111";
 const CUSTO_B = "22222222-2222-4222-8222-222222222222";
 const RECEITA_A = "33333333-3333-4333-8333-333333333333";
+const ETAPA_A = "44444444-4444-4444-8444-444444444444";
+const ETAPA_B = "55555555-5555-4555-8555-555555555555";
 
 /** O que a tela tem para oferecer no seletor de meses. */
 const DISPONIVEIS = ["2026-05", "2026-06", "2026-07", "2026-08"];
@@ -91,6 +93,40 @@ describe("lerFiltrosCustoReceita", () => {
     );
     expect(filtros.centrosCusto).toEqual([CUSTO_A, CUSTO_B]);
     expect(filtros.centrosReceita).toEqual([RECEITA_A]);
+  });
+
+  it("as etapas viajam em parâmetro PRÓPRIO, um por lado", () => {
+    // Separadas do centro porque significam coisas diferentes: a raiz é o
+    // conjunto e a etapa é o recorte dentro dele. Misturadas num parâmetro só,
+    // a tela não teria como abrir cada campo marcado com o que é dele.
+    const { filtros } = lerFiltrosCustoReceita(
+      {
+        centro_custo: CUSTO_A,
+        etapa_custo: `${ETAPA_A},${ETAPA_B}`,
+        centro_receita: RECEITA_A,
+        etapa_receita: ETAPA_A,
+      },
+      DISPONIVEIS,
+    );
+    expect(filtros.etapasCusto).toEqual([ETAPA_A, ETAPA_B]);
+    expect(filtros.etapasReceita).toEqual([ETAPA_A]);
+  });
+
+  it("sem etapa na URL, os dois lados nascem sem recorte", () => {
+    const { filtros } = lerFiltrosCustoReceita(
+      { centro_custo: CUSTO_A },
+      DISPONIVEIS,
+    );
+    expect(filtros.etapasCusto).toEqual([]);
+    expect(filtros.etapasReceita).toEqual([]);
+  });
+
+  it("etapa com uuid inválido não vira filtro", () => {
+    const { filtros } = lerFiltrosCustoReceita(
+      { centro_custo: CUSTO_A, etapa_custo: "escavadeira" },
+      DISPONIVEIS,
+    );
+    expect(filtros.etapasCusto).toEqual([]);
   });
 
   it("uuid inválido em qualquer um dos lados não vira filtro", () => {

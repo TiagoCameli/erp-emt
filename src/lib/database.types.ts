@@ -4349,7 +4349,6 @@ export type Database = {
           centro_custo_id: string;
           codigo: string;
           mes: string;
-          natureza: string;
           nome: string;
           retencao: number;
           tipo: string;

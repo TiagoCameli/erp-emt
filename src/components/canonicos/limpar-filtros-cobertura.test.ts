@@ -17,7 +17,14 @@ import { describe, expect, it } from "vitest";
  * e esquecer o `onLimparFiltros` descobre aqui, e não em produção.
  */
 
-/** Arquivos de tela que declaram filtros para um host canônico. */
+/**
+ * Arquivos de TELA que declaram filtros para um host canônico.
+ *
+ * O `.test.tsx` fica de fora: um teste que renderiza uma barra de filtros escreve
+ * `filtros={...}` igual a uma tela, mas não é uma — ele não tem host nem botão
+ * para cobrir, e cobrá-lo aqui obrigaria a torcer o teste (espalhar props num
+ * objeto só para escapar do grep) em vez de corrigir a pergunta.
+ */
 function arquivosComFiltro(): string[] {
   return execFileSync(
     "grep",
@@ -27,6 +34,7 @@ function arquivosComFiltro(): string[] {
     .trim()
     .split("\n")
     .filter(Boolean)
+    .filter((arquivo) => !arquivo.endsWith(".test.tsx"))
     .sort();
 }
 

@@ -34,6 +34,7 @@ import {
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
+import { BotaoDuplicarLancamento } from "@/modules/financeiro/lancamentos/components/botao-duplicar-lancamento";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   ROTULO_BANCO,
@@ -369,6 +370,8 @@ export interface LancamentosTabelaProps {
   contas: ContaBancariaOpcao[];
   /** Permissão de excluir: sem ela a ação não aparece na linha. */
   podeExcluir: boolean;
+  /** Duplicar cria um lançamento novo: sem permissão de criar, o botão some. */
+  podeCriar: boolean;
   /**
    * Rótulo da coluna do recorte, ou `null` quando a URL não recorta.
    *
@@ -397,6 +400,7 @@ export function LancamentosTabela({
   formasPagamento,
   contas,
   podeExcluir,
+  podeCriar,
   rotuloRecorte,
 }: LancamentosTabelaProps) {
   const colunas = React.useMemo(
@@ -872,6 +876,12 @@ export function LancamentosTabela({
         limparDesabilitado={salvandoLote}
       >
         <BotaoEspelho rota="/espelho/lancamentos" ids={selecionados} />
+        {podeCriar ? (
+          <BotaoDuplicarLancamento
+            selecionados={selecionados}
+            onLimparSelecao={() => setSelecionados([])}
+          />
+        ) : null}
         <LoteContaBancaria
           selecionados={selecionados}
           jaComConta={

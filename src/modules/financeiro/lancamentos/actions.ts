@@ -14,6 +14,11 @@ import {
   parametrosDaQueryString,
 } from "@/modules/financeiro/lancamentos/filtros";
 import {
+  avisosDaDuplicacao,
+  dadosDuplicados,
+  motivoParaNaoDuplicar,
+} from "@/modules/financeiro/lancamentos/duplicacao";
+import {
   lancamentoSchema,
   type LancamentoInput,
 } from "@/modules/financeiro/lancamentos/schemas";
@@ -27,6 +32,7 @@ import {
   nomeArquivoPlanilhaLancamentos,
 } from "@/modules/financeiro/lancamentos/planilha";
 import {
+  buscarLancamento,
   detalharLancamentosParaPlanilha,
   listarLancamentos,
   type LancamentoPlanilha,
@@ -233,6 +239,79 @@ export async function salvarLancamento(
     revalidatePath(ROTA_RECEBIMENTOS);
   }
   return { ok: true, id: data };
+}
+
+/** O que a duplicação devolve: o id para navegar e o que conferir depois. */
+export type ResultadoDuplicacao =
+  | { ok: true; id: string; numero: string | null; avisos: string[] }
+  | { erro: string };
+
+/**
+ * Cria um lançamento NOVO com os dados de um existente.
+ *
+ * Pedido do Tiago em 27/08/2026: "quando eu seleciono um lançamento quero que
+ * apareça um botão de duplicar (...) que pode ser todo editado, com nova data de
+ * criação e uma nova trilha, e não leva os anexos, e também ainda precisa ser
+ * revisado, mesmo que o que foi utilizado para duplicação esteja revisado e
+ * aprovado."
+ *
+ * O que cada parte disso vira, e de onde vem sozinha:
+ * - **nova data de criação e nova trilha**: o duplicado é uma linha nova, então
+ *   `created_at` é de agora e a trilha, que sai do `audit_log` por `registro_id`,
+ *   já nasce só dele. Nada a fazer.
+ * - **não leva os anexos**: `anexo_vinculos` é polimórfica e nunca é tocada aqui.
+ * - **ainda precisa ser revisado**: as parcelas nascem sem conta bancária, que é
+ *   o que marca um a pagar como revisado, e sem status herdado. O duplicado
+ *   percorre o mesmo caminho de um lançamento digitado à mão — é por isso que
+ *   esta função monta o payload e entrega para `salvarLancamento(null, ...)` em
+ *   vez de escrever um insert próprio. Um insert próprio seria uma segunda porta
+ *   para dentro de `lancamentos`, com a sua própria cópia das regras de
+ *   permissão por tipo, de soma de parcelas e de roteamento do pagamento.
+ * - **pode ser todo editado**: o duplicado nasce `manual`, inclusive quando o
+ *   original veio de OC ou de diária. Lançamento de outra origem é somente
+ *   leitura no Financeiro, e o pedido é justamente ter uma cópia editável.
+ *
+ * A decisão de o que copiar mora em `duplicacao.ts`, que é função pura e tem
+ * teste campo a campo.
+ */
+export async function duplicarLancamento(
+  id: string,
+): Promise<ResultadoDuplicacao> {
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Lançamento inválido" };
+
+  // Ler o original exige VER; criar a cópia exige CRIAR, e quem confere isso é
+  // `salvarLancamento`, que já sabe que recebível também aceita
+  // `financeiro.recebimentos`. Repetir a regra aqui seria a terceira cópia dela.
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para ver lançamentos" };
+  }
+
+  const original = await buscarLancamento(idValido.data);
+  if (!original) return { erro: "Lançamento não encontrado" };
+
+  const impedimento = motivoParaNaoDuplicar(original);
+  if (impedimento) return { erro: impedimento };
+
+  const resultado = await salvarLancamento(null, dadosDuplicados(original));
+  if ("erro" in resultado) return { erro: resultado.erro };
+
+  // O número é lido DEPOIS de criar: quem numera é o banco, por sequência anual.
+  const supabase = await createClient();
+  const { data: novo } = await supabase
+    .from("lancamentos")
+    .select("numero")
+    .eq("id", resultado.id)
+    .maybeSingle();
+
+  return {
+    ok: true,
+    id: resultado.id,
+    numero: novo?.numero ?? null,
+    avisos: avisosDaDuplicacao(original).map((aviso) => aviso.texto),
+  };
 }
 
 /**
