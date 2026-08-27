@@ -77,7 +77,7 @@ const formulario = {
     valor: string;
     formaPagamentoId: string;
   }[],
-  formas: [{ formaPagamentoId: BOLETO, valor: "" }],
+  formas: [{ formaPagamentoId: BOLETO, cartaoId: "", valor: "" }],
 };
 
 /** As reclamações de uma tentativa recusada, sem depender da ordem delas. */
@@ -318,7 +318,7 @@ describe("as mesmas regras no formulário", () => {
   it("a primeira forma em branco não passa", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...formulario,
-      formas: [{ formaPagamentoId: "", valor: "" }],
+      formas: [{ formaPagamentoId: "", cartaoId: "", valor: "" }],
     });
     expect(r.success).toBe(false);
     expect(caminhos(r)).toContain("formas.0.formaPagamentoId");
@@ -328,8 +328,8 @@ describe("as mesmas regras no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...formulario,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "1000,00" },
-        { formaPagamentoId: DINHEIRO, valor: "" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "1000,00" },
+        { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "" },
       ],
     });
     expect(r.success).toBe(false);
@@ -340,8 +340,8 @@ describe("as mesmas regras no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...formulario,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "500,00" },
-        { formaPagamentoId: DINHEIRO, valor: "400,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "500,00" },
+        { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "400,00" },
       ],
       parcelas: [
         {
@@ -366,8 +366,8 @@ describe("as mesmas regras no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...formulario,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "700,00" },
-        { formaPagamentoId: DINHEIRO, valor: "400,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "700,00" },
+        { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "400,00" },
       ],
       parcelas: [
         {
@@ -390,8 +390,8 @@ describe("as mesmas regras no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...formulario,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "500,00" },
-        { formaPagamentoId: DINHEIRO, valor: "500,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "500,00" },
+        { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "500,00" },
       ],
       parcelas: [],
     });
@@ -407,8 +407,8 @@ describe("as mesmas regras no formulário", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...formulario,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "500,00" },
-        { formaPagamentoId: DINHEIRO, valor: "500,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "500,00" },
+        { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "500,00" },
       ],
       parcelas: [
         {
@@ -468,7 +468,7 @@ describe("a forma do cabeçalho não é preenchida pela tela", () => {
   it("a forma continua obrigatória, e o erro cai no campo que existe na tela", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...comoATelaManda,
-      formas: [{ formaPagamentoId: "", valor: "" }],
+      formas: [{ formaPagamentoId: "", cartaoId: "", valor: "" }],
     });
     expect(r.success).toBe(false);
     expect(mensagens(r)).toContain("Escolha a forma de pagamento");
@@ -483,8 +483,8 @@ describe("a forma do cabeçalho não é preenchida pela tela", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...comoATelaManda,
       formas: [
-        { formaPagamentoId: BOLETO, valor: "500,00" },
-        { formaPagamentoId: DINHEIRO, valor: "500,00" },
+        { formaPagamentoId: BOLETO, cartaoId: "", valor: "500,00" },
+        { formaPagamentoId: DINHEIRO, cartaoId: "", valor: "500,00" },
       ],
       parcelas: [
         {

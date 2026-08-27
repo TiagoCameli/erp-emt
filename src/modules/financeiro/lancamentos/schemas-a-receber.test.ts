@@ -30,7 +30,7 @@ const formAPagar = {
   // formulario do a pagar sempre mostra o campo.
   parcelas: [{ valor: "", dataVencimento: "", formaPagamentoId: FORMA }],
   rateios: [{ centroCustoId: CENTRO, valor: "" }],
-  formas: [{ formaPagamentoId: FORMA, valor: "" }],
+  formas: [{ formaPagamentoId: FORMA, cartaoId: "", valor: "" }],
 };
 
 /** O mesmo formulário como A RECEBER, com a trinca que só ele exige. */

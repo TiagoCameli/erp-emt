@@ -153,6 +153,16 @@ export type OcParcelaInput = z.infer<typeof ocParcelaSchema>;
  */
 export const ocFormaSchema = z.object({
   formaPagamentoId: idSchemaCom("Escolha a forma de pagamento"),
+  /**
+   * Qual cartão pagou esta parte, quando a forma é cartão de crédito.
+   *
+   * Opcional AQUI e obrigatório no banco: só o banco sabe o TIPO da forma, e é
+   * `trg_oc_formas_cartao` que exige o cartão quando o tipo é cartao_credito e o
+   * recusa quando não é. Repetir essa decisão aqui exigiria consultar
+   * `formas_pagamento` dentro de um schema, que é onde a regra deixaria de ter
+   * um dono só.
+   */
+  cartaoId: idSchemaCom("Cartão inválido").optional(),
   valor: z
     .number({ error: "Valor da forma inválido" })
     .positive({ error: "O valor da forma precisa ser maior que zero" })
@@ -577,6 +587,8 @@ export const ordemCompraFormSchema = z
     formas: z.array(
       z.object({
         formaPagamentoId: z.string().trim(),
+        /** Vazio = nenhum cartão escolhido, igual ao Combobox sem seleção. */
+        cartaoId: z.string().trim(),
         valor: z.string().trim(),
       }),
     ),
@@ -741,6 +753,37 @@ export const ordemCompraFormSchema = z
   });
 
 export type OrdemCompraFormInput = z.infer<typeof ordemCompraFormSchema>;
+
+/**
+ * O schema do formulário COM a exigência do cartão nas formas de cartão.
+ *
+ * Por que é uma função e não mais uma regra dentro do `superRefine` acima: a
+ * regra depende do TIPO da forma escolhida, e o tipo não está no formulário —
+ * está no catálogo de `formas_pagamento`, que a tela recebe por prop. Um schema
+ * estático não tem como saber que "aquele uuid ali" é cartão de crédito.
+ *
+ * A tela monta o `Set` dos ids de forma do tipo cartão e memoiza o schema. O
+ * `ordemCompraFormSchema` de cima continua existindo sem esta regra: é o que os
+ * testes das outras regras usam, e é o mesmo objeto quando o conjunto é vazio.
+ *
+ * O banco exige a mesma coisa por `trg_oc_formas_cartao`. Aqui é só para o erro
+ * cair no campo, em vez de voltar do servidor como texto solto.
+ */
+export function ordemCompraFormSchemaCom(
+  formasDeCartao: ReadonlySet<string>,
+) {
+  return ordemCompraFormSchema.superRefine((form, ctx) => {
+    form.formas.forEach((forma, i) => {
+      if (!formasDeCartao.has(forma.formaPagamentoId)) return;
+      if (forma.cartaoId) return;
+      ctx.addIssue({
+        code: "custom",
+        message: "Escolha o cartão que pagou",
+        path: ["formas", i, "cartaoId"],
+      });
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Recebimento da OC (Task 6): confirma a NF e gera as parcelas do a_pagar

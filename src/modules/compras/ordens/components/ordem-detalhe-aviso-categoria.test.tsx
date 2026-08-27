@@ -94,6 +94,7 @@ function renderizar(detalhe: OrdemDetalhe) {
       condicoesPagamento={[]}
       formasPagamento={[]}
       categorias={[]}
+      cartoes={[]}
       parcelasCondicao={[]}
       anexosIniciais={[]}
       podeEditar

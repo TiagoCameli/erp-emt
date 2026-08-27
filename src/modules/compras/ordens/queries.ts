@@ -13,6 +13,7 @@ import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
 import type { StatusOC } from "@/modules/compras/_shared/formato";
 import type { AjustesDaOrdem } from "@/modules/compras/ordens/calculo";
+import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import { ehParcelaAberta } from "@/modules/financeiro/_shared/formato";
 import {
   idsFornecedoresPorNome,
@@ -181,6 +182,10 @@ export interface OrdemForma {
   id: string;
   formaPagamentoId: string;
   formaPagamentoNome: string;
+  /** Qual cartão pagou esta parte. Nulo em tudo que não é cartão de crédito. */
+  cartaoId: string | null;
+  /** "Cartão obra (7712)", já montado: a tela e o espelho leem o mesmo texto. */
+  cartaoRotulo: string | null;
   valor: number;
 }
 
@@ -552,7 +557,7 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
          centros_custo(nome, codigo)
        ),
        oc_parcelas(numero_parcela, data_vencimento, valor, oc_forma_id),
-       oc_formas(id, valor, forma_pagamento_id, formas_pagamento(nome))`,
+       oc_formas(id, valor, forma_pagamento_id, cartao_id, formas_pagamento(nome), cartoes_credito(nome, ultimos_digitos))`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -635,6 +640,13 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
         id: forma.id,
         formaPagamentoId: forma.forma_pagamento_id,
         formaPagamentoNome: forma.formas_pagamento?.nome ?? "-",
+        cartaoId: forma.cartao_id,
+        cartaoRotulo: forma.cartoes_credito
+          ? rotuloDoCartao({
+              nome: forma.cartoes_credito.nome,
+              ultimosDigitos: forma.cartoes_credito.ultimos_digitos,
+            })
+          : null,
         valor: forma.valor,
       }))
       .sort((a, b) => b.valor - a.valor),

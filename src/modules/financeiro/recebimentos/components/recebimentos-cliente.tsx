@@ -954,6 +954,9 @@ export function RecebimentosCliente({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           lancamento={null}
+          // A receber não declara forma de pagamento, e sem forma não há
+          // cartão: a lista vai vazia de propósito, não por esquecimento.
+          cartoes={[]}
           tipoFixo="a_receber"
           categorias={categorias}
           fornecedores={fornecedores}

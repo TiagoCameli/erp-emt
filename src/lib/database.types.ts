@@ -181,6 +181,56 @@ export type Database = {
           },
         ];
       };
+      cartoes_credito: {
+        Row: {
+          ativo: boolean;
+          banco: string | null;
+          bandeira: string | null;
+          created_at: string;
+          created_by: string | null;
+          dia_fechamento: number | null;
+          dia_vencimento: number | null;
+          id: string;
+          nome: string;
+          ultimos_digitos: string;
+          updated_at: string;
+        };
+        Insert: {
+          ativo?: boolean;
+          banco?: string | null;
+          bandeira?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          dia_fechamento?: number | null;
+          dia_vencimento?: number | null;
+          id?: string;
+          nome: string;
+          ultimos_digitos: string;
+          updated_at?: string;
+        };
+        Update: {
+          ativo?: boolean;
+          banco?: string | null;
+          bandeira?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          dia_fechamento?: number | null;
+          dia_vencimento?: number | null;
+          id?: string;
+          nome?: string;
+          ultimos_digitos?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "cartoes_credito_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       categorias_financeiras: {
         Row: {
           ativo: boolean;
@@ -1898,6 +1948,7 @@ export type Database = {
       lancamento_formas: {
         Row: {
           created_at: string;
+          cartao_id: string | null;
           created_by: string | null;
           forma_pagamento_id: string;
           id: string;
@@ -1907,6 +1958,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          cartao_id?: string | null;
           created_by?: string | null;
           forma_pagamento_id: string;
           id?: string;
@@ -1916,6 +1968,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          cartao_id?: string | null;
           created_by?: string | null;
           forma_pagamento_id?: string;
           id?: string;
@@ -1924,6 +1977,13 @@ export type Database = {
           valor?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "lancamento_formas_cartao_id_fkey";
+            columns: ["cartao_id"];
+            isOneToOne: false;
+            referencedRelation: "cartoes_credito";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "lancamento_formas_forma_pagamento_id_fkey";
             columns: ["forma_pagamento_id"];
@@ -2404,6 +2464,7 @@ export type Database = {
       oc_formas: {
         Row: {
           created_at: string;
+          cartao_id: string | null;
           created_by: string | null;
           forma_pagamento_id: string;
           id: string;
@@ -2413,6 +2474,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          cartao_id?: string | null;
           created_by?: string | null;
           forma_pagamento_id: string;
           id?: string;
@@ -2422,6 +2484,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          cartao_id?: string | null;
           created_by?: string | null;
           forma_pagamento_id?: string;
           id?: string;
@@ -2430,6 +2493,13 @@ export type Database = {
           valor?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "oc_formas_cartao_id_fkey";
+            columns: ["cartao_id"];
+            isOneToOne: false;
+            referencedRelation: "cartoes_credito";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "oc_formas_forma_pagamento_id_fkey";
             columns: ["forma_pagamento_id"];
@@ -4355,6 +4425,19 @@ export type Database = {
         Returns: undefined;
       };
       fn_saldo_conta: { Args: { p_conta: string }; Returns: number };
+      fn_salvar_cartao_credito: {
+        Args: {
+          p_ativo: boolean;
+          p_banco: string;
+          p_bandeira: string;
+          p_dia_fechamento: number;
+          p_dia_vencimento: number;
+          p_id: string;
+          p_nome: string;
+          p_ultimos_digitos: string;
+        };
+        Returns: string;
+      };
       fn_salvar_forma_pagamento: {
         Args: {
           p_ativo: boolean;

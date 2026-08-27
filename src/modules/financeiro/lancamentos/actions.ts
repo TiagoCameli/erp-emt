@@ -123,6 +123,10 @@ function rateiosParaRpc(dados: LancamentoInput): Json {
 function formasParaRpc(dados: LancamentoInput): Json {
   return dados.formas.map((forma) => ({
     forma_pagamento_id: forma.formaPagamentoId,
+    // `null` e nao `undefined`: o jsonb precisa da chave presente para
+    // `x->>'cartao_id'` devolver nulo. Quem exige o cartao quando a forma e
+    // cartao de credito e a trigger `trg_lancamento_formas_cartao`.
+    cartao_id: forma.cartaoId ?? null,
     valor: forma.valor,
   }));
 }

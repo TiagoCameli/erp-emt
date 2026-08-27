@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarCartoesAtivos } from "@/modules/cadastros/cartoes/queries";
 import { lerFiltrosLancamentos } from "@/modules/financeiro/lancamentos/filtros";
 import { rotuloRecorte as rotuloRecorte_ } from "@/modules/financeiro/lancamentos/recorte";
 import { LancamentosAcoesCabecalho } from "@/modules/financeiro/lancamentos/components/lancamentos-acoes-cabecalho";
@@ -58,6 +59,7 @@ export default async function PaginaLancamentos({
     clientes,
     centrosCusto,
     formasPagamento,
+    cartoes,
     condicoesPagamento,
     contas,
   ] = await Promise.all([
@@ -67,6 +69,7 @@ export default async function PaginaLancamentos({
     listarClientes(),
     listarCentrosCusto(),
     listarFormasPagamento(),
+    listarCartoesAtivos(),
     listarCondicoesPagamento(),
     listarContasBancarias(),
   ]);
@@ -110,6 +113,7 @@ export default async function PaginaLancamentos({
             contas={contas}
             centrosCusto={centrosCusto}
             formasPagamento={formasPagamento}
+            cartoes={cartoes}
             condicoesPagamento={condicoesPagamento}
           />
         }

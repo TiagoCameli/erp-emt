@@ -83,17 +83,22 @@ export function achatarGruposEmItens(grupos: GrupoForm[]): ItemPlano[] {
  * faria a soma fechar com um total que nao existe.
  */
 export function formasDoFormulario(form: {
-  formas: { formaPagamentoId: string; valor: string }[];
+  formas: { formaPagamentoId: string; cartaoId: string; valor: string }[];
   centrosCusto: GrupoForm[];
   frete?: string;
   outrasDespesas?: string;
   impostos?: string;
   desconto?: string;
-}): { formaPagamentoId: string; valor: number }[] {
+}): { formaPagamentoId: string; cartaoId?: string; valor: number }[] {
+  // Campo vazio vira `undefined`, nao string vazia: `idSchemaCom(...).optional()`
+  // recusa "" com "Cartao invalido", e a forma que nao e cartao SEMPRE manda "".
+  const cartao = (valor: string) => (valor === "" ? undefined : valor);
+
   if (form.formas.length === 1) {
     return [
       {
         formaPagamentoId: form.formas[0]!.formaPagamentoId,
+        cartaoId: cartao(form.formas[0]!.cartaoId),
         valor: totalComAjustes(
           achatarGruposEmItens(form.centrosCusto),
           ajustesDoForm(form),
@@ -103,6 +108,7 @@ export function formasDoFormulario(form: {
   }
   return form.formas.map((forma) => ({
     formaPagamentoId: forma.formaPagamentoId,
+    cartaoId: cartao(forma.cartaoId),
     valor: paraNumero(forma.valor),
   }));
 }

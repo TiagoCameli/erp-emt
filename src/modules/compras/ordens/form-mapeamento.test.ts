@@ -100,7 +100,7 @@ describe("formasDoFormulario", () => {
       impostos?: string;
       desconto?: string;
     },
-    formas: { formaPagamentoId: string; valor: string }[],
+    formas: { formaPagamentoId: string; cartaoId: string; valor: string }[],
   ) {
     return {
       formas,
@@ -125,19 +125,23 @@ describe("formasDoFormulario", () => {
     // outras despesas paga por uma forma so era recusada no salvamento.
     const formas = formasDoFormulario(
       formulario({ outrasDespesas: "1.000,00", desconto: "174,94" }, [
-        { formaPagamentoId: FORMA, valor: "" },
+        { cartaoId: "", formaPagamentoId: FORMA, valor: "" },
       ]),
     );
-    expect(formas).toEqual([{ formaPagamentoId: FORMA, valor: 5825.06 }]);
+    expect(formas).toEqual([
+      { formaPagamentoId: FORMA, cartaoId: undefined, valor: 5825.06 },
+    ]);
   });
 
   it("CONTROLE: sem ajuste nenhum, a forma unica leva a soma dos itens", () => {
     // Se este caso mudasse, a correcao teria quebrado a ordem simples, que e a
     // maioria delas.
     const formas = formasDoFormulario(
-      formulario({}, [{ formaPagamentoId: FORMA, valor: "" }]),
+      formulario({}, [{ cartaoId: "", formaPagamentoId: FORMA, valor: "" }]),
     );
-    expect(formas).toEqual([{ formaPagamentoId: FORMA, valor: 5000 }]);
+    expect(formas).toEqual([
+      { formaPagamentoId: FORMA, cartaoId: undefined, valor: 5000 },
+    ]);
   });
 
   it("a soma das formas fecha com a MESMA conta que o servidor confere", () => {
@@ -151,7 +155,7 @@ describe("formasDoFormulario", () => {
         impostos: "50,00",
         desconto: "174,94",
       },
-      [{ formaPagamentoId: FORMA, valor: "" }],
+      [{ cartaoId: "", formaPagamentoId: FORMA, valor: "" }],
     );
     const somaFormas = formasDoFormulario(form).reduce(
       (soma, forma) => soma + Math.round(forma.valor * 100),
@@ -175,8 +179,8 @@ describe("formasDoFormulario", () => {
   it("com DUAS formas, cada uma leva o valor digitado", () => {
     const formas = formasDoFormulario(
       formulario({ desconto: "100,00" }, [
-        { formaPagamentoId: FORMA, valor: "2.000,00" },
-        { formaPagamentoId: FORMA_2, valor: "2.900,00" },
+        { cartaoId: "", formaPagamentoId: FORMA, valor: "2.000,00" },
+        { cartaoId: "", formaPagamentoId: FORMA_2, valor: "2.900,00" },
       ]),
     );
     expect(formas).toEqual([
@@ -191,7 +195,7 @@ describe("formasDoFormulario", () => {
     // existe e o erro apareceria longe da causa.
     const formas = formasDoFormulario(
       formulario({ desconto: "6.000,00" }, [
-        { formaPagamentoId: FORMA, valor: "" },
+        { cartaoId: "", formaPagamentoId: FORMA, valor: "" },
       ]),
     );
     expect(formas[0]!.valor).toBeLessThan(0);
@@ -212,7 +216,9 @@ describe("o payload da tela passa pelo schema do SERVIDOR", () => {
    * estava errado era a PONTE entre eles. Testar as pontas separadas deixou o
    * furo passar; o que pega e submeter o payload inteiro ao juiz que recusou.
    */
-  function payload(formasDoForm: { formaPagamentoId: string; valor: string }[]) {
+  function payload(
+    formasDoForm: { formaPagamentoId: string; cartaoId: string; valor: string }[],
+  ) {
     const form = {
       formas: formasDoForm,
       centrosCusto: [
@@ -247,7 +253,7 @@ describe("o payload da tela passa pelo schema do SERVIDOR", () => {
 
   it("aceita a ordem com desconto paga por uma forma so", () => {
     const resultado = ordemCompraSchema.safeParse(
-      payload([{ formaPagamentoId: FORMA, valor: "" }]),
+      payload([{ cartaoId: "", formaPagamentoId: FORMA, valor: "" }]),
     );
     expect(resultado.success).toBe(true);
   });
@@ -256,7 +262,7 @@ describe("o payload da tela passa pelo schema do SERVIDOR", () => {
     // Reproduz o defeito de proposito. Sem esta linha, o teste acima passaria
     // tambem numa versao em que o servidor tivesse parado de conferir a soma --
     // e ai o teste nao estaria provando nada.
-    const errado = payload([{ formaPagamentoId: FORMA, valor: "" }]);
+    const errado = payload([{ cartaoId: "", formaPagamentoId: FORMA, valor: "" }]);
     errado.formas = [{ formaPagamentoId: FORMA, valor: 5000 }];
     const resultado = ordemCompraSchema.safeParse(errado);
     expect(resultado.success).toBe(false);

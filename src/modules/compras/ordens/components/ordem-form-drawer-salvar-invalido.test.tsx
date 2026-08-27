@@ -55,9 +55,15 @@ const CONDICAO = "44444444-4444-4444-8444-444444444444";
 const CATEGORIA = "55555555-5555-4555-8555-555555555555";
 const CENTRO = "66666666-6666-4666-8666-666666666666";
 const INSUMO = "77777777-7777-4777-8777-777777777777";
+/** O CARTÃO em si, do cadastro. `CARTAO` acima é a FORMA de pagamento. */
+const CARTAO_OBRA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-/** A OC-2026-0026 como estava no banco: R$ 15.400,00 em PIX (400) + cartão (15.000). */
-function ordemDividida(precoDoItem: number): OrdemDetalhe {
+/**
+ * A OC-2026-0026 como estava no banco: R$ 15.400,00 em PIX (400) + cartão
+ * (15.000). O `comCartao` diz se a linha do cartão de crédito já tem cartão
+ * escolhido — sem ele o formulário recusa o envio, que é a regra de 27/08/2026.
+ */
+function ordemDividida(precoDoItem: number, comCartao = true): OrdemDetalhe {
   return {
     id: "88888888-8888-4888-8888-888888888888",
     numero: "OC-2026-0026",
@@ -137,12 +143,16 @@ function ordemDividida(precoDoItem: number): OrdemDetalhe {
         id: "f-pix",
         formaPagamentoId: PIX,
         formaPagamentoNome: "PIX",
+        cartaoId: null,
+        cartaoRotulo: null,
         valor: 400,
       },
       {
         id: "f-cc",
         formaPagamentoId: CARTAO,
         formaPagamentoNome: "Cartão de Crédito",
+        cartaoId: comCartao ? CARTAO_OBRA : null,
+        cartaoRotulo: comCartao ? "Cartão obra (7712)" : null,
         valor: 15000,
       },
     ],
@@ -173,6 +183,9 @@ function abrirEdicao(ordem: OrdemDetalhe) {
         { id: CARTAO, nome: "Cartão de Crédito", tipo: "cartao_credito" },
       ]}
       categorias={[{ id: CATEGORIA, nome: "Outras despesas" }]}
+      cartoes={[
+        { id: CARTAO_OBRA, nome: "Cartão obra", ultimosDigitos: "7712" },
+      ]}
     />,
   );
 }
@@ -195,6 +208,21 @@ describe("editar OC: salvar com o formulário inválido", () => {
     await waitFor(() => expect(avisos.length).toBe(1));
     expect(editarOrdem).not.toHaveBeenCalled();
     expect(avisos[0]).toMatch(/R\$/);
+  });
+
+  it("avisa quando a compra é no cartão e ninguém disse qual cartão", async () => {
+    // A regra de 27/08/2026: forma do tipo cartão de crédito exige o cartão. Sem
+    // este teste, um envio sem cartão só quebraria no banco, com a mensagem da
+    // trigger e depois da ida ao servidor.
+    abrirEdicao(ordemDividida(15400, false));
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /salvar ordem/i }),
+    );
+
+    await waitFor(() => expect(avisos.length).toBe(1));
+    expect(editarOrdem).not.toHaveBeenCalled();
+    expect(avisos[0]).toMatch(/cart[ãa]o/i);
   });
 
   it("salva sem avisar nada quando está tudo fechado", async () => {

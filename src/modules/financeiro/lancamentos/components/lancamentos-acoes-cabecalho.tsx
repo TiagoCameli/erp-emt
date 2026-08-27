@@ -15,11 +15,14 @@ import type {
   FormaPagamentoOpcao,
   FornecedorOpcao,
 } from "@/modules/financeiro/lancamentos/queries";
+import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 
 export interface LancamentosAcoesCabecalhoProps {
   podeCriar: boolean;
   categorias: CategoriaOpcao[];
+  /** Cartões de crédito ativos, para o pagamento no crédito. */
+  cartoes: CartaoOpcao[];
   fornecedores: FornecedorOpcao[];
   clientes: ClienteOpcao[];
   contas: ContaBancariaOpcao[];
@@ -42,6 +45,7 @@ export interface LancamentosAcoesCabecalhoProps {
 export function LancamentosAcoesCabecalho({
   podeCriar,
   categorias,
+  cartoes,
   fornecedores,
   clientes,
   contas,
@@ -71,6 +75,7 @@ export function LancamentosAcoesCabecalho({
             onAbertoChange={setAberto}
             lancamento={null}
             categorias={categorias}
+            cartoes={cartoes}
             fornecedores={fornecedores}
             clientes={clientes}
             contas={contas}
