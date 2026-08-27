@@ -15,11 +15,6 @@ function linha(
 ): LinhaCustoReceita {
   return {
     mes: "2026-07",
-    // `operacional` por default: era a ÚNICA natureza que a RPC devolvia antes de
-    // 27/08/2026, e é sobre ela que todos os testes abaixo foram escritos. Assim
-    // eles continuam medindo exatamente o que mediam, e a movimentação é testada
-    // à parte, pedindo explicitamente.
-    natureza: "operacional",
     centroCustoId: OBRA,
     nome: "009 - BR-364",
     codigo: null,
@@ -94,8 +89,6 @@ describe("totais", () => {
       retencao: 0,
       resultado: 0,
       margem: null,
-      movimentacaoEntrada: 0,
-      movimentacaoSaida: 0,
     });
   });
 });
@@ -210,89 +203,5 @@ describe("porCentro", () => {
     expect(porCentro([linha({ tipo: "a_pagar", total: 10 })], "a_receber")).toEqual(
       [],
     );
-  });
-});
-
-/**
- * O empréstimo tomado (natureza `movimentacao`) tem de APARECER sem ENTRAR.
- *
- * O caso real: em 27/08/2026 o Tiago abriu este relatório no centro Empréstimos e
- * viu custo de R$ 2.843.964,90 com receita R$ 0,00 — a entrada de R$ 4.261.910,46
- * era invisível porque a RPC só trazia natureza operacional. Trazer a
- * movimentação resolve o "não aparece"; o que estes testes travam é o outro lado,
- * que é pior: ela não pode virar receita, porque aí o centro passaria a parecer
- * lucrativo com dinheiro que precisa ser devolvido.
- */
-describe("movimentação de dívida", () => {
-  const emprestimo = {
-    tipo: "a_receber" as const,
-    total: 4261910.46,
-    natureza: "movimentacao" as const,
-  };
-
-  it("aparece no seu próprio par de números", () => {
-    const t = totais([linha(emprestimo)]);
-    expect(t.movimentacaoEntrada).toBe(4261910.46);
-    expect(t.movimentacaoSaida).toBe(0);
-  });
-
-  it("NÃO entra em receita, resultado nem margem", () => {
-    const t = totais([
-      linha({ tipo: "a_pagar", total: 2843964.9 }),
-      linha(emprestimo),
-    ]);
-    expect(t.receitaLiquida).toBe(0);
-    expect(t.custo).toBe(2843964.9);
-    expect(t.resultado).toBe(-2843964.9);
-    // Margem null e não zero: zero se leria como "não sobrou nada da receita",
-    // e não há receita nenhuma neste centro.
-    expect(t.margem).toBeNull();
-  });
-
-  it("LINHA DE CONTROLE: a mesma linha como operacional MUDA o resultado", () => {
-    // Sem esta, o teste acima passaria também se `totais` estivesse ignorando a
-    // linha por outro motivo qualquer — um erro de tipo, um filtro errado. Aqui a
-    // única diferença entre os dois cenários é a natureza, e ela tem de bastar
-    // para virar o resultado de -2,84 mi para +1,42 mi.
-    const comoMovimentacao = totais([
-      linha({ tipo: "a_pagar", total: 2843964.9 }),
-      linha(emprestimo),
-    ]);
-    const comoOperacional = totais([
-      linha({ tipo: "a_pagar", total: 2843964.9 }),
-      linha({ ...emprestimo, natureza: "operacional" }),
-    ]);
-    expect(comoMovimentacao.resultado).toBe(-2843964.9);
-    expect(comoOperacional.resultado).toBe(1417945.56);
-    expect(comoMovimentacao.resultado).not.toBe(comoOperacional.resultado);
-  });
-
-  it("o gráfico por mês ignora a movimentação", () => {
-    const meses = porMes([
-      linha({ tipo: "a_receber", total: 1000, mes: "2026-07" }),
-      linha({ ...emprestimo, mes: "2026-07" }),
-    ]);
-    expect(meses).toHaveLength(1);
-    expect(meses[0]?.receita).toBe(1000);
-  });
-
-  it("a tabela por centro traz operacional por default e movimentação a pedido", () => {
-    const linhas = [
-      linha({ tipo: "a_receber", total: 1000 }),
-      linha(emprestimo),
-    ];
-    expect(porCentro(linhas, "a_receber")[0]?.total).toBe(1000);
-    expect(porCentro(linhas, "a_receber", "movimentacao")[0]?.total).toBe(
-      4261910.46,
-    );
-  });
-
-  it("soma dois empréstimos em centavos, sem resto de float", () => {
-    const t = totais([
-      linha({ ...emprestimo, total: 963910.46 }),
-      linha({ ...emprestimo, total: 2298000.0 }),
-      linha({ ...emprestimo, total: 1000000.0 }),
-    ]);
-    expect(t.movimentacaoEntrada).toBe(4261910.46);
   });
 });

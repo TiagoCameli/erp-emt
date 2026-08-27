@@ -827,51 +827,13 @@ async function ConteudoCustoReceita({
         />
       </GradeKpis>
 
-      {/* Empréstimo tomado, e o outro lado da movimentação. Só aparece quando
-          existe: uma faixa de zeros em todo relatório de obra seria ruído, e a
-          maioria dos centros não tem dívida.
-
-          FORA dos quatro cartões de propósito. Dinheiro que entrou e tem de ser
-          devolvido não é receita, e somá-lo faria o centro Empréstimos parecer
-          lucrativo. Antes de 27/08/2026 ele não aparecia em lugar nenhum deste
-          relatório: o centro mostrava custo de R$ 2,84 milhões e receita zero. */}
-      {total.movimentacaoEntrada > 0 || total.movimentacaoSaida > 0 ? (
-        <Painel>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-detalhe font-medium">
-                Movimentação de dívida
-              </h3>
-              <p className="text-legenda text-muted-foreground">
-                Empréstimo tomado e devolvido no recorte. Não entra na receita,
-                no resultado nem na margem: é dinheiro que precisa voltar.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-x-10 gap-y-3">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-legenda text-muted-foreground uppercase">
-                  Tomado
-                </span>
-                <MoneyText valor={total.movimentacaoEntrada} />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-legenda text-muted-foreground uppercase">
-                  Devolvido
-                </span>
-                <MoneyText valor={total.movimentacaoSaida} />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-legenda text-muted-foreground uppercase">
-                  Em aberto
-                </span>
-                <MoneyText
-                  valor={total.movimentacaoEntrada - total.movimentacaoSaida}
-                />
-              </div>
-            </div>
-          </div>
-        </Painel>
-      ) : null}
+      {/* SEM faixa de movimentação de dívida aqui, e é decisão, não esquecimento.
+          Ela existiu por um dia (26/08/2026) para o empréstimo aparecer sem somar
+          na receita. Em 27/08 o Tiago decidiu que a análise inteira do centro de
+          Empréstimos vive no relatório de Créditos, e a faixa passou a mostrar só
+          resíduo: um pagamento de empréstimo de R$ 37.300,00 parado no Escritório
+          Central, que o corte por centro financeiro não pegava. Hoje a RPC só
+          devolve categoria operacional, então não há o que mostrar. */}
 
       <Painel>
         <CustoReceitaGrafico meses={porMesDoRelatorio} />
