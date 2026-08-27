@@ -112,9 +112,33 @@ export async function editarConta(
   }
 
   const supabase = await createClient();
+
+  /**
+   * Quem não pode ver o saldo desta conta não escreve as colunas de saldo.
+   *
+   * Sem isto, a pessoa abre o formulário (que não tem como preencher o campo,
+   * porque ela não pode LER a coluna), corrige o nome da conta, salva — e grava
+   * 0,00 em cima do saldo real, sem nada na tela avisando. A tela também esconde
+   * os campos, mas a tela é a última camada, não a única: um POST montado à mão
+   * chegaria aqui com `saldoInicial: 0`.
+   *
+   * Erro na checagem cai no lado seguro (não escreve): perder a edição do saldo
+   * é reversível, sobrescrever o saldo real não.
+   */
+  const { data: podeVerSaldo, error: erroPermissao } = await supabase.rpc(
+    "fn_pode_ver_saldo",
+    { p_conta: idValido.data },
+  );
+
+  const registro = paraRegistro(validado.data);
+  if (erroPermissao || podeVerSaldo !== true) {
+    delete (registro as Partial<typeof registro>).saldo_inicial;
+    delete (registro as Partial<typeof registro>).saldo_inicial_data;
+  }
+
   const { error } = await supabase
     .from(TABELA)
-    .update(paraRegistro(validado.data))
+    .update(registro)
     .eq("id", idValido.data);
 
   if (error) {

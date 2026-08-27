@@ -42,8 +42,12 @@ function valoresIniciais(conta: ContaLista | null): ContaFormInput {
     agencia: conta?.agencia ?? "",
     conta: conta?.conta ?? "",
     tipo: conta?.tipo ?? "corrente",
+    // `saldoInicial` null é SEM PERMISSÃO de ver o saldo desta conta, e o campo
+    // fica escondido. O teste explícito contra null não é zelo: `null !==
+    // undefined` é true, então a versão anterior caía no `String(null)` e o
+    // campo abria com o texto "null" — que ao salvar viraria NaN.
     saldoInicial:
-      conta?.saldoInicial !== undefined
+      conta?.saldoInicial !== undefined && conta?.saldoInicial !== null
         ? String(conta.saldoInicial).replace(".", ",")
         : "",
     saldoInicialData: conta?.saldoInicialData ?? "",
@@ -80,6 +84,15 @@ export function ContasFormDrawer({
   }, [aberto, conta, form]);
 
   const salvando = form.formState.isSubmitting;
+
+  /**
+   * Editando uma conta cujo SALDO o usuário não pode ver.
+   *
+   * `saldoInicial === null` só acontece por permissão: `fn_saldos_das_contas`
+   * não devolve a conta, então a listagem não tem o número. Conta com saldo
+   * inicial zero de verdade chega como `0`, não null.
+   */
+  const semPermissaoDeSaldo = editando && conta.saldoInicial === null;
 
   async function aoEnviar(valores: ContaFormInput) {
     const saldoInicial =
@@ -250,36 +263,54 @@ export function ContasFormDrawer({
           </CampoFormulario>
         </LinhaCampos>
 
-        <LinhaCampos colunas={2}>
-          <CampoFormulario
-            id="conta-saldo-inicial"
-            rotulo="Saldo inicial"
-            ajuda="O saldo que o extrato mostrava na data ao lado, somando a conta corrente com o que estava aplicado."
-            erro={form.formState.errors.saldoInicial?.message}
-          >
-            <InputDecimal
-              id="conta-saldo-inicial"
-              placeholder="0,00"
-              className="tabular-nums text-right"
-              disabled={salvando}
-              {...form.register("saldoInicial")}
-            />
-          </CampoFormulario>
+        {/*
+          Os dois campos de saldo SOMEM para quem não pode ver o saldo desta
+          conta. Mostrá-los vazios seria a pior das opções: quem salvasse
+          qualquer outro campo (o nome, a agência) gravaria 0,00 em cima do saldo
+          real, sem perceber. A action também não escreve essas colunas nesse
+          caso — a tela esconder é a terceira camada, não a única.
 
-          <CampoFormulario
-            id="conta-saldo-inicial-data"
-            rotulo="Saldo em"
-            ajuda="Data do extrato. O saldo atual conta só o que veio DEPOIS dela. Em branco, conta tudo desde o primeiro lançamento."
-            erro={form.formState.errors.saldoInicialData?.message}
-          >
-            <Input
+          `semPermissaoDeSaldo` é só na EDIÇÃO: na criação não há saldo para
+          destruir, e alguém precisa poder informar o saldo de abertura.
+        */}
+        {semPermissaoDeSaldo ? (
+          <p className="rounded-md border border-border bg-surface p-2.5 text-legenda text-muted-foreground">
+            O saldo inicial desta conta não aparece porque você não tem permissão
+            de ver o saldo dela. Salvar aqui não altera o saldo. Quem libera é a
+            Administração, na aba Usuários.
+          </p>
+        ) : (
+          <LinhaCampos colunas={2}>
+            <CampoFormulario
+              id="conta-saldo-inicial"
+              rotulo="Saldo inicial"
+              ajuda="O saldo que o extrato mostrava na data ao lado, somando a conta corrente com o que estava aplicado."
+              erro={form.formState.errors.saldoInicial?.message}
+            >
+              <InputDecimal
+                id="conta-saldo-inicial"
+                placeholder="0,00"
+                className="tabular-nums text-right"
+                disabled={salvando}
+                {...form.register("saldoInicial")}
+              />
+            </CampoFormulario>
+
+            <CampoFormulario
               id="conta-saldo-inicial-data"
-              type="date"
-              disabled={salvando}
-              {...form.register("saldoInicialData")}
-            />
-          </CampoFormulario>
-        </LinhaCampos>
+              rotulo="Saldo em"
+              ajuda="Data do extrato. O saldo atual conta só o que veio DEPOIS dela. Em branco, conta tudo desde o primeiro lançamento."
+              erro={form.formState.errors.saldoInicialData?.message}
+            >
+              <Input
+                id="conta-saldo-inicial-data"
+                type="date"
+                disabled={salvando}
+                {...form.register("saldoInicialData")}
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+        )}
 
         <SelectAtivo
           value={form.watch("ativo")}

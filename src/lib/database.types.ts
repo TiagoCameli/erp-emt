@@ -4121,6 +4121,10 @@ export type Database = {
           categoria_insumo_id: string;
         }[];
       };
+      fn_pode_ver_saldo: {
+        Args: { p_conta: string };
+        Returns: boolean;
+      };
       fn_pagar_parcela: {
         Args: {
           p_conta_id: string;
