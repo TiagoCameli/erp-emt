@@ -197,6 +197,7 @@ function props(lancamentos: LancamentoLista[]) {
       formasPagamento={[]}
       contas={[CONTA]}
       podeExcluir={false}
+      podeCriar
       rotuloRecorte={null}
     />
   );

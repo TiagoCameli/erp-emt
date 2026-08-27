@@ -137,6 +137,7 @@ export default async function PaginaLancamentos({
 
       <LancamentosTabela
         podeExcluir={podeExcluir}
+        podeCriar={podeCriar}
         lancamentos={itens}
         total={total}
         pagina={pagina}
