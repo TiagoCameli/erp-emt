@@ -108,13 +108,20 @@ export function MatrizRecursosAcoes({
             <th className="w-full px-3 py-2 text-left font-medium text-muted-foreground">
               Recurso
             </th>
-            <th className="px-2 py-2 text-center font-medium text-muted-foreground">
+            {/* As colunas de ação declaram largura para ABSORVEREM a sobra da
+                tela larga. Sem isso a coluna do nome engole tudo (medido em
+                viewport de 2233px: 1301px de nome contra 37px de "Ver") e o
+                checkbox fica a mais de mil pixels do recurso que ele governa.
+                O layout da tabela é automático, então largura aqui é
+                preferência e não piso: em tela estreita as colunas encolhem
+                sozinhas em vez de estourar para o lado. */}
+            <th className="w-20 px-2 py-2 text-center font-medium text-muted-foreground">
               Todas
             </th>
             {ACOES.map((acao) => (
               <th
                 key={acao}
-                className="px-2 py-2 text-center font-medium whitespace-nowrap text-muted-foreground"
+                className="w-24 px-2 py-2 text-center font-medium whitespace-nowrap text-muted-foreground"
               >
                 {ROTULOS_ACOES[acao]}
               </th>
@@ -136,7 +143,12 @@ export function MatrizRecursosAcoes({
                 const marcadas = acoesMarcadas(recurso, selecionadas);
                 const todasMarcadas = marcadas.length === recurso.acoes.length;
                 return (
-                  <tr key={recurso.id} className="border-t border-border">
+                  <tr
+                    key={recurso.id}
+                    // Realce ao passar o mouse: a linha ficou larga, e é ele que
+                    // liga o nome à esquerda ao checkbox certo lá na direita.
+                    className="border-t border-border hover:bg-surface/60"
+                  >
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       {recurso.nome}
                     </td>

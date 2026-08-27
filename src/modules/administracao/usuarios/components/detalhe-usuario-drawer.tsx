@@ -159,17 +159,18 @@ export function DetalheUsuarioDrawer({
       titulo={usuario.nome}
       descricao={usuario.email}
       // A tela cheia era desperdiçada: os campos ficavam numa coluna de 672px
-      // no meio de um monitor de 1900, e a matriz (8 colunas x 50 linhas) rolava
-      // dentro de uma caixinha. O teto existe para o texto não virar uma linha
-      // de 1900px em monitor ultrawide.
-      larguraClassName="sm:max-w-[1600px]"
+      // no meio do monitor, e a matriz (8 colunas x 50 linhas) rolava dentro de
+      // uma caixinha de 384px de altura. O teto de 1900px foi MEDIDO na tela do
+      // Tiago (viewport de 2233px): sem teto nenhum, a coluna do nome do recurso
+      // engole a sobra e o checkbox fica a mais de mil pixels do nome.
+      larguraClassName="sm:max-w-[1900px]"
     >
       {/* Duas colunas em tela larga: à esquerda quem a pessoa é e como ela
           entra (blocos curtos, largura de leitura), à direita a matriz, que é o
           único conteúdo desta tela que realmente precisa de largura. Empilha
           abaixo de lg. `items-start` para a coluna curta não esticar até a
           altura da matriz. */}
-      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start lg:gap-10">
+      <div className="flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:items-start xl:gap-10">
         <div className="flex min-w-0 flex-col gap-6">
           <div className="flex flex-wrap items-center gap-2">
             {usuario.ativo ? (
@@ -395,7 +396,7 @@ export function DetalheUsuarioDrawer({
             usuarioId={usuario.id}
             podeEditar={podeEditar}
             recarregar={versaoMatriz}
-            alturaMaximaClassName="max-h-[26rem] lg:max-h-[calc(100vh-16rem)]"
+            alturaMaximaClassName="max-h-[26rem] xl:max-h-[calc(100vh-16rem)]"
           />
         </div>
       </div>
