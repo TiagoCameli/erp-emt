@@ -94,11 +94,18 @@ export interface SomaMovimentos {
  * O acumulado só avança nas linhas com `noSaldo`. A última linha com `noSaldo`
  * fecha exatamente no saldo atual da conta — é isso que `saldoFinal` devolve, e
  * é o número que a tela confere contra a listagem de contas.
+ *
+ * SALDO INICIAL NULL = SEM PERMISSÃO de ver o saldo desta conta (desde
+ * 27/08/2026). Nesse caso o acumulado não existe: toda linha volta com
+ * `saldoAcumulado` null e `saldoFinal` null, e a tela esconde a coluna. Tratar
+ * null como zero seria pior que esconder — o extrato mostraria uma coluna de
+ * saldos que começa em R$ 0,00 e nunca existiu, com a cara de número certo.
  */
 export function montarExtrato(
   saldoInicial: number | string | null,
   linhas: readonly MovimentoBruto[],
-): { movimentos: MovimentoExtrato[]; saldoFinal: number } {
+): { movimentos: MovimentoExtrato[]; saldoFinal: number | null } {
+  const semSaldo = saldoInicial === null;
   let acumulado = paraCentavos(saldoInicial);
 
   const movimentos = linhas.map((linha) => {
@@ -111,11 +118,12 @@ export function montarExtrato(
       ...linha,
       valor: paraReais(centavos),
       valorComSinal: paraReais(comSinal),
-      saldoAcumulado: linha.noSaldo ? paraReais(acumulado) : null,
+      saldoAcumulado:
+        semSaldo || !linha.noSaldo ? null : paraReais(acumulado),
     };
   });
 
-  return { movimentos, saldoFinal: paraReais(acumulado) };
+  return { movimentos, saldoFinal: semSaldo ? null : paraReais(acumulado) };
 }
 
 /**
@@ -160,8 +168,14 @@ export function somarMovimentos(
  * diferença de 1e-10 e transformaria o alerta em ruído permanente.
  */
 export function extratoFechaNoSaldo(
-  saldoFinal: number,
-  saldoDaListagem: number,
+  saldoFinal: number | null,
+  saldoDaListagem: number | null,
 ): boolean {
+  // Sem permissão de ver o saldo não há nada para conferir, e "não fecha" seria
+  // um alerta vermelho na cara de quem não fez nada errado. Os dois lados vêm
+  // null juntos (mesma permissão, mesma consulta), então um só null é situação
+  // que não existe — mas se existir, tratar como "fecha" mantém a tela quieta
+  // em vez de acusar defeito que não é defeito.
+  if (saldoFinal === null || saldoDaListagem === null) return true;
   return paraCentavos(saldoFinal) === paraCentavos(saldoDaListagem);
 }

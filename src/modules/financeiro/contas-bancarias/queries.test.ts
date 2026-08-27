@@ -4,26 +4,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * A coluna "Saldo atual" de Financeiro > Contas bancárias somava as parcelas
  * pagas no Node, com um select sem paginação. O PostgREST corta em 1.000 linhas
  * SEM ERRO, e a carga da BR-364 cria 1.696 parcelas pagas: a tela ignoraria umas
- * 696 saídas e mostraria saldo mais alto do que a conta tem, discordando de
- * Relatórios > Posição bancária. É esta coluna que se confere com o extrato.
+ * 696 saídas e mostraria saldo mais alto do que a conta tem. É esta coluna que se
+ * confere com o extrato do banco.
  *
- * Este teste trava as duas metades da correção: a soma tem que vir pronta do
- * banco (nenhum `.from()` em lancamento_parcelas) e o NUMERIC que chega como
- * string tem que virar o real certo.
+ * Desde 27/08/2026 o dinheiro por conta vem de UMA função,
+ * `fn_saldos_das_contas`, que já soma no banco E já filtra por permissão. O que
+ * este arquivo trava:
  *
- * Desde 22/08/2026 ele também cobre a DATA DE CORTE. O corte é aplicado DENTRO
- * de `fn_rel_posicao_bancaria` (a RPC já devolve só o movimento posterior), então
- * o que se testa aqui é o resto: a data chegar na linha e o movimento anterior
- * ao corte vir junto, para a tela poder dizer o que ficou de fora.
- *
- * O mock despacha por NOME da RPC de propósito. Um `mockResolvedValue` único
- * responderia a mesma coisa para as duas funções, e o teste passaria com a
- * segunda RPC recebendo linhas da primeira — verde, medindo nada.
+ *   1. o saldo vem PRONTO do banco (nenhum `.from()` em lancamento_parcelas);
+ *   2. `saldo_inicial` NÃO é pedido no select do cadastro — o `authenticated`
+ *      perdeu o SELECT nessa coluna, e pedi-la derruba a tela com
+ *      "permission denied";
+ *   3. conta AUSENTE da função é conta sem permissão: saldo null, nome presente.
+ *      Nunca saldo zero;
+ *   4. NUMERIC que chega como string vira o real certo;
+ *   5. erro na função ESTOURA, em vez de devolver saldo errado.
  */
 
-const { rpc, from } = vi.hoisted(() => ({
+const { rpc, from, selectRecebido } = vi.hoisted(() => ({
   rpc: vi.fn(),
   from: vi.fn(),
+  selectRecebido: { valor: "" },
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -37,11 +38,13 @@ const { listarContas } = await import(
 const CONTA = "11111111-1111-1111-1111-111111111111";
 const OUTRA = "22222222-2222-2222-2222-222222222222";
 
-/** Uma conta como a tabela devolve; NUMERIC pode chegar como string. */
+/**
+ * Uma conta como a tabela devolve. SEM `saldo_inicial`: a coluna não é mais
+ * legível pelo client, e o cadastro só traz identificação.
+ */
 function conta(
   id: string,
   nome: string,
-  saldoInicial: number | string,
   saldoInicialData: string | null = null,
 ) {
   return {
@@ -51,31 +54,57 @@ function conta(
     agencia: null,
     conta: null,
     tipo: "corrente",
-    saldo_inicial: saldoInicial,
     saldo_inicial_data: saldoInicialData,
     ativo: true,
   };
 }
 
-/**
- * Responde por NOME: `posicao` é o movimento agregado (já com o corte aplicado
- * no banco) e `antes` é o que o corte deixou de fora.
- */
-function respostas(opcoes: {
-  posicao?: { data: unknown[] | null; error: { message: string } | null };
-  antes?: { data: unknown[] | null; error: { message: string } | null };
-  aplicacao?: { data: unknown[] | null; error: { message: string } | null };
+/** Uma linha de `fn_saldos_das_contas`. NUMERIC pode chegar como string. */
+function dinheiro(opcoes: {
+  conta: string;
+  saldoInicial: number | string;
+  entradas?: number | string;
+  saidas?: number | string;
+  saldo: number | string;
+  saldoInicialData?: string | null;
+  anteriorParcelas?: number | null;
+  anteriorRecebido?: number | string | null;
+  anteriorPago?: number | string | null;
+  aplicado?: number | string | null;
+  resgatado?: number | string | null;
+  posicaoAplicacao?: number | string | null;
 }) {
+  return {
+    conta_bancaria_id: opcoes.conta,
+    saldo_inicial: opcoes.saldoInicial,
+    saldo_inicial_data: opcoes.saldoInicialData ?? null,
+    entradas: opcoes.entradas ?? 0,
+    saidas: opcoes.saidas ?? 0,
+    saldo: opcoes.saldo,
+    anterior_parcelas: opcoes.anteriorParcelas ?? null,
+    anterior_recebido: opcoes.anteriorRecebido ?? null,
+    anterior_pago: opcoes.anteriorPago ?? null,
+    aplicado: opcoes.aplicado ?? null,
+    resgatado: opcoes.resgatado ?? null,
+    posicao_aplicacao: opcoes.posicaoAplicacao ?? null,
+  };
+}
+
+/**
+ * Responde por NOME da RPC de propósito. Um `mockResolvedValue` único
+ * responderia a mesma coisa para qualquer função, e um teste passaria com a
+ * função errada recebendo as linhas da outra — verde, medindo nada.
+ */
+function saldos(
+  resposta: { data: unknown[] | null; error: { message: string } | null } = {
+    data: [],
+    error: null,
+  },
+) {
   rpc.mockImplementation(async (nome: string) => {
-    if (nome === "fn_rel_posicao_bancaria") {
-      return opcoes.posicao ?? { data: [], error: null };
-    }
-    if (nome === "fn_rel_movimento_antes_do_corte") {
-      return opcoes.antes ?? { data: [], error: null };
-    }
-    if (nome === "fn_rel_posicao_aplicacao") {
-      return opcoes.aplicacao ?? { data: [], error: null };
-    }
+    if (nome === "fn_saldos_das_contas") return resposta;
+    // As agregadas antigas perderam o EXECUTE do `authenticated`: se alguma
+    // voltar a ser chamada daqui, isto grita em vez de devolver dado.
     throw new Error(`RPC inesperada: ${nome}`);
   });
 }
@@ -83,6 +112,7 @@ function respostas(opcoes: {
 beforeEach(() => {
   rpc.mockReset();
   from.mockReset();
+  selectRecebido.valor = "";
   from.mockImplementation((tabela: string) => {
     if (tabela !== "contas_bancarias") {
       throw new Error(
@@ -90,40 +120,40 @@ beforeEach(() => {
       );
     }
     return {
-      select: () => ({
-        order: () => ({
-          data: [
-            conta(CONTA, "Caixa BR-364", "2000000.00"),
-            conta(OUTRA, "Caixa escritório", 1000),
-          ],
-          error: null,
-        }),
-      }),
+      select: (colunas: string) => {
+        selectRecebido.valor = colunas;
+        return {
+          order: () => ({
+            data: [conta(CONTA, "Caixa BR-364"), conta(OUTRA, "Caixa escritório")],
+            error: null,
+          }),
+        };
+      },
     };
   });
 });
 
 describe("listarContas", () => {
-  it("tira o saldo da RPC agregada, não de uma varredura das parcelas", async () => {
+  it("tira o saldo da função agregada, não de uma varredura das parcelas", async () => {
     // As 1.696 parcelas pagas da BR-364 chegam como UMA linha, com o total já
     // somado no banco pelo valor líquido.
-    respostas({
-      posicao: {
-        data: [
-          {
-            conta_bancaria_id: CONTA,
-            tipo: "a_pagar",
-            total: "1696000.00",
-          },
-          { conta_bancaria_id: CONTA, tipo: "a_receber", total: "500.00" },
-        ],
-        error: null,
-      },
+    saldos({
+      data: [
+        dinheiro({
+          conta: CONTA,
+          saldoInicial: "2000000.00",
+          entradas: "500.00",
+          saidas: "1696000.00",
+          saldo: "304500.00",
+        }),
+        dinheiro({ conta: OUTRA, saldoInicial: 1000, saldo: 1000 }),
+      ],
+      error: null,
     });
 
     const contas = await listarContas();
 
-    expect(rpc).toHaveBeenCalledWith("fn_rel_posicao_bancaria");
+    expect(rpc).toHaveBeenCalledWith("fn_saldos_das_contas");
     // Nenhuma chamada tocou a tabela de volume: se tocasse, o mock estouraria.
     expect(from).toHaveBeenCalledWith("contas_bancarias");
     expect(from).toHaveBeenCalledTimes(1);
@@ -134,16 +164,73 @@ describe("listarContas", () => {
     ]);
   });
 
-  it("conta sem parcela paga fica com o saldo inicial", async () => {
-    respostas({});
+  it("NÃO pede saldo_inicial no select do cadastro", async () => {
+    // O `authenticated` perdeu o SELECT nessa coluna em 27/08/2026 (é o que
+    // impede ler o saldo por consulta direta). Pedi-la aqui devolveria
+    // "permission denied for table contas_bancarias" e derrubaria a tela inteira
+    // — em produção, para todo mundo, inclusive Admin.
+    saldos();
+
+    await listarContas();
+
+    expect(selectRecebido.valor).not.toContain("saldo_inicial,");
+    expect(selectRecebido.valor).toContain("saldo_inicial_data");
+    expect(selectRecebido.valor).toContain("nome");
+  });
+
+  it("conta fora da resposta é conta SEM PERMISSÃO: saldo null, nome presente", async () => {
+    // O pedido do Tiago em uma asserção: o nome aparece, o saldo não.
+    saldos({
+      data: [dinheiro({ conta: CONTA, saldoInicial: 500, saldo: 700 })],
+      error: null,
+    });
 
     const contas = await listarContas();
 
-    expect(contas.map((c) => c.saldoAtual)).toEqual([2000000, 1000]);
+    expect(contas.map((c) => [c.nome, c.podeVerSaldo, c.saldoAtual])).toEqual([
+      ["Caixa BR-364", true, 700],
+      ["Caixa escritório", false, null],
+    ]);
+    // E o saldo inicial também fica escondido: ele É dinheiro.
+    expect(contas[1].saldoInicial).toBeNull();
   });
 
-  it("erro na RPC do saldo não devolve saldo errado, estoura", async () => {
-    respostas({ posicao: { data: null, error: { message: "boom" } } });
+  it("saldo null NÃO é saldo zero", async () => {
+    // A CAIXINHA DE DINHEIRO tem saldo R$ 0,00 de verdade. Se `null` e `0`
+    // ficassem iguais, a tela mostraria zero para uma conta com milhões.
+    saldos({
+      data: [dinheiro({ conta: CONTA, saldoInicial: 0, saldo: 0 })],
+      error: null,
+    });
+
+    const contas = await listarContas();
+
+    expect(contas[0].saldoAtual).toBe(0);
+    expect(contas[0].podeVerSaldo).toBe(true);
+    expect(contas[1].saldoAtual).toBeNull();
+    expect(contas[1].podeVerSaldo).toBe(false);
+  });
+
+  it("NUMERIC que chega como string vira o real certo", async () => {
+    saldos({
+      data: [
+        dinheiro({
+          conta: CONTA,
+          saldoInicial: "155484.34",
+          saldo: "303864.35",
+        }),
+      ],
+      error: null,
+    });
+
+    const contas = await listarContas();
+
+    expect(contas[0].saldoInicial).toBe(155484.34);
+    expect(contas[0].saldoAtual).toBe(303864.35);
+  });
+
+  it("erro na função do saldo não devolve saldo errado, estoura", async () => {
+    saldos({ data: null, error: { message: "boom" } });
 
     await expect(listarContas()).rejects.toThrow(
       "Não foi possível calcular o saldo das contas",
@@ -151,127 +238,111 @@ describe("listarContas", () => {
   });
 
   it("sem data de corte, a linha diz isso: null, e nada fora do saldo", async () => {
-    respostas({});
-
-    const contas = await listarContas();
-
-    expect(contas[0]?.saldoInicialData).toBeNull();
-    expect(contas[0]?.movimentoAnteriorAoCorte).toBeNull();
-  });
-
-  it("com data de corte, a data e o movimento de fora chegam na linha", async () => {
-    from.mockImplementation(() => ({
-      select: () => ({
-        order: () => ({
-          data: [conta(CONTA, "BB 30.893-5", "0.00", "2025-12-31")],
-          error: null,
-        }),
-      }),
-    }));
-    respostas({
-      // A RPC já devolve só o posterior ao corte: são R$ 300 mil de saída.
-      posicao: {
-        data: [
-          { conta_bancaria_id: CONTA, tipo: "a_pagar", total: "300000.00" },
-        ],
-        error: null,
-      },
-      antes: {
-        data: [
-          {
-            conta_bancaria_id: CONTA,
-            corte: "2025-12-31",
-            parcelas: 19,
-            recebido: "4297142.81",
-            pago: "119056.58",
-          },
-        ],
-        error: null,
-      },
+    saldos({
+      data: [dinheiro({ conta: CONTA, saldoInicial: 1000, saldo: 1000 })],
+      error: null,
     });
 
     const contas = await listarContas();
 
-    // Saldo = abertura do extrato (0) mais o que veio DEPOIS. O R$ 4,29 milhões
-    // anterior ao corte NÃO entra: ele já está representado na abertura.
-    expect(contas[0]?.saldoAtual).toBe(-300000);
-    expect(contas[0]?.saldoInicialData).toBe("2025-12-31");
-    expect(contas[0]?.movimentoAnteriorAoCorte).toEqual({
-      parcelas: 19,
-      recebido: 4297142.81,
-      pago: 119056.58,
+    expect(contas[0].saldoInicialData).toBeNull();
+    expect(contas[0].movimentoAnteriorAoCorte).toBeNull();
+  });
+
+  it("com data de corte, a data e o movimento de fora chegam na linha", async () => {
+    // A data vem do CADASTRO (ela não é dinheiro e continua legível sem
+    // permissão); o movimento de fora vem da função, porque são valores.
+    from.mockImplementation(() => ({
+      select: (colunas: string) => {
+        selectRecebido.valor = colunas;
+        return {
+          order: () => ({
+            data: [conta(CONTA, "Caixa BR-364", "2026-08-21")],
+            error: null,
+          }),
+        };
+      },
+    }));
+    saldos({
+      data: [
+        dinheiro({
+          conta: CONTA,
+          saldoInicial: 1000,
+          saldo: 1000,
+          anteriorParcelas: 5573,
+          anteriorRecebido: "10.00",
+          anteriorPago: "4290000.00",
+        }),
+      ],
+      error: null,
+    });
+
+    const contas = await listarContas();
+
+    expect(contas[0].saldoInicialData).toBe("2026-08-21");
+    expect(contas[0].movimentoAnteriorAoCorte).toEqual({
+      parcelas: 5573,
+      recebido: 10,
+      pago: 4290000,
     });
   });
 
   it("a posição em aplicação chega na linha, e negativa não é arredondada para zero", async () => {
-    // Opção A (22/08/2026): a varredura não mexe mais no saldo, então a posição
-    // em aplicação é número de CONFERÊNCIA. Negativa é impossível e mede o
-    // extrato que falta importar: é o caso real da conta da Caixa. Se algum dia
-    // alguém "consertar" isso com Math.max(0, ...), este teste cai.
-    respostas({
-      aplicacao: {
-        data: [
-          {
-            conta_bancaria_id: CONTA,
-            aplicado: "4522847.75",
-            resgatado: "8093863.71",
-            posicao: "-3571015.96",
-          },
-        ],
-        error: null,
-      },
+    // Negativo é IMPOSSÍVEL (não se resgata mais principal do que se aplica) e é
+    // o tamanho do furo: some com ele e o alerta da tela some junto.
+    saldos({
+      data: [
+        dinheiro({
+          conta: CONTA,
+          saldoInicial: 1000,
+          saldo: 1000,
+          aplicado: "100.00",
+          resgatado: "3670000.00",
+          posicaoAplicacao: "-3569900.00",
+        }),
+      ],
+      error: null,
     });
 
     const contas = await listarContas();
 
-    expect(contas[0]?.posicaoAplicacao).toEqual({
-      aplicado: 4522847.75,
-      resgatado: 8093863.71,
-      posicao: -3571015.96,
+    expect(contas[0].posicaoAplicacao).toEqual({
+      aplicado: 100,
+      resgatado: 3670000,
+      posicao: -3569900,
     });
-    // A conta que não aparece na RPC fica null, não zero: "nunca teve aplicação"
-    // e "aplicou e resgatou o mesmo valor" são fatos diferentes.
-    expect(contas[1]?.posicaoAplicacao).toBeNull();
   });
 
   it("a posição em aplicação NÃO entra no saldo", async () => {
-    // O saldo inicial já vem do extrato com o que está aplicado (opção A), então
-    // somar a posição aqui contaria o mesmo dinheiro duas vezes.
-    respostas({
-      aplicacao: {
-        data: [
-          {
-            conta_bancaria_id: CONTA,
-            aplicado: "900000.00",
-            resgatado: "100000.00",
-            posicao: "800000.00",
-          },
-        ],
-        error: null,
-      },
+    // Opção A (22/08/2026): o saldo inicial já vem do extrato COM o aplicado
+    // dentro, então somar a posição de novo contaria o mesmo dinheiro duas vezes.
+    saldos({
+      data: [
+        dinheiro({
+          conta: CONTA,
+          saldoInicial: 1000,
+          saldo: 1000,
+          aplicado: "500.00",
+          resgatado: "0.00",
+          posicaoAplicacao: "500.00",
+        }),
+      ],
+      error: null,
     });
 
     const contas = await listarContas();
 
-    expect(contas[0]?.saldoAtual).toBe(2000000);
+    expect(contas[0].saldoAtual).toBe(1000);
   });
 
-  it("erro ao apurar a posição em aplicação estoura em vez de dizer 'nada'", async () => {
-    respostas({ aplicacao: { data: null, error: { message: "boom" } } });
+  it("erro no cadastro das contas estoura com a mensagem do cadastro", async () => {
+    from.mockImplementation(() => ({
+      select: () => ({ order: () => ({ data: null, error: { message: "x" } }) }),
+    }));
+    saldos();
 
     await expect(listarContas()).rejects.toThrow(
-      "Não foi possível apurar a posição em aplicação",
-    );
-  });
-
-  it("erro ao apurar o que ficou fora do corte estoura em vez de dizer 'nada'", async () => {
-    // Devolver null calado faria a tela mostrar "desde 31/12/2025" sem dizer
-    // que escondeu R$ 4,29 milhões. É o defeito que a data de corte veio
-    // consertar, cometido de novo um nível acima.
-    respostas({ antes: { data: null, error: { message: "boom" } } });
-
-    await expect(listarContas()).rejects.toThrow(
-      "Não foi possível apurar o movimento anterior ao corte",
+      "Não foi possível carregar as contas bancárias",
     );
   });
 });

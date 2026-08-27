@@ -343,6 +343,17 @@ export interface PosicaoBancaria {
   totalEntradas: number;
   totalSaidas: number;
   totalSaldoAtual: number;
+  /**
+   * Quantas contas ATIVAS ficaram fora por falta de permissão de ver o saldo.
+   *
+   * Aparece na tela porque um relatório que some contas em silêncio é pior que um
+   * relatório restrito: quem lê acha que está vendo a posição de todos os bancos
+   * da empresa, e os totais parecem o dinheiro que existe. Aqui elas ficam fora
+   * de verdade (nem linha, nem soma) — deixá-las com travessão e somar só as
+   * visíveis já é o suficiente para alguém subtrair e descobrir o resto quando
+   * falta uma só.
+   */
+  contasOcultas: number;
 }
 
 /**
@@ -368,52 +379,48 @@ export interface PosicaoBancaria {
 export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   const supabase = await createClient();
 
-  const { data: contas, error: erroContas } = await supabase
-    .from("contas_bancarias")
-    .select("id, nome, banco, saldo_inicial, saldo_inicial_data")
-    .eq("ativo", true)
-    .order("nome");
+  // O cadastro de TODAS as contas ativas (para saber quantas existem) e o
+  // dinheiro só das permitidas. `saldo_inicial` não entra no select: desde
+  // 27/08/2026 o `authenticated` não tem SELECT nessa coluna, e as entradas e
+  // saídas por conta agora vêm somadas de `fn_saldos_das_contas`, que é a mesma
+  // função da aba Contas bancárias — as duas telas não têm como divergir.
+  const [contasResultado, saldosResultado] = await Promise.all([
+    supabase
+      .from("contas_bancarias")
+      .select("id, nome, banco, saldo_inicial_data")
+      .eq("ativo", true)
+      .order("nome"),
+    supabase.rpc("fn_saldos_das_contas"),
+  ]);
 
-  if (erroContas) {
+  if (contasResultado.error) {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
-
-  // Agregado no banco: uma linha por conta/tipo das parcelas pagas.
-  const { data: movimentos, error: erroParcelas } = await supabase.rpc(
-    "fn_rel_posicao_bancaria",
-  );
-
-  if (erroParcelas) {
+  if (saldosResultado.error) {
     throw new Error("Não foi possível carregar os pagamentos das contas");
   }
 
-  const entradasPorConta = new Map<string, number>();
-  const saidasPorConta = new Map<string, number>();
+  const dinheiroPorConta = new Map(
+    (saldosResultado.data ?? []).map((linha) => [
+      linha.conta_bancaria_id,
+      linha,
+    ]),
+  );
 
-  // SOMA, não `set`: desde que a transferência entrou na RPC, a mesma conta
-  // pode chegar em duas linhas do mesmo lado (a_receber e transferencia_entrada
-  // são as duas entradas). Sobrescrever descartaria uma delas em silêncio.
-  function acumular(mapa: Map<string, number>, chave: string, valor: number) {
-    mapa.set(chave, (mapa.get(chave) ?? 0) + valor);
-  }
+  const ativas = contasResultado.data ?? [];
+  const resultado: PosicaoBancariaConta[] = [];
 
-  for (const movimento of movimentos ?? []) {
-    const centavos = paraCentavos(movimento.total);
-    const entra =
-      movimento.tipo === "a_receber" ||
-      movimento.tipo === "transferencia_entrada";
-    acumular(
-      entra ? entradasPorConta : saidasPorConta,
-      movimento.conta_bancaria_id,
-      centavos,
-    );
-  }
+  for (const conta of ativas) {
+    const dinheiro = dinheiroPorConta.get(conta.id);
+    // Conta sem permissão fica FORA do relatório: ela não tem número nenhum
+    // para mostrar em quatro das cinco colunas, e uma linha com quatro
+    // travessões só ocupa espaço. A contagem sai em `contasOcultas`.
+    if (!dinheiro) continue;
 
-  const resultado: PosicaoBancariaConta[] = (contas ?? []).map((conta) => {
-    const inicialCentavos = paraCentavos(conta.saldo_inicial);
-    const entradasCentavos = entradasPorConta.get(conta.id) ?? 0;
-    const saidasCentavos = saidasPorConta.get(conta.id) ?? 0;
-    return {
+    const inicialCentavos = paraCentavos(dinheiro.saldo_inicial);
+    const entradasCentavos = paraCentavos(dinheiro.entradas);
+    const saidasCentavos = paraCentavos(dinheiro.saidas);
+    resultado.push({
       contaId: conta.id,
       nome: conta.nome,
       banco: conta.banco,
@@ -421,11 +428,9 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
       saldoInicialData: conta.saldo_inicial_data,
       entradas: paraReais(entradasCentavos),
       saidas: paraReais(saidasCentavos),
-      saldoAtual: paraReais(
-        inicialCentavos + entradasCentavos - saidasCentavos,
-      ),
-    };
-  });
+      saldoAtual: paraReais(inicialCentavos + entradasCentavos - saidasCentavos),
+    });
+  }
 
   return {
     contas: resultado,
@@ -433,6 +438,7 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
     totalEntradas: resultado.reduce((s, c) => s + c.entradas, 0),
     totalSaidas: resultado.reduce((s, c) => s + c.saidas, 0),
     totalSaldoAtual: resultado.reduce((s, c) => s + c.saldoAtual, 0),
+    contasOcultas: ativas.length - resultado.length,
   };
 }
 

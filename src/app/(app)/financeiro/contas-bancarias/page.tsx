@@ -21,14 +21,24 @@ export default async function PaginaContasBancarias() {
     "editar",
   );
 
-  // Total em contas: soma do saldo atual de todas as contas, em centavos para
-  // não acumular erro de ponto flutuante. Inclui ativas e inativas, porque o
-  // dinheiro parado numa conta desativada continua existindo.
-  const totalCentavos = contas.reduce(
-    (soma, conta) => soma + Math.round(conta.saldoAtual * 100),
+  /**
+   * Total em contas: soma do saldo atual, em centavos para não acumular erro de
+   * ponto flutuante. Inclui ativas e inativas, porque o dinheiro parado numa
+   * conta desativada continua existindo.
+   *
+   * SOMA SÓ AS CONTAS CUJO SALDO O USUÁRIO PODE VER, e isso não é delicadeza de
+   * UI: é o que fecha o vazamento. Somar todas e mostrar o total permitiria a
+   * quem vê 4 de 5 contas subtrair as 4 e descobrir o saldo da quinta — a conta
+   * escondida sairia por aritmética. O cartão diz de quantas contas ele fala,
+   * senão o número parece "todo o dinheiro da empresa" quando não é.
+   */
+  const visiveis = contas.filter((conta) => conta.podeVerSaldo);
+  const totalCentavos = visiveis.reduce(
+    (soma, conta) => soma + Math.round((conta.saldoAtual ?? 0) * 100),
     0,
   );
   const totalEmContas = totalCentavos / 100;
+  const todasVisiveis = visiveis.length === contas.length;
 
   return (
     <>
@@ -40,11 +50,25 @@ export default async function PaginaContasBancarias() {
       />
 
       <GradeKpis className="mb-4">
-        <KPICard
-          titulo="Total em contas"
-          valor={<MoneyText valor={totalEmContas} />}
-          detalhe={`${contas.length} ${contas.length === 1 ? "conta" : "contas"} cadastradas`}
-        />
+        {visiveis.length === 0 ? (
+          // Sem nenhuma conta liberada, um cartão com R$ 0,00 seria mentira:
+          // pareceria empresa sem dinheiro em vez de usuário sem permissão.
+          <KPICard
+            titulo="Total em contas"
+            valor="—"
+            detalhe={`Você não tem permissão de ver o saldo das ${contas.length} contas cadastradas`}
+          />
+        ) : (
+          <KPICard
+            titulo="Total em contas"
+            valor={<MoneyText valor={totalEmContas} />}
+            detalhe={
+              todasVisiveis
+                ? `${contas.length} ${contas.length === 1 ? "conta" : "contas"} cadastradas`
+                : `${visiveis.length} de ${contas.length} contas — nas outras você não vê o saldo`
+            }
+          />
+        )}
       </GradeKpis>
 
       <ContasTabela contas={contas} podeEditar={podeEditar} />

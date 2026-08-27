@@ -309,7 +309,17 @@ async function ConteudoPosicaoBancaria({
 }) {
   const posicao = await posicaoBancaria();
   if (posicao.contas.length === 0) {
-    return (
+    // Lista vazia tem DUAS causas com respostas opostas: não existe conta
+    // cadastrada, ou existem e o usuário não pode ver o saldo de nenhuma. Mandar
+    // "cadastre uma conta bancária" para quem tem cinco contas na frente e falta
+    // de permissão é o tipo de mensagem que faz a pessoa cadastrar uma sexta.
+    return posicao.contasOcultas > 0 ? (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Sem permissão de ver saldo"
+        descricao={`Existem ${posicao.contasOcultas} conta(s) ativas, mas você não tem permissão de ver o saldo de nenhuma delas. Quem libera é a Administração, na aba Usuários.`}
+      />
+    ) : (
       <EmptyState
         icone={BarChart3}
         titulo="Sem contas bancárias"
@@ -335,7 +345,13 @@ async function ConteudoPosicaoBancaria({
         <KPICard
           titulo="Saldo total"
           valor={<MoneyText valor={posicao.totalSaldoAtual} />}
-          detalhe="Somando todas as contas ativas"
+          // "Todas as contas ativas" passa a ser mentira quando alguma ficou
+          // fora por permissão, e é uma mentira que parece o dinheiro da empresa.
+          detalhe={
+            posicao.contasOcultas > 0
+              ? `Somando as ${posicao.contas.length} contas que você pode ver`
+              : "Somando todas as contas ativas"
+          }
         />
       </GradeKpis>
       <PosicaoBancariaTabela

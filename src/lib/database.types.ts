@@ -3576,6 +3576,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      usuario_conta_saldo: {
+        Row: {
+          conta_bancaria_id: string;
+          created_at: string;
+          created_by: string | null;
+          usuario_id: string;
+        };
+        Insert: {
+          conta_bancaria_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          usuario_id: string;
+        };
+        Update: {
+          conta_bancaria_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          usuario_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "usuario_conta_saldo_conta_bancaria_id_fkey";
+            columns: ["conta_bancaria_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "usuario_conta_saldo_usuario_id_fkey";
+            columns: ["usuario_id"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       usuario_permissoes: {
         Row: {
           acao: string;
@@ -4437,6 +4473,28 @@ export type Database = {
         Returns: undefined;
       };
       fn_saldo_conta: { Args: { p_conta: string }; Returns: number };
+      fn_saldos_das_contas: {
+        Args: never;
+        Returns: {
+          conta_bancaria_id: string;
+          // NUMERIC: o gerador escreve `number` e nisto ele mente — o PostgREST
+          // devolve NUMERIC como string em algumas rotas. Quem lê converte.
+          saldo_inicial: number;
+          saldo_inicial_data: string | null;
+          entradas: number;
+          saidas: number;
+          saldo: number;
+          // Os cinco abaixo vêm de LEFT JOIN: conta sem movimento anterior ao
+          // corte e sem aplicação volta com null, e null aqui é "não existe",
+          // não zero.
+          anterior_parcelas: number | null;
+          anterior_recebido: number | null;
+          anterior_pago: number | null;
+          aplicado: number | null;
+          resgatado: number | null;
+          posicao_aplicacao: number | null;
+        }[];
+      };
       fn_salvar_cartao_credito: {
         Args: {
           p_ativo: boolean;
@@ -4593,6 +4651,10 @@ export type Database = {
       };
       salvar_matriz_usuario: {
         Args: { p_permissoes: Json; p_usuario_id: string };
+        Returns: undefined;
+      };
+      salvar_saldos_usuario: {
+        Args: { p_contas: string[]; p_usuario_id: string };
         Returns: undefined;
       };
       salvar_permissoes_perfil: {

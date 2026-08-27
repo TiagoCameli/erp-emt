@@ -14,10 +14,6 @@ import {
 import { subarvoreDosCentros } from "@/modules/financeiro/lancamentos/queries";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
-  movimentoPorContaEmCentavos,
-  saldoAtualDaConta,
-} from "@/modules/financeiro/contas-bancarias/saldo";
-import {
   ROTULO_BANCO,
   STATUS_PARCELA_ABERTA,
   type BancoConta,
@@ -203,8 +199,13 @@ export interface ContaBancariaOpcao {
    * Vai para a tela para o pagamento em lote poder dizer, ANTES de tentar,
    * quanto sobra depois: sem isto o operador marca vinte parcelas, manda pagar,
    * e descobre pelo erro do banco na décima que a conta acabou.
+   *
+   * NULL = o usuário não tem permissão de ver o saldo desta conta. A conta
+   * continua na lista e continua pagável: quem paga escolhe a conta pelo NOME. O
+   * que ele perde é o aviso antecipado — o guard de `fn_pagar_parcela` ainda
+   * recusa por saldo, só com uma mensagem que não revela o valor.
    */
-  saldoAtual: number;
+  saldoAtual: number | null;
 }
 
 /**
@@ -593,45 +594,56 @@ export async function listarParcelasPagas({
   return { itens, total: count ?? 0 };
 }
 
-/** Contas bancárias ativas para o select do pagamento, em ordem alfabética. */
+/**
+ * Contas bancárias ativas para o select do pagamento, em ordem alfabética.
+ *
+ * TODAS as contas ativas entram, inclusive aquelas cujo saldo o usuário não pode
+ * ver — quem paga precisa poder ESCOLHER a conta mesmo sem saber quanto ela tem.
+ * O que muda é `saldoAtual`, que vem null nesses casos, e a tela deixa de mostrar
+ * o valor no rótulo e a projeção de "saldo depois".
+ *
+ * O saldo sai de `fn_saldos_das_contas`, a mesma função da tela de contas
+ * bancárias, com a mesma fórmula de `fn_saldo_conta` (a que `fn_pagar_parcela`
+ * usa para decidir se o dinheiro sai). Dois cálculos de saldo divergiriam no
+ * primeiro arredondamento; três, no primeiro dia.
+ *
+ * `saldo_inicial` NÃO é mais lido daqui: desde 27/08/2026 o `authenticated` não
+ * tem SELECT nessa coluna, e pedi-la derrubava a tela de pagamentos com
+ * "permission denied".
+ */
 export async function listarContasBancarias(): Promise<ContaBancariaOpcao[]> {
   const supabase = await createClient();
 
-  // O saldo vem da mesma RPC que a tela de contas bancárias usa, e a aritmética
-  // em centavos mora em contas-bancarias/saldo.ts, que tem teste: dois cálculos
-  // de saldo divergiriam no primeiro arredondamento.
-  const [contasResultado, movimentosResultado] = await Promise.all([
+  const [contasResultado, saldosResultado] = await Promise.all([
     supabase
       .from("contas_bancarias")
-      .select("id, nome, banco, saldo_inicial")
+      .select("id, nome, banco")
       .eq("ativo", true)
       .order("nome"),
-    supabase.rpc("fn_rel_posicao_bancaria"),
+    supabase.rpc("fn_saldos_das_contas"),
   ]);
 
   if (contasResultado.error) {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
-  if (movimentosResultado.error) {
+  if (saldosResultado.error) {
     throw new Error("Não foi possível calcular o saldo das contas");
   }
 
-  const movimentoCentavos = movimentoPorContaEmCentavos(
-    (movimentosResultado.data ?? []).map((linha) => ({
-      contaBancariaId: linha.conta_bancaria_id,
-      tipo: linha.tipo,
-      total: linha.total,
-    })),
+  // Conta ausente do mapa é conta sem permissão de ver o saldo, nunca conta com
+  // saldo zero.
+  const saldoPorConta = new Map(
+    (saldosResultado.data ?? []).map((linha) => [
+      linha.conta_bancaria_id,
+      Number(linha.saldo),
+    ]),
   );
 
   return (contasResultado.data ?? []).map((conta) => ({
     id: conta.id,
     nome: conta.nome,
     banco: conta.banco,
-    saldoAtual: saldoAtualDaConta(
-      conta.saldo_inicial,
-      movimentoCentavos.get(conta.id) ?? 0,
-    ),
+    saldoAtual: saldoPorConta.get(conta.id) ?? null,
   }));
 }
 

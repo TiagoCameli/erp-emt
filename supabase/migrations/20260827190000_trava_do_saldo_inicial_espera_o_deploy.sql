@@ -1,0 +1,21 @@
+-- Tira a trava do saldo inicial do banco vivo até o código do saldo por conta
+-- estar em produção.
+--
+-- Aplicada no projeto vivo em 27/08/2026, logo depois de
+-- `20260827185747_reabre_saldo_ate_o_codigo_do_saldo_por_conta_subir` (de outra
+-- frente) ter reaberto a coluna e as agregadas.
+--
+-- POR QUE: a trava foi criada junto com a parte 1 e não devia. A Dora tem
+-- `financeiro.contas-bancarias / editar`, não é Admin e não tinha nenhuma conta
+-- marcada, então alterar o saldo inicial passou a ser recusado para ela ANTES de
+-- existir tela para alguém liberá-la. Restrição sem o controle que a libera é
+-- interrupção de trabalho, não segurança.
+--
+-- A trava volta em `20260827230000_saldo_por_conta_fecha_as_portas.sql`, que roda
+-- DEPOIS do deploy — quando a aba Usuários já tem o bloco "Saldo por conta
+-- bancária" para marcar quem pode.
+--
+-- A FUNÇÃO `fn_trava_saldo_inicial` fica: sem trigger ela não faz nada, e
+-- derrubar e recriar seria ruído no histórico.
+
+drop trigger if exists trg_trava_saldo_inicial on public.contas_bancarias;

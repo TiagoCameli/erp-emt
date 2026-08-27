@@ -36,6 +36,7 @@ import type {
 } from "@/modules/administracao/usuarios/queries";
 import { ContatoUsuarioBloco } from "./contato-usuario";
 import { MatrizPermissoes } from "./matriz-permissoes";
+import { SaldosPorConta } from "./saldos-por-conta";
 
 export interface DetalheUsuarioDrawerProps {
   usuario: UsuarioLista | null;
@@ -397,6 +398,15 @@ export function DetalheUsuarioDrawer({
             podeEditar={podeEditar}
             recarregar={versaoMatriz}
             alturaMaximaClassName="max-h-[26rem] xl:max-h-[calc(100vh-16rem)]"
+          />
+
+          {/* Permissão por LINHA, embaixo da matriz de recurso x ação. Recarrega
+              com `versaoMatriz` para o aviso de Admin acompanhar o que a matriz
+              acima acabou de salvar. */}
+          <SaldosPorConta
+            usuarioId={usuario.id}
+            podeEditar={podeEditar}
+            recarregar={versaoMatriz}
           />
         </div>
       </div>
