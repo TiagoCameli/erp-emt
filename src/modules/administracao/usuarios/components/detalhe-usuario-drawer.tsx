@@ -158,226 +158,246 @@ export function DetalheUsuarioDrawer({
       onAbertoChange={onAbertoChange}
       titulo={usuario.nome}
       descricao={usuario.email}
-      larguraClassName="sm:max-w-2xl"
+      // A tela cheia era desperdiçada: os campos ficavam numa coluna de 672px
+      // no meio de um monitor de 1900, e a matriz (8 colunas x 50 linhas) rolava
+      // dentro de uma caixinha. O teto existe para o texto não virar uma linha
+      // de 1900px em monitor ultrawide.
+      larguraClassName="sm:max-w-[1600px]"
     >
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-wrap items-center gap-2">
-          {usuario.ativo ? (
-            <StatusBadge status="aprovado" rotulo="Ativo" />
-          ) : (
-            <StatusBadge status="rascunho" rotulo="Inativo" />
-          )}
-          {usuario.acessoPendente ? (
-            <StatusBadge status="pendente_aprovacao" rotulo="1º acesso pendente" />
-          ) : null}
-          <span className="text-detalhe text-muted-foreground">
-            {usuario.perfilNome
-              ? `Perfil: ${usuario.perfilNome}`
-              : "Sem perfil aplicado"}
-          </span>
-        </div>
+      {/* Duas colunas em tela larga: à esquerda quem a pessoa é e como ela
+          entra (blocos curtos, largura de leitura), à direita a matriz, que é o
+          único conteúdo desta tela que realmente precisa de largura. Empilha
+          abaixo de lg. `items-start` para a coluna curta não esticar até a
+          altura da matriz. */}
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start lg:gap-10">
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {usuario.ativo ? (
+              <StatusBadge status="aprovado" rotulo="Ativo" />
+            ) : (
+              <StatusBadge status="rascunho" rotulo="Inativo" />
+            )}
+            {usuario.acessoPendente ? (
+              <StatusBadge
+                status="pendente_aprovacao"
+                rotulo="1º acesso pendente"
+              />
+            ) : null}
+            <span className="text-detalhe text-muted-foreground">
+              {usuario.perfilNome
+                ? `Perfil: ${usuario.perfilNome}`
+                : "Sem perfil aplicado"}
+            </span>
+          </div>
 
-        {/* Dados que a PRÓPRIA pessoa preencheu em Minha conta, em leitura. Fica
+          {/* Dados que a PRÓPRIA pessoa preencheu em Minha conta, em leitura. Fica
             antes do formulário de propósito: quem abre este drawer procurando um
             telefone acha na primeira tela, sem rolar até o fim da matriz de
             permissões. */}
-        <div className="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2.5">
-          <span className="text-detalhe font-medium">Dados pessoais</span>
-          <ContatoUsuarioBloco
-            contato={usuario.contato}
-            nome={usuario.nome}
-          />
-        </div>
+          <div className="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2.5">
+            <span className="text-detalhe font-medium">Dados pessoais</span>
+            <ContatoUsuarioBloco
+              contato={usuario.contato}
+              nome={usuario.nome}
+            />
+          </div>
 
-        {podeEditar ? (
-          <>
-            <form
-              onSubmit={submeterComAviso(form, aoSalvar)}
-              className={classesFormulario}
-              noValidate
-            >
-              <CampoFormulario
-                id="usuario-nome"
-                rotulo="Nome"
-                erro={form.formState.errors.nome?.message}
+          {podeEditar ? (
+            <>
+              <form
+                onSubmit={submeterComAviso(form, aoSalvar)}
+                className={classesFormulario}
+                noValidate
               >
-                <Input
+                <CampoFormulario
                   id="usuario-nome"
+                  rotulo="Nome"
+                  erro={form.formState.errors.nome?.message}
+                >
+                  <Input
+                    id="usuario-nome"
+                    disabled={salvando}
+                    {...form.register("nome")}
+                  />
+                </CampoFormulario>
+
+                <SelectAtivo
+                  value={form.watch("ativo")}
+                  onChange={(valor) => form.setValue("ativo", valor)}
                   disabled={salvando}
-                  {...form.register("nome")}
+                  ajuda="Usuário inativo não entra no sistema"
+                  className="rounded-md border border-border px-3 py-2.5"
                 />
+
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm" disabled={salvando}>
+                    {salvando ? (
+                      <>
+                        <LoaderCircle className="animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      "Salvar alterações"
+                    )}
+                  </Button>
+                </div>
+              </form>
+
+              <Separator />
+
+              <CampoFormulario
+                id="aplicar-perfil"
+                rotulo="Aplicar perfil"
+                ajuda="Aplicar um perfil substitui a matriz individual pelo template do perfil"
+              >
+                <div className="flex items-center gap-2">
+                  <Combobox
+                    valor={perfilSelecionado}
+                    onValorChange={setPerfilSelecionado}
+                    opcoes={perfis.map((perfil) => ({
+                      valor: perfil.id,
+                      rotulo: perfil.nome,
+                    }))}
+                    placeholder="Escolha um perfil"
+                    disabled={aplicandoPerfil || perfis.length === 0}
+                    id="aplicar-perfil"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={aplicarPerfil}
+                    disabled={aplicandoPerfil || !perfilSelecionado}
+                  >
+                    {aplicandoPerfil ? (
+                      <>
+                        <LoaderCircle className="animate-spin" />
+                        Aplicando...
+                      </>
+                    ) : (
+                      "Aplicar perfil"
+                    )}
+                  </Button>
+                </div>
               </CampoFormulario>
 
-              <SelectAtivo
-                value={form.watch("ativo")}
-                onChange={(valor) => form.setValue("ativo", valor)}
-                disabled={salvando}
-                ajuda="Usuário inativo não entra no sistema"
-                className="rounded-md border border-border px-3 py-2.5"
-              />
+              <Separator />
 
-              <div className="flex justify-end">
-                <Button type="submit" size="sm" disabled={salvando}>
-                  {salvando ? (
-                    <>
-                      <LoaderCircle className="animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    "Salvar alterações"
-                  )}
-                </Button>
-              </div>
-            </form>
-
-            <Separator />
-
-            <CampoFormulario
-              id="aplicar-perfil"
-              rotulo="Aplicar perfil"
-              ajuda="Aplicar um perfil substitui a matriz individual pelo template do perfil"
-            >
-              <div className="flex items-center gap-2">
-                <Combobox
-                  valor={perfilSelecionado}
-                  onValorChange={setPerfilSelecionado}
-                  opcoes={perfis.map((perfil) => ({
-                    valor: perfil.id,
-                    rotulo: perfil.nome,
-                  }))}
-                  placeholder="Escolha um perfil"
-                  disabled={aplicandoPerfil || perfis.length === 0}
-                  id="aplicar-perfil"
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={aplicarPerfil}
-                  disabled={aplicandoPerfil || !perfilSelecionado}
-                >
-                  {aplicandoPerfil ? (
-                    <>
-                      <LoaderCircle className="animate-spin" />
-                      Aplicando...
-                    </>
-                  ) : (
-                    "Aplicar perfil"
-                  )}
-                </Button>
-              </div>
-            </CampoFormulario>
-
-            <Separator />
-
-            <div className="flex flex-col gap-2">
-              <p className="text-corpo font-medium">Acesso</p>
-              {ehVoceMesmo ? (
-                <p className="text-detalhe text-muted-foreground">
-                  Esta é a sua conta. Para trocar a sua senha, use Minha conta
-                  {" > "}Alterar senha.
-                </p>
-              ) : (
-                <>
+              <div className="flex flex-col gap-2">
+                <p className="text-corpo font-medium">Acesso</p>
+                {ehVoceMesmo ? (
                   <p className="text-detalhe text-muted-foreground">
-                    {usuario.acessoPendente
-                      ? "Aguardando o 1º acesso. A senha provisória abaixo vale até o usuário definir a própria."
-                      : "O usuário já definiu a própria senha. Redefina para gerar uma nova senha provisória."}
+                    Esta é a sua conta. Para trocar a sua senha, use Minha conta
+                    {" > "}Alterar senha.
                   </p>
+                ) : (
+                  <>
+                    <p className="text-detalhe text-muted-foreground">
+                      {usuario.acessoPendente
+                        ? "Aguardando o 1º acesso. A senha provisória abaixo vale até o usuário definir a própria."
+                        : "O usuário já definiu a própria senha. Redefina para gerar uma nova senha provisória."}
+                    </p>
 
-                  {senhaRevelada ? (
-                    <span className="flex items-center gap-2">
-                      <code className="codigo-doc rounded-md border border-border bg-surface px-2 py-1">
-                        {senhaRevelada}
-                      </code>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={copiarSenha}
-                      >
-                        <Copy />
-                        Copiar
-                      </Button>
-                    </span>
-                  ) : null}
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {usuario.acessoPendente && !senhaRevelada ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={revelarSenha}
-                        disabled={carregandoSenha}
-                      >
-                        {carregandoSenha ? (
-                          <>
-                            <LoaderCircle className="animate-spin" />
-                            Carregando...
-                          </>
-                        ) : (
-                          <>
-                            <KeyRound />
-                            Revelar senha provisória
-                          </>
-                        )}
-                      </Button>
+                    {senhaRevelada ? (
+                      <span className="flex items-center gap-2">
+                        <code className="codigo-doc rounded-md border border-border bg-surface px-2 py-1">
+                          {senhaRevelada}
+                        </code>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={copiarSenha}
+                        >
+                          <Copy />
+                          Copiar
+                        </Button>
+                      </span>
                     ) : null}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setConfirmarReset(true)}
-                    >
-                      <KeyRound />
-                      Redefinir senha
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
 
-            <Separator />
-          </>
-        ) : null}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {usuario.acessoPendente && !senhaRevelada ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={revelarSenha}
+                          disabled={carregandoSenha}
+                        >
+                          {carregandoSenha ? (
+                            <>
+                              <LoaderCircle className="animate-spin" />
+                              Carregando...
+                            </>
+                          ) : (
+                            <>
+                              <KeyRound />
+                              Revelar senha provisória
+                            </>
+                          )}
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmarReset(true)}
+                      >
+                        <KeyRound />
+                        Redefinir senha
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          ) : null}
 
-        <div className="flex flex-col gap-2">
-          <p className="text-corpo font-medium">Matriz de permissões</p>
-          <p className="text-detalhe text-muted-foreground">
-            Marque o que este usuário pode fazer em cada aba do sistema
-          </p>
-          <MatrizPermissoes
-            usuarioId={usuario.id}
-            podeEditar={podeEditar}
-            recarregar={versaoMatriz}
-          />
-        </div>
-
-        {podeExcluir && !ehVoceMesmo ? (
-          <>
-            <Separator />
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-col">
+          {/* O separador é DESTE bloco, não do anterior: sem isso, quem não pode
+              excluir via a coluna terminar com uma linha solta embaixo. */}
+          {podeExcluir && !ehVoceMesmo ? (
+            <>
+              <Separator />
+              <div className="flex flex-col gap-2">
                 <p className="text-corpo font-medium">Excluir usuário</p>
                 <p className="text-detalhe text-muted-foreground">
                   Some da lista e bloqueia o acesso. O nome continua nas ações
                   que ele já fez.
                 </p>
+                <div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setConfirmarExcluir(true)}
+                  >
+                    <Trash2 />
+                    Excluir
+                  </Button>
+                </div>
               </div>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => setConfirmarExcluir(true)}
-              >
-                <Trash2 />
-                Excluir
-              </Button>
-            </div>
-          </>
-        ) : null}
+            </>
+          ) : null}
+        </div>
+
+        {/* Coluna da direita: a matriz ocupa a altura da tela em vez de rolar
+            dentro de uma caixa de 384px. O desconto cobre cabeçalho do drawer,
+            respiro e o título da seção. */}
+        <div className="flex min-w-0 flex-col gap-2">
+          <p className="text-corpo font-medium">Matriz de permissões</p>
+          <p className="text-detalhe text-muted-foreground">
+            Marque o que este usuário pode fazer em cada aba do sistema. O botão
+            &quot;Tudo&quot; da linha marca todas as ações daquele recurso de
+            uma vez.
+          </p>
+          <MatrizPermissoes
+            usuarioId={usuario.id}
+            podeEditar={podeEditar}
+            recarregar={versaoMatriz}
+            alturaMaximaClassName="max-h-[26rem] lg:max-h-[calc(100vh-16rem)]"
+          />
+        </div>
       </div>
 
       <ConfirmDialog

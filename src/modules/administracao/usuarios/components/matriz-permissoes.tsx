@@ -13,6 +13,7 @@ import {
 } from "@/components/canonicos/matriz-recursos-acoes";
 import type { Acao } from "@/config/recursos";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { salvarMatrizUsuario } from "@/modules/administracao/usuarios/actions";
 import type { MatrizInput } from "@/modules/administracao/usuarios/schemas";
 
@@ -21,6 +22,8 @@ export interface MatrizPermissoesProps {
   podeEditar: boolean;
   /** Incremente para forçar recarga (ex: depois de aplicar um perfil). */
   recarregar?: number;
+  /** Altura máxima da matriz (o drawer largo dá a tela toda a ela). */
+  alturaMaximaClassName?: string;
 }
 
 /**
@@ -32,6 +35,7 @@ export function MatrizPermissoes({
   usuarioId,
   podeEditar,
   recarregar = 0,
+  alturaMaximaClassName,
 }: MatrizPermissoesProps) {
   // Estado carrega junto com a chave: carregando = chave desatualizada.
   const chaveCarga = `${usuarioId}|${recarregar}`;
@@ -102,10 +106,23 @@ export function MatrizPermissoes({
   }
 
   if (carregando) {
-    // Espelha o tamanho da matriz real: o drawer não pula quando carrega.
+    /**
+     * Espelha o tamanho da matriz real: o drawer não pula quando carrega.
+     *
+     * `max-h-*` vira `h-*` de propósito. Aplicar o `max-h` cru num bloco vazio
+     * daria altura ZERO (máximo não é altura), e o esqueleto sumiria — que é o
+     * contrário do que ele existe para fazer. A matriz de verdade tem mais de
+     * cinquenta linhas, então ela sempre encosta no teto: teto e altura são o
+     * mesmo número aqui.
+     */
     return (
       <div className="flex flex-col gap-3">
-        <Skeleton className="h-64 w-full rounded-md" />
+        <Skeleton
+          className={cn(
+            "w-full rounded-md",
+            alturaMaximaClassName?.replaceAll("max-h-", "h-") ?? "h-64",
+          )}
+        />
         {podeEditar ? (
           <div className="flex justify-end">
             <Skeleton className="h-8 w-28" />
@@ -121,6 +138,7 @@ export function MatrizPermissoes({
         selecionadas={selecao}
         onAlternar={alternar}
         desabilitada={!podeEditar || salvando}
+        alturaMaximaClassName={alturaMaximaClassName}
       />
 
       {podeEditar ? (
