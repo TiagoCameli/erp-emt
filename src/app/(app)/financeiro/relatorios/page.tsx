@@ -32,10 +32,8 @@ import {
   periodoDoModo,
   type FiltrosCustoCc,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
-import {
-  lerFiltrosCustoReceita,
-  type FiltrosCustoReceita,
-} from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import { centrosEfetivos } from "@/modules/financeiro/relatorios/centros-e-etapas";
 import {
   porCentro,
   porMes,
@@ -79,7 +77,7 @@ import {
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
-  listarCentrosCustoRaiz,
+  listarCentrosCustoParaFiltro,
   listarFornecedoresComLancamentos,
   mesCorrente,
   mesesDeCompetencia,
@@ -541,10 +539,18 @@ function descreverPeriodo(
 
 async function ConteudoCustoCc({
   filtros,
+  centroIds,
   erroDoModo,
   podeVerLancamentos,
 }: {
   filtros: FiltrosCustoCc;
+  /**
+   * Os centros que vão ao banco, já traduzidos da escada da tela: a raiz, ou as
+   * etapas dela quando alguma foi escolhida (ver `centrosEfetivos`). Vem por
+   * fora de `filtros` porque `filtros` é o que a BARRA mostra de volta — lá os
+   * dois níveis precisam continuar separados para cada campo abrir marcado.
+   */
+  centroIds: string[];
   erroDoModo?: string;
   podeVerLancamentos: boolean;
 }) {
@@ -562,8 +568,8 @@ async function ConteudoCustoCc({
   // começou. A janela cabe a vida mais antiga, e cada linha do gráfico começa na
   // dela (o recorte por centro é feito na RPC da série).
   const primeirosMeses =
-    filtros.modo === "vida" && filtros.centroIds.length > 0
-      ? await primeirosMesesDosCentros(filtros.centroIds)
+    filtros.modo === "vida" && centroIds.length > 0
+      ? await primeirosMesesDosCentros(centroIds)
       : undefined;
   const primeiroMes =
     primeirosMeses && primeirosMeses.size > 0
@@ -575,7 +581,7 @@ async function ConteudoCustoCc({
       <EmptyState
         icone={BarChart3}
         titulo={
-          filtros.centroIds.length > 1
+          centroIds.length > 1
             ? "Estes centros de custo ainda não têm custo"
             : "Este centro de custo ainda não tem custo"
         }
@@ -601,7 +607,7 @@ async function ConteudoCustoCc({
     // Os centros escolhidos são o que faz a tabela e os cartões falarem só deles.
     // Este parâmetro já existiu e era jogado fora antes de chegar ao banco: a
     // escolha mudava a URL e não mudava número nenhum.
-    centroIds: filtros.centroIds,
+    centroIds,
     categoriaIds: filtros.categoriaIds,
     fornecedorIds: filtros.fornecedorIds,
     formaIds: filtros.formaIds,
@@ -619,8 +625,8 @@ async function ConteudoCustoCc({
     anterior
       ? custoPorCentroCusto({ ...filtrosDaRpc, ...pontasDaRpc(anterior) })
       : Promise.resolve(null),
-    filtros.modo === "vida" && filtros.centroIds.length > 0
-      ? serieDosCentros(filtros.centroIds, filtrosDaRpc)
+    filtros.modo === "vida" && centroIds.length > 0
+      ? serieDosCentros(centroIds, filtrosDaRpc)
       : Promise.resolve(null),
   ]);
 
@@ -687,7 +693,7 @@ async function ConteudoCustoCc({
           detalhe={
             filtros.modo === "vida" && primeiroMes
               ? `Desde ${rotuloMes(primeiroMes)}, o primeiro lançamento ${
-                  filtros.centroIds.length > 1
+                  centroIds.length > 1
                     ? "do mais antigo destes centros"
                     : "deste centro"
                 }`
@@ -749,11 +755,20 @@ async function ConteudoCustoCc({
  * divergiram neste projeto; aqui a divergência é impossível por construção.
  */
 async function ConteudoCustoReceita({
-  filtros,
+  centrosCusto,
+  centrosReceita,
   meses,
   podeVerLancamentos,
 }: {
-  filtros: FiltrosCustoReceita;
+  /**
+   * Os centros que vão ao banco, já traduzidos da escada da tela: a raiz, ou as
+   * etapas dela quando alguma foi escolhida (ver `centrosEfetivos`). Chegam
+   * prontos, e não como o par raiz+etapa cru, porque duas traduções da mesma
+   * escolha divergiriam no primeiro detalhe que alguém acrescentasse de um lado
+   * só — e o sintoma seria a tabela somando um conjunto e a barra dizendo outro.
+   */
+  centrosCusto: string[];
+  centrosReceita: string[];
   meses: string[];
   podeVerLancamentos: boolean;
 }) {
@@ -769,8 +784,8 @@ async function ConteudoCustoReceita({
 
   const linhas = await custoReceita({
     meses,
-    centrosCusto: filtros.centrosCusto,
-    centrosReceita: filtros.centrosReceita,
+    centrosCusto,
+    centrosReceita,
   });
 
   if (linhas.length === 0) {
@@ -1040,7 +1055,7 @@ export default async function RelatoriosPage({
   const opcoesCustoCc =
     relatorio === "custo-cc"
       ? await Promise.all([
-          listarCentrosCustoRaiz(),
+          listarCentrosCustoParaFiltro(),
           listarCategorias(),
           listarFornecedores(),
           listarFormasPagamento(),
@@ -1057,7 +1072,7 @@ export default async function RelatoriosPage({
   const mesesDisponiveis =
     relatorio === "custo-receita" ? await mesesDeCompetencia() : [];
   const centrosParaCustoReceita =
-    relatorio === "custo-receita" ? await listarCentrosCustoRaiz() : null;
+    relatorio === "custo-receita" ? await listarCentrosCustoParaFiltro() : null;
   const {
     filtros: filtrosCustoReceita,
     mesesEfetivos: mesesCustoReceita,
@@ -1147,6 +1162,11 @@ export default async function RelatoriosPage({
           />
           <ConteudoCustoCc
             filtros={filtrosCustoCc}
+            centroIds={centrosEfetivos(
+              opcoesCustoCc[0],
+              filtrosCustoCc.centroIds,
+              filtrosCustoCc.etapaIds,
+            )}
             erroDoModo={erroDoModo}
             podeVerLancamentos={podeVerLancamentos}
           />
@@ -1165,7 +1185,16 @@ export default async function RelatoriosPage({
             periodoDesabilitado={periodoDesabilitado}
           />
           <ConteudoCustoReceita
-            filtros={filtrosCustoReceita}
+            centrosCusto={centrosEfetivos(
+              centrosParaCustoReceita,
+              filtrosCustoReceita.centrosCusto,
+              filtrosCustoReceita.etapasCusto,
+            )}
+            centrosReceita={centrosEfetivos(
+              centrosParaCustoReceita,
+              filtrosCustoReceita.centrosReceita,
+              filtrosCustoReceita.etapasReceita,
+            )}
             meses={mesesCustoReceita}
             podeVerLancamentos={podeVerLancamentos}
           />

@@ -16,6 +16,13 @@ import type {
   FornecedorOpcao,
 } from "@/modules/financeiro/lancamentos/queries";
 import {
+  etapasValidas,
+  opcoesDeEtapa,
+  opcoesDeRaiz,
+  rotuloDasEtapas,
+  temEtapasParaEscolher,
+} from "@/modules/financeiro/relatorios/centros-e-etapas";
+import {
   comparacaoPermitida,
   STATUS_CUSTO,
   TIPOS_CENTRO,
@@ -126,6 +133,14 @@ export interface FiltrosCustoCcBarraProps {
  * do PostgREST viaja na URL, e lista grande morre por tamanho antes de chegar ao
  * servidor.
  *
+ * O CENTRO É ESCOLHIDO EM DOIS CAMPOS: a raiz num, e a etapa dela no outro, que
+ * só aparece quando a raiz escolhida tem filho. É o conserto do que o Tiago pegou
+ * em 27/08/2026: com os dois níveis na mesma lista, 61 das 76 opções eram
+ * equipamentos da mesma raiz e o seletor desenhava sessenta e uma linhas
+ * idênticas, "Manutenção/Docume…", porque o nome que as distinguia vinha depois
+ * do corte. A regra de como os dois campos viram uma lista para o banco mora em
+ * `centros-e-etapas.ts`.
+ *
  * Toda troca de modo escreve na URL numa navegação SÓ (`setMuitos`), limpando o
  * que não se aplica no mesmo passo. Em duas navegações, o `de`/`ate` de um modo
  * anterior ficaria pendurado na URL e voltaria sozinho quando a pessoa
@@ -170,6 +185,25 @@ export function FiltrosCustoCcBarra({
   function trocarLista(chave: string, ids: string[]) {
     setMuitos({ [chave]: escreverListaNaUrl(ids) });
   }
+
+  /**
+   * Troca os centros e, na MESMA navegação, apaga as etapas que ficaram órfãs.
+   *
+   * Em duas navegações o `etapa=<uuid>` fica pendurado na URL, invisível (o campo
+   * some junto com a raiz dele) e vivo — e volta a recortar o relatório sozinho
+   * quando alguém remarcar aquela raiz depois. É a mesma razão pela qual a troca
+   * de modo limpa o que não pertence ao modo novo numa escrita só.
+   */
+  function trocarRaizes(ids: string[]) {
+    setMuitos({
+      centro: escreverListaNaUrl(ids),
+      etapa: escreverListaNaUrl(
+        etapasValidas(centrosCusto, ids, filtros.etapaIds),
+      ),
+    });
+  }
+
+  const nomesEtapa = rotuloDasEtapas(centrosCusto, filtros.centroIds);
 
   const filtrosDaBarra: FiltroDaBarra[] = [
     {
@@ -231,35 +265,54 @@ export function FiltrosCustoCcBarra({
     });
   }
 
-  filtrosDaBarra.push(
-    {
-      id: "centro",
-      // No modo vida o centro deixa de ser filtro e vira a escolha principal: é
-      // dele que sai o período inteiro do relatório.
-      rotulo:
-        filtros.modo === "vida"
-          ? "Centro de custo (obrigatório)"
-          : "Centro de custo",
-      fixo: filtros.modo === "vida",
-      temValor: filtros.centroIds.length > 0,
-      onLimpar: () => setMuitos({ centro: null }),
+  filtrosDaBarra.push({
+    id: "centro",
+    // No modo vida o centro deixa de ser filtro e vira a escolha principal: é
+    // dele que sai o período inteiro do relatório.
+    rotulo:
+      filtros.modo === "vida"
+        ? "Centro de custo (obrigatório)"
+        : "Centro de custo",
+    fixo: filtros.modo === "vida",
+    temValor: filtros.centroIds.length > 0,
+    onLimpar: () => setMuitos({ centro: null, etapa: null }),
+    elemento: (
+      <FiltroSelectMulti
+        valores={filtros.centroIds}
+        onValoresChange={trocarRaizes}
+        maximo={MAX_ITENS_FILTRO}
+        opcoes={opcoesDeRaiz(centrosCusto)}
+        todosRotulo={
+          filtros.modo === "vida" ? "Escolha um centro" : "Todos os centros"
+        }
+      />
+    ),
+  });
+
+  // O segundo campo da escada só entra na barra quando há o que escolher nele.
+  // Fixo, ficaria vazio e inerte em quase toda abertura da tela: das 15 raízes
+  // que os relatórios oferecem, uma só tem filho hoje (a da manutenção, com 61
+  // equipamentos).
+  if (temEtapasParaEscolher(centrosCusto, filtros.centroIds)) {
+    filtrosDaBarra.push({
+      id: "etapa",
+      rotulo: nomesEtapa.rotulo,
+      fixo: true,
+      temValor: filtros.etapaIds.length > 0,
+      onLimpar: () => setMuitos({ etapa: null }),
       elemento: (
         <FiltroSelectMulti
-          valores={filtros.centroIds}
-          onValoresChange={(ids) => trocarLista("centro", ids)}
+          valores={filtros.etapaIds}
+          onValoresChange={(ids) => trocarLista("etapa", ids)}
           maximo={MAX_ITENS_FILTRO}
-          opcoes={centrosCusto.map((centro) => ({
-            valor: centro.id,
-            rotulo: centro.codigo
-              ? `${centro.codigo} · ${centro.nome}`
-              : centro.nome,
-          }))}
-          todosRotulo={
-            filtros.modo === "vida" ? "Escolha um centro" : "Todos os centros"
-          }
+          opcoes={opcoesDeEtapa(centrosCusto, filtros.centroIds)}
+          todosRotulo={nomesEtapa.todos}
         />
       ),
-    },
+    });
+  }
+
+  filtrosDaBarra.push(
     {
       id: "categoria",
       rotulo: "Categoria",

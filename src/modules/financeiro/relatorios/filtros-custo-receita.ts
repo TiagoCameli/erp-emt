@@ -13,6 +13,14 @@ import {
  * "o custo da obra mais o das máquinas que servem ela" contra "a receita da obra"
  * é a pergunta real, e ela precisa dos dois lados soltos.
  *
+ * ## Cada lado tem DOIS campos: a raiz e a etapa
+ *
+ * `centro_custo` traz as raízes e `etapa_custo` o recorte dentro delas (o mesmo
+ * do lado da receita). São dois parâmetros, e não um só com tudo dentro, porque
+ * eles significam coisas diferentes: a raiz é o conjunto, a etapa é o recorte —
+ * e quem lê a URL precisa saber qual é qual para o segundo campo abrir marcado.
+ * A tradução dos dois numa lista só para o banco é de `centros-e-etapas.ts`.
+ *
  * ## O tempo entra como UMA lista de meses
  *
  * A tela tem dois controles (janela de/até e lista de meses), e o banco recebe um
@@ -48,10 +56,21 @@ export interface FiltrosCustoReceita {
   /** Pontas da janela (yyyy-MM). Só valem quando `meses` está vazio. */
   de: string;
   ate: string;
-  /** Centros cujo CUSTO entra. Vazio = todos. Cada um vale pela subárvore. */
+  /** Centros-raiz cujo CUSTO entra. Vazio = todos. Cada um vale pela subárvore. */
   centrosCusto: string[];
-  /** Centros cuja RECEITA entra. Vazio = todos. Cada um vale pela subárvore. */
+  /** Centros-raiz cuja RECEITA entra. Vazio = todos. Cada um vale pela subárvore. */
   centrosReceita: string[];
+  /**
+   * Etapas escolhidas dentro dos centros do custo. Vazio = o centro inteiro.
+   *
+   * Escolher etapa RECORTA a raiz, não soma a ela: ver `centros-e-etapas.ts`, que
+   * é quem traduz os dois campos numa lista só para o banco. A validação de a
+   * quem cada etapa pertence mora lá, porque depende do cadastro e esta leitura é
+   * pura — aqui só se garante que são uuids.
+   */
+  etapasCusto: string[];
+  /** Etapas escolhidas dentro dos centros da receita. Vazio = o centro inteiro. */
+  etapasReceita: string[];
 }
 
 /** Recua ou avança meses em `yyyy-MM`. Aritmética inteira, sem `Date` e sem fuso. */
@@ -118,6 +137,8 @@ export function lerFiltrosCustoReceita(
     ate,
     centrosCusto: lerUuidsDaUrl(params.centro_custo),
     centrosReceita: lerUuidsDaUrl(params.centro_receita),
+    etapasCusto: lerUuidsDaUrl(params.etapa_custo),
+    etapasReceita: lerUuidsDaUrl(params.etapa_receita),
   };
 
   return {
