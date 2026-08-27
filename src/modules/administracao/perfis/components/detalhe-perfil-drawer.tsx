@@ -15,7 +15,6 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { Acao } from "@/config/recursos";
 import {
@@ -140,7 +139,9 @@ export function DetalhePerfilDrawer({
             ? "1 usuário usa este perfil"
             : `${perfil.totalUsuarios} usuários usam este perfil`
         }
-        larguraClassName="sm:max-w-2xl"
+        // Mesma razão do drawer de usuário: a matriz é uma tabela de 8 colunas
+        // por 50 linhas e não cabe numa coluna de 672px no meio da tela.
+        larguraClassName="sm:max-w-[1600px]"
         rodape={
           <>
             {podeExcluir ? (
@@ -178,52 +179,58 @@ export function DetalhePerfilDrawer({
           </>
         }
       >
+        {/* Duas colunas em tela larga: identidade do perfil à esquerda (dois
+            campos curtos), matriz à direita, que é o conteúdo que precisa de
+            largura. `items-start` para a coluna curta não esticar. */}
         <form
           id={idFormulario}
           onSubmit={submeterComAviso(form, aoSalvar)}
-          className={classesFormulario}
+          className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start lg:gap-10"
           noValidate
         >
-          <CampoFormulario
-            id="perfil-detalhe-nome"
-            rotulo="Nome"
-            erro={form.formState.errors.nome?.message}
-          >
-            <Input
+          <div className={classesFormulario}>
+            <CampoFormulario
               id="perfil-detalhe-nome"
-              disabled={!podeEditar || salvando}
-              {...form.register("nome")}
-            />
-          </CampoFormulario>
+              rotulo="Nome"
+              erro={form.formState.errors.nome?.message}
+            >
+              <Input
+                id="perfil-detalhe-nome"
+                disabled={!podeEditar || salvando}
+                {...form.register("nome")}
+              />
+            </CampoFormulario>
 
-          <CampoFormulario
-            id="perfil-detalhe-descricao"
-            rotulo="Descrição"
-            erro={form.formState.errors.descricao?.message}
-          >
-            <Textarea
+            <CampoFormulario
               id="perfil-detalhe-descricao"
-              rows={3}
-              placeholder="O que esse perfil pode fazer no sistema"
-              disabled={!podeEditar || salvando}
-              {...form.register("descricao")}
-            />
-          </CampoFormulario>
+              rotulo="Descrição"
+              erro={form.formState.errors.descricao?.message}
+            >
+              <Textarea
+                id="perfil-detalhe-descricao"
+                rows={5}
+                placeholder="O que esse perfil pode fazer no sistema"
+                disabled={!podeEditar || salvando}
+                {...form.register("descricao")}
+              />
+            </CampoFormulario>
+          </div>
 
-          <Separator className="my-5" />
-
-          <section className="space-y-2">
+          <section className="flex min-w-0 flex-col gap-2">
             <div>
               <h3 className="text-corpo font-medium">Permissões do perfil</h3>
               <p className="text-detalhe text-muted-foreground">
                 Salvar a matriz não muda quem já usa o perfil. Para atualizar
-                esses usuários, aplique o perfil de novo na aba Usuários.
+                esses usuários, aplique o perfil de novo na aba Usuários. O
+                botão &quot;Tudo&quot; da linha marca todas as ações daquele
+                recurso de uma vez.
               </p>
             </div>
             <MatrizPermissoesPerfil
               selecionadas={selecionadas}
               onAlternar={alternarPermissao}
               desabilitada={!podeEditar || salvando}
+              alturaMaximaClassName="max-h-[26rem] lg:max-h-[calc(100vh-18rem)]"
             />
           </section>
         </form>
