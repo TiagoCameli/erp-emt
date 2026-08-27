@@ -15,34 +15,26 @@ import { paraCentavos, paraReais } from "@/modules/financeiro/relatorios/calculo
  * cartão por um centavo -- num relatório de dinheiro, um centavo de diferença
  * custa a confiança no resto.
  *
+ * NÃO HÁ EMPRÉSTIMO AQUI, e não é esquecimento. Por decisão do Tiago em
+ * 27/08/2026, toda a análise de empréstimo vive no relatório de Créditos:
+ * empréstimo tomado não é receita de obra e amortização não é custo de obra, e
+ * misturar os dois neste relatório fazia o centro Empréstimos aparecer com custo
+ * de R$ 2,84 milhões e receita zero. A RPC já corta pelos dois lados (centro de
+ * tipo `financeiro` e natureza de categoria diferente de `operacional`), então
+ * este módulo não precisa filtrar nada -- e não deve voltar a ter um par de
+ * números "de movimentação": ele existiu por um dia, em 26/08, e o que chegava
+ * nele era resíduo de um pagamento de empréstimo parado num centro operacional.
+ *
  * Módulo puro: nada de banco, nada de React.
  */
 
 export type TipoCustoReceita = "a_pagar" | "a_receber";
-
-/**
- * Natureza da categoria do lançamento, como a RPC devolve.
- *
- * Só duas chegam aqui: a RPC filtra `in ('operacional','movimentacao')`, e
- * 'financeira' fica de fora. A distinção existe porque as duas NÃO podem somar no
- * mesmo lugar: `movimentacao` é dinheiro que entra e tem de ser devolvido
- * (empréstimo tomado) ou que só troca de bolso (aplicação e resgate). Somar isso
- * como receita infla o resultado -- a varredura do banco era 31,7% da receita de
- * 2026 antes de sair do sistema, em 22/08/2026.
- */
-export type NaturezaCustoReceita = "operacional" | "movimentacao";
 
 /** Uma linha do grão fino, como a RPC devolve (valores já em reais). */
 export interface LinhaCustoReceita {
   /** yyyy-MM. */
   mes: string;
   tipo: TipoCustoReceita;
-  /**
-   * `operacional` é o que forma custo, receita e resultado. `movimentacao` é
-   * empréstimo tomado (e, se voltar a ser lançada, a varredura): aparece na tela
-   * numa faixa própria e NÃO entra em nenhum dos quatro cartões.
-   */
-  natureza: NaturezaCustoReceita;
   centroCustoId: string;
   nome: string;
   codigo: string | null;
@@ -78,32 +70,15 @@ export interface TotaisCustoReceita {
    * receita", e cem por cento como lucro total.
    */
   margem: number | null;
-  /**
-   * Empréstimo tomado no recorte (natureza `movimentacao`, lado a receber).
-   *
-   * FORA do resultado e da margem, de propósito: é dinheiro que entrou e tem de
-   * ser devolvido. Existe como número próprio porque some-lo em "receita" faria o
-   * centro Empréstimos parecer lucrativo, e omiti-lo fazia o mesmo centro
-   * aparecer com custo de R$ 2,84 milhões e receita zero -- que foi o print que
-   * o Tiago mandou em 27/08/2026.
-   */
-  movimentacaoEntrada: number;
-  /** O outro lado da movimentação (aplicação, amortização lançada como tal). */
-  movimentacaoSaida: number;
 }
 
 function somarCentavos(
   linhas: readonly LinhaCustoReceita[],
   campo: "total" | "retencao",
   tipo?: TipoCustoReceita,
-  natureza: NaturezaCustoReceita = "operacional",
 ): number {
   return linhas.reduce((soma, linha) => {
     if (tipo && linha.tipo !== tipo) return soma;
-    // A natureza tem default 'operacional' de propósito: antes de 27/08/2026 a
-    // RPC só devolvia operacional, e todo cálculo desta tela era sobre ela. Quem
-    // quiser movimentação pede explicitamente.
-    if (linha.natureza !== natureza) return soma;
     return soma + paraCentavos(linha[campo]);
   }, 0);
 }
@@ -126,12 +101,6 @@ export function totais(
       receitaCentavos === 0
         ? null
         : (resultadoCentavos / receitaCentavos) * 100,
-    movimentacaoEntrada: paraReais(
-      somarCentavos(linhas, "total", "a_receber", "movimentacao"),
-    ),
-    movimentacaoSaida: paraReais(
-      somarCentavos(linhas, "total", "a_pagar", "movimentacao"),
-    ),
   };
 }
 
@@ -150,9 +119,6 @@ export function porMes(
   const porChave = new Map<string, { custo: number; receita: number }>();
 
   for (const linha of linhas) {
-    // Só operacional: o gráfico é de custo x receita, e uma barra que somasse
-    // empréstimo tomado mostraria um mês lucrativo que não foi.
-    if (linha.natureza !== "operacional") continue;
     const atual = porChave.get(linha.mes) ?? { custo: 0, receita: 0 };
     const centavos = paraCentavos(linha.total);
     if (linha.tipo === "a_pagar") atual.custo += centavos;
@@ -188,7 +154,6 @@ export interface CentroCustoReceita {
 export function porCentro(
   linhas: readonly LinhaCustoReceita[],
   tipo: TipoCustoReceita,
-  natureza: NaturezaCustoReceita = "operacional",
 ): CentroCustoReceita[] {
   const porId = new Map<
     string,
@@ -197,7 +162,6 @@ export function porCentro(
 
   for (const linha of linhas) {
     if (linha.tipo !== tipo) continue;
-    if (linha.natureza !== natureza) continue;
     const atual = porId.get(linha.centroCustoId) ?? {
       nome: linha.nome,
       codigo: linha.codigo,
