@@ -139,9 +139,10 @@ export function DetalhePerfilDrawer({
             ? "1 usuário usa este perfil"
             : `${perfil.totalUsuarios} usuários usam este perfil`
         }
-        // Mesma razão do drawer de usuário: a matriz é uma tabela de 8 colunas
-        // por 50 linhas e não cabe numa coluna de 672px no meio da tela.
-        larguraClassName="sm:max-w-[1600px]"
+        // Mesma razão e mesmo teto do drawer de usuário: a matriz é uma tabela
+        // de 8 colunas por 50 linhas e não cabe numa coluna de 672px no meio da
+        // tela, mas largura sem teto afasta o checkbox do nome que ele governa.
+        larguraClassName="sm:max-w-[1900px]"
         rodape={
           <>
             {podeExcluir ? (
@@ -185,7 +186,7 @@ export function DetalhePerfilDrawer({
         <form
           id={idFormulario}
           onSubmit={submeterComAviso(form, aoSalvar)}
-          className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start lg:gap-10"
+          className="flex flex-col gap-6 xl:grid xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] xl:items-start xl:gap-10"
           noValidate
         >
           <div className={classesFormulario}>
@@ -230,7 +231,7 @@ export function DetalhePerfilDrawer({
               selecionadas={selecionadas}
               onAlternar={alternarPermissao}
               desabilitada={!podeEditar || salvando}
-              alturaMaximaClassName="max-h-[26rem] lg:max-h-[calc(100vh-18rem)]"
+              alturaMaximaClassName="max-h-[26rem] xl:max-h-[calc(100vh-18rem)]"
             />
           </section>
         </form>
