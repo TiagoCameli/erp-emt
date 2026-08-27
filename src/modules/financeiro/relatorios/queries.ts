@@ -745,6 +745,9 @@ export async function custoReceita({
     // A RPC devolve o `tipo` da coluna, que só tem estes dois valores nos
     // lançamentos. O cast é o mesmo dos outros relatórios do módulo.
     tipo: linha.tipo as LinhaCustoReceita["tipo"],
+    // A RPC filtra `in ('operacional','movimentacao')`, então só estes dois
+    // valores chegam. O cast é o mesmo padrão do `tipo` acima.
+    natureza: linha.natureza as LinhaCustoReceita["natureza"],
     centroCustoId: linha.centro_custo_id,
     nome: linha.nome ?? "Sem centro de custo",
     codigo: linha.codigo,
