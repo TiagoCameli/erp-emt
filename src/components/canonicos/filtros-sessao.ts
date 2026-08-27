@@ -126,6 +126,47 @@ export function salvarQuerySessao(rota: string, query: string): void {
 }
 
 /**
+ * Apaga os filtros lembrados de UMA rota, e avisa quem os lê.
+ *
+ * Existe porque o "Limpar filtros" tem duas famílias para limpar, e limpar só
+ * uma deixa a tela filtrada por algo que o botão diz ter tirado. Tela cujos
+ * filtros vivem na URL limpa numa navegação só (`limparTodos`), e nela o
+ * DataTable NÃO percorre o `onLimpar` de cada filtro; então filtro guardado na
+ * sessão sobrevivia ao clique. Foi medido no extrato da conta bancária: seis
+ * filtros (busca, sentido, as duas datas e os dois valores) continuavam
+ * valendo depois de limpar.
+ *
+ * A chave `__query__` NÃO é apagada aqui: ela é o espelho da família da URL, e
+ * quem manda nela é `salvarQuerySessao`, que o `limparTodos` chama em seguida
+ * para gravar "eu limpei". Apagar as duas coisas no mesmo lugar misturaria as
+ * responsabilidades e faria a ordem das chamadas importar.
+ *
+ * O `avisar()` é o que faz a tela reagir: `useFiltroSessao` lê o armazenamento
+ * por `useSyncExternalStore`, então sem valor guardado cada filtro volta ao
+ * padrão declarado NA PRÓPRIA TELA. Isso é melhor que o `onLimpar` de cada
+ * filtro, que repete o padrão num segundo lugar e pode discordar dele.
+ */
+export function limparFiltrosDaRota(rota: string): void {
+  const store = armazenamento();
+  if (!store) return;
+  const prefixoDaRota = `${PREFIXO}${rota}:`;
+  const guardaDaQuery = chaveFiltroSessao(rota, "__query__");
+  try {
+    const chaves: string[] = [];
+    for (let i = 0; i < store.length; i += 1) {
+      const chave = store.key(i);
+      if (!chave?.startsWith(prefixoDaRota)) continue;
+      if (chave === guardaDaQuery) continue;
+      chaves.push(chave);
+    }
+    for (const chave of chaves) store.removeItem(chave);
+  } catch {
+    // Sem armazenamento não há nada para limpar.
+  }
+  avisar();
+}
+
+/**
  * Apaga todo filtro lembrado, de todas as rotas.
  *
  * Chamado no `/login`. O logout é Server Action com redirect e não alcança o

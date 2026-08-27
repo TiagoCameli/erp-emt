@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  assinarFiltrosSessao,
   chaveFiltroSessao,
   filtrosLembraveis,
   lerFiltroSessao,
   lerQuerySessao,
+  limparFiltrosDaRota,
   limparFiltrosSessao,
   salvarFiltroSessao,
   salvarQuerySessao,
@@ -100,6 +102,57 @@ describe("limparFiltrosSessao", () => {
     limparFiltrosSessao();
 
     expect(window.sessionStorage.getItem("outra-coisa")).toBe("preservar");
+  });
+});
+
+describe("limparFiltrosDaRota", () => {
+  it("apaga os filtros da rota e deixa as outras rotas em paz", () => {
+    salvarFiltroSessao("/cadastros/obras", "busca", "PONTE");
+    salvarFiltroSessao("/cadastros/obras", "uf", "AC");
+    salvarFiltroSessao("/cadastros/clientes", "busca", "EMT");
+
+    limparFiltrosDaRota("/cadastros/obras");
+
+    expect(lerFiltroSessao("/cadastros/obras", "busca")).toBeNull();
+    expect(lerFiltroSessao("/cadastros/obras", "uf")).toBeNull();
+    // O filtro da OUTRA tela sobrevive: "Limpar filtros" é da tela onde a pessoa
+    // clicou, e levar tudo faria ela perder o recorte de uma tela que nem está
+    // aberta.
+    expect(lerFiltroSessao("/cadastros/clientes", "busca")).toBe("EMT");
+  });
+
+  it("NÃO mexe na query da rota, que é da família da URL", () => {
+    // Quem manda no `__query__` é o `salvarQuerySessao`, que o `limparTodos`
+    // chama em seguida para gravar "eu limpei". Apagar aqui faria a ordem das
+    // duas chamadas importar, e um dia alguém trocaria a ordem.
+    salvarQuerySessao("/financeiro/lancamentos", "status=a_pagar");
+    salvarFiltroSessao("/financeiro/lancamentos", "busca", "pneu");
+
+    limparFiltrosDaRota("/financeiro/lancamentos");
+
+    expect(lerFiltroSessao("/financeiro/lancamentos", "busca")).toBeNull();
+    expect(lerQuerySessao("/financeiro/lancamentos")).toBe("status=a_pagar");
+  });
+
+  it("avisa quem está ouvindo, senão a tela não reage", () => {
+    // É o aviso que faz o `useFiltroSessao` reler a loja. Sem ele o filtro sai
+    // do armazenamento e continua desenhado na tela.
+    salvarFiltroSessao("/cadastros/obras", "busca", "PONTE");
+    const ouvinte = vi.fn();
+    const cancelar = assinarFiltrosSessao(ouvinte);
+
+    limparFiltrosDaRota("/cadastros/obras");
+
+    expect(ouvinte).toHaveBeenCalled();
+    cancelar();
+  });
+
+  it("rota sem filtro guardado não quebra nada", () => {
+    salvarFiltroSessao("/cadastros/clientes", "busca", "EMT");
+
+    limparFiltrosDaRota("/rh/ferias");
+
+    expect(lerFiltroSessao("/cadastros/clientes", "busca")).toBe("EMT");
   });
 });
 

@@ -46,6 +46,9 @@ vi.mock("@/components/canonicos/filtros-sessao", () => ({
   salvarQuerySessao: vi.fn(),
   lerQuerySessao: vi.fn(() => null),
   limparFiltrosSessao: vi.fn(),
+  // O "Limpar filtros" também apaga a família de sessão da rota. Aqui é um
+  // espião: quem prova o comportamento dela é `filtros-sessao.test.ts`.
+  limparFiltrosDaRota: vi.fn(),
   filtrosLembraveis: vi.fn(() => ""),
 }));
 
