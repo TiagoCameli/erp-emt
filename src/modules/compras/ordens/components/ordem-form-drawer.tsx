@@ -976,6 +976,13 @@ export function OrdemFormDrawer({
                   form.setValue("formas.0.formaPagamentoId", valor, {
                     shouldValidate: true,
                   });
+                  // Trocou de cartão para PIX: o cartão que estava escolhido tem
+                  // que sair junto. `trg_oc_formas_cartao` recusa cartão em forma
+                  // que não é cartão, e o erro chegaria depois do servidor,
+                  // falando de uma escolha que a tela já nem mostra mais.
+                  if (!formasDeCartao.has(valor)) {
+                    form.setValue("formas.0.cartaoId", "");
+                  }
                   // A parcela acompanha: com uma forma só, toda parcela é dela.
                   const atuais = form.getValues("parcelas") ?? [];
                   atuais.forEach((_, indice) =>
@@ -1266,6 +1273,10 @@ export function OrdemFormDrawer({
                           valor,
                           { shouldValidate: true },
                         );
+                        // Deixou de ser cartão: o cartão escolhido sai junto.
+                        if (!formasDeCartao.has(valor)) {
+                          form.setValue(`formas.${indice}.cartaoId`, "");
+                        }
                         // As parcelas que eram da forma antiga passam a ser da
                         // nova: senão ficariam apontando para uma forma que saiu
                         // da tela, e o envio travaria numa mensagem sobre soma em

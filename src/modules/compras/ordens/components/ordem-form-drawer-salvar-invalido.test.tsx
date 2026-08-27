@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -45,6 +53,7 @@ vi.mock("@/components/canonicos/toast", () => ({
   DURACAO_TOAST: { sucesso: 2000, info: 3000, aviso: 5000, erro: 6000 },
 }));
 
+import { instalarLayoutDeLista } from "@/components/canonicos/combobox-jsdom-teste";
 import { OrdemFormDrawer } from "@/modules/compras/ordens/components/ordem-form-drawer";
 import type { OrdemDetalhe } from "@/modules/compras/ordens/queries";
 
@@ -191,6 +200,9 @@ function abrirEdicao(ordem: OrdemDetalhe) {
 }
 
 describe("editar OC: salvar com o formulário inválido", () => {
+  // O Combobox é uma lista virtualizada: sem layout falso o jsdom não desenha
+  // opção nenhuma e o teste falharia por um motivo que não é o dele.
+  beforeAll(instalarLayoutDeLista);
   beforeEach(() => {
     editarOrdem.mockClear();
     avisos.length = 0;
@@ -223,6 +235,30 @@ describe("editar OC: salvar com o formulário inválido", () => {
     await waitFor(() => expect(avisos.length).toBe(1));
     expect(editarOrdem).not.toHaveBeenCalled();
     expect(avisos[0]).toMatch(/cart[ãa]o/i);
+  });
+
+  it("trocar a forma de cartão para PIX limpa o cartão escolhido", async () => {
+    // Sem isto, o cartão fica pendurado numa forma que não é cartão e
+    // `trg_oc_formas_cartao` recusa o salvamento com "So forma do tipo cartao de
+    // credito aceita cartao" — falando de uma escolha que a tela já nem mostra.
+    abrirEdicao(ordemDividida(15400));
+
+    const seletores = await screen.findAllByRole("combobox", {
+      name: /forma de pagamento/i,
+    });
+    // O último é o da linha do cartão na tabela de formas (a de R$ 15.000,00).
+    const daLinhaDoCartao = seletores[seletores.length - 1]!;
+    fireEvent.click(daLinhaDoCartao);
+    fireEvent.click(await screen.findByRole("option", { name: "PIX" }));
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /salvar ordem/i }),
+    );
+
+    await waitFor(() => expect(avisos.length).toBe(1));
+    // Duas linhas de PIX: o erro agora é sobre a forma repetida, NÃO sobre o
+    // cartão. Se o cartão tivesse ficado, ele apareceria antes.
+    expect(avisos[0]).not.toMatch(/cart[ãa]o/i);
   });
 
   it("salva sem avisar nada quando está tudo fechado", async () => {

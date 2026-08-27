@@ -1606,6 +1606,12 @@ export function LancamentoFormDrawer({
                     form.setValue("formas.0.formaPagamentoId", valor, {
                       shouldValidate: true,
                     });
+                    // Trocou de cartão para PIX: o cartão que estava escolhido
+                    // sai junto. `trg_lancamento_formas_cartao` recusa cartão em
+                    // forma que não é cartão.
+                    if (!formasDeCartao.has(valor)) {
+                      form.setValue("formas.0.cartaoId", "");
+                    }
                     // A parcela acompanha: com uma forma só, toda parcela é dela,
                     // e a pessoa não escolhe duas vezes a mesma coisa.
                     const atuais = form.getValues("parcelas") ?? [];
@@ -1685,6 +1691,10 @@ export function LancamentoFormDrawer({
                             valor,
                             { shouldValidate: true },
                           );
+                          // Deixou de ser cartão: o cartão escolhido sai junto.
+                          if (!formasDeCartao.has(valor)) {
+                            form.setValue(`formas.${indice}.cartaoId`, "");
+                          }
                           // As parcelas que eram da forma antiga passam a ser da
                           // nova: sem isto elas ficariam apontando para uma forma
                           // que saiu da tela, e o envio travaria numa mensagem
