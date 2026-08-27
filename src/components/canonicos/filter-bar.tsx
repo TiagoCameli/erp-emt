@@ -513,11 +513,25 @@ const DEBOUNCE_BUSCA_MS = 400;
 export function useBuscaUrl(buscaInicial: string, chave = "busca") {
   const { setMuitos } = useFiltrosUrl();
   const [busca, setBusca] = React.useState(buscaInicial);
+  // Ultimo termo que ESTE hook escreveu na URL, para distinguir a volta da
+  // propria escrita de uma mudanca vinda de FORA (o "Limpar filtros", um link
+  // colado, o voltar do navegador). Mesma mecanica do `useFaixaUrl` abaixo.
+  const escritoPorNos = React.useRef(buscaInicial.trim());
+
+  // A URL mudou por fora: o campo tem de acompanhar. Sem isto o texto antigo
+  // fica no input e, 400 ms depois, o debounce REESCREVE o termo na URL que o
+  // botao acabou de limpar -- a lista volta filtrada e ninguem pediu.
+  React.useEffect(() => {
+    if (buscaInicial.trim() === escritoPorNos.current) return;
+    escritoPorNos.current = buscaInicial.trim();
+    setBusca(buscaInicial);
+  }, [buscaInicial]);
 
   React.useEffect(() => {
     const termo = busca.trim();
     if (termo === buscaInicial.trim()) return;
     const timer = setTimeout(() => {
+      escritoPorNos.current = termo;
       setMuitos({ [chave]: termo === "" ? null : termo, pagina: "1" });
     }, DEBOUNCE_BUSCA_MS);
     return () => clearTimeout(timer);
