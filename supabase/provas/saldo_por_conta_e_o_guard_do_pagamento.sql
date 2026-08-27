@@ -119,6 +119,82 @@ end $prova$;
 -- mesmo número.
 
 -- =====================================================================
+-- Parte 1b: o estado DEFINITIVO, depois do deploy e da migration que fecha
+-- =====================================================================
+--
+-- Rodada em 27/08/2026, com `20260827230000_saldo_por_conta_fecha_as_portas`
+-- aplicada e o código (PRs #207 e #209) em produção. É este o estado que vale.
+--
+-- Além dos controles de leitura, aqui entram os DOIS UPDATEs, que é o que fecha
+-- o furo achado no checklist: a Dora tem `financeiro.contas-bancarias / editar`,
+-- então ela EDITA a conta — e não pode, ao salvar o nome, zerar o saldo.
+
+do $prova$
+declare
+  v_dora  uuid := '3767e529-eae7-4178-852c-2dd2782efaaf';
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
+  v_conta uuid;
+  a_saldos int; a_nomes int;
+  b text := 'PASSOU (NAO DEVIA)';
+  b2 text := 'PASSOU (NAO DEVIA)';
+  c int;
+  d_query_nova int;
+  e_update_nome text := '(nao rodou)';
+  f_update_saldo text := 'PASSOU (NAO DEVIA)';
+begin
+  select id into v_conta from public.contas_bancarias where nome ilike '%102.124-9%' limit 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_dora, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  select count(*) into a_saldos from public.fn_saldos_das_contas();
+  select count(*) into a_nomes from public.contas_bancarias;
+  -- A query que o código NOVO faz. Se ela quebrar aqui, quebrou em produção.
+  execute 'select count(*) from (select id, nome, banco, agencia, conta, tipo, saldo_inicial_data, ativo from public.contas_bancarias order by nome) x' into d_query_nova;
+
+  begin execute 'select saldo_inicial from public.contas_bancarias limit 1';
+  exception when others then b := sqlerrm; end;
+  begin execute 'select * from public.fn_rel_posicao_bancaria() limit 1';
+  exception when others then b2 := sqlerrm; end;
+
+  -- E: o UPDATE que a action faz agora (SEM as colunas de saldo) tem que passar.
+  -- Sem esta linha, a prova não distinguiria "trava funcionando" de "trava
+  -- impedindo a Dora de trabalhar".
+  begin
+    execute format('update public.contas_bancarias set nome = nome where id = %L', v_conta);
+    e_update_nome := 'PASSOU (correto)';
+  exception when others then e_update_nome := 'RECUSOU: ' || sqlerrm;
+  end;
+
+  -- F CONTROLE: o UPDATE COM a coluna de saldo tem que ser recusado pela trigger.
+  begin
+    execute format('update public.contas_bancarias set saldo_inicial = 0 where id = %L', v_conta);
+  exception when others then f_update_saldo := sqlerrm;
+  end;
+  reset role;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+  select count(*) into c from public.fn_saldos_das_contas();
+  reset role;
+
+  raise exception E'PROVA FINAL (desfeita, nada gravado)\n  Dora: % saldo(s) e % nome(s) de conta; query nova devolve % linha(s)\n  CONTROLE select saldo_inicial -> %\n  CONTROLE fn_rel_posicao_bancaria -> %\n  Dora edita o NOME -> %\n  CONTROLE Dora edita o SALDO -> %\n  Tiago (Admin): % conta(s) com saldo',
+    a_saldos, a_nomes, d_query_nova, b, b2, e_update_nome, f_update_saldo, c;
+end $prova$;
+
+-- Resultado em 27/08/2026, estado definitivo:
+--   Dora: 0 saldo(s) e 5 nome(s) de conta; query nova devolve 5 linha(s)
+--   CONTROLE select saldo_inicial -> permission denied for table contas_bancarias
+--   CONTROLE fn_rel_posicao_bancaria -> permission denied for function fn_rel_posicao_bancaria
+--   Dora edita o NOME -> PASSOU (correto)
+--   CONTROLE Dora edita o SALDO -> Sem permissao para alterar o saldo inicial desta conta
+--   Tiago (Admin): 5 conta(s) com saldo
+--
+-- As seis linhas juntas são a obra: o nome aparece, o saldo não, a consulta
+-- direta e a agregada estão fechadas, quem edita conta continua editando, e o
+-- saldo real não pode ser sobrescrito por quem não o vê. Admin passa por cima.
+
+-- =====================================================================
 -- Parte 2: o guard do pagamento continua certo, e para de contar o saldo
 -- =====================================================================
 --
