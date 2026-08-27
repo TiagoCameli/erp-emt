@@ -15,6 +15,7 @@ import {
   InputDecimal,
   LinhaCampos,
   StatusBadge,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -268,7 +269,7 @@ export function ApontamentoFormDrawer({
     >
       <form
         id={ID_FORM}
-        onSubmit={form.handleSubmit(aoEnviar)}
+        onSubmit={submeterComAviso(form, aoEnviar)}
         className={classesFormulario}
       >
         <CampoFormulario

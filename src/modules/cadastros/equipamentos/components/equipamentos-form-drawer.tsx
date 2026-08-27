@@ -14,6 +14,7 @@ import {
   FormDrawer,
   LinhaCampos,
   SelectAtivo,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,7 +186,7 @@ export function EquipamentosFormDrawer({
     >
       <form
         id={ID_FORM}
-        onSubmit={form.handleSubmit(aoEnviar)}
+        onSubmit={submeterComAviso(form, aoEnviar)}
         className={classesFormulario}
         noValidate
       >
@@ -429,7 +430,7 @@ function SecaoDocumentos({
       {podeEditar && adicionando ? (
         <form
           id={ID_FORM_DOCUMENTO}
-          onSubmit={form.handleSubmit(aoAdicionar)}
+          onSubmit={submeterComAviso(form, aoAdicionar)}
           className="flex flex-col gap-3 rounded-md border border-border bg-surface/50 p-4"
           noValidate
         >

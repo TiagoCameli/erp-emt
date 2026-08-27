@@ -10,6 +10,7 @@ import {
   CampoFormulario,
   classesFormulario,
   InputMoeda,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
@@ -145,7 +146,7 @@ export function RecebimentoDialog({
 
         <form
           id="form-recebimento"
-          onSubmit={form.handleSubmit(aoEnviar)}
+          onSubmit={submeterComAviso(form, aoEnviar)}
           className={classesFormulario}
           noValidate
         >

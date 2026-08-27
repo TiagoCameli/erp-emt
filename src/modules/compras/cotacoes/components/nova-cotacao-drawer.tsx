@@ -11,6 +11,7 @@ import {
   Combobox,
   FormDrawer,
   SecaoFormulario,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { FilaAnexos } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
@@ -114,7 +115,7 @@ export function NovaCotacaoDrawer({
     >
       <form
         id={ID_FORM}
-        onSubmit={form.handleSubmit(aoEnviar)}
+        onSubmit={submeterComAviso(form, aoEnviar)}
         className={classesFormulario}
         noValidate
       >

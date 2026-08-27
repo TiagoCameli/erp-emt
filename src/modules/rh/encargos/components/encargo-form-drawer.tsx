@@ -13,6 +13,7 @@ import {
   FormDrawer,
   InputDecimal,
   SelectAtivo,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,7 +127,7 @@ export function EncargoFormDrawer({
     >
       <form
         id={ID_FORM}
-        onSubmit={form.handleSubmit(aoEnviar)}
+        onSubmit={submeterComAviso(form, aoEnviar)}
         className={classesFormulario}
         noValidate
       >

@@ -8,6 +8,7 @@ import {
   CampoFormulario,
   classesFormulario,
   InputSenha,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export function DefinirSenhaForm() {
 
   return (
     <form
-      onSubmit={form.handleSubmit(aoEnviar)}
+      onSubmit={submeterComAviso(form, aoEnviar)}
       className={classesFormulario}
       noValidate
     >

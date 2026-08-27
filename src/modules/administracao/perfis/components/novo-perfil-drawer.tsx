@@ -10,6 +10,7 @@ import {
   CampoFormulario,
   classesFormulario,
   FormDrawer,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,7 +88,7 @@ export function NovoPerfilDrawer({
     >
       <form
         id={idFormulario}
-        onSubmit={form.handleSubmit(aoEnviar)}
+        onSubmit={submeterComAviso(form, aoEnviar)}
         className={classesFormulario}
         noValidate
       >

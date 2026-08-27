@@ -11,6 +11,7 @@ import {
   classesFormulario,
   ConfirmDialog,
   FormDrawer,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,7 +180,7 @@ export function DetalhePerfilDrawer({
       >
         <form
           id={idFormulario}
-          onSubmit={form.handleSubmit(aoSalvar)}
+          onSubmit={submeterComAviso(form, aoSalvar)}
           className={classesFormulario}
           noValidate
         >

@@ -12,6 +12,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -154,7 +155,7 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
         ) : (
           <form
             id={ID_FORM}
-            onSubmit={form.handleSubmit(aoEnviar)}
+            onSubmit={submeterComAviso(form, aoEnviar)}
             className={classesFormulario}
             noValidate
           >

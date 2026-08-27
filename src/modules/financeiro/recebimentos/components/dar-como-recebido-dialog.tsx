@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   MoneyText,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import {
@@ -141,7 +142,7 @@ export function DarComoRecebidoDialog({
 
         <form
           id={ID_FORM}
-          onSubmit={form.handleSubmit(aoEnviar)}
+          onSubmit={submeterComAviso(form, aoEnviar)}
           className={classesFormulario}
           noValidate
         >
