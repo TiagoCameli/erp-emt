@@ -33,6 +33,7 @@ import type {
   PerfilOpcao,
   UsuarioLista,
 } from "@/modules/administracao/usuarios/queries";
+import { ContatoUsuarioBloco } from "./contato-usuario";
 import { MatrizPermissoes } from "./matriz-permissoes";
 
 export interface DetalheUsuarioDrawerProps {
@@ -173,6 +174,18 @@ export function DetalheUsuarioDrawer({
               ? `Perfil: ${usuario.perfilNome}`
               : "Sem perfil aplicado"}
           </span>
+        </div>
+
+        {/* Dados que a PRÓPRIA pessoa preencheu em Minha conta, em leitura. Fica
+            antes do formulário de propósito: quem abre este drawer procurando um
+            telefone acha na primeira tela, sem rolar até o fim da matriz de
+            permissões. */}
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2.5">
+          <span className="text-detalhe font-medium">Dados pessoais</span>
+          <ContatoUsuarioBloco
+            contato={usuario.contato}
+            nome={usuario.nome}
+          />
         </div>
 
         {podeEditar ? (

@@ -3573,38 +3573,77 @@ export type Database = {
       usuarios: {
         Row: {
           ativo: boolean;
+          cargo: string | null;
+          celular: string | null;
+          cpf: string | null;
           created_at: string;
           created_by: string | null;
+          data_nascimento: string | null;
           email: string | null;
+          endereco_bairro: string | null;
+          endereco_cep: string | null;
+          endereco_cidade: string | null;
+          endereco_complemento: string | null;
+          endereco_logradouro: string | null;
+          endereco_numero: string | null;
+          endereco_uf: string | null;
           excluido_em: string | null;
           excluido_por: string | null;
           id: string;
           nome: string;
           perfil_id: string | null;
+          ramal: string | null;
+          rg: string | null;
           updated_at: string;
         };
         Insert: {
           ativo?: boolean;
+          cargo?: string | null;
+          celular?: string | null;
+          cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
+          data_nascimento?: string | null;
           email?: string | null;
+          endereco_bairro?: string | null;
+          endereco_cep?: string | null;
+          endereco_cidade?: string | null;
+          endereco_complemento?: string | null;
+          endereco_logradouro?: string | null;
+          endereco_numero?: string | null;
+          endereco_uf?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
           id: string;
           nome: string;
           perfil_id?: string | null;
+          ramal?: string | null;
+          rg?: string | null;
           updated_at?: string;
         };
         Update: {
           ativo?: boolean;
+          cargo?: string | null;
+          celular?: string | null;
+          cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
+          data_nascimento?: string | null;
           email?: string | null;
+          endereco_bairro?: string | null;
+          endereco_cep?: string | null;
+          endereco_cidade?: string | null;
+          endereco_complemento?: string | null;
+          endereco_logradouro?: string | null;
+          endereco_numero?: string | null;
+          endereco_uf?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
           id?: string;
           nome?: string;
           perfil_id?: string | null;
+          ramal?: string | null;
+          rg?: string | null;
           updated_at?: string;
         };
         Relationships: [
@@ -4323,6 +4362,28 @@ export type Database = {
           p_rateios: Json;
         };
         Returns: string;
+      };
+      fn_salvar_meu_perfil: {
+        // Todos `string | null` À MÃO: os parâmetros não têm DEFAULT no banco, e
+        // o gerador escreve `string` para parâmetro sem DEFAULT — ele não sabe
+        // que a coluna aceita null. Aqui null é o valor normal (campo em
+        // branco), e a action manda as treze chaves sempre.
+        Args: {
+          p_cargo: string | null;
+          p_celular: string | null;
+          p_cpf: string | null;
+          p_data_nascimento: string | null;
+          p_endereco_bairro: string | null;
+          p_endereco_cep: string | null;
+          p_endereco_cidade: string | null;
+          p_endereco_complemento: string | null;
+          p_endereco_logradouro: string | null;
+          p_endereco_numero: string | null;
+          p_endereco_uf: string | null;
+          p_ramal: string | null;
+          p_rg: string | null;
+        };
+        Returns: undefined;
       };
       fn_salvar_parcelas_oc: {
         Args: { p_formas?: Json; p_oc_id: string; p_parcelas: Json };
