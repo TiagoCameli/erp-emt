@@ -8,7 +8,11 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
-import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
+import {
+  formatarBRL,
+  formatarData,
+  formatarPercentual,
+} from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
@@ -71,6 +75,7 @@ import {
   custoPorGrupo,
   custoReceita,
   creditos,
+  emprestimosPorContrato,
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
@@ -348,8 +353,13 @@ async function ConteudoCreditos({
 }: {
   podeVerLancamentos: boolean;
 }) {
-  const dados = await creditos();
-  if (dados.contratos.length === 0) {
+  // As duas leituras em paralelo: são independentes, e uma esperar a outra
+  // dobraria o tempo da aba sem motivo.
+  const [dados, contratos] = await Promise.all([
+    creditos(),
+    emprestimosPorContrato(),
+  ]);
+  if (dados.contratos.length === 0 && contratos.contratos.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
@@ -385,6 +395,90 @@ async function ConteudoCreditos({
           detalhe="Em aberto, do total marcado como crédito"
         />
       </GradeKpis>
+
+      {/* A análise do centro de custo de Empréstimos, um contrato por etapa.
+          Vive AQUI por decisão dele em 27/08/2026: empréstimo não é receita de
+          obra nem custo de obra, então saiu de todos os outros relatórios e a
+          análise inteira passou a morar em Créditos.
+
+          Vem antes da tabela por lançamento porque é a leitura mais alta: a de
+          baixo lista TODO crédito marcado (inclusive os 10 financiamentos de
+          equipamento, que ficaram no centro do bem), e esta é só o dinheiro
+          emprestado. */}
+      {contratos.contratos.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-corpo font-medium text-foreground">
+              Contratos do centro de Empréstimos
+            </h3>
+            <p className="text-legenda text-muted-foreground">
+              Tomado e pago de cada contrato. As duas colunas ficam lado a lado
+              porque não se comparam ainda: parte das prestações antigas está nos
+              extratos e não foi lançada.
+            </p>
+          </div>
+          <Painel>
+            <div className="overflow-x-auto">
+              <table className="w-full text-detalhe">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="px-2 py-2 text-left font-medium">Contrato</th>
+                    <th className="px-2 py-2 text-right font-medium">Tomado</th>
+                    <th className="px-2 py-2 text-right font-medium">Pago</th>
+                    <th className="px-2 py-2 text-right font-medium">A pagar</th>
+                    <th className="px-2 py-2 text-right font-medium">Parcelas</th>
+                    <th className="px-2 py-2 text-right font-medium">Próxima</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contratos.contratos.map((contrato) => (
+                    <tr
+                      key={contrato.centroCustoId}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="px-2 py-2">{contrato.contrato}</td>
+                      <td className="px-2 py-2 text-right">
+                        <MoneyText valor={contrato.tomado} />
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <MoneyText valor={contrato.pago} />
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        <MoneyText valor={contrato.aPagar} />
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">
+                        {contrato.parcelas === 0
+                          ? "—"
+                          : `${contrato.parcelasPagas}/${contrato.parcelas}`}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">
+                        {contrato.proximoVencimento
+                          ? formatarData(contrato.proximoVencimento)
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-border font-medium">
+                    <td className="px-2 py-2">Total</td>
+                    <td className="px-2 py-2 text-right">
+                      <MoneyText valor={contratos.totalTomado} />
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <MoneyText valor={contratos.totalPago} />
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <MoneyText valor={contratos.totalAPagar} />
+                    </td>
+                    <td className="px-2 py-2" colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </Painel>
+        </div>
+      ) : null}
 
       <CreditosTabela
         creditos={dados}
