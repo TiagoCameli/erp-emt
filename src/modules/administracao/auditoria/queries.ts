@@ -54,12 +54,20 @@ const NOME_SISTEMA = "Sistema";
 
 /**
  * Padrão "começa com" do termo, sem os caracteres que quebram a sintaxe do
- * PostgREST ou que virariam curinga de ilike. Termo que sobra vazio devolve
+ * PostgREST ou que virariam curinga de like. Termo que sobra vazio devolve
  * null: sem isso o padrão viraria "%" e o filtro sumiria com as linhas sem
  * registro_id, filtrando por nada.
+ *
+ * Devolve em MINÚSCULAS porque a comparação é `like`, sensível a caixa, e
+ * `uuid::text` no Postgres é sempre minúsculo. Sem isto, colar um id em
+ * maiúsculas (é como várias ferramentas copiam) devolveria lista vazia, e nesta
+ * tela lista vazia lê como "não existe registro nenhum desse documento".
  */
 function padraoInicio(termo: string): string | null {
-  const limpo = termo.replace(/[,()"'\\%_]/g, "").trim();
+  const limpo = termo
+    .replace(/[,()"'\\%_]/g, "")
+    .trim()
+    .toLowerCase();
   return limpo === "" ? null : `${limpo}%`;
 }
 
@@ -103,7 +111,15 @@ export async function listarAuditoria(
     ? padraoInicio(filtros.registro)
     : null;
   if (padraoRegistro) {
-    consulta = consulta.ilike("registro_id", padraoRegistro);
+    // `like`, e NÃO `ilike`. Medido neste banco, com 210.199 linhas na
+    // audit_log: o `ilike` levava 1.757 ms e o `like` 91 ms, 19 vezes menos.
+    // `ilike` numa coluna uuid obriga o Postgres a baixar a caixa dos dois lados
+    // por linha, e ainda o levava ao plano pior (index scan de `criado_em` lendo
+    // o heap das 210 mil). Com cache frio a consulta passava dos 8 s do
+    // `statement_timeout` do `authenticated` e a tela morria inteira, com "Algo
+    // deu errado ao carregar esta tela" -- não é lentidão, é filtro que derruba
+    // a página. A caixa é resolvida em `padraoInicio`.
+    consulta = consulta.like("registro_id", padraoRegistro);
   }
 
   const { data, error, count } = await consulta

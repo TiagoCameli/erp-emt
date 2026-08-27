@@ -26,6 +26,9 @@ vi.mock("@/components/canonicos/filtros-sessao", () => ({
   salvarQuerySessao: vi.fn(),
   lerQuerySessao: vi.fn(() => null),
   limparFiltrosSessao: vi.fn(),
+  // O `limparTodos` apaga as DUAS famílias de filtro: a da URL, aqui, e a de
+  // sessão, na rota. Quem prova a segunda é `filtros-sessao.test.ts`.
+  limparFiltrosDaRota: vi.fn(),
 }));
 
 /**

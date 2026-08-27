@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
-import { salvarQuerySessao } from "@/components/canonicos/filtros-sessao";
+import {
+  limparFiltrosDaRota,
+  salvarQuerySessao,
+} from "@/components/canonicos/filtros-sessao";
 import { toast } from "@/components/canonicos/toast";
 import {
   escreverPreferenciasTabela,
@@ -475,6 +478,10 @@ export function useFiltrosUrl() {
       params.delete(chave);
       mexeu = true;
     }
+    // A familia da URL pode nao ter nada, e a da sessao ter tudo (o extrato da
+    // conta bancaria e assim: so o escopo mora na URL). Entao o `mexeu` decide
+    // apenas se vale NAVEGAR -- a limpeza da sessao acontece de qualquer jeito.
+    limparFiltrosDaRota(pathname);
     if (!mexeu) return;
 
     const query = params.toString();
