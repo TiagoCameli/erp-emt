@@ -46,6 +46,7 @@ import { cn } from "@/lib/utils";
 import { criarClienteRapido } from "@/modules/_shared/cliente/actions";
 import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
+import { criarFornecedorRapido } from "@/modules/_shared/fornecedor/actions";
 import {
   ROTULO_BANCO,
   ROTULO_TIPO_LANCAMENTO,
@@ -1299,7 +1300,7 @@ export function LancamentoFormDrawer({
               <CampoFormulario
                 id="lan-fornecedor"
                 rotulo="Fornecedor"
-                ajuda="Opcional"
+                ajuda="Opcional. Digite o nome para cadastrar um novo"
               >
                 <Combobox
                   valor={fornecedorValor}
@@ -1316,6 +1317,22 @@ export function LancamentoFormDrawer({
                       rotulo: fornecedor.nome,
                     })),
                   ]}
+                  /* Cadastra o fornecedor sem sair do formulário, igual ao
+                     "Quem está pagando" do a receber. Quem lança a nota de um
+                     fornecedor novo teria de abandonar o preenchimento, ir a
+                     Cadastros e voltar — e o desfecho conhecido é lançar "sem
+                     fornecedor" e nunca mais voltar para arrumar. O cadastro
+                     nasce só com a razão social; o resto se completa em
+                     Cadastros > Fornecedores. */
+                  onCriar={async (texto) => {
+                    const r = await criarFornecedorRapido(texto);
+                    if ("erro" in r) {
+                      toast.error(r.erro);
+                      return null;
+                    }
+                    toast.success("Fornecedor criado");
+                    return r.id;
+                  }}
                   placeholder="Sem fornecedor"
                   disabled={salvando}
                   id="lan-fornecedor"
