@@ -15,14 +15,15 @@ import { toast } from "@/components/canonicos/toast";
 import {
   CampoFormulario,
   classesFormulario,
-  type ColunaItem,
   Combobox,
   FormDrawer,
   InputDecimal,
   LinhaCampos,
   SecaoFormulario,
   SeletorCentroCusto,
+  submeterComAviso,
   TabelaItens,
+  type ColunaItem,
 } from "@/components/canonicos";
 import { Anexos } from "@/components/canonicos/anexos";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
@@ -1121,7 +1122,7 @@ export function LancamentoFormDrawer({
     >
       <form
         id={ID_FORM}
-        onSubmit={form.handleSubmit(aoEnviar)}
+        onSubmit={submeterComAviso(form, aoEnviar)}
         className={classesFormulario}
         noValidate
       >

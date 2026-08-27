@@ -14,6 +14,7 @@ import {
   FormDrawer,
   SelectAtivo,
   StatusBadge,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,7 +192,7 @@ export function DetalheUsuarioDrawer({
         {podeEditar ? (
           <>
             <form
-              onSubmit={form.handleSubmit(aoSalvar)}
+              onSubmit={submeterComAviso(form, aoSalvar)}
               className={classesFormulario}
               noValidate
             >

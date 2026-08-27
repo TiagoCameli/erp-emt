@@ -12,6 +12,7 @@ import {
   FormDrawer,
   SecaoFormulario,
   SelectAtivo,
+  submeterComAviso,
   TabelaItens,
   type ColunaItem,
 } from "@/components/canonicos";
@@ -213,7 +214,7 @@ export function CondicaoFormDrawer({
     >
       <form
         id={ID_FORM}
-        onSubmit={form.handleSubmit(aoEnviar)}
+        onSubmit={submeterComAviso(form, aoEnviar)}
         className={classesFormulario}
         noValidate
       >

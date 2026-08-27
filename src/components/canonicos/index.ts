@@ -22,6 +22,7 @@ export * from "./menu-filtros";
 export * from "./preferencias-tabela";
 export * from "./form-drawer";
 export * from "./campo-formulario";
+export * from "./submeter-com-aviso";
 export * from "./input-senha";
 export * from "./linha-campos";
 export * from "./secao-formulario";

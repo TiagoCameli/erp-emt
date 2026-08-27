@@ -9,6 +9,7 @@ import {
   CampoFormulario,
   classesFormulario,
   InputSenha,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { alterarSenha } from "@/modules/auth/actions";
@@ -38,7 +39,7 @@ export function AlterarSenhaForm() {
 
   return (
     <form
-      onSubmit={form.handleSubmit(aoEnviar)}
+      onSubmit={submeterComAviso(form, aoEnviar)}
       className={classesFormulario}
       noValidate
     >

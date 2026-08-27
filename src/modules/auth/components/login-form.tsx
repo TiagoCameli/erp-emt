@@ -8,6 +8,7 @@ import {
   CampoFormulario,
   classesFormulario,
   InputSenha,
+  submeterComAviso,
 } from "@/components/canonicos";
 import { limparFiltrosSessao } from "@/components/canonicos/filtros-sessao";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -66,7 +67,7 @@ export function LoginForm({ erroInicial, destino }: LoginFormProps) {
       // string, que vaza para o histórico do navegador, para o log de acesso do
       // servidor e para o header Referer. Com POST, o pior caso é não logar.
       method="post"
-      onSubmit={form.handleSubmit(aoEnviar)}
+      onSubmit={submeterComAviso(form, aoEnviar)}
       className={classesFormulario}
       noValidate
     >
