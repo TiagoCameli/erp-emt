@@ -347,8 +347,8 @@ describe("planilha traz o lançamento inteiro, não só o resumo da lista", () =
     contaBancariaNome: "Banco do Brasil 102.124-9",
     origemNumero: "OC-2026-0041",
     rateios: [
-      { nome: "Escritório Central", codigo: "001", valor: 800 },
-      { nome: "BR-364 Lote 09", codigo: "009", valor: 434.56 },
+      { centroId: "cc-001", nome: "Escritório Central", codigo: "001", valor: 800 },
+      { centroId: "cc-009", nome: "BR-364 Lote 09", codigo: "009", valor: 434.56 },
     ],
   };
 
@@ -393,7 +393,7 @@ describe("planilha traz o lançamento inteiro, não só o resumo da lista", () =
     // lado do nome e do valor do lançamento é ruído em toda linha da planilha.
     const linha = linhaPlanilhaLancamento({
       ...completo,
-      rateios: [{ nome: "Escritório Central", codigo: "001", valor: 1234.56 }],
+      rateios: [{ centroId: "cc-001", nome: "Escritório Central", codigo: "001", valor: 1234.56 }],
     });
     expect(linha[coluna("Centro de custo")]).toBe("Escritório Central");
     expect(linha[coluna("Rateio")]).toBeNull();

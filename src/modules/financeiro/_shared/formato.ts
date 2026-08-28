@@ -115,3 +115,13 @@ export function rotuloParcela(
   if (totalParcelas <= 1) return documento;
   return `${documento} · parcela ${numeroParcela} de ${totalParcelas}`;
 }
+
+/**
+ * Nome exibido quando o rateio não tem cadastro de centro de custo.
+ *
+ * Mora neste módulo, e não na consulta que o usa, porque a planilha por rateio
+ * também precisa dele para nomear o lançamento sem rateio nenhum — e a planilha
+ * é um módulo puro, testado sem banco. Importar a constante da consulta
+ * arrastaria o `server-only` dela para dentro do teste.
+ */
+export const SEM_CENTRO_DE_CUSTO = "Sem centro de custo";
