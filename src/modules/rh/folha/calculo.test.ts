@@ -68,6 +68,9 @@ function criarFolha(itens: FolhaItem[]): FolhaDetalhe {
     aprovadoPorNome: null,
     motivoRejeicao: null,
     itens,
+    // Quem está fora da folha não tem item, então não entra em nenhum resumo
+    // deste arquivo: os cálculos aqui somam `itens`.
+    foraDaFolha: [],
   };
 }
 
