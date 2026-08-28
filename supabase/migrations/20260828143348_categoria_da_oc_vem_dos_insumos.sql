@@ -1,47 +1,74 @@
+-- APLICADA NO BANCO VIVO EM 4 MIGRATIONS, em 28/08/2026:
+--
+--   20260828143348  categoria_da_oc_vem_dos_insumos_derivado
+--   20260828143450  reclassificar_insumo_pela_ordem_de_compra
+--   20260828143634  reclassificar_insumo_qualifica_valor_ambiguo
+--   20260828143752  relatorios_de_custo_leem_a_categoria_do_rateio
+--
+-- Este arquivo e a versao consolidada, e o corpo das funcoes aqui e o que esta
+-- NO BANCO depois das quatro. A terceira existe porque as duas funcoes novas
+-- nasceram com `valor` ambiguo entre o parametro de SAIDA e a coluna das
+-- tabelas: o plpgsql so resolve isso na EXECUCAO, entao os dois primeiros
+-- applies responderam "success" com as funcoes quebradas
+--
+--   ERROR: column reference "valor" is ambiguous
+--
+-- e o erro so apareceria no primeiro uso, no dialogo de confirmacao da OC, na
+-- mao do usuario. Quem achou foi a prova em transacao desfeita, nao o apply.
+--
 -- A categoria de custo da ordem de compra passa a vir DOS INSUMOS.
 --
--- Pedido do Tiago (27/08/2026): "categoria vem automático de acordo com os
--- insumos que estão sendo adquiridos; se a compra tiver insumos de categorias
+-- Pedido do Tiago (27/08/2026): "categoria vem automatico de acordo com os
+-- insumos que estao sendo adquiridos; se a compra tiver insumos de categorias
 -- diferentes a OC registra mais de uma categoria; quando a pessoa seleciona um
--- insumo, a categoria dele ao lado; quem está fazendo a OC pode alterar a
+-- insumo, a categoria dele ao lado; quem esta fazendo a OC pode alterar a
 -- categoria daquele insumo direto na OC, e quando ela salva, a categoria daquele
 -- insumo muda tanto nas OCs anteriores quanto para as futuras -- mas quero que
--- apareça um aviso na tela falando dessa mudança."
+-- apareca um aviso na tela falando dessa mudanca."
 --
--- O que existia antes (e por que precisava mudar):
+-- O que existia antes, e por que precisava mudar:
 --
---   1. `ordens_compra.categoria_id` era DIGITADO no cabeçalho, obrigatório, e a
---      decisão de 30/07 era explícita: "categoria escolhida por quem sabe o que
---      está comprando, em vez de deduzida do insumo (OC com insumos de grupos
---      diferentes seria ambígua e exigiria uma regra de desempate inventada)".
---   2. Só que `fn_aprovar_ordem_compra` JÁ o sobrescrevia, na aprovação, pela
---      categoria de maior valor entre os insumos -- e já quebrava o rateio do
---      lançamento por (centro, categoria do insumo). Ou seja: a regra de
---      desempate foi inventada de qualquer jeito, e a tela dizia uma categoria
---      antes de aprovar e outra depois.
+--   1. `ordens_compra.categoria_id` era DIGITADO no cabecalho, obrigatorio. A
+--      decisao de 30/07 foi explicita: "categoria escolhida por quem sabe o que
+--      esta comprando, em vez de deduzida do insumo (OC com insumos de grupos
+--      diferentes seria ambigua e exigiria uma regra de desempate inventada)".
+--   2. Só que `fn_aprovar_ordem_compra` JA o sobrescrevia, na aprovacao, pela
+--      categoria de maior valor entre os insumos -- e JA quebrava o rateio do
+--      lancamento por (centro, categoria do insumo). A regra de desempate foi
+--      inventada de qualquer jeito, e a tela dizia uma categoria antes de
+--      aprovar e outra depois.
 --
--- Esta migration acaba com a segunda verdade. A fonte passa a ser uma só,
--- `insumos.categoria_financeira_id`, e a ordem carrega DUAS colunas derivadas,
+-- Medido no banco vivo hoje (28/08/2026), antes de aplicar:
+--
+--   * 72 ordens de compra, 10 delas (14%) JA com mais de uma categoria entre os
+--     insumos -- e todas as 10 aparecendo com UMA categoria na tela;
+--   * 6.367 lancamentos vivos, e ZERO com rateio que nao soma o valor do
+--     lancamento (diferenca total R$ 0,00). E o que autoriza o DRE a trocar de
+--     base sem mover um centavo;
+--   * 6.540 rateios, 489 deles SEM categoria, somando R$ 61.446.438,72 -- todos
+--     de lancamento `manual`. E por isso que o DRE agrupa por
+--     `coalesce(r.categoria_id, l.categoria_id)` e nao por `r.categoria_id`:
+--     sem o coalesce, esses R$ 61,4 mi viravam "(sem categoria)";
+--   * ZERO divergencia entre o `categoria_id` guardado (na ordem e no
+--     lancamento) e a predominante dos itens de hoje. Nao existe passivo
+--     retroativo a realinhar: a base ja esta consistente, e o backfill da secao
+--     7 nao muda nenhuma tela.
+--
+-- Esta migration acaba com a segunda verdade. A fonte passa a ser uma so,
+-- `insumos.categoria_financeira_id`, e a ordem carrega duas colunas derivadas,
 -- mantidas por trigger a partir dos itens:
 --
---   * `categoria_ids` -- o conjunto de categorias da ordem, para a tela dizer
---     "2 categorias" e para o filtro da listagem achar a compra pela categoria
---     de QUALQUER item dela (antes, filtrar por "Peças" escondia a peça de
---     R$ 40 mil que veio na mesma nota que R$ 60 mil de material);
+--   * `categoria_ids` -- o conjunto, para a tela dizer "2 categorias" e para o
+--     filtro da listagem achar a compra pela categoria de QUALQUER item dela
+--     (antes, filtrar por "Pecas" escondia a peca que veio na mesma nota que o
+--     material);
 --   * `categoria_id` -- a predominante por valor, que continua sendo o que desce
---     para `lancamentos.categoria_id` e o que as telas de uma categoria só leem.
+--     para `lancamentos.categoria_id`.
 --
--- E o efeito para trás, que é o que o aviso da tela anuncia: como a categoria é
--- LIDA do cadastro e não fotografada na ordem, reclassificar um insumo muda o
--- que TODA ordem que o comprou mostra. `fn_reclassificar_insumo` faz isso de
--- forma controlada e leva os lançamentos já gerados junto.
---
--- ATENÇÃO A QUEM FOR APLICAR: as três funções de relatório alteradas aqui foram
--- escritas a partir do repositório, não do banco. `CREATE OR REPLACE` troca o
--- corpo INTEIRO e não dá conflito, então releia `pg_get_functiondef` de
--- fn_rel_dre e fn_rel_custo_centro_custo IMEDIATAMENTE antes do apply e refaça a
--- seção 6 a partir do corpo vivo. Já apagamos trabalho de outra frente assim
--- (ver 20260820210000).
+-- E o efeito para tras, que e o que o aviso da tela anuncia: como a categoria e
+-- LIDA do cadastro e nao fotografada na ordem, reclassificar um insumo muda o
+-- que toda ordem que o comprou mostra. `fn_reclassificar_insumo` faz isso de
+-- forma controlada e leva o rateio dos lancamentos ja gerados junto.
 
 -- =====================================================================
 -- 1. A coluna do conjunto de categorias
@@ -56,8 +83,7 @@ comment on column public.ordens_compra.categoria_ids is
 comment on column public.ordens_compra.categoria_id is
   'Categoria PREDOMINANTE por valor entre os itens, derivada por trg_oc_categorias_derivadas. E ela que desce para lancamentos.categoria_id na aprovacao. Deixou de ser digitada no cabecalho em 28/08/2026.';
 
--- GIN porque o filtro da listagem usa `@>` (contains). Sem ele, filtrar por
--- categoria varre as 5.911 ordens.
+-- GIN porque o filtro da listagem usa `@>` (contains).
 create index if not exists idx_ordens_compra_categoria_ids
   on public.ordens_compra using gin (categoria_ids);
 
@@ -95,8 +121,8 @@ begin
     and i.categoria_financeira_id is not null;
 
   -- A predominante e a MESMA conta de fn_aprovar_ordem_compra: maior soma de
-  -- quantidade * preco, com desempate pelo id para nao depender da ordem em que
-  -- as linhas voltaram.
+  -- quantidade * preco, desempate pelo id para nao depender da ordem em que as
+  -- linhas voltaram.
   select i.categoria_financeira_id
   into v_predominante
   from public.oc_itens oi
@@ -110,7 +136,7 @@ begin
 
   update public.ordens_compra
   set categoria_ids = v_ids,
-      -- Sem item classificado, a predominante fica NULA em vez de manter a
+      -- Sem item classificado a predominante fica NULA em vez de manter a
       -- antiga: manter mostraria na tela uma categoria que nenhum item sustenta,
       -- e a aprovacao ja recusa a ordem nesse estado.
       categoria_id = v_predominante
@@ -142,7 +168,7 @@ begin
   end if;
 
   perform public.fn_oc_categorias_derivadas(new.ordem_compra_id);
-  -- Mover um item de ordem (nao acontece hoje, mas o UPDATE aceita) deixaria a
+  -- Mover um item de ordem nao acontece hoje, mas o UPDATE aceita, e deixaria a
   -- ordem de origem com o derivado velho.
   if tg_op = 'UPDATE' and old.ordem_compra_id <> new.ordem_compra_id then
     perform public.fn_oc_categorias_derivadas(old.ordem_compra_id);
@@ -159,8 +185,8 @@ create trigger trg_oc_categorias_derivadas
   for each row execute function public.fn_trg_oc_itens_categorias();
 
 -- A trigger do CADASTRO. E ela que faz "muda nas OCs anteriores" ser verdade
--- para a listagem e para a tela da ordem, sem ninguem precisar reprocessar nada.
--- Vale para todo caminho que escreve o campo: a tela de Cadastros > Insumos, a
+-- para a listagem e para a tela da ordem, sem ninguem reprocessar nada. Vale
+-- para todo caminho que escreve o campo: a tela de Cadastros > Insumos, a
 -- importacao por planilha e a reclassificacao feita de dentro da OC.
 create or replace function public.fn_trg_insumo_categoria_nas_ordens()
 returns trigger
@@ -229,8 +255,8 @@ begin
     raise exception 'Sem permissao para mudar a categoria de custo do insumo';
   end if;
 
-  select nome, categoria_financeira_id into v_nome_insumo, v_atual
-  from public.insumos where id = p_insumo_id;
+  select i.nome, i.categoria_financeira_id into v_nome_insumo, v_atual
+  from public.insumos i where i.id = p_insumo_id;
 
   if v_nome_insumo is null then
     raise exception 'Insumo nao encontrado';
@@ -250,9 +276,9 @@ begin
     return;
   end if;
 
-  select tipo, coalesce(natureza, 'operacional'), ativo
+  select cf.tipo, coalesce(cf.natureza, 'operacional'), cf.ativo
   into v_tipo, v_natureza, v_ativa
-  from public.categorias_financeiras where id = p_categoria_id;
+  from public.categorias_financeiras cf where cf.id = p_categoria_id;
 
   if v_tipo is null then
     raise exception 'Categoria de custo nao encontrada';
@@ -271,9 +297,9 @@ begin
       'Categoria de natureza movimentacao nao classifica compra: ela sai do saldo bancario e do resultado';
   end if;
 
-  update public.insumos
+  update public.insumos i
   set categoria_financeira_id = p_categoria_id, updated_at = now()
-  where id = p_insumo_id;
+  where i.id = p_insumo_id;
   -- A trigger trg_insumo_categoria_nas_ordens ja refez categoria_ids e
   -- categoria_id de todas as ordens deste insumo neste ponto.
 
@@ -294,7 +320,7 @@ begin
   --
   -- A conta e por CENTRO, nao por linha de rateio: um centro pode ja ter duas
   -- linhas (uma por categoria), e repartir cada linha separadamente devolveria
-  -- duas linhas por categoria em vez de uma -- somando certo, mas dobrando o
+  -- duas linhas por categoria em vez de uma -- somando certo, e dobrando o
   -- numero de linhas a cada reclassificacao.
   for v_lanc in
     select l.id, l.valor, l.origem_id
@@ -320,29 +346,29 @@ begin
     -- Centro cujo bruto e zero (item de preco zero) fica de fora: nao ha como
     -- repartir proporcionalmente, e dividir por zero derrubaria a chamada.
     bruto_centro as (
-      select centro_custo_id, sum(bruto) as total
+      select base.centro_custo_id, sum(base.bruto) as total
       from base
-      group by centro_custo_id
-      having sum(bruto) > 0
+      group by base.centro_custo_id
+      having sum(base.bruto) > 0
     ),
     -- O total ATUAL por centro, lido antes do delete (as CTEs veem o mesmo
     -- snapshot). Centro que nao aparece nos itens nao entra aqui, e por isso sai
     -- desta reclassificacao inalterado.
     atual as (
-      select r.centro_custo_id, sum(r.valor) as valor
+      select r.centro_custo_id, sum(r.valor) as valor_centro
       from public.lancamento_rateios r
       where r.lancamento_id = v_lanc.id
-        and r.centro_custo_id in (select centro_custo_id from bruto_centro)
+        and r.centro_custo_id in (select bc.centro_custo_id from bruto_centro bc)
       group by r.centro_custo_id
     ),
     partes as (
       select a.centro_custo_id, b.categoria_id,
-             round(a.valor * b.bruto / bc.total, 2) as valor,
+             round(a.valor_centro * b.bruto / bc.total, 2) as parte,
              row_number() over (
                partition by a.centro_custo_id
                order by b.bruto desc, b.categoria_id
-             ) as ordem,
-             a.valor as valor_centro
+             ) as ordem_da_parte,
+             a.valor_centro
       from atual a
       join bruto_centro bc on bc.centro_custo_id = a.centro_custo_id
       join base b on b.centro_custo_id = a.centro_custo_id
@@ -351,26 +377,28 @@ begin
     -- fn_aprovar_ordem_compra: sem isto a soma do rateio deixa de fechar com o
     -- valor do lancamento e o total do DRE se move por centavos.
     sobra as (
-      select centro_custo_id, valor_centro - sum(valor) as resto
-      from partes group by centro_custo_id, valor_centro
+      select partes.centro_custo_id,
+             partes.valor_centro - sum(partes.parte) as resto
+      from partes
+      group by partes.centro_custo_id, partes.valor_centro
     ),
     apagadas as (
       delete from public.lancamento_rateios r
       where r.lancamento_id = v_lanc.id
-        and r.centro_custo_id in (select centro_custo_id from atual)
+        and r.centro_custo_id in (select a.centro_custo_id from atual a)
       returning r.id
     )
     insert into public.lancamento_rateios
       (lancamento_id, centro_custo_id, categoria_id, valor, created_by)
     select v_lanc.id, p.centro_custo_id, p.categoria_id,
-           p.valor + case when p.ordem = 1 then s.resto else 0 end,
+           p.parte + case when p.ordem_da_parte = 1 then s.resto else 0 end,
            (select auth.uid())
     from partes p
     join sobra s on s.centro_custo_id = p.centro_custo_id
     -- Parte de valor zero nao vira linha, MENOS quando e a unica do centro:
     -- apagar a ultima linha de um centro deixaria o lancamento sem aquele centro,
     -- e a invariante de centro de custo recusaria a transacao inteira.
-    where p.valor <> 0 or p.ordem = 1;
+    where p.parte <> 0 or p.ordem_da_parte = 1;
 
     -- A predominante do lancamento acompanha o rateio. Ela e o que os relatorios
     -- de uma categoria so leem, e o que a tela de Lancamentos mostra.
@@ -418,7 +446,7 @@ set search_path to ''
 as $function$
 begin
   -- Definer sem checagem e uma porta aberta, mesmo devolvendo so contagem: a
-  -- funcao le lancamentos e ordens passando por cima da RLS. E ela TEM que
+  -- funcao le ordens e lancamentos passando por cima da RLS. E ela TEM que
   -- passar por cima, senao um usuario com visao parcial veria "0 ordens
   -- anteriores" e confirmaria uma mudanca que atinge trezentas.
   if not (public.tem_permissao('compras.ordens', 'editar')
@@ -427,13 +455,12 @@ begin
   end if;
 
   return query
-  with alvo as (select unnest(coalesce(p_insumo_ids, '{}'::uuid[])) as insumo_id),
-  -- DISTINCT na ordem, e nao contagem por agregacao de itens: uma OC com tres
-  -- itens do mesmo insumo contaria tres vezes.
-  ocs as (
+  with ocs as (
+    -- DISTINCT na ordem, e nao contagem por agregacao de itens: uma OC com tres
+    -- itens do mesmo insumo contaria tres vezes.
     select distinct oi.ordem_compra_id
     from public.oc_itens oi
-    join alvo a on a.insumo_id = oi.insumo_id
+    where oi.insumo_id = any(coalesce(p_insumo_ids, '{}'::uuid[]))
   ),
   ordens_alvo as (
     select oc.id, oc.status
@@ -448,9 +475,9 @@ begin
   )
   select
     (select count(*)::int from ordens_alvo),
-    (select count(*)::int from ordens_alvo where status = 'aprovado'),
+    (select count(*)::int from ordens_alvo where ordens_alvo.status = 'aprovado'),
     (select count(*)::int from lancs),
-    (select coalesce(sum(valor), 0) from lancs);
+    (select coalesce(sum(lancs.valor), 0) from lancs);
 end;
 $function$;
 
@@ -461,21 +488,135 @@ comment on function public.fn_impacto_reclassificar_insumos(uuid[]) is
   'Quantas ordens, quantas ja aprovadas, quantos lancamentos e quanto dinheiro uma reclassificacao destes insumos alcanca. Leitura, para o dialogo de confirmacao da OC.';
 
 -- =====================================================================
--- 6. Os relatorios passam a ler a categoria DO RATEIO
+-- 6. Os relatorios de custo passam a ler a categoria DO RATEIO
 -- =====================================================================
 --
--- Uma OC com duas categorias tem duas linhas de rateio, cada uma com a sua. O
--- `lancamentos.categoria_id` guarda so a predominante, entao um DRE que agrupa
--- por ele joga a compra inteira na categoria de maior valor.
+-- Uma OC com duas categorias tem duas linhas de rateio, cada uma com a sua. Um
+-- relatorio que agrupa ou filtra por `lancamentos.categoria_id` joga a compra
+-- inteira na categoria de maior valor.
 --
 -- `coalesce(r.categoria_id, l.categoria_id)`, e nao `r.categoria_id` puro: so o
--- caminho da aprovacao de OC preenche a categoria do rateio. Lancamento avulso,
--- folha, medicao e a carga antiga tem rateio com categoria nula, e trocar o
--- agrupamento sem o coalesce faria esse dinheiro todo virar "(sem categoria)".
--- Nulo novo muda o significado de um join sem dar erro.
+-- caminho da aprovacao de OC preenche a categoria do rateio. Sao 489 rateios com
+-- categoria nula (R$ 61,4 mi, todos de lancamento manual), e sem o coalesce esse
+-- dinheiro todo viraria "(sem categoria)". Nulo novo muda o significado de um
+-- join sem dar erro.
 --
--- LEIA A NOTA DO TOPO antes de aplicar esta secao.
+-- AS 4 FUNCOES DE FILTRO SAO EDITADAS A PARTIR DELAS MESMAS. Nao ha corpo
+-- reescrito aqui: cada uma le `pg_get_functiondef`, confere que a ancora aparece
+-- EXATAMENTE uma vez e troca so aquele trecho. E o unico jeito seguro --
+-- `fn_rel_custo_centro_custo` viva ja divergia do repositorio (ganhou "a etapa
+-- ganha da raiz" e a exclusao do centro financeiro), e reescrever pelo repo
+-- apagaria aquilo sem conflito, sem erro e sem aviso.
+--
+-- Fica de FORA de proposito tudo que usa a categoria para decidir NATUREZA:
+-- fn_rel_posicao_bancaria, fn_rel_posicao_aplicacao, fn_rel_movimento_antes_do_corte,
+-- fn_rel_fluxo_caixa, fn_rel_aging, fn_rel_creditos, fn_rel_custo_receita e
+-- fn_rel_gestao_financeiro_resumo. Aquelas mexem em SALDO, e a natureza e do
+-- documento inteiro, nao de uma fatia dele. fn_rel_custo_por_insumo e
+-- fn_rel_custo_por_subcategoria tambem ficam: o `categoria_id` delas e o da
+-- tabela categorias_insumo (o grupo), que nao tem nada com categoria financeira.
 
+do $relatorios$
+declare
+  v_def text;
+  v_novo text;
+  v_vezes int;
+  v_faltando text;
+begin
+  -- ---------- 6.1 fn_rel_custo_centro_custo: o filtro por categoria ----------
+  v_def := pg_get_functiondef(
+    'public.fn_rel_custo_centro_custo(date,date,uuid[],uuid[],uuid[],uuid[],boolean,text[],boolean,text[])'::regprocedure);
+  v_vezes := (length(v_def) - length(replace(v_def, 'or l.categoria_id = any(p_categorias)', '')))
+             / length('or l.categoria_id = any(p_categorias)');
+  if v_vezes <> 1 then
+    raise exception
+      'fn_rel_custo_centro_custo: esperava 1 ocorrencia do filtro de categoria e achei %. Releia a funcao viva antes de mexer.', v_vezes;
+  end if;
+  v_novo := replace(v_def,
+    'or l.categoria_id = any(p_categorias)',
+    'or coalesce(r.categoria_id, l.categoria_id) = any(p_categorias)');
+  execute v_novo;
+
+  -- ---------- 6.2 fn_rel_custo_centro_serie: mesmo filtro ----------
+  v_def := pg_get_functiondef(
+    'public.fn_rel_custo_centro_serie(uuid[],date,date,uuid[],uuid[],uuid[],boolean,text[],boolean)'::regprocedure);
+  v_vezes := (length(v_def) - length(replace(v_def, 'or l.categoria_id = any(p_categorias)', '')))
+             / length('or l.categoria_id = any(p_categorias)');
+  if v_vezes <> 1 then
+    raise exception
+      'fn_rel_custo_centro_serie: esperava 1 ocorrencia do filtro de categoria e achei %.', v_vezes;
+  end if;
+  v_novo := replace(v_def,
+    'or l.categoria_id = any(p_categorias)',
+    'or coalesce(r.categoria_id, l.categoria_id) = any(p_categorias)');
+  execute v_novo;
+
+  -- ---------- 6.3 fn_rel_custo_por_mes ----------
+  v_def := pg_get_functiondef(
+    'public.fn_rel_custo_por_mes(integer,date,date,uuid,uuid)'::regprocedure);
+  v_vezes := (length(v_def) - length(replace(v_def, '(p_categoria is null or l.categoria_id = p_categoria)', '')))
+             / length('(p_categoria is null or l.categoria_id = p_categoria)');
+  if v_vezes <> 1 then
+    raise exception
+      'fn_rel_custo_por_mes: esperava 1 ocorrencia do filtro de categoria e achei %.', v_vezes;
+  end if;
+  v_novo := replace(v_def,
+    '(p_categoria is null or l.categoria_id = p_categoria)',
+    '(p_categoria is null or coalesce(r.categoria_id, l.categoria_id) = p_categoria)');
+  execute v_novo;
+
+  -- ---------- 6.4 fn_rel_custo_por_grupo: tres pontos coordenados ----------
+  --
+  -- Esta e diferente das outras. Ela filtra o LANCAMENTO por categoria numa CTE
+  -- onde o rateio nem esta em escopo, e depois soma os ITENS da OC. Com uma OC
+  -- mista, filtrar por "Pecas" derrubava a ordem inteira -- inclusive os itens de
+  -- material dela. O certo e escolher os ITENS, no ramo dos itens, e o
+  -- lancamento inteiro so no ramo que nao tem item.
+  v_def := pg_get_functiondef(
+    'public.fn_rel_custo_por_grupo(date,date,uuid,uuid)'::regprocedure);
+
+  v_faltando := null;
+  if position('select l.id, l.origem, l.origem_id' in v_def) = 0 then
+    v_faltando := 'o select da CTE lancs';
+  elsif position(E'      and (p_categoria is null or l.categoria_id = p_categoria)\n' in v_def) = 0 then
+    v_faltando := 'o filtro de categoria na CTE lancs';
+  elsif position(E'    where l.origem = ''oc''\n' in v_def) = 0 then
+    v_faltando := 'o where do ramo com insumo';
+  elsif position(E'    where l.origem <> ''oc''\n' in v_def) = 0 then
+    v_faltando := 'o where do ramo sem insumo';
+  end if;
+  if v_faltando is not null then
+    raise exception
+      'fn_rel_custo_por_grupo: nao achei % na funcao viva. Releia e refaca esta secao a mao.',
+      v_faltando;
+  end if;
+
+  -- a) a CTE lancs passa a carregar a categoria do lancamento...
+  v_novo := replace(v_def,
+    'select l.id, l.origem, l.origem_id',
+    'select l.id, l.origem, l.origem_id, l.categoria_id');
+  -- b) ...e para de recusar o lancamento pela categoria dele
+  v_novo := replace(v_novo,
+    E'      and (p_categoria is null or l.categoria_id = p_categoria)\n',
+    '');
+  -- c) o ramo dos itens escolhe por ITEM
+  v_novo := replace(v_novo,
+    E'    where l.origem = ''oc''\n',
+    E'    where l.origem = ''oc''\n      and (p_categoria is null or i.categoria_financeira_id = p_categoria)\n');
+  -- d) o ramo sem item continua escolhendo pelo documento, agora pelo rateio
+  v_novo := replace(v_novo,
+    E'    where l.origem <> ''oc''\n',
+    E'    where l.origem <> ''oc''\n      and (p_categoria is null or coalesce(r.categoria_id, l.categoria_id) = p_categoria)\n');
+  execute v_novo;
+
+  raise notice 'Os 4 filtros de categoria passaram a ler o rateio.';
+end $relatorios$;
+
+-- O DRE e o unico corpo reescrito por inteiro, porque a mudanca dele e
+-- estrutural: sai de somar `lancamentos.valor` agrupado pela categoria do
+-- documento, e passa a somar `lancamento_rateios.valor` agrupado pela categoria
+-- da FATIA. O corpo vivo foi conferido linha por linha contra este antes do
+-- apply, e e identico ao que a 20260822180000 deixou.
 create or replace function public.fn_rel_dre(p_inicio date, p_fim date)
 returns table(tipo text, categoria_id uuid, categoria text, natureza text, total numeric)
 language sql
@@ -486,9 +627,6 @@ as $function$
     l.tipo,
     c.id as categoria_id,
     c.nome as categoria,
-    -- Sem categoria a linha nao tem como ser classificada. Cai em operacional
-    -- porque o DRE tem de continuar mostrando ela: sumir com despesa por falta
-    -- de cadastro seria o mesmo erro que esta funcao conserta, ao contrario.
     coalesce(c.natureza, 'operacional') as natureza,
     sum(r.valor) as total
   from public.lancamento_rateios r
@@ -505,85 +643,7 @@ revoke all on function public.fn_rel_dre(date, date) from public, anon;
 grant execute on function public.fn_rel_dre(date, date) to authenticated;
 
 comment on function public.fn_rel_dre(date, date) is
-  'DRE gerencial por competencia, somado pelo RATEIO: uma ordem com material e peca de equipamento entra nas duas categorias, com o valor de cada. Devolve a natureza da categoria para a tela separar resultado operacional, resultado financeiro e movimentacao patrimonial (que nao e resultado).';
-
--- O filtro por categoria do relatorio de custo por centro. Mesma razao: filtrar
--- por `l.categoria_id` escondia a parte da compra que nao era a predominante.
-drop function if exists public.fn_rel_custo_centro_custo(date, date, uuid[], uuid[], uuid[], uuid[], boolean, text[], boolean, text[]);
-
-create function public.fn_rel_custo_centro_custo(
-  p_inicio date default null,
-  p_fim date default null,
-  p_centros uuid[] default null,
-  p_categorias uuid[] default null,
-  p_fornecedores uuid[] default null,
-  p_formas uuid[] default null,
-  p_sem_forma boolean default false,
-  p_status text[] default null,
-  p_excluir_previsto boolean default false,
-  p_tipos_centro text[] default null
-)
-returns table(centro_custo_id uuid, nome text, codigo text, total numeric)
-language sql
-stable
-set search_path to ''
-as $function$
-  with recursive raizes as (
-    select c.id as centro_id, c.id as raiz_id
-    from public.centros_custo c
-    where c.pai_id is null
-    union all
-    select f.id, a.raiz_id
-    from public.centros_custo f
-    join raizes a on f.pai_id = a.centro_id
-  ),
-  -- Escolher um centro vale para a SUBÁRVORE dele: quem escolhe a obra quer as
-  -- etapas dela, e comparar no id da etapa perdia dinheiro em silêncio.
-  alvos as (
-    select distinct s.id
-    from unnest(coalesce(p_centros, '{}'::uuid[])) as escolhido(id)
-    cross join lateral public.fn_centro_custo_subarvore(escolhido.id) s
-  )
-  select raiz.id, raiz.nome, raiz.codigo, sum(r.valor) as total
-  from public.lancamento_rateios r
-  join public.lancamentos l on l.id = r.lancamento_id
-  left join raizes a on a.centro_id = r.centro_custo_id
-  left join public.centros_custo raiz on raiz.id = a.raiz_id
-  where l.tipo = 'a_pagar'
-    and l.status <> 'cancelado'
-    and (not coalesce(p_excluir_previsto, false) or l.status <> 'previsto')
-    and (p_inicio is null or l.mes_competencia >= date_trunc('month', p_inicio)::date)
-    and (p_fim is null or l.mes_competencia < p_fim)
-    and (
-      coalesce(cardinality(p_centros), 0) = 0
-      or r.centro_custo_id in (select alvos.id from alvos)
-    )
-    and (
-      coalesce(cardinality(p_categorias), 0) = 0
-      or coalesce(r.categoria_id, l.categoria_id) = any(p_categorias)
-    )
-    and (
-      coalesce(cardinality(p_fornecedores), 0) = 0
-      or l.fornecedor_id = any(p_fornecedores)
-    )
-    and (coalesce(cardinality(p_status), 0) = 0 or l.status = any(p_status))
-    -- Forma de pagamento é a única com duas pernas: 880 lançamentos a pagar não
-    -- têm forma nenhuma (R$ 13,4 mi), então "sem forma" precisa ser uma escolha
-    -- marcável, e não um resto invisível.
-    and (
-      (coalesce(cardinality(p_formas), 0) = 0 and not coalesce(p_sem_forma, false))
-      or l.forma_pagamento_id = any(coalesce(p_formas, '{}'::uuid[]))
-      or (coalesce(p_sem_forma, false) and l.forma_pagamento_id is null)
-    )
-    and (
-      coalesce(cardinality(p_tipos_centro), 0) = 0
-      or raiz.tipo = any(p_tipos_centro)
-    )
-  group by raiz.id, raiz.nome, raiz.codigo
-$function$;
-
-revoke all on function public.fn_rel_custo_centro_custo(date, date, uuid[], uuid[], uuid[], uuid[], boolean, text[], boolean, text[]) from public, anon;
-grant execute on function public.fn_rel_custo_centro_custo(date, date, uuid[], uuid[], uuid[], uuid[], boolean, text[], boolean, text[]) to authenticated;
+  'DRE gerencial por competencia, somado pelo RATEIO: uma ordem com material e peca de equipamento entra nas duas categorias, com o valor de cada uma. Devolve a natureza da categoria para a tela separar resultado operacional, resultado financeiro e movimentacao patrimonial (que nao e resultado).';
 
 -- =====================================================================
 -- 7. Backfill do derivado, com linha de controle
@@ -591,20 +651,20 @@ grant execute on function public.fn_rel_custo_centro_custo(date, date, uuid[], u
 
 do $backfill$
 declare
-  v_dre_antes jsonb;
-  v_dre_depois jsonb;
-  v_ordens int;
+  v_antes jsonb;
+  v_depois jsonb;
+  v_ordens int := 0;
   v_multi int;
   v_oc uuid;
-  v_divergentes int;
-  v_valor_divergente numeric(14,2);
 begin
-  -- LINHA DE CONTROLE. O DRE passou a somar pelo rateio em vez de pelo
-  -- lancamento: o total POR CATEGORIA tem que mudar (e o objetivo), e o total
-  -- POR TIPO nao pode mudar nem um centavo. Se mudar, existe lancamento cujo
-  -- rateio nao soma o valor dele -- e ai o relatorio inteiro estava mentindo de
-  -- um jeito que ninguem tinha medido.
-  select jsonb_object_agg(tipo, total) into v_dre_antes
+  -- LINHA DE CONTROLE, e ela TEM que dar zero de diferenca.
+  --
+  -- O DRE passou a somar pelo rateio em vez de pelo lancamento. O total POR
+  -- CATEGORIA muda -- e o objetivo. O total POR TIPO nao pode mudar um centavo:
+  -- se mudar, existe lancamento cujo rateio nao soma o valor dele, e o relatorio
+  -- passaria a mentir de um jeito que ninguem mediu. Conferido antes do apply:
+  -- 0 lancamentos divergentes em 6.367.
+  select jsonb_object_agg(tipo, total) into v_antes
   from (
     select l.tipo, sum(l.valor) as total
     from public.lancamentos l
@@ -614,24 +674,23 @@ begin
     group by l.tipo
   ) t;
 
-  select jsonb_object_agg(tipo, total) into v_dre_depois
+  select jsonb_object_agg(tipo, total) into v_depois
   from (
     select tipo, sum(total) as total
     from public.fn_rel_dre('2020-01-01', '2030-12-31')
     group by tipo
   ) t;
 
-  if v_dre_antes <> v_dre_depois then
+  if v_antes <> v_depois then
     raise exception
       'O DRE somado pelo rateio nao fecha com o somado pelo lancamento. Antes: %. Depois: %. Ha lancamento cujo rateio nao soma o valor dele; conserte antes de trocar a funcao.',
-      v_dre_antes::text, v_dre_depois::text;
+      v_antes::text, v_depois::text;
   end if;
 
-  raise notice 'DRE por tipo intacto na troca de base: %', v_dre_antes::text;
+  raise notice 'DRE por tipo intacto na troca de base: %', v_antes::text;
 
-  -- O backfill em si. Uma chamada por ordem: sao 5.911, roda em segundos, e a
-  -- funcao ja nao escreve quando o derivado nao muda.
-  v_ordens := 0;
+  -- O backfill em si. Sao 72 ordens: roda em milissegundos, e a funcao nem
+  -- escreve quando o derivado nao muda.
   for v_oc in select id from public.ordens_compra loop
     perform public.fn_oc_categorias_derivadas(v_oc);
     v_ordens := v_ordens + 1;
@@ -641,30 +700,8 @@ begin
   from public.ordens_compra
   where cardinality(categoria_ids) > 1;
 
-  raise notice 'Derivado refeito em % ordens. Com mais de uma categoria: %.',
+  raise notice 'Derivado refeito em % ordens. Com mais de uma categoria: % (esperado 10).',
     v_ordens, v_multi;
-
-  -- O que esta migration NAO faz, de proposito: realinhar os lancamentos ja
-  -- gerados cuja categoria discorda da predominante dos itens de hoje.
-  --
-  -- Discordam porque o cadastro do insumo mudou depois da aprovacao. Realinhar
-  -- e o comportamento pedido ("reclassifica tudo") e passa a valer para toda
-  -- reclassificacao FUTURA, via fn_reclassificar_insumo. Fazer a base inteira
-  -- aqui moveria dinheiro entre categorias do DRE de meses fechados numa
-  -- migration de estrutura, sem ninguem ter visto o tamanho. O numero fica
-  -- medido para o Tiago decidir.
-  select count(*), coalesce(sum(l.valor), 0)
-  into v_divergentes, v_valor_divergente
-  from public.lancamentos l
-  join public.ordens_compra oc on oc.id = l.origem_id
-  where l.origem = 'oc'
-    and l.status <> 'cancelado'
-    and oc.categoria_id is not null
-    and l.categoria_id is distinct from oc.categoria_id;
-
-  raise notice
-    'Lancamentos de OC cuja categoria discorda da predominante dos itens de hoje: % (R$ %). NAO foram tocados: decisao do Tiago em passo separado.',
-    v_divergentes, to_char(v_valor_divergente, 'FM999999999990.00');
 end $backfill$;
 
 notify pgrst, 'reload schema';

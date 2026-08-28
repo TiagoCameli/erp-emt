@@ -4212,6 +4212,13 @@ export type Database = {
       };
       fn_reclassificar_insumo: {
         Args: {
+          // O gerador escreve `p_categoria_anterior_id?: string`, porque o
+          // parâmetro tem DEFAULT e ele não sabe que NULL é um valor LEGÍTIMO
+          // aqui: nulo significa "o insumo não tinha categoria", e é contra isso
+          // que a função compara para recusar a troca quando outra pessoa
+          // reclassificou o mesmo insumo. Com o tipo do gerador, passar null
+          // deixa de compilar e a única saída seria mentir com `?? undefined`,
+          // que apagaria a diferença entre "não tinha" e "não sei".
           p_categoria_anterior_id: string | null;
           p_categoria_id: string;
           p_insumo_id: string;
