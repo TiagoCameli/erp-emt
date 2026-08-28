@@ -194,18 +194,19 @@ describe("ordemCompraSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("exige categoria do custo", () => {
+  /**
+   * A categoria não é campo da ordem. Quem a mantém é a trigger, a partir dos
+   * itens: `categoria_id` com a predominante e `categoria_ids` com o conjunto.
+   * Uma ordem sem categoria no payload é o caso NORMAL desde 27/08/2026.
+   */
+  it("não exige categoria do custo: ela vem dos insumos", () => {
     const { categoriaId: _, ...semCategoria } = ocValida;
-    const r = ordemCompraSchema.safeParse(semCategoria);
-    expect(r.success).toBe(false);
-    if (!r.success) {
-      expect(r.error.issues[0]?.message).toBe("Escolha a categoria do custo");
-    }
+    expect(ordemCompraSchema.safeParse(semCategoria).success).toBe(true);
   });
 });
 
 describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
-  const insumoValido = { insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5" };
+  const insumoValido = { insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5", categoriaCustoId: CATEGORIA };
 
   it("aceita quantidade com vírgula e 4 casas decimais", () => {
     const r = ocInsumoFormSchema.safeParse({
@@ -253,7 +254,7 @@ describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
 describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
   const grupoValido = {
     centroCustoId: CENTRO,
-    insumos: [{ insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5" }],
+    insumos: [{ insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5", categoriaCustoId: CATEGORIA }],
   };
   const formValido = {
     fornecedorId: FORNECEDOR,
@@ -331,22 +332,50 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
     expect(ordemCompraFormSchema.safeParse(comoATelaManda).success).toBe(true);
   });
 
-  it("exige descrição e categoria no formulário", () => {
+  it("exige descrição no formulário", () => {
     expect(
       ordemCompraFormSchema.safeParse({ ...formValido, descricao: "" }).success,
     ).toBe(false);
+  });
+
+  /**
+   * A categoria do custo saiu do cabeçalho em 27/08/2026: ela é a do cadastro de
+   * cada insumo, e a ordem pode ter mais de uma. O formulário não pede mais, e um
+   * `categoriaId` sobrando (tela antiga em cache, por exemplo) não pode recusar o
+   * salvamento — foi assim que a criação de OC morreu calada em 20/08.
+   */
+  it("não pede mais categoria no cabeçalho, e ignora a que sobrar", () => {
+    expect(ordemCompraFormSchema.safeParse(formValido).success).toBe(true);
+    expect(
+      ordemCompraFormSchema.safeParse({ ...formValido, categoriaId: "" })
+        .success,
+    ).toBe(true);
+  });
+
+  /**
+   * Célula de categoria vazia passa: é o insumo que ainda não tem categoria no
+   * cadastro. Quem recusa é a APROVAÇÃO, no banco, e a tela avisa antes. Se o
+   * formulário exigisse, uma ordem em rascunho com insumo não classificado não
+   * poderia nem ser salva, e o erro cairia numa célula de tabela.
+   */
+  it("aceita item sem categoria de custo, para poder salvar o rascunho", () => {
     const r = ordemCompraFormSchema.safeParse({
       ...formValido,
-      categoriaId: "",
+      centrosCusto: [
+        {
+          centroCustoId: CENTRO,
+          insumos: [
+            {
+              insumoId: INSUMO,
+              quantidade: "5",
+              precoUnitario: "12,5",
+              categoriaCustoId: "",
+            },
+          ],
+        },
+      ],
     });
-    expect(r.success).toBe(false);
-    if (!r.success) {
-      expect(
-        r.error.issues.some(
-          (issue) => issue.message === "Selecione a categoria do custo",
-        ),
-      ).toBe(true);
-    }
+    expect(r.success).toBe(true);
   });
 
   it("exige condição de pagamento no formulário", () => {
@@ -367,7 +396,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
         grupoValido,
         {
           centroCustoId: CENTRO2,
-          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1" }],
+          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1", categoriaCustoId: CATEGORIA }],
         },
       ],
     });
@@ -397,7 +426,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
         grupoValido,
         {
           centroCustoId: CENTRO,
-          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1" }],
+          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1", categoriaCustoId: CATEGORIA }],
         },
       ],
     });
@@ -415,8 +444,8 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
         {
           centroCustoId: CENTRO,
           insumos: [
-            { insumoId: INSUMO, quantidade: "1", precoUnitario: "1" },
-            { insumoId: INSUMO, quantidade: "2", precoUnitario: "2" },
+            { insumoId: INSUMO, quantidade: "1", precoUnitario: "1", categoriaCustoId: CATEGORIA },
+            { insumoId: INSUMO, quantidade: "2", precoUnitario: "2", categoriaCustoId: CATEGORIA },
           ],
         },
       ],
@@ -448,7 +477,7 @@ describe("parcelas da OC no formulário", () => {
     centrosCusto: [
       {
         centroCustoId: CENTRO,
-        insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100" }],
+        insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100", categoriaCustoId: CATEGORIA }],
       },
     ],
     formas: [{ formaPagamentoId: FORMA, cartaoId: "", valor: "" }],

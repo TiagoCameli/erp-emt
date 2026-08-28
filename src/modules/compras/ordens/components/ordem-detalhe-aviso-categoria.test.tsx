@@ -35,8 +35,15 @@ vi.mock("@/components/canonicos/anexos", () => ({
 
 const ID_ORDEM = "11111111-1111-4111-8111-111111111111";
 
+/**
+ * Um item da OC. `semCategoriaCusto` é DERIVADO da categoria, e não um campo que
+ * a fixture escolhe: no banco os dois saem da mesma coluna
+ * (`insumos.categoria_financeira_id`), então um item "sem categoria de custo" que
+ * ao mesmo tempo tem categoria é um estado que não existe. Fixture impossível
+ * prova a crença de quem a escreveu, não o comportamento do código.
+ */
 function item(troca: Partial<OrdemItem> = {}): OrdemItem {
-  return {
+  const base = {
     id: "22222222-2222-4222-8222-222222222222",
     insumoId: "33333333-3333-4333-8333-333333333333",
     insumoNome: "MUNHÃO",
@@ -46,9 +53,16 @@ function item(troca: Partial<OrdemItem> = {}): OrdemItem {
     subtotal: 150,
     centroCustoId: "44444444-4444-4444-8444-444444444444",
     centroCustoNome: "Hilux SQR1C93 - 07",
-    semCategoriaCusto: false,
+    categoriaCustoId: "77777777-7777-4777-8777-777777777777" as string | null,
+    categoriaCustoNome: "Peças e manutenção" as string | null,
     ...troca,
   };
+  return { ...base, semCategoriaCusto: base.categoriaCustoId === null };
+}
+
+/** O item que trava a aprovação: insumo sem categoria de custo no cadastro. */
+function itemSemCategoria(troca: Partial<OrdemItem> = {}): OrdemItem {
+  return item({ categoriaCustoId: null, categoriaCustoNome: null, ...troca });
 }
 
 function ordem(troca: Partial<OrdemDetalhe> = {}): OrdemDetalhe {
@@ -117,7 +131,7 @@ describe("aviso de item sem categoria de custo", () => {
   });
 
   it("nomeia o item que trava a aprovação e leva ao cadastro dele", () => {
-    renderizar(ordem({ itens: [item({ semCategoriaCusto: true })] }));
+    renderizar(ordem({ itens: [itemSemCategoria()] }));
 
     expect(screen.getByText("1 item está sem categoria de custo")).toBeTruthy();
 
@@ -133,11 +147,10 @@ describe("aviso de item sem categoria de custo", () => {
     renderizar(
       ordem({
         itens: [
-          item({ semCategoriaCusto: true }),
-          item({
+          itemSemCategoria(),
+          itemSemCategoria({
             id: "66666666-6666-4666-8666-666666666666",
             insumoNome: "CORREIA DO ALTERNADOR",
-            semCategoriaCusto: true,
           }),
         ],
       }),
@@ -157,7 +170,7 @@ describe("aviso de item sem categoria de custo", () => {
     renderizar(
       ordem({
         status: "aprovado",
-        itens: [item({ semCategoriaCusto: true })],
+        itens: [itemSemCategoria()],
       }),
     );
 

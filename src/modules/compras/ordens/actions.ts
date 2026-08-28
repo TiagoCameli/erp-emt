@@ -16,7 +16,9 @@ import {
 import {
   ordemCompraSchema,
   recebimentoSchema,
+  reclassificacoesSchema,
   type OrdemCompraInput,
+  type ReclassificacaoInsumoInput,
   type RecebimentoInput,
 } from "@/modules/compras/ordens/schemas";
 
@@ -72,10 +74,14 @@ function cabecalhoParaRegistro(dados: OrdemCompraInput) {
     cotacao_id: dados.cotacaoId ?? null,
     data_compra: dados.dataCompra,
     mes_competencia: dados.mesCompetencia,
-    // Descrição e categoria descem para o lançamento gerado na aprovação
-    // (fn_aprovar_ordem_compra): é o que classifica a compra no DRE.
+    // A descrição desce para o lançamento gerado na aprovação
+    // (fn_aprovar_ordem_compra).
+    //
+    // A CATEGORIA não vai: `ordens_compra.categoria_id` e `categoria_ids` são
+    // derivados dos itens pela trigger `trg_oc_categorias_derivadas`. Mandar
+    // daqui devolveria a segunda verdade que este bloco fechou — e, pior, uma
+    // que a aprovação sobrescreveria depois, calada.
     descricao: dados.descricao,
-    categoria_id: dados.categoriaId,
     // Nota fiscal, boleto, recibo: o número que identifica o documento do
     // fornecedor. Vale nos dois caminhos, porque o mesmo objeto vira o
     // p_cabecalho da RPC de criação e o update direto da edição.
@@ -713,4 +719,123 @@ export async function excluirOrdensCompraLote(
       naoEncontradas: escolhidos.length - encontradas.length,
     },
   };
+}
+
+/** O que a reclassificação atingiu (ou vai atingir). */
+export interface ImpactoDaReclassificacao {
+  ordens: number;
+  ordensAprovadas: number;
+  lancamentos: number;
+  valor: number;
+}
+
+/**
+ * Quantas ordens e lançamentos uma reclassificação destes insumos alcança.
+ *
+ * Serve ao diálogo de confirmação, e só a ele: é leitura, não muda nada. A
+ * contagem vem do banco em uma chamada porque `.in()` do PostgREST com muitos
+ * ids estoura a URL antes de a RLS ser consultada, e porque contar ordem por
+ * agregação de itens devolveria uma linha por item.
+ */
+export async function contarImpactoReclassificacao(
+  insumoIds: string[],
+): Promise<ImpactoDaReclassificacao | { erro: string }> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar ordens de compra" };
+  }
+
+  const ids = insumoIds.filter((id) => idSchema.safeParse(id).success);
+  if (ids.length === 0) {
+    return { erro: "Nenhum insumo válido para contar" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .rpc("fn_impacto_reclassificar_insumos", { p_insumo_ids: ids })
+    .maybeSingle();
+
+  if (error || !data) {
+    return erroAcao(
+      "compras.ordens.contarImpactoReclassificacao",
+      error,
+      "Não foi possível contar as ordens afetadas",
+    );
+  }
+
+  return {
+    ordens: data.ordens,
+    ordensAprovadas: data.ordens_aprovadas,
+    lancamentos: data.lancamentos,
+    valor: data.valor,
+  };
+}
+
+/**
+ * Grava no cadastro dos insumos as categorias trocadas dentro de uma OC.
+ *
+ * Isto NÃO é uma edição da ordem: é uma edição de `insumos`, a tabela que todas
+ * as ordens leem. Por isso passa por `fn_reclassificar_insumo`, que
+ *
+ *  - confere a permissão de compras.ordens (quem emite a ordem classifica o que
+ *    está comprando, sem precisar de acesso a Cadastros),
+ *  - recusa quando a categoria mudou desde que a tela carregou, em vez de deixar
+ *    a segunda pessoa desfazer a primeira em silêncio,
+ *  - recusa categoria de natureza `movimentacao`, que tiraria a compra do saldo
+ *    bancário, e
+ *  - reclassifica o rateio dos lançamentos que as ordens antigas já geraram.
+ *
+ * Uma chamada por insumo, e não um laço no banco: assim uma recusa nomeia o
+ * insumo que a causou, e as que passaram continuam valendo.
+ */
+export async function reclassificarInsumos(
+  mudancas: ReclassificacaoInsumoInput[],
+): Promise<ImpactoDaReclassificacao | { erro: string }> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar ordens de compra" };
+  }
+
+  const validado = reclassificacoesSchema.safeParse(mudancas);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const total: ImpactoDaReclassificacao = {
+    ordens: 0,
+    ordensAprovadas: 0,
+    lancamentos: 0,
+    valor: 0,
+  };
+
+  for (const mudanca of validado.data) {
+    const { data, error } = await supabase
+      .rpc("fn_reclassificar_insumo", {
+        p_insumo_id: mudanca.insumoId,
+        p_categoria_id: mudanca.categoriaId,
+        p_categoria_anterior_id: mudanca.categoriaAnteriorId,
+      })
+      .maybeSingle();
+
+    if (error || !data) {
+      return erroAcao(
+        "compras.ordens.reclassificarInsumos",
+        error,
+        "Não foi possível mudar a categoria do insumo",
+      );
+    }
+
+    total.ordens += data.ordens;
+    total.ordensAprovadas += data.ordens_aprovadas;
+    total.lancamentos += data.lancamentos;
+    total.valor += data.valor;
+  }
+
+  // A reclassificação reescreve o rateio de lançamentos e a categoria derivada
+  // das ordens: as duas listagens e os relatórios que leem categoria saem do
+  // cache junto.
+  revalidatePath(ROTA);
+  revalidatePath("/financeiro/lancamentos");
+  revalidatePath("/cadastros/insumos");
+
+  return total;
 }

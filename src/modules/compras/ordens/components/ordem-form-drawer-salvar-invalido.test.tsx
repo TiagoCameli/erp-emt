@@ -107,6 +107,8 @@ function ordemDividida(precoDoItem: number, comCartao = true): OrdemDetalhe {
         centroCustoId: CENTRO,
         centroCustoNome: "Motoniveladora 12H - 01",
         semCategoriaCusto: false,
+        categoriaCustoId: CATEGORIA,
+        categoriaCustoNome: "Outras despesas",
       },
     ],
     parcelas: [
@@ -176,7 +178,15 @@ function abrirEdicao(ordem: OrdemDetalhe) {
       onAbertoChange={() => {}}
       ordem={ordem}
       fornecedores={[{ id: FORNECEDOR, nome: "ATAIDE LOPES" }]}
-      insumos={[{ id: INSUMO, nome: "Serviço Prestado", unidade: "un" }]}
+      insumos={[
+        {
+          id: INSUMO,
+          nome: "Serviço Prestado",
+          unidade: "un",
+          categoriaCustoId: CATEGORIA,
+          categoriaCustoNome: "Outras despesas",
+        },
+      ]}
       centrosCusto={[
         {
           id: CENTRO,

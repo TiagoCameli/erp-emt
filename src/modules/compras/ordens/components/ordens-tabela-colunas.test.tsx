@@ -14,6 +14,7 @@ function ordem(troca: Partial<OrdemLista> = {}): OrdemLista {
     fornecedorNome: "VIBRA ENERGIA S.A",
     descricao: "Diesel S10 para a frota",
     categoriaNome: "Combustível",
+    qtdCategorias: 1,
     valorTotal: 29473.5,
     status: "aprovado",
     dataCompra: "2026-08-17",

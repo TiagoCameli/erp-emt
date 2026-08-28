@@ -47,6 +47,7 @@ function ordem(troca: Partial<OrdemLista> = {}): OrdemLista {
     fornecedorNome: "GUERRA IMPLEMENTOS RODOVIARIOS S.A",
     descricao: "Peças para caminhão",
     categoriaNome: "Manutenção",
+    qtdCategorias: 1,
     valorTotal: 1000,
     status: "aprovado",
     dataCompra: "2026-07-10",

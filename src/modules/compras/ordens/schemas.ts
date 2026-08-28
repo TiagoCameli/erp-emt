@@ -238,8 +238,15 @@ export const ordemCompraSchema = z
     mesCompetencia: mesSchema,
     /** O que foi comprado, em uma linha. Vai para o lançamento financeiro. */
     descricao: descricaoSchema,
-    /** Categoria financeira do custo: é ela que classifica a compra no DRE. */
-    categoriaId: idSchemaCom("Escolha a categoria do custo"),
+    /**
+     * A categoria do custo NÃO é campo da ordem (27/08/2026).
+     *
+     * Ela é derivada dos insumos comprados, e a ordem pode ter mais de uma. Quem
+     * mantém `ordens_compra.categoria_id` (a predominante) e `categoria_ids` (o
+     * conjunto) é a trigger `trg_oc_categorias_derivadas`, a partir dos itens.
+     * Aceitar o campo aqui de novo abriria a segunda verdade que este bloco
+     * fechou: a tela dizendo uma categoria e o rateio do lançamento outra.
+     */
     /**
      * Número do documento do fornecedor: nota fiscal, boleto, recibo, contrato.
      * Opcional e sem unicidade, porque o mesmo número repete entre fornecedores
@@ -443,6 +450,24 @@ export const ocInsumoFormSchema = z.object({
     .refine((valor) => casasDecimaisTexto(valor) <= CASAS_TAXA, {
       error: `O preço aceita no máximo ${CASAS_TAXA} casas decimais`,
     }),
+  /**
+   * Categoria de custo DO INSUMO, editável aqui dentro.
+   *
+   * Não é campo da ordem: o valor mora em `insumos.categoria_financeira_id`, e
+   * salvar a ordem com ele mudado reclassifica o cadastro do insumo (portanto as
+   * ordens anteriores também). Quem avisa disso na tela é `AvisoReclassificacao`.
+   *
+   * Aceita vazio, e vazio NÃO é uma escolha: é o insumo que ainda não tem
+   * categoria no cadastro. Sem categoria a aprovação é recusada pelo banco, e o
+   * aviso de "item sem categoria de custo" é quem cobra. Se este campo fosse
+   * obrigatório no schema, uma ordem em rascunho com insumo não classificado
+   * deixaria de poder ser salva — e o botão morreria calado, porque o erro cai
+   * numa célula de tabela.
+   *
+   * Sem `.default("")`: o `input` do zod deixaria de bater com o `output` e o
+   * react-hook-form passaria a exigir o campo em toda linha nova.
+   */
+  categoriaCustoId: z.string().trim(),
 });
 
 export type OcInsumoFormInput = z.infer<typeof ocInsumoFormSchema>;
@@ -518,7 +543,10 @@ export const ordemCompraFormSchema = z
       .regex(/^\d{4}-\d{2}$/, { error: "Informe o mês de referência" }),
     /** Mesma trava do servidor: a descrição classifica a compra no DRE. */
     descricao: descricaoSchema,
-    categoriaId: idSchemaCom("Selecione a categoria do custo"),
+    // Sem `categoriaId`: a categoria saiu do cabeçalho e passou a ser a dos
+    // insumos, uma por item (`centrosCusto[].insumos[].categoriaCustoId`). Campo
+    // que a tela não desenha não pode ser campo do formulário — foi assim que a
+    // criação de OC morreu calada em 20/08/2026.
     /** Número do documento do fornecedor. Vazio no form = null no banco. */
     numeroDocumento: z
       .string()
@@ -847,3 +875,32 @@ export const recebimentoFormSchema = z.object({
 });
 
 export type RecebimentoFormInput = z.infer<typeof recebimentoFormSchema>;
+
+/**
+ * Uma reclassificação de insumo pedida de dentro da ordem de compra.
+ *
+ * O `categoriaAnteriorId` não é decoração: é a foto que a tela tinha do cadastro
+ * quando o usuário abriu a ordem. O servidor compara antes de gravar e recusa
+ * quando não bate, porque duas pessoas com a mesma ordem aberta reclassificariam
+ * o mesmo insumo e a segunda desfaria a primeira em silêncio — e isto não é um
+ * campo da ordem, é o cadastro que TODAS as ordens leem.
+ *
+ * Nulo é permitido no `categoriaAnteriorId` (insumo que ainda não tinha
+ * categoria) e proibido no `categoriaId`: limpar a categoria de um insumo pela OC
+ * deixaria outras ordens sem poder ser aprovadas, sem ninguém ter pedido isso.
+ */
+export const reclassificacaoInsumoSchema = z.object({
+  insumoId: idSchemaCom("Insumo inválido"),
+  categoriaId: idSchemaCom("Escolha a categoria do custo"),
+  categoriaAnteriorId: idSchemaCom("Categoria inválida").nullable(),
+});
+
+export type ReclassificacaoInsumoInput = z.infer<
+  typeof reclassificacaoInsumoSchema
+>;
+
+/** As reclassificações de um salvamento. Teto porque cada uma varre lançamentos. */
+export const reclassificacoesSchema = z
+  .array(reclassificacaoInsumoSchema)
+  .min(1, { error: "Nenhuma categoria para reclassificar" })
+  .max(200, { error: "Reclassifique no máximo 200 insumos de uma vez" });

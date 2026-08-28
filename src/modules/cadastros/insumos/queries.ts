@@ -188,6 +188,11 @@ export async function listarCategoriasCusto(): Promise<CategoriaCustoOpcao[]> {
     .select("id, nome")
     .eq("ativo", true)
     .eq("tipo", "despesa")
+    // Natureza `movimentacao` é principal de aplicação e de empréstimo, e
+    // fn_rel_posicao_bancaria a EXCLUI do saldo: um insumo classificado nela
+    // faria a compra sair do saldo bancário. `fn_reclassificar_insumo` recusa, e
+    // a lista não pode oferecer o que o banco recusa.
+    .neq("natureza", "movimentacao")
     .order("nome");
 
   if (error) {

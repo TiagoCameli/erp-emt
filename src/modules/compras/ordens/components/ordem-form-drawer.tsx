@@ -31,6 +31,7 @@ import {
   type ColunaItem,
 } from "@/components/canonicos";
 import { Anexos } from "@/components/canonicos/anexos";
+import { ConfirmDialog } from "@/components/canonicos/confirm-dialog";
 import {
   FilaAnexos,
   subirFilaDeAnexos,
@@ -56,10 +57,19 @@ import { criarCartaoRapido } from "@/modules/cadastros/cartoes/actions";
 import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import {
+  contarImpactoReclassificacao,
   criarOrdem,
   editarOrdem,
+  reclassificarInsumos,
   sugerirParcelasPelaCondicao,
 } from "@/modules/compras/ordens/actions";
+import {
+  AvisoReclassificacao,
+  ListaReclassificacao,
+  mensagemDoImpacto,
+  type ImpactoReclassificacao,
+} from "@/modules/compras/ordens/components/aviso-reclassificacao";
+import { categoriasDaOrdem } from "@/modules/compras/ordens/categorias";
 import {
   diferencaParaTotal,
   redistribuirProporcional,
@@ -78,6 +88,7 @@ import {
   achatarGruposEmItens,
   formasDoFormulario,
   agruparItensPorCentroCusto,
+  reclassificacoesPendentes,
   type GrupoForm,
 } from "@/modules/compras/ordens/form-mapeamento";
 import type {
@@ -100,7 +111,9 @@ const ID_FORM = "form-ordem-compra";
 
 /** Linha de insumo em branco. */
 function insumoVazio(): GrupoForm["insumos"][number] {
-  return { insumoId: "", quantidade: "", precoUnitario: "" };
+  // A categoria nasce vazia e é escolher o insumo que a preenche, com o que o
+  // cadastro dele já tem. Ninguém digita categoria antes de dizer o que compra.
+  return { insumoId: "", quantidade: "", precoUnitario: "", categoriaCustoId: "" };
 }
 
 /** Grupo de centro de custo em branco, já com uma linha de insumo. */
@@ -113,13 +126,23 @@ function grupoVazio(): GrupoForm {
  * atribui na tela). Quantidade/preço viram string com vírgula, no mesmo
  * formato que a edição usa (ver agruparItensPorCentroCusto).
  */
-function grupoDoPrefill(prefill: PrefillOrdemCotacao): GrupoForm {
+function grupoDoPrefill(
+  prefill: PrefillOrdemCotacao,
+  insumos: InsumoOpcao[],
+): GrupoForm {
+  const categoriaDoInsumo = new Map(
+    insumos.map((insumo) => [insumo.id, insumo.categoriaCustoId ?? ""]),
+  );
   return {
     centroCustoId: "",
     insumos: prefill.itens.map((item) => ({
       insumoId: item.insumoId,
       quantidade: String(item.quantidade).replace(".", ","),
       precoUnitario: String(item.precoUnitario).replace(".", ","),
+      // A categoria vem do CADASTRO do insumo, não da cotação: a cotação não
+      // classifica custo, e trazer dali criaria uma terceira versão da mesma
+      // informação.
+      categoriaCustoId: categoriaDoInsumo.get(item.insumoId) ?? "",
     })),
   };
 }
@@ -140,6 +163,7 @@ function ajusteParaCampo(valor: number): string {
 function valoresIniciais(
   ordem: OrdemDetalhe | null,
   prefill: PrefillOrdemCotacao | null,
+  insumos: InsumoOpcao[],
 ): OrdemCompraFormInput {
   if (ordem && ordem.itens.length > 0) {
     return {
@@ -149,7 +173,6 @@ function valoresIniciais(
       dataCompra: ordem.dataCompra,
       mesCompetencia: competenciaParaMes(ordem.mesCompetencia),
       descricao: ordem.descricao ?? "",
-      categoriaId: ordem.categoriaId ?? "",
       numeroDocumento: ordem.numeroDocumento ?? "",
       observacoes: ordem.observacoes ?? "",
       frete: ajusteParaCampo(ordem.ajustes.frete),
@@ -173,10 +196,10 @@ function valoresIniciais(
       cotacaoId: prefill.cotacaoId,
       dataCompra: dataHojeISO(),
       mesCompetencia: mesHojeISO(),
-      // Descrição e categoria vêm da cotação: é a mesma compra, redigitar só
-      // criaria divergência entre a cotação e a OC que saiu dela.
+      // A descrição vem da cotação: é a mesma compra, redigitar só criaria
+      // divergência entre a cotação e a OC que saiu dela. A categoria NÃO vem:
+      // ela é a do cadastro de cada insumo, e vai por item em `grupoDoPrefill`.
       descricao: prefill.descricao ?? "",
-      categoriaId: prefill.categoriaId ?? "",
       // A cotação não tem número de documento: o documento só existe depois da
       // compra fechada, então aqui nasce vazio mesmo.
       numeroDocumento: "",
@@ -188,7 +211,9 @@ function valoresIniciais(
       impostos: "",
       desconto: "",
       centrosCusto:
-        prefill.itens.length > 0 ? [grupoDoPrefill(prefill)] : [grupoVazio()],
+        prefill.itens.length > 0
+          ? [grupoDoPrefill(prefill, insumos)]
+          : [grupoVazio()],
       parcelas: [],
       // A cotação traz UMA forma: ela nasce como a única, e "Dividir entre
       // formas" abre a segunda se a compra for paga em mais de uma.
@@ -213,7 +238,6 @@ function valoresIniciais(
       ? competenciaParaMes(ordem.mesCompetencia)
       : mesHojeISO(),
     descricao: ordem?.descricao ?? "",
-    categoriaId: ordem?.categoriaId ?? "",
     numeroDocumento: ordem?.numeroDocumento ?? "",
     observacoes: ordem?.observacoes ?? "",
     frete: ajusteParaCampo(ordem?.ajustes.frete ?? 0),
@@ -390,9 +414,12 @@ export function OrdemFormDrawer({
     [formasDeCartao],
   );
 
+  const insumosRef = React.useRef(insumos);
+  insumosRef.current = insumos;
+
   const form = useForm<OrdemCompraFormInput>({
     resolver: zodResolver(schema),
-    defaultValues: valoresIniciais(ordem, prefillAtivo),
+    defaultValues: valoresIniciais(ordem, prefillAtivo, insumos),
     // Erro aparece ao sair do campo, não só no submit: a pessoa corrige na hora.
     mode: "onBlur",
   });
@@ -404,10 +431,24 @@ export function OrdemFormDrawer({
   } = useFieldArray({ control: form.control, name: "centrosCusto" });
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(ordem, prefillAtivo));
+    // `insumos` entra por ref, e não pela lista de dependências: é um array de
+    // milhares de linhas que chega por prop, e uma identidade nova a cada render
+    // do pai faria este reset rodar com o drawer aberto, apagando o que a pessoa
+    // digitou. O catálogo só é lido para preencher a categoria inicial de cada
+    // linha, então a foto do momento do reset basta.
+    if (aberto) {
+      form.reset(valoresIniciais(ordem, prefillAtivo, insumosRef.current));
+    }
   }, [aberto, ordem, prefillAtivo, form]);
 
-  const salvando = form.formState.isSubmitting;
+  /**
+   * Salvamento disparado de FORA do handleSubmit: o que sai do diálogo de
+   * confirmação da reclassificação. Sem ele o formulário voltaria a aceitar
+   * cliques enquanto o salvamento confirmado está em curso, porque para o
+   * react-hook-form o submit já terminou no instante em que abrimos o diálogo.
+   */
+  const [salvandoFora, setSalvandoFora] = React.useState(false);
+  const salvando = form.formState.isSubmitting || salvandoFora;
 
   // Total ao vivo (prévia): soma qtd x preço de todos os insumos de todos os
   // grupos. Computado a cada render (sem useMemo) porque o react-hook-form
@@ -474,7 +515,117 @@ export function OrdemFormDrawer({
     0,
   );
 
+  /**
+   * As categorias da ordem, ao vivo, como a tela mostra e como a aprovação vai
+   * gravar no rateio do lançamento. Sai das LINHAS, e não do cadastro: quem
+   * acabou de trocar a categoria de um insumo tem que ver o resumo já mudado, ou
+   * o resumo estaria discordando da coluna logo acima dele.
+   */
+  const nomeDaCategoria = React.useMemo(
+    () => new Map(categorias.map((categoria) => [categoria.id, categoria.nome])),
+    [categorias],
+  );
+
+  const categoriasDaOrdemAtual = categoriasDaOrdem(
+    (gruposObservados ?? []).flatMap((grupo) =>
+      (grupo.insumos ?? []).map((linha) => ({
+        categoriaCustoId: linha.categoriaCustoId || null,
+        categoriaCustoNome: nomeDaCategoria.get(linha.categoriaCustoId) ?? null,
+        subtotal:
+          paraNumero(linha.quantidade ?? "") *
+          paraNumero(linha.precoUnitario ?? ""),
+      })),
+    ),
+  );
+
+  /**
+   * O que salvar vai mudar no CADASTRO dos insumos. Enquanto tem item nesta
+   * lista, a tela mostra o aviso e o salvamento passa pela confirmação: mudar a
+   * categoria aqui não é uma edição desta ordem, é uma edição do cadastro que
+   * todas as ordens leem, incluindo as já aprovadas.
+   */
+  const pendentes = reclassificacoesPendentes(
+    gruposObservados ?? [],
+    insumos,
+    categorias,
+  );
+
+  /** Reclassificações confirmadas no diálogo, esperando o salvamento seguir. */
+  const [confirmandoReclassificacao, setConfirmandoReclassificacao] =
+    React.useState(false);
+  const valoresEmEspera = React.useRef<OrdemCompraFormInput | null>(null);
+
+  /**
+   * O tamanho do que a reclassificação vai mexer para trás, buscado quando o
+   * diálogo abre.
+   *
+   * `pendentes` sai de um `watch` e tem identidade nova a cada render, então
+   * entra por ref: na lista de dependências, este efeito buscaria a contagem em
+   * loop enquanto o diálogo estivesse aberto.
+   */
+  const [impacto, setImpacto] = React.useState<ImpactoReclassificacao>({
+    estado: "carregando",
+  });
+  const pendentesRef = React.useRef(pendentes);
+  pendentesRef.current = pendentes;
+
+  React.useEffect(() => {
+    if (!confirmandoReclassificacao) return;
+    let cancelado = false;
+    setImpacto({ estado: "carregando" });
+    void contarImpactoReclassificacao(
+      pendentesRef.current.map((pendente) => pendente.insumoId),
+    ).then((resultado) => {
+      if (cancelado) return;
+      setImpacto(
+        "erro" in resultado
+          ? { estado: "erro", mensagem: resultado.erro }
+          : { estado: "pronto", ...resultado },
+      );
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [confirmandoReclassificacao]);
+
+  /**
+   * Aplica no cadastro as categorias que a pessoa trocou dentro da ordem.
+   *
+   * Roda DEPOIS de a ordem estar salva, e é de propósito: o pedido é a ordem, a
+   * reclassificação é o efeito. Se ela falhar, a ordem existe e a mensagem diz
+   * exatamente isso — o contrário (reclassificar e a ordem não salvar) mudaria o
+   * cadastro que todas as ordens leem por causa de um salvamento que nem
+   * aconteceu.
+   */
+  async function aplicarReclassificacoes(): Promise<void> {
+    if (pendentes.length === 0) return;
+
+    const resultado = await reclassificarInsumos(
+      pendentes.map((pendente) => ({
+        insumoId: pendente.insumoId,
+        categoriaId: pendente.categoriaId,
+        categoriaAnteriorId: pendente.categoriaAnteriorId,
+      })),
+    );
+
+    if ("erro" in resultado) {
+      toast.error(`A ordem foi salva, mas a categoria não: ${resultado.erro}`);
+      return;
+    }
+
+    toast.success(mensagemDoImpacto(pendentes, resultado));
+  }
+
   async function aoEnviar(valores: OrdemCompraFormInput) {
+    // Trocar a categoria de um insumo muda o cadastro dele, então muda TODAS as
+    // ordens que o compraram. Isso não pode acontecer no mesmo clique em que se
+    // salva uma ordem, sem ninguém dizer que vai acontecer.
+    if (pendentes.length > 0 && valoresEmEspera.current === null) {
+      valoresEmEspera.current = valores;
+      setConfirmandoReclassificacao(true);
+      return;
+    }
+
     const itens = achatarGruposEmItens(valores.centrosCusto);
     // A conta de quanto vale a forma única mora em `formasDoFormulario`, junto
     // dos testes. Aqui havia uma soma de `quantidade * preço` escrita à mão, sem
@@ -500,7 +651,6 @@ export function OrdemFormDrawer({
       dataCompra: valores.dataCompra,
       mesCompetencia: mesParaCompetencia(valores.mesCompetencia),
       descricao: valores.descricao,
-      categoriaId: valores.categoriaId,
       numeroDocumento: valores.numeroDocumento,
       observacoes: valores.observacoes,
       // Os quatro ajustes do rodapé, de texto para número. O desconto sobe
@@ -523,6 +673,7 @@ export function OrdemFormDrawer({
         return;
       }
       toast.success("Ordem de compra salva");
+      await aplicarReclassificacoes();
       onAbertoChange(false);
       return;
     }
@@ -532,6 +683,7 @@ export function OrdemFormDrawer({
       toast.error(resultado.erro);
       return;
     }
+    await aplicarReclassificacoes();
     // Sobe a fila de anexos agora que a OC existe.
     if (filaAnexos.length > 0) {
       setSubindoAnexos(true);
@@ -557,8 +709,35 @@ export function OrdemFormDrawer({
     onCriada?.(resultado.id);
   }
 
+  /**
+   * O "Salvar" do diálogo: segue o salvamento que o aviso interrompeu.
+   *
+   * `valoresEmEspera` fica preenchido, e é isso que faz `aoEnviar` passar direto
+   * pelo portão da confirmação em vez de abrir o diálogo outra vez. Ele é limpo
+   * no fim, sempre: sem isso, um salvamento recusado pelo servidor deixaria o
+   * portão aberto e a próxima tentativa reclassificaria sem avisar.
+   */
+  async function confirmarReclassificacao() {
+    const valores = valoresEmEspera.current;
+    if (!valores) return;
+    setSalvandoFora(true);
+    try {
+      await aoEnviar(valores);
+    } finally {
+      setSalvandoFora(false);
+      valoresEmEspera.current = null;
+      setConfirmandoReclassificacao(false);
+    }
+  }
+
+  /** Fechar o diálogo sem confirmar: a ordem NÃO é salva, e nada é reclassificado. */
+  function cancelarReclassificacao(aberto: boolean) {
+    if (aberto) return;
+    valoresEmEspera.current = null;
+    setConfirmandoReclassificacao(false);
+  }
+
   const fornecedorValor = form.watch("fornecedorId");
-  const categoriaValor = form.watch("categoriaId") ?? "";
   const condicaoPagamentoValor = form.watch("condicaoPagamentoId");
   const dataCompraValor = form.watch("dataCompra") ?? "";
   // Compra muito velha normalmente é digitação errada, mas às vezes é nota
@@ -715,6 +894,7 @@ export function OrdemFormDrawer({
       : null);
 
   return (
+    <>
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
@@ -867,9 +1047,14 @@ export function OrdemFormDrawer({
             </p>
           ) : null}
 
-          {/* Descrição e categoria classificam a compra no DRE e descem para o
-              lançamento gerado na aprovação. Por isso são obrigatórias aqui, e
-              não no Financeiro depois. */}
+          {/* A descrição desce para o lançamento gerado na aprovação, e é por
+              isso que ela é pedida aqui e não no Financeiro depois.
+
+              A CATEGORIA saiu deste cabeçalho em 27/08/2026: ela é a do cadastro
+              de cada insumo, aparece na coluna "Categoria do custo" de cada item
+              e é resumida abaixo da lista. Um campo aqui seria uma segunda
+              verdade sobre a mesma compra — e era, porque a aprovação já o
+              sobrescrevia pela categoria de maior valor dos insumos. */}
           <LinhaCampos>
             <CampoFormulario
               id="oc-descricao"
@@ -885,27 +1070,6 @@ export function OrdemFormDrawer({
                 placeholder="Ex.: brita 1 para a base do km 118"
                 disabled={salvando}
                 {...form.register("descricao")}
-              />
-            </CampoFormulario>
-
-            <CampoFormulario
-              id="oc-categoria"
-              rotulo="Categoria do custo"
-              obrigatorio
-              erro={form.formState.errors.categoriaId?.message}
-            >
-              <Combobox
-                valor={categoriaValor}
-                onValorChange={(valor) =>
-                  form.setValue("categoriaId", valor, { shouldValidate: true })
-                }
-                opcoes={categorias.map((categoria) => ({
-                  valor: categoria.id,
-                  rotulo: categoria.nome,
-                }))}
-                placeholder="Selecione a categoria do custo"
-                disabled={salvando}
-                id="oc-categoria"
               />
             </CampoFormulario>
           </LinhaCampos>
@@ -1103,6 +1267,7 @@ export function OrdemFormDrawer({
                   indice={indice}
                   centrosDisponiveis={centrosDisponiveis}
                   insumos={insumos}
+                  categorias={categorias}
                   nomesDaOrdem={nomesDaOrdem}
                   salvando={salvando}
                   podeRemover={grupos.length > 1}
@@ -1111,6 +1276,30 @@ export function OrdemFormDrawer({
               );
             })}
           </div>
+
+          {/* O resumo das categorias da ordem. Fica aqui, embaixo dos itens, e
+              não no cabeçalho: é uma consequência do que foi comprado, e ver a
+              consequência ao lado da causa é o que evita a pergunta "de onde
+              saiu essa categoria?". */}
+          {categoriasDaOrdemAtual.length > 0 ? (
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md border border-border bg-surface px-3 py-2">
+              <span className="text-legenda text-muted-foreground">
+                {categoriasDaOrdemAtual.length === 1
+                  ? "Categoria do custo:"
+                  : "Categorias do custo:"}
+              </span>
+              {categoriasDaOrdemAtual.map((categoria) => (
+                <span key={categoria.id} className="text-detalhe">
+                  <span className="font-medium">{categoria.nome}</span>{" "}
+                  <span className="text-muted-foreground tabular-nums">
+                    {formatarBRL(categoria.valor)}
+                  </span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <AvisoReclassificacao pendentes={pendentes} />
         </SecaoFormulario>
 
         <SecaoFormulario titulo="Totais">
@@ -1434,6 +1623,27 @@ export function OrdemFormDrawer({
         </SecaoFormulario>
       </form>
     </FormDrawer>
+
+    {/* O aviso da mudança global, no último instante em que ainda dá para
+        desistir. Não é o mesmo aviso do formulário: aquele diz o que vai
+        acontecer, este diz o TAMANHO — quantas ordens antigas e quantos
+        lançamentos mudam de categoria, e quanto dinheiro isso move no DRE. */}
+    <ConfirmDialog
+      aberto={confirmandoReclassificacao}
+      onAbertoChange={cancelarReclassificacao}
+      titulo={
+        pendentes.length === 1
+          ? "Mudar a categoria deste insumo no cadastro?"
+          : `Mudar a categoria de ${pendentes.length} insumos no cadastro?`
+      }
+      descricao="A categoria de custo é do insumo. Mudar aqui vale para as próximas compras e também para as ordens anteriores que compraram o mesmo insumo."
+      conteudo={
+        <ListaReclassificacao pendentes={pendentes} impacto={impacto} />
+      }
+      textoConfirmar={editando ? "Salvar e reclassificar" : "Criar e reclassificar"}
+      onConfirmar={confirmarReclassificacao}
+    />
+    </>
   );
 }
 
@@ -1815,6 +2025,20 @@ const COLUNAS_ITEM: ColunaItem[] = [
     obrigatorio: true,
   },
   {
+    /**
+     * A categoria de custo DO INSUMO, ao lado dele. Editável: quem emite a ordem
+     * é quem sabe se aquele munhão é peça de equipamento ou material de obra, e
+     * antes disso a única saída era abrir Cadastros > Insumos em outra aba.
+     *
+     * Mesmo alinhamento e mesmo tipo de controle do insumo (Combobox de largura
+     * cheia), porque as duas células dizem a mesma coisa sobre a mesma linha.
+     */
+    chave: "categoria",
+    rotulo: "Categoria do custo",
+    largura: "minmax(0,0.8fr)",
+    alinhamento: "left",
+  },
+  {
     chave: "quantidade",
     rotulo: "Qtd",
     largura: "120px",
@@ -1836,12 +2060,59 @@ const COLUNAS_ITEM: ColunaItem[] = [
   },
 ];
 
+/**
+ * Escreve a categoria em TODAS as linhas daquele insumo, em todos os grupos.
+ *
+ * A categoria é do insumo, não da linha. O mesmo insumo pode aparecer em dois
+ * centros de custo da mesma ordem, e nesse caso as duas linhas falam do mesmo
+ * cadastro: deixar uma dizendo "Materiais" e a outra "Peças" mostraria uma
+ * escolha que o banco não tem como guardar, e o resumo da ordem contaria duas
+ * categorias onde vai existir uma.
+ */
+function definirCategoriaDoInsumo(
+  form: UseFormReturn<OrdemCompraFormInput>,
+  insumoId: string,
+  categoriaId: string,
+) {
+  const grupos = form.getValues("centrosCusto") ?? [];
+  grupos.forEach((grupo, i) => {
+    (grupo.insumos ?? []).forEach((linha, j) => {
+      if (linha.insumoId !== insumoId) return;
+      form.setValue(`centrosCusto.${i}.insumos.${j}.categoriaCustoId`, categoriaId, {
+        shouldDirty: true,
+      });
+    });
+  });
+}
+
+/**
+ * A categoria que uma linha deve exibir ao escolher um insumo: a que outra linha
+ * do mesmo insumo já mostra (a pessoa pode ter acabado de trocar), e na falta
+ * dela a do cadastro.
+ */
+function categoriaAoEscolherInsumo(
+  form: UseFormReturn<OrdemCompraFormInput>,
+  insumoId: string,
+  insumos: InsumoOpcao[],
+): string {
+  const grupos = form.getValues("centrosCusto") ?? [];
+  for (const grupo of grupos) {
+    for (const linha of grupo.insumos ?? []) {
+      if (linha.insumoId === insumoId && linha.categoriaCustoId) {
+        return linha.categoriaCustoId;
+      }
+    }
+  }
+  return insumos.find((insumo) => insumo.id === insumoId)?.categoriaCustoId ?? "";
+}
+
 /** Um grupo de centro de custo com sua lista de insumos (field array próprio). */
 function GrupoCentroCusto({
   form,
   indice,
   centrosDisponiveis,
   insumos,
+  categorias,
   nomesDaOrdem,
   salvando,
   podeRemover,
@@ -1851,6 +2122,8 @@ function GrupoCentroCusto({
   indice: number;
   centrosDisponiveis: CentroCustoOpcao[];
   insumos: InsumoOpcao[];
+  /** Categorias de custo para a célula de categoria. */
+  categorias: CategoriaOpcao[];
   /** Nomes que a própria ordem já traz, para id fora da lista não virar UUID. */
   nomesDaOrdem: NomesDaOrdem;
   salvando: boolean;
@@ -1957,13 +2230,19 @@ function GrupoCentroCusto({
                   valor={form.watch(
                     `centrosCusto.${indice}.insumos.${j}.insumoId`,
                   )}
-                  onValorChange={(valor) =>
+                  onValorChange={(valor) => {
                     form.setValue(
                       `centrosCusto.${indice}.insumos.${j}.insumoId`,
                       valor,
                       { shouldValidate: true },
-                    )
-                  }
+                    );
+                    // A categoria vem junto do insumo: quem escolhe o que compra
+                    // não precisa dizer de novo em que categoria isso entra.
+                    form.setValue(
+                      `centrosCusto.${indice}.insumos.${j}.categoriaCustoId`,
+                      categoriaAoEscolherInsumo(form, valor, insumos),
+                    );
+                  }}
                   opcoes={insumosDisponiveis.map((insumo) => ({
                     valor: insumo.id,
                     rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}`,
@@ -1975,6 +2254,30 @@ function GrupoCentroCusto({
                   disabled={salvando}
                   ariaLabel="Insumo"
                   id={`oc-insumo-${indice}-${j}`}
+                />
+              );
+            }
+            if (chave === "categoria") {
+              const insumoDestaLinha = insumosObservados?.[j]?.insumoId ?? "";
+              const valor = insumosObservados?.[j]?.categoriaCustoId ?? "";
+              return (
+                <Combobox
+                  valor={valor}
+                  onValorChange={(escolhida) =>
+                    definirCategoriaDoInsumo(form, insumoDestaLinha, escolhida)
+                  }
+                  opcoes={categorias.map((categoria) => ({
+                    valor: categoria.id,
+                    rotulo: categoria.nome,
+                  }))}
+                  // Sem insumo não há cadastro para classificar: o campo só abre
+                  // depois de a linha dizer o que está sendo comprado.
+                  disabled={salvando || !insumoDestaLinha}
+                  placeholder={
+                    insumoDestaLinha ? "Sem categoria" : "Escolha o insumo"
+                  }
+                  ariaLabel="Categoria do custo"
+                  id={`oc-categoria-${indice}-${j}`}
                 />
               );
             }
