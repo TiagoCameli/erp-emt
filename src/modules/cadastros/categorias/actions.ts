@@ -84,6 +84,9 @@ export async function criar(dados: CategoriaInput): Promise<ResultadoAcao> {
   const { error } = await supabase.from(TABELA).insert({
     nome: validado.data.nome,
     grupo_id: validado.data.grupoId,
+    // Vazio vira NULL, e não string vazia: a coluna é uuid, e "" seria recusado
+    // pelo banco com uma mensagem de sintaxe que não fala de classificação.
+    categoria_financeira_id: validado.data.categoriaCustoId || null,
     ativo: validado.data.ativo,
   });
 
@@ -127,6 +130,10 @@ export async function editar(
     .update({
       nome: validado.data.nome,
       grupo_id: validado.data.grupoId,
+      // Mudar isto reclassifica o DRE de toda compra dos insumos desta
+      // subcategoria: a trigger trg_subcategoria_categoria_nas_ordens refaz o
+      // derivado das ordens, e a tela avisa antes de salvar.
+      categoria_financeira_id: validado.data.categoriaCustoId || null,
       ativo: validado.data.ativo,
     })
     .eq("id", idValido.data);

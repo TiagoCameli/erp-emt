@@ -6,7 +6,6 @@ import { InsumosTabela } from "@/modules/cadastros/insumos/components/insumos-ta
 import {
   listar,
   listarCategorias,
-  listarCategoriasCusto,
   listarUnidades,
 } from "@/modules/cadastros/insumos/queries";
 
@@ -61,7 +60,7 @@ export default async function PaginaInsumos({
       ? tamanhoParam
       : TAMANHO_PADRAO;
 
-  const [{ itens, total }, categorias, categoriasCusto, grupos, unidades] =
+  const [{ itens, total }, categorias, grupos, unidades] =
     await Promise.all([
       listar({
         pagina,
@@ -73,7 +72,6 @@ export default async function PaginaInsumos({
         unidadeId: unidade === "" ? undefined : unidade,
       }),
       listarCategorias(),
-      listarCategoriasCusto(),
       listarGrupos(),
       listarUnidades(),
     ]);
@@ -90,7 +88,6 @@ export default async function PaginaInsumos({
       categoria={categoria}
       unidade={unidade}
       categorias={categorias}
-      categoriasCusto={categoriasCusto}
       grupos={grupos}
       unidades={unidades}
       podeCriar={temPermissao(usuario, "cadastros.insumos", "criar")}

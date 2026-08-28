@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type {
-  CategoriaOpcao,
+  SubcategoriaOpcao,
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
@@ -39,7 +39,7 @@ export interface NovaOrdemProviderProps {
   centrosCusto: CentroCustoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
-  categorias: CategoriaOpcao[];
+  subcategorias: SubcategoriaOpcao[];
   /** Cartões de crédito ativos, para a compra paga no crédito. */
   cartoes: CartaoOpcao[];
   /**
@@ -66,7 +66,7 @@ export function NovaOrdemProvider({
   centrosCusto,
   condicoesPagamento,
   formasPagamento,
-  categorias,
+  subcategorias,
   cartoes,
   prefill,
   children,
@@ -113,7 +113,7 @@ export function NovaOrdemProvider({
           centrosCusto={centrosCusto}
           condicoesPagamento={condicoesPagamento}
           formasPagamento={formasPagamento}
-          categorias={categorias}
+          subcategorias={subcategorias}
           cartoes={cartoes}
           onCriada={(id) => router.push(`/compras/ordens/${id}`)}
         />

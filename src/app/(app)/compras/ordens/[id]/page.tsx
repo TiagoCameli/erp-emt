@@ -7,7 +7,7 @@ import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import { OrdemDetalheView } from "@/modules/compras/ordens/components/ordem-detalhe";
 import {
   buscarOrdem,
-  listarCategoriasCusto,
+  listarSubcategorias,
   listarCentrosCusto,
   listarCondicoesPagamento,
   listarFornecedores,
@@ -37,7 +37,7 @@ export default async function PaginaOrdemDetalhe({
     centrosCusto,
     condicoesPagamento,
     formasPagamento,
-    categorias,
+    subcategorias,
     cartoes,
     parcelasCondicao,
     anexosIniciais,
@@ -48,7 +48,7 @@ export default async function PaginaOrdemDetalhe({
     listarCentrosCusto(),
     listarCondicoesPagamento(),
     listarFormasPagamento(),
-    listarCategoriasCusto(),
+    listarSubcategorias(),
     listarCartoesAtivos(),
     ordem.condicaoPagamentoId
       ? listarParcelasCondicao(ordem.condicaoPagamentoId)
@@ -77,7 +77,7 @@ export default async function PaginaOrdemDetalhe({
       centrosCusto={centrosCusto}
       condicoesPagamento={condicoesPagamento}
       formasPagamento={formasPagamento}
-      categorias={categorias}
+      subcategorias={subcategorias}
       cartoes={cartoes}
       parcelasCondicao={parcelasCondicao}
       anexosIniciais={anexosIniciais}

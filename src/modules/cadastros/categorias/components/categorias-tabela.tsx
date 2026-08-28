@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { CLASSE_COR_GRUPO } from "@/modules/cadastros/_shared/insumo-grupos";
 import { alternarAtivo, excluir } from "@/modules/cadastros/categorias/actions";
 import type {
+  CategoriaCustoOpcao,
   CategoriaLista,
   GrupoComCategorias,
   GrupoOpcao,
@@ -37,6 +38,8 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 export interface CategoriasTabelaProps {
   grupos: GrupoComCategorias[];
   opcoesGrupo: GrupoOpcao[];
+  /** Categorias de custo (DRE) para o seletor da subcategoria. */
+  categoriasCusto: CategoriaCustoOpcao[];
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
@@ -67,6 +70,7 @@ const OPCOES_INSUMOS = [
 export function CategoriasTabela({
   grupos,
   opcoesGrupo,
+  categoriasCusto,
   podeCriar,
   podeEditar,
   podeExcluir,
@@ -146,6 +150,21 @@ export function CategoriasTabela({
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),
+      },
+      {
+        // A categoria de custo desta subcategoria: é ela que classifica no DRE
+        // toda compra dos insumos dela. Vazia trava a aprovação de qualquer OC
+        // que use um insumo desta subcategoria, então destaca em vez de mostrar
+        // um traço discreto igual ao das colunas opcionais.
+        accessorKey: "categoriaCustoNome",
+        header: "Categoria de custo",
+        size: 220,
+        cell: ({ row }) =>
+          row.original.categoriaCustoNome ? (
+            <span>{row.original.categoriaCustoNome}</span>
+          ) : (
+            <span className="text-status-pendente">Sem categoria</span>
+          ),
       },
       // Contagem: o helper canônico é quem declara direita + tabular-nums.
       colunaNumero<CategoriaLista>("insumos", "Insumos"),
@@ -353,6 +372,7 @@ export function CategoriasTabela({
           categoria={emEdicao}
           grupoPadrao={grupoNovo}
           grupos={opcoesGrupo}
+          categoriasCusto={categoriasCusto}
         />
       ) : null}
 

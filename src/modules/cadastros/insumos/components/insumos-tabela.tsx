@@ -40,7 +40,6 @@ import {
   validarImport,
 } from "@/modules/cadastros/insumos/actions";
 import type {
-  CategoriaCustoOpcao,
   CategoriaOpcao,
   InsumoLista,
   UnidadeOpcao,
@@ -67,7 +66,6 @@ export interface InsumosTabelaProps {
   /** Filtro por unidade de medida (id) vindo da URL. */
   unidade: string;
   categorias: CategoriaOpcao[];
-  categoriasCusto: CategoriaCustoOpcao[];
   grupos: GrupoOpcao[];
   unidades: UnidadeOpcao[];
   podeCriar: boolean;
@@ -95,7 +93,6 @@ export function InsumosTabela({
   categoria,
   unidade,
   categorias,
-  categoriasCusto,
   grupos,
   unidades,
   podeCriar,
@@ -292,20 +289,6 @@ export function InsumosTabela({
             </span>
           ) : (
             <span className="text-muted-foreground">-</span>
-          ),
-      },
-      {
-        // O que classifica a compra no DRE. Nulo aqui trava a aprovação de
-        // qualquer OC que use o insumo, então vale destacar em vez de mostrar
-        // um traço discreto igual ao das colunas opcionais.
-        accessorKey: "categoriaCustoNome",
-        header: "Categoria de custo",
-        size: 200,
-        cell: ({ row }) =>
-          row.original.categoriaCustoNome ? (
-            <span>{row.original.categoriaCustoNome}</span>
-          ) : (
-            <span className="text-status-pendente">Sem categoria</span>
           ),
       },
       {
@@ -600,7 +583,6 @@ export function InsumosTabela({
         onAbertoChange={setDrawerAberto}
         insumo={emEdicao}
         categorias={categorias}
-        categoriasCusto={categoriasCusto}
         grupos={grupos}
         unidades={unidades}
       />

@@ -84,6 +84,8 @@ const MATERIAL = "55555555-5555-4555-8555-555555555555";
 const PECAS = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CENTRO = "66666666-6666-4666-8666-666666666666";
 const INSUMO = "77777777-7777-4777-8777-777777777777";
+const SUBCATEGORIA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const SUB_HIDRAULICA = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
 const VALOR = 15400;
 
@@ -125,6 +127,8 @@ function ordem(): OrdemDetalhe {
         semCategoriaCusto: false,
         categoriaCustoId: MATERIAL,
         categoriaCustoNome: "Materiais",
+        subcategoriaId: SUBCATEGORIA,
+        subcategoriaNome: "Peças e componentes",
       },
     ],
     parcelas: [],
@@ -156,6 +160,8 @@ function abrirEdicao() {
           unidade: "un",
           categoriaCustoId: MATERIAL,
           categoriaCustoNome: "Materiais",
+          subcategoriaId: SUBCATEGORIA,
+          subcategoriaNome: "Peças e componentes",
         },
       ]}
       centrosCusto={[
@@ -169,9 +175,21 @@ function abrirEdicao() {
       ]}
       condicoesPagamento={[{ id: CONDICAO, descricao: "À vista" }]}
       formasPagamento={[{ id: PIX, nome: "PIX", tipo: "bancario" }]}
-      categorias={[
-        { id: MATERIAL, nome: "Materiais" },
-        { id: PECAS, nome: "Peças e manutenção" },
+      subcategorias={[
+        {
+          id: SUBCATEGORIA,
+          nome: "Peças e componentes",
+          grupoNome: "Equipamentos",
+          categoriaCustoId: MATERIAL,
+          categoriaCustoNome: "Materiais",
+        },
+        {
+          id: SUB_HIDRAULICA,
+          nome: "Hidráulica",
+          grupoNome: "Material",
+          categoriaCustoId: PECAS,
+          categoriaCustoNome: "Peças e manutenção",
+        },
       ]}
       cartoes={[]}
       anexos={[]}
@@ -179,14 +197,14 @@ function abrirEdicao() {
   );
 }
 
-/** Troca a categoria do único item para "Peças e manutenção". */
+/** Troca a subcategoria do único item para "Hidráulica". */
 async function trocarCategoriaDoItem() {
   const seletor = await screen.findByRole("combobox", {
-    name: /categoria do custo/i,
+    name: /subcategoria/i,
   });
   fireEvent.click(seletor);
   fireEvent.click(
-    await screen.findByRole("option", { name: "Peças e manutenção" }),
+    await screen.findByRole("option", { name: /Hidráulica/ }),
   );
 }
 
@@ -205,7 +223,7 @@ describe("trocar a categoria do insumo dentro da OC", () => {
     abrirEdicao();
 
     expect(
-      screen.queryByText(/vai mudar de categoria no cadastro/i),
+      screen.queryByText(/vai mudar de subcategoria no cadastro/i),
     ).toBeNull();
 
     fireEvent.click(
@@ -216,16 +234,21 @@ describe("trocar a categoria do insumo dentro da OC", () => {
     expect(reclassificarInsumos).not.toHaveBeenCalled();
   });
 
-  it("trocar a categoria mostra o aviso na tela, com o de/para", async () => {
+  it("trocar a subcategoria mostra o aviso, com o de/para dela E o do DRE", async () => {
     abrirEdicao();
     await trocarCategoriaDoItem();
 
     expect(
-      await screen.findByText("1 insumo vai mudar de categoria no cadastro"),
+      await screen.findByText("1 insumo vai mudar de subcategoria no cadastro"),
     ).toBeTruthy();
     // O aviso diz o que é surpreendente: vale para as ordens ANTERIORES.
     expect(screen.getByText(/ordens anteriores/i)).toBeTruthy();
     expect(screen.getAllByText("MUNHÃO").length).toBeGreaterThan(0);
+    // O de/para da subcategoria...
+    expect(screen.getAllByText("Hidráulica").length).toBeGreaterThan(0);
+    // ...e o efeito no DRE, que é o que torna a troca séria: "Materiais" era a
+    // categoria de custo da subcategoria antiga, "Peças e manutenção" é a da nova.
+    expect(screen.getByText("no DRE:")).toBeTruthy();
     expect(screen.getAllByText("Peças e manutenção").length).toBeGreaterThan(0);
   });
 
@@ -233,7 +256,7 @@ describe("trocar a categoria do insumo dentro da OC", () => {
    * O portão. Antes de existir, o mesmo clique que salvava a ordem reclassificava
    * o cadastro que todas as outras leem, sem ninguém dizer que ia acontecer.
    */
-  it("salvar com categoria trocada NÃO grava: pede confirmação primeiro", async () => {
+  it("salvar com subcategoria trocada NÃO grava: pede confirmação primeiro", async () => {
     abrirEdicao();
     await trocarCategoriaDoItem();
 
@@ -283,8 +306,8 @@ describe("trocar a categoria do insumo dentro da OC", () => {
     expect(reclassificarInsumos).toHaveBeenCalledWith([
       {
         insumoId: INSUMO,
-        categoriaId: PECAS,
-        categoriaAnteriorId: MATERIAL,
+        categoriaId: SUB_HIDRAULICA,
+        categoriaAnteriorId: SUBCATEGORIA,
       },
     ]);
   });
@@ -300,7 +323,7 @@ describe("trocar a categoria do insumo dentro da OC", () => {
     // que `findByRole` acha primeiro. Clicar no do drawer deixaria o diálogo
     // aberto e o teste passaria a medir outra coisa.
     const dialogo = (
-      await screen.findByText(/mudar a categoria deste insumo/i)
+      await screen.findByText(/mudar a subcategoria deste insumo/i)
     ).closest("[role='dialog']") as HTMLElement;
     fireEvent.click(
       within(dialogo).getByRole("button", { name: /^cancelar$/i }),

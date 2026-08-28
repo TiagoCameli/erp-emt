@@ -15,6 +15,7 @@ const CENTRO2 = "55555555-5555-4555-8555-555555555555";
 const CONDICAO = "66666666-6666-4666-8666-666666666666";
 const FORMA = "77777777-7777-4777-8777-777777777777";
 const CATEGORIA = "88888888-8888-4888-8888-888888888888";
+const SUBCATEGORIA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const DESCRICAO = "Brita 1 para a base do km 118";
 
 const itemValido = {
@@ -206,7 +207,7 @@ describe("ordemCompraSchema", () => {
 });
 
 describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
-  const insumoValido = { insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5", categoriaCustoId: CATEGORIA };
+  const insumoValido = { insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5", subcategoriaId: SUBCATEGORIA };
 
   it("aceita quantidade com vírgula e 4 casas decimais", () => {
     const r = ocInsumoFormSchema.safeParse({
@@ -254,7 +255,7 @@ describe("ocInsumoFormSchema (client, quantidade/preço como string)", () => {
 describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
   const grupoValido = {
     centroCustoId: CENTRO,
-    insumos: [{ insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5", categoriaCustoId: CATEGORIA }],
+    insumos: [{ insumoId: INSUMO, quantidade: "5", precoUnitario: "12,5", subcategoriaId: SUBCATEGORIA }],
   };
   const formValido = {
     fornecedorId: FORNECEDOR,
@@ -369,7 +370,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
               insumoId: INSUMO,
               quantidade: "5",
               precoUnitario: "12,5",
-              categoriaCustoId: "",
+              subcategoriaId: "",
             },
           ],
         },
@@ -396,7 +397,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
         grupoValido,
         {
           centroCustoId: CENTRO2,
-          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1", categoriaCustoId: CATEGORIA }],
+          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1", subcategoriaId: SUBCATEGORIA }],
         },
       ],
     });
@@ -426,7 +427,7 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
         grupoValido,
         {
           centroCustoId: CENTRO,
-          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1", categoriaCustoId: CATEGORIA }],
+          insumos: [{ insumoId: INSUMO2, quantidade: "1", precoUnitario: "1", subcategoriaId: SUBCATEGORIA }],
         },
       ],
     });
@@ -444,8 +445,8 @@ describe("ordemCompraFormSchema (grupos por centro de custo)", () => {
         {
           centroCustoId: CENTRO,
           insumos: [
-            { insumoId: INSUMO, quantidade: "1", precoUnitario: "1", categoriaCustoId: CATEGORIA },
-            { insumoId: INSUMO, quantidade: "2", precoUnitario: "2", categoriaCustoId: CATEGORIA },
+            { insumoId: INSUMO, quantidade: "1", precoUnitario: "1", subcategoriaId: SUBCATEGORIA },
+            { insumoId: INSUMO, quantidade: "2", precoUnitario: "2", subcategoriaId: SUBCATEGORIA },
           ],
         },
       ],
@@ -477,7 +478,7 @@ describe("parcelas da OC no formulário", () => {
     centrosCusto: [
       {
         centroCustoId: CENTRO,
-        insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100", categoriaCustoId: CATEGORIA }],
+        insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100", subcategoriaId: SUBCATEGORIA }],
       },
     ],
     formas: [{ formaPagamentoId: FORMA, cartaoId: "", valor: "" }],

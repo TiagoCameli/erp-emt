@@ -92,8 +92,8 @@ import {
   type GrupoForm,
 } from "@/modules/compras/ordens/form-mapeamento";
 import type {
-  CategoriaOpcao,
   CentroCustoOpcao,
+  SubcategoriaOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
   FornecedorOpcao,
@@ -111,9 +111,9 @@ const ID_FORM = "form-ordem-compra";
 
 /** Linha de insumo em branco. */
 function insumoVazio(): GrupoForm["insumos"][number] {
-  // A categoria nasce vazia e é escolher o insumo que a preenche, com o que o
-  // cadastro dele já tem. Ninguém digita categoria antes de dizer o que compra.
-  return { insumoId: "", quantidade: "", precoUnitario: "", categoriaCustoId: "" };
+  // A subcategoria nasce vazia e é escolher o insumo que a preenche, com o que o
+  // cadastro dele já tem. Ninguém digita subcategoria antes de dizer o que compra.
+  return { insumoId: "", quantidade: "", precoUnitario: "", subcategoriaId: "" };
 }
 
 /** Grupo de centro de custo em branco, já com uma linha de insumo. */
@@ -130,8 +130,8 @@ function grupoDoPrefill(
   prefill: PrefillOrdemCotacao,
   insumos: InsumoOpcao[],
 ): GrupoForm {
-  const categoriaDoInsumo = new Map(
-    insumos.map((insumo) => [insumo.id, insumo.categoriaCustoId ?? ""]),
+  const subcategoriaDoInsumo = new Map(
+    insumos.map((insumo) => [insumo.id, insumo.subcategoriaId]),
   );
   return {
     centroCustoId: "",
@@ -139,10 +139,10 @@ function grupoDoPrefill(
       insumoId: item.insumoId,
       quantidade: String(item.quantidade).replace(".", ","),
       precoUnitario: String(item.precoUnitario).replace(".", ","),
-      // A categoria vem do CADASTRO do insumo, não da cotação: a cotação não
-      // classifica custo, e trazer dali criaria uma terceira versão da mesma
+      // A subcategoria vem do CADASTRO do insumo, não da cotação: a cotação não
+      // classifica insumo, e trazer dali criaria uma terceira versão da mesma
       // informação.
-      categoriaCustoId: categoriaDoInsumo.get(item.insumoId) ?? "",
+      subcategoriaId: subcategoriaDoInsumo.get(item.insumoId) ?? "",
     })),
   };
 }
@@ -343,8 +343,12 @@ export interface OrdemFormDrawerProps {
   centrosCusto: CentroCustoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
-  /** Categorias de despesa para classificar o custo da compra. */
-  categorias: CategoriaOpcao[];
+  /**
+   * Subcategorias de insumo para a coluna dos itens. Cada uma carrega a categoria
+   * de custo que ela implica, e é isso que o aviso usa para nomear o efeito no
+   * DRE de trocar a subcategoria de um insumo.
+   */
+  subcategorias: SubcategoriaOpcao[];
   /**
    * Cartões de crédito ATIVOS, para dizer por qual deles a compra saiu.
    *
@@ -379,7 +383,7 @@ export function OrdemFormDrawer({
   centrosCusto,
   condicoesPagamento,
   formasPagamento,
-  categorias,
+  subcategorias,
   cartoes,
   prefill,
   anexos = [],
@@ -521,20 +525,26 @@ export function OrdemFormDrawer({
    * acabou de trocar a categoria de um insumo tem que ver o resumo já mudado, ou
    * o resumo estaria discordando da coluna logo acima dele.
    */
-  const nomeDaCategoria = React.useMemo(
-    () => new Map(categorias.map((categoria) => [categoria.id, categoria.nome])),
-    [categorias],
+  // A categoria de custo de cada linha é a da SUBCATEGORIA escolhida nela: mesmo
+  // caminho que o banco percorre (categorias_insumo.categoria_financeira_id),
+  // então o resumo da tela e o rateio do lançamento contam a mesma história.
+  const custoDaSubcategoria = React.useMemo(
+    () => new Map(subcategorias.map((sub) => [sub.id, sub])),
+    [subcategorias],
   );
 
   const categoriasDaOrdemAtual = categoriasDaOrdem(
     (gruposObservados ?? []).flatMap((grupo) =>
-      (grupo.insumos ?? []).map((linha) => ({
-        categoriaCustoId: linha.categoriaCustoId || null,
-        categoriaCustoNome: nomeDaCategoria.get(linha.categoriaCustoId) ?? null,
-        subtotal:
-          paraNumero(linha.quantidade ?? "") *
-          paraNumero(linha.precoUnitario ?? ""),
-      })),
+      (grupo.insumos ?? []).map((linha) => {
+        const sub = custoDaSubcategoria.get(linha.subcategoriaId ?? "");
+        return {
+          categoriaCustoId: sub?.categoriaCustoId ?? null,
+          categoriaCustoNome: sub?.categoriaCustoNome ?? null,
+          subtotal:
+            paraNumero(linha.quantidade ?? "") *
+            paraNumero(linha.precoUnitario ?? ""),
+        };
+      }),
     ),
   );
 
@@ -547,7 +557,7 @@ export function OrdemFormDrawer({
   const pendentes = reclassificacoesPendentes(
     gruposObservados ?? [],
     insumos,
-    categorias,
+    subcategorias,
   );
 
   /** Reclassificações confirmadas no diálogo, esperando o salvamento seguir. */
@@ -603,8 +613,8 @@ export function OrdemFormDrawer({
     const resultado = await reclassificarInsumos(
       pendentes.map((pendente) => ({
         insumoId: pendente.insumoId,
-        categoriaId: pendente.categoriaId,
-        categoriaAnteriorId: pendente.categoriaAnteriorId,
+        categoriaId: pendente.subcategoriaId,
+        categoriaAnteriorId: pendente.subcategoriaAnteriorId,
       })),
     );
 
@@ -1267,7 +1277,7 @@ export function OrdemFormDrawer({
                   indice={indice}
                   centrosDisponiveis={centrosDisponiveis}
                   insumos={insumos}
-                  categorias={categorias}
+                  subcategorias={subcategorias}
                   nomesDaOrdem={nomesDaOrdem}
                   salvando={salvando}
                   podeRemover={grupos.length > 1}
@@ -1633,10 +1643,10 @@ export function OrdemFormDrawer({
       onAbertoChange={cancelarReclassificacao}
       titulo={
         pendentes.length === 1
-          ? "Mudar a categoria deste insumo no cadastro?"
-          : `Mudar a categoria de ${pendentes.length} insumos no cadastro?`
+          ? "Mudar a subcategoria deste insumo no cadastro?"
+          : `Mudar a subcategoria de ${pendentes.length} insumos no cadastro?`
       }
-      descricao="A categoria de custo é do insumo. Mudar aqui vale para as próximas compras e também para as ordens anteriores que compraram o mesmo insumo."
+      descricao="A subcategoria é do insumo, e é ela que diz em qual categoria de custo a compra entra no DRE. Mudar aqui vale para as próximas compras e também para as ordens anteriores que compraram o mesmo insumo."
       conteudo={
         <ListaReclassificacao pendentes={pendentes} impacto={impacto} />
       }
@@ -2026,15 +2036,19 @@ const COLUNAS_ITEM: ColunaItem[] = [
   },
   {
     /**
-     * A categoria de custo DO INSUMO, ao lado dele. Editável: quem emite a ordem
-     * é quem sabe se aquele munhão é peça de equipamento ou material de obra, e
-     * antes disso a única saída era abrir Cadastros > Insumos em outra aba.
+     * A SUBCATEGORIA do insumo, ao lado dele. Editável: quem emite a ordem é quem
+     * sabe se aquele munhão é peça de equipamento ou material de obra, e antes
+     * disso a única saída era abrir Cadastros > Insumos em outra aba.
+     *
+     * É a subcategoria, e não a categoria de custo, porque a categoria de custo
+     * saiu do insumo em 28/08/2026: ela é da subcategoria. Trocar aqui muda a
+     * subcategoria DESTE insumo, e com ela a linha do DRE em que a compra entra.
      *
      * Mesmo alinhamento e mesmo tipo de controle do insumo (Combobox de largura
      * cheia), porque as duas células dizem a mesma coisa sobre a mesma linha.
      */
-    chave: "categoria",
-    rotulo: "Categoria do custo",
+    chave: "subcategoria",
+    rotulo: "Subcategoria",
     largura: "minmax(0,0.8fr)",
     alinhamento: "left",
   },
@@ -2069,18 +2083,20 @@ const COLUNAS_ITEM: ColunaItem[] = [
  * escolha que o banco não tem como guardar, e o resumo da ordem contaria duas
  * categorias onde vai existir uma.
  */
-function definirCategoriaDoInsumo(
+function definirSubcategoriaDoInsumo(
   form: UseFormReturn<OrdemCompraFormInput>,
   insumoId: string,
-  categoriaId: string,
+  subcategoriaId: string,
 ) {
   const grupos = form.getValues("centrosCusto") ?? [];
   grupos.forEach((grupo, i) => {
     (grupo.insumos ?? []).forEach((linha, j) => {
       if (linha.insumoId !== insumoId) return;
-      form.setValue(`centrosCusto.${i}.insumos.${j}.categoriaCustoId`, categoriaId, {
-        shouldDirty: true,
-      });
+      form.setValue(
+        `centrosCusto.${i}.insumos.${j}.subcategoriaId`,
+        subcategoriaId,
+        { shouldDirty: true },
+      );
     });
   });
 }
@@ -2090,7 +2106,7 @@ function definirCategoriaDoInsumo(
  * do mesmo insumo já mostra (a pessoa pode ter acabado de trocar), e na falta
  * dela a do cadastro.
  */
-function categoriaAoEscolherInsumo(
+function subcategoriaAoEscolherInsumo(
   form: UseFormReturn<OrdemCompraFormInput>,
   insumoId: string,
   insumos: InsumoOpcao[],
@@ -2098,12 +2114,12 @@ function categoriaAoEscolherInsumo(
   const grupos = form.getValues("centrosCusto") ?? [];
   for (const grupo of grupos) {
     for (const linha of grupo.insumos ?? []) {
-      if (linha.insumoId === insumoId && linha.categoriaCustoId) {
-        return linha.categoriaCustoId;
+      if (linha.insumoId === insumoId && linha.subcategoriaId) {
+        return linha.subcategoriaId;
       }
     }
   }
-  return insumos.find((insumo) => insumo.id === insumoId)?.categoriaCustoId ?? "";
+  return insumos.find((insumo) => insumo.id === insumoId)?.subcategoriaId ?? "";
 }
 
 /** Um grupo de centro de custo com sua lista de insumos (field array próprio). */
@@ -2112,7 +2128,7 @@ function GrupoCentroCusto({
   indice,
   centrosDisponiveis,
   insumos,
-  categorias,
+  subcategorias,
   nomesDaOrdem,
   salvando,
   podeRemover,
@@ -2122,8 +2138,8 @@ function GrupoCentroCusto({
   indice: number;
   centrosDisponiveis: CentroCustoOpcao[];
   insumos: InsumoOpcao[];
-  /** Categorias de custo para a célula de categoria. */
-  categorias: CategoriaOpcao[];
+  /** Subcategorias para a célula de subcategoria. */
+  subcategorias: SubcategoriaOpcao[];
   /** Nomes que a própria ordem já traz, para id fora da lista não virar UUID. */
   nomesDaOrdem: NomesDaOrdem;
   salvando: boolean;
@@ -2236,11 +2252,11 @@ function GrupoCentroCusto({
                       valor,
                       { shouldValidate: true },
                     );
-                    // A categoria vem junto do insumo: quem escolhe o que compra
-                    // não precisa dizer de novo em que categoria isso entra.
+                    // A subcategoria vem junto do insumo: quem escolhe o que
+                    // compra não precisa dizer de novo onde aquilo se classifica.
                     form.setValue(
-                      `centrosCusto.${indice}.insumos.${j}.categoriaCustoId`,
-                      categoriaAoEscolherInsumo(form, valor, insumos),
+                      `centrosCusto.${indice}.insumos.${j}.subcategoriaId`,
+                      subcategoriaAoEscolherInsumo(form, valor, insumos),
                     );
                   }}
                   opcoes={insumosDisponiveis.map((insumo) => ({
@@ -2257,27 +2273,35 @@ function GrupoCentroCusto({
                 />
               );
             }
-            if (chave === "categoria") {
+            if (chave === "subcategoria") {
               const insumoDestaLinha = insumosObservados?.[j]?.insumoId ?? "";
-              const valor = insumosObservados?.[j]?.categoriaCustoId ?? "";
+              const valor = insumosObservados?.[j]?.subcategoriaId ?? "";
               return (
                 <Combobox
                   valor={valor}
                   onValorChange={(escolhida) =>
-                    definirCategoriaDoInsumo(form, insumoDestaLinha, escolhida)
+                    definirSubcategoriaDoInsumo(
+                      form,
+                      insumoDestaLinha,
+                      escolhida,
+                    )
                   }
-                  opcoes={categorias.map((categoria) => ({
-                    valor: categoria.id,
-                    rotulo: categoria.nome,
+                  // O grupo entra no rótulo porque "A classificar" existe nos
+                  // quatro grupos: sem ele, quatro opções idênticas na lista.
+                  opcoes={subcategorias.map((sub) => ({
+                    valor: sub.id,
+                    rotulo: sub.grupoNome
+                      ? `${sub.nome} (${sub.grupoNome})`
+                      : sub.nome,
                   }))}
                   // Sem insumo não há cadastro para classificar: o campo só abre
                   // depois de a linha dizer o que está sendo comprado.
                   disabled={salvando || !insumoDestaLinha}
                   placeholder={
-                    insumoDestaLinha ? "Sem categoria" : "Escolha o insumo"
+                    insumoDestaLinha ? "Sem subcategoria" : "Escolha o insumo"
                   }
-                  ariaLabel="Categoria do custo"
-                  id={`oc-categoria-${indice}-${j}`}
+                  ariaLabel="Subcategoria"
+                  id={`oc-subcategoria-${indice}-${j}`}
                 />
               );
             }

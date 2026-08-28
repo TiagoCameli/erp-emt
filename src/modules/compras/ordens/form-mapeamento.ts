@@ -31,14 +31,14 @@ export interface ItemPlano {
 }
 
 /**
- * Item como a tela agrupa: o plano mais a categoria de custo do insumo.
+ * Item como a tela agrupa: o plano mais a subcategoria do insumo.
  *
- * A categoria não está em `ItemPlano` porque não é da ordem — `oc_itens` não tem
- * essa coluna, e a action que grava não pode mandá-la. Ela só existe no caminho
- * banco > formulário, para a célula nascer preenchida com o cadastro.
+ * A subcategoria não está em `ItemPlano` porque não é da ordem — `oc_itens` não
+ * tem essa coluna, e a action que grava não pode mandá-la. Ela só existe no
+ * caminho banco > formulário, para a célula nascer preenchida com o cadastro.
  */
 export type ItemAgrupavel = ItemPlano & {
-  categoriaCustoId?: string | null;
+  subcategoriaId?: string | null;
 };
 
 /**
@@ -60,7 +60,7 @@ export function agruparItensPorCentroCusto(
       insumoId: item.insumoId,
       quantidade: String(item.quantidade).replace(".", ","),
       precoUnitario: String(item.precoUnitario).replace(".", ","),
-      categoriaCustoId: item.categoriaCustoId ?? "",
+      subcategoriaId: item.subcategoriaId ?? "",
     });
   }
   return ordem.map((centroCustoId) => ({
@@ -84,22 +84,39 @@ export function achatarGruposEmItens(grupos: GrupoParaConta[]): ItemPlano[] {
   );
 }
 
-/** Uma mudança de categoria de insumo que o formulário está segurando. */
+/** Uma mudança de subcategoria de insumo que o formulário está segurando. */
 export interface ReclassificacaoPendente {
   insumoId: string;
   insumoNome: string;
-  categoriaId: string;
-  categoriaNome: string;
-  /** O que o cadastro tinha quando a tela carregou. Nulo = não classificado. */
-  categoriaAnteriorId: string | null;
-  categoriaAnteriorNome: string | null;
+  /** A subcategoria escolhida: é ela que a action grava no insumo. */
+  subcategoriaId: string;
+  subcategoriaNome: string;
+  /** O que o cadastro tinha quando a tela carregou. */
+  subcategoriaAnteriorId: string;
+  subcategoriaAnteriorNome: string | null;
+  /**
+   * O EFEITO no DRE, que é o que torna a troca séria: a categoria de custo vem
+   * da subcategoria, então mover o insumo de subcategoria muda em que linha do
+   * DRE a compra dele entra. Nulo do lado novo é subcategoria ainda não
+   * classificada, e o banco recusa a troca nesse caso.
+   */
+  categoriaCustoNome: string | null;
+  categoriaCustoAnteriorNome: string | null;
 }
 
 /** O que esta conta precisa saber de um insumo do catálogo. */
 interface InsumoClassificado {
   id: string;
   nome: string;
-  categoriaCustoId: string | null;
+  subcategoriaId: string;
+  subcategoriaNome: string | null;
+  categoriaCustoNome: string | null;
+}
+
+/** O que esta conta precisa saber de uma subcategoria. */
+interface SubcategoriaConhecida {
+  id: string;
+  nome: string;
   categoriaCustoNome: string | null;
 }
 
@@ -107,45 +124,47 @@ interface InsumoClassificado {
  * O que o salvamento vai mudar NO CADASTRO dos insumos, comparando o que está na
  * tela com o que o catálogo trouxe.
  *
- * É o insumo que tem categoria, não a linha: o mesmo insumo pode aparecer em dois
- * centros de custo da mesma ordem, e as duas linhas falam do mesmo cadastro.
+ * É o insumo que tem subcategoria, não a linha: o mesmo insumo pode aparecer em
+ * dois centros de custo da mesma ordem, e as duas linhas falam do mesmo cadastro.
  * Por isso a saída é uma por INSUMO — a tela mantém as linhas do mesmo insumo em
  * sincronia, e a primeira aparição é a que vale, para o resultado não depender da
  * ordem em que os grupos foram digitados.
  *
- * Célula vazia nunca gera reclassificação: vazio é o insumo que ainda não tem
- * categoria no cadastro, e limpar categoria pela OC quebraria a aprovação de
- * outras ordens.
+ * Célula vazia nunca gera reclassificação: `insumos.categoria_id` é NOT NULL, e
+ * limpar não é uma escolha que a tela ofereça.
  */
 export function reclassificacoesPendentes(
   grupos: GrupoForm[],
   insumos: InsumoClassificado[],
-  categorias: { id: string; nome: string }[],
+  subcategorias: SubcategoriaConhecida[],
 ): ReclassificacaoPendente[] {
   const catalogo = new Map(insumos.map((insumo) => [insumo.id, insumo]));
-  const nomeCategoria = new Map(categorias.map((c) => [c.id, c.nome]));
+  const porId = new Map(subcategorias.map((s) => [s.id, s]));
   const pendentes = new Map<string, ReclassificacaoPendente>();
 
   for (const grupo of grupos) {
     for (const linha of grupo.insumos ?? []) {
-      const escolhida = (linha.categoriaCustoId ?? "").trim();
+      const escolhida = (linha.subcategoriaId ?? "").trim();
       if (!linha.insumoId || !escolhida) continue;
       if (pendentes.has(linha.insumoId)) continue;
 
       const insumo = catalogo.get(linha.insumoId);
       // Insumo fora do catálogo carregado (inativo, por exemplo): sem a foto do
       // "antes" não há como decidir se mudou, e reclassificar no escuro é o que
-      // este parâmetro existe para evitar.
+      // o parâmetro de "anterior" existe para evitar.
       if (!insumo) continue;
-      if (insumo.categoriaCustoId === escolhida) continue;
+      if (insumo.subcategoriaId === escolhida) continue;
 
+      const nova = porId.get(escolhida);
       pendentes.set(linha.insumoId, {
         insumoId: linha.insumoId,
         insumoNome: insumo.nome,
-        categoriaId: escolhida,
-        categoriaNome: nomeCategoria.get(escolhida) ?? "-",
-        categoriaAnteriorId: insumo.categoriaCustoId,
-        categoriaAnteriorNome: insumo.categoriaCustoNome,
+        subcategoriaId: escolhida,
+        subcategoriaNome: nova?.nome ?? "-",
+        subcategoriaAnteriorId: insumo.subcategoriaId,
+        subcategoriaAnteriorNome: insumo.subcategoriaNome,
+        categoriaCustoNome: nova?.categoriaCustoNome ?? null,
+        categoriaCustoAnteriorNome: insumo.categoriaCustoNome,
       });
     }
   }

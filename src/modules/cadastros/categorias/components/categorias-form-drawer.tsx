@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { criar, editar } from "@/modules/cadastros/categorias/actions";
 import type {
+  CategoriaCustoOpcao,
   CategoriaLista,
   GrupoOpcao,
 } from "@/modules/cadastros/categorias/queries";
@@ -44,6 +45,12 @@ export interface CategoriasFormDrawerProps {
   grupoPadrao?: string | null;
   /** Os 4 grupos fixos. */
   grupos: GrupoOpcao[];
+  /**
+   * Categorias de custo (as do DRE) para o seletor. Chegaram aqui em 28/08/2026,
+   * quando a classificação saiu do insumo: é nesta tela que ela passou a ser
+   * decidida, uma vez por subcategoria.
+   */
+  categoriasCusto: CategoriaCustoOpcao[];
 }
 
 /**
@@ -56,6 +63,7 @@ export function CategoriasFormDrawer({
   categoria,
   grupoPadrao,
   grupos,
+  categoriasCusto,
 }: CategoriasFormDrawerProps) {
   const editando = Boolean(categoria);
 
@@ -64,6 +72,7 @@ export function CategoriasFormDrawer({
     defaultValues: {
       nome: "",
       grupoId: grupoPadrao ?? grupos[0]?.id ?? "",
+      categoriaCustoId: "",
       ativo: true,
     },
   });
@@ -75,12 +84,14 @@ export function CategoriasFormDrawer({
       form.reset({
         nome: categoria.nome,
         grupoId: categoria.grupoId,
+        categoriaCustoId: categoria.categoriaCustoId ?? "",
         ativo: categoria.ativo,
       });
     } else {
       form.reset({
         nome: "",
         grupoId: grupoPadrao ?? grupos[0]?.id ?? "",
+        categoriaCustoId: "",
         ativo: true,
       });
     }
@@ -103,6 +114,9 @@ export function CategoriasFormDrawer({
   }
 
   const grupoValor = form.watch("grupoId");
+  const categoriaCustoValor = form.watch("categoriaCustoId") ?? "";
+  /** Quantos insumos herdam esta escolha. É o tamanho do que se está mexendo. */
+  const insumosAfetados = categoria?.insumos ?? 0;
 
   return (
     <FormDrawer
@@ -167,6 +181,40 @@ export function CategoriasFormDrawer({
             className="w-full"
             id="categoria-grupo"
           />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="categoria-custo"
+          rotulo="Categoria de custo"
+          ajuda="É por aqui que a compra de TODO insumo desta subcategoria entra no DRE. Vazio deixa a subcategoria sem classificação, e a ordem de compra que usar um insumo dela não pode ser aprovada."
+          erro={form.formState.errors.categoriaCustoId?.message}
+        >
+          <Combobox
+            valor={categoriaCustoValor}
+            onValorChange={(valor) =>
+              form.setValue("categoriaCustoId", valor, { shouldValidate: true })
+            }
+            opcoes={categoriasCusto.map((c) => ({
+              valor: c.id,
+              rotulo: c.nome,
+            }))}
+            placeholder="Sem categoria de custo"
+            className="w-full"
+            id="categoria-custo"
+          />
+          {/*
+            O tamanho do que se está mexendo, quando há insumo herdando. Sem este
+            número a escolha parece local: em "Peças e componentes" ela decide o
+            DRE de 990 insumos.
+          */}
+          {editando && insumosAfetados > 0 ? (
+            <p className="text-legenda text-muted-foreground">
+              {insumosAfetados === 1
+                ? "1 insumo desta subcategoria passa a entrar no DRE por esta categoria."
+                : `${insumosAfetados} insumos desta subcategoria passam a entrar no DRE por esta categoria.`}{" "}
+              As compras já lançadas são reclassificadas junto.
+            </p>
+          ) : null}
         </CampoFormulario>
 
         <SelectAtivo

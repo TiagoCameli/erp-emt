@@ -18,12 +18,12 @@ export const insumoSchema = z.object({
       error: "Nome do insumo não pode ser só números",
     }),
   categoriaId: idSchemaCom("Selecione uma categoria"),
-  /**
-   * Categoria de custo (categoria FINANCEIRA, a do DRE). Obrigatória porque
-   * `fn_aprovar_ordem_compra` recusa a OC que tenha um item sem ela — e não
-   * havia tela nenhuma para preencher, então a compra travava sem saída.
+  /*
+   * A categoria de CUSTO saiu do insumo em 28/08/2026. Ela é da SUBCATEGORIA
+   * agora (`categorias_insumo.categoria_financeira_id`), configurada uma vez para
+   * todos os insumos dela. Campo que a tela não desenha não pode ser campo do
+   * schema: com ele aqui, salvar um insumo morreria calado.
    */
-  categoriaCustoId: idSchemaCom("Selecione uma categoria de custo"),
   unidadeId: idSchemaCom("Selecione uma unidade de medida"),
   descricao: z.string().trim().optional().or(z.literal("")),
   ativo: z.boolean().default(true),

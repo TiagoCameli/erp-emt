@@ -14,12 +14,12 @@ export interface InsumoLista {
   categoriaId: string;
   categoriaNome: string | null;
   /**
-   * Categoria de custo (financeira). É ela que classifica a compra no DRE
-   * quando a OC é aprovada; nula trava a aprovação de qualquer OC que use o
-   * insumo. Nula só nos insumos anteriores ao campo virar obrigatório.
+   * A categoria de CUSTO saiu do insumo em 28/08/2026 (decisão do Tiago: "eu não
+   * quero categoria de custo no app, somente grupo e sub categoria"). Ela passou
+   * a ser configurada uma vez por SUBCATEGORIA, em
+   * `categorias_insumo.categoria_financeira_id` — eram 3.391 insumos carregando
+   * um campo que 28 subcategorias já determinavam.
    */
-  categoriaCustoId: string | null;
-  categoriaCustoNome: string | null;
   /** Grupo vem por join da categoria: não existe grupo_id no insumo. */
   grupoId: string | null;
   grupoNome: string | null;
@@ -97,10 +97,9 @@ export async function listar(
   let consulta = supabase
     .from("insumos")
     .select(
-      `id, codigo, nome, categoria_id, categoria_financeira_id, unidade_id,
+      `id, codigo, nome, categoria_id, unidade_id,
        descricao, ativo,
        categorias_insumo!inner(nome, grupo_id, insumo_grupos(id, nome, cor)),
-       categorias_financeiras(nome),
        unidades_medida(sigla)`,
       { count: "exact" },
     )
@@ -135,8 +134,6 @@ export async function listar(
     nome: insumo.nome,
     categoriaId: insumo.categoria_id,
     categoriaNome: insumo.categorias_insumo?.nome ?? null,
-    categoriaCustoId: insumo.categoria_financeira_id,
-    categoriaCustoNome: insumo.categorias_financeiras?.nome ?? null,
     grupoId: insumo.categorias_insumo?.insumo_grupos?.id ?? null,
     grupoNome: insumo.categorias_insumo?.insumo_grupos?.nome ?? null,
     grupoCor: corGrupo(insumo.categorias_insumo?.insumo_grupos?.cor),
