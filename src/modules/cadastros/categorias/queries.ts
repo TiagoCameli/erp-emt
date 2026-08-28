@@ -30,6 +30,47 @@ export interface CategoriaLista {
   criadoEm: string;
   /** Quantos insumos usam esta subcategoria (bloqueia exclusão). */
   insumos: number;
+  /**
+   * Categoria de custo (DRE) desta subcategoria. É daqui que sai a classificação
+   * de toda compra dos insumos dela. Nula trava a aprovação de qualquer OC que
+   * compre um insumo desta subcategoria, então a tela destaca em vez de mostrar
+   * um traço discreto.
+   */
+  categoriaCustoId: string | null;
+  categoriaCustoNome: string | null;
+}
+
+/** Categoria de custo (financeira) para o seletor da subcategoria. */
+export interface CategoriaCustoOpcao {
+  id: string;
+  nome: string;
+}
+
+/**
+ * Categorias de custo que uma subcategoria de insumo pode apontar.
+ *
+ * Só `despesa`: compra é sempre custo. E fora a natureza `movimentacao`, que é
+ * principal de aplicação e de empréstimo -- `fn_rel_posicao_bancaria` EXCLUI essa
+ * natureza do saldo, então classificar insumo nela tiraria uma compra de material
+ * do saldo bancário. O banco recusa (fn_reclassificar_insumo), e a lista não pode
+ * oferecer o que o banco recusa.
+ */
+export async function listarCategoriasCusto(): Promise<CategoriaCustoOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("categorias_financeiras")
+    .select("id, nome")
+    .eq("ativo", true)
+    .eq("tipo", "despesa")
+    .neq("natureza", "movimentacao")
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar as categorias de custo");
+  }
+
+  return data ?? [];
 }
 
 /** Opção de grupo para os selects. */
@@ -72,7 +113,11 @@ export async function listarPorGrupo(): Promise<GrupoComCategorias[]> {
     listarGrupos(),
     supabase
       .from("categorias_insumo")
-      .select("id, nome, grupo_id, ativo, created_at, insumos(count)")
+      .select(
+        `id, nome, grupo_id, ativo, created_at, categoria_financeira_id,
+         categorias_financeiras(nome),
+         insumos(count)`,
+      )
       .order("nome"),
   ]);
 
@@ -94,6 +139,8 @@ export async function listarPorGrupo(): Promise<GrupoComCategorias[]> {
       ativo: categoria.ativo,
       criadoEm: categoria.created_at,
       insumos: contagem?.[0]?.count ?? 0,
+      categoriaCustoId: categoria.categoria_financeira_id,
+      categoriaCustoNome: categoria.categorias_financeiras?.nome ?? null,
     };
     porGrupo.set(categoria.grupo_id, [
       ...(porGrupo.get(categoria.grupo_id) ?? []),

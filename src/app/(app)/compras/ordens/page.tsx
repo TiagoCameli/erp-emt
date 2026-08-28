@@ -25,6 +25,7 @@ import {
 import { OrdensTabela } from "@/modules/compras/ordens/components/ordens-tabela";
 import {
   listarCategoriasCusto,
+  listarSubcategorias,
   listarCentrosCusto,
   listarCondicoesPagamento,
   listarFornecedores,
@@ -86,6 +87,7 @@ export default async function PaginaOrdens({
     condicoesPagamento,
     formasPagamento,
     categorias,
+    subcategorias,
     cartoes,
     prefill,
   ] = await Promise.all([
@@ -118,6 +120,7 @@ export default async function PaginaOrdens({
     listarCondicoesPagamento(),
     listarFormasPagamento(),
     listarCategoriasCusto(),
+    listarSubcategorias(),
     listarCartoesAtivos(),
     gerarCotacaoId && podeCriar
       ? montarPrefillDaCotacao(gerarCotacaoId)
@@ -132,7 +135,7 @@ export default async function PaginaOrdens({
       centrosCusto={centrosCusto}
       condicoesPagamento={condicoesPagamento}
       formasPagamento={formasPagamento}
-      categorias={categorias}
+      subcategorias={subcategorias}
       cartoes={cartoes}
       prefill={prefill}
     >

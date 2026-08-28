@@ -34,6 +34,7 @@ vi.mock("@/components/canonicos/anexos", () => ({
 }));
 
 const ID_ORDEM = "11111111-1111-4111-8111-111111111111";
+const SUBCATEGORIA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 /**
  * Um item da OC. `semCategoriaCusto` é DERIVADO da categoria, e não um campo que
@@ -55,6 +56,8 @@ function item(troca: Partial<OrdemItem> = {}): OrdemItem {
     centroCustoNome: "Hilux SQR1C93 - 07",
     categoriaCustoId: "77777777-7777-4777-8777-777777777777" as string | null,
     categoriaCustoNome: "Peças e manutenção" as string | null,
+    subcategoriaId: SUBCATEGORIA,
+    subcategoriaNome: "Peças e componentes",
     ...troca,
   };
   return { ...base, semCategoriaCusto: base.categoriaCustoId === null };
@@ -107,7 +110,7 @@ function renderizar(detalhe: OrdemDetalhe) {
       centrosCusto={[]}
       condicoesPagamento={[]}
       formasPagamento={[]}
-      categorias={[]}
+      subcategorias={[]}
       cartoes={[]}
       parcelasCondicao={[]}
       anexosIniciais={[]}
@@ -130,17 +133,20 @@ describe("aviso de item sem categoria de custo", () => {
     expect(screen.queryByText(/sem categoria de custo/i)).toBeNull();
   });
 
-  it("nomeia o item que trava a aprovação e leva ao cadastro dele", () => {
+  it("nomeia o item que trava a aprovação e leva ao cadastro que resolve", () => {
     renderizar(ordem({ itens: [itemSemCategoria()] }));
 
     expect(screen.getByText("1 item está sem categoria de custo")).toBeTruthy();
 
-    // O link é o atalho para resolver: o campo mora no cadastro do insumo,
-    // e a busca já vem preenchida com o nome dele.
+    /**
+     * O link leva a Categorias, e NÃO a Insumos. Desde 28/08/2026 a categoria de
+     * custo é da subcategoria: mandar para o cadastro do insumo seria mandar para
+     * uma tela que não tem mais o campo que desbloqueia a ordem. O nome da
+     * subcategoria vai no rótulo para a pessoa saber qual procurar lá.
+     */
     const link = screen.getByRole("link", { name: /MUNHÃO/ });
-    expect(link.getAttribute("href")).toBe(
-      "/cadastros/insumos?busca=MUNH%C3%83O",
-    );
+    expect(link.getAttribute("href")).toBe("/cadastros/categorias");
+    expect(link.textContent).toContain("Peças e componentes");
   });
 
   it("conta no plural quando é mais de um item", () => {

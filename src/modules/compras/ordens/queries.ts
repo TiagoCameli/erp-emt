@@ -160,6 +160,9 @@ export interface OrdemItem {
    */
   categoriaCustoId: string | null;
   categoriaCustoNome: string | null;
+  /** Subcategoria do insumo: o que a coluna editável da OC mostra. */
+  subcategoriaId: string;
+  subcategoriaNome: string | null;
 }
 
 /** Lançamento financeiro vinculado à OC (origem='oc'). Read-only nas telas. */
@@ -261,11 +264,20 @@ export interface InsumoOpcao {
   nome: string;
   unidade: string | null;
   /**
-   * Categoria de custo do insumo, vinda do CADASTRO dele. É ela que classifica
-   * a compra no DRE, e é ela que a OC exibe ao lado do insumo.
+   * SUBCATEGORIA do insumo. É o que a coluna da OC mostra e edita.
    *
-   * Vem para a tela porque a OC deixou de ter categoria própria: a categoria da
-   * ordem é a dos insumos comprados. Nula é o estado que trava a aprovação.
+   * Editável ali porque quem compra é quem sabe o que está comprando, e porque
+   * cada insumo tem a sua subcategoria: trocar aqui muda só este insumo.
+   */
+  subcategoriaId: string;
+  subcategoriaNome: string | null;
+  /**
+   * Categoria de custo (a do DRE), DERIVADA da subcategoria desde 28/08/2026.
+   *
+   * Não é campo do insumo: mora em `categorias_insumo.categoria_financeira_id`,
+   * configurada uma vez por subcategoria. Vem para a tela porque é ela que soma
+   * no resumo da ordem e porque é o efeito que o aviso precisa nomear quando
+   * alguém troca a subcategoria. Nula é o estado que trava a aprovação.
    */
   categoriaCustoId: string | null;
   categoriaCustoNome: string | null;
@@ -590,9 +602,12 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
        oc_itens(
          id, insumo_id, quantidade, preco_unitario, centro_custo_id,
          insumos(
-           nome, categoria_financeira_id,
+           nome, categoria_id,
            unidades_medida(sigla),
-           categorias_financeiras(nome)
+           categorias_insumo(
+             nome, categoria_financeira_id,
+             categorias_financeiras(nome)
+           )
          ),
          centros_custo(nome, codigo)
        ),
@@ -627,9 +642,14 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     subtotal: item.quantidade * item.preco_unitario,
     centroCustoId: item.centro_custo_id,
     centroCustoNome: item.centros_custo?.nome ?? "-",
-    semCategoriaCusto: item.insumos?.categoria_financeira_id == null,
-    categoriaCustoId: item.insumos?.categoria_financeira_id ?? null,
-    categoriaCustoNome: item.insumos?.categorias_financeiras?.nome ?? null,
+    semCategoriaCusto:
+      item.insumos?.categorias_insumo?.categoria_financeira_id == null,
+    categoriaCustoId:
+      item.insumos?.categorias_insumo?.categoria_financeira_id ?? null,
+    categoriaCustoNome:
+      item.insumos?.categorias_insumo?.categorias_financeiras?.nome ?? null,
+    subcategoriaId: item.insumos?.categoria_id ?? "",
+    subcategoriaNome: item.insumos?.categorias_insumo?.nome ?? null,
   }));
 
   return {
@@ -747,9 +767,12 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
     supabase
       .from("insumos")
       .select(
-        `id, nome, categoria_financeira_id,
+        `id, nome, categoria_id,
          unidades_medida(sigla),
-         categorias_financeiras(nome)`,
+         categorias_insumo!inner(
+           nome, categoria_financeira_id,
+           categorias_financeiras(nome)
+         )`,
       )
       .eq("ativo", true)
       .order("nome")
@@ -764,11 +787,61 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
     id: insumo.id,
     nome: insumo.nome,
     unidade: insumo.unidades_medida?.sigla ?? null,
-    categoriaCustoId: insumo.categoria_financeira_id,
-    categoriaCustoNome: insumo.categorias_financeiras?.nome ?? null,
+    subcategoriaId: insumo.categoria_id,
+    subcategoriaNome: insumo.categorias_insumo?.nome ?? null,
+    categoriaCustoId: insumo.categorias_insumo?.categoria_financeira_id ?? null,
+    categoriaCustoNome:
+      insumo.categorias_insumo?.categorias_financeiras?.nome ?? null,
   }));
 }
 
+
+/** Subcategoria de insumo para a coluna editável dos itens da OC. */
+export interface SubcategoriaOpcao {
+  id: string;
+  nome: string;
+  grupoNome: string | null;
+  /**
+   * A categoria de custo que esta subcategoria carrega. Vem junto porque é o
+   * EFEITO da escolha: trocar a subcategoria de um insumo muda em que categoria
+   * a compra dele entra no DRE, e é isso que o aviso da tela precisa nomear.
+   */
+  categoriaCustoId: string | null;
+  categoriaCustoNome: string | null;
+}
+
+/**
+ * Subcategorias ativas, com o grupo e a categoria de custo de cada uma.
+ *
+ * Alimenta a coluna "Subcategoria" dos itens da OC. Só ATIVAS: subcategoria
+ * inativa é recusada por `fn_reclassificar_insumo`, e oferecer na lista o que o
+ * banco recusa é convidar o erro.
+ */
+export async function listarSubcategorias(): Promise<SubcategoriaOpcao[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("categorias_insumo")
+    .select(
+      `id, nome, categoria_financeira_id,
+       insumo_grupos(nome),
+       categorias_financeiras(nome)`,
+    )
+    .eq("ativo", true)
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar as subcategorias");
+  }
+
+  return (data ?? []).map((sub) => ({
+    id: sub.id,
+    nome: sub.nome,
+    grupoNome: sub.insumo_grupos?.nome ?? null,
+    categoriaCustoId: sub.categoria_financeira_id,
+    categoriaCustoNome: sub.categorias_financeiras?.nome ?? null,
+  }));
+}
 
 /**
  * Categorias de despesa ativas para o select da OC, em ordem alfabética. Só

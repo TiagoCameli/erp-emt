@@ -23,6 +23,7 @@ const CONDICAO = "66666666-6666-4666-8666-666666666666";
 const BOLETO = "77777777-7777-4777-8777-777777777777";
 const DINHEIRO = "99999999-9999-4999-8999-999999999999";
 const CATEGORIA = "88888888-8888-4888-8888-888888888888";
+const SUBCATEGORIA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 /** 10 x R$ 100,00 = R$ 1.000,00 de total. */
 const TOTAL = 1000;
@@ -69,7 +70,7 @@ const formulario = {
   centrosCusto: [
     {
       centroCustoId: CENTRO,
-      insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100", categoriaCustoId: CATEGORIA }],
+      insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100", subcategoriaId: SUBCATEGORIA }],
     },
   ],
   parcelas: [] as {

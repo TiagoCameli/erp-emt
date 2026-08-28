@@ -278,6 +278,7 @@ export type Database = {
       categorias_insumo: {
         Row: {
           ativo: boolean;
+          categoria_financeira_id: string | null;
           created_at: string;
           created_by: string | null;
           grupo_id: string;
@@ -287,6 +288,7 @@ export type Database = {
         };
         Insert: {
           ativo?: boolean;
+          categoria_financeira_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           grupo_id: string;
@@ -296,6 +298,7 @@ export type Database = {
         };
         Update: {
           ativo?: boolean;
+          categoria_financeira_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           grupo_id?: string;
@@ -304,6 +307,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "categorias_insumo_categoria_financeira_id_fkey";
+            columns: ["categoria_financeira_id"];
+            isOneToOne: false;
+            referencedRelation: "categorias_financeiras";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "categorias_insumo_grupo_id_fkey";
             columns: ["grupo_id"];

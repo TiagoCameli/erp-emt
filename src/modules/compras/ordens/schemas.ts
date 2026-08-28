@@ -451,23 +451,22 @@ export const ocInsumoFormSchema = z.object({
       error: `O preço aceita no máximo ${CASAS_TAXA} casas decimais`,
     }),
   /**
-   * Categoria de custo DO INSUMO, editável aqui dentro.
+   * SUBCATEGORIA do insumo, editável aqui dentro.
    *
-   * Não é campo da ordem: o valor mora em `insumos.categoria_financeira_id`, e
-   * salvar a ordem com ele mudado reclassifica o cadastro do insumo (portanto as
-   * ordens anteriores também). Quem avisa disso na tela é `AvisoReclassificacao`.
+   * Não é campo da ordem: o valor mora em `insumos.categoria_id`, e salvar a
+   * ordem com ele mudado reclassifica o cadastro daquele insumo. E isso mexe no
+   * DRE, porque a categoria de custo é da SUBCATEGORIA desde 28/08/2026 — quem
+   * avisa na tela é `AvisoReclassificacao`.
    *
-   * Aceita vazio, e vazio NÃO é uma escolha: é o insumo que ainda não tem
-   * categoria no cadastro. Sem categoria a aprovação é recusada pelo banco, e o
-   * aviso de "item sem categoria de custo" é quem cobra. Se este campo fosse
-   * obrigatório no schema, uma ordem em rascunho com insumo não classificado
-   * deixaria de poder ser salva — e o botão morreria calado, porque o erro cai
-   * numa célula de tabela.
+   * Cada insumo tem a sua subcategoria, independente dos outros: trocar aqui
+   * muda só este insumo, nunca os vizinhos da mesma subcategoria.
    *
-   * Sem `.default("")`: o `input` do zod deixaria de bater com o `output` e o
-   * react-hook-form passaria a exigir o campo em toda linha nova.
+   * Aceita vazio porque a célula nasce vazia até a linha dizer qual insumo é.
+   * Vazio nunca reclassifica. Sem `.default("")`: o `input` do zod deixaria de
+   * bater com o `output` e o react-hook-form passaria a exigir o campo em toda
+   * linha nova.
    */
-  categoriaCustoId: z.string().trim(),
+  subcategoriaId: z.string().trim(),
 });
 
 export type OcInsumoFormInput = z.infer<typeof ocInsumoFormSchema>;

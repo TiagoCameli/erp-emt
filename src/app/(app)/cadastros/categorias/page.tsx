@@ -8,6 +8,7 @@ import {
 } from "@/modules/cadastros/categorias/actions";
 import { CategoriasTabela } from "@/modules/cadastros/categorias/components/categorias-tabela";
 import {
+  listarCategoriasCusto,
   listarGrupos,
   listarPorGrupo,
 } from "@/modules/cadastros/categorias/queries";
@@ -19,9 +20,10 @@ export default async function PaginaCategorias() {
     notFound();
   }
 
-  const [grupos, opcoesGrupo] = await Promise.all([
+  const [grupos, opcoesGrupo, categoriasCusto] = await Promise.all([
     listarPorGrupo(),
     listarGrupos(),
+    listarCategoriasCusto(),
   ]);
 
   const podeCriar = temPermissao(usuario, "cadastros.categorias", "criar");
@@ -33,7 +35,7 @@ export default async function PaginaCategorias() {
       <PageHeader
         modulo="Cadastros"
         titulo="Categorias"
-        descricao="Dois níveis: 4 grupos fixos (Material, Mão de obra, Equipamentos, Outros) e as subcategorias dentro de cada um. O insumo aponta para a subcategoria."
+        descricao="Dois níveis: 4 grupos fixos (Material, Mão de obra, Equipamentos, Outros) e as subcategorias dentro de cada um. O insumo aponta para a subcategoria, e é a subcategoria que diz em qual categoria de custo a compra entra no DRE."
         acoes={
           podeCriar ? (
             <>
@@ -50,6 +52,7 @@ export default async function PaginaCategorias() {
       <CategoriasTabela
         grupos={grupos}
         opcoesGrupo={opcoesGrupo}
+        categoriasCusto={categoriasCusto}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}

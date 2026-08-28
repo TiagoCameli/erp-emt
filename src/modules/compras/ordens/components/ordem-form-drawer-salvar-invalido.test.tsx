@@ -66,6 +66,7 @@ const CENTRO = "66666666-6666-4666-8666-666666666666";
 const INSUMO = "77777777-7777-4777-8777-777777777777";
 /** O CARTÃO em si, do cadastro. `CARTAO` acima é a FORMA de pagamento. */
 const CARTAO_OBRA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const SUBCATEGORIA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 /**
  * A OC-2026-0026 como estava no banco: R$ 15.400,00 em PIX (400) + cartão
@@ -109,6 +110,8 @@ function ordemDividida(precoDoItem: number, comCartao = true): OrdemDetalhe {
         semCategoriaCusto: false,
         categoriaCustoId: CATEGORIA,
         categoriaCustoNome: "Outras despesas",
+        subcategoriaId: SUBCATEGORIA,
+        subcategoriaNome: "Peças e componentes",
       },
     ],
     parcelas: [
@@ -185,6 +188,8 @@ function abrirEdicao(ordem: OrdemDetalhe) {
           unidade: "un",
           categoriaCustoId: CATEGORIA,
           categoriaCustoNome: "Outras despesas",
+          subcategoriaId: SUBCATEGORIA,
+          subcategoriaNome: "Peças e componentes",
         },
       ]}
       centrosCusto={[
@@ -201,7 +206,15 @@ function abrirEdicao(ordem: OrdemDetalhe) {
         { id: PIX, nome: "PIX", tipo: "bancario" },
         { id: CARTAO, nome: "Cartão de Crédito", tipo: "cartao_credito" },
       ]}
-      categorias={[{ id: CATEGORIA, nome: "Outras despesas" }]}
+      subcategorias={[
+        {
+          id: SUBCATEGORIA,
+          nome: "Peças e componentes",
+          grupoNome: "Equipamentos",
+          categoriaCustoId: CATEGORIA,
+          categoriaCustoNome: "Outras despesas",
+        },
+      ]}
       cartoes={[
         { id: CARTAO_OBRA, nome: "Cartão obra", ultimosDigitos: "7712" },
       ]}

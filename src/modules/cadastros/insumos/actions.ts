@@ -28,7 +28,6 @@ interface LinhaImportInsumo {
   nome: string;
   grupo: string;
   categoria: string;
-  categoriaCusto: string;
   unidade: string;
 }
 
@@ -60,12 +59,6 @@ const colunasImportInsumo: ColunaImportacao<LinhaImportInsumo>[] = [
     rotulo: "Categoria",
     obrigatoria: true,
     exemplo: "Cimento, agregados e concreto",
-  },
-  {
-    chave: "categoriaCusto",
-    rotulo: "Categoria de custo",
-    obrigatoria: true,
-    exemplo: "Materiais de construção",
   },
   { chave: "unidade", rotulo: "Unidade", obrigatoria: true, exemplo: "m3" },
 ];
@@ -99,7 +92,6 @@ function montarRegistro(dados: InsumoInput) {
     codigo: codigo ? codigo : null,
     nome: dados.nome.trim(),
     categoria_id: dados.categoriaId,
-    categoria_financeira_id: dados.categoriaCustoId,
     unidade_id: dados.unidadeId,
     descricao: descricao ? descricao : null,
     ativo: dados.ativo,
@@ -307,23 +299,20 @@ export async function importar(
 
   const supabase = await createClient();
 
-  const [categorias, categoriasCusto, unidades] = await Promise.all([
+  // Sem buscar categorias_financeiras: a planilha deixou de pedir categoria de
+  // custo, que agora é da subcategoria (Cadastros > Categorias de insumo).
+  const [categorias, unidades] = await Promise.all([
     supabase
       .from("categorias_insumo")
       .select("id, nome, insumo_grupos!inner(slug, nome)")
       .eq("ativo", true),
-    supabase
-      .from("categorias_financeiras")
-      .select("id, nome")
-      .eq("ativo", true)
-      .eq("tipo", "despesa"),
     supabase.from("unidades_medida").select("id, sigla").eq("ativo", true),
   ]);
 
-  if (categorias.error || categoriasCusto.error || unidades.error) {
+  if (categorias.error || unidades.error) {
     return erroAcao(
       "cadastros.insumos.importar",
-      categorias.error ?? categoriasCusto.error ?? unidades.error,
+      categorias.error ?? unidades.error,
       "Não foi possível carregar categorias e unidades para casar",
     );
   }
@@ -336,12 +325,6 @@ export async function importar(
     const slug = c.insumo_grupos?.slug ?? "";
     categoriaPorGrupoNome.set(`${slug}|${c.nome.trim().toLowerCase()}`, c.id);
   }
-  const categoriaCustoPorNome = new Map(
-    (categoriasCusto.data ?? []).map((c) => [
-      c.nome.trim().toLowerCase(),
-      c.id,
-    ]),
-  );
   const unidadePorSigla = new Map(
     (unidades.data ?? []).map((u) => [u.sigla.trim().toLowerCase(), u.id]),
   );
@@ -350,7 +333,6 @@ export async function importar(
     codigo: string | null;
     nome: string;
     categoria_id: string;
-    categoria_financeira_id: string;
     unidade_id: string;
     ativo: boolean;
   }[] = [];
@@ -384,18 +366,9 @@ export async function importar(
       };
     }
 
-    // Categoria de custo (financeira) é obrigatória: é dela que sai a
-    // classificação do lançamento quando a OC é aprovada. Sem ela o insumo
-    // nasce travando a aprovação de qualquer OC que o use.
-    const categoriaCustoNome = String(linha.dados.categoriaCusto ?? "")
-      .trim()
-      .toLowerCase();
-    const categoriaCustoId = categoriaCustoPorNome.get(categoriaCustoNome);
-    if (!categoriaCustoId) {
-      return {
-        erro: `A categoria de custo "${linha.dados.categoriaCusto}" (linha ${linha.linha}) não existe entre as categorias de despesa ativas. Confira em Cadastros > Categorias financeiras.`,
-      };
-    }
+    // A planilha não pede mais categoria de custo: ela é da SUBCATEGORIA, e a
+    // subcategoria já vem na linha. Quem classifica o DRE é Cadastros >
+    // Categorias de insumo, uma vez por subcategoria.
 
     const unidadeId = unidadePorSigla.get(unidadeSigla);
     if (!unidadeId) {
@@ -414,7 +387,6 @@ export async function importar(
       codigo,
       nome,
       categoria_id: categoriaId,
-      categoria_financeira_id: categoriaCustoId,
       unidade_id: unidadeId,
       ativo: true,
     });

@@ -56,7 +56,7 @@ import {
   rotuloCategoriasDaOrdem,
 } from "@/modules/compras/ordens/categorias";
 import type {
-  CategoriaOpcao,
+  SubcategoriaOpcao,
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
   FormaPagamentoOpcao,
@@ -122,7 +122,11 @@ export interface OrdemDetalheViewProps {
   centrosCusto: CentroCustoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
-  categorias: CategoriaOpcao[];
+  /**
+   * Subcategorias para a coluna editável dos itens no drawer de edição. O
+   * detalhe em si não usa: aqui a classificação é leitura, vinda dos itens.
+   */
+  subcategorias: SubcategoriaOpcao[];
   /** Cartões de crédito ativos, para o formulário de edição. */
   cartoes: CartaoOpcao[];
   parcelasCondicao: ParcelaCondicaoOpcao[];
@@ -153,7 +157,7 @@ export function OrdemDetalheView({
   centrosCusto,
   condicoesPagamento,
   formasPagamento,
-  categorias,
+  subcategorias,
   cartoes,
   parcelasCondicao,
   anexosIniciais,
@@ -373,18 +377,30 @@ export function OrdemDetalheView({
                   : `${itensSemCategoriaCusto.length} itens estão sem categoria de custo`}
               </p>
               <p className="text-legenda text-muted-foreground">
-                A ordem não pode ser aprovada assim: é a categoria de custo do
-                insumo que classifica a compra no DRE. Ela fica no cadastro do
-                insumo, não aqui na ordem.
+                A ordem não pode ser aprovada assim: é a categoria de custo que
+                classifica a compra no DRE, e ela é da SUBCATEGORIA do insumo, não
+                desta ordem. Classifique a subcategoria em Cadastros para
+                desbloquear todas as ordens que compram insumos dela.
               </p>
               <ul className="mt-2 flex flex-col gap-1">
                 {itensSemCategoriaCusto.map((item) => (
                   <li key={item.id} className="text-legenda">
+                    {/*
+                      O atalho leva a Categorias, e não a Insumos: desde
+                      28/08/2026 é lá que a categoria de custo é definida. Mandar
+                      para o cadastro do insumo seria mandar para uma tela que não
+                      tem mais o campo que resolve o problema.
+                    */}
                     <Link
-                      href={`/cadastros/insumos?busca=${encodeURIComponent(item.insumoNome)}`}
+                      href="/cadastros/categorias"
                       className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
                     >
                       {item.insumoNome}
+                      {item.subcategoriaNome ? (
+                        <span className="font-normal text-muted-foreground">
+                          (subcategoria {item.subcategoriaNome})
+                        </span>
+                      ) : null}
                       <ExternalLink className="size-3" aria-hidden="true" />
                     </Link>
                   </li>
@@ -826,7 +842,7 @@ export function OrdemDetalheView({
           centrosCusto={centrosCusto}
           condicoesPagamento={condicoesPagamento}
           formasPagamento={formasPagamento}
-          categorias={categorias}
+          subcategorias={subcategorias}
           cartoes={cartoes}
         />
       ) : null}
