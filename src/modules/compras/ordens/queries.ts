@@ -83,8 +83,17 @@ export interface OrdemLista {
   fornecedorNome: string;
   /** O que foi comprado, em uma linha. Nulo nas OCs anteriores ao campo. */
   descricao: string | null;
-  /** Nome da categoria financeira do custo, resolvido por join. */
+  /**
+   * Nome da categoria PREDOMINANTE do custo, resolvido por join.
+   *
+   * Predominante porque a ordem pode ter mais de uma: `ordens_compra.categoria_id`
+   * guarda a de maior valor entre os itens, mantida pela trigger. Com duas ou
+   * mais, a célula mostra a contagem em vez deste nome — dizer "Materiais" numa
+   * compra meio material meio peça de equipamento é uma afirmação falsa.
+   */
   categoriaNome: string | null;
+  /** Quantas categorias distintas a ordem tem, pelos insumos comprados. */
+  qtdCategorias: number;
   valorTotal: number;
   status: string;
   /** O fato: quando a compra aconteceu. */
@@ -143,6 +152,14 @@ export interface OrdemItem {
    * estava travando.
    */
   semCategoriaCusto: boolean;
+  /**
+   * Categoria de custo deste item, lida do cadastro do insumo (nunca copiada
+   * para `oc_itens`). Por ser lida, e não fotografada, reclassificar o insumo
+   * muda o que esta OC mostra — inclusive nas ordens antigas. É de propósito, e
+   * é sobre isso que o aviso do formulário fala.
+   */
+  categoriaCustoId: string | null;
+  categoriaCustoNome: string | null;
 }
 
 /** Lançamento financeiro vinculado à OC (origem='oc'). Read-only nas telas. */
@@ -243,6 +260,15 @@ export interface InsumoOpcao {
   id: string;
   nome: string;
   unidade: string | null;
+  /**
+   * Categoria de custo do insumo, vinda do CADASTRO dele. É ela que classifica
+   * a compra no DRE, e é ela que a OC exibe ao lado do insumo.
+   *
+   * Vem para a tela porque a OC deixou de ter categoria própria: a categoria da
+   * ordem é a dos insumos comprados. Nula é o estado que trava a aprovação.
+   */
+  categoriaCustoId: string | null;
+  categoriaCustoNome: string | null;
 }
 
 // Centro de custo vive em `_shared`: a mesma consulta e o mesmo tipo estavam
@@ -391,7 +417,7 @@ export async function listarOrdens(
     .from("ordens_compra")
     .select(
       `id, numero, numero_documento, descricao, valor_total, status, data_compra,
-       mes_competencia, created_at, created_by,
+       mes_competencia, created_at, created_by, categoria_ids,
        fornecedores(razao_social, nome_fantasia),
        categorias_financeiras(nome),
        condicoes_pagamento(descricao),
@@ -404,6 +430,10 @@ export async function listarOrdens(
     )
     .order("data_compra", { ascending: false })
     .order("created_at", { ascending: false })
+    // Desempate final pelo id. `data_compra` e `created_at` empatam em massa nas
+    // ordens que vieram da carga do Mais Controle, e ordenação sem desempate com
+    // `.range()` repete linha numa página e perde na outra, sem erro nenhum.
+    .order("id")
     .range(de, ate);
 
   if (params.status) consulta = consulta.eq("status", params.status);
@@ -416,7 +446,12 @@ export async function listarOrdens(
     consulta = consulta.eq("mes_competencia", params.mesCompetencia);
   }
   if (params.categoriaId) {
-    consulta = consulta.eq("categoria_id", params.categoriaId);
+    // `contains` e não `eq`: o filtro casa a ordem que tem AQUELA categoria em
+    // algum item, e não só a que a tem como predominante. Filtrar por
+    // `categoria_id` escondia a compra de R$ 40 mil de peça que veio junto com
+    // R$ 60 mil de material — a ordem existe, o custo existe, e ela não
+    // aparecia no recorte de peças.
+    consulta = consulta.contains("categoria_ids", [params.categoriaId]);
   }
   if (params.formaPagamentoId) {
     consulta = consulta.eq("forma_pagamento_id", params.formaPagamentoId);
@@ -509,6 +544,7 @@ export async function listarOrdens(
       : "-",
     descricao: ordem.descricao,
     categoriaNome: ordem.categorias_financeiras?.nome ?? null,
+    qtdCategorias: (ordem.categoria_ids ?? []).length,
     valorTotal: ordem.valor_total,
     status: ordem.status,
     dataCompra: ordem.data_compra,
@@ -553,7 +589,11 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
        condicoes_pagamento(descricao),
        oc_itens(
          id, insumo_id, quantidade, preco_unitario, centro_custo_id,
-         insumos(nome, categoria_financeira_id, unidades_medida(sigla)),
+         insumos(
+           nome, categoria_financeira_id,
+           unidades_medida(sigla),
+           categorias_financeiras(nome)
+         ),
          centros_custo(nome, codigo)
        ),
        oc_parcelas(numero_parcela, data_vencimento, valor, oc_forma_id),
@@ -588,6 +628,8 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     centroCustoId: item.centro_custo_id,
     centroCustoNome: item.centros_custo?.nome ?? "-",
     semCategoriaCusto: item.insumos?.categoria_financeira_id == null,
+    categoriaCustoId: item.insumos?.categoria_financeira_id ?? null,
+    categoriaCustoNome: item.insumos?.categorias_financeiras?.nome ?? null,
   }));
 
   return {
@@ -704,7 +746,11 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("insumos")
-      .select("id, nome, unidades_medida(sigla)")
+      .select(
+        `id, nome, categoria_financeira_id,
+         unidades_medida(sigla),
+         categorias_financeiras(nome)`,
+      )
       .eq("ativo", true)
       .order("nome")
       .range(de, ate),
@@ -718,6 +764,8 @@ export async function listarInsumos(): Promise<InsumoOpcao[]> {
     id: insumo.id,
     nome: insumo.nome,
     unidade: insumo.unidades_medida?.sigla ?? null,
+    categoriaCustoId: insumo.categoria_financeira_id,
+    categoriaCustoNome: insumo.categorias_financeiras?.nome ?? null,
   }));
 }
 
@@ -735,6 +783,11 @@ export async function listarCategoriasCusto(): Promise<CategoriaOpcao[]> {
     .select("id, nome")
     .eq("ativo", true)
     .eq("tipo", "despesa")
+    // Natureza `movimentacao` é principal de aplicação e de empréstimo, e
+    // fn_rel_posicao_bancaria a EXCLUI do saldo bancário. Classificar um insumo
+    // nela tiraria uma compra de material do saldo. `fn_reclassificar_insumo`
+    // recusa; oferecer na lista o que o banco recusa é convidar o erro.
+    .neq("natureza", "movimentacao")
     .order("nome");
 
   if (error) {

@@ -2624,6 +2624,7 @@ export type Database = {
           aprovado_em: string | null;
           aprovado_por: string | null;
           categoria_id: string | null;
+          categoria_ids: string[];
           condicao_pagamento_id: string;
           cotacao_id: string | null;
           created_at: string;
@@ -2650,6 +2651,7 @@ export type Database = {
           aprovado_em?: string | null;
           aprovado_por?: string | null;
           categoria_id?: string | null;
+          categoria_ids?: string[];
           condicao_pagamento_id: string;
           cotacao_id?: string | null;
           created_at?: string;
@@ -2676,6 +2678,7 @@ export type Database = {
           aprovado_em?: string | null;
           aprovado_por?: string | null;
           categoria_id?: string | null;
+          categoria_ids?: string[];
           condicao_pagamento_id?: string;
           cotacao_id?: string | null;
           created_at?: string;
@@ -4037,6 +4040,15 @@ export type Database = {
         Args: { p_competencia: string; p_encargos_pct?: number };
         Returns: string;
       };
+      fn_impacto_reclassificar_insumos: {
+        Args: { p_insumo_ids: string[] };
+        Returns: {
+          lancamentos: number;
+          ordens: number;
+          ordens_aprovadas: number;
+          valor: number;
+        }[];
+      };
       fn_importar_br364_lote09: {
         Args: {
           p_ajustar_saldo_conta?: boolean;
@@ -4197,6 +4209,26 @@ export type Database = {
           p_tamanho: number;
         };
         Returns: string;
+      };
+      fn_reclassificar_insumo: {
+        Args: {
+          // O gerador escreve `p_categoria_anterior_id?: string`, porque o
+          // parâmetro tem DEFAULT e ele não sabe que NULL é um valor LEGÍTIMO
+          // aqui: nulo significa "o insumo não tinha categoria", e é contra isso
+          // que a função compara para recusar a troca quando outra pessoa
+          // reclassificou o mesmo insumo. Com o tipo do gerador, passar null
+          // deixa de compilar e a única saída seria mentir com `?? undefined`,
+          // que apagaria a diferença entre "não tinha" e "não sei".
+          p_categoria_anterior_id: string | null;
+          p_categoria_id: string;
+          p_insumo_id: string;
+        };
+        Returns: {
+          lancamentos: number;
+          ordens: number;
+          ordens_aprovadas: number;
+          valor: number;
+        }[];
       };
       fn_registrar_recebimento: {
         Args: {

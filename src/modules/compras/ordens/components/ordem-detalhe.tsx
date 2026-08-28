@@ -50,6 +50,11 @@ import {
   temAjuste,
   totalOrdemCompra,
 } from "@/modules/compras/ordens/calculo";
+import {
+  categoriasDaOrdem,
+  rotuloCategorias,
+  rotuloCategoriasDaOrdem,
+} from "@/modules/compras/ordens/categorias";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
@@ -194,6 +199,13 @@ export function OrdemDetalheView({
   const avisoDeClassificacao =
     itensSemCategoriaCusto.length > 0 &&
     (ordem.status === "rascunho" || ordem.status === "pendente_aprovacao");
+
+  /**
+   * As categorias desta ordem, somadas a partir dos itens. É a mesma conta que a
+   * trigger faz no banco para manter `categoria_ids`, e a mesma que o formulário
+   * mostra embaixo da lista: uma conta, três telas.
+   */
+  const categoriasDoCusto = categoriasDaOrdem(ordem.itens);
 
   async function aoEnviarParaAprovacao() {
     if (enviando) return;
@@ -430,8 +442,31 @@ export function OrdemDetalheView({
                 {formatarMesAno(ordem.mesCompetencia)}
               </Dado>
               <Dado rotulo="Criada em">{formatarData(ordem.criadoEm)}</Dado>
-              <Dado rotulo="Categoria do custo">
-                {ordem.categoriaNome ?? <CelulaVazia />}
+              {/*
+                A categoria vem dos itens, e a ordem pode ter mais de uma: uma
+                compra que junta material de obra e peça de equipamento no mesmo
+                documento tem duas, e a aprovação grava as duas no rateio do
+                lançamento. Com uma só, o nome dela; com duas ou mais, a
+                contagem e a quebra por valor logo abaixo — escrever o nome de
+                uma delas seria dizer que a compra inteira foi daquela.
+              */}
+              <Dado rotulo={rotuloCategoriasDaOrdem(categoriasDoCusto)}>
+                {rotuloCategorias(categoriasDoCusto) ?? <CelulaVazia />}
+                {categoriasDoCusto.length > 1 ? (
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {categoriasDoCusto.map((categoria) => (
+                      <li
+                        key={categoria.id}
+                        className="text-legenda text-muted-foreground"
+                      >
+                        {categoria.nome}{" "}
+                        <span className="tabular-nums">
+                          {formatarBRL(categoria.valor)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </Dado>
               <Dado rotulo="Condição de pagamento">
                 {ordem.condicaoPagamentoDescricao ?? <CelulaVazia />}
@@ -529,6 +564,9 @@ export function OrdemDetalheView({
                   <tr className="border-b border-border text-legenda text-muted-foreground">
                     <th className="px-3 py-2 text-center font-medium">Insumo</th>
                     <th className="px-3 py-2 text-center font-medium">
+                      Categoria do custo
+                    </th>
+                    <th className="px-3 py-2 text-center font-medium">
                       Centro de custo
                     </th>
                     <th className="px-3 py-2 text-right font-medium">Qtd.</th>
@@ -558,6 +596,12 @@ export function OrdemDetalheView({
                           </span>
                         ) : null}
                       </td>
+                      {/* A categoria de cada item, lida do cadastro do insumo.
+                          Aqui é leitura: quem troca é o formulário, porque
+                          trocar muda o cadastro e isso precisa de aviso. */}
+                      <td className="px-3 py-2 text-center">
+                        {item.categoriaCustoNome ?? <CelulaVazia />}
+                      </td>
                       <td className="px-3 py-2 text-center">
                         {item.centroCustoNome}
                       </td>
@@ -584,7 +628,7 @@ export function OrdemDetalheView({
                   {temAjuste(ordem.ajustes) ? (
                     <>
                       <tr className="text-muted-foreground">
-                        <td className="px-3 py-2 text-center" colSpan={4}>
+                        <td className="px-3 py-2 text-center" colSpan={5}>
                           Soma dos itens
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -594,7 +638,7 @@ export function OrdemDetalheView({
                       {LINHAS_DE_AJUSTE.map(({ chave, rotulo, sinal }) =>
                         ordem.ajustes[chave] === 0 ? null : (
                           <tr key={chave} className="text-muted-foreground">
-                            <td className="px-3 py-2 text-center" colSpan={4}>
+                            <td className="px-3 py-2 text-center" colSpan={5}>
                               {rotulo}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums">
@@ -607,7 +651,7 @@ export function OrdemDetalheView({
                     </>
                   ) : null}
                   <tr className="font-semibold">
-                    <td className="px-3 py-2 text-center" colSpan={4}>
+                    <td className="px-3 py-2 text-center" colSpan={5}>
                       Total
                     </td>
                     <td className="px-3 py-2 text-right">

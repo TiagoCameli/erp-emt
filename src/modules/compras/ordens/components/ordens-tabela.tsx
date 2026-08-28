@@ -103,7 +103,15 @@ export const colunas: ColumnDef<OrdemLista, unknown>[] = [
     cell: ({ row }) => (
       <CelulaDescricaoCategoria
         descricao={row.original.descricao}
-        categoriaNome={row.original.categoriaNome}
+        // Com duas ou mais categorias na mesma ordem, a contagem — mesmo padrão
+        // de "2 formas" na coluna de forma de pagamento. O nome de uma delas
+        // diria que a compra inteira foi daquela categoria, e o detalhe da ordem
+        // é que abre a quebra por valor.
+        categoriaNome={
+          row.original.qtdCategorias > 1
+            ? `${row.original.qtdCategorias} categorias`
+            : row.original.categoriaNome
+        }
       />
     ),
   },

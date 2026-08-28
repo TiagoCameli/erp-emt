@@ -86,6 +86,7 @@ function ordemFixture(overrides: Partial<EspelhoOrdem> = {}): EspelhoOrdem {
     observacoes: null,
     fornecedorNome: "BRITAM",
     categoriaNome: "Materiais",
+    qtdCategorias: 1,
     cotacaoNumero: "COT-2026-0003",
     condicaoDescricao: "À Vista",
     itens: [],
@@ -181,6 +182,44 @@ describe("EspelhoOrdensPage", () => {
     // gastaria linha de uma folha que precisa fechar em A4.
     expect(screen.getByText("· Pendente de aprovação")).toBeInTheDocument();
     expect(screen.queryByText("pendente_aprovacao")).not.toBeInTheDocument();
+  });
+
+  /**
+   * A OC pode ter mais de uma categoria desde 28/08/2026 (10 das 72 têm, e duas
+   * têm cinco). `categoriaNome` guarda a PREDOMINANTE, e imprimir o nome dela
+   * numa compra mista afirma que a compra inteira foi daquela categoria — num
+   * papel que vai para o arquivo e para o fornecedor.
+   */
+  it("com mais de uma categoria, o papel imprime a contagem e não o nome de uma delas", async () => {
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockReturnValue(true);
+    vi.mocked(buscarOrdensParaEspelho).mockResolvedValue([
+      ordemFixture({
+        categoriaNome: "Materiais de construção",
+        qtdCategorias: 2,
+      }),
+    ]);
+    vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
+
+    await renderPagina(ID_A);
+
+    expect(screen.getByText("2 categorias")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Materiais de construção"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("com uma categoria só, imprime o nome dela", async () => {
+    vi.mocked(getUsuarioLogado).mockResolvedValue(USUARIO);
+    vi.mocked(temPermissao).mockReturnValue(true);
+    vi.mocked(buscarOrdensParaEspelho).mockResolvedValue([
+      ordemFixture({ categoriaNome: "Materiais", qtdCategorias: 1 }),
+    ]);
+    vi.mocked(listarAnexosPorDocumento).mockResolvedValue({});
+
+    await renderPagina(ID_A);
+
+    expect(screen.getByText("Materiais")).toBeInTheDocument();
   });
 
   it("o total da ordem e o total dos itens saem com rótulos diferentes, e o papel diz quanto vale a OC", async () => {

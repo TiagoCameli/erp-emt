@@ -172,7 +172,17 @@ export default async function EspelhoOrdensPage({
               itens={[
                 { rotulo: "Nº da ordem", valor: ordem.numero },
                 { rotulo: "Cotação", valor: ordem.cotacaoNumero },
-                { rotulo: "Categoria", valor: ordem.categoriaNome },
+                {
+                  // Mesma regra da listagem: com duas ou mais, a contagem. O
+                  // nome de uma delas afirmaria que a compra inteira foi daquela
+                  // categoria, e este papel vai para o arquivo.
+                  rotulo:
+                    ordem.qtdCategorias > 1 ? "Categorias" : "Categoria",
+                  valor:
+                    ordem.qtdCategorias > 1
+                      ? `${ordem.qtdCategorias} categorias`
+                      : ordem.categoriaNome,
+                },
                 { rotulo: "Condição", valor: ordem.condicaoDescricao },
               ]}
             />

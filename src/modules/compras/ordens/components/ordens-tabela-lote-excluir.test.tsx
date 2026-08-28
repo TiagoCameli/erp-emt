@@ -48,6 +48,7 @@ function ordem(id: string, numero: string, status: string): OrdemLista {
     fornecedorNome: "GUERRA IMPLEMENTOS RODOVIARIOS S.A",
     descricao: "Peças para caminhão",
     categoriaNome: "Manutenção",
+    qtdCategorias: 1,
     valorTotal: 1000,
     status,
     dataCompra: "2026-07-10",

@@ -22,6 +22,7 @@ const LINHA = {
   mes_competencia: "2026-07-01",
   observacoes: null,
   fornecedores: { razao_social: "BRITAM", nome_fantasia: null },
+  categoria_ids: ["7ee38e15-2f00-4f6d-8f2a-3f1e0d5c2a11"],
   categorias_financeiras: { nome: "Materiais" },
   cotacoes: { numero: "COT-2026-0003" },
   condicoes_pagamento: { descricao: "À Vista" },

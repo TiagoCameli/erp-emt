@@ -69,7 +69,7 @@ const formulario = {
   centrosCusto: [
     {
       centroCustoId: CENTRO,
-      insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100" }],
+      insumos: [{ insumoId: INSUMO, quantidade: "10", precoUnitario: "100", categoriaCustoId: CATEGORIA }],
     },
   ],
   parcelas: [] as {

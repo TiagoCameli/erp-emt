@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,14 @@ export interface ConfirmDialogProps {
   textoConfirmar: string;
   variante?: 'padrao' | 'destrutivo';
   exigeMotivo?: boolean;
+  /**
+   * O que exatamente vai acontecer, quando uma frase não dá conta: a lista dos
+   * registros afetados, o de/para de uma reclassificação, a contagem do
+   * impacto. Fica entre a descrição e os botões, com teto de altura e rolagem
+   * própria — sem o teto, uma lista de trinta linhas empurra os botões para
+   * fora da tela e o diálogo fica sem saída.
+   */
+  conteudo?: ReactNode;
   onConfirmar: (motivo?: string) => void | Promise<void>;
 }
 
@@ -34,6 +42,7 @@ export function ConfirmDialog({
   textoConfirmar,
   variante = 'padrao',
   exigeMotivo = false,
+  conteudo,
   onConfirmar,
 }: ConfirmDialogProps) {
   const [motivo, setMotivo] = useState('');
@@ -69,6 +78,10 @@ export function ConfirmDialog({
             {descricao}
           </DialogDescription>
         </DialogHeader>
+
+        {conteudo ? (
+          <div className="max-h-[50vh] overflow-y-auto">{conteudo}</div>
+        ) : null}
 
         {exigeMotivo ? (
           <div className="grid gap-2">
