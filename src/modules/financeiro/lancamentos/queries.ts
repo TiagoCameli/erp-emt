@@ -19,6 +19,7 @@ import {
   type TipoFormaPagamento,
 } from "@/modules/_shared/forma-pagamento";
 import {
+  SEM_CENTRO_DE_CUSTO,
   STATUS_PARCELA_ABERTA,
   type StatusLancamento,
   type StatusParcela,
@@ -280,6 +281,17 @@ export interface LancamentoLista {
 
 /** Um centro de custo do rateio, para a coluna da planilha. */
 export interface RateioPlanilha {
+  /**
+   * Id do centro de custo, ou null no rateio que perdeu o cadastro.
+   *
+   * Existe para a planilha por rateio juntar as partes do MESMO centro sem
+   * depender do nome: um lançamento vindo de OC com vários itens na mesma obra
+   * grava uma parte por item (9 lançamentos hoje, até 5 partes), e o arquivo
+   * traria a mesma obra repetida em cinco linhas. Agrupar por nome funcionaria
+   * hoje e passaria a somar dois centros num só no dia em que dois cadastros
+   * tiverem o mesmo nome — e isso é dinheiro trocando de obra sem erro nenhum.
+   */
+  centroId: string | null;
   nome: string;
   codigo: string | null;
   valor: number;
@@ -1243,7 +1255,7 @@ export async function detalharLancamentosParaPlanilha(
          formas_pagamento(nome),
          condicoes_pagamento(descricao),
          lancamento_parcelas(conta_bancaria_id, contas_bancarias(nome)),
-         lancamento_rateios(valor, centros_custo(nome, codigo))`,
+         lancamento_rateios(valor, centros_custo(id, nome, codigo))`,
       )
       .in("id", lote);
 
@@ -1284,7 +1296,8 @@ export async function detalharLancamentosParaPlanilha(
           ? (numeroOc.get(linha.origem_id) ?? null)
           : null,
       rateios: (linha.lancamento_rateios ?? []).map((rateio) => ({
-        nome: rateio.centros_custo?.nome ?? "Sem centro de custo",
+        centroId: rateio.centros_custo?.id ?? null,
+        nome: rateio.centros_custo?.nome ?? SEM_CENTRO_DE_CUSTO,
         codigo: rateio.centros_custo?.codigo ?? null,
         valor: rateio.valor,
       })),
@@ -1308,7 +1321,7 @@ type LinhaDetalhePlanilha = {
   }[];
   lancamento_rateios: {
     valor: number;
-    centros_custo: { nome: string; codigo: string | null } | null;
+    centros_custo: { id: string; nome: string; codigo: string | null } | null;
   }[];
 };
 
