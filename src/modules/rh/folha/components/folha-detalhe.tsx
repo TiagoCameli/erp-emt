@@ -6,8 +6,11 @@ import {
   ArrowLeft,
   ChevronDown,
   FileText,
+  LoaderCircle,
   Pencil,
   RefreshCw,
+  UserMinus,
+  UserPlus,
 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
@@ -24,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   formatarBRL,
+  formatarData,
   formatarDataHora,
   formatarQuantidade,
 } from "@/lib/formatadores";
@@ -37,12 +41,15 @@ import {
   desaprovarFolha,
   enviarFolhaParaAprovacao,
   rejeitarFolha,
+  tirarDaFolha,
+  voltarParaFolha,
 } from "@/modules/rh/folha/actions";
 import {
   retidoSemGrupoDeRecolhimento,
   type LancamentosDaFolhaAgrupados,
 } from "@/modules/rh/folha/calculo";
 import type {
+  ColaboradorForaDaFolha,
   CustoCentroCusto,
   FolhaDetalhe,
   FolhaItem,
@@ -206,6 +213,43 @@ export function FolhaDetalheView({
   const [itemEmEdicao, setItemEmEdicao] = React.useState<FolhaItem | null>(
     null,
   );
+  /** Linha em que se clicou "Tirar": alimenta o diálogo de confirmação. */
+  const [itemParaTirar, setItemParaTirar] = React.useState<FolhaItem | null>(
+    null,
+  );
+  /**
+   * Id do colaborador que está voltando para a folha, para o botão dele virar
+   * spinner. Guarda o ID e não um booleano: com um booleano, clicar em "Colocar
+   * de volta" numa linha deixaria TODAS as linhas girando, e a operação demora
+   * (ela regenera a folha inteira).
+   */
+  const [voltandoId, setVoltandoId] = React.useState<string | null>(null);
+
+  async function aoTirarDaFolha(motivo?: string) {
+    if (!itemParaTirar) return;
+    const resultado = await tirarDaFolha(
+      folha.id,
+      itemParaTirar.colaboradorId,
+      motivo,
+    );
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success(`${itemParaTirar.colaboradorNome} saiu desta folha`);
+    setItemParaTirar(null);
+  }
+
+  async function aoVoltarParaFolha(fora: ColaboradorForaDaFolha) {
+    setVoltandoId(fora.colaboradorId);
+    const resultado = await voltarParaFolha(folha.id, fora.colaboradorId);
+    setVoltandoId(null);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success(`${fora.nome} voltou para esta folha`);
+  }
 
   async function aoEnviarParaAprovacao() {
     const resultado = await enviarFolhaParaAprovacao(folha.id);
@@ -603,6 +647,18 @@ export function FolhaDetalheView({
                           <FileText />
                           Holerite
                         </Button>
+                        {podeEditarLinha ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            title={`Tirar ${item.colaboradorNome} desta folha`}
+                            onClick={() => setItemParaTirar(item)}
+                          >
+                            <UserMinus />
+                            Tirar
+                          </Button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -612,6 +668,82 @@ export function FolhaDetalheView({
           </div>
         )}
       </Secao>
+
+      {/*
+        Quem foi tirado desta folha. A seção só existe quando há alguém fora:
+        um bloco vazio permanente daria a entender que tirar gente da folha é
+        parte do fluxo normal, e não a exceção que é.
+
+        Sem esta lista não haveria caminho de volta: quem sai perde a linha em
+        `folha_itens` e simplesmente desapareceria da tela.
+      */}
+      {folha.foraDaFolha.length > 0 ? (
+        <Secao titulo={`Fora desta folha (${folha.foraDaFolha.length})`}>
+          <p className="mb-2 text-detalhe text-muted-foreground">
+            Estes colaboradores continuam ativos na empresa e entram
+            normalmente na folha da próxima competência. Eles só não entram
+            nesta, nem nos totais acima.
+          </p>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full text-detalhe">
+              <thead>
+                <tr className="border-b border-border text-legenda text-muted-foreground">
+                  <th className="px-3 py-2 text-left font-medium">
+                    Colaborador
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">Função</th>
+                  <th className="px-3 py-2 text-left font-medium">Motivo</th>
+                  <th className="px-3 py-2 text-right font-medium">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {folha.foraDaFolha.map((fora) => (
+                  <tr
+                    key={fora.colaboradorId}
+                    className="border-b border-border last:border-0"
+                  >
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col">
+                        <span className="font-medium">{fora.nome}</span>
+                        <span className="text-legenda text-muted-foreground">
+                          {ROTULO_VINCULO[fora.vinculo as Vinculo] ??
+                            fora.vinculo}
+                          {" · tirado em "}
+                          {formatarData(fora.tiradoEm)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {fora.funcao ?? <CelulaVazia />}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {fora.motivo ?? <CelulaVazia />}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {podeEditarLinha ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={voltandoId !== null}
+                          onClick={() => void aoVoltarParaFolha(fora)}
+                        >
+                          {voltandoId === fora.colaboradorId ? (
+                            <LoaderCircle className="animate-spin" />
+                          ) : (
+                            <UserPlus />
+                          )}
+                          Colocar de volta
+                        </Button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Secao>
+      ) : null}
 
       <Secao titulo="Custo por centro de custo">
         {custosPorCentro.length === 0 ? (
@@ -807,6 +939,38 @@ export function FolhaDetalheView({
           descricao="A folha vai para o Admin aprovar. Enquanto estiver pendente, ela não pode ser regerada."
           textoConfirmar="Enviar para aprovação"
           onConfirmar={aoEnviarParaAprovacao}
+        />
+      ) : null}
+
+      {/*
+        A descrição responde a pergunta que o botão provoca — "isso demite a
+        pessoa?" — antes de alguém precisar perguntar. E avisa que a folha é
+        regerada, porque a operação demora alguns segundos e mexe nos totais.
+
+        O motivo é EXIGIDO aqui, embora a coluna aceite null: em setembro alguém
+        vai querer saber por que fulano não recebeu em agosto, e essa é a única
+        parte que a auditoria não consegue reconstruir sozinha.
+
+        Condição própria (`podeEditarLinha`), e não a do diálogo de enviar: esta
+        ação existe em rascunho mesmo quando a folha ainda não tem item nenhum
+        para enviar.
+      */}
+      {podeEditarLinha ? (
+        <ConfirmDialog
+          aberto={itemParaTirar !== null}
+          onAbertoChange={(aberto) => {
+            if (!aberto) setItemParaTirar(null);
+          }}
+          titulo={
+            itemParaTirar
+              ? `Tirar ${itemParaTirar.colaboradorNome} desta folha`
+              : "Tirar da folha"
+          }
+          descricao="Ele NÃO é desligado da empresa: continua ativo e entra normalmente na folha da próxima competência. Só sai desta, e os totais são recalculados."
+          textoConfirmar="Tirar desta folha"
+          variante="destrutivo"
+          exigeMotivo
+          onConfirmar={aoTirarDaFolha}
         />
       ) : null}
 

@@ -539,3 +539,103 @@ export async function gerarPlanilhaFolha(
     nomeArquivo: nomeArquivoFolha(folha.competencia),
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Tirar da folha / trazer de volta                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Tira um colaborador DESTA folha, sem desligá-lo da empresa.
+ *
+ * A permissão é `editar`, mas a RPC também exige `criar`: a operação REGENERA a
+ * folha, porque montar (e desmontar) item é responsabilidade de
+ * `fn_gerar_folha` — a única função que sabe a regra de dinheiro do item. Ver o
+ * cabeçalho da migration 20260828140000.
+ *
+ * O motivo é opcional e curto. Obrigar motivo transformaria o caminho rápido
+ * ("entrou de licença, tiro deste mês") num formulário, e o histórico já grava
+ * quem tirou e quando.
+ */
+export async function tirarDaFolha(
+  folhaId: string,
+  colaboradorId: string,
+  motivo?: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar a folha" };
+  }
+
+  const idFolha = idSchema.safeParse(folhaId);
+  if (!idFolha.success) return { erro: "Folha inválida" };
+  const idColab = idSchema.safeParse(colaboradorId);
+  if (!idColab.success) return { erro: "Colaborador inválido" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_tirar_da_folha", {
+    p_folha_id: idFolha.data,
+    p_colaborador_id: idColab.data,
+    p_motivo: motivo?.trim() ? motivo.trim() : null,
+  });
+
+  if (error) {
+    // `mensagemDeNegocio` deixa passar o texto dos `raise` da RPC (P0001), que
+    // aqui são todos em pt-BR e dizem o que fazer: folha fora de rascunho,
+    // sobra de adiantamento já descontada numa folha posterior, falta de
+    // permissão de criar. Erro de infraestrutura cai no fallback.
+    return erroAcao(
+      "rh.folha.tirarDaFolha",
+      error,
+      mensagemDeNegocio(
+        error,
+        "Não foi possível tirar o colaborador da folha. Tente novamente",
+      ),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idFolha.data));
+  return { ok: true };
+}
+
+/**
+ * Traz de volta para a folha um colaborador que tinha sido tirado dela.
+ *
+ * Também regenera, e pelo mesmo motivo: é `fn_gerar_folha` que sabe montar o
+ * item (base por vínculo, INSS, IRRF, adiantamento em cascata, centro de custo,
+ * encargos e provisões). Uma segunda função que soubesse montar item seria uma
+ * segunda cópia da regra de dinheiro.
+ */
+export async function voltarParaFolha(
+  folhaId: string,
+  colaboradorId: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar a folha" };
+  }
+
+  const idFolha = idSchema.safeParse(folhaId);
+  if (!idFolha.success) return { erro: "Folha inválida" };
+  const idColab = idSchema.safeParse(colaboradorId);
+  if (!idColab.success) return { erro: "Colaborador inválido" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_voltar_para_folha", {
+    p_folha_id: idFolha.data,
+    p_colaborador_id: idColab.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.voltarParaFolha",
+      error,
+      mensagemDeNegocio(
+        error,
+        "Não foi possível colocar o colaborador de volta. Tente novamente",
+      ),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idFolha.data));
+  return { ok: true };
+}

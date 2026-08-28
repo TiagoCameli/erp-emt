@@ -1272,6 +1272,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      folha_exclusoes: {
+        Row: {
+          colaborador_id: string;
+          created_at: string;
+          created_by: string | null;
+          folha_id: string;
+          motivo: string | null;
+        };
+        Insert: {
+          colaborador_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          folha_id: string;
+          motivo?: string | null;
+        };
+        Update: {
+          colaborador_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          folha_id?: string;
+          motivo?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folha_exclusoes_colaborador_id_fkey";
+            columns: ["colaborador_id"];
+            isOneToOne: false;
+            referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folha_exclusoes_folha_id_fkey";
+            columns: ["folha_id"];
+            isOneToOne: false;
+            referencedRelation: "folhas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       folha_guias: {
         Row: {
           created_at: string;
@@ -4049,6 +4088,20 @@ export type Database = {
       fn_gerar_folha: {
         Args: { p_competencia: string; p_encargos_pct?: number };
         Returns: string;
+      };
+      fn_tirar_da_folha: {
+        // `p_motivo` opcional no banco (default null). Os dois ids são
+        // obrigatórios: não existe "tirar alguém" sem dizer de qual folha.
+        Args: {
+          p_colaborador_id: string;
+          p_folha_id: string;
+          p_motivo?: string | null;
+        };
+        Returns: undefined;
+      };
+      fn_voltar_para_folha: {
+        Args: { p_colaborador_id: string; p_folha_id: string };
+        Returns: undefined;
       };
       fn_impacto_reclassificar_insumos: {
         Args: { p_insumo_ids: string[] };
