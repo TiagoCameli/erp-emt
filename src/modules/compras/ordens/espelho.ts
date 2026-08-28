@@ -69,7 +69,16 @@ export interface EspelhoOrdem {
   mesCompetencia: string | null;
   observacoes: string | null;
   fornecedorNome: string | null;
+  /**
+   * Nome da categoria PREDOMINANTE. Com duas ou mais, a faixa do espelho mostra
+   * a contagem em vez deste nome: o espelho e documento que vai para o arquivo e
+   * para o fornecedor, e escrever "Materiais de construcao" numa compra que e
+   * metade material e metade peca de equipamento e a mesma meia-verdade que saiu
+   * da tela em 28/08/2026.
+   */
   categoriaNome: string | null;
+  /** Quantas categorias distintas a ordem tem, pelos insumos comprados. */
+  qtdCategorias: number;
   cotacaoNumero: string | null;
   condicaoDescricao: string | null;
   itens: EspelhoOrdemItem[];
@@ -94,6 +103,7 @@ export interface LinhaEspelhoOrdem {
   mes_competencia: string | null;
   observacoes: string | null;
   fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
+  categoria_ids: string[] | null;
   categorias_financeiras: { nome: string } | null;
   cotacoes: { numero: string | null } | null;
   condicoes_pagamento: { descricao: string | null } | null;
@@ -188,6 +198,7 @@ export function montarEspelhoOrdem(linha: LinhaEspelhoOrdem): EspelhoOrdem {
       linha.fornecedores?.razao_social ??
       null,
     categoriaNome: linha.categorias_financeiras?.nome ?? null,
+    qtdCategorias: (linha.categoria_ids ?? []).length,
     cotacaoNumero: linha.cotacoes?.numero ?? null,
     condicaoDescricao: linha.condicoes_pagamento?.descricao ?? null,
     itens,
@@ -224,6 +235,7 @@ export async function buscarOrdensParaEspelho(
         `id, numero, descricao, valor_total, frete, outras_despesas, impostos,
          desconto, status, motivo_rejeicao, data_compra, mes_competencia,
          observacoes,
+         categoria_ids,
          fornecedores(razao_social, nome_fantasia),
          categorias_financeiras(nome),
          cotacoes(numero),
