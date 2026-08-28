@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { ArrowDownLeft, ArrowUpRight, Filter, Landmark } from "lucide-react";
 
 import {
@@ -29,6 +29,7 @@ import {
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
 import {
+  compararOrdem,
   somarMovimentos,
   type MovimentoExtrato,
 } from "@/modules/financeiro/contas-bancarias/extrato";
@@ -47,6 +48,15 @@ const ROTULO_TIPO: Record<MovimentoExtrato["tipo"], string | null> = {
   transferencia: "Transferência",
   tarifa: "Tarifa",
 };
+
+/**
+ * Ordenação com que a tabela abre: do movimento mais recente para o mais antigo.
+ *
+ * Constante de módulo, e não literal no JSX, porque um array novo a cada render
+ * é uma identidade nova a cada render — inofensivo hoje, que ele é só a semente
+ * do estado, e uma armadilha no dia em que virar dependência de efeito.
+ */
+const ORDEM_INICIAL: SortingState = [{ id: "data", desc: true }];
 
 const OPCOES_SENTIDO = [
   { valor: "entrada", rotulo: "Entradas" },
@@ -163,7 +173,23 @@ export function ExtratoContaTabela({
 
   const colunas = React.useMemo<ColumnDef<MovimentoExtrato, unknown>[]>(
     () => [
-      colunaData<MovimentoExtrato>("data", "Data", formatarData),
+      colunaData<MovimentoExtrato>("data", "Data", formatarData, {
+        /*
+          A coluna Data ordena pela SEQUÊNCIA do extrato, não pela data escrita
+          nela. Data não tem hora: com quatro movimentos num mesmo 28/08,
+          ordenar pela data inverte a ordem dos DIAS e deixa cada dia
+          internamente crescente, então o saldo atual da conta não cai na
+          primeira linha — cai no fim do primeiro bloco de dia. Ver
+          `MovimentoExtrato.ordem`.
+        */
+        sortingFn: (a, b) => compararOrdem(a.original, b.original),
+        /*
+          Primeiro clique volta para o mais recente, que é o padrão da tela e o
+          sentido em que extrato se lê. Sem isso, o clique de volta cairia no
+          crescente e a pessoa precisaria de dois cliques para desfazer.
+        */
+        sortDescFirst: true,
+      }),
       {
         accessorKey: "entrada",
         header: "Movimento",
@@ -509,6 +535,17 @@ export function ExtratoContaTabela({
         data={dados}
         filtros={filtros}
         onLimparFiltros={limparTodos}
+        /*
+          Abre no movimento mais recente, como o extrato do banco, e é isso que
+          põe o SALDO ATUAL DA CONTA na primeira linha, batendo com o cartão
+          acima da tabela. Na ordem crua do servidor (crescente) o saldo atual
+          ficava na última linha da última página: com 25 por página e 69
+          movimentos, três páginas depois do que a pessoa está olhando.
+
+          Semente, não ordenação controlada: sem `onSortingChange` o DataTable
+          usa este valor como estado inicial e o cabeçalho continua clicável.
+        */
+        sorting={ORDEM_INICIAL}
         pageIndex={paginacao.pageIndex}
         pageSize={paginacao.pageSize}
         onPaginationChange={setPaginacao}

@@ -72,6 +72,23 @@ export interface MovimentoExtrato
    * próprio.
    */
   saldoAcumulado: number | null;
+  /**
+   * Posição desta linha na sequência cronológica que o banco devolveu (0 é a
+   * mais antiga). É por ela que a coluna Data da tela ordena, e não pela data.
+   *
+   * O motivo é que DATA NÃO TEM HORA. Dezenas de movimentos caem no mesmo dia (a
+   * BB 102.124-9 teve quatro num 28/08), então ordenar por data decrescente
+   * inverte a ordem dos DIAS e deixa cada dia internamente crescente: o saldo
+   * atual da conta não aparece na primeira linha, mas no fim do primeiro bloco
+   * de dia. Foi o que a tela mostrou — R$ 264.170,16 no topo com R$ 159.992,48
+   * de saldo atual, quatro linhas abaixo.
+   *
+   * Este índice é o desempate que a data não tem, e é o MESMO que o servidor
+   * usou para acumular o saldo (data, depois `chave`). Ordenar por ele inverte a
+   * sequência inteira, e aí a primeira linha do decrescente é, por construção, a
+   * última do acumulado: o saldo atual da conta.
+   */
+  ordem: number;
 }
 
 /** Soma de um conjunto de movimentos, em reais. */
@@ -108,7 +125,7 @@ export function montarExtrato(
   const semSaldo = saldoInicial === null;
   let acumulado = paraCentavos(saldoInicial);
 
-  const movimentos = linhas.map((linha) => {
+  const movimentos = linhas.map((linha, indice) => {
     const centavos = paraCentavos(linha.valor);
     const comSinal = linha.entrada ? centavos : -centavos;
 
@@ -120,10 +137,31 @@ export function montarExtrato(
       valorComSinal: paraReais(comSinal),
       saldoAcumulado:
         semSaldo || !linha.noSaldo ? null : paraReais(acumulado),
+      // A linha anterior ao corte também é numerada, mesmo sem saldo próprio:
+      // sem número ela não teria como ser ordenada junto com as outras, e o
+      // escopo "tudo" voltaria a embaralhar as duas metades do extrato.
+      ordem: indice,
     };
   });
 
   return { movimentos, saldoFinal: semSaldo ? null : paraReais(acumulado) };
+}
+
+/**
+ * Comparador da coluna Data do extrato: compara pela sequência cronológica, não
+ * pela data.
+ *
+ * Vive aqui, junto de quem carimba `ordem`, porque é a outra metade da mesma
+ * regra: o servidor acumulou o saldo numa ordem, e a tela só pode inverter
+ * EXATAMENTE essa ordem. Solto do comparador, `ordem` seria um número que
+ * ninguém usa e a coluna voltaria calada a ordenar pela data — que é o defeito
+ * que ele existe para consertar. Ver `MovimentoExtrato.ordem`.
+ */
+export function compararOrdem(
+  a: Pick<MovimentoExtrato, "ordem">,
+  b: Pick<MovimentoExtrato, "ordem">,
+): number {
+  return a.ordem - b.ordem;
 }
 
 /**
