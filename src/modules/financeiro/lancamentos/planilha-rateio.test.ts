@@ -27,12 +27,40 @@ import {
  * lançamento — as duas somas dão números certos, cada uma na sua unidade.
  */
 
+/**
+ * Um rateio gravado direto na RAIZ: `raizNome` repete `nome` e não há etapa. É
+ * o caso da grande maioria (6.244 de 6.561 no banco).
+ */
 function rateio(campos: Partial<RateioPlanilha> = {}): RateioPlanilha {
+  const nome =
+    campos.nome ?? "009 - Manutenção da Rodovia BR-364/AC - Lote 09 & 10";
   return {
     centroId: "cc-1",
-    nome: "009 - Manutenção da Rodovia BR-364/AC - Lote 09 & 10",
+    nome,
     codigo: null,
     valor: 100,
+    raizNome: nome,
+    etapaNome: null,
+    ...campos,
+  };
+}
+
+/**
+ * Um rateio gravado numa ETAPA: o nível gravado é a etapa, e o centro de custo
+ * é o pai dela. É a distinção que a primeira versão da planilha errou.
+ */
+function rateioEmEtapa(
+  etapa: string,
+  centro: string,
+  campos: Partial<RateioPlanilha> = {},
+): RateioPlanilha {
+  return {
+    centroId: `etapa:${etapa}`,
+    nome: etapa,
+    codigo: null,
+    valor: 100,
+    raizNome: centro,
+    etapaNome: etapa,
     ...campos,
   };
 }
@@ -197,12 +225,17 @@ describe("colunas da planilha por rateio", () => {
     expect(CABECALHOS_PLANILHA_RATEIOS).toContain("Descrição");
     expect(CABECALHOS_PLANILHA_RATEIOS).toContain("Observações");
 
-    // "Valor" vira duas colunas, "Rateio" vira "Parte".
+    // "Valor" vira duas colunas, "Rateio" vira "Etapa".
     expect(CABECALHOS_PLANILHA_RATEIOS).not.toContain("Valor");
     expect(CABECALHOS_PLANILHA_RATEIOS).not.toContain("Rateio");
     expect(CABECALHOS_PLANILHA_RATEIOS).toContain("Valor do rateio");
     expect(CABECALHOS_PLANILHA_RATEIOS).toContain("Valor do lançamento");
-    expect(CABECALHOS_PLANILHA_RATEIOS).toContain("Parte");
+    expect(CABECALHOS_PLANILHA_RATEIOS).toContain("Etapa");
+
+    // A etapa vem LOGO DEPOIS do centro de custo: são o par que se lê junto.
+    expect(CABECALHOS_PLANILHA_RATEIOS.indexOf("Etapa")).toBe(
+      CABECALHOS_PLANILHA_RATEIOS.indexOf("Centro de custo") + 1,
+    );
 
     // Uma coluna a mais que a outra planilha: "Valor" virou duas.
     expect(CABECALHOS_PLANILHA_RATEIOS).toHaveLength(
@@ -243,37 +276,68 @@ describe("colunas da planilha por rateio", () => {
     expect(celulas.map((celula) => celula[fatia])).toEqual([100, 200]);
   });
 
-  it("a coluna Parte fica em branco quando o lançamento tem um centro só", () => {
-    const [uma] = expandirPorRateio([
-      lancamento({ rateios: [rateio({ valor: 300 })] }),
-    ]);
-    const duas = expandirPorRateio([
-      lancamento({
-        rateios: [
-          rateio({ centroId: "a", valor: 100 }),
-          rateio({ centroId: "b", valor: 200 }),
-        ],
-      }),
-    ]);
-
-    expect(linhaPlanilhaRateio(uma)[coluna("Parte")]).toBeNull();
-    expect(linhaPlanilhaRateio(duas[1])[coluna("Parte")]).toBe("2 de 2");
-  });
-
-  it("o centro de custo da linha é um só, no nível em que foi gravado", () => {
-    // Rateio em etapa traz o nome da ETAPA, não o da obra-raiz: é o grão que o
-    // rateio conhece, e é o que a tela do lançamento mostra.
+  it("centro de custo é a RAIZ, e a etapa vai na coluna ao lado", () => {
+    // O caso que o Tiago apontou: "001 - Carretas EMT" é o centro de custo e
+    // "Caminhão Cavalo XF 530 FTT SQU9C94 - 03" é uma ETAPA dele. A primeira
+    // versão punha a etapa na coluna do centro, e quem soma por obra não achava
+    // a obra.
     const [linha] = expandirPorRateio([
       lancamento({
         rateios: [
-          rateio({ centroId: "pc200", nome: "Escavadeira PC200 - 05", valor: 555.05 }),
+          rateioEmEtapa(
+            "Caminhão Cavalo XF 530 FTT SQU9C94 - 03",
+            "001 - Carretas EMT",
+            { valor: 4450 },
+          ),
         ],
       }),
     ]);
 
-    expect(linhaPlanilhaRateio(linha)[coluna("Centro de custo")]).toBe(
-      "Escavadeira PC200 - 05",
+    const celulas = linhaPlanilhaRateio(linha);
+    expect(celulas[coluna("Centro de custo")]).toBe("001 - Carretas EMT");
+    expect(celulas[coluna("Etapa")]).toBe(
+      "Caminhão Cavalo XF 530 FTT SQU9C94 - 03",
     );
+  });
+
+  it("a coluna Etapa fica em branco no rateio que foi direto para a raiz", () => {
+    const [linha] = expandirPorRateio([
+      lancamento({ rateios: [rateio({ nome: "003 - Ramal do Gama", valor: 300 })] }),
+    ]);
+
+    const celulas = linhaPlanilhaRateio(linha);
+    expect(celulas[coluna("Centro de custo")]).toBe("003 - Ramal do Gama");
+    // Em branco, e não a raiz repetida: as duas colunas parecendo a mesma coisa
+    // é o que fez a versão anterior confundir centro com etapa.
+    expect(celulas[coluna("Etapa")]).toBeNull();
+  });
+
+  it("duas etapas do MESMO centro viram duas linhas", () => {
+    // "uma linha por etapa": o centro se repete nas duas, a etapa é o que muda.
+    const linhas = expandirPorRateio([
+      lancamento({
+        valor: 8029.37,
+        rateios: [
+          rateioEmEtapa("Escavadeira 320C - 03", "Manutenção de Equipamentos", {
+            valor: 4014.68,
+          }),
+          rateioEmEtapa("Rolo Chapa CB10 - 01", "Manutenção de Equipamentos", {
+            valor: 4014.69,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(linhas).toHaveLength(2);
+    const celulas = linhas.map(linhaPlanilhaRateio);
+    expect(celulas.map((linha) => linha[coluna("Centro de custo")])).toEqual([
+      "Manutenção de Equipamentos",
+      "Manutenção de Equipamentos",
+    ]);
+    expect(celulas.map((linha) => linha[coluna("Etapa")])).toEqual([
+      "Escavadeira 320C - 03",
+      "Rolo Chapa CB10 - 01",
+    ]);
   });
 });
 

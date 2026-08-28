@@ -276,9 +276,15 @@ export const CABECALHOS_PLANILHA_LANCAMENTOS = COLUNAS_PLANILHA_LANCAMENTOS.map(
  *
  * A versão por lançamento (acima) responde "quanto e para quem"; esta responde
  * "quanto foi para cada obra", que é a pergunta de quem monta tabela dinâmica
- * por centro de custo. Um lançamento rateado entre três obras vira três linhas,
- * e o rateio em etapa traz o nome da ETAPA, que é o nível em que ele foi
- * gravado.
+ * por centro de custo. Um lançamento rateado entre três obras vira três linhas.
+ *
+ * CENTRO DE CUSTO E ETAPA SÃO DUAS COLUNAS, e essa é a regra que a primeira
+ * versão errou. No vocabulário do ERP são coisas diferentes: "001 - Carretas
+ * EMT" é o centro de custo, e "Caminhão Cavalo XF 530 FTT SQU9C94 - 03" é uma
+ * ETAPA dele. Pôr o nível gravado numa coluna só enchia "Centro de custo" de
+ * nome de equipamento, e quem soma por obra não achava a obra. Aqui a coluna
+ * "Centro de custo" traz sempre a RAIZ, e a etapa vai na coluna ao lado — vazia
+ * nos 6.244 rateios (de 6.561) que foram direto para a raiz.
  *
  * O que impede a soma dupla, que é o defeito clássico deste formato: a coluna de
  * dinheiro que soma é a FATIA, nunca o valor do documento. O total do documento
@@ -288,13 +294,16 @@ export const CABECALHOS_PLANILHA_LANCAMENTOS = COLUNAS_PLANILHA_LANCAMENTOS.map(
  */
 export interface LinhaRateio {
   lancamento: LancamentoPlanilha;
+  /** O CENTRO DE CUSTO: a raiz da árvore. Nunca o nome da etapa. */
   centroNome: string;
+  /** A ETAPA, quando o rateio foi para uma. Null quando foi direto na raiz. */
+  etapaNome: string | null;
   centroCodigo: string | null;
-  /** A fatia deste centro. Soma dos rateios = valor do lançamento. */
+  /** A fatia deste rateio. Soma dos rateios = valor do lançamento. */
   valorRateio: number;
   /** Posição desta fatia dentro do lançamento, base 1. */
   parte: number;
-  /** Quantas fatias o lançamento tem depois de juntar as do mesmo centro. */
+  /** Quantas fatias o lançamento tem depois de juntar as do mesmo destino. */
   partes: number;
 }
 
@@ -335,7 +344,8 @@ export function expandirPorRateio(
       }
       porCentro.set(chave, {
         lancamento,
-        centroNome: rateio.nome,
+        centroNome: rateio.raizNome,
+        etapaNome: rateio.etapaNome,
         centroCodigo: rateio.codigo,
         valorRateio: rateio.valor,
         parte: porCentro.size + 1,
@@ -350,6 +360,7 @@ export function expandirPorRateio(
             {
               lancamento,
               centroNome: SEM_CENTRO_DE_CUSTO,
+              etapaNome: null,
               centroCodigo: null,
               valorRateio: lancamento.valor,
               parte: 1,
@@ -419,21 +430,21 @@ const COLUNAS_TROCADAS: Record<string, ColunaRateio[]> = {
       cabecalho: "Centro de custo",
       largura: 34,
       tipo: "texto",
-      // UM centro, o desta linha, e no nível em que o rateio foi gravado: quando
-      // é etapa, sai o nome da etapa, que é o grão que o rateio conhece.
+      // SEMPRE A RAIZ, mesmo quando o rateio foi para uma etapa: é o que o ERP
+      // chama de centro de custo, e é por ele que se soma por obra. A etapa vai
+      // na coluna ao lado.
       celula: (linha) => linha.centroNome,
     },
   ],
   Rateio: [
     {
-      cabecalho: "Parte",
-      largura: 10,
+      cabecalho: "Etapa",
+      largura: 34,
       tipo: "texto",
-      // Em branco quando o lançamento tem um centro só: "1 de 1" em milhares de
-      // linhas é ruído. Com mais de um, é o que denuncia fatia faltando depois
-      // de alguém filtrar o arquivo.
-      celula: (linha) =>
-        linha.partes < 2 ? null : `${linha.parte} de ${linha.partes}`,
+      // Em branco no rateio que foi direto para a raiz, que é a maioria (6.244
+      // de 6.561): a etapa é um detalhe do centro, não um segundo nome dele, e
+      // repetir a raiz aqui faria as duas colunas parecerem a mesma coisa.
+      celula: (linha) => linha.etapaNome,
     },
   ],
 };
