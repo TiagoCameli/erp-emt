@@ -65,7 +65,30 @@
 --   subarvore: R$ 5.322.242,89 (identica: nada sumiu nem apareceu)
 --   lancamentos cujo rateio nao fecha com o valor: 0
 --
--- As mesmas tres conferencias rodam no fim deste arquivo e ABORTAM se falharem.
+-- As mesmas conferencias rodam no fim deste arquivo e ABORTAM se falharem.
+--
+-- ## O BUG QUE ESTE ARQUIVO JA TEVE, e a conferencia que nasceu dele
+--
+-- A primeira versao apagava e reinseria linhas de rateio SEM `categoria_id`. As
+-- tres provas que eu tinha (raiz zerada, subarvore igual, rateio fechando com o
+-- lancamento) passaram todas -- porque nenhuma delas olhava categoria. So que o
+-- DRE agrupa por `coalesce(r.categoria_id, l.categoria_id)`, entao toda linha
+-- recriada passou a cair na categoria do LANCAMENTO.
+--
+-- Isso moveu R$ 133.160,00 de categoria no DRE, sem erro e sem aviso:
+--
+--   LAN-2026-5876  R$ 132.500,00  Outras despesas    -> Aquisicao de Equipamento
+--   LAN-2026-2257  R$     360,00  Salario Mao de Obra-> Aquisicao de Equipamento
+--   LAN-2026-4889  R$     300,00  Reembolso          -> Aquisicao de Equipamento
+--
+-- O rateio NAO herda a classificacao do lancamento: 9 das linhas deste mesmo
+-- centro tem categoria diferente da do documento. O conserto veio do audit_log,
+-- que guardou o `dados_antes` das 8 linhas apagadas.
+--
+-- A licao, e o motivo da conferencia extra la embaixo: prova de dinheiro que so
+-- olha SOMA nao pega dinheiro trocando de gaveta. Quando a operacao recria
+-- linhas, a prova tem que olhar cada DIMENSAO que a linha carrega -- aqui,
+-- centro E categoria.
 
 do $aplica$
 declare
@@ -122,13 +145,30 @@ begin
   where l.id = r.lancamento_id and l.numero = m.numero and r.centro_custo_id = AQ;
 
   -- ---------- 3. os 3 que cobrem mais de um equipamento ----------
-  delete from public.lancamento_rateios r
-  using public.lancamentos l
-  where l.id = r.lancamento_id and r.centro_custo_id = AQ
-    and l.numero in ('LAN-2026-4252','LAN-2026-5233','LAN-2026-5876');
-
-  insert into public.lancamento_rateios (lancamento_id, centro_custo_id, valor)
-  select l.id, e.id, v.valor
+  -- A categoria do rateio vem JUNTO. Aprendi apanhando: a primeira versao disto
+  -- apagava e reinseria sem `categoria_id`, e as linhas novas nasciam nulas. O
+  -- DRE usa `coalesce(r.categoria_id, l.categoria_id)`, entao quem tinha rateio
+  -- com categoria DIFERENTE da do lancamento mudava de linha no DRE sem que nada
+  -- reclamasse -- R$ 133.160,00 em tres lancamentos (o LAN-2026-5876 sozinho e
+  -- R$ 132.500,00 que sairam de "Outras despesas" para "Aquisicao de
+  -- Equipamento"). O rateio carrega classificacao propria: 9 das linhas deste
+  -- mesmo centro divergem da categoria do lancamento.
+  with original as (
+    select r.lancamento_id, r.categoria_id
+    from public.lancamento_rateios r
+    join public.lancamentos l on l.id = r.lancamento_id
+    where r.centro_custo_id = AQ
+      and l.numero in ('LAN-2026-4252','LAN-2026-5233','LAN-2026-5876')
+  ),
+  apagadas as (
+    delete from public.lancamento_rateios r
+    using public.lancamentos l
+    where l.id = r.lancamento_id and r.centro_custo_id = AQ
+      and l.numero in ('LAN-2026-4252','LAN-2026-5233','LAN-2026-5876')
+    returning r.id
+  )
+  insert into public.lancamento_rateios (lancamento_id, centro_custo_id, categoria_id, valor)
+  select l.id, e.id, o.categoria_id, v.valor
   from (values
     ('LAN-2026-4252','Rolo Chapa CB10 - 01', 332000.00),          -- NF 19814
     ('LAN-2026-4252','Rolo de Pneu CW34 - 01', 368000.00),        -- NF 19815
@@ -140,7 +180,8 @@ begin
     ('LAN-2026-5876','PLATAFORMA ROLL ON - ROLL OFF 6.50 M - CARROCERIA ABERTA', 66250.00)
   ) v(numero, etapa, valor)
   join public.lancamentos l on l.numero = v.numero
-  join public.centros_custo e on e.pai_id = AQ and e.nome = v.etapa;
+  join public.centros_custo e on e.pai_id = AQ and e.nome = v.etapa
+  join original o on o.lancamento_id = l.id;
 
   -- ---------- 4. fretes genericos e viagens, rateados pela Vectra ----------
   -- A sobra do arredondamento vai para a maior parte, senao a soma do rateio
@@ -155,8 +196,10 @@ begin
     join public.centros_custo e on e.pai_id = AQ and e.nome = v.etapa
   ),
   total as (select sum(peso) as t from base),
+  -- `categoria_id` entra no alvo pelo mesmo motivo da secao 3: sem ele, as linhas
+  -- novas nascem sem classificacao e o DRE cai no fallback do lancamento.
   alvo as (
-    select l.id as lanc_id, r.valor
+    select l.id as lanc_id, r.valor, r.categoria_id
     from public.lancamento_rateios r
     join public.lancamentos l on l.id = r.lancamento_id
     where r.centro_custo_id = AQ
@@ -164,7 +207,8 @@ begin
                        'LAN-2026-5155','LAN-2026-2257','LAN-2026-4889')  -- viagens
   ),
   partes as (
-    select a.lanc_id, b.etapa_id, round(a.valor * b.peso / t.t, 2) as parte,
+    select a.lanc_id, a.categoria_id, b.etapa_id,
+           round(a.valor * b.peso / t.t, 2) as parte,
            row_number() over (partition by a.lanc_id order by b.peso desc, b.etapa_id) as ordem,
            a.valor
     from alvo a cross join total t join base b on true
@@ -174,8 +218,9 @@ begin
     delete from public.lancamento_rateios r using alvo a
     where r.lancamento_id = a.lanc_id and r.centro_custo_id = AQ returning r.id
   )
-  insert into public.lancamento_rateios (lancamento_id, centro_custo_id, valor)
-  select p.lanc_id, p.etapa_id, p.parte + case when p.ordem = 1 then s.resto else 0 end
+  insert into public.lancamento_rateios (lancamento_id, centro_custo_id, categoria_id, valor)
+  select p.lanc_id, p.etapa_id, p.categoria_id,
+         p.parte + case when p.ordem = 1 then s.resto else 0 end
   from partes p join sobra s on s.lanc_id = p.lanc_id
   where p.parte <> 0 or p.ordem = 1;
 
@@ -199,6 +244,20 @@ begin
     having round(sum(r.valor),2) <> round(l.valor,2)) t;
 
   select count(*) into v_etapas from public.centros_custo where pai_id = AQ;
+
+  -- LINHA DE CONTROLE que faltava na primeira versao: nenhuma linha nova pode
+  -- nascer sem categoria se a que ela substituiu tinha uma.
+  if exists (
+    select 1 from public.lancamento_rateios r
+    join public.centros_custo c on c.id = r.centro_custo_id
+    join public.lancamentos l on l.id = r.lancamento_id
+    where c.pai_id = AQ and r.categoria_id is null and l.categoria_id is not null
+      and l.numero in ('LAN-2026-4252','LAN-2026-5233','LAN-2026-5876',
+                       'LAN-2026-5631','LAN-2026-1324','LAN-2026-5155',
+                       'LAN-2026-2257','LAN-2026-4889')
+  ) then
+    raise exception 'Ha linha de rateio recriada sem categoria. O DRE cairia no fallback do lancamento.';
+  end if;
 
   if v_raiz <> 0 then
     raise exception 'Sobrou R$ % na raiz de Aquisicao de Equipamentos.', v_raiz;
