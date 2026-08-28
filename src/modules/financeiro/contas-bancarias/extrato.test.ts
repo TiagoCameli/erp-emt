@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  compararOrdem,
   extratoFechaNoSaldo,
   montarExtrato,
   somarMovimentos,
@@ -176,5 +177,70 @@ describe("linha de controle: o extrato fecha no saldo da listagem", () => {
     // −R$ 386.238,63 é onde a BB 102.124-9 fecharia se a data de corte deixasse
     // de ser aplicada num dos dois lados. Contra R$ 37.393,55 de saldo real.
     expect(extratoFechaNoSaldo(-386238.63, 37393.55)).toBe(false);
+  });
+});
+
+/**
+ * A ORDEM EM QUE A TELA MOSTRA AS LINHAS.
+ *
+ * O extrato se lê do movimento mais recente para o mais antigo, como o extrato
+ * do banco, e a primeira linha TEM que exibir o saldo atual da conta. Isso NÃO
+ * sai de ordenar a coluna por DATA: dezenas de movimentos caem no mesmo dia (a
+ * BB 102.124-9 teve quatro num 28/08), a data não tem hora, e inverter só o dia
+ * deixa o dia INTERNAMENTE crescente. Foi exatamente o que apareceu na tela: a
+ * primeira linha de 28/08 mostrava R$ 264.170,16 e o saldo atual da conta
+ * (R$ 159.992,48) estava na quarta linha.
+ *
+ * Quem inverte a sequência inteira é `ordem`, o índice cronológico que o
+ * servidor carimba na linha.
+ */
+describe("ordem cronológica da linha", () => {
+  it("carimba o índice da sequência que veio do banco", () => {
+    const { movimentos } = montarExtrato(1000, [
+      mov({ chave: "a" }),
+      mov({ chave: "b" }),
+      mov({ chave: "c" }),
+    ]);
+
+    expect(movimentos.map((m) => m.ordem)).toEqual([0, 1, 2]);
+  });
+
+  it("numera também a linha anterior ao corte, que não tem saldo próprio", () => {
+    // Sem número, a linha antiga não teria como ser ordenada junto com as
+    // outras e o escopo "tudo" voltaria a misturar as duas metades do extrato.
+    const { movimentos } = montarExtrato(1000, [
+      mov({ chave: "a", noSaldo: false }),
+      mov({ chave: "b", entrada: true, valor: 100 }),
+    ]);
+
+    expect(movimentos.map((m) => m.ordem)).toEqual([0, 1]);
+    expect(movimentos[0].saldoAcumulado).toBeNull();
+  });
+
+  it("decrescente põe o saldo atual na PRIMEIRA linha, mesmo tudo no mesmo dia", () => {
+    // Os três no mesmo dia: é o caso que a ordenação por data erra, porque não
+    // há hora nenhuma para desempatar.
+    const { movimentos, saldoFinal } = montarExtrato(1000, [
+      mov({ chave: "a", data: "2026-08-28", entrada: true, valor: 500 }),
+      mov({ chave: "b", data: "2026-08-28", entrada: false, valor: 200 }),
+      mov({ chave: "c", data: "2026-08-28", entrada: false, valor: 300 }),
+    ]);
+
+    const naTela = [...movimentos].sort((a, b) => compararOrdem(b, a));
+
+    expect(naTela[0].saldoAcumulado).toBe(saldoFinal);
+    expect(naTela.map((m) => m.chave)).toEqual(["c", "b", "a"]);
+  });
+
+  it("crescente devolve exatamente a sequência do banco", () => {
+    const { movimentos } = montarExtrato(1000, [
+      mov({ chave: "a" }),
+      mov({ chave: "b" }),
+      mov({ chave: "c" }),
+    ]);
+
+    const naTela = [...movimentos].sort((a, b) => compararOrdem(a, b));
+
+    expect(naTela.map((m) => m.chave)).toEqual(["a", "b", "c"]);
   });
 });
