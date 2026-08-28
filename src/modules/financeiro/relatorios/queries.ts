@@ -602,6 +602,18 @@ export async function serieDosCentros(
 ): Promise<SerieDeCentro[]> {
   if (centroIds.length === 0) return [];
   const supabase = await createClient();
+
+  // `p_tipos_centro` é o que faltava aqui: até 28/08/2026 a RPC da série nem
+  // tinha o parâmetro, então os cartões filtravam por tipo de centro e o gráfico
+  // ao lado não. Medido com as 17 raízes escolhidas e "obra" marcado: cartão
+  // R$ 45.625.418,30 contra série R$ 48.013.704,59 — a diferença era a Manutenção
+  // inteira, desenhada num gráfico que o número em cima dele não contava. O corte
+  // foi para o banco na migration 20260828234000.
+  //
+  // O tipo NÃO trava isto: `supabase.rpc` aceita chave que a assinatura não tem
+  // (conferido — um `p_parametro_que_nao_existe` passa por `tsc` sem um pio), e
+  // `database.types.ts` é gerado, então enquanto ele não for regerado nem existe
+  // `p_tipos_centro` para conferir. Quem trava é `serie-com-tipo-de-centro.test.ts`.
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_serie", {
     p_centros: centroIds,
     p_inicio: filtros?.inicio,
@@ -612,6 +624,7 @@ export async function serieDosCentros(
     p_sem_forma: filtros?.semForma,
     p_status: filtros?.status,
     p_excluir_previsto: filtros?.excluirPrevisto,
+    p_tipos_centro: filtros?.tiposCentro,
   });
   if (error) {
     throw new Error(

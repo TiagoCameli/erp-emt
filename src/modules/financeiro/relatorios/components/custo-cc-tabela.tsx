@@ -13,6 +13,10 @@ import {
   type FiltrosDoRelatorioDeCusto,
   type PeriodoCompetencia,
 } from "@/modules/financeiro/relatorios/drill";
+import {
+  classeDoSinal,
+  sinalDaVariacaoDeCusto,
+} from "@/modules/financeiro/relatorios/relatorios";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { CustoPorCentroCusto } from "../queries";
 
@@ -69,13 +73,7 @@ function CelulasVariacao({ dados }: { dados?: VariacaoCentro }) {
           <span className="text-muted-foreground">—</span>
         ) : (
           <span
-            className={
-              dados.diferenca > 0
-                ? "text-status-rejeitado"
-                : dados.diferenca < 0
-                  ? "text-status-aprovado"
-                  : "text-muted-foreground"
-            }
+            className={classeDoSinal(sinalDaVariacaoDeCusto(dados.diferenca))}
           >
             {dados.diferenca > 0 ? "+" : ""}
             {formatarPercentual(dados.percentual)}

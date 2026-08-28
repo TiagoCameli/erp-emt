@@ -15,6 +15,10 @@ import {
 
 import { formatarBRL } from "@/lib/formatadores";
 import { rotuloMes } from "@/modules/financeiro/relatorios/calculo";
+import {
+  COR_ENTIDADE,
+  SEM_ANIMACAO,
+} from "@/modules/financeiro/relatorios/components/cores-grafico";
 import type { MesCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 
 interface CustoReceitaGraficoProps {
@@ -124,23 +128,34 @@ export function CustoReceitaGrafico({ meses }: CustoReceitaGraficoProps) {
             wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
           />
           <ReferenceLine y={0} stroke="var(--border)" />
+          {/*
+            As cores estavam TROCADAS em relação ao resto do módulo: a receita
+            tinha o verde da marca, que no aging, nos créditos, no custo por
+            centro e nas saídas do fluxo é dinheiro que SAI, e o custo tinha o
+            asfalto, que nas outras é dinheiro que ENTRA. Duas telas do mesmo
+            módulo diziam o contrário uma da outra. Agora as duas leem
+            `COR_ENTIDADE`.
+          */}
           <Bar
             dataKey="receita"
             name="Receita líquida"
-            fill="var(--color-chart-1)"
+            fill={COR_ENTIDADE.receita}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[3, 3, 0, 0]}
           />
           <Bar
             dataKey="custo"
             name="Custo"
-            fill="var(--color-chart-3)"
+            fill={COR_ENTIDADE.custo}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[3, 3, 0, 0]}
           />
           <Line
             type="monotone"
             dataKey="resultado"
             name="Resultado"
-            stroke="var(--color-chart-2)"
+            stroke={COR_ENTIDADE.saldo}
+            isAnimationActive={SEM_ANIMACAO}
             strokeWidth={2}
             dot={{ r: 2 }}
             activeDot={{ r: 4 }}

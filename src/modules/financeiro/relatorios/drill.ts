@@ -212,11 +212,17 @@ export function drillGrupoInsumo({
   periodo: PeriodoCompetencia;
 }): string {
   if (grupoId !== null) {
-    // Grupo com insumo soma `oc_itens.quantidade * preco_unitario`, não o valor do
-    // lançamento. Abrir a lista de lançamentos aqui daria um total diferente da
-    // célula clicada, que é exatamente o defeito que este módulo existe para
-    // matar. Não acontece hoje (0 ordens de compra no banco) e falha alto no dia
-    // em que a primeira OC entrar, em vez de mentir em silêncio.
+    // Grupo com insumo soma ITEM de ordem de compra, não lançamento inteiro. Desde
+    // 28/08/2026 o item já entra com o rodapé da OC rateado (desconto, frete,
+    // impostos), então a soma dos grupos fecha com o custo por centro de custo —
+    // mas UM grupo continua sendo uma fatia dos documentos, não um conjunto deles:
+    // a mesma OC aparece em material e em serviço ao mesmo tempo. Abrir a lista de
+    // lançamentos aqui traria os documentos inteiros e o total passaria da célula
+    // clicada, que é exatamente o defeito que este módulo existe para matar.
+    //
+    // Isto NÃO é mais teórico: a base tem 70 lançamentos vindos de OC. Quem chama
+    // (a tabela de custo por grupo) só monta link na linha "Sem insumo", e este
+    // lance é a trava que garante isso — falha alto em vez de mentir em silêncio.
     throw new Error(
       "Drill de grupo com insumo não está implementado: o grupo soma item de OC, e a lista de lançamentos não fecharia com ele.",
     );

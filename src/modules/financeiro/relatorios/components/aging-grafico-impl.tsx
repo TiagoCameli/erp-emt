@@ -14,6 +14,10 @@ import {
 import { formatarBRL } from "@/lib/formatadores";
 import { drillAging } from "@/modules/financeiro/relatorios/drill";
 import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
+import {
+  COR_ENTIDADE,
+  SEM_ANIMACAO,
+} from "@/modules/financeiro/relatorios/components/cores-grafico";
 import type { AgingFaixa } from "../queries";
 
 interface AgingGraficoProps {
@@ -103,12 +107,23 @@ export function AgingGrafico({
             stroke="var(--border)"
             vertical={false}
           />
+          {/*
+            Rótulo GIRADO, como nos outros gráficos do módulo. Deitado ele
+            colidia: são seis faixas fixas (`interval={0}`, e tem que ser — faixa
+            escondida é faixa que ninguém confere) e o rótulo mais longo tem 23
+            caracteres, "Vencido mais de 60 dias". A -30° cada um corre na
+            diagonal e cabe, e a `height` reserva a faixa do texto girado, senão
+            ele invade a área de plotagem.
+          */}
           <XAxis
             dataKey="rotulo"
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
             interval={0}
+            angle={-30}
+            textAnchor="end"
+            height={56}
           />
           <YAxis
             tickFormatter={rotuloEixoValor}
@@ -126,7 +141,8 @@ export function AgingGrafico({
           <Bar
             dataKey="aPagar"
             name="A pagar"
-            fill="var(--color-chart-1)"
+            fill={COR_ENTIDADE.a_pagar}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[3, 3, 0, 0]}
             cursor={podeVerLancamentos ? "pointer" : undefined}
             onClick={(ponto: { payload?: LinhaGrafico }) =>
@@ -138,7 +154,8 @@ export function AgingGrafico({
           <Bar
             dataKey="aReceber"
             name="A receber"
-            fill="var(--color-chart-3)"
+            fill={COR_ENTIDADE.a_receber}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[3, 3, 0, 0]}
             cursor={podeVerLancamentos ? "pointer" : undefined}
             onClick={(ponto: { payload?: LinhaGrafico }) =>
