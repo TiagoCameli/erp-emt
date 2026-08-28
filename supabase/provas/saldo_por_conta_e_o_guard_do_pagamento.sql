@@ -294,3 +294,83 @@ end $prova$;
 -- recusa da Dora não diz o saldo, a do Admin diz. A recusa ainda revela uma
 -- DESIGUALDADE (o saldo é menor que o pagamento), o que é inevitável numa
 -- recusa útil — e é muito menos que o valor.
+
+-- =====================================================================
+-- Parte 3: salvar a marcação EXECUTA de verdade
+-- =====================================================================
+--
+-- Esta parte existe porque faltou. Em 27/08 eu provei o caminho de LEITURA com
+-- rigor e provei a ASSINATURA HTTP de outra RPC, mas nunca EXECUTEI
+-- `salvar_saldos_usuario`. Ela estava quebrada por um erro de uma palavra
+-- (`as conta` em vez de `as t(conta)` no unnest), a migration terminou com
+-- `success`, os advisors não viram nada — e o defeito apareceu no primeiro
+-- clique do Tiago em "Salvar contas", em produção, como "Não foi possível
+-- salvar as contas".
+--
+-- Assinatura resolvida (42501 em vez de PGRST202) diz que o PostgREST ACHA a
+-- função, não que ela roda. Toda RPC de escrita precisa de uma prova que a
+-- chame.
+--
+-- As três chamadas cobrem o que a tela faz de verdade: marcar todas, marcar
+-- menos (que tem que SUBSTITUIR, não acumular) e receber um id que não é conta.
+
+do $prova$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
+  v_dora  uuid := '3767e529-eae7-4178-852c-2dd2782efaaf';
+  v_todas uuid[];
+  v_tres uuid[];
+  v_lixo uuid[];
+  a int; b int; c int;
+  d_saldos int; d_nomes int;
+  e_erro text := 'PASSOU (NAO DEVIA)';
+begin
+  select array_agg(id) into v_todas from public.contas_bancarias where ativo;
+  select array_agg(id) into v_tres
+    from (select id from public.contas_bancarias where ativo order by nome limit 3) x;
+  -- Um uuid que não é conta: a função tem que IGNORAR, não estourar a FK.
+  v_lixo := v_tres || '00000000-0000-0000-0000-000000000000'::uuid;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  perform public.salvar_saldos_usuario(v_dora, v_todas);
+  select count(*) into a from public.usuario_conta_saldo where usuario_id = v_dora;
+
+  -- Salvar de novo com TRÊS: tem que SUBSTITUIR. Se acumulasse, desmarcar uma
+  -- conta na tela não teria efeito nenhum — e ninguém perceberia, porque o
+  -- número de linhas só cresce.
+  perform public.salvar_saldos_usuario(v_dora, v_tres);
+  select count(*) into b from public.usuario_conta_saldo where usuario_id = v_dora;
+
+  perform public.salvar_saldos_usuario(v_dora, v_lixo);
+  select count(*) into c from public.usuario_conta_saldo where usuario_id = v_dora;
+  reset role;
+
+  -- E o efeito na ponta: a Dora passa a ver o saldo das 3 e o nome de todas.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_dora, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+  select count(*) into d_saldos from public.fn_saldos_das_contas();
+  select count(*) into d_nomes from public.contas_bancarias;
+  -- CONTROLE: a Dora não pode salvar marcação de ninguém, nem a própria.
+  begin
+    perform public.salvar_saldos_usuario(v_dora, v_todas);
+  exception when others then e_erro := sqlerrm;
+  end;
+  reset role;
+
+  raise exception E'PROVA DO SALVAR (desfeita, nada gravado)\n  salvou 4 -> % linha(s)\n  salvou 3 (substitui) -> % linha(s)\n  salvou 3 + 1 uuid invalido -> % linha(s)\n  Dora ve % saldo(s) e % nome(s)\n  CONTROLE Dora salvando marcacao -> %',
+    a, b, c, d_saldos, d_nomes, e_erro;
+end $prova$;
+
+-- Resultado em 28/08/2026, com a correção do unnest aplicada:
+--   salvou 4 -> 4 linha(s)
+--   salvou 3 (substitui) -> 3 linha(s)
+--   salvou 3 + 1 uuid invalido -> 3 linha(s)
+--   Dora ve 3 saldo(s) e 5 nome(s)
+--   CONTROLE Dora salvando marcacao -> Sem permissao para editar permissoes de usuarios
+--
+-- A linha do meio é a que mais importa depois da primeira: 3 e não 7. Se o
+-- `delete` antes do `insert` saísse algum dia, desmarcar conta na tela deixaria
+-- de ter efeito e o sintoma seria invisível — só linhas a mais numa tabela que
+-- ninguém olha.
