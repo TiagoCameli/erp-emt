@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { editarItemFolhaSchema } from "@/modules/rh/folha/schemas";
+import {
+  editarItemFolhaSchema,
+  vencimentoFolhaSchema,
+} from "@/modules/rh/folha/schemas";
 
 const ITEM = "11111111-1111-4111-8111-111111111111";
 
@@ -274,5 +277,45 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       expect(r.data.gratificacao).toBe(0);
       expect(r.data.desconto).toBe(0);
     }
+  });
+});
+
+describe("vencimentoFolhaSchema", () => {
+  it("aceita a data e devolve como veio", () => {
+    const r = vencimentoFolhaSchema.safeParse({
+      folhaId: ITEM,
+      data: "2026-09-11",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.data).toBe("2026-09-11");
+  });
+
+  it("vazio vira null, que no banco significa \"vale o dia dos parâmetros\"", () => {
+    // Um <input type="date"> esvaziado manda "". Sem a tradução para null o
+    // Postgres recusaria a data e o campo ficaria preso no valor antigo.
+    const r = vencimentoFolhaSchema.safeParse({ folhaId: ITEM, data: "" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.data).toBeNull();
+  });
+
+  it("só espaço também limpa, em vez de virar data inválida", () => {
+    const r = vencimentoFolhaSchema.safeParse({ folhaId: ITEM, data: "   " });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.data).toBeNull();
+  });
+
+  it("recusa data com ano de 2 dígitos", () => {
+    // O <input type="date"> deixa digitar ano 0026 e mandaria uma data quase
+    // dois milênios no passado; ela tem de morrer antes de virar chamada.
+    const r = vencimentoFolhaSchema.safeParse({ folhaId: ITEM, data: "26-09-11" });
+    expect(r.success).toBe(false);
+  });
+
+  it("recusa folha que não é uuid", () => {
+    const r = vencimentoFolhaSchema.safeParse({
+      folhaId: "folha-1",
+      data: "2026-09-11",
+    });
+    expect(r.success).toBe(false);
   });
 });

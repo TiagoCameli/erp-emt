@@ -192,3 +192,33 @@ export const editarItemFolhaSchema = z
   });
 
 export type EditarItemFolhaInput = z.infer<typeof editarItemFolhaSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Data de vencimento da folha                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Vencimento escolhido para a folha: yyyy-MM-dd, ou string vazia para limpar.
+ *
+ * Vazio vira `null`, e null no banco significa "cai no dia de pagamento dos
+ * parâmetros". Sem essa conversão o `<input type="date">` esvaziado mandaria
+ * `""`, o Postgres recusaria a data e o campo ficaria preso no valor antigo sem
+ * ninguém entender por quê.
+ *
+ * O ano tem 4 dígitos por regra do schema: `<input type="date">` deixa digitar
+ * ano 0026 e mandaria uma data quase dois milênios no passado. Quem recusa de
+ * fato é a função no banco (vencimento anterior à competência), mas data
+ * absurda tem de morrer antes de virar chamada de rede.
+ */
+export const vencimentoFolhaSchema = z.object({
+  folhaId: idSchemaCom("Folha inválida"),
+  data: z
+    .string()
+    .trim()
+    .refine((valor) => valor === "" || /^\d{4}-\d{2}-\d{2}$/.test(valor), {
+      error: "Informe uma data válida",
+    })
+    .transform((valor) => (valor === "" ? null : valor)),
+});
+
+export type VencimentoFolhaInput = z.input<typeof vencimentoFolhaSchema>;

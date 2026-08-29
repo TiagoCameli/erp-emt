@@ -55,6 +55,9 @@ function criarFolha(itens: FolhaItem[]): FolhaDetalhe {
     id: "folha-1",
     competencia: "2026-06",
     status: "aprovado",
+    // Sem data escolhida: o vencimento cai no dia dos parâmetros. É o caso que
+    // estas contas de agrupamento não enxergam nem deveriam enxergar.
+    dataVencimento: null,
     encargosPercentual: 20,
     valorBruto: 0,
     valorEncargos: 0,

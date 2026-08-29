@@ -66,6 +66,7 @@ import { EditarItemFolhaDrawer } from "./editar-item-folha-drawer";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
 import { HoleriteDialog } from "./holerite-dialog";
 import { LancamentosGerados } from "./lancamentos-gerados";
+import { VencimentoFolha } from "./vencimento-folha";
 
 /** Card de seção do detalhe (borda + superfície), com título e ação. */
 function Secao({
@@ -419,6 +420,18 @@ export function FolhaDetalheView({
           <BotaoPlanilha folhaId={folha.id} />
         </div>
       </div>
+
+      {/*
+        Antes da ApprovalBar de propósito: quem vai aprovar precisa ver para
+        quando a folha está programada ANTES de bater o martelo, não depois de
+        rolar a página até os lançamentos.
+      */}
+      <VencimentoFolha
+        folhaId={folha.id}
+        status={folha.status}
+        dataVencimento={folha.dataVencimento}
+        podeEditar={podeEditar}
+      />
 
       {mostrarApprovalBar ? (
         <ApprovalBar
