@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ChevronDown,
+  Copy,
   FileText,
   LoaderCircle,
   Pencil,
   RefreshCw,
+  Undo2,
   UserMinus,
   UserPlus,
 } from "lucide-react";
@@ -40,10 +42,12 @@ import {
   aprovarFolha,
   desaprovarFolha,
   enviarFolhaParaAprovacao,
-  rejeitarFolha,
+  mandarFolhaParaRevisao,
   tirarDaFolha,
+  voltarFolhaParaRascunho,
   voltarParaFolha,
 } from "@/modules/rh/folha/actions";
+import { mensagemDeAprovacao } from "@/modules/rh/folha/mensagem-aprovacao";
 import {
   retidoSemGrupoDeRecolhimento,
   type LancamentosDaFolhaAgrupados,
@@ -271,14 +275,62 @@ export function FolhaDetalheView({
     router.refresh();
   }
 
-  async function aoRejeitar(motivo: string) {
-    const resultado = await rejeitarFolha(folha.id, motivo);
+  async function aoMandarParaRevisao(motivo: string) {
+    const resultado = await mandarFolhaParaRevisao(folha.id, motivo);
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Folha rejeitada e devolvida para rascunho");
+    toast.success("Folha devolvida para revisão");
     router.refresh();
+  }
+
+  /**
+   * Quem montou a folha puxa de volta o que enviou. Sem diálogo de confirmação:
+   * a folha volta para rascunho e nada mais acontece — nenhum lançamento foi
+   * gerado ainda, e reenviar é um clique. Pedir confirmação para desfazer algo
+   * reversível é atrito sem contrapartida.
+   */
+  async function aoVoltarParaRascunho() {
+    const resultado = await voltarFolhaParaRascunho(folha.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Folha de volta em rascunho");
+    router.refresh();
+  }
+
+  /**
+   * Copia o pedido de aprovação pronto para colar no WhatsApp.
+   *
+   * `window.location.origin` porque o link precisa apontar para onde a pessoa
+   * está: uma constante mandaria o preview da Vercel para produção, e quem
+   * recebesse aprovaria a folha errada.
+   */
+  async function aoCopiarMensagem() {
+    const texto = mensagemDeAprovacao(
+      {
+        id: folha.id,
+        competencia: folha.competencia,
+        colaboradores: folha.itens.length,
+        custoTotal: folha.custoTotal,
+        liquido: folha.valorLiquido,
+      },
+      window.location.origin,
+    );
+
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success("Mensagem copiada. Cole no WhatsApp de quem aprova");
+    } catch {
+      // `writeText` falha sem permissão de área de transferência (navegador
+      // antigo, http, aba sem foco). Avisar é melhor que o silêncio de um botão
+      // que parece ter funcionado.
+      toast.error(
+        "Não foi possível copiar. Verifique a permissão de área de transferência do navegador",
+      );
+    }
   }
 
   async function aoDesaprovar(motivo: string) {
@@ -290,6 +342,27 @@ export function FolhaDetalheView({
     toast.success("Aprovação desfeita. Lançamentos apagados");
     router.refresh();
   }
+
+  /**
+   * O que dá para fazer enquanto a folha espera aprovação, do lado de quem a
+   * montou. Some assim que ela é aprovada: aí o caminho de volta é Desaprovar,
+   * que apaga lançamento e exige motivo.
+   */
+  const acoesDaEspera =
+    folha.status === "pendente_aprovacao" ? (
+      <>
+        <Button type="button" variant="outline" onClick={aoCopiarMensagem}>
+          <Copy />
+          Copiar pedido
+        </Button>
+        {podeEditar ? (
+          <Button type="button" variant="outline" onClick={aoVoltarParaRascunho}>
+            <Undo2 />
+            Voltar para rascunho
+          </Button>
+        ) : null}
+      </>
+    ) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -354,8 +427,16 @@ export function FolhaDetalheView({
           podeAprovar={podeAprovar}
           podeDesaprovar={podeDesaprovar}
           onAprovar={aoAprovar}
-          onRejeitar={aoRejeitar}
+          onRejeitar={aoMandarParaRevisao}
           onDesaprovar={aoDesaprovar}
+          textosRejeitar={{
+            botao: "Mandar para revisão",
+            titulo: "Mandar a folha para revisão",
+            descricao:
+              "Diga o que precisa ser corrigido. A folha volta para rascunho e o motivo aparece para quem for ajustar.",
+            confirmar: "Mandar para revisão",
+          }}
+          acoesExtras={acoesDaEspera}
         />
       ) : null}
 

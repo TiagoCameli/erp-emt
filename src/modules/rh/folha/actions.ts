@@ -201,7 +201,7 @@ export async function editarItemFolha(
 }
 
 /* ------------------------------------------------------------------ */
-/* Fluxo de aprovação: enviar, aprovar, rejeitar, desaprovar          */
+/* Fluxo: enviar, aprovar, mandar para revisão, retomar, desaprovar   */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -316,13 +316,22 @@ export async function aprovarFolha(id: string): Promise<ResultadoAcao> {
   return { ok: true };
 }
 
-/** Rejeita a folha pendente com motivo, devolvendo para rascunho. */
-export async function rejeitarFolha(
+/**
+ * Devolve a folha pendente para quem a montou, com motivo.
+ *
+ * É o antigo "rejeitar", com o nome que descreve o que acontece: a folha volta
+ * para rascunho e o autor corrige. "Rejeitar" fazia parecer que o trabalho foi
+ * recusado — e não existe status `rejeitado` na folha justamente porque ela é
+ * recalculável, então o beco sem saída nunca existiu.
+ */
+export async function mandarFolhaParaRevisao(
   id: string,
   motivo: string,
 ): Promise<ResultadoAcao> {
   const motivoLimpo = motivo.trim();
-  if (motivoLimpo === "") return { erro: "Informe o motivo da rejeição" };
+  if (motivoLimpo === "") {
+    return { erro: "Informe o motivo da revisão" };
+  }
 
   return transicionarStatusFolha(
     id,
@@ -331,6 +340,32 @@ export async function rejeitarFolha(
     "rascunho",
     {
       motivo_rejeicao: motivoLimpo,
+    },
+  );
+}
+
+/**
+ * Quem MONTA a folha puxa de volta o que ela mesma enviou para aprovação.
+ *
+ * Permissão `editar`, e sem motivo: não é devolução a ninguém, é a própria
+ * pessoa retomando — pedir motivo seria pedir um bilhete para si mesma. O
+ * motivo da revisão anterior é apagado no mesmo UPDATE, porque a folha volta
+ * para a mesa limpa e um motivo velho pendurado faria a tela mostrar uma
+ * cobrança que já foi atendida.
+ *
+ * Folha aprovada não entra aqui: `statusEsperado` é `pendente_aprovacao`, e o
+ * trigger do banco recusa qualquer saída de `aprovado` que não seja Desaprovar.
+ */
+export async function voltarFolhaParaRascunho(
+  id: string,
+): Promise<ResultadoAcao> {
+  return transicionarStatusFolha(
+    id,
+    "editar",
+    "pendente_aprovacao",
+    "rascunho",
+    {
+      motivo_rejeicao: null,
     },
   );
 }
