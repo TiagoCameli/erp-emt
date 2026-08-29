@@ -33,6 +33,7 @@ import {
   escreverListaNaUrl,
   MAX_ITENS_FILTRO,
 } from "@/modules/financeiro/_shared/listas-na-url";
+import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";
 
 const MODOS: { valor: ModoPeriodo; rotulo: string }[] = [
   { valor: "mes", rotulo: "Um mês" },
@@ -45,7 +46,6 @@ const ROTULO_TIPO_CENTRO: Record<(typeof TIPOS_CENTRO)[number], string> = {
   obra: "Obra",
   escritorio: "Escritório",
   manutencao: "Manutenção",
-  financeiro: "Financeiro",
 };
 
 /**
@@ -153,7 +153,11 @@ export function FiltrosCustoCcBarra({
   fornecedores,
   formasPagamento,
 }: FiltrosCustoCcBarraProps) {
-  const { setMuitos, limparTodos } = useFiltrosUrl();
+  // `naoSaoFiltro` preserva o `rel` no "Limpar filtros": ele diz qual relatório
+  // está aberto, e apagá-lo devolvia a pessoa ao Fluxo de caixa.
+  const { setMuitos, limparTodos } = useFiltrosUrl({
+    naoSaoFiltro: PARAMS_DE_NAVEGACAO,
+  });
 
   const podeComparar = comparacaoPermitida(filtros.modo);
 

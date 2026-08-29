@@ -18,6 +18,10 @@ import {
   type FiltrosDoRelatorioDeCusto,
 } from "@/modules/financeiro/relatorios/drill";
 import { rotuloMes } from "@/modules/financeiro/relatorios/calculo";
+import {
+  CORES_SERIE_CENTRO,
+  SEM_ANIMACAO,
+} from "@/modules/financeiro/relatorios/components/cores-grafico";
 import type { SerieDeCentro } from "@/modules/financeiro/relatorios/queries";
 
 interface CustoCcSerieProps {
@@ -29,19 +33,11 @@ interface CustoCcSerieProps {
 }
 
 /**
- * Cores das linhas.
- *
- * Sem o `--chart-5`: ele é o vermelho de status do app, e uma obra pintada de
- * vermelho no gráfico se lê como obra com problema. Com mais de quatro centros a
- * cor repete, e é por isso que a legenda nomeia cada linha em vez de deixar a cor
- * ser a única identificação.
+ * Cores das linhas: vêm de `cores-grafico`, onde mora o porquê de a paleta de
+ * SÉRIE ser por posição (aqui a cor separa um centro do outro, e todas as linhas
+ * são custo) enquanto a de entidade nunca é.
  */
-const CORES_LINHA = [
-  "var(--color-chart-1)",
-  "var(--color-chart-2)",
-  "var(--color-chart-3)",
-  "var(--color-chart-4)",
-];
+const CORES_LINHA = CORES_SERIE_CENTRO;
 
 /** Eixo Y compacto: R$ 12 mil / R$ 1,2 mi, pra não estourar a largura. */
 function rotuloEixoValor(valor: number): string {
@@ -203,6 +199,7 @@ export function CustoCcSerie({
                 serie.codigo ? `${serie.codigo} · ${serie.nome}` : serie.nome
               }
               stroke={CORES_LINHA[indice % CORES_LINHA.length]}
+              isAnimationActive={SEM_ANIMACAO}
               strokeWidth={2}
               dot={{ r: 2 }}
               activeDot={{ r: 4 }}

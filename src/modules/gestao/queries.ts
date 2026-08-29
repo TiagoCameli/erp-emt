@@ -315,11 +315,22 @@ export async function custoPorCentroCusto(
   const supabase = await createClient();
   const { janela } = filtros;
 
+  // ARRAY, e não escalar. `fn_rel_custo_centro_custo` perdeu a sobrecarga de um
+  // centro só quando as duas viraram uma função com `p_centros`/`p_categorias`
+  // (migration 20260814150000), e esta chamada ficou para trás com os nomes
+  // antigos. Passava despercebido porque o supabase-js OMITE chave `undefined`
+  // do corpo: sem filtro escolhido, o PostgREST recebia só o período e resolvia
+  // pelos defaults. Bastava escolher uma obra para os nomes inexistentes irem
+  // junto, a função não ser encontrada e o card virar um travessão — que foi o
+  // que a tela fez até 28/08/2026, com o gráfico ao lado vazio.
+  //
+  // O `tsc` não pega: `supabase.rpc` aceita chave que não existe na assinatura
+  // sem reclamar (`database.types.ts` também está atrasado nesta família).
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo", {
     p_inicio: janela.inicio,
     p_fim: janela.fim,
-    p_centro_custo: filtros.centroCustoId,
-    p_categoria: filtros.categoriaId,
+    p_centros: filtros.centroCustoId ? [filtros.centroCustoId] : undefined,
+    p_categorias: filtros.categoriaId ? [filtros.categoriaId] : undefined,
   });
 
   if (error) {

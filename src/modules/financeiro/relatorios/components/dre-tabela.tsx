@@ -9,6 +9,10 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { drillCategoriaCompetencia } from "@/modules/financeiro/relatorios/drill";
+import {
+  classeDoSinal,
+  sinalDoResultado,
+} from "@/modules/financeiro/relatorios/relatorios";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { BlocoDre, DreGerencial, DreLinha } from "../queries";
 
@@ -109,7 +113,7 @@ function SubtotalDre({ rotulo, valor }: { rotulo: string; valor: number }) {
           valor={valor}
           className={cn(
             "text-detalhe font-semibold",
-            valor >= 0 ? "text-status-aprovado" : "text-status-rejeitado",
+            classeDoSinal(sinalDoResultado(valor)),
           )}
         />
       </TableCell>
@@ -136,7 +140,6 @@ function blocoTemLinha(bloco: BlocoDre): boolean {
  * Sem interatividade, renderiza no servidor.
  */
 export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
-  const resultadoPositivo = dre.resultado >= 0;
   const temFinanceiro = blocoTemLinha(dre.financeiro);
   const temMovimentacao = blocoTemLinha(dre.movimentacao);
 
@@ -219,9 +222,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
                 valor={dre.resultado}
                 className={cn(
                   "text-corpo font-semibold",
-                  resultadoPositivo
-                    ? "text-status-aprovado"
-                    : "text-status-rejeitado",
+                  classeDoSinal(sinalDoResultado(dre.resultado)),
                 )}
               />
             </TableCell>

@@ -23,6 +23,17 @@ interface CustoReceitaTabelaProps {
 }
 
 /**
+ * Cabeçalho na densidade do módulo: 36px de altura, `text-detalhe` (13px) e
+ * cinza.
+ *
+ * As duas tabelas deste relatório usavam `TableHead`/`TableCell` sem classe
+ * nenhuma, herdando o default do shadcn — `text-sm` (14px), que não existe na
+ * escala EMT, e `h-10 px-2 text-left`. Ao lado das outras seis tabelas do
+ * relatório, a mesma tela tinha dois tamanhos de letra e dois alinhamentos.
+ */
+const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
+
+/**
  * Uma das duas tabelas do relatório: centro, valor e participação no total do
  * SEU lado.
  *
@@ -53,24 +64,32 @@ export function CustoReceitaTabela({
       </div>
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead>Código</TableHead>
-            <TableHead>Centro de custo</TableHead>
+          <TableRow className="hover:bg-transparent">
+            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
+                dinheiro, quantidade, total, percentual e horas vão à direita. */}
+            <TableHead className={`${CABECALHO} text-center`}>Código</TableHead>
+            <TableHead className={`${CABECALHO} text-center`}>
+              Centro de custo
+            </TableHead>
             {temRetencao ? (
-              <TableHead className="text-right">Retido</TableHead>
+              <TableHead className={`${CABECALHO} text-right`}>
+                Retido
+              </TableHead>
             ) : null}
-            <TableHead className="text-right">
+            <TableHead className={`${CABECALHO} text-right`}>
               {lado === "custo" ? "Custo" : "Receita líquida"}
             </TableHead>
-            <TableHead className="text-right">Participação</TableHead>
+            <TableHead className={`${CABECALHO} text-right`}>
+              Participação
+            </TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
+        <TableBody className="[&_td]:px-3">
           {linhas.length === 0 ? (
             <TableRow>
               <TableCell
                 colSpan={temRetencao ? 5 : 4}
-                className="text-center text-detalhe text-muted-foreground"
+                className="py-2 text-center text-detalhe text-muted-foreground"
               >
                 {lado === "custo"
                   ? "Nenhum custo nos centros e meses escolhidos"
@@ -80,14 +99,17 @@ export function CustoReceitaTabela({
           ) : (
             linhas.map((linha) => (
               <TableRow key={linha.centroCustoId}>
-                <TableCell>
+                {/* `text-detalhe` fica na célula, e não no `span`: o `codigo-doc`
+                    já traz o tamanho dele, e é a CelulaVazia que precisaria
+                    herdar o tamanho certo da tabela. */}
+                <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
                   {linha.codigo ? (
                     <span className="codigo-doc">{linha.codigo}</span>
                   ) : (
                     <CelulaVazia />
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="py-2 text-center text-detalhe text-foreground">
                   {podeVerLancamentos ? (
                     <LinkDrill
                       href={drillCustoReceita({
@@ -104,18 +126,21 @@ export function CustoReceitaTabela({
                   )}
                 </TableCell>
                 {temRetencao ? (
-                  <TableCell className="text-right">
+                  <TableCell className="py-2 text-right text-detalhe">
                     {linha.retencao > 0 ? (
-                      <MoneyText valor={linha.retencao} />
+                      <MoneyText
+                        valor={linha.retencao}
+                        className="text-detalhe"
+                      />
                     ) : (
                       <CelulaVazia />
                     )}
                   </TableCell>
                 ) : null}
-                <TableCell className="text-right">
-                  <MoneyText valor={linha.total} />
+                <TableCell className="py-2 text-right">
+                  <MoneyText valor={linha.total} className="text-detalhe" />
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell className="py-2 text-right text-detalhe tabular-nums text-muted-foreground">
                   {total === 0
                     ? "—"
                     : formatarPercentual((linha.total / total) * 100)}
@@ -124,20 +149,28 @@ export function CustoReceitaTabela({
             ))
           )}
           {linhas.length > 0 ? (
-            <TableRow className="bg-surface font-medium">
+            <TableRow className="border-t-2 bg-surface hover:bg-surface">
               <TableCell />
-              <TableCell>Total</TableCell>
+              <TableCell className="py-2 text-center text-detalhe font-semibold text-foreground">
+                Total
+              </TableCell>
               {temRetencao ? (
-                <TableCell className="text-right">
+                <TableCell className="py-2 text-right">
                   <MoneyText
                     valor={linhas.reduce((soma, l) => soma + l.retencao, 0)}
+                    className="text-detalhe font-semibold"
                   />
                 </TableCell>
               ) : null}
-              <TableCell className="text-right">
-                <MoneyText valor={total} />
+              <TableCell className="py-2 text-right">
+                <MoneyText
+                  valor={total}
+                  className="text-detalhe font-semibold"
+                />
               </TableCell>
-              <TableCell className="text-right tabular-nums">100%</TableCell>
+              <TableCell className="py-2 text-right text-detalhe font-semibold tabular-nums text-muted-foreground">
+                100%
+              </TableCell>
             </TableRow>
           ) : null}
         </TableBody>

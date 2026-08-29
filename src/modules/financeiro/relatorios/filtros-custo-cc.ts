@@ -33,7 +33,17 @@ export type ParametrosUrl = Record<string, string | string[] | undefined>;
  */
 export type ModoPeriodo = "mes" | "periodo" | "total" | "vida";
 
-export type TipoCentro = "obra" | "escritorio" | "manutencao" | "financeiro";
+/**
+ * Tipo de centro que o filtro oferece.
+ *
+ * `financeiro` NÃO entra, e a ausência é a correção de um filtro morto: a
+ * `fn_rel_custo_centro_custo` exclui `raiz.tipo = 'financeiro'`
+ * incondicionalmente (decisão de 27/08/2026 — empréstimo não é custo de obra),
+ * então marcar o tipo devolvia 0 linhas e R$ 0,00 com a mesma mensagem de
+ * "filtro apertado demais". O catálogo tem que oferecer só o que a consulta pode
+ * responder; quem quer ver crédito abre o relatório Créditos.
+ */
+export type TipoCentro = "obra" | "escritorio" | "manutencao";
 
 /**
  * Status de lançamento que o filtro oferece.
@@ -111,7 +121,6 @@ export const TIPOS_CENTRO: readonly TipoCentro[] = [
   "obra",
   "escritorio",
   "manutencao",
-  "financeiro",
 ];
 export const STATUS_CUSTO: readonly StatusCusto[] = [
   "a_pagar",

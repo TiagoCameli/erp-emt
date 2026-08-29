@@ -16,6 +16,7 @@ import {
 import { useFiltrosUrl } from "@/components/canonicos";
 import { cn } from "@/lib/utils";
 import {
+  PARAM_RELATORIO,
   RELATORIOS,
   type RelatorioId,
 } from "@/modules/financeiro/relatorios/relatorios";
@@ -63,7 +64,7 @@ export function RelatoriosNav({ ativo }: RelatoriosNavProps) {
             key={id}
             type="button"
             aria-current={selecionado ? "page" : undefined}
-            onClick={() => set("rel", id)}
+            onClick={() => set(PARAM_RELATORIO, id)}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-detalhe transition-colors",
               selecionado

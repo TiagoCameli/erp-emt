@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import type { Creditos } from "../creditos";
+import type { EmprestimosPorContrato } from "../queries";
 
 interface CreditosTabelaProps {
   creditos: Creditos;
@@ -209,6 +210,106 @@ export function CreditosPorMesTabela({
             <TableCell className="py-2 text-right">
               <MoneyText valor={total} className="text-detalhe font-semibold" />
             </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+/**
+ * Os contratos do centro de Empréstimos, um por etapa: quanto o banco liberou,
+ * quanto já foi amortizado e o que falta.
+ *
+ * Morava dentro de `relatorios/page.tsx`, montada em `<table>` cru com `<tfoot>`
+ * próprio, ao lado desta mesma tela que já fazia o mesmo trabalho com o `Table`
+ * canônico. Tabela construída na página é o começo de um segundo jeito de
+ * desenhar tabela no app, e este relatório já mostrava os dois lado a lado.
+ *
+ * `tomado` e `pago` NÃO se comparam ainda: parte das prestações antigas está nos
+ * extratos e não foi lançada. As duas colunas ficam lado a lado justamente para
+ * essa lacuna aparecer.
+ */
+export function ContratosEmprestimoTabela({
+  contratos,
+}: {
+  contratos: EmprestimosPorContrato;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-border">
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead scope="col" className={`${CABECALHO} text-center`}>
+              Contrato
+            </TableHead>
+            <TableHead scope="col" className={`${CABECALHO} text-right`}>
+              Tomado
+            </TableHead>
+            <TableHead scope="col" className={`${CABECALHO} text-right`}>
+              Pago
+            </TableHead>
+            <TableHead scope="col" className={`${CABECALHO} text-right`}>
+              A pagar
+            </TableHead>
+            <TableHead scope="col" className={`${CABECALHO} text-right`}>
+              Parcelas
+            </TableHead>
+            <TableHead scope="col" className={`${CABECALHO} text-center`}>
+              Próxima
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="[&_td]:px-3">
+          {contratos.contratos.map((contrato) => (
+            <TableRow key={contrato.centroCustoId}>
+              <TableCell className="py-2 text-center text-detalhe text-foreground">
+                {contrato.contrato}
+              </TableCell>
+              <TableCell className="py-2 text-right">
+                <MoneyText valor={contrato.tomado} className="text-detalhe" />
+              </TableCell>
+              <TableCell className="py-2 text-right">
+                <MoneyText valor={contrato.pago} className="text-detalhe" />
+              </TableCell>
+              <TableCell className="py-2 text-right">
+                <MoneyText valor={contrato.aPagar} className="text-detalhe" />
+              </TableCell>
+              <TableCell className="py-2 text-right text-detalhe tabular-nums text-muted-foreground">
+                {contrato.parcelas === 0
+                  ? "—"
+                  : `${contrato.parcelasPagas} de ${contrato.parcelas}`}
+              </TableCell>
+              <TableCell className="py-2 text-center text-detalhe tabular-nums text-foreground">
+                {contrato.proximoVencimento
+                  ? formatarData(contrato.proximoVencimento)
+                  : "—"}
+              </TableCell>
+            </TableRow>
+          ))}
+          <TableRow className="border-t-2 bg-surface hover:bg-surface">
+            <TableCell className="py-2 text-center text-detalhe font-semibold text-foreground">
+              Total
+            </TableCell>
+            <TableCell className="py-2 text-right">
+              <MoneyText
+                valor={contratos.totalTomado}
+                className="text-detalhe font-semibold"
+              />
+            </TableCell>
+            <TableCell className="py-2 text-right">
+              <MoneyText
+                valor={contratos.totalPago}
+                className="text-detalhe font-semibold"
+              />
+            </TableCell>
+            <TableCell className="py-2 text-right">
+              <MoneyText
+                valor={contratos.totalAPagar}
+                className="text-detalhe font-semibold"
+              />
+            </TableCell>
+            <TableCell colSpan={2} />
           </TableRow>
         </TableBody>
       </Table>

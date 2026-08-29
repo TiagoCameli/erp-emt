@@ -8,11 +8,7 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
-import {
-  formatarBRL,
-  formatarData,
-  formatarPercentual,
-} from "@/lib/formatadores";
+import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
@@ -56,6 +52,7 @@ import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-fi
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
 import { CreditosGrafico } from "@/modules/financeiro/relatorios/components/creditos-grafico";
 import {
+  ContratosEmprestimoTabela,
   CreditosPorMesTabela,
   CreditosTabela,
 } from "@/modules/financeiro/relatorios/components/creditos-tabela";
@@ -431,66 +428,7 @@ async function ConteudoCreditos({
               extratos e não foi lançada.
             </p>
           </div>
-          <Painel>
-            <div className="overflow-x-auto">
-              <table className="w-full text-detalhe">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="px-2 py-2 text-left font-medium">Contrato</th>
-                    <th className="px-2 py-2 text-right font-medium">Tomado</th>
-                    <th className="px-2 py-2 text-right font-medium">Pago</th>
-                    <th className="px-2 py-2 text-right font-medium">A pagar</th>
-                    <th className="px-2 py-2 text-right font-medium">Parcelas</th>
-                    <th className="px-2 py-2 text-right font-medium">Próxima</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contratos.contratos.map((contrato) => (
-                    <tr
-                      key={contrato.centroCustoId}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-2 py-2">{contrato.contrato}</td>
-                      <td className="px-2 py-2 text-right">
-                        <MoneyText valor={contrato.tomado} />
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <MoneyText valor={contrato.pago} />
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <MoneyText valor={contrato.aPagar} />
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {contrato.parcelas === 0
-                          ? "—"
-                          : `${contrato.parcelasPagas}/${contrato.parcelas}`}
-                      </td>
-                      <td className="px-2 py-2 text-right tabular-nums">
-                        {contrato.proximoVencimento
-                          ? formatarData(contrato.proximoVencimento)
-                          : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-border font-medium">
-                    <td className="px-2 py-2">Total</td>
-                    <td className="px-2 py-2 text-right">
-                      <MoneyText valor={contratos.totalTomado} />
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <MoneyText valor={contratos.totalPago} />
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <MoneyText valor={contratos.totalAPagar} />
-                    </td>
-                    <td className="px-2 py-2" colSpan={2} />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </Painel>
+          <ContratosEmprestimoTabela contratos={contratos} />
         </div>
       ) : null}
 
@@ -1059,10 +997,15 @@ export default async function RelatoriosPage({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* A lista dos relatórios saiu do subtítulo de propósito: ela já tinha
+          vencido (faltavam "Custo x receita" e "Custo por grupo de insumo") e
+          venceria de novo no próximo relatório, porque quem acrescenta um mexe
+          em `RELATORIOS` e não neste texto. Quem lista os nove, sempre em dia, é
+          a barra logo abaixo. */}
       <PageHeader
         modulo="Financeiro"
         titulo="Relatórios"
-        descricao="Como está o caixa: fluxo, DRE, aging, posição bancária, créditos, custo por centro de custo e extrato por fornecedor."
+        descricao="Como está o caixa e onde entra o custo. Escolha o relatório na barra abaixo."
       />
 
       <RelatoriosNav ativo={relatorio} />
