@@ -1672,6 +1672,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           custo_total: number;
+          data_vencimento: string | null;
           encargos_percentual: number;
           id: string;
           motivo_rejeicao: string | null;
@@ -1692,6 +1693,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           custo_total?: number;
+          data_vencimento?: string | null;
           encargos_percentual?: number;
           id?: string;
           motivo_rejeicao?: string | null;
@@ -1712,6 +1714,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           custo_total?: number;
+          data_vencimento?: string | null;
           encargos_percentual?: number;
           id?: string;
           motivo_rejeicao?: string | null;
@@ -3966,6 +3969,13 @@ export type Database = {
       };
       fn_definir_parcelas_lancamento: {
         Args: { p_lanc_id: string; p_motivo?: string; p_parcelas: Json };
+        Returns: undefined;
+      };
+      fn_definir_vencimento_folha: {
+        Args: {
+          p_data: string | null;
+          p_folha: string;
+        };
         Returns: undefined;
       };
       fn_desaprovar_folha: {

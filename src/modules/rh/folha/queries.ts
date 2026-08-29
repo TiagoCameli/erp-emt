@@ -194,6 +194,12 @@ export interface FolhaDetalhe {
    * gratificação, em vez de deixar o total crescer sem explicação.
    */
   valorGratificacoes: number;
+  /**
+   * Vencimento escolhido para ESTA folha (yyyy-MM-dd), editável só em
+   * rascunho. É a data que vai para os lançamentos de salário. Null quando
+   * ninguém escolheu: aí vale o dia de pagamento dos parâmetros da folha.
+   */
+  dataVencimento: string | null;
   /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
   aprovadoEm: string | null;
   /**
@@ -423,7 +429,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       `id, competencia, status, encargos_percentual, valor_bruto,
        valor_encargos, valor_descontos, valor_provisoes, valor_gratificacoes,
        valor_adiantamentos, valor_liquido,
-       custo_total, aprovado_em, motivo_rejeicao,
+       custo_total, data_vencimento, aprovado_em, motivo_rejeicao,
        usuarios!folhas_aprovado_por_fkey(nome)`,
     )
     .eq("id", id)
@@ -544,6 +550,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
+    dataVencimento: folha.data_vencimento,
     aprovadoEm: folha.aprovado_em,
     aprovadoPorNome: folha.usuarios?.nome ?? null,
     motivoRejeicao: folha.motivo_rejeicao,

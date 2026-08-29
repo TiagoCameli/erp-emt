@@ -27,8 +27,10 @@ import { buscarFolha } from "@/modules/rh/folha/queries";
 import {
   editarItemFolhaSchema,
   gerarFolhaSchema,
+  vencimentoFolhaSchema,
   type EditarItemFolhaInput,
   type GerarFolhaInput,
+  type VencimentoFolhaInput,
 } from "@/modules/rh/folha/schemas";
 
 const RECURSO = "rh.folha" as const;
@@ -197,6 +199,49 @@ export async function editarItemFolha(
   const idFolha = idSchema.safeParse(folhaId);
   revalidatePath(ROTA);
   if (idFolha.success) revalidatePath(rotaDetalhe(idFolha.data));
+  return { ok: true };
+}
+
+/**
+ * Define (ou limpa) a data de vencimento da folha.
+ *
+ * É a data que vai para os lançamentos de salário na aprovação. Passa pela RPC
+ * porque a coluna não tem grant de UPDATE para o `authenticated`: em `folhas`
+ * só `status` e `motivo_rejeicao` são escritos direto, e o resto é escrito por
+ * função. A trava de "só em rascunho" também vive lá, então ela vale mesmo se
+ * alguém chamar por fora desta action.
+ */
+export async function definirVencimentoDaFolha(
+  dados: VencimentoFolhaInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para alterar a data de vencimento da folha" };
+  }
+
+  const validado = vencimentoFolhaSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_definir_vencimento_folha", {
+    p_folha: validado.data.folhaId,
+    p_data: validado.data.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.definirVencimento",
+      error,
+      // As duas travas da função (fora do rascunho, data anterior à
+      // competência) dizem o que fazer em seguida. Trocar o texto por um
+      // genérico apagaria justamente a instrução.
+      mensagemDeNegocio(error, "Não foi possível salvar a data de vencimento"),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(validado.data.folhaId));
   return { ok: true };
 }
 
