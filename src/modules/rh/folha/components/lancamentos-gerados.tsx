@@ -145,7 +145,10 @@ export function LancamentosGerados({
         <EmptyState
           icone={Receipt}
           titulo="Lançamentos ainda não gerados"
-          descricao="A aprovação da folha cria um lançamento a pagar por colaborador (o líquido) e um por grupo de recolhimento (a guia). Enquanto a folha estiver em rascunho ou pendente de aprovação, não existe lançamento nenhum."
+          // O texto promete o que a aprovação faz HOJE: desde 29/08/2026 ela
+          // aprova o pagamento junto. Sem dizer isso aqui, quem lê antes de
+          // aprovar continua esperando um segundo aval que não vem mais.
+          descricao="A aprovação da folha cria um lançamento a pagar por colaborador (o líquido) e um por grupo de recolhimento (a guia), já com o pagamento aprovado e programado para o dia de pagamento parametrizado. Enquanto a folha estiver em rascunho ou pendente de aprovação, não existe lançamento nenhum."
         />
       </div>
     );
