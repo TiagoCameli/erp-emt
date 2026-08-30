@@ -29,7 +29,9 @@ import {
 import { lerLancamentosEmPaginas } from "@/modules/financeiro/lancamentos/leitura-completa";
 import {
   montarPlanilhaLancamentos,
+  montarPlanilhaLancamentosPorRateio,
   nomeArquivoPlanilhaLancamentos,
+  nomeArquivoPlanilhaRateios,
 } from "@/modules/financeiro/lancamentos/planilha";
 import {
   buscarLancamento,
@@ -737,6 +739,14 @@ const LIMITE_PLANILHA = 25_000;
 const TETO_QUERY = 4000;
 
 /**
+ * Como a planilha reparte as linhas.
+ *
+ * `lancamento`: uma linha por documento, com o rateio resumido em duas colunas.
+ * `rateio`: uma linha por centro de custo de cada documento, para somar por obra.
+ */
+export type FormatoPlanilhaLancamentos = "lancamento" | "rateio";
+
+/**
  * Gera a planilha (.xlsx) dos lançamentos que estão no filtro da tela e devolve
  * em base64 para o navegador baixar.
  *
@@ -757,9 +767,17 @@ const TETO_QUERY = 4000;
  * `lerEmPaginas` nas consultas de filtro). No fim a contagem lida é conferida
  * contra o `count` do banco: se não fechar, a resposta é erro, não um arquivo
  * pela metade.
+ *
+ * DOIS FORMATOS, uma leitura só. `lancamento` é uma linha por documento;
+ * `rateio` abre cada documento em uma linha por centro de custo, para quem
+ * precisa somar por obra. A diferença mora inteira na montagem do arquivo, e por
+ * isso ela é um parâmetro em vez de uma segunda action: a leitura acima é a
+ * parte cara e a parte perigosa (paginação, teto, conferência da contagem), e
+ * duas cópias dela divergiriam na primeira correção feita de um lado só.
  */
 export async function gerarPlanilhaLancamentos(
   query: string,
+  formato: FormatoPlanilhaLancamentos = "lancamento",
 ): Promise<ResultadoPlanilha> {
   // Exportar é ler: mesma permissão que abre a tela. Sem ela, nem a lista existe.
   try {
@@ -841,13 +859,18 @@ export async function gerarPlanilhaLancamentos(
     );
   }
 
-  const workbook = montarPlanilhaLancamentos(itens);
+  const porRateio = formato === "rateio";
+  const workbook = porRateio
+    ? montarPlanilhaLancamentosPorRateio(itens)
+    : montarPlanilhaLancamentos(itens);
   workbook.created = new Date();
   const conteudo = await workbook.xlsx.writeBuffer();
 
   return {
     ok: true,
     base64: Buffer.from(conteudo).toString("base64"),
-    nomeArquivo: nomeArquivoPlanilhaLancamentos(dataHojeISO()),
+    nomeArquivo: porRateio
+      ? nomeArquivoPlanilhaRateios(dataHojeISO())
+      : nomeArquivoPlanilhaLancamentos(dataHojeISO()),
   };
 }

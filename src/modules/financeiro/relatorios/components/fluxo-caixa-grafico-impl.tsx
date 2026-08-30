@@ -15,6 +15,11 @@ import {
 import { formatarBRL } from "@/lib/formatadores";
 import { drillFluxoCaixa } from "@/modules/financeiro/relatorios/drill";
 import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
+import {
+  COR_ENTIDADE,
+  SEM_ANIMACAO,
+  corProjetada,
+} from "@/modules/financeiro/relatorios/components/cores-grafico";
 import type { FluxoCaixaMes } from "../queries";
 
 interface FluxoCaixaGraficoProps {
@@ -122,13 +127,22 @@ export function FluxoCaixaGrafico({
             cursor={{ fill: "var(--muted)" }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
+          {/*
+            Realizado x projetado se separa por COR, e não por `fillOpacity`: o
+            ícone da `Legend` lê o `fill` e o tooltip lê o `color` (que é o mesmo
+            `fill`), então com opacidade a legenda mostrava dois quadrados
+            idênticos, um "realizadas" e outro "projetadas". O tom claro é a
+            mesma cor da entidade contra o fundo do card — o mesmo desenho de
+            antes, agora legível fora da barra.
+          */}
           <Bar
             dataKey="entradasRealizado"
             cursor={cursor}
             onClick={aoClicar("a_receber", true)}
             stackId="entradas"
             name="Entradas realizadas"
-            fill="var(--color-chart-3)"
+            fill={COR_ENTIDADE.a_receber}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[0, 0, 0, 0]}
           />
           <Bar
@@ -137,8 +151,8 @@ export function FluxoCaixaGrafico({
             onClick={aoClicar("a_receber", false)}
             stackId="entradas"
             name="Entradas projetadas"
-            fill="var(--color-chart-3)"
-            fillOpacity={0.45}
+            fill={corProjetada(COR_ENTIDADE.a_receber)}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[3, 3, 0, 0]}
           />
           <Bar
@@ -147,7 +161,8 @@ export function FluxoCaixaGrafico({
             onClick={aoClicar("a_pagar", true)}
             stackId="saidas"
             name="Saídas realizadas"
-            fill="var(--color-chart-1)"
+            fill={COR_ENTIDADE.a_pagar}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[0, 0, 0, 0]}
           />
           <Bar
@@ -156,15 +171,16 @@ export function FluxoCaixaGrafico({
             onClick={aoClicar("a_pagar", false)}
             stackId="saidas"
             name="Saídas projetadas"
-            fill="var(--color-chart-1)"
-            fillOpacity={0.45}
+            fill={corProjetada(COR_ENTIDADE.a_pagar)}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[3, 3, 0, 0]}
           />
           <Line
             type="monotone"
             dataKey="saldo"
             name="Saldo do mês"
-            stroke="var(--color-chart-2)"
+            stroke={COR_ENTIDADE.saldo}
+            isAnimationActive={SEM_ANIMACAO}
             strokeWidth={2}
             dot={{ r: 3 }}
           />

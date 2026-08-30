@@ -194,6 +194,12 @@ export interface FolhaDetalhe {
    * gratificação, em vez de deixar o total crescer sem explicação.
    */
   valorGratificacoes: number;
+  /**
+   * Vencimento escolhido para ESTA folha (yyyy-MM-dd), editável só em
+   * rascunho. É a data que vai para os lançamentos de salário. Null quando
+   * ninguém escolheu: aí vale o dia de pagamento dos parâmetros da folha.
+   */
+  dataVencimento: string | null;
   /** Quando a folha foi aprovada (ISO), ou null se ainda não foi. */
   aprovadoEm: string | null;
   /**
@@ -209,6 +215,32 @@ export interface FolhaDetalhe {
   /** Motivo da última rejeição, mostrado enquanto a folha volta pra rascunho. */
   motivoRejeicao: string | null;
   itens: FolhaItem[];
+  /**
+   * Quem foi tirado DESTA folha. Ver `ColaboradorForaDaFolha`.
+   *
+   * Vem junto do detalhe porque é o ÚNICO caminho de volta: quem sai perde a
+   * linha em `folha_itens`, então sem esta lista a pessoa desapareceria da tela
+   * e não haveria onde clicar para trazê-la de volta.
+   */
+  foraDaFolha: ColaboradorForaDaFolha[];
+}
+
+/**
+ * Um colaborador que está fora desta folha por decisão de quem a montou.
+ *
+ * NÃO é desligamento: ele continua ativo na empresa e entra por padrão na
+ * competência seguinte, que é outra folha. A exclusão é do par (folha,
+ * colaborador) — ver `public.folha_exclusoes`.
+ */
+export interface ColaboradorForaDaFolha {
+  colaboradorId: string;
+  nome: string;
+  vinculo: string;
+  funcao: string | null;
+  /** Texto curto e opcional. Null quando ninguém escreveu nada. */
+  motivo: string | null;
+  /** Quando saiu (ISO), para a tela poder ordenar e mostrar. */
+  tiradoEm: string;
 }
 
 /** Custo total alocado por centro de custo, derivado dos itens. */
@@ -397,7 +429,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       `id, competencia, status, encargos_percentual, valor_bruto,
        valor_encargos, valor_descontos, valor_provisoes, valor_gratificacoes,
        valor_adiantamentos, valor_liquido,
-       custo_total, aprovado_em, motivo_rejeicao,
+       custo_total, data_vencimento, aprovado_em, motivo_rejeicao,
        usuarios!folhas_aprovado_por_fkey(nome)`,
     )
     .eq("id", id)
@@ -423,6 +455,36 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
   if (erroItens) {
     throw new Error("Não foi possível carregar os itens da folha");
   }
+
+  /**
+   * Quem está fora desta folha.
+   *
+   * Consulta separada, e não embed a partir de `folha_itens`: quem está fora
+   * NÃO TEM item — é justamente o que "fora" significa. Um embed traria zero
+   * linhas e a seção da tela nunca apareceria.
+   */
+  const { data: foraRaw, error: erroFora } = await supabase
+    .from("folha_exclusoes")
+    .select(
+      "colaborador_id, motivo, created_at, colaboradores(nome, vinculo, funcoes(nome))",
+    )
+    .eq("folha_id", id);
+
+  if (erroFora) {
+    throw new Error("Não foi possível carregar quem está fora da folha");
+  }
+
+  const foraDaFolha: ColaboradorForaDaFolha[] = (foraRaw ?? [])
+    .map((linha) => ({
+      colaboradorId: linha.colaborador_id,
+      // Mesmo tratamento dos itens: colaborador apagado não derruba a tela.
+      nome: linha.colaboradores?.nome ?? "Colaborador removido",
+      vinculo: linha.colaboradores?.vinculo ?? "clt",
+      funcao: linha.colaboradores?.funcoes?.nome ?? null,
+      motivo: linha.motivo,
+      tiradoEm: linha.created_at,
+    }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   const parcelasPorColaborador = await identificarParcelasDaFolha(supabase, id);
 
@@ -488,10 +550,12 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
     valorAdiantamentos: folha.valor_adiantamentos,
     valorLiquido: folha.valor_liquido,
     custoTotal: folha.custo_total,
+    dataVencimento: folha.data_vencimento,
     aprovadoEm: folha.aprovado_em,
     aprovadoPorNome: folha.usuarios?.nome ?? null,
     motivoRejeicao: folha.motivo_rejeicao,
     itens,
+    foraDaFolha,
   };
 }
 

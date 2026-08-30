@@ -76,6 +76,24 @@ export interface FiltrosDoRelatorioDeCusto {
   excluirPrevisto?: boolean;
 }
 
+/**
+ * O recorte de dimensão do relatório de Custo por grupo de insumo, que atravessa
+ * a tela inteira: os cartões, os três níveis da tabela e o link do drill-down.
+ *
+ * Um tipo só para os quatro usos, e não um parâmetro solto em cada um, pelo mesmo
+ * motivo de `FiltrosDoRelatorioDeCusto`: foi assim que o custo por centro de custo
+ * passou a ter gráfico e cartão somando conjuntos diferentes — o filtro chegava em
+ * um e não no outro, e as duas metades da mesma tela discordavam.
+ *
+ * Singular, e não lista, porque é o que `fn_rel_custo_por_grupo` aceita
+ * (`p_centro_custo uuid`, `p_categoria uuid`).
+ */
+export interface RecorteCustoGrupo {
+  /** Já traduzido pela escada da tela: a etapa quando há uma, senão a raiz. */
+  centroCustoId?: string;
+  categoriaId?: string;
+}
+
 /** Lista de valores no formato da URL, ou `undefined` quando não filtra nada. */
 function lista(valores?: string[]): string | undefined {
   return valores && valores.length > 0 ? valores.join(",") : undefined;
@@ -182,19 +200,23 @@ export function drillCustoReceita({
 /**
  * DRE gerencial: a linha de categoria. O `tipo` vem da seção clicada (receita ou
  * despesa) e não de um padrão, porque a mesma categoria pode aparecer nas duas.
+ *
+ * O período viaja inteiro (mês, janela ou tudo) desde que o DRE deixou de ser de
+ * um mês só: com o `mes` fixo, abrir a linha de um DRE do trimestre mostraria um
+ * terço do que a célula somou.
  */
 export function drillCategoriaCompetencia({
   categoriaId,
-  mes,
+  periodo,
   tipo,
 }: {
   categoriaId: string;
-  mes: string;
+  periodo: PeriodoCompetencia;
   tipo: TipoLancamentoRecorte;
 }): string {
   return montar({
     categoria: categoriaId,
-    mes,
+    ...periodoNaUrl(periodo),
     tipo,
     sem_cancelado: "1",
   });
@@ -207,21 +229,43 @@ export function drillCategoriaCompetencia({
 export function drillGrupoInsumo({
   grupoId,
   periodo,
+  recorte = {},
 }: {
   grupoId: string | null;
   periodo: PeriodoCompetencia;
+  /**
+   * O centro e a categoria que o relatório está somando. Viajam pelo mesmo motivo
+   * dos implícitos: sem eles, a lista abre com o custo de todos os centros
+   * embaixo de uma célula que somou um só.
+   */
+  recorte?: RecorteCustoGrupo;
 }): string {
   if (grupoId !== null) {
-    // Grupo com insumo soma `oc_itens.quantidade * preco_unitario`, não o valor do
-    // lançamento. Abrir a lista de lançamentos aqui daria um total diferente da
-    // célula clicada, que é exatamente o defeito que este módulo existe para
-    // matar. Não acontece hoje (0 ordens de compra no banco) e falha alto no dia
-    // em que a primeira OC entrar, em vez de mentir em silêncio.
+    // Grupo com insumo soma ITEM de ordem de compra, não lançamento inteiro. Desde
+    // 28/08/2026 o item já entra com o rodapé da OC rateado (desconto, frete,
+    // impostos), então a soma dos grupos fecha com o custo por centro de custo —
+    // mas UM grupo continua sendo uma fatia dos documentos, não um conjunto deles:
+    // a mesma OC aparece em material e em serviço ao mesmo tempo. Abrir a lista de
+    // lançamentos aqui traria os documentos inteiros e o total passaria da célula
+    // clicada, que é exatamente o defeito que este módulo existe para matar.
+    //
+    // Isto NÃO é mais teórico: a base tem 70 lançamentos vindos de OC. Quem chama
+    // (a tabela de custo por grupo) só monta link na linha "Sem insumo", e este
+    // lance é a trava que garante isso — falha alto em vez de mentir em silêncio.
     throw new Error(
       "Drill de grupo com insumo não está implementado: o grupo soma item de OC, e a lista de lançamentos não fecharia com ele.",
     );
   }
-  return montar({ ...IMPLICITOS_CUSTO, ...periodoNaUrl(periodo) });
+  return montar({
+    ...IMPLICITOS_CUSTO,
+    ...periodoNaUrl(periodo),
+    // A lista de lançamentos filtra centro pela SUBÁRVORE (ver
+    // `subarvoreDosCentros`), que é a mesma regra da RPC do relatório
+    // (`fn_centro_custo_subarvore`): escolher a obra traz as etapas dela dos dois
+    // lados.
+    centro: recorte.centroCustoId,
+    categoria: recorte.categoriaId,
+  });
 }
 
 /**

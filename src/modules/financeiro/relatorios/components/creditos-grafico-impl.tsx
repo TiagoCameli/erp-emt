@@ -11,6 +11,10 @@ import {
 } from "recharts";
 
 import { formatarBRL } from "@/lib/formatadores";
+import {
+  COR_ENTIDADE,
+  SEM_ANIMACAO,
+} from "@/modules/financeiro/relatorios/components/cores-grafico";
 import type { CreditoMes } from "../creditos";
 
 function rotuloEixoValor(valor: number): string {
@@ -43,9 +47,9 @@ function ConteudoTooltip({
 }
 
 /**
- * O que vence de crédito mês a mês. Uma série só, então a cor é fixa: ela não
- * distingue entidade nenhuma, e variar por posição faria a cor querer dizer
- * "mês mais caro", que não é o que ela diz.
+ * O que vence de crédito mês a mês. Uma série só, e a cor é a da entidade que
+ * ela desenha (`a_pagar`, a mesma do aging e das saídas do fluxo): variar por
+ * posição faria a cor querer dizer "mês mais caro", que não é o que ela diz.
  */
 export function CreditosGrafico({ meses }: { meses: CreditoMes[] }) {
   return (
@@ -81,7 +85,8 @@ export function CreditosGrafico({ meses }: { meses: CreditoMes[] }) {
           <Bar
             dataKey="valor"
             name="A pagar no mês"
-            fill="var(--color-chart-1)"
+            fill={COR_ENTIDADE.a_pagar}
+            isAnimationActive={SEM_ANIMACAO}
             radius={[3, 3, 0, 0]}
           />
         </BarChart>

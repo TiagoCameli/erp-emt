@@ -13,6 +13,10 @@ import {
 
 import { formatarBRL } from "@/lib/formatadores";
 import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
+import {
+  COR_ENTIDADE,
+  SEM_ANIMACAO,
+} from "@/modules/financeiro/relatorios/components/cores-grafico";
 import { MAX_BARRAS } from "./custo-cc-altura";
 import type { CustoCentroCusto } from "../queries";
 
@@ -45,10 +49,10 @@ interface CustoCcGraficoProps {
  */
 
 /** Cor única: a comparação é de grandeza, e o comprimento da barra já a carrega. */
-const COR_BARRA = "var(--color-chart-1)";
+const COR_BARRA = COR_ENTIDADE.custo;
 
 /** "Outros" é um agregado, não um centro: cinza, e sem link. */
-const COR_OUTROS = "var(--color-status-rascunho)";
+const COR_OUTROS = COR_ENTIDADE.agregado;
 
 /** Largura reservada para o nome do centro, em px. */
 const LARGURA_NOME = 236;
@@ -169,6 +173,7 @@ export function CustoCcGrafico({ centros, destinos }: CustoCcGraficoProps) {
         <Bar
           dataKey="valor"
           name="Custo"
+          isAnimationActive={SEM_ANIMACAO}
           radius={[0, 3, 3, 0]}
           maxBarSize={22}
           onClick={(ponto: { payload?: { href?: string } }) =>

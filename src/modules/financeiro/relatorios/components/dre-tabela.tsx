@@ -8,14 +8,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { drillCategoriaCompetencia } from "@/modules/financeiro/relatorios/drill";
+import {
+  drillCategoriaCompetencia,
+  type PeriodoCompetencia,
+} from "@/modules/financeiro/relatorios/drill";
+import {
+  classeDoSinal,
+  sinalDoResultado,
+} from "@/modules/financeiro/relatorios/relatorios";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { BlocoDre, DreGerencial, DreLinha } from "../queries";
 
 interface DreTabelaProps {
   dre: DreGerencial;
-  /** Mês de referência do DRE, para o clique abrir a mesma competência. */
-  mes: string;
+  /**
+   * O período do DRE, para o clique abrir a MESMA competência.
+   *
+   * Não é mais um mês: desde 29/08/2026 a tela apura trimestre e ano, e um drill
+   * preso no mês abriria um terço do que a linha somou.
+   */
+  periodo: PeriodoCompetencia;
   /** Sem permissão de ver lançamentos, a categoria não vira link (daria 404). */
   podeVerLancamentos: boolean;
 }
@@ -26,7 +38,7 @@ function SecaoDre({
   total,
   rotuloTotal,
   tipo,
-  mes,
+  periodo,
   podeVerLancamentos,
 }: {
   titulo: string;
@@ -35,7 +47,7 @@ function SecaoDre({
   rotuloTotal: string;
   /** Receita ou despesa: decide o `tipo` do lançamento no destino do clique. */
   tipo: "a_pagar" | "a_receber";
-  mes: string;
+  periodo: PeriodoCompetencia;
   podeVerLancamentos: boolean;
 }) {
   return (
@@ -59,10 +71,10 @@ function SecaoDre({
                 <LinkDrill
                   href={drillCategoriaCompetencia({
                     categoriaId: linha.categoriaId,
-                    mes,
+                    periodo,
                     tipo,
                   })}
-                  titulo={`Ver os lançamentos de ${linha.categoria} neste mês`}
+                  titulo={`Ver os lançamentos de ${linha.categoria} neste período`}
                 >
                   {linha.categoria}
                 </LinkDrill>
@@ -81,7 +93,7 @@ function SecaoDre({
             colSpan={2}
             className="py-2 text-center text-detalhe text-muted-foreground"
           >
-            Sem lançamentos no mês
+            Sem lançamentos no período
           </TableCell>
         </TableRow>
       )}
@@ -109,7 +121,7 @@ function SubtotalDre({ rotulo, valor }: { rotulo: string; valor: number }) {
           valor={valor}
           className={cn(
             "text-detalhe font-semibold",
-            valor >= 0 ? "text-status-aprovado" : "text-status-rejeitado",
+            classeDoSinal(sinalDoResultado(valor)),
           )}
         />
       </TableCell>
@@ -123,7 +135,7 @@ function blocoTemLinha(bloco: BlocoDre): boolean {
 }
 
 /**
- * DRE gerencial do mês em tabela, em três blocos: operacional (a obra),
+ * DRE gerencial do período em tabela, em três blocos: operacional (a obra),
  * financeiro (juros e tarifa) e movimentação patrimonial.
  *
  * O bloco de movimentação aparece DEPOIS do resultado do mês e fora da soma dele
@@ -135,8 +147,7 @@ function blocoTemLinha(bloco: BlocoDre): boolean {
  *
  * Sem interatividade, renderiza no servidor.
  */
-export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
-  const resultadoPositivo = dre.resultado >= 0;
+export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) {
   const temFinanceiro = blocoTemLinha(dre.financeiro);
   const temMovimentacao = blocoTemLinha(dre.movimentacao);
 
@@ -162,7 +173,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
             total={dre.operacional.totalReceitas}
             rotuloTotal="Total de receitas"
             tipo="a_receber"
-            mes={mes}
+            periodo={periodo}
             podeVerLancamentos={podeVerLancamentos}
           />
           <SecaoDre
@@ -171,7 +182,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
             total={dre.operacional.totalDespesas}
             rotuloTotal="Total de despesas"
             tipo="a_pagar"
-            mes={mes}
+            periodo={periodo}
             podeVerLancamentos={podeVerLancamentos}
           />
           {/* O subtotal operacional só faz sentido se houver um segundo bloco
@@ -191,7 +202,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
                 total={dre.financeiro.totalReceitas}
                 rotuloTotal="Total de receitas financeiras"
                 tipo="a_receber"
-                mes={mes}
+                periodo={periodo}
                 podeVerLancamentos={podeVerLancamentos}
               />
               <SecaoDre
@@ -200,7 +211,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
                 total={dre.financeiro.totalDespesas}
                 rotuloTotal="Total de despesas financeiras"
                 tipo="a_pagar"
-                mes={mes}
+                periodo={periodo}
                 podeVerLancamentos={podeVerLancamentos}
               />
               <SubtotalDre
@@ -212,16 +223,14 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
 
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
             <TableCell className="py-2.5 text-center text-corpo font-semibold text-foreground">
-              Resultado do mês
+              Resultado do período
             </TableCell>
             <TableCell className="py-2.5 text-right">
               <MoneyText
                 valor={dre.resultado}
                 className={cn(
                   "text-corpo font-semibold",
-                  resultadoPositivo
-                    ? "text-status-aprovado"
-                    : "text-status-rejeitado",
+                  classeDoSinal(sinalDoResultado(dre.resultado)),
                 )}
               />
             </TableCell>
@@ -239,7 +248,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
                     não é resultado
                   </strong>
                   : principal de aplicação, resgate e empréstimo. Não entra no
-                  resultado do mês acima.
+                  resultado do período acima.
                 </TableCell>
               </TableRow>
               <SecaoDre
@@ -248,7 +257,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
                 total={dre.movimentacao.totalReceitas}
                 rotuloTotal="Total de entradas"
                 tipo="a_receber"
-                mes={mes}
+                periodo={periodo}
                 podeVerLancamentos={podeVerLancamentos}
               />
               <SecaoDre
@@ -257,7 +266,7 @@ export function DreTabela({ dre, mes, podeVerLancamentos }: DreTabelaProps) {
                 total={dre.movimentacao.totalDespesas}
                 rotuloTotal="Total de saídas"
                 tipo="a_pagar"
-                mes={mes}
+                periodo={periodo}
                 podeVerLancamentos={podeVerLancamentos}
               />
             </>

@@ -6,7 +6,10 @@ import {
   escreverCabecalhoMarca,
   estilizarCabecalhoColunas,
 } from "@/lib/planilha-marca";
-import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
+import {
+  ROTULO_TIPO_LANCAMENTO,
+  SEM_CENTRO_DE_CUSTO,
+} from "@/modules/financeiro/_shared/formato";
 import { ROTULO_REVISAO_DA_LINHA } from "@/modules/financeiro/lancamentos/lote";
 import type { LancamentoPlanilha } from "@/modules/financeiro/lancamentos/queries";
 import {
@@ -82,10 +85,15 @@ function valorDoRateio(valor: number): string {
  *
  * **Uma linha por lançamento, e isso é o que decide a forma do rateio.** Um
  * lançamento pode ser dividido entre várias obras, então "Centro de custo" lista
- * os nomes e "Rateio" traz quanto foi para cada um. A alternativa (uma linha por
- * rateio) foi recusada: ela repetiria o valor do lançamento em N linhas, e quem
- * somasse a coluna Valor contaria o mesmo dinheiro várias vezes. Numa planilha
- * de dinheiro, total errado que abre sem erro é o pior defeito possível.
+ * os nomes e "Rateio" traz quanto foi para cada um.
+ *
+ * Quem precisa somar por obra usa a OUTRA versão, uma linha por rateio
+ * (`montarPlanilhaLancamentosPorRateio`, mais abaixo). Ela existe desde
+ * 28/08/2026 e não substitui esta: a armadilha do formato é repetir o valor do
+ * documento em N linhas, e aí quem soma a coluna conta o mesmo dinheiro várias
+ * vezes com o arquivo abrindo sem erro. Lá a coluna que soma é a FATIA, e o
+ * valor do documento aparece uma vez só por lançamento — o porquê está escrito
+ * em `LinhaRateio`.
  *
  * Parcela também é 1-N (conta, vencimento, pagamento). Aqui entra só o resumo: a
  * quantidade em "Parcelas" e a conta bancária quando é a mesma em todas.
@@ -258,6 +266,238 @@ export const CABECALHOS_PLANILHA_LANCAMENTOS = COLUNAS_PLANILHA_LANCAMENTOS.map(
   (coluna) => coluna.cabecalho,
 );
 
+/* ------------------------------------------------------------------ */
+/* A outra versão: uma linha por rateio                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Uma linha da planilha POR RATEIO: o lançamento inteiro repetido, mais a fatia
+ * de UM centro de custo.
+ *
+ * A versão por lançamento (acima) responde "quanto e para quem"; esta responde
+ * "quanto foi para cada obra", que é a pergunta de quem monta tabela dinâmica
+ * por centro de custo. Um lançamento rateado entre três obras vira três linhas.
+ *
+ * CENTRO DE CUSTO E ETAPA SÃO DUAS COLUNAS, e essa é a regra que a primeira
+ * versão errou. No vocabulário do ERP são coisas diferentes: "001 - Carretas
+ * EMT" é o centro de custo, e "Caminhão Cavalo XF 530 FTT SQU9C94 - 03" é uma
+ * ETAPA dele. Pôr o nível gravado numa coluna só enchia "Centro de custo" de
+ * nome de equipamento, e quem soma por obra não achava a obra. Aqui a coluna
+ * "Centro de custo" traz sempre a RAIZ, e a etapa vai na coluna ao lado — vazia
+ * nos 6.244 rateios (de 6.561) que foram direto para a raiz.
+ *
+ * O que impede a soma dupla, que é o defeito clássico deste formato: a coluna de
+ * dinheiro que soma é a FATIA, nunca o valor do documento. O total do documento
+ * vai numa coluna separada e só na PRIMEIRA linha do lançamento, então somar
+ * qualquer uma das duas dá um número certo — uma soma o custo por obra, a outra
+ * soma os documentos.
+ */
+export interface LinhaRateio {
+  lancamento: LancamentoPlanilha;
+  /** O CENTRO DE CUSTO: a raiz da árvore. Nunca o nome da etapa. */
+  centroNome: string;
+  /** A ETAPA, quando o rateio foi para uma. Null quando foi direto na raiz. */
+  etapaNome: string | null;
+  centroCodigo: string | null;
+  /** A fatia deste rateio. Soma dos rateios = valor do lançamento. */
+  valorRateio: number;
+  /** Posição desta fatia dentro do lançamento, base 1. */
+  parte: number;
+  /** Quantas fatias o lançamento tem depois de juntar as do mesmo destino. */
+  partes: number;
+}
+
+/**
+ * Abre cada lançamento em uma linha por centro de custo.
+ *
+ * JUNTA AS PARTES DO MESMO CENTRO. Um lançamento vindo de OC grava uma parte por
+ * item, então cinco itens da mesma obra são cinco linhas em `lancamento_rateios`
+ * apontando o mesmo centro (9 lançamentos hoje, até 5 partes). Sem juntar, o
+ * arquivo traria a mesma obra repetida cinco vezes, com valores que só fazem
+ * sentido para quem tem a OC na mão. A ordem é a da PRIMEIRA aparição de cada
+ * centro, para o arquivo sair na mesma sequência que a tela do lançamento.
+ *
+ * LANÇAMENTO SEM RATEIO VIRA UMA LINHA, com o nome `SEM_CENTRO_DE_CUSTO` e o
+ * valor inteiro. Hoje não existe nenhum (o centro de custo é invariante de
+ * banco), mas um `flatMap` sobre uma lista vazia apagaria o lançamento do
+ * arquivo em silêncio — e planilha de dinheiro com documento faltando não deixa
+ * rastro nenhum de que faltou.
+ */
+export function expandirPorRateio(
+  itens: readonly LancamentoPlanilha[],
+): LinhaRateio[] {
+  const linhas: LinhaRateio[] = [];
+
+  for (const lancamento of itens) {
+    const porCentro = new Map<string, LinhaRateio>();
+
+    for (const rateio of lancamento.rateios) {
+      // Sem id (centro apagado do cadastro), cada parte fica na sua linha: a
+      // chave por nome juntaria dois centros diferentes que perderam o cadastro.
+      const chave = rateio.centroId ?? `sem-centro:${porCentro.size}`;
+      const existente = porCentro.get(chave);
+      if (existente) {
+        existente.valorRateio = arredondarCentavos(
+          existente.valorRateio + rateio.valor,
+        );
+        continue;
+      }
+      porCentro.set(chave, {
+        lancamento,
+        centroNome: rateio.raizNome,
+        etapaNome: rateio.etapaNome,
+        centroCodigo: rateio.codigo,
+        valorRateio: rateio.valor,
+        parte: porCentro.size + 1,
+        partes: 0, // preenchido abaixo, quando o total é conhecido.
+      });
+    }
+
+    const doLancamento =
+      porCentro.size > 0
+        ? [...porCentro.values()]
+        : [
+            {
+              lancamento,
+              centroNome: SEM_CENTRO_DE_CUSTO,
+              etapaNome: null,
+              centroCodigo: null,
+              valorRateio: lancamento.valor,
+              parte: 1,
+              partes: 1,
+            },
+          ];
+
+    for (const linha of doLancamento) linha.partes = doLancamento.length;
+    linhas.push(...doLancamento);
+  }
+
+  return linhas;
+}
+
+/**
+ * Soma de fatias em centavos inteiros.
+ *
+ * Somar `191.40 + 180.96` em float sobra 1e-13, e a planilha exibiria o certo
+ * enquanto a célula guarda o errado: a diferença só aparece quando alguém
+ * compara o total do arquivo com o do sistema e acha um centavo perdido. Mesma
+ * regra do resto do módulo de dinheiro.
+ */
+function arredondarCentavos(valor: number): number {
+  return Math.round(valor * 100) / 100;
+}
+
+/** Uma coluna da planilha por rateio. */
+export interface ColunaRateio {
+  cabecalho: string;
+  largura: number;
+  tipo: TipoColunaPlanilha;
+  celula: (linha: LinhaRateio) => CelulaPlanilha;
+}
+
+/**
+ * As colunas que MUDAM na versão por rateio, pelo cabeçalho da versão por
+ * lançamento. Uma entrada pode virar duas colunas (é o caso de "Valor").
+ *
+ * Herdar o resto em vez de listar tudo de novo é o que mantém as duas planilhas
+ * juntas: a coluna que alguém acrescentar amanhã à versão por lançamento
+ * aparece nas duas, na mesma posição, sem ninguém lembrar de fazer nada.
+ */
+const COLUNAS_TROCADAS: Record<string, ColunaRateio[]> = {
+  Valor: [
+    {
+      cabecalho: "Valor do rateio",
+      largura: 16,
+      tipo: "dinheiro",
+      // A coluna que SOMA, e por isso é a fatia: é ela que responde "quanto
+      // custou esta obra". Somar o documento repetido em N linhas contaria o
+      // mesmo dinheiro N vezes, que é o defeito que este formato costuma ter.
+      celula: (linha) => linha.valorRateio,
+    },
+    {
+      cabecalho: "Valor do lançamento",
+      largura: 18,
+      tipo: "dinheiro",
+      // Só na PRIMEIRA linha do lançamento. Repetido em todas, ele seria a
+      // armadilha de sempre; em branco nas demais, esta coluna também soma
+      // certo, e as duas somas juntas viram a conferência do arquivo: elas têm
+      // que dar o mesmo número.
+      celula: (linha) => (linha.parte === 1 ? linha.lancamento.valor : null),
+    },
+  ],
+  "Centro de custo": [
+    {
+      cabecalho: "Centro de custo",
+      largura: 34,
+      tipo: "texto",
+      // SEMPRE A RAIZ, mesmo quando o rateio foi para uma etapa: é o que o ERP
+      // chama de centro de custo, e é por ele que se soma por obra. A etapa vai
+      // na coluna ao lado.
+      celula: (linha) => linha.centroNome,
+    },
+  ],
+  Rateio: [
+    {
+      cabecalho: "Etapa",
+      largura: 34,
+      tipo: "texto",
+      // Em branco no rateio que foi direto para a raiz, que é a maioria (6.244
+      // de 6.561): a etapa é um detalhe do centro, não um segundo nome dele, e
+      // repetir a raiz aqui faria as duas colunas parecerem a mesma coisa.
+      celula: (linha) => linha.etapaNome,
+    },
+  ],
+};
+
+/**
+ * Colunas da planilha por rateio: as da versão por lançamento, com as trocas de
+ * `COLUNAS_TROCADAS` aplicadas na mesma posição.
+ *
+ * Se um cabeçalho de `COLUNAS_TROCADAS` deixar de existir na versão por
+ * lançamento (alguém renomeou "Valor", por exemplo), o módulo QUEBRA na carga em
+ * vez de exportar calado: sem isso, a troca simplesmente não aconteceria e a
+ * planilha sairia com o valor do documento repetido em toda linha — total
+ * inflado, arquivo abrindo sem erro.
+ */
+export const COLUNAS_PLANILHA_RATEIOS: ColunaRateio[] = (() => {
+  const existentes = new Set(CABECALHOS_PLANILHA_LANCAMENTOS);
+  for (const cabecalho of Object.keys(COLUNAS_TROCADAS)) {
+    if (!existentes.has(cabecalho)) {
+      throw new Error(
+        `A planilha por rateio troca a coluna "${cabecalho}", que não existe mais na planilha por lançamento`,
+      );
+    }
+  }
+
+  return COLUNAS_PLANILHA_LANCAMENTOS.flatMap((coluna) => {
+    const trocada = COLUNAS_TROCADAS[coluna.cabecalho];
+    if (trocada) return trocada;
+    return [
+      {
+        cabecalho: coluna.cabecalho,
+        largura: coluna.largura,
+        tipo: coluna.tipo,
+        celula: (linha: LinhaRateio) => coluna.celula(linha.lancamento),
+      },
+    ];
+  });
+})();
+
+/** Cabeçalhos da planilha por rateio, na ordem das colunas. */
+export const CABECALHOS_PLANILHA_RATEIOS = COLUNAS_PLANILHA_RATEIOS.map(
+  (coluna) => coluna.cabecalho,
+);
+
+/** Uma linha da planilha por rateio, na ordem das colunas. */
+export function linhaPlanilhaRateio(linha: LinhaRateio): CelulaPlanilha[] {
+  return COLUNAS_PLANILHA_RATEIOS.map((coluna) => coluna.celula(linha));
+}
+
+/** Nome do arquivo da versão por rateio. Ver `nomeArquivoPlanilhaLancamentos`. */
+export function nomeArquivoPlanilhaRateios(dataISO: string): string {
+  return `lancamentos-por-rateio-${dataISO}.xlsx`;
+}
+
 /** Uma linha da planilha, na ordem das colunas. */
 export function linhaPlanilhaLancamento(
   lancamento: LancamentoPlanilha,
@@ -370,6 +610,89 @@ export function montarPlanilhaLancamentos(
   linhaTotais.getCell(colunaValor.number).value = {
     formula: `SUBTOTAL(109,${colunaValor.letter}${primeiraLinha}:${colunaValor.letter}${ultimaLinha})`,
   };
+  linhaTotais.eachCell((cell) => {
+    cell.font = { bold: true };
+  });
+
+  return workbook;
+}
+
+/** Nome da aba da versão por rateio. */
+export const ABA_PLANILHA_RATEIOS = "Rateios";
+
+/**
+ * Monta o .xlsx POR RATEIO: mesma marca, mesmo cabeçalho congelado e mesmo
+ * filtro, com uma linha por centro de custo de cada lançamento.
+ *
+ * A linha de total traz as DUAS somas, e é a conferência do arquivo: "Valor do
+ * rateio" soma as fatias, "Valor do lançamento" soma os documentos (preenchido
+ * uma vez por lançamento), e as duas TÊM que dar o mesmo número, porque a soma
+ * dos rateios é o valor do lançamento — conferido no banco, 6.365 de 6.365 sem
+ * divergência. Divergência ali é rateio incompleto, e aparece na cara de quem
+ * abre o arquivo em vez de virar um centavo perdido meses depois.
+ */
+export function montarPlanilhaLancamentosPorRateio(
+  itens: LancamentoPlanilha[],
+): ExcelJS.Workbook {
+  const linhas = expandirPorRateio(itens);
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "ERP EMT";
+  workbook.company = EMPRESA.razaoSocial;
+
+  const worksheet = workbook.addWorksheet(ABA_PLANILHA_RATEIOS);
+
+  escreverCabecalhoMarca(workbook, worksheet, {
+    titulo: "Lançamentos financeiros por centro de custo",
+    colunas: COLUNAS_PLANILHA_RATEIOS.length,
+  });
+
+  const linhaHeader = worksheet.addRow(CABECALHOS_PLANILHA_RATEIOS);
+  estilizarCabecalhoColunas(linhaHeader);
+
+  for (const linha of linhas) {
+    worksheet.addRow(linhaPlanilhaRateio(linha));
+  }
+
+  COLUNAS_PLANILHA_RATEIOS.forEach((definicao, indice) => {
+    const coluna = worksheet.getColumn(indice + 1);
+    coluna.width = definicao.largura;
+    if (definicao.tipo === "dinheiro") {
+      coluna.numFmt = FORMATO_BRL;
+      coluna.alignment = { horizontal: "right" };
+    } else if (definicao.tipo === "data") {
+      coluna.numFmt = FORMATO_DATA;
+      coluna.alignment = { horizontal: "center" };
+    } else if (definicao.tipo === "inteiro") {
+      coluna.alignment = { horizontal: "right" };
+    }
+  });
+
+  const primeiraLinha = linhaHeader.number + 1;
+  const ultimaLinha = linhaHeader.number + linhas.length;
+
+  worksheet.views = [{ state: "frozen", ySplit: linhaHeader.number }];
+  worksheet.autoFilter = {
+    from: { row: linhaHeader.number, column: 1 },
+    to: { row: ultimaLinha, column: COLUNAS_PLANILHA_RATEIOS.length },
+  };
+
+  const linhaTotais = worksheet.addRow([]);
+  linhaTotais.getCell(1).value =
+    `Total (${linhas.length.toLocaleString("pt-BR")} rateios de ${itens.length.toLocaleString("pt-BR")} lançamentos)`;
+
+  // SUBTOTAL(109) nas duas colunas de dinheiro, pelo mesmo motivo da outra
+  // planilha: quem recebe filtra e apaga linha, e total fixo passa a mentir na
+  // primeira mexida. Aqui ele ainda acompanha o filtro do Excel, então filtrar
+  // por uma obra mostra na hora quanto foi para ela.
+  COLUNAS_PLANILHA_RATEIOS.forEach((definicao, indice) => {
+    if (definicao.tipo !== "dinheiro") return;
+    const coluna = worksheet.getColumn(indice + 1);
+    linhaTotais.getCell(coluna.number).value = {
+      formula: `SUBTOTAL(109,${coluna.letter}${primeiraLinha}:${coluna.letter}${ultimaLinha})`,
+    };
+  });
+
   linhaTotais.eachCell((cell) => {
     cell.font = { bold: true };
   });

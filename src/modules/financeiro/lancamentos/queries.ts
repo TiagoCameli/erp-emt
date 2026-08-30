@@ -19,6 +19,11 @@ import {
   type TipoFormaPagamento,
 } from "@/modules/_shared/forma-pagamento";
 import {
+  centroEEtapaDoRateio,
+  type CentroNaArvore,
+} from "@/modules/financeiro/lancamentos/hierarquia-centro";
+import {
+  SEM_CENTRO_DE_CUSTO,
   STATUS_PARCELA_ABERTA,
   type StatusLancamento,
   type StatusParcela,
@@ -280,9 +285,39 @@ export interface LancamentoLista {
 
 /** Um centro de custo do rateio, para a coluna da planilha. */
 export interface RateioPlanilha {
+  /**
+   * Id do centro de custo, ou null no rateio que perdeu o cadastro.
+   *
+   * Existe para a planilha por rateio juntar as partes do MESMO centro sem
+   * depender do nome: um lançamento vindo de OC com vários itens na mesma obra
+   * grava uma parte por item (9 lançamentos hoje, até 5 partes), e o arquivo
+   * traria a mesma obra repetida em cinco linhas. Agrupar por nome funcionaria
+   * hoje e passaria a somar dois centros num só no dia em que dois cadastros
+   * tiverem o mesmo nome — e isso é dinheiro trocando de obra sem erro nenhum.
+   */
+  centroId: string | null;
+  /**
+   * Nome do nível em que o rateio foi gravado: a raiz, ou a etapa quando o
+   * lançamento foi para uma etapa. É o que a planilha por lançamento mostra.
+   */
   nome: string;
   codigo: string | null;
   valor: number;
+  /**
+   * O CENTRO DE CUSTO de verdade: a raiz da árvore (nível 1).
+   *
+   * Centro de custo e etapa são coisas diferentes no vocabulário do ERP, e a
+   * planilha misturava as duas: "001 - Carretas EMT" é o centro de custo, e
+   * "Caminhão Cavalo XF 530 FTT SQU9C94 - 03" é uma ETAPA dele. Sair só o nome
+   * do nível gravado deixava a coluna "Centro de custo" cheia de nome de
+   * equipamento, e quem soma por centro não achava a obra.
+   *
+   * Num rateio gravado na própria raiz (6.244 dos 6.561 hoje) é o mesmo nome
+   * de `nome`.
+   */
+  raizNome: string;
+  /** Nome da ETAPA, ou null quando o rateio foi gravado direto na raiz. */
+  etapaNome: string | null;
 }
 
 /**
@@ -1243,7 +1278,7 @@ export async function detalharLancamentosParaPlanilha(
          formas_pagamento(nome),
          condicoes_pagamento(descricao),
          lancamento_parcelas(conta_bancaria_id, contas_bancarias(nome)),
-         lancamento_rateios(valor, centros_custo(nome, codigo))`,
+         lancamento_rateios(valor, centros_custo(id, nome, codigo, pai_id))`,
       )
       .in("id", lote);
 
@@ -1259,6 +1294,7 @@ export async function detalharLancamentosParaPlanilha(
   }
 
   const numeroOc = await numerosDeOcDosLancamentos(supabase, linhas);
+  const arvore = await arvoreDeCentrosDeCusto(supabase);
 
   for (const linha of linhas) {
     const parcelas = linha.lancamento_parcelas ?? [];
@@ -1283,11 +1319,20 @@ export async function detalharLancamentosParaPlanilha(
         linha.origem === "oc" && linha.origem_id
           ? (numeroOc.get(linha.origem_id) ?? null)
           : null,
-      rateios: (linha.lancamento_rateios ?? []).map((rateio) => ({
-        nome: rateio.centros_custo?.nome ?? "Sem centro de custo",
-        codigo: rateio.centros_custo?.codigo ?? null,
-        valor: rateio.valor,
-      })),
+      rateios: (linha.lancamento_rateios ?? []).map((rateio) => {
+        const centro = rateio.centros_custo;
+        const nome = centro?.nome ?? SEM_CENTRO_DE_CUSTO;
+        const hierarquia = centro
+          ? centroEEtapaDoRateio(centro.id, nome, arvore)
+          : { raizNome: nome, etapaNome: null };
+        return {
+          centroId: centro?.id ?? null,
+          nome,
+          codigo: centro?.codigo ?? null,
+          valor: rateio.valor,
+          ...hierarquia,
+        };
+      }),
     });
   }
 
@@ -1308,9 +1353,50 @@ type LinhaDetalhePlanilha = {
   }[];
   lancamento_rateios: {
     valor: number;
-    centros_custo: { nome: string; codigo: string | null } | null;
+    centros_custo: {
+      id: string;
+      nome: string;
+      codigo: string | null;
+      pai_id: string | null;
+    } | null;
   }[];
 };
+
+/**
+ * Nome de cada centro de custo do cadastro, para resolver a RAIZ de um rateio
+ * gravado em etapa.
+ *
+ * Uma consulta só para a árvore inteira, e não um embed do pai dentro do
+ * rateio: são 84 centros (17 raízes e 67 etapas), então o mapa cabe na memória
+ * com folga e a consulta é a mesma para uma exportação de 1 ou de 25.000
+ * lançamentos. O embed pediria um self-join aninhado no PostgREST, que é
+ * sintaxe que só se prova rodando autenticado.
+ *
+ * A RLS de `centros_custo` aceita quem tem `financeiro.lancamentos.ver`, que é
+ * exatamente a permissão que a exportação já exige, então a árvore nunca volta
+ * pela metade para quem consegue exportar.
+ */
+async function arvoreDeCentrosDeCusto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Map<string, CentroNaArvore>> {
+  const arvore = new Map<string, CentroNaArvore>();
+
+  const { data, error } = await supabase
+    .from("centros_custo")
+    .select("id, nome, pai_id");
+
+  if (error) {
+    throw new Error(
+      `Não foi possível carregar os centros de custo para a planilha: ${error.message}`,
+    );
+  }
+
+  for (const centro of data ?? []) {
+    arvore.set(centro.id, { nome: centro.nome, paiId: centro.pai_id });
+  }
+  return arvore;
+}
+
 
 /** Número da OC de cada lançamento que vem de ordem de compra. */
 async function numerosDeOcDosLancamentos(

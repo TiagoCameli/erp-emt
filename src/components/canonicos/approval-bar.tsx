@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +31,28 @@ export interface ApprovalBarProps {
   onDesaprovar: (motivo: string) => void | Promise<void>;
   desabilitarDesaprovar?: boolean;
   motivoBloqueioDesaprovar?: string;
+  /**
+   * Renomeia a devolução ao autor, para a tela em que "rejeitar" é duro demais.
+   *
+   * O efeito é o mesmo em toda entidade (volta ao autor com motivo registrado),
+   * mas a palavra não é: na folha, "Rejeitar" faz parecer que o trabalho foi
+   * recusado, quando o que acontece é devolver para ajuste. Só o texto muda —
+   * quem devolve continua precisando do motivo, aqui e no banco.
+   */
+  textosRejeitar?: {
+    botao: string;
+    titulo: string;
+    descricao: string;
+    confirmar: string;
+  };
+  /**
+   * Ações da própria tela, à esquerda das de aprovação.
+   *
+   * Existe porque a barra é o lugar onde o usuário procura o que fazer com o
+   * documento, e ação de fluxo pendurada em outro canto da tela não é achada.
+   * Quem passa decide quando mostrar: a barra não sabe as regras da entidade.
+   */
+  acoesExtras?: ReactNode;
 }
 
 export function ApprovalBar({
@@ -43,7 +65,15 @@ export function ApprovalBar({
   onDesaprovar,
   desabilitarDesaprovar = false,
   motivoBloqueioDesaprovar,
+  textosRejeitar,
+  acoesExtras,
 }: ApprovalBarProps) {
+  const rejeitar = textosRejeitar ?? {
+    botao: 'Rejeitar',
+    titulo: 'Rejeitar registro',
+    descricao: 'Informe o motivo da rejeição. Ele fica registrado na auditoria.',
+    confirmar: 'Rejeitar',
+  };
   const [aprovando, setAprovando] = useState(false);
   const [dialogRejeitar, setDialogRejeitar] = useState(false);
   const [dialogDesaprovar, setDialogDesaprovar] = useState(false);
@@ -77,6 +107,7 @@ export function ApprovalBar({
       <StatusBadge status={status} rotulo={rotulo} />
 
       <div className="flex items-center gap-2">
+        {acoesExtras}
         {mostrarAprovacao ? (
           <>
             <Button
@@ -86,7 +117,7 @@ export function ApprovalBar({
               disabled={aprovando}
               onClick={() => setDialogRejeitar(true)}
             >
-              Rejeitar
+              {rejeitar.botao}
             </Button>
             <Button type="button" disabled={aprovando} onClick={aprovar}>
               {aprovando ? 'Aprovando...' : 'Aprovar'}
@@ -115,9 +146,9 @@ export function ApprovalBar({
       <ConfirmDialog
         aberto={dialogRejeitar}
         onAbertoChange={setDialogRejeitar}
-        titulo="Rejeitar registro"
-        descricao="Informe o motivo da rejeição. Ele fica registrado na auditoria."
-        textoConfirmar="Rejeitar"
+        titulo={rejeitar.titulo}
+        descricao={rejeitar.descricao}
+        textoConfirmar={rejeitar.confirmar}
         variante="destrutivo"
         exigeMotivo
         onConfirmar={(motivo) => onRejeitar(motivo ?? '')}

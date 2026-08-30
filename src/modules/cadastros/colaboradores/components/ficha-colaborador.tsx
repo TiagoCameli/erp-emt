@@ -30,6 +30,10 @@ import { ROTULO_TIPO_DOCUMENTO } from "@/modules/rh/documentos/schemas";
 import { ROTULO_STATUS_FERIAS } from "@/modules/rh/ferias/schemas";
 import { ROTULO_TIPO_OCORRENCIA } from "@/modules/rh/ocorrencias/schemas";
 import { ROTULO_TIPO_APONTAMENTO, STATUS_PONTO } from "@/modules/rh/_shared/formato";
+import {
+  ROTULO_TIPO_RESCISAO,
+  type TipoRescisao,
+} from "@/modules/rh/rescisoes/formato";
 
 export interface FichaColaboradorProps {
   colaborador: ColaboradorFicha;
@@ -147,6 +151,26 @@ export function FichaColaborador({
           <Dado rotulo="Admissão">
             {colaborador.dataAdmissao ? formatarData(colaborador.dataAdmissao) : "-"}
           </Dado>
+          {/* Só aparece para quem SAIU. Numa ficha de alguém que está na
+              empresa, um "Desligamento: -" ocuparia espaço para dizer o que o
+              badge "Ativo" já disse ali em cima. */}
+          {colaborador.dataDemissao ? (
+            <Dado rotulo="Desligamento">
+              {formatarData(colaborador.dataDemissao)}
+              {colaborador.tipoRescisao ? (
+                <span className="text-muted-foreground block text-[12px]">
+                  {ROTULO_TIPO_RESCISAO[
+                    colaborador.tipoRescisao as TipoRescisao
+                  ] ?? colaborador.tipoRescisao}
+                </span>
+              ) : null}
+              {colaborador.motivoDesligamento ? (
+                <span className="text-muted-foreground block text-[12px]">
+                  {colaborador.motivoDesligamento}
+                </span>
+              ) : null}
+            </Dado>
+          ) : null}
           <Dado rotulo="Centro de custo">{colaborador.centroCustoNome ?? "-"}</Dado>
           <Dado rotulo="Jornada">{colaborador.jornadaNome ?? "Padrão EMT"}</Dado>
           <Dado rotulo="Salário">

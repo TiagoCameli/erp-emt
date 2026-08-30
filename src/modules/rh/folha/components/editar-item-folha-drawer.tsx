@@ -13,7 +13,9 @@ import {
   LinhaCampos,
   MoneyText,
   SecaoFormulario,
+  SeletorCentroCusto,
 } from "@/components/canonicos";
+import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import { Button } from "@/components/ui/button";
 import { formatarBRL } from "@/lib/formatadores";
 import {
@@ -33,6 +35,13 @@ import { paraNumero } from "@/modules/rh/percentual";
 
 const ID_FORM = "form-editar-item-folha";
 
+/**
+ * Teto das horas trabalhadas: o mês inteiro sem dormir (31 × 24). Não é jornada,
+ * é impossibilidade — pega dedo escorregado (2000 no lugar de 200) sem julgar
+ * escala de trabalho. O mesmo número está no schema e na `fn_editar_item_folha`.
+ */
+const HORAS_MAX = 744;
+
 /** Número do banco no formato que o InputMoeda edita. */
 function paraCampo(valor: number | null): string {
   if (valor === null) return "";
@@ -46,6 +55,8 @@ export interface EditarItemFolhaDrawerProps {
   item: FolhaItem | null;
   /** Folha do item, só para revalidar a rota do detalhe depois de salvar. */
   folhaId: string;
+  /** Raízes e etapas ativas, para o seletor de centro de custo. */
+  centros: readonly CentroCustoOpcao[];
   /** Chamado depois de salvar com sucesso. */
   onSalvo?: () => void;
 }
@@ -81,12 +92,17 @@ export function EditarItemFolhaDrawer({
   onAbertoChange,
   item,
   folhaId,
+  centros,
   onSalvo,
 }: EditarItemFolhaDrawerProps) {
   const [salarioBase, setSalarioBase] = React.useState("");
   const [gratificacao, setGratificacao] = React.useState("");
   const [desconto, setDesconto] = React.useState("");
   const [horas, setHoras] = React.useState("");
+  const [centroCusto, setCentroCusto] = React.useState("");
+  const [horasNormais, setHorasNormais] = React.useState("");
+  const [horasExtras, setHorasExtras] = React.useState("");
+  const [valorExtras, setValorExtras] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
   // Ajuste de estado durante o render na transição de fechado para aberto
@@ -105,6 +121,12 @@ export function EditarItemFolhaDrawer({
       setHoras(
         item.descontoHoras === null ? "" : paraCampo(item.descontoHoras),
       );
+      // Vazio quando a linha não tem centro: é o estado que trava a aprovação,
+      // e o campo em branco com asterisco é o que faz alguém reparar nele.
+      setCentroCusto(item.centroCustoId ?? "");
+      setHorasNormais(paraCampo(item.horasNormais));
+      setHorasExtras(paraCampo(item.horasExtras));
+      setValorExtras(paraCampo(item.valorExtras));
     }
   }
 
@@ -125,6 +147,16 @@ export function EditarItemFolhaDrawer({
     (Number.isFinite(horasNumero) &&
       horasNumero >= 0 &&
       horasNumero <= HORAS_MES);
+  const extrasNumero = valorExtras.trim() === "" ? 0 : paraNumero(valorExtras);
+  const extrasValido = Number.isFinite(extrasNumero) && extrasNumero >= 0;
+  // Horas trabalhadas: vazio é ZERO (não trabalhou), diferente das horas do
+  // desconto, onde vazio é null (não declarou motivo).
+  const hnNumero = horasNormais.trim() === "" ? 0 : paraNumero(horasNormais);
+  const heNumero = horasExtras.trim() === "" ? 0 : paraNumero(horasExtras);
+  const horasTrabalhadasValidas = [hnNumero, heNumero].every(
+    (valor) => Number.isFinite(valor) && valor >= 0 && valor <= HORAS_MAX,
+  );
+
   // Linha zerada não existe na folha: a mesma trava está no schema e no banco.
   const temValor =
     baseValida && gratValida && (baseNumero > 0 || gratNumero > 0);
@@ -134,6 +166,12 @@ export function EditarItemFolhaDrawer({
     gratValida &&
     descontoValido &&
     horasValidas &&
+    // Sem centro de custo o banco recusa. Travar o botão em vez de deixar
+    // clicar e cair num toast: o campo obrigatório está à vista, na primeira
+    // seção do formulário.
+    centroCusto !== "" &&
+    extrasValido &&
+    horasTrabalhadasValidas &&
     temValor;
 
   /**
@@ -182,6 +220,7 @@ export function EditarItemFolhaDrawer({
       ? liquidoPrevisto({
           salarioBase: baseNumero,
           gratificacao: gratNumero,
+          valorExtras: extrasValido ? extrasNumero : 0,
           desconto: descontoPrevisto,
           inss: item?.inss ?? 0,
           irrf: item?.irrf ?? 0,
@@ -218,11 +257,28 @@ export function EditarItemFolhaDrawer({
       return;
     }
 
+    if (centroCusto === "") {
+      toast.error("Escolha o centro de custo desta linha");
+      return;
+    }
+    if (!extrasValido) {
+      toast.error("Informe o valor de extras como número (ex: 350,00)");
+      return;
+    }
+    if (!horasTrabalhadasValidas) {
+      toast.error(`Informe as horas entre 0 e ${HORAS_MAX}`);
+      return;
+    }
+
     setSalvando(true);
     const resultado = await editarItemFolha(folhaId, {
       itemId: item.id,
+      centroCustoId: centroCusto,
       salarioBase: baseNumero,
       gratificacao: gratNumero,
+      horasNormais: hnNumero,
+      horasExtras: heNumero,
+      valorExtras: extrasNumero,
       desconto: descontoNumero,
       descontoHoras: horasNumero,
     });
@@ -233,7 +289,7 @@ export function EditarItemFolhaDrawer({
       return;
     }
 
-    toast.success("Valores da linha atualizados");
+    toast.success("Linha da folha atualizada");
     onAbertoChange(false);
     onSalvo?.();
   }
@@ -247,10 +303,10 @@ export function EditarItemFolhaDrawer({
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
-      titulo={item ? `Valores de ${item.colaboradorNome}` : "Valores da linha"}
+      titulo={item ? item.colaboradorNome : "Linha da folha"}
       descricao={
         item
-          ? `${vinculo} · ajuste o que esta folha paga a esta pessoa. Regerar a folha preserva o que você mudar aqui.`
+          ? `${vinculo} · ajuste o que esta folha paga a esta pessoa. Regerar a folha preserva tudo o que você mudar aqui.`
           : undefined
       }
       rodape={
@@ -305,6 +361,26 @@ export function EditarItemFolhaDrawer({
         className={classesFormulario}
         noValidate
       >
+        {/* Centro de custo primeiro: é a pergunta "de quem é este custo", e é
+            o único campo aqui que, faltando, impede a folha inteira de ser
+            aprovada. */}
+        <SecaoFormulario titulo="Centro de custo">
+          <SeletorCentroCusto
+            centros={centros}
+            valor={centroCusto}
+            onValorChange={setCentroCusto}
+            disabled={salvando}
+            idBase="item-folha-centro"
+            obrigatorio
+            erro={
+              centroCusto === ""
+                ? "Nenhum custo da folha existe sem centro de custo"
+                : undefined
+            }
+            rotuloDoValor={item?.centroCustoNome ?? undefined}
+          />
+        </SecaoFormulario>
+
         <SecaoFormulario titulo="Remuneração do mês">
           <LinhaCampos>
             <CampoFormulario
@@ -337,6 +413,55 @@ export function EditarItemFolhaDrawer({
                 valor={gratificacao}
                 onValorChange={setGratificacao}
                 disabled={salvando}
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Horas e extras do mês">
+          <LinhaCampos>
+            <CampoFormulario
+              id="item-folha-horas-normais"
+              rotulo="Horas normais"
+              largura="medio"
+              ajuda="Vem do apontamento aprovado. Terceiro e diarista não têm apontamento, então aqui é o único lugar de informar."
+            >
+              <InputHoras
+                id="item-folha-horas-normais"
+                valor={horasNormais}
+                onValorChange={setHorasNormais}
+                disabled={salvando}
+                placeholder="0"
+              />
+            </CampoFormulario>
+
+            <CampoFormulario
+              id="item-folha-horas-extras"
+              rotulo="Horas extras"
+              largura="medio"
+              ajuda="Só registro de produtividade: não vira dinheiro sozinha. O que paga é o valor abaixo."
+            >
+              <InputHoras
+                id="item-folha-horas-extras"
+                valor={horasExtras}
+                onValorChange={setHorasExtras}
+                disabled={salvando}
+                placeholder="0"
+              />
+            </CampoFormulario>
+
+            <CampoFormulario
+              id="item-folha-valor-extras"
+              rotulo="Valor de extras"
+              largura="medio"
+              ajuda="Soma no líquido e no custo. NÃO entra na base do encargo nem da provisão — é por isso que existe separado do salário base."
+            >
+              <InputMoeda
+                id="item-folha-valor-extras"
+                valor={valorExtras}
+                onValorChange={setValorExtras}
+                disabled={salvando}
+                placeholder="0,00"
               />
             </CampoFormulario>
           </LinhaCampos>

@@ -24,6 +24,7 @@ import {
   MAX_MESES,
   type FiltrosCustoReceita,
 } from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";
 
 const MOTIVO_PERIODO_DESABILITADO =
   "Há mês de referência marcado, e o mês marcado manda. Limpe os meses para voltar a usar a janela.";
@@ -68,7 +69,11 @@ export function FiltrosCustoReceitaBarra({
   centrosCusto,
   periodoDesabilitado,
 }: FiltrosCustoReceitaBarraProps) {
-  const { setMuitos, limparTodos } = useFiltrosUrl();
+  // `naoSaoFiltro` preserva o `rel` no "Limpar filtros": ele diz qual relatório
+  // está aberto, e apagá-lo devolvia a pessoa ao Fluxo de caixa.
+  const { setMuitos, limparTodos } = useFiltrosUrl({
+    naoSaoFiltro: PARAMS_DE_NAVEGACAO,
+  });
 
   const opcoesCentro = opcoesDeRaiz(centrosCusto);
 

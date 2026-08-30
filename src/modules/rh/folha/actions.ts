@@ -12,6 +12,7 @@ import {
   escreverCabecalhoMarca,
   estilizarCabecalhoColunas,
 } from "@/lib/planilha-marca";
+import { gerarPdf } from "@/lib/pdf";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatarBRL,
@@ -25,10 +26,16 @@ import {
 import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
 import { buscarFolha } from "@/modules/rh/folha/queries";
 import {
+  documentoDoResumo,
+  nomeDoArquivo,
+} from "@/modules/rh/folha/resumo-pdf";
+import {
   editarItemFolhaSchema,
   gerarFolhaSchema,
+  vencimentoFolhaSchema,
   type EditarItemFolhaInput,
   type GerarFolhaInput,
+  type VencimentoFolhaInput,
 } from "@/modules/rh/folha/schemas";
 
 const RECURSO = "rh.folha" as const;
@@ -170,6 +177,12 @@ export async function editarItemFolha(
     p_item: validado.data.itemId,
     p_salario_base: validado.data.salarioBase,
     p_gratificacao: validado.data.gratificacao,
+    // Obrigatório dos dois lados: o schema já barrou vazio, e a função recusa
+    // null. Nenhum custo da folha existe sem centro de custo.
+    p_centro_custo: validado.data.centroCustoId,
+    p_horas_normais: validado.data.horasNormais,
+    p_horas_extras: validado.data.horasExtras,
+    p_valor_extras: validado.data.valorExtras,
     // O schema já resolveu vazio e null para 0, então aqui sempre chega um
     // número. Nada de `?? undefined`: aquilo existia para omitir o parâmetro e
     // deixar o DEFAULT null do banco significar "sem desconto", distinção que o
@@ -200,8 +213,51 @@ export async function editarItemFolha(
   return { ok: true };
 }
 
+/**
+ * Define (ou limpa) a data de vencimento da folha.
+ *
+ * É a data que vai para os lançamentos de salário na aprovação. Passa pela RPC
+ * porque a coluna não tem grant de UPDATE para o `authenticated`: em `folhas`
+ * só `status` e `motivo_rejeicao` são escritos direto, e o resto é escrito por
+ * função. A trava de "só em rascunho" também vive lá, então ela vale mesmo se
+ * alguém chamar por fora desta action.
+ */
+export async function definirVencimentoDaFolha(
+  dados: VencimentoFolhaInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para alterar a data de vencimento da folha" };
+  }
+
+  const validado = vencimentoFolhaSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_definir_vencimento_folha", {
+    p_folha: validado.data.folhaId,
+    p_data: validado.data.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.definirVencimento",
+      error,
+      // As duas travas da função (fora do rascunho, data anterior à
+      // competência) dizem o que fazer em seguida. Trocar o texto por um
+      // genérico apagaria justamente a instrução.
+      mensagemDeNegocio(error, "Não foi possível salvar a data de vencimento"),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(validado.data.folhaId));
+  return { ok: true };
+}
+
 /* ------------------------------------------------------------------ */
-/* Fluxo de aprovação: enviar, aprovar, rejeitar, desaprovar          */
+/* Fluxo: enviar, aprovar, mandar para revisão, retomar, desaprovar   */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -316,13 +372,22 @@ export async function aprovarFolha(id: string): Promise<ResultadoAcao> {
   return { ok: true };
 }
 
-/** Rejeita a folha pendente com motivo, devolvendo para rascunho. */
-export async function rejeitarFolha(
+/**
+ * Devolve a folha pendente para quem a montou, com motivo.
+ *
+ * É o antigo "rejeitar", com o nome que descreve o que acontece: a folha volta
+ * para rascunho e o autor corrige. "Rejeitar" fazia parecer que o trabalho foi
+ * recusado — e não existe status `rejeitado` na folha justamente porque ela é
+ * recalculável, então o beco sem saída nunca existiu.
+ */
+export async function mandarFolhaParaRevisao(
   id: string,
   motivo: string,
 ): Promise<ResultadoAcao> {
   const motivoLimpo = motivo.trim();
-  if (motivoLimpo === "") return { erro: "Informe o motivo da rejeição" };
+  if (motivoLimpo === "") {
+    return { erro: "Informe o motivo da revisão" };
+  }
 
   return transicionarStatusFolha(
     id,
@@ -331,6 +396,32 @@ export async function rejeitarFolha(
     "rascunho",
     {
       motivo_rejeicao: motivoLimpo,
+    },
+  );
+}
+
+/**
+ * Quem MONTA a folha puxa de volta o que ela mesma enviou para aprovação.
+ *
+ * Permissão `editar`, e sem motivo: não é devolução a ninguém, é a própria
+ * pessoa retomando — pedir motivo seria pedir um bilhete para si mesma. O
+ * motivo da revisão anterior é apagado no mesmo UPDATE, porque a folha volta
+ * para a mesa limpa e um motivo velho pendurado faria a tela mostrar uma
+ * cobrança que já foi atendida.
+ *
+ * Folha aprovada não entra aqui: `statusEsperado` é `pendente_aprovacao`, e o
+ * trigger do banco recusa qualquer saída de `aprovado` que não seja Desaprovar.
+ */
+export async function voltarFolhaParaRascunho(
+  id: string,
+): Promise<ResultadoAcao> {
+  return transicionarStatusFolha(
+    id,
+    "editar",
+    "pendente_aprovacao",
+    "rascunho",
+    {
+      motivo_rejeicao: null,
     },
   );
 }
@@ -400,6 +491,59 @@ function nomeArquivoFolha(competencia: string): string {
  * linha de totais. Devolve o arquivo em base64 para o client baixar via Blob.
  * Disponível em qualquer status.
  */
+/**
+ * O resumo da folha em PDF, para ir ANEXADO ao pedido de aprovação.
+ *
+ * Pedido do Tiago (29/08/2026): a mensagem que ele copia com o link também tem
+ * que levar um PDF com o resumo de cada funcionário. Quem aprova R$ 173 mil
+ * precisa ver de onde o número vem, e às vezes decide no celular, longe do
+ * sistema.
+ *
+ * Gerado no SERVIDOR e devolvido em base64, igual à planilha: o pdfmake pesa
+ * mais de 1 MB e não tem por que viajar até o navegador. E a permissão fica
+ * onde vale — um PDF com o salário de 47 pessoas não pode sair para quem não
+ * pode ver a folha.
+ */
+export async function gerarResumoFolhaPdf(
+  id: string,
+): Promise<ResultadoPlanilha> {
+  if (!(await checarPermissao("ver"))) {
+    return { erro: "Sem permissão para exportar a folha" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Folha inválida" };
+
+  const folha = await buscarFolha(idValido.data);
+  if (!folha) return { erro: "Folha não encontrada" };
+
+  try {
+    const bytes = await gerarPdf(
+      documentoDoResumo(
+        {
+          competencia: folha.competencia,
+          statusRotulo: STATUS_FOLHA[folha.status].rotulo,
+          dataVencimento: folha.dataVencimento,
+          itens: folha.itens,
+        },
+        new Date(),
+      ),
+    );
+
+    return {
+      ok: true,
+      base64: bytes.toString("base64"),
+      nomeArquivo: nomeDoArquivo(folha.competencia),
+    };
+  } catch (erro) {
+    return erroAcao(
+      "rh.folha.resumoPdf",
+      erro,
+      "Não foi possível gerar o resumo em PDF",
+    );
+  }
+}
+
 export async function gerarPlanilhaFolha(
   id: string,
 ): Promise<ResultadoPlanilha> {
@@ -538,4 +682,104 @@ export async function gerarPlanilhaFolha(
     base64,
     nomeArquivo: nomeArquivoFolha(folha.competencia),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tirar da folha / trazer de volta                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Tira um colaborador DESTA folha, sem desligá-lo da empresa.
+ *
+ * A permissão é `editar`, mas a RPC também exige `criar`: a operação REGENERA a
+ * folha, porque montar (e desmontar) item é responsabilidade de
+ * `fn_gerar_folha` — a única função que sabe a regra de dinheiro do item. Ver o
+ * cabeçalho da migration 20260828140000.
+ *
+ * O motivo é opcional e curto. Obrigar motivo transformaria o caminho rápido
+ * ("entrou de licença, tiro deste mês") num formulário, e o histórico já grava
+ * quem tirou e quando.
+ */
+export async function tirarDaFolha(
+  folhaId: string,
+  colaboradorId: string,
+  motivo?: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar a folha" };
+  }
+
+  const idFolha = idSchema.safeParse(folhaId);
+  if (!idFolha.success) return { erro: "Folha inválida" };
+  const idColab = idSchema.safeParse(colaboradorId);
+  if (!idColab.success) return { erro: "Colaborador inválido" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_tirar_da_folha", {
+    p_folha_id: idFolha.data,
+    p_colaborador_id: idColab.data,
+    p_motivo: motivo?.trim() ? motivo.trim() : null,
+  });
+
+  if (error) {
+    // `mensagemDeNegocio` deixa passar o texto dos `raise` da RPC (P0001), que
+    // aqui são todos em pt-BR e dizem o que fazer: folha fora de rascunho,
+    // sobra de adiantamento já descontada numa folha posterior, falta de
+    // permissão de criar. Erro de infraestrutura cai no fallback.
+    return erroAcao(
+      "rh.folha.tirarDaFolha",
+      error,
+      mensagemDeNegocio(
+        error,
+        "Não foi possível tirar o colaborador da folha. Tente novamente",
+      ),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idFolha.data));
+  return { ok: true };
+}
+
+/**
+ * Traz de volta para a folha um colaborador que tinha sido tirado dela.
+ *
+ * Também regenera, e pelo mesmo motivo: é `fn_gerar_folha` que sabe montar o
+ * item (base por vínculo, INSS, IRRF, adiantamento em cascata, centro de custo,
+ * encargos e provisões). Uma segunda função que soubesse montar item seria uma
+ * segunda cópia da regra de dinheiro.
+ */
+export async function voltarParaFolha(
+  folhaId: string,
+  colaboradorId: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar a folha" };
+  }
+
+  const idFolha = idSchema.safeParse(folhaId);
+  if (!idFolha.success) return { erro: "Folha inválida" };
+  const idColab = idSchema.safeParse(colaboradorId);
+  if (!idColab.success) return { erro: "Colaborador inválido" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_voltar_para_folha", {
+    p_folha_id: idFolha.data,
+    p_colaborador_id: idColab.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.voltarParaFolha",
+      error,
+      mensagemDeNegocio(
+        error,
+        "Não foi possível colocar o colaborador de volta. Tente novamente",
+      ),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idFolha.data));
+  return { ok: true };
 }

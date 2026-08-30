@@ -405,14 +405,43 @@ export function FiltroPeriodo({
  */
 const PARAMS_QUE_NAO_SAO_FILTRO = ["tamanho", "ordem", "direcao"];
 
+export interface OpcoesFiltrosUrl {
+  /**
+   * Parâmetros DESTA tela que também não são filtro, e por isso sobrevivem ao
+   * "Limpar filtros". Some com a lista global acima.
+   *
+   * Existe para a tela cuja URL carrega NAVEGAÇÃO além de filtro: em
+   * `/financeiro/relatorios` o `rel` diz qual dos nove relatórios está aberto, e
+   * limpar os filtros o derrubava de volta para o Fluxo de caixa — o botão
+   * desfazia uma escolha que ninguém mandou desfazer.
+   *
+   * Por que por chamada e não na lista global: a global vale para as 16 telas
+   * com filtro na URL, então acrescentar `rel` lá reservaria o nome no app
+   * inteiro para sempre. E por que não um `onLimparFiltros` próprio na tela: ele
+   * teria que enumerar as chaves de filtro dela (o Custo por centro de custo tem
+   * doze), e essa lista sai de sincronia no primeiro filtro que alguém
+   * acrescenta — o sintoma seria o botão limpando quase tudo, que é pior que não
+   * limpar. Aqui continua havendo uma implementação só, por exclusão.
+   *
+   * Passe um array ESTÁVEL (constante de módulo): ele entra na dependência do
+   * callback pelo conteúdo, mas um literal novo a cada render é trabalho à toa.
+   */
+  naoSaoFiltro?: readonly string[];
+}
+
 /**
  * Lê e escreve filtros nos searchParams da URL (replace, sem scroll).
  * `set(chave, null)` ou valor vazio remove o parâmetro.
  */
-export function useFiltrosUrl() {
+export function useFiltrosUrl(opcoes?: OpcoesFiltrosUrl) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // Assinatura de conteúdo da lista da tela. O array chega novo a cada render se
+  // o call site usar literal, e comparar por referência refaria o callback
+  // sempre; a string é comparável por valor.
+  const naoSaoFiltroDaTela = (opcoes?.naoSaoFiltro ?? []).join(",");
 
   const get = React.useCallback(
     (chave: string): string | null => searchParams.get(chave),
@@ -465,16 +494,23 @@ export function useFiltrosUrl() {
    *
    * O que NÃO é filtro sobrevive: ordenar e escolher quantas linhas ver não é
    * filtrar, e quem limpou filtro não pediu a ordem padrão de volta. `pagina` é
-   * apagada, o que a leitura entende como primeira página.
+   * apagada, o que a leitura entende como primeira página. A tela que carrega
+   * NAVEGAÇÃO na própria URL declara as chaves dela em `naoSaoFiltro`.
    *
    * Não navega quando não há filtro nenhum: clique de graça faria a tela recarregar
    * sem motivo.
    */
   const limparTodos = React.useCallback(() => {
+    const sobrevivem = new Set([
+      ...PARAMS_QUE_NAO_SAO_FILTRO,
+      // `"".split(",")` devolve [""], que entraria no Set como uma chave de
+      // nome vazio. Sem lista da tela, não monta lista nenhuma.
+      ...(naoSaoFiltroDaTela === "" ? [] : naoSaoFiltroDaTela.split(",")),
+    ]);
     const params = new URLSearchParams(searchParams.toString());
     let mexeu = false;
     for (const chave of [...params.keys()]) {
-      if (PARAMS_QUE_NAO_SAO_FILTRO.includes(chave)) continue;
+      if (sobrevivem.has(chave)) continue;
       params.delete(chave);
       mexeu = true;
     }
@@ -489,7 +525,7 @@ export function useFiltrosUrl() {
     router.replace(query ? `${pathname}?${query}` : pathname, {
       scroll: false,
     });
-  }, [router, pathname, searchParams]);
+  }, [router, pathname, searchParams, naoSaoFiltroDaTela]);
 
   const set = React.useCallback(
     (chave: string, valor: string | null) => {
