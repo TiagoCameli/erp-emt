@@ -32,6 +32,14 @@ function centavos(valor: number): number {
 export interface ParcelasDoLiquido {
   salarioBase: number;
   gratificacao: number;
+  /**
+   * Valor de extras da linha. SOMA no bruto, igual à gratificação — a fórmula do
+   * banco é `salario + gratificacao + extras - inss - irrf`. Entrou aqui em
+   * 29/08/2026, quando o campo virou editável: até então era sempre 0 e a
+   * ausência não aparecia. Com o campo na tela, a prévia sem ele erraria
+   * exatamente no número que a pessoa está conferindo.
+   */
+  valorExtras: number;
   /** Desconto por pessoa, em reais, como foi digitado nesta tela. */
   desconto: number;
   /** INSS retido, calculado pelas faixas no banco. */
@@ -53,7 +61,8 @@ export interface ParcelasDoLiquido {
 export function liquidoPrevisto(parcelas: ParcelasDoLiquido): number {
   const total =
     centavos(parcelas.salarioBase) +
-    centavos(parcelas.gratificacao) -
+    centavos(parcelas.gratificacao) +
+    centavos(parcelas.valorExtras) -
     centavos(parcelas.desconto) -
     centavos(parcelas.inss) -
     centavos(parcelas.irrf) -

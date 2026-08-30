@@ -168,8 +168,41 @@ const descontoHorasSchema = z
   });
 
 /**
- * Alteração de UMA linha da folha em rascunho. Só quatro campos: é o que a
- * `fn_editar_item_folha` sabe recalcular sem mexer na cascata de adiantamento.
+ * HORAS trabalhadas do mês (normais ou extras). Diferente de
+ * `descontoHorasSchema`: ali o vazio é `null` porque "sem motivo declarado" é um
+ * estado; aqui vazio é 0, porque "não trabalhou hora extra" é zero hora.
+ *
+ * O teto de 744 é o mês inteiro sem dormir (31 × 24). Não é jornada, é
+ * impossibilidade: serve para pegar dedo escorregado (2000 no lugar de 200), não
+ * para julgar escala de trabalho — quem faz isso é o apontamento. O mesmo número
+ * está na `fn_editar_item_folha`.
+ */
+const HORAS_MAX = 744;
+
+const horasTrabalhadasSchema = z
+  .union([z.string(), z.number(), z.null()])
+  .transform((valor, ctx) => {
+    if (valor === null) return 0;
+    if (typeof valor === "number") return valor;
+    const texto = valor.trim();
+    if (texto === "") return 0;
+    const numero = paraNumero(texto);
+    if (!Number.isFinite(numero)) {
+      ctx.addIssue({ code: "custom", message: "Horas inválidas" });
+      return z.NEVER;
+    }
+    return numero;
+  })
+  .refine((valor) => valor >= 0, { error: "As horas não podem ser negativas" })
+  .refine((valor) => valor <= HORAS_MAX, {
+    error: `As horas vão de 0 a ${HORAS_MAX} (o mês inteiro, 24h por dia)`,
+  })
+  .refine((valor) => casasDecimais(valor) <= 2, {
+    error: "As horas aceitam no máximo 2 casas decimais",
+  });
+
+/**
+ * Alteração de UMA linha da folha em rascunho.
  *
  * Salário base e gratificação não podem ser os dois zero — uma linha de R$ 0,00
  * não representa nada na folha, e quem não entra nela sai pelo cadastro, não
@@ -180,8 +213,18 @@ const descontoHorasSchema = z
 export const editarItemFolhaSchema = z
   .object({
     itemId: idSchemaCom("Item da folha inválido"),
+    // Obrigatório, e é o ponto: item da folha sem centro de custo passa batido
+    // até a aprovação e morre lá, longe de onde daria para resolver. Regra de
+    // ouro do projeto — nenhum custo existe sem centro de custo.
+    centroCustoId: idSchemaCom("Escolha o centro de custo desta linha"),
     salarioBase: dinheiroSchema,
     gratificacao: dinheiroComZeroSchema,
+    horasNormais: horasTrabalhadasSchema,
+    horasExtras: horasTrabalhadasSchema,
+    // Entra no custo da empresa e no líquido. Existe como campo próprio para não
+    // ser preciso inflar o salário base para pagar um extra, o que erraria a
+    // base do encargo e da provisão.
+    valorExtras: dinheiroComZeroSchema,
     desconto: descontoSchema,
     descontoHoras: descontoHorasSchema,
   })

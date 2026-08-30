@@ -4000,11 +4000,15 @@ export type Database = {
       };
       fn_editar_item_folha: {
         Args: {
+          p_centro_custo: string;
           p_desconto?: number;
           p_desconto_horas?: number;
           p_gratificacao: number;
+          p_horas_extras: number;
+          p_horas_normais: number;
           p_item: string;
           p_salario_base: number;
+          p_valor_extras: number;
         };
         Returns: undefined;
       };
