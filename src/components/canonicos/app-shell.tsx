@@ -48,8 +48,22 @@ const COLUNAS_MOBILE: Record<number, string> = {
   6: "grid-cols-6",
 };
 
-/** Largura da sidebar. Fixa: ela nunca expande. */
-const LARGURA_SIDEBAR = "w-14";
+/**
+ * Largura da sidebar. Fixa: ela nunca expande.
+ *
+ * 80px porque o item do rail passou a mostrar o NOME do módulo abaixo do ícone,
+ * e o mais largo dos seis ("Administração") precisa caber em uma linha. Era 56px
+ * quando só havia ícone, e ali a pessoa tinha que decorar seis desenhos ou
+ * passar o mouse em cada um para descobrir onde estava.
+ *
+ * O 80 foi MEDIDO no navegador, não chutado. Com 80px de sidebar sobram 71px de
+ * caixa útil para o texto, e "Administração" em 10px ocupa 67,9px com a Inter
+ * carregada e 68,8px caindo no `system-ui` do fallback. Ou seja, passa nos dois
+ * casos, mas com folga de 2 a 3px: um módulo de nome mais longo que este NÃO
+ * cabe, e é por isso que o rótulo leva `truncate` em vez de confiar na medida.
+ * Antes de estreitar isto de novo, meça; não olhe e ache que coube.
+ */
+const LARGURA_SIDEBAR = "w-20";
 /** Atraso pra abrir o submenu: o mouse de passagem não abre nada. */
 const ATRASO_ABRIR_MS = 150;
 /** Atraso pra fechar: sair de raspão do painel não fecha na cara do usuário. */
@@ -295,13 +309,24 @@ function ModuloSidebar({
         aria-expanded={abas.length > 0 ? aberto : undefined}
         onKeyDown={aoTeclarNoGatilho}
         className={cn(
-          "flex h-11 items-center justify-center transition-colors",
+          "flex h-14 flex-col items-center justify-center gap-1 px-1 transition-colors",
           moduloAtivo
             ? "faixa-esquerda bg-sidebar-accent text-primary"
             : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
         )}
       >
-        <Icone className="size-5" aria-hidden="true" />
+        <Icone className="size-5 shrink-0" aria-hidden="true" />
+        {/*
+          O nome embaixo do ícone. `aria-hidden` porque o Link já tem
+          `aria-label` com o mesmo texto: sem isso o leitor de tela anuncia o
+          nome do módulo duas vezes.
+        */}
+        <span
+          aria-hidden="true"
+          className="w-full truncate text-center text-[10px] leading-none"
+        >
+          {modulo.nome}
+        </span>
       </Link>
 
       {aberto && abas.length > 0 ? (
@@ -383,9 +408,9 @@ export function AppShell({
   return (
     <div className="flex h-screen overflow-hidden">
       {/*
-        Sidebar sempre recolhida: só ícones. O submenu de cada módulo escapa
-        pela direita (absolute), então nada aqui pode ter overflow escondido.
-        z-40 mantém os painéis acima do conteúdo.
+        Sidebar sempre recolhida: ícone e nome do módulo, sem expandir. O submenu
+        de cada módulo escapa pela direita (absolute), então nada aqui pode ter
+        overflow escondido. z-40 mantém os painéis acima do conteúdo.
       */}
       <aside
         className={cn(
@@ -400,10 +425,10 @@ export function AppShell({
         >
           {/*
             A marca de verdade, não a inicial num quadrado. `simbolo` corta o
-            "Construtora Ltda" e deixa EMT sobre a pista, que é o que ainda se lê
-            nos 36px que a sidebar recolhida tem de largura útil.
+            "Construtora Ltda" e deixa EMT sobre a pista, que é o que se lê nos
+            72px de largura útil da sidebar.
           */}
-          <LogoEmt variante="simbolo" className="w-9" />
+          <LogoEmt variante="simbolo" className="w-11" />
         </Link>
 
         <nav className="flex-1 py-1" aria-label="Módulos">
