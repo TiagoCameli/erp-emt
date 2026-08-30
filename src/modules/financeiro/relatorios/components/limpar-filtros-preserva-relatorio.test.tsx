@@ -2,7 +2,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FiltrosCustoCcBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-cc-barra";
+import { FiltrosCustoGrupoBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-grupo-barra";
 import { FiltrosCustoReceitaBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-receita-barra";
+import { FiltrosDreBarra } from "@/modules/financeiro/relatorios/components/filtros-dre-barra";
+import { FiltrosFluxoCaixaBarra } from "@/modules/financeiro/relatorios/components/filtros-fluxo-caixa-barra";
 import type { FiltrosCustoCc } from "@/modules/financeiro/relatorios/filtros-custo-cc";
 import type { FiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
 
@@ -134,6 +137,67 @@ describe("Limpar filtros preserva o relatório aberto", () => {
     const query = ultimaQuery();
     expect(query.get("mes_ref")).toBeNull();
     expect(query.get("rel")).toBe("custo-receita");
+  });
+
+  it("Custo por grupo de insumo: some o centro, fica o `rel`", () => {
+    navegador.query = `rel=custo-grupo&centro=${OBRA}`;
+    render(
+      <FiltrosCustoGrupoBarra
+        filtros={{
+          modo: "mes",
+          mes: "2026-08",
+          de: "",
+          ate: "",
+          centroId: OBRA,
+          etapaId: "",
+          categoriaId: "",
+        }}
+        centrosCusto={[
+          {
+            id: OBRA,
+            nome: "009 - BR-364",
+            codigo: null,
+            paiId: null,
+            tipo: "obra",
+          },
+        ]}
+        categorias={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+
+    const query = ultimaQuery();
+    expect(query.get("centro")).toBeNull();
+    expect(query.get("rel")).toBe("custo-grupo");
+  });
+
+  it("DRE gerencial: some o período, fica o `rel`", () => {
+    navegador.query = "rel=dre&modo=periodo&de=2026-01&ate=2026-03";
+    render(
+      <FiltrosDreBarra
+        filtros={{ modo: "periodo", mes: "2026-08", de: "2026-01", ate: "2026-03" }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+
+    const query = ultimaQuery();
+    expect(query.get("modo")).toBeNull();
+    expect(query.get("de")).toBeNull();
+    expect(query.get("ate")).toBeNull();
+    expect(query.get("rel")).toBe("dre");
+  });
+
+  it("Fluxo de caixa: some a janela, fica o `rel`", () => {
+    navegador.query = "rel=fluxo-caixa&fluxo_modo=total";
+    render(<FiltrosFluxoCaixaBarra filtros={{ modo: "total", de: "", ate: "" }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+
+    const query = ultimaQuery();
+    expect(query.get("fluxo_modo")).toBeNull();
+    expect(query.get("rel")).toBe("fluxo-caixa");
   });
 
   it("com o `rel` sozinho na URL, o botão nem aparece", () => {

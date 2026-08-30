@@ -20,6 +20,7 @@ import {
   drillCentroCusto,
   type FiltrosDoRelatorioDeCusto,
   type PeriodoCompetencia,
+  type RecorteCustoGrupo,
 } from "@/modules/financeiro/relatorios/drill";
 import {
   comparacaoPermitida,
@@ -28,7 +29,27 @@ import {
   periodoDoModo,
   type FiltrosCustoCc,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
+import {
+  lerFiltrosCreditos,
+  recortarCreditosPorSituacao,
+  type FiltrosCreditos,
+} from "@/modules/financeiro/relatorios/filtros-creditos";
+import { lerFiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-custo-grupo";
 import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import {
+  descreverJanela,
+  janelaDoFluxo,
+  lerFiltrosFluxoCaixa,
+  type JanelaFluxo,
+} from "@/modules/financeiro/relatorios/filtros-fluxo-caixa";
+import {
+  descreverPeriodo,
+  lerPeriodoDaUrl,
+  periodoDoModo as periodoDoModoSimples,
+  periodoFechado,
+  pontasDaRpc,
+  type ModoPeriodo,
+} from "@/modules/financeiro/relatorios/filtros-periodo";
 import { centrosEfetivos } from "@/modules/financeiro/relatorios/centros-e-etapas";
 import {
   porCentro,
@@ -37,12 +58,14 @@ import {
 } from "@/modules/financeiro/relatorios/custo-receita";
 import { CustoCcSerie } from "@/modules/financeiro/relatorios/components/custo-cc-serie";
 import { FiltrosCustoCcBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-cc-barra";
+import { FiltrosCustoGrupoBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-grupo-barra";
+import { FiltrosDreBarra } from "@/modules/financeiro/relatorios/components/filtros-dre-barra";
+import { FiltrosFluxoCaixaBarra } from "@/modules/financeiro/relatorios/components/filtros-fluxo-caixa-barra";
 import { FiltrosCustoReceitaBarra } from "@/modules/financeiro/relatorios/components/filtros-custo-receita-barra";
 import { CustoReceitaGrafico } from "@/modules/financeiro/relatorios/components/custo-receita-grafico";
 import { CustoReceitaTabela } from "@/modules/financeiro/relatorios/components/custo-receita-tabela";
 import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-grafico";
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
-import { proximoMes } from "@/modules/financeiro/relatorios/calculo";
 import { CustoCcGrafico } from "@/modules/financeiro/relatorios/components/custo-cc-grafico";
 import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/custo-grupo-tabela";
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
@@ -57,13 +80,14 @@ import {
   CreditosTabela,
 } from "@/modules/financeiro/relatorios/components/creditos-tabela";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
+import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
+import { FiltrosCreditosBarra } from "@/modules/financeiro/relatorios/components/filtros-creditos-barra";
 import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
   normalizarRelatorio,
   type RelatorioId,
 } from "@/modules/financeiro/relatorios/relatorios";
 import { SeletorFornecedor } from "@/modules/financeiro/relatorios/components/seletor-fornecedor";
-import { SeletorMes } from "@/modules/financeiro/relatorios/components/seletor-mes";
 import {
   aging,
   custoPorCentroCusto,
@@ -96,17 +120,26 @@ function primeiro(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
 }
 
-const MES_VALIDO = /^\d{4}-(0[1-9]|1[0-2])$/;
-
 /** Faixa de cabeçalho de cada relatório: título e, opcionalmente, controles. */
 function SecaoRelatorio({
   titulo,
   descricao,
+  exportar,
   controles,
   children,
 }: {
   titulo: string;
   descricao: string;
+  /**
+   * Qual relatório esta seção mostra. Presente, desenha "Exportar Excel" ao
+   * lado do título.
+   *
+   * O botão nasce AQUI, e não em cada uma das nove seções, porque o gesto é o
+   * mesmo em todas e o que muda é só a planilha. Assim o décimo relatório ganha
+   * exportação junto com a seção dele, em vez de alguém precisar lembrar — que
+   * é exatamente como os nove ficaram sem exportação nenhuma até hoje.
+   */
+  exportar?: RelatorioId;
   controles?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -119,7 +152,12 @@ function SecaoRelatorio({
           </h2>
           <p className="text-detalhe text-muted-foreground">{descricao}</p>
         </div>
-        {controles ? <div className="shrink-0">{controles}</div> : null}
+        {exportar || controles ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {controles}
+            {exportar ? <BotaoExportarRelatorio relatorio={exportar} /> : null}
+          </div>
+        ) : null}
       </div>
       {children}
     </section>
@@ -133,17 +171,32 @@ function Painel({ children }: { children: React.ReactNode }) {
 }
 
 async function ConteudoFluxoCaixa({
+  janela,
   podeVerLancamentos,
 }: {
+  /** A janela de meses da tela. Cortada no servidor, ver `fluxoCaixa`. */
+  janela: JanelaFluxo;
   podeVerLancamentos: boolean;
 }) {
-  const dados = await fluxoCaixa();
+  const dados = await fluxoCaixa(janela);
+  const janelaDescrita = descreverJanela(janela);
   if (dados.meses.length === 0) {
+    // Duas causas com respostas opostas: não há parcela nenhuma, ou a janela é
+    // que não pega nenhum mês. Mandar "assim que houver parcelas lançadas" para
+    // quem tem cinco anos de parcelas e olhou 2019 é uma resposta errada.
     return (
       <EmptyState
         icone={BarChart3}
-        titulo="Sem movimentação de caixa"
-        descricao="Assim que houver parcelas com vencimento lançadas, o fluxo aparece aqui."
+        titulo={
+          janela.de || janela.ate
+            ? "Sem movimentação nesta janela"
+            : "Sem movimentação de caixa"
+        }
+        descricao={
+          janela.de || janela.ate
+            ? `Nenhuma parcela cai em ${janelaDescrita.toLowerCase()}. Abra a janela ou escolha "Tudo".`
+            : "Assim que houver parcelas com vencimento lançadas, o fluxo aparece aqui."
+        }
       />
     );
   }
@@ -176,7 +229,7 @@ async function ConteudoFluxoCaixa({
         <KPICard
           titulo="Meses com movimento"
           valor={dados.meses.length}
-          detalhe="Por mês de vencimento"
+          detalhe={janelaDescrita}
         />
       </GradeKpis>
       <Painel>
@@ -201,13 +254,30 @@ function temLancamentoNoDre(dre: DreGerencial): boolean {
 }
 
 async function ConteudoDre({
-  mes,
+  periodo,
   podeVerLancamentos,
 }: {
-  mes: string;
+  /**
+   * O período do DRE, com as DUAS pontas fechadas (ver `periodoFechado`): a
+   * `fn_rel_dre` não tem guarda de nulo, e uma ponta aberta devolveria um DRE
+   * vazio como se o período não tivesse lançamento nenhum.
+   */
+  periodo: PeriodoCompetencia;
   podeVerLancamentos: boolean;
 }) {
-  const dre = await dreGerencial({ mes });
+  const { inicio, fim } = pontasDaRpc(periodo);
+  if (inicio === undefined || fim === undefined) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Sem lançamentos para apurar"
+        descricao="Não há nenhum lançamento com mês de referência, então não existe período para o DRE."
+      />
+    );
+  }
+
+  const dre = await dreGerencial({ inicio, fim });
+  const descricao = descreverPeriodo(periodo);
   return (
     <>
       <GradeKpis>
@@ -217,29 +287,29 @@ async function ConteudoDre({
         <KPICard
           titulo="Receitas"
           valor={<MoneyText valor={dre.operacional.totalReceitas} />}
-          detalhe="Lançamentos a receber no mês"
+          detalhe="Lançamentos a receber no período"
         />
         <KPICard
           titulo="Despesas"
           valor={<MoneyText valor={dre.operacional.totalDespesas} />}
-          detalhe="Lançamentos a pagar no mês"
+          detalhe="Lançamentos a pagar no período"
         />
         <KPICard
           titulo="Resultado"
           valor={<MoneyText valor={dre.resultado} />}
-          detalhe={dre.resultado >= 0 ? "Superávit" : "Déficit"}
+          detalhe={`${dre.resultado >= 0 ? "Superávit" : "Déficit"} · ${descricao}`}
         />
       </GradeKpis>
       {!temLancamentoNoDre(dre) ? (
         <EmptyState
           icone={BarChart3}
-          titulo="Sem lançamentos no mês"
-          descricao="Não há receitas nem despesas com competência neste mês."
+          titulo="Sem lançamentos no período"
+          descricao="Não há receitas nem despesas com mês de referência neste recorte."
         />
       ) : (
         <DreTabela
           dre={dre}
-          mes={mes}
+          periodo={periodo}
           podeVerLancamentos={podeVerLancamentos}
         />
       )}
@@ -360,17 +430,25 @@ async function ConteudoPosicaoBancaria({
 }
 
 async function ConteudoCreditos({
+  situacao,
   podeVerLancamentos,
 }: {
+  situacao: FiltrosCreditos["situacao"];
   podeVerLancamentos: boolean;
 }) {
   // As duas leituras em paralelo: são independentes, e uma esperar a outra
   // dobraria o tempo da aba sem motivo.
-  const [dados, contratos] = await Promise.all([
+  const [todos, contratos] = await Promise.all([
     creditos(),
     emprestimosPorContrato(),
   ]);
-  if (dados.contratos.length === 0 && contratos.contratos.length === 0) {
+
+  // O filtro recorta a lista E os totais. Somar a carteira inteira embaixo de
+  // uma tabela que mostra só os contratos em aberto seria dois números que não
+  // se explicam — a regra do módulo é o cartão acompanhar o filtro da tabela.
+  const dados = recortarCreditosPorSituacao(todos, situacao);
+
+  if (todos.contratos.length === 0 && contratos.contratos.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
@@ -451,44 +529,6 @@ async function ConteudoCreditos({
       </div>
     </>
   );
-}
-
-/**
- * Traduz o período do relatório para as pontas que a RPC entende.
- *
- * A RPC usa `[inicio, fim)` — fim EXCLUSIVO —, então a ponta de cima é o primeiro
- * dia do mês SEGUINTE ao último mês pedido. Fechar no primeiro dia do próprio mês
- * deixaria o último mês inteiro de fora, que é o tipo de erro que some do olho
- * porque o relatório continua mostrando número.
- */
-function pontasDaRpc(periodo: PeriodoCompetencia): {
-  inicio?: string;
-  fim?: string;
-} {
-  if (periodo.mes) {
-    return { inicio: `${periodo.mes}-01`, fim: proximoMes(periodo.mes) };
-  }
-  return {
-    inicio: periodo.de ? `${periodo.de}-01` : undefined,
-    fim: periodo.ate ? proximoMes(periodo.ate) : undefined,
-  };
-}
-
-/** Descreve o período em pt-BR, para o detalhe dos cartões. */
-function descreverPeriodo(
-  periodo: PeriodoCompetencia,
-  modo: FiltrosCustoCc["modo"],
-): string {
-  if (modo === "total") return "Todo o período, sem limite de data";
-  if (periodo.mes) return `Mês de referência ${rotuloMes(periodo.mes)}`;
-  if (periodo.de && periodo.ate) {
-    return periodo.de === periodo.ate
-      ? `Mês de referência ${rotuloMes(periodo.de)}`
-      : `De ${rotuloMes(periodo.de)} a ${rotuloMes(periodo.ate)}`;
-  }
-  if (periodo.de) return `De ${rotuloMes(periodo.de)} em diante`;
-  if (periodo.ate) return `Até ${rotuloMes(periodo.ate)}`;
-  return "Todo o período";
 }
 
 async function ConteudoCustoCc({
@@ -829,23 +869,38 @@ async function ConteudoCustoReceita({
 }
 
 async function ConteudoCustoGrupo({
-  mes,
+  periodo,
+  modo,
+  recorte,
   podeVerLancamentos,
 }: {
-  mes: string;
+  periodo: PeriodoCompetencia;
+  modo: ModoPeriodo;
+  /**
+   * Centro e categoria escolhidos, o centro já traduzido pela escada da tela (a
+   * etapa substitui a raiz). Vai à RPC, desce para os três níveis da tabela e
+   * viaja no link do drill: é o mesmo recorte nos quatro lugares, ou os números
+   * da tela discordam entre si.
+   */
+  recorte: RecorteCustoGrupo;
   podeVerLancamentos: boolean;
 }) {
-  const custo = await custoPorGrupo({
-    inicio: `${mes}-01`,
-    fim: proximoMes(mes),
-  });
+  const custo = await custoPorGrupo({ ...pontasDaRpc(periodo), ...recorte });
+
+  const descricaoPeriodo = descreverPeriodo(periodo, modo);
+  const temRecorte =
+    recorte.centroCustoId !== undefined || recorte.categoriaId !== undefined;
 
   if (custo.grupos.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
-        titulo="Sem custo neste mês de referência"
-        descricao="Nenhum lançamento a pagar tem este mês de referência."
+        titulo="Sem custo neste recorte"
+        descricao={
+          temRecorte
+            ? "Nenhum lançamento a pagar cai no período com o centro e a categoria escolhidos. Troque o período ou afrouxe os filtros."
+            : "Nenhum lançamento a pagar tem mês de referência neste período."
+        }
       />
     );
   }
@@ -856,9 +911,9 @@ async function ConteudoCustoGrupo({
     <>
       <GradeKpis>
         <KPICard
-          titulo="Custo total do mês"
+          titulo="Custo total"
           valor={<MoneyText valor={custo.total} />}
-          detalhe="Soma dos 4 grupos, igual ao custo por centro de custo"
+          detalhe={descricaoPeriodo}
         />
         {maior ? (
           <KPICard
@@ -875,7 +930,8 @@ async function ConteudoCustoGrupo({
       </GradeKpis>
       <CustoGrupoTabela
         custo={custo}
-        mes={mes}
+        periodo={periodo}
+        recorte={recorte}
         podeVerLancamentos={podeVerLancamentos}
       />
     </>
@@ -908,6 +964,7 @@ async function ConteudoExtratoFornecedor({
     <SecaoRelatorio
       titulo="Extrato por fornecedor"
       descricao="Lançamentos a pagar dos fornecedores escolhidos, do vencimento mais recente para o mais antigo. A coluna Mês de referência é o mês em que o custo entra. Os cartões somam o que está em aberto nas parcelas e acompanham os filtros da tabela."
+      exportar="extrato-fornecedor"
       controles={
         <SeletorFornecedor
           fornecedores={fornecedores}
@@ -951,12 +1008,27 @@ export default async function RelatoriosPage({
   const params = await searchParams;
   const relatorio: RelatorioId = normalizarRelatorio(primeiro(params.rel));
 
-  const mesParam = primeiro(params.mes);
-  const mes = mesParam && MES_VALIDO.test(mesParam) ? mesParam : mesCorrente();
-
   // Lista, com uuid validado, deduplicada e no teto do filtro `in`. Regra e teto
   // moram em extrato-filtros.ts, que o seletor também usa para escrever.
   const fornecedorIds = lerFornecedoresDaUrl(params.fornecedor);
+
+  /**
+   * A janela do fluxo de caixa. Leitura pura e barata, feita sempre: ela não vai
+   * ao banco, e o corte que ela descreve é aplicado dentro de `fluxoCaixa`.
+   */
+  const filtrosFluxo = lerFiltrosFluxoCaixa(params);
+  const janelaFluxo = janelaDoFluxo(filtrosFluxo, mesCorrente());
+
+  // O DRE e o custo por grupo leem o MESMO contrato de período (`modo`, `mes`,
+  // `de`, `ate`) do custo por centro de custo: os três recortam o mês de
+  // referência do lançamento, então trocar de relatório na barra de cima mantém o
+  // recorte em vez de jogá-lo fora.
+  // Créditos: a situação do contrato (em aberto x quitado). Leitura pura, feita
+  // sempre, e o recorte é aplicado dentro de `ConteudoCreditos`.
+  const filtrosCreditos = lerFiltrosCreditos(params);
+
+  const periodoDre = lerPeriodoDaUrl(params, mesCorrente());
+  const filtrosCustoGrupo = lerFiltrosCustoGrupo(params, mesCorrente());
 
   // O relatório de centro de custo tem contrato de URL próprio (4 modos de
   // período + filtros de análise), lido pelo mesmo padrão do de lançamentos.
@@ -977,6 +1049,22 @@ export default async function RelatoriosPage({
           listarFormasPagamento(),
         ])
       : null;
+
+  // Custo por grupo de insumo: os dois cadastros que a barra dele oferece.
+  const opcoesCustoGrupo =
+    relatorio === "custo-grupo"
+      ? await Promise.all([listarCentrosCustoParaFiltro(), listarCategorias()])
+      : null;
+
+  /**
+   * Os meses que existem, para o DRE fechar as pontas abertas do período.
+   *
+   * A `fn_rel_dre` recebe as duas datas sem `default` e sem guarda de nulo, então
+   * "tudo" e "de julho em diante" precisam de uma data de verdade dos dois lados.
+   * O primeiro e o último mês com lançamento são o "tudo" exato — não uma data
+   * inventada com folga, que traria mês vazio para dentro do relatório.
+   */
+  const mesesParaDre = relatorio === "dre" ? await mesesDeCompetencia() : [];
 
   /**
    * Custo x receita: os meses que existem e o cadastro de centros.
@@ -1012,31 +1100,59 @@ export default async function RelatoriosPage({
 
       {relatorio === "fluxo-caixa" ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="Fluxo de caixa"
-          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado). Não usa o mês de referência."
+          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado). Não usa o mês de referência. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031."
         >
-          <ConteudoFluxoCaixa podeVerLancamentos={podeVerLancamentos} />
+          <FiltrosFluxoCaixaBarra filtros={filtrosFluxo} />
+          <ConteudoFluxoCaixa
+            janela={janelaFluxo}
+            podeVerLancamentos={podeVerLancamentos}
+          />
         </SecaoRelatorio>
       ) : null}
 
       {relatorio === "dre" ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="DRE gerencial"
-          descricao="Regime de COMPETÊNCIA: receitas e despesas por categoria no MÊS DE REFERÊNCIA do lançamento, com o resultado."
-          controles={<SeletorMes valor={mes} />}
+          descricao="Regime de COMPETÊNCIA: receitas e despesas por categoria no MÊS DE REFERÊNCIA do lançamento, com o resultado. O período aceita um mês, uma janela (o trimestre, o ano) ou tudo."
         >
-          <ConteudoDre mes={mes} podeVerLancamentos={podeVerLancamentos} />
+          <FiltrosDreBarra filtros={periodoDre} />
+          <ConteudoDre
+            periodo={
+              periodoFechado(periodoDoModoSimples(periodoDre), mesesParaDre) ?? {}
+            }
+            podeVerLancamentos={podeVerLancamentos}
+          />
         </SecaoRelatorio>
       ) : null}
 
-      {relatorio === "custo-grupo" ? (
+      {relatorio === "custo-grupo" && opcoesCustoGrupo ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="Custo por grupo de insumo"
-          descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo."
-          controles={<SeletorMes valor={mes} />}
+          descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo. Com o mesmo período, centro e categoria, o total fecha com o Custo por centro de custo."
         >
+          <FiltrosCustoGrupoBarra
+            filtros={filtrosCustoGrupo}
+            centrosCusto={opcoesCustoGrupo[0]}
+            categorias={opcoesCustoGrupo[1]}
+          />
           <ConteudoCustoGrupo
-            mes={mes}
+            periodo={periodoDoModoSimples(filtrosCustoGrupo)}
+            modo={filtrosCustoGrupo.modo}
+            recorte={{
+              // A escada vira UM id aqui, que é o que a RPC aceita: a etapa
+              // escolhida SUBSTITUI a raiz, e o banco filtra pela subárvore do
+              // que receber.
+              centroCustoId: centrosEfetivos(
+                opcoesCustoGrupo[0],
+                filtrosCustoGrupo.centroId ? [filtrosCustoGrupo.centroId] : [],
+                filtrosCustoGrupo.etapaId ? [filtrosCustoGrupo.etapaId] : [],
+              )[0],
+              categoriaId: filtrosCustoGrupo.categoriaId || undefined,
+            }}
             podeVerLancamentos={podeVerLancamentos}
           />
         </SecaoRelatorio>
@@ -1044,6 +1160,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "aging" ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="Aging de vencimentos"
           descricao="Regime de CAIXA: parcelas em aberto por faixa de vencimento, a pagar e a receber."
         >
@@ -1053,6 +1170,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "posicao-bancaria" ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="Posição bancária"
           descricao="Saldo por conta: saldo inicial mais o efeito das parcelas pagas."
         >
@@ -1062,15 +1180,21 @@ export default async function RelatoriosPage({
 
       {relatorio === "creditos" ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="Créditos"
           descricao="Empréstimos, financiamentos e consórcios tomados pela empresa: quanto se deve hoje e quanto vence pela frente. É uma dimensão à parte da categoria e do centro de custo — o financiamento de uma máquina continua sendo custo de equipamento."
         >
-          <ConteudoCreditos podeVerLancamentos={podeVerLancamentos} />
+          <FiltrosCreditosBarra filtros={filtrosCreditos} />
+          <ConteudoCreditos
+            situacao={filtrosCreditos.situacao}
+            podeVerLancamentos={podeVerLancamentos}
+          />
         </SecaoRelatorio>
       ) : null}
 
       {relatorio === "custo-cc" && opcoesCustoCc ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="Custo por centro de custo"
           descricao="Regime de COMPETÊNCIA: custo por centro de custo pelo MÊS DE REFERÊNCIA do lançamento (é o gasto da obra no mês, não o que saiu do caixa). Clique num centro para ver os lançamentos dele, com o mesmo filtro."
         >
@@ -1096,6 +1220,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "custo-receita" && centrosParaCustoReceita ? (
         <SecaoRelatorio
+          exportar={relatorio}
           titulo="Custo x receita por centro de custo"
           descricao="Regime de COMPETÊNCIA, pelo MÊS DE REFERÊNCIA do lançamento. Os centros do custo e os da receita são escolhidos separadamente: é o custo de um conjunto contra a receita de outro. Conta só categoria de natureza operacional, e a receita é a líquida (a retenção aparece ao lado)."
         >

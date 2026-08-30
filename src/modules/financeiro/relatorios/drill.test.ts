@@ -236,7 +236,7 @@ describe("drillCategoriaCompetencia", () => {
       params(
         drillCategoriaCompetencia({
           categoriaId: CATEGORIA,
-          mes: "2026-07",
+          periodo: { mes: "2026-07" },
           tipo: "a_receber",
         }),
       ),
@@ -253,11 +253,48 @@ describe("drillCategoriaCompetencia", () => {
       params(
         drillCategoriaCompetencia({
           categoriaId: CATEGORIA,
-          mes: "2026-07",
+          periodo: { mes: "2026-07" },
           tipo: "a_pagar",
         }),
       ).tipo,
     ).toBe("a_pagar");
+  });
+
+  it("o DRE do trimestre abre a lista do trimestre inteiro", () => {
+    // Enquanto o DRE era de um mês só, o drill levava `mes` e pronto. Com o
+    // período destravado, um link preso no mês abriria um terço do que a linha
+    // somou — e a lista não teria como acusar, porque ela abre certinha.
+    expect(
+      params(
+        drillCategoriaCompetencia({
+          categoriaId: CATEGORIA,
+          periodo: { de: "2026-01", ate: "2026-03" },
+          tipo: "a_pagar",
+        }),
+      ),
+    ).toEqual({
+      categoria: CATEGORIA,
+      comp_de: "2026-01-01",
+      comp_ate: "2026-03-31",
+      tipo: "a_pagar",
+      sem_cancelado: "1",
+    });
+  });
+
+  it("o DRE de tudo não manda limite de data nenhum", () => {
+    expect(
+      params(
+        drillCategoriaCompetencia({
+          categoriaId: CATEGORIA,
+          periodo: {},
+          tipo: "a_receber",
+        }),
+      ),
+    ).toEqual({
+      categoria: CATEGORIA,
+      tipo: "a_receber",
+      sem_cancelado: "1",
+    });
   });
 });
 
@@ -270,6 +307,43 @@ describe("drillGrupoInsumo", () => {
       tipo: "a_pagar",
       sem_cancelado: "1",
     });
+  });
+
+  it("leva o centro e a categoria que o relatório está somando", () => {
+    // Sem eles, clicar em "Sem insumo" num relatório recortado por obra abria a
+    // lista com o custo de TODOS os centros: a célula somava R$ 3,3 mi e a lista
+    // mostrava R$ 6,9 mi, sem erro nenhum na tela.
+    expect(
+      params(
+        drillGrupoInsumo({
+          grupoId: null,
+          periodo: { mes: "2026-07" },
+          recorte: { centroCustoId: CENTRO, categoriaId: CATEGORIA },
+        }),
+      ),
+    ).toEqual({
+      mes: "2026-07",
+      centro: CENTRO,
+      categoria: CATEGORIA,
+      tipo: "a_pagar",
+      sem_cancelado: "1",
+    });
+  });
+
+  it("sem recorte, não inventa filtro de centro nem de categoria", () => {
+    // Linha de controle do teste acima: o par de chaves só aparece quando a tela
+    // está mesmo filtrada, senão `centro=` vazio recortaria a lista para nada.
+    const chaves = Object.keys(
+      params(
+        drillGrupoInsumo({
+          grupoId: null,
+          periodo: {},
+          recorte: {},
+        }),
+      ),
+    );
+    expect(chaves).not.toContain("centro");
+    expect(chaves).not.toContain("categoria");
   });
 
   it("recusa grupo com insumo, porque o total não fecharia", () => {
