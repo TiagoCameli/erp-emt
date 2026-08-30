@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   ChevronDown,
   Copy,
   FileText,
@@ -22,6 +21,7 @@ import {
   ConfirmDialog,
   KPICard,
   MoneyText,
+  PageHeader,
   StatusBadge,
   Trilha,
   type EventoTrilha,
@@ -398,36 +398,29 @@ export function FolhaDetalheView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Voltar para a lista"
-            onClick={() => router.push("/rh/folha")}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-titulo font-semibold tabular-nums">
-                {formatarCompetencia(folha.competencia)}
-              </h1>
-              <StatusBadge status={info.badge} rotulo={info.rotulo} />
-            </div>
-            <p className="text-detalhe text-muted-foreground">
-              Folha gerencial · {folha.itens.length}{" "}
-              {folha.itens.length === 1 ? "colaborador" : "colaboradores"}
-              {folha.status === "aprovado" && folha.aprovadoEm
-                ? ` · aprovada em ${formatarDataHora(folha.aprovadoEm)}${
-                    folha.aprovadoPorNome ? ` por ${folha.aprovadoPorNome}` : ""
-                  }`
-                : ""}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        className="mb-0"
+        modulo="RH · Folha"
+        titulo={
+          <span className="tabular-nums">
+            {formatarCompetencia(folha.competencia)}
+          </span>
+        }
+        descricao={
+          <>
+            Folha gerencial · {folha.itens.length}{" "}
+            {folha.itens.length === 1 ? "colaborador" : "colaboradores"}
+            {folha.status === "aprovado" && folha.aprovadoEm
+              ? ` · aprovada em ${formatarDataHora(folha.aprovadoEm)}${
+                  folha.aprovadoPorNome ? ` por ${folha.aprovadoPorNome}` : ""
+                }`
+              : ""}
+          </>
+        }
+        voltarPara={{ rota: "/rh/folha", rotulo: "Voltar para as folhas" }}
+        selos={<StatusBadge status={info.badge} rotulo={info.rotulo} />}
+        acoes={
+          <>
           {podeCriar && rascunho ? (
             <Button
               type="button"
@@ -449,8 +442,9 @@ export function FolhaDetalheView({
             </Button>
           ) : null}
           <BotaoPlanilha folhaId={folha.id} />
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/*
         Antes da ApprovalBar de propósito: quem vai aprovar precisa ver para

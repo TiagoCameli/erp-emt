@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   CalendarClock,
   ExternalLink,
   History,
@@ -22,6 +21,7 @@ import {
   ConfirmDialog,
   EmptyState,
   MoneyText,
+  PageHeader,
   StatusBadge,
   Trilha,
   type EventoTrilha,
@@ -332,53 +332,44 @@ export function LancamentoDetalheView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Voltar para a lista"
-            onClick={() => router.push("/financeiro/lancamentos")}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-titulo font-semibold">
-                <span className="codigo-doc">
-                  {lancamento.numero ?? "Sem número"}
-                </span>
-              </h1>
-              <StatusBadge status={selo.badge} rotulo={selo.rotulo} />
-              {selo.etapa ? (
-                <StatusBadge status="aprovado" rotulo={selo.etapa} discreto />
-              ) : null}
-              {/* "Conta a pagar" e não "A pagar": 'a_pagar' também é nome de
-                  status, e os dois badges lado a lado se contradiziam. */}
-              <StatusBadge
-                status={
-                  lancamento.tipo === "a_receber"
-                    ? "aprovado"
-                    : "pendente_aprovacao"
-                }
-                rotulo={`Conta ${ROTULO_TIPO_LANCAMENTO[
-                  lancamento.tipo
-                ].toLowerCase()}`}
-              />
-              {semParcelas ? (
-                <StatusBadge status="rejeitado" rotulo="Parcelas pendentes" />
-              ) : null}
-              {quitadoNoCartao ? (
-                <StatusBadge status="pago" rotulo="Pago no cartão" />
-              ) : null}
-            </div>
-            <p className="text-detalhe text-muted-foreground">
-              {lancamento.descricao}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        className="mb-0"
+        modulo="Financeiro · Lançamentos"
+        titulo={lancamento.numero ?? "Sem número"}
+        tituloMono
+        descricao={lancamento.descricao}
+        voltarPara={{
+          rota: "/financeiro/lancamentos",
+          rotulo: "Voltar para os lançamentos",
+        }}
+        selos={
+          <>
+            <StatusBadge status={selo.badge} rotulo={selo.rotulo} />
+            {selo.etapa ? (
+              <StatusBadge status="aprovado" rotulo={selo.etapa} discreto />
+            ) : null}
+            {/* "Conta a pagar" e não "A pagar": 'a_pagar' também é nome de
+                status, e os dois badges lado a lado se contradiziam. */}
+            <StatusBadge
+              status={
+                lancamento.tipo === "a_receber"
+                  ? "aprovado"
+                  : "pendente_aprovacao"
+              }
+              rotulo={`Conta ${ROTULO_TIPO_LANCAMENTO[
+                lancamento.tipo
+              ].toLowerCase()}`}
+            />
+            {semParcelas ? (
+              <StatusBadge status="rejeitado" rotulo="Parcelas pendentes" />
+            ) : null}
+            {quitadoNoCartao ? (
+              <StatusBadge status="pago" rotulo="Pago no cartão" />
+            ) : null}
+          </>
+        }
+        acoes={
+          <>
           <BotaoEspelho rota="/espelho/lancamentos" ids={[lancamento.id]} />
           {editavel ? (
             <Button
@@ -407,8 +398,9 @@ export function LancamentoDetalheView({
               Excluir
             </Button>
           ) : null}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {incompleto ? (
         <Aviso

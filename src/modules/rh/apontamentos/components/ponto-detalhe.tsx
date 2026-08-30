@@ -2,10 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
-import { CelulaVazia, ConfirmDialog, StatusBadge } from "@/components/canonicos";
+import {
+  CelulaVazia,
+  ConfirmDialog,
+  PageHeader,
+  StatusBadge,
+} from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import {
@@ -148,29 +153,23 @@ export function PontoDetalheView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Voltar para a lista"
-            onClick={() => router.push("/rh/apontamentos")}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-titulo font-semibold">{ponto.obraNome}</h1>
-              <StatusBadge status={info.badge} rotulo={info.rotulo} />
-            </div>
-            <p className="text-detalhe text-muted-foreground tabular-nums">
-              {formatarData(ponto.data)}
-              {ponto.obraLote ? ` · Lote ${ponto.obraLote}` : ""}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        className="mb-0"
+        modulo="RH · Apontamentos"
+        titulo={ponto.obraNome}
+        descricao={
+          <span className="tabular-nums">
+            {formatarData(ponto.data)}
+            {ponto.obraLote ? ` · Lote ${ponto.obraLote}` : ""}
+          </span>
+        }
+        voltarPara={{
+          rota: "/rh/apontamentos",
+          rotulo: "Voltar para os apontamentos",
+        }}
+        selos={<StatusBadge status={info.badge} rotulo={info.rotulo} />}
+        acoes={
+          <>
           {podeAprovarAgora ? (
             <Button
               type="button"
@@ -198,8 +197,9 @@ export function PontoDetalheView({
               Reabrir
             </Button>
           ) : null}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {!aberto ? (
         <div className="rounded-md border border-border bg-surface px-4 py-3">
