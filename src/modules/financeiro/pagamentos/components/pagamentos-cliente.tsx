@@ -649,10 +649,27 @@ export function PagamentosCliente({
     };
   }
 
-  /** Faixa de valor (de/até) da aba, presa às chaves de URL dela. */
+  /** O maior valor à vista em cada aba, só para dar escala à barra. */
+  const maiorValorAPagar = React.useMemo(
+    () => aprovadas.reduce((maior, p) => Math.max(maior, p.valor), 0),
+    [aprovadas],
+  );
+  const maiorValorPagas = React.useMemo(
+    () => pagas.reduce((maior, p) => Math.max(maior, p.valor), 0),
+    [pagas],
+  );
+
+  /**
+   * Faixa de valor (de/até) da aba, presa às chaves de URL dela.
+   *
+   * `maiorValor` é a ESCALA da barra, tirada do que está à vista naquela aba.
+   * Não é teto de filtro: a alça na borda direita significa "sem limite", então
+   * a parcela maior que tudo o que a página mostra nunca fica escondida.
+   */
   function faixaValor(
     id: string,
     controle: ReturnType<typeof useFaixaUrl>,
+    maiorValor: number,
   ): FiltroConfiguravel {
     return {
       id,
@@ -664,6 +681,7 @@ export function PagamentosCliente({
         <FiltroValor
           de={controle.faixa.de}
           ate={controle.faixa.ate}
+          maiorValor={maiorValor}
           onValorChange={(de, ate) => controle.setFaixa({ de, ate })}
         />
       ),
@@ -880,7 +898,7 @@ export function PagamentosCliente({
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
     }),
-    faixaValor("valor", faixaAPagar),
+    faixaValor("valor", faixaAPagar, maiorValorAPagar),
     periodo({
       id: "vencimento",
       rotulo: "Período de vencimento",
@@ -991,7 +1009,7 @@ export function PagamentosCliente({
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
     }),
-    faixaValor("valor", faixaPagas),
+    faixaValor("valor", faixaPagas, maiorValorPagas),
     periodo({
       id: "vencimento",
       rotulo: "Período de vencimento",

@@ -222,13 +222,14 @@ describe("layout da barra de filtros", () => {
   it("filtro largo mede dois trilhos, para cair no mesmo prumo", () => {
     render(<Tela />);
 
-    for (const rotulo of ["Busca", "Faixa de valor"]) {
-      expect(casca(rotulo).className).toContain(TRILHO_FILTRO_DUPLO);
+    expect(casca("Busca").className).toContain(TRILHO_FILTRO_DUPLO);
+    // Período e faixa de valor encolheram para UM trilho quando viraram botão
+    // com resumo: os pares de campo que exigiam a largura dupla saíram da barra
+    // para dentro do popover. A busca continua em dois porque o placeholder
+    // ("Buscar por número ou descrição") não cabe em um.
+    for (const rotulo of ["Período de vencimento", "Faixa de valor"]) {
+      expect(casca(rotulo).className).toContain(TRILHO_FILTRO);
     }
-    // O período encolheu para UM trilho quando virou botão com resumo: os dois
-    // campos de data que exigiam a largura dupla saíram da barra para dentro do
-    // popover.
-    expect(casca("Período de vencimento").className).toContain(TRILHO_FILTRO);
   });
 
   it("as ações da tabela ficam fora da fileira dos filtros", () => {
