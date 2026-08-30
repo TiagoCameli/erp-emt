@@ -90,6 +90,74 @@ describe("ReguaTempo", () => {
       );
     });
 
+    it("NÃO filtra durante o arraste: só ao soltar, e uma vez só", () => {
+      // O conserto do tremor que o Tiago relatou em 30/08/2026 com gravação.
+      // Antes, cada bloco que o cursor atravessava chamava `onPeriodoChange`, e
+      // cada chamada troca a URL, refaz a consulta no servidor e redesenha a
+      // lista inteira — sete navegações num arraste de JAN a AGO.
+      const onPeriodoChange = abrir();
+
+      fireEvent.pointerDown(bloco("janeiro de 2026"), { button: 0 });
+      for (const mes of [
+        "fevereiro",
+        "março",
+        "abril",
+        "maio",
+        "junho",
+        "julho",
+        "agosto",
+      ]) {
+        fireEvent.pointerEnter(bloco(`${mes} de 2026`));
+      }
+
+      // Sete blocos atravessados, ZERO navegações.
+      expect(onPeriodoChange).not.toHaveBeenCalled();
+
+      fireEvent.pointerUp(bloco("agosto de 2026"));
+
+      expect(onPeriodoChange).toHaveBeenCalledTimes(1);
+      expect(onPeriodoChange).toHaveBeenCalledWith("2026-01-01", "2026-08-31");
+    });
+
+    it("a faixa acompanha o cursor enquanto arrasta, mesmo sem filtrar", () => {
+      // O outro lado da moeda: não filtrar durante o gesto não pode significar
+      // não MOSTRAR nada. A régua se pinta sozinha, com estado local.
+      abrir();
+
+      fireEvent.pointerDown(bloco("janeiro de 2026"), { button: 0 });
+      fireEvent.pointerEnter(bloco("abril de 2026"));
+
+      for (const mes of ["janeiro", "fevereiro", "março", "abril"]) {
+        expect(bloco(`${mes} de 2026`).getAttribute("aria-pressed")).toBe(
+          "true",
+        );
+      }
+      expect(bloco("maio de 2026").getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("clique simples navega UMA vez, não uma por evento", () => {
+      // Num clique de mouse o `click` chega depois do `pointerup`, e o
+      // `pointerup` já aplicou o intervalo do bloco. Aplicar de novo no `click`
+      // seriam duas navegações e dois refetches para um clique só.
+      const onPeriodoChange = abrir();
+      const ago = bloco("agosto de 2026");
+
+      fireEvent.pointerDown(ago, { button: 0 });
+      fireEvent.pointerUp(ago);
+      fireEvent.click(ago);
+
+      expect(onPeriodoChange).toHaveBeenCalledTimes(1);
+      expect(onPeriodoChange).toHaveBeenCalledWith("2026-08-01", "2026-08-31");
+    });
+
+    it("o teclado escolhe o bloco sem precisar de ponteiro", () => {
+      // Ninguém navega uma régua de doze meses arrastando com Tab.
+      const onPeriodoChange = abrir();
+      fireEvent.keyDown(bloco("março de 2026"), { key: "Enter" });
+
+      expect(onPeriodoChange).toHaveBeenCalledWith("2026-03-01", "2026-03-31");
+    });
+
     it("CONTROLE: passar o mouse SEM ter apertado não muda nada", () => {
       // Se o hover sozinho filtrasse, atravessar a régua com o mouse trocaria o
       // filtro doze vezes no caminho até o botão de fechar.
