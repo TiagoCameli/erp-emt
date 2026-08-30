@@ -33,7 +33,7 @@ import {
   type FiltrosCustoCc,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
 import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
-import { centrosEfetivos } from "@/modules/financeiro/relatorios/centros-e-etapas";
+import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
 import {
   porCentro,
   porMes,

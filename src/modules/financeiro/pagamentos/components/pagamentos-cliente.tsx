@@ -51,6 +51,15 @@ import {
   ROTULO_ORIGEM_LANCAMENTO,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { subarvoreDeCentros } from "@/modules/_shared/centro-custo/selecao";
+import {
+  centrosEfetivos,
+  etapasValidas,
+  opcoesDeEtapa,
+  opcoesDeRaiz,
+  rotuloDasEtapas,
+  separarRaizesEEtapas,
+  temEtapasParaEscolher,
+} from "@/modules/_shared/centro-custo/filtro";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
@@ -465,25 +474,43 @@ export function PagamentosCliente({
   );
 
   /**
-   * Só os centros de custo RAIZ.
+   * O primeiro degrau da escada: só os centros de custo RAIZ.
    *
    * O filtro expande a SUBÁRVORE no banco, então escolher a manutenção alcança
    * as parcelas de cada equipamento e escolher a obra alcança as etapas dela --
-   * sem despejar os 73 centros numa lista onde 61 são equipamentos. É o mesmo
-   * corte que os filtros dos relatórios usam, pelo mesmo motivo.
+   * sem despejar os 73 centros numa lista onde 61 são equipamentos. Quem quer o
+   * equipamento sozinho usa o segundo campo, que aparece ao lado. A regra é a de
+   * `_shared/centro-custo/filtro.ts`, igual em Lançamentos e nos relatórios.
    */
   const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
-    () =>
-      centrosCusto
-        .filter((centro) => centro.paiId === null)
-        .map((centro) => ({
-          valor: centro.id,
-          rotulo: centro.codigo
-            ? `${centro.codigo} ${centro.nome}`
-            : centro.nome,
-        })),
+    () => opcoesDeRaiz(centrosCusto),
     [centrosCusto],
   );
+
+  /**
+   * A escada das DUAS abas, montada uma vez.
+   *
+   * Cada aba tem a sua chave na URL (`centro` e `h_centro`), e as duas guardam a
+   * lista EFETIVA -- a raiz, ou as etapas dela quando alguma foi escolhida. Uma
+   * chave só por aba é o que mantém de pé todo link já compartilhado desta tela,
+   * inclusive o do relatório que aponta direto para um equipamento.
+   */
+  function escadaDeCentro(chave: string, efetivos: string[]) {
+    const { raizes, etapas } = separarRaizesEEtapas(centrosCusto, efetivos);
+    const nomes = rotuloDasEtapas(centrosCusto, raizes);
+    const gravar = (novasRaizes: string[], novasEtapas: string[]) =>
+      setMuitos({
+        [chave]: escreverListaNaUrl(
+          centrosEfetivos(centrosCusto, novasRaizes, novasEtapas),
+        ),
+        pagina: "1",
+      });
+
+    return { raizes, etapas, nomes, gravar };
+  }
+
+  const escadaAPagar = escadaDeCentro("centro", valoresAPagar.centroIds);
+  const escadaPagas = escadaDeCentro("h_centro", valoresPagas.centroIds);
 
   const opcoesForma = React.useMemo<OpcaoFiltro[]>(
     () =>
@@ -557,21 +584,33 @@ export function PagamentosCliente({
     opcoes: OpcaoFiltro[];
     todosRotulo: string;
     largura?: string;
+    /** `false` no segundo degrau da escada: ver o comentário onde ele é montado. */
+    oculto?: boolean;
+    /**
+     * Escrita própria, para os dois campos da escada de centro de custo: eles
+     * são filtros separados na barra e gravam na MESMA chave da URL.
+     */
+    onValores?: (valores: string[]) => void;
+    onLimpar?: () => void;
   }): FiltroConfiguravel {
     return {
       id: config.id,
       rotulo: config.rotulo,
-      ocultoPorPadrao: true,
+      ocultoPorPadrao: config.oculto ?? true,
       temValor: config.valores.length > 0,
-      onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
+      onLimpar:
+        config.onLimpar ??
+        (() => setMuitos({ [config.chave]: null, pagina: "1" })),
       elemento: (
         <FiltroSelectMulti
           valores={config.valores}
           onValoresChange={(valores) =>
-            setMuitos({
-              [config.chave]: escreverListaNaUrl(valores),
-              pagina: "1",
-            })
+            config.onValores
+              ? config.onValores(valores)
+              : setMuitos({
+                  [config.chave]: escreverListaNaUrl(valores),
+                  pagina: "1",
+                })
           }
           opcoes={config.opcoes}
           placeholder={config.rotulo}
@@ -905,11 +944,37 @@ export function PagamentosCliente({
       id: "centro",
       chave: "centro",
       rotulo: "Centro de custo",
-      valores: valoresAPagar.centroIds,
+      valores: escadaAPagar.raizes,
       opcoes: opcoesCentro,
       todosRotulo: "Todos os centros",
       largura: LARGURA_NOME,
+      // Desmarcar a raiz apaga as etapas dela na MESMA navegação.
+      onValores: (ids) =>
+        escadaAPagar.gravar(
+          ids,
+          etapasValidas(centrosCusto, ids, escadaAPagar.etapas),
+        ),
+      onLimpar: () => setMuitos({ centro: null, pagina: "1" }),
     }),
+    // Entra VISÍVEL, e só quando a raiz escolhida tem etapa: o campo aparece por
+    // causa de uma escolha que a pessoa acabou de fazer ao lado, então escondê-lo
+    // atrás do menu "Filtros" seria esconder a resposta que ela provocou.
+    ...(temEtapasParaEscolher(centrosCusto, escadaAPagar.raizes)
+      ? [
+          selecaoMulti({
+            id: "etapa",
+            chave: "centro",
+            rotulo: escadaAPagar.nomes.rotulo,
+            valores: escadaAPagar.etapas,
+            opcoes: opcoesDeEtapa(centrosCusto, escadaAPagar.raizes),
+            todosRotulo: escadaAPagar.nomes.todos,
+            largura: LARGURA_NOME,
+            oculto: false,
+            onValores: (ids) => escadaAPagar.gravar(escadaAPagar.raizes, ids),
+            onLimpar: () => escadaAPagar.gravar(escadaAPagar.raizes, []),
+          }),
+        ]
+      : []),
     selecaoMulti({
       id: "categoria",
       chave: "categoria",
@@ -1025,11 +1090,33 @@ export function PagamentosCliente({
       id: "centro",
       chave: "h_centro",
       rotulo: "Centro de custo",
-      valores: valoresPagas.centroIds,
+      valores: escadaPagas.raizes,
       opcoes: opcoesCentro,
       todosRotulo: "Todos os centros",
       largura: LARGURA_NOME,
+      onValores: (ids) =>
+        escadaPagas.gravar(
+          ids,
+          etapasValidas(centrosCusto, ids, escadaPagas.etapas),
+        ),
+      onLimpar: () => setMuitos({ h_centro: null, pagina: "1" }),
     }),
+    ...(temEtapasParaEscolher(centrosCusto, escadaPagas.raizes)
+      ? [
+          selecaoMulti({
+            id: "etapa",
+            chave: "h_centro",
+            rotulo: escadaPagas.nomes.rotulo,
+            valores: escadaPagas.etapas,
+            opcoes: opcoesDeEtapa(centrosCusto, escadaPagas.raizes),
+            todosRotulo: escadaPagas.nomes.todos,
+            largura: LARGURA_NOME,
+            oculto: false,
+            onValores: (ids) => escadaPagas.gravar(escadaPagas.raizes, ids),
+            onLimpar: () => escadaPagas.gravar(escadaPagas.raizes, []),
+          }),
+        ]
+      : []),
     selecaoMulti({
       id: "categoria",
       chave: "h_categoria",

@@ -16,6 +16,7 @@ import {
   type LinhaFaixaPrazo,
   type PontoMes,
 } from "@/modules/gestao/calculo";
+import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import type { FiltrosPainel } from "@/modules/gestao/filtros";
 
 /**
@@ -82,15 +83,19 @@ export interface OpcaoPainel {
 }
 
 /**
- * Opções dos filtros do painel: obras (centros de custo raiz) e categorias
+ * Opções dos filtros do painel: centros de custo (raízes e etapas) e categorias
  * financeiras, só as ativas.
  *
- * Consulta própria do módulo em vez de importar a do Financeiro: cada módulo lê o
- * que precisa, que é o padrão do projeto. Aqui só interessa o NÍVEL 1, porque o
- * painel raciocina por obra, não por etapa ou item da árvore.
+ * Traz os DOIS níveis desde 29/08/2026, porque o filtro virou a escada de
+ * `_shared/centro-custo/filtro.ts`: a raiz num campo, a etapa dela no campo ao
+ * lado quando existe. Antes vinha só o nível 1, e escolher a manutenção somava
+ * as 64 máquinas sem jeito de olhar uma.
+ *
+ * As RPCs do painel agrupam pelo centro escolhido mais fundo, então elas já
+ * aceitam receber o id de uma etapa; nada muda no banco.
  */
 export async function opcoesDoPainel(): Promise<{
-  centros: OpcaoPainel[];
+  centros: CentroCustoOpcao[];
   categorias: OpcaoPainel[];
 }> {
   const supabase = await createClient();
@@ -98,9 +103,10 @@ export async function opcoesDoPainel(): Promise<{
   const [centros, categorias] = await Promise.all([
     supabase
       .from("centros_custo")
-      .select("id, nome, codigo")
-      .eq("nivel", 1)
+      .select("id, nome, codigo, pai_id, tipo")
+      .lte("nivel", 2)
       .eq("ativo", true)
+      .order("codigo", { ascending: true, nullsFirst: false })
       .order("nome"),
     supabase
       .from("categorias_financeiras")
@@ -116,7 +122,10 @@ export async function opcoesDoPainel(): Promise<{
   return {
     centros: (centros.data ?? []).map((centro) => ({
       id: centro.id,
-      nome: centro.codigo ? `${centro.codigo} - ${centro.nome}` : centro.nome,
+      nome: centro.nome,
+      codigo: centro.codigo,
+      paiId: centro.pai_id,
+      tipo: centro.tipo,
     })),
     categorias: (categorias.data ?? []).map((categoria) => ({
       id: categoria.id,
@@ -315,11 +324,22 @@ export async function custoPorCentroCusto(
   const supabase = await createClient();
   const { janela } = filtros;
 
+  /*
+   * `p_centros` e `p_categorias` são LISTA, e não o `p_centro_custo` singular
+   * que as outras RPCs do painel recebem.
+   *
+   * Esta RPC passou a receber lista em 27/08/2026, quando os relatórios ganharam
+   * filtro de múltipla escolha. O painel continuou mandando `p_centro_custo` e
+   * `p_categoria`, que deixaram de existir -- e o PostgREST não reclama de
+   * argumento a mais na hora de resolver a função, ele simplesmente não acha
+   * nenhuma sobrecarga e devolve erro. O cartão "Custo por centro de custo"
+   * ficou mostrando um traço desde então, sem nada na tela dizendo por quê.
+   */
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo", {
     p_inicio: janela.inicio,
     p_fim: janela.fim,
-    p_centro_custo: filtros.centroCustoId,
-    p_categoria: filtros.categoriaId,
+    p_centros: filtros.centroCustoId ? [filtros.centroCustoId] : undefined,
+    p_categorias: filtros.categoriaId ? [filtros.categoriaId] : undefined,
   });
 
   if (error) {

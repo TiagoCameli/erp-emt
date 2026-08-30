@@ -21,7 +21,7 @@ import {
   opcoesDeRaiz,
   rotuloDasEtapas,
   temEtapasParaEscolher,
-} from "@/modules/financeiro/relatorios/centros-e-etapas";
+} from "@/modules/_shared/centro-custo/filtro";
 import {
   comparacaoPermitida,
   STATUS_CUSTO,
@@ -139,7 +139,7 @@ export interface FiltrosCustoCcBarraProps {
  * equipamentos da mesma raiz e o seletor desenhava sessenta e uma linhas
  * idênticas, "Manutenção/Docume…", porque o nome que as distinguia vinha depois
  * do corte. A regra de como os dois campos viram uma lista para o banco mora em
- * `centros-e-etapas.ts`.
+ * `_shared/centro-custo/filtro.ts`.
  *
  * Toda troca de modo escreve na URL numa navegação SÓ (`setMuitos`), limpando o
  * que não se aplica no mesmo passo. Em duas navegações, o `de`/`ate` de um modo

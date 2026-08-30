@@ -1,8 +1,14 @@
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 
 /**
- * A escolha de centro de custo nos relatórios, em DOIS campos: a raiz num, a
- * etapa no outro.
+ * O filtro de centro de custo de TODA tela que filtra por centro, em DOIS
+ * campos: a raiz num, a etapa no outro.
+ *
+ * Nasceu nos relatórios em 27/08/2026 e virou a regra do app em 29/08/2026, com
+ * o mesmo diagnóstico feito de novo em Lançamentos: o filtro de lá listava 102
+ * opções misturando 12 raízes com 64 equipamentos e 26 empréstimos, e "Bobcat
+ * S450 - 02" aparecia solto entre "Banco do Brasil" e "Caixa Econômica" sem
+ * dizer de que centro era.
  *
  * ## Por que dois campos, e não uma lista só
  *
@@ -188,4 +194,45 @@ export function centrosEfetivos(
   }
 
   return raizesEscolhidas.flatMap((raiz) => etapasPorRaiz.get(raiz) ?? [raiz]);
+}
+
+/**
+ * O contrário de `centrosEfetivos`: quebra a lista que vai ao banco nos dois
+ * campos da tela.
+ *
+ * Existe porque as LISTAGENS (Lançamentos, Pagamentos) guardam um parâmetro só,
+ * `centro=`, com os centros efetivos — enquanto os relatórios guardam o par em
+ * `centro=` e `etapa=`. Manter um parâmetro só nas listagens não é economia: é o
+ * que faz todo link antigo continuar abrindo exatamente o mesmo conjunto,
+ * inclusive o drill dos relatórios, que já hoje manda a ETAPA dentro de
+ * `centro=` (ver `relatorios/drill.ts`). Com um parâmetro novo, esses cliques
+ * passariam a mostrar um id de equipamento no campo das raízes.
+ *
+ * Id que não está no cadastro vira RAIZ em vez de sumir. Centro inativado depois
+ * de o link ser criado continua filtrando, e o Combobox canônico sabe rotular o
+ * desconhecido; descartá-lo faria a tela devolver MAIS linhas do que o link
+ * pediu, sem nada na barra dizendo que o filtro caiu.
+ */
+export function separarRaizesEEtapas(
+  centros: readonly CentroCustoOpcao[],
+  efetivos: readonly string[],
+): { raizes: string[]; etapas: string[] } {
+  const porId = new Map(centros.map((centro) => [centro.id, centro]));
+  const raizes: string[] = [];
+  const etapas: string[] = [];
+
+  for (const id of efetivos) {
+    const pai = porId.get(id)?.paiId ?? null;
+    if (pai === null) {
+      if (!raizes.includes(id)) raizes.push(id);
+      continue;
+    }
+    if (!etapas.includes(id)) etapas.push(id);
+    // A raiz da etapa entra sozinha: sem ela o primeiro campo ficaria vazio e a
+    // barra diria "todos os centros de custo" numa tela recortada por uma
+    // máquina só.
+    if (!raizes.includes(pai)) raizes.push(pai);
+  }
+
+  return { raizes, etapas };
 }
