@@ -57,7 +57,11 @@ export interface ValoresFiltrosLancamentos {
   tipo: string;
   status: string;
   /** Mês de referência, no formato do input (yyyy-MM). */
+  /** Mês exato de um link antigo (`?mes=`). A barra usa a janela abaixo. */
   mes: string;
+  /** A janela de mês de referência que a barra mostra e escreve. */
+  competenciaDe: string;
+  competenciaAte: string;
   /** Estado da revisão (em_revisao, sem_conta, parcial, revisado). */
   revisao: string;
   /** Situação de atraso das parcelas (vencido, a_vencer). */
@@ -288,7 +292,24 @@ export function lerFiltrosLancamentos(
   // Faixa de mês de REFERÊNCIA. O `mes` acima é um mês exato; esta é a janela, e
   // ela existe porque o relatório de centro de custo passou a somar período
   // ("acumulado da obra no ano") e o clique precisa de um destino equivalente.
-  const competencia = periodo(params.comp_de, params.comp_ate);
+  /**
+   * A janela de MÊS DE REFERÊNCIA, que desde 30/08/2026 é o que o filtro da barra
+   * escreve (o Tiago pediu intervalo em vez de um mês só).
+   *
+   * O `mes=2026-08` de antes continua sendo lido: todo link salvo, favorito ou
+   * colado num WhatsApp abre o mesmo conjunto de linhas. Quando ele vem sozinho,
+   * vira uma janela de um mês só — que é exatamente o que ele significava.
+   */
+  const competenciaDaUrl = periodo(params.comp_de, params.comp_ate);
+  // `periodo()` devolve `undefined` na ponta ausente, não string vazia: comparar
+  // com "" deixaria o link antigo sem janela nenhuma, e o filtro de mês pararia
+  // de filtrar em silêncio.
+  const competencia =
+    competenciaDaUrl.de === undefined &&
+    competenciaDaUrl.ate === undefined &&
+    mesCompetencia !== ""
+      ? { de: mesCompetencia, ate: mesCompetencia }
+      : competenciaDaUrl;
   /**
    * Lista de MESES de referência exatos (yyyy-MM-01).
    *
@@ -362,7 +383,13 @@ export function lerFiltrosLancamentos(
       tipo,
       status,
       busca,
-      mesCompetencia: mesCompetencia === "" ? undefined : mesCompetencia,
+      /**
+       * NÃO vai mais para a consulta: quem filtra competência é a janela
+       * (`competenciaDe`/`Ate`), e o `mes` da URL já foi traduzido para ela lá em
+       * cima. Mandar os dois faria um `eq` e um `between` sobre a mesma coluna,
+       * e o `eq` venceria — a janela de quatro meses traria um mês só.
+       */
+      mesCompetencia: undefined,
       fornecedorIds,
       categoriaIds,
       centroCustoIds,
@@ -397,7 +424,11 @@ export function lerFiltrosLancamentos(
       tipo,
       // A barra mostra a escolha da pessoa, e não o que foi para o banco.
       status: statusEscolhido ?? "",
+      // O filtro da barra virou intervalo; `mes` fica só para quem ainda chega
+      // por link antigo, e a barra mostra a janela.
       mes: mesCompetencia === "" ? "" : mes,
+      competenciaDe: competencia.de ?? "",
+      competenciaAte: competencia.ate ?? "",
       revisao: revisao ?? "",
       atraso: atraso ?? "",
       origem: origem ?? "",

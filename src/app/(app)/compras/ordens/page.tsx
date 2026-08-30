@@ -52,8 +52,16 @@ export default async function PaginaOrdens({
   const podeExcluir = temPermissao(usuario, "compras.ordens", "excluir");
 
   const params = await searchParams;
-  const { pagina, tamanho, busca, fornecedorId, de, ate, mesCompetencia } =
-    lerParametrosLista(params);
+  const {
+    pagina,
+    tamanho,
+    busca,
+    fornecedorId,
+    de,
+    ate,
+    competenciaDe,
+    competenciaAte,
+  } = lerParametrosLista(params);
   const status = parametroValido(params.status, STATUS_VALIDOS);
 
   // Filtros só desta tela. Parâmetro inválido é ignorado, nunca vai pro banco.
@@ -99,7 +107,8 @@ export default async function PaginaOrdens({
       fornecedorId,
       de,
       ate,
-      mesCompetencia,
+      competenciaDe,
+      competenciaAte,
       categoriaId,
       formaPagamentoId,
       condicaoPagamentoId,
@@ -156,7 +165,8 @@ export default async function PaginaOrdens({
         fornecedorId={fornecedorId ?? ""}
         de={de ?? ""}
         ate={ate ?? ""}
-        mes={competenciaParaMes(mesCompetencia ?? "")}
+        competenciaDe={competenciaDe ?? ""}
+        competenciaAte={competenciaAte ?? ""}
         categoriaId={categoriaId ?? ""}
         formaPagamentoId={formaPagamentoId ?? ""}
         condicaoPagamentoId={condicaoPagamentoId ?? ""}

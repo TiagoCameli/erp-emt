@@ -17,15 +17,28 @@ export interface ParametrosLista {
   de?: string;
   /** Fim do período (parâmetro `ate`, yyyy-mm-dd). */
   ate?: string;
-  /** Mês de referência (parâmetro `mes`, yyyy-MM na URL) como yyyy-MM-01. */
+  /**
+   * Mês de referência (parâmetro `mes`, yyyy-MM na URL) como yyyy-MM-01.
+   *
+   * Continua sendo lido para todo link antigo abrir o mesmo conjunto, mas NÃO
+   * vai mais para a consulta: quem filtra competência é a janela abaixo, e o
+   * `mes` já foi traduzido para ela. Mandar os dois faria um `eq` e um `between`
+   * sobre a mesma coluna, com o `eq` vencendo — a janela de quatro meses traria
+   * um mês só.
+   */
   mesCompetencia?: string;
+  /**
+   * A JANELA de mês de referência (`comp_de`/`comp_ate`, yyyy-MM-01 nos dois
+   * lados), desde que o Tiago pediu intervalo em 30/08/2026.
+   */
+  competenciaDe?: string;
+  competenciaAte?: string;
 }
 
 const TAMANHO_PADRAO = 25;
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Data yyyy-mm-dd vinda da URL, ou undefined se não for uma data. */
 export function parametroData(
@@ -51,7 +64,12 @@ export function parametroUuid(
  */
 export function inicioDoDiaISO(data: string, deslocamentoDias = 0): string {
   const [ano, mes, dia] = data.split("-").map(Number);
-  return new TZDate(ano, mes - 1, dia + deslocamentoDias, TIMEZONE).toISOString();
+  return new TZDate(
+    ano,
+    mes - 1,
+    dia + deslocamentoDias,
+    TIMEZONE,
+  ).toISOString();
 }
 
 /** Mês do filtro (yyyy-MM na URL) como competência do banco (yyyy-MM-01). */
@@ -107,7 +125,40 @@ export function lerParametrosLista(
     de,
     ate,
     mesCompetencia: parametroMes(params.mes),
+    ...janelaDeCompetencia(params),
   };
+}
+
+/**
+ * A janela de competência da URL, com o `?mes=` antigo traduzido.
+ *
+ * Um link salvo com `mes=2026-07` vira uma janela de um mês só, que é
+ * exatamente o que ele significava. Quando a janela vem explícita, ela manda: se
+ * o `mes` vencesse, arrastar a régua de maio a agosto num link antigo devolveria
+ * só julho, e a régua diria uma coisa enquanto a lista mostra outra.
+ */
+function janelaDeCompetencia(
+  params: Record<string, string | string[] | undefined>,
+): {
+  competenciaDe?: string;
+  competenciaAte?: string;
+} {
+  let de = parametroMesDia1(params.comp_de);
+  let ate = parametroMesDia1(params.comp_ate);
+  if (de === undefined && ate === undefined) {
+    const mes = parametroMes(params.mes);
+    return { competenciaDe: mes, competenciaAte: mes };
+  }
+  if (de && ate && de > ate) [de, ate] = [ate, de];
+  return { competenciaDe: de, competenciaAte: ate };
+}
+
+/** Uma competência `yyyy-MM-01` da URL. Qualquer outra coisa é ignorada. */
+function parametroMesDia1(
+  valor: string | string[] | undefined,
+): string | undefined {
+  if (typeof valor !== "string") return undefined;
+  return /^\d{4}-\d{2}-01$/.test(valor) ? valor : undefined;
 }
 
 /**

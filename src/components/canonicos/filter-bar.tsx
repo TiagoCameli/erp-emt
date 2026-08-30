@@ -414,7 +414,9 @@ export function FiltroPeriodo({
               )}
             >
               <CalendarDays className="size-3.5 shrink-0 opacity-70" />
-              <span className="truncate">{temPeriodo ? resumo : "Qualquer data"}</span>
+              <span className="truncate">
+                {temPeriodo ? resumo : "Qualquer data"}
+              </span>
             </Button>
           </PopoverTrigger>
           {/* Largura fixa e generosa: a régua de DIAS tem 31 blocos, e num
@@ -753,6 +755,115 @@ export function FiltroMes({
       </div>
     </CampoFiltro>
   );
+}
+
+interface FiltroMesPeriodoProps {
+  /** Primeira competência do intervalo, yyyy-MM-01. Vazio = sem limite. */
+  de: string;
+  ate: string;
+  /** Recebe as duas pontas juntas: uma navegação só, sem estado intermediário. */
+  onPeriodoChange: (de: string, ate: string) => void;
+  rotulo?: string;
+}
+
+/**
+ * Filtro de MÊS DE REFERÊNCIA por intervalo: "mai - ago de 2026" num filtro só.
+ *
+ * Escolha do Tiago em 29/08/2026, depois de eu apresentar o custo (mexe na
+ * consulta das telas que filtram por competência). O `FiltroMes`, de um mês só,
+ * continua existindo para as telas em que a competência É um mês por definição.
+ *
+ * A régua vem sem "Semanas" e sem "Dias", e sem os campos de data: a coluna
+ * `mes_competencia` guarda o dia 1 de cada mês, então um corte no dia 17 não
+ * existe no dado — oferecê-lo seria oferecer um filtro que não filtra.
+ *
+ * As duas pontas viajam normalizadas no DIA 1 (`yyyy-MM-01`), que é o formato
+ * que a coluna guarda e que a consulta compara. A régua raciocina em dias e
+ * devolveria 31/08 na ponta final; deixar assim funcionaria por acidente
+ * (`lte('2026-08-31')` também alcança o dia 1 de agosto) e quebraria no dia em
+ * que alguém comparasse as duas pontas entre si.
+ */
+export function FiltroMesPeriodo({
+  de,
+  ate,
+  onPeriodoChange,
+  rotulo = "Mês de referência",
+}: FiltroMesPeriodoProps) {
+  const [aberto, setAberto] = React.useState(false);
+  const resumo = resumoDoPeriodo(de, ate === "" ? "" : ultimoDiaDoMes(ate));
+  const temPeriodo = resumo !== "";
+
+  return (
+    <CampoFiltro largura={TRILHO_FILTRO}>
+      <div className="flex items-center gap-1.5">
+        <Popover open={aberto} onOpenChange={setAberto}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={rotulo}
+              className={cn(
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                temPeriodo ? "" : "text-muted-foreground",
+              )}
+            >
+              <CalendarDays className="size-3.5 shrink-0 opacity-70" />
+              <span className="truncate">
+                {temPeriodo ? resumo : "Todos os meses"}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[30rem] max-w-[92vw] p-3">
+            <ReguaTempo
+              de={de}
+              ate={ate === "" ? "" : ultimoDiaDoMes(ate)}
+              onPeriodoChange={(novoDe, novoAte) =>
+                onPeriodoChange(
+                  primeiroDiaDoMes(novoDe),
+                  primeiroDiaDoMes(novoAte),
+                )
+              }
+              rotulo={rotulo}
+              granularidades={["ano", "trimestre", "mes"]}
+              semDataExata
+            />
+          </PopoverContent>
+        </Popover>
+
+        {temPeriodo ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Limpar ${rotulo.toLowerCase()}`}
+            onClick={() => onPeriodoChange("", "")}
+          >
+            <X />
+          </Button>
+        ) : null}
+      </div>
+    </CampoFiltro>
+  );
+}
+
+/** "2026-08-17" -> "2026-08-01". Vazio continua vazio. */
+function primeiroDiaDoMes(iso: string): string {
+  return iso === "" ? "" : `${iso.slice(0, 7)}-01`;
+}
+
+/**
+ * "2026-08-01" -> "2026-08-31", só para a RÉGUA pintar o mês inteiro.
+ *
+ * A régua marca um bloco quando o período encosta nele, então a ponta final no
+ * dia 1 já pintaria agosto. O último dia entra para o RESUMO: sem ele,
+ * `resumoDoPeriodo` veria "01/05 a 01/08" como período que não fecha em mês e
+ * diria "01/05/2026 - 01/08/2026" em vez de "mai - ago de 2026".
+ */
+function ultimoDiaDoMes(iso: string): string {
+  const [ano, mes] = iso.split("-").map(Number) as [number, number];
+  const ultimo = new Date(Date.UTC(ano, mes, 0));
+  return `${iso.slice(0, 7)}-${String(ultimo.getUTCDate()).padStart(2, "0")}`;
 }
 
 interface FiltroValorProps {

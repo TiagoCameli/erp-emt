@@ -52,8 +52,13 @@ describe("lerFiltrosLancamentos", () => {
     expect(filtros.revisao).toBe("nao_revisado");
     expect(filtros.origem).toBe("oc");
     expect(filtros.fornecedorIds).toEqual([FORNECEDOR]);
-    // O banco guarda a competência normalizada no dia 1; a tela mostra yyyy-MM.
-    expect(filtros.mesCompetencia).toBe("2026-07-01");
+    // O `?mes=` de um link antigo vira uma JANELA de um mês só, desde que o
+    // filtro da barra passou a ser intervalo (30/08/2026). O `mesCompetencia`
+    // não vai mais para a consulta: mandar um `eq` junto com o `between` faria o
+    // `eq` vencer, e a janela de quatro meses traria um mês.
+    expect(filtros.mesCompetencia).toBeUndefined();
+    expect(filtros.competenciaDe).toBe("2026-07-01");
+    expect(filtros.competenciaAte).toBe("2026-07-01");
     expect(valores.mes).toBe("2026-07");
     expect(valores.status).toBe("pago");
     expect(valores.fornecedores).toEqual([FORNECEDOR]);
@@ -315,9 +320,56 @@ describe("lerFiltrosLancamentos: sem_cancelado, recorte e faixa de competência"
     expect(filtros.centroCustoIds).toEqual([
       "0a327d7e-6e2d-40d9-a87b-cf9b4a76be2e",
     ]);
-    expect(filtros.mesCompetencia).toBe("2026-07-01");
+    expect(filtros.competenciaDe).toBe("2026-07-01");
+    expect(filtros.competenciaAte).toBe("2026-07-01");
     expect(filtros.tipo).toBe("a_pagar");
     expect(filtros.semCancelado).toBe(true);
+  });
+
+  describe("mês de referência virou intervalo (30/08/2026)", () => {
+    it("a janela da URL manda, e a barra a mostra", () => {
+      const { filtros, valores } = lerFiltrosLancamentos({
+        comp_de: "2026-05-01",
+        comp_ate: "2026-08-01",
+      });
+      expect(filtros.competenciaDe).toBe("2026-05-01");
+      expect(filtros.competenciaAte).toBe("2026-08-01");
+      expect(valores.competenciaDe).toBe("2026-05-01");
+      expect(valores.competenciaAte).toBe("2026-08-01");
+    });
+
+    it("link antigo com ?mes= traz o MESMO conjunto de antes", () => {
+      // Todo link salvo, favorito ou colado num WhatsApp continua abrindo as
+      // mesmas linhas: um mês vira uma janela de um mês.
+      const antigo = lerFiltrosLancamentos({ mes: "2026-07" });
+      const novo = lerFiltrosLancamentos({
+        comp_de: "2026-07-01",
+        comp_ate: "2026-07-01",
+      });
+      expect(antigo.filtros.competenciaDe).toBe(novo.filtros.competenciaDe);
+      expect(antigo.filtros.competenciaAte).toBe(novo.filtros.competenciaAte);
+    });
+
+    it("CONTROLE: com a janela na URL, o ?mes= antigo NÃO estreita o filtro", () => {
+      // É o caso que existe enquanto um link antigo ainda anda por aí: se o
+      // `mes` vencesse, arrastar a régua de maio a agosto devolveria só julho, e
+      // a pessoa veria a régua dizendo uma coisa e a lista outra.
+      const { filtros } = lerFiltrosLancamentos({
+        mes: "2026-07",
+        comp_de: "2026-05-01",
+        comp_ate: "2026-08-01",
+      });
+      expect(filtros.mesCompetencia).toBeUndefined();
+      expect(filtros.competenciaDe).toBe("2026-05-01");
+      expect(filtros.competenciaAte).toBe("2026-08-01");
+    });
+
+    it("sem nada, não filtra competência", () => {
+      const { filtros, valores } = lerFiltrosLancamentos({});
+      expect(filtros.competenciaDe).toBeUndefined();
+      expect(filtros.competenciaAte).toBeUndefined();
+      expect(valores.competenciaDe).toBe("");
+    });
   });
 });
 
