@@ -92,6 +92,7 @@ export function FaixaInssFormDrawer({
           ? "Atualize o limite ou a alíquota da faixa"
           : "Cadastre uma faixa oficial vigente do INSS"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

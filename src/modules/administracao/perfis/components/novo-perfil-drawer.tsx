@@ -63,6 +63,7 @@ export function NovoPerfilDrawer({
       onAbertoChange={trocarAberto}
       titulo="Novo perfil"
       descricao="Depois de criar, abra o perfil para montar a matriz de permissões"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !enviando}
       rodape={
         <>
           <Button

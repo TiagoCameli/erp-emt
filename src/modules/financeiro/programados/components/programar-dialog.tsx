@@ -97,6 +97,7 @@ export function ProgramarDialog({
       titulo="Reprogramar data de pagamento"
       descricao="Nova data em que este pagamento fica autorizado a sair"
       larguraClassName="max-w-lg"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

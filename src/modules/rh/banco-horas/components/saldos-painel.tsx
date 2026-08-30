@@ -126,6 +126,7 @@ export function SaldosPainel({ saldos }: SaldosPainelProps) {
       ]}
       emptyState={
         <EmptyState
+          className="border-none bg-transparent"
           icone={Scale}
           titulo="Nenhum saldo a exibir"
           descricao="Os saldos aparecem aqui assim que houver movimentos de banco de horas."

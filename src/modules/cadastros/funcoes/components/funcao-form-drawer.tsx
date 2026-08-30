@@ -99,6 +99,7 @@ export function FuncaoFormDrawer({
           ? "Atualize os dados da função"
           : "Cadastre uma função para usar nos colaboradores"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

@@ -97,6 +97,12 @@ export function ConvidarUsuarioDrawer({ perfis }: ConvidarUsuarioDrawerProps) {
         onAbertoChange={aoMudarAberto}
         titulo="Cadastrar usuário"
         descricao="O sistema gera uma senha provisória para você repassar. O usuário troca no primeiro acesso"
+        // `!senhaProvisoria` porque depois de cadastrar o form não é resetado
+        // (o reset só acontece ao fechar): sem isso, fechar a tela da senha
+        // provisória perguntaria "descartar?" para um cadastro já salvo.
+        temAlteracoesNaoSalvas={
+          form.formState.isDirty && !enviando && !senhaProvisoria
+        }
         rodape={
           senhaProvisoria ? (
             <Button type="button" onClick={() => aoMudarAberto(false)}>

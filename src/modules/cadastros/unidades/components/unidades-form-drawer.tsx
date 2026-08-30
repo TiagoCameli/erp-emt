@@ -102,6 +102,7 @@ export function UnidadesFormDrawer({
           ? "Atualize os dados da unidade de medida"
           : "Cadastre uma unidade para usar nos insumos"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

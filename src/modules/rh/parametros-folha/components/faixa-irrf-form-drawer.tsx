@@ -94,6 +94,7 @@ export function FaixaIrrfFormDrawer({
           ? "Atualize o limite, a alíquota ou a parcela a deduzir da faixa"
           : "Cadastre uma faixa oficial vigente do IRRF"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

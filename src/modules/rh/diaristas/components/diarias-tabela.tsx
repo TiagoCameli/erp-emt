@@ -399,6 +399,7 @@ export function DiariasTabela({
         ]}
         emptyState={
           <EmptyState
+            className="border-none bg-transparent"
             icone={CalendarClock}
             titulo="Nenhuma diária encontrada"
             descricao="Registre as diárias por diarista. No fechamento da competência elas viram um lançamento a pagar."

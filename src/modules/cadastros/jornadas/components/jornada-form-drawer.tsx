@@ -127,6 +127,7 @@ export function JornadaFormDrawer({
           ? "Atualize as horas da jornada"
           : "Cadastre uma jornada para usar nos colaboradores"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

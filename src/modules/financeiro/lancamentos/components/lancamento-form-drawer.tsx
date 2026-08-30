@@ -1185,6 +1185,7 @@ export function LancamentoFormDrawer({
             : "Registre um lançamento a pagar ou a receber, com parcelas e rateio por centro de custo"
       }
       larguraClassName="sm:max-w-[95vw]"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <div className="flex w-full items-center justify-end gap-2">
           <Button

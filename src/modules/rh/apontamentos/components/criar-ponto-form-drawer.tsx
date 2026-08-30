@@ -84,6 +84,7 @@ export function CriarPontoFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo="Novo ponto"
       descricao="Abre o ponto de um dia numa obra. Depois lance as horas de cada colaborador da equipe."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

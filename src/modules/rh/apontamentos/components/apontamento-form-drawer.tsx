@@ -248,6 +248,7 @@ export function ApontamentoFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar apontamento" : "Adicionar colaborador"}
       descricao="Horas trabalhadas do colaborador no dia. Extras são as horas além da jornada normal."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button
