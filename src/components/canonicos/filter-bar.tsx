@@ -2,12 +2,20 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, FilterX, Search, X } from "lucide-react";
+import { CalendarDays, Coins, FilterX, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { Combobox } from "@/components/canonicos/combobox";
 import { ReguaTempo } from "@/components/canonicos/regua-tempo";
+import {
+  filtroDasAlcas,
+  passoDaBarra,
+  posicaoDasAlcas,
+  resumoDaFaixa,
+  tetoDaBarra,
+} from "@/components/canonicos/filtro-valor-calculo";
 import { resumoDoPeriodo } from "@/components/canonicos/regua-tempo-calculo";
 import {
   Popover,
@@ -30,6 +38,7 @@ import {
   limparPreferenciaTabela,
   salvarPreferenciaTabela,
 } from "@/modules/_shared/preferencias-tabela/actions";
+import { formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 
 /** Sentinela interna do Radix Select para a opção "todos" (valor vazio é proibido). */
@@ -753,6 +762,17 @@ interface FiltroValorProps {
   /** Recebe as duas pontas juntas: uma navegação só, sem página intermediária. */
   onValorChange: (de: string, ate: string) => void;
   rotulo?: string;
+  /**
+   * O maior valor da lista que está na tela, para dar escala à barra.
+   *
+   * Escolha do Tiago em 29/08/2026. Sem ele, o popover mostra só os campos: uma
+   * barra sem escala seria uma barra que mente sobre onde os valores estão.
+   *
+   * Não confundir com um teto de filtro: a alça encostada na borda direita
+   * significa SEM LIMITE, então mudar de página (e de maior valor) nunca esconde
+   * uma compra grande. A regra vive em `filtro-valor-calculo.ts`, com teste.
+   */
+  maiorValor?: number;
 }
 
 /**
@@ -768,33 +788,117 @@ export function FiltroValor({
   ate,
   onValorChange,
   rotulo = "Valor",
+  maiorValor,
 }: FiltroValorProps) {
+  const [aberto, setAberto] = React.useState(false);
+  const resumo = resumoDaFaixa(de, ate, formatarBRL);
+  const temFaixa = resumo !== "";
+
+  const teto = maiorValor === undefined ? null : tetoDaBarra(maiorValor);
+  const posicao = teto === null ? null : posicaoDasAlcas(de, ate, teto);
+
   return (
-    <CampoFiltro largura={TRILHO_FILTRO_DUPLO}>
+    <CampoFiltro largura={TRILHO_FILTRO}>
       <div className="flex items-center gap-1.5">
-        <Input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          value={de}
-          onChange={(evento) => onValorChange(evento.target.value, ate)}
-          aria-label={`${rotulo}: mínimo`}
-          placeholder="de"
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
-        <span className="text-detalhe text-muted-foreground">até</span>
-        <Input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          value={ate}
-          onChange={(evento) => onValorChange(de, evento.target.value)}
-          aria-label={`${rotulo}: máximo`}
-          placeholder="até"
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
+        <Popover open={aberto} onOpenChange={setAberto}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={rotulo}
+              className={cn(
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                temFaixa ? "" : "text-muted-foreground",
+              )}
+            >
+              <Coins className="size-3.5 shrink-0 opacity-70" />
+              <span className="truncate">
+                {temFaixa ? resumo : "Qualquer valor"}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[22rem] max-w-[92vw] p-3">
+            <div className="flex flex-col gap-3">
+              {teto === null || posicao === null ? null : (
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <Slider
+                    min={0}
+                    max={teto}
+                    step={passoDaBarra(teto)}
+                    value={[posicao.de, posicao.ate]}
+                    onValueChange={([novoDe, novoAte]) => {
+                      const alcas = filtroDasAlcas(
+                        { de: novoDe ?? 0, ate: novoAte ?? teto },
+                        teto,
+                      );
+                      onValorChange(alcas.de, alcas.ate);
+                    }}
+                    aria-label={rotulo}
+                  />
+                  {/* As pontas da ESCALA, não do filtro: dizem onde a barra
+                      começa e termina, e o "+" avisa que passar do fim é "sem
+                      limite", não "até este número". */}
+                  <div className="flex justify-between text-legenda text-muted-foreground tabular-nums">
+                    <span>{formatarBRL(0)}</span>
+                    <span>{formatarBRL(teto)}+</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-legenda text-muted-foreground">De</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={de}
+                  onChange={(evento) => onValorChange(evento.target.value, ate)}
+                  aria-label={`${rotulo}: mínimo`}
+                  placeholder="sem limite"
+                  className="h-8 flex-1 text-detalhe tabular-nums"
+                />
+                <span className="text-legenda text-muted-foreground">até</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={ate}
+                  onChange={(evento) => onValorChange(de, evento.target.value)}
+                  aria-label={`${rotulo}: máximo`}
+                  placeholder="sem limite"
+                  className="h-8 flex-1 text-detalhe tabular-nums"
+                />
+              </div>
+
+              {temFaixa ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 self-start text-legenda"
+                  onClick={() => onValorChange("", "")}
+                >
+                  Limpar
+                </Button>
+              ) : null}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {temFaixa ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Limpar ${rotulo.toLowerCase()}`}
+            onClick={() => onValorChange("", "")}
+          >
+            <X />
+          </Button>
+        ) : null}
       </div>
     </CampoFiltro>
   );

@@ -33,3 +33,22 @@ if (typeof HTMLCanvasElement !== "undefined") {
     }),
   });
 }
+
+/**
+ * `ResizeObserver` fingido, também para o jsdom.
+ *
+ * O Radix usa `ResizeObserver` para medir o trilho do Slider
+ * (`@radix-ui/react-use-size`), e o jsdom não o implementa: sem este stub, todo
+ * teste que renderiza a barra da faixa de valor morre num `ReferenceError` que
+ * não tem nada a ver com o que ele queria provar.
+ *
+ * Observa nada de propósito: o jsdom não faz layout, então não há tamanho para
+ * relatar. O que o Radix precisa é que a API exista para montar o componente.
+ */
+if (!("ResizeObserver" in globalThis)) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}

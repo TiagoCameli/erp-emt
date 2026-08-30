@@ -457,6 +457,12 @@ export function LancamentosTabela({
    * O que isto protege: marcar 3 na página 1, trocar o filtro e aplicar gravaria
    * em lançamento que o usuário não está mais olhando.
    */
+  /** O maior valor à vista, para a barra da faixa de valor ter escala. */
+  const maiorValorDaPagina = React.useMemo(
+    () => lancamentos.reduce((maior, l) => Math.max(maior, l.valor), 0),
+    [lancamentos],
+  );
+
   const idsVisiveis = React.useMemo(
     () => new Set(lancamentos.map((lancamento) => lancamento.id)),
     [lancamentos],
@@ -904,6 +910,10 @@ export function LancamentosTabela({
         <FiltroValor
           de={faixaValor.de}
           ate={faixaValor.ate}
+          // O maior valor da PÁGINA dá escala à barra. Não é teto de filtro: a
+          // alça na borda direita significa "sem limite", então a compra maior
+          // que tudo o que está à vista nunca fica escondida.
+          maiorValor={maiorValorDaPagina}
           onValorChange={(de, ate) => setFaixaValor({ de, ate })}
         />
       ),

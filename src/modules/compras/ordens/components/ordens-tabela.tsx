@@ -309,6 +309,12 @@ export function OrdensTabela({
    * gravar em linha que sumiu da tela, aqui é só a contagem discordar do que
    * se vê, porque não há ação de lote nesta tela.
    */
+  /** O maior valor à vista, para a barra da faixa de valor ter escala. */
+  const maiorValorDaPagina = React.useMemo(
+    () => ordens.reduce((maior, o) => Math.max(maior, o.valorTotal), 0),
+    [ordens],
+  );
+
   const idsVisiveis = React.useMemo(
     () => new Set(ordens.map((ordem) => ordem.id)),
     [ordens],
@@ -569,6 +575,9 @@ export function OrdensTabela({
                 de={faixaValor.de}
                 ate={faixaValor.ate}
                 rotulo="Valor total"
+                // Escala da barra, não teto de filtro: a alça na borda direita
+                // significa "sem limite".
+                maiorValor={maiorValorDaPagina}
                 onValorChange={(novoDe, novoAte) =>
                   setFaixaValor({ de: novoDe, ate: novoAte })
                 }
