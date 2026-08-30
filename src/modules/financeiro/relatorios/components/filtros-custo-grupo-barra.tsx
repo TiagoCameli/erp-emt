@@ -16,7 +16,7 @@ import {
   opcoesDeRaiz,
   rotuloDasEtapas,
   temEtapasParaEscolher,
-} from "@/modules/financeiro/relatorios/centros-e-etapas";
+} from "@/modules/_shared/centro-custo/filtro";
 import type { FiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-custo-grupo";
 import { camposDePeriodo } from "@/modules/financeiro/relatorios/components/filtros-periodo-barra";
 import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";

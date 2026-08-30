@@ -50,7 +50,7 @@ import {
   pontasDaRpc,
   type ModoPeriodo,
 } from "@/modules/financeiro/relatorios/filtros-periodo";
-import { centrosEfetivos } from "@/modules/financeiro/relatorios/centros-e-etapas";
+import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
 import {
   porCentro,
   porMes,

@@ -687,7 +687,7 @@ export async function serieDosCentros(
  * tela precisa das duas coisas ao mesmo tempo (as raízes no primeiro campo, as
  * etapas da raiz escolhida no segundo), e ir ao banco de novo a cada marcação
  * faria o segundo campo piscar vazio no meio da escolha. Quem separa os níveis é
- * `centros-e-etapas.ts`.
+ * `_shared/centro-custo/filtro.ts`.
  *
  * ## O nome aqui é o nome PRÓPRIO do centro
  *

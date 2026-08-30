@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { centrosEfetivos } from "@/modules/financeiro/relatorios/centros-e-etapas";
+import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
 import { lerFiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-custo-grupo";
 
 const OBRA = "11111111-1111-4111-8111-111111111111";

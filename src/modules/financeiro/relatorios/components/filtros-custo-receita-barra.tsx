@@ -19,7 +19,7 @@ import {
   opcoesDeRaiz,
   rotuloDasEtapas,
   temEtapasParaEscolher,
-} from "@/modules/financeiro/relatorios/centros-e-etapas";
+} from "@/modules/_shared/centro-custo/filtro";
 import {
   MAX_MESES,
   type FiltrosCustoReceita,

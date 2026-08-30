@@ -31,7 +31,7 @@ import {
  * ## O CENTRO É ESCADA: raiz num campo, etapa no outro
  *
  * Igual às outras duas telas de centro do módulo. A tradução dos dois campos no
- * id que vai ao banco é de `centros-e-etapas.ts` (a etapa SUBSTITUI a raiz), e a
+ * id que vai ao banco é de `_shared/centro-custo/filtro.ts` (a etapa SUBSTITUI a raiz), e a
  * RPC filtra pela SUBÁRVORE do que receber (`fn_centro_custo_subarvore`) — então
  * escolher a obra traz as etapas dela.
  *

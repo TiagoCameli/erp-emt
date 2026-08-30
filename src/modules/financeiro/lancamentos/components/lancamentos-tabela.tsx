@@ -33,6 +33,15 @@ import {
   type OpcaoFiltro,
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import {
+  centrosEfetivos,
+  etapasValidas,
+  opcoesDeEtapa,
+  opcoesDeRaiz,
+  rotuloDasEtapas,
+  separarRaizesEEtapas,
+  temEtapasParaEscolher,
+} from "@/modules/_shared/centro-custo/filtro";
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
 import { BotaoDuplicarLancamento } from "@/modules/financeiro/lancamentos/components/botao-duplicar-lancamento";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
@@ -475,13 +484,49 @@ export function LancamentosTabela({
     [categorias],
   );
 
+  /**
+   * O filtro de centro é uma ESCADA de dois campos, e os dois saem do mesmo
+   * parâmetro `centro=` da URL.
+   *
+   * Um campo só listava 102 opções misturando as 12 raízes com os 64
+   * equipamentos e os 26 empréstimos, e nada na linha dizia de que centro cada
+   * um era: "Bobcat S450 - 02" aparecia entre "Banco do Brasil" e "Caixa
+   * Econômica". A regra e o porquê ficam em `_shared/centro-custo/filtro.ts`.
+   *
+   * Continua UM parâmetro na URL (a lista efetiva, que o servidor expande em
+   * subárvore) em vez do par `centro`/`etapa` dos relatórios: é o que faz o
+   * drill deles, que já manda a ETAPA dentro de `centro=`, continuar abrindo
+   * esta tela recortada pelo equipamento em vez de pela manutenção inteira.
+   */
+  const { raizes: raizesEscolhidas, etapas: etapasEscolhidas } =
+    React.useMemo(
+      () => separarRaizesEEtapas(centrosCusto, valores.centros),
+      [centrosCusto, valores.centros],
+    );
+
   const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
-    () =>
-      centrosCusto.map((centro) => ({
-        valor: centro.id,
-        rotulo: centro.codigo ? `${centro.codigo} - ${centro.nome}` : centro.nome,
-      })),
+    () => opcoesDeRaiz(centrosCusto),
     [centrosCusto],
+  );
+
+  const opcoesEtapa = React.useMemo<OpcaoFiltro[]>(
+    () => opcoesDeEtapa(centrosCusto, raizesEscolhidas),
+    [centrosCusto, raizesEscolhidas],
+  );
+
+  const nomesEtapa = rotuloDasEtapas(centrosCusto, raizesEscolhidas);
+
+  /** Grava os dois campos no `centro=`, sempre numa navegação só. */
+  const escreverCentro = React.useCallback(
+    (raizes: string[], etapas: string[]) => {
+      setMuitos({
+        centro: escreverListaNaUrl(
+          centrosEfetivos(centrosCusto, raizes, etapas),
+        ),
+        pagina: "1",
+      });
+    },
+    [centrosCusto, setMuitos],
   );
 
   const opcoesConta = React.useMemo<OpcaoFiltro[]>(
@@ -617,6 +662,7 @@ export function LancamentosTabela({
    * filtrada pelos três com a barra dizendo "todos os fornecedores".
    */
   function selecaoMulti(config: {
+    /** Id do filtro na barra, e chave da URL quando `onValores` não vem. */
     chave: string;
     rotulo: string;
     valores: string[];
@@ -624,21 +670,32 @@ export function LancamentosTabela({
     todosRotulo: string;
     oculto?: boolean;
     largura?: string;
+    /**
+     * Escrita própria, para os dois campos da escada de centro de custo: eles
+     * são filtros separados na barra e gravam no MESMO parâmetro da URL, então
+     * não podem cair na regra "um filtro, uma chave".
+     */
+    onValores?: (valores: string[]) => void;
+    onLimpar?: () => void;
   }): FiltroConfiguravel {
     return {
       id: config.chave,
       rotulo: config.rotulo,
       ocultoPorPadrao: config.oculto,
       temValor: config.valores.length > 0,
-      onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
+      onLimpar:
+        config.onLimpar ??
+        (() => setMuitos({ [config.chave]: null, pagina: "1" })),
       elemento: (
         <FiltroSelectMulti
           valores={config.valores}
           onValoresChange={(valores) =>
-            setMuitos({
-              [config.chave]: escreverListaNaUrl(valores),
-              pagina: "1",
-            })
+            config.onValores
+              ? config.onValores(valores)
+              : setMuitos({
+                  [config.chave]: escreverListaNaUrl(valores),
+                  pagina: "1",
+                })
           }
           maximo={MAX_ITENS_FILTRO}
           opcoes={config.opcoes}
@@ -781,12 +838,36 @@ export function LancamentosTabela({
     selecaoMulti({
       chave: "centro",
       rotulo: "Centro de custo",
-      valores: valores.centros,
+      valores: raizesEscolhidas,
       opcoes: opcoesCentro,
       todosRotulo: "Todos os centros de custo",
       oculto: true,
       largura: LARGURA_NOME,
+      // Trocar a raiz apaga as etapas órfãs na MESMA navegação: em duas, o id do
+      // equipamento seguiria vivo dentro do `centro=` sem campo nenhum na tela
+      // mostrando que ele está lá.
+      onValores: (ids) =>
+        escreverCentro(ids, etapasValidas(centrosCusto, ids, etapasEscolhidas)),
+      onLimpar: () => setMuitos({ centro: null, pagina: "1" }),
     }),
+    // O segundo degrau só entra na barra quando há o que escolher nele, e entra
+    // VISÍVEL (sem `oculto`): ele aparece por causa de uma escolha que a pessoa
+    // acabou de fazer no campo ao lado, então mandá-la ao menu "Filtros" para
+    // revelar o campo que ela provocou seria esconder a própria resposta.
+    ...(temEtapasParaEscolher(centrosCusto, raizesEscolhidas)
+      ? [
+          selecaoMulti({
+            chave: "etapa",
+            rotulo: nomesEtapa.rotulo,
+            valores: etapasEscolhidas,
+            opcoes: opcoesEtapa,
+            todosRotulo: nomesEtapa.todos,
+            largura: LARGURA_NOME,
+            onValores: (ids) => escreverCentro(raizesEscolhidas, ids),
+            onLimpar: () => escreverCentro(raizesEscolhidas, []),
+          }),
+        ]
+      : []),
     selecao({
       chave: "conta",
       rotulo: "Conta bancária",

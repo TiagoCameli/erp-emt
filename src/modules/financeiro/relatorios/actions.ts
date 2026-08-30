@@ -6,7 +6,7 @@ import { dataHojeISO } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { parametrosDaQueryString } from "@/modules/financeiro/lancamentos/filtros";
-import { centrosEfetivos } from "@/modules/financeiro/relatorios/centros-e-etapas";
+import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
 import type { PeriodoCompetencia } from "@/modules/financeiro/relatorios/drill";
 import {
   lerFiltrosCustoCc,

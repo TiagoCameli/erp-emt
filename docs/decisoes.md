@@ -3543,3 +3543,51 @@ e em Programados. O #184 não as tocou e este commit também não.
 **Decisão:** `rh_rescisao_itens`, com `codigo` preenchido nas verbas calculadas e nulo nas acrescentadas à mão. Regerar apaga e reconstrói, preservando por snapshot o valor digitado (chave `codigo`) e recolocando as linhas livres. Verba calculada não é removível, só zerada.
 
 **Consequência:** Verba nova não é migration. Apagar uma calculada seria armadilha — ela voltaria no próximo Recalcular e quem apagou não ficaria sabendo; por isso a RPC recusa e manda zerar. O mecanismo do snapshot é o mesmo de `fn_gerar_folha`, pelo mesmo motivo.
+
+## 30/08/2026 — Filtro de centro de custo é escada em todo o app, com UMA chave na URL nas listagens
+
+O dono, sobre o filtro de Lançamentos: "não deve aparecer as etapas individuais no filtro e sim o cc;
+se o cc selecionado tiver etapas aparece um outro filtro de etapas ao lado, corrija isso".
+
+**O diagnóstico que o print não mostrava.** A lista tinha 102 opções misturando 12 raízes com 64
+equipamentos e 26 empréstimos. Mas o pior era "Bobcat S450 - 02" aparecendo **duas vezes**: não é
+duplicata de cadastro, é a mesma máquina com etapa na Manutenção E na Aquisição de Equipamentos,
+criada por mim em 28/08. Achatar a hierarquia apagava justamente o que distinguia as duas. São 14
+máquinas nessa situação.
+
+A escada já existia desde 27/08 nos relatórios (`relatorios/centros-e-etapas.ts`) e desde sempre no
+formulário de rateio. O módulo puro foi para `_shared/centro-custo/filtro.ts` e passou a valer em
+Lançamentos, Pagamentos (as duas abas) e no painel de Gestão.
+
+**A decisão estrutural: uma chave na URL, não duas.** Os relatórios guardam o par em `centro=` e
+`etapa=`. As listagens continuam com `centro=` sozinho, guardando a lista EFETIVA, e os dois campos
+são uma VISTA dela (`separarRaizesEEtapas` é o contrário de `centrosEfetivos`).
+
+Não é economia de parâmetro. **O drill dos relatórios já manda a etapa dentro de `centro=`**
+(`relatorios/drill.ts`), e uma chave nova faria esses cliques mostrarem um id de equipamento no
+campo das raízes. Com a vista, todo link já compartilhado continua abrindo o mesmo conjunto e
+nenhuma consulta do servidor mudou. O teste de ida e volta cobre os oito formatos que a URL aceita,
+inclusive id fora do cadastro — que vira RAIZ em vez de sumir, senão a tela devolveria mais linhas
+do que o link pediu, calada.
+
+**O segundo campo entra visível, nunca `ocultoPorPadrao`.** Ele aparece por causa de uma escolha que
+a pessoa acabou de fazer no campo ao lado; mandá-la ao menu "Filtros" para revelar o campo que ela
+provocou seria esconder a resposta.
+
+**Provado no navegador, não só no Vitest.** Abrir `?centro=<bobcat>` mostra Manutenção + "Bobcat
+MC110C - 01" com 7 lançamentos e R$ 11.841,00; marcar um segundo equipamento grava as DUAS etapas
+sem a raiz; desmarcar a raiz apaga as órfãs e some com o campo na mesma navegação.
+
+**O mesmo bug achado duas vezes, por dois caminhos.** Testando o painel filtrado por equipamento, o
+cartão "Custo por centro de custo" veio como traço: `fn_rel_custo_centro_custo` recebe
+`p_centros uuid[]` e o painel mandava `p_centro_custo` singular. Corrigi no meu branch — e o merge
+com a main mostrou que **outra frente já tinha corrigido em 28/08**, com diagnóstico melhor: o nome
+antigo só ia junto quando havia filtro escolhido, porque o supabase-js OMITE chave `undefined` do
+corpo, então sem filtro o PostgREST resolvia pelos defaults e ninguém via nada. Ficou o comentário
+deles. Vale como lembrete de que `supabase.rpc` aceita chave que não existe na assinatura sem o
+`tsc` reclamar, e de que dois branches longos acham a mesma coisa em paralelo.
+
+**Fica pendente:** o React Compiler recusa preservar `useMemo` apoiado em valor desestruturado de
+chamada (`raizId`) e desliga a otimização do componente inteiro. Em `painel-filtros.tsx` tirei os
+dois `useMemo` e deixei o compilador memoizar — são 64 etapas num filtro que só re-renderiza quando
+a URL muda.
