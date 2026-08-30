@@ -60,6 +60,14 @@ export interface ColaboradorFicha {
   centroCustoId: string | null;
   centroCustoNome: string | null;
   dataAdmissao: string | null;
+  /**
+   * Desligamento (29/08/2026). Independente de `ativo`: aviso prévio
+   * trabalhado tem data no futuro com a pessoa ainda ativa, e um cadastro pode
+   * ter sido desativado por engano sem nunca ter tido demissão.
+   */
+  dataDemissao: string | null;
+  motivoDesligamento: string | null;
+  tipoRescisao: string | null;
   telefone: string | null;
   ativo: boolean;
   salario: number | null;
@@ -113,7 +121,7 @@ export async function buscarColaboradorFicha(
   const { data, error } = await supabase
     .from("colaboradores")
     .select(
-      "id, nome, cpf, funcao_id, jornada_id, vinculo, obra_id, centro_custo_id, data_admissao, telefone, ativo, salario, valor_diaria, gratificacao, encargos_percentual, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base), jornadas(nome)",
+      "id, nome, cpf, funcao_id, jornada_id, vinculo, obra_id, centro_custo_id, data_admissao, data_demissao, motivo_desligamento, tipo_rescisao, telefone, ativo, salario, valor_diaria, gratificacao, encargos_percentual, banco, agencia, conta, tipo_conta, chave_pix, rg, rg_orgao, rg_uf, ctps_numero, ctps_serie, ctps_uf, pis, cnh_numero, cnh_categoria, cnh_validade, escolaridade, data_nascimento, nome_mae, nacionalidade, estado_civil, raca_cor, titulo_eleitor, reservista, obras(nome), centros_custo(nome), funcoes(nome, cbo, salario_base), jornadas(nome)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -135,6 +143,9 @@ export async function buscarColaboradorFicha(
     centroCustoId: data.centro_custo_id,
     centroCustoNome: data.centros_custo?.nome ?? null,
     dataAdmissao: data.data_admissao,
+    dataDemissao: data.data_demissao,
+    motivoDesligamento: data.motivo_desligamento,
+    tipoRescisao: data.tipo_rescisao,
     telefone: data.telefone,
     ativo: data.ativo,
     salario: data.salario,

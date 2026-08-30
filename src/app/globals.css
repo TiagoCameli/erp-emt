@@ -201,10 +201,16 @@
     visibility: hidden;
   }
   .holerite-print,
-  .holerite-print * {
+  .holerite-print *,
+  /* Recibo de rescisao: superficie imprimivel propria, declarada aqui porque
+     o "body *" acima esconde tudo por padrao. Sem esta linha o recibo sairia
+     em branco da impressora -- e o aviso esta escrito no comentario acima. */
+  .recibo-rescisao-print,
+  .recibo-rescisao-print * {
     visibility: visible;
   }
-  .holerite-print {
+  .holerite-print,
+  .recibo-rescisao-print {
     position: absolute;
     inset: 0;
     margin: 0;
@@ -213,6 +219,17 @@
     width: auto;
     border: 0;
     box-shadow: none;
+  }
+  /* A CAIXA do dialogo rola na tela (max-h + overflow) para caber no viewport.
+     No papel isso cortaria o documento na altura da caixa, porque a folha nao
+     rola -- e o bloco imprimivel e `position: absolute`, entao quem o clipa e
+     este ancestral, nao ele mesmo. `position: static` tira a caixa de
+     containing block e deixa o recibo se posicionar pela pagina. */
+  .recibo-rescisao-caixa {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    transform: none;
   }
   .nao-imprime {
     display: none !important;
