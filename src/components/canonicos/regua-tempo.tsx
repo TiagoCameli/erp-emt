@@ -17,6 +17,7 @@ import {
   inicioDaJanela,
   intervaloEntre,
   janelaVizinha,
+  mostraRotulo,
   ROTULO_GRANULARIDADE,
   tituloDaJanela,
   type BlocoDaRegua,
@@ -199,6 +200,14 @@ export function ReguaTempo({
 
   const emArraste = arraste !== null;
 
+  /**
+   * A régua está mostrando os rótulos de cinco em cinco?
+   *
+   * Perguntado à própria regra, e não recontando os blocos: o limite mora em
+   * `mostraRotulo`, e duas contas do mesmo número acabam divergindo.
+   */
+  const rotulosEsparsos = !mostraRotulo(1, blocos.length);
+
   return (
     <div
       className="flex w-full flex-col gap-3"
@@ -273,13 +282,20 @@ export function ReguaTempo({
             <span
               key={bloco.inicio}
               className={cn(
-                "min-w-0 flex-1 truncate px-0.5 text-center text-legenda tabular-nums transition-colors",
+                "min-w-0 flex-1 text-center text-legenda tabular-nums transition-colors",
+                // Rótulo esparso transborda em vez de truncar: os vizinhos estão
+                // vazios, então "16" cabe inteiro no espaço deles. Truncar aqui
+                // devolveria a fileira de "1.." que este trecho existe para
+                // acabar.
+                rotulosEsparsos
+                  ? "overflow-visible whitespace-nowrap"
+                  : "truncate px-0.5",
                 pintados[i]
                   ? "font-medium text-foreground"
                   : "text-muted-foreground",
               )}
             >
-              {bloco.rotulo}
+              {mostraRotulo(i, blocos.length) ? bloco.rotulo : ""}
             </span>
           ))}
         </div>

@@ -143,6 +143,33 @@ const BLOCOS_POR_JANELA: Record<Granularidade, number> = {
 };
 
 /**
+ * Quantos blocos ainda cabem com o nome de cada um escrito por extenso.
+ *
+ * Doze meses num popover de 530px dão 44px por bloco e "jan" cabe folgado.
+ * Trinta e um dias dão 17px, e "10" sai da régua como "1..": a régua vira uma
+ * fileira de reticências que não diz mês nenhum. Acima deste número os rótulos
+ * passam a aparecer de cinco em cinco, que é o que um slicer de linha do tempo
+ * faz quando a barra não cabe — os blocos continuam todos lá, clicáveis e
+ * arrastáveis, e o nome de cada um continua no `title` e no leitor de tela.
+ */
+const MAXIMO_DE_ROTULOS = 16;
+
+/** De quantos em quantos blocos o rótulo aparece. */
+const PASSO_LARGO = 5;
+
+/**
+ * Se o bloco `indice` de uma régua de `total` blocos mostra o rótulo.
+ *
+ * Numa régua de 31 dias saem os dias 1, 6, 11, 16, 21, 26 e 31: sete âncoras
+ * espaçadas por igual, e o dia 1 sempre entre elas, porque uma régua que começa
+ * sem número não diz onde começa.
+ */
+export function mostraRotulo(indice: number, total: number): boolean {
+  if (total <= MAXIMO_DE_ROTULOS) return true;
+  return indice % PASSO_LARGO === 0;
+}
+
+/**
  * O início da JANELA que contém uma data, por granularidade.
  *
  * É o que faz o ◀ ▶ andar em passos inteiros e previsíveis: em meses a janela é

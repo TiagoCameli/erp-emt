@@ -6,6 +6,7 @@ import {
   blocosNoPeriodo,
   ehDataISO,
   granularidadeDoPeriodo,
+  mostraRotulo,
   inicioDaJanela,
   intervaloEntre,
   janelaVizinha,
@@ -410,5 +411,35 @@ describe("granularidadeDoPeriodo", () => {
   it("sem as duas pontas, não sugere nada", () => {
     expect(granularidadeDoPeriodo("2026-08-01", "")).toBeNull();
     expect(granularidadeDoPeriodo("", "")).toBeNull();
+  });
+});
+
+describe("mostraRotulo", () => {
+  it("com poucos blocos, todos escrevem o nome", () => {
+    // Doze meses num popover de 530px dão 44px por bloco: "jan" cabe folgado.
+    for (let i = 0; i < 12; i++) {
+      expect(mostraRotulo(i, 12)).toBe(true);
+    }
+  });
+
+  it("com 31 dias, escreve de cinco em cinco", () => {
+    // 17px por bloco, e "10" sairia como "1..": a régua virava uma fileira de
+    // reticências que não dizia dia nenhum.
+    const escritos = Array.from({ length: 31 }, (_, i) => i)
+      .filter((i) => mostraRotulo(i, 31))
+      .map((i) => i + 1);
+    expect(escritos).toEqual([1, 6, 11, 16, 21, 26, 31]);
+  });
+
+  it("o primeiro bloco SEMPRE escreve", () => {
+    // Régua que começa sem número não diz onde começa.
+    for (const total of [1, 12, 28, 29, 30, 31, 52]) {
+      expect(mostraRotulo(0, total)).toBe(true);
+    }
+  });
+
+  it("a virada é em 16 blocos", () => {
+    expect(mostraRotulo(1, 16)).toBe(true);
+    expect(mostraRotulo(1, 17)).toBe(false);
   });
 });
