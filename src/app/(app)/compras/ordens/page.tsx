@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
-import { competenciaParaMes } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ROTULO_STATUS_OC, type StatusOC } from "@/modules/compras/_shared/formato";
 import { listarCartoesAtivos } from "@/modules/cadastros/cartoes/queries";

@@ -323,4 +323,25 @@ describe("ReguaTempo", () => {
       expect(onPeriodoChange).toHaveBeenLastCalledWith("", "");
     });
   });
+
+  describe("régua de dias", () => {
+    it("todos os 31 dias continuam clicáveis, mas só 7 escrevem o número", () => {
+      // Trinta e um blocos num popover de 530px dão 17px cada, e "10" saía
+      // como "1..": a régua virava uma fileira de reticências. Espaçar os
+      // rótulos não pode custar bloco nenhum — quem quer o dia 17 clica no
+      // dia 17.
+      abrir("2026-08-01", "2026-08-31");
+      fireEvent.click(screen.getByRole("button", { name: "Dias" }));
+
+      expect(bloco("17 de agosto de 2026")).toBeTruthy();
+      expect(bloco("31 de agosto de 2026")).toBeTruthy();
+
+      for (const dia of ["1", "6", "11", "16", "21", "26", "31"]) {
+        expect(screen.getByText(dia)).toBeTruthy();
+      }
+      for (const dia of ["2", "17", "30"]) {
+        expect(screen.queryByText(dia)).toBeNull();
+      }
+    });
+  });
 });
