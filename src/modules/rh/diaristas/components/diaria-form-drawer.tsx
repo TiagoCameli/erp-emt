@@ -130,6 +130,7 @@ export function DiariaFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar diária" : "Nova diária"}
       descricao="Diárias em aberto são somadas no fechamento da competência e viram um lançamento a pagar."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

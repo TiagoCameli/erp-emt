@@ -124,6 +124,7 @@ export function CategoriasFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar subcategoria" : "Nova subcategoria"}
       descricao="Subcategoria é o detalhe dentro de um dos 4 grupos, e é ela que o insumo aponta"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

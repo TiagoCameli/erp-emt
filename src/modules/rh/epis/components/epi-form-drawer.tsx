@@ -137,6 +137,7 @@ export function EpiFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar EPI" : "Novo EPI"}
       descricao="Entrega de equipamento de proteção individual por colaborador."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

@@ -99,6 +99,7 @@ export function ClientesFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar cliente" : "Novo cliente"}
       descricao="Órgãos e empresas contratantes das obras"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

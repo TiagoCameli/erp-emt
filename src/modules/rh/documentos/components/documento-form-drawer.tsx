@@ -135,6 +135,7 @@ export function DocumentoFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar documento" : "Novo documento"}
       descricao="Documentos com data de vencimento entram no painel de alertas."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

@@ -187,6 +187,7 @@ export function CondicaoFormDrawer({
           ? "Atualize a descrição e as parcelas desta condição"
           : "Cadastre uma condição para usar em cotações e ordens de compra"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

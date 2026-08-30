@@ -163,6 +163,7 @@ export function TransferenciaFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar transferência" : "Nova transferência"}
       descricao="Movimentação entre contas da empresa. Não entra no resultado: só muda o saldo das duas contas"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           {editando && onSolicitarExclusao ? (

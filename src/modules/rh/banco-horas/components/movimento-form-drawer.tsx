@@ -111,6 +111,7 @@ export function MovimentoFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar movimento" : "Novo movimento"}
       descricao="Crédito soma horas ao saldo; débito subtrai. O saldo é por colaborador."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

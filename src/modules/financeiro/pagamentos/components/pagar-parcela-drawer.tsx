@@ -156,10 +156,16 @@ export function PagarParcelaDrawer({
   // motivo: ajuste de um pagamento vazando para o próximo tira (ou acrescenta)
   // dinheiro que ninguém acertou.
   const [estavaAberto, setEstavaAberto] = React.useState(aberto);
+  // Guarda a data com que o campo nasceu. Guardada em estado, e não recalculada
+  // com `dataHojeISO()` na comparação, senão a virada da meia-noite com o drawer
+  // aberto faria o formulário parecer alterado sem ninguém ter tocado nele.
+  const [dataInicial, setDataInicial] = React.useState(dataPagamento);
   if (aberto && !estavaAberto) {
+    const hoje = dataHojeISO();
     setEstavaAberto(true);
     setContaId(parcela?.contaBancariaId ?? "");
-    setDataPagamento(dataHojeISO());
+    setDataPagamento(hoje);
+    setDataInicial(hoje);
     setDesconto("");
     setJuros("");
     setOutrasDespesas("");
@@ -265,6 +271,17 @@ export function PagarParcelaDrawer({
       onAbertoChange={onAbertoChange}
       titulo="Registrar pagamento"
       descricao="Informe a conta bancária e a data do pagamento desta parcela"
+      // Sem React Hook Form aqui: "alterado" é a comparação com os valores que o
+      // bloco de reset acima grava quando o drawer abre.
+      temAlteracoesNaoSalvas={
+        !salvando &&
+        (contaId !== (parcela?.contaBancariaId ?? "") ||
+          dataPagamento !== dataInicial ||
+          desconto !== "" ||
+          juros !== "" ||
+          outrasDespesas !== "" ||
+          motivo !== "")
+      }
       rodape={
         <div className="flex w-full items-center justify-between gap-4">
           {/* O que o operador precisa ver antes de confirmar: sem ajuste, o

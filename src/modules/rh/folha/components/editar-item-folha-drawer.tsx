@@ -48,6 +48,35 @@ function paraCampo(valor: number | null): string {
   return String(valor).replace(".", ",");
 }
 
+/**
+ * Os campos como eles nascem para um item. Serve para preencher o formulário ao
+ * abrir e, comparado com o estado atual, para saber se a pessoa mexeu em algo:
+ * este drawer não usa React Hook Form, então não há `formState.isDirty`.
+ */
+function camposDoItem(item: FolhaItem): {
+  salarioBase: string;
+  gratificacao: string;
+  desconto: string;
+  horas: string;
+  centroCusto: string;
+  horasNormais: string;
+  horasExtras: string;
+  valorExtras: string;
+} {
+  return {
+    salarioBase: paraCampo(item.salarioBase),
+    gratificacao: paraCampo(item.gratificacao),
+    desconto: paraCampo(item.descontos),
+    horas: item.descontoHoras === null ? "" : paraCampo(item.descontoHoras),
+    // Vazio quando a linha não tem centro: é o estado que trava a aprovação,
+    // e o campo em branco com asterisco é o que faz alguém reparar nele.
+    centroCusto: item.centroCustoId ?? "",
+    horasNormais: paraCampo(item.horasNormais),
+    horasExtras: paraCampo(item.horasExtras),
+    valorExtras: paraCampo(item.valorExtras),
+  };
+}
+
 export interface EditarItemFolhaDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
@@ -115,18 +144,15 @@ export function EditarItemFolhaDrawer({
   if (idAtual !== itemAberto) {
     setItemAberto(idAtual);
     if (item) {
-      setSalarioBase(paraCampo(item.salarioBase));
-      setGratificacao(paraCampo(item.gratificacao));
-      setDesconto(paraCampo(item.descontos));
-      setHoras(
-        item.descontoHoras === null ? "" : paraCampo(item.descontoHoras),
-      );
-      // Vazio quando a linha não tem centro: é o estado que trava a aprovação,
-      // e o campo em branco com asterisco é o que faz alguém reparar nele.
-      setCentroCusto(item.centroCustoId ?? "");
-      setHorasNormais(paraCampo(item.horasNormais));
-      setHorasExtras(paraCampo(item.horasExtras));
-      setValorExtras(paraCampo(item.valorExtras));
+      const iniciais = camposDoItem(item);
+      setSalarioBase(iniciais.salarioBase);
+      setGratificacao(iniciais.gratificacao);
+      setDesconto(iniciais.desconto);
+      setHoras(iniciais.horas);
+      setCentroCusto(iniciais.centroCusto);
+      setHorasNormais(iniciais.horasNormais);
+      setHorasExtras(iniciais.horasExtras);
+      setValorExtras(iniciais.valorExtras);
     }
   }
 
@@ -299,6 +325,20 @@ export function EditarItemFolhaDrawer({
       item.colaboradorVinculo)
     : "";
 
+  // Substitui o `formState.isDirty` do React Hook Form: compara cada campo com o
+  // valor que ele ganhou quando a linha foi aberta.
+  const iniciais = item ? camposDoItem(item) : null;
+  const alterado =
+    iniciais !== null &&
+    (salarioBase !== iniciais.salarioBase ||
+      gratificacao !== iniciais.gratificacao ||
+      desconto !== iniciais.desconto ||
+      horas !== iniciais.horas ||
+      centroCusto !== iniciais.centroCusto ||
+      horasNormais !== iniciais.horasNormais ||
+      horasExtras !== iniciais.horasExtras ||
+      valorExtras !== iniciais.valorExtras);
+
   return (
     <FormDrawer
       aberto={aberto}
@@ -309,6 +349,7 @@ export function EditarItemFolhaDrawer({
           ? `${vinculo} · ajuste o que esta folha paga a esta pessoa. Regerar a folha preserva tudo o que você mudar aqui.`
           : undefined
       }
+      temAlteracoesNaoSalvas={alterado && !salvando}
       rodape={
         <div className="flex w-full flex-wrap items-center justify-between gap-4">
           {/* A prévia existe para o líquido aparecer ANTES de salvar: é o que

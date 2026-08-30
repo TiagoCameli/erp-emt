@@ -90,6 +90,7 @@ export function GerarFolhaFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={regerar ? "Regerar folha" : "Gerar folha"}
       descricao="Consolida os colaboradores ativos da competência: CLT e terceiro pelo salário do cadastro, diarista pela soma das diárias em aberto. Traz ponto, adiantamentos, gratificação e o encargo de cada um. Regerar substitui o rascunho da mesma competência, preservando as linhas alteradas à mão."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

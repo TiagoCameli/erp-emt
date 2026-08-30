@@ -88,6 +88,10 @@ export function PagarLoteDrawer({
     contaUnicaDasParcelas(parcelas),
   );
   const [dataPagamento, setDataPagamento] = React.useState(dataHojeISO());
+  // A data com que o campo nasceu, para saber se a pessoa mexeu nele. Em estado,
+  // e não recalculada, senão a virada da meia-noite com o drawer aberto marcaria
+  // o formulário como alterado sozinha.
+  const [dataInicial, setDataInicial] = React.useState(dataPagamento);
   const [motivo, setMotivo] = React.useState("");
   const [pagando, setPagando] = React.useState(false);
   const [progresso, setProgresso] = React.useState({ feitos: 0, total: 0 });
@@ -98,9 +102,11 @@ export function PagarLoteDrawer({
   // errada.
   const [estavaAberto, setEstavaAberto] = React.useState(aberto);
   if (aberto && !estavaAberto) {
+    const hoje = dataHojeISO();
     setEstavaAberto(true);
     setContaId(contaUnicaDasParcelas(parcelas));
-    setDataPagamento(dataHojeISO());
+    setDataPagamento(hoje);
+    setDataInicial(hoje);
     setMotivo("");
     setFalhas([]);
     setProgresso({ feitos: 0, total: 0 });
@@ -181,6 +187,16 @@ export function PagarLoteDrawer({
           : `Pagar ${parcelas.length} parcelas`
       }
       descricao="Uma conta e uma data para todas. Desconto, juros e despesas só no pagamento individual."
+      // Sem React Hook Form: compara com os valores que o bloco de reset grava ao
+      // abrir. Com falha na lista não pergunta nada: o lote já rodou, o painel
+      // está aberto só para mostrar o que não passou, e não há nada a descartar.
+      temAlteracoesNaoSalvas={
+        !pagando &&
+        falhas.length === 0 &&
+        (contaId !== contaUnicaDasParcelas(parcelas) ||
+          dataPagamento !== dataInicial ||
+          motivo !== "")
+      }
       rodape={
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-detalhe text-muted-foreground">

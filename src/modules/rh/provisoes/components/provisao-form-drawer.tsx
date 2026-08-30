@@ -91,6 +91,7 @@ export function ProvisaoFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar provisão" : "Nova provisão"}
       descricao="A provisão entra no custo da folha do mês e não gera conta a pagar no Financeiro."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button
