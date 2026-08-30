@@ -2,11 +2,18 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FilterX, Search, X } from "lucide-react";
+import { CalendarDays, FilterX, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/canonicos/combobox";
+import { ReguaTempo } from "@/components/canonicos/regua-tempo";
+import { resumoDoPeriodo } from "@/components/canonicos/regua-tempo-calculo";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
 import {
   limparFiltrosDaRota,
@@ -357,8 +364,20 @@ interface FiltroPeriodoProps {
 }
 
 /**
- * Filtro de período com as duas pontas (de/até) em campos de data curtos.
- * Data vazia significa sem limite naquela ponta.
+ * Filtro de período: um botão que abre a régua de tempo num popover.
+ *
+ * Era um par de `input type="date"` sempre à vista, ocupando dois trilhos numa
+ * barra que já tem 16 filtros. O Tiago pediu a mudança em 29/08/2026, com o
+ * slicer do Excel como referência e uma condição explícita: "essa barra não deve
+ * ficar aparecendo o tempo todo, quando você clicar no filtro ela aparece".
+ *
+ * O botão mostra o RESUMO do período ("jan - ago de 2026"), que é o que a pessoa
+ * precisa ler de relance para saber o que está filtrando. Duas caixas de data
+ * com dd/mm/aaaa exigiam ler seis números e comparar mentalmente.
+ *
+ * A API não mudou (`de`, `ate`, `onPeriodoChange`): as 26 telas que usam este
+ * filtro ganharam a régua sem uma linha de mudança em nenhuma delas. Foi o
+ * motivo de mexer no canônico em vez de criar um filtro novo ao lado.
  */
 export function FiltroPeriodo({
   de,
@@ -366,28 +385,57 @@ export function FiltroPeriodo({
   onPeriodoChange,
   rotulo = "Período",
 }: FiltroPeriodoProps) {
+  const [aberto, setAberto] = React.useState(false);
+  const resumo = resumoDoPeriodo(de, ate);
+  const temPeriodo = resumo !== "";
+
   return (
-    <CampoFiltro largura={TRILHO_FILTRO_DUPLO}>
+    <CampoFiltro largura={TRILHO_FILTRO}>
       <div className="flex items-center gap-1.5">
-        <Input
-          type="date"
-          value={de}
-          max={ate === "" ? undefined : ate}
-          onChange={(evento) => onPeriodoChange(evento.target.value, ate)}
-          // O `rotulo` continua nomeando as duas pontas para quem usa leitor de
-          // tela: o rótulo visível em cima diz "de quê", e uma ponta da outra não.
-          aria-label={`${rotulo}: data inicial`}
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
-        <span className="text-detalhe text-muted-foreground">até</span>
-        <Input
-          type="date"
-          value={ate}
-          min={de === "" ? undefined : de}
-          onChange={(evento) => onPeriodoChange(de, evento.target.value)}
-          aria-label={`${rotulo}: data final`}
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
+        <Popover open={aberto} onOpenChange={setAberto}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={rotulo}
+              className={cn(
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                temPeriodo ? "" : "text-muted-foreground",
+              )}
+            >
+              <CalendarDays className="size-3.5 shrink-0 opacity-70" />
+              <span className="truncate">{temPeriodo ? resumo : "Qualquer data"}</span>
+            </Button>
+          </PopoverTrigger>
+          {/* Largura fixa e generosa: a régua de DIAS tem 31 blocos, e num
+              popover que herdasse a largura do gatilho (13rem) cada dia sairia
+              com 2px. Em 34rem cada bloco de dia fica com ~16px, que é o que o
+              número "31" pede em 12px. */}
+          <PopoverContent align="start" className="w-[34rem] max-w-[92vw] p-3">
+            <ReguaTempo
+              de={de}
+              ate={ate}
+              onPeriodoChange={onPeriodoChange}
+              rotulo={rotulo}
+            />
+          </PopoverContent>
+        </Popover>
+
+        {/* O X divide o trilho com o botão em vez de crescer para fora dele,
+            mesma razão do FiltroMes: escolher um período não pode empurrar para
+            o lado todos os filtros que vêm depois na mesma linha. */}
+        {temPeriodo ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Limpar ${rotulo.toLowerCase()}`}
+            onClick={() => onPeriodoChange("", "")}
+          >
+            <X />
+          </Button>
+        ) : null}
       </div>
     </CampoFiltro>
   );
