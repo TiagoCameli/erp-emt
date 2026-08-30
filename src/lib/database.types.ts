@@ -471,6 +471,7 @@ export type Database = {
           ctps_serie: string | null;
           ctps_uf: string | null;
           data_admissao: string | null;
+          data_demissao: string | null;
           data_nascimento: string | null;
           desconto_valor: number | null;
           encargos_percentual: number | null;
@@ -480,6 +481,7 @@ export type Database = {
           gratificacao: number;
           id: string;
           jornada_id: string | null;
+          motivo_desligamento: string | null;
           nacionalidade: string | null;
           nome: string;
           nome_mae: string | null;
@@ -493,6 +495,7 @@ export type Database = {
           salario: number | null;
           telefone: string | null;
           tipo_conta: string | null;
+          tipo_rescisao: string | null;
           titulo_eleitor: string | null;
           updated_at: string;
           valor_diaria: number | null;
@@ -515,6 +518,7 @@ export type Database = {
           ctps_serie?: string | null;
           ctps_uf?: string | null;
           data_admissao?: string | null;
+          data_demissao?: string | null;
           data_nascimento?: string | null;
           desconto_valor?: number | null;
           encargos_percentual?: number | null;
@@ -524,6 +528,7 @@ export type Database = {
           gratificacao?: number;
           id?: string;
           jornada_id?: string | null;
+          motivo_desligamento?: string | null;
           nacionalidade?: string | null;
           nome: string;
           nome_mae?: string | null;
@@ -537,6 +542,7 @@ export type Database = {
           salario?: number | null;
           telefone?: string | null;
           tipo_conta?: string | null;
+          tipo_rescisao?: string | null;
           titulo_eleitor?: string | null;
           updated_at?: string;
           valor_diaria?: number | null;
@@ -559,6 +565,7 @@ export type Database = {
           ctps_serie?: string | null;
           ctps_uf?: string | null;
           data_admissao?: string | null;
+          data_demissao?: string | null;
           data_nascimento?: string | null;
           desconto_valor?: number | null;
           encargos_percentual?: number | null;
@@ -568,6 +575,7 @@ export type Database = {
           gratificacao?: number;
           id?: string;
           jornada_id?: string | null;
+          motivo_desligamento?: string | null;
           nacionalidade?: string | null;
           nome?: string;
           nome_mae?: string | null;
@@ -581,6 +589,7 @@ export type Database = {
           salario?: number | null;
           telefone?: string | null;
           tipo_conta?: string | null;
+          tipo_rescisao?: string | null;
           titulo_eleitor?: string | null;
           updated_at?: string;
           valor_diaria?: number | null;
@@ -1303,6 +1312,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "folha_exclusoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "folha_exclusoes_folha_id_fkey";
             columns: ["folha_id"];
             isOneToOne: false;
@@ -1489,6 +1505,7 @@ export type Database = {
           custo_total: number;
           desconto_horas: number | null;
           descontos: number;
+          dias_trabalhados: number | null;
           editado_manualmente: boolean;
           encargos: number;
           encargos_percentual: number | null;
@@ -1513,6 +1530,7 @@ export type Database = {
           custo_total?: number;
           desconto_horas?: number | null;
           descontos?: number;
+          dias_trabalhados?: number | null;
           editado_manualmente?: boolean;
           encargos?: number;
           encargos_percentual?: number | null;
@@ -1537,6 +1555,7 @@ export type Database = {
           custo_total?: number;
           desconto_horas?: number | null;
           descontos?: number;
+          dias_trabalhados?: number | null;
           editado_manualmente?: boolean;
           encargos?: number;
           encargos_percentual?: number | null;
@@ -1586,6 +1605,9 @@ export type Database = {
       };
       folha_parametros: {
         Row: {
+          aviso_previo_dias_base: number;
+          aviso_previo_dias_por_ano: number;
+          aviso_previo_dias_teto: number;
           created_at: string;
           created_by: string | null;
           dia_pagamento_salario: number | null;
@@ -1596,9 +1618,13 @@ export type Database = {
           id: number;
           irrf_deducao_por_dependente: number;
           irrf_desconto_simplificado: number;
+          multa_fgts_percentual: number;
           updated_at: string;
         };
         Insert: {
+          aviso_previo_dias_base?: number;
+          aviso_previo_dias_por_ano?: number;
+          aviso_previo_dias_teto?: number;
           created_at?: string;
           created_by?: string | null;
           dia_pagamento_salario?: number | null;
@@ -1609,9 +1635,13 @@ export type Database = {
           id?: number;
           irrf_deducao_por_dependente?: number;
           irrf_desconto_simplificado?: number;
+          multa_fgts_percentual?: number;
           updated_at?: string;
         };
         Update: {
+          aviso_previo_dias_base?: number;
+          aviso_previo_dias_por_ano?: number;
+          aviso_previo_dias_teto?: number;
           created_at?: string;
           created_by?: string | null;
           dia_pagamento_salario?: number | null;
@@ -1622,6 +1652,7 @@ export type Database = {
           id?: number;
           irrf_deducao_por_dependente?: number;
           irrf_desconto_simplificado?: number;
+          multa_fgts_percentual?: number;
           updated_at?: string;
         };
         Relationships: [];
@@ -1999,8 +2030,8 @@ export type Database = {
       };
       lancamento_formas: {
         Row: {
-          created_at: string;
           cartao_id: string | null;
+          created_at: string;
           created_by: string | null;
           forma_pagamento_id: string;
           id: string;
@@ -2009,8 +2040,8 @@ export type Database = {
           valor: number;
         };
         Insert: {
-          created_at?: string;
           cartao_id?: string | null;
+          created_at?: string;
           created_by?: string | null;
           forma_pagamento_id: string;
           id?: string;
@@ -2019,8 +2050,8 @@ export type Database = {
           valor: number;
         };
         Update: {
-          created_at?: string;
           cartao_id?: string | null;
+          created_at?: string;
           created_by?: string | null;
           forma_pagamento_id?: string;
           id?: string;
@@ -2515,8 +2546,8 @@ export type Database = {
       };
       oc_formas: {
         Row: {
-          created_at: string;
           cartao_id: string | null;
+          created_at: string;
           created_by: string | null;
           forma_pagamento_id: string;
           id: string;
@@ -2525,8 +2556,8 @@ export type Database = {
           valor: number;
         };
         Insert: {
-          created_at?: string;
           cartao_id?: string | null;
+          created_at?: string;
           created_by?: string | null;
           forma_pagamento_id: string;
           id?: string;
@@ -2535,8 +2566,8 @@ export type Database = {
           valor: number;
         };
         Update: {
-          created_at?: string;
           cartao_id?: string | null;
+          created_at?: string;
           created_by?: string | null;
           forma_pagamento_id?: string;
           id?: string;
@@ -3538,6 +3569,186 @@ export type Database = {
           },
         ];
       };
+      rh_rescisao_itens: {
+        Row: {
+          codigo: string | null;
+          created_at: string;
+          descricao: string;
+          editado_manualmente: boolean;
+          id: string;
+          natureza: string;
+          ordem: number;
+          referencia: string | null;
+          rescisao_id: string;
+          valor: number;
+        };
+        Insert: {
+          codigo?: string | null;
+          created_at?: string;
+          descricao: string;
+          editado_manualmente?: boolean;
+          id?: string;
+          natureza: string;
+          ordem?: number;
+          referencia?: string | null;
+          rescisao_id: string;
+          valor?: number;
+        };
+        Update: {
+          codigo?: string | null;
+          created_at?: string;
+          descricao?: string;
+          editado_manualmente?: boolean;
+          id?: string;
+          natureza?: string;
+          ordem?: number;
+          referencia?: string | null;
+          rescisao_id?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rh_rescisao_itens_rescisao_id_fkey";
+            columns: ["rescisao_id"];
+            isOneToOne: false;
+            referencedRelation: "rh_rescisoes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rh_rescisoes: {
+        Row: {
+          aprovado_em: string | null;
+          aprovado_por: string | null;
+          aviso: string;
+          centro_custo_id: string | null;
+          colaborador_id: string;
+          created_at: string;
+          created_by: string | null;
+          data_aviso: string | null;
+          data_desligamento: string;
+          data_vencimento: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          ferias_vencidas_periodos: number;
+          id: string;
+          lancamento_id: string | null;
+          motivo_exclusao: string | null;
+          motivo_rejeicao: string | null;
+          numero: string;
+          observacao: string | null;
+          remuneracao_base: number;
+          saldo_fgts: number;
+          status: string;
+          tipo: string;
+          updated_at: string;
+          valor_descontos: number;
+          valor_liquido: number;
+          valor_proventos: number;
+        };
+        Insert: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          aviso: string;
+          centro_custo_id?: string | null;
+          colaborador_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_aviso?: string | null;
+          data_desligamento: string;
+          data_vencimento?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          ferias_vencidas_periodos?: number;
+          id?: string;
+          lancamento_id?: string | null;
+          motivo_exclusao?: string | null;
+          motivo_rejeicao?: string | null;
+          numero: string;
+          observacao?: string | null;
+          remuneracao_base: number;
+          saldo_fgts?: number;
+          status?: string;
+          tipo: string;
+          updated_at?: string;
+          valor_descontos?: number;
+          valor_liquido?: number;
+          valor_proventos?: number;
+        };
+        Update: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          aviso?: string;
+          centro_custo_id?: string | null;
+          colaborador_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_aviso?: string | null;
+          data_desligamento?: string;
+          data_vencimento?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          ferias_vencidas_periodos?: number;
+          id?: string;
+          lancamento_id?: string | null;
+          motivo_exclusao?: string | null;
+          motivo_rejeicao?: string | null;
+          numero?: string;
+          observacao?: string | null;
+          remuneracao_base?: number;
+          saldo_fgts?: number;
+          status?: string;
+          tipo?: string;
+          updated_at?: string;
+          valor_descontos?: number;
+          valor_liquido?: number;
+          valor_proventos?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rh_rescisoes_aprovado_por_fkey";
+            columns: ["aprovado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_rescisoes_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_rescisoes_colaborador_id_fkey";
+            columns: ["colaborador_id"];
+            isOneToOne: false;
+            referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_rescisoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_rescisoes_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_rescisoes_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       transferencias_contas: {
         Row: {
           conta_destino_id: string;
@@ -3656,6 +3867,13 @@ export type Database = {
             columns: ["conta_bancaria_id"];
             isOneToOne: false;
             referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "usuario_conta_saldo_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
             referencedColumns: ["id"];
           },
           {
@@ -3852,6 +4070,15 @@ export type Database = {
         Args: { p_adiantamento_ids: string[] };
         Returns: string[];
       };
+      fn_adicionar_item_rescisao: {
+        Args: {
+          p_descricao: string;
+          p_natureza: string;
+          p_rescisao: string;
+          p_valor: number;
+        };
+        Returns: string;
+      };
       fn_alterar_mes_competencia: {
         Args: { p_entidade: string; p_id: string; p_mes: string };
         Returns: undefined;
@@ -3882,6 +4109,7 @@ export type Database = {
         Returns: undefined;
       };
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined };
+      fn_aprovar_rescisao: { Args: { p_rescisao: string }; Returns: undefined };
       fn_arquivo_por_hash: {
         Args: { p_hash: string; p_tamanho: number };
         Returns: string;
@@ -3990,6 +4218,10 @@ export type Database = {
         Args: { p_motivo: string; p_parcela_id: string };
         Returns: undefined;
       };
+      fn_desaprovar_rescisao: {
+        Args: { p_motivo: string; p_rescisao: string };
+        Returns: undefined;
+      };
       fn_desconciliar_transacao: {
         Args: { p_transacao_id: string };
         Returns: undefined;
@@ -4010,6 +4242,14 @@ export type Database = {
           p_salario_base: number;
           p_valor_extras: number;
         };
+        Returns: undefined;
+      };
+      fn_editar_item_rescisao: {
+        Args: { p_item: string; p_valor: number };
+        Returns: undefined;
+      };
+      fn_enviar_rescisao_aprovacao: {
+        Args: { p_rescisao: string };
         Returns: undefined;
       };
       fn_epis_a_recolher: {
@@ -4044,6 +4284,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined };
+      fn_excluir_rescisao: {
+        Args: { p_motivo: string; p_rescisao: string };
+        Returns: undefined;
+      };
       fn_excluir_transferencia: {
         Args: { p_id: string; p_motivo: string };
         Returns: undefined;
@@ -4090,6 +4334,10 @@ export type Database = {
         Args: { p_base: number; p_encargos_percentual: number; p_item: string };
         Returns: undefined;
       };
+      fn_folha_avos_do_mes: {
+        Args: { p_admissao: string; p_competencia: string; p_demissao: string };
+        Returns: number;
+      };
       fn_folha_inss: { Args: { p_base: number }; Returns: number };
       fn_folha_irrf: {
         Args: { p_base: number; p_colaborador: string; p_inss: number };
@@ -4103,19 +4351,20 @@ export type Database = {
         Args: { p_competencia: string; p_encargos_pct?: number };
         Returns: string;
       };
-      fn_tirar_da_folha: {
-        // `p_motivo` opcional no banco (default null). Os dois ids são
-        // obrigatórios: não existe "tirar alguém" sem dizer de qual folha.
+      fn_gerar_rescisao: {
         Args: {
-          p_colaborador_id: string;
-          p_folha_id: string;
-          p_motivo?: string | null;
+          p_aviso: string;
+          p_colaborador: string;
+          p_data_aviso?: string;
+          p_data_desligamento: string;
+          p_data_vencimento?: string;
+          p_ferias_vencidas_periodos?: number;
+          p_observacao?: string;
+          p_remuneracao_base?: number;
+          p_saldo_fgts?: number;
+          p_tipo: string;
         };
-        Returns: undefined;
-      };
-      fn_voltar_para_folha: {
-        Args: { p_colaborador_id: string; p_folha_id: string };
-        Returns: undefined;
+        Returns: string;
       };
       fn_impacto_reclassificar_insumos: {
         Args: { p_insumo_ids: string[] };
@@ -4203,16 +4452,16 @@ export type Database = {
           obra_id: string;
         }[];
       };
+      fn_oc_categorias_derivadas: {
+        Args: { p_oc_id: string };
+        Returns: undefined;
+      };
       fn_padrao_categoria_de_custo: {
         Args: never;
         Returns: {
           categoria_financeira_id: string;
           categoria_insumo_id: string;
         }[];
-      };
-      fn_pode_ver_saldo: {
-        Args: { p_conta: string };
-        Returns: boolean;
       };
       fn_pagar_parcela: {
         Args: {
@@ -4238,6 +4487,7 @@ export type Database = {
         Args: { p_acao: string; p_tipo: string };
         Returns: boolean;
       };
+      fn_pode_ver_saldo: { Args: { p_conta: string }; Returns: boolean };
       fn_propagar_anexos: {
         Args: {
           p_de_id: string;
@@ -4264,28 +4514,13 @@ export type Database = {
         Returns: undefined;
       };
       fn_reabrir_ponto: { Args: { p_ponto: string }; Returns: undefined };
+      fn_realinhar_rateio_do_lancamento: {
+        Args: { p_lancamento_id: string };
+        Returns: undefined;
+      };
       fn_recalcular_status_lancamento: {
         Args: { p_lanc_id: string };
         Returns: undefined;
-      };
-      fn_recurso_da_entidade: { Args: { p_tipo: string }; Returns: string };
-      fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string };
-      fn_reenviar_parcela: {
-        Args: { p_observacao?: string; p_parcela_id: string };
-        Returns: undefined;
-      };
-      fn_registrar_adiantamento: { Args: { p_dados: Json }; Returns: string };
-      fn_registrar_arquivo: {
-        Args: {
-          p_entidade_id: string;
-          p_entidade_tipo: string;
-          p_hash: string;
-          p_mime: string;
-          p_nome: string;
-          p_path: string;
-          p_tamanho: number;
-        };
-        Returns: string;
       };
       fn_reclassificar_insumo: {
         Args: {
@@ -4307,6 +4542,25 @@ export type Database = {
           valor: number;
         }[];
       };
+      fn_recurso_da_entidade: { Args: { p_tipo: string }; Returns: string };
+      fn_recurso_do_cadastro: { Args: { p_tabela: string }; Returns: string };
+      fn_reenviar_parcela: {
+        Args: { p_observacao?: string; p_parcela_id: string };
+        Returns: undefined;
+      };
+      fn_registrar_adiantamento: { Args: { p_dados: Json }; Returns: string };
+      fn_registrar_arquivo: {
+        Args: {
+          p_entidade_id: string;
+          p_entidade_tipo: string;
+          p_hash: string;
+          p_mime: string;
+          p_nome: string;
+          p_path: string;
+          p_tamanho: number;
+        };
+        Returns: string;
+      };
       fn_registrar_recebimento: {
         Args: {
           p_data_recebimento: string;
@@ -4314,6 +4568,10 @@ export type Database = {
           p_oc_id: string;
           p_valor_nf: number;
         };
+        Returns: undefined;
+      };
+      fn_rejeitar_rescisao: {
+        Args: { p_motivo: string; p_rescisao: string };
         Returns: undefined;
       };
       fn_rel_aging: {
@@ -4380,6 +4638,7 @@ export type Database = {
           p_inicio?: string;
           p_sem_forma?: boolean;
           p_status?: string[];
+          p_tipos_centro?: string[];
         };
         Returns: {
           centro_custo_id: string;
@@ -4394,6 +4653,20 @@ export type Database = {
         Returns: {
           centro_custo_id: string;
           primeiro_mes: string;
+        }[];
+      };
+      fn_rel_custo_itens_oc: {
+        Args: { p_fim?: string; p_inicio?: string };
+        Returns: {
+          categoria_financeira_id: string;
+          categoria_insumo_id: string;
+          centro_custo_id: string;
+          grupo_id: string;
+          insumo_id: string;
+          item_id: string;
+          lancamento_id: string;
+          quantidade: number;
+          valor: number;
         }[];
       };
       fn_rel_custo_por_grupo: {
@@ -4468,6 +4741,16 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_rel_dre: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: {
+          categoria: string;
+          categoria_id: string;
+          natureza: string;
+          tipo: string;
+          total: number;
+        }[];
+      };
       fn_rel_emprestimos_por_contrato: {
         Args: never;
         Returns: {
@@ -4479,16 +4762,6 @@ export type Database = {
           parcelas_pagas: number;
           proximo_vencimento: string;
           tomado: number;
-        }[];
-      };
-      fn_rel_dre: {
-        Args: { p_fim: string; p_inicio: string };
-        Returns: {
-          categoria: string;
-          categoria_id: string;
-          natureza: string;
-          tipo: string;
-          total: number;
         }[];
       };
       fn_rel_fluxo_caixa: {
@@ -4562,19 +4835,46 @@ export type Database = {
           total: number;
         }[];
       };
-      fn_remover_minha_foto: {
-        Args: never;
-        // O caminho que ESTAVA na linha, para o chamador apagar o binário.
-        // `null` é resposta legítima: não havia foto. O gerador escreveria
-        // `string`, porque não sabe que a função pode devolver null.
-        Returns: string | null;
+      fn_remover_item_rescisao: {
+        Args: { p_item: string };
+        Returns: undefined;
       };
+      fn_remover_minha_foto: { Args: never; Returns: string };
       fn_reprogramar_parcela: {
         Args: {
           p_data_programada: string;
           p_motivo: string;
           p_parcela_id: string;
         };
+        Returns: undefined;
+      };
+      fn_rescisao_avos_13: {
+        Args: { p_admissao: string; p_data_fim: string };
+        Returns: number;
+      };
+      fn_rescisao_avos_ferias: {
+        Args: { p_admissao: string; p_data_fim: string };
+        Returns: number;
+      };
+      fn_rescisao_gravar_item: {
+        Args: {
+          p_calculado: number;
+          p_codigo: string;
+          p_descricao: string;
+          p_manuais: Json;
+          p_natureza: string;
+          p_ordem: number;
+          p_referencia: string;
+          p_rescisao: string;
+        };
+        Returns: undefined;
+      };
+      fn_rescisao_periodos_vencidos: {
+        Args: { p_colaborador: string; p_data_fim: string };
+        Returns: number;
+      };
+      fn_rescisao_recalcular_totais: {
+        Args: { p_rescisao: string };
         Returns: undefined;
       };
       fn_restaurar_cadastro: {
@@ -4589,23 +4889,18 @@ export type Database = {
       fn_saldos_das_contas: {
         Args: never;
         Returns: {
+          anterior_pago: number;
+          anterior_parcelas: number;
+          anterior_recebido: number;
+          aplicado: number;
           conta_bancaria_id: string;
-          // NUMERIC: o gerador escreve `number` e nisto ele mente — o PostgREST
-          // devolve NUMERIC como string em algumas rotas. Quem lê converte.
-          saldo_inicial: number;
-          saldo_inicial_data: string | null;
           entradas: number;
+          posicao_aplicacao: number;
+          resgatado: number;
           saidas: number;
           saldo: number;
-          // Os cinco abaixo vêm de LEFT JOIN: conta sem movimento anterior ao
-          // corte e sem aplicação volta com null, e null aqui é "não existe",
-          // não zero.
-          anterior_parcelas: number | null;
-          anterior_recebido: number | null;
-          anterior_pago: number | null;
-          aplicado: number | null;
-          resgatado: number | null;
-          posicao_aplicacao: number | null;
+          saldo_inicial: number;
+          saldo_inicial_data: string;
         }[];
       };
       fn_salvar_cartao_credito: {
@@ -4662,11 +4957,7 @@ export type Database = {
         };
         Returns: undefined;
       };
-      fn_salvar_minha_foto: {
-        Args: never;
-        /** O caminho GRAVADO, para o chamador conferir que é onde o binário foi posto. */
-        Returns: string;
-      };
+      fn_salvar_minha_foto: { Args: never; Returns: string };
       fn_salvar_parcelas_oc: {
         Args: { p_formas?: Json; p_oc_id: string; p_parcelas: Json };
         Returns: undefined;
@@ -4687,13 +4978,24 @@ export type Database = {
           //
           // Escrito a mao de proposito: o gerador de tipos nao sabe que a funcao
           // aceita null num parametro sem DEFAULT, e escreve `string`. Regerar
-          // este arquivo apaga esta linha -- ja aconteceu em 25/08 e 26/08/2026.
+          // este arquivo apaga esta linha -- ja aconteceu em 25/08, 26/08 e
+          // 29/08/2026.
           p_id: string | null;
           p_observacoes?: string;
           p_tarifa?: number;
           p_valor: number;
         };
         Returns: string;
+      };
+      fn_tirar_da_folha: {
+        // `p_motivo` opcional no banco (default null). Os dois ids são
+        // obrigatórios: não existe "tirar alguém" sem dizer de qual folha.
+        Args: {
+          p_colaborador_id: string;
+          p_folha_id: string;
+          p_motivo?: string | null;
+        };
+        Returns: undefined;
       };
       fn_total_da_oc: {
         Args: {
@@ -4726,6 +5028,10 @@ export type Database = {
           p_nome_exibicao?: string;
         };
         Returns: string;
+      };
+      fn_voltar_para_folha: {
+        Args: { p_colaborador_id: string; p_folha_id: string };
+        Returns: undefined;
       };
       nomes_usuarios_auditoria: {
         Args: { p_ids: string[] };
@@ -4766,12 +5072,12 @@ export type Database = {
         Args: { p_permissoes: Json; p_usuario_id: string };
         Returns: undefined;
       };
-      salvar_saldos_usuario: {
-        Args: { p_contas: string[]; p_usuario_id: string };
-        Returns: undefined;
-      };
       salvar_permissoes_perfil: {
         Args: { p_perfil_id: string; p_permissoes: Json };
+        Returns: undefined;
+      };
+      salvar_saldos_usuario: {
+        Args: { p_contas: string[]; p_usuario_id: string };
         Returns: undefined;
       };
       tabelas_auditadas: { Args: never; Returns: string[] };

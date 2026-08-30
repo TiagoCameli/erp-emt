@@ -321,6 +321,13 @@ export const RECURSOS = [
     acoes: ["ver", "criar", "editar", "aprovar", "desaprovar"],
   },
   {
+    id: "rh.rescisoes",
+    nome: "Rescisões",
+    modulo: "rh",
+    rota: "/rh/rescisoes",
+    acoes: ["ver", "criar", "editar", "excluir", "aprovar", "desaprovar"],
+  },
+  {
     id: "rh.encargos",
     nome: "Encargos da folha",
     modulo: "rh",
