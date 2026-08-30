@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   ChevronDown,
   Copy,
   FileText,
@@ -22,11 +21,13 @@ import {
   ConfirmDialog,
   KPICard,
   MoneyText,
+  PageHeader,
   StatusBadge,
   Trilha,
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { baixarBase64, MIME_PDF } from "@/lib/download";
 import {
   formatarBRL,
   formatarData,
@@ -42,6 +43,7 @@ import {
   aprovarFolha,
   desaprovarFolha,
   enviarFolhaParaAprovacao,
+  gerarResumoFolhaPdf,
   mandarFolhaParaRevisao,
   tirarDaFolha,
   voltarFolhaParaRascunho,
@@ -220,6 +222,8 @@ export function FolhaDetalheView({
         } com desconto no salário`;
 
   const [dialogEnviar, setDialogEnviar] = React.useState(false);
+  /** O PDF é gerado no servidor: sem o spinner, o botão parece não ter feito nada. */
+  const [copiandoPedido, setCopiandoPedido] = React.useState(false);
   const [drawerRegerar, setDrawerRegerar] = React.useState(false);
   const [holeriteItem, setHoleriteItem] = React.useState<FolhaItem | null>(
     null,
@@ -340,28 +344,60 @@ export function FolhaDetalheView({
    * está: uma constante mandaria o preview da Vercel para produção, e quem
    * recebesse aprovaria a folha errada.
    */
+  /**
+   * Copia a mensagem de aprovação E baixa o resumo em PDF (pedido do Tiago,
+   * 29/08/2026: "a mensagem ... também envia um pdf com um resumo de cada
+   * funcionário").
+   *
+   * Os dois numa ação só porque é uma coisa só na cabeça de quem usa: pedir a
+   * aprovação. Não dá para o PDF viajar junto na área de transferência — o
+   * WhatsApp não cola arquivo —, então ele desce como download e a pessoa anexa.
+   * O toast é quem diz isso, senão o arquivo aparece na pasta sem explicação.
+   *
+   * A ORDEM IMPORTA: o PDF primeiro. Se ele falhar, a mensagem não é copiada e o
+   * erro aparece — copiar antes deixaria a pessoa mandar o pedido achando que o
+   * anexo estava junto.
+   */
   async function aoCopiarMensagem() {
-    const texto = mensagemDeAprovacao(
-      {
-        id: folha.id,
-        competencia: folha.competencia,
-        colaboradores: folha.itens.length,
-        custoTotal: folha.custoTotal,
-        liquido: folha.valorLiquido,
-      },
-      window.location.origin,
-    );
-
+    if (copiandoPedido) return;
+    setCopiandoPedido(true);
     try {
-      await navigator.clipboard.writeText(texto);
-      toast.success("Mensagem copiada. Cole no WhatsApp de quem aprova");
-    } catch {
-      // `writeText` falha sem permissão de área de transferência (navegador
-      // antigo, http, aba sem foco). Avisar é melhor que o silêncio de um botão
-      // que parece ter funcionado.
-      toast.error(
-        "Não foi possível copiar. Verifique a permissão de área de transferência do navegador",
+      const resumo = await gerarResumoFolhaPdf(folha.id);
+      if ("erro" in resumo) {
+        toast.error(resumo.erro);
+        return;
+      }
+
+      const texto = mensagemDeAprovacao(
+        {
+          id: folha.id,
+          competencia: folha.competencia,
+          colaboradores: folha.itens.length,
+          custoTotal: folha.custoTotal,
+          liquido: folha.valorLiquido,
+        },
+        window.location.origin,
       );
+
+      try {
+        await navigator.clipboard.writeText(texto);
+      } catch {
+        // `writeText` falha sem permissão de área de transferência (navegador
+        // antigo, http, aba sem foco). Avisar é melhor que o silêncio de um
+        // botão que parece ter funcionado. O PDF já foi gerado, então o aviso
+        // diz o que sobrou de utilizável.
+        toast.error(
+          "Não foi possível copiar a mensagem. Verifique a permissão de área de transferência do navegador",
+        );
+        return;
+      }
+
+      baixarBase64(resumo.base64, resumo.nomeArquivo, MIME_PDF);
+      toast.success(
+        "Mensagem copiada e resumo baixado. Cole no WhatsApp e anexe o PDF",
+      );
+    } finally {
+      setCopiandoPedido(false);
     }
   }
 
@@ -383,8 +419,17 @@ export function FolhaDetalheView({
   const acoesDaEspera =
     folha.status === "pendente_aprovacao" ? (
       <>
-        <Button type="button" variant="outline" onClick={aoCopiarMensagem}>
-          <Copy />
+        <Button
+          type="button"
+          variant="outline"
+          disabled={copiandoPedido}
+          onClick={aoCopiarMensagem}
+        >
+          {copiandoPedido ? (
+            <LoaderCircle className="animate-spin" aria-hidden />
+          ) : (
+            <Copy />
+          )}
           Copiar pedido
         </Button>
         {podeEditar ? (
@@ -398,36 +443,29 @@ export function FolhaDetalheView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Voltar para a lista"
-            onClick={() => router.push("/rh/folha")}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-titulo font-semibold tabular-nums">
-                {formatarCompetencia(folha.competencia)}
-              </h1>
-              <StatusBadge status={info.badge} rotulo={info.rotulo} />
-            </div>
-            <p className="text-detalhe text-muted-foreground">
-              Folha gerencial · {folha.itens.length}{" "}
-              {folha.itens.length === 1 ? "colaborador" : "colaboradores"}
-              {folha.status === "aprovado" && folha.aprovadoEm
-                ? ` · aprovada em ${formatarDataHora(folha.aprovadoEm)}${
-                    folha.aprovadoPorNome ? ` por ${folha.aprovadoPorNome}` : ""
-                  }`
-                : ""}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        className="mb-0"
+        modulo="RH · Folha"
+        titulo={
+          <span className="tabular-nums">
+            {formatarCompetencia(folha.competencia)}
+          </span>
+        }
+        descricao={
+          <>
+            Folha gerencial · {folha.itens.length}{" "}
+            {folha.itens.length === 1 ? "colaborador" : "colaboradores"}
+            {folha.status === "aprovado" && folha.aprovadoEm
+              ? ` · aprovada em ${formatarDataHora(folha.aprovadoEm)}${
+                  folha.aprovadoPorNome ? ` por ${folha.aprovadoPorNome}` : ""
+                }`
+              : ""}
+          </>
+        }
+        voltarPara={{ rota: "/rh/folha", rotulo: "Voltar para as folhas" }}
+        selos={<StatusBadge status={info.badge} rotulo={info.rotulo} />}
+        acoes={
+          <>
           {podeCriar && rascunho ? (
             <Button
               type="button"
@@ -449,8 +487,9 @@ export function FolhaDetalheView({
             </Button>
           ) : null}
           <BotaoPlanilha folhaId={folha.id} />
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/*
         Antes da ApprovalBar de propósito: quem vai aprovar precisa ver para

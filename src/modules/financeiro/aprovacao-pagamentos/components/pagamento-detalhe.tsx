@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   Check,
   ClipboardCopy,
   ExternalLink,
@@ -19,6 +18,7 @@ import {
   CelulaVazia,
   ConfirmDialog,
   MoneyText,
+  PageHeader,
   StatusBadge,
   Trilha,
   type EventoTrilha,
@@ -258,62 +258,52 @@ export function PagamentoDetalheView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Voltar para a fila de aprovação"
-            onClick={voltarParaFila}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <p className="text-legenda tracking-wide text-muted-foreground uppercase">
-              Financeiro · Aprovação de pagamentos
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-titulo font-semibold">
-                <span className="codigo-doc">{titulo}</span>
-              </h1>
-              {infoParcela ? (
-                <StatusBadge
-                  status={infoParcela.badge}
-                  rotulo={infoParcela.rotulo}
-                />
-              ) : null}
-              {semNota ? (
-                <StatusBadge status="pendente_aprovacao" rotulo="Sem nota" />
-              ) : null}
-            </div>
-            <p className="text-detalhe text-muted-foreground">
-              {lancamento.fornecedorNome ?? "Sem fornecedor"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Vale em QUALQUER status, igual à fila e a lancamentos. A
-              proteção não sumiu, mudou de camada: quem garante que o papel não
-              afirma pagamento inexistente é a página do espelho
-              (src/app/(espelho)/espelho/pagamentos/page.tsx), que degrada
-              sozinha quando a parcela não tem status 'pago' — o documento sai
-              intitulado "Parcela" em vez de "Pagamento", e "Saiu da conta" e
-              "Pago em" saem como travessão. A guarda mora lá porque o link é
-              colável: guarda que só existe no botão não é guarda. */}
-          <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void copiarMensagem()}
-          >
-            <ClipboardCopy />
-            Copiar mensagem de aprovação
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        className="mb-0"
+        modulo="Financeiro · Aprovação de pagamentos"
+        titulo={titulo}
+        tituloMono
+        descricao={lancamento.fornecedorNome ?? "Sem fornecedor"}
+        voltarPara={{
+          rota: ROTA_FILA,
+          rotulo: "Voltar para a fila de aprovação",
+        }}
+        selos={
+          <>
+            {infoParcela ? (
+              <StatusBadge
+                status={infoParcela.badge}
+                rotulo={infoParcela.rotulo}
+              />
+            ) : null}
+            {semNota ? (
+              <StatusBadge status="pendente_aprovacao" rotulo="Sem nota" />
+            ) : null}
+          </>
+        }
+        acoes={
+          <>
+            {/* Vale em QUALQUER status, igual à fila e a lancamentos. A
+                proteção não sumiu, mudou de camada: quem garante que o papel não
+                afirma pagamento inexistente é a página do espelho
+                (src/app/(espelho)/espelho/pagamentos/page.tsx), que degrada
+                sozinha quando a parcela não tem status 'pago' — o documento sai
+                intitulado "Parcela" em vez de "Pagamento", e "Saiu da conta" e
+                "Pago em" saem como travessão. A guarda mora lá porque o link é
+                colável: guarda que só existe no botão não é guarda. */}
+            <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void copiarMensagem()}
+            >
+              <ClipboardCopy />
+              Copiar mensagem de aprovação
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="flex flex-col gap-4 lg:col-span-2">

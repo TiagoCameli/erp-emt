@@ -306,6 +306,7 @@ export function OcorrenciasTabela({
         ]}
         emptyState={
           <EmptyState
+            className="border-none bg-transparent"
             icone={ClipboardList}
             titulo="Nenhuma ocorrência encontrada"
             descricao="Registre ausências e ocorrências por colaborador: advertências, suspensões, atestados, acidentes, elogios e outros."

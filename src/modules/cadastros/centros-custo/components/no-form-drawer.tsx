@@ -47,6 +47,28 @@ function lerOrcamento(texto: string): number | undefined {
 }
 
 /**
+ * Valores com que os campos nascem para um dado modo de abertura. Função pura
+ * porque serve a duas coisas: preencher os campos ao abrir e, comparada com o
+ * estado atual, dizer se a pessoa mexeu em algo (este drawer não usa React Hook
+ * Form, então não há `formState.isDirty` para consultar).
+ */
+function valoresIniciais(modo: ModoNo | null): {
+  nome: string;
+  codigo: string;
+  orcamento: string;
+} {
+  if (modo?.tipo !== "editar") return { nome: "", codigo: "", orcamento: "" };
+  return {
+    nome: modo.no.nome,
+    codigo: modo.no.codigo ?? "",
+    orcamento:
+      modo.no.orcamento === null
+        ? ""
+        : String(modo.no.orcamento).replace(".", ","),
+  };
+}
+
+/**
  * Drawer único para criar etapa, criar item e editar nó. Em nó gerido pelo
  * sistema (sistema=true ou equipamento), o nome e o código ficam travados e só
  * o orçamento é editável.
@@ -82,19 +104,10 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
     setUltimaAbertura(chaveAbertura);
     setErroNome(null);
     setErroOrcamento(null);
-    if (modo!.tipo === "editar") {
-      setNome(modo!.no.nome);
-      setCodigo(modo!.no.codigo ?? "");
-      setOrcamento(
-        modo!.no.orcamento === null
-          ? ""
-          : String(modo!.no.orcamento).replace(".", ","),
-      );
-    } else {
-      setNome("");
-      setCodigo("");
-      setOrcamento("");
-    }
+    const iniciais = valoresIniciais(modo);
+    setNome(iniciais.nome);
+    setCodigo(iniciais.codigo);
+    setOrcamento(iniciais.orcamento);
   } else if (chaveAbertura === null && ultimaAbertura !== null) {
     setUltimaAbertura(null);
   }
@@ -191,12 +204,21 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
 
   const nomeTravado = editando && geridoSistema;
 
+  // Substitui o `formState.isDirty` do React Hook Form, que este drawer não tem:
+  // compara os campos com o valor que eles ganharam ao abrir.
+  const iniciais = valoresIniciais(modo);
+  const alterado =
+    nome !== iniciais.nome ||
+    codigo !== iniciais.codigo ||
+    orcamento !== iniciais.orcamento;
+
   return (
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={titulo()}
       descricao={descricao()}
+      temAlteracoesNaoSalvas={alterado && !salvando}
       rodape={
         <>
           <Button

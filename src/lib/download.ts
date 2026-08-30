@@ -13,6 +13,12 @@
 export const MIME_XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+/**
+ * MIME de PDF. Precisa ser passado explicitamente: o default de `baixarBase64` é
+ * xlsx, e um PDF baixado com MIME de planilha abre no Excel em vez do leitor.
+ */
+export const MIME_PDF = "application/pdf";
+
 /** Converte o base64 da Server Action num Blob. Só roda no navegador (atob). */
 function base64ParaBlob(base64: string, mime: string): Blob {
   const binario = atob(base64);

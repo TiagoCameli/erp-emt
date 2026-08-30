@@ -416,6 +416,7 @@ export function CategoriasTabela({
           // filtrada em "Ativos"), não plano de contas vazio.
           categorias.length > 0 ? (
             <EmptyState
+              className="border-none bg-transparent"
               icone={Filter}
               titulo="Nenhuma categoria com esses filtros"
               descricao="Existem categorias cadastradas, mas nenhuma bate com os filtros escolhidos."

@@ -19,7 +19,7 @@ import {
  * do lado da receita). São dois parâmetros, e não um só com tudo dentro, porque
  * eles significam coisas diferentes: a raiz é o conjunto, a etapa é o recorte —
  * e quem lê a URL precisa saber qual é qual para o segundo campo abrir marcado.
- * A tradução dos dois numa lista só para o banco é de `centros-e-etapas.ts`.
+ * A tradução dos dois numa lista só para o banco é de `_shared/centro-custo/filtro.ts`.
  *
  * ## O tempo entra como UMA lista de meses
  *
@@ -63,7 +63,7 @@ export interface FiltrosCustoReceita {
   /**
    * Etapas escolhidas dentro dos centros do custo. Vazio = o centro inteiro.
    *
-   * Escolher etapa RECORTA a raiz, não soma a ela: ver `centros-e-etapas.ts`, que
+   * Escolher etapa RECORTA a raiz, não soma a ela: ver `_shared/centro-custo/filtro.ts`, que
    * é quem traduz os dois campos numa lista só para o banco. A validação de a
    * quem cada etapa pertence mora lá, porque depende do cadastro e esta leitura é
    * pura — aqui só se garante que são uuids.

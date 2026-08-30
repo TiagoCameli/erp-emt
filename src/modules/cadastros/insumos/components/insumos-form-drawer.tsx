@@ -110,6 +110,7 @@ export function InsumosFormDrawer({
       onAbertoChange={aoMudarAberto}
       titulo={editando ? "Editar insumo" : "Novo insumo"}
       descricao="Escolha o grupo e a subcategoria dentro dele. É a subcategoria que diz em qual categoria de custo a compra deste insumo entra no DRE"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

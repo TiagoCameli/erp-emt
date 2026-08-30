@@ -1,10 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, TriangleAlert } from "lucide-react";
+import { Pencil, TriangleAlert } from "lucide-react";
 
-import { MoneyText, StatusBadge } from "@/components/canonicos";
+import { MoneyText, PageHeader, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
@@ -50,47 +49,40 @@ export function ExtratoContaCabecalho({
   fechaNoSaldo,
   podeEditar,
 }: ExtratoContaCabecalhoProps) {
-  const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Voltar para as contas bancárias"
-            onClick={() => router.push("/financeiro/contas-bancarias")}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <p className="text-legenda font-medium uppercase tracking-wide text-muted-foreground">
-              Financeiro · Extrato da conta
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-titulo font-semibold">{conta.nome}</h1>
-              {conta.ativo ? (
-                <StatusBadge status="aprovado" rotulo="Ativa" />
-              ) : (
-                <StatusBadge status="rascunho" rotulo="Inativa" />
-              )}
-            </div>
-            <p className="text-detalhe text-muted-foreground">
-              {identificacao(conta)}
-            </p>
-          </div>
-        </div>
-
-        {podeEditar ? (
-          <Button type="button" variant="outline" size="sm" onClick={() => setAberto(true)}>
-            <Pencil />
-            Editar conta
-          </Button>
-        ) : null}
-      </div>
+      <PageHeader
+        className="mb-0"
+        modulo="Financeiro · Extrato da conta"
+        titulo={conta.nome}
+        descricao={identificacao(conta)}
+        voltarPara={{
+          rota: "/financeiro/contas-bancarias",
+          rotulo: "Voltar para as contas bancárias",
+        }}
+        selos={
+          conta.ativo ? (
+            <StatusBadge status="aprovado" rotulo="Ativa" />
+          ) : (
+            <StatusBadge status="rascunho" rotulo="Inativa" />
+          )
+        }
+        acoes={
+          podeEditar ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAberto(true)}
+            >
+              <Pencil />
+              Editar conta
+            </Button>
+          ) : null
+        }
+      />
 
       {/*
         LINHA DE CONTROLE, na tela.

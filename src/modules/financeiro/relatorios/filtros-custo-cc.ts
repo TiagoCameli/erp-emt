@@ -81,7 +81,7 @@ export interface FiltrosCustoCc {
    * Vive em parâmetro PRÓPRIO (`etapa`) e não misturada no `centro` porque as
    * duas coisas significam diferente: a raiz é o conjunto e a etapa é o recorte
    * dentro dele. Escolher etapa substitui a raiz na consulta — a tradução é de
-   * `centros-e-etapas.ts`, que é quem conhece o cadastro; esta leitura é pura e
+   * `_shared/centro-custo/filtro.ts`, que é quem conhece o cadastro; esta leitura é pura e
    * só garante que são uuids.
    */
   etapaIds: string[];

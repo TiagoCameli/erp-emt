@@ -6,6 +6,7 @@ import { CalendarClock, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroBusca,
@@ -72,6 +73,10 @@ export function CondicoesTabela({
 
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<CondicaoLista | null>(null);
+  // Desativar aqui é caminho de mão única: o menu da linha não oferece
+  // "Reativar", então o clique errado não tem desfazer pela tela. Todas as
+  // outras telas de cadastro confirmam antes; esta era a exceção.
+  const [aDesativar, setADesativar] = React.useState<CondicaoLista | null>(null);
 
   function abrirNova() {
     setEmEdicao(null);
@@ -83,12 +88,14 @@ export function CondicoesTabela({
     setDrawerAberto(true);
   }
 
-  async function aoDesativar(condicao: CondicaoLista) {
-    const resultado = await desativarCondicao(condicao.id);
+  async function aoDesativar() {
+    if (!aDesativar) return;
+    const resultado = await desativarCondicao(aDesativar.id);
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
+    setADesativar(null);
     toast.success("Condição de pagamento desativada");
   }
 
@@ -190,9 +197,8 @@ export function CondicoesTabela({
               </DropdownMenuItem>
               {condicao.ativo ? (
                 <DropdownMenuItem
-                  onSelect={() => {
-                    void aoDesativar(condicao);
-                  }}
+                  variant="destructive"
+                  onSelect={() => setADesativar(condicao)}
                 >
                   Desativar
                 </DropdownMenuItem>
@@ -318,6 +324,22 @@ export function CondicoesTabela({
           condicao={emEdicao}
         />
       ) : null}
+
+      <ConfirmDialog
+        aberto={aDesativar !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setADesativar(null);
+        }}
+        titulo="Desativar condição de pagamento"
+        descricao={
+          aDesativar
+            ? `"${aDesativar.descricao}" deixa de aparecer nas cotações, ordens de compra e lançamentos novos. Os documentos que já a usam não mudam.`
+            : ""
+        }
+        textoConfirmar="Desativar"
+        variante="destrutivo"
+        onConfirmar={aoDesativar}
+      />
     </>
   );
 }

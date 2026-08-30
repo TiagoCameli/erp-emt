@@ -3478,3 +3478,116 @@ servidor: com o filtro em múltipla escolha, as duas pontas têm de responder o 
 
 **Fica pendente:** fornecedor continua de escolha única na Fila de aprovação, em Pagamentos diretos
 e em Programados. O #184 não as tocou e este commit também não.
+
+## 2026-08-29 - Rescisão: quem declara a regra trabalhista é o Tiago
+
+**Contexto:** Pedido de "gerar rescisão de um funcionário e já gera a rescisão desse funcionário e desliga ele da empresa". Rescisão é o Bloco 9 do programa de RH, e a regra de ouro do Grupo B é que o Tiago fornece a regra fiscal/trabalhista — eu construo o mecanismo. Perguntado de onde sai o valor, ele respondeu: "ERP calcula mas eu posso editar todos os valores".
+
+**Decisão:** A matriz de verbas por tipo é **declaração dele**, capturada numa pergunta em que cada opção trazia escrito o que implica, e travada em `src/modules/rh/rescisoes/formato.test.ts`:
+
+| tipo | aviso | 13º prop | férias venc + 1/3 | férias prop + 1/3 | multa FGTS |
+|---|---|---|---|---|---|
+| sem_justa_causa | indenizado ou trabalhado | sim | sim | sim | sim |
+| pedido_demissao | desconto se não cumprir (só dias base) | sim | sim | sim | não |
+| termino_experiencia | não há | sim | sim | sim | não |
+| justa_causa | não há | não | sim | não | não |
+
+**Consequência:** Alterar a matriz passa a quebrar um teste, o que força a mudança a ser deliberada. Os parâmetros numéricos (30 dias de aviso, +3 por ano, teto 90, multa 40%) viraram colunas de `folha_parametros`, editáveis em RH > Parâmetros da folha.
+
+## 2026-08-29 - O que a rescisão NÃO calcula, e por quê
+
+**Contexto:** "ERP calcula" esbarra em quatro coisas que o ERP não tem como saber.
+
+**Decisão:** Nascem zeradas e editáveis, com a tela dizendo o motivo:
+
+- **INSS e IRRF.** `folha_inss_faixas` e `folha_irrf_faixas` estão com zero linha desde julho/2026, e quais verbas de rescisão são tributadas é regra fiscal que ninguém declarou. Um cálculo sobre tabela vazia daria zero com aparência de conta feita.
+- **Férias vencidas.** `rh_ferias` está vazia; um cálculo automático diria 16 períodos aquisitivos para quem entrou em 2010. `fn_rescisao_periodos_vencidos` existe como PISTA para a tela e não alimenta a conta. Teto de 5 no schema para o erro de digitação parar com mensagem em vez de virar pagamento.
+- **Saldo do FGTS.** Vive na Caixa. Informado por quem monta a rescisão; o percentual aplica em cima e a referência registra sobre qual base.
+- **Adiantamento em aberto.** A rescisão não desconta: a folha da competência ainda vai descontar o que couber, e um segundo caminho de desconto pagaria o mesmo dinheiro duas vezes. A tela mostra o saldo e oferece acrescentar uma verba.
+
+**Consequência:** Quando as faixas de imposto forem cadastradas, ligar o cálculo de INSS/IRRF é uma migration pequena. Até lá o documento é conferido contra o TRCT do contador, que é o que já acontecia.
+
+## 2026-08-29 - A folha passou a pagar proporcional aos dias trabalhados
+
+**Contexto:** Com a rescisão, era preciso decidir se quem sai dia 15 aparece na folha daquele mês. O Tiago escolheu, entre três desenhos: entra proporcional, e a rescisão não repete saldo de salário. Um valor, um lugar.
+
+**Decisão:** `fn_gerar_folha` passou a proporcionalizar salário base e gratificação por `fn_folha_avos_do_mes(admissao, demissao, competencia)`.
+
+- **30 avos sempre para mês inteiro**, tenha o mês 28, 30 ou 31 dias. Dividir pelos dias reais faria o mesmo dia de trabalho valer 1/31 em janeiro e 1/28 em fevereiro.
+- **Sem admissão E sem demissão devolve 30**, e a função nem chama o `round` nesse caso. 38 dos 59 colaboradores ativos estão sem `data_admissao`: tratar "não sei" como "não trabalhou" zeraria dois terços da folha.
+- **Diarista fica de fora**: o mês dele já é a soma das diárias, proporcional por construção.
+- A **edição manual continua mandando**, porque é reaplicada depois.
+
+**Consequência:** A mudança atravessa quem nunca vai ser demitido — quem é ADMITIDO no meio do mês também deixou de receber mês cheio. Corrigir só a demissão deixaria a folha proporcional apenas na metade em que ela tira dinheiro de alguém. `folha_itens.dias_trabalhados` guarda os avos que o item pagou, para uma folha aprovada não se explicar com número diferente do que pagou se alguém corrigir a data de admissão depois.
+
+## 2026-08-29 - `data_demissao` e `ativo` são colunas independentes
+
+**Contexto:** Desligar alguém era desmarcar `ativo`. O sistema esquecia quando e por quê — as duas informações de que a rescisão precisa.
+
+**Decisão:** `colaboradores` ganhou `data_demissao`, `motivo_desligamento` e `tipo_rescisao`, sem CHECK amarrando com `ativo`. Aviso prévio trabalhado tem data no futuro com a pessoa ainda ativa, e um cadastro pode ser desativado por engano sem nunca ter tido demissão; um CHECK transformaria os dois casos legítimos em erro de banco.
+
+**Consequência:** O WHERE do loop da folha ganhou uma perna — `c.ativo OR (c.data_demissao >= inicio_da_competencia)` — para o desligado continuar entrando na folha do mês em que saiu. Sem ela, `ativo = false` o tiraria da própria folha que tem de pagar os dias que ele trabalhou.
+
+## 2026-08-29 - Aprovar a rescisão desliga e gera a conta a pagar, na mesma transação
+
+**Contexto:** O pedido descreve as três coisas juntas ("gera a rescisão e desliga ele da empresa"), e o pagamento é consequência das duas.
+
+**Decisão:** `fn_aprovar_rescisao` muda o status, escreve `ativo=false` + data + tipo + motivo no colaborador, e cria o lançamento `origem='rescisao'` com parcela e rateio — tudo numa transação. `fn_desaprovar_rescisao` desfaz as três, recusando se a parcela já foi paga ou conciliada (mesmo lock `for update of pa` da `fn_desaprovar_folha`).
+
+**Consequência:** Não existe estado intermediário — rescisão aprovada com a pessoa ainda ativa, ou pessoa desligada sem ninguém devendo o acerto a ela. `lancamentos.origem` aceita `'rescisao'`.
+
+## 2026-08-29 - As verbas da rescisão são linhas, não colunas
+
+**Contexto:** "Posso editar todos os valores" inclui zerar uma verba que não se aplica e acrescentar uma que o contador mandou.
+
+**Decisão:** `rh_rescisao_itens`, com `codigo` preenchido nas verbas calculadas e nulo nas acrescentadas à mão. Regerar apaga e reconstrói, preservando por snapshot o valor digitado (chave `codigo`) e recolocando as linhas livres. Verba calculada não é removível, só zerada.
+
+**Consequência:** Verba nova não é migration. Apagar uma calculada seria armadilha — ela voltaria no próximo Recalcular e quem apagou não ficaria sabendo; por isso a RPC recusa e manda zerar. O mecanismo do snapshot é o mesmo de `fn_gerar_folha`, pelo mesmo motivo.
+
+## 30/08/2026 — Filtro de centro de custo é escada em todo o app, com UMA chave na URL nas listagens
+
+O dono, sobre o filtro de Lançamentos: "não deve aparecer as etapas individuais no filtro e sim o cc;
+se o cc selecionado tiver etapas aparece um outro filtro de etapas ao lado, corrija isso".
+
+**O diagnóstico que o print não mostrava.** A lista tinha 102 opções misturando 12 raízes com 64
+equipamentos e 26 empréstimos. Mas o pior era "Bobcat S450 - 02" aparecendo **duas vezes**: não é
+duplicata de cadastro, é a mesma máquina com etapa na Manutenção E na Aquisição de Equipamentos,
+criada por mim em 28/08. Achatar a hierarquia apagava justamente o que distinguia as duas. São 14
+máquinas nessa situação.
+
+A escada já existia desde 27/08 nos relatórios (`relatorios/centros-e-etapas.ts`) e desde sempre no
+formulário de rateio. O módulo puro foi para `_shared/centro-custo/filtro.ts` e passou a valer em
+Lançamentos, Pagamentos (as duas abas) e no painel de Gestão.
+
+**A decisão estrutural: uma chave na URL, não duas.** Os relatórios guardam o par em `centro=` e
+`etapa=`. As listagens continuam com `centro=` sozinho, guardando a lista EFETIVA, e os dois campos
+são uma VISTA dela (`separarRaizesEEtapas` é o contrário de `centrosEfetivos`).
+
+Não é economia de parâmetro. **O drill dos relatórios já manda a etapa dentro de `centro=`**
+(`relatorios/drill.ts`), e uma chave nova faria esses cliques mostrarem um id de equipamento no
+campo das raízes. Com a vista, todo link já compartilhado continua abrindo o mesmo conjunto e
+nenhuma consulta do servidor mudou. O teste de ida e volta cobre os oito formatos que a URL aceita,
+inclusive id fora do cadastro — que vira RAIZ em vez de sumir, senão a tela devolveria mais linhas
+do que o link pediu, calada.
+
+**O segundo campo entra visível, nunca `ocultoPorPadrao`.** Ele aparece por causa de uma escolha que
+a pessoa acabou de fazer no campo ao lado; mandá-la ao menu "Filtros" para revelar o campo que ela
+provocou seria esconder a resposta.
+
+**Provado no navegador, não só no Vitest.** Abrir `?centro=<bobcat>` mostra Manutenção + "Bobcat
+MC110C - 01" com 7 lançamentos e R$ 11.841,00; marcar um segundo equipamento grava as DUAS etapas
+sem a raiz; desmarcar a raiz apaga as órfãs e some com o campo na mesma navegação.
+
+**O mesmo bug achado duas vezes, por dois caminhos.** Testando o painel filtrado por equipamento, o
+cartão "Custo por centro de custo" veio como traço: `fn_rel_custo_centro_custo` recebe
+`p_centros uuid[]` e o painel mandava `p_centro_custo` singular. Corrigi no meu branch — e o merge
+com a main mostrou que **outra frente já tinha corrigido em 28/08**, com diagnóstico melhor: o nome
+antigo só ia junto quando havia filtro escolhido, porque o supabase-js OMITE chave `undefined` do
+corpo, então sem filtro o PostgREST resolvia pelos defaults e ninguém via nada. Ficou o comentário
+deles. Vale como lembrete de que `supabase.rpc` aceita chave que não existe na assinatura sem o
+`tsc` reclamar, e de que dois branches longos acham a mesma coisa em paralelo.
+
+**Fica pendente:** o React Compiler recusa preservar `useMemo` apoiado em valor desestruturado de
+chamada (`raizId`) e desliga a otimização do componente inteiro. Em `painel-filtros.tsx` tirei os
+dois `useMemo` e deixei o compilador memoizar — são 64 etapas num filtro que só re-renderiza quando
+a URL muda.

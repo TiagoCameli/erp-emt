@@ -379,6 +379,7 @@ export function EpisTabela({
         ]}
         emptyState={
           <EmptyState
+            className="border-none bg-transparent"
             icone={HardHat}
             titulo="Nenhum EPI encontrado"
             descricao="Registre a entrega de EPIs por colaborador, com CA, quantidade e o termo assinado."

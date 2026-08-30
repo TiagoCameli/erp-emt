@@ -18,14 +18,27 @@ import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { CLASSE_COR_GRUPO } from "@/modules/cadastros/_shared/insumo-grupos";
 import { insumosDaSubcategoria } from "@/modules/financeiro/relatorios/actions";
-import { drillGrupoInsumo } from "@/modules/financeiro/relatorios/drill";
+import {
+  drillGrupoInsumo,
+  type PeriodoCompetencia,
+  type RecorteCustoGrupo,
+} from "@/modules/financeiro/relatorios/drill";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { CustoPorGrupo } from "@/modules/financeiro/relatorios/queries";
 
 export interface CustoGrupoTabelaProps {
   custo: CustoPorGrupo;
-  /** Mês de referência (yyyy-MM), repassado ao carregar o nível de insumo. */
-  mes: string;
+  /**
+   * O período do relatório, repassado ao carregar o nível de insumo e no link do
+   * drill. Não é mais um mês: a tela oferece mês, janela e tudo.
+   */
+  periodo: PeriodoCompetencia;
+  /**
+   * Centro e categoria escolhidos. Descem junto para o nível de insumo e para o
+   * drill — sem eles, abrir uma subcategoria de R$ 12 mil listaria insumos de
+   * todos os centros, e o filho não fecharia com o pai.
+   */
+  recorte: RecorteCustoGrupo;
   /** Sem permissão de ver lançamentos, o grupo não vira link (daria 404). */
   podeVerLancamentos: boolean;
 }
@@ -39,13 +52,13 @@ interface LinhaInsumo {
 const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
 
 /**
- * Percentual que a linha representa no total do mês, na mesma casa decimal nos
- * três níveis.
+ * Percentual que a linha representa no total do período, na mesma casa decimal
+ * nos três níveis.
  *
  * Uma casa, e não as duas do `formatarPercentual`, porque a coluna existe para
- * ordenar de olho ("este grupo é um terço do mês"), não para conferir conta.
+ * ordenar de olho ("este grupo é um terço do período"), não para conferir conta.
  */
-function PercentualDoMes({ valor, total }: { valor: number; total: number }) {
+function PercentualDoTotal({ valor, total }: { valor: number; total: number }) {
   const percentual = total === 0 ? 0 : (valor / total) * 100;
   return (
     <>
@@ -74,7 +87,8 @@ function PercentualDoMes({ valor, total }: { valor: number; total: number }) {
  */
 export function CustoGrupoTabela({
   custo,
-  mes,
+  periodo,
+  recorte,
   podeVerLancamentos,
 }: CustoGrupoTabelaProps) {
   const [gruposAbertos, setGruposAbertos] = React.useState<Set<string>>(
@@ -108,7 +122,11 @@ export function CustoGrupoTabela({
     if (aberta || insumos[categoriaId]) return;
 
     setCarregando(categoriaId);
-    const resultado = await insumosDaSubcategoria(categoriaId, mes);
+    const resultado = await insumosDaSubcategoria(
+      categoriaId,
+      periodo,
+      recorte.centroCustoId,
+    );
     setCarregando(null);
 
     if ("erro" in resultado) {
@@ -137,12 +155,12 @@ export function CustoGrupoTabela({
             </TableHead>
             <TableHead
               className={cn(CABECALHO, "w-32 text-right")}
-              title="Quantidade consumida no mês, na unidade de cada insumo. Só a linha de insumo tem uma unidade só."
+              title="Quantidade consumida no período, na unidade de cada insumo. Só a linha de insumo tem uma unidade só."
             >
               Quantidade
             </TableHead>
             <TableHead className={cn(CABECALHO, "w-28 text-right")}>
-              % do mês
+              % do total
             </TableHead>
             <TableHead className={cn(CABECALHO, "w-40 text-right")}>
               Custo
@@ -187,9 +205,10 @@ export function CustoGrupoTabela({
                         <LinkDrill
                           href={drillGrupoInsumo({
                             grupoId: null,
-                            periodo: { mes },
+                            periodo,
+                            recorte,
                           })}
-                          titulo={`Ver os lançamentos de ${grupo.nome} neste mês`}
+                          titulo={`Ver os lançamentos de ${grupo.nome} neste recorte`}
                           className={cn(
                             "rounded-md px-2 py-0.5 text-legenda font-medium",
                             CLASSE_COR_GRUPO[grupo.cor],
@@ -216,7 +235,7 @@ export function CustoGrupoTabela({
                     <CelulaVazia />
                   </TableCell>
                   <TableCell className="py-2 text-right text-detalhe tabular-nums text-muted-foreground">
-                    <PercentualDoMes valor={grupo.valor} total={custo.total} />
+                    <PercentualDoTotal valor={grupo.valor} total={custo.total} />
                   </TableCell>
                   <TableCell className="py-2 text-right">
                     <MoneyText
@@ -263,7 +282,7 @@ export function CustoGrupoTabela({
                               <CelulaVazia />
                             </TableCell>
                             <TableCell className="py-1.5 text-right text-detalhe tabular-nums text-muted-foreground">
-                              <PercentualDoMes
+                              <PercentualDoTotal
                                 valor={sub.valor}
                                 total={custo.total}
                               />
@@ -286,7 +305,7 @@ export function CustoGrupoTabela({
                                     {formatarQuantidade(insumo.quantidade)}
                                   </TableCell>
                                   <TableCell className="py-1.5 text-right text-detalhe tabular-nums text-muted-foreground">
-                                    <PercentualDoMes
+                                    <PercentualDoTotal
                                       valor={insumo.valor}
                                       total={custo.total}
                                     />
@@ -310,7 +329,7 @@ export function CustoGrupoTabela({
 
           <TableRow className="border-t-2 bg-surface hover:bg-surface">
             <TableCell className="py-2 text-detalhe font-semibold text-foreground">
-              Total do mês
+              Total do período
             </TableCell>
             <TableCell className="py-2 text-right text-detalhe">
               <CelulaVazia />

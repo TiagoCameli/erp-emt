@@ -75,7 +75,9 @@ export function ImportarCadastro({
 
   return (
     <>
-      <Button variant="outline" onClick={() => setAberto(true)}>
+      {/* `sm` porque este botão fica lado a lado com o "Novo ..." de cada
+          cadastro, que é `sm`: sem isso ele sai 4px mais alto que o vizinho. */}
+      <Button variant="outline" size="sm" onClick={() => setAberto(true)}>
         <Upload />
         Importar planilha
       </Button>

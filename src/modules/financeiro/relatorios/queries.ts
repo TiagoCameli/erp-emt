@@ -18,11 +18,15 @@ import {
   type Creditos,
 } from "@/modules/financeiro/relatorios/creditos";
 import {
+  dentroDaJanela,
+  type JanelaFluxo,
+} from "@/modules/financeiro/relatorios/filtros-fluxo-caixa";
+import type { RecorteCustoGrupo } from "@/modules/financeiro/relatorios/drill";
+import {
   agregarAging,
   agruparDrePorNatureza,
   paraCentavos,
   paraReais,
-  proximoMes,
   rotuloMes,
   somarPorCategoria,
   totalAging,
@@ -103,8 +107,16 @@ interface AcumuladorFluxo {
  * em que o dinheiro de fato se moveu (data_pagamento), refletindo a posição de
  * caixa; o projetado (pendentes/aprovadas) entra no mês de vencimento, pois é
  * quando deve ocorrer. Parcelas canceladas ficam de fora.
+ *
+ * A JANELA É APLICADA AQUI, e não no componente do gráfico, de propósito.
+ * `fn_rel_fluxo_caixa()` não recebe parâmetro e devolve todo mês em que existe
+ * parcela — pelo vencimento, então as prestações dos financiamentos empurram o
+ * eixo até 05/2031 (78 meses, medido em 29/08/2026). Como ela já devolve agregado
+ * (98 linhas), cortar antes de somar custa um `filter` e faz os quatro cartões, a
+ * contagem de meses e o gráfico falarem da MESMA janela; cortar só no desenho
+ * deixaria os cartões somando 2031 embaixo de um gráfico que para em 2027.
  */
-export async function fluxoCaixa(): Promise<FluxoCaixa> {
+export async function fluxoCaixa(janela?: JanelaFluxo): Promise<FluxoCaixa> {
   const supabase = await createClient();
 
   // Agregado no banco: uma linha por mês/tipo/realizado (a regra do mês do
@@ -118,6 +130,7 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
   const porMes = new Map<string, AcumuladorFluxo>();
 
   for (const linha of data ?? []) {
+    if (janela && !dentroDaJanela(linha.mes, janela)) continue;
     const centavos = paraCentavos(linha.total);
     const ehEntrada = linha.tipo === "a_receber";
 
@@ -183,7 +196,6 @@ export async function fluxoCaixa(): Promise<FluxoCaixa> {
 // =====================================================================
 
 export interface DreGerencial {
-  mes: string;
   /** A obra: medição, custo, despesa. É o resultado que o Tiago administra. */
   operacional: BlocoDre;
   /** Juros ganhos, tarifa, IOF. É resultado, mas não é da obra. */
@@ -198,15 +210,25 @@ export interface DreGerencial {
   resultado: number;
 }
 
-interface OpcaoMesParam {
-  mes: string;
+/**
+ * As duas pontas da janela de competência, `[inicio, fim)` — fim EXCLUSIVO.
+ *
+ * As duas são OBRIGATÓRIAS, e isso não é rigor à toa: a `fn_rel_dre` não tem
+ * `default` nem guarda de nulo (`l.mes_competencia >= date_trunc('month',
+ * p_inicio)` com nulo dá NULL, que filtra tudo fora), então mandar uma ponta
+ * aberta devolveria um DRE vazio como se o período não tivesse lançamento. Quem
+ * quer "tudo" fecha as pontas nos meses que existem, com `periodoFechado`.
+ */
+interface JanelaCompetencia {
+  inicio: string;
+  fim: string;
 }
 
 /**
- * DRE gerencial do mês (competência): receitas (a_receber) e despesas
+ * DRE gerencial do período (competência): receitas (a_receber) e despesas
  * (a_pagar) somadas por categoria_financeira, com totais e resultado. Usa o
  * valor do lançamento (regime de competência), não das parcelas. Lançamentos
- * cancelados ficam de fora. `mes` no formato "YYYY-MM".
+ * cancelados ficam de fora.
  *
  * TRÊS BLOCOS, e é o ponto todo desta função: `fn_rel_dre` devolve a NATUREZA
  * da categoria, e a natureza decide em qual bloco a linha cai. Enquanto o DRE
@@ -226,14 +248,12 @@ interface OpcaoMesParam {
  * comportamento da função.
  */
 export async function dreGerencial({
-  mes,
-}: OpcaoMesParam): Promise<DreGerencial> {
+  inicio,
+  fim,
+}: JanelaCompetencia): Promise<DreGerencial> {
   const supabase = await createClient();
 
-  const inicio = `${mes}-01`;
-  const fim = proximoMes(mes);
-
-  // Agregado no banco: uma linha por tipo/categoria do mês, pelo MÊS DE
+  // Agregado no banco: uma linha por tipo/categoria do período, pelo MÊS DE
   // REFERÊNCIA do lançamento (regime de competência; ver fn_rel_dre).
   const { data, error } = await supabase.rpc("fn_rel_dre", {
     p_inicio: inicio,
@@ -249,7 +269,7 @@ export async function dreGerencial({
   const { operacional, financeiro, movimentacao, resultado } =
     agruparDrePorNatureza(data ?? []);
 
-  return { mes, operacional, financeiro, movimentacao, resultado };
+  return { operacional, financeiro, movimentacao, resultado };
 }
 
 
@@ -667,7 +687,7 @@ export async function serieDosCentros(
  * tela precisa das duas coisas ao mesmo tempo (as raízes no primeiro campo, as
  * etapas da raiz escolhida no segundo), e ir ao banco de novo a cada marcação
  * faria o segundo campo piscar vazio no meio da escolha. Quem separa os níveis é
- * `centros-e-etapas.ts`.
+ * `_shared/centro-custo/filtro.ts`.
  *
  * ## O nome aqui é o nome PRÓPRIO do centro
  *
@@ -1014,22 +1034,67 @@ export interface CustoPorGrupo {
   total: number;
 }
 
+/** Filtros do relatório de custo por grupo de insumo. */
+export interface FiltrosCustoPorGrupo extends RecorteCustoGrupo {
+  /** Primeiro dia do período. Ausente = sem limite. */
+  inicio?: string;
+  /** Primeiro dia do mês SEGUINTE ao último do período (fim exclusivo). */
+  fim?: string;
+}
+
 /**
- * Custo por grupo de insumo no mês de referência, com as subcategorias de cada
- * grupo já carregadas (nível 3, o insumo, vem por ação sob demanda).
+ * As subcategorias que sobrevivem ao filtro de categoria financeira.
+ *
+ * A `fn_rel_custo_por_subcategoria` recebe `p_centro_custo` e NÃO recebe
+ * `p_categoria`, então o nível 2 do drill precisa do mesmo corte feito aqui —
+ * senão o filho não fecha com o pai, que é o defeito que este módulo mais teve.
+ *
+ * O corte é exato, e não uma aproximação: a categoria financeira de um item vem
+ * de `categorias_insumo.categoria_financeira_id` (é assim que
+ * `fn_rel_custo_itens_oc` a monta), e o nível 2 agrupa por essa mesma
+ * subcategoria. Como a coluna é do próprio registro, uma subcategoria está
+ * inteira dentro ou inteira fora do filtro — nunca partida. Subcategoria com
+ * categoria financeira nula fica de fora, exatamente como o `=` do SQL a deixa.
+ */
+async function subcategoriasDaCategoria(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  categoriaId: string,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("categorias_insumo")
+    .select("id")
+    .eq("categoria_financeira_id", categoriaId);
+
+  if (error) {
+    throw new Error("Não foi possível carregar as subcategorias de insumo");
+  }
+  return new Set((data ?? []).map((linha) => linha.id));
+}
+
+/**
+ * Custo por grupo de insumo no período, com as subcategorias de cada grupo já
+ * carregadas (nível 3, o insumo, vem por ação sob demanda).
  *
  * A dimensão de insumo existe nos itens da OC, não no rateio, então lançamento
  * avulso entra na linha "Sem insumo": é isso que faz a soma por grupo fechar com
- * o custo total do mês.
+ * o custo total do período.
+ *
+ * O CENTRO E A CATEGORIA DESCEM PARA O NÍVEL 2 JUNTO. O centro vai como
+ * parâmetro (a RPC filtra pela subárvore dele); a categoria é aplicada aqui,
+ * porque a RPC do nível 2 não a recebe. As duas coisas têm o mesmo objetivo: a
+ * soma das subcategorias abertas tem de dar o valor do grupo que está na linha de
+ * cima.
  */
 export async function custoPorGrupo(
-  periodo?: { inicio: string; fim: string },
+  filtros?: FiltrosCustoPorGrupo,
 ): Promise<CustoPorGrupo> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("fn_rel_custo_por_grupo", {
-    p_inicio: periodo?.inicio,
-    p_fim: periodo?.fim,
+    p_inicio: filtros?.inicio,
+    p_fim: filtros?.fim,
+    p_centro_custo: filtros?.centroCustoId,
+    p_categoria: filtros?.categoriaId,
   });
 
   if (error) {
@@ -1038,6 +1103,13 @@ export async function custoPorGrupo(
 
   const linhas = data ?? [];
 
+  // Uma consulta só, e só quando há filtro de categoria: são dezenas de
+  // subcategorias no cadastro inteiro, e ir ao banco por grupo aberto seria
+  // repetir a mesma resposta quatro vezes.
+  const daCategoria = filtros?.categoriaId
+    ? await subcategoriasDaCategoria(supabase, filtros.categoriaId)
+    : null;
+
   const subcategorias = await Promise.all(
     linhas.map(async (linha) => {
       if (!linha.grupo_id) return [] as CustoSubcategoria[];
@@ -1045,15 +1117,18 @@ export async function custoPorGrupo(
         "fn_rel_custo_por_subcategoria",
         {
           p_grupo_id: linha.grupo_id,
-          p_inicio: periodo?.inicio,
-          p_fim: periodo?.fim,
+          p_inicio: filtros?.inicio,
+          p_fim: filtros?.fim,
+          p_centro_custo: filtros?.centroCustoId,
         },
       );
-      return (subs ?? []).map((sub) => ({
-        categoriaId: sub.categoria_id,
-        nome: sub.categoria_nome,
-        valor: paraReais(paraCentavos(sub.total)),
-      }));
+      return (subs ?? [])
+        .filter((sub) => daCategoria === null || daCategoria.has(sub.categoria_id))
+        .map((sub) => ({
+          categoriaId: sub.categoria_id,
+          nome: sub.categoria_nome,
+          valor: paraReais(paraCentavos(sub.total)),
+        }));
     }),
   );
 
@@ -1071,17 +1146,26 @@ export async function custoPorGrupo(
   };
 }
 
-/** Nível 3 do drill-down: insumos de uma subcategoria no período. */
+/**
+ * Nível 3 do drill-down: insumos de uma subcategoria no período.
+ *
+ * Leva o CENTRO junto, e não precisa levar a categoria financeira: a
+ * subcategoria pedida já é a chave, e a categoria financeira é uma coluna dela
+ * (ver `subcategoriasDaCategoria`). Se esta subcategoria apareceu na tela, ela
+ * passou pelo filtro de categoria inteira — então todo insumo dela está dentro
+ * do mesmo recorte, e a soma dos insumos fecha com a linha que foi aberta.
+ */
 export async function custoPorInsumo(
   categoriaId: string,
-  periodo?: { inicio: string; fim: string },
+  filtros?: FiltrosCustoPorGrupo,
 ): Promise<{ nome: string; quantidade: number; valor: number }[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("fn_rel_custo_por_insumo", {
     p_categoria_id: categoriaId,
-    p_inicio: periodo?.inicio,
-    p_fim: periodo?.fim,
+    p_inicio: filtros?.inicio,
+    p_fim: filtros?.fim,
+    p_centro_custo: filtros?.centroCustoId,
   });
 
   if (error) {

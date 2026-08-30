@@ -165,6 +165,9 @@ export function DetalheUsuarioDrawer({
       // Tiago (viewport de 2233px): sem teto nenhum, a coluna do nome do recurso
       // engole a sobra e o checkbox fica a mais de mil pixels do nome.
       larguraClassName="sm:max-w-[1900px]"
+      // Cobre só o formulário de dados do usuário. A matriz de permissões tem
+      // botão próprio de salvar e não entra no `isDirty` deste form.
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
     >
       {/* Duas colunas em tela larga: à esquerda quem a pessoa é e como ela
           entra (blocos curtos, largura de leitura), à direita a matriz, que é o

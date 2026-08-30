@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   Ban,
   ExternalLink,
   Pencil,
@@ -22,6 +21,7 @@ import {
   CelulaVazia,
   ConfirmDialog,
   MoneyText,
+  PageHeader,
   StatusBadge,
   Trilha,
   type EventoTrilha,
@@ -279,32 +279,19 @@ export function OrdemDetalheView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            aria-label="Voltar para a lista"
-            onClick={() => router.push("/compras/ordens")}
-          >
-            <ArrowLeft />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-titulo font-semibold">
-                <span className="codigo-doc">
-                  {ordem.numero ?? "Sem número"}
-                </span>
-              </h1>
-              <StatusBadge status={info.badge} rotulo={info.rotulo} />
-            </div>
-            <p className="text-detalhe text-muted-foreground">
-              {ordem.fornecedorNome}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        className="mb-0"
+        modulo="Compras · Ordens de compra"
+        titulo={ordem.numero ?? "Sem número"}
+        tituloMono
+        descricao={ordem.fornecedorNome}
+        voltarPara={{
+          rota: "/compras/ordens",
+          rotulo: "Voltar para as ordens de compra",
+        }}
+        selos={<StatusBadge status={info.badge} rotulo={info.rotulo} />}
+        acoes={
+          <>
           <BotaoEspelho rota="/espelho/ordens" ids={[ordem.id]} />
           {editavel ? (
             <Button
@@ -360,8 +347,9 @@ export function OrdemDetalheView({
               Excluir
             </Button>
           ) : null}
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {avisoDeClassificacao ? (
         <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-status-pendente/30 bg-status-pendente/5 px-3 py-3">

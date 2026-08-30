@@ -100,6 +100,7 @@ export function EncargoFormDrawer({
           ? "Atualize o nome ou a alíquota do encargo"
           : "Cadastre um encargo para compor os encargos da folha"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

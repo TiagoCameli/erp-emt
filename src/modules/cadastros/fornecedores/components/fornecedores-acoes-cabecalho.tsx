@@ -34,7 +34,7 @@ export function FornecedoresAcoesCabecalho({
         validarAction={validarImport}
         importarAction={importar}
       />
-      <Button type="button" onClick={() => setAberto(true)}>
+      <Button type="button" size="sm" onClick={() => setAberto(true)}>
         <Plus />
         Novo fornecedor
       </Button>
