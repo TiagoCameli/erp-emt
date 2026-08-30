@@ -376,6 +376,7 @@ export function DocumentosTabela({
         ]}
         emptyState={
           <EmptyState
+            className="border-none bg-transparent"
             icone={FileText}
             titulo="Nenhum documento encontrado"
             descricao="Cadastre documentos e ASO por colaborador. Os que têm vencimento entram no painel de alertas."
