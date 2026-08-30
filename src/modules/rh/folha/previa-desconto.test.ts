@@ -31,6 +31,10 @@ const LIQUIDO_REAL = 1785.43;
 const DESCONTO_ANTIGO = 121.58;
 
 const semOutrosDescontos = {
+  // `valorExtras: 0` reproduz o caso do CLELTON, que não tinha extra. Ele mora
+  // aqui e não num default do tipo de propósito: extra que soma no bruto e é
+  // esquecido silenciosamente é dinheiro a menos no líquido de alguém.
+  valorExtras: 0,
   inss: 0,
   irrf: 0,
   adiantamentos: 0,
@@ -132,6 +136,7 @@ describe("o líquido não fica negativo", () => {
       liquidoPrevisto({
         salarioBase: 1000,
         gratificacao: 0,
+        valorExtras: 0,
         desconto: 1000,
         inss: 0,
         irrf: 0,
@@ -146,6 +151,7 @@ describe("o líquido não fica negativo", () => {
       liquidoPrevisto({
         salarioBase: 1000,
         gratificacao: 0,
+        valorExtras: 0,
         desconto: 50,
         inss: 0,
         irrf: 0,
@@ -162,11 +168,53 @@ describe("INSS e IRRF continuam saindo do líquido", () => {
       liquidoPrevisto({
         salarioBase: 5000,
         gratificacao: 0,
+        valorExtras: 0,
         desconto: 250,
         inss: 500,
         irrf: 300,
         adiantamentos: 0,
       }),
     ).toBe(3950);
+  });
+});
+
+describe("valor de extras", () => {
+  it("soma no líquido, do mesmo jeito que a gratificação", () => {
+    // A fórmula do banco é `salario + gratificacao + extras - inss - irrf`, e o
+    // extra virou campo editável em 29/08/2026. Antes era sempre 0 e a ausência
+    // na prévia não aparecia; com o campo na tela, a prévia sem ele erraria
+    // exatamente no número que a pessoa confere antes de salvar.
+    const semExtra = liquidoPrevisto({
+      ...semOutrosDescontos,
+      salarioBase: SALARIO,
+      gratificacao: GRATIFICACAO,
+      desconto: DESCONTO,
+    });
+    const comExtra = liquidoPrevisto({
+      ...semOutrosDescontos,
+      salarioBase: SALARIO,
+      gratificacao: GRATIFICACAO,
+      valorExtras: 350.5,
+      desconto: DESCONTO,
+    });
+
+    // Comparação por DIFERENÇA, e não contra um total cravado: o total
+    // envelheceria se a âncora do CLELTON mudasse, e a relação que importa aqui
+    // é "o extra entra inteiro".
+    expect(Math.round((comExtra - semExtra) * 100)).toBe(35050);
+  });
+
+  it("extra não salva líquido negativo: o piso continua em zero", () => {
+    // O banco recusa a gravação nesse caso; a prévia mostrar R$ 0,00 é o aviso
+    // visual de que o valor digitado não vai passar.
+    const liquido = liquidoPrevisto({
+      ...semOutrosDescontos,
+      salarioBase: 1000,
+      gratificacao: 0,
+      valorExtras: 100,
+      desconto: 0,
+      adiantamentos: 5000,
+    });
+    expect(liquido).toBe(0);
   });
 });

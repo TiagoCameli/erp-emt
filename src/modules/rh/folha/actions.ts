@@ -172,6 +172,12 @@ export async function editarItemFolha(
     p_item: validado.data.itemId,
     p_salario_base: validado.data.salarioBase,
     p_gratificacao: validado.data.gratificacao,
+    // Obrigatório dos dois lados: o schema já barrou vazio, e a função recusa
+    // null. Nenhum custo da folha existe sem centro de custo.
+    p_centro_custo: validado.data.centroCustoId,
+    p_horas_normais: validado.data.horasNormais,
+    p_horas_extras: validado.data.horasExtras,
+    p_valor_extras: validado.data.valorExtras,
     // O schema já resolveu vazio e null para 0, então aqui sempre chega um
     // número. Nada de `?? undefined`: aquilo existia para omitir o parâmetro e
     // deixar o DEFAULT null do banco significar "sem desconto", distinção que o

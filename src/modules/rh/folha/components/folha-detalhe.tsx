@@ -61,6 +61,7 @@ import type {
   ResumoProvisao,
 } from "@/modules/rh/folha/queries";
 import { podeTransicionar } from "@/modules/rh/folha/transicoes";
+import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import { BotaoPlanilha } from "./botao-planilha";
 import { EditarItemFolhaDrawer } from "./editar-item-folha-drawer";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
@@ -122,6 +123,13 @@ export interface FolhaDetalheViewProps {
     grupoRecolhimentoIrrf: string | null;
   } | null;
   trilha: EventoTrilha[];
+  /**
+   * Raízes e etapas ativas, para o seletor de centro de custo do editor de
+   * linha. Vem da página (Server Component) e não de um fetch no cliente: são 73
+   * linhas que não mudam durante a edição, e buscá-las ao abrir o drawer faria o
+   * campo piscar vazio bem na hora de escolher.
+   */
+  centrosCusto: readonly CentroCustoOpcao[];
   podeCriar: boolean;
   podeEditar: boolean;
   podeAprovar: boolean;
@@ -146,6 +154,7 @@ export function FolhaDetalheView({
   fgtsPercentual,
   gruposRetido,
   trilha,
+  centrosCusto,
   podeCriar,
   podeEditar,
   podeAprovar,
@@ -229,6 +238,28 @@ export function FolhaDetalheView({
    * (ela regenera a folha inteira).
    */
   const [voltandoId, setVoltandoId] = React.useState<string | null>(null);
+
+  /**
+   * Clicar na LINHA abre o editor daquela pessoa (pedido do Tiago, 29/08/2026).
+   *
+   * Ignora o clique que nasceu dentro de um controle: sem esta checagem, clicar
+   * em "Holerite" abriria o holerite E o editor por baixo dele, e abrir o
+   * `<details>` da provisão abriria o drawer junto.
+   *
+   * O botão "Editar" continua na linha de propósito: `<tr>` não vira botão
+   * acessível (role="button" dentro de tabela quebra a semântica da grade), e
+   * ele é o caminho que funciona por teclado e leitor de tela. O clique na linha
+   * é atalho de mouse, não a única porta.
+   */
+  function aoClicarNaLinha(
+    evento: React.MouseEvent<HTMLTableRowElement>,
+    item: FolhaItem,
+  ) {
+    if (!podeEditarLinha) return;
+    const alvo = evento.target as HTMLElement;
+    if (alvo.closest("button, a, summary, input, select, textarea")) return;
+    setItemEmEdicao(item);
+  }
 
   async function aoTirarDaFolha(motivo?: string) {
     if (!itemParaTirar) return;
@@ -578,7 +609,17 @@ export function FolhaDetalheView({
                 {folha.itens.map((item) => (
                   <tr
                     key={item.id}
-                    className="border-b border-border last:border-0"
+                    className={
+                      podeEditarLinha
+                        ? "cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
+                        : "border-b border-border last:border-0"
+                    }
+                    title={
+                      podeEditarLinha
+                        ? `Editar a linha de ${item.colaboradorNome}`
+                        : undefined
+                    }
+                    onClick={(evento) => aoClicarNaLinha(evento, item)}
                   >
                     <td className="px-3 py-2 text-center font-medium">
                       {item.colaboradorNome}
@@ -729,7 +770,7 @@ export function FolhaDetalheView({
                             onClick={() => setItemEmEdicao(item)}
                           >
                             <Pencil />
-                            Valores
+                            Editar
                           </Button>
                         ) : null}
                         <Button
@@ -1021,6 +1062,7 @@ export function FolhaDetalheView({
           }}
           item={itemEmEdicao}
           folhaId={folha.id}
+          centros={centrosCusto}
           onSalvo={() => router.refresh()}
         />
       ) : null}

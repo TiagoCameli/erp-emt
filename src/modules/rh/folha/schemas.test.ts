@@ -6,13 +6,20 @@ import {
 } from "@/modules/rh/folha/schemas";
 
 const ITEM = "11111111-1111-4111-8111-111111111111";
+const CENTRO = "22222222-2222-4222-8222-222222222222";
 
 /** Payload mínimo válido, para cada teste mexer só no que ele mede. */
 function base(overrides: Record<string, unknown> = {}) {
   return {
     itemId: ITEM,
+    // Sempre presente no payload mínimo porque é OBRIGATÓRIO: linha da folha sem
+    // centro de custo trava a aprovação inteira lá na frente.
+    centroCustoId: CENTRO,
     salarioBase: "2.000,00",
     gratificacao: "",
+    horasNormais: "",
+    horasExtras: "",
+    valorExtras: "",
     desconto: "",
     // Vazio = o desconto não foi informado por horas. O campo sempre vai (a
     // tela sempre manda), e é o valor dele que pode ser nulo.
@@ -250,8 +257,12 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
     // o reparse quebraria em runtime com o build verde.
     const r = editarItemFolhaSchema.safeParse({
       itemId: ITEM,
+      centroCustoId: CENTRO,
       salarioBase: 1621,
       gratificacao: 500,
+      horasNormais: 200,
+      horasExtras: 12,
+      valorExtras: 350.4,
       desconto: 121.57,
       descontoHoras: 8,
     });
@@ -261,14 +272,22 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
       expect(r.data.gratificacao).toBe(500);
       expect(r.data.desconto).toBe(121.57);
       expect(r.data.descontoHoras).toBe(8);
+      expect(r.data.horasNormais).toBe(200);
+      expect(r.data.horasExtras).toBe(12);
+      expect(r.data.valorExtras).toBe(350.4);
     }
   });
 
   it("aceita gratificação 0 como número no reparse (e não confunde com vazio)", () => {
     const r = editarItemFolhaSchema.safeParse({
       itemId: ITEM,
+      centroCustoId: CENTRO,
       salarioBase: 1621,
       gratificacao: 0,
+      // null nas horas trabalhadas também vale zero, igual ao vazio.
+      horasNormais: null,
+      horasExtras: null,
+      valorExtras: 0,
       desconto: 0,
       descontoHoras: null,
     });
@@ -276,6 +295,8 @@ describe("editarItemFolhaSchema — reparse na Server Action", () => {
     if (r.success) {
       expect(r.data.gratificacao).toBe(0);
       expect(r.data.desconto).toBe(0);
+      expect(r.data.horasNormais).toBe(0);
+      expect(r.data.horasExtras).toBe(0);
     }
   });
 });
@@ -317,5 +338,69 @@ describe("vencimentoFolhaSchema", () => {
       data: "2026-09-11",
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("editarItemFolhaSchema — centro de custo", () => {
+  it("recusa a linha sem centro de custo", () => {
+    // A regra de ouro do projeto: nenhum custo existe sem centro de custo. Sem
+    // esta trava o item passa batido até a aprovação e morre lá, na trigger do
+    // lançamento — longe da tela onde daria para resolver.
+    const r = editarItemFolhaSchema.safeParse(base({ centroCustoId: "" }));
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues[0]?.message).toContain("centro de custo");
+    }
+  });
+
+  it("recusa centro que não é uuid", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ centroCustoId: "009" }));
+    expect(r.success).toBe(false);
+  });
+});
+
+describe("editarItemFolhaSchema — horas trabalhadas e extras", () => {
+  it("vazio é ZERO, e não null: não trabalhou hora extra é zero hora", () => {
+    // Diferente das horas do DESCONTO, onde vazio é null porque "não declarei o
+    // motivo" é um estado. Aqui não há motivo a declarar: ou trabalhou, ou não.
+    const r = editarItemFolhaSchema.safeParse(
+      base({ horasNormais: "", horasExtras: "" }),
+    );
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.horasNormais).toBe(0);
+      expect(r.data.horasExtras).toBe(0);
+    }
+  });
+
+  it("lê o decimal com vírgula, igual ao resto do app", () => {
+    const r = editarItemFolhaSchema.safeParse(base({ horasExtras: "12,5" }));
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.horasExtras).toBe(12.5);
+  });
+
+  it("recusa mais horas do que o mês tem", () => {
+    // 744 = 31 × 24. Não é jornada, é impossibilidade — a trava existe para
+    // pegar 2000 digitado no lugar de 200.
+    const r = editarItemFolhaSchema.safeParse(base({ horasNormais: "745" }));
+    expect(r.success).toBe(false);
+  });
+
+  it("LINHA DE CONTROLE: 744 exatas passam", () => {
+    // Sem esta, a de cima passaria mesmo se o schema recusasse qualquer hora.
+    const r = editarItemFolhaSchema.safeParse(base({ horasNormais: "744" }));
+    expect(r.success).toBe(true);
+  });
+
+  it("valor de extras vazio vira 0, e o digitado atravessa em reais", () => {
+    const vazio = editarItemFolhaSchema.safeParse(base({ valorExtras: "" }));
+    expect(vazio.success).toBe(true);
+    if (vazio.success) expect(vazio.data.valorExtras).toBe(0);
+
+    const cheio = editarItemFolhaSchema.safeParse(
+      base({ valorExtras: "1.350,40" }),
+    );
+    expect(cheio.success).toBe(true);
+    if (cheio.success) expect(cheio.data.valorExtras).toBe(1350.4);
   });
 });

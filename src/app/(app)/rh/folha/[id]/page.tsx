@@ -14,6 +14,7 @@ import {
   trilhaFolha,
 } from "@/modules/rh/folha/queries";
 import { buscarParametros } from "@/modules/rh/parametros-folha/queries";
+import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 
 export default async function PaginaFolhaDetalhe({
   params,
@@ -46,11 +47,16 @@ export default async function PaginaFolhaDetalhe({
   // não cadastrados). Só leitura, não afeta os valores já fechados na folha.
   // A mesma leitura serve ao aviso de retido sem grupo de recolhimento (onda de
   // correção do review do Bloco 8a): nenhuma consulta nova.
-  const [parametros, trilha, lancamentosDaFolha] = await Promise.all([
-    buscarParametros(),
-    trilhaFolha(id),
-    listarLancamentosDaFolha(id, idsLancamentoSalario),
-  ]);
+  // `listarCentrosCusto` entra no mesmo Promise.all: o editor de linha precisa
+  // das raízes e etapas para o seletor de centro de custo, e buscá-las só ao
+  // abrir o drawer deixaria o campo piscando vazio na hora de escolher.
+  const [parametros, trilha, lancamentosDaFolha, centrosCusto] =
+    await Promise.all([
+      buscarParametros(),
+      trilhaFolha(id),
+      listarLancamentosDaFolha(id, idsLancamentoSalario),
+      listarCentrosCusto(),
+    ]);
   const lancamentos = agruparLancamentosDaFolha(lancamentosDaFolha);
 
   const podeCriar = temPermissao(usuario, "rh.folha", "criar");
@@ -76,6 +82,7 @@ export default async function PaginaFolhaDetalhe({
           : null
       }
       trilha={trilha}
+      centrosCusto={centrosCusto}
       podeCriar={podeCriar}
       podeEditar={podeEditar}
       podeAprovar={podeAprovar}
