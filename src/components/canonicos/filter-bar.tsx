@@ -2,11 +2,26 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FilterX, Search, X } from "lucide-react";
+import { CalendarDays, Coins, FilterX, Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { Combobox } from "@/components/canonicos/combobox";
+import { ReguaTempo } from "@/components/canonicos/regua-tempo";
+import {
+  filtroDasAlcas,
+  passoDaBarra,
+  posicaoDasAlcas,
+  resumoDaFaixa,
+  tetoDaBarra,
+} from "@/components/canonicos/filtro-valor-calculo";
+import { resumoDoPeriodo } from "@/components/canonicos/regua-tempo-calculo";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
 import {
   limparFiltrosDaRota,
@@ -23,6 +38,7 @@ import {
   limparPreferenciaTabela,
   salvarPreferenciaTabela,
 } from "@/modules/_shared/preferencias-tabela/actions";
+import { formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 
 /** Sentinela interna do Radix Select para a opção "todos" (valor vazio é proibido). */
@@ -357,8 +373,20 @@ interface FiltroPeriodoProps {
 }
 
 /**
- * Filtro de período com as duas pontas (de/até) em campos de data curtos.
- * Data vazia significa sem limite naquela ponta.
+ * Filtro de período: um botão que abre a régua de tempo num popover.
+ *
+ * Era um par de `input type="date"` sempre à vista, ocupando dois trilhos numa
+ * barra que já tem 16 filtros. O Tiago pediu a mudança em 29/08/2026, com o
+ * slicer do Excel como referência e uma condição explícita: "essa barra não deve
+ * ficar aparecendo o tempo todo, quando você clicar no filtro ela aparece".
+ *
+ * O botão mostra o RESUMO do período ("jan - ago de 2026"), que é o que a pessoa
+ * precisa ler de relance para saber o que está filtrando. Duas caixas de data
+ * com dd/mm/aaaa exigiam ler seis números e comparar mentalmente.
+ *
+ * A API não mudou (`de`, `ate`, `onPeriodoChange`): as 26 telas que usam este
+ * filtro ganharam a régua sem uma linha de mudança em nenhuma delas. Foi o
+ * motivo de mexer no canônico em vez de criar um filtro novo ao lado.
  */
 export function FiltroPeriodo({
   de,
@@ -366,28 +394,59 @@ export function FiltroPeriodo({
   onPeriodoChange,
   rotulo = "Período",
 }: FiltroPeriodoProps) {
+  const [aberto, setAberto] = React.useState(false);
+  const resumo = resumoDoPeriodo(de, ate);
+  const temPeriodo = resumo !== "";
+
   return (
-    <CampoFiltro largura={TRILHO_FILTRO_DUPLO}>
+    <CampoFiltro largura={TRILHO_FILTRO}>
       <div className="flex items-center gap-1.5">
-        <Input
-          type="date"
-          value={de}
-          max={ate === "" ? undefined : ate}
-          onChange={(evento) => onPeriodoChange(evento.target.value, ate)}
-          // O `rotulo` continua nomeando as duas pontas para quem usa leitor de
-          // tela: o rótulo visível em cima diz "de quê", e uma ponta da outra não.
-          aria-label={`${rotulo}: data inicial`}
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
-        <span className="text-detalhe text-muted-foreground">até</span>
-        <Input
-          type="date"
-          value={ate}
-          min={de === "" ? undefined : de}
-          onChange={(evento) => onPeriodoChange(de, evento.target.value)}
-          aria-label={`${rotulo}: data final`}
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
+        <Popover open={aberto} onOpenChange={setAberto}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={rotulo}
+              className={cn(
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                temPeriodo ? "" : "text-muted-foreground",
+              )}
+            >
+              <CalendarDays className="size-3.5 shrink-0 opacity-70" />
+              <span className="truncate">
+                {temPeriodo ? resumo : "Qualquer data"}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          {/* Largura fixa e generosa: a régua de DIAS tem 31 blocos, e num
+              popover que herdasse a largura do gatilho (13rem) cada dia sairia
+              com 2px. Em 34rem cada bloco de dia fica com ~16px, que é o que o
+              número "31" pede em 12px. */}
+          <PopoverContent align="start" className="w-[34rem] max-w-[92vw] p-3">
+            <ReguaTempo
+              de={de}
+              ate={ate}
+              onPeriodoChange={onPeriodoChange}
+              rotulo={rotulo}
+            />
+          </PopoverContent>
+        </Popover>
+
+        {/* O X divide o trilho com o botão em vez de crescer para fora dele,
+            mesma razão do FiltroMes: escolher um período não pode empurrar para
+            o lado todos os filtros que vêm depois na mesma linha. */}
+        {temPeriodo ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Limpar ${rotulo.toLowerCase()}`}
+            onClick={() => onPeriodoChange("", "")}
+          >
+            <X />
+          </Button>
+        ) : null}
       </div>
     </CampoFiltro>
   );
@@ -698,6 +757,115 @@ export function FiltroMes({
   );
 }
 
+interface FiltroMesPeriodoProps {
+  /** Primeira competência do intervalo, yyyy-MM-01. Vazio = sem limite. */
+  de: string;
+  ate: string;
+  /** Recebe as duas pontas juntas: uma navegação só, sem estado intermediário. */
+  onPeriodoChange: (de: string, ate: string) => void;
+  rotulo?: string;
+}
+
+/**
+ * Filtro de MÊS DE REFERÊNCIA por intervalo: "mai - ago de 2026" num filtro só.
+ *
+ * Escolha do Tiago em 29/08/2026, depois de eu apresentar o custo (mexe na
+ * consulta das telas que filtram por competência). O `FiltroMes`, de um mês só,
+ * continua existindo para as telas em que a competência É um mês por definição.
+ *
+ * A régua vem sem "Semanas" e sem "Dias", e sem os campos de data: a coluna
+ * `mes_competencia` guarda o dia 1 de cada mês, então um corte no dia 17 não
+ * existe no dado — oferecê-lo seria oferecer um filtro que não filtra.
+ *
+ * As duas pontas viajam normalizadas no DIA 1 (`yyyy-MM-01`), que é o formato
+ * que a coluna guarda e que a consulta compara. A régua raciocina em dias e
+ * devolveria 31/08 na ponta final; deixar assim funcionaria por acidente
+ * (`lte('2026-08-31')` também alcança o dia 1 de agosto) e quebraria no dia em
+ * que alguém comparasse as duas pontas entre si.
+ */
+export function FiltroMesPeriodo({
+  de,
+  ate,
+  onPeriodoChange,
+  rotulo = "Mês de referência",
+}: FiltroMesPeriodoProps) {
+  const [aberto, setAberto] = React.useState(false);
+  const resumo = resumoDoPeriodo(de, ate === "" ? "" : ultimoDiaDoMes(ate));
+  const temPeriodo = resumo !== "";
+
+  return (
+    <CampoFiltro largura={TRILHO_FILTRO}>
+      <div className="flex items-center gap-1.5">
+        <Popover open={aberto} onOpenChange={setAberto}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={rotulo}
+              className={cn(
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                temPeriodo ? "" : "text-muted-foreground",
+              )}
+            >
+              <CalendarDays className="size-3.5 shrink-0 opacity-70" />
+              <span className="truncate">
+                {temPeriodo ? resumo : "Todos os meses"}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[30rem] max-w-[92vw] p-3">
+            <ReguaTempo
+              de={de}
+              ate={ate === "" ? "" : ultimoDiaDoMes(ate)}
+              onPeriodoChange={(novoDe, novoAte) =>
+                onPeriodoChange(
+                  primeiroDiaDoMes(novoDe),
+                  primeiroDiaDoMes(novoAte),
+                )
+              }
+              rotulo={rotulo}
+              granularidades={["ano", "trimestre", "mes"]}
+              semDataExata
+            />
+          </PopoverContent>
+        </Popover>
+
+        {temPeriodo ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Limpar ${rotulo.toLowerCase()}`}
+            onClick={() => onPeriodoChange("", "")}
+          >
+            <X />
+          </Button>
+        ) : null}
+      </div>
+    </CampoFiltro>
+  );
+}
+
+/** "2026-08-17" -> "2026-08-01". Vazio continua vazio. */
+function primeiroDiaDoMes(iso: string): string {
+  return iso === "" ? "" : `${iso.slice(0, 7)}-01`;
+}
+
+/**
+ * "2026-08-01" -> "2026-08-31", só para a RÉGUA pintar o mês inteiro.
+ *
+ * A régua marca um bloco quando o período encosta nele, então a ponta final no
+ * dia 1 já pintaria agosto. O último dia entra para o RESUMO: sem ele,
+ * `resumoDoPeriodo` veria "01/05 a 01/08" como período que não fecha em mês e
+ * diria "01/05/2026 - 01/08/2026" em vez de "mai - ago de 2026".
+ */
+function ultimoDiaDoMes(iso: string): string {
+  const [ano, mes] = iso.split("-").map(Number) as [number, number];
+  const ultimo = new Date(Date.UTC(ano, mes, 0));
+  return `${iso.slice(0, 7)}-${String(ultimo.getUTCDate()).padStart(2, "0")}`;
+}
+
 interface FiltroValorProps {
   /** Valor mínimo em reais, como string do input. Vazio = sem limite. */
   de: string;
@@ -705,6 +873,17 @@ interface FiltroValorProps {
   /** Recebe as duas pontas juntas: uma navegação só, sem página intermediária. */
   onValorChange: (de: string, ate: string) => void;
   rotulo?: string;
+  /**
+   * O maior valor da lista que está na tela, para dar escala à barra.
+   *
+   * Escolha do Tiago em 29/08/2026. Sem ele, o popover mostra só os campos: uma
+   * barra sem escala seria uma barra que mente sobre onde os valores estão.
+   *
+   * Não confundir com um teto de filtro: a alça encostada na borda direita
+   * significa SEM LIMITE, então mudar de página (e de maior valor) nunca esconde
+   * uma compra grande. A regra vive em `filtro-valor-calculo.ts`, com teste.
+   */
+  maiorValor?: number;
 }
 
 /**
@@ -720,33 +899,117 @@ export function FiltroValor({
   ate,
   onValorChange,
   rotulo = "Valor",
+  maiorValor,
 }: FiltroValorProps) {
+  const [aberto, setAberto] = React.useState(false);
+  const resumo = resumoDaFaixa(de, ate, formatarBRL);
+  const temFaixa = resumo !== "";
+
+  const teto = maiorValor === undefined ? null : tetoDaBarra(maiorValor);
+  const posicao = teto === null ? null : posicaoDasAlcas(de, ate, teto);
+
   return (
-    <CampoFiltro largura={TRILHO_FILTRO_DUPLO}>
+    <CampoFiltro largura={TRILHO_FILTRO}>
       <div className="flex items-center gap-1.5">
-        <Input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          value={de}
-          onChange={(evento) => onValorChange(evento.target.value, ate)}
-          aria-label={`${rotulo}: mínimo`}
-          placeholder="de"
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
-        <span className="text-detalhe text-muted-foreground">até</span>
-        <Input
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          value={ate}
-          onChange={(evento) => onValorChange(de, evento.target.value)}
-          aria-label={`${rotulo}: máximo`}
-          placeholder="até"
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
+        <Popover open={aberto} onOpenChange={setAberto}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={rotulo}
+              className={cn(
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                temFaixa ? "" : "text-muted-foreground",
+              )}
+            >
+              <Coins className="size-3.5 shrink-0 opacity-70" />
+              <span className="truncate">
+                {temFaixa ? resumo : "Qualquer valor"}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-[22rem] max-w-[92vw] p-3">
+            <div className="flex flex-col gap-3">
+              {teto === null || posicao === null ? null : (
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <Slider
+                    min={0}
+                    max={teto}
+                    step={passoDaBarra(teto)}
+                    value={[posicao.de, posicao.ate]}
+                    onValueChange={([novoDe, novoAte]) => {
+                      const alcas = filtroDasAlcas(
+                        { de: novoDe ?? 0, ate: novoAte ?? teto },
+                        teto,
+                      );
+                      onValorChange(alcas.de, alcas.ate);
+                    }}
+                    aria-label={rotulo}
+                  />
+                  {/* As pontas da ESCALA, não do filtro: dizem onde a barra
+                      começa e termina, e o "+" avisa que passar do fim é "sem
+                      limite", não "até este número". */}
+                  <div className="flex justify-between text-legenda text-muted-foreground tabular-nums">
+                    <span>{formatarBRL(0)}</span>
+                    <span>{formatarBRL(teto)}+</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-legenda text-muted-foreground">De</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={de}
+                  onChange={(evento) => onValorChange(evento.target.value, ate)}
+                  aria-label={`${rotulo}: mínimo`}
+                  placeholder="sem limite"
+                  className="h-8 flex-1 text-detalhe tabular-nums"
+                />
+                <span className="text-legenda text-muted-foreground">até</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={ate}
+                  onChange={(evento) => onValorChange(de, evento.target.value)}
+                  aria-label={`${rotulo}: máximo`}
+                  placeholder="sem limite"
+                  className="h-8 flex-1 text-detalhe tabular-nums"
+                />
+              </div>
+
+              {temFaixa ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 self-start text-legenda"
+                  onClick={() => onValorChange("", "")}
+                >
+                  Limpar
+                </Button>
+              ) : null}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {temFaixa ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Limpar ${rotulo.toLowerCase()}`}
+            onClick={() => onValorChange("", "")}
+          >
+            <X />
+          </Button>
+        ) : null}
       </div>
     </CampoFiltro>
   );

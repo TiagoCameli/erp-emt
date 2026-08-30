@@ -18,7 +18,7 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
-  FiltroMes,
+  FiltroMesPeriodo,
   FiltroPeriodo,
   FiltroSelect,
   FiltroSelectMulti,
@@ -457,6 +457,12 @@ export function LancamentosTabela({
    * O que isto protege: marcar 3 na página 1, trocar o filtro e aplicar gravaria
    * em lançamento que o usuário não está mais olhando.
    */
+  /** O maior valor à vista, para a barra da faixa de valor ter escala. */
+  const maiorValorDaPagina = React.useMemo(
+    () => lancamentos.reduce((maior, l) => Math.max(maior, l.valor), 0),
+    [lancamentos],
+  );
+
   const idsVisiveis = React.useMemo(
     () => new Set(lancamentos.map((lancamento) => lancamento.id)),
     [lancamentos],
@@ -787,13 +793,25 @@ export function LancamentosTabela({
     {
       id: "mes",
       rotulo: "Mês de referência",
-      temValor: valores.mes !== "",
-      onLimpar: () => setMuitos({ mes: null, pagina: "1" }),
+      temValor:
+        valores.competenciaDe !== "" || valores.competenciaAte !== "",
+      // `mes` é apagado junto: quem chegou por link antigo e limpa o filtro não
+      // pode ficar com o mês preso na URL, invisível na barra.
+      onLimpar: () =>
+        setMuitos({ comp_de: null, comp_ate: null, mes: null, pagina: "1" }),
       elemento: (
-        <FiltroMes
-          valor={valores.mes}
-          onValorChange={(novoMes) =>
-            setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
+        <FiltroMesPeriodo
+          de={valores.competenciaDe}
+          ate={valores.competenciaAte}
+          onPeriodoChange={(novoDe, novoAte) =>
+            setMuitos({
+              comp_de: novoDe === "" ? null : novoDe,
+              comp_ate: novoAte === "" ? null : novoAte,
+              // Escrever a janela apaga o `mes` do link antigo: dois filtros
+              // para a mesma pergunta na URL é o caminho para eles discordarem.
+              mes: null,
+              pagina: "1",
+            })
           }
         />
       ),
@@ -904,6 +922,10 @@ export function LancamentosTabela({
         <FiltroValor
           de={faixaValor.de}
           ate={faixaValor.ate}
+          // O maior valor da PÁGINA dá escala à barra. Não é teto de filtro: a
+          // alça na borda direita significa "sem limite", então a compra maior
+          // que tudo o que está à vista nunca fica escondida.
+          maiorValor={maiorValorDaPagina}
           onValorChange={(de, ate) => setFaixaValor({ de, ate })}
         />
       ),

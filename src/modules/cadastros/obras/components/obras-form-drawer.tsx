@@ -138,6 +138,7 @@ export function ObrasFormDrawer({
           ? "Atualize os dados desta obra"
           : "Cadastre uma obra. O centro de custo raiz dela é gerado automaticamente"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

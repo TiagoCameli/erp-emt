@@ -420,6 +420,7 @@ export function ColaboradoresFormDrawer({
         onAbertoChange={definirAberto}
         titulo={editando ? "Editar colaborador" : "Novo colaborador"}
         descricao="Dados cadastrais do colaborador."
+        temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
         rodape={
           <>
             <Button

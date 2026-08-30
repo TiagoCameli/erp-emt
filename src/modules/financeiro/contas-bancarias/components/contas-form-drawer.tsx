@@ -142,6 +142,7 @@ export function ContasFormDrawer({
           ? "Atualize os dados desta conta"
           : "Cadastre uma conta bancária ou um caixa"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

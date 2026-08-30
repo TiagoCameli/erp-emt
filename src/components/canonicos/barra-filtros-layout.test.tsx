@@ -193,9 +193,19 @@ describe("layout da barra de filtros", () => {
     // nome duas vezes na mesma casca.
     expect(screen.getByText("Período de vencimento")).toBeTruthy();
     expect(screen.queryByText("Vencimento")).toBeNull();
-    // O nome continua nomeando cada ponta para leitor de tela.
-    expect(screen.getByLabelText("Vencimento: data inicial")).toBeTruthy();
-    expect(screen.getByLabelText("Vencimento: data final")).toBeTruthy();
+    // O nome continua nomeando o controle para leitor de tela.
+    expect(screen.getByRole("button", { name: "Vencimento" })).toBeTruthy();
+  });
+
+  it("a régua de datas NÃO fica na barra: ela mora atrás de um clique", () => {
+    // Condição do Tiago em 29/08/2026, palavra por palavra: "essa barra não deve
+    // ficar aparecendo o tempo todo, quando você clicar no filtro ela aparece".
+    // Sem este teste, alguém "melhoraria" o filtro deixando a régua sempre à
+    // vista e devolveria a barra ao tamanho que fez ele pedir a mudança.
+    render(<Tela />);
+
+    expect(screen.queryByLabelText(/régua de/i)).toBeNull();
+    expect(screen.queryByLabelText("Vencimento: data inicial")).toBeNull();
   });
 
   it("seletor mede um trilho, e não o texto da opção", () => {
@@ -212,8 +222,13 @@ describe("layout da barra de filtros", () => {
   it("filtro largo mede dois trilhos, para cair no mesmo prumo", () => {
     render(<Tela />);
 
-    for (const rotulo of ["Busca", "Período de vencimento", "Faixa de valor"]) {
-      expect(casca(rotulo).className).toContain(TRILHO_FILTRO_DUPLO);
+    expect(casca("Busca").className).toContain(TRILHO_FILTRO_DUPLO);
+    // Período e faixa de valor encolheram para UM trilho quando viraram botão
+    // com resumo: os pares de campo que exigiam a largura dupla saíram da barra
+    // para dentro do popover. A busca continua em dois porque o placeholder
+    // ("Buscar por número ou descrição") não cabe em um.
+    for (const rotulo of ["Período de vencimento", "Faixa de valor"]) {
+      expect(casca(rotulo).className).toContain(TRILHO_FILTRO);
     }
   });
 

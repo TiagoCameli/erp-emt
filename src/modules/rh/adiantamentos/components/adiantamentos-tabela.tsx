@@ -464,6 +464,7 @@ export function AdiantamentosTabela({
         ]}
         emptyState={
           <EmptyState
+            className="border-none bg-transparent"
             icone={HandCoins}
             titulo="Nenhum adiantamento encontrado"
             descricao="Registre adiantamentos por colaborador e competência. Eles são descontados na folha gerencial."

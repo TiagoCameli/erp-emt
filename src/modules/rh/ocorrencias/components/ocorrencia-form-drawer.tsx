@@ -138,6 +138,7 @@ export function OcorrenciaFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar ocorrência" : "Nova ocorrência"}
       descricao="Ausências e ocorrências por colaborador."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

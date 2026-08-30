@@ -143,6 +143,7 @@ export function DetalhePerfilDrawer({
         // de 8 colunas por 50 linhas e não cabe numa coluna de 672px no meio da
         // tela, mas largura sem teto afasta o checkbox do nome que ele governa.
         larguraClassName="sm:max-w-[1900px]"
+        temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
         rodape={
           <>
             {podeExcluir ? (

@@ -10,6 +10,12 @@ interface EmptyStateProps {
   descricao?: string;
   /** Ação principal do estado vazio (ex: botão de criar). Sempre que fizer sentido, passe uma. */
   acao?: ReactNode;
+  /**
+   * No slot `emptyState` da DataTable, passe SEMPRE
+   * `"border-none bg-transparent"`: lá o componente já está dentro da borda da
+   * tabela, e a moldura tracejada daqui vira caixa dentro de caixa. Solto na
+   * página é o contrário, a moldura é o que delimita o bloco.
+   */
   className?: string;
 }
 

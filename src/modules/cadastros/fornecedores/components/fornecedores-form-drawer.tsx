@@ -98,6 +98,7 @@ export function FornecedoresFormDrawer({
           ? "Atualize os dados do fornecedor"
           : "Cadastre um novo fornecedor de materiais, peças, serviços ou fretes"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

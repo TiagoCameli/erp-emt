@@ -17,7 +17,7 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
-  FiltroMes,
+  FiltroMesPeriodo,
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
@@ -214,7 +214,9 @@ export interface OrdensTabelaProps {
   de: string;
   ate: string;
   /** Mês de referência do filtro, no formato do input (yyyy-MM). */
-  mes: string;
+  /** A janela de mês de referência (`yyyy-MM-01` nas duas pontas). */
+  competenciaDe: string;
+  competenciaAte: string;
   categoriaId: string;
   formaPagamentoId: string;
   condicaoPagamentoId: string;
@@ -263,7 +265,8 @@ export function OrdensTabela({
   fornecedorId,
   de,
   ate,
-  mes,
+  competenciaDe,
+  competenciaAte,
   categoriaId,
   formaPagamentoId,
   condicaoPagamentoId,
@@ -309,6 +312,12 @@ export function OrdensTabela({
    * gravar em linha que sumiu da tela, aqui é só a contagem discordar do que
    * se vê, porque não há ação de lote nesta tela.
    */
+  /** O maior valor à vista, para a barra da faixa de valor ter escala. */
+  const maiorValorDaPagina = React.useMemo(
+    () => ordens.reduce((maior, o) => Math.max(maior, o.valorTotal), 0),
+    [ordens],
+  );
+
   const idsVisiveis = React.useMemo(
     () => new Set(ordens.map((ordem) => ordem.id)),
     [ordens],
@@ -459,13 +468,27 @@ export function OrdensTabela({
           {
             id: "mes",
             rotulo: "Mês de referência",
-            temValor: mes !== "",
-            onLimpar: () => setMuitos({ mes: null, pagina: "1" }),
+            temValor: competenciaDe !== "" || competenciaAte !== "",
+            // `mes` sai junto: quem chegou por link antigo e limpa o filtro não
+            // pode ficar com o mês preso na URL, invisível na barra.
+            onLimpar: () =>
+              setMuitos({
+                comp_de: null,
+                comp_ate: null,
+                mes: null,
+                pagina: "1",
+              }),
             elemento: (
-              <FiltroMes
-                valor={mes}
-                onValorChange={(novoMes) =>
-                  setMuitos({ mes: novoMes === "" ? null : novoMes, pagina: "1" })
+              <FiltroMesPeriodo
+                de={competenciaDe}
+                ate={competenciaAte}
+                onPeriodoChange={(novoDe, novoAte) =>
+                  setMuitos({
+                    comp_de: novoDe === "" ? null : novoDe,
+                    comp_ate: novoAte === "" ? null : novoAte,
+                    mes: null,
+                    pagina: "1",
+                  })
                 }
               />
             ),
@@ -569,6 +592,9 @@ export function OrdensTabela({
                 de={faixaValor.de}
                 ate={faixaValor.ate}
                 rotulo="Valor total"
+                // Escala da barra, não teto de filtro: a alça na borda direita
+                // significa "sem limite".
+                maiorValor={maiorValorDaPagina}
                 onValorChange={(novoDe, novoAte) =>
                   setFaixaValor({ de: novoDe, ate: novoAte })
                 }

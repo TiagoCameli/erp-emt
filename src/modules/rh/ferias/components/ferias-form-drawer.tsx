@@ -111,6 +111,7 @@ export function FeriasFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar férias" : "Nova férias"}
       descricao="O limite de gozo é o fim do período aquisitivo mais 12 meses."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

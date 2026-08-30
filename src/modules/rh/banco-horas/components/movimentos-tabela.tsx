@@ -286,6 +286,7 @@ export function MovimentosTabela({
         ]}
         emptyState={
           <EmptyState
+            className="border-none bg-transparent"
             icone={Clock}
             titulo="Nenhum movimento encontrado"
             descricao="Registre créditos e débitos de horas por colaborador. O saldo é calculado no painel acima."

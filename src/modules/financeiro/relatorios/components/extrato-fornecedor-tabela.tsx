@@ -441,11 +441,13 @@ export function ExtratoFornecedorTabela({
         emptyState={
           filtrando && lancamentos.length > 0 ? (
             <EmptyState
+              className="border-none bg-transparent"
               titulo="Nenhum lançamento com esses filtros"
               descricao="O extrato tem lançamentos, mas nenhum bate com os filtros escolhidos."
             />
           ) : (
             <EmptyState
+              className="border-none bg-transparent"
               titulo="Sem lançamentos"
               descricao="Nenhum lançamento a pagar para este fornecedor."
             />

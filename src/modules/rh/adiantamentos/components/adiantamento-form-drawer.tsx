@@ -175,6 +175,7 @@ export function AdiantamentoFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar adiantamento" : "Novo adiantamento"}
       descricao="Adiantamentos são descontados na folha gerencial da competência."
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

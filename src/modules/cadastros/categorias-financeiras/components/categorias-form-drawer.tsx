@@ -145,6 +145,7 @@ export function CategoriasFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar categoria" : "Nova categoria"}
       descricao="Categorias organizam o plano de contas gerencial de receitas e despesas"
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button

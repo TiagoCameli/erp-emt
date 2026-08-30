@@ -45,7 +45,14 @@ export interface ListarOrdensParams {
   de?: string;
   ate?: string;
   /** Mês de referência exato (yyyy-mm-01). */
+  /**
+   * NÃO filtra: quem filtra competência é a janela abaixo. Fica no tipo porque a
+   * página ainda o lê da URL para dizer à barra o que veio de um link antigo.
+   */
   mesCompetencia?: string;
+  /** A janela de mês de referência, `yyyy-MM-01` nas duas pontas. */
+  competenciaDe?: string;
+  competenciaAte?: string;
   /** Categoria financeira do custo. */
   categoriaId?: string;
   /** Forma de pagamento (o método: PIX, boleto, cartão...). */
@@ -454,8 +461,14 @@ export async function listarOrdens(
   }
   if (params.de) consulta = consulta.gte("data_compra", params.de);
   if (params.ate) consulta = consulta.lte("data_compra", params.ate);
-  if (params.mesCompetencia) {
-    consulta = consulta.eq("mes_competencia", params.mesCompetencia);
+  // A JANELA de competência, e não o mês exato: desde 30/08/2026 o filtro da
+  // barra é intervalo, e o `mes` de um link antigo já chega aqui traduzido para
+  // uma janela de um mês só (ver `janelaDeCompetencia` em compras/_shared/lista).
+  if (params.competenciaDe) {
+    consulta = consulta.gte("mes_competencia", params.competenciaDe);
+  }
+  if (params.competenciaAte) {
+    consulta = consulta.lte("mes_competencia", params.competenciaAte);
   }
   if (params.categoriaId) {
     // `contains` e não `eq`: o filtro casa a ordem que tem AQUELA categoria em

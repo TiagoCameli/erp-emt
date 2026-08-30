@@ -159,6 +159,7 @@ export function EquipamentosFormDrawer({
           ? "Atualize os dados deste equipamento"
           : "Cadastre um equipamento. A etapa dele no centro de custo de Manutenção é gerada automaticamente"
       }
+      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
           <Button
