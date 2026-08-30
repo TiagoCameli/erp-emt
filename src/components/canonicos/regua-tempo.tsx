@@ -31,6 +31,16 @@ export interface ReguaTempoProps {
   onPeriodoChange: (de: string, ate: string) => void;
   /** Nome do que está sendo datado, para os rótulos de acessibilidade. */
   rotulo: string;
+  /**
+   * Quais tamanhos de bloco esta régua oferece. Por padrão, os cinco.
+   *
+   * O filtro de MÊS DE REFERÊNCIA passa só [ano, trimestre, mes]: competência é
+   * um mês por definição (a coluna guarda o dia 1), e oferecer "Dias" ali seria
+   * oferecer um corte que o dado não tem.
+   */
+  granularidades?: readonly Granularidade[];
+  /** Some com os campos de data exata. O filtro de competência não os usa. */
+  semDataExata?: boolean;
 }
 
 /**
@@ -55,6 +65,8 @@ export function ReguaTempo({
   ate,
   onPeriodoChange,
   rotulo,
+  granularidades = GRANULARIDADES,
+  semDataExata = false,
 }: ReguaTempoProps) {
   const hoje = React.useMemo(() => dataHojeISO(), []);
 
@@ -64,14 +76,21 @@ export function ReguaTempo({
    * "sugerida" a cada clique, ou escolher três dias em DIAS jogaria a régua de
    * volta para DIAS no meio do arraste seguinte.
    */
-  const [granularidade, setGranularidade] = React.useState<Granularidade>(
-    () => granularidadeDoPeriodo(de, ate) ?? "mes",
-  );
+  const inicial = React.useMemo(() => {
+    // A sugerida, quando esta régua a oferece; senão, meses. Sem esse ajuste, um
+    // filtro de três dias abriria a régua de competência em "Dias", que ela não
+    // desenha, e a régua sairia vazia.
+    const sugerida = granularidadeDoPeriodo(de, ate) ?? "mes";
+    if (granularidades.includes(sugerida)) return sugerida;
+    return granularidades.includes("mes") ? "mes" : granularidades[0]!;
+    // Só na montagem: depois disso a granularidade é do usuário.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [granularidade, setGranularidade] =
+    React.useState<Granularidade>(inicial);
   const [inicioJanela, setInicioJanela] = React.useState<string>(() =>
-    inicioDaJanela(
-      ancoraInicial(de, ate, hoje),
-      granularidadeDoPeriodo(de, ate) ?? "mes",
-    ),
+    inicioDaJanela(ancoraInicial(de, ate, hoje), inicial),
   );
 
   /** Bloco onde o arraste começou. `null` quando ninguém está arrastando. */
@@ -146,7 +165,7 @@ export function ReguaTempo({
         {/* Os cinco tamanhos, sempre à vista: um seletor escondido faria a
             pessoa descobrir por acidente que a régua faz dias. */}
         <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-          {GRANULARIDADES.map((opcao) => (
+          {granularidades.map((opcao) => (
             <button
               key={opcao}
               type="button"
@@ -214,26 +233,31 @@ export function ReguaTempo({
 
       {/* As datas exatas. Ficam DEPOIS da régua porque são o ajuste fino: a
           régua dá o intervalo redondo, e aqui se corta no dia. */}
-      <div className="flex items-center gap-1.5">
-        <span className="text-legenda text-muted-foreground">De</span>
-        <Input
-          type="date"
-          value={de}
-          max={ate === "" ? undefined : ate}
-          onChange={(evento) => onPeriodoChange(evento.target.value, ate)}
-          aria-label={`${rotulo}: data inicial`}
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
-        <span className="text-legenda text-muted-foreground">até</span>
-        <Input
-          type="date"
-          value={ate}
-          min={de === "" ? undefined : de}
-          onChange={(evento) => onPeriodoChange(de, evento.target.value)}
-          aria-label={`${rotulo}: data final`}
-          className="h-8 flex-1 text-detalhe tabular-nums"
-        />
-      </div>
+      {/* Não renderizado, e não só escondido por CSS: campo com `hidden` continua
+          no DOM, continua alcançável por leitor de tela e continua entrando na
+          navegação por Tab em alguns navegadores. */}
+      {semDataExata ? null : (
+        <div className="flex items-center gap-1.5">
+          <span className="text-legenda text-muted-foreground">De</span>
+          <Input
+            type="date"
+            value={de}
+            max={ate === "" ? undefined : ate}
+            onChange={(evento) => onPeriodoChange(evento.target.value, ate)}
+            aria-label={`${rotulo}: data inicial`}
+            className="h-8 flex-1 text-detalhe tabular-nums"
+          />
+          <span className="text-legenda text-muted-foreground">até</span>
+          <Input
+            type="date"
+            value={ate}
+            min={de === "" ? undefined : de}
+            onChange={(evento) => onPeriodoChange(de, evento.target.value)}
+            aria-label={`${rotulo}: data final`}
+            className="h-8 flex-1 text-detalhe tabular-nums"
+          />
+        </div>
+      )}
 
       {/* Atalhos do que se pergunta toda semana. Não substituem a régua: são o
           caminho de UM clique para os cortes que já têm nome. */}
