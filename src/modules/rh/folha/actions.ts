@@ -12,6 +12,7 @@ import {
   escreverCabecalhoMarca,
   estilizarCabecalhoColunas,
 } from "@/lib/planilha-marca";
+import { gerarPdf } from "@/lib/pdf";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatarBRL,
@@ -24,6 +25,10 @@ import {
 } from "@/modules/cadastros/colaboradores/schemas";
 import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
 import { buscarFolha } from "@/modules/rh/folha/queries";
+import {
+  documentoDoResumo,
+  nomeDoArquivo,
+} from "@/modules/rh/folha/resumo-pdf";
 import {
   editarItemFolhaSchema,
   gerarFolhaSchema,
@@ -486,6 +491,59 @@ function nomeArquivoFolha(competencia: string): string {
  * linha de totais. Devolve o arquivo em base64 para o client baixar via Blob.
  * Disponível em qualquer status.
  */
+/**
+ * O resumo da folha em PDF, para ir ANEXADO ao pedido de aprovação.
+ *
+ * Pedido do Tiago (29/08/2026): a mensagem que ele copia com o link também tem
+ * que levar um PDF com o resumo de cada funcionário. Quem aprova R$ 173 mil
+ * precisa ver de onde o número vem, e às vezes decide no celular, longe do
+ * sistema.
+ *
+ * Gerado no SERVIDOR e devolvido em base64, igual à planilha: o pdfmake pesa
+ * mais de 1 MB e não tem por que viajar até o navegador. E a permissão fica
+ * onde vale — um PDF com o salário de 47 pessoas não pode sair para quem não
+ * pode ver a folha.
+ */
+export async function gerarResumoFolhaPdf(
+  id: string,
+): Promise<ResultadoPlanilha> {
+  if (!(await checarPermissao("ver"))) {
+    return { erro: "Sem permissão para exportar a folha" };
+  }
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Folha inválida" };
+
+  const folha = await buscarFolha(idValido.data);
+  if (!folha) return { erro: "Folha não encontrada" };
+
+  try {
+    const bytes = await gerarPdf(
+      documentoDoResumo(
+        {
+          competencia: folha.competencia,
+          statusRotulo: STATUS_FOLHA[folha.status].rotulo,
+          dataVencimento: folha.dataVencimento,
+          itens: folha.itens,
+        },
+        new Date(),
+      ),
+    );
+
+    return {
+      ok: true,
+      base64: bytes.toString("base64"),
+      nomeArquivo: nomeDoArquivo(folha.competencia),
+    };
+  } catch (erro) {
+    return erroAcao(
+      "rh.folha.resumoPdf",
+      erro,
+      "Não foi possível gerar o resumo em PDF",
+    );
+  }
+}
+
 export async function gerarPlanilhaFolha(
   id: string,
 ): Promise<ResultadoPlanilha> {
