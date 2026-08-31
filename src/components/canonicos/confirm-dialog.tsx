@@ -15,6 +15,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
+import { comAvisoDeFalha } from './acao-sem-silencio';
+
 export interface ConfirmDialogProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
@@ -57,13 +59,30 @@ export function ConfirmDialog({
     onAbertoChange(novoAberto);
   }
 
+  /**
+   * Fecha o diálogo SÓ quando a ação passou.
+   *
+   * O `comAvisoDeFalha` está aqui porque o `await` pode REJEITAR sem a action
+   * ter rodado (rede, 504, id de action de um build antigo). Antes dele a
+   * rejeição morria calada: o diálogo ficava aberto sem dizer por quê, e quem
+   * clicou não tinha como saber se confirmou ou não. Ver acao-sem-silencio.ts.
+   *
+   * Quando falha, o motivo digitado FICA e o diálogo continua aberto de
+   * propósito: a pessoa recarrega e tenta de novo sem redigitar.
+   */
   async function confirmar() {
     if (!motivoValido || carregando) return;
     setCarregando(true);
+    let passou = false;
     try {
-      await onConfirmar(exigeMotivo ? motivo.trim() : undefined);
-      setMotivo('');
-      onAbertoChange(false);
+      await comAvisoDeFalha('canonicos.confirmDialog.confirmar', async () => {
+        await onConfirmar(exigeMotivo ? motivo.trim() : undefined);
+        passou = true;
+      });
+      if (passou) {
+        setMotivo('');
+        onAbertoChange(false);
+      }
     } finally {
       setCarregando(false);
     }
