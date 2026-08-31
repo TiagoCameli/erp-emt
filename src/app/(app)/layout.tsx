@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
-import { AppShell, type ModuloNavegacao } from "@/components/canonicos";
+import {
+  AppShell,
+  RedeDeFalhaSilenciosa,
+  type ModuloNavegacao,
+} from "@/components/canonicos";
 import { urlAssinadaDaFoto } from "@/lib/foto-perfil";
 import { abasVisiveis, getUsuarioLogado, modulosVisiveis } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -67,6 +71,9 @@ export default async function AppLayout({
       modulos={modulos}
       onSair={sair}
     >
+      {/* Piso do app: rejeição de action que ninguém pegou vira aviso, em vez
+          de o botão piscar e nada acontecer. Ver o comentário do componente. */}
+      <RedeDeFalhaSilenciosa />
       {children}
     </AppShell>
   );

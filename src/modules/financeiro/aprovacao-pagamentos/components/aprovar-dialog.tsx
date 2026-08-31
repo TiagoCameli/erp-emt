@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CalendarClock, LoaderCircle, TriangleAlert } from "lucide-react";
 
-import { Combobox } from "@/components/canonicos";
+import { Combobox, comAvisoDeFalha } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -126,9 +126,17 @@ export function AprovarDialog({
   async function confirmar() {
     setSalvando(true);
     try {
-      // Só manda a conta quando é troca de verdade: mandar a mesma de volta
-      // faria o banco revalidar uma conta que pode ter sido desativada depois.
-      await onConfirmar(outraData ? data : null, trocouConta ? conta : null);
+      // `comAvisoDeFalha` porque este `await` pode REJEITAR sem a aprovação ter
+      // rodado (rede, 504, id de Server Action de um build antigo). Sem ele a
+      // rejeição morria calada e o botão de aprovar dinheiro parecia ter
+      // funcionado. Ver acao-sem-silencio.ts.
+      await comAvisoDeFalha(
+        "financeiro.aprovacaoPagamentos.aprovarDialog",
+        () =>
+          // Só manda a conta quando é troca de verdade: mandar a mesma de volta
+          // faria o banco revalidar uma conta que pode ter sido desativada depois.
+          onConfirmar(outraData ? data : null, trocouConta ? conta : null),
+      );
     } finally {
       setSalvando(false);
     }
@@ -251,7 +259,9 @@ export function AprovarDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        {/* 44 px de alvo de toque no celular; 36 px no desktop, como o resto
+            do app. Mesmo motivo do ConfirmDialog canônico. */}
+        <DialogFooter className="max-sm:[&>button]:h-11">
           <Button
             type="button"
             variant="outline"

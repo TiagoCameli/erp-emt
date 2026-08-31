@@ -107,10 +107,39 @@ export function ApprovalBar({
   );
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface px-4 py-3">
-      <StatusBadge status={status} rotulo={rotulo} />
+    /*
+     * No celular a barra EMPILHA, e no desktop volta a ser uma linha só.
+     *
+     * Medido na folha de 08/2026, em produção: a versão de uma linha só exigia
+     * 816 px de largura (badge 154 + quatro botões 590 + vãos + recuo), com
+     * `flex-nowrap` nos dois níveis. Num telefone de 390-414 px o "Aprovar",
+     * que é o último da fila, ficava uns 400 px FORA da tela — sem jeito de
+     * tocar nele, na ação mais importante do app, justamente na tela que chega
+     * por link de WhatsApp e é aberta no celular.
+     *
+     * `items-stretch` no empilhado, para o botão ocupar a largura toda: alvo de
+     * toque grande é o que separa aprovar de errar o dedo.
+     */
+    <div className="flex flex-col items-stretch gap-3 rounded-md border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex items-center">
+        <StatusBadge status={status} rotulo={rotulo} />
+      </div>
 
-      <div className="flex items-center gap-2">
+      {/*
+       * `flex-wrap` em TODA largura, sem `sm:flex-nowrap`.
+       *
+       * Medido: com `flex-nowrap` a partir de `sm` (640 px), a barra voltava a
+       * uma linha só que exige 816 px — então entre 640 e 816 px dois botões
+       * saíam da tela de novo, e um deles era o Aprovar. Essa faixa é tablet,
+       * notebook pequeno e telefone deitado. Desligar a quebra de linha num
+       * ponto fixo é chutar onde a fila cabe; deixar quebrando sempre não
+       * precisa de chute, e no desktop largo a fila cabe numa linha de
+       * qualquer jeito, então nada muda visualmente lá.
+       *
+       * No celular cada botão cresce até caber dois por linha (`min-w` de
+       * 9rem) e ganha 44 px de altura, o mínimo de alvo de toque.
+       */}
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end max-sm:[&>button]:h-11 max-sm:[&>button]:min-w-36 max-sm:[&>button]:flex-1">
         {acoesExtras}
         {mostrarAprovacao ? (
           <>
@@ -123,7 +152,19 @@ export function ApprovalBar({
             >
               {rejeitar.botao}
             </Button>
-            <Button type="button" disabled={aprovando} onClick={aprovar}>
+            {/*
+              `basis-full` só no celular: com o `flex-wrap` do container isso dá
+              LINHA PRÓPRIA ao Aprovar, embaixo de todo o resto. É de propósito
+              que ele não divida linha com "Mandar para revisão": dois botões
+              lado a lado num telefone, um deles aprovando dinheiro, é convite a
+              erro de dedo. No desktop segue na fila, do tamanho natural.
+            */}
+            <Button
+              type="button"
+              className="max-sm:basis-full"
+              disabled={aprovando}
+              onClick={aprovar}
+            >
               {aprovando ? 'Aprovando...' : 'Aprovar'}
             </Button>
           </>
@@ -134,7 +175,13 @@ export function ApprovalBar({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex" tabIndex={0}>
+                  {/* `flex-1` e `[&>button]` repetidos aqui porque este span
+                      fica ENTRE o container e o botão: sem isso o Desaprovar
+                      bloqueado seria o único que não cresce no celular. */}
+                  <span
+                    className="inline-flex max-sm:flex-1 max-sm:[&>button]:h-11 max-sm:[&>button]:w-full"
+                    tabIndex={0}
+                  >
                     {botaoDesaprovar}
                   </span>
                 </TooltipTrigger>
