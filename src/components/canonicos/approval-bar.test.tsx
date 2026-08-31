@@ -117,3 +117,51 @@ describe("ApprovalBar quando a action lança", () => {
     expect(erros[0]).toMatch(/recarregue/i);
   });
 });
+
+/**
+ * Layout no celular.
+ *
+ * jsdom não faz layout, então aqui não se mede pixel: o que estes testes
+ * trancam é o CONTRATO de classes que impede o botão de sair da tela. A medição
+ * de verdade foi feita em produção, na folha de 08/2026: a barra de uma linha só
+ * exigia 816 px de largura mínima (badge 154 + quatro botões 590 + vãos +
+ * recuo), com `flex-nowrap` nos dois níveis — num telefone de 390-414 px o
+ * "Aprovar", que é o último da fila, ficava uns 400 px FORA da tela.
+ */
+describe("ApprovalBar no celular", () => {
+  it("empilha a barra e deixa a fila de ações quebrar linha", () => {
+    montar();
+    const barra = screen
+      .getByRole("button", { name: "Aprovar" })
+      .closest("div.rounded-md");
+    expect(barra).toBeTruthy();
+    // Empilhado por padrão; uma linha só a partir de `sm`.
+    expect(barra!.className).toContain("flex-col");
+    expect(barra!.className).toContain("sm:flex-row");
+
+    // Sem `flex-wrap` o botão sai da tela em vez de descer de linha.
+    const acoes = screen.getByRole("button", { name: "Aprovar" }).parentElement;
+    expect(acoes!.className).toContain("flex-wrap");
+  });
+
+  it("dá ao Aprovar linha própria e alvo de toque de 44px no celular", () => {
+    montar();
+    const aprovar = screen.getByRole("button", { name: "Aprovar" });
+    // Linha própria: não divide linha com o botão de devolver.
+    expect(aprovar.className).toContain("max-sm:basis-full");
+
+    // h-11 = 44px, o mínimo de alvo de toque.
+    const acoes = aprovar.parentElement!;
+    expect(acoes.className).toContain("max-sm:[&>button]:h-11");
+    expect(acoes.className).toContain("max-sm:[&>button]:flex-1");
+  });
+
+  it("não fixa altura de botão para o desktop", () => {
+    montar();
+    const acoes = screen.getByRole("button", { name: "Aprovar" }).parentElement!;
+    // Um par `h-11 sm:h-9` fixaria a altura do desktop aqui e passaria a mentir
+    // no dia que o tamanho padrão do Button mudar. Só `max-sm:` é o certo.
+    expect(acoes.className).not.toMatch(/(^|\s)h-11/);
+    expect(acoes.className).not.toContain("sm:[&>button]:h-9");
+  });
+});

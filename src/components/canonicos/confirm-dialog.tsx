@@ -117,7 +117,15 @@ export function ConfirmDialog({
           </div>
         ) : null}
 
-        <DialogFooter>
+        {/*
+          `max-sm:h-11` no celular: o `DialogFooter` do shadcn já empilha os
+          botões em tela estreita, mas os 36 px de altura do botão padrão são
+          menos que o alvo de toque mínimo de 44 px — e este é o botão que
+          confirma aprovação, rejeição e exclusão. `max-sm:` em vez de um par
+          `h-11 sm:h-9` de propósito: assim o desktop não é tocado, e o dia que
+          a altura padrão do botão mudar isto não fica mentindo.
+        */}
+        <DialogFooter className="max-sm:[&>button]:h-11">
           <Button
             type="button"
             variant="outline"

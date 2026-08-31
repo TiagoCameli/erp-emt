@@ -52,7 +52,14 @@ export function BarraSelecao({
           {resumo}
         </span>
       ) : null}
-      <div className="ml-auto flex items-center gap-2">
+      {/*
+       * `flex-wrap` aqui também, não só no pai: o pai quebrando joga o grupo
+       * inteiro para a linha de baixo, mas se o grupo tem três ações (é o caso
+       * do aprovar em lote na fila de pagamentos) ele continua estourando a
+       * largura do celular e a última ação sai da tela. E `h-11` no celular
+       * pelo alvo de toque, igual à ApprovalBar.
+       */}
+      <div className="ml-auto flex flex-wrap items-center gap-2 max-sm:[&>button]:h-11">
         {children}
         <Button
           type="button"

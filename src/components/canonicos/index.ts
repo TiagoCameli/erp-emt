@@ -29,6 +29,8 @@ export * from "./secao-formulario";
 export * from "./tabela-itens";
 export * from "./confirm-dialog";
 export * from "./approval-bar";
+export * from "./acao-sem-silencio";
+export * from "./rede-de-falha-silenciosa";
 export * from "./filter-bar";
 export * from "./filtros-sessao";
 export * from "./use-filtro-sessao";
