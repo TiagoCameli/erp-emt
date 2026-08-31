@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+import { comAvisoDeFalha } from './acao-sem-silencio';
 import { ConfirmDialog } from './confirm-dialog';
 import { StatusBadge } from './status-badge';
 
@@ -85,7 +86,10 @@ export function ApprovalBar({
     if (aprovando) return;
     setAprovando(true);
     try {
-      await onAprovar();
+      // `comAvisoDeFalha` existe porque este `await` pode REJEITAR (a action
+      // nem rodar), e a rejeição calada faz o botão de aprovar dinheiro parecer
+      // que funcionou. Ver o comentário em acao-sem-silencio.ts.
+      await comAvisoDeFalha('canonicos.approvalBar.aprovar', onAprovar);
     } finally {
       setAprovando(false);
     }
