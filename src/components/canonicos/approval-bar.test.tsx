@@ -144,6 +144,22 @@ describe("ApprovalBar no celular", () => {
     expect(acoes!.className).toContain("flex-wrap");
   });
 
+  it("nunca desliga a quebra de linha, em nenhuma largura", () => {
+    montar();
+    const acoes = screen.getByRole("button", { name: "Aprovar" }).parentElement!;
+    /*
+     * Esta é a regressão que a medição pegou: com `sm:flex-nowrap` a barra
+     * voltava a uma linha só a partir de 640 px, mas a linha exige 816 px —
+     * então entre 640 e 816 px dois botões saíam da tela de novo, um deles o
+     * Aprovar. Tablet, notebook pequeno e telefone deitado caem nessa faixa.
+     *
+     * Medido depois de tirar o `nowrap`, com o CSS compilado do app: de 360 a
+     * 1512 px, zero botão fora da tela, zero não clicável, zero scroll
+     * horizontal (4 linhas em 360, 2 até 768, 1 de 820 para cima).
+     */
+    expect(acoes.className).not.toContain("flex-nowrap");
+  });
+
   it("dá ao Aprovar linha própria e alvo de toque de 44px no celular", () => {
     montar();
     const aprovar = screen.getByRole("button", { name: "Aprovar" });

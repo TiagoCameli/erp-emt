@@ -126,12 +126,20 @@ export function ApprovalBar({
       </div>
 
       {/*
-       * `flex-wrap` é a trava: mesmo que uma tela passe seis ações extras, nada
-       * sai da tela — a fila desce de linha. No celular cada botão cresce até
-       * caber dois por linha (`min-w` de 9rem) e ganha 44 px de altura, o
-       * mínimo de alvo de toque; no desktop volta ao tamanho natural.
+       * `flex-wrap` em TODA largura, sem `sm:flex-nowrap`.
+       *
+       * Medido: com `flex-nowrap` a partir de `sm` (640 px), a barra voltava a
+       * uma linha só que exige 816 px — então entre 640 e 816 px dois botões
+       * saíam da tela de novo, e um deles era o Aprovar. Essa faixa é tablet,
+       * notebook pequeno e telefone deitado. Desligar a quebra de linha num
+       * ponto fixo é chutar onde a fila cabe; deixar quebrando sempre não
+       * precisa de chute, e no desktop largo a fila cabe numa linha de
+       * qualquer jeito, então nada muda visualmente lá.
+       *
+       * No celular cada botão cresce até caber dois por linha (`min-w` de
+       * 9rem) e ganha 44 px de altura, o mínimo de alvo de toque.
        */}
-      <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:justify-end max-sm:[&>button]:h-11 max-sm:[&>button]:min-w-36 max-sm:[&>button]:flex-1">
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end max-sm:[&>button]:h-11 max-sm:[&>button]:min-w-36 max-sm:[&>button]:flex-1">
         {acoesExtras}
         {mostrarAprovacao ? (
           <>
