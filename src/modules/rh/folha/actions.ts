@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import ExcelJS from "exceljs";
+import type ExcelJS from "exceljs";
 
 import { EMPRESA } from "@/config/marca";
 import type { Acao } from "@/config/recursos";
@@ -615,7 +615,18 @@ export async function gerarPlanilhaFolha(
   const folha = await buscarFolha(idValido.data);
   if (!folha) return { erro: "Folha não encontrada" };
 
-  const workbook = new ExcelJS.Workbook();
+  /*
+   * Import DINÂMICO, pela mesma razão do pdfmake logo abaixo: este arquivo é o
+   * módulo de actions da folha, e ele carrega `aprovarFolha`. Dependência de
+   * terceiro no TOPO daqui é ponto único de falha para TODAS as actions do
+   * módulo — se o pacote não carregar em produção, morre a aprovação junto,
+   * calada e sem chegar ao banco. Foi exatamente o que o pdfmake fez.
+   *
+   * O `import type` no topo do arquivo continua, porque tipo é apagado na
+   * compilação e não carrega nada em runtime.
+   */
+  const { default: ExcelJSRuntime } = await import("exceljs");
+  const workbook = new ExcelJSRuntime.Workbook();
   workbook.creator = "ERP EMT";
   workbook.company = EMPRESA.razaoSocial;
   workbook.created = new Date();
