@@ -60,8 +60,14 @@ function totalDa(linha: LinhaBarra): number {
   return linha.segmentos.reduce((soma, s) => soma + s.valor, 0);
 }
 
+/** Uma série na legenda: só o que ela precisa, nome e cor. */
+export interface SerieDaLegenda {
+  rotulo: string;
+  cor: string;
+}
+
 /** Legenda de série, sempre presente quando há mais de uma. */
-function Legenda({ series }: { series: SegmentoBarra[] }) {
+function Legenda({ series }: { series: SerieDaLegenda[] }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1">
       {series.map((serie) => (
@@ -87,7 +93,7 @@ export interface BarrasHorizontaisProps {
    * As séries, na ordem da pilha. Com duas ou mais vira legenda; com uma só o
    * título do bloco já diz o que a barra é, e a caixinha seria ruído.
    */
-  series?: SegmentoBarra[];
+  series?: SerieDaLegenda[];
 }
 
 export function BarrasHorizontais({ linhas, series }: BarrasHorizontaisProps) {

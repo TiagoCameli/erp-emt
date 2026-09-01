@@ -34,7 +34,7 @@ import { ComposicaoGrupos } from "@/modules/gestao/components/composicao-grupos"
 import {
   BarrasHorizontais,
   type LinhaBarra,
-  type SegmentoBarra,
+  type SerieDaLegenda,
 } from "@/modules/gestao/components/barras-horizontais";
 import {
   ReceitaDespesaGrafico,
@@ -70,6 +70,18 @@ const COR_DESPESA = "var(--color-chart-2)";
 const COR_PAGO = "var(--color-chart-3)";
 /** Vermelho: só ESTADO (o que venceu), nunca uma série ao lado do verde. */
 const COR_VENCIDO = "var(--color-chart-5)";
+
+/**
+ * As duas séries do bloco de fornecedores, para a legenda.
+ *
+ * Asfalto para o que já saiu e âmbar para o que ainda vai sair: são as duas
+ * cores de maior separação do sistema (ΔE 30,6 em daltonismo, medido em
+ * 01/09/2026), e a ordem da pilha é cronológica — o passado à esquerda.
+ */
+const SERIES_FORNECEDOR: SerieDaLegenda[] = [
+  { rotulo: "Pago", cor: COR_PAGO },
+  { rotulo: "Em aberto", cor: COR_DESPESA },
+];
 
 /**
  * Lê o valor de um bloco que pode ter falhado. O painel carrega tudo em
@@ -408,7 +420,7 @@ export default async function GestaoPage({
       <Painel
         titulo="Resumo do período, mês a mês"
         descricao="Os mesmos números do gráfico acima, exatos."
-        rotuloDestaque="Em reais"
+        rotuloDestaque="Resultado do período"
         destaque={
           resultado === null ? undefined : (
             <MoneyText valor={resultado.resultado} />
@@ -668,15 +680,3 @@ export default async function GestaoPage({
     </div>
   );
 }
-
-/**
- * As duas séries do bloco de fornecedores, para a legenda.
- *
- * Asfalto para o que já saiu e âmbar para o que ainda vai sair: são as duas
- * cores de maior separação do sistema (ΔE 30,6 em daltonismo, medido em
- * 01/09/2026), e a ordem da pilha é cronológica — o passado à esquerda.
- */
-const SERIES_FORNECEDOR: SegmentoBarra[] = [
-  { rotulo: "Pago", valor: 0, cor: COR_PAGO },
-  { rotulo: "Em aberto", valor: 0, cor: COR_DESPESA },
-];
