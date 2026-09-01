@@ -2,6 +2,7 @@ import "server-only";
 
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
+import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   ehPagamentoDireto,
@@ -216,7 +217,7 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
     await Promise.all([
       ocsSemNota(supabase, idsOc),
       numerosDeOc(supabase, idsOc),
-      contarAnexos(supabase, lancamentoIds),
+      contarAnexos(lancamentoIds),
       contarParcelas(supabase, lancamentoIds),
     ]);
 
@@ -344,28 +345,34 @@ async function contarParcelas(
   return contagem;
 }
 
-/** Quantos anexos cada lançamento da fila tem (contador da coluna Anexos). */
+/**
+ * Quantos anexos cada lançamento da fila tem (contador da coluna Anexos).
+ *
+ * Delega para `contarAnexosPorDocumento`, que é o canônico e já tem as DUAS
+ * travas de tamanho. A versão que existia aqui não tinha nenhuma, e isso
+ * quebrava em produção sem dizer nada:
+ *
+ * - `.in()` com os ids da fila inteira. Medido no `edge_logs` em 01/09/2026:
+ *   `GET /rest/v1/anexo_vinculos` com **33.812 caracteres** de URL devolvendo
+ *   **400**, dezenas de vezes. Com 835 parcelas pendentes a fila passa de 900
+ *   lançamentos, e 900 uuids a 37 caracteres cada dão os 33 KB. O PostgREST
+ *   corta antes de olhar RLS.
+ * - O erro era ENGOLIDO (`const { data } = await ...`, sem checar `error`), e
+ *   `data` vinha `undefined`. Resultado: a coluna Anexos mostrava zero para
+ *   TODO MUNDO na fila, e ninguém tinha erro para reportar — quem aprovava
+ *   pagamento achava que nenhum documento tinha nota anexada.
+ *
+ * Ver [[project_erp_emt_in_postgrest_limite_url]]: teste unitário não pega,
+ * porque dois ids cabem em qualquer URL.
+ */
 async function contarAnexos(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   lancamentoIds: string[],
 ): Promise<Map<string, number>> {
   const unicos = [...new Set(lancamentoIds)];
   if (unicos.length === 0) return new Map();
 
-  const { data } = await supabase
-    .from("anexo_vinculos")
-    .select("entidade_id")
-    .eq("entidade_tipo", "lancamento")
-    .in("entidade_id", unicos);
-
-  const contagem = new Map<string, number>();
-  for (const vinculo of data ?? []) {
-    contagem.set(
-      vinculo.entidade_id,
-      (contagem.get(vinculo.entidade_id) ?? 0) + 1,
-    );
-  }
-  return contagem;
+  const porDocumento = await contarAnexosPorDocumento("lancamento", unicos);
+  return new Map(Object.entries(porDocumento));
 }
 
 /**
@@ -686,7 +693,7 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
     await Promise.all([
       ocsSemNota(supabase, idsOc),
       numerosDeOc(supabase, idsOc),
-      contarAnexos(supabase, lancamentoIds),
+      contarAnexos(lancamentoIds),
       contarParcelas(supabase, lancamentoIds),
     ]);
 
