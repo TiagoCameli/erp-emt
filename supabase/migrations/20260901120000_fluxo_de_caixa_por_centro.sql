@@ -12,10 +12,10 @@
 -- ============================================================
 -- "Fluxo de caixa por centro de custo" so tem uma leitura honesta: quanto de
 -- dinheiro entrou e saiu POR AQUELE centro. Um lancamento nao tem centro, tem
--- RATEIO -- 131 dos 6.462 dividem entre varias obras, e sao justamente os de
--- maior valor. Contar a parcela INTEIRA em cada centro que ela toca faria a
--- soma de duas obras ser maior que o total da empresa, com a tela abrindo sem
--- erro nenhum.
+-- RATEIO -- 247 documentos dividem entre varios centros (medido em 01/09/2026),
+-- e sao justamente os de maior valor. Contar a parcela INTEIRA em cada centro
+-- que ela toca faria a soma de duas obras ser maior que o total da empresa, com
+-- a tela abrindo sem erro nenhum.
 --
 -- Entao a linha vale `valor_liquido * (rateio escolhido / rateio do documento)`.
 -- E a mesma regra que `fn_rel_custo_receita` ja usa (ela soma `r.valor`, a
