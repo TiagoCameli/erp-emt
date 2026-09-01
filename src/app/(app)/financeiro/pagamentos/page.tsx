@@ -24,6 +24,18 @@ import {
   somaDasParcelasPagas,
 } from "@/modules/financeiro/pagamentos/queries";
 
+/**
+ * A Server Action de exportar roda na função DESTA página, não numa função
+ * própria. Exportar Pagamentos é ler a fila inteira mais o histórico em páginas
+ * e montar o .xlsx na memória. Com o teto padrão da Vercel (10 a 15s) isso morre
+ * no meio e devolve erro no lugar do arquivo — foi o que aconteceu na primeira
+ * vez que o botão foi usado, em 01/09/2026, e não havia log de aplicação para
+ * apontar a causa (a Vercel aqui é plano hobby). 60s é o máximo que vale em
+ * qualquer plano. Mesma razão do `maxDuration` de /financeiro/lancamentos, e
+ * `max-duration-de-quem-exporta.test.ts` cobra isto de toda página que exporta.
+ */
+export const maxDuration = 60;
+
 const TAMANHO_PAGINA = 25;
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;

@@ -32,7 +32,7 @@ export function erroAcao(
  * ([[feedback_digest_do_next_se_resolve_no_edge_log]]). Se a mensagem não subir
  * na tela, ela não existe em lugar nenhum, e a investigação vira chute.
  */
-function textoDoErro(erro: unknown): string {
+export function textoDoErro(erro: unknown): string {
   if (erro instanceof Error) {
     const codigo = (erro as { code?: unknown }).code;
     const sufixo = typeof codigo === "string" && codigo ? ` [${codigo}]` : "";
