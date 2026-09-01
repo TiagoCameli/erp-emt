@@ -922,6 +922,49 @@ function inicioDoDiaISO(data: string, deslocamentoDias = 0): string {
 }
 
 /**
+ * A linha crua que a consulta da listagem devolve.
+ *
+ * Existe porque o `select` é montado em tempo de EXECUÇÃO (o embed apelidado do
+ * filtro de conta só entra quando o filtro está ligado), e sem string literal o
+ * supabase-js não tem o que inferir — o tipo da linha degrada para
+ * `GenericStringError` e o typecheck acusa cada campo. Mesmo par
+ * `partesSelect` + `.returns<T[]>()` da listagem de Cotações.
+ *
+ * O `filtroConta` NÃO entra aqui de propósito: ele existe só para filtrar, e
+ * ninguém lê o valor dele.
+ */
+interface LinhaBrutaLancamento {
+  id: string;
+  numero: string | null;
+  numero_documento: string | null;
+  tipo: string;
+  origem: string;
+  descricao: string;
+  valor: number;
+  data_vencimento: string | null;
+  status: string;
+  data_compra: string;
+  mes_competencia: string;
+  created_at: string;
+  categorias_financeiras: { nome: string } | null;
+  fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
+  colaboradores: { nome: string } | null;
+  lancamento_parcelas:
+    | {
+        status: string;
+        conta_bancaria_id: string | null;
+        valor: number;
+        valor_liquido: number | null;
+        desconto: number | null;
+        data_vencimento: string | null;
+      }[]
+    | null;
+  lancamento_rateios:
+    | { centro_custo_id: string | null; centros_custo: { nome: string } | null }[]
+    | null;
+}
+
+/**
  * Lista os lançamentos com paginação server-side (count exato), o nome da
  * categoria e do fornecedor resolvidos e a contagem de parcelas. Todos os
  * filtros de `ListarLancamentosParams` são aplicados no banco.
@@ -1161,7 +1204,11 @@ export async function listarLancamentos(
     );
   }
 
-  const { data, error, count } = await consulta;
+  // `returns` explícito porque o select é montado em tempo de execução: sem
+  // string literal o supabase-js não tem o que inferir. Mesmo motivo do
+  // `.returns<LinhaListaCotacao[]>()` na listagem de Cotações.
+  const { data, error, count } =
+    await consulta.returns<LinhaBrutaLancamento[]>();
 
   if (error) {
     throw new Error("Não foi possível carregar os lançamentos");
