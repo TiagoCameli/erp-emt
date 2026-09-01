@@ -12,10 +12,19 @@ import {
   nomesDoRateio,
   rotuloCentroCusto,
 } from "@/modules/financeiro/_shared/centro-de-custo";
-import { subarvoreDosCentros } from "@/modules/financeiro/lancamentos/queries";
+import {
+  arvoreDeCentrosDeCusto,
+  subarvoreDosCentros,
+} from "@/modules/financeiro/lancamentos/queries";
+import {
+  centroEEtapaDoRateio,
+  raizIdDoRateio,
+} from "@/modules/financeiro/lancamentos/hierarquia-centro";
+import type { PagamentoPlanilha } from "@/modules/financeiro/pagamentos/planilha";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   ROTULO_BANCO,
+  SEM_CENTRO_DE_CUSTO,
   STATUS_PARCELA_ABERTA,
   type BancoConta,
   type StatusParcela,
@@ -723,6 +732,14 @@ export async function listarParcelasPagas({
     .neq("lancamentos.status", "cancelado")
     .order("data_pagamento", { ascending: false, nullsFirst: false })
     .order("pago_em", { ascending: false, nullsFirst: false })
+    // DESEMPATE por id, e nunca tirar: `range` sem uma ordem TOTAL deixa o
+    // Postgres devolver os empatados na ordem que quiser, e cada página é uma
+    // consulta nova. Duas parcelas com a mesma `data_pagamento` e o mesmo
+    // `pago_em` (ou as duas nulas, na carga antiga) podem sair na página 1 e na
+    // 2, e uma terceira não sair em nenhuma. Na tela isso é uma linha repetida;
+    // na exportação, que lê o histórico inteiro página por página, é um
+    // pagamento que some do arquivo sem deixar rastro.
+    .order("id", { ascending: true })
     .range(de, ate);
 
   consulta = aplicarFiltrosPagas(
@@ -915,3 +932,157 @@ export async function trilhaParcelasDoLancamento(
     );
   });
 }
+
+/**
+ * As parcelas que a planilha de Pagamentos precisa, pelos ids.
+ *
+ * Uma leitura PRÓPRIA, e não um enriquecimento das duas listas da tela, por dois
+ * motivos. Primeiro, as duas abas devolvem formatos diferentes (`ParcelaAprovada`
+ * e `ParcelaPaga` não têm os mesmos campos), e a planilha precisa exatamente das
+ * mesmas colunas nas duas — montar isso a partir de dois contratos deixaria
+ * célula em branco de um lado só. Segundo, o rateio, o número do documento e o
+ * total de parcelas não estão em nenhuma das duas: pendurá-los no select das
+ * listas sairia caro em toda navegação para servir uma exportação que acontece
+ * de vez em quando.
+ *
+ * O RATEIO é do LANÇAMENTO, não da parcela: aqui ele vem como o PESO da divisão,
+ * e quem reparte o valor da parcela entre os centros é `expandirPagamentos` (por
+ * maior resto). A RAIZ de cada rateio sai de uma consulta só com o cadastro
+ * inteiro, e não de self-join aninhado no PostgREST.
+ *
+ * Recebe os ids de UM LOTE, não a exportação inteira: `in` viaja na query string
+ * de um GET e lista grande vira HTTP 400 por tamanho de URL antes de chegar na
+ * RLS. Quem chama fatia com `emLotes`.
+ */
+export async function lerPagamentosParaPlanilha(
+  ids: string[],
+): Promise<Map<string, PagamentoPlanilha>> {
+  const porId = new Map<string, PagamentoPlanilha>();
+  if (ids.length === 0) return porId;
+
+  const supabase = await createClient();
+
+  const linhas: LinhaPagamentoPlanilha[] = [];
+  for (const lote of emLotes(ids, LOTE_IDS_POSTGREST)) {
+    const { data, error } = await supabase
+      .from("lancamento_parcelas")
+      .select(
+        `id, numero_parcela, status, valor, desconto, juros, outras_despesas,
+         valor_liquido, data_vencimento, data_programada, data_pagamento,
+         contas_bancarias(nome),
+         lancamentos!inner(
+           id, numero, numero_documento, descricao, origem, mes_competencia,
+           data_compra,
+           categorias_financeiras(nome),
+           fornecedores(razao_social, nome_fantasia),
+           formas_pagamento(nome),
+           lancamento_parcelas(id),
+           lancamento_rateios(valor, centros_custo(id, nome))
+         )`,
+      )
+      .in("id", lote);
+
+    if (error) {
+      // A mensagem do banco vai junto de propósito: sem ela, a falha chega no
+      // log como "não foi possível" e descobrir o motivo vira adivinhação.
+      throw new Error(
+        `Não foi possível carregar os pagamentos para a planilha: ${error.message}`,
+      );
+    }
+    linhas.push(...((data ?? []) as unknown as LinhaPagamentoPlanilha[]));
+  }
+
+  const arvore = await arvoreDeCentrosDeCusto(supabase);
+
+  for (const linha of linhas) {
+    const lancamento = linha.lancamentos;
+    porId.set(linha.id, {
+      id: linha.id,
+      lancamentoNumero: lancamento?.numero ?? null,
+      numeroDocumento: lancamento?.numero_documento ?? null,
+      numeroParcela: linha.numero_parcela,
+      // Conta as parcelas irmãs para a célula sair "3/10". A cancelada entra na
+      // conta: ela ocupa um número na série, e "3/9" com uma parcela 10 no
+      // sistema faria quem confere procurar um erro que não existe.
+      totalParcelas: lancamento?.lancamento_parcelas?.length ?? null,
+      descricao: lancamento?.descricao ?? "",
+      categoriaNome: lancamento?.categorias_financeiras?.nome ?? null,
+      // O fantasia primeiro, que é como o financeiro chama o fornecedor; a
+      // razão social é o fallback de quem não tem fantasia cadastrado.
+      fornecedorNome:
+        lancamento?.fornecedores?.nome_fantasia ??
+        lancamento?.fornecedores?.razao_social ??
+        "",
+      origem: lancamento?.origem ?? null,
+      mesCompetencia: lancamento?.mes_competencia ?? null,
+      dataCompra: lancamento?.data_compra ?? null,
+      dataVencimento: linha.data_vencimento,
+      dataProgramada: linha.data_programada,
+      dataPagamento: linha.data_pagamento,
+      contaNome: linha.contas_bancarias?.nome ?? null,
+      formaPagamentoNome: lancamento?.formas_pagamento?.nome ?? null,
+      status: linha.status,
+      valor: linha.valor,
+      desconto: linha.desconto,
+      juros: linha.juros,
+      outrasDespesas: linha.outras_despesas,
+      // `valor_liquido` é coluna calculada e pode ser null em parcela antiga:
+      // cair no `valor` é o fallback, o mesmo do resto do módulo de dinheiro.
+      valorLiquido: linha.valor_liquido ?? linha.valor,
+      rateios: (lancamento?.lancamento_rateios ?? []).map((rateio) => {
+        const centro = rateio.centros_custo;
+        const nome = centro?.nome ?? SEM_CENTRO_DE_CUSTO;
+        const hierarquia = centro
+          ? centroEEtapaDoRateio(centro.id, nome, arvore)
+          : { raizNome: nome, etapaNome: null };
+        return {
+          centroId: centro?.id ?? null,
+          raizId: centro ? raizIdDoRateio(centro.id, arvore) : null,
+          valor: rateio.valor,
+          ...hierarquia,
+        };
+      }),
+    });
+  }
+
+  return porId;
+}
+
+/** Uma linha crua do select da planilha, como o PostgREST devolve. */
+type LinhaPagamentoPlanilha = {
+  id: string;
+  numero_parcela: number;
+  status: string;
+  valor: number;
+  desconto: number;
+  juros: number;
+  outras_despesas: number;
+  valor_liquido: number | null;
+  data_vencimento: string | null;
+  data_programada: string | null;
+  data_pagamento: string | null;
+  contas_bancarias: { nome: string } | null;
+  lancamentos: {
+    id: string;
+    numero: string | null;
+    numero_documento: string | null;
+    descricao: string;
+    origem: string;
+    mes_competencia: string | null;
+    data_compra: string | null;
+    categorias_financeiras: { nome: string } | null;
+    fornecedores: {
+      razao_social: string | null;
+      nome_fantasia: string | null;
+    } | null;
+    formas_pagamento: { nome: string } | null;
+    lancamento_parcelas: { id: string }[];
+    lancamento_rateios: {
+      valor: number;
+      centros_custo: {
+        id: string;
+        nome: string;
+      } | null;
+    }[];
+  } | null;
+};

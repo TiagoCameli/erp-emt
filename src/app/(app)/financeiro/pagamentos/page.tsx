@@ -10,6 +10,7 @@ import {
   listarFormasPagamento,
   listarFornecedores,
 } from "@/modules/financeiro/lancamentos/queries";
+import { BotaoExportarPagamentos } from "@/modules/financeiro/pagamentos/components/botao-exportar-pagamentos";
 import { PagamentosCliente } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
 import {
@@ -254,6 +255,16 @@ export default async function PaginaPagamentos({
         modulo="Financeiro"
         titulo="Pagamentos"
         descricao="Veja tudo que há a pagar, aprovado ou aguardando aprovação, pague em lote e acompanhe o histórico"
+        // Os dois recortes vão para o botão exatamente como as duas listas
+        // acima os receberam: é a página que interpreta a URL, e a planilha sai
+        // do mesmo objeto que montou a tela. Um segundo lugar lendo a URL
+        // divergiria no primeiro filtro novo.
+        acoes={
+          <BotaoExportarPagamentos
+            valoresAPagar={aPagar}
+            filtrosPagas={filtrosPagas}
+          />
+        }
       />
       <PagamentosCliente
         hoje={dataHojeISO()}

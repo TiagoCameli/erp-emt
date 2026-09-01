@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   centroEEtapaDoRateio,
+  raizIdDoRateio,
   type CentroNaArvore,
 } from "@/modules/financeiro/lancamentos/hierarquia-centro";
 
@@ -79,5 +80,44 @@ describe("centroEEtapaDoRateio", () => {
 
     expect(resultado.etapaNome).toBe("A");
     expect(["A", "B"]).toContain(resultado.raizNome);
+  });
+});
+
+describe("raizIdDoRateio", () => {
+  it("na raiz devolve o próprio id", () => {
+    expect(raizIdDoRateio("carretas", ARVORE)).toBe("carretas");
+  });
+
+  it("na etapa sobe até a raiz", () => {
+    expect(raizIdDoRateio("squ9c94", ARVORE)).toBe("carretas");
+    expect(raizIdDoRateio("pc200", ARVORE)).toBe("manutencao");
+  });
+
+  it("duas etapas do mesmo centro dão o MESMO id de raiz", () => {
+    // É esta igualdade que faz a planilha por centro de custo juntar as duas
+    // carretas numa linha só. Por nome ela funcionaria hoje e passaria a somar
+    // dois centros homônimos num só amanhã.
+    const outraEtapa = new Map(ARVORE);
+    outraEtapa.set("sqs7e01", {
+      nome: "Caminhão Cavalo XF 530 FTT SQS7E01 - 02",
+      paiId: "carretas",
+    });
+    expect(raizIdDoRateio("sqs7e01", outraEtapa)).toBe(
+      raizIdDoRateio("squ9c94", outraEtapa),
+    );
+  });
+
+  it("centro fora da árvore devolve null, e não um palpite", () => {
+    // Sem id não dá para afirmar que duas partes são do mesmo lugar: quem chama
+    // põe cada uma na sua linha em vez de juntar por engano.
+    expect(raizIdDoRateio("sumiu", ARVORE)).toBeNull();
+  });
+
+  it("ciclo no cadastro para no teto em vez de pendurar a exportação", () => {
+    const ciclica = new Map<string, CentroNaArvore>([
+      ["a", { nome: "A", paiId: "b" }],
+      ["b", { nome: "B", paiId: "a" }],
+    ]);
+    expect(["a", "b"]).toContain(raizIdDoRateio("a", ciclica));
   });
 });
