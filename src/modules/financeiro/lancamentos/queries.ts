@@ -23,6 +23,10 @@ import {
   type CentroNaArvore,
 } from "@/modules/financeiro/lancamentos/hierarquia-centro";
 import {
+  eventoRateioParaTrilha,
+  linhasDoRateio,
+} from "@/modules/financeiro/lancamentos/rateio-eventos";
+import {
   SEM_CENTRO_DE_CUSTO,
   STATUS_PARCELA_ABERTA,
   type StatusLancamento,
@@ -1832,6 +1836,93 @@ export async function trilhaLancamento(id: string): Promise<EventoTrilha[]> {
 
   const nomes = await resolverNomesAuditLog(supabase, registros);
   return eventosDoAuditLog(registros, { nomes, entidade: "Lançamento", genero: "m" });
+}
+
+/**
+ * Trilha das alterações de rateio do lançamento: lê `rateio_eventos`, resolve o
+ * nome do autor e o nome ATUAL de cada centro citado, e converte para os eventos
+ * do componente Trilha.
+ *
+ * Os nomes dos centros vêm de uma segunda leitura, e não de um embed: os ids
+ * estão DENTRO do jsonb, sem chave estrangeira que o PostgREST possa seguir. A
+ * leitura junta os centros dos dois lados de todos os eventos e pede uma vez só.
+ *
+ * `nomes_usuarios_financeiro` pelo mesmo motivo da trilha de parcelas: é gated na
+ * permissão de quem já vê o lançamento, e não na de auditoria — com a outra RPC,
+ * Financeiro e Gestor leriam "Sistema" no lugar do nome de quem reclassificou.
+ */
+export async function trilhaRateioDoLancamento(
+  lancamentoId: string,
+): Promise<EventoTrilha[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("rateio_eventos")
+    .select("id, motivo, antes, depois, created_at, created_by")
+    .eq("lancamento_id", lancamentoId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false });
+
+  if (error || !data || data.length === 0) return [];
+
+  const idsUsuarios = [
+    ...new Set(
+      data
+        .map((linha) => linha.created_by)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+
+  const nomesPorId = new Map<string, string>();
+  if (idsUsuarios.length > 0) {
+    const { data: usuarios } = await supabase.rpc("nomes_usuarios_financeiro", {
+      p_ids: idsUsuarios,
+    });
+    for (const usuario of usuarios ?? []) {
+      nomesPorId.set(usuario.id, usuario.nome);
+    }
+  }
+
+  const idsCentros = [
+    ...new Set(
+      data.flatMap((linha) =>
+        [...linhasDoRateio(linha.antes), ...linhasDoRateio(linha.depois)].map(
+          (r) => r.centroCustoId,
+        ),
+      ),
+    ),
+  ];
+
+  const nomesPorCentro = new Map<string, string>();
+  if (idsCentros.length > 0) {
+    const { data: centros } = await supabase
+      .from("centros_custo")
+      .select("id, codigo, nome")
+      .in("id", idsCentros);
+    for (const centro of centros ?? []) {
+      nomesPorCentro.set(
+        centro.id,
+        centro.codigo ? `${centro.codigo} ${centro.nome}` : centro.nome,
+      );
+    }
+  }
+
+  return data.map((linha) =>
+    eventoRateioParaTrilha(
+      {
+        id: linha.id,
+        motivo: linha.motivo,
+        antes: linha.antes,
+        depois: linha.depois,
+        criadoEm: linha.created_at,
+        usuarioNome:
+          linha.created_by === null
+            ? "Sistema"
+            : (nomesPorId.get(linha.created_by) ?? "Sistema"),
+      },
+      nomesPorCentro,
+    ),
+  );
 }
 
 /**
