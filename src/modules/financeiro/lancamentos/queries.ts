@@ -48,6 +48,11 @@ import {
 } from "@/modules/financeiro/_shared/centro-de-custo";
 import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
+  aplicarNaturezaOperacional,
+  aplicarRecorteNoEmbed,
+  recorteNoEmbed,
+} from "@/modules/financeiro/lancamentos/recorte-no-embed";
+import {
   emLotes,
   LOTE_IDS_POSTGREST,
 } from "@/lib/lotes-de-ids";
@@ -632,27 +637,6 @@ async function lerEmPaginas<T>(
   return linhas;
 }
 
-/** Ids de lançamentos com alguma parcela na conta bancária informada. */
-async function idsPorContaBancaria(
-  supabase: ClienteSupabase,
-  contaBancariaId: string,
-): Promise<string[]> {
-  // Vale parcela paga e a pagar: a pergunta de quem filtra é "o que passou por
-  // esta conta", não "o que ainda vai sair dela".
-  const parcelas = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_parcelas")
-      .select("lancamento_id")
-      .eq("conta_bancaria_id", contaBancariaId)
-      // Ordem estável (id como desempate) para a paginação não repetir nem
-      // pular linha entre uma página e a seguinte.
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
-  );
-  return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
-}
-
 /**
  * A subárvore de um centro de custo: ele mesmo e todos os descendentes.
  *
@@ -756,6 +740,54 @@ async function idsComSaldoAberto(
       .range(de, ate),
   );
   return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
+}
+
+/**
+ * A data de corte do saldo inicial de uma conta.
+ *
+ * A posição bancária só conta o que passou DEPOIS do saldo inicial digitado,
+ * senão o movimento antigo entra de novo por cima de um saldo que já o embute —
+ * é o mesmo corte que `fn_rel_posicao_bancaria` e `fn_lancamentos_do_recorte`
+ * fazem. Aqui ele é lido para o filtro do embed poder repeti-lo.
+ */
+async function saldoInicialDaConta(
+  supabase: ClienteSupabase,
+  contaId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("contas_bancarias")
+    .select("saldo_inicial_data")
+    .eq("id", contaId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Não foi possível ler a conta do recorte: ${error.message}`);
+  }
+  return data?.saldo_inicial_data ?? null;
+}
+
+/**
+ * As categorias de natureza `movimentacao`.
+ *
+ * Aplicação e resgate do principal não são caixa entrando nem saindo, e os três
+ * recortes as descartam. A regra mora na CATEGORIA do lançamento, então o filtro
+ * do embed (que é de parcela) não a alcança: ela vira um filtro do pai, por lista
+ * de ids — e essa lista é curta (4 hoje), ao contrário da de lançamentos.
+ */
+async function idsDeCategoriaDeMovimentacao(
+  supabase: ClienteSupabase,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("categorias_financeiras")
+    .select("id")
+    .eq("natureza", "movimentacao");
+
+  if (error) {
+    throw new Error(
+      `Não foi possível ler as categorias de movimentação: ${error.message}`,
+    );
+  }
+  return (data ?? []).map((categoria) => categoria.id);
 }
 
 /**
@@ -981,11 +1013,9 @@ export async function listarLancamentos(
   if (params.atraso) {
     listasDeIds.push(await idsPorAtraso(supabase, params.atraso, hojeISO));
   }
-  if (params.contaBancariaId) {
-    listasDeIds.push(
-      await idsPorContaBancaria(supabase, params.contaBancariaId),
-    );
-  }
+  // A conta bancária NÃO vira lista de ids: a maior conta tem 4.901 lançamentos
+  // (medido 01/09/2026), 181 KB de URL, e acima de ~1.800 ids a requisição nem
+  // completa — some sem log em lugar nenhum. Vai no embed, como o centro.
   if (params.comSaldoAberto) {
     listasDeIds.push(await idsComSaldoAberto(supabase));
   }
@@ -1004,13 +1034,28 @@ export async function listarLancamentos(
   const valoresCentro = subarvoreCentro?.length
     ? await valoresPorCentroCusto(supabase, subarvoreCentro)
     : null;
-  // O recorte de parcela também é filtro E medida, pelo mesmo motivo do centro.
+  // O recorte de parcela também é filtro E medida, e agora pelos mesmos dois
+  // caminhos do centro: a MEDIDA continua vindo da RPC (POST, sem limite de URL)
+  // e o FILTRO desceu para o embed aliasado.
+  //
+  // Ele mandava as chaves deste mapa para `listasDeIds`, que é exatamente o que o
+  // comentário acima proíbe. Custou 400 no clique do fluxo de caixa (732
+  // lançamentos, URL de 29.342 caracteres, medido no edge_logs em 01/09/2026) e,
+  // no `conta_paga`, uma requisição de 4.818 ids que nem chegava a virar erro.
   const valoresRecorte = params.recorte
     ? await valoresDoRecorte(supabase, params.recorte, params.contaBancariaId)
     : null;
-  if (valoresRecorte) {
-    listasDeIds.push([...valoresRecorte.keys()]);
-  }
+  // O corte do saldo inicial é da CONTA, então só o banco sabe. Uma leitura, e
+  // só quando o recorte é o da posição bancária.
+  const saldoInicialData =
+    params.recorte?.tipo === "conta_paga" && params.contaBancariaId
+      ? await saldoInicialDaConta(supabase, params.contaBancariaId)
+      : null;
+  // As categorias de natureza `movimentacao` (4 hoje): os três recortes as
+  // descartam, e a regra mora no lançamento, não na parcela.
+  const categoriasDeMovimentacao = params.recorte
+    ? await idsDeCategoriaDeMovimentacao(supabase)
+    : [];
 
   let idsFiltrados: string[] | null = null;
   if (listasDeIds.length > 0) {
@@ -1031,7 +1076,9 @@ export async function listarLancamentos(
          status, conta_bancaria_id, valor, valor_liquido, desconto,
          data_vencimento
        ),
-       lancamento_rateios(centro_custo_id, centros_custo(nome))`,
+       lancamento_rateios(centro_custo_id, centros_custo(nome)),
+       recorte_parcelas:lancamento_parcelas(id),
+       conta_parcelas:lancamento_parcelas(id)`,
       { count: "exact" },
     )
     // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
@@ -1073,6 +1120,30 @@ export async function listarLancamentos(
     consulta = consulta
       .in("lancamento_rateios.centro_custo_id", subarvoreCentro)
       .not("lancamento_rateios", "is", null);
+  }
+  // O recorte do relatório, no embed aliasado. `recorte_parcelas` existe SÓ para
+  // filtrar: o `lancamento_parcelas` do select continua inteiro, porque é ele que
+  // alimenta a coluna Revisão e o dinheiro de cada linha.
+  if (params.recorte) {
+    consulta = aplicarRecorteNoEmbed(
+      consulta,
+      "recorte_parcelas",
+      recorteNoEmbed(params.recorte, {
+        hojeISO,
+        saldoInicialData,
+        contaBancariaId: params.contaBancariaId,
+      }),
+    );
+    consulta = aplicarNaturezaOperacional(consulta, categoriasDeMovimentacao);
+  }
+  // A conta bancária tem embed PRÓPRIO, e não o mesmo do recorte, para o
+  // significado não mudar: hoje "tem parcela nesta conta" E "tem parcela no
+  // recorte" são duas condições independentes, e juntá-las num embed só passaria
+  // a exigir que fossem a MESMA parcela.
+  if (params.contaBancariaId) {
+    consulta = consulta
+      .eq("conta_parcelas.conta_bancaria_id", params.contaBancariaId)
+      .not("conta_parcelas", "is", null);
   }
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
