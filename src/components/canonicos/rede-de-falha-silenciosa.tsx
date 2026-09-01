@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 
-import { toast } from './toast';
 
 /**
  * Rede de segurança: nenhuma ação do app pode falhar em silêncio.
@@ -65,13 +64,22 @@ export function RedeDeFalhaSilenciosa() {
       if (agora - ultimoAviso < 3000) return;
       ultimoAviso = agora;
 
+      /*
+       * SÓ LOG, sem toast. Aprendido na prática, em 01/09/2026: com toast, esta
+       * rede avisava ao simplesmente ABRIR /rh/folha — sem ninguém clicar em
+       * nada. Rejeição de carregamento de página (preferência de tabela que o
+       * DataTable grava ao montar, prefetch, requisição cancelada em navegação)
+       * NÃO é ação do usuário, e alarme sobre o que a pessoa não fez é pior que
+       * silêncio: ela para de confiar no aviso e, pior, atribui o alarme à
+       * última coisa que fez. Aqui isso mandou o Tiago achar que a aprovação da
+       * folha falhava, quando o toast vinha da tela carregando.
+       *
+       * Quem avisa é o `comAvisoDeFalha`, no botão — ali existe uma ação de
+       * verdade para o aviso se referir. Esta rede continua valendo por causa do
+       * log: o console nomeia o que falhou, e sem log a Vercel hobby não deixa
+       * nada para investigar depois.
+       */
       console.error('[erp-emt] falha nao tratada', motivo);
-      // "PODE não ter sido concluída" e "confira": mesma razão do
-      // comAvisoDeFalha — invocação morta não é o mesmo que nada aconteceu, e
-      // mandar tentar de novo convida a aprovar o mesmo dinheiro duas vezes.
-      toast.error(
-        'A ação pode não ter sido concluída. Recarregue a página e confira antes de tentar de novo',
-      );
     }
 
     function aoRejeitar(evento: PromiseRejectionEvent) {

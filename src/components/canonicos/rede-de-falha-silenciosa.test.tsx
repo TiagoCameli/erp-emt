@@ -48,63 +48,62 @@ afterEach(() => {
 });
 
 describe("RedeDeFalhaSilenciosa", () => {
-  it("avisa quando uma action rejeita sem ninguém pegar", () => {
+  it("registra no log a rejeição que ninguém pegou", () => {
+    const espia = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<RedeDeFalhaSilenciosa />);
 
     rejeitar(new Error("Failed to find Server Action 'abc123'."));
 
-    expect(erros.length).toBe(1);
-    expect(erros[0]).toMatch(/recarregue/i);
-    /*
-     * "PODE não ter sido concluída" e "confira", não "tente de novo".
-     *
-     * Chegar aqui significa que a invocação morreu (as actions não lançam mais:
-     * devolvem `{ erro }` até para falha inesperada). Invocação morta não é o
-     * mesmo que nada aconteceu — o lote de aprovação de pagamentos é uma
-     * transação por parcela, então parte pode estar commitada. Mandar tentar de
-     * novo convida a aprovar o mesmo dinheiro duas vezes.
-     */
-    expect(erros[0]).toMatch(/pode não ter sido concluída/i);
-    expect(erros[0]).toMatch(/confira/i);
+    expect(espia).toHaveBeenCalled();
   });
 
-  it("não avisa de requisição cancelada de propósito", () => {
+  it("NÃO mostra toast, porque carregar página não é ação do usuário", () => {
+    render(<RedeDeFalhaSilenciosa />);
+
+    rejeitar(new Error("qualquer falha de fundo"));
+
+    /*
+     * Aprendido na prática em 01/09/2026: com toast, esta rede avisava ao
+     * simplesmente ABRIR /rh/folha, sem ninguém clicar em nada. Rejeição de
+     * carregamento (preferência de tabela que o DataTable grava ao montar,
+     * prefetch, requisição cancelada em navegação) não é ação do usuário — e
+     * alarme sobre o que a pessoa não fez é pior que silêncio: ela atribui o
+     * alarme à última coisa que fez. Aqui mandou o Tiago achar que a aprovação
+     * da folha falhava, quando o toast vinha da tela carregando.
+     *
+     * Quem avisa é o comAvisoDeFalha, no botão, onde existe ação de verdade.
+     */
+    expect(erros).toEqual([]);
+  });
+
+  it("ignora requisição cancelada de propósito", () => {
+    const espia = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<RedeDeFalhaSilenciosa />);
 
     const abortada = new Error("cancelado");
     abortada.name = "AbortError";
     rejeitar(abortada);
 
-    // Cancelar não é falhar: navegação, desmontagem e busca com debounce
-    // cancelam a toda hora, e um toast a cada uma seria ruído puro.
-    expect(erros).toEqual([]);
+    expect(espia).not.toHaveBeenCalled();
   });
 
-  it("não avisa do controle de fluxo do Next", () => {
+  it("ignora o controle de fluxo do Next", () => {
+    const espia = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<RedeDeFalhaSilenciosa />);
 
     rejeitar(new Error("NEXT_REDIRECT;replace;/login;307;"));
     rejeitar(new Error("NEXT_NOT_FOUND"));
 
-    expect(erros).toEqual([]);
-  });
-
-  it("dá um aviso só quando o lote falha em rajada", () => {
-    render(<RedeDeFalhaSilenciosa />);
-
-    // Um clique de "aprovar selecionados" dispara N chamadas; N toasts em cima
-    // do outro não dizem mais do que um.
-    for (let i = 0; i < 5; i++) rejeitar(new Error(`falhou ${i}`));
-
-    expect(erros.length).toBe(1);
+    expect(espia).not.toHaveBeenCalled();
   });
 
   it("solta o listener ao desmontar", () => {
+    const espia = vi.spyOn(console, "error").mockImplementation(() => {});
     const { unmount } = render(<RedeDeFalhaSilenciosa />);
     unmount();
 
     rejeitar(new Error("depois de desmontar"));
 
-    expect(erros).toEqual([]);
+    expect(espia).not.toHaveBeenCalled();
   });
 });
