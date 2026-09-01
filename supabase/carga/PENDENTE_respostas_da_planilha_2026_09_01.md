@@ -1,6 +1,6 @@
 # PENDENTE: as 58 respostas da planilha de dúvidas
 
-**Nada disto foi aplicado ainda.** O MCP do Supabase perdeu o token no meio do
+**Nada disto foi aplicado ainda.** (59 de 59 decididas: 58 na planilha e o 2686 na conversa.) O MCP do Supabase perdeu o token no meio do
 trabalho e a aplicação depende de reconectar (`/mcp` no Claude Code). O plano
 abaixo está fechado e conferido; é só executar.
 
@@ -52,7 +52,7 @@ que não têm etapa no ERP (ver o fim).
 | 3369 | 230,81 | Manutenção > Oficina |
 | 0702 | 205,57 | Manutenção > Rolo CP56 - 01 |
 | 3176 | 135,00 | Manutenção > Oficina |
-| 2686 | 120,00 | Manutenção > Hilux CHLSTM4FD QWQ-3H97 - 01 **(inferido, ver abaixo)** |
+| 2686 | 120,00 | Manutenção > Caminhão Cavalo 2644 S/33 MZO-2987 - 01 (CS-01) |
 | 0295 | 90,00 | Manutenção > Trator de Esteira D6NXL - 01 |
 | 3137 | 89,15 | 007 - AC 405 - Lote 2 |
 | 5951 | 50,00 | 009 - BR-364 Lote 09 & 10 |
@@ -121,9 +121,17 @@ chama de **"Hilux Apoio - 203"**) **e** para o `1905` (que o MC chama de
 **"Hilux de Apoio - Cinza - 209"**). Então esses dois nomes do MC são o mesmo
 carro no ERP.
 
-Por isso o `2686`, que ficou em branco e que o MC também põe em "Apoio Cinza
-209", vai para o mesmo QWQ-3H97 - 01. **É inferência minha, não resposta dele**:
-se estiver errado é R$ 120,00 e um UPDATE.
+O `2686` ficou em branco na planilha e eu ia inferir o mesmo QWQ-3H97, porque o
+MC também o põe em "Apoio Cinza 209". Perguntei, e ele respondeu **CS-01**, ou
+seja o Caminhão Cavalo 2644 S/33 MZO-2987 - 01.
+
+Vale registrar a tensão: a nota do 2686 diz "alinhamento e balanceamento HILUX
+CINZA", e o MC concorda que é a Hilux. A resposta dele manda para o cavalo. Ele
+e o dono da frota e a palavra dele vale, mas fica anotado que os dois documentos
+dizem outra coisa -- se for erro de digitação são R$ 120,00 e um UPDATE.
+
+Foi exatamente por isso que eu marquei essa linha como inferência em vez de
+aplicar calado: a inferência estava errada.
 
 A aba Hilux ficou em branco, mas as respostas linha a linha a tornaram
 desnecessária.
