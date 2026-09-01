@@ -1,8 +1,22 @@
-# PENDENTE: as 58 respostas da planilha de dúvidas
+# As 59 respostas da planilha de dúvidas, aplicadas
 
-**Nada disto foi aplicado ainda.** (59 de 59 decididas: 58 na planilha e o 2686 na conversa.) O MCP do Supabase perdeu o token no meio do
-trabalho e a aplicação depende de reconectar (`/mcp` no Claude Code). O plano
-abaixo está fechado e conferido; é só executar.
+**Aplicado em 01/09/2026.** 59 de 59 decididas: 58 na planilha e o 2686 na
+conversa. Foi em duas cargas, cada uma com ENSAIO antes -- o bloco inteiro com
+`raise exception` no fim, que desfaz mas roda todas as checagens:
+
+    parte 1, os 40 diretos   respostas_da_planilha_parte1_2026_09_01.sql
+    parte 2, os 6 do rateio  respostas_da_planilha_parte2_2026_09_01.sql
+
+O MCP do Supabase perdeu o token no meio do trabalho e ficou algumas horas fora.
+Enquanto isso eu gerei a parte 1 como SQL para ele colar no SQL Editor, resolvendo
+destino por NOME em vez de uuid -- eu nao tinha os uuid e nome errado falha alto
+em vez de gravar nulo. Quando o MCP voltou, rodei o mesmo bloco por aqui, com
+ensaio. O arquivo da parte 1 e literalmente o que foi rodado.
+
+**O banco tinha se movido entre a planilha e a aplicacao**: entrou o
+LAN-2026-6666 (R$ 1.583,33, diarias de 01/09) na raiz. Nao esta no plano e ficou
+la. Foi por isso que eu conferi os 59 um a um antes de mexer, em vez de confiar
+no total: o total ja era outro.
 
 Origem: `~/Downloads/raiz-manutencao-duvidas.xlsx`, devolvido em 01/09/2026 às
 10:02 com 58 das 59 linhas respondidas.
@@ -15,14 +29,21 @@ Origem: `~/Downloads/raiz-manutencao-duvidas.xlsx`, devolvido em 01/09/2026 às
 As duas passaram. Se qualquer uma tivesse falhado seria outro arquivo e nada
 disto valeria.
 
-## O efeito
+## O efeito, medido depois
 
 ```
-raiz da Manutenção: R$ 101.994,63 -> ~R$ 10.677,06   (59 -> 13 lançamentos)
+raiz da Manutenção: R$ 103.577,96 -> R$ 12.260,39   (60 -> 17 lançamentos)
+etapas com custo:   53 de 62
 ```
 
-Sai R$ 91.797,57. Fica só o que ele mandou ficar, mais R$ 480 de fatias do MC
-que não têm etapa no ERP (ver o fim).
+Sobraram 17, e cada um por um motivo declarado:
+
+    13  R$ 10.197,06  ele mandou ficar
+     3  R$    480,00  fatia do MC que aponta para maquina fora do cadastro
+     1  R$  1.583,33  chegou depois da planilha (LAN-2026-6666)
+
+A parte 1 tirou R$ 87.505,52 da raiz e R$ 35.414,92 da subarvore; a parte 2
+tirou mais R$ 3.812,05 da raiz e R$ 766,53 da subarvore.
 
 ## As 58 respostas, resolvidas
 
