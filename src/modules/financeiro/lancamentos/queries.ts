@@ -632,26 +632,6 @@ async function lerEmPaginas<T>(
   return linhas;
 }
 
-/** Ids de lançamentos com alguma parcela na conta bancária informada. */
-async function idsPorContaBancaria(
-  supabase: ClienteSupabase,
-  contaBancariaId: string,
-): Promise<string[]> {
-  // Vale parcela paga e a pagar: a pergunta de quem filtra é "o que passou por
-  // esta conta", não "o que ainda vai sair dela".
-  const parcelas = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_parcelas")
-      .select("lancamento_id")
-      .eq("conta_bancaria_id", contaBancariaId)
-      // Ordem estável (id como desempate) para a paginação não repetir nem
-      // pular linha entre uma página e a seguinte.
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
-  );
-  return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
-}
 
 /**
  * A subárvore de um centro de custo: ele mesmo e todos os descendentes.
@@ -981,11 +961,6 @@ export async function listarLancamentos(
   if (params.atraso) {
     listasDeIds.push(await idsPorAtraso(supabase, params.atraso, hojeISO));
   }
-  if (params.contaBancariaId) {
-    listasDeIds.push(
-      await idsPorContaBancaria(supabase, params.contaBancariaId),
-    );
-  }
   if (params.comSaldoAberto) {
     listasDeIds.push(await idsComSaldoAberto(supabase));
   }
@@ -1019,21 +994,47 @@ export async function listarLancamentos(
     if (idsFiltrados.length === 0) return { itens: [], total: 0 };
   }
 
+  /*
+   * Conta bancária vive na PARCELA, e entra por um embed APELIDADO só para
+   * filtrar — não pelo `lancamento_parcelas` que já está no select.
+   *
+   * O apelido é obrigatório porque o nome da relação já está ocupado, e aquele
+   * embed alimenta o DINHEIRO da linha (valor pago, aberto, vencido, desconto
+   * obtido, a coluna Revisão e a contagem de parcelas). Filtrá-lo devolveria só
+   * as parcelas daquela conta, e a linha passaria a somar um pedaço do
+   * lançamento — dinheiro errado na tela, que é pior que tela quebrada.
+   *
+   * Cada embed é subconsulta lateral independente, então filtrar o apelido não
+   * mexe no `count: "exact"` nem multiplica a linha do lançamento. Mesmo par
+   * `!inner` + filtro no apelido que a listagem de Cotações usa em
+   * `participante:cotacao_fornecedores`.
+   *
+   * Por que saiu da interseção de ids: a lista de lançamentos de uma conta
+   * viaja na query string, e medido no banco em 01/09/2026 a maior conta tem
+   * 4.901 lançamentos — a 37 caracteres por uuid, 181 KB de URL. O `edge_logs`
+   * registrou `GET /rest/v1/lancamentos` com 29 KB devolvendo 400, e acima de
+   * ~1.100 ids a requisição nem completa (nesse caso NÃO há log em lugar
+   * nenhum, e a tela só diz "algo deu errado"). Só o id da conta viaja agora.
+   */
+  const partesSelect = [
+    `id, numero, numero_documento, tipo, origem, descricao, valor,
+     data_vencimento, status, data_compra, mes_competencia, created_at,
+     categorias_financeiras(nome),
+     fornecedores(razao_social, nome_fantasia),
+     colaboradores(nome),
+     lancamento_parcelas(
+       status, conta_bancaria_id, valor, valor_liquido, desconto,
+       data_vencimento
+     ),
+     lancamento_rateios(centro_custo_id, centros_custo(nome))`,
+  ];
+  if (params.contaBancariaId) {
+    partesSelect.push("filtroConta:lancamento_parcelas!inner(conta_bancaria_id)");
+  }
+
   let consulta = supabase
     .from("lancamentos")
-    .select(
-      `id, numero, numero_documento, tipo, origem, descricao, valor,
-       data_vencimento, status, data_compra, mes_competencia, created_at,
-       categorias_financeiras(nome),
-       fornecedores(razao_social, nome_fantasia),
-       colaboradores(nome),
-       lancamento_parcelas(
-         status, conta_bancaria_id, valor, valor_liquido, desconto,
-         data_vencimento
-       ),
-       lancamento_rateios(centro_custo_id, centros_custo(nome))`,
-      { count: "exact" },
-    )
+    .select(partesSelect.join(", "), { count: "exact" })
     // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
     // sobre a página carregada. A coluna vem de COLUNA_DO_BANCO, lista fechada,
     // então nada cru da URL chega no `order`.
@@ -1073,6 +1074,15 @@ export async function listarLancamentos(
     consulta = consulta
       .in("lancamento_rateios.centro_custo_id", subarvoreCentro)
       .not("lancamento_rateios", "is", null);
+  }
+  // Vale parcela paga E a pagar: a pergunta de quem filtra é "o que passou por
+  // esta conta", não "o que ainda vai sair dela". O `!inner` do embed é o que
+  // descarta o lançamento sem nenhuma parcela naquela conta.
+  if (params.contaBancariaId) {
+    consulta = consulta.eq(
+      "filtroConta.conta_bancaria_id",
+      params.contaBancariaId,
+    );
   }
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
