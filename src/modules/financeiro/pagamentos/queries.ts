@@ -26,6 +26,17 @@ import {
   type ParcelaEvento,
   type TipoParcelaEvento,
 } from "@/modules/financeiro/pagamentos/eventos";
+import {
+  RESUMO_PAGAS_VAZIO,
+  somarPagas,
+  type LinhaPaga,
+  type ResumoPagas,
+} from "@/modules/financeiro/pagamentos/resumo";
+import {
+  recorteDaParcela,
+  type RateioDoLancamento,
+} from "@/modules/financeiro/pagamentos/recorte";
+import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 
 /** Parcela a pagar já aprovada, pronta para registrar o pagamento. */
 export interface ParcelaAprovada {
@@ -134,6 +145,17 @@ export interface ParcelaPaga {
   /** Centro de custo do lançamento, pela regra de `_shared/centro-de-custo.ts`. */
   centroCustoRotulo: string | null;
   centroCustoNomes?: string;
+  /**
+   * A FATIA desta parcela no centro de custo filtrado, ou `null` quando não há
+   * filtro de centro.
+   *
+   * Existe porque o custo de um lançamento pode ser dividido entre vários centros:
+   * a "COMPRA DE 3 CARRETAS" de R$ 100.000,00 é um pagamento só, repartido entre
+   * três. Filtrando uma carreta, mostrar os R$ 100.000,00 conta o mesmo dinheiro
+   * em cada uma das três, e o total das partes passa do total do pai. Mesmo campo
+   * (e mesmo nome) que a listagem de Lançamentos já usa. Ver `recorte.ts`.
+   */
+  valorRecorte: number | null;
 }
 
 /**
@@ -410,9 +432,11 @@ async function aplicarCentroCusto<T extends ConsultaFiltravel<T>>(
   supabase: Awaited<ReturnType<typeof createClient>>,
   consulta: T,
   centroCustoIds: readonly string[] | undefined,
-): Promise<{ consulta: T; vazio: boolean }> {
+): Promise<{ consulta: T; vazio: boolean; subarvore: Set<string> | null }> {
   if (!centroCustoIds || centroCustoIds.length === 0) {
-    return { consulta, vazio: false };
+    // `null` e não Set vazio: "sem filtro de centro" é diferente de "filtro que
+    // não alcança nada", e é o null que desliga o cálculo da fatia.
+    return { consulta, vazio: false, subarvore: null };
   }
 
   // União das subárvores: marcar duas obras é "quero as duas", não "o que está
@@ -420,14 +444,78 @@ async function aplicarCentroCusto<T extends ConsultaFiltravel<T>>(
   // que a listagem de Lançamentos usa -- o recorte não pode divergir entre as
   // duas telas.
   const subarvore = await subarvoreDosCentros(supabase, [...centroCustoIds]);
-  if (subarvore.length === 0) return { consulta, vazio: true };
+  if (subarvore.length === 0) {
+    return { consulta, vazio: true, subarvore: new Set() };
+  }
 
   // O par de chamadas mora em `filtros-pagas.ts`, que tem teste: o caminho de
   // dois níveis e o `not is null` são a parte que erra calado.
   return {
     consulta: aplicarCentroDaSubarvore(consulta, subarvore),
     vazio: false,
+    subarvore: new Set(subarvore),
   };
+}
+
+/**
+ * O rateio COMPLETO de cada lançamento, para calcular a fatia do recorte.
+ *
+ * Lido numa consulta própria, e não do embed que a listagem já traz, porque
+ * quando o filtro de centro está ligado aquele embed vem FILTRADO -- ele traz só
+ * os rateios que bateram. E é o rateio inteiro que dá o DENOMINADOR da fatia:
+ * com metade do rateio, um custo dividido entre a carreta e o Escritório
+ * apareceria inteiro na carreta, que é o erro que a fatia veio consertar.
+ *
+ * Em lotes de `LOTE_IDS_POSTGREST` porque o `in` viaja na URL do PostgREST: a
+ * lista inteira de lançamentos de um centro grande (1.871 no Escritório Central)
+ * dá 69 KB de filtro e a requisição morre com 400 antes de chegar na RLS.
+ */
+async function rateiosDosLancamentos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lancamentoIds: readonly string[],
+): Promise<Map<string, RateioDoLancamento[]>> {
+  type LinhaRateio = {
+    lancamento_id: string;
+    centro_custo_id: string | null;
+    valor: number | string | null;
+  };
+
+  const porLancamento = new Map<string, RateioDoLancamento[]>();
+  const unicos = [...new Set(lancamentoIds)];
+
+  for (const lote of emLotes(unicos, LOTE_IDS_POSTGREST)) {
+    const { linhas, erro } = await todasAsLinhas<LinhaRateio>((de, ate) =>
+      supabase
+        .from("lancamento_rateios")
+        .select("lancamento_id, centro_custo_id, valor")
+        .in("lancamento_id", lote)
+        // Desempate obrigatório: sem ele a ordem muda entre uma faixa e a
+        // seguinte, e o rateio de um lançamento sai repetido ou pela metade --
+        // que é dinheiro entrando errado no denominador da fatia.
+        .order("lancamento_id", { ascending: true })
+        .order("id", { ascending: true })
+        .range(de, ate)
+        .returns<LinhaRateio[]>(),
+    );
+
+    // Erro NÃO pode virar rateio vazio: a fatia sairia zero e a tela diria
+    // "nada foi pago neste centro" num recorte que tem pagamento.
+    if (erro) {
+      throw new Error("Não foi possível carregar o rateio dos pagamentos");
+    }
+
+    for (const linha of linhas) {
+      if (linha.centro_custo_id === null) continue;
+      const lista = porLancamento.get(linha.lancamento_id) ?? [];
+      lista.push({
+        centroCustoId: linha.centro_custo_id,
+        valor: Number(linha.valor ?? 0),
+      });
+      porLancamento.set(linha.lancamento_id, lista);
+    }
+  }
+
+  return porLancamento;
 }
 
 /** Ids de fornecedor que a busca do filtro alcança. Vazio quando não há busca. */
@@ -441,12 +529,29 @@ async function fornecedoresDaBusca(
 }
 
 /**
- * Quanto SAIU DA CONTA no recorte do histórico: soma de `valor_liquido`.
+ * A linha da soma, com o lançamento.
  *
- * Líquido, e não `valor`, porque é o que o extrato do banco mostra — e é o
- * mesmo número do cartão "Pago no mês" do Painel (`fn_rel_gestao_financeiro_resumo`
- * também soma o líquido). Clicar no cartão e cair numa tela que soma diferente
- * seria trocar uma pergunta respondida por uma dúvida.
+ * `LinhaPaga` (de `resumo.ts`) é o mínimo que a SOMA precisa ler, e o lançamento
+ * não faz parte disso. Aqui ele é obrigatório por outro motivo: é a chave para
+ * achar o rateio e calcular a fatia do centro filtrado.
+ */
+type LinhaPagaDaSoma = LinhaPaga & { lancamento_id: string };
+
+/**
+ * O recorte do histórico somado: `valor`, os três ajustes e o `valor_liquido`.
+ *
+ * O card "Pago no filtro" mostra o LÍQUIDO, porque é o que o extrato do banco
+ * mostra e é o mesmo número do cartão "Pago no mês" do Painel
+ * (`fn_rel_gestao_financeiro_resumo` também soma o líquido). Clicar no cartão e
+ * cair numa tela que soma diferente seria trocar uma pergunta respondida por uma
+ * dúvida.
+ *
+ * A composição inteira vem junto, e não só o líquido, porque o rodapé da tabela
+ * precisa dela: a coluna "Valor" mostra o `valor` da parcela, então num recorte
+ * com desconto, juros ou despesa o total da coluna e o do card DIVERGEM. Com a
+ * composição, o rodapé fecha a conta à vista (valor − desconto + juros +
+ * despesas = líquido) e o líquido dele é o número do card. Sem ela, seriam dois
+ * totais na mesma tela sem nada explicando a diferença.
  *
  * Soma no servidor sobre TODAS as linhas do filtro (paginando acima do teto de
  * mil do PostgREST), nunca sobre a página carregada: a tabela é paginada, e
@@ -454,23 +559,23 @@ async function fornecedoresDaBusca(
  */
 export async function somaDasParcelasPagas(
   filtros: FiltrosParcelasPagas = {},
-): Promise<number> {
+): Promise<ResumoPagas> {
   const supabase = await createClient();
 
   const idsFornecedores = await fornecedoresDaBusca(supabase, filtros);
 
   // Os embeds de forma e de rateio entram no select porque FILTRAR um embed
-  // exige que ele esteja no select. Ninguém lê estes campos aqui -- a soma só
-  // precisa de `valor_liquido` --, eles existem para o recorte desta soma ser
-  // idêntico ao da lista. Total que não obedece ao mesmo filtro da lista é um
-  // número que não pertence ao que está na tela.
+  // exige que ele esteja no select. Ninguém lê estes campos aqui, eles existem
+  // para o recorte desta soma ser idêntico ao da lista. Total que não obedece ao
+  // mesmo filtro da lista é um número que não pertence ao que está na tela.
   const centro = await aplicarCentroCusto(
     supabase,
     aplicarFiltrosPagas(
       supabase
         .from("lancamento_parcelas")
         .select(
-          `valor_liquido,
+          `lancamento_id,
+           valor, desconto, juros, outras_despesas, valor_liquido,
            lancamento_formas(forma_pagamento_id),
            lancamentos!inner(
              fornecedor_id,
@@ -486,24 +591,88 @@ export async function somaDasParcelasPagas(
     filtros.centroCustoIds,
   );
   // Centro que não existe mais soma zero, igual à lista que vem vazia.
-  if (centro.vazio) return 0;
+  if (centro.vazio) return RESUMO_PAGAS_VAZIO;
 
-  const { linhas, erro } = await todasAsLinhas<{ valor_liquido: number }>(
-    (de, ate) =>
-      centro.consulta
-        // Desempate: sem ele, linhas com o mesmo `data_pagamento` (e são
-        // milhares, vindas da carga) mudam de ordem entre uma faixa e a
-        // seguinte, e a soma conta linha repetida e perde outra.
-        .order("id", { ascending: true })
-        .range(de, ate)
-        .returns<{ valor_liquido: number }[]>(),
+  const { linhas, erro } = await todasAsLinhas<LinhaPagaDaSoma>((de, ate) =>
+    centro.consulta
+      // Desempate: sem ele, linhas com o mesmo `data_pagamento` (e são
+      // milhares, vindas da carga) mudam de ordem entre uma faixa e a
+      // seguinte, e a soma conta linha repetida e perde outra.
+      .order("id", { ascending: true })
+      .range(de, ate)
+      .returns<LinhaPagaDaSoma[]>(),
   );
 
   if (erro) {
     throw new Error("Não foi possível somar o histórico de pagamentos");
   }
 
-  return linhas.reduce((soma, linha) => soma + Number(linha.valor_liquido), 0);
+  // Com filtro de centro, o que se soma é a FATIA de cada parcela naquele
+  // centro, não a parcela inteira: um pagamento dividido entre três carretas
+  // somado por inteiro em cada uma faz o total das partes passar do total do
+  // pai (medido: R$ 3,28 mi contra R$ 1,47 mi). Ver `recorte.ts`.
+  const recortadas = await recortarLinhas(supabase, linhas, centro.subarvore);
+
+  // A soma mora em `resumo.ts`, em centavos e com teste: acumular dinheiro em
+  // ponto flutuante sobre sete mil linhas deixa rastro de fração de centavo no
+  // total, e este total é conferido contra o extrato do banco.
+  return { ...somarPagas(recortadas), recortado: centro.subarvore !== null };
+}
+
+/**
+ * Troca cada linha pela FATIA dela no centro filtrado.
+ *
+ * Sem filtro de centro devolve as linhas como estão, e sem ida nenhuma ao banco:
+ * é o caso da esmagadora maioria das aberturas da tela, e ali não existe fatia a
+ * calcular -- o recorte é o pagamento inteiro.
+ *
+ * `valor` e `valor_liquido` são repartidos com os MESMOS pesos, então a fatia do
+ * líquido continua sendo o líquido daquela fatia. Desconto, juros e despesas
+ * ficam de fora de propósito: repartir os cinco em separado quebraria a
+ * identidade (valor − desconto + juros + despesas = líquido) por centavo de
+ * arredondamento, e a composição de um pagamento dividido pertence ao pagamento,
+ * não à fatia -- ela continua inteira no detalhe da parcela.
+ */
+async function recortarLinhas<
+  T extends {
+    lancamento_id: string;
+    valor: number | string | null;
+    desconto: number | string | null;
+    juros: number | string | null;
+    outras_despesas: number | string | null;
+    valor_liquido: number | string | null;
+  },
+>(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  linhas: readonly T[],
+  subarvore: Set<string> | null,
+): Promise<T[]> {
+  if (subarvore === null || linhas.length === 0) return [...linhas];
+
+  const rateios = await rateiosDosLancamentos(
+    supabase,
+    linhas.map((linha) => linha.lancamento_id),
+  );
+
+  return linhas.map((linha) => {
+    const doLancamento = rateios.get(linha.lancamento_id) ?? [];
+    return {
+      ...linha,
+      valor: recorteDaParcela(
+        Number(linha.valor ?? 0),
+        doLancamento,
+        subarvore,
+      ),
+      valor_liquido: recorteDaParcela(
+        Number(linha.valor_liquido ?? 0),
+        doLancamento,
+        subarvore,
+      ),
+      desconto: 0,
+      juros: 0,
+      outras_despesas: 0,
+    };
+  });
 }
 
 /**
@@ -528,7 +697,7 @@ export async function listarParcelasPagas({
   let consulta = supabase
     .from("lancamento_parcelas")
     .select(
-      `id, numero_parcela, valor, desconto, juros, outras_despesas,
+      `id, lancamento_id, numero_parcela, valor, desconto, juros, outras_despesas,
        valor_liquido, data_pagamento,
        contas_bancarias(nome, banco),
        lancamento_formas(forma_pagamento_id),
@@ -576,7 +745,21 @@ export async function listarParcelasPagas({
     throw new Error("Não foi possível carregar o histórico de pagamentos");
   }
 
-  const itens: ParcelaPaga[] = (data ?? []).map((parcela) => ({
+  const linhas = data ?? [];
+
+  // A fatia de cada parcela no centro filtrado. Uma consulta de rateio para a
+  // PÁGINA (25 ids), e nenhuma quando não há filtro de centro. O rateio não sai
+  // do embed da consulta acima porque ali ele vem filtrado -- só com os rateios
+  // que bateram --, e a fatia precisa do rateio inteiro no denominador.
+  const rateios =
+    comCentro.subarvore === null || linhas.length === 0
+      ? null
+      : await rateiosDosLancamentos(
+          supabase,
+          linhas.map((parcela) => parcela.lancamento_id),
+        );
+
+  const itens: ParcelaPaga[] = linhas.map((parcela) => ({
     id: parcela.id,
     lancamentoNumero: parcela.lancamentos?.numero ?? null,
     numeroParcela: parcela.numero_parcela,
@@ -597,6 +780,14 @@ export async function listarParcelasPagas({
     juros: Number(parcela.juros ?? 0),
     outrasDespesas: Number(parcela.outras_despesas ?? 0),
     valorLiquido: parcela.valor_liquido ?? parcela.valor,
+    valorRecorte:
+      rateios === null || comCentro.subarvore === null
+        ? null
+        : recorteDaParcela(
+            Number(parcela.valor ?? 0),
+            rateios.get(parcela.lancamento_id) ?? [],
+            comCentro.subarvore,
+          ),
   }));
 
   return { itens, total: count ?? 0 };

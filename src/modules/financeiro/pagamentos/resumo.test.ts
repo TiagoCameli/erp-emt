@@ -4,7 +4,10 @@ import type { ParcelaAprovada } from "@/modules/financeiro/pagamentos/queries";
 import {
   contagem,
   podePagarParcela,
+  somarPagas,
   somarParaResumo,
+  RESUMO_PAGAS_VAZIO,
+  type LinhaPaga,
 } from "@/modules/financeiro/pagamentos/resumo";
 
 const HOJE = "2026-08-19";
@@ -123,5 +126,103 @@ describe("contagem", () => {
     expect(contagem(0)).toBe("0 parcelas");
     expect(contagem(1)).toBe("1 parcela");
     expect(contagem(2)).toBe("2 parcelas");
+  });
+});
+
+/**
+ * A soma do histórico filtrado, que alimenta o card "Pago no filtro" e o rodapé
+ * da tabela de pagas.
+ *
+ * O que está sendo defendido é a EXATIDÃO do acumulador. Um total de dinheiro
+ * errado por frações de centavo não quebra nada e não avisa nada: ele só deixa
+ * de bater com a soma em SQL do Painel e com a conferência que alguém faz contra
+ * o extrato, e aí a discussão vira "de quem é o número certo".
+ */
+describe("somarPagas", () => {
+  function linha(parcial: Partial<LinhaPaga>): LinhaPaga {
+    return {
+      valor: 0,
+      desconto: null,
+      juros: null,
+      outras_despesas: null,
+      valor_liquido: 0,
+      ...parcial,
+    };
+  }
+
+  it("soma os cinco campos e conta as parcelas", () => {
+    const resumo = somarPagas([
+      linha({ valor: 1000, desconto: 50, valor_liquido: 950 }),
+      linha({ valor: 200, juros: 10, outras_despesas: 5, valor_liquido: 215 }),
+    ]);
+
+    expect(resumo).toEqual({
+      parcelas: 2,
+      valor: 1200,
+      desconto: 50,
+      juros: 10,
+      outrasDespesas: 5,
+      valorLiquido: 1165,
+      // Quem sabe se houve recorte por centro é quem filtrou, não a soma.
+      recortado: false,
+    });
+  });
+
+  it("LINHA DE CONTROLE: cem parcelas de 0,07 somam 7,00 exatos", () => {
+    /*
+     * É a prova de que o acumulador é inteiro. Somando em reais, o resultado sai
+     * 7.000000000000001 e o `toBe(7)` falha — que é exatamente o rastro que
+     * apareceria no total de um recorte de milhares de linhas.
+     */
+    const centavo = Array.from({ length: 100 }, () =>
+      linha({ valor: 0.07, valor_liquido: 0.07 }),
+    );
+    const resumo = somarPagas(centavo);
+
+    expect(resumo.valor).toBe(7);
+    expect(resumo.valorLiquido).toBe(7);
+  });
+
+  it("a soma obedece à mesma identidade de uma linha", () => {
+    // valor − desconto + juros + despesas = líquido. Se o total não obedecer, o
+    // rodapé mostra uma conta que não fecha na cara de quem confere.
+    const resumo = somarPagas([
+      linha({ valor: 1500.55, desconto: 0.55, valor_liquido: 1500 }),
+      linha({ valor: 99.99, juros: 0.01, valor_liquido: 100 }),
+      linha({ valor: 10, outras_despesas: 2.5, valor_liquido: 12.5 }),
+    ]);
+
+    expect(
+      resumo.valor - resumo.desconto + resumo.juros + resumo.outrasDespesas,
+    ).toBe(resumo.valorLiquido);
+  });
+
+  it("nulo é zero: parcela sem ajuste nenhum", () => {
+    // O banco grava null onde não houve desconto/juros/despesa. Virar NaN aqui
+    // apagaria o total inteiro, não só a linha.
+    const resumo = somarPagas([linha({ valor: 300, valor_liquido: 300 })]);
+    expect(resumo).toEqual({
+      parcelas: 1,
+      valor: 300,
+      desconto: 0,
+      juros: 0,
+      outrasDespesas: 0,
+      valorLiquido: 300,
+      recortado: false,
+    });
+  });
+
+  it("numérico que chega como TEXTO soma igual", () => {
+    // NUMERIC do Postgres pode chegar como string no JSON do PostgREST. Somar
+    // string com `+` concatenaria ("1000" + "200" = "1000200").
+    const resumo = somarPagas([
+      linha({ valor: "1000.50", valor_liquido: "1000.50" }),
+      linha({ valor: "200.25", valor_liquido: "200.25" }),
+    ]);
+    expect(resumo.valor).toBe(1200.75);
+  });
+
+  it("recorte vazio devolve tudo zero, não NaN", () => {
+    expect(somarPagas([])).toEqual(RESUMO_PAGAS_VAZIO);
   });
 });
