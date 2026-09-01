@@ -5,27 +5,25 @@ import * as React from "react";
 import {
   BarraFiltrosConfiguravel,
   FiltroMes,
-  FiltroSelect,
+  FiltroSelectMulti,
   useFiltrosUrl,
   type FiltroDaBarra,
   type OpcaoFiltro,
 } from "@/components/canonicos";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import {
-  etapasDaRaiz,
-  rotuloDaEtapa,
-  valorAoEscolherEtapa,
-  resolverSelecao,
-} from "@/modules/_shared/centro-custo/selecao";
-import {
+  etapasValidas,
+  opcoesDeEtapa,
   opcoesDeRaiz,
   rotuloDasEtapas,
+  temEtapasParaEscolher,
 } from "@/modules/_shared/centro-custo/filtro";
+import {
+  escreverListaNaUrl,
+  MAX_ITENS_FILTRO,
+} from "@/modules/financeiro/_shared/listas-na-url";
 import type { ValoresFiltrosPainel } from "@/modules/gestao/filtros";
 import type { OpcaoPainel } from "@/modules/gestao/queries";
-
-/** Largura do seletor de nome comprido (obra tem nome de contrato inteiro). */
-const LARGURA_NOME = "max-w-[18rem]";
 
 export interface PainelFiltrosProps {
   valores: ValoresFiltrosPainel;
@@ -35,13 +33,26 @@ export interface PainelFiltrosProps {
 }
 
 /**
- * Barra de filtros do painel de Gestão: obra, período por mês de referência e
- * categoria financeira.
+ * Barra de filtros do painel de Gestão: centros de custo, período por mês de
+ * referência e categorias financeiras.
  *
  * Usa a `BarraFiltrosConfiguravel`, que é a mesma barra das tabelas (mesmo menu
  * "Filtros", mesma persistência por usuário no banco) para a tela que não tem um
  * DataTable onde os filtros possam morar. O painel é gráfico e cartão, então é
  * exatamente esse caso.
+ *
+ * ## Escolha MÚLTIPLA desde 01/09/2026
+ *
+ * Era escolha única até aqui, e o painel foi a última tela de custo a virar. O
+ * pedido do dono foi direto ("quero poder selecionar mais de um centro de custo
+ * de uma única vez"), e a comparação entre duas obras era impossível: dava para
+ * ver uma, ou o total da empresa, nunca duas lado a lado.
+ *
+ * A escada de dois campos (raiz num, etapa no outro) e a regra de tradução para o
+ * banco são as MESMAS do relatório de Custo por CC, e moram em
+ * `_shared/centro-custo/filtro.ts`. Nada aqui reimplementa: um segundo jeito de
+ * transformar raiz+etapa em lista de ids faria duas telas de dinheiro somarem
+ * conjuntos diferentes com o mesmo filtro na cara.
  *
  * Trocar filtro NÃO zera página nenhuma aqui: o painel não tem paginação.
  */
@@ -52,39 +63,10 @@ export function PainelFiltros({
 }: PainelFiltrosProps) {
   const { setMuitos, limparTodos } = useFiltrosUrl();
 
-  /**
-   * A escada de centro de custo, aqui em ESCOLHA ÚNICA.
-   *
-   * O painel guarda um id só em `centro=` e manda esse id para as RPCs, que
-   * agrupam pelo centro escolhido mais fundo. Então os dois campos são uma
-   * VISTA do mesmo parâmetro, igual ao formulário de rateio: a raiz enquanto
-   * nenhuma etapa foi escolhida, a etapa quando foi. Nenhum link antigo do
-   * painel muda de significado.
-   */
-  const { raizId, etapaId } = resolverSelecao(centros, valores.centro);
-
   const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
     () => opcoesDeRaiz(centros),
     [centros],
   );
-
-  // Sem `useMemo` de propósito: o React Compiler recusa preservar memoização
-  // manual apoiada num valor desestruturado de chamada (`raizId`) e desliga a
-  // otimização do componente INTEIRO. São 64 etapas no pior caso, num filtro
-  // que só re-renderiza quando a URL muda -- o custo é zero e a alternativa
-  // custaria a memoização de tudo o mais nesta barra.
-  const etapas = etapasDaRaiz(centros, raizId);
-
-  const opcoesEtapa: OpcaoFiltro[] = etapas.map((etapa) => ({
-    valor: etapa.id,
-    rotulo: etapa.codigo ? `${etapa.codigo} · ${etapa.nome}` : etapa.nome,
-  }));
-
-  // O rótulo do campo é SINGULAR (a escolha é de um só) e o "todos" vem do
-  // módulo do filtro, que já sabe que etapa é "todas as" e equipamento é "todos
-  // os". Concatenar um "s" aqui escreveria "Todos os etapas".
-  const nomeEtapa = rotuloDaEtapa(centros, raizId);
-  const todosEtapa = rotuloDasEtapas(centros, raizId ? [raizId] : []).todos;
 
   const opcoesCategoria = React.useMemo<OpcaoFiltro[]>(
     () =>
@@ -95,38 +77,23 @@ export function PainelFiltros({
     [categorias],
   );
 
-  /** Seletor de valor único preso a um parâmetro da URL. */
-  function selecao(config: {
-    /** Id do filtro na barra, e chave da URL quando `onValor` não vem. */
-    chave: string;
-    rotulo: string;
-    valor: string;
-    opcoes: OpcaoFiltro[];
-    todosRotulo: string;
-    /** Escrita própria, para os dois campos da escada de centro de custo. */
-    onValor?: (valor: string) => void;
-    onLimpar?: () => void;
-  }): FiltroDaBarra {
-    return {
-      id: config.chave,
-      rotulo: config.rotulo,
-      temValor: config.valor !== "",
-      onLimpar: config.onLimpar ?? (() => setMuitos({ [config.chave]: null })),
-      elemento: (
-        <FiltroSelect
-          valor={config.valor}
-          onValorChange={(valor) =>
-            config.onValor
-              ? config.onValor(valor)
-              : setMuitos({ [config.chave]: valor === "" ? null : valor })
-          }
-          opcoes={config.opcoes}
-          placeholder={config.rotulo}
-          todosRotulo={config.todosRotulo}
-          className={LARGURA_NOME}
-        />
-      ),
-    };
+  /** Escreve uma lista de ids num parâmetro, ou remove o parâmetro (= todos). */
+  function trocarLista(chave: string, ids: string[]) {
+    setMuitos({ [chave]: escreverListaNaUrl(ids) });
+  }
+
+  /**
+   * Troca as raízes e, na MESMA navegação, apaga as etapas que ficaram órfãs.
+   *
+   * Em duas navegações o `etapa=<uuid>` fica pendurado na URL, invisível (o campo
+   * some junto com a raiz dele) e vivo — e volta a recortar o painel sozinho
+   * quando alguém remarcar aquela raiz meia hora depois.
+   */
+  function trocarRaizes(ids: string[]) {
+    setMuitos({
+      centro: escreverListaNaUrl(ids),
+      etapa: escreverListaNaUrl(etapasValidas(centros, ids, valores.etapa)),
+    });
   }
 
   /**
@@ -159,41 +126,53 @@ export function PainelFiltros({
     };
   }
 
+  const nomesEtapa = rotuloDasEtapas(centros, valores.centro);
+
   const filtros: FiltroDaBarra[] = [
-    selecao({
-      chave: "centro",
+    {
+      id: "centro",
       // "Obra" era o rótulo, mas a lista sempre teve a manutenção e o escritório
       // dentro. Com a escada abrindo os equipamentos embaixo, chamar de obra
       // ficaria errado em voz alta.
       rotulo: "Centro de custo",
-      valor: raizId,
-      opcoes: opcoesCentro,
-      todosRotulo: "Todos os centros de custo",
-      // Trocar a raiz descarta a etapa na MESMA navegação: ela pertencia à raiz
-      // anterior, e um par impossível ficaria pendurado na URL.
-      onValor: (valor) => setMuitos({ centro: valor === "" ? null : valor }),
-    }),
-    // O segundo degrau, só quando a raiz escolhida tem o que oferecer.
-    ...(etapas.length > 0
-      ? [
-          selecao({
-            chave: "etapa",
-            rotulo: nomeEtapa,
-            valor: etapaId,
-            opcoes: opcoesEtapa,
-            todosRotulo: todosEtapa,
-            // Esvaziar a etapa devolve para a raiz, nunca para vazio: é a mesma
-            // regra do formulário de rateio, e sem ela limpar o detalhe apagaria
-            // o recorte inteiro do painel.
-            onValor: (valor) =>
-              setMuitos({ centro: valorAoEscolherEtapa(raizId, valor) }),
-            // Limpar este campo NÃO apaga `centro=`: devolve o painel para a
-            // raiz. A chave dele na URL não existe -- os dois campos são vista
-            // de um parâmetro só.
-            onLimpar: () => setMuitos({ centro: raizId || null }),
-          }),
-        ]
-      : []),
+      temValor: valores.centro.length > 0,
+      onLimpar: () => setMuitos({ centro: null, etapa: null }),
+      elemento: (
+        <FiltroSelectMulti
+          valores={valores.centro}
+          onValoresChange={trocarRaizes}
+          maximo={MAX_ITENS_FILTRO}
+          opcoes={opcoesCentro}
+          todosRotulo="Todos os centros de custo"
+        />
+      ),
+    },
+  ];
+
+  // O segundo degrau da escada só entra na barra quando há o que escolher nele.
+  // Fixo, ficaria vazio e inerte em quase toda abertura da tela: das 17 raízes,
+  // duas só têm filho hoje.
+  if (temEtapasParaEscolher(centros, valores.centro)) {
+    filtros.push({
+      id: "etapa",
+      rotulo: nomesEtapa.rotulo,
+      fixo: true,
+      temValor: valores.etapa.length > 0,
+      // Limpar este campo NÃO apaga `centro=`: devolve o painel para as raízes.
+      onLimpar: () => setMuitos({ etapa: null }),
+      elemento: (
+        <FiltroSelectMulti
+          valores={valores.etapa}
+          onValoresChange={(ids) => trocarLista("etapa", ids)}
+          maximo={MAX_ITENS_FILTRO}
+          opcoes={opcoesDeEtapa(centros, valores.centro)}
+          todosRotulo={nomesEtapa.todos}
+        />
+      ),
+    });
+  }
+
+  filtros.push(
     mes({
       chave: "mes_de",
       rotulo: "Mês inicial",
@@ -206,18 +185,30 @@ export function PainelFiltros({
       rotuloCampo: "até",
       valor: valores.mesAte,
     }),
-    selecao({
-      chave: "categoria",
+    {
+      id: "categoria",
       rotulo: "Categoria",
-      valor: valores.categoria,
-      opcoes: opcoesCategoria,
-      todosRotulo: "Todas as categorias",
-    }),
-  ];
+      temValor: valores.categoria.length > 0,
+      onLimpar: () => setMuitos({ categoria: null }),
+      elemento: (
+        <FiltroSelectMulti
+          valores={valores.categoria}
+          onValoresChange={(ids) => trocarLista("categoria", ids)}
+          maximo={MAX_ITENS_FILTRO}
+          opcoes={opcoesCategoria}
+          todosRotulo="Todas as categorias"
+        />
+      ),
+    },
+  );
 
   return (
     <div className="mb-4">
-      <BarraFiltrosConfiguravel onLimparFiltros={limparTodos} idTabela="gestao.painel" filtros={filtros} />
+      <BarraFiltrosConfiguravel
+        onLimparFiltros={limparTodos}
+        idTabela="gestao.painel"
+        filtros={filtros}
+      />
     </div>
   );
 }

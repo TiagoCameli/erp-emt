@@ -4721,7 +4721,9 @@ export type Database = {
       fn_rel_custo_por_grupo: {
         Args: {
           p_categoria?: string;
+          p_categorias?: string[];
           p_centro_custo?: string;
+          p_centros?: string[];
           p_fim?: string;
           p_inicio?: string;
         };
@@ -4750,7 +4752,9 @@ export type Database = {
       fn_rel_custo_por_mes: {
         Args: {
           p_categoria?: string;
+          p_categorias?: string[];
           p_centro_custo?: string;
+          p_centros?: string[];
           p_fim?: string;
           p_inicio?: string;
           p_meses?: number;
@@ -4830,6 +4834,49 @@ export type Database = {
         Returns: {
           id: string;
           nome: string;
+        }[];
+      };
+      fn_rel_gestao_maiores_custos: {
+        Args: {
+          p_categorias?: string[];
+          p_centros?: string[];
+          p_fim?: string;
+          p_inicio?: string;
+          p_limite?: number;
+        };
+        Returns: {
+          centros: number;
+          // Anotados à mão como nulos porque a coluna É nula no banco. O gerador
+          // do supabase escreve tudo não-nulo em Returns de RPC, e um `string`
+          // mentiroso aqui faz o `tsc` aprovar uma tela que quebra em runtime no
+          // primeiro lançamento sem número.
+          data_vencimento: string | null;
+          descricao: string;
+          fornecedor: string | null;
+          lancamento_id: string;
+          mes_competencia: string;
+          numero: string | null;
+          valor: number;
+        }[];
+      };
+      fn_rel_gestao_maiores_fornecedores: {
+        Args: {
+          p_categorias?: string[];
+          p_centros?: string[];
+          p_fim?: string;
+          p_inicio?: string;
+          p_limite?: number;
+        };
+        Returns: {
+          aberto: number;
+          /** Nulo nas linhas `sem_fornecedor` e `outros`. */
+          fornecedor_id: string | null;
+          fornecedores: number;
+          lancamentos: number;
+          nome: string;
+          pago: number;
+          tipo_linha: string;
+          total: number;
         }[];
       };
       fn_rel_gestao_compras_resumo: {

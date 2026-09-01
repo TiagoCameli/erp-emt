@@ -1,3 +1,5 @@
+import { escreverListaNaUrl } from "@/modules/financeiro/_shared/listas-na-url";
+
 /**
  * Para onde cada cartão do Painel leva, já filtrado.
  *
@@ -51,9 +53,18 @@ export interface ContextoDosCards {
   hoje: string;
   /** Mês do cartão de custo (yyyy-MM): o último da janela do painel. */
   mesDoCusto: string;
-  /** Filtros do painel, para o cartão que OBEDECE a eles. Vazio = sem filtro. */
-  centroCustoId?: string;
-  categoriaId?: string;
+  /**
+   * Filtros do painel, para o cartão que OBEDECE a eles. Vazio = sem filtro.
+   *
+   * Listas desde 01/09/2026, e as MESMAS três chaves do relatório de destino
+   * (`centro`, `etapa`, `categoria`): o par raiz/etapa do painel é o par do
+   * relatório de Custo por CC, então ele viaja inteiro em vez de ser achatado
+   * aqui. Mandar só a raiz levaria a pessoa de um cartão recortado num
+   * equipamento para um relatório com as outras 60 máquinas dentro.
+   */
+  centroIds?: readonly string[];
+  etapaIds?: readonly string[];
+  categoriaIds?: readonly string[];
 }
 
 export interface LinksDosCards {
@@ -62,6 +73,18 @@ export interface LinksDosCards {
   venceEmSeteDias: string;
   pagamentosAAprovar: string;
   pagoNoMes: string;
+}
+
+/**
+ * Uma lista de ids no formato da URL, ou `undefined` para o parâmetro não
+ * aparecer.
+ *
+ * Passa pelo `escreverListaNaUrl` canônico, e não junta com vírgula aqui, porque
+ * é ele que aplica o teto de 50: link do cartão com lista maior morreria por
+ * tamanho de URL no destino, e o cartão levaria a uma tela quebrada.
+ */
+function lista(itens: readonly string[] | undefined): string | undefined {
+  return escreverListaNaUrl([...(itens ?? [])]) ?? undefined;
 }
 
 /** Monta a query string ignorando o que estiver vazio. */
@@ -75,18 +98,19 @@ function comParametros(rota: string, params: Record<string, string | undefined>)
 }
 
 export function linksDosCards(contexto: ContextoDosCards): LinksDosCards {
-  const { hoje, mesDoCusto, centroCustoId, categoriaId } = contexto;
+  const { hoje, mesDoCusto, centroIds, etapaIds, categoriaIds } = contexto;
 
   return {
-    // Obedece ao filtro do painel (é o único que obedece), então carrega centro
-    // e categoria: o relatório sem eles somaria a empresa inteira e mostraria
-    // um número maior que o do cartão que acabou de ser clicado.
+    // Obedece ao filtro do painel (é o único que obedece), então carrega centro,
+    // etapa e categoria: o relatório sem eles somaria a empresa inteira e
+    // mostraria um número maior que o do cartão que acabou de ser clicado.
     custoDoMes: comParametros("/financeiro/relatorios", {
       rel: "custo-cc",
       modo: "mes",
       mes: mesDoCusto,
-      centro: centroCustoId,
-      categoria: categoriaId,
+      centro: lista(centroIds),
+      etapa: lista(etapaIds),
+      categoria: lista(categoriaIds),
     }),
 
     // A fila a pagar JÁ é o conjunto em aberto (pendente, em revisão e

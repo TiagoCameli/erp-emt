@@ -52,8 +52,8 @@ describe("linksDosCards", () => {
   it("Custo do mês carrega o filtro do painel, porque o cartão obedece a ele", () => {
     const links = linksDosCards({
       ...CONTEXTO,
-      centroCustoId: "11111111-1111-4111-8111-111111111111",
-      categoriaId: "22222222-2222-4222-8222-222222222222",
+      centroIds: ["11111111-1111-4111-8111-111111111111"],
+      categoriaIds: ["22222222-2222-4222-8222-222222222222"],
     });
     // Sem carregar o filtro, o relatório somaria a empresa inteira e mostraria
     // um número maior que o do cartão que acabou de ser clicado.
@@ -62,6 +62,37 @@ describe("linksDosCards", () => {
     );
     expect(links.custoDoMes).toContain(
       "categoria=22222222-2222-4222-8222-222222222222",
+    );
+  });
+
+  it("leva a lista inteira, e não só o primeiro centro escolhido", () => {
+    const links = linksDosCards({
+      ...CONTEXTO,
+      centroIds: [
+        "11111111-1111-4111-8111-111111111111",
+        "33333333-3333-4333-8333-333333333333",
+      ],
+    });
+    // O `URLSearchParams` escapa a vírgula como %2C, e o destino desescapa.
+    expect(decodeURIComponent(links.custoDoMes)).toContain(
+      "centro=11111111-1111-4111-8111-111111111111,33333333-3333-4333-8333-333333333333",
+    );
+  });
+
+  /**
+   * O painel guarda raiz e etapa em parâmetros separados, e o relatório de
+   * destino também. Achatar o par aqui levaria quem recortou um equipamento para
+   * um relatório com as outras 60 máquinas da raiz dentro — o cartão apontaria
+   * para outro número.
+   */
+  it("leva a etapa junto com a raiz, no parâmetro próprio dela", () => {
+    const links = linksDosCards({
+      ...CONTEXTO,
+      centroIds: ["11111111-1111-4111-8111-111111111111"],
+      etapaIds: ["44444444-4444-4444-8444-444444444444"],
+    });
+    expect(links.custoDoMes).toContain(
+      "etapa=44444444-4444-4444-8444-444444444444",
     );
   });
 
@@ -105,8 +136,9 @@ describe("linksDosCards", () => {
   });
 
   it("não gera parâmetro vazio quando não há filtro", () => {
-    const links = linksDosCards({ ...CONTEXTO, centroCustoId: "", categoriaId: "" });
+    const links = linksDosCards({ ...CONTEXTO, centroIds: [], categoriaIds: [] });
     expect(links.custoDoMes).not.toContain("centro=");
+    expect(links.custoDoMes).not.toContain("etapa=");
     expect(links.custoDoMes).not.toContain("categoria=");
   });
 });
