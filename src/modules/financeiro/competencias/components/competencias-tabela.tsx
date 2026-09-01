@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarCheck, Filter, Lock, LockOpen } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
+import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 
 import {
   colunaDinheiro,
@@ -214,7 +215,7 @@ export function CompetenciasTabela({
       return;
     }
     toast.success(`Competência ${formatarMesAno(mes.mes)} fechada`);
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function aoReabrir(mes: CompetenciaMes, motivo: string) {
@@ -224,7 +225,7 @@ export function CompetenciasTabela({
       return;
     }
     toast.success(`Competência ${formatarMesAno(mes.mes)} reaberta`);
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   const colunas = React.useMemo<ColumnDef<CompetenciaMes, unknown>[]>(() => {

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
+import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 
 import {
   CelulaVazia,
@@ -128,7 +129,7 @@ export function PontoDetalheView({
       return;
     }
     toast.success("Ponto aprovado");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function aoReabrir() {
@@ -138,7 +139,7 @@ export function PontoDetalheView({
       return;
     }
     toast.success("Ponto reaberto");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function aoRemover(apontamentoId: string) {
@@ -148,7 +149,7 @@ export function PontoDetalheView({
       return;
     }
     toast.success("Apontamento removido");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   return (

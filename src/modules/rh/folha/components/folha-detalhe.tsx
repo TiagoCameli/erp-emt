@@ -14,6 +14,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
+import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 
 import {
   ApprovalBar,
@@ -298,7 +299,7 @@ export function FolhaDetalheView({
       return;
     }
     toast.success("Folha enviada para aprovação");
-    router.refresh();
+    semDerrubarSucesso("rh.folha.detalhe", () => router.refresh());
   }
 
   async function aoAprovar() {
@@ -308,7 +309,7 @@ export function FolhaDetalheView({
       return;
     }
     toast.success("Folha aprovada. Lançamentos gerados no Financeiro");
-    router.refresh();
+    semDerrubarSucesso("rh.folha.detalhe", () => router.refresh());
   }
 
   async function aoMandarParaRevisao(motivo: string) {
@@ -318,7 +319,7 @@ export function FolhaDetalheView({
       return;
     }
     toast.success("Folha devolvida para revisão");
-    router.refresh();
+    semDerrubarSucesso("rh.folha.detalhe", () => router.refresh());
   }
 
   /**
@@ -334,7 +335,7 @@ export function FolhaDetalheView({
       return;
     }
     toast.success("Folha de volta em rascunho");
-    router.refresh();
+    semDerrubarSucesso("rh.folha.detalhe", () => router.refresh());
   }
 
   /**
@@ -408,7 +409,7 @@ export function FolhaDetalheView({
       return;
     }
     toast.success("Aprovação desfeita. Lançamentos apagados");
-    router.refresh();
+    semDerrubarSucesso("rh.folha.detalhe", () => router.refresh());
   }
 
   /**
