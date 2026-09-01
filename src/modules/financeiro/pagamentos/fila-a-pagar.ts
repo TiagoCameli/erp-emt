@@ -19,7 +19,11 @@
 import { z } from "zod";
 
 import { idSchema } from "@/lib/id";
-import { dentroDoPeriodo } from "@/modules/_shared/filtros-cliente";
+// De `filtros-predicados`, e NÃO de `filtros-cliente`: aquele é `"use client"`
+// por causa de um hook que mora nele, e Next transforma cada export de módulo
+// cliente numa REFERÊNCIA. Chamar a referência aqui funciona na tela e estoura
+// na Server Action da planilha, que é este mesmo arquivo rodando no servidor.
+import { dentroDoPeriodo } from "@/modules/_shared/filtros-predicados";
 import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
 import { MAX_ITENS_FILTRO } from "@/modules/financeiro/_shared/listas-na-url";
 import { ORIGENS_LANCAMENTO } from "@/modules/financeiro/lancamentos/schemas";
