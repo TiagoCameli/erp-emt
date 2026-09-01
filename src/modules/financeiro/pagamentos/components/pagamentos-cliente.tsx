@@ -82,6 +82,7 @@ import {
   contagem,
   podePagarParcela,
   somarParaResumo,
+  type ResumoPagas,
 } from "@/modules/financeiro/pagamentos/resumo";
 
 import { PagarParcelaDrawer } from "./pagar-parcela-drawer";
@@ -206,7 +207,12 @@ export interface PagamentosClienteProps {
    * Painel mostra, e é o que faz clicar no cartão cair numa tela que confirma
    * aquele valor em vez de deixar o operador somar 25 linhas de cada vez.
    */
-  somaPagas: number;
+  /**
+   * O recorte somado: `valor`, os três ajustes e o líquido. O card mostra o
+   * líquido; o rodapé da tabela mostra a composição inteira, e é assim que os
+   * dois números da tela fecham entre si.
+   */
+  somaPagas: ResumoPagas;
   /** Aba que abre primeiro. O Painel manda `aba=pagas` no cartão "Pago no mês". */
   abaInicial?: "a-pagar" | "pagas";
   contas: ContaBancariaOpcao[];
@@ -344,6 +350,27 @@ function textoDosAjustes(parcela: ParcelaPaga): string | null {
  * mesma parcela, e duas versões da frase divergiriam no primeiro ajuste novo.
  */
 export function CelulaValorPaga({ parcela }: { parcela: ParcelaPaga }) {
+  /*
+   * Com filtro de centro ligado, a coluna mostra a FATIA daquele centro, não o
+   * valor do pagamento: a "COMPRA DE 3 CARRETAS" de R$ 100.000,00 entra com um
+   * terço em cada carreta, e é isso que faz o total das partes fechar com o total
+   * do centro pai (escolha do Tiago em 01/09/2026, ver `recorte.ts`).
+   *
+   * E a composição do líquido SAI junto: desconto, juros e despesas são do
+   * pagamento inteiro, então imprimi-los embaixo de uma fatia daria uma conta que
+   * não fecha (fatia − desconto cheio). Quem quer a composição abre a parcela.
+   */
+  /*
+   * `typeof === "number"` e não `!== null` de propósito: o campo AUSENTE
+   * (undefined) tem que cair no caminho normal, não no da fatia. Com a checagem
+   * de null, quem montasse a linha sem o campo veria "R$ 0,00" no lugar do valor
+   * pago -- zero silencioso onde devia estar dinheiro. Aconteceu em 01/09/2026,
+   * nas fixtures de teste, antes desta linha existir.
+   */
+  if (typeof parcela.valorRecorte === "number") {
+    return <MoneyText valor={parcela.valorRecorte} />;
+  }
+
   return (
     <>
       <MoneyText valor={parcela.valor} />
@@ -1376,9 +1403,16 @@ export function PagamentosCliente({
       },
       {
         accessorKey: "valor",
-        header: "Valor",
+        // O rótulo muda junto com o número: com filtro de centro a coluna deixa
+        // de ser o valor do pagamento e passa a ser a parte dele que é daquele
+        // centro. Número que muda de significado sem mudar de rótulo é
+        // exatamente o defeito que esta tela acabou de ter.
+        header: somaPagas.recortado ? "Valor no centro" : "Valor",
         size: 130,
-        meta: { alinharDireita: true },
+        meta: {
+          alinharDireita: true,
+          rotulo: somaPagas.recortado ? "Valor no centro" : "Valor",
+        },
         cell: ({ row }) => <CelulaValorPaga parcela={row.original} />,
       },
       ...(podeEstornar
@@ -1402,7 +1436,10 @@ export function PagamentosCliente({
           ]
         : []),
     ],
-    [podeEstornar],
+    // `recortado` entra na lista porque o rótulo da coluna de valor depende dele:
+    // sem isto o cabeçalho ficaria congelado em "Valor" depois de filtrar por
+    // centro, enquanto a célula já mostraria a fatia.
+    [podeEstornar, somaPagas.recortado],
   );
 
   /**
@@ -1460,6 +1497,56 @@ export function PagamentosCliente({
     setPaginacao((atual) => ({ ...atual, pageIndex: 0 }));
   }
 
+  /**
+   * Rodapé de totais da aba "Pagas".
+   *
+   * Soma o FILTRO inteiro, não a página: é o mesmo recorte do card, e é por isso
+   * que o rodapé serve para conferir o card em vez de competir com ele. Somar as
+   * 25 linhas à vista chamaria de "total" um pedaço -- e o rótulo diz de quantas
+   * parcelas o número é, justamente para ninguém ler o total do recorte como o
+   * total da página.
+   *
+   * A composição (desconto, juros, despesas, líquido) sai da MESMA
+   * `ComposicaoDoLiquido` da célula, e só aparece quando existe ajuste no
+   * recorte. Sem ajuste, `valor` e líquido são o mesmo número e repeti-lo não
+   * informaria nada; com ajuste, é a linha que explica por que o total da coluna
+   * e o do card diferem.
+   *
+   * Preso ao id da coluna (`lancamentoNumero` e `valor`) porque o usuário pode
+   * esconder e reordenar coluna: com posição fixa, o total desceria embaixo da
+   * coluna errada assim que alguém mexesse.
+   */
+  const rodapePagas = React.useMemo(
+    () => ({
+      lancamentoNumero: (
+        <span className="text-legenda text-muted-foreground">
+          {somaPagas.recortado ? "Total no centro" : "Total do filtro"} ·{" "}
+          {contagem(totalPagas)}
+        </span>
+      ),
+      valor: (
+        <>
+          <MoneyText valor={somaPagas.valor} />
+          {/*
+            Recortado, a composição não vai: desconto, juros e despesas são dos
+            pagamentos inteiros, e mostrá-los embaixo da soma das fatias daria uma
+            conta que não fecha. Sem recorte, é ela que explica por que o total da
+            coluna e o do card diferem.
+          */}
+          {somaPagas.recortado ? null : (
+            <ComposicaoDoLiquido
+              desconto={somaPagas.desconto}
+              juros={somaPagas.juros}
+              outrasDespesas={somaPagas.outrasDespesas}
+              valorLiquido={somaPagas.valorLiquido}
+            />
+          )}
+        </>
+      ),
+    }),
+    [somaPagas, totalPagas],
+  );
+
   async function aoMudarPaginacao(nova: PaginationState) {
     setPaginacao(nova);
     setCarregandoPagas(true);
@@ -1488,9 +1575,18 @@ export function PagamentosCliente({
       {aba === "pagas" ? (
         <GradeKpis>
           <KPICard
-            titulo="Pago no filtro"
-            valor={formatarBRL(somaPagas)}
-            detalhe={`${contagem(totalPagas)} · o que saiu da conta, já com desconto, juros e despesas`}
+            titulo={
+              somaPagas.recortado ? "Pago neste centro" : "Pago no filtro"
+            }
+            valor={formatarBRL(somaPagas.valorLiquido)}
+            detalhe={
+              somaPagas.recortado
+                ? // Com centro filtrado o número é a PARTE que é daquele centro:
+                  // custo dividido entre duas obras entra pela metade em cada uma,
+                  // e é isso que faz a soma das etapas fechar com a do centro pai.
+                  `${contagem(totalPagas)} · a parte deste centro no que saiu da conta`
+                : `${contagem(totalPagas)} · o que saiu da conta, já com desconto, juros e despesas`
+            }
           />
         </GradeKpis>
       ) : (
@@ -1598,6 +1694,7 @@ export function PagamentosCliente({
               pageIndex={paginacao.pageIndex}
               pageSize={paginacao.pageSize}
               onPaginationChange={aoMudarPaginacao}
+              rodape={rodapePagas}
               isLoading={carregandoPagas}
               selecao={{
                 idDaLinha: (parcela: ParcelaPaga) => parcela.id,

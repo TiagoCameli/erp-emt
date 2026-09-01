@@ -4,9 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import { CelulaValorPaga } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
 import type { ParcelaPaga } from "@/modules/financeiro/pagamentos/queries";
 
-function parcela(
-  override: Partial<ParcelaPaga> = {},
-): ParcelaPaga {
+function parcela(override: Partial<ParcelaPaga> = {}): ParcelaPaga {
   return {
     id: "parcela-1",
     lancamentoNumero: "LAN-2026-0001",
@@ -22,6 +20,8 @@ function parcela(
     juros: 0,
     outrasDespesas: 0,
     valorLiquido: 1000,
+    // Sem filtro de centro: a coluna mostra o valor do pagamento.
+    valorRecorte: null,
     ...override,
   };
 }
@@ -41,7 +41,9 @@ describe("CelulaValorPaga", () => {
     );
 
     expect(within(container).getByText("R$ 1.000,00")).toBeInTheDocument();
-    expect(within(container).queryByText(/desconto|juros|líquido/)).not.toBeInTheDocument();
+    expect(
+      within(container).queryByText(/desconto|juros|líquido/),
+    ).not.toBeInTheDocument();
   });
 
   it("com desconto, sem juros: mostra desconto e líquido", () => {
@@ -166,5 +168,39 @@ describe("CelulaValorPaga", () => {
     );
     expect(ajustes).toBeInTheDocument();
     expect(within(container).getByText("R$ 975,00")).toBeInTheDocument();
+  });
+
+  it("com filtro de centro, mostra a FATIA e não o valor do pagamento", () => {
+    // A "COMPRA DE 3 CARRETAS" de R$ 100.000,00 entra com um terço na carreta
+    // filtrada. Mostrar os R$ 100.000,00 aqui é o que fazia o total das quatro
+    // carretas passar do total do centro pai.
+    const { container } = render(
+      <CelulaValorPaga
+        parcela={parcela({
+          valor: 100000,
+          valorLiquido: 100000,
+          valorRecorte: 33333.34,
+        })}
+      />,
+    );
+    expect(within(container).getByText("R$ 33.333,34")).toBeInTheDocument();
+    expect(
+      within(container).queryByText("R$ 100.000,00"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("REGRESSÃO: campo de fatia ausente não vira R$ 0,00", () => {
+    /*
+     * `valorRecorte` ausente (undefined) é "não há filtro de centro", e tem que
+     * mostrar o valor pago. Com a guarda escrita como `!== null`, undefined caía
+     * no caminho da fatia e a coluna imprimia R$ 0,00 no lugar do dinheiro --
+     * silencioso, plausível e errado. Foi o que aconteceu em 01/09/2026.
+     */
+    const semCampo = parcela({ valor: 4989.62, valorLiquido: 4989.62 });
+    delete (semCampo as { valorRecorte?: number | null }).valorRecorte;
+
+    const { container } = render(<CelulaValorPaga parcela={semCampo} />);
+    expect(within(container).getByText("R$ 4.989,62")).toBeInTheDocument();
+    expect(within(container).queryByText("R$ 0,00")).not.toBeInTheDocument();
   });
 });

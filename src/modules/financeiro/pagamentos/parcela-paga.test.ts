@@ -25,12 +25,10 @@ describe("ParcelaPaga", () => {
       // 1000 - 50 + 20 + 20. À mão: fixture que ignora um dos termos afirma a
       // crença de quem a escreveu, e passa verde sobre uma conta impossível.
       valorLiquido: 990,
+      valorRecorte: null,
     };
     expect(
-      parcela.valor -
-        parcela.desconto +
-        parcela.juros +
-        parcela.outrasDespesas,
+      parcela.valor - parcela.desconto + parcela.juros + parcela.outrasDespesas,
     ).toBe(parcela.valorLiquido);
   });
 });

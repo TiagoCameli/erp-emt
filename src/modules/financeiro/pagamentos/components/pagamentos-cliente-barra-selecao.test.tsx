@@ -1,10 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 import {
   FILTROS_A_PAGAR_VAZIOS,
   PagamentosCliente,
 } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
+import { RESUMO_PAGAS_VAZIO } from "@/modules/financeiro/pagamentos/resumo";
 import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { buscarParcelasPagas } from "@/modules/financeiro/pagamentos/actions";
 import type { ParcelaPaga } from "@/modules/financeiro/pagamentos/queries";
@@ -63,6 +70,7 @@ function parcelaPaga(troca: Partial<ParcelaPaga> = {}): ParcelaPaga {
     juros: 0,
     outrasDespesas: 0,
     valorLiquido: 1000,
+    valorRecorte: null,
     ...troca,
   };
 }
@@ -90,7 +98,7 @@ function montar(totalPagas = PAGAS.length) {
       aprovadas={[]}
       pagas={PAGAS}
       totalPagas={totalPagas}
-      somaPagas={0}
+      somaPagas={RESUMO_PAGAS_VAZIO}
       contas={[]}
       fornecedores={[]}
       categorias={[]}

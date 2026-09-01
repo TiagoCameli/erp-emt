@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
-import { PagamentosCliente,
+import {
+  PagamentosCliente,
   FILTROS_A_PAGAR_VAZIOS,
 } from "@/modules/financeiro/pagamentos/components/pagamentos-cliente";
+import { RESUMO_PAGAS_VAZIO } from "@/modules/financeiro/pagamentos/resumo";
 import type { ParcelaAprovada } from "@/modules/financeiro/pagamentos/queries";
 
 /**
@@ -112,7 +114,7 @@ function montar(
       aprovadas={FILA}
       pagas={[]}
       totalPagas={0}
-      somaPagas={0}
+      somaPagas={RESUMO_PAGAS_VAZIO}
       contas={[
         { id: "conta-1", nome: "Obra 364", banco: "bb", saldoAtual: 50000 },
       ]}
@@ -184,7 +186,9 @@ describe("Fila a pagar com parcelas não aprovadas", () => {
     montar();
     marcar(PENDENTE);
     marcar(EM_REVISAO);
-    expect(screen.getByRole("button", { name: "Pagar 0 aprovadas" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Pagar 0 aprovadas" }),
+    ).toBeDisabled();
   });
 
   /**
@@ -308,7 +312,16 @@ describe("Fila a pagar com parcelas não aprovadas", () => {
   });
 
   it("na aba Pagas os cards falam do histórico, não da fila", () => {
-    montar(true, { abaInicial: "pagas", somaPagas: 1835626.54, totalPagas: 177 });
+    montar(true, {
+      abaInicial: "pagas",
+      somaPagas: {
+        ...RESUMO_PAGAS_VAZIO,
+        parcelas: 177,
+        valor: 1835626.54,
+        valorLiquido: 1835626.54,
+      },
+      totalPagas: 177,
+    });
     // O número do cartão "Pago no mês" do Painel, confirmado no destino.
     expect(screen.getByText("Pago no filtro")).toBeInTheDocument();
     expect(valorDoCard("Pago no filtro")).toContain("1.835.626,54");
@@ -343,8 +356,20 @@ describe("o filtro de centro de custo da fila", () => {
   const OBRA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
   const CENTROS = [
-    { id: MANUT, nome: "Manutenção", codigo: null, paiId: null, tipo: "manutencao" },
-    { id: BOBCAT, nome: "Bobcat MC110C - 01", codigo: null, paiId: MANUT, tipo: null },
+    {
+      id: MANUT,
+      nome: "Manutenção",
+      codigo: null,
+      paiId: null,
+      tipo: "manutencao",
+    },
+    {
+      id: BOBCAT,
+      nome: "Bobcat MC110C - 01",
+      codigo: null,
+      paiId: MANUT,
+      tipo: null,
+    },
     { id: OBRA, nome: "009 - BR-364", codigo: null, paiId: null, tipo: "obra" },
   ];
 
@@ -369,7 +394,7 @@ describe("o filtro de centro de custo da fila", () => {
         aprovadas={DUAS}
         pagas={[]}
         totalPagas={0}
-        somaPagas={0}
+        somaPagas={RESUMO_PAGAS_VAZIO}
         contas={[]}
         fornecedores={[]}
         categorias={[]}
