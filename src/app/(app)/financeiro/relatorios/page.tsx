@@ -1020,6 +1020,15 @@ async function ConteudoExtratoFornecedor({
   );
 }
 
+/**
+ * `gerarPlanilhaDoRelatorio` roda na função DESTA página. Estava sem teto desde
+ * que nasceu: com o padrão da Vercel (10 a 15s) um relatório grande morre no
+ * meio e devolve erro no lugar do arquivo. Achado em 01/09/2026 pelo
+ * `max-duration-de-quem-exporta.test.ts`, escrito depois de o mesmo esquecimento
+ * derrubar a exportação de Pagamentos. Mesma razão do /financeiro/lancamentos.
+ */
+export const maxDuration = 60;
+
 export default async function RelatoriosPage({
   searchParams,
 }: RelatoriosPageProps) {

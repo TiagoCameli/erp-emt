@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { erroAcao } from "@/lib/erros";
+import { erroAcao, textoDoErro } from "@/lib/erros";
 import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import {
@@ -464,7 +464,13 @@ export async function gerarPlanilhaPagamentos(
     return erroAcao(
       "financeiro.pagamentos.gerarPlanilhaPagamentos",
       erro,
-      "Não foi possível ler os pagamentos para exportar. Tente novamente",
+      // O texto REAL do erro sobe para o toast de propósito. O padrão do app é
+      // esconder detalhe técnico, e isso continua valendo para o erro ESPERADO
+      // — mas a Vercel aqui é plano hobby e não há log de aplicação nenhum:
+      // sem o texto, uma falha nesta action não tem como ser nomeada depois.
+      // Foi exatamente o que aconteceu em 01/09/2026, e a investigação teve que
+      // sair por eliminação nos logs do PostgREST. Ver `semLancar` em lib/erros.
+      `Não foi possível ler os pagamentos para exportar: ${textoDoErro(erro)}`,
     );
   }
 
@@ -508,7 +514,7 @@ export async function gerarPlanilhaPagamentos(
     return erroAcao(
       "financeiro.pagamentos.gerarPlanilhaPagamentos",
       erro,
-      "Não foi possível montar a planilha de pagamentos. Tente novamente",
+      `Não foi possível montar a planilha de pagamentos: ${textoDoErro(erro)}`,
     );
   }
 
