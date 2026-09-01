@@ -272,19 +272,33 @@ export function drillGrupoInsumo({
  * Fluxo de caixa: a barra de um mês. Regime de CAIXA, então o mês vai no recorte
  * (que reusa a expressão de `fn_rel_fluxo_caixa`) e NÃO como `mes`, que é
  * competência.
+ *
+ * Os CENTROS do lado clicado viajam junto, e é o que faz a lista abrir com o
+ * mesmo total da barra: com centro escolhido, a barra soma a FATIA do rateio, e a
+ * lista de Lançamentos também mede pela fatia quando recebe `centro=` (ver
+ * `escolherValorRecorte`). Sem eles, o clique numa fatia de uma obra abriria a
+ * lista com o dinheiro de todas.
  */
 export function drillFluxoCaixa({
   mes,
   tipo,
   realizado,
+  centroIds,
 }: {
   mes: string;
   tipo: TipoLancamentoRecorte;
   realizado: boolean;
+  /**
+   * Centros JÁ EFETIVOS do lado clicado: os do custo quando a barra é de saída,
+   * os da receita quando é de entrada. Vazio = o relatório não filtrou aquele
+   * lado, e a lista abre sem recorte de centro.
+   */
+  centroIds?: string[];
 }): string {
   return montar({
     tipo,
     recorte: escreverRecorte({ tipo: "fluxo", mes, realizado }),
+    centro: lista(centroIds),
   });
 }
 

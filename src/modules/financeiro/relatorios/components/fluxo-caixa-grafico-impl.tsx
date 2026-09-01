@@ -24,6 +24,13 @@ import type { FluxoCaixaMes } from "../queries";
 
 interface FluxoCaixaGraficoProps {
   meses: FluxoCaixaMes[];
+  /**
+   * Centros JÁ EFETIVOS de cada lado, do jeito que o relatório recortou. Viajam
+   * no clique para a lista abrir com o mesmo total da barra: com centro
+   * escolhido, a barra soma a FATIA do rateio e a lista mede pela fatia também.
+   */
+  centrosCusto?: string[];
+  centrosReceita?: string[];
   /** Sem permissão de ver lançamentos, a barra não clica (levaria a um 404). */
   podeVerLancamentos: boolean;
 }
@@ -80,6 +87,8 @@ function ConteudoTooltip({
  */
 export function FluxoCaixaGrafico({
   meses,
+  centrosCusto,
+  centrosReceita,
   podeVerLancamentos,
 }: FluxoCaixaGraficoProps) {
   /**
@@ -93,7 +102,17 @@ export function FluxoCaixaGrafico({
     (tipo: "a_pagar" | "a_receber", realizado: boolean) =>
     (ponto: { payload?: FluxoCaixaMes }) => {
       if (!podeVerLancamentos || !ponto?.payload?.mes) return;
-      abrirDrill(drillFluxoCaixa({ mes: ponto.payload.mes, tipo, realizado }));
+      abrirDrill(
+        drillFluxoCaixa({
+          mes: ponto.payload.mes,
+          tipo,
+          realizado,
+          // Cada lado leva os SEUS centros: saída é o centro de custo, entrada é
+          // o de receita. Cruzar os dois abriria a lista com o recorte do lado
+          // que ninguém clicou.
+          centroIds: tipo === "a_pagar" ? centrosCusto : centrosReceita,
+        }),
+      );
     };
   const cursor = podeVerLancamentos ? "pointer" : undefined;
 

@@ -391,6 +391,41 @@ describe("drillFluxoCaixa", () => {
     expect(p.venc_de).toBeUndefined();
     expect(p.venc_ate).toBeUndefined();
   });
+
+  it("os centros do relatório viajam no clique", () => {
+    // Sem isto, clicar na fatia de UMA obra abriria a lista com o dinheiro de
+    // todas: a barra soma `liquido × fatia do rateio`, e a lista sem `centro=`
+    // soma a parcela inteira de todo mundo.
+    expect(
+      params(
+        drillFluxoCaixa({
+          mes: "2026-07",
+          tipo: "a_pagar",
+          realizado: true,
+          centroIds: [CENTRO, OUTRO_CENTRO],
+        }),
+      ),
+    ).toEqual({
+      recorte: "fluxo:2026-07:realizado",
+      tipo: "a_pagar",
+      centro: `${CENTRO},${OUTRO_CENTRO}`,
+    });
+  });
+
+  it("lado sem filtro não ganha `centro=` vazio", () => {
+    // Lista vazia tem de virar ausência do parâmetro, e não `centro=`: a tela de
+    // Lançamentos leria a chave presente e a barra dela mostraria um filtro que
+    // ninguém escolheu.
+    const p = params(
+      drillFluxoCaixa({
+        mes: "2026-07",
+        tipo: "a_receber",
+        realizado: false,
+        centroIds: [],
+      }),
+    );
+    expect(p.centro).toBeUndefined();
+  });
 });
 
 describe("drillAging", () => {

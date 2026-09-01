@@ -459,21 +459,62 @@ describe("escolherValorRecorte", () => {
   });
 
   it("só centro: o recorte é o rateio", () => {
-    expect(escolherValorRecorte(40_000, null)).toBe(40_000);
+    expect(escolherValorRecorte(40_000, null, 100_000)).toBe(40_000);
   });
 
   it("só parcela: o recorte é a fatia da parcela", () => {
-    expect(escolherValorRecorte(null, 180)).toBe(180);
+    expect(escolherValorRecorte(null, 180, 100_000)).toBe(180);
   });
 
-  it("os dois juntos: o centro ganha, e não é o produto dos dois", () => {
-    // Ratear o valor da parcela pela proporção do centro seria uma conta que
-    // nenhum relatório pede, e que apareceria na tela com aparência de verdade.
+  it("os dois juntos: é a parte do centro DENTRO das parcelas da fatia", () => {
+    // Documento de R$ 100.000 com R$ 40.000 rateados para o centro escolhido, e
+    // R$ 10.000 de parcela caindo no mês clicado: 40% de 10.000.
+    //
+    // Até 01/09/2026 o centro ganhava sozinho e devolvia 40.000 aqui. O Fluxo de
+    // caixa por centro de custo quebrou nisso: a barra de um mês soma
+    // `liquido × fatia`, e a lista somava o rateio do documento INTEIRO — um
+    // financiamento de 57 prestações aparecia todo no clique de um mês só.
+    expect(escolherValorRecorte(40_000, 10_000, 100_000)).toBe(4_000);
+  });
+
+  it("o centro inteiro é fatia de 100%: a parcela passa igual", () => {
+    // Linha de controle. Rateio de um centro só significa que a proporção é 1, e
+    // então o recorte de parcela tem de voltar intacto — se a conta estivesse
+    // invertida (dividir pela parcela, por exemplo), este caso mudaria.
+    expect(escolherValorRecorte(100_000, 10_000, 100_000)).toBe(10_000);
+  });
+
+  it("as fatias de dois centros somam a parcela do mês", () => {
+    // O mesmo documento visto por cada metade do rateio: 60% + 40% = a parcela.
+    // É o que faz a soma da lista fechar com a barra do gráfico.
+    const parcelaDoMes = 10_000;
+    expect(escolherValorRecorte(60_000, parcelaDoMes, 100_000)!).toBe(6_000);
+    expect(escolherValorRecorte(40_000, parcelaDoMes, 100_000)!).toBe(4_000);
+    expect(
+      escolherValorRecorte(60_000, parcelaDoMes, 100_000)! +
+        escolherValorRecorte(40_000, parcelaDoMes, 100_000)!,
+    ).toBe(parcelaDoMes);
+  });
+
+  it("arredonda uma vez, em centavos, no fim", () => {
+    // Um terço de R$ 0,10 é R$ 0,03 — não 0,033333. A conta é feita em centavos
+    // e arredondada uma vez só, senão o resto vaza para a soma da tela.
+    expect(escolherValorRecorte(1_000, 0.1, 3_000)).toBe(0.03);
+  });
+
+  it("sem o valor do documento, sobra a fatia do centro", () => {
+    // Quem chama sem o terceiro argumento é o caminho antigo (só centro, sem
+    // recorte de parcela): o comportamento dele não pode mudar.
     expect(escolherValorRecorte(40_000, 180)).toBe(40_000);
   });
 
+  it("documento de valor zero não tem proporção: sobra a fatia do centro", () => {
+    expect(escolherValorRecorte(0, 180, 0)).toBe(0);
+  });
+
   it("centro com zero ganha de parcela com valor", () => {
-    // Zero é fatia de zero: a comparação é com null, não com falsidade.
-    expect(escolherValorRecorte(0, 180)).toBe(0);
+    // Zero é fatia de zero: a comparação é com null, não com falsidade. Zero de
+    // rateio no centro escolhido quer dizer que o documento não encosta nele.
+    expect(escolherValorRecorte(0, 180, 100_000)).toBe(0);
   });
 });

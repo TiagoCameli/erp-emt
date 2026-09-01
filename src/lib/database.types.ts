@@ -4765,7 +4765,10 @@ export type Database = {
         }[];
       };
       fn_rel_fluxo_caixa: {
-        Args: never;
+        Args: {
+          p_centros_custo?: string[];
+          p_centros_receita?: string[];
+        };
         Returns: {
           mes: string;
           realizado: boolean;

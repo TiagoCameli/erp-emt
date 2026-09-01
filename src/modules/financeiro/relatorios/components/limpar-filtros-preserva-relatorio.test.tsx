@@ -189,14 +189,29 @@ describe("Limpar filtros preserva o relatório aberto", () => {
     expect(query.get("rel")).toBe("dre");
   });
 
-  it("Fluxo de caixa: some a janela, fica o `rel`", () => {
-    navegador.query = "rel=fluxo-caixa&fluxo_modo=total";
-    render(<FiltrosFluxoCaixaBarra filtros={{ modo: "total", de: "", ate: "" }} />);
+  it("Fluxo de caixa: somem a janela e os centros, fica o `rel`", () => {
+    navegador.query =
+      "rel=fluxo-caixa&fluxo_modo=total&centro_custo=" + OBRA;
+    render(
+      <FiltrosFluxoCaixaBarra
+        filtros={{
+          modo: "total",
+          de: "",
+          ate: "",
+          centrosCusto: [OBRA],
+          etapasCusto: [],
+          centrosReceita: [],
+          etapasReceita: [],
+        }}
+        centrosCusto={[]}
+      />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
 
     const query = ultimaQuery();
     expect(query.get("fluxo_modo")).toBeNull();
+    expect(query.get("centro_custo")).toBeNull();
     expect(query.get("rel")).toBe("fluxo-caixa");
   });
 
