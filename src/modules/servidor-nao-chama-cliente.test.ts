@@ -82,17 +82,33 @@ function resolverImport(deOndeVem: string, especificador: string): string | null
  * `import type { X } from "..."` fica de fora: o import é apagado na compilação,
  * então ele não cria dependência de runtime nenhuma. Um `import { type X }`
  * misturado com valor continua contando, e está certo — o valor vem junto.
+ *
+ * `await import("...")` CONTA, e é o que faltava na primeira versão deste teste.
+ * O buraco era logo onde o defeito mora: a action da planilha carrega o módulo
+ * do exceljs por import dinâmico (para não pendurar a biblioteca em toda action
+ * do arquivo), e um `"use client"` alcançado por ali estouraria exatamente do
+ * mesmo jeito — com o teste passando.
  */
 function importesDeRuntime(caminho: string): string[] {
   const fonte = CONTEUDO.get(caminho) ?? "";
   const achados: string[] = [];
-  const IMPORT = /^\s*import\s+(type\s+)?([\s\S]*?)from\s+["']([^"']+)["']/gm;
-  for (const achou of fonte.matchAll(IMPORT)) {
+
+  const ESTATICO = /^\s*import\s+(type\s+)?([\s\S]*?)from\s+["']([^"']+)["']/gm;
+  for (const achou of fonte.matchAll(ESTATICO)) {
     const [, ehTipo, , especificador] = achou;
     if (ehTipo) continue;
     const alvo = resolverImport(caminho, especificador);
     if (alvo) achados.push(alvo);
   }
+
+  // `import("...")` com literal. Import dinâmico de caminho montado em variável
+  // não dá para seguir estaticamente — e também não existe neste app.
+  const DINAMICO = /\bimport\(\s*["']([^"']+)["']\s*\)/g;
+  for (const achou of fonte.matchAll(DINAMICO)) {
+    const alvo = resolverImport(caminho, achou[1]);
+    if (alvo) achados.push(alvo);
+  }
+
   return achados;
 }
 
@@ -126,6 +142,18 @@ describe("nada que o servidor alcança é 'use client'", () => {
     expect(ARQUIVOS_USE_SERVER.length).toBeGreaterThanOrEqual(5);
     expect(ARQUIVOS_USE_SERVER).toContain(
       join("src", "modules", "financeiro", "pagamentos", "actions.ts"),
+    );
+  });
+
+  it("segue import DINÂMICO, não só o estático", () => {
+    // A action da planilha carrega o módulo do exceljs por `await import` para
+    // não pendurar a biblioteca em toda action do arquivo. Se o passeio não
+    // entrasse ali, o teste passaria justamente no caminho onde o defeito mora.
+    const daAction = importesDeRuntime(
+      join("src", "modules", "financeiro", "pagamentos", "actions.ts"),
+    );
+    expect(daAction).toContain(
+      join("src", "modules", "financeiro", "pagamentos", "planilha.ts"),
     );
   });
 
