@@ -5,7 +5,7 @@ import ExcelJS from "exceljs";
 
 import { EMPRESA } from "@/config/marca";
 import type { Acao } from "@/config/recursos";
-import { erroAcao } from "@/lib/erros";
+import { erroAcao, logErroServidor, semLancar } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import {
@@ -276,6 +276,19 @@ async function transicionarStatusFolha(
   novoStatus: StatusFolha,
   extra: { motivo_rejeicao?: string | null } = {},
 ): Promise<ResultadoAcao> {
+  return semLancar("rh.folha.transicionarStatus", () =>
+    transicionar(id, acao, statusEsperado, novoStatus, extra),
+  );
+}
+
+/** Corpo de transicionarStatusFolha, separado só para o `semLancar` envolver. */
+async function transicionar(
+  id: string,
+  acao: Acao,
+  statusEsperado: StatusFolha,
+  novoStatus: StatusFolha,
+  extra: { motivo_rejeicao?: string | null },
+): Promise<ResultadoAcao> {
   if (!(await checarPermissao(acao))) {
     return { erro: "Sem permissão para esta ação na folha" };
   }
@@ -317,8 +330,13 @@ async function transicionarStatusFolha(
     );
   }
 
-  revalidatePath(ROTA);
-  revalidatePath(rotaDetalhe(idValido.data));
+  // O UPDATE já commitou: cache não derruba a resposta.
+  try {
+    revalidatePath(ROTA);
+    revalidatePath(rotaDetalhe(idValido.data));
+  } catch (erroCache) {
+    logErroServidor("rh.folha.transicionarStatus.revalidar", erroCache);
+  }
   return { ok: true };
 }
 
@@ -347,29 +365,43 @@ export async function enviarFolhaParaAprovacao(
  * a mensagem de erro do banco vai direto pro toast.
  */
 export async function aprovarFolha(id: string): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("aprovar"))) {
-    return { erro: "Sem permissão para aprovar a folha" };
-  }
+  return semLancar("rh.folha.aprovar", async () => {
+    if (!(await checarPermissao("aprovar"))) {
+      return { erro: "Sem permissão para aprovar a folha" };
+    }
 
-  const idValido = idSchema.safeParse(id);
-  if (!idValido.success) return { erro: "Folha inválida" };
+    const idValido = idSchema.safeParse(id);
+    if (!idValido.success) return { erro: "Folha inválida" };
 
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_aprovar_folha", {
-    p_folha: idValido.data,
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_aprovar_folha", {
+      p_folha: idValido.data,
+    });
+
+    if (error) {
+      return erroAcao(
+        "rh.folha.aprovar",
+        error,
+        error.message || "Não foi possível aprovar a folha",
+      );
+    }
+
+    /*
+     * A APROVAÇÃO JÁ ESTÁ GRAVADA neste ponto: a RPC commitou. O que vem
+     * depois é só cache, e não pode derrubar a resposta — se `revalidatePath`
+     * lançasse aqui, a action rejeitaria e a tela diria "não foi concluída"
+     * sobre uma folha aprovada, com os lançamentos já criados. Mentir para
+     * quem aprovou R$ 173 mil é pior que cache velho, então o erro de
+     * revalidação vira aviso no log e a action segue devolvendo ok.
+     */
+    try {
+      revalidatePath(ROTA);
+      revalidatePath(rotaDetalhe(idValido.data));
+    } catch (erroCache) {
+      logErroServidor("rh.folha.aprovar.revalidar", erroCache);
+    }
+    return { ok: true };
   });
-
-  if (error) {
-    return erroAcao(
-      "rh.folha.aprovar",
-      error,
-      error.message || "Não foi possível aprovar a folha",
-    );
-  }
-
-  revalidatePath(ROTA);
-  revalidatePath(rotaDetalhe(idValido.data));
-  return { ok: true };
 }
 
 /**
@@ -435,33 +467,40 @@ export async function desaprovarFolha(
   id: string,
   motivo: string,
 ): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("desaprovar"))) {
-    return { erro: "Sem permissão para desaprovar a folha" };
-  }
+  return semLancar("rh.folha.desaprovar", async () => {
+    if (!(await checarPermissao("desaprovar"))) {
+      return { erro: "Sem permissão para desaprovar a folha" };
+    }
 
-  const idValido = idSchema.safeParse(id);
-  if (!idValido.success) return { erro: "Folha inválida" };
+    const idValido = idSchema.safeParse(id);
+    if (!idValido.success) return { erro: "Folha inválida" };
 
-  const motivoLimpo = motivo.trim();
-  if (motivoLimpo === "") return { erro: "Informe o motivo da desaprovação" };
+    const motivoLimpo = motivo.trim();
+    if (motivoLimpo === "") return { erro: "Informe o motivo da desaprovação" };
 
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_desaprovar_folha", {
-    p_folha: idValido.data,
-    p_motivo: motivoLimpo,
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_desaprovar_folha", {
+      p_folha: idValido.data,
+      p_motivo: motivoLimpo,
+    });
+
+    if (error) {
+      return erroAcao(
+        "rh.folha.desaprovar",
+        error,
+        error.message || "Não foi possível desaprovar a folha",
+      );
+    }
+
+    // Mesma razão do aprovar: a RPC já commitou, cache não derruba a resposta.
+    try {
+      revalidatePath(ROTA);
+      revalidatePath(rotaDetalhe(idValido.data));
+    } catch (erroCache) {
+      logErroServidor("rh.folha.desaprovar.revalidar", erroCache);
+    }
+    return { ok: true };
   });
-
-  if (error) {
-    return erroAcao(
-      "rh.folha.desaprovar",
-      error,
-      error.message || "Não foi possível desaprovar a folha",
-    );
-  }
-
-  revalidatePath(ROTA);
-  revalidatePath(rotaDetalhe(idValido.data));
-  return { ok: true };
 }
 
 /* ------------------------------------------------------------------ */

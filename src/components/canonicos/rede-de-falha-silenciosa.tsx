@@ -66,8 +66,11 @@ export function RedeDeFalhaSilenciosa() {
       ultimoAviso = agora;
 
       console.error('[erp-emt] falha nao tratada', motivo);
+      // "PODE não ter sido concluída" e "confira": mesma razão do
+      // comAvisoDeFalha — invocação morta não é o mesmo que nada aconteceu, e
+      // mandar tentar de novo convida a aprovar o mesmo dinheiro duas vezes.
       toast.error(
-        'A ação não foi concluída. Recarregue a página e tente de novo',
+        'A ação pode não ter sido concluída. Recarregue a página e confira antes de tentar de novo',
       );
     }
 

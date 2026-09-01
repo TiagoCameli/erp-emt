@@ -36,6 +36,21 @@ export async function comAvisoDeFalha(
     await executar();
   } catch (erro) {
     console.error(`[erp-emt] ${contexto}`, erro);
-    toast.error('A ação não foi concluída. Recarregue a página e tente de novo');
+    /*
+     * "PODE não ter sido concluída", e "confira" antes de "tente de novo".
+     *
+     * As Server Actions daqui não lançam mais: elas devolvem `{ erro }` até
+     * para falha inesperada (`semLancar`, em src/lib/erros.ts). Então chegar
+     * neste catch significa que a INVOCAÇÃO morreu — timeout da função, queda
+     * de rede, deploy no meio do clique. E invocação morta não é o mesmo que
+     * nada aconteceu: o lote de aprovação de pagamentos, por exemplo, é uma
+     * transação por parcela, então parte dele pode estar aprovada e commitada.
+     *
+     * Dizer "não foi concluída, tente de novo" nesse cenário convida a pessoa
+     * a aprovar o mesmo dinheiro duas vezes. O certo é mandar conferir.
+     */
+    toast.error(
+      'A ação pode não ter sido concluída. Recarregue a página e confira antes de tentar de novo',
+    );
   }
 }

@@ -55,6 +55,17 @@ describe("RedeDeFalhaSilenciosa", () => {
 
     expect(erros.length).toBe(1);
     expect(erros[0]).toMatch(/recarregue/i);
+    /*
+     * "PODE não ter sido concluída" e "confira", não "tente de novo".
+     *
+     * Chegar aqui significa que a invocação morreu (as actions não lançam mais:
+     * devolvem `{ erro }` até para falha inesperada). Invocação morta não é o
+     * mesmo que nada aconteceu — o lote de aprovação de pagamentos é uma
+     * transação por parcela, então parte pode estar commitada. Mandar tentar de
+     * novo convida a aprovar o mesmo dinheiro duas vezes.
+     */
+    expect(erros[0]).toMatch(/pode não ter sido concluída/i);
+    expect(erros[0]).toMatch(/confira/i);
   });
 
   it("não avisa de requisição cancelada de propósito", () => {
