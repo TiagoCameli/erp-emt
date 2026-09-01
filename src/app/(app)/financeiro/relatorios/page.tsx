@@ -37,6 +37,7 @@ import {
 import { lerFiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-custo-grupo";
 import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
 import {
+  descreverFatia,
   descreverJanela,
   janelaDoFluxo,
   lerFiltrosFluxoCaixa,
@@ -172,30 +173,52 @@ function Painel({ children }: { children: React.ReactNode }) {
 
 async function ConteudoFluxoCaixa({
   janela,
+  centrosCusto,
+  centrosReceita,
   podeVerLancamentos,
 }: {
   /** A janela de meses da tela. Cortada no servidor, ver `fluxoCaixa`. */
   janela: JanelaFluxo;
+  /**
+   * Centros JÁ EFETIVOS de cada lado (a etapa substitui a raiz). Vazio = o lado
+   * inteiro. Com centro escolhido, a RPC soma a FATIA do rateio daquele centro —
+   * é por isso que os cartões dizem "Fatia de N centros" em vez de deixar o
+   * número parecer o total da empresa.
+   */
+  centrosCusto: string[];
+  centrosReceita: string[];
   podeVerLancamentos: boolean;
 }) {
-  const dados = await fluxoCaixa(janela);
+  const dados = await fluxoCaixa(janela, {
+    custo: centrosCusto,
+    receita: centrosReceita,
+  });
   const janelaDescrita = descreverJanela(janela);
+  const fatiaCusto = descreverFatia(centrosCusto.length);
+  const fatiaReceita = descreverFatia(centrosReceita.length);
+  const temCorteDeCentro = centrosCusto.length > 0 || centrosReceita.length > 0;
   if (dados.meses.length === 0) {
-    // Duas causas com respostas opostas: não há parcela nenhuma, ou a janela é
-    // que não pega nenhum mês. Mandar "assim que houver parcelas lançadas" para
-    // quem tem cinco anos de parcelas e olhou 2019 é uma resposta errada.
+    // Três causas com respostas diferentes: não há parcela nenhuma, a janela não
+    // pega nenhum mês, ou os centros escolhidos não têm movimento. Mandar "assim
+    // que houver parcelas lançadas" para quem tem cinco anos de parcelas e olhou
+    // 2019 — ou para quem acabou de recortar uma obra — é uma resposta errada.
+    const temCorteDeJanela = Boolean(janela.de || janela.ate);
     return (
       <EmptyState
         icone={BarChart3}
         titulo={
-          janela.de || janela.ate
-            ? "Sem movimentação nesta janela"
-            : "Sem movimentação de caixa"
+          temCorteDeCentro
+            ? "Sem movimentação nos centros escolhidos"
+            : temCorteDeJanela
+              ? "Sem movimentação nesta janela"
+              : "Sem movimentação de caixa"
         }
         descricao={
-          janela.de || janela.ate
-            ? `Nenhuma parcela cai em ${janelaDescrita.toLowerCase()}. Abra a janela ou escolha "Tudo".`
-            : "Assim que houver parcelas com vencimento lançadas, o fluxo aparece aqui."
+          temCorteDeCentro
+            ? `Nenhuma parcela rateada nos centros escolhidos cai em ${janelaDescrita.toLowerCase()}. Tire o filtro de centro ou abra a janela.`
+            : temCorteDeJanela
+              ? `Nenhuma parcela cai em ${janelaDescrita.toLowerCase()}. Abra a janela ou escolha "Tudo".`
+              : "Assim que houver parcelas com vencimento lançadas, o fluxo aparece aqui."
         }
       />
     );
@@ -209,6 +232,7 @@ async function ConteudoFluxoCaixa({
           detalhe={
             <>
               Realizado <MoneyText valor={dados.totalRealizadoEntradas} />
+              {fatiaReceita ? ` · ${fatiaReceita.toLowerCase()}` : ""}
             </>
           }
         />
@@ -218,13 +242,21 @@ async function ConteudoFluxoCaixa({
           detalhe={
             <>
               Realizado <MoneyText valor={dados.totalRealizadoSaidas} />
+              {fatiaCusto ? ` · ${fatiaCusto.toLowerCase()}` : ""}
             </>
           }
         />
         <KPICard
           titulo="Saldo projetado"
           valor={<MoneyText valor={dados.saldoProjetado} />}
-          detalhe="Entradas menos saídas no período"
+          detalhe={
+            // Os dois lados se escolhem separados, então o saldo pode estar
+            // somando a fatia de uma obra com o total da empresa. Quem lê o
+            // número precisa saber disso ANTES de decidir pagamento.
+            (centrosCusto.length > 0) !== (centrosReceita.length > 0)
+              ? "Entradas menos saídas — um dos lados está recortado por centro"
+              : "Entradas menos saídas no período"
+          }
         />
         <KPICard
           titulo="Meses com movimento"
@@ -235,6 +267,8 @@ async function ConteudoFluxoCaixa({
       <Painel>
         <FluxoCaixaGrafico
           meses={dados.meses}
+          centrosCusto={centrosCusto}
+          centrosReceita={centrosReceita}
           podeVerLancamentos={podeVerLancamentos}
         />
       </Painel>
@@ -1077,6 +1111,15 @@ export default async function RelatoriosPage({
     relatorio === "custo-receita" ? await mesesDeCompetencia() : [];
   const centrosParaCustoReceita =
     relatorio === "custo-receita" ? await listarCentrosCustoParaFiltro() : null;
+
+  /**
+   * Fluxo de caixa: o cadastro de centros, para a escada dos dois lados.
+   *
+   * Lido só nesta aba, como nas outras: as oito restantes não oferecem centro, e
+   * uma consulta em toda navegação de relatório seria trabalho jogado fora.
+   */
+  const centrosParaFluxo =
+    relatorio === "fluxo-caixa" ? await listarCentrosCustoParaFiltro() : null;
   const {
     filtros: filtrosCustoReceita,
     mesesEfetivos: mesesCustoReceita,
@@ -1102,11 +1145,27 @@ export default async function RelatoriosPage({
         <SecaoRelatorio
           exportar={relatorio}
           titulo="Fluxo de caixa"
-          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado). Não usa o mês de referência. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031."
+          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado). Não usa o mês de referência. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro — um lançamento dividido entre duas obras entra em cada uma pela parte dela."
         >
-          <FiltrosFluxoCaixaBarra filtros={filtrosFluxo} />
+          <FiltrosFluxoCaixaBarra
+            filtros={filtrosFluxo}
+            centrosCusto={centrosParaFluxo ?? []}
+          />
           <ConteudoFluxoCaixa
             janela={janelaFluxo}
+            /* A escada de dois campos vira a lista que a RPC aceita: a etapa
+               escolhida SUBSTITUI a raiz, e o banco filtra pela subárvore do que
+               receber. Mesma tradução do Custo x receita. */
+            centrosCusto={centrosEfetivos(
+              centrosParaFluxo ?? [],
+              filtrosFluxo.centrosCusto,
+              filtrosFluxo.etapasCusto,
+            )}
+            centrosReceita={centrosEfetivos(
+              centrosParaFluxo ?? [],
+              filtrosFluxo.centrosReceita,
+              filtrosFluxo.etapasReceita,
+            )}
             podeVerLancamentos={podeVerLancamentos}
           />
         </SecaoRelatorio>

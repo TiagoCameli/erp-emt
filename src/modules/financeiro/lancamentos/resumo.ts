@@ -175,21 +175,44 @@ export function valorDasParcelasNoRecorte(
  * Qual fatia vale, quando a URL recorta por centro de custo E por parcela ao
  * mesmo tempo.
  *
- * O centro ganha. O produto dos dois (a parte do centro dentro das parcelas da
- * fatia) é uma conta que NENHUM relatório pede: o relatório de centro de custo não
- * tem dimensão de parcela, e os de parcela não têm dimensão de centro. Inventar
- * essa conta seria pior que não tê-la, porque ela apareceria na tela como um
- * número com aparência de verdade que ninguém sabe conferir.
+ * Os DOIS valem, e o resultado é o produto: a parte do centro dentro das parcelas
+ * da fatia. Até 01/09/2026 o centro ganhava sozinho, com o motivo escrito aqui de
+ * que "nenhum relatório pede essa conta" — e o Fluxo de caixa por centro de custo
+ * passou a pedir. Ele soma, para cada mês, `valor_liquido × (rateio do centro ÷
+ * rateio do documento)`, e o clique na barra abre esta lista com `centro=` e
+ * `recorte=fluxo:mês:realizado` juntos. Devolver só a fatia do centro fazia a
+ * lista somar as parcelas de TODOS os meses do documento embaixo de uma barra de
+ * um mês só — um financiamento de 57 prestações aparecia inteiro no clique de
+ * março.
  *
- * Zero é fatia de zero e ganha normalmente: a comparação é com `null`, não com
- * falsidade.
+ * A proporção sai do rateio, não da parcela: `valorNoCentro ÷ valorDoDocumento` é
+ * a fração do documento que cabe ao centro, e ela é a MESMA que a RPC usa (a soma
+ * dos rateios de um documento é o valor dele — medido em 28/08/2026, diferença
+ * 0,00 em 6.367 lançamentos, e o centro é invariante de banco desde 22/08/2026).
+ *
+ * Multiplica antes de dividir, e arredonda uma vez no fim, em centavos: dividir
+ * primeiro joga fora a precisão que a multiplicação ia usar.
+ *
+ * Zero é fatia de zero e conta normalmente: a comparação é com `null`, não com
+ * falsidade. Documento de valor zero não tem proporção que se calcule, e aí sobra
+ * a fatia do centro — que nesse caso também é zero.
  */
 export function escolherValorRecorte(
   valorNoCentro: number | null,
   valorNaParcela: number | null,
+  valorDoDocumento?: number,
 ): number | null {
-  if (valorNoCentro !== null) return valorNoCentro;
-  return valorNaParcela;
+  if (valorNoCentro === null) return valorNaParcela;
+  if (valorNaParcela === null) return valorNoCentro;
+  if (valorDoDocumento === undefined || centavos(valorDoDocumento) === 0) {
+    return valorNoCentro;
+  }
+  return reais(
+    Math.round(
+      (centavos(valorNaParcela) * centavos(valorNoCentro)) /
+        centavos(valorDoDocumento),
+    ),
+  );
 }
 
 /** O resumo que os cartões do cabeçalho mostram. */

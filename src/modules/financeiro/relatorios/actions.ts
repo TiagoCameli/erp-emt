@@ -16,6 +16,7 @@ import { lerFiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-cu
 import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
 import {
   janelaDoFluxo,
+  descreverFatia,
   descreverJanela,
   lerFiltrosFluxoCaixa,
 } from "@/modules/financeiro/relatorios/filtros-fluxo-caixa";
@@ -194,7 +195,42 @@ async function abaDoRelatorio(
     case "fluxo-caixa": {
       const filtros = lerFiltrosFluxoCaixa(params);
       const janela = janelaDoFluxo(filtros, mesCorrente());
-      return abaFluxoCaixa(await fluxoCaixa(janela), descreverJanela(janela));
+      // A escada de centro vira a lista que a RPC aceita, igual à tela: a etapa
+      // escolhida SUBSTITUI a raiz. Sem isso a planilha traria a empresa inteira
+      // com o nome de um relatório de uma obra.
+      const cadastro =
+        filtros.centrosCusto.length > 0 || filtros.centrosReceita.length > 0
+          ? await listarCentrosCustoParaFiltro()
+          : [];
+      const centrosCusto = centrosEfetivos(
+        cadastro,
+        filtros.centrosCusto,
+        filtros.etapasCusto,
+      );
+      const centrosReceita = centrosEfetivos(
+        cadastro,
+        filtros.centrosReceita,
+        filtros.etapasReceita,
+      );
+      // O título da aba diz o recorte inteiro, inclusive que o número é FATIA:
+      // planilha de fluxo de caixa é o arquivo que sai da tela e vira anexo de
+      // e-mail, e lá não há barra de filtros para dizer o que ele mostra.
+      const fatiaCusto = descreverFatia(centrosCusto.length);
+      const fatiaReceita = descreverFatia(centrosReceita.length);
+      const recorte = [
+        descreverJanela(janela),
+        fatiaCusto ? `saídas: ${fatiaCusto.toLowerCase()}` : null,
+        fatiaReceita ? `entradas: ${fatiaReceita.toLowerCase()}` : null,
+      ]
+        .filter((parte) => parte !== null)
+        .join(" · ");
+      return abaFluxoCaixa(
+        await fluxoCaixa(janela, {
+          custo: centrosCusto,
+          receita: centrosReceita,
+        }),
+        recorte,
+      );
     }
 
     case "dre": {
@@ -260,10 +296,23 @@ async function abaDoRelatorio(
     case "custo-receita": {
       const meses = await mesesDeCompetencia();
       const { filtros, mesesEfetivos } = lerFiltrosCustoReceita(params, meses);
+      // A escada de centro tem de virar a lista efetiva aqui também: passar
+      // `filtros.centrosCusto` cru ignora a ETAPA escolhida, e a planilha saía
+      // com o centro inteiro (as 61 máquinas da manutenção) embaixo do nome de
+      // um relatório de dois equipamentos. A tela já traduzia; a exportação não.
+      const cadastro = await listarCentrosCustoParaFiltro();
       const linhas = await custoReceita({
         meses: mesesEfetivos,
-        centrosCusto: filtros.centrosCusto,
-        centrosReceita: filtros.centrosReceita,
+        centrosCusto: centrosEfetivos(
+          cadastro,
+          filtros.centrosCusto,
+          filtros.etapasCusto,
+        ),
+        centrosReceita: centrosEfetivos(
+          cadastro,
+          filtros.centrosReceita,
+          filtros.etapasReceita,
+        ),
       });
       return abaCustoReceita(linhas, `${mesesEfetivos.length} mês(es)`);
     }

@@ -115,13 +115,43 @@ interface AcumuladorFluxo {
  * (98 linhas), cortar antes de somar custa um `filter` e faz os quatro cartões, a
  * contagem de meses e o gráfico falarem da MESMA janela; cortar só no desenho
  * deixaria os cartões somando 2031 embaixo de um gráfico que para em 2027.
+ *
+ * O CENTRO, AO CONTRÁRIO DA JANELA, VAI AO BANCO. Ele não é um `filter` de linha
+ * agregada: o rateio é do LANÇAMENTO e o dinheiro é da PARCELA, então a fatia de
+ * um centro só se calcula antes de agregar. Filtrar aqui exigiria trazer parcela
+ * e rateio crus (uns 15 mil registros por abertura de tela) e reescrever em TS as
+ * regras que a RPC já tem — o mês do pagamento x o do vencimento, a natureza
+ * `movimentacao` fora, o cancelado fora. Duas cópias dessas regras divergem na
+ * primeira que alguém mexer de um lado só.
  */
-export async function fluxoCaixa(janela?: JanelaFluxo): Promise<FluxoCaixa> {
+export async function fluxoCaixa(
+  janela?: JanelaFluxo,
+  /**
+   * Centros JÁ EFETIVOS de cada lado (a etapa substitui a raiz, ver
+   * `_shared/centro-custo/filtro.ts`). Vazio = o lado inteiro.
+   *
+   * `p_centros_custo` recorta as saídas (a_pagar) e `p_centros_receita` as
+   * entradas (a_receber), e o que a RPC soma passa a ser a FATIA do rateio
+   * daquele centro. Os dois lados são independentes de propósito, como em
+   * `custoReceita`.
+   */
+  centros?: { custo?: readonly string[]; receita?: readonly string[] },
+): Promise<FluxoCaixa> {
   const supabase = await createClient();
 
   // Agregado no banco: uma linha por mês/tipo/realizado (a regra do mês do
   // pagamento x mês do vencimento vive na fn_rel_fluxo_caixa).
-  const { data, error } = await supabase.rpc("fn_rel_fluxo_caixa");
+  const { data, error } = await supabase.rpc("fn_rel_fluxo_caixa", {
+    // `undefined` e não `null` quando o lado não filtra: os parâmetros da RPC
+    // são opcionais com default null no banco, e é assim que os tipos gerados os
+    // descrevem. Lista vazia também vira `undefined`, senão um `{}` chegaria ao
+    // banco e o `cardinality` daria zero — que dá no mesmo, mas manda array
+    // vazio na query string sem motivo.
+    p_centros_custo: centros?.custo?.length ? [...centros.custo] : undefined,
+    p_centros_receita: centros?.receita?.length
+      ? [...centros.receita]
+      : undefined,
+  });
 
   if (error) {
     throw new Error("Não foi possível carregar o fluxo de caixa");

@@ -1228,6 +1228,9 @@ export async function listarLancamentos(
       valorRecorte: escolherValorRecorte(
         valoresCentro?.get(lancamento.id) ?? null,
         valoresRecorte?.get(lancamento.id) ?? null,
+        // O valor do DOCUMENTO, que é o divisor da proporção quando os dois
+        // recortes valem ao mesmo tempo (centro + mês do fluxo de caixa).
+        lancamento.valor,
       ),
     };
   });
