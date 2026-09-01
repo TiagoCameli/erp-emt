@@ -3,6 +3,7 @@ import "server-only";
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
+import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   ehPagamentoDireto,
@@ -275,6 +276,21 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
 /**
  * Das OCs informadas, quais ainda não têm recebimento (nota fiscal) registrado.
  * Uma consulta a mais, só com os ids da fila.
+ *
+ * As TRÊS funções auxiliares daqui (esta, `numerosDeOc` e `contarParcelas`)
+ * levam `emLotes` + `todasAsLinhas` pelo mesmo motivo, medido no `edge_logs` em
+ * 01/09/2026: com 835 parcelas pendentes a fila passa de 900 lançamentos, e
+ * `.in()` com 900 uuids vira uma URL de 35 KB que o PostgREST recusa com 400 —
+ * `GET /rest/v1/lancamento_parcelas` apareceu 61 vezes e `anexo_vinculos` 246.
+ *
+ * Pior que o 400 era o erro ser ENGOLIDO (`const { data } = await ...`, sem
+ * checar `error`): `data` vinha undefined e a tela mostrava um valor plausível e
+ * falso — "sem nota" em TODAS as OCs, coluna Origem sem número, "parcela 1 de
+ * 1" numa de três. Ninguém tinha erro para reportar.
+ *
+ * `todasAsLinhas` é a segunda trava: aqui volta uma linha por RECEBIMENTO (e por
+ * PARCELA, em `contarParcelas`), então o corte silencioso de 1.000 linhas do
+ * PostgREST também mentiria.
  */
 async function ocsSemNota(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -283,12 +299,27 @@ async function ocsSemNota(
   const unicos = [...new Set(ids.filter((id): id is string => id !== null))];
   if (unicos.length === 0) return new Set();
 
-  const { data } = await supabase
-    .from("recebimentos")
-    .select("ordem_compra_id")
-    .in("ordem_compra_id", unicos);
+  const comNota = new Set<string>();
 
-  const comNota = new Set((data ?? []).map((r) => r.ordem_compra_id));
+  for (const lote of emLotes(unicos, LOTE_IDS_POSTGREST)) {
+    const { linhas, erro } = await todasAsLinhas<{ ordem_compra_id: string }>(
+      (de, ate) =>
+        supabase
+          .from("recebimentos")
+          .select("ordem_compra_id")
+          .in("ordem_compra_id", lote)
+          .order("ordem_compra_id")
+          .order("id")
+          .range(de, ate),
+    );
+
+    // Conjunto parcial acusaria de "sem nota" OC que TEM nota. Melhor não
+    // acusar ninguém do que apontar o dedo errado numa tela de aprovação.
+    if (erro) return new Set();
+
+    for (const linha of linhas) comNota.add(linha.ordem_compra_id);
+  }
+
   return new Set(unicos.filter((id) => !comNota.has(id)));
 }
 
@@ -300,13 +331,27 @@ async function numerosDeOc(
   const unicos = [...new Set(ids.filter((id): id is string => id !== null))];
   if (unicos.length === 0) return new Map();
 
-  const { data } = await supabase
-    .from("ordens_compra")
-    .select("id, numero")
-    .in("id", unicos);
+  const encontradas: { id: string; numero: string | null }[] = [];
+
+  for (const lote of emLotes(unicos, LOTE_IDS_POSTGREST)) {
+    const { linhas, erro } = await todasAsLinhas<{
+      id: string;
+      numero: string | null;
+    }>((de, ate) =>
+      supabase
+        .from("ordens_compra")
+        .select("id, numero")
+        .in("id", lote)
+        .order("id")
+        .range(de, ate),
+    );
+
+    if (erro) return new Map();
+    encontradas.push(...linhas);
+  }
 
   return new Map(
-    (data ?? [])
+    encontradas
       .filter((ordem): ordem is { id: string; numero: string } =>
         Boolean(ordem.numero),
       )
@@ -330,13 +375,30 @@ async function contarParcelas(
   const unicos = [...new Set(lancamentoIds)];
   if (unicos.length === 0) return new Map();
 
-  const { data } = await supabase
-    .from("lancamento_parcelas")
-    .select("lancamento_id")
-    .in("lancamento_id", unicos);
+  const todas: { lancamento_id: string }[] = [];
+
+  for (const lote of emLotes(unicos, LOTE_IDS_POSTGREST)) {
+    const { linhas, erro } = await todasAsLinhas<{ lancamento_id: string }>(
+      (de, ate) =>
+        supabase
+          .from("lancamento_parcelas")
+          .select("lancamento_id")
+          .in("lancamento_id", lote)
+          .order("lancamento_id")
+          .order("id")
+          .range(de, ate),
+    );
+
+    // Contagem parcial mostraria "parcela 1 de 1" numa de três. Sem o total, o
+    // rótulo não é desenhado — mentir sobre quantas parcelas o lançamento tem é
+    // pior que não dizer.
+    if (erro) return new Map();
+
+    todas.push(...linhas);
+  }
 
   const contagem = new Map<string, number>();
-  for (const parcela of data ?? []) {
+  for (const parcela of todas) {
     contagem.set(
       parcela.lancamento_id,
       (contagem.get(parcela.lancamento_id) ?? 0) + 1,
