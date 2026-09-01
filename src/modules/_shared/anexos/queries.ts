@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logErroServidor } from "@/lib/erros";
 import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
@@ -219,43 +220,86 @@ export async function contarAnexosPorDocumento(
 
 /**
  * Anexos de vários documentos do mesmo tipo, agrupados por id. Serve para uma
- * listagem pré-carregar os anexos de todas as linhas numa consulta (telas de RH
- * com drawer), sem carregamento no client.
+ * listagem pré-carregar os anexos de todas as linhas (fila a pagar, telas de RH
+ * com drawer, espelhos), sem carregamento no client.
+ *
+ * As MESMAS duas travas de tamanho de `contarAnexosPorDocumento`, e aqui elas
+ * chegaram tarde: até 01/09/2026 esta função mandava a lista INTEIRA de ids num
+ * `in.(...)` e não paginava a resposta.
+ *
+ * - `emLotes` nos ids que VÃO. A fila a pagar tem ~900 parcelas e cada uuid
+ *   custa 37 caracteres na URL: medido no `edge_logs`, **147 requisições com
+ *   HTTP 400 num único dia**, URL de até 35.708 caracteres. O gateway corta
+ *   ANTES do Postgres, então nem se confunde com falta de permissão.
+ * - `todasAsLinhas` nas linhas que VOLTAM. Volta uma linha por VÍNCULO, não por
+ *   documento: duzentos documentos com vários arquivos cada passam de mil, e o
+ *   corte do PostgREST é silencioso -- os anexos além da milésima linha
+ *   simplesmente não existiriam para a tela.
+ *
+ * E o erro não vira mais silêncio. Era `if (error || !data) return {}` sem log
+ * nenhum: o clipe desaparecia da fila inteira e não havia o que reportar. O
+ * retorno vazio continua (uma listagem não pode explodir porque falta um clipe, e
+ * mapa PARCIAL seria pior -- desenharia clipe em algumas linhas e não em outras,
+ * mentindo sobre quais documentos têm nota), mas agora ele grita no log.
+ *
+ * Ids repetidos são deduplicados: sem isso o mesmo documento cai em dois lotes e
+ * a tela mostra o anexo duas vezes.
  */
 export async function listarAnexosPorDocumento(
   entidade: EntidadeAnexo,
   entidadeIds: string[],
 ): Promise<Record<string, AnexoDoDocumento[]>> {
-  if (entidadeIds.length === 0) return {};
+  const unicos = [...new Set(entidadeIds)];
+  if (unicos.length === 0) return {};
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("anexo_vinculos")
-    .select(
-      `id, entidade_id, arquivo_id, origem, vinculo_origem_id, nome_exibicao,
-       created_at, created_by,
-       arquivos(nome_original, tipo_mime, tamanho_bytes)`,
-    )
-    .eq("entidade_tipo", entidade)
-    .in("entidade_id", entidadeIds)
-    .order("created_at", { ascending: true });
-
-  if (error || !data) return {};
-
   const porDocumento: Record<string, AnexoDoDocumento[]> = {};
-  for (const linha of data as (LinhaVinculo & { entidade_id: string })[]) {
-    (porDocumento[linha.entidade_id] ??= []).push({
-      vinculoId: linha.id,
-      arquivoId: linha.arquivo_id,
-      nome: linha.nome_exibicao ?? linha.arquivos?.nome_original ?? "arquivo",
-      tipoMime: linha.arquivos?.tipo_mime ?? null,
-      tamanhoBytes: linha.arquivos?.tamanho_bytes ?? 0,
-      criadoEm: linha.created_at,
-      criadoPorNome: null,
-      propagado: linha.origem === "propagado",
-      origemNumero: null,
-      origemRotulo: null,
-    });
+
+  for (const lote of emLotes(unicos, LOTE_IDS_POSTGREST)) {
+    const { linhas, erro } = await todasAsLinhas<
+      LinhaVinculo & { entidade_id: string }
+    >((de, ate) =>
+      supabase
+        .from("anexo_vinculos")
+        .select(
+          `id, entidade_id, arquivo_id, origem, vinculo_origem_id, nome_exibicao,
+           created_at, created_by,
+           arquivos(nome_original, tipo_mime, tamanho_bytes)`,
+        )
+        .eq("entidade_tipo", entidade)
+        .in("entidade_id", lote)
+        // Agrupa por documento e, DENTRO dele, mantém a ordem de criação, que é a
+        // que a tela mostra. O `id` no fim é o desempate que a paginação exige:
+        // `created_at` empata (a carga gravou milhares de vínculos na mesma
+        // transação) e sem ele a faixa seguinte repete um anexo e perde outro.
+        .order("entidade_id")
+        .order("created_at", { ascending: true })
+        .order("id")
+        // Sem `.returns()`: o genérico do `todasAsLinhas` acima já tipa a linha,
+        // igual ao `contarAnexosPorDocumento`.
+        .range(de, ate),
+    );
+
+    if (erro) {
+      logErroServidor("_shared.anexos.listarAnexosPorDocumento", erro);
+      return {};
+    }
+
+    for (const linha of linhas) {
+      (porDocumento[linha.entidade_id] ??= []).push({
+        vinculoId: linha.id,
+        arquivoId: linha.arquivo_id,
+        nome: linha.nome_exibicao ?? linha.arquivos?.nome_original ?? "arquivo",
+        tipoMime: linha.arquivos?.tipo_mime ?? null,
+        tamanhoBytes: linha.arquivos?.tamanho_bytes ?? 0,
+        criadoEm: linha.created_at,
+        criadoPorNome: null,
+        propagado: linha.origem === "propagado",
+        origemNumero: null,
+        origemRotulo: null,
+      });
+    }
   }
+
   return porDocumento;
 }
