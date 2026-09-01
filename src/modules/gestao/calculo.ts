@@ -266,3 +266,87 @@ export function participacao(valor: number, total: number): number {
   if (total === 0) return 0;
   return (valor / total) * 100;
 }
+
+// =====================================================================
+// Resultado do período (receita menos despesa)
+// =====================================================================
+
+export interface MesDoResultado {
+  /** Competência "yyyy-MM-01". */
+  mes: string;
+  /** "jul/26", para o eixo. */
+  rotulo: string;
+  receita: number;
+  despesa: number;
+  /** Receita menos despesa. Negativo quando o mês fecha no vermelho. */
+  resultado: number;
+}
+
+export interface ResultadoDoPeriodo {
+  meses: MesDoResultado[];
+  receita: number;
+  despesa: number;
+  resultado: number;
+  /** Resultado sobre a receita, em percentual. `null` sem receita no período. */
+  margem: number | null;
+  /** Meses COM movimento que fecharam positivo e negativo. */
+  positivos: number;
+  negativos: number;
+  /** O mês de pior resultado entre os que tiveram movimento. */
+  pior: MesDoResultado | null;
+}
+
+/**
+ * Junta a receita e a despesa de cada mês da janela e fecha o resultado.
+ *
+ * Recebe as duas séries prontas em vez de ir ao banco porque as duas vêm de
+ * funções DIFERENTES, cada uma dona do seu lado: a despesa é a mesma
+ * `fn_rel_custo_por_mes` que alimenta o cartão "Custo do mês", e a receita sai de
+ * `fn_rel_custo_receita`. Somar a despesa de uma fonte no cartão e de outra no
+ * gráfico ao lado é como duas telas de dinheiro passam a discordar sem ninguém
+ * achar o motivo.
+ *
+ * A janela manda no eixo: mês sem lançamento nenhum entra zerado, em vez de
+ * sumir. Um gráfico que pula de março para junho faz o buraco parecer dado.
+ *
+ * Módulo puro: nada de banco, nada de React.
+ */
+export function resultadoDoPeriodo(
+  meses: readonly string[],
+  receitaPorMes: ReadonlyMap<string, number>,
+  despesaPorMes: ReadonlyMap<string, number>,
+): ResultadoDoPeriodo {
+  const linhas: MesDoResultado[] = meses.map((mes) => {
+    const receita = receitaPorMes.get(mes) ?? 0;
+    const despesa = despesaPorMes.get(mes) ?? 0;
+    return {
+      mes,
+      rotulo: rotuloMesCurto(mes),
+      receita,
+      despesa,
+      resultado: receita - despesa,
+    };
+  });
+
+  const receita = linhas.reduce((soma, m) => soma + m.receita, 0);
+  const despesa = linhas.reduce((soma, m) => soma + m.despesa, 0);
+  // Mês sem NADA lançado não conta como mês negativo: contá-lo faria a frase do
+  // rodapé dizer "cinco meses negativos" numa janela em que dois nem começaram.
+  const comMovimento = linhas.filter((m) => m.receita !== 0 || m.despesa !== 0);
+
+  return {
+    meses: linhas,
+    receita,
+    despesa,
+    resultado: receita - despesa,
+    margem: receita === 0 ? null : ((receita - despesa) / receita) * 100,
+    positivos: comMovimento.filter((m) => m.resultado > 0).length,
+    negativos: comMovimento.filter((m) => m.resultado < 0).length,
+    pior:
+      comMovimento.length === 0
+        ? null
+        : comMovimento.reduce((pior, m) =>
+            m.resultado < pior.resultado ? m : pior,
+          ),
+  };
+}

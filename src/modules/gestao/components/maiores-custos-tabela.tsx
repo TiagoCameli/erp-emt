@@ -16,6 +16,11 @@ import type { MaiorCusto } from "../queries";
  * Os maiores lançamentos a pagar do período. Tabela crua de leitura, não a
  * DataTable: não tem filtro, ordenação nem coluna configurável, é um recorte
  * fixo com link para o lançamento. Quem quer a lista inteira abre o Financeiro.
+ *
+ * Com centro de custo filtrado, o valor é a FATIA que caiu no recorte, e não o
+ * documento inteiro. Documento partido entre mais de um centro do recorte ganha
+ * a marca "fatia" ao lado do número: sem ela, alguém compararia esse valor com o
+ * da nota fiscal e concluiria que a tela está errada.
  */
 export function MaioresCustosTabela({ custos }: { custos: MaiorCusto[] }) {
   return (
@@ -72,6 +77,14 @@ export function MaioresCustosTabela({ custos }: { custos: MaiorCusto[] }) {
               </TableCell>
               <TableCell className="py-2 text-right">
                 <MoneyText valor={custo.valor} className="text-detalhe" />
+                {custo.centros > 1 ? (
+                  <span
+                    className="ml-1.5 text-legenda text-muted-foreground"
+                    title={`Rateado em ${custo.centros} centros de custo do recorte`}
+                  >
+                    fatia
+                  </span>
+                ) : null}
               </TableCell>
             </TableRow>
           ))}

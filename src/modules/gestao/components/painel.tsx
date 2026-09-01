@@ -12,6 +12,17 @@ interface PainelProps {
   destaque?: ReactNode;
   rotuloDestaque?: string;
   link?: { href: string; rotulo: string };
+  /**
+   * A linha de rodapé: o que o número quer dizer, ou o que ele não conta.
+   *
+   * Fica embaixo, e não na `descricao`, porque as duas respondem perguntas
+   * diferentes: a descrição diz de que o bloco fala, e a nota diz o que a pessoa
+   * precisa saber DEPOIS de olhar o gráfico ("três meses positivos, cinco
+   * negativos", "transferências entre contas próprias ficam fora dos dois
+   * lados"). Advertência dessas no cabeçalho é lida antes de haver o que
+   * advertir, e por isso não é lida.
+   */
+  nota?: ReactNode;
   children: ReactNode;
 }
 
@@ -26,6 +37,7 @@ export function Painel({
   destaque,
   rotuloDestaque,
   link,
+  nota,
   children,
 }: PainelProps) {
   return (
@@ -61,6 +73,11 @@ export function Painel({
         </div>
       </header>
       <div className="flex-1 p-4">{children}</div>
+      {nota ? (
+        <p className="border-t border-border px-4 py-2 text-legenda text-muted-foreground">
+          {nota}
+        </p>
+      ) : null}
     </section>
   );
 }

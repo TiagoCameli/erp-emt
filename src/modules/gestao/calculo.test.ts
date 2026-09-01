@@ -4,6 +4,7 @@ import {
   agregarPorPrazo,
   janelaPainel,
   participacao,
+  resultadoDoPeriodo,
   rotuloMesCurto,
   serieMensal,
   somarMeses,
@@ -142,5 +143,107 @@ describe("participacao", () => {
   it("não divide por zero", () => {
     expect(participacao(10, 0)).toBe(0);
     expect(participacao(25, 100)).toBe(25);
+  });
+});
+
+/**
+ * O resultado do período junta duas séries que vêm de funções diferentes do
+ * banco. Errar a junção é mostrar margem inventada na primeira tela depois do
+ * login.
+ */
+describe("resultadoDoPeriodo", () => {
+  const MESES = ["2026-06-01", "2026-07-01", "2026-08-01"];
+
+  function mapa(entradas: [string, number][]): Map<string, number> {
+    return new Map(entradas);
+  }
+
+  it("fecha receita, despesa e resultado do período", () => {
+    const r = resultadoDoPeriodo(
+      MESES,
+      mapa([
+        ["2026-06-01", 1000],
+        ["2026-07-01", 2000],
+        ["2026-08-01", 500],
+      ]),
+      mapa([
+        ["2026-06-01", 400],
+        ["2026-07-01", 2500],
+        ["2026-08-01", 100],
+      ]),
+    );
+
+    expect(r.receita).toBe(3500);
+    expect(r.despesa).toBe(3000);
+    expect(r.resultado).toBe(500);
+    expect(r.meses.map((m) => m.resultado)).toEqual([600, -500, 400]);
+  });
+
+  /**
+   * A janela manda no eixo. Um gráfico que pula de junho para agosto faz o
+   * buraco parecer dado, e a tabela ao lado ficaria com uma coluna a menos que o
+   * período escolhido na barra de filtros.
+   */
+  it("mês sem lançamento entra zerado, em vez de sumir", () => {
+    const r = resultadoDoPeriodo(MESES, mapa([["2026-07-01", 900]]), mapa([]));
+
+    expect(r.meses).toHaveLength(3);
+    expect(r.meses[0]).toMatchObject({ mes: "2026-06-01", receita: 0, despesa: 0 });
+  });
+
+  it("mês sem NADA lançado não conta como mês negativo", () => {
+    // Contá-lo faria o rodapé dizer "dois meses negativos" numa janela em que
+    // dois meses nem começaram.
+    const r = resultadoDoPeriodo(
+      MESES,
+      mapa([["2026-06-01", 100]]),
+      mapa([["2026-06-01", 300]]),
+    );
+
+    expect(r.positivos).toBe(0);
+    expect(r.negativos).toBe(1);
+    expect(r.pior?.mes).toBe("2026-06-01");
+  });
+
+  it("sem receita, a margem é nula em vez de dividir por zero", () => {
+    const r = resultadoDoPeriodo(MESES, mapa([]), mapa([["2026-06-01", 700]]));
+
+    expect(r.margem).toBeNull();
+    expect(r.resultado).toBe(-700);
+  });
+
+  it("margem é o resultado sobre a receita, em percentual", () => {
+    const r = resultadoDoPeriodo(
+      MESES,
+      mapa([["2026-06-01", 1000]]),
+      mapa([["2026-06-01", 750]]),
+    );
+
+    expect(r.margem).toBeCloseTo(25, 10);
+  });
+
+  it("período inteiro vazio não tem pior mês", () => {
+    const r = resultadoDoPeriodo(MESES, mapa([]), mapa([]));
+
+    expect(r.pior).toBeNull();
+    expect(r.positivos).toBe(0);
+    expect(r.negativos).toBe(0);
+    expect(r.margem).toBeNull();
+  });
+
+  it("empate no pior mês fica com o primeiro, para a frase não trocar sozinha", () => {
+    const r = resultadoDoPeriodo(
+      MESES,
+      mapa([
+        ["2026-06-01", 0],
+        ["2026-07-01", 0],
+      ]),
+      mapa([
+        ["2026-06-01", 500],
+        ["2026-07-01", 500],
+      ]),
+    );
+
+    expect(r.pior?.mes).toBe("2026-06-01");
   });
 });

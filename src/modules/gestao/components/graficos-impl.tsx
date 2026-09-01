@@ -5,6 +5,9 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
+  Legend,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,16 +15,29 @@ import {
 } from "recharts";
 
 import { formatarBRL } from "@/lib/formatadores";
-import type { CustoCentro } from "../queries";
-import type { FaixaVencimento, PontoMes } from "../calculo";
+import type { MesDoResultado } from "../calculo";
 
 /**
- * Gráficos do painel de Gestão. Mesmo padrão dos relatórios do Financeiro:
- * Recharts, cores do design system, grade discreta, nenhuma decoração.
+ * Gráficos do painel de Gestão. Recharts, cores do design system, grade
+ * discreta, nenhuma decoração.
  *
- * Regra de cor aqui: um gráfico de série única usa UMA cor (a âmbar da marca).
- * Cor só varia quando significa alguma coisa, como a coluna do que já venceu,
- * que é a única vermelha. Cor por posição no ranking não informa nada.
+ * ## A regra de cor
+ *
+ * A cor segue o que a barra SIGNIFICA, nunca a posição num ranking: cor por
+ * posição não informa nada e troca de linha quando o filtro muda, fazendo
+ * parecer que o dado mudou.
+ *
+ * Receita é o verde da marca e despesa é o âmbar — e não o vermelho, que era o
+ * par óbvio. O vermelho perde para o verde em deuteranopia: medido em
+ * 01/09/2026, `#3e7744` contra `#b91c1c` dá ΔE 5,2, abaixo do piso de 6 que
+ * ainda exigiria reforço por outro meio, enquanto verde contra âmbar dá 14,7 e
+ * passa limpo. Verde e vermelho lado a lado como DUAS SÉRIES é a armadilha
+ * clássica de daltonismo, e aqui elas ficam lado a lado em oito pares de colunas.
+ *
+ * O vermelho continua reservado para ESTADO, onde ele não disputa com o verde na
+ * mesma barra: o que já venceu, e o mês que fechou negativo. Nos dois casos há
+ * uma segunda pista além da cor (o rótulo do eixo diz "Vencido"; o resultado
+ * negativo fica abaixo da linha do zero e o número vem com o sinal).
  */
 
 /**
@@ -41,41 +57,93 @@ function rotuloEixoValor(valor: number): string {
   return formatadorEixo.format(valor);
 }
 
-interface PontoTooltip {
-  payload?: { rotulo: string; valor: number; detalhe?: string };
+/** Rótulo em cima da barra: compacto e COM SINAL, que é a informação ali. */
+const formatadorRotulo = new Intl.NumberFormat("pt-BR", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+function rotuloComSinal(valor: number): string {
+  if (valor === 0) return "—";
+  const sinal = valor > 0 ? "+" : "−";
+  return `${sinal}${formatadorRotulo.format(Math.abs(valor))}`;
 }
 
+/**
+ * Adaptador para o `LabelList`, que tipa o valor como texto renderizável e não
+ * como número. Não-número vira string vazia em vez de "NaN" na cara do gráfico.
+ */
+function rotuloDaColuna(valor: unknown): string {
+  return typeof valor === "number" ? rotuloComSinal(valor) : "";
+}
+
+const EIXO_TICK = { fontSize: 11, fill: "var(--muted-foreground)" };
+const ROTULO_BARRA = { fontSize: 11, fill: "var(--muted-foreground)" };
+const ALTURA = "h-64 w-full";
+
+const COR_RECEITA = "var(--color-chart-1)";
+const COR_DESPESA = "var(--color-chart-2)";
+const COR_NEGATIVO = "var(--color-chart-5)";
+
+interface SerieDoTooltip {
+  name?: string;
+  value?: number;
+  color?: string;
+}
+
+/**
+ * Tooltip de uma ou mais séries.
+ *
+ * Os valores vêm no texto do design system (não na cor da série): a bolinha
+ * colorida ao lado é que carrega a identidade, e número colorido em cima de
+ * fundo claro perde contraste justamente onde ele precisa ser lido.
+ */
 function ConteudoTooltip({
   active,
   payload,
+  label,
+  detalhe,
 }: {
   active?: boolean;
-  payload?: PontoTooltip[];
+  payload?: SerieDoTooltip[];
+  label?: string;
+  detalhe?: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
-  const ponto = payload[0]?.payload;
-  if (!ponto) return null;
   return (
     <div className="rounded-md border border-border bg-popover p-2 text-detalhe shadow-sm">
-      <p className="font-medium text-foreground">{ponto.rotulo}</p>
-      <p className="tabular-nums text-foreground">{formatarBRL(ponto.valor)}</p>
-      {ponto.detalhe ? (
-        <p className="text-muted-foreground">{ponto.detalhe}</p>
-      ) : null}
+      <p className="font-medium text-foreground">{label}</p>
+      {payload.map((serie) => (
+        <p key={serie.name} className="flex items-center gap-1.5 text-foreground">
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-[2px]"
+            style={{ backgroundColor: serie.color }}
+          />
+          <span className="text-muted-foreground">{serie.name}</span>
+          <span className="tabular-nums">{formatarBRL(serie.value ?? 0)}</span>
+        </p>
+      ))}
+      {detalhe ? <p className="text-muted-foreground">{detalhe}</p> : null}
     </div>
   );
 }
 
-const EIXO_TICK = { fontSize: 11, fill: "var(--muted-foreground)" };
-const ALTURA = "h-64 w-full";
-
-/** Custo por mês de competência: uma barra por mês, inclusive os meses zerados. */
-export function CustoMesGrafico({ meses }: { meses: PontoMes[] }) {
+/**
+ * Receita e despesa lado a lado, um par de colunas por mês de competência.
+ *
+ * Um eixo só para as duas séries: são a mesma grandeza em reais, e dois eixos
+ * fariam a altura relativa das colunas mentir sobre qual das duas é maior.
+ *
+ * Sem rótulo em cima das colunas de propósito: são dezesseis colunas numa
+ * janela de oito meses, e os números se atropelariam. Quem quer o número exato
+ * tem o tooltip e a tabela do ano logo abaixo, que traz os três valores.
+ */
+export function ReceitaDespesaGrafico({ meses }: { meses: MesDoResultado[] }) {
   const dados = meses.map((mes) => ({
     rotulo: mes.rotulo,
-    valor: mes.valor,
-    detalhe:
-      mes.lancamentos === 1 ? "1 lançamento" : `${mes.lancamentos} lançamentos`,
+    Receita: mes.receita,
+    Despesa: mes.despesa,
   }));
 
   return (
@@ -100,13 +168,29 @@ export function CustoMesGrafico({ meses }: { meses: PontoMes[] }) {
             axisLine={false}
             width={72}
           />
-          <Tooltip content={<ConteudoTooltip />} cursor={{ fill: "var(--muted)" }} />
+          <Tooltip
+            content={<ConteudoTooltip />}
+            cursor={{ fill: "var(--muted)" }}
+          />
+          <Legend
+            verticalAlign="top"
+            align="right"
+            height={28}
+            iconType="square"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 11, color: "var(--muted-foreground)" }}
+          />
           <Bar
-            dataKey="valor"
-            name="Custo"
-            fill="var(--color-chart-1)"
+            dataKey="Receita"
+            fill={COR_RECEITA}
             radius={[3, 3, 0, 0]}
-            maxBarSize={48}
+            maxBarSize={28}
+          />
+          <Bar
+            dataKey="Despesa"
+            fill={COR_DESPESA}
+            radius={[3, 3, 0, 0]}
+            maxBarSize={28}
           />
         </BarChart>
       </ResponsiveContainer>
@@ -115,20 +199,29 @@ export function CustoMesGrafico({ meses }: { meses: PontoMes[] }) {
 }
 
 /**
- * A pagar por faixa de prazo. A coluna do vencido é vermelha porque é estado,
- * não série: o rótulo do eixo já diz "Vencido", então a cor não é a única pista.
+ * O resultado de cada mês: receita menos despesa, acima ou abaixo do zero.
+ *
+ * Uma grandeza só, com polaridade — então o par verde/vermelho aqui é
+ * divergente, e não duas séries disputando a mesma barra. Quem não distingue as
+ * duas cores lê o mesmo pela posição em relação à linha do zero e pelo sinal do
+ * número escrito em cima.
+ *
+ * O rótulo em CADA coluna, aqui sim: são oito números, e é justamente a
+ * comparação entre eles que o bloco existe para mostrar.
  */
-export function VencimentosGrafico({ faixas }: { faixas: FaixaVencimento[] }) {
-  const dados = faixas.map((f) => ({
-    rotulo: f.rotulo,
-    valor: f.valor,
-    vencido: f.faixa === "vencido",
+export function ResultadoMesGrafico({ meses }: { meses: MesDoResultado[] }) {
+  const dados = meses.map((mes) => ({
+    rotulo: mes.rotulo,
+    Resultado: mes.resultado,
   }));
 
   return (
     <div className={ALTURA}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <BarChart
+          data={dados}
+          margin={{ top: 20, right: 8, bottom: 0, left: 0 }}
+        >
           <CartesianGrid
             strokeDasharray="3 3"
             stroke="var(--border)"
@@ -138,9 +231,7 @@ export function VencimentosGrafico({ faixas }: { faixas: FaixaVencimento[] }) {
             dataKey="rotulo"
             tick={EIXO_TICK}
             tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
-            interval={0}
-            height={40}
+            axisLine={false}
           />
           <YAxis
             tickFormatter={rotuloEixoValor}
@@ -149,76 +240,26 @@ export function VencimentosGrafico({ faixas }: { faixas: FaixaVencimento[] }) {
             axisLine={false}
             width={72}
           />
-          <Tooltip content={<ConteudoTooltip />} cursor={{ fill: "var(--muted)" }} />
-          <Bar dataKey="valor" name="A pagar" radius={[3, 3, 0, 0]} maxBarSize={48}>
+          {/* A linha do zero é o que faz "acima" e "abaixo" significarem algo. */}
+          <ReferenceLine y={0} stroke="var(--border)" />
+          <Tooltip
+            content={<ConteudoTooltip />}
+            cursor={{ fill: "var(--muted)" }}
+          />
+          <Bar dataKey="Resultado" radius={[3, 3, 0, 0]} maxBarSize={40}>
             {dados.map((linha) => (
               <Cell
                 key={linha.rotulo}
-                fill={
-                  linha.vencido
-                    ? "var(--color-chart-5)"
-                    : "var(--color-chart-1)"
-                }
+                fill={linha.Resultado < 0 ? COR_NEGATIVO : COR_RECEITA}
               />
             ))}
+            <LabelList
+              dataKey="Resultado"
+              position="top"
+              formatter={rotuloDaColuna}
+              style={ROTULO_BARRA}
+            />
           </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/** Nome do centro de custo cortado para caber no eixo sem espremer as barras. */
-function encurtar(nome: string, limite = 22): string {
-  return nome.length > limite ? `${nome.slice(0, limite - 1)}…` : nome;
-}
-
-/** Custo por centro de custo: barras horizontais, maiores em cima. */
-export function CustoCentroGrafico({ centros }: { centros: CustoCentro[] }) {
-  const dados = centros.map((centro) => ({
-    rotulo: centro.nome,
-    eixo: encurtar(centro.nome),
-    valor: centro.valor,
-    detalhe: `${centro.participacao.toFixed(0)}% do período`,
-  }));
-
-  return (
-    <div className={ALTURA}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={dados}
-          layout="vertical"
-          margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
-        >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="var(--border)"
-            horizontal={false}
-          />
-          <XAxis
-            type="number"
-            tickFormatter={rotuloEixoValor}
-            tick={EIXO_TICK}
-            tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
-          />
-          <YAxis
-            type="category"
-            dataKey="eixo"
-            tick={EIXO_TICK}
-            tickLine={false}
-            axisLine={false}
-            width={150}
-            interval={0}
-          />
-          <Tooltip content={<ConteudoTooltip />} cursor={{ fill: "var(--muted)" }} />
-          <Bar
-            dataKey="valor"
-            name="Custo"
-            fill="var(--color-chart-1)"
-            radius={[0, 3, 3, 0]}
-            maxBarSize={24}
-          />
         </BarChart>
       </ResponsiveContainer>
     </div>

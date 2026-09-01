@@ -17,6 +17,7 @@ import {
   type PontoMes,
 } from "@/modules/gestao/calculo";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
 import type { FiltrosPainel } from "@/modules/gestao/filtros";
 
 /**
@@ -76,6 +77,69 @@ export function janelaDoPainel(): JanelaPainel {
   return janelaPainel(mesHojeISO(), MESES_PAINEL);
 }
 
+// =====================================================================
+// Da URL para o banco
+// =====================================================================
+
+/**
+ * Os filtros do painel já traduzidos para o que o banco entende.
+ *
+ * A tradução é feita UMA vez, na página, e passada para todos os blocos. Traduzir
+ * dentro de cada consulta faria cada uma reler o cadastro de centros e — pior —
+ * abriria a porta para duas delas divergirem no dia em que alguém mexesse numa
+ * só. O painel inteiro tem que falar do mesmo conjunto.
+ */
+export interface FiltrosDoBanco {
+  /** Janela de competência: a mesma para todos os cortes de custo. */
+  janela: JanelaPainel;
+  /**
+   * O que vai em `p_centros`: para cada raiz escolhida, ela mesma OU as etapas
+   * dela que foram escolhidas. Vazio = todos.
+   *
+   * Cada id vale pela SUBÁRVORE dele dentro das `fn_rel_*`, que expandem no
+   * banco. Por isso a lista aqui é curta: são os nós escolhidos, não a árvore.
+   */
+  centros: string[];
+  categorias: string[];
+}
+
+/**
+ * Traduz o par raiz/etapa da URL no que o banco recebe.
+ *
+ * `centros` vem vazio quando o cadastro não pôde ser lido: sem ele não dá para
+ * saber de que raiz cada etapa é, e `centrosEfetivos` devolveria vazio — que
+ * significa "todos" e faria o painel mostrar a empresa inteira com a barra de
+ * filtros dizendo o contrário. Nesse caso valem as raízes cruas da URL, que é o
+ * recorte mais próximo do pedido que ainda dá para honrar.
+ */
+export function filtrosDoBanco(
+  filtros: FiltrosPainel,
+  centros: readonly CentroCustoOpcao[],
+): FiltrosDoBanco {
+  const efetivos =
+    centros.length === 0
+      ? [...filtros.centroIds]
+      : centrosEfetivos(centros, filtros.centroIds, filtros.etapaIds);
+
+  return {
+    janela: filtros.janela,
+    centros: efetivos,
+    categorias: [...filtros.categoriaIds],
+  };
+}
+
+/**
+ * Uma lista de ids para o parâmetro da RPC, ou `undefined` para o "todos".
+ *
+ * `undefined` e não array vazio: o supabase-js OMITE a chave `undefined` do
+ * corpo, e aí o PostgREST resolve pelo DEFAULT da função. Mandar `[]` também
+ * funcionaria hoje (as funções tratam `cardinality = 0` como todos), mas depender
+ * disso amarra a tela a um detalhe do corpo das funções.
+ */
+function listaOuTodos(ids: readonly string[]): string[] | undefined {
+  return ids.length === 0 ? undefined : [...ids];
+}
+
 /** Opção de um seletor da barra de filtros do painel. */
 export interface OpcaoPainel {
   id: string;
@@ -104,7 +168,12 @@ export async function opcoesDoPainel(): Promise<{
     supabase
       .from("centros_custo")
       .select("id, nome, codigo, pai_id, tipo")
-      .lte("nivel", 2)
+      // Sem corte de nível: o cadastro inteiro. Os dois campos da escada já
+      // ignoram o que estiver mais fundo (o segundo só oferece filho de raiz),
+      // então cortar em 2 não mudava a TELA -- mudava a expansão da subárvore
+      // em `filtrosDoBanco`, que passaria a não enxergar um nível 3 e a somar
+      // menos do que o filtro pediu, calado. Hoje o cadastro tem 17 raízes e 90
+      // etapas, e nenhum nível 3.
       .eq("ativo", true)
       .order("codigo", { ascending: true, nullsFirst: false })
       .order("nome"),
@@ -263,7 +332,7 @@ export interface CustoPorMes {
  * avulsos, então o custo está nos lançamentos, não na data de pagamento.
  */
 export async function custoPorMes(
-  filtros: FiltrosPainel,
+  filtros: FiltrosDoBanco,
 ): Promise<CustoPorMes> {
   const supabase = await createClient();
   const { janela } = filtros;
@@ -274,8 +343,8 @@ export async function custoPorMes(
   const { data, error } = await supabase.rpc("fn_rel_custo_por_mes", {
     p_inicio: janela.inicio,
     p_fim: janela.fim,
-    p_centro_custo: filtros.centroCustoId,
-    p_categoria: filtros.categoriaId,
+    p_centros: listaOuTodos(filtros.centros),
+    p_categorias: listaOuTodos(filtros.categorias),
   });
 
   if (error) {
@@ -319,7 +388,7 @@ export interface CustoPorCentro {
 
 /** Custo do período por centro de custo, maiores primeiro, com "Outros" no fim. */
 export async function custoPorCentroCusto(
-  filtros: FiltrosPainel,
+  filtros: FiltrosDoBanco,
 ): Promise<CustoPorCentro> {
   const supabase = await createClient();
   const { janela } = filtros;
@@ -338,8 +407,8 @@ export async function custoPorCentroCusto(
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_custo", {
     p_inicio: janela.inicio,
     p_fim: janela.fim,
-    p_centros: filtros.centroCustoId ? [filtros.centroCustoId] : undefined,
-    p_categorias: filtros.categoriaId ? [filtros.categoriaId] : undefined,
+    p_centros: listaOuTodos(filtros.centros),
+    p_categorias: listaOuTodos(filtros.categorias),
   });
 
   if (error) {
@@ -398,7 +467,7 @@ export interface CustoPorGrupo {
  * que faz a soma por grupo fechar com o custo total do período.
  */
 export async function custoPorGrupo(
-  filtros: FiltrosPainel,
+  filtros: FiltrosDoBanco,
 ): Promise<CustoPorGrupo> {
   const supabase = await createClient();
   const { janela } = filtros;
@@ -406,8 +475,8 @@ export async function custoPorGrupo(
   const { data, error } = await supabase.rpc("fn_rel_custo_por_grupo", {
     p_inicio: janela.inicio,
     p_fim: janela.fim,
-    p_centro_custo: filtros.centroCustoId,
-    p_categoria: filtros.categoriaId,
+    p_centros: listaOuTodos(filtros.centros),
+    p_categorias: listaOuTodos(filtros.categorias),
   });
 
   if (error) {
@@ -493,122 +562,199 @@ export interface MaiorCusto {
   fornecedor: string | null;
   mesCompetencia: string;
   dataVencimento: string | null;
+  /** O valor rateado no recorte: o documento inteiro quando nada está filtrado. */
   valor: number;
+  /** Em quantos centros de custo do recorte o documento caiu. */
+  centros: number;
 }
 
 /**
- * Os maiores lançamentos a pagar do período, por valor. Responde "o que puxou
- * o custo" sem precisar abrir o Financeiro, e o limite mantém a consulta barata
- * na primeira tela depois do login.
+ * Os maiores lançamentos a pagar do período, por valor, já somados e cortados
+ * no banco.
+ *
+ * Com centro de custo escolhido a pergunta muda: não é "o maior lançamento", é
+ * "o maior custo NESTES centros", e o valor exibido é a fatia que caiu neles. Um
+ * documento de R$ 300 mil rateado 10% aqui pesa menos que um de R$ 50 mil
+ * inteiro.
+ *
+ * Era leitura crua até 01/09/2026, e não dava para continuar assim com a escolha
+ * múltipla: documento rateado entre duas obras filtradas rendia DUAS linhas de
+ * meio valor cada, e o `.limit(8)` cortava antes de qualquer soma. Ver
+ * `fn_rel_gestao_maiores_custos`.
  */
 export async function maioresCustos(
-  filtros: FiltrosPainel,
+  filtros: FiltrosDoBanco,
 ): Promise<MaiorCusto[]> {
-  // Com obra escolhida a pergunta muda: não é "o maior lançamento", é "o maior
-  // custo NESTA obra". São 121 lançamentos rateados entre até 3 obras (medido em
-  // 14/08/2026), e eles tendem a ser justamente os grandes, que é o que esta
-  // lista mostra. Somar o documento inteiro dentro de uma obra inflaria o número
-  // dela, então o caminho filtrado ordena e soma pelo RATEIO.
-  if (filtros.centroCustoId !== undefined) {
-    return maioresCustosDaObra(filtros, filtros.centroCustoId);
-  }
-
   const supabase = await createClient();
   const { janela } = filtros;
 
-  let consulta = supabase
-    .from("lancamentos")
-    .select(
-      `id, numero, descricao, valor, mes_competencia, data_vencimento,
-       fornecedores(razao_social, nome_fantasia)`,
-    )
-    .eq("tipo", "a_pagar")
-    .neq("status", "cancelado")
-    .gte("mes_competencia", janela.inicio)
-    .lt("mes_competencia", janela.fim);
-
-  if (filtros.categoriaId !== undefined) {
-    consulta = consulta.eq("categoria_id", filtros.categoriaId);
-  }
-
-  const { data, error } = await consulta
-    .order("valor", { ascending: false })
-    // Desempate por id: sem chave única, dois lançamentos de mesmo valor podem
-    // trocar de lugar entre uma carga e a seguinte da mesma tela.
-    .order("id", { ascending: false })
-    .limit(MAX_MAIORES_CUSTOS);
+  const { data, error } = await supabase.rpc("fn_rel_gestao_maiores_custos", {
+    p_inicio: janela.inicio,
+    p_fim: janela.fim,
+    p_centros: listaOuTodos(filtros.centros),
+    p_categorias: listaOuTodos(filtros.categorias),
+    p_limite: MAX_MAIORES_CUSTOS,
+  });
 
   if (error) {
     throw new Error("Não foi possível carregar os maiores custos");
   }
 
-  return (data ?? []).map((lancamento) => ({
-    id: lancamento.id,
-    numero: lancamento.numero,
-    descricao: lancamento.descricao,
-    fornecedor:
-      lancamento.fornecedores?.nome_fantasia ??
-      lancamento.fornecedores?.razao_social ??
-      null,
-    mesCompetencia: lancamento.mes_competencia,
-    dataVencimento: lancamento.data_vencimento,
-    valor: paraReais(paraCentavos(lancamento.valor)),
+  return (data ?? []).map((linha) => ({
+    id: linha.lancamento_id,
+    numero: linha.numero,
+    descricao: linha.descricao,
+    fornecedor: linha.fornecedor,
+    mesCompetencia: linha.mes_competencia,
+    dataVencimento: linha.data_vencimento,
+    valor: emReais(linha.valor),
+    centros: linha.centros ?? 1,
   }));
 }
 
+// =====================================================================
+// Maiores fornecedores do período (com quem a empresa gasta)
+// =====================================================================
+
+/** Barras que cabem no bloco; o excedente vem somado numa linha "Outros". */
+const MAX_FORNECEDORES = 8;
+
+export interface FornecedorDoPeriodo {
+  id: string | null;
+  nome: string;
+  /** `fornecedor`, `sem_fornecedor` ou `outros`. */
+  tipo: "fornecedor" | "sem_fornecedor" | "outros";
+  total: number;
+  /** A parte que já saiu do caixa. */
+  pago: number;
+  /** A parte que ainda vai sair. `pago + aberto = total`, sempre. */
+  aberto: number;
+  lancamentos: number;
+  /** Quantos fornecedores a linha representa (1, ou o tamanho da cauda). */
+  fornecedores: number;
+}
+
+export interface MaioresFornecedores {
+  linhas: FornecedorDoPeriodo[];
+  total: number;
+  pago: number;
+  aberto: number;
+}
+
 /**
- * Maiores custos DENTRO de uma obra: consulta os rateios daquela obra, não os
- * lançamentos, e o valor exibido é a parte que caiu nela.
+ * Com quem a empresa gastou no período, maiores primeiro, cada um dividido entre
+ * o que já foi pago e o que ainda está em aberto.
  *
- * Ordenar pelo rateio (e não pelo valor do lançamento) é o que faz o "maiores"
- * significar algo aqui: um lançamento de R$ 300 mil rateado 10% nesta obra pesa
- * menos que um de R$ 50 mil inteiro nela.
+ * Soma o RATEIO, então este bloco fecha ao centavo com o custo do período do
+ * resto do painel (conferido em 01/09/2026: R$ 40.239.183,56 nos dois, e
+ * R$ 1.531.625,88 com uma obra escolhida). Com centro filtrado, o valor de cada
+ * fornecedor é a FATIA que caiu naquele centro.
+ *
+ * Pago x aberto sai da fração paga das PARCELAS de cada documento, e não do
+ * `status` do lançamento: o dinheiro é da parcela, e documento parcelado fica
+ * meses no meio do caminho.
+ *
+ * O corte em oito mais "Outros" é feito no BANCO. São 962 fornecedores ativos, e
+ * uma linha por fornecedor é exatamente o tipo de consulta que cresce com o
+ * tamanho da empresa até bater no teto de 1000 do PostgREST — que corta sem erro
+ * e faz a soma mentir para menos.
  */
-async function maioresCustosDaObra(
-  filtros: FiltrosPainel,
-  centroCustoId: string,
-): Promise<MaiorCusto[]> {
+export async function maioresFornecedores(
+  filtros: FiltrosDoBanco,
+): Promise<MaioresFornecedores> {
   const supabase = await createClient();
   const { janela } = filtros;
 
-  let consulta = supabase
-    .from("lancamento_rateios")
-    .select(
-      `valor,
-       lancamentos!inner(
-         id, numero, descricao, mes_competencia, data_vencimento, tipo, status,
-         categoria_id, fornecedores(razao_social, nome_fantasia)
-       )`,
-    )
-    .eq("centro_custo_id", centroCustoId)
-    .eq("lancamentos.tipo", "a_pagar")
-    .neq("lancamentos.status", "cancelado")
-    .gte("lancamentos.mes_competencia", janela.inicio)
-    .lt("lancamentos.mes_competencia", janela.fim);
-
-  if (filtros.categoriaId !== undefined) {
-    consulta = consulta.eq("lancamentos.categoria_id", filtros.categoriaId);
-  }
-
-  const { data, error } = await consulta
-    .order("valor", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(MAX_MAIORES_CUSTOS);
+  const { data, error } = await supabase.rpc(
+    "fn_rel_gestao_maiores_fornecedores",
+    {
+      p_inicio: janela.inicio,
+      p_fim: janela.fim,
+      p_centros: listaOuTodos(filtros.centros),
+      p_categorias: listaOuTodos(filtros.categorias),
+      p_limite: MAX_FORNECEDORES,
+    },
+  );
 
   if (error) {
-    throw new Error("Não foi possível carregar os maiores custos");
+    throw new Error("Não foi possível carregar os maiores fornecedores");
   }
 
-  return (data ?? []).map((rateio) => ({
-    id: rateio.lancamentos.id,
-    numero: rateio.lancamentos.numero,
-    descricao: rateio.lancamentos.descricao,
-    fornecedor:
-      rateio.lancamentos.fornecedores?.nome_fantasia ??
-      rateio.lancamentos.fornecedores?.razao_social ??
-      null,
-    mesCompetencia: rateio.lancamentos.mes_competencia,
-    dataVencimento: rateio.lancamentos.data_vencimento,
-    valor: paraReais(paraCentavos(rateio.valor)),
+  const linhas: FornecedorDoPeriodo[] = (data ?? []).map((linha) => ({
+    id: linha.fornecedor_id,
+    nome:
+      linha.tipo_linha === "outros"
+        ? `Outros (${linha.fornecedores})`
+        : linha.nome,
+    tipo: linha.tipo_linha as FornecedorDoPeriodo["tipo"],
+    total: emReais(linha.total),
+    pago: emReais(linha.pago),
+    aberto: emReais(linha.aberto),
+    lancamentos: linha.lancamentos ?? 0,
+    fornecedores: linha.fornecedores ?? 1,
   }));
+
+  return {
+    linhas,
+    total: linhas.reduce((soma, l) => soma + l.total, 0),
+    pago: linhas.reduce((soma, l) => soma + l.pago, 0),
+    aberto: linhas.reduce((soma, l) => soma + l.aberto, 0),
+  };
+}
+
+// =====================================================================
+// Receita por mês de competência
+// =====================================================================
+
+/**
+ * A receita de cada mês da janela, para o gráfico de receita x despesa.
+ *
+ * SÓ a receita: a despesa do mesmo gráfico continua saindo de `custoPorMes`, que
+ * é a fonte do cartão "Custo do mês". Duas fontes para o mesmo número na mesma
+ * tela é como um cartão e o gráfico ao lado passam a discordar sem ninguém achar
+ * o motivo — e as duas funções concordam hoje ao centavo (R$ 40.239.183,56 na
+ * janela jan–ago/2026, medido em 01/09/2026), o que só torna a divergência
+ * futura mais difícil de perceber.
+ *
+ * Usa `fn_rel_custo_receita`, a mesma do relatório de Custo x receita, em vez de
+ * uma função nova: as regras de o que é receita foram afinadas com o dono ao
+ * longo de agosto (empréstimo fora, principal de aplicação fora, receita
+ * financeira fora porque juro recebido é resultado da empresa e não produção da
+ * obra) e uma segunda implementação delas divergiria na primeira mudança feita
+ * de um lado só.
+ *
+ * Ela devolve uma linha por mês, centro-RAIZ e tipo — 13 raízes com movimento,
+ * então a janela de 6 meses do painel dá ~156 linhas, longe do teto de 1000 do
+ * PostgREST. Somar as raízes aqui é o certo: o corte por centro já foi feito no
+ * banco.
+ *
+ * A receita obedece ao MESMO filtro de centro de custo da despesa. Não é óbvio, e
+ * é de propósito: os centros são os mesmos dos dois lados (a obra que gasta é a
+ * obra que fatura), então filtrar a obra e comparar a despesa dela com a receita
+ * de todas as obras desenharia uma margem inventada.
+ */
+export async function receitaPorMes(
+  filtros: FiltrosDoBanco,
+): Promise<Map<string, number>> {
+  const supabase = await createClient();
+  const centros = listaOuTodos(filtros.centros);
+
+  const { data, error } = await supabase.rpc("fn_rel_custo_receita", {
+    // A coluna é `date` no dia 1, e `janela.meses` já vem nesse formato.
+    p_meses: [...filtros.janela.meses],
+    p_centros_custo: centros,
+    p_centros_receita: centros,
+  });
+
+  if (error) {
+    throw new Error("Não foi possível carregar a receita do período");
+  }
+
+  const porMes = new Map<string, number>();
+  for (const linha of data ?? []) {
+    if (linha.tipo !== "a_receber") continue;
+    const mes = linha.mes.slice(0, 10);
+    porMes.set(mes, (porMes.get(mes) ?? 0) + paraReais(paraCentavos(linha.total)));
+  }
+  return porMes;
 }
