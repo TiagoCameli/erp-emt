@@ -8,6 +8,7 @@ import {
   History,
   Lock,
   Pencil,
+  Split,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { ROTULO_ORIGEM_DATA } from "@/modules/financeiro/_shared/janela-pagamento";
 import { rotuloOrigemLancamento } from "@/modules/financeiro/lancamentos/schemas";
 import { DefinirParcelasDialog } from "./definir-parcelas-dialog";
+import { DefinirRateioDialog } from "./definir-rateio-dialog";
 import { LancamentoFormDrawer } from "./lancamento-form-drawer";
 import type {
   CategoriaOpcao,
@@ -205,6 +207,7 @@ export function LancamentoDetalheView({
   const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [parcelasAberto, setParcelasAberto] = React.useState(false);
+  const [rateioAberto, setRateioAberto] = React.useState(false);
   const [reenviando, setReenviando] = React.useState<string | null>(null);
   const [salvandoConta, setSalvandoConta] = React.useState(false);
 
@@ -832,7 +835,27 @@ export function LancamentoDetalheView({
             />
           </Secao>
 
-          <Secao titulo="Rateio por centro de custo">
+          <Secao
+            titulo="Rateio por centro de custo"
+            acao={
+              /* Só `podeEditar`, sem olhar origem nem status de parcela: a razão
+                 de esta tela existir é justamente o lançamento aprovado ou pago,
+                 em que o formulário está trancado. As guardas de verdade (soma,
+                 competência, permissão pelo tipo) estão na
+                 `fn_definir_rateio_lancamento`. */
+              podeEditar ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRateioAberto(true)}
+                >
+                  <Split />
+                  Editar rateio
+                </Button>
+              ) : undefined
+            }
+          >
             {lancamento.rateios.length > 0 ? (
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="w-full text-detalhe">
@@ -964,6 +987,24 @@ export function LancamentoDetalheView({
             status: parcela.status,
           }))}
           condicaoDescricao={lancamento.condicaoPagamentoDescricao}
+        />
+      ) : null}
+
+      {podeEditar ? (
+        <DefinirRateioDialog
+          aberto={rateioAberto}
+          onAbertoChange={(aberto) => {
+            setRateioAberto(aberto);
+            if (!aberto) router.refresh();
+          }}
+          lancamentoId={lancamento.id}
+          valor={lancamento.valor}
+          origem={lancamento.origem}
+          rateiosAtuais={lancamento.rateios.map((rateio) => ({
+            centroCustoId: rateio.centroCustoId,
+            valor: rateio.valor,
+          }))}
+          centrosCusto={centrosCusto}
         />
       ) : null}
 

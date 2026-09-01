@@ -17,6 +17,7 @@ import {
   listarFormasPagamento,
   listarFornecedores,
   trilhaLancamento,
+  trilhaRateioDoLancamento,
 } from "@/modules/financeiro/lancamentos/queries";
 
 export default async function PaginaLancamentoDetalhe({
@@ -34,7 +35,8 @@ export default async function PaginaLancamentoDetalhe({
   if (!lancamento) notFound();
 
   const [
-    trilha,
+    trilhaDoDocumento,
+    trilhaRateio,
     trilhaParcelas,
     categorias,
     fornecedores,
@@ -47,6 +49,7 @@ export default async function PaginaLancamentoDetalhe({
     contas,
   ] = await Promise.all([
     trilhaLancamento(id),
+    trilhaRateioDoLancamento(id),
     trilhaParcelasDoLancamento(id),
     listarCategorias(),
     listarFornecedores(),
@@ -58,6 +61,14 @@ export default async function PaginaLancamentoDetalhe({
     listarAnexosDoDocumento("lancamento", id),
     listarContasBancarias(),
   ]);
+
+  // Reclassificar custo entre obras é um evento do LANÇAMENTO, não da parcela:
+  // entra na trilha do documento, em ordem com as edições de cabeçalho. Uma
+  // terceira caixa na lateral separaria por origem de dado o que a pessoa lê
+  // como uma história só.
+  const trilha = [...trilhaDoDocumento, ...trilhaRateio].sort(
+    (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime(),
+  );
 
   const podeEditar = temPermissao(usuario, "financeiro.lancamentos", "editar");
   const podeExcluir = temPermissao(

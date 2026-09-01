@@ -2974,6 +2974,51 @@ export type Database = {
           },
         ];
       };
+      rateio_eventos: {
+        Row: {
+          antes: Json;
+          created_at: string;
+          created_by: string | null;
+          depois: Json;
+          id: string;
+          lancamento_id: string;
+          motivo: string;
+        };
+        Insert: {
+          antes: Json;
+          created_at?: string;
+          created_by?: string | null;
+          depois: Json;
+          id?: string;
+          lancamento_id: string;
+          motivo: string;
+        };
+        Update: {
+          antes?: Json;
+          created_at?: string;
+          created_by?: string | null;
+          depois?: Json;
+          id?: string;
+          lancamento_id?: string;
+          motivo?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rateio_eventos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rateio_eventos_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       recebimentos: {
         Row: {
           created_at: string;
@@ -4197,6 +4242,10 @@ export type Database = {
       };
       fn_definir_parcelas_lancamento: {
         Args: { p_lanc_id: string; p_motivo?: string; p_parcelas: Json };
+        Returns: undefined;
+      };
+      fn_definir_rateio_lancamento: {
+        Args: { p_lanc_id: string; p_motivo: string; p_rateios: Json };
         Returns: undefined;
       };
       fn_definir_vencimento_folha: {

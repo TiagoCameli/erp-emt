@@ -20,7 +20,9 @@ import {
 } from "@/modules/financeiro/lancamentos/duplicacao";
 import {
   lancamentoSchema,
+  rateioSchema,
   type LancamentoInput,
+  type RateioInput,
 } from "@/modules/financeiro/lancamentos/schemas";
 import {
   LIMITE_LOTE,
@@ -434,6 +436,76 @@ export async function definirParcelasLancamento(
 
   revalidatePath(ROTA);
   revalidatePath(`${ROTA}/${idValido.data}`);
+  return { ok: true };
+}
+
+/**
+ * Motivo da alteração do rateio. Trimado (motivo só de espaços é motivo nenhum,
+ * e o banco aplica o mesmo `btrim`) e com teto de 500 caracteres, que a coluna
+ * `rateio_eventos.motivo` não tem: sem teto aqui, um cliente contornado poderia
+ * gravar um texto de megabytes na trilha. Mesmo teto do motivo de pagamento.
+ */
+const motivoRateioSchema = z.string().trim().min(1).max(500);
+
+/**
+ * Reescreve o rateio por centro de custo de um lançamento, sem tocar em parcela.
+ *
+ * Existe separada de `salvarLancamento` pela mesma razão que
+ * `definirParcelasLancamento` existe: `fn_salvar_lancamento` recusa lançamento
+ * com parcela paga ou aprovada, e regravaria parcelas e formas do zero. Aqui só
+ * o rateio muda — o valor do lançamento continua o que era, porque ele vem das
+ * parcelas.
+ */
+export async function definirRateioLancamento(
+  lancamentoId: string,
+  rateios: RateioInput[],
+  motivo: string,
+): Promise<ResultadoExclusao> {
+  await exigirPermissao(RECURSO, "editar");
+
+  const idValido = idSchema.safeParse(lancamentoId);
+  if (!idValido.success) return { erro: "Lançamento inválido" };
+
+  // `.min(1)` aqui, ao contrário das parcelas: lista vazia deixaria o lançamento
+  // sem centro de custo, que é invariante de banco (`trg_lancamento_exige_centro`).
+  // Não há caso em que o vazio seja o que a pessoa quis.
+  const validado = z.array(rateioSchema).min(1).safeParse(rateios);
+  if (!validado.success) {
+    return {
+      erro:
+        validado.error.issues[0]?.message ??
+        "Escolha o centro de custo: nenhum custo existe sem centro de custo",
+    };
+  }
+
+  const motivoValido = motivoRateioSchema.safeParse(motivo);
+  if (!motivoValido.success) {
+    return { erro: "Explique por que o rateio está mudando" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_definir_rateio_lancamento", {
+    p_lanc_id: idValido.data,
+    p_rateios: validado.data.map((rateio) => ({
+      centro_custo_id: rateio.centroCustoId,
+      valor: rateio.valor,
+    })),
+    p_motivo: motivoValido.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.lancamentos.definirRateio",
+      error,
+      error.message ?? "Não foi possível salvar o rateio",
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(`${ROTA}/${idValido.data}`);
+  // O rateio move custo entre centros, e Recebimentos mostra a fatia do centro
+  // filtrado: sem esta linha a outra tela seguiria com a divisão velha.
+  revalidatePath(ROTA_RECEBIMENTOS);
   return { ok: true };
 }
 
