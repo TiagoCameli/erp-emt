@@ -108,6 +108,12 @@ function bancoCom({
           });
           return construtor;
         },
+        // `returns` só carimba o tipo, não muda a consulta: devolve o próprio
+        // construtor para o `await` continuar caindo no `then`. A consulta
+        // passou a usar `.returns<T[]>()` porque o select é montado em tempo de
+        // execução (o embed do filtro de conta só entra quando o filtro está
+        // ligado) e sem string literal o supabase-js não tem o que inferir.
+        returns: () => construtor,
         // Página vazia de propósito: o objeto do teste é o que a consulta RECEBE.
         then: (resolver: (r: unknown) => void) =>
           resolver({ data: [], error: null, count: 0 }),
@@ -249,3 +255,74 @@ function maiorLista(filtros: ChamadaFiltro[]): number {
     0,
   );
 }
+
+/**
+ * A conta bancária era o MESMO defeito, medido no banco em 01/09/2026.
+ *
+ * `idsPorContaBancaria` lia todos os lançamentos que passaram pela conta e
+ * mandava a lista num `.in("id", ...)`. A maior conta tem **4.901 lançamentos**
+ * — 177 KB de URL, muito além dos 69 KB que já matavam a requisição no caso do
+ * centro. O `edge_logs` registrou `GET /rest/v1/lancamentos` com 29 KB
+ * devolvendo 400.
+ *
+ * A correção é o mesmo par do centro, com uma diferença que importa: o embed vai
+ * APELIDADO (`filtroConta:lancamento_parcelas!inner`), porque o embed sem
+ * apelido alimenta o DINHEIRO da linha (pago, aberto, vencido, desconto, coluna
+ * Revisão, contagem de parcelas). Filtrar aquele faria a linha somar só as
+ * parcelas da conta escolhida — dinheiro errado na tela.
+ */
+describe("filtro de conta bancária na listagem", () => {
+  const CONTA = "9f1b7c3e-1111-4111-8111-000000000001";
+
+  it("filtra pelo embed apelidado, não por lista de ids de lançamento", async () => {
+    const filtros = bancoCom({ centros: 61, lancamentos: 4901 });
+
+    await listarLancamentos({
+      pagina: 0,
+      tamanho: 25,
+      contaBancariaId: CONTA,
+    });
+
+    const noEmbed = filtros.find(
+      (f) => f.coluna === "filtroConta.conta_bancaria_id",
+    );
+    expect(noEmbed?.metodo).toBe("eq");
+    expect(noEmbed?.valor).toBe(CONTA);
+
+    // E o que a correção mata: a lista de ids de lançamento na query string.
+    expect(filtros.some((f) => f.metodo === "in" && f.coluna === "id")).toBe(
+      false,
+    );
+  });
+
+  it("não LÊ as parcelas da conta para montar lista de id", async () => {
+    const filtros = bancoCom({ centros: 61, lancamentos: 4901 });
+
+    await listarLancamentos({
+      pagina: 0,
+      tamanho: 25,
+      contaBancariaId: CONTA,
+    });
+
+    // A asserção que trava o defeito na raiz: antes, o filtro varria
+    // `lancamento_parcelas` inteira para juntar os ids dos lançamentos daquela
+    // conta. Agora quem responde "existe parcela nesta conta?" é o próprio
+    // banco, dentro do embed — nenhuma leitura de parcela sai daqui.
+    const tabelasLidas = from.mock.calls.map((chamada) => chamada[0]);
+    expect(tabelasLidas).not.toContain("lancamento_parcelas");
+
+    // E nenhuma lista entregue à consulta cresce com os lançamentos da conta:
+    // a mesma linha de controle da prova do centro.
+    expect(maiorLista(filtros)).toBeLessThan(100);
+  });
+
+  it("sem filtro de conta, nada do embed apelidado entra na consulta", async () => {
+    const filtros = bancoCom({ centros: 61, lancamentos: 4901 });
+
+    await listarLancamentos({ pagina: 0, tamanho: 25 });
+
+    expect(
+      filtros.some((f) => String(f.coluna).startsWith("filtroConta")),
+    ).toBe(false);
+  });
+});
