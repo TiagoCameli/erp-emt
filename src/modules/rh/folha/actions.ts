@@ -12,7 +12,6 @@ import {
   escreverCabecalhoMarca,
   estilizarCabecalhoColunas,
 } from "@/lib/planilha-marca";
-import { gerarPdf } from "@/lib/pdf";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatarBRL,
@@ -557,6 +556,26 @@ export async function gerarResumoFolhaPdf(
   if (!folha) return { erro: "Folha não encontrada" };
 
   try {
+    /*
+     * Import DINÂMICO, e é o conserto de um apagão.
+     *
+     * `@/lib/pdf` faz `import PdfPrinter from "pdfmake/src/printer"`, um import
+     * profundo nos internos CJS do pdfmake, que carrega o pdfkit — e o pdfkit
+     * LÊ ARQUIVO DE FONTE DO DISCO (.afm) ao ser carregado. Em serverless esse
+     * arquivo pode não estar no bundle, e aí o módulo estoura no LOAD.
+     *
+     * Enquanto o import era estático, esse estouro derrubava o MÓDULO INTEIRO de
+     * actions da folha: aprovar, voltar para rascunho, mandar para revisão,
+     * exportar Excel, copiar pedido — todas mortas do mesmo jeito, sem nada
+     * chegar ao banco (a `fn_aprovar_folha` não aparece uma vez nos logs). A
+     * tela continuava carregando porque a PÁGINA importa `queries.ts`, não
+     * `actions.ts`: o módulo de actions só é carregado quando uma action roda.
+     *
+     * Agora o pdfmake só é carregado por quem pede PDF. Se ele estourar, quebra
+     * o botão de PDF e mais nada. Dependência pesada não tem direito de levar a
+     * aprovação de dinheiro junto.
+     */
+    const { gerarPdf } = await import("@/lib/pdf");
     const bytes = await gerarPdf(
       documentoDoResumo(
         {
