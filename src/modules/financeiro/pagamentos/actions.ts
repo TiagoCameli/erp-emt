@@ -19,6 +19,7 @@ import {
   buscarPagamentosParaEspelho,
   type EspelhoPagamento,
 } from "@/modules/financeiro/pagamentos/espelho";
+import { filtrosPagasSchema } from "@/modules/financeiro/pagamentos/filtros-pagas";
 import { foraDaJanela } from "@/modules/financeiro/pagamentos/janela";
 import {
   listarParcelasPagas,
@@ -220,30 +221,6 @@ export async function estornarPagamento(
   return { ok: true };
 }
 
-/** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
-const VALOR_MAXIMO = 999999999999.99;
-
-const valorFiltroSchema = z.number().min(0).max(VALOR_MAXIMO).optional();
-
-/**
- * Filtros do histórico vindos do cliente. Revalidados aqui mesmo já tendo sido
- * validados na página: a action é porta de entrada pública, e filtro inválido
- * não pode virar filtro do PostgREST.
- */
-const filtrosPagasSchema = z.object({
-  busca: z.string().trim().max(120).optional(),
-  fornecedorId: idSchema.optional(),
-  contaBancariaId: idSchema.optional(),
-  valorDe: valorFiltroSchema,
-  valorAte: valorFiltroSchema,
-  vencimentoDe: z.iso.date().optional(),
-  vencimentoAte: z.iso.date().optional(),
-  programadaDe: z.iso.date().optional(),
-  programadaAte: z.iso.date().optional(),
-  pagamentoDe: z.iso.date().optional(),
-  pagamentoAte: z.iso.date().optional(),
-});
-
 /**
  * Página do histórico de pagamentos, para a paginação server-side da tabela
  * "Pagas". Exige só a permissão de ver (a RLS no banco é a barreira final). Os
@@ -257,6 +234,11 @@ export async function buscarParcelasPagas(
 ): Promise<ParcelasPagasPagina> {
   await exigirPermissao(RECURSO, "ver");
 
+  // O schema mora em `filtros-pagas.ts` para poder ter teste: aqui dentro de um
+  // `"use server"` ele era inalcançável, e ficou dez dias sem nove dos filtros
+  // da aba -- que a action então descartava em silêncio, virando a página numa
+  // lista SEM filtro apresentada como filtrada. Ver o bloco `filtrosPagasSchema`
+  // em `filtros-pagas.test.ts`.
   const validados = filtrosPagasSchema.safeParse(filtros);
   if (!validados.success) {
     // Recusa em vez de ignorar: devolver a lista inteira com os filtros na tela

@@ -3,6 +3,7 @@ import "server-only";
 import type { EventoTrilha } from "@/components/canonicos/trilha";
 import { createClient } from "@/lib/supabase/server";
 import {
+  aplicarCentroDaSubarvore,
   aplicarFiltrosPagas,
   padraoBusca,
   type ConsultaFiltravel,
@@ -215,7 +216,9 @@ export interface ContaBancariaOpcao {
  * que montar o mesmo array de duas formas diferentes.
  */
 function rateiosDoEmbed(
-  lancamento: { lancamento_rateios?: { centros_custo: { nome: string } | null }[] | null } | null,
+  lancamento: {
+    lancamento_rateios?: { centros_custo: { nome: string } | null }[] | null;
+  } | null,
 ): { centroNome: string | null }[] {
   return (lancamento?.lancamento_rateios ?? []).map((rateio) => ({
     centroNome: rateio.centros_custo?.nome ?? null,
@@ -263,7 +266,10 @@ interface LinhaAPagar {
     categorias_financeiras: { nome: string } | null;
     fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
     lancamento_rateios:
-      | { centro_custo_id: string | null; centros_custo: { nome: string } | null }[]
+      | {
+          centro_custo_id: string | null;
+          centros_custo: { nome: string } | null;
+        }[]
       | null;
   } | null;
 }
@@ -363,7 +369,6 @@ export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
 /** Máximo de fornecedores resolvidos por nome numa busca (limite do filtro in). */
 const MAX_FORNECEDORES_BUSCA = 50;
 
-
 /**
  * Ids de fornecedores cujo nome bate com o padrão. A busca do histórico precisa
  * achar por fornecedor, e o or() do PostgREST não mistura colunas de tabelas
@@ -417,10 +422,10 @@ async function aplicarCentroCusto<T extends ConsultaFiltravel<T>>(
   const subarvore = await subarvoreDosCentros(supabase, [...centroCustoIds]);
   if (subarvore.length === 0) return { consulta, vazio: true };
 
+  // O par de chamadas mora em `filtros-pagas.ts`, que tem teste: o caminho de
+  // dois níveis e o `not is null` são a parte que erra calado.
   return {
-    consulta: consulta
-      .in("lancamentos.lancamento_rateios.centro_custo_id", subarvore)
-      .not("lancamentos.lancamento_rateios", "is", null),
+    consulta: aplicarCentroDaSubarvore(consulta, subarvore),
     vazio: false,
   };
 }
@@ -581,7 +586,10 @@ export async function listarParcelasPagas({
     centroCustoNomes: nomesDoRateio(rateiosDoEmbed(parcela.lancamentos)),
     fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
     contaNome: parcela.contas_bancarias
-      ? rotuloConta(parcela.contas_bancarias.nome, parcela.contas_bancarias.banco)
+      ? rotuloConta(
+          parcela.contas_bancarias.nome,
+          parcela.contas_bancarias.banco,
+        )
       : "-",
     dataPagamento: parcela.data_pagamento,
     valor: parcela.valor,
