@@ -17,6 +17,7 @@ import {
   PenLine,
 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
+import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 
 import {
   BotaoEspelho,
@@ -495,7 +496,7 @@ export function FilaAprovacao({
     }
 
     setAlvoAprovacao(null);
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function confirmarRevisao(motivo?: string) {
@@ -529,7 +530,7 @@ export function FilaAprovacao({
     }
 
     setAlvoRevisao(null);
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   const colunas = React.useMemo<ColumnDef<ParcelaPendente, unknown>[]>(() => {

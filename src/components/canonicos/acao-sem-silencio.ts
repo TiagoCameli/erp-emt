@@ -28,6 +28,27 @@ import { toast } from './toast';
  * que a folha já escreve no `aoCopiarMensagem`: avisar é melhor que o silêncio
  * de um botão que parece ter funcionado.
  */
+/**
+ * Efeito colateral de DEPOIS do sucesso. Ele não pode virar falha.
+ *
+ * Quando a action já devolveu ok, o dinheiro está gravado. O que vem depois é
+ * enfeite: `router.refresh()`, limpar seleção, fechar drawer. Se qualquer um
+ * desses lançar, a rejeição sobe pelo handler, cai no `comAvisoDeFalha` e a
+ * tela diz "a ação pode não ter sido concluída" — sobre uma aprovação que
+ * ACONTECEU. Quem leu isso vai clicar de novo e aprovar o mesmo dinheiro duas
+ * vezes.
+ *
+ * É a mesma disciplina do `revalidatePath` no servidor (src/lib/erros.ts):
+ * depois do commit, nada tem direito de transformar sucesso em erro.
+ */
+export function semDerrubarSucesso(contexto: string, efeito: () => void): void {
+  try {
+    efeito();
+  } catch (erro) {
+    console.error(`[erp-emt] ${contexto} (depois do sucesso)`, erro);
+  }
+}
+
 export async function comAvisoDeFalha(
   contexto: string,
   executar: () => void | Promise<void>,

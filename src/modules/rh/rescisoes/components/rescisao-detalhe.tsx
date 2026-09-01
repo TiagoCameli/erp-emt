@@ -26,6 +26,7 @@ import {
   type EventoTrilha,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
+import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
@@ -112,7 +113,7 @@ export function RescisaoDetalhe({
     }
     toast.success("Verba atualizada");
     setItemEditando(null);
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function salvarNova() {
@@ -132,7 +133,7 @@ export function RescisaoDetalhe({
     setAdicionando(false);
     setNovaDescricao("");
     setNovoValor("");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   function linhasDaSecao(itens: ItemRescisao[]) {

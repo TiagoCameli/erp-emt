@@ -12,6 +12,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
+import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 
 import { Anexos } from "@/components/canonicos/anexos";
 import { AlterarMesDialog } from "@/modules/_shared/alterar-mes-dialog";
@@ -234,7 +235,7 @@ export function OrdemDetalheView({
       return;
     }
     toast.success("Ordem aprovada. O lançamento previsto foi gerado");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function aoRejeitar(motivo: string) {
@@ -244,7 +245,7 @@ export function OrdemDetalheView({
       return;
     }
     toast.success("Ordem rejeitada");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function aoDesaprovar(motivo: string) {
@@ -254,7 +255,7 @@ export function OrdemDetalheView({
       return;
     }
     toast.success("Ordem desaprovada. O lançamento previsto foi cancelado");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function aoCancelar(motivo?: string) {
@@ -264,7 +265,7 @@ export function OrdemDetalheView({
       return;
     }
     toast.success("Ordem cancelada");
-    router.refresh();
+    semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
   async function aoExcluir() {
