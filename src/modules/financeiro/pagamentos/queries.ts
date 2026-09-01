@@ -529,6 +529,15 @@ async function fornecedoresDaBusca(
 }
 
 /**
+ * A linha da soma, com o lançamento.
+ *
+ * `LinhaPaga` (de `resumo.ts`) é o mínimo que a SOMA precisa ler, e o lançamento
+ * não faz parte disso. Aqui ele é obrigatório por outro motivo: é a chave para
+ * achar o rateio e calcular a fatia do centro filtrado.
+ */
+type LinhaPagaDaSoma = LinhaPaga & { lancamento_id: string };
+
+/**
  * O recorte do histórico somado: `valor`, os três ajustes e o `valor_liquido`.
  *
  * O card "Pago no filtro" mostra o LÍQUIDO, porque é o que o extrato do banco
@@ -584,14 +593,14 @@ export async function somaDasParcelasPagas(
   // Centro que não existe mais soma zero, igual à lista que vem vazia.
   if (centro.vazio) return RESUMO_PAGAS_VAZIO;
 
-  const { linhas, erro } = await todasAsLinhas<LinhaPaga>((de, ate) =>
+  const { linhas, erro } = await todasAsLinhas<LinhaPagaDaSoma>((de, ate) =>
     centro.consulta
       // Desempate: sem ele, linhas com o mesmo `data_pagamento` (e são
       // milhares, vindas da carga) mudam de ordem entre uma faixa e a
       // seguinte, e a soma conta linha repetida e perde outra.
       .order("id", { ascending: true })
       .range(de, ate)
-      .returns<LinhaPaga[]>(),
+      .returns<LinhaPagaDaSoma[]>(),
   );
 
   if (erro) {
