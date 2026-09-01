@@ -68,3 +68,39 @@ export function centroEEtapaDoRateio(
 
   return { raizNome: atual.nome, etapaNome: gravado.nome };
 }
+
+/**
+ * O ID da raiz de um rateio, para agrupar por CENTRO DE CUSTO sem depender de
+ * nome.
+ *
+ * Existe separado de `centroEEtapaDoRateio` porque quem mostra precisa do nome e
+ * quem AGRUPA precisa do id, e são coisas diferentes: dois cadastros com o mesmo
+ * nome são dois centros, e juntá-los numa linha só moveria dinheiro de uma obra
+ * para outra sem erro nenhum no arquivo. É a mesma razão pela qual a planilha
+ * por rateio já junta as partes por `centroId`.
+ *
+ * `null` quando o centro não está na árvore (cadastro apagado no meio da
+ * exportação). Quem chama trata isso como "cada parte na sua linha", que é o
+ * mesmo que a planilha por rateio faz com o rateio órfão: sem id não dá para
+ * afirmar que duas partes são do mesmo lugar.
+ *
+ * Mesmo teto de níveis do passeio de `centroEEtapaDoRateio`, e pelo mesmo
+ * motivo: `pai_id` é auto-referência e o banco não garante aciclia.
+ */
+export function raizIdDoRateio(
+  centroId: string,
+  arvore: ReadonlyMap<string, CentroNaArvore>,
+): string | null {
+  const gravado = arvore.get(centroId);
+  if (!gravado) return null;
+
+  let atualId = centroId;
+  let atual = gravado;
+  for (let passos = 0; passos < TETO_DE_NIVEIS && atual.paiId; passos += 1) {
+    const pai = arvore.get(atual.paiId);
+    if (!pai) break;
+    atualId = atual.paiId;
+    atual = pai;
+  }
+  return atualId;
+}

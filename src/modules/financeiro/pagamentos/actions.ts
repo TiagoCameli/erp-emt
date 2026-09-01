@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao } from "@/lib/erros";
-import { formatarData } from "@/lib/formatadores";
+import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import { idSchema } from "@/lib/id";
 import {
   exigirPermissao,
@@ -19,9 +19,26 @@ import {
   buscarPagamentosParaEspelho,
   type EspelhoPagamento,
 } from "@/modules/financeiro/pagamentos/espelho";
+import {
+  filtrarFilaAPagar,
+  valoresFiltrosAPagarSchema,
+} from "@/modules/financeiro/pagamentos/fila-a-pagar";
 import { filtrosPagasSchema } from "@/modules/financeiro/pagamentos/filtros-pagas";
 import { foraDaJanela } from "@/modules/financeiro/pagamentos/janela";
+import { subarvoreDosCentros } from "@/modules/financeiro/lancamentos/queries";
+/*
+ * Só o TIPO da planilha vem no topo. O módulo em si entra por `await import`
+ * dentro da action que o usa: ele puxa o exceljs, e um import de topo o
+ * carregaria em toda chamada de toda action deste arquivo — inclusive as de
+ * pagar parcela, que são as quentes. Já aconteceu neste app com o pdfmake.
+ */
+import type {
+  FormatoPlanilhaPagamentos,
+  PagamentoPlanilha,
+} from "@/modules/financeiro/pagamentos/planilha";
 import {
+  lerPagamentosParaPlanilha,
+  listarParcelasAPagar,
   listarParcelasPagas,
   trilhaParcelasDoLancamento,
   type FiltrosParcelasPagas,
@@ -307,4 +324,204 @@ export async function detalheDaParcela(
   ]);
 
   return { espelho, anexos, trilha };
+}
+
+/**
+ * Teto de linhas por arquivo.
+ *
+ * A exportação leva TUDO que está no filtro, e sem filtro nenhum leva a fila
+ * inteira (~900 parcelas) mais o histórico (dezenas de milhares). O número
+ * existe só porque o arquivo é montado inteiro na memória do servidor e volta em
+ * base64 pela resposta da Server Action: sem teto algum, um dia a exportação
+ * viraria um erro genérico de memória em vez de um aviso com o que fazer.
+ */
+const LIMITE_PLANILHA_PAGAMENTOS = 25_000;
+
+/**
+ * Tamanho da página de leitura do histórico.
+ *
+ * Bem abaixo do teto de 1.000 do PostgREST: pedir tudo de uma vez faz a resposta
+ * ser cortada num teto invisível, e a planilha sairia faltando pagamento sem
+ * ninguém perceber.
+ */
+const PAGINA_LEITURA_PAGAS = 500;
+
+/** Trava do laço de páginas: 25.000 linhas em páginas de 500 são 50 voltas. */
+const TETO_DE_PAGINAS = 200;
+
+/** O arquivo pronto, ou o motivo de não ter saído. */
+export type ResultadoPlanilhaPagamentos =
+  | { ok: true; base64: string; nomeArquivo: string }
+  | { erro: string };
+
+const FORMATOS_PLANILHA = new Set(["pagamento", "centro", "rateio"]);
+
+/**
+ * Gera a planilha (.xlsx) de Pagamentos, com as duas abas, e devolve em base64
+ * para o navegador baixar.
+ *
+ * ## O recorte
+ *
+ * Recebe os filtros das DUAS abas, cada um do jeito que a tela já os tem: a fila
+ * a pagar filtra em memória (ela vem inteira do servidor), o histórico filtra no
+ * banco. A planilha usa as MESMAS funções que a tela — `filtrarFilaAPagar` e
+ * `listarParcelasPagas` —, então o arquivo não pode discordar do que está na
+ * tela. Uma segunda implementação do filtro divergiria na primeira correção
+ * feita de um lado só, e o sintoma seriam dois totais diferentes para o mesmo
+ * recorte, os dois abrindo sem erro.
+ *
+ * Os filtros são revalidados aqui mesmo já tendo sido validados na página: a
+ * action é porta de entrada pública. Os dois schemas usam `strictObject`, que
+ * RECUSA chave desconhecida em vez de descartá-la — é a trava contra o defeito
+ * que deixou a aba "Pagas" dez dias sem nove dos seus filtros.
+ *
+ * Exporta o conjunto FILTRADO inteiro, e não a página aberta: quem exporta quer
+ * fechar o mês, não as 25 linhas que couberam na tela.
+ *
+ * ## Os três formatos, uma leitura só
+ *
+ * `pagamento` é uma linha por parcela; `centro` abre cada parcela em uma linha
+ * por centro de custo (juntando as etapas); `rateio` desce até o nível em que o
+ * rateio foi gravado. A diferença mora inteira na montagem do arquivo, e por
+ * isso ela é um parâmetro em vez de três actions: a leitura é a parte cara e a
+ * parte perigosa (paginação, teto, conferência da contagem), e três cópias dela
+ * divergiriam na primeira correção feita de um lado só.
+ *
+ * O módulo da planilha entra por `await import`: ele puxa o exceljs, que é
+ * grande, e um import de topo o carregaria em toda chamada de toda action deste
+ * arquivo — inclusive as de pagar parcela, que são as quentes.
+ */
+export async function gerarPlanilhaPagamentos(
+  valoresAPagar: unknown,
+  filtrosPagas: unknown,
+  formato: FormatoPlanilhaPagamentos,
+): Promise<ResultadoPlanilhaPagamentos> {
+  // Exportar é ler: mesma permissão que abre a tela. Sem ela, nem a lista existe.
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para exportar pagamentos" };
+  }
+
+  if (!FORMATOS_PLANILHA.has(formato)) {
+    return { erro: "Formato inválido para exportar" };
+  }
+
+  const daFila = valoresFiltrosAPagarSchema.safeParse(valoresAPagar);
+  if (!daFila.success) {
+    // Recusa em vez de ignorar: exportar sem o filtro que está na tela
+    // entregaria a base inteira com cara de recorte.
+    return { erro: "Filtro inválido na fila a pagar. Recarregue a página" };
+  }
+  const doHistorico = filtrosPagasSchema.safeParse(filtrosPagas);
+  if (!doHistorico.success) {
+    return { erro: "Filtro inválido no histórico. Recarregue a página" };
+  }
+
+  let idsAPagar: string[];
+  let idsPagas: string[];
+  let totalPagas: number;
+  try {
+    const supabase = await createClient();
+
+    // A fila vem inteira e é filtrada em memória, exatamente como na tela. A
+    // subárvore do centro é resolvida UMA vez, e não uma por linha.
+    const fila = await listarParcelasAPagar();
+    const centroIds = daFila.data.centroIds;
+    const subarvore =
+      centroIds.length === 0
+        ? null
+        : new Set(await subarvoreDosCentros(supabase, centroIds));
+    idsAPagar = filtrarFilaAPagar(fila, daFila.data, subarvore).map(
+      (parcela) => parcela.id,
+    );
+
+    // O histórico vem página por página. Ler de uma vez só não é opção: o
+    // PostgREST corta a resposta num teto invisível e a planilha sairia
+    // faltando pagamento sem ninguém perceber.
+    const vistos = new Set<string>();
+    totalPagas = 0;
+    for (let pagina = 0; pagina < TETO_DE_PAGINAS; pagina += 1) {
+      const lote = await listarParcelasPagas({
+        pagina,
+        tamanho: PAGINA_LEITURA_PAGAS,
+        filtros: doHistorico.data,
+      });
+      totalPagas = lote.total;
+      // Acima do teto a leitura para na primeira página: não vale ler o resto
+      // de um conjunto que vai ser recusado.
+      if (totalPagas > LIMITE_PLANILHA_PAGAMENTOS) break;
+      // `Set`, e não `push` direto: a ordenação tem desempate por id, mas se um
+      // pagamento for registrado no meio da leitura uma linha pode aparecer em
+      // duas páginas — e linha repetida numa planilha de dinheiro é dinheiro
+      // contado duas vezes.
+      for (const parcela of lote.itens) vistos.add(parcela.id);
+      if (lote.itens.length < PAGINA_LEITURA_PAGAS) break;
+      if (vistos.size >= totalPagas) break;
+    }
+    idsPagas = [...vistos];
+  } catch (erro) {
+    return erroAcao(
+      "financeiro.pagamentos.gerarPlanilhaPagamentos",
+      erro,
+      "Não foi possível ler os pagamentos para exportar. Tente novamente",
+    );
+  }
+
+  const total = idsAPagar.length + totalPagas;
+  if (total === 0) {
+    return { erro: "O filtro atual não tem nenhum pagamento para exportar" };
+  }
+  if (total > LIMITE_PLANILHA_PAGAMENTOS) {
+    return {
+      erro: `O filtro atual tem ${total.toLocaleString("pt-BR")} pagamentos, acima do limite de ${LIMITE_PLANILHA_PAGAMENTOS.toLocaleString("pt-BR")} por arquivo. Filtre por mês de referência e exporte em partes`,
+    };
+  }
+  // Leu menos do que o banco disse que existe: alguém mexeu no histórico no
+  // meio da leitura. Melhor recusar e pedir de novo do que entregar planilha
+  // incompleta com cara de completa, que é o tipo de erro que ninguém confere.
+  if (idsPagas.length < totalPagas) {
+    return erroAcao(
+      "financeiro.pagamentos.gerarPlanilhaPagamentos",
+      new Error(`leitura incompleta: ${idsPagas.length} de ${totalPagas}`),
+      `Li ${idsPagas.length.toLocaleString("pt-BR")} de ${totalPagas.toLocaleString("pt-BR")} pagamentos porque a lista mudou durante a exportação. Exporte de novo`,
+    );
+  }
+
+  let aPagar: PagamentoPlanilha[];
+  let pagas: PagamentoPlanilha[];
+  try {
+    const detalhes = await lerPagamentosParaPlanilha([
+      ...idsAPagar,
+      ...idsPagas,
+    ]);
+    // Parcela sem detalhe saiu da lista entre as duas consultas. Fica de fora em
+    // vez de virar linha em branco, e a contagem acima é quem recusa leitura
+    // parcial.
+    const detalhar = (ids: string[]) =>
+      ids
+        .map((id) => detalhes.get(id))
+        .filter((item): item is PagamentoPlanilha => item !== undefined);
+    aPagar = detalhar(idsAPagar);
+    pagas = detalhar(idsPagas);
+  } catch (erro) {
+    return erroAcao(
+      "financeiro.pagamentos.gerarPlanilhaPagamentos",
+      erro,
+      "Não foi possível montar a planilha de pagamentos. Tente novamente",
+    );
+  }
+
+  const { montarPlanilhaPagamentos, nomeArquivoPlanilhaPagamentos } =
+    await import("@/modules/financeiro/pagamentos/planilha");
+
+  const workbook = montarPlanilhaPagamentos({ aPagar, pagas, formato });
+  workbook.created = new Date();
+  const conteudo = await workbook.xlsx.writeBuffer();
+
+  return {
+    ok: true,
+    base64: Buffer.from(conteudo).toString("base64"),
+    nomeArquivo: nomeArquivoPlanilhaPagamentos(dataHojeISO(), formato),
+  };
 }

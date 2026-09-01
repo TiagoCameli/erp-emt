@@ -1450,7 +1450,7 @@ type LinhaDetalhePlanilha = {
  * exatamente a permissão que a exportação já exige, então a árvore nunca volta
  * pela metade para quem consegue exportar.
  */
-async function arvoreDeCentrosDeCusto(
+export async function arvoreDeCentrosDeCusto(
   supabase: Awaited<ReturnType<typeof createClient>>,
 ): Promise<Map<string, CentroNaArvore>> {
   const arvore = new Map<string, CentroNaArvore>();

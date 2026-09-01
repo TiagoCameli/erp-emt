@@ -52,6 +52,11 @@ import {
 } from "@/modules/financeiro/lancamentos/schemas";
 import { subarvoreDeCentros } from "@/modules/_shared/centro-custo/selecao";
 import {
+  filtrarFilaAPagar,
+  VALORES_FILTROS_A_PAGAR_VAZIOS,
+  type ValoresFiltrosAPagar,
+} from "@/modules/financeiro/pagamentos/fila-a-pagar";
+import {
   centrosEfetivos,
   etapasValidas,
   opcoesDeEtapa,
@@ -92,7 +97,6 @@ const TAMANHO_PAGINA = 25;
 /** Largura máxima do seletor de nome comprido (fornecedor, conta bancária). */
 const LARGURA_NOME = "max-w-[15rem]";
 
-/** Valores dos filtros da aba "A pagar", como vivem na URL. */
 /**
  * Origens do lançamento, reusando a lista e os rótulos de `lancamentos/schemas`.
  * Uma segunda lista aqui divergiria na primeira origem nova -- e origem nova
@@ -103,49 +107,16 @@ const OPCOES_ORIGEM: OpcaoFiltro[] = ORIGENS_LANCAMENTO.map((valor) => ({
   rotulo: ROTULO_ORIGEM_LANCAMENTO[valor],
 }));
 
-export interface ValoresFiltrosAPagar {
-  busca: string;
-  /**
-   * Situações da parcela na fila: lista VAZIA é "todas as situações em aberto".
-   *
-   * Existe porque a fila passou a mostrar pendente e em revisão junto com
-   * aprovada, e porque é ele que faz o cartão "Vence em até 7 dias" do Painel
-   * cair numa lista que soma exatamente o número do cartão (só aprovadas).
-   *
-   * Lista, e não valor único, porque "o que já posso pagar" costuma ser mais de
-   * uma situação ao mesmo tempo.
-   */
-  situacoes: string[];
-  fornecedorIds: string[];
-  contaIds: string[];
-  valorDe: string;
-  valorAte: string;
-  vencDe: string;
-  vencAte: string;
-  /** Período da data programada (data autorizada do pagamento). */
-  progDe: string;
-  progAte: string;
-  /**
-   * Dimensões do LANÇAMENTO por trás da parcela. Existem porque a tela de
-   * Pagamentos tinha 7 filtros contra os 16 de Lançamentos, e quem paga faz as
-   * mesmas perguntas de quem lança: de que obra é, que tipo de custo é, por qual
-   * forma sai.
-   */
-  categoriaIds: string[];
-  /**
-   * Centros de custo escolhidos. O filtro pega a SUBÁRVORE de cada um (obra traz
-   * as etapas, manutenção traz cada equipamento) e a UNIÃO dos conjuntos: marcar
-   * duas obras é "quero as duas".
-   */
-  centroIds: string[];
-  formaIds: string[];
-  /** Mês de referência no formato do campo da tela: yyyy-MM. */
-  mes: string;
-  origem: string;
-  /** Período da data da compra (o fato, não o vencimento). */
-  compraDe: string;
-  compraAte: string;
-}
+/*
+ * A interface e o filtro da fila moram em `fila-a-pagar.ts`, um módulo PURO: a
+ * exportação para Excel precisa do MESMO recorte que está na tela, e enquanto o
+ * filtro vivia dentro do `useMemo` daqui a única forma de reusá-lo seria
+ * copiá-lo — duas cópias divergem na primeira correção feita de um lado só, e o
+ * sintoma é planilha e tela com totais diferentes, as duas abrindo sem erro
+ * nenhum. Reexportado com o nome antigo para os testes e a página não mudarem
+ * de porta.
+ */
+export type { ValoresFiltrosAPagar };
 
 /**
  * Valores dos filtros da aba "Pagas", como vivem na URL (prefixo h_).
@@ -169,27 +140,8 @@ export interface ValoresFiltrosPagas extends Omit<
  * literal desatualizado, e o erro do `tsc` falava de propriedade faltando em vez
  * do que realmente mudou.
  */
-export const FILTROS_A_PAGAR_VAZIOS: ValoresFiltrosAPagar = {
-  busca: "",
-  // Os três de múltipla escolha são LISTA vazia, e não string vazia: aqui "sem
-  // filtro" tem que ser o mesmo valor que a tela trata como "todos".
-  situacoes: [],
-  fornecedorIds: [],
-  contaIds: [],
-  valorDe: "",
-  valorAte: "",
-  vencDe: "",
-  vencAte: "",
-  progDe: "",
-  progAte: "",
-  categoriaIds: [],
-  centroIds: [],
-  formaIds: [],
-  mes: "",
-  origem: "",
-  compraDe: "",
-  compraAte: "",
-};
+export const FILTROS_A_PAGAR_VAZIOS: ValoresFiltrosAPagar =
+  VALORES_FILTROS_A_PAGAR_VAZIOS;
 
 export const FILTROS_PAGAS_VAZIOS: ValoresFiltrosPagas = {
   ...FILTROS_A_PAGAR_VAZIOS,
@@ -242,24 +194,6 @@ export interface PagamentosClienteProps {
    * action que busca as próximas páginas do histórico.
    */
   filtrosPagas: FiltrosParcelasPagas;
-}
-
-/**
- * Data (YYYY-MM-DD, comparável como texto) dentro do período. Ponta vazia é
- * sem limite naquele lado. Parcela sem a data fica fora de qualquer período:
- * ela não tem data para comparar, e tratá-la como "dentro" mostraria linha que
- * o filtro não pediu.
- */
-function dentroDoPeriodo(
-  data: string | null,
-  de: string,
-  ate: string,
-): boolean {
-  if (de === "" && ate === "") return true;
-  if (!data) return false;
-  if (de !== "" && data < de) return false;
-  if (ate !== "" && data > ate) return false;
-  return true;
 }
 
 /** Número do lançamento + parcela para exibição (ex: LAN-0001 / 2). */
@@ -773,123 +707,21 @@ export function PagamentosCliente({
     [centrosCusto, valoresAPagar.centroIds],
   );
 
-  const aprovadasFiltradas = React.useMemo(() => {
-    const termo = buscaAprovadas.trim().toLowerCase();
-    const valorDe =
-      valoresAPagar.valorDe === "" ? null : Number(valoresAPagar.valorDe);
-    const valorAte =
-      valoresAPagar.valorAte === "" ? null : Number(valoresAPagar.valorAte);
-
-    /*
-     * `null` quando o filtro está em branco, `Set` quando tem escolha. Duas
-     * coisas de propósito: o `null` distingue "todos" de "nenhum marcado"
-     * (com lista vazia, `has` recusaria tudo e a fila apareceria zerada), e o
-     * `Set` faz a busca ser O(1) — com `includes`, cada uma das ~840 parcelas
-     * varreria a lista inteira a cada tecla digitada na busca.
-     */
-    const conjunto = (itens: string[]) =>
-      itens.length === 0 ? null : new Set(itens);
-    const fornecedoresEscolhidos = conjunto(valoresAPagar.fornecedorIds);
-    const contasEscolhidas = conjunto(valoresAPagar.contaIds);
-    const situacoesEscolhidas = conjunto(valoresAPagar.situacoes);
-    const categoriasEscolhidas = conjunto(valoresAPagar.categoriaIds);
-    const formasEscolhidas = conjunto(valoresAPagar.formaIds);
-
-    return aprovadas.filter((parcela) => {
-      if (
-        termo !== "" &&
-        !`${parcela.lancamentoNumero ?? ""} ${parcela.descricao} ${parcela.fornecedorNome}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      // Lista vazia é "todos": a checagem de conjunto só entra quando há
-      // escolha, senão nenhuma parcela passaria com o filtro em branco.
-      if (
-        fornecedoresEscolhidos !== null &&
-        !fornecedoresEscolhidos.has(parcela.fornecedorId ?? "")
-      ) {
-        return false;
-      }
-      if (
-        contasEscolhidas !== null &&
-        !contasEscolhidas.has(parcela.contaBancariaId ?? "")
-      ) {
-        return false;
-      }
-      if (
-        situacoesEscolhidas !== null &&
-        !situacoesEscolhidas.has(parcela.status ?? "aprovado")
-      ) {
-        return false;
-      }
-      if (valorDe !== null && parcela.valor < valorDe) return false;
-      if (valorAte !== null && parcela.valor > valorAte) return false;
-      if (
-        !dentroDoPeriodo(
-          parcela.dataVencimento,
-          valoresAPagar.vencDe,
-          valoresAPagar.vencAte,
-        )
-      ) {
-        return false;
-      }
-      if (
-        !dentroDoPeriodo(
-          parcela.dataProgramada,
-          valoresAPagar.progDe,
-          valoresAPagar.progAte,
-        )
-      ) {
-        return false;
-      }
-      if (
-        categoriasEscolhidas !== null &&
-        !categoriasEscolhidas.has(parcela.categoriaId ?? "")
-      ) {
-        return false;
-      }
-      // O centro casa pela SUBÁRVORE, e contra TODOS os centros do rateio:
-      // escolher a manutenção acha a parcela pendurada num equipamento, e um
-      // custo dividido entre duas obras aparece filtrando por qualquer uma.
-      if (
-        centroDoFiltro !== null &&
-        !(parcela.centroCustoIds ?? []).some((id) => centroDoFiltro.has(id))
-      ) {
-        return false;
-      }
-      if (
-        formasEscolhidas !== null &&
-        !formasEscolhidas.has(parcela.formaPagamentoId ?? "")
-      ) {
-        return false;
-      }
-      // O campo da tela é yyyy-MM e a coluna é o primeiro dia do mês.
-      if (
-        valoresAPagar.mes !== "" &&
-        (parcela.mesCompetencia ?? "").slice(0, 7) !== valoresAPagar.mes
-      ) {
-        return false;
-      }
-      if (
-        valoresAPagar.origem !== "" &&
-        parcela.origem !== valoresAPagar.origem
-      ) {
-        return false;
-      }
-      if (
-        !dentroDoPeriodo(
-          parcela.dataCompra ?? null,
-          valoresAPagar.compraDe,
-          valoresAPagar.compraAte,
-        )
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [aprovadas, buscaAprovadas, valoresAPagar, centroDoFiltro]);
+  /*
+   * O filtro em si mora em `fila-a-pagar.ts`, e a planilha chama o MESMO: o
+   * arquivo exportado tem que trazer exatamente as linhas que estão na tela.
+   * A busca entra por fora do objeto porque ela é digitada e vive em estado
+   * local até o debounce escrever na URL; o resto já vem da página.
+   */
+  const aprovadasFiltradas = React.useMemo(
+    () =>
+      filtrarFilaAPagar(
+        aprovadas,
+        { ...valoresAPagar, busca: buscaAprovadas },
+        centroDoFiltro,
+      ),
+    [aprovadas, buscaAprovadas, valoresAPagar, centroDoFiltro],
+  );
 
   /**
    * As parcelas que os cards resumem.
