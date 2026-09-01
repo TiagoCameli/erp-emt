@@ -16,6 +16,22 @@ import {
 import { buscarParametros } from "@/modules/rh/parametros-folha/queries";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 
+/**
+ * As Server Actions desta página rodam na função DELA, e aqui moram as três
+ * coisas mais caras do app: aprovar a folha (que numa folha de 47 pessoas cria
+ * 47 lançamentos, 47 parcelas, 47 rateios, os eventos de parcela e as guias por
+ * grupo de recolhimento, tudo numa transação), gerar o PDF do resumo e gerar a
+ * planilha. Com o teto padrão da Vercel (10 a 15s) a invocação morre no meio —
+ * e quando ela morre a action não devolve NADA: nem `{ erro }`, nem sucesso. O
+ * `await` do cliente rejeita, e a tela só consegue dizer "a ação não foi
+ * concluída", sem saber por quê. Foi o que apareceu ao aprovar a folha de
+ * 08/2026.
+ *
+ * 60s é o máximo que vale em qualquer plano. Mesma razão do
+ * `maxDuration` de /financeiro/lancamentos.
+ */
+export const maxDuration = 60;
+
 export default async function PaginaFolhaDetalhe({
   params,
 }: {

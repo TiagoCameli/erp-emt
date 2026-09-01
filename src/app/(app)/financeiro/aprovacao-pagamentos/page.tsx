@@ -18,6 +18,22 @@ import {
 } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
 
+/**
+ * `aprovarParcelasEmLote` roda na função desta página e faz um laço no
+ * SERVIDOR: uma ida ao banco por parcela selecionada, sem teto de lote. Com
+ * 835 parcelas pendentes hoje, um lote grande passa fácil do teto padrão da
+ * Vercel (10 a 15s).
+ *
+ * E o estouro aqui é pior que lento: cada parcela é a sua própria transação,
+ * então quando a invocação morre no meio, PARTE do lote já está aprovada e
+ * commitada — e o cliente não recebe nem a contagem, porque a action não
+ * devolve nada. A pessoa fica sem saber quantos pagamentos autorizou.
+ *
+ * 60s é o máximo que vale em qualquer plano. Mesma razão do
+ * `maxDuration` de /financeiro/lancamentos e de /rh/folha/[id].
+ */
+export const maxDuration = 60;
+
 export default async function PaginaAprovacaoPagamentos({
   searchParams,
 }: {

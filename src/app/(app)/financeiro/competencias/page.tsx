@@ -5,6 +5,14 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { CompetenciasTabela } from "@/modules/financeiro/competencias/components/competencias-tabela";
 import { listarCompetencias } from "@/modules/financeiro/competencias/queries";
 
+/**
+ * Fechar a competência roda na função desta página e varre o mês inteiro de
+ * lançamentos para checar o que trava o fechamento. Teto padrão da Vercel é 10
+ * a 15s, e invocação morta não devolve nem `{ erro }`. Mesma razão do
+ * `maxDuration` de /rh/folha/[id].
+ */
+export const maxDuration = 60;
+
 export default async function PaginaCompetencias() {
   const usuario = await getUsuarioLogado();
   if (!usuario || !temPermissao(usuario, "financeiro.competencias", "ver")) {

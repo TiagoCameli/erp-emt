@@ -16,6 +16,15 @@ import {
   trilhaOrdem,
 } from "@/modules/compras/ordens/queries";
 
+/**
+ * Aprovar a OC roda na função desta página e escreve em transação: lançamento,
+ * parcelas da condição de pagamento, rateios por centro de custo e recebimento.
+ * Com o teto padrão da Vercel (10 a 15s) uma OC grande morre no meio — e a
+ * action não devolve nada, nem `{ erro }`, então a tela não consegue dizer por
+ * quê. Mesma razão do `maxDuration` de /rh/folha/[id].
+ */
+export const maxDuration = 60;
+
 export default async function PaginaOrdemDetalhe({
   params,
 }: {

@@ -7,6 +7,13 @@ import {
   listarColaboradoresComJornada,
 } from "@/modules/rh/apontamentos/queries";
 
+/**
+ * Aprovar o ponto roda na função desta página e trava os apontamentos do dia
+ * inteiro. Teto padrão da Vercel é 10 a 15s, e invocação morta não devolve nem
+ * `{ erro }`. Mesma razão do `maxDuration` de /rh/folha/[id].
+ */
+export const maxDuration = 60;
+
 export default async function PaginaPontoDetalhe({
   params,
 }: {

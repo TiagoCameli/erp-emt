@@ -8,6 +8,14 @@ import {
   trilhaDaRescisao,
 } from "@/modules/rh/rescisoes/queries";
 
+/**
+ * Aprovar a rescisão roda na função desta página e gera lançamento e parcelas
+ * a partir dos itens calculados. Teto padrão da Vercel é 10 a 15s, e invocação
+ * morta não devolve nem `{ erro }`. Mesma razão do `maxDuration` de
+ * /rh/folha/[id].
+ */
+export const maxDuration = 60;
+
 export default async function PaginaRescisao({
   params,
 }: {
