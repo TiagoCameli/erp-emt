@@ -34,9 +34,15 @@ interface Chamada {
   referencedTable?: string;
 }
 
+/**
+ * O dublê precisa de nome próprio: `ConsultaComSondaDeRevisao<typeof consulta>`
+ * numa `const` é circular (TS2502). Interface pode se referenciar.
+ */
+interface ConsultaDublada extends ConsultaComSondaDeRevisao<ConsultaDublada> {}
+
 function dubleDeConsulta() {
   const chamadas: Chamada[] = [];
-  const consulta: ConsultaComSondaDeRevisao<typeof consulta> = {
+  const consulta: ConsultaDublada = {
     eq: (coluna, valor) => {
       chamadas.push({ metodo: "eq", coluna, valor });
       return consulta;
