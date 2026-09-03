@@ -35,48 +35,52 @@ interface Chamada {
 }
 
 /**
- * O dublê precisa de nome próprio: `ConsultaComSondaDeRevisao<typeof consulta>`
- * numa `const` é circular (TS2502). Interface pode se referenciar.
+ * O dublê é CLASSE, e não objeto literal, porque o tipo precisa se referenciar:
+ * o applier é genérico em `T extends ConsultaComSondaDeRevisao<T>`, e numa
+ * `const` isso vira auto-referência na anotação (TS2502). Classe pode.
  */
-interface ConsultaDublada extends ConsultaComSondaDeRevisao<ConsultaDublada> {}
+class ConsultaDublada implements ConsultaComSondaDeRevisao<ConsultaDublada> {
+  readonly chamadas: Chamada[] = [];
 
-function dubleDeConsulta() {
-  const chamadas: Chamada[] = [];
-  const consulta: ConsultaDublada = {
-    eq: (coluna, valor) => {
-      chamadas.push({ metodo: "eq", coluna, valor });
-      return consulta;
-    },
-    neq: (coluna, valor) => {
-      chamadas.push({ metodo: "neq", coluna, valor });
-      return consulta;
-    },
-    is: (coluna, valor) => {
-      chamadas.push({ metodo: "is", coluna, valor });
-      return consulta;
-    },
-    not: (coluna, operador, valor) => {
-      chamadas.push({ metodo: `not.${operador}`, coluna, valor });
-      return consulta;
-    },
-    or: (filtro, opcoes) => {
-      chamadas.push({
-        metodo: "or",
-        coluna: opcoes?.referencedTable ?? "",
-        valor: filtro,
-        referencedTable: opcoes?.referencedTable,
-      });
-      return consulta;
-    },
-  };
-  return { consulta, chamadas };
+  eq(coluna: string, valor: string): ConsultaDublada {
+    this.chamadas.push({ metodo: "eq", coluna, valor });
+    return this;
+  }
+
+  neq(coluna: string, valor: string): ConsultaDublada {
+    this.chamadas.push({ metodo: "neq", coluna, valor });
+    return this;
+  }
+
+  is(coluna: string, valor: null): ConsultaDublada {
+    this.chamadas.push({ metodo: "is", coluna, valor });
+    return this;
+  }
+
+  not(coluna: string, operador: string, valor: string | null): ConsultaDublada {
+    this.chamadas.push({ metodo: `not.${operador}`, coluna, valor });
+    return this;
+  }
+
+  or(
+    filtro: string,
+    opcoes?: { referencedTable?: string },
+  ): ConsultaDublada {
+    this.chamadas.push({
+      metodo: "or",
+      coluna: opcoes?.referencedTable ?? "",
+      valor: filtro,
+      referencedTable: opcoes?.referencedTable,
+    });
+    return this;
+  }
 }
 
 /** As chamadas de um estado, já aplicadas no dublê. */
 function chamadasDe(revisao: Parameters<typeof revisaoNoEmbed>[0]): Chamada[] {
-  const { consulta, chamadas } = dubleDeConsulta();
+  const consulta = new ConsultaDublada();
   aplicarRevisaoNoEmbed(consulta, revisaoNoEmbed(revisao));
-  return chamadas;
+  return consulta.chamadas;
 }
 
 /** O teste do PAI: o embed entrou como "tem linha" ou como "vazio"? */
