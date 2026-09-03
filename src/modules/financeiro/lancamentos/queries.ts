@@ -57,6 +57,10 @@ import {
   recorteNoEmbed,
 } from "@/modules/financeiro/lancamentos/recorte-no-embed";
 import {
+  aplicarRevisaoNoEmbed,
+  revisaoNoEmbed,
+} from "@/modules/financeiro/lancamentos/revisao-no-embed";
+import {
   emLotes,
   LOTE_IDS_POSTGREST,
 } from "@/lib/lotes-de-ids";
@@ -186,7 +190,8 @@ export interface ListarLancamentosParams {
   /**
    * Estado da revisão: parcela em revisão, ou a situação da conta bancária das
    * parcelas ainda não pagas (sem conta, conta parcial, revisado). É derivado
-   * das parcelas, então vira consulta de ids + `in`.
+   * das parcelas, e vira DOIS embeds aliasados — não lista de ids: `revisado` é
+   * quase a base inteira e o `in` estourava a URL. Ver `revisao-no-embed.ts`.
    */
   revisao?: FiltroRevisao;
   /**
@@ -885,72 +890,6 @@ async function idsPorAtraso(
 }
 
 /**
- * Ids de lançamentos no estado de revisão pedido. `em_revisao` é status de
- * parcela; os outros três são derivados da conta bancária das parcelas ainda
- * não pagas, com a mesma regra que a coluna "Revisão" da lista usa (por isso
- * só lançamentos a pagar entram: a receber não tem revisão de conta).
- */
-async function idsPorRevisao(
-  supabase: ClienteSupabase,
-  revisao: FiltroRevisao,
-): Promise<string[]> {
-  if (revisao === "em_revisao") {
-    const parcelas = await lerEmPaginas((de, ate) =>
-      supabase
-        .from("lancamento_parcelas")
-        .select("lancamento_id")
-        .eq("status", "em_revisao")
-        .order("lancamento_id")
-        .order("id")
-        .range(de, ate),
-    );
-    return [...new Set(parcelas.map((parcela) => parcela.lancamento_id))];
-  }
-
-  // Parcela PAGA entra na conta, e conta como resolvida: pagar exige conta
-  // bancária (fn_pagar_parcela recusa sem ela), então parcela paga é o caso mais
-  // resolvido que existe. Antes elas eram excluídas pela consulta, e o efeito era
-  // o contrário do esperado: lançamento quitado ficava fora do filtro "Revisado" e
-  // aparecia com "-" na coluna, como se a pergunta não valesse para ele.
-  const parcelas = await lerEmPaginas((de, ate) =>
-    supabase
-      .from("lancamento_parcelas")
-      .select("lancamento_id, conta_bancaria_id, status, lancamentos!inner(tipo)")
-      .eq("lancamentos.tipo", "a_pagar")
-      .order("lancamento_id")
-      .order("id")
-      .range(de, ate),
-  );
-
-  const contagem = new Map<string, { total: number; comConta: number }>();
-  for (const parcela of parcelas) {
-    const atual = contagem.get(parcela.lancamento_id) ?? {
-      total: 0,
-      comConta: 0,
-    };
-    atual.total += 1;
-    if (parcela.status === "pago" || parcela.conta_bancaria_id !== null) {
-      atual.comConta += 1;
-    }
-    contagem.set(parcela.lancamento_id, atual);
-  }
-
-  const ids: string[] = [];
-  for (const [id, { total, comConta }] of contagem) {
-    const estado =
-      comConta === 0 ? "sem_conta" : comConta === total ? "revisado" : "parcial";
-    // `nao_revisado` é o complemento de `revisado`: sem conta nenhuma ou conta em
-    // parte. Lançamento quitado NÃO entra aqui, porque parcela paga conta como
-    // resolvida (ver o comentário da contagem acima): quitado é revisado, não
-    // pendência.
-    const casa =
-      revisao === "nao_revisado" ? estado !== "revisado" : estado === revisao;
-    if (casa) ids.push(id);
-  }
-  return ids;
-}
-
-/**
  * Interseção das listas de ids vindas dos filtros de tabela filha, para ir ao
  * banco com um `in` só (dois `in` na mesma consulta já seriam AND, mas a lista
  * menor deixa a URL da consulta menor).
@@ -1011,8 +950,21 @@ export async function listarLancamentos(
   const hojeISO = dataHojeISO();
 
   const listasDeIds: string[][] = [];
-  if (params.revisao) {
-    listasDeIds.push(await idsPorRevisao(supabase, params.revisao));
+  /**
+   * A revisão NÃO vira lista de ids: `revisado` é quase a base inteira (6.106 de
+   * 6.107 a pagar, medido em 03/09/2026), o que dava 226 KB de `id=in.(...)` e
+   * derrubava a tela sem deixar log. Vai em dois embeds aliasados, como o recorte
+   * e o centro. Ver `revisao-no-embed.ts`.
+   */
+  const revisaoDoFiltro = params.revisao
+    ? revisaoNoEmbed(params.revisao)
+    : null;
+  // Os quatro estados de conta só existem em lançamento A PAGAR, e a consulta
+  // antiga cravava isso ao montar os ids. Com o tipo apontando para "a receber" a
+  // interseção ficava vazia, e a resposta certa continua sendo lista vazia — não
+  // a lista de a receber inteira.
+  if (revisaoDoFiltro?.soAPagar && params.tipo && params.tipo !== "a_pagar") {
+    return { itens: [], total: 0 };
   }
   if (params.atraso) {
     listasDeIds.push(await idsPorAtraso(supabase, params.atraso, hojeISO));
@@ -1082,7 +1034,9 @@ export async function listarLancamentos(
        ),
        lancamento_rateios(centro_custo_id, centros_custo(nome)),
        recorte_parcelas:lancamento_parcelas(id),
-       conta_parcelas:lancamento_parcelas(id)`,
+       conta_parcelas:lancamento_parcelas(id),
+       revisao_pendentes:lancamento_parcelas(id),
+       revisao_resolvidas:lancamento_parcelas(id)`,
       { count: "exact" },
     )
     // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
@@ -1148,6 +1102,20 @@ export async function listarLancamentos(
     consulta = consulta
       .eq("conta_parcelas.conta_bancaria_id", params.contaBancariaId)
       .not("conta_parcelas", "is", null);
+  }
+  // O estado de revisão, nas duas sondas aliasadas: "existe parcela pendente?" e
+  // "existe parcela resolvida?". Como os embeds do recorte e da conta, elas
+  // existem SÓ para filtrar — o `lancamento_parcelas` do select continua inteiro,
+  // porque é ele que alimenta o dinheiro da linha e a coluna "Revisão".
+  if (revisaoDoFiltro) {
+    consulta = aplicarRevisaoNoEmbed(consulta, revisaoDoFiltro);
+    // Sem tipo na chamada, o recorte de "a pagar" que a consulta antiga fazia por
+    // dentro (`.eq("lancamentos.tipo", "a_pagar")` na leitura das parcelas) tem
+    // que continuar valendo. A tela sempre manda tipo; quem chama
+    // `listarLancamentos` direto pode não mandar.
+    if (revisaoDoFiltro.soAPagar && !params.tipo) {
+      consulta = consulta.eq("tipo", "a_pagar");
+    }
   }
   if (params.tipo) consulta = consulta.eq("tipo", params.tipo);
   if (params.status) consulta = consulta.eq("status", params.status);
@@ -1245,8 +1213,8 @@ export async function listarLancamentos(
     // caso mais resolvido que existe. Antes as pagas eram descartadas aqui, e o
     // lançamento quitado caía em "não se aplica" mostrando "-" na coluna, como se a
     // pergunta não valesse para ele, justamente no caso em que a resposta é o
-    // melhor possível. Tem que casar com `idsPorRevisao`, senão o filtro traz um
-    // conjunto e a coluna mostra outro.
+    // melhor possível. Tem que casar com as sondas de `revisao-no-embed.ts`,
+    // senão o filtro traz um conjunto e a coluna mostra outro.
     const comConta = parcelas.filter(
       (parcela) =>
         parcela.status === "pago" || parcela.conta_bancaria_id !== null,
