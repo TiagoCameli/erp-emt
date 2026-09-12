@@ -184,9 +184,13 @@ Dezembro manda na ordem: se algo tiver que escorregar, escorrega o 8d, não o 8c
 
 ## Testes
 
-**Cálculo puro (TypeScript, vitest).** Avos por data de admissão, percentual da parcela, abatimento da 1ª na 2ª, terço das férias, arredondamento na ordem certa. Cada teste tem que cair quando a fórmula é quebrada de propósito: teste que sobrevive à mutação não está provando nada. Valor em real asserido pelo formatador, nunca por string literal, porque o separador do `pt-BR` não é espaço comum.
+**A conta de dinheiro vive na função SQL, e é lá que ela se prova.** Avos, percentual, abatimento e imposto ficam dentro de `fn_gerar_decimo_terceiro`. Escrever a mesma fórmula em TypeScript para poder testá-la criaria uma segunda fonte de verdade, e um teste verde em cima da cópia não diz nada sobre a RPC que realmente paga. O `calculo.ts` da folha é precedente: ele só agrega para a tela, não calcula dinheiro.
 
-**RPC, provadas no banco vivo, em transação desfeita.** Bloco `DO` que cria colaborador de mentira com admissão conhecida, gera o lote, aprova, confere que a soma dos lançamentos bate com o líquido do lote, e termina em `raise exception` para desfazer. A prova precisa demonstrar que a RPC **executou**, não só que não levantou erro: um ensaio que retorna cedo passa verde sem fazer nada. Numeração e sequência não podem ser queimadas.
+**Prova em `supabase/provas/decimo_terceiro.sql`**, no molde de `rescisao.sql`: os números são calculados **à mão no cabeçalho do arquivo**, antes de qualquer `select`, e o teste confere a RPC contra eles. Colaborador de mentira com admissão conhecida, gera o lote, aprova, confere que a soma dos lançamentos bate com o líquido, e termina em `raise exception` para desfazer tudo. Sem sujar a base e sem queimar numeração.
+
+A prova tem que demonstrar que a RPC **executou**, não só que não levantou erro. Isto já se pagou aqui: `plpgsql` só valida as queries do corpo na primeira execução, e a prova da rescisão estourou com `folha_parametros` vazia depois de a migration ter voltado `success` com o advisor limpo.
+
+**TypeScript (vitest) cobre o que é de TypeScript:** os schemas de validação, a agregação para a tela (soma dos itens, lista dos excluídos, aviso de provisão) e o formato. Valor em real asserido pelo formatador, nunca por string literal, porque o separador do `pt-BR` não é espaço comum. Cada teste tem que cair quando o código é quebrado de propósito: teste que sobrevive à mutação não está provando nada.
 
 **Uma prova por trava:** desconto ligado com faixa vazia recusa; colaborador sem admissão não vira item e aparece na lista de excluídos; competência fechada barra a aprovação.
 
