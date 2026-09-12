@@ -179,7 +179,7 @@ end $prova$;
 -- Depois: 0 lotes, 0 itens, 0 cobaias, 0 lancamentos. Nada ficou.
 
 -- =====================================================================
--- Parte 2: o ciclo de vida (migration 20260912130000)
+-- Parte 2: o ciclo de vida (migrations 20260912130000 e 20260912150000)
 -- =====================================================================
 --
 -- Bloco proprio, nao aninhado no primeiro: cada um desfaz sozinho.
@@ -187,6 +187,12 @@ end $prova$;
 -- CONTA A MAO: ZE CICLO, salario 3.000,00, admitido 10/01/2026 = 12 avos.
 --   1a parcela a 50% -> 1.500,00. Editando para 1.000,00 o total do lote
 --   tem que cair exatamente 500,00.
+--
+-- O que esta parte existe para provar, alem da edicao: que DEVOLVER nao e um
+-- beco sem saida. A primeira versao gravava status 'rejeitado', e
+-- fn_enviar_decimo_terceiro_aprovacao so aceita 'rascunho': o lote devolvido
+-- ficava preso, sem caminho de volta pela tela, enquanto o texto da propria
+-- tela prometia "volta para rascunho". Por isso o item D reenvia.
 
 do $prova2$
 declare
@@ -194,8 +200,8 @@ declare
   v_cc uuid; v_um uuid; v_lote uuid; v_item uuid;
   a_antes numeric; a_depois numeric; a_delta numeric;
   b_erro text := '(NAO RECUSOU)';
-  c_status text;
-  d_erro text := '(NAO RECUSOU)';
+  c_status text; c_motivo text;
+  d_status text;
   e_erro text := '(NAO RECUSOU)';
   f_marcado boolean;
 begin
@@ -212,18 +218,14 @@ begin
    where decimo_terceiro_id = v_lote and colaborador_id = v_um;
   select valor_liquido into a_antes from public.rh_decimo_terceiro where id = v_lote;
 
-  -- A) editar o item move o total do lote na medida exata (1500 -> 1000 = -500)
+  -- A) editar o item move o total do lote na medida exata
   perform public.fn_editar_item_decimo_terceiro(v_item, 1000.00);
   select valor_liquido into a_depois from public.rh_decimo_terceiro where id = v_lote;
   select editado_manualmente into f_marcado from public.rh_decimo_terceiro_itens where id = v_item;
   a_delta := a_antes - a_depois;
 
-  if a_delta <> 500.00 then
-    raise exception 'FALHOU o recalculo: esperava o total cair 500.00, caiu %', a_delta;
-  end if;
-  if not f_marcado then
-    raise exception 'FALHOU: item editado nao ficou marcado como editado_manualmente';
-  end if;
+  if a_delta <> 500.00 then raise exception 'FALHOU o recalculo: esperava cair 500.00, caiu %', a_delta; end if;
+  if not f_marcado then raise exception 'FALHOU: item editado nao ficou marcado'; end if;
 
   -- B) enviar e tentar editar: tem que recusar
   perform public.fn_enviar_decimo_terceiro_aprovacao(v_lote);
@@ -231,50 +233,46 @@ begin
     perform public.fn_editar_item_decimo_terceiro(v_item, 1.00);
   exception when others then b_erro := sqlerrm;
   end;
-  if b_erro = '(NAO RECUSOU)' then
-    raise exception 'FALHOU: editou item de lote pendente de aprovacao';
+  if b_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: editou item de lote pendente'; end if;
+
+  -- C) devolver para ajuste: volta para RASCUNHO guardando o motivo aparado
+  perform public.fn_rejeitar_decimo_terceiro(v_lote, '  salario do Joao esta errado  ');
+  select status, motivo_rejeicao into c_status, c_motivo
+    from public.rh_decimo_terceiro where id = v_lote;
+  if c_status <> 'rascunho' then
+    raise exception 'FALHOU: devolver deixou o status em %, e de la nao se reenvia', c_status;
+  end if;
+  if c_motivo <> 'salario do Joao esta errado' then
+    raise exception 'FALHOU: motivo gravado sem trim: "%"', c_motivo;
   end if;
 
-  -- C) rejeitar com motivo
-  perform public.fn_rejeitar_decimo_terceiro(v_lote, 'prova de rejeicao');
-  select status into c_status from public.rh_decimo_terceiro where id = v_lote;
-  if c_status <> 'rejeitado' then
-    raise exception 'FALHOU: esperava status rejeitado, veio %', c_status;
-  end if;
-
-  -- D) CONTROLE: rejeitar de novo (ja nao esta pendente) tem que recusar
-  begin
-    perform public.fn_rejeitar_decimo_terceiro(v_lote, 'de novo');
-  exception when others then d_erro := sqlerrm;
-  end;
-  if d_erro = '(NAO RECUSOU)' then
-    raise exception 'FALHOU: rejeitou um lote que ja estava rejeitado';
+  -- D) e do rascunho da para REENVIAR: o ciclo fecha, sem beco sem saida
+  perform public.fn_enviar_decimo_terceiro_aprovacao(v_lote);
+  select status into d_status from public.rh_decimo_terceiro where id = v_lote;
+  if d_status <> 'pendente_aprovacao' then
+    raise exception 'FALHOU: nao deu para reenviar depois de devolver, status %', d_status;
   end if;
 
   -- E) CONTROLE: excluir sem motivo tem que recusar. O motivo aqui e so tab,
-  -- espaco e quebra de linha: btrim(x) sem argumento corta SO espaco e
-  -- deixaria isso passar como preenchido.
+  -- espaco e quebra de linha: btrim(x) sem argumento corta SO espaco.
   begin
     perform public.fn_excluir_decimo_terceiro(v_lote, E'\t  \n');
   exception when others then e_erro := sqlerrm;
   end;
-  if e_erro = '(NAO RECUSOU)' then
-    raise exception 'FALHOU: excluiu sem motivo (btrim nao pegou tab/quebra)';
-  end if;
+  if e_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: excluiu sem motivo'; end if;
 
   reset role;
-  raise exception E'PROVA 13o - CICLO (desfeita, nada gravado)\n  A) editar item: total caiu % (500.00)  marcado como editado? %\n  B) CONTROLE editar apos enviar -> %\n  C) rejeitou -> status % (rejeitado)\n  D) CONTROLE rejeitar de novo -> %\n  E) CONTROLE excluir com motivo so de espaco/tab -> %',
-    a_delta, f_marcado, b_erro, c_status, d_erro, e_erro;
+  raise exception E'PROVA 13o - CICLO (desfeita, nada gravado)\n  A) editar item: total caiu % (500.00)  marcado? %\n  B) CONTROLE editar apos enviar -> %\n  C) devolveu: status=% (rascunho)  motivo="%" (com trim)\n  D) reenviou: status=% (pendente_aprovacao)  o ciclo fecha\n  E) CONTROLE excluir com motivo so de espaco/tab -> %',
+    a_delta, f_marcado, b_erro, c_status, c_motivo, d_status, e_erro;
 end $prova2$;
 
 -- Resultado em 12/09/2026:
 --
---   A) editar item: total caiu 500.00 (500.00)  marcado como editado? t
+--   A) editar item: total caiu 500.00 (500.00)  marcado? t
 --   B) CONTROLE editar apos enviar -> O lote esta em "pendente_aprovacao":
 --      so da para editar em rascunho.
---   C) rejeitou -> status rejeitado (rejeitado)
---   D) CONTROLE rejeitar de novo -> O lote esta em "rejeitado": so da para
---      rejeitar o que esta pendente de aprovacao.
+--   C) devolveu: status=rascunho (rascunho)  motivo="salario do Joao esta errado"
+--   D) reenviou: status=pendente_aprovacao (pendente_aprovacao)  o ciclo fecha
 --   E) CONTROLE excluir com motivo so de espaco/tab -> Informe o motivo da exclusao
 
 -- =====================================================================
