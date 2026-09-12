@@ -177,3 +177,102 @@ end $prova$;
 -- cobaias. O numero anda quando o cadastro anda; o que nao anda e a igualdade.
 --
 -- Depois: 0 lotes, 0 itens, 0 cobaias, 0 lancamentos. Nada ficou.
+
+-- =====================================================================
+-- Parte 2: o ciclo de vida (migration 20260912130000)
+-- =====================================================================
+--
+-- Bloco proprio, nao aninhado no primeiro: cada um desfaz sozinho.
+--
+-- CONTA A MAO: ZE CICLO, salario 3.000,00, admitido 10/01/2026 = 12 avos.
+--   1a parcela a 50% -> 1.500,00. Editando para 1.000,00 o total do lote
+--   tem que cair exatamente 500,00.
+
+do $prova2$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
+  v_cc uuid; v_um uuid; v_lote uuid; v_item uuid;
+  a_antes numeric; a_depois numeric; a_delta numeric;
+  b_erro text := '(NAO RECUSOU)';
+  c_status text;
+  d_erro text := '(NAO RECUSOU)';
+  e_erro text := '(NAO RECUSOU)';
+  f_marcado boolean;
+begin
+  select id into v_cc from public.centros_custo limit 1;
+  insert into public.colaboradores (nome, vinculo, ativo, salario, data_admissao, centro_custo_id)
+  values ('ZE CICLO', 'clt', true, 3000.00, date '2026-01-10', v_cc) returning id into v_um;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  v_lote := public.fn_gerar_decimo_terceiro(2026::smallint, 1::smallint, 0.5, false, null);
+
+  select id into v_item from public.rh_decimo_terceiro_itens
+   where decimo_terceiro_id = v_lote and colaborador_id = v_um;
+  select valor_liquido into a_antes from public.rh_decimo_terceiro where id = v_lote;
+
+  -- A) editar o item move o total do lote na medida exata (1500 -> 1000 = -500)
+  perform public.fn_editar_item_decimo_terceiro(v_item, 1000.00);
+  select valor_liquido into a_depois from public.rh_decimo_terceiro where id = v_lote;
+  select editado_manualmente into f_marcado from public.rh_decimo_terceiro_itens where id = v_item;
+  a_delta := a_antes - a_depois;
+
+  if a_delta <> 500.00 then
+    raise exception 'FALHOU o recalculo: esperava o total cair 500.00, caiu %', a_delta;
+  end if;
+  if not f_marcado then
+    raise exception 'FALHOU: item editado nao ficou marcado como editado_manualmente';
+  end if;
+
+  -- B) enviar e tentar editar: tem que recusar
+  perform public.fn_enviar_decimo_terceiro_aprovacao(v_lote);
+  begin
+    perform public.fn_editar_item_decimo_terceiro(v_item, 1.00);
+  exception when others then b_erro := sqlerrm;
+  end;
+  if b_erro = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: editou item de lote pendente de aprovacao';
+  end if;
+
+  -- C) rejeitar com motivo
+  perform public.fn_rejeitar_decimo_terceiro(v_lote, 'prova de rejeicao');
+  select status into c_status from public.rh_decimo_terceiro where id = v_lote;
+  if c_status <> 'rejeitado' then
+    raise exception 'FALHOU: esperava status rejeitado, veio %', c_status;
+  end if;
+
+  -- D) CONTROLE: rejeitar de novo (ja nao esta pendente) tem que recusar
+  begin
+    perform public.fn_rejeitar_decimo_terceiro(v_lote, 'de novo');
+  exception when others then d_erro := sqlerrm;
+  end;
+  if d_erro = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: rejeitou um lote que ja estava rejeitado';
+  end if;
+
+  -- E) CONTROLE: excluir sem motivo tem que recusar. O motivo aqui e so tab,
+  -- espaco e quebra de linha: btrim(x) sem argumento corta SO espaco e
+  -- deixaria isso passar como preenchido.
+  begin
+    perform public.fn_excluir_decimo_terceiro(v_lote, E'\t  \n');
+  exception when others then e_erro := sqlerrm;
+  end;
+  if e_erro = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: excluiu sem motivo (btrim nao pegou tab/quebra)';
+  end if;
+
+  reset role;
+  raise exception E'PROVA 13o - CICLO (desfeita, nada gravado)\n  A) editar item: total caiu % (500.00)  marcado como editado? %\n  B) CONTROLE editar apos enviar -> %\n  C) rejeitou -> status % (rejeitado)\n  D) CONTROLE rejeitar de novo -> %\n  E) CONTROLE excluir com motivo so de espaco/tab -> %',
+    a_delta, f_marcado, b_erro, c_status, d_erro, e_erro;
+end $prova2$;
+
+-- Resultado em 12/09/2026:
+--
+--   A) editar item: total caiu 500.00 (500.00)  marcado como editado? t
+--   B) CONTROLE editar apos enviar -> O lote esta em "pendente_aprovacao":
+--      so da para editar em rascunho.
+--   C) rejeitou -> status rejeitado (rejeitado)
+--   D) CONTROLE rejeitar de novo -> O lote esta em "rejeitado": so da para
+--      rejeitar o que esta pendente de aprovacao.
+--   E) CONTROLE excluir com motivo so de espaco/tab -> Informe o motivo da exclusao
