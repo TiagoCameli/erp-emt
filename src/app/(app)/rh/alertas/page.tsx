@@ -26,7 +26,7 @@ export default async function PaginaAlertasRh() {
   }
 
   const podeDocumentos = temPermissao(usuario, "rh.documentos", "ver");
-  const podeFerias = temPermissao(usuario, "rh.ferias", "ver");
+  const podeFerias = temPermissao(usuario, "rh.decimo-terceiro-ferias", "ver");
   const podeEpis = temPermissao(usuario, "rh.epis", "ver");
   const podeCadastro = temPermissao(usuario, "cadastros.colaboradores", "ver");
   // O alerta de adiantamento de inativo lê colaboradores E

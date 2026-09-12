@@ -9,7 +9,7 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { feriasSchema, type FeriasInput } from "@/modules/rh/ferias/schemas";
 
-const RECURSO = "rh.ferias" as const;
+const RECURSO = "rh.decimo-terceiro-ferias" as const;
 const ROTA = "/rh/ferias";
 const TABELA = "rh_ferias" as const;
 

@@ -9,7 +9,7 @@ import { listarColaboradores } from "@/modules/rh/_shared/queries";
 
 export default async function PaginaFerias() {
   const usuario = await getUsuarioLogado();
-  if (!usuario || !temPermissao(usuario, "rh.ferias", "ver")) {
+  if (!usuario || !temPermissao(usuario, "rh.decimo-terceiro-ferias", "ver")) {
     notFound();
   }
 
@@ -18,9 +18,9 @@ export default async function PaginaFerias() {
     listarColaboradores(),
   ]);
 
-  const podeCriar = temPermissao(usuario, "rh.ferias", "criar");
-  const podeEditar = temPermissao(usuario, "rh.ferias", "editar");
-  const podeExcluir = temPermissao(usuario, "rh.ferias", "excluir");
+  const podeCriar = temPermissao(usuario, "rh.decimo-terceiro-ferias", "criar");
+  const podeEditar = temPermissao(usuario, "rh.decimo-terceiro-ferias", "editar");
+  const podeExcluir = temPermissao(usuario, "rh.decimo-terceiro-ferias", "excluir");
 
   const vencidas = ferias.filter((item) => item.situacao === "vencida").length;
   const aVencer = ferias.filter((item) => item.situacao === "a_vencer").length;
