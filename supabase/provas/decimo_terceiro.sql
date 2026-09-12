@@ -276,3 +276,117 @@ end $prova2$;
 --   D) CONTROLE rejeitar de novo -> O lote esta em "rejeitado": so da para
 --      rejeitar o que esta pendente de aprovacao.
 --   E) CONTROLE excluir com motivo so de espaco/tab -> Informe o motivo da exclusao
+
+-- =====================================================================
+-- Parte 3: o dinheiro (migration 20260912140000)
+-- =====================================================================
+--
+-- CONTA A MAO: ZE DINHEIRO, 3.000,00, admitido 10/01/2026 = 12 avos.
+--   1a parcela a 50% -> 1.500,00, que tem que virar conta a pagar de
+--   1.500,00 com rateio de 1.500,00 no centro de custo dele.
+--
+-- A soma dos lancamentos NAO e conferida contra numero fixo (o lote pega
+-- todo CLT), e sim contra o liquido do proprio lote. Essa igualdade vale em
+-- qualquer cadastro, e e ela que diz que o dinheiro que sai e o dinheiro
+-- que a tela mostra.
+
+do $prova3$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
+  v_cc uuid; v_um uuid; v_lote uuid;
+  a_liq numeric; a_soma numeric; a_qtd int; a_rateio numeric; a_cc uuid;
+  b_qtd int; b_status text; b_lancitem int;
+  c_erro text := '(NAO RECUSOU)';
+  d_erro text := '(NAO RECUSOU)';
+begin
+  select id into v_cc from public.centros_custo limit 1;
+  insert into public.colaboradores (nome, vinculo, ativo, salario, data_admissao, centro_custo_id)
+  values ('ZE DINHEIRO', 'clt', true, 3000.00, date '2026-01-10', v_cc) returning id into v_um;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  v_lote := public.fn_gerar_decimo_terceiro(2026::smallint, 1::smallint, 0.5, false, null);
+
+  -- C) CONTROLE: aprovar em rascunho tem que recusar (antes de enviar)
+  begin
+    perform public.fn_aprovar_decimo_terceiro(v_lote);
+  exception when others then c_erro := sqlerrm;
+  end;
+  if c_erro = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: aprovou um lote que estava em rascunho';
+  end if;
+
+  perform public.fn_enviar_decimo_terceiro_aprovacao(v_lote);
+  perform public.fn_aprovar_decimo_terceiro(v_lote);
+
+  -- A) a soma dos lancamentos TEM que bater com o liquido do lote
+  select valor_liquido into a_liq from public.rh_decimo_terceiro where id = v_lote;
+  select coalesce(sum(l.valor),0), count(*) into a_soma, a_qtd
+    from public.lancamentos l
+   where l.origem = 'decimo_terceiro'
+     and l.origem_id in (select id from public.rh_decimo_terceiro_itens
+                          where decimo_terceiro_id = v_lote);
+
+  -- Nao basta "nao deu erro": se a RPC nao tivesse executado o laco, a soma
+  -- seria 0 = 0 e passaria. A contagem e que prova que ela rodou.
+  if a_qtd = 0 then
+    raise exception 'FALHOU: aprovou e nao gerou lancamento nenhum (a RPC nao executou)';
+  end if;
+  if a_soma <> a_liq then
+    raise exception 'FALHOU: lote liquido % mas lancamentos somam %', a_liq, a_soma;
+  end if;
+
+  select r.valor, r.centro_custo_id into a_rateio, a_cc
+    from public.lancamento_rateios r
+    join public.lancamentos l on l.id = r.lancamento_id
+   where l.origem = 'decimo_terceiro'
+     and l.origem_id = (select id from public.rh_decimo_terceiro_itens
+                         where decimo_terceiro_id = v_lote and colaborador_id = v_um);
+  if a_rateio <> 1500.00 then
+    raise exception 'FALHOU o rateio: esperado 1500.00, veio %', a_rateio;
+  end if;
+  if a_cc is distinct from v_cc then
+    raise exception 'FALHOU: rateio caiu em centro de custo errado';
+  end if;
+
+  -- B) desaprovar devolve TUDO
+  perform public.fn_desaprovar_decimo_terceiro(v_lote, 'prova');
+  select count(*) into b_qtd from public.lancamentos
+   where origem = 'decimo_terceiro'
+     and origem_id in (select id from public.rh_decimo_terceiro_itens
+                        where decimo_terceiro_id = v_lote);
+  select status into b_status from public.rh_decimo_terceiro where id = v_lote;
+  select count(*) into b_lancitem from public.rh_decimo_terceiro_itens
+   where decimo_terceiro_id = v_lote and lancamento_id is not null;
+
+  if b_qtd <> 0 then raise exception 'FALHOU: desaprovou e sobraram % lancamentos', b_qtd; end if;
+  if b_status <> 'rascunho' then raise exception 'FALHOU: apos desaprovar o status ficou %', b_status; end if;
+  if b_lancitem <> 0 then raise exception 'FALHOU: % itens ficaram com lancamento_id apontando para lancamento apagado', b_lancitem; end if;
+
+  -- D) CONTROLE: desaprovar sem motivo
+  begin
+    perform public.fn_desaprovar_decimo_terceiro(v_lote, '   ');
+  exception when others then d_erro := sqlerrm;
+  end;
+  if d_erro = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: desaprovou sem motivo';
+  end if;
+
+  reset role;
+  raise exception E'PROVA 13o - DINHEIRO (desfeita, nada gravado)\n  A) aprovou: % lancamentos somando % = liquido do lote %\n     rateio do Ze=% (1500.00) no centro certo? %\n  B) desaprovou: lancamentos restantes=% (0)  status=% (rascunho)  itens com lancamento_id=% (0)\n  C) CONTROLE aprovar em rascunho -> %\n  D) CONTROLE desaprovar sem motivo -> %',
+    a_qtd, a_soma, a_liq, a_rateio, (a_cc = v_cc), b_qtd, b_status, b_lancitem, c_erro, d_erro;
+end $prova3$;
+
+-- Resultado em 12/09/2026:
+--
+--   A) aprovou: 12 lancamentos somando 11058.20 = liquido do lote 11058.20
+--      rateio do Ze=1500.00 (1500.00) no centro certo? t
+--   B) desaprovou: lancamentos restantes=0 (0)  status=rascunho (rascunho)
+--      itens com lancamento_id=0 (0)
+--   C) CONTROLE aprovar em rascunho -> O lote esta em "rascunho": so da para
+--      aprovar o que esta pendente de aprovacao.
+--   D) CONTROLE desaprovar sem motivo -> Informe o motivo da desaprovacao
+--
+-- Os 12 lancamentos sao os 11 CLT reais com admissao mais a cobaia.
+-- Depois: 0 lotes, 0 cobaias, 0 lancamentos de 13o. Nada ficou.

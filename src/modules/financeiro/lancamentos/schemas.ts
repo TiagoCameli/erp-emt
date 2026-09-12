@@ -874,6 +874,9 @@ export const ORIGENS_LANCAMENTO = [
   "folha",
   "folha_guia",
   "adiantamento",
+  "rescisao",
+  "decimo_terceiro",
+  "decimo_terceiro_guia",
 ] as const;
 
 export type OrigemLancamento = (typeof ORIGENS_LANCAMENTO)[number];
@@ -885,6 +888,9 @@ export const ROTULO_ORIGEM_LANCAMENTO: Record<OrigemLancamento, string> = {
   folha: "Folha de pagamento",
   folha_guia: "Guia da folha",
   adiantamento: "Adiantamento",
+  rescisao: "Rescisão",
+  decimo_terceiro: "13º salário",
+  decimo_terceiro_guia: "Guia do 13º",
 };
 
 /**
