@@ -2,9 +2,8 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { MoneyText, PageHeader, StatusBadge } from "@/components/canonicos";
+import { MoneyText, PageHeader, SecaoDetalhe, StatusBadge } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import type { Dependente } from "@/modules/cadastros/colaboradores/dependentes";
 import { rotuloParentesco } from "@/modules/cadastros/colaboradores/dependentes-schemas";
@@ -306,7 +305,7 @@ export function FichaColaborador({
         ) : null}
 
         {ferias ? (
-          <SecaoDetalhe titulo="Férias" card acao={<VerTudo href="/rh/ferias" />}>
+          <SecaoDetalhe titulo="Férias" card acao={<VerTudo href="/rh/decimo-terceiro-e-ferias" />}>
             {ferias.itens.length === 0 ? (
               <SemRegistros texto="Nenhum período de férias cadastrado." />
             ) : (

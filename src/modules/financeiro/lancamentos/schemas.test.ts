@@ -212,6 +212,9 @@ describe("rótulo de origem do lançamento", () => {
       "Folha de pagamento",
       "Guia da folha",
       "Adiantamento",
+      "Rescisão",
+      "13º salário",
+      "Guia do 13º",
     ]);
   });
 

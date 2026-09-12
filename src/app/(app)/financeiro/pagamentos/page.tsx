@@ -66,6 +66,9 @@ const ORIGENS = new Set([
   "folha_guia",
   "diaria",
   "adiantamento",
+  "rescisao",
+  "decimo_terceiro",
+  "decimo_terceiro_guia",
 ]);
 
 function parametroOrigem(valor: Parametro): string | undefined {

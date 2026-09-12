@@ -37,7 +37,7 @@ export default async function PaginaFichaColaborador({
   if (!colaborador) notFound();
 
   const podePonto = temPermissao(usuario, "rh.apontamentos", "ver");
-  const podeFerias = temPermissao(usuario, "rh.ferias", "ver");
+  const podeFerias = temPermissao(usuario, "rh.decimo-terceiro-ferias", "ver");
   const podeDocumentos = temPermissao(usuario, "rh.documentos", "ver");
   const podeEpis = temPermissao(usuario, "rh.epis", "ver");
   const podeOcorrencias = temPermissao(usuario, "rh.ocorrencias", "ver");

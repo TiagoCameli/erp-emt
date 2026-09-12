@@ -3233,6 +3233,174 @@ export type Database = {
           },
         ];
       };
+      rh_decimo_terceiro: {
+        Row: {
+          ano: number;
+          aprovado_em: string | null;
+          aprovado_por: string | null;
+          com_desconto: boolean;
+          created_at: string;
+          created_by: string | null;
+          data_vencimento: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          motivo_exclusao: string | null;
+          motivo_rejeicao: string | null;
+          parcela: number;
+          percentual: number;
+          status: string;
+          updated_at: string;
+          valor_bruto: number;
+          valor_descontos: number;
+          valor_liquido: number;
+        };
+        Insert: {
+          ano: number;
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          com_desconto?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          data_vencimento?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          motivo_exclusao?: string | null;
+          motivo_rejeicao?: string | null;
+          parcela: number;
+          percentual: number;
+          status?: string;
+          updated_at?: string;
+          valor_bruto?: number;
+          valor_descontos?: number;
+          valor_liquido?: number;
+        };
+        Update: {
+          ano?: number;
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          com_desconto?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          data_vencimento?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          motivo_exclusao?: string | null;
+          motivo_rejeicao?: string | null;
+          parcela?: number;
+          percentual?: number;
+          status?: string;
+          updated_at?: string;
+          valor_bruto?: number;
+          valor_descontos?: number;
+          valor_liquido?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rh_decimo_terceiro_aprovado_por_fkey";
+            columns: ["aprovado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_decimo_terceiro_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_decimo_terceiro_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rh_decimo_terceiro_itens: {
+        Row: {
+          avos: number;
+          centro_custo_id: string | null;
+          colaborador_id: string;
+          created_at: string;
+          decimo_terceiro_id: string;
+          editado_manualmente: boolean;
+          id: string;
+          lancamento_id: string | null;
+          salario_base: number;
+          valor_bruto: number;
+          valor_inss: number;
+          valor_irrf: number;
+          valor_ja_pago: number;
+          valor_liquido: number;
+        };
+        Insert: {
+          avos: number;
+          centro_custo_id?: string | null;
+          colaborador_id: string;
+          created_at?: string;
+          decimo_terceiro_id: string;
+          editado_manualmente?: boolean;
+          id?: string;
+          lancamento_id?: string | null;
+          salario_base: number;
+          valor_bruto?: number;
+          valor_inss?: number;
+          valor_irrf?: number;
+          valor_ja_pago?: number;
+          valor_liquido?: number;
+        };
+        Update: {
+          avos?: number;
+          centro_custo_id?: string | null;
+          colaborador_id?: string;
+          created_at?: string;
+          decimo_terceiro_id?: string;
+          editado_manualmente?: boolean;
+          id?: string;
+          lancamento_id?: string | null;
+          salario_base?: number;
+          valor_bruto?: number;
+          valor_inss?: number;
+          valor_irrf?: number;
+          valor_ja_pago?: number;
+          valor_liquido?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rh_decimo_terceiro_itens_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_decimo_terceiro_itens_colaborador_id_fkey";
+            columns: ["colaborador_id"];
+            isOneToOne: false;
+            referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_decimo_terceiro_itens_decimo_terceiro_id_fkey";
+            columns: ["decimo_terceiro_id"];
+            isOneToOne: false;
+            referencedRelation: "rh_decimo_terceiro";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_decimo_terceiro_itens_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       rh_dependentes: {
         Row: {
           colaborador_id: string;
@@ -4140,6 +4308,10 @@ export type Database = {
         Args: { p_lanc_id: string };
         Returns: undefined;
       };
+      fn_aprovar_decimo_terceiro: {
+        Args: { p_lote: string };
+        Returns: undefined;
+      };
       fn_aprovar_folha: { Args: { p_folha: string }; Returns: undefined };
       fn_aprovar_ordem_compra: {
         Args: { p_oc_id: string };
@@ -4255,6 +4427,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_desaprovar_decimo_terceiro: {
+        Args: { p_lote: string; p_motivo: string };
+        Returns: undefined;
+      };
       fn_desaprovar_folha: {
         Args: { p_folha: string; p_motivo: string };
         Returns: undefined;
@@ -4279,6 +4455,11 @@ export type Database = {
         Args: { p_vinculo_id: string };
         Returns: undefined;
       };
+      fn_dt_recalcular_totais: { Args: { p_lote: string }; Returns: undefined };
+      fn_editar_item_decimo_terceiro: {
+        Args: { p_item: string; p_valor: number };
+        Returns: undefined;
+      };
       fn_editar_item_folha: {
         Args: {
           p_centro_custo: string;
@@ -4295,6 +4476,10 @@ export type Database = {
       };
       fn_editar_item_rescisao: {
         Args: { p_item: string; p_valor: number };
+        Returns: undefined;
+      };
+      fn_enviar_decimo_terceiro_aprovacao: {
+        Args: { p_lote: string };
         Returns: undefined;
       };
       fn_enviar_rescisao_aprovacao: {
@@ -4327,6 +4512,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_excluir_cotacao: { Args: { p_id: string }; Returns: undefined };
+      fn_excluir_decimo_terceiro: {
+        Args: { p_lote: string; p_motivo: string };
+        Returns: undefined;
+      };
       fn_excluir_lancamento: { Args: { p_id: string }; Returns: undefined };
       fn_excluir_obra: {
         Args: { p_id: string; p_motivo: string };
@@ -4395,6 +4584,16 @@ export type Database = {
       fn_folha_recalcular_totais: {
         Args: { p_folha: string };
         Returns: undefined;
+      };
+      fn_gerar_decimo_terceiro: {
+        Args: {
+          p_ano: number;
+          p_com_desconto: boolean;
+          p_data_vencimento?: string;
+          p_parcela: number;
+          p_percentual: number;
+        };
+        Returns: string;
       };
       fn_gerar_folha: {
         Args: { p_competencia: string; p_encargos_pct?: number };
@@ -4617,6 +4816,10 @@ export type Database = {
           p_oc_id: string;
           p_valor_nf: number;
         };
+        Returns: undefined;
+      };
+      fn_rejeitar_decimo_terceiro: {
+        Args: { p_lote: string; p_motivo: string };
         Returns: undefined;
       };
       fn_rejeitar_rescisao: {

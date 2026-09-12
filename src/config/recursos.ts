@@ -342,11 +342,11 @@ export const RECURSOS = [
     acoes: CRUD,
   },
   {
-    id: "rh.ferias",
-    nome: "Férias",
+    id: "rh.decimo-terceiro-ferias",
+    nome: "13º e Férias",
     modulo: "rh",
-    rota: "/rh/ferias",
-    acoes: CRUD,
+    rota: "/rh/decimo-terceiro-e-ferias",
+    acoes: CRUD_APROVA,
   },
   {
     id: "rh.ocorrencias",

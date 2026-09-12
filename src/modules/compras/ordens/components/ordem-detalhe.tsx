@@ -1,5 +1,6 @@
 "use client";
 
+import { SecaoDetalhe } from "@/components/canonicos";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -37,7 +38,6 @@ import {
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
-import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   aprovarOrdem,
   cancelarOrdem,
