@@ -1,3 +1,4 @@
+import { SecaoDetalhe } from "@/components/canonicos";
 "use client";
 
 import * as React from "react";
@@ -37,7 +38,6 @@ import {
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { infoStatusOC } from "@/modules/compras/_shared/formato";
-import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   aprovarOrdem,
   cancelarOrdem,

@@ -10,7 +10,9 @@ import { createClient } from "@/lib/supabase/server";
 import { feriasSchema, type FeriasInput } from "@/modules/rh/ferias/schemas";
 
 const RECURSO = "rh.decimo-terceiro-ferias" as const;
-const ROTA = "/rh/ferias";
+// A aba virou "13º e Férias" e a rota mudou. Revalidar a rota antiga
+// não faria nada: ela é só um redirect, e a tabela ficaria com dado velho.
+const ROTA = "/rh/decimo-terceiro-e-ferias";
 const TABELA = "rh_ferias" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };

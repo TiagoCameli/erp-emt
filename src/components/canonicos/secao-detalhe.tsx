@@ -11,9 +11,14 @@ export interface SecaoDetalheProps {
 }
 
 /**
- * Cabeçalho de seção dos detalhes de Compras. Um único tratamento de título
- * (h2 text-secao font-semibold) compartilhado por OC e cotação, para a
- * hierarquia de seção ficar consistente entre as telas.
+ * Cabeçalho de seção canônico. Um único tratamento de título
+ * (h2 text-secao font-semibold) para a hierarquia de seção ficar consistente
+ * em todo o app.
+ *
+ * Nasceu em `compras/_shared` e foi promovido em 12/09/2026: metade dos
+ * consumidores já era de fora de Compras (ficha do colaborador, painel de
+ * alertas do RH), e importar componente de um módulo dentro de outro é o
+ * caminho para a duplicação que a regra 9 do CLAUDE.md proíbe.
  * Com card, envolve numa superfície com borda (layout do detalhe da OC).
  */
 export function SecaoDetalhe({ titulo, acao, card, children }: SecaoDetalheProps) {

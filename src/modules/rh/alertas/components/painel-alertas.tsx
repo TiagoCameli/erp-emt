@@ -7,6 +7,7 @@ import {
   GradeKpis,
   KPICard,
   MoneyText,
+  SecaoDetalhe,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,6 @@ import type {
   AlertaEpi,
   AlertaFerias,
 } from "@/modules/rh/alertas/queries";
-import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import { ROTULO_TIPO_DOCUMENTO, type TipoDocumento } from "@/modules/rh/documentos/schemas";
 
 /**
@@ -169,7 +169,7 @@ export function PainelAlertas({
                   </span>
                 }
                 detalhe={detalheContagem(contagemFerias, "vencida(s)", "a vencer")}
-                href="/rh/ferias"
+                href="/rh/decimo-terceiro-e-ferias"
               />
             ) : null}
 
@@ -249,13 +249,13 @@ export function PainelAlertas({
             ) : null}
 
             {ferias ? (
-              <SecaoDetalhe titulo="Férias" card acao={<VerTudo href="/rh/ferias" />}>
+              <SecaoDetalhe titulo="Férias" card acao={<VerTudo href="/rh/decimo-terceiro-e-ferias" />}>
                 {ferias.length === 0 ? (
                   <SemAlertas texto="Nenhuma férias vencendo." />
                 ) : (
                   <ul className="flex flex-col gap-2">
                     {ferias.slice(0, LIMITE_ITENS).map((item) => (
-                      <LinhaAlerta key={item.id} href="/rh/ferias">
+                      <LinhaAlerta key={item.id} href="/rh/decimo-terceiro-e-ferias">
                         <div>
                           <p className="text-detalhe">{item.colaboradorNome}</p>
                           <p className="text-legenda text-muted-foreground tabular-nums">

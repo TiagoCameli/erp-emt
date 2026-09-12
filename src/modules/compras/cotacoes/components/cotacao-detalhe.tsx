@@ -1,3 +1,4 @@
+import { SecaoDetalhe } from "@/components/canonicos";
 "use client";
 
 import * as React from "react";
@@ -20,7 +21,6 @@ import { cn } from "@/lib/utils";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import type { OpcaoPagamento } from "@/modules/compras/_shared/pagamento";
 import { infoStatusCotacao } from "@/modules/compras/_shared/formato";
-import { SecaoDetalhe } from "@/modules/compras/_shared/secao-detalhe";
 import {
   cancelarCotacao,
   excluirCotacao,

@@ -25,6 +25,7 @@ export * from "./campo-formulario";
 export * from "./submeter-com-aviso";
 export * from "./input-senha";
 export * from "./linha-campos";
+export * from "./secao-detalhe";
 export * from "./secao-formulario";
 export * from "./tabela-itens";
 export * from "./confirm-dialog";

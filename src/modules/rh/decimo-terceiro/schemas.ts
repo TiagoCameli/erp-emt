@@ -148,3 +148,46 @@ export const ROTULO_STATUS_LOTE: Record<StatusLote, string> = {
   aprovado: "Aprovado",
   rejeitado: "Rejeitado",
 };
+
+/**
+ * Schema do FORMULÁRIO: tudo string, sem transform.
+ *
+ * É separado do `gerarLoteSchema` de propósito. Aquele transforma (percentual
+ * vira fração, vencimento vazio vira null) e tem `.default(null)`, o que faz o
+ * tipo de entrada diferir do de saída. O React Hook Form usa UM tipo só para
+ * os dois lados, e um resolver com input ≠ output quebra a tipagem do
+ * `useForm` e o comportamento dos campos.
+ *
+ * Aqui só se valida o que dá para validar sem converter. A conversão de
+ * verdade acontece no servidor, onde `gerarLoteSchema` roda de novo sobre o
+ * que chegou.
+ */
+export const gerarLoteFormSchema = z.object({
+  ano: z.string().min(1, { error: "Informe o ano" }),
+  parcela: z.enum(["1", "2"], { error: "A parcela é 1 ou 2" }),
+  percentual: z.string().min(1, { error: "Informe o percentual" }),
+  comDesconto: z.boolean(),
+  dataVencimento: z.string(),
+});
+
+export type GerarLoteFormInput = z.infer<typeof gerarLoteFormSchema>;
+
+/** Converte o formulário no input de servidor. */
+export function gerarLoteFormParaInput(dados: GerarLoteFormInput): unknown {
+  return {
+    ano: Number(dados.ano),
+    parcela: Number(dados.parcela),
+    percentual: dados.percentual,
+    comDesconto: dados.comDesconto,
+    dataVencimento: dados.dataVencimento,
+  };
+}
+
+/** Sugestão de percentual por parcela, em pontos percentuais. */
+export const PERCENTUAL_SUGERIDO: Record<"1" | "2", string> = {
+  // Metade na 1ª é o usual. Na 2ª o padrão é 100%: o abatimento do que a 1ª
+  // pagou é feito pela RPC, então 50% aqui daria líquido zero, e isso não pode
+  // passar por descuido em dezembro.
+  "1": "50",
+  "2": "100",
+};
