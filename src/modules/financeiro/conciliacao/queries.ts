@@ -32,6 +32,34 @@ export interface ParcelaVinculada {
   dataVencimento: string | null;
 }
 
+/**
+ * Transferência entre contas vinculada a uma transação (ou sugerida). Não é
+ * `lancamento_parcelas`: transferência é entidade própria, e é por isso que a
+ * conciliação precisa procurar nos dois lugares.
+ */
+export interface TransferenciaVinculada {
+  id: string;
+  numero: string | null;
+  descricao: string | null;
+  dataTransferencia: string;
+  valor: number;
+  contaOrigemNome: string;
+  contaDestinoNome: string;
+}
+
+/**
+ * O que o extrato pode casar: uma parcela paga ou um lado de uma
+ * transferência. União discriminada porque o diálogo mostra os dois na mesma
+ * lista e precisa saber qual RPC chamar ao confirmar.
+ */
+export type SugestaoConciliacao =
+  | { especie: "parcela"; id: string; parcela: ParcelaVinculada }
+  | {
+      especie: "transferencia";
+      id: string;
+      transferencia: TransferenciaVinculada;
+    };
+
 /** Linha da tabela de transações do extrato. */
 export interface TransacaoLista {
   id: string;
@@ -43,6 +71,7 @@ export interface TransacaoLista {
   tipo: TipoMovimento;
   conciliada: boolean;
   parcela: ParcelaVinculada | null;
+  transferencia: TransferenciaVinculada | null;
 }
 
 /** Linha da lista de extratos importados. */
@@ -144,6 +173,41 @@ const SELECT_PARCELA =
   "id, numero_parcela, valor, desconto, valor_liquido, data_pagamento, data_vencimento, lancamentos(id, numero, descricao, tipo, fornecedores(razao_social, nome_fantasia))";
 
 /**
+ * Colunas da transferência. Os dois nomes de conta PRECISAM do apelido com a
+ * FK explícita: `transferencias_contas` aponta duas vezes para
+ * `contas_bancarias` (origem e destino), e o embed sem hint fica ambíguo — o
+ * PostgREST responde HTTP 300 e derruba a tela, passando no build e no teste.
+ */
+const SELECT_TRANSFERENCIA =
+  "id, numero, descricao, data_transferencia, valor, origem:contas_bancarias!transferencias_contas_conta_origem_id_fkey(nome), destino:contas_bancarias!transferencias_contas_conta_destino_id_fkey(nome)";
+
+/** Forma que o Supabase devolve a transferência embutida (join). */
+interface TransferenciaJoin {
+  id: string;
+  numero: string | null;
+  descricao: string | null;
+  data_transferencia: string;
+  valor: number;
+  origem: { nome: string } | null;
+  destino: { nome: string } | null;
+}
+
+/** Converte a transferência embutida no shape de TransferenciaVinculada. */
+function paraTransferenciaVinculada(
+  transferencia: TransferenciaJoin,
+): TransferenciaVinculada {
+  return {
+    id: transferencia.id,
+    numero: transferencia.numero,
+    descricao: transferencia.descricao,
+    dataTransferencia: transferencia.data_transferencia,
+    valor: transferencia.valor,
+    contaOrigemNome: transferencia.origem?.nome ?? "-",
+    contaDestinoNome: transferencia.destino?.nome ?? "-",
+  };
+}
+
+/**
  * Lista os extratos OFX importados, com a conta, o período e a contagem de
  * transações e conciliadas. Mais recentes (por importação) primeiro.
  */
@@ -191,7 +255,8 @@ export async function listarTransacoes(
     .from("extrato_transacoes")
     .select(
       `id, extrato_id, conta_bancaria_id, data_movimento, memo, valor, tipo, conciliada,
-       lancamento_parcelas(${SELECT_PARCELA})`,
+       lancamento_parcelas(${SELECT_PARCELA}),
+       transferencias_contas(${SELECT_TRANSFERENCIA})`,
     )
     .order("data_movimento", { ascending: false })
     .order("created_at", { ascending: false });
@@ -219,6 +284,11 @@ export async function listarTransacoes(
     conciliada: transacao.conciliada,
     parcela: transacao.lancamento_parcelas
       ? paraParcelaVinculada(transacao.lancamento_parcelas as ParcelaJoin)
+      : null,
+    transferencia: transacao.transferencias_contas
+      ? paraTransferenciaVinculada(
+          transacao.transferencias_contas as unknown as TransferenciaJoin,
+        )
       : null,
   }));
 }
@@ -300,6 +370,76 @@ export async function sugerirParcelas(
         : Number.POSITIVE_INFINITY;
       return diaA - diaB;
     });
+}
+
+/**
+ * Sugere TRANSFERÊNCIAS entre contas para casar com a transação: mesmo valor,
+ * o lado coerente com o sentido do movimento (débito casa com a conta de
+ * ORIGEM, crédito com a de DESTINO), data dentro de +/- 3 dias e aquele lado
+ * ainda livre.
+ *
+ * Transferência não é parcela e nunca vai aparecer em `sugerirParcelas`: é uma
+ * entidade própria, e sem esta busca o "ENVIO DE TED" do extrato fica pendente
+ * para sempre, mesmo com a transferência lançada certinho.
+ *
+ * O lado importa: a MESMA transferência aparece em dois extratos, saindo de uma
+ * conta e entrando na outra. Casar a saída na origem não pode consumir a
+ * entrada no destino.
+ */
+export async function sugerirTransferencias(
+  transacao: Pick<TransacaoLista, "contaBancariaId" | "valor" | "dataMovimento">,
+): Promise<TransferenciaVinculada[]> {
+  const supabase = await createClient();
+
+  const valorAbsoluto = Math.abs(transacao.valor);
+  const ehDebito = transacao.valor < 0;
+  const colunaDoLado = ehDebito ? "conta_origem_id" : "conta_destino_id";
+
+  const { data, error } = await supabase
+    .from("transferencias_contas")
+    .select(SELECT_TRANSFERENCIA)
+    .eq(colunaDoLado, transacao.contaBancariaId)
+    .eq("valor", valorAbsoluto);
+
+  if (error) {
+    throw new Error("Não foi possível buscar transferências compatíveis");
+  }
+
+  const candidatas = (data ?? [])
+    .map((linha) =>
+      paraTransferenciaVinculada(linha as unknown as TransferenciaJoin),
+    )
+    .filter(
+      (transferencia) =>
+        diferencaDias(
+          transferencia.dataTransferencia,
+          transacao.dataMovimento,
+        ) <= 3,
+    );
+
+  if (candidatas.length === 0) return [];
+
+  const { data: ladosCasados } = await supabase
+    .from("extrato_transacoes")
+    .select("transferencia_id")
+    .eq("tipo", ehDebito ? "debito" : "credito")
+    .in(
+      "transferencia_id",
+      candidatas.map((transferencia) => transferencia.id),
+    );
+
+  const ocupadas = new Set<string>();
+  for (const linha of ladosCasados ?? []) {
+    if (linha.transferencia_id) ocupadas.add(linha.transferencia_id);
+  }
+
+  return candidatas
+    .filter((transferencia) => !ocupadas.has(transferencia.id))
+    .sort(
+      (a, b) =>
+        diferencaDias(a.dataTransferencia, transacao.dataMovimento) -
+        diferencaDias(b.dataTransferencia, transacao.dataMovimento),
+    );
 }
 
 /** Contas bancárias ativas para o seletor da conciliação, em ordem alfabética. */

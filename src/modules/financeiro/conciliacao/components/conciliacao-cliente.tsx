@@ -43,7 +43,7 @@ import {
 import type {
   ContaBancariaOpcao,
   ExtratoLista,
-  ParcelaVinculada,
+  SugestaoConciliacao,
   TransacaoLista,
 } from "@/modules/financeiro/conciliacao/queries";
 import { ConciliarDialog } from "./conciliar-dialog";
@@ -102,7 +102,7 @@ export function ConciliacaoCliente({
   const [conciliarAberto, setConciliarAberto] = React.useState(false);
   const [transacaoAtiva, setTransacaoAtiva] =
     React.useState<TransacaoLista | null>(null);
-  const [sugestoes, setSugestoes] = React.useState<ParcelaVinculada[]>([]);
+  const [sugestoes, setSugestoes] = React.useState<SugestaoConciliacao[]>([]);
   const [carregandoSugestoes, setCarregandoSugestoes] = React.useState(false);
   const [desconciliarAlvo, setDesconciliarAlvo] =
     React.useState<TransacaoLista | null>(null);
@@ -195,9 +195,12 @@ export function ConciliacaoCliente({
       }
       if (termo !== "") {
         const parcela = transacao.parcela;
+        const transferencia = transacao.transferencia;
         const alvo = `${transacao.memo ?? ""} ${parcela?.lancamentoNumero ?? ""} ${
           parcela?.lancamentoDescricao ?? ""
-        } ${parcela?.fornecedorNome ?? ""}`;
+        } ${parcela?.fornecedorNome ?? ""} ${transferencia?.numero ?? ""} ${
+          transferencia?.descricao ?? ""
+        }`;
         if (!alvo.toLowerCase().includes(termo)) return false;
       }
       return true;
@@ -316,7 +319,7 @@ export function ConciliacaoCliente({
         meta: { naoTruncar: true },
         cell: ({ row }) => {
           const transacao = row.original;
-          if (!transacao.conciliada || !transacao.parcela) {
+          if (!transacao.conciliada) {
             return (
               <StatusBadge
                 status="pendente_aprovacao"
@@ -324,10 +327,21 @@ export function ConciliacaoCliente({
               />
             );
           }
-          const parcela = transacao.parcela;
-          const referencia = `${
-            parcela.lancamentoNumero ? `${parcela.lancamentoNumero} · ` : ""
-          }${parcela.lancamentoDescricao} (parcela ${parcela.numeroParcela})`;
+          // Duas espécies de vínculo: parcela paga ou lado de transferência.
+          // Sem o segundo braço, uma transação casada com transferência
+          // apareceria como "Não conciliada" mesmo estando conciliada.
+          const { parcela, transferencia } = transacao;
+          const referencia = parcela
+            ? `${
+                parcela.lancamentoNumero
+                  ? `${parcela.lancamentoNumero} · `
+                  : ""
+              }${parcela.lancamentoDescricao} (parcela ${parcela.numeroParcela})`
+            : transferencia
+              ? `${
+                  transferencia.numero ? `${transferencia.numero} · ` : ""
+                }${transferencia.contaOrigemNome} para ${transferencia.contaDestinoNome}`
+              : null;
           return (
             // items-center porque o badge é w-fit: sem isso ele encosta na
             // esquerda e desalinha do cabeçalho centralizado.
@@ -335,12 +349,14 @@ export function ConciliacaoCliente({
               <StatusBadge status="aprovado" rotulo="Conciliada" />
               {/* A descrição do lançamento é texto livre, então o corte com
                   reticências mora aqui, e o texto inteiro fica no tooltip. */}
-              <span
-                className="max-w-full truncate text-legenda text-muted-foreground"
-                title={referencia}
-              >
-                {referencia}
-              </span>
+              {referencia ? (
+                <span
+                  className="max-w-full truncate text-legenda text-muted-foreground"
+                  title={referencia}
+                >
+                  {referencia}
+                </span>
+              ) : null}
             </div>
           );
         },
@@ -605,7 +621,7 @@ export function ConciliacaoCliente({
           if (!aberto) setDesconciliarAlvo(null);
         }}
         titulo="Desfazer conciliação"
-        descricao="A transação volta a ficar pendente e a parcela é liberada para nova conciliação. Confirma?"
+        descricao="A transação volta a ficar pendente e o lançamento é liberado para nova conciliação. Confirma?"
         textoConfirmar="Desconciliar"
         variante="destrutivo"
         onConfirmar={confirmarDesconciliar}
