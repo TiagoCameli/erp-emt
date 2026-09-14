@@ -11,7 +11,8 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   sugerirParcelas,
-  type ParcelaVinculada,
+  sugerirTransferencias,
+  type SugestaoConciliacao,
 } from "@/modules/financeiro/conciliacao/queries";
 
 const RECURSO = "financeiro.conciliacao" as const;
@@ -126,14 +127,18 @@ export async function importarOfx(
 }
 
 export type ResultadoSugestoes =
-  | { ok: true; sugestoes: ParcelaVinculada[] }
+  | { ok: true; sugestoes: SugestaoConciliacao[] }
   | { erro: string };
 
 /**
- * Busca, sob demanda, as parcelas pagas que casam com a transação (mesma conta,
- * mesmo valor em módulo, data de pagamento dentro de +/- 3 dias). Usada pelo
- * diálogo de conciliação ao abrir, para não pré-carregar sugestões de toda
- * transação da listagem.
+ * Busca, sob demanda, o que casa com a transação: parcelas pagas E
+ * transferências entre contas (mesma conta, mesmo valor em módulo, data dentro
+ * de +/- 3 dias). Usada pelo diálogo de conciliação ao abrir, para não
+ * pré-carregar sugestões de toda transação da listagem.
+ *
+ * As duas buscas vão juntas porque o extrato não distingue: um débito de
+ * R$ 450.000,00 tanto pode ser o pagamento de uma parcela quanto o envio de
+ * uma transferência, e quem decide é quem está conciliando.
  */
 export async function buscarSugestoes(transacao: {
   contaBancariaId: string;
@@ -151,24 +156,51 @@ export async function buscarSugestoes(transacao: {
   }
 
   try {
-    const sugestoes = await sugerirParcelas(transacao);
-    return { ok: true, sugestoes };
+    const [parcelas, transferencias] = await Promise.all([
+      sugerirParcelas(transacao),
+      sugerirTransferencias(transacao),
+    ]);
+    return {
+      ok: true,
+      sugestoes: [
+        ...parcelas.map(
+          (parcela): SugestaoConciliacao => ({
+            especie: "parcela",
+            id: parcela.id,
+            parcela,
+          }),
+        ),
+        ...transferencias.map(
+          (transferencia): SugestaoConciliacao => ({
+            especie: "transferencia",
+            id: transferencia.id,
+            transferencia,
+          }),
+        ),
+      ],
+    };
   } catch (e) {
     return erroAcao(
       "financeiro.conciliacao.buscarSugestoes",
       e,
-      "Não foi possível buscar sugestões de parcela",
+      "Não foi possível buscar sugestões para a transação",
     );
   }
 }
 
-/** Concilia uma transação de extrato com uma parcela paga, via RPC. */
+/**
+ * Concilia uma transação de extrato com uma parcela paga, via RPC.
+ *
+ * A permissão cobrada aqui é `editar`, a MESMA que `fn_conciliar_transacao`
+ * exige no banco. Antes a action pedia `criar`: quem tivesse só `criar` via o
+ * botão, clicava e levava a recusa crua do Postgres no fim do caminho.
+ */
 export async function conciliar(
   transacaoId: string,
   parcelaId: string,
 ): Promise<ResultadoAcao> {
   try {
-    await exigirPermissao(RECURSO, "criar");
+    await exigirPermissao(RECURSO, "editar");
   } catch {
     return { erro: "Sem permissão para conciliar transações" };
   }
@@ -191,6 +223,46 @@ export async function conciliar(
       "financeiro.conciliacao.conciliar",
       error,
       error.message || "Não foi possível conciliar a transação",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Concilia uma transação de extrato com um LADO de uma transferência entre
+ * contas, via RPC. O lado sai do sentido do movimento: débito casa com a conta
+ * de origem, crédito com a de destino.
+ */
+export async function conciliarTransferencia(
+  transacaoId: string,
+  transferenciaId: string,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar transações" };
+  }
+
+  if (!idSchema.safeParse(transacaoId).success) {
+    return { erro: "Transação inválida" };
+  }
+  if (!idSchema.safeParse(transferenciaId).success) {
+    return { erro: "Transferência inválida" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliar_transferencia", {
+    p_transacao_id: transacaoId,
+    p_transferencia_id: transferenciaId,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.conciliarTransferencia",
+      error,
+      error.message || "Não foi possível conciliar a transferência",
     );
   }
 

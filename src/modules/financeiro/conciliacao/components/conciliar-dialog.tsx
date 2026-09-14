@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CircleAlert, Link2, LoaderCircle } from "lucide-react";
+import {
+  ArrowLeftRight,
+  CircleAlert,
+  Link2,
+  LoaderCircle,
+} from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,9 +24,12 @@ import { EmptyState, MoneyText } from "@/components/canonicos";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { ROTULO_TIPO_LANCAMENTO } from "@/modules/financeiro/_shared/formato";
-import { conciliar } from "@/modules/financeiro/conciliacao/actions";
+import {
+  conciliar,
+  conciliarTransferencia,
+} from "@/modules/financeiro/conciliacao/actions";
 import type {
-  ParcelaVinculada,
+  SugestaoConciliacao,
   TransacaoLista,
 } from "@/modules/financeiro/conciliacao/queries";
 
@@ -30,8 +38,8 @@ export interface ConciliarDialogProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Transação que está sendo conciliada (null quando fechado). */
   transacao: TransacaoLista | null;
-  /** Sugestões já buscadas no servidor para a transação aberta. */
-  sugestoes: ParcelaVinculada[];
+  /** Sugestões já buscadas no servidor: parcelas pagas e transferências. */
+  sugestoes: SugestaoConciliacao[];
   /** Verdadeiro enquanto o pai busca as sugestões da transação. */
   carregando: boolean;
   /** Conciliou com sucesso: o pai fecha o diálogo e revalida a listagem. */
@@ -39,13 +47,17 @@ export interface ConciliarDialogProps {
 }
 
 /**
- * Escolha da parcela paga para conciliar com a transação selecionada. As
- * sugestões (mesma conta, mesmo valor LÍQUIDO, data de pagamento próxima) são
- * buscadas pelo pai e recebidas por prop; aqui o usuário escolhe uma e concilia,
- * repassando o erro do banco ao toast quando falhar.
+ * Escolha do que casar com a transação selecionada: uma parcela paga ou um lado
+ * de uma transferência entre contas. As sugestões (mesma conta, mesmo valor,
+ * data próxima) são buscadas pelo pai e recebidas por prop; aqui o usuário
+ * escolhe uma e concilia, repassando o erro do banco ao toast quando falhar.
  *
- * O número em destaque de cada sugestão é o líquido (valor menos desconto), que
- * é o que o extrato do banco mostra e o que o banco de dados compara.
+ * São duas espécies porque o extrato não distingue: um débito de R$ 450.000,00
+ * tanto pode ser o pagamento de uma parcela quanto o envio de uma
+ * transferência. Cada espécie tem a sua RPC.
+ *
+ * O número em destaque de uma parcela é o líquido (valor menos desconto), que é
+ * o que o extrato do banco mostra e o que o banco de dados compara.
  */
 export function ConciliarDialog({
   aberto,
@@ -70,11 +82,15 @@ export function ConciliarDialog({
   }
 
   async function confirmar() {
-    if (!transacao || !selecionada) return;
+    const escolhida = sugestoes.find((sugestao) => sugestao.id === selecionada);
+    if (!transacao || !escolhida) return;
     setErro(null);
     setConciliando(true);
 
-    const resposta = await conciliar(transacao.id, selecionada);
+    const resposta =
+      escolhida.especie === "parcela"
+        ? await conciliar(transacao.id, escolhida.id)
+        : await conciliarTransferencia(transacao.id, escolhida.id);
     setConciliando(false);
 
     if ("erro" in resposta) {
@@ -111,28 +127,70 @@ export function ConciliarDialog({
         {carregando ? (
           <div className="flex items-center justify-center gap-2 py-10 text-detalhe text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
-            Buscando parcelas compatíveis
+            Buscando lançamentos compatíveis
           </div>
         ) : sugestoes.length === 0 ? (
           <EmptyState
             icone={Link2}
-            titulo="Nenhuma parcela compatível"
-            descricao="Não há parcela paga na mesma conta, com o mesmo valor líquido (valor menos desconto) e data de pagamento próxima. Confira se a parcela já foi paga no financeiro."
+            titulo="Nenhum lançamento compatível"
+            descricao="Não há parcela paga nem transferência na mesma conta, com o mesmo valor e data próxima. Confira se a parcela já foi paga, ou se a transferência foi lançada, no financeiro."
             className="border-none bg-transparent"
           />
         ) : (
           <div className="flex max-h-80 flex-col gap-2 overflow-y-auto">
-            {sugestoes.map((parcela) => {
-              const ativa = selecionada === parcela.id;
+            {sugestoes.map((sugestao) => {
+              const ativa = selecionada === sugestao.id;
+              const classes = cn(
+                "flex items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-surface",
+                ativa && "border-primary bg-primary/5",
+              );
+
+              // Transferência entre contas: não tem parcela, não tem
+              // fornecedor e não tem desconto. O que identifica é o par
+              // origem/destino, que é o que diz se o lado está certo.
+              if (sugestao.especie === "transferencia") {
+                const transferencia = sugestao.transferencia;
+                return (
+                  <button
+                    key={sugestao.id}
+                    type="button"
+                    onClick={() => setSelecionada(sugestao.id)}
+                    className={classes}
+                  >
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 text-detalhe font-medium">
+                        <ArrowLeftRight className="size-3.5 shrink-0 text-muted-foreground" />
+                        {transferencia.numero ? (
+                          <span className="codigo-doc">
+                            {transferencia.numero}
+                          </span>
+                        ) : null}
+                        <span className="truncate">
+                          {transferencia.descricao ??
+                            "Transferência entre contas"}
+                        </span>
+                      </p>
+                      <p className="text-legenda text-muted-foreground">
+                        Transferência · {transferencia.contaOrigemNome} para{" "}
+                        {transferencia.contaDestinoNome} ·{" "}
+                        {formatarData(transferencia.dataTransferencia)}
+                      </p>
+                    </div>
+                    <MoneyText
+                      valor={transferencia.valor}
+                      className="shrink-0 text-detalhe font-medium"
+                    />
+                  </button>
+                );
+              }
+
+              const parcela = sugestao.parcela;
               return (
                 <button
-                  key={parcela.id}
+                  key={sugestao.id}
                   type="button"
-                  onClick={() => setSelecionada(parcela.id)}
-                  className={cn(
-                    "flex items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-surface",
-                    ativa && "border-primary bg-primary/5",
-                  )}
+                  onClick={() => setSelecionada(sugestao.id)}
+                  className={classes}
                 >
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 text-detalhe font-medium">

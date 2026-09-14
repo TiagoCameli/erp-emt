@@ -1142,6 +1142,7 @@ export type Database = {
           memo: string | null;
           parcela_id: string | null;
           tipo: string;
+          transferencia_id: string | null;
           valor: number;
         };
         Insert: {
@@ -1158,6 +1159,7 @@ export type Database = {
           memo?: string | null;
           parcela_id?: string | null;
           tipo: string;
+          transferencia_id?: string | null;
           valor: number;
         };
         Update: {
@@ -1174,6 +1176,7 @@ export type Database = {
           memo?: string | null;
           parcela_id?: string | null;
           tipo?: string;
+          transferencia_id?: string | null;
           valor?: number;
         };
         Relationships: [
@@ -1203,6 +1206,13 @@ export type Database = {
             columns: ["parcela_id"];
             isOneToOne: false;
             referencedRelation: "lancamento_parcelas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extrato_transacoes_transferencia_id_fkey";
+            columns: ["transferencia_id"];
+            isOneToOne: false;
+            referencedRelation: "transferencias_contas";
             referencedColumns: ["id"];
           },
         ];
@@ -4394,6 +4404,10 @@ export type Database = {
       };
       fn_conciliar_transacao: {
         Args: { p_parcela_id: string; p_transacao_id: string };
+        Returns: undefined;
+      };
+      fn_conciliar_transferencia: {
+        Args: { p_transacao_id: string; p_transferencia_id: string };
         Returns: undefined;
       };
       fn_criar_forma_pagamento: {
