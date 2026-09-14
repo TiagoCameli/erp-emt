@@ -8,9 +8,11 @@ import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  adicionarAoLoteSchema,
   editarItemSchema,
   gerarLoteSchema,
   motivoSchema,
+  tirarDoLoteSchema,
 } from "@/modules/rh/decimo-terceiro/schemas";
 
 const RECURSO = "rh.decimo-terceiro-ferias" as const;
@@ -82,8 +84,6 @@ export async function gerarLote(dados: unknown): Promise<ResultadoGeracao> {
   const { data, error } = await supabase.rpc("fn_gerar_decimo_terceiro", {
     p_ano: validado.data.ano,
     p_parcela: validado.data.parcela,
-    p_percentual: validado.data.percentual,
-    p_com_desconto: validado.data.comDesconto,
     // `?? undefined` OMITE o parâmetro e deixa valer o DEFAULT do banco.
     // "não informado" é estado legítimo: sem vencimento a RPC usa 20/12.
     p_data_vencimento: validado.data.dataVencimento ?? undefined,
@@ -110,7 +110,9 @@ export async function editarItem(dados: unknown): Promise<ResultadoAcao> {
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_editar_item_decimo_terceiro", {
     p_item: validado.data.itemId,
-    p_valor: validado.data.valor,
+    p_bruto: validado.data.bruto,
+    p_inss: validado.data.inss,
+    p_irrf: validado.data.irrf,
   });
 
   if (error) {
@@ -232,6 +234,53 @@ export async function excluirLote(dados: unknown): Promise<ResultadoAcao> {
 
   if (error) {
     return { erro: mensagemDeNegocio("excluir", error, "Não foi possível excluir o lote") };
+  }
+
+  revalidarTelas();
+  return { ok: true };
+}
+
+export async function tirarDoLote(dados: unknown): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Você não tem permissão para editar o 13º" };
+  }
+
+  const validado = tirarDoLoteSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_tirar_do_lote_decimo_terceiro", {
+    p_item: validado.data.itemId,
+  });
+
+  if (error) {
+    return { erro: mensagemDeNegocio("tirar-do-lote", error, "Não foi possível tirar do lote") };
+  }
+
+  revalidarTelas();
+  return { ok: true };
+}
+
+export async function adicionarAoLote(dados: unknown): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Você não tem permissão para editar o 13º" };
+  }
+
+  const validado = adicionarAoLoteSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_adicionar_ao_lote_decimo_terceiro", {
+    p_lote: validado.data.loteId,
+    p_colaborador: validado.data.colaboradorId,
+  });
+
+  if (error) {
+    return { erro: mensagemDeNegocio("adicionar-ao-lote", error, "Não foi possível acrescentar ao lote") };
   }
 
   revalidarTelas();

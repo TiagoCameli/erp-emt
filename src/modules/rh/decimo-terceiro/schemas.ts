@@ -4,57 +4,16 @@ import { CASAS_DINHEIRO } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
 import { casasDecimais, paraNumero } from "@/modules/rh/percentual";
 
-/**
- * Casas do percentual DIGITADO. A coluna `percentual` é numeric(7,4) e este
- * schema divide por 100, o que acrescenta duas casas: digitar "33,333" viraria
- * 0,33333 e o banco arredondaria para 0,3333 sem avisar ninguém.
- */
-const CASAS_PERCENTUAL_DIGITADO = 2;
-
 /** Data yyyy-MM-dd. */
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Percentual da parcela: entra como o número que o Tiago digita (50, 33,33) e
- * sai como a fração que o banco guarda (0,5). O check da coluna é
- * `percentual > 0 and percentual <= 1`, então mandar 50 cru faria o banco
- * recusar com erro de constraint em vez de uma mensagem que diz o que houve.
+ * Dinheiro digitado em pt-BR, não negativo, NUMERIC(14,2).
  *
- * Usa o `paraNumero` de `@/modules/rh/percentual`, que lê pt-BR (ponto é
- * milhar, vírgula é decimal) e devolve NaN quando o agrupamento do ponto é
- * inválido. NÃO usar o de `rh/parametros-folha/schemas.ts`: aquele segue com
- * a versão antiga de propósito, e nela "0.5" vira 5.
+ * Usa o `paraNumero` de `@/modules/rh/percentual`, que lê ponto como milhar e
+ * vírgula como decimal, e devolve NaN quando o agrupamento do ponto é inválido
+ * (é o que impede "0.5" de virar 5). NÃO usar o de `rh/parametros-folha`.
  */
-const percentualSchema = z
-  .union([z.string(), z.number()])
-  .transform((valor, ctx) => {
-    const numero = typeof valor === "number" ? valor : paraNumero(valor.trim());
-
-    if (!Number.isFinite(numero)) {
-      ctx.addIssue({ code: "custom", message: "Percentual inválido" });
-      return z.NEVER;
-    }
-    if (numero <= 0 || numero > 100) {
-      ctx.addIssue({
-        code: "custom",
-        message: "O percentual tem que estar entre 0 e 100",
-      });
-      return z.NEVER;
-    }
-    if (casasDecimais(numero) > CASAS_PERCENTUAL_DIGITADO) {
-      ctx.addIssue({
-        code: "custom",
-        message: `O percentual aceita no máximo ${CASAS_PERCENTUAL_DIGITADO} casas decimais`,
-      });
-      return z.NEVER;
-    }
-
-    // O round fecha o erro de ponto flutuante da divisão (33,33/100 não é
-    // exatamente 0,3333 em binário) antes de o número virar numeric(7,4).
-    return Math.round((numero / 100) * 10_000) / 10_000;
-  });
-
-/** Dinheiro digitado em pt-BR, não negativo, NUMERIC(14,2). */
 const dinheiroSchema = z
   .union([z.string(), z.number()])
   .transform((valor, ctx) => {
@@ -79,11 +38,19 @@ const dinheiroSchema = z
     return numero;
   });
 
+/** Dinheiro opcional: campo em branco vale zero. */
+const dinheiroOpcionalSchema = z
+  .union([z.string(), z.number(), z.null(), z.undefined()])
+  .transform((valor) => {
+    if (valor === null || valor === undefined) return "0";
+    if (typeof valor === "number") return valor;
+    return valor.trim() === "" ? "0" : valor;
+  })
+  .pipe(dinheiroSchema);
+
 /**
  * Texto obrigatório de motivo. O `trim` do Zod corta espaço, tab e quebra de
- * linha, que é o mesmo conjunto do `btrim(x, E' \t\r\n')` das RPCs: sem isso
- * um motivo feito só de tab passaria aqui e seria recusado lá no banco, com
- * mensagem pior.
+ * linha, o mesmo conjunto do `btrim(x, E' \t\r\n')` das RPCs.
  */
 const motivoTextoSchema = z
   .string()
@@ -91,6 +58,13 @@ const motivoTextoSchema = z
   .min(1, { error: "Informe o motivo" })
   .max(500, { error: "Máximo de 500 caracteres" });
 
+/**
+ * Gerar o lote. Só ano, parcela e vencimento.
+ *
+ * Não há percentual nem chave de desconto: desde 14/09/2026 o app não calcula
+ * 13º. O lote nasce com todo colaborador ativo dos três vínculos, zerado, e
+ * quem monta digita cada valor.
+ */
 export const gerarLoteSchema = z.object({
   ano: z
     .number({ error: "Informe o ano" })
@@ -100,8 +74,6 @@ export const gerarLoteSchema = z.object({
   parcela: z.union([z.literal(1), z.literal(2)], {
     error: "A parcela é 1 ou 2",
   }),
-  percentual: percentualSchema,
-  comDesconto: z.boolean(),
   dataVencimento: z
     .union([z.string(), z.null()])
     .transform((valor) => {
@@ -116,11 +88,31 @@ export const gerarLoteSchema = z.object({
     .default(null),
 });
 
-export type GerarLoteInput = z.input<typeof gerarLoteSchema>;
+/**
+ * Editar a linha: os três valores que a pessoa digita.
+ *
+ * O líquido NÃO entra aqui: ele é a subtração dos três, mantida por trigger no
+ * banco. Mandar o líquido junto criaria dois donos do mesmo número.
+ */
+export const editarItemSchema = z
+  .object({
+    itemId: idSchemaCom("Item inválido"),
+    bruto: dinheiroSchema,
+    inss: dinheiroOpcionalSchema,
+    irrf: dinheiroOpcionalSchema,
+  })
+  .refine((dados) => dados.inss + dados.irrf <= dados.bruto, {
+    error: "Os descontos passam do bruto: o líquido ficaria negativo",
+    path: ["inss"],
+  });
 
-export const editarItemSchema = z.object({
+export const tirarDoLoteSchema = z.object({
   itemId: idSchemaCom("Item inválido"),
-  valor: dinheiroSchema,
+});
+
+export const adicionarAoLoteSchema = z.object({
+  loteId: idSchemaCom("Lote inválido"),
+  colaboradorId: idSchemaCom("Selecione o colaborador"),
 });
 
 export const motivoSchema = z.object({
@@ -132,7 +124,40 @@ export const loteIdSchema = z.object({
   loteId: idSchemaCom("Lote inválido"),
 });
 
-/** Status do lote, na ordem em que aparecem no ciclo de vida. */
+/**
+ * Schema do FORMULÁRIO de gerar: tudo string, sem transform.
+ *
+ * Separado do `gerarLoteSchema` de propósito: aquele transforma e tem
+ * `.default(null)`, o que faz o tipo de entrada diferir do de saída, e o React
+ * Hook Form usa UM tipo só para os dois lados.
+ */
+export const gerarLoteFormSchema = z.object({
+  ano: z.string().min(1, { error: "Informe o ano" }),
+  parcela: z.enum(["1", "2"], { error: "A parcela é 1 ou 2" }),
+  dataVencimento: z.string(),
+});
+
+export type GerarLoteFormInput = z.infer<typeof gerarLoteFormSchema>;
+
+/** Converte o formulário de gerar no input de servidor. */
+export function gerarLoteFormParaInput(dados: GerarLoteFormInput): unknown {
+  return {
+    ano: Number(dados.ano),
+    parcela: Number(dados.parcela),
+    dataVencimento: dados.dataVencimento,
+  };
+}
+
+/** Schema do FORMULÁRIO de editar a linha: tudo string. */
+export const editarItemFormSchema = z.object({
+  bruto: z.string().min(1, { error: "Informe o bruto" }),
+  inss: z.string(),
+  irrf: z.string(),
+});
+
+export type EditarItemFormInput = z.infer<typeof editarItemFormSchema>;
+
+/** Status do lote, na ordem do ciclo de vida. */
 export const STATUS_LOTE = [
   "rascunho",
   "pendente_aprovacao",
@@ -147,47 +172,4 @@ export const ROTULO_STATUS_LOTE: Record<StatusLote, string> = {
   pendente_aprovacao: "Pendente de aprovação",
   aprovado: "Aprovado",
   rejeitado: "Rejeitado",
-};
-
-/**
- * Schema do FORMULÁRIO: tudo string, sem transform.
- *
- * É separado do `gerarLoteSchema` de propósito. Aquele transforma (percentual
- * vira fração, vencimento vazio vira null) e tem `.default(null)`, o que faz o
- * tipo de entrada diferir do de saída. O React Hook Form usa UM tipo só para
- * os dois lados, e um resolver com input ≠ output quebra a tipagem do
- * `useForm` e o comportamento dos campos.
- *
- * Aqui só se valida o que dá para validar sem converter. A conversão de
- * verdade acontece no servidor, onde `gerarLoteSchema` roda de novo sobre o
- * que chegou.
- */
-export const gerarLoteFormSchema = z.object({
-  ano: z.string().min(1, { error: "Informe o ano" }),
-  parcela: z.enum(["1", "2"], { error: "A parcela é 1 ou 2" }),
-  percentual: z.string().min(1, { error: "Informe o percentual" }),
-  comDesconto: z.boolean(),
-  dataVencimento: z.string(),
-});
-
-export type GerarLoteFormInput = z.infer<typeof gerarLoteFormSchema>;
-
-/** Converte o formulário no input de servidor. */
-export function gerarLoteFormParaInput(dados: GerarLoteFormInput): unknown {
-  return {
-    ano: Number(dados.ano),
-    parcela: Number(dados.parcela),
-    percentual: dados.percentual,
-    comDesconto: dados.comDesconto,
-    dataVencimento: dados.dataVencimento,
-  };
-}
-
-/** Sugestão de percentual por parcela, em pontos percentuais. */
-export const PERCENTUAL_SUGERIDO: Record<"1" | "2", string> = {
-  // Metade na 1ª é o usual. Na 2ª o padrão é 100%: o abatimento do que a 1ª
-  // pagou é feito pela RPC, então 50% aqui daria líquido zero, e isso não pode
-  // passar por descuido em dezembro.
-  "1": "50",
-  "2": "100",
 };

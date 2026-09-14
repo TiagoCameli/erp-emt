@@ -31,16 +31,20 @@ export function rotuloLote(ano: number, parcela: number): string {
   return `13º ${ano}, ${rotuloParcela(parcela)}`;
 }
 
+/** Rótulo pt-BR do vínculo, para a coluna que a folha gerencial também tem. */
+export const ROTULO_VINCULO: Record<string, string> = {
+  clt: "CLT",
+  terceiro: "Terceiro",
+  diarista: "Diarista",
+};
+
 /**
- * A fração do banco (0,5) vira o percentual da tela ("50%").
+ * Vínculo por extenso, com fallback para o valor cru.
  *
- * Sem casas quando é inteiro, com até duas quando não é: "50%" e "33,33%".
+ * O 13º paga os três vínculos desde 14/09/2026: quem não tem carteira recebe
+ * também, e a coluna existe para quem monta o lote saber com quem está lidando
+ * na hora de digitar o valor.
  */
-export function formatarPercentual(fracao: number): string {
-  const pontos = fracao * 100;
-  const casas = Number.isInteger(pontos) ? 0 : 2;
-  return `${pontos.toLocaleString("pt-BR", {
-    minimumFractionDigits: casas,
-    maximumFractionDigits: 2,
-  })}%`;
+export function rotuloVinculo(vinculo: string): string {
+  return ROTULO_VINCULO[vinculo] ?? vinculo;
 }

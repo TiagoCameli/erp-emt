@@ -15,7 +15,6 @@ import {
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { Button } from "@/components/ui/button";
 import {
-  formatarPercentual,
   rotuloParcela,
   STATUS_LOTE_INFO,
 } from "@/modules/rh/decimo-terceiro/formato";
@@ -45,30 +44,11 @@ const colunas: ColumnDef<LoteLista, unknown>[] = [
     ),
   },
   {
-    accessorKey: "percentual",
-    header: "Percentual",
-    meta: { alinharDireita: true },
-    cell: ({ row }) => (
-      <span className="tabular-nums">
-        {formatarPercentual(row.original.percentual)}
-      </span>
-    ),
-  },
-  {
     accessorKey: "quantidadePessoas",
     header: "Pessoas",
     meta: { alinharDireita: true },
     cell: ({ row }) => (
       <span className="tabular-nums">{row.original.quantidadePessoas}</span>
-    ),
-  },
-  {
-    accessorKey: "comDesconto",
-    header: "Desconto",
-    cell: ({ row }) => (
-      <span className="text-muted-foreground">
-        {row.original.comDesconto ? "INSS e IRRF" : "Sem desconto"}
-      </span>
     ),
   },
   {
@@ -97,7 +77,7 @@ export interface LotesTabelaProps {
   lotes: LoteLista[];
   podeCriar: boolean;
   anoSugerido: number;
-  quantidadeForaDoLote: number;
+  quantidadeDeAtivos: number;
   temProvisaoDe13: boolean;
 }
 
@@ -105,7 +85,7 @@ export function LotesTabela({
   lotes,
   podeCriar,
   anoSugerido,
-  quantidadeForaDoLote,
+  quantidadeDeAtivos,
   temProvisaoDe13,
 }: LotesTabelaProps) {
   const router = useRouter();
@@ -148,7 +128,7 @@ export function LotesTabela({
             icone={CalendarDays}
             titulo="Nenhum 13º gerado"
             className="border-none bg-transparent"
-            descricao="Gere o lote de uma parcela. O sistema calcula os avos de cada CLT pela data de admissão, você confere linha a linha, e a aprovação gera uma conta a pagar por pessoa."
+            descricao="Gere o lote de uma parcela. Ele nasce com todo colaborador ativo e valor zerado: você digita o de cada um, tira quem não recebe, e a aprovação gera uma conta a pagar por pessoa."
             acao={
               podeCriar ? (
                 <Button
@@ -170,7 +150,7 @@ export function LotesTabela({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           anoSugerido={anoSugerido}
-          quantidadeForaDoLote={quantidadeForaDoLote}
+          quantidadeDeAtivos={quantidadeDeAtivos}
           temProvisaoDe13={temProvisaoDe13}
           onGerado={(id) =>
             router.push(`/rh/decimo-terceiro-e-ferias/13o/${id}`)
