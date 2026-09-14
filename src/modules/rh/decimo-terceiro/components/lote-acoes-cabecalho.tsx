@@ -10,7 +10,7 @@ import { GerarLoteDrawer } from "./gerar-lote-drawer";
 
 export interface LoteAcoesCabecalhoProps {
   anoSugerido: number;
-  quantidadeForaDoLote: number;
+  quantidadeDeAtivos: number;
   temProvisaoDe13: boolean;
 }
 
@@ -23,7 +23,7 @@ export interface LoteAcoesCabecalhoProps {
  */
 export function LoteAcoesCabecalho({
   anoSugerido,
-  quantidadeForaDoLote,
+  quantidadeDeAtivos,
   temProvisaoDe13,
 }: LoteAcoesCabecalhoProps) {
   const router = useRouter();
@@ -39,7 +39,7 @@ export function LoteAcoesCabecalho({
         aberto={aberto}
         onAbertoChange={setAberto}
         anoSugerido={anoSugerido}
-        quantidadeForaDoLote={quantidadeForaDoLote}
+        quantidadeDeAtivos={quantidadeDeAtivos}
         temProvisaoDe13={temProvisaoDe13}
         onGerado={(id) =>
           router.push(`/rh/decimo-terceiro-e-ferias/13o/${id}`)

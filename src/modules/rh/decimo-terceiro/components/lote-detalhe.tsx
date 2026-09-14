@@ -3,11 +3,12 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Send, TriangleAlert } from "lucide-react";
+import { Pencil, Plus, Send, TriangleAlert, UserMinus } from "lucide-react";
 
 import {
   ApprovalBar,
   comAvisoDeFalha,
+  ConfirmDialog,
   DataTable,
   GradeKpis,
   KPICard,
@@ -17,32 +18,34 @@ import {
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
+import { formatarData } from "@/lib/formatadores";
 import {
   aprovarLote,
   desaprovarLote,
   enviarParaAprovacao,
   rejeitarLote,
+  tirarDoLote,
 } from "@/modules/rh/decimo-terceiro/actions";
 import {
   conferenciaDoLote,
   resumoPorCentroCusto,
 } from "@/modules/rh/decimo-terceiro/calculo";
 import {
-  formatarPercentual,
+  rotuloVinculo,
   STATUS_LOTE_INFO,
 } from "@/modules/rh/decimo-terceiro/formato";
 import type {
-  ForaDoLote,
+  ColaboradorParaAdicionar,
   ItemDoLote,
   LoteDetalhe as LoteDetalheDados,
 } from "@/modules/rh/decimo-terceiro/queries";
 
+import { AdicionarColaboradorDrawer } from "./adicionar-colaborador-drawer";
 import { EditarItemDrawer } from "./editar-item-drawer";
-import { ExcluidosDoLote } from "./excluidos-do-lote";
 
 export interface LoteDetalheProps {
   lote: LoteDetalheDados;
-  fora: ForaDoLote[];
+  paraAdicionar: ColaboradorParaAdicionar[];
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
@@ -50,24 +53,29 @@ export interface LoteDetalheProps {
 
 export function LoteDetalhe({
   lote,
-  fora,
+  paraAdicionar,
   podeEditar,
   podeAprovar,
   podeDesaprovar,
 }: LoteDetalheProps) {
   const router = useRouter();
   const [emEdicao, setEmEdicao] = React.useState<ItemDoLote | null>(null);
+  const [paraTirar, setParaTirar] = React.useState<ItemDoLote | null>(null);
+  const [adicionarAberto, setAdicionarAberto] = React.useState(false);
 
-  const conferencia = React.useMemo(() => conferenciaDoLote(lote), [lote]);
   const porCentro = React.useMemo(() => resumoPorCentroCusto(lote), [lote]);
+  const conferencia = React.useMemo(() => conferenciaDoLote(lote), [lote]);
 
   const emRascunho = lote.status === "rascunho";
   const podeEditarLinha = podeEditar && emRascunho;
 
-  /** Depois do sucesso, nada pode virar falha: o dinheiro já está gravado. */
+  /** Depois do sucesso, nada pode virar falha: o dado já está gravado. */
   function atualizar() {
     semDerrubarSucesso("13o.refresh", () => router.refresh());
   }
+
+  const preenchidos = lote.itens.filter((item) => item.valorLiquido > 0).length;
+  const emBranco = lote.itens.length - preenchidos;
 
   const colunas = React.useMemo<ColumnDef<ItemDoLote, unknown>[]>(
     () => [
@@ -79,6 +87,15 @@ export function LoteDetalhe({
         ),
       },
       {
+        accessorKey: "vinculo",
+        header: "Vínculo",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {rotuloVinculo(row.original.vinculo)}
+          </span>
+        ),
+      },
+      {
         accessorKey: "centroCustoNome",
         header: "Centro de custo",
         cell: ({ row }) => (
@@ -87,18 +104,30 @@ export function LoteDetalhe({
           </span>
         ),
       },
+      // Contexto para decidir o valor, NÃO base de cálculo: o app não calcula.
       {
         accessorKey: "salarioBase",
         header: "Salário",
-        meta: { alinharDireita: true, ocultaPorPadrao: true },
-        cell: ({ row }) => <MoneyText valor={row.original.salarioBase} />,
+        meta: { alinharDireita: true },
+        cell: ({ row }) =>
+          row.original.salarioBase > 0 ? (
+            <span className="text-muted-foreground">
+              <MoneyText valor={row.original.salarioBase} />
+            </span>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          ),
       },
       {
-        accessorKey: "avos",
-        header: "Avos",
-        meta: { alinharDireita: true },
+        accessorKey: "dataAdmissao",
+        header: "Admissão",
+        meta: { ocultaPorPadrao: true },
         cell: ({ row }) => (
-          <span className="tabular-nums">{row.original.avos}</span>
+          <span className="text-muted-foreground tabular-nums">
+            {row.original.dataAdmissao
+              ? formatarData(row.original.dataAdmissao)
+              : "-"}
+          </span>
         ),
       },
       {
@@ -108,21 +137,15 @@ export function LoteDetalhe({
         cell: ({ row }) => <MoneyText valor={row.original.valorBruto} />,
       },
       {
-        accessorKey: "valorJaPago",
-        header: "Já pago",
-        meta: { alinharDireita: true, ocultaPorPadrao: lote.parcela === 1 },
-        cell: ({ row }) => <MoneyText valor={row.original.valorJaPago} />,
-      },
-      {
         accessorKey: "valorInss",
         header: "INSS",
-        meta: { alinharDireita: true, ocultaPorPadrao: !lote.comDesconto },
+        meta: { alinharDireita: true, ocultaPorPadrao: true },
         cell: ({ row }) => <MoneyText valor={row.original.valorInss} />,
       },
       {
         accessorKey: "valorIrrf",
         header: "IRRF",
-        meta: { alinharDireita: true, ocultaPorPadrao: !lote.comDesconto },
+        meta: { alinharDireita: true, ocultaPorPadrao: true },
         cell: ({ row }) => <MoneyText valor={row.original.valorIrrf} />,
       },
       {
@@ -132,20 +155,50 @@ export function LoteDetalhe({
         cell: ({ row }) => (
           <span className="flex items-center justify-end gap-1.5">
             <MoneyText valor={row.original.valorLiquido} />
-            {row.original.editadoManualmente ? (
+            {row.original.editadoManualmente ? null : (
               <span
-                title="Editado à mão"
-                aria-label="Editado à mão"
-                className="text-muted-foreground"
+                title="Ainda não preenchido"
+                aria-label="Ainda não preenchido"
+                className="text-amber-600"
               >
-                <Pencil className="size-3" aria-hidden />
+                ·
               </span>
-            ) : null}
+            )}
           </span>
         ),
       },
+      {
+        id: "acoes",
+        header: "",
+        cell: ({ row }) =>
+          podeEditarLinha ? (
+            // O botão fica na linha de propósito: `<tr>` não vira botão
+            // acessível, e é este o caminho que funciona por teclado e leitor
+            // de tela. O clique na linha é atalho de mouse, não a única porta.
+            <div className="flex justify-end gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setEmEdicao(row.original)}
+              >
+                <Pencil />
+                Editar
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setParaTirar(row.original)}
+              >
+                <UserMinus />
+                <span className="sr-only">Tirar do lote</span>
+              </Button>
+            </div>
+          ) : null,
+      },
     ],
-    [lote.parcela, lote.comDesconto],
+    [podeEditarLinha],
   );
 
   const info = STATUS_LOTE_INFO[lote.status];
@@ -156,32 +209,25 @@ export function LoteDetalhe({
         <KPICard
           titulo="Líquido a pagar"
           valor={<MoneyText valor={lote.valorLiquido} />}
-          detalhe={`${lote.quantidadePessoas} ${
-            lote.quantidadePessoas === 1 ? "colaborador" : "colaboradores"
-          } · ${formatarPercentual(lote.percentual)} do 13º devido`}
+          detalhe={`${preenchidos} de ${lote.itens.length} ${
+            lote.itens.length === 1 ? "linha preenchida" : "linhas preenchidas"
+          }`}
         />
         <KPICard
-          titulo="Bruto da parcela"
+          titulo="Bruto"
           valor={<MoneyText valor={lote.valorBruto} />}
-          detalhe={
-            lote.parcela === 2
-              ? "Já descontado o que a 1ª parcela pagou"
-              : "Antes de qualquer desconto"
-          }
+          detalhe="Soma do que foi digitado, antes dos descontos"
         />
         <KPICard
           titulo="Descontos"
           valor={<MoneyText valor={lote.valorDescontos} />}
-          detalhe={
-            lote.comDesconto
-              ? "INSS e IRRF sobre o 13º inteiro do ano"
-              : "Esta parcela sai sem desconto"
-          }
+          detalhe="INSS e IRRF digitados nas linhas"
         />
       </GradeKpis>
 
-      {/* A soma dos itens contra o total gravado. Divergência aqui significa
-          que o número do cabeçalho não é o que vai virar conta a pagar. */}
+      {/* A soma dos itens contra o total gravado no cabeçalho. Divergência
+          significa que fn_dt_recalcular_totais não rodou depois de alguma
+          edição, e aí o número da tela não é o que vai virar conta a pagar. */}
       {!conferencia.fecha ? (
         <div
           role="alert"
@@ -189,8 +235,28 @@ export function LoteDetalhe({
         >
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
-            O total do lote não bate com a soma dos itens: diferença de{" "}
+            O total do lote não bate com a soma das linhas: diferença de{" "}
             <MoneyText valor={conferencia.diferenca} />. Não aprove sem conferir.
+          </span>
+        </div>
+      ) : null}
+
+      {emRascunho && emBranco > 0 ? (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+        >
+          <TriangleAlert
+            className="mt-0.5 size-4 shrink-0 text-amber-700"
+            aria-hidden
+          />
+          <span>
+            <strong>
+              {emBranco}{" "}
+              {emBranco === 1 ? "linha ainda em branco" : "linhas ainda em branco"}
+            </strong>
+            . Quem ficar em R$ 0,00 não vira conta a pagar na aprovação. Se a
+            pessoa não recebe 13º, pode tirar do lote.
           </span>
         </div>
       ) : null}
@@ -201,8 +267,6 @@ export function LoteDetalhe({
           <span className="text-muted-foreground">{lote.motivoRejeicao}</span>
         </p>
       ) : null}
-
-      <ExcluidosDoLote fora={fora} />
 
       <ApprovalBar
         status={lote.status}
@@ -246,7 +310,7 @@ export function LoteDetalhe({
           botao: "Devolver para ajuste",
           titulo: "Devolver o 13º para ajuste",
           descricao:
-            "O lote volta para rascunho e quem gerou pode corrigir. Diga o que precisa mudar.",
+            "O lote volta para rascunho e quem montou pode corrigir. Diga o que precisa mudar.",
           confirmar: "Devolver",
         }}
         acoesExtras={
@@ -277,13 +341,16 @@ export function LoteDetalhe({
       <SecaoDetalhe
         titulo="Itens"
         acao={
-          conferencia.editadosAMao > 0 ? (
-            <span className="text-sm text-muted-foreground">
-              {conferencia.editadosAMao}{" "}
-              {conferencia.editadosAMao === 1
-                ? "linha editada à mão"
-                : "linhas editadas à mão"}
-            </span>
+          podeEditarLinha ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAdicionarAberto(true)}
+            >
+              <Plus />
+              Acrescentar colaborador
+            </Button>
           ) : undefined
         }
       >
@@ -291,36 +358,75 @@ export function LoteDetalhe({
           idTabela="rh.decimo-terceiro.itens"
           columns={colunas}
           data={lote.itens}
-          onRowClick={
-            podeEditarLinha ? (item) => setEmEdicao(item) : undefined
-          }
+          onRowClick={podeEditarLinha ? (item) => setEmEdicao(item) : undefined}
         />
       </SecaoDetalhe>
 
       {porCentro.length > 1 ? (
         <SecaoDetalhe titulo="Por centro de custo">
           <ul className="flex flex-col gap-1 text-sm">
-            {porCentro.map((linha) => (
-              <li
-                key={linha.centroCustoId ?? "__sem_centro__"}
-                className="flex items-center justify-between gap-4 border-b border-border py-1 last:border-none"
-              >
-                <span>{linha.centroCustoNome}</span>
-                <MoneyText valor={linha.valorLiquido} />
-              </li>
-            ))}
+            {porCentro
+              .filter((linha) => linha.valorLiquido > 0)
+              .map((linha) => (
+                <li
+                  key={linha.centroCustoId ?? "__sem_centro__"}
+                  className="flex items-center justify-between gap-4 border-b border-border py-1 last:border-none"
+                >
+                  <span>{linha.centroCustoNome}</span>
+                  <MoneyText valor={linha.valorLiquido} />
+                </li>
+              ))}
           </ul>
         </SecaoDetalhe>
       ) : null}
 
       {podeEditarLinha ? (
-        <EditarItemDrawer
-          item={emEdicao}
-          onFechar={() => {
-            setEmEdicao(null);
-            atualizar();
-          }}
-        />
+        <>
+          <EditarItemDrawer
+            item={emEdicao}
+            onFechar={() => setEmEdicao(null)}
+            onSalvo={() => {
+              setEmEdicao(null);
+              atualizar();
+            }}
+          />
+
+          <AdicionarColaboradorDrawer
+            aberto={adicionarAberto}
+            onAbertoChange={setAdicionarAberto}
+            loteId={lote.id}
+            colaboradores={paraAdicionar}
+            onAdicionado={atualizar}
+          />
+
+          <ConfirmDialog
+            aberto={paraTirar !== null}
+            onAbertoChange={(aberto) => {
+              if (!aberto) setParaTirar(null);
+            }}
+            titulo="Tirar do lote"
+            descricao={
+              paraTirar
+                ? `${paraTirar.colaboradorNome} sai deste lote de 13º. O cadastro não é tocado, e dá para acrescentar de volta.`
+                : ""
+            }
+            textoConfirmar="Tirar do lote"
+            variante="destrutivo"
+            onConfirmar={() =>
+              comAvisoDeFalha("13o.tirar", async () => {
+                if (!paraTirar) return;
+                const r = await tirarDoLote({ itemId: paraTirar.id });
+                if ("erro" in r) {
+                  toast.error(r.erro);
+                  return;
+                }
+                toast.success(`${paraTirar.colaboradorNome} saiu do lote`);
+                setParaTirar(null);
+                atualizar();
+              })
+            }
+          />
+        </>
       ) : null}
     </div>
   );

@@ -11,7 +11,6 @@ import { listarColaboradores } from "@/modules/rh/_shared/queries";
 import { LoteAcoesCabecalho } from "@/modules/rh/decimo-terceiro/components/lote-acoes-cabecalho";
 import { LotesTabela } from "@/modules/rh/decimo-terceiro/components/lotes-tabela";
 import {
-  listarForaDoLote,
   listarLotes,
   temProvisaoDe13Ativa,
 } from "@/modules/rh/decimo-terceiro/queries";
@@ -31,13 +30,12 @@ export default async function PaginaDecimoTerceiroEFerias() {
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
 
-  // Cinco leituras independentes: em paralelo para a página não somar cinco
+  // Quatro leituras independentes: em paralelo para a página não somar quatro
   // idas ao banco em sequência.
-  const [ferias, colaboradores, lotes, fora, temProvisao] = await Promise.all([
+  const [ferias, colaboradores, lotes, temProvisao] = await Promise.all([
     listarFerias(),
     listarColaboradores(),
     listarLotes(),
-    listarForaDoLote(),
     temProvisaoDe13Ativa(),
   ]);
 
@@ -67,11 +65,6 @@ export default async function PaginaDecimoTerceiroEFerias() {
           valor={aVencer}
           detalhe="Faltam 60 dias ou menos para o limite"
         />
-        <KPICard
-          titulo="Fora do 13º"
-          valor={fora.length}
-          detalhe="CLT ativo sem data de admissão no cadastro"
-        />
       </GradeKpis>
 
       <div className="flex flex-col gap-6">
@@ -98,7 +91,7 @@ export default async function PaginaDecimoTerceiroEFerias() {
             podeCriar ? (
               <LoteAcoesCabecalho
                 anoSugerido={anoSugerido}
-                quantidadeForaDoLote={fora.length}
+                quantidadeDeAtivos={colaboradores.length}
                 temProvisaoDe13={temProvisao}
               />
             ) : undefined
@@ -108,7 +101,7 @@ export default async function PaginaDecimoTerceiroEFerias() {
             lotes={lotes}
             podeCriar={podeCriar}
             anoSugerido={anoSugerido}
-            quantidadeForaDoLote={fora.length}
+            quantidadeDeAtivos={colaboradores.length}
             temProvisaoDe13={temProvisao}
           />
         </SecaoDetalhe>

@@ -3248,7 +3248,6 @@ export type Database = {
           ano: number;
           aprovado_em: string | null;
           aprovado_por: string | null;
-          com_desconto: boolean;
           created_at: string;
           created_by: string | null;
           data_vencimento: string | null;
@@ -3258,7 +3257,6 @@ export type Database = {
           motivo_exclusao: string | null;
           motivo_rejeicao: string | null;
           parcela: number;
-          percentual: number;
           status: string;
           updated_at: string;
           valor_bruto: number;
@@ -3269,7 +3267,6 @@ export type Database = {
           ano: number;
           aprovado_em?: string | null;
           aprovado_por?: string | null;
-          com_desconto?: boolean;
           created_at?: string;
           created_by?: string | null;
           data_vencimento?: string | null;
@@ -3279,7 +3276,6 @@ export type Database = {
           motivo_exclusao?: string | null;
           motivo_rejeicao?: string | null;
           parcela: number;
-          percentual: number;
           status?: string;
           updated_at?: string;
           valor_bruto?: number;
@@ -3290,7 +3286,6 @@ export type Database = {
           ano?: number;
           aprovado_em?: string | null;
           aprovado_por?: string | null;
-          com_desconto?: boolean;
           created_at?: string;
           created_by?: string | null;
           data_vencimento?: string | null;
@@ -3300,7 +3295,6 @@ export type Database = {
           motivo_exclusao?: string | null;
           motivo_rejeicao?: string | null;
           parcela?: number;
-          percentual?: number;
           status?: string;
           updated_at?: string;
           valor_bruto?: number;
@@ -3333,7 +3327,6 @@ export type Database = {
       };
       rh_decimo_terceiro_itens: {
         Row: {
-          avos: number;
           centro_custo_id: string | null;
           colaborador_id: string;
           created_at: string;
@@ -3345,11 +3338,9 @@ export type Database = {
           valor_bruto: number;
           valor_inss: number;
           valor_irrf: number;
-          valor_ja_pago: number;
           valor_liquido: number;
         };
         Insert: {
-          avos: number;
           centro_custo_id?: string | null;
           colaborador_id: string;
           created_at?: string;
@@ -3361,11 +3352,9 @@ export type Database = {
           valor_bruto?: number;
           valor_inss?: number;
           valor_irrf?: number;
-          valor_ja_pago?: number;
           valor_liquido?: number;
         };
         Update: {
-          avos?: number;
           centro_custo_id?: string | null;
           colaborador_id?: string;
           created_at?: string;
@@ -3377,7 +3366,6 @@ export type Database = {
           valor_bruto?: number;
           valor_inss?: number;
           valor_irrf?: number;
-          valor_ja_pago?: number;
           valor_liquido?: number;
         };
         Relationships: [
@@ -4293,6 +4281,10 @@ export type Database = {
         Args: { p_adiantamento_ids: string[] };
         Returns: string[];
       };
+      fn_adicionar_ao_lote_decimo_terceiro: {
+        Args: { p_colaborador: string; p_lote: string };
+        Returns: string;
+      };
       fn_adicionar_item_rescisao: {
         Args: {
           p_descricao: string;
@@ -4471,7 +4463,12 @@ export type Database = {
       };
       fn_dt_recalcular_totais: { Args: { p_lote: string }; Returns: undefined };
       fn_editar_item_decimo_terceiro: {
-        Args: { p_item: string; p_valor: number };
+        Args: {
+          p_bruto: number;
+          p_inss?: number;
+          p_irrf?: number;
+          p_item: string;
+        };
         Returns: undefined;
       };
       fn_editar_item_folha: {
@@ -4600,13 +4597,7 @@ export type Database = {
         Returns: undefined;
       };
       fn_gerar_decimo_terceiro: {
-        Args: {
-          p_ano: number;
-          p_com_desconto: boolean;
-          p_data_vencimento?: string;
-          p_parcela: number;
-          p_percentual: number;
-        };
+        Args: { p_ano: number; p_data_vencimento?: string; p_parcela: number };
         Returns: string;
       };
       fn_gerar_folha: {
@@ -5311,6 +5302,10 @@ export type Database = {
           p_folha_id: string;
           p_motivo?: string | null;
         };
+        Returns: undefined;
+      };
+      fn_tirar_do_lote_decimo_terceiro: {
+        Args: { p_item: string };
         Returns: undefined;
       };
       fn_total_da_oc: {

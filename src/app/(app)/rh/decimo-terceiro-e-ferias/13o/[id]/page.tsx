@@ -9,7 +9,7 @@ import {
 } from "@/modules/rh/decimo-terceiro/formato";
 import {
   buscarLote,
-  listarForaDoLote,
+  listarColaboradoresForaDoLote,
 } from "@/modules/rh/decimo-terceiro/queries";
 
 const RECURSO = "rh.decimo-terceiro-ferias" as const;
@@ -36,7 +36,10 @@ export default async function PaginaLoteDecimoTerceiro({
   }
 
   const { id } = await params;
-  const [lote, fora] = await Promise.all([buscarLote(id), listarForaDoLote()]);
+  const [lote, paraAdicionar] = await Promise.all([
+    buscarLote(id),
+    listarColaboradoresForaDoLote(id),
+  ]);
 
   if (!lote) notFound();
 
@@ -47,13 +50,13 @@ export default async function PaginaLoteDecimoTerceiro({
       <PageHeader
         modulo="RH"
         titulo={rotuloLote(lote.ano, lote.parcela)}
-        descricao="Confira linha a linha antes de aprovar. A aprovação gera uma conta a pagar por colaborador, no centro de custo de cada um."
+        descricao="Digite o 13º de cada um. O sistema não calcula: quem ficar em branco não vira conta a pagar, e a aprovação lança no centro de custo de cada colaborador."
         acoes={<StatusBadge status={info.badge} rotulo={info.rotulo} />}
       />
 
       <LoteDetalhe
         lote={lote}
-        fora={fora}
+        paraAdicionar={paraAdicionar}
         podeEditar={temPermissao(usuario, RECURSO, "editar")}
         podeAprovar={temPermissao(usuario, RECURSO, "aprovar")}
         podeDesaprovar={temPermissao(usuario, RECURSO, "desaprovar")}

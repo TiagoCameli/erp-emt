@@ -16,13 +16,11 @@ import {
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { gerarLote } from "@/modules/rh/decimo-terceiro/actions";
 import {
   gerarLoteFormParaInput,
   gerarLoteFormSchema,
-  PERCENTUAL_SUGERIDO,
   type GerarLoteFormInput,
 } from "@/modules/rh/decimo-terceiro/schemas";
 
@@ -34,13 +32,7 @@ const OPCOES_PARCELA = [
 ];
 
 function valoresIniciais(ano: number): GerarLoteFormInput {
-  return {
-    ano: String(ano),
-    parcela: "1",
-    percentual: PERCENTUAL_SUGERIDO["1"],
-    comDesconto: false,
-    dataVencimento: "",
-  };
+  return { ano: String(ano), parcela: "1", dataVencimento: "" };
 }
 
 export interface GerarLoteDrawerProps {
@@ -48,22 +40,24 @@ export interface GerarLoteDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Ano sugerido. Normalmente o corrente. */
   anoSugerido: number;
-  /** Quantos CLT ficam de fora por não terem data de admissão. */
-  quantidadeForaDoLote: number;
+  /** Quantos colaboradores ativos vão entrar no lote. */
+  quantidadeDeAtivos: number;
   /** Existe provisão de 13º ativa na folha? Se sim, o custo conta duas vezes. */
   temProvisaoDe13: boolean;
   onGerado?: (id: string) => void;
 }
 
 /**
- * Gerar o lote de 13º. Não paga ninguém: cria o documento em RASCUNHO para ser
- * conferido e editado, e é a aprovação que gera as contas a pagar.
+ * Gerar o lote de 13º.
+ *
+ * Não calcula nada e não paga ninguém: monta a planilha com todo colaborador
+ * ativo dos três vínculos, zerada, para ser preenchida linha a linha.
  */
 export function GerarLoteDrawer({
   aberto,
   onAbertoChange,
   anoSugerido,
-  quantidadeForaDoLote,
+  quantidadeDeAtivos,
   temProvisaoDe13,
   onGerado,
 }: GerarLoteDrawerProps) {
@@ -77,28 +71,6 @@ export function GerarLoteDrawer({
   }, [aberto, anoSugerido, form]);
 
   const salvando = form.formState.isSubmitting;
-  const parcela = form.watch("parcela");
-  const comDesconto = form.watch("comDesconto");
-
-  /**
-   * Trocar a parcela troca o percentual sugerido. A 2ª parcela nasce em 100%
-   * porque a RPC abate o que a 1ª já pagou: deixar 50% ali daria líquido zero
-   * para todo mundo, e isso não pode passar por descuido em dezembro.
-   *
-   * Só sobrescreve o que ainda é a sugestão da outra parcela. Percentual
-   * digitado à mão é respeitado.
-   */
-  function aoTrocarParcela(novaParcela: string) {
-    const anterior = form.getValues("percentual");
-    form.setValue("parcela", novaParcela as "1" | "2", { shouldDirty: true });
-
-    const eraSugestao = Object.values(PERCENTUAL_SUGERIDO).includes(anterior);
-    if (eraSugestao) {
-      form.setValue("percentual", PERCENTUAL_SUGERIDO[novaParcela as "1" | "2"], {
-        shouldDirty: true,
-      });
-    }
-  }
 
   async function aoEnviar(dados: GerarLoteFormInput) {
     const resultado = await gerarLote(gerarLoteFormParaInput(dados));
@@ -106,7 +78,7 @@ export function GerarLoteDrawer({
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Lote de 13º gerado em rascunho");
+    toast.success("Lote de 13º criado. Preencha os valores.");
     onAbertoChange(false);
     onGerado?.(resultado.id);
   }
@@ -116,7 +88,7 @@ export function GerarLoteDrawer({
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo="Gerar 13º"
-      descricao="Cria o lote em rascunho com todo CLT ativo que tem data de admissão. Ninguém é pago agora: a aprovação é que gera as contas a pagar."
+      descricao="Monta a planilha com todo colaborador ativo, com os valores zerados. O sistema não calcula o 13º: você digita o valor de cada um, e tira ou acrescenta quem quiser."
       temAlteracoesNaoSalvas={form.formState.isDirty}
       rodape={
         <>
@@ -152,8 +124,7 @@ export function GerarLoteDrawer({
             <span>
               Existe provisão de 13º ativa na folha. A folha mensal já soma esse
               percentual ao custo, então pagar aqui conta o custo{" "}
-              <strong>duas vezes</strong>. O abatimento da provisão ainda não
-              existe no sistema.
+              <strong>duas vezes</strong>.
             </span>
           </div>
         ) : null}
@@ -182,15 +153,14 @@ export function GerarLoteDrawer({
               obrigatorio
               largura="medio"
               erro={form.formState.errors.parcela?.message}
-              ajuda={
-                parcela === "2"
-                  ? "A 2ª desconta automaticamente o que a 1ª já pagou a cada pessoa."
-                  : undefined
-              }
             >
               <Combobox
-                valor={parcela}
-                onValorChange={aoTrocarParcela}
+                valor={form.watch("parcela")}
+                onValorChange={(valor) =>
+                  form.setValue("parcela", valor as "1" | "2", {
+                    shouldDirty: true,
+                  })
+                }
                 opcoes={OPCOES_PARCELA}
                 placeholder="Selecione a parcela"
                 disabled={salvando}
@@ -198,72 +168,27 @@ export function GerarLoteDrawer({
             </CampoFormulario>
 
             <CampoFormulario
-              id="lote-percentual"
-              rotulo="Percentual"
-              obrigatorio
-              largura="curto"
-              erro={form.formState.errors.percentual?.message}
-              ajuda="Quanto do 13º devido esta parcela paga. Até 2 casas."
+              id="lote-vencimento"
+              rotulo="Vencimento"
+              largura="medio"
+              erro={form.formState.errors.dataVencimento?.message}
+              ajuda="Em branco, vence em 20 de dezembro."
             >
               <Input
-                id="lote-percentual"
-                inputMode="decimal"
+                id="lote-vencimento"
+                type="date"
                 disabled={salvando}
-                {...form.register("percentual")}
+                {...form.register("dataVencimento")}
               />
             </CampoFormulario>
           </LinhaCampos>
-
-          <CampoFormulario
-            id="lote-vencimento"
-            rotulo="Vencimento"
-            largura="medio"
-            erro={form.formState.errors.dataVencimento?.message}
-            ajuda="Em branco, as contas a pagar vencem em 20 de dezembro do ano do 13º."
-          >
-            <Input
-              id="lote-vencimento"
-              type="date"
-              disabled={salvando}
-              {...form.register("dataVencimento")}
-            />
-          </CampoFormulario>
         </SecaoFormulario>
 
-        <SecaoFormulario titulo="Desconto">
-          <label className="flex items-start gap-3 text-sm">
-            <Checkbox
-              checked={comDesconto}
-              disabled={salvando}
-              onCheckedChange={(marcado) =>
-                form.setValue("comDesconto", marcado === true, {
-                  shouldDirty: true,
-                })
-              }
-            />
-            <span>
-              <span className="font-medium">Descontar INSS e IRRF</span>
-              <span className="mt-1 block text-muted-foreground">
-                O imposto é calculado sobre o 13º inteiro do ano, em tributação
-                exclusiva, e cobrado só nesta parcela. O usual é deixar
-                desligado na 1ª e ligar na 2ª. Sem faixas cadastradas em
-                Parâmetros da folha, o sistema recusa em vez de descontar zero.
-              </span>
-            </span>
-          </label>
-        </SecaoFormulario>
-
-        {quantidadeForaDoLote > 0 ? (
-          <p className="text-sm text-muted-foreground">
-            <strong>
-              {quantidadeForaDoLote}{" "}
-              {quantidadeForaDoLote === 1 ? "colaborador CLT" : "colaboradores CLT"}
-            </strong>{" "}
-            {quantidadeForaDoLote === 1 ? "ficará" : "ficarão"} de fora por não
-            {quantidadeForaDoLote === 1 ? " ter" : " terem"} data de admissão no
-            cadastro. A lista aparece no lote depois de gerar.
-          </p>
-        ) : null}
+        <p className="text-sm text-muted-foreground">
+          Vão entrar <strong>{quantidadeDeAtivos} colaboradores</strong> ativos,
+          nos três vínculos, todos com valor zerado. Ninguém é pago com R$ 0,00:
+          a aprovação ignora quem ficou em branco.
+        </p>
       </form>
     </FormDrawer>
   );
