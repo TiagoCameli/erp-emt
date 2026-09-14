@@ -40,11 +40,21 @@ export function AdicionarColaboradorDrawer({
   const [colaboradorId, setColaboradorId] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
-  React.useEffect(() => {
-    if (aberto) setColaboradorId("");
-  }, [aberto]);
-
   const vazio = colaboradores.length === 0;
+
+  /**
+   * Limpa a seleção ao FECHAR, não ao abrir.
+   *
+   * Zerar no abrir só dá para fazer dentro de um effect, e `setState` síncrono
+   * em effect dispara renderização em cascata (a regra
+   * `react-hooks/set-state-in-effect` recusa). Fechando, o estado já fica
+   * limpo para a próxima abertura, e o caminho cobre Cancelar, Esc e clique
+   * fora de uma vez.
+   */
+  function fechar() {
+    setColaboradorId("");
+    onAbertoChange(false);
+  }
 
   async function aoSalvar() {
     if (!colaboradorId) {
@@ -60,7 +70,7 @@ export function AdicionarColaboradorDrawer({
         return;
       }
       toast.success("Colaborador acrescentado ao lote");
-      onAbertoChange(false);
+      fechar();
       onAdicionado();
     } finally {
       setSalvando(false);
@@ -70,7 +80,10 @@ export function AdicionarColaboradorDrawer({
   return (
     <FormDrawer
       aberto={aberto}
-      onAbertoChange={onAbertoChange}
+      onAbertoChange={(proximo) => {
+        if (proximo) onAbertoChange(true);
+        else fechar();
+      }}
       titulo="Acrescentar colaborador"
       descricao="Entra no lote com valor zerado, para você digitar. Só aparecem aqui os ativos que ainda não estão no lote."
       rodape={
@@ -79,7 +92,7 @@ export function AdicionarColaboradorDrawer({
             type="button"
             variant="outline"
             disabled={salvando}
-            onClick={() => onAbertoChange(false)}
+            onClick={fechar}
           >
             Cancelar
           </Button>
