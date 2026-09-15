@@ -3,7 +3,16 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus, Send, TriangleAlert, UserMinus } from "lucide-react";
+import {
+  Copy,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  Send,
+  TriangleAlert,
+  Undo2,
+  UserMinus,
+} from "lucide-react";
 
 import {
   ApprovalBar,
@@ -25,7 +34,9 @@ import {
   enviarParaAprovacao,
   rejeitarLote,
   tirarDoLote,
+  voltarParaRascunho,
 } from "@/modules/rh/decimo-terceiro/actions";
+import { mensagemDeAprovacao } from "@/modules/rh/decimo-terceiro/mensagem-aprovacao";
 import {
   conferenciaDoLote,
   resumoPorCentroCusto,
@@ -42,6 +53,7 @@ import type {
 
 import { AdicionarColaboradorDrawer } from "./adicionar-colaborador-drawer";
 import { EditarItemDrawer } from "./editar-item-drawer";
+import { VencimentoLote } from "./vencimento-lote";
 
 export interface LoteDetalheProps {
   lote: LoteDetalheDados;
@@ -62,6 +74,7 @@ export function LoteDetalhe({
   const [emEdicao, setEmEdicao] = React.useState<ItemDoLote | null>(null);
   const [paraTirar, setParaTirar] = React.useState<ItemDoLote | null>(null);
   const [adicionarAberto, setAdicionarAberto] = React.useState(false);
+  const [copiandoPedido, setCopiandoPedido] = React.useState(false);
 
   const porCentro = React.useMemo(() => resumoPorCentroCusto(lote), [lote]);
   const conferencia = React.useMemo(() => conferenciaDoLote(lote), [lote]);
@@ -75,6 +88,48 @@ export function LoteDetalhe({
   }
 
   const preenchidos = lote.itens.filter((item) => item.valorLiquido > 0).length;
+
+  /**
+   * Copia o pedido de aprovação para o WhatsApp.
+   *
+   * A mensagem carrega os números, e não só o link: quem recebe precisa saber
+   * o tamanho do que está sendo pedido antes de clicar. E avisa quando a área
+   * de transferência falha — botão que parece ter funcionado e não funcionou é
+   * pior que botão que não existe.
+   */
+  async function aoCopiarPedido() {
+    if (copiandoPedido) return;
+    setCopiandoPedido(true);
+    try {
+      const texto = mensagemDeAprovacao(
+        {
+          id: lote.id,
+          ano: lote.ano,
+          parcela: lote.parcela,
+          pessoas: lote.itens.length,
+          preenchidos,
+          valorLiquido: lote.valorLiquido,
+          dataVencimento: lote.dataVencimento,
+        },
+        window.location.origin,
+      );
+
+      try {
+        await navigator.clipboard.writeText(texto);
+      } catch {
+        // `writeText` falha sem permissão de área de transferência (navegador
+        // antigo, http, aba sem foco).
+        toast.error(
+          "Não foi possível copiar. Verifique a permissão de área de transferência do navegador",
+        );
+        return;
+      }
+
+      toast.success("Pedido copiado. Cole no WhatsApp de quem aprova");
+    } finally {
+      setCopiandoPedido(false);
+    }
+  }
   const emBranco = lote.itens.length - preenchidos;
 
   const colunas = React.useMemo<ColumnDef<ItemDoLote, unknown>[]>(
@@ -268,6 +323,18 @@ export function LoteDetalhe({
         </p>
       ) : null}
 
+      {/*
+        Antes da ApprovalBar de propósito: quem vai aprovar precisa ver para
+        quando o dinheiro está programado ANTES de bater o martelo.
+      */}
+      <VencimentoLote
+        loteId={lote.id}
+        ano={lote.ano}
+        status={lote.status}
+        dataVencimento={lote.dataVencimento}
+        podeEditar={podeEditar}
+      />
+
       <ApprovalBar
         status={lote.status}
         rotulo={info.rotulo}
@@ -314,7 +381,48 @@ export function LoteDetalhe({
           confirmar: "Devolver",
         }}
         acoesExtras={
-          emRascunho && podeEditar ? (
+          lote.status === "pendente_aprovacao" ? (
+            // O que dá para fazer enquanto o lote espera, do lado de quem
+            // montou. Some quando é aprovado: aí o caminho de volta é
+            // Desaprovar, que apaga lançamento e exige motivo.
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={copiandoPedido}
+                onClick={aoCopiarPedido}
+              >
+                {copiandoPedido ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Copy />
+                )}
+                Copiar pedido
+              </Button>
+              {podeEditar ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    comAvisoDeFalha("13o.voltar-rascunho", async () => {
+                      const r = await voltarParaRascunho(lote.id);
+                      if ("erro" in r) {
+                        toast.error(r.erro);
+                        return;
+                      }
+                      toast.success("Lote de volta em rascunho");
+                      atualizar();
+                    })
+                  }
+                >
+                  <Undo2 />
+                  Voltar para rascunho
+                </Button>
+              ) : null}
+            </>
+          ) : emRascunho && podeEditar ? (
             <Button
               type="button"
               variant="outline"

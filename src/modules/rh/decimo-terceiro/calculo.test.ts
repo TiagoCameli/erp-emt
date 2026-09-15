@@ -39,6 +39,8 @@ function lote(itens: ItemDoLote[], over: Partial<LoteDetalhe> = {}): LoteDetalhe
     valorLiquido: 0,
     quantidadePessoas: itens.length,
     motivoRejeicao: null,
+    aprovadoEm: null,
+    aprovadoPorNome: null,
     itens,
     ...over,
   };

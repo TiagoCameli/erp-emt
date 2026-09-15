@@ -1,4 +1,8 @@
 import type { StatusPadrao } from "@/components/canonicos";
+import {
+  ROTULO_VINCULO,
+  type Vinculo,
+} from "@/modules/cadastros/colaboradores/schemas";
 import type { StatusLote } from "@/modules/rh/decimo-terceiro/schemas";
 
 /**
@@ -31,20 +35,19 @@ export function rotuloLote(ano: number, parcela: number): string {
   return `13º ${ano}, ${rotuloParcela(parcela)}`;
 }
 
-/** Rótulo pt-BR do vínculo, para a coluna que a folha gerencial também tem. */
-export const ROTULO_VINCULO: Record<string, string> = {
-  clt: "CLT",
-  terceiro: "Terceiro",
-  diarista: "Diarista",
-};
-
 /**
  * Vínculo por extenso, com fallback para o valor cru.
  *
- * O 13º paga os três vínculos desde 14/09/2026: quem não tem carteira recebe
- * também, e a coluna existe para quem monta o lote saber com quem está lidando
- * na hora de digitar o valor.
+ * O mapa vem de `cadastros/colaboradores`, que é o dono do cadastro. Eu tinha
+ * escrito uma cópia aqui em 14/09/2026 e ela durou um dia: duas listas de
+ * rótulo para a mesma coluna divergem no dia em que alguém acrescenta um
+ * vínculo.
+ *
+ * O fallback existe porque `vinculo` chega das queries como `string` solto, e
+ * não como o union: valor fora do catálogo mostra algo em vez de quebrar.
  */
 export function rotuloVinculo(vinculo: string): string {
-  return ROTULO_VINCULO[vinculo] ?? vinculo;
+  return vinculo in ROTULO_VINCULO
+    ? ROTULO_VINCULO[vinculo as Vinculo]
+    : vinculo;
 }

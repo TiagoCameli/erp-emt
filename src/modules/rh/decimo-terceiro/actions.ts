@@ -9,6 +9,7 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   adicionarAoLoteSchema,
+  definirVencimentoSchema,
   editarItemSchema,
   gerarLoteSchema,
   motivoSchema,
@@ -281,6 +282,69 @@ export async function adicionarAoLote(dados: unknown): Promise<ResultadoAcao> {
 
   if (error) {
     return { erro: mensagemDeNegocio("adicionar-ao-lote", error, "Não foi possível acrescentar ao lote") };
+  }
+
+  revalidarTelas();
+  return { ok: true };
+}
+
+/**
+ * Traz o lote pendente de volta para rascunho, do lado de quem montou.
+ *
+ * Não é o mesmo que `rejeitarLote`: aquele é do lado de quem APROVA, exige
+ * motivo e fica registrado. Este é correção antes de alguém aprovar, e existe
+ * porque sem ele um lote enviado por engano só volta pelas mãos de quem tem
+ * permissão de aprovar.
+ */
+export async function voltarParaRascunho(loteId: string): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Você não tem permissão para editar o 13º" };
+  }
+  if (!idSchema.safeParse(loteId).success) {
+    return { erro: "Lote inválido" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_voltar_decimo_terceiro_para_rascunho", {
+    p_lote: loteId,
+  });
+
+  if (error) {
+    return {
+      erro: mensagemDeNegocio("voltar-rascunho", error, "Não foi possível voltar para rascunho"),
+    };
+  }
+
+  revalidarTelas();
+  return { ok: true };
+}
+
+/**
+ * Define o vencimento do lote. Só em rascunho, e a RPC é quem recusa fora dele.
+ *
+ * `null` apaga a data escolhida e volta ao padrão do banco (20/12 do ano). É o
+ * único jeito de desfazer sem regerar o lote, e regerar aqui não existe.
+ */
+export async function definirVencimento(dados: unknown): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Você não tem permissão para editar o 13º" };
+  }
+
+  const validado = definirVencimentoSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_definir_vencimento_decimo_terceiro", {
+    p_lote: validado.data.loteId,
+    p_data: validado.data.dataVencimento,
+  });
+
+  if (error) {
+    return {
+      erro: mensagemDeNegocio("vencimento", error, "Não foi possível salvar o vencimento"),
+    };
   }
 
   revalidarTelas();
