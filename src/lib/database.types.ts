@@ -4426,6 +4426,19 @@ export type Database = {
         Args: { p_lanc_id: string; p_motivo: string; p_rateios: Json };
         Returns: undefined;
       };
+      fn_definir_vencimento_decimo_terceiro: {
+        Args: {
+          // EDICAO MANUAL: o gerador escreve `p_data: string` porque o
+          // parametro nao tem DEFAULT e ele nao sabe que NULL e um valor
+          // LEGITIMO aqui — null e como se APAGA a data escolhida e se volta
+          // ao padrao (20/12). Mesma edicao existe em
+          // fn_definir_vencimento_folha, logo acima.
+          // REGERAR OS TIPOS APAGA ISTO DE NOVO.
+          p_data: string | null;
+          p_lote: string;
+        };
+        Returns: undefined;
+      };
       fn_definir_vencimento_folha: {
         Args: {
           p_data: string | null;
@@ -5339,6 +5352,10 @@ export type Database = {
           p_nome_exibicao?: string;
         };
         Returns: string;
+      };
+      fn_voltar_decimo_terceiro_para_rascunho: {
+        Args: { p_lote: string };
+        Returns: undefined;
       };
       fn_voltar_para_folha: {
         Args: { p_colaborador_id: string; p_folha_id: string };

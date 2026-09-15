@@ -45,6 +45,9 @@ export interface ItemDoLote {
 /** Lote com os itens, para a tela de detalhe. */
 export interface LoteDetalhe extends LoteLista {
   motivoRejeicao: string | null;
+  /** timestamptz, ou null enquanto não foi aprovado. */
+  aprovadoEm: string | null;
+  aprovadoPorNome: string | null;
   itens: ItemDoLote[];
 }
 
@@ -99,8 +102,15 @@ export async function buscarLote(id: string): Promise<LoteDetalhe | null> {
   const { data, error } = await supabase
     .from("rh_decimo_terceiro")
     .select(
+      // O hint `!rh_decimo_terceiro_aprovado_por_fkey` NÃO é enfeite: esta
+      // tabela tem TRÊS FKs para `usuarios` (aprovado_por, excluido_por e
+      // created_by). Sem dizer qual, o PostgREST responde HTTP 300 por
+      // ambiguidade e a tela inteira quebra — e isso passa no tsc, no lint e
+      // no build, porque só falha em runtime contra o banco.
       `id, ano, parcela, status, data_vencimento,
        valor_bruto, valor_descontos, valor_liquido, motivo_rejeicao,
+       aprovado_em,
+       usuarios!rh_decimo_terceiro_aprovado_por_fkey(nome),
        rh_decimo_terceiro_itens(
          id, colaborador_id, centro_custo_id, salario_base,
          valor_bruto, valor_inss, valor_irrf, valor_liquido,
@@ -151,6 +161,8 @@ export async function buscarLote(id: string): Promise<LoteDetalhe | null> {
     valorDescontos: Number(data.valor_descontos),
     valorLiquido: Number(data.valor_liquido),
     motivoRejeicao: data.motivo_rejeicao,
+    aprovadoEm: data.aprovado_em,
+    aprovadoPorNome: data.usuarios?.nome ?? null,
     quantidadePessoas: itens.length,
     itens,
   };

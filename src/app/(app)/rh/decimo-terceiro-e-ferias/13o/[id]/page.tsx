@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { PageHeader, StatusBadge } from "@/components/canonicos";
+import { formatarDataHora } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { LoteDetalhe } from "@/modules/rh/decimo-terceiro/components/lote-detalhe";
 import {
@@ -50,7 +51,18 @@ export default async function PaginaLoteDecimoTerceiro({
       <PageHeader
         modulo="RH"
         titulo={rotuloLote(lote.ano, lote.parcela)}
-        descricao="Digite o 13º de cada um. O sistema não calcula: quem ficar em branco não vira conta a pagar, e a aprovação lança no centro de custo de cada colaborador."
+        descricao={
+          <>
+            Digite o 13º de cada um. O sistema não calcula: quem ficar em branco
+            não vira conta a pagar, e a aprovação lança no centro de custo de
+            cada colaborador.
+            {lote.status === "aprovado" && lote.aprovadoEm
+              ? ` · Aprovado em ${formatarDataHora(lote.aprovadoEm)}${
+                  lote.aprovadoPorNome ? ` por ${lote.aprovadoPorNome}` : ""
+                }`
+              : ""}
+          </>
+        }
         acoes={<StatusBadge status={info.badge} rotulo={info.rotulo} />}
       />
 

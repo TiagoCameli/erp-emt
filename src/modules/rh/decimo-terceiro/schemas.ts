@@ -115,6 +115,24 @@ export const adicionarAoLoteSchema = z.object({
   colaboradorId: idSchemaCom("Selecione o colaborador"),
 });
 
+/**
+ * Vencimento do lote. `null` apaga a data escolhida e volta ao padrão do
+ * banco (20/12 do ano do 13º), que é o único jeito de desfazer sem regerar.
+ */
+export const definirVencimentoSchema = z.object({
+  loteId: idSchemaCom("Lote inválido"),
+  dataVencimento: z
+    .union([z.string(), z.null()])
+    .transform((valor) => {
+      if (valor === null) return null;
+      const texto = valor.trim();
+      return texto === "" ? null : texto;
+    })
+    .refine((valor) => valor === null || DATA_REGEX.test(valor), {
+      error: "Data de vencimento inválida",
+    }),
+});
+
 export const motivoSchema = z.object({
   loteId: idSchemaCom("Lote inválido"),
   motivo: motivoTextoSchema,

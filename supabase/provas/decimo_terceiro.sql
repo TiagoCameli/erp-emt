@@ -138,3 +138,88 @@ end $prova$;
 --
 -- Os 27 terceiros e os 4 diaristas sao exatamente o que o modelo anterior
 -- deixava de fora.
+
+-- =====================================================================
+-- Parte 2: o pedido de aprovacao (migration 20260915100000)
+-- =====================================================================
+--
+-- Duas coisas que a folha gerencial tem e o 13o passou a ter: voltar para
+-- rascunho enquanto espera, e vencimento editavel.
+--
+-- O item A e o que NAO da para copiar da folha. La a guarda recusa data
+-- anterior ao mes da competencia; aqui a competencia e dezembro e a 1a parcela
+-- e paga em NOVEMBRO (a lei manda ate 30/11). Copiar a guarda da folha
+-- recusaria o caso normal.
+
+do $prova2$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
+  v_lote uuid; v_item uuid;
+  a_venc date; b_venc date;
+  c_erro text := '(NAO RECUSOU)';
+  d_status text; e_status text;
+  f_erro text := '(NAO RECUSOU)';
+  g_erro text := '(NAO RECUSOU)';
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  v_lote := public.fn_gerar_decimo_terceiro(2023::smallint, 1::smallint, null);
+
+  -- A) vencimento em NOVEMBRO e aceito (a guarda da folha recusaria)
+  select data_vencimento into a_venc from public.rh_decimo_terceiro where id = v_lote;
+  perform public.fn_definir_vencimento_decimo_terceiro(v_lote, date '2023-11-30');
+  select data_vencimento into b_venc from public.rh_decimo_terceiro where id = v_lote;
+  if b_venc <> date '2023-11-30' then raise exception 'FALHOU vencimento: veio %', b_venc; end if;
+
+  -- C) CONTROLE: ano anterior e erro de digitacao, e e recusado
+  begin
+    perform public.fn_definir_vencimento_decimo_terceiro(v_lote, date '2022-12-20');
+  exception when others then c_erro := sqlerrm; end;
+  if c_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: aceitou vencimento de ano anterior'; end if;
+
+  -- D) enviar, voltar para rascunho, e o lote volta EDITAVEL
+  select id into v_item from public.rh_decimo_terceiro_itens where decimo_terceiro_id = v_lote limit 1;
+  perform public.fn_editar_item_decimo_terceiro(v_item, 500.00, 0, 0);
+  perform public.fn_enviar_decimo_terceiro_aprovacao(v_lote);
+  select status into d_status from public.rh_decimo_terceiro where id = v_lote;
+
+  perform public.fn_voltar_decimo_terceiro_para_rascunho(v_lote);
+  select status into e_status from public.rh_decimo_terceiro where id = v_lote;
+  if e_status <> 'rascunho' then raise exception 'FALHOU voltar: status %', e_status; end if;
+
+  -- o ponto de voltar e poder editar de novo. Se isto estourar, voltar nao
+  -- serviu para nada.
+  perform public.fn_editar_item_decimo_terceiro(v_item, 600.00, 0, 0);
+
+  -- E) CONTROLE: voltar de novo, ja estando em rascunho
+  begin
+    perform public.fn_voltar_decimo_terceiro_para_rascunho(v_lote);
+  exception when others then f_erro := sqlerrm; end;
+  if f_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: voltou um lote que ja estava em rascunho'; end if;
+
+  -- F) CONTROLE: mexer no vencimento com o lote PENDENTE trocaria o que quem
+  -- aprova autorizou, por baixo dela
+  perform public.fn_enviar_decimo_terceiro_aprovacao(v_lote);
+  begin
+    perform public.fn_definir_vencimento_decimo_terceiro(v_lote, date '2023-12-15');
+  exception when others then g_erro := sqlerrm; end;
+  if g_erro = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: mudou o vencimento por baixo de quem ia aprovar';
+  end if;
+
+  reset role;
+  raise exception E'PROVA 13o PEDIDO DE APROVACAO (desfeita)\n  A) vencimento: nasceu % e virou % (NOVEMBRO, aceito)\n  C) CONTROLE ano anterior -> %\n  D) enviou (%) e voltou para % e deu para editar de novo\n  E) CONTROLE voltar ja em rascunho -> %\n  F) CONTROLE mudar vencimento com o lote pendente -> %',
+    coalesce(a_venc::text,'(nulo)'), b_venc, c_erro, d_status, e_status, f_erro, g_erro;
+end $prova2$;
+
+-- Resultado em 15/09/2026:
+--
+--   A) vencimento: nasceu (nulo) e virou 2023-11-30 (NOVEMBRO, aceito)
+--   C) CONTROLE ano anterior -> A data de vencimento (20/12/2022) e anterior
+--      ao ano do 13o (2023).
+--   D) enviou (pendente_aprovacao) e voltou para rascunho e deu para editar de novo
+--   E) CONTROLE voltar ja em rascunho -> O lote esta em "rascunho": so da para
+--      voltar para rascunho o que esta pendente de aprovacao.
+--   F) CONTROLE mudar vencimento com o lote pendente -> O lote esta em
+--      "pendente_aprovacao": a data de vencimento so muda em rascunho.
