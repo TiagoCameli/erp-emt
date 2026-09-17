@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseOfx } from "@/lib/ofx";
+import { conferirMesFechado, parseOfx } from "@/lib/ofx";
 
 /**
  * OFX 1.x (SGML) de exemplo, no formato que Caixa/BB/Sicredi exportam: cabeçalho
@@ -186,5 +186,74 @@ describe("parseOfx ignora transação sem data ou sem valor", () => {
     const extrato = parseOfx(ofx);
     expect(extrato.transacoes).toHaveLength(1);
     expect(extrato.transacoes[0]?.fitid).toBe("Boa");
+  });
+});
+
+describe("parseOfx com o período trocado", () => {
+  // A Caixa exportou assim em 01/2025 e 02/2025: DTSTART depois de DTEND. O
+  // extrato foi gravado com início 31/01 e fim 01/01, um período que anda para
+  // trás. Período é intervalo, e intervalo não tem ordem.
+  const ofx = `<OFX>
+<BANKTRANLIST>
+<DTSTART>20250131
+<DTEND>20250101
+<STMTTRN>
+<DTPOSTED>20250106
+<TRNAMT>458000.00
+<FITID>001022
+<MEMO>RESG CDB 95 VLR ATUAL
+</STMTTRN>
+</BANKTRANLIST>
+</OFX>`;
+
+  it("devolve o par na ordem certa", () => {
+    const extrato = parseOfx(ofx);
+    expect(extrato.periodoInicio).toBe("2025-01-01");
+    expect(extrato.periodoFim).toBe("2025-01-31");
+  });
+
+  it("depois de normalizado o mês conta como fechado", () => {
+    const extrato = parseOfx(ofx);
+    expect(conferirMesFechado(extrato.periodoInicio, extrato.periodoFim)).toBe(
+      null,
+    );
+  });
+});
+
+describe("conferirMesFechado", () => {
+  it("aceita o mês inteiro, do dia 1 ao último", () => {
+    expect(conferirMesFechado("2026-01-01", "2026-01-31")).toBe(null);
+  });
+
+  it("aceita fevereiro de ano bissexto até o dia 29", () => {
+    expect(conferirMesFechado("2024-02-01", "2024-02-29")).toBe(null);
+  });
+
+  it("aceita fevereiro comum até o dia 28", () => {
+    expect(conferirMesFechado("2025-02-01", "2025-02-28")).toBe(null);
+  });
+
+  it("recusa fevereiro comum que para no dia 27", () => {
+    expect(conferirMesFechado("2025-02-01", "2025-02-27")).toContain(
+      "de 01 a 28",
+    );
+  });
+
+  it("acusa o arquivo que atravessa a virada do mês", () => {
+    // É o extrato do BB de janeiro/2026: dois dias de dezembro a mais.
+    const aviso = conferirMesFechado("2025-12-30", "2026-01-31");
+    expect(aviso).toContain("30/12/2025");
+    expect(aviso).toContain("31/01/2026");
+    expect(aviso).toContain("não é um mês fechado");
+  });
+
+  it("acusa o arquivo que começa depois do dia 1", () => {
+    const aviso = conferirMesFechado("2026-01-05", "2026-01-31");
+    expect(aviso).toContain("05/01/2026");
+    expect(aviso).toContain("de 01 a 31");
+  });
+
+  it("diz que não dá para conferir quando o arquivo não declara o período", () => {
+    expect(conferirMesFechado(null, null)).toContain("não informa o período");
   });
 });

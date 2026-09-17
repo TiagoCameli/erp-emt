@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { Json } from "@/lib/database.types";
 import { erroAcao } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
-import { parseOfx } from "@/lib/ofx";
+import { conferirMesFechado, parseOfx } from "@/lib/ofx";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -20,7 +20,7 @@ const ROTA = "/financeiro/conciliacao";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoImportacao =
-  | { ok: true; inseridas: number; ignoradas: number }
+  | { ok: true; inseridas: number; ignoradas: number; aviso: string | null }
   | { erro: string };
 
 /** Transação no formato que a RPC fn_importar_extrato espera no jsonb. */
@@ -123,6 +123,11 @@ export async function importarOfx(
     ok: true,
     inseridas: resumo.data.inseridas,
     ignoradas: resumo.data.ignoradas,
+    // A conferência é do MÊS FECHADO e vale sobre o período que o ARQUIVO
+    // declara, não sobre o que foi deduzido das transações. Avisa depois de
+    // importar, não antes: o arquivo é o que o banco deu, e recusar a
+    // importação deixaria o movimento de fora em vez de à vista.
+    aviso: conferirMesFechado(extrato.periodoInicio, extrato.periodoFim),
   };
 }
 

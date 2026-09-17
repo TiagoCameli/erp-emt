@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CircleAlert, CircleCheck, LoaderCircle, Upload } from "lucide-react";
+import {
+  CircleAlert,
+  CircleCheck,
+  LoaderCircle,
+  TriangleAlert,
+  Upload,
+} from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,6 +41,8 @@ export interface ImportarOfxDialogProps {
 interface ResultadoImportacao {
   inseridas: number;
   ignoradas: number;
+  /** Frase do aviso quando o arquivo não é um mês fechado. */
+  aviso: string | null;
 }
 
 /**
@@ -112,6 +120,7 @@ export function ImportarOfxDialog({
     setResultado({
       inseridas: resposta.inseridas,
       ignoradas: resposta.ignoradas,
+      aviso: resposta.aviso,
     });
     toast.success(
       resposta.inseridas === 1
@@ -160,6 +169,18 @@ export function ImportarOfxDialog({
                 ) : null}
               </div>
             </div>
+            {/* O arquivo entrou, mas se ele não cobre o mês inteiro a
+                conferência nasce furada: o extrato do BB de janeiro/2026 vinha
+                de 30/12 a 31/01. Avisar aqui, com o resultado à vista, é o que
+                faz a pessoa reexportar antes de começar a conciliar. */}
+            {resultado.aviso ? (
+              <Alert>
+                <TriangleAlert className="text-status-pendente" />
+                <AlertTitle>O extrato não é de um mês fechado</AlertTitle>
+                <AlertDescription>{resultado.aviso}</AlertDescription>
+              </Alert>
+            ) : null}
+
             <DialogFooter>
               <Button onClick={() => trocarAberto(false)}>Fechar</Button>
             </DialogFooter>
