@@ -24,6 +24,54 @@ export interface ExtratoOfx {
   transacoes: TransacaoOfx[];
 }
 
+/** Data ISO yyyy-MM-dd no formato que o Tiago lê: dd/MM/yyyy. */
+function dataBr(iso: string): string {
+  const [ano, mes, dia] = iso.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+/** Último dia do mês (1-based) de um ano/mês, contando bissexto. */
+function ultimoDiaDoMes(ano: number, mes: number): number {
+  return new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+}
+
+/**
+ * Confere se o extrato cobre um MÊS FECHADO, do dia 1 ao último dia. É assim
+ * que a conferência é feita: um arquivo que começa no meio do mês, ou que
+ * atravessa a virada, deixa movimento de fora sem ninguém perceber — o extrato
+ * do BB de janeiro/2026 vinha de 30/12/2025 a 31/01/2026, dois dias a mais.
+ *
+ * Devolve a frase do aviso, ou null quando está fechado. Não bloqueia a
+ * importação: o arquivo pode ser o que o banco deu, e quem decide é quem
+ * concilia.
+ *
+ * Só vale para período DECLARADO pelo arquivo (DTSTART/DTEND). Quando o
+ * arquivo não declara, o período é deduzido das transações e não diz nada
+ * sobre cobertura: um mês inteiro sem movimento no dia 1 pareceria incompleto.
+ */
+export function conferirMesFechado(
+  inicio: string | null,
+  fim: string | null,
+): string | null {
+  if (inicio === null || fim === null) {
+    return "O arquivo não informa o período (DTSTART/DTEND), então não dá para conferir se ele cobre o mês inteiro. Confira no extrato do banco se falta movimento.";
+  }
+
+  const [anoInicio, mesInicio, diaInicio] = inicio.split("-").map(Number);
+  const [anoFim, mesFim, diaFim] = fim.split("-").map(Number);
+
+  if (anoInicio !== anoFim || mesInicio !== mesFim) {
+    return `O arquivo vai de ${dataBr(inicio)} a ${dataBr(fim)}, que não é um mês fechado. Exporte do dia 1 ao último dia do mês.`;
+  }
+
+  const ultimo = ultimoDiaDoMes(anoInicio, mesInicio);
+  if (diaInicio !== 1 || diaFim !== ultimo) {
+    return `O arquivo cobre de ${dataBr(inicio)} a ${dataBr(fim)}, e o mês vai de 01 a ${String(ultimo).padStart(2, "0")}. Exporte do dia 1 ao último dia do mês.`;
+  }
+
+  return null;
+}
+
 /** Extrai o conteúdo de uma tag OFX (SGML ou XML): valor até a próxima tag. */
 function campo(bloco: string, tag: string): string | null {
   const re = new RegExp(`<${tag}>\\s*([^<\\r\\n]+)`, "i");
@@ -92,9 +140,19 @@ export function parseOfx(conteudo: string): ExtratoOfx {
     });
   }
 
+  // Período é INTERVALO, e intervalo não tem ordem: quando o exportador manda
+  // DTSTART depois de DTEND, o que existe é um par trocado, não um período que
+  // anda para trás. A Caixa mandou assim em 01/2025 e 02/2025, e o extrato foi
+  // gravado com início 31/01 e fim 01/01. Normalizar aqui conserta a gravação e
+  // a conferência de mês fechado de uma vez.
+  const inicioBruto = dataOfxParaIso(campo(conteudo, "DTSTART"));
+  const fimBruto = dataOfxParaIso(campo(conteudo, "DTEND"));
+  const trocado =
+    inicioBruto !== null && fimBruto !== null && inicioBruto > fimBruto;
+
   return {
-    periodoInicio: dataOfxParaIso(campo(conteudo, "DTSTART")),
-    periodoFim: dataOfxParaIso(campo(conteudo, "DTEND")),
+    periodoInicio: trocado ? fimBruto : inicioBruto,
+    periodoFim: trocado ? inicioBruto : fimBruto,
     transacoes,
   };
 }
