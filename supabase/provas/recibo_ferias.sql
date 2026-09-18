@@ -360,3 +360,144 @@ end $prova2$;
 -- Depois da prova, conferido que nada sobrou: rh_ferias 0, lancamentos de
 -- ferias 0, os dois grupos de recolhimento de volta a NULO, e nenhum
 -- competencia_evento de entidade 'ferias'.
+
+-- ---------------------------------------------------------------------------
+-- Parte 3: o cadastro por RPC (migration 20260918130000)
+-- ---------------------------------------------------------------------------
+--
+-- Em dois blocos porque o bloco unico estourava o tempo do transporte do MCP.
+-- Sao independentes: cada um cria a sua propria linha.
+
+do $prova3a$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';  -- Admin
+  v_colab uuid; v_cc uuid; v_ferias uuid;
+  a_cc uuid; a_recibo text; a_dias int;
+  b_dias int; b_status text; b_obs text;
+  c_erro text := '(NAO RECUSOU)';
+begin
+  select id, centro_custo_id into v_colab, v_cc
+    from public.colaboradores where ativo and centro_custo_id is not null limit 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  -- A) criar nasce SEM recibo e com o centro do colaborador. O centro importa
+  -- aqui e nao so em fn_lancar_ferias: sem ele, umas ferias cadastradas por
+  -- esta porta gerariam conta a pagar fora de qualquer obra na aprovacao.
+  v_ferias := public.fn_criar_ferias(
+    v_colab, date '2025-01-01', date '2025-12-31',
+    date '2026-05-04', date '2026-05-23', 20, 'programada', 'cadastro');
+
+  select centro_custo_id, status_recibo, dias into a_cc, a_recibo, a_dias
+    from public.rh_ferias where id = v_ferias;
+  if a_cc is distinct from v_cc then raise exception 'FALHOU: criar nao trouxe o centro do colaborador'; end if;
+  if a_recibo <> 'sem_recibo' then raise exception 'FALHOU: nasceu em % em vez de sem_recibo', a_recibo; end if;
+  if a_dias <> 20 then raise exception 'FALHOU dias: %', a_dias; end if;
+
+  -- B) editar
+  perform public.fn_editar_ferias(
+    v_ferias, date '2025-01-01', date '2025-12-31',
+    date '2026-05-04', date '2026-05-18', 15, 'gozada', 'voltou antes');
+  select dias, status, observacao into b_dias, b_status, b_obs
+    from public.rh_ferias where id = v_ferias;
+  if b_dias <> 15 or b_status <> 'gozada' or b_obs <> 'voltou antes' then
+    raise exception 'FALHOU editar: dias=% status=% obs=%', b_dias, b_status, b_obs;
+  end if;
+
+  -- C) CONTROLE: fim do gozo antes do inicio
+  begin
+    perform public.fn_editar_ferias(
+      v_ferias, date '2025-01-01', date '2025-12-31',
+      date '2026-05-04', date '2026-05-01', 15, 'gozada', null);
+  exception when others then c_erro := sqlerrm; end;
+  if c_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: aceitou fim do gozo antes do inicio'; end if;
+
+  reset role;
+  raise exception E'PARTE 3a (desfeita)\n  A) criou: centro do colaborador, recibo=% dias=%\n  B) editou -> dias=% status=% obs="%"\n  C) CONTROLE fim do gozo antes do inicio -> %',
+    a_recibo, a_dias, b_dias, b_status, b_obs, c_erro;
+end $prova3a$;
+
+-- Resultado em 18/09/2026:
+--
+--   A) criou: centro do colaborador, recibo=sem_recibo dias=20
+--   B) editou -> dias=15 status=gozada obs="voltou antes"
+--   C) CONTROLE fim do gozo antes do inicio -> O fim do gozo (01/05/2026) e
+--      antes do inicio (04/05/2026).
+
+do $prova3b$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';  -- Admin
+  v_colab uuid; v_ferias uuid;
+  g_zero text; g_abriu text;
+  d_erro text := '(NAO RECUSOU)';
+  e_erro text := '(NAO RECUSOU)';
+  f_sobrou int;
+begin
+  select id into v_colab
+    from public.colaboradores where ativo and centro_custo_id is not null limit 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  v_ferias := public.fn_criar_ferias(
+    v_colab, date '2025-01-01', date '2025-12-31',
+    date '2026-05-04', date '2026-05-23', 20, 'programada', 'cadastro');
+
+  -- G) DIGITAR VALOR ABRE O RECIBO.
+  -- Esta assercao existe por causa de um beco sem saida achado provando a
+  -- fn_criar_ferias: ela deixa o recibo em `sem_recibo`, e a
+  -- fn_editar_recibo_ferias so aceitava `rascunho`. Quem cadastrasse as ferias
+  -- pela tela de cadastro nao tinha como lancar o pagamento depois.
+  -- Zero nao abre, porque `sem_recibo` quer dizer "ninguem digitou dinheiro".
+  perform public.fn_editar_recibo_ferias(v_ferias, 0, 0, 0);
+  select status_recibo into g_zero from public.rh_ferias where id = v_ferias;
+  if g_zero <> 'sem_recibo' then raise exception 'FALHOU: zero abriu o recibo (%)', g_zero; end if;
+
+  perform public.fn_editar_recibo_ferias(v_ferias, 800.00, 0, 0);
+  select status_recibo into g_abriu from public.rh_ferias where id = v_ferias;
+  if g_abriu <> 'rascunho' then raise exception 'FALHOU: digitar valor nao abriu o recibo (%)', g_abriu; end if;
+
+  perform public.fn_enviar_recibo_ferias_aprovacao(v_ferias);
+  perform public.fn_aprovar_recibo_ferias(v_ferias);
+
+  -- D) CONTROLE: a data de inicio do gozo define a competencia e o vencimento
+  -- da conta a pagar. Mudar a data com o recibo aprovado deixaria o lancamento
+  -- apontando para um mes que nao existe mais no recibo.
+  begin
+    perform public.fn_editar_ferias(
+      v_ferias, date '2025-01-01', date '2025-12-31',
+      date '2026-09-01', date '2026-09-20', 20, 'programada', null);
+  exception when others then d_erro := sqlerrm; end;
+  if d_erro = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: mudou a data do gozo com o recibo aprovado';
+  end if;
+
+  -- E) CONTROLE: excluir com recibo aprovado deixaria lancamento orfao
+  begin
+    perform public.fn_excluir_ferias(v_ferias);
+  exception when others then e_erro := sqlerrm; end;
+  if e_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: excluiu ferias com recibo aprovado'; end if;
+
+  -- F) desaprovado, exclui
+  perform public.fn_desaprovar_recibo_ferias(v_ferias, 'prova');
+  perform public.fn_excluir_ferias(v_ferias);
+  select count(*) into f_sobrou from public.rh_ferias where id = v_ferias;
+  if f_sobrou <> 0 then raise exception 'FALHOU: nao excluiu'; end if;
+
+  reset role;
+  raise exception E'PARTE 3b (desfeita)\n  G) bruto 0 -> % ; bruto 800 -> %\n  D) CONTROLE editar com recibo aprovado -> %\n  E) CONTROLE excluir com recibo aprovado -> %\n  F) desaprovou e excluiu -> sobraram % linhas',
+    g_zero, g_abriu, d_erro, e_erro, f_sobrou;
+end $prova3b$;
+
+-- Resultado em 18/09/2026:
+--
+--   G) bruto 0 -> sem_recibo ; bruto 800 -> rascunho
+--   D) CONTROLE editar com recibo aprovado -> O recibo esta aprovado e ja
+--      virou conta a pagar. Desaprove antes de mudar as datas.
+--   E) CONTROLE excluir com recibo aprovado -> Este recibo esta aprovado e tem
+--      conta a pagar. Desaprove antes de excluir.
+--   F) desaprovou e excluiu -> sobraram 0 linhas
+--
+-- Depois das tres partes, conferido que nada sobrou: rh_ferias 0, lancamentos
+-- de ferias 0, nenhum competencia_evento de entidade 'ferias'.
