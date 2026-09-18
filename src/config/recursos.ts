@@ -232,7 +232,10 @@ export const RECURSOS = [
     nome: "Recebimentos",
     modulo: "financeiro",
     rota: "/financeiro/recebimentos",
-    acoes: ["ver", "criar", "editar"],
+    // `editar` da a baixa ("dar como recebido"), `excluir` a desfaz (estorno),
+    // na mesma divisao que Pagamentos usa. Sao acoes separadas de proposito:
+    // quem lanca o recebimento do dia nao precisa poder desfazer o de ontem.
+    acoes: ["ver", "criar", "editar", "excluir"],
   },
   /**
    * Transferencia entre contas vem logo depois de Recebimentos porque fecha o

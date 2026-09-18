@@ -137,6 +137,13 @@ export default async function PaginaRecebimentos({
     "financeiro.recebimentos",
     "editar",
   );
+  // Estornar é ação própria: quem dá a baixa do dia não necessariamente pode
+  // desfazer a de ontem. Mesma divisão que Pagamentos usa entre criar e excluir.
+  const podeEstornar = temPermissao(
+    usuario,
+    "financeiro.recebimentos",
+    "excluir",
+  );
 
   // As duas abas têm filtros próprios, em parâmetros próprios (o histórico usa o
   // prefixo h_): compartilhar os mesmos parâmetros faria filtrar uma aba filtrar
@@ -219,6 +226,7 @@ export default async function PaginaRecebimentos({
       categoriasReceita={categoriasReceita}
       podeCriar={podeCriar}
       podeReceber={podeReceber}
+      podeEstornar={podeEstornar}
       valoresAReceber={aReceberFiltros}
       // Vai o texto para os campos e o objeto já validado para a action que
       // pagina o histórico: a página é a única a interpretar a URL.

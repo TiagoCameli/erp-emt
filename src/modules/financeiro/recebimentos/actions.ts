@@ -80,6 +80,50 @@ export async function darComoRecebido(
 }
 
 /**
+ * Estorna um recebimento já baixado, via `fn_estornar_pagamento`.
+ *
+ * Mesma função do estorno de pagamento, pelo mesmo motivo de `darComoRecebido`
+ * usar a mesma `fn_pagar_parcela`: desfazer uma baixa é uma regra só, e duas
+ * cópias dela divergiriam no primeiro ajuste. É o banco que ramifica por tipo,
+ * cobra `financeiro.recebimentos`/`excluir` no a receber e PRESERVA a conta de
+ * destino da parcela, que no recebimento é dado do cadastro e não da baixa.
+ *
+ * O banco também recusa parcela conciliada. A mensagem dele vai direto ao
+ * toast: quem recusa é ele.
+ */
+export async function estornarRecebimento(
+  parcelaId: string,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "excluir");
+  } catch {
+    return { erro: "Sem permissão para estornar recebimentos" };
+  }
+
+  const parcelaValida = idSchema.safeParse(parcelaId);
+  if (!parcelaValida.success) return { erro: "Recebimento inválido" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_estornar_pagamento", {
+    p_parcela_id: parcelaValida.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "financeiro.recebimentos.estornarRecebimento",
+      error,
+      error.message || "Não foi possível estornar o recebimento. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  // Estornar a última parcela recebida devolve o lançamento para "aberto", então
+  // a lista de Lançamentos também sai de cache.
+  revalidatePath(ROTA_LANCAMENTOS);
+  return { ok: true };
+}
+
+/**
  * Busca uma página da aba "Recebidos" com os filtros já validados pela página.
  *
  * Existe porque a aba é paginada no servidor: a primeira página vem do Server
