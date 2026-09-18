@@ -217,3 +217,146 @@ end $prova$;
 -- O advisor de seguranca foi de 19 achados de
 -- `anon_security_definer_function_executable` para 1, e o que sobrou
 -- (`fn_trava_saldo_inicial`) retorna trigger e e de outra frente.
+
+-- ---------------------------------------------------------------------------
+-- Parte 2: aprovar e desaprovar (migration 20260918120000)
+-- ---------------------------------------------------------------------------
+--
+-- A guia usa uma fixture: em producao `folha_parametros.grupo_recolhimento_*`
+-- esta NULO nos dois, entao a guia nunca sai e o ramo ficaria sem prova. A
+-- prova liga os dois grupos dentro da transacao desfeita. Sem isso, "passou"
+-- so queria dizer que o `if` nem foi avaliado.
+
+do $prova2$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';  -- Admin
+  v_colab uuid; v_cc uuid; v_ferias uuid;
+  a_qtd int; a_valor numeric; a_comp date; a_cc uuid; a_venc date;
+  a_guia_qtd int; a_guia_soma numeric; a_guia_cc int;
+  b_qtd int; b_status text; b_lanc uuid; b_origem text;
+  c_erro text := '(NAO RECUSOU)';
+  d_erro text := '(NAO RECUSOU)';
+  e_erro text := '(NAO RECUSOU)';
+begin
+  select id, centro_custo_id into v_colab, v_cc
+    from public.colaboradores where ativo and centro_custo_id is not null limit 1;
+
+  update public.folha_parametros
+     set grupo_recolhimento_inss = 'GPS', grupo_recolhimento_irrf = 'DARF'
+   where id = 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  v_ferias := public.fn_lancar_ferias(
+    v_colab, date '2025-01-01', date '2025-12-31',
+    date '2026-03-02', date '2026-03-31', 30, 'programada',
+    1000.00, 80.00, 20.00, null, 'prova');
+
+  -- C) CONTROLE: aprovar em rascunho
+  begin
+    perform public.fn_aprovar_recibo_ferias(v_ferias);
+  exception when others then c_erro := sqlerrm; end;
+  if c_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: aprovou recibo em rascunho'; end if;
+
+  perform public.fn_enviar_recibo_ferias_aprovacao(v_ferias);
+  perform public.fn_aprovar_recibo_ferias(v_ferias);
+
+  -- A) uma conta a pagar, no centro certo, na competencia do GOZO.
+  -- Contagem e soma primeiro, atributos depois num select de UMA linha: com
+  -- `max()` a query nem compila para uuid, e com mais de uma linha o max
+  -- esconderia a segunda.
+  select count(*), coalesce(sum(l.valor),0) into a_qtd, a_valor
+    from public.lancamentos l
+   where l.origem = 'ferias' and l.origem_id = v_ferias;
+  if a_qtd <> 1 then raise exception 'FALHOU: esperava 1 lancamento, vieram %', a_qtd; end if;
+  if a_valor <> 900.00 then raise exception 'FALHOU: lancamento de % em vez de 900.00', a_valor; end if;
+
+  select l.mes_competencia, l.centro_custo_id, l.data_vencimento
+    into a_comp, a_cc, a_venc
+    from public.lancamentos l
+   where l.origem = 'ferias' and l.origem_id = v_ferias;
+
+  if a_comp <> date '2026-03-01' then
+    raise exception 'FALHOU competencia: esperava 2026-03-01 (mes do gozo), veio %', a_comp;
+  end if;
+  if a_cc is distinct from v_cc then raise exception 'FALHOU: centro de custo errado'; end if;
+  if a_venc <> date '2026-02-28' then
+    raise exception 'FALHOU vencimento: esperava 2026-02-28 (gozo - 2), veio %', a_venc;
+  end if;
+
+  -- A2) as guias saem do que foi DIGITADO, e sem centro de custo: guia e da
+  -- empresa, nao da obra.
+  select count(*), coalesce(sum(l.valor),0), count(l.centro_custo_id)
+    into a_guia_qtd, a_guia_soma, a_guia_cc
+    from public.lancamentos l
+   where l.origem = 'ferias_guia' and l.origem_id = v_ferias;
+
+  if a_guia_qtd <> 2 then raise exception 'FALHOU guia: esperava 2 (INSS e IRRF), vieram %', a_guia_qtd; end if;
+  if a_guia_soma <> 100.00 then raise exception 'FALHOU guia: soma % em vez de 100.00', a_guia_soma; end if;
+  if a_guia_cc <> 0 then raise exception 'FALHOU: guia saiu com centro de custo'; end if;
+
+  -- Recibo e guia compartilham `origem_id`. Se o lancamento_id fosse
+  -- reconsultado com `limit 1` sem ordem, poderia apontar para a guia, e a
+  -- tela mostraria o valor do INSS como se fosse o das ferias.
+  select lancamento_id into b_lanc from public.rh_ferias where id = v_ferias;
+  if b_lanc is null then raise exception 'FALHOU: recibo aprovado sem lancamento_id'; end if;
+  select origem into b_origem from public.lancamentos where id = b_lanc;
+  if b_origem <> 'ferias' then
+    raise exception 'FALHOU: lancamento_id aponta para "%", nao para o recibo', b_origem;
+  end if;
+
+  -- D) CONTROLE: desaprovar sem motivo
+  begin
+    perform public.fn_desaprovar_recibo_ferias(v_ferias, '   ');
+  exception when others then d_erro := sqlerrm; end;
+  if d_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: desaprovou sem motivo'; end if;
+
+  -- E) CONTROLE: desaprovar com parcela ja paga. Sem esta trava, desaprovar
+  -- apagaria um lancamento que ja saiu da conta bancaria.
+  reset role;
+  update public.lancamento_parcelas set status = 'pago' where lancamento_id = b_lanc;
+  execute 'set local role authenticated';
+  begin
+    perform public.fn_desaprovar_recibo_ferias(v_ferias, 'prova');
+  exception when others then e_erro := sqlerrm; end;
+  if e_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: desaprovou com parcela paga'; end if;
+  reset role;
+  update public.lancamento_parcelas set status = 'pendente' where lancamento_id = b_lanc;
+  execute 'set local role authenticated';
+
+  -- B) desaprovar devolve tudo, recibo E guia
+  perform public.fn_desaprovar_recibo_ferias(v_ferias, 'prova');
+  select count(*) into b_qtd from public.lancamentos
+   where origem in ('ferias','ferias_guia') and origem_id = v_ferias;
+  select status_recibo, lancamento_id into b_status, b_lanc
+    from public.rh_ferias where id = v_ferias;
+
+  if b_qtd <> 0 then raise exception 'FALHOU: sobraram % lancamentos', b_qtd; end if;
+  if b_status <> 'rascunho' then raise exception 'FALHOU: status apos desaprovar = %', b_status; end if;
+  if b_lanc is not null then raise exception 'FALHOU: lancamento_id ficou orfao'; end if;
+
+  reset role;
+  raise exception E'PROVA RECIBO DE FERIAS - parte 2 (desfeita)\n  C) CONTROLE aprovar em rascunho -> %\n  A) aprovou: % lancamento de % na competencia % (mes do gozo), vencendo % (gozo - 2), no centro do colaborador\n  A2) guia: % lancamentos somando % (80 INSS + 20 IRRF), nenhum com centro\n  D) CONTROLE desaprovar sem motivo -> %\n  E) CONTROLE desaprovar com parcela paga -> %\n  B) desaprovou: % lancamentos, status %, lancamento_id nulo',
+    c_erro, a_qtd, a_valor, a_comp, a_venc, a_guia_qtd, a_guia_soma, d_erro, e_erro, b_qtd, b_status;
+end $prova2$;
+
+-- Resultado em 18/09/2026:
+--
+--   C) CONTROLE aprovar em rascunho -> O recibo de YARA NYLLA BEZERRA GADELHA
+--      PEREIRA esta em "rascunho": so da para aprovar o que esta pendente.
+--   A) aprovou: 1 lancamento de 900.00 na competencia 2026-03-01 (mes do
+--      gozo), vencendo 2026-02-28 (gozo - 2), no centro do colaborador
+--   A2) guia: 2 lancamentos somando 100.00 (80 INSS + 20 IRRF), nenhum com
+--      centro
+--   D) CONTROLE desaprovar sem motivo -> Informe o motivo da desaprovacao
+--   E) CONTROLE desaprovar com parcela paga -> Ha parcela ja paga neste
+--      recibo. Nao da para desaprovar.
+--   B) desaprovou: 0 lancamentos, status rascunho, lancamento_id nulo
+--
+-- Contas a mao: 1.000,00 - 80,00 - 20,00 = 900,00 no recibo, 80,00 + 20,00 =
+-- 100,00 nas guias. 02/03/2026 - 2 dias = 28/02/2026.
+--
+-- Depois da prova, conferido que nada sobrou: rh_ferias 0, lancamentos de
+-- ferias 0, os dois grupos de recolhimento de volta a NULO, e nenhum
+-- competencia_evento de entidade 'ferias'.
