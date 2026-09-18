@@ -3625,53 +3625,114 @@ export type Database = {
       };
       rh_ferias: {
         Row: {
+          aprovado_em: string | null;
+          aprovado_por: string | null;
+          centro_custo_id: string | null;
           colaborador_id: string;
           created_at: string;
           created_by: string | null;
           data_fim: string | null;
           data_inicio: string | null;
+          data_vencimento: string | null;
           dias: number;
           id: string;
+          lancamento_id: string | null;
+          motivo_rejeicao: string | null;
           observacao: string | null;
           periodo_aquisitivo_fim: string;
           periodo_aquisitivo_inicio: string;
           status: string;
+          status_recibo: string;
           updated_at: string;
+          valor_bruto: number;
+          valor_inss: number;
+          valor_irrf: number;
+          valor_liquido: number;
         };
         Insert: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          centro_custo_id?: string | null;
           colaborador_id: string;
           created_at?: string;
           created_by?: string | null;
           data_fim?: string | null;
           data_inicio?: string | null;
+          data_vencimento?: string | null;
           dias?: number;
           id?: string;
+          lancamento_id?: string | null;
+          motivo_rejeicao?: string | null;
           observacao?: string | null;
           periodo_aquisitivo_fim: string;
           periodo_aquisitivo_inicio: string;
           status?: string;
+          status_recibo?: string;
           updated_at?: string;
+          valor_bruto?: number;
+          valor_inss?: number;
+          valor_irrf?: number;
+          valor_liquido?: number;
         };
         Update: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          centro_custo_id?: string | null;
           colaborador_id?: string;
           created_at?: string;
           created_by?: string | null;
           data_fim?: string | null;
           data_inicio?: string | null;
+          data_vencimento?: string | null;
           dias?: number;
           id?: string;
+          lancamento_id?: string | null;
+          motivo_rejeicao?: string | null;
           observacao?: string | null;
           periodo_aquisitivo_fim?: string;
           periodo_aquisitivo_inicio?: string;
           status?: string;
+          status_recibo?: string;
           updated_at?: string;
+          valor_bruto?: number;
+          valor_inss?: number;
+          valor_irrf?: number;
+          valor_liquido?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "rh_ferias_aprovado_por_fkey";
+            columns: ["aprovado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_ferias_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "rh_ferias_colaborador_id_fkey";
             columns: ["colaborador_id"];
             isOneToOne: false;
             referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_ferias_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_ferias_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
             referencedColumns: ["id"];
           },
         ];
@@ -4328,6 +4389,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined };
+      fn_aprovar_recibo_ferias: {
+        Args: { p_ferias: string };
+        Returns: undefined;
+      };
       fn_aprovar_rescisao: { Args: { p_rescisao: string }; Returns: undefined };
       fn_arquivo_por_hash: {
         Args: { p_hash: string; p_tamanho: number };
@@ -4402,6 +4467,19 @@ export type Database = {
         Args: { p_transacao_id: string; p_transferencia_id: string };
         Returns: undefined;
       };
+      fn_criar_ferias: {
+        Args: {
+          p_aquisitivo_fim: string;
+          p_aquisitivo_inicio: string;
+          p_colaborador: string;
+          p_data_fim?: string;
+          p_data_inicio?: string;
+          p_dias?: number;
+          p_observacao?: string;
+          p_status?: string;
+        };
+        Returns: string;
+      };
       fn_criar_forma_pagamento: {
         Args: { p_nome: string; p_tipo?: string };
         Returns: string;
@@ -4439,6 +4517,20 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_definir_vencimento_ferias: {
+        Args: {
+          // EDICAO MANUAL: o gerador escreve `p_data: string` porque o
+          // parametro nao tem DEFAULT e ele nao sabe que NULL e um valor
+          // LEGITIMO aqui — null e como se APAGA a data escolhida e se volta
+          // ao padrao (dois dias antes do inicio do gozo). A propria funcao
+          // trata `p_data is not null`. Mesma edicao existe em
+          // fn_definir_vencimento_decimo_terceiro e fn_definir_vencimento_folha.
+          // REGERAR OS TIPOS APAGA ISTO DE NOVO.
+          p_data: string | null;
+          p_ferias: string;
+        };
+        Returns: undefined;
+      };
       fn_definir_vencimento_folha: {
         Args: {
           p_data: string | null;
@@ -4462,6 +4554,10 @@ export type Database = {
         Args: { p_motivo: string; p_parcela_id: string };
         Returns: undefined;
       };
+      fn_desaprovar_recibo_ferias: {
+        Args: { p_ferias: string; p_motivo: string };
+        Returns: undefined;
+      };
       fn_desaprovar_rescisao: {
         Args: { p_motivo: string; p_rescisao: string };
         Returns: undefined;
@@ -4475,6 +4571,19 @@ export type Database = {
         Returns: undefined;
       };
       fn_dt_recalcular_totais: { Args: { p_lote: string }; Returns: undefined };
+      fn_editar_ferias: {
+        Args: {
+          p_aquisitivo_fim: string;
+          p_aquisitivo_inicio: string;
+          p_data_fim?: string;
+          p_data_inicio?: string;
+          p_dias?: number;
+          p_ferias: string;
+          p_observacao?: string;
+          p_status?: string;
+        };
+        Returns: undefined;
+      };
       fn_editar_item_decimo_terceiro: {
         Args: {
           p_bruto: number;
@@ -4502,8 +4611,21 @@ export type Database = {
         Args: { p_item: string; p_valor: number };
         Returns: undefined;
       };
+      fn_editar_recibo_ferias: {
+        Args: {
+          p_bruto: number;
+          p_ferias: string;
+          p_inss?: number;
+          p_irrf?: number;
+        };
+        Returns: undefined;
+      };
       fn_enviar_decimo_terceiro_aprovacao: {
         Args: { p_lote: string };
+        Returns: undefined;
+      };
+      fn_enviar_recibo_ferias_aprovacao: {
+        Args: { p_ferias: string };
         Returns: undefined;
       };
       fn_enviar_rescisao_aprovacao: {
@@ -4540,6 +4662,7 @@ export type Database = {
         Args: { p_lote: string; p_motivo: string };
         Returns: undefined;
       };
+      fn_excluir_ferias: { Args: { p_ferias: string }; Returns: undefined };
       fn_excluir_lancamento: { Args: { p_id: string }; Returns: undefined };
       fn_excluir_obra: {
         Args: { p_id: string; p_motivo: string };
@@ -4690,6 +4813,23 @@ export type Database = {
           valor_no_recorte: number;
         }[];
       };
+      fn_lancar_ferias: {
+        Args: {
+          p_aquisitivo_fim: string;
+          p_aquisitivo_inicio: string;
+          p_bruto: number;
+          p_colaborador: string;
+          p_data_fim: string;
+          p_data_inicio: string;
+          p_data_vencimento?: string;
+          p_dias: number;
+          p_inss?: number;
+          p_irrf?: number;
+          p_observacao?: string;
+          p_status: string;
+        };
+        Returns: string;
+      };
       fn_limpar_preferencia_tabela: {
         Args: { p_tabela: string };
         Returns: undefined;
@@ -4838,6 +4978,10 @@ export type Database = {
       };
       fn_rejeitar_decimo_terceiro: {
         Args: { p_lote: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_rejeitar_recibo_ferias: {
+        Args: { p_ferias: string; p_motivo: string };
         Returns: undefined;
       };
       fn_rejeitar_rescisao: {
@@ -5359,6 +5503,10 @@ export type Database = {
       };
       fn_voltar_para_folha: {
         Args: { p_colaborador_id: string; p_folha_id: string };
+        Returns: undefined;
+      };
+      fn_voltar_recibo_ferias_para_rascunho: {
+        Args: { p_ferias: string };
         Returns: undefined;
       };
       nomes_usuarios_auditoria: {

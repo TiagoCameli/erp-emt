@@ -3591,3 +3591,67 @@ deles. Vale como lembrete de que `supabase.rpc` aceita chave que não existe na 
 chamada (`raizId`) e desliga a otimização do componente inteiro. Em `painel-filtros.tsx` tirei os
 dois `useMemo` e deixei o compilador memoizar — são 64 etapas num filtro que só re-renderiza quando
 a URL muda.
+
+## 18/09/2026 — Recibo de férias, e duas travas que estavam abertas sem ninguém saber
+
+**O recibo vive em cima do registro de férias que já existia.** Uma linha de `rh_ferias` é umas
+férias E um recibo, com dois status independentes: `status` é o GOZO (programada/gozada) e
+`status_recibo` é o PAGAMENTO. Não são a mesma coisa nem andam juntos: alguém pode estar de férias
+sem o recibo ter saído, e receber antecipado sem ter saído ainda. Tabela separada duplicaria a
+chave e obrigaria a manter as duas em sincronia por trigger.
+
+**Duas portas de criação, e a transição entre elas é o que faz as duas funcionarem.** "Lançar
+férias" (`fn_lancar_ferias`) cria período e recibo de uma vez, em `rascunho`. "Programar férias"
+(`fn_criar_ferias`) só marca o gozo, e deixa em `sem_recibo`. Como a edição de valores só aceitava
+`rascunho`, quem entrasse pela segunda porta **nunca** conseguiria lançar o pagamento. A saída foi
+deixar o próprio ato de digitar um valor abrir o recibo (`sem_recibo` → `rascunho`), em vez de um
+botão "abrir recibo", que seria um clique a mais para dizer o que o valor já diz. Zerar não fecha o
+que está aberto: quem corrige um valor passa pelo zero.
+
+**A competência é o mês de INÍCIO DO GOZO, não o do pagamento.** O custo pertence ao mês em que a
+pessoa esteve de férias. E, sem data escolhida, o vencimento é dois dias antes do início do gozo,
+que é o prazo legal (CLT art. 145). Por isso as datas de gozo são obrigatórias em `lancarFerias` e
+opcionais no cadastro: sem elas o recibo não teria em que mês ser lançado. Pelo mesmo motivo,
+`fn_editar_ferias` recusa mudar as datas com o recibo aprovado.
+
+### As duas travas abertas, achadas provando
+
+**1. As policies de `rh_ferias` apontavam para um recurso morto.** Em 12/09 a aba virou
+`rh.decimo-terceiro-ferias`, e a migration daquele dia renomeou as permissões nas duas tabelas
+(`perfil_permissoes` e `usuario_permissoes`), até conferindo que não sobrou linha. O que ela não
+mexeu foram as quatro policies de 20260621120001, que seguiam chamando
+`tem_permissao('rh.ferias', ...)`. Com o recurso renomeado, isso passou a devolver **false para
+todo mundo, inclusive Admin**: a tabela ficou invisível e imutável pelo app por seis dias. RLS não
+dá erro, devolve zero linha, e a tela mostrou "nenhuma férias cadastrada" o tempo todo. `tsc`, lint
+e build passam, porque o nome do recurso dentro da policy é string SQL, não `RecursoId`.
+
+Não houve perda: a tabela estava vazia. **Renomear recurso é trabalho de DUAS metades**, e a
+varredura que acha a segunda é `pg_get_expr(polqual, polrelid) like '%<recurso velho>%'`.
+
+**2. Dezoito RPCs do 13º e do recibo estavam executáveis pelo `anon`.** Função nasce com EXECUTE
+para PUBLIC, e PUBLIC inclui o anon; nenhuma das migrations declarou `revoke`. Na prática as
+funções recusavam, porque a primeira linha de cada uma é `tem_permissao`, mas isso é a segunda
+tranca segurando sozinha. O advisor de segurança foi de 19 achados para 1 (o que sobrou retorna
+`trigger`, que o PostgREST não expõe, e é de outra frente). **Daqui em diante toda migration que
+cria RPC leva `revoke ... from public, anon` e `grant ... to authenticated` na mesma transação**:
+separados, existe um instante em que quem está logado perde a função.
+
+### O que ficou pendente de propósito
+
+`_PENDENTE_20260918_ferias_fecha_grants.sql` fecha o grant de escrita de `rh_ferias` e **não foi
+aplicada**. Migration aqui vai direto para produção: aplicar junto com o merge quebraria a tela que
+ainda está no ar, como em 27/08, quando um revoke assim derrubou quatro telas para todos os
+usuários. Até ela subir, um usuário autenticado consegue alterar `valor_bruto` e `status_recibo` de
+um recibo já aprovado direto pelo PostgREST, sem passar por trava de status. Grant de tabela não se
+reduz por coluna, então não há meio termo. O checklist está no cabeçalho do arquivo.
+
+### Sobre provar
+
+A prova das guias de INSS/IRRF só vale porque **liga os parâmetros dentro da transação desfeita**:
+`folha_parametros.grupo_recolhimento_inss/irrf` estão nulos em produção, então o ramo que escreve
+os dois lançamentos nunca era avaliado, e "passou" só queria dizer que o `if` foi falso.
+
+E a prova parte 1 ganhou uma asserção de VISIBILIDADE (conta a linha depois de gravar) porque foi
+assim que a trava 1 apareceu: com `select ... into` sem linha, toda variável fica nula, e
+`if a_recibo <> 'rascunho'` com nulo dá NULL, que o `if` trata como falso. Das asserções, só a do
+centro de custo acusou, por ser a única com `is distinct from`. **Igualdade não prova presença.**

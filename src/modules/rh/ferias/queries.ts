@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { dataHojeISO } from "@/lib/formatadores";
+import type { StatusRecibo } from "@/modules/rh/ferias/recibo-schemas";
 import type { StatusFerias } from "@/modules/rh/ferias/schemas";
 
 /**
@@ -33,6 +34,13 @@ export interface FeriasLista {
   dias: number;
   status: StatusFerias;
   observacao: string | null;
+  /**
+   * Status do PAGAMENTO, independente do `status` do gozo. `sem_recibo` quer
+   * dizer que ninguém digitou dinheiro nestas férias ainda.
+   */
+  statusRecibo: StatusRecibo;
+  /** Líquido do recibo. Zero enquanto ninguém digitou valor. */
+  valorLiquido: number;
   /** Limite de gozo (yyyy-MM-dd): fim do período aquisitivo + 12 meses. */
   limiteGozo: string;
   /** Situação calculada na leitura. */
@@ -85,7 +93,7 @@ export async function listarFerias(
   let consulta = supabase
     .from("rh_ferias")
     .select(
-      "id, colaborador_id, periodo_aquisitivo_inicio, periodo_aquisitivo_fim, data_inicio, data_fim, dias, status, observacao, created_at, colaboradores(nome)",
+      "id, colaborador_id, periodo_aquisitivo_inicio, periodo_aquisitivo_fim, data_inicio, data_fim, dias, status, observacao, status_recibo, valor_liquido, created_at, colaboradores(nome)",
     )
     .order("periodo_aquisitivo_fim", { ascending: true })
     .order("created_at", { ascending: false });
@@ -116,6 +124,8 @@ export async function listarFerias(
       dias: linha.dias,
       status,
       observacao: linha.observacao,
+      statusRecibo: linha.status_recibo as StatusRecibo,
+      valorLiquido: linha.valor_liquido,
       limiteGozo,
       situacao: calcularSituacao(status, limiteGozo, hoje),
       criadoEm: linha.created_at,
