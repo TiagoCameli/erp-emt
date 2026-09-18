@@ -501,3 +501,118 @@ end $prova3b$;
 --
 -- Depois das tres partes, conferido que nada sobrou: rh_ferias 0, lancamentos
 -- de ferias 0, nenhum competencia_evento de entidade 'ferias'.
+
+-- ---------------------------------------------------------------------------
+-- Parte 4: depois do revoke (migration 20260918221453)
+-- ---------------------------------------------------------------------------
+--
+-- Revogar privilegio e a hora classica de derrubar producao: fecha a porta
+-- errada e a tela para de funcionar sem ninguem perceber ate alguem clicar.
+-- Entao a prova confere os DOIS lados na mesma transacao: o que tinha que
+-- fechar fechou, e o que nao podia fechar continua de pe.
+--
+-- Rodada em 18/09/2026, depois de confirmar o deploy em producao.
+
+do $prova4$
+declare
+  v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';  -- Admin
+  v_colab uuid; v_cc uuid; v_ferias uuid;
+  a_vis int; a_liq numeric; a_cc uuid; a_recibo text;
+  a_qtd int; a_valor numeric; a_comp date; a_lanc_cc uuid;
+  b_qtd int; h_sobrou int;
+  e_status text; f_status text; g_status text;
+  direto text := '(NAO RECUSOU)';
+  c_erro text := '(NAO RECUSOU)';
+begin
+  select id, centro_custo_id into v_colab, v_cc
+    from public.colaboradores where ativo and centro_custo_id is not null limit 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role','authenticated')::text, true);
+  execute 'set local role authenticated';
+
+  -- O que o revoke FECHOU: escrita direta na tabela, que era o buraco. Um
+  -- PATCH assim no PostgREST trocava o valor de um recibo ja aprovado.
+  begin
+    execute 'update public.rh_ferias set valor_bruto = 999999';
+  exception when others then direto := sqlerrm; end;
+  if direto = '(NAO RECUSOU)' then
+    raise exception 'FALHOU: o update direto ainda passa, o revoke nao pegou';
+  end if;
+
+  -- O que o revoke NAO podia fechar: o caminho da tela, por RPC.
+  -- Porta 1: lancar cria periodo e recibo de uma vez.
+  v_ferias := public.fn_lancar_ferias(
+    v_colab, date '2025-01-01', date '2025-12-31',
+    date '2026-03-02', date '2026-03-31', 30, 'programada',
+    1000.00, 80.00, 20.00, null, 'pos-revoke');
+
+  select count(*) into a_vis from public.rh_ferias where id = v_ferias;
+  select status_recibo, valor_liquido, centro_custo_id into a_recibo, a_liq, a_cc
+    from public.rh_ferias where id = v_ferias;
+  if a_vis <> 1 then raise exception 'FALHOU: a tela nao enxerga a linha depois do revoke'; end if;
+  if a_liq <> 900.00 then raise exception 'FALHOU liquido: %', a_liq; end if;
+  if a_cc is distinct from v_cc then raise exception 'FALHOU centro'; end if;
+
+  perform public.fn_editar_recibo_ferias(v_ferias, 500.00, 0, 0);
+  perform public.fn_definir_vencimento_ferias(v_ferias, date '2026-02-25');
+  perform public.fn_enviar_recibo_ferias_aprovacao(v_ferias);
+  select status_recibo into e_status from public.rh_ferias where id = v_ferias;
+  perform public.fn_rejeitar_recibo_ferias(v_ferias, 'pos-revoke');
+  select status_recibo into f_status from public.rh_ferias where id = v_ferias;
+
+  begin
+    perform public.fn_editar_recibo_ferias(v_ferias, 100.00, 90.00, 90.00);
+  exception when others then c_erro := sqlerrm; end;
+  if c_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: trava de desconto sumiu'; end if;
+
+  -- Porta 2: cadastro, que so marca o gozo, e o recibo abre digitando valor.
+  v_ferias := public.fn_criar_ferias(
+    v_colab, date '2025-01-01', date '2025-12-31',
+    date '2026-03-02', date '2026-03-31', 30, 'programada', 'pos-revoke');
+  perform public.fn_editar_ferias(
+    v_ferias, date '2025-01-01', date '2025-12-31',
+    date '2026-03-02', date '2026-03-25', 24, 'gozada', 'ajustado');
+  perform public.fn_editar_recibo_ferias(v_ferias, 1000.00, 80.00, 20.00);
+  select status_recibo into g_status from public.rh_ferias where id = v_ferias;
+
+  perform public.fn_enviar_recibo_ferias_aprovacao(v_ferias);
+  perform public.fn_aprovar_recibo_ferias(v_ferias);
+
+  select count(*), coalesce(sum(valor),0) into a_qtd, a_valor
+    from public.lancamentos where origem = 'ferias' and origem_id = v_ferias;
+  select mes_competencia, centro_custo_id into a_comp, a_lanc_cc
+    from public.lancamentos where origem = 'ferias' and origem_id = v_ferias;
+  if a_qtd <> 1 or a_valor <> 900.00 then raise exception 'FALHOU aprovar: % de %', a_qtd, a_valor; end if;
+  if a_lanc_cc is distinct from v_cc then raise exception 'FALHOU centro do lancamento'; end if;
+
+  perform public.fn_desaprovar_recibo_ferias(v_ferias, 'pos-revoke');
+  select count(*) into b_qtd from public.lancamentos
+   where origem in ('ferias','ferias_guia') and origem_id = v_ferias;
+  if b_qtd <> 0 then raise exception 'FALHOU desaprovar: sobraram % lancamentos', b_qtd; end if;
+
+  perform public.fn_excluir_ferias(v_ferias);
+  select count(*) into h_sobrou from public.rh_ferias where id = v_ferias;
+  if h_sobrou <> 0 then raise exception 'FALHOU excluir'; end if;
+
+  reset role;
+  raise exception E'POS-REVOKE (desfeita)\n  update direto na tabela -> %\n  porta 1, lancar: enxerga % linha, recibo=% liquido=% centro certo\n  editou, definiu vencimento, enviou -> % ; devolveu -> %\n  CONTROLE desconto > bruto -> %\n  porta 2, cadastro: criou, editou, digitou valor -> recibo=%\n  aprovou: % lancamento de % na competencia %, centro certo\n  desaprovou: % lancamentos ; excluiu: sobraram % linhas',
+    direto, a_vis, a_recibo, a_liq, e_status, f_status, c_erro, g_status,
+    a_qtd, a_valor, a_comp, b_qtd, h_sobrou;
+end $prova4$;
+
+-- Resultado em 18/09/2026, depois de aplicar 20260918221453:
+--
+--   update direto na tabela -> permission denied for table rh_ferias
+--   porta 1, lancar: enxerga 1 linha, recibo=rascunho liquido=900.00 centro
+--   certo
+--   editou, definiu vencimento, enviou -> pendente_aprovacao ; devolveu ->
+--   rascunho
+--   CONTROLE desconto > bruto -> Os descontos (180.00) passam do bruto
+--   (100.00): o liquido ficaria negativo.
+--   porta 2, cadastro: criou, editou, digitou valor -> recibo=rascunho
+--   aprovou: 1 lancamento de 900.00 na competencia 2026-03-01, centro certo
+--   desaprovou: 0 lancamentos ; excluiu: sobraram 0 linhas
+--
+-- Depois: rh_ferias 0, lancamentos de ferias 0, nenhum competencia_evento de
+-- ferias, e uma unica policy na tabela (a de SELECT). O ACL ficou identico ao
+-- de rh_decimo_terceiro: `authenticated` so com SELECT, `anon` sem nada.
