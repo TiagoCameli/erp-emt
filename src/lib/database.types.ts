@@ -4518,7 +4518,17 @@ export type Database = {
         Returns: undefined;
       };
       fn_definir_vencimento_ferias: {
-        Args: { p_data: string; p_ferias: string };
+        Args: {
+          // EDICAO MANUAL: o gerador escreve `p_data: string` porque o
+          // parametro nao tem DEFAULT e ele nao sabe que NULL e um valor
+          // LEGITIMO aqui — null e como se APAGA a data escolhida e se volta
+          // ao padrao (dois dias antes do inicio do gozo). A propria funcao
+          // trata `p_data is not null`. Mesma edicao existe em
+          // fn_definir_vencimento_decimo_terceiro e fn_definir_vencimento_folha.
+          // REGERAR OS TIPOS APAGA ISTO DE NOVO.
+          p_data: string | null;
+          p_ferias: string;
+        };
         Returns: undefined;
       };
       fn_definir_vencimento_folha: {
