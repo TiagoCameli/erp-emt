@@ -9,6 +9,7 @@ import { toast } from "@/components/canonicos/toast";
 import {
   BarraSelecao,
   CelulaDescricaoCategoria,
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroBusca,
@@ -45,7 +46,10 @@ import type {
   FornecedorOpcao,
 } from "@/modules/financeiro/lancamentos/queries";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
-import { buscarParcelasRecebidas } from "@/modules/financeiro/recebimentos/actions";
+import {
+  buscarParcelasRecebidas,
+  estornarRecebimento,
+} from "@/modules/financeiro/recebimentos/actions";
 import type {
   CategoriaReceitaOpcao,
   FiltrosRecebidas,
@@ -108,6 +112,29 @@ function colunaCentroCusto<
   };
 }
 
+/**
+ * O que o estorno vai APAGAR deste recebimento, em texto, ou null quando não há
+ * nada a apagar.
+ *
+ * `fn_estornar_pagamento` zera desconto e juros junto com a data da baixa. O
+ * aviso precisa citar o dinheiro que some: confirmação que fala só do valor
+ * esconde o desconto concedido ao cliente. É o gêmeo do `textoDosAjustes` de
+ * Pagamentos, sem "outras despesas" porque o recebimento não tem esse campo (a
+ * baixa nunca envia, então ele é sempre zero aqui).
+ */
+function textoDosAjustes(parcela: ParcelaRecebida): string | null {
+  const itens: string[] = [];
+  if (parcela.desconto > 0) {
+    itens.push(`o desconto de ${formatarBRL(parcela.desconto)}`);
+  }
+  if (parcela.juros > 0) {
+    itens.push(`os juros de ${formatarBRL(parcela.juros)}`);
+  }
+  if (itens.length === 0) return null;
+  const lista = itens.length === 1 ? itens[0] : `${itens[0]} e ${itens[1]}`;
+  return `${lista} ${itens.length === 1 ? "é apagado" : "são apagados"}`;
+}
+
 export interface RecebimentosClienteProps {
   aReceber: ParcelaAReceber[];
   recebidas: ParcelaRecebida[];
@@ -123,6 +150,8 @@ export interface RecebimentosClienteProps {
   hoje: string;
   podeCriar: boolean;
   podeReceber: boolean;
+  /** `financeiro.recebimentos`/`excluir`: desfaz a baixa. Separada de `podeReceber`. */
+  podeEstornar: boolean;
   valoresAReceber: ValoresFiltrosAReceber;
   valoresRecebidos: ValoresFiltrosRecebidos;
   /** Os filtros da aba "Recebidos" já validados, para a action paginar. */
@@ -221,6 +250,7 @@ export function RecebimentosCliente({
   hoje,
   podeCriar,
   podeReceber,
+  podeEstornar,
   valoresAReceber,
   valoresRecebidos,
   filtrosRecebidas,
@@ -255,6 +285,25 @@ export function RecebimentosCliente({
   const [selecionadosAReceber, setSelecionadosAReceber] = React.useState<
     string[]
   >([]);
+  const [parcelaEstorno, setParcelaEstorno] =
+    React.useState<ParcelaRecebida | null>(null);
+  const [estornoAberto, setEstornoAberto] = React.useState(false);
+
+  function abrirEstorno(parcela: ParcelaRecebida) {
+    setParcelaEstorno(parcela);
+    setEstornoAberto(true);
+  }
+
+  async function confirmarEstorno() {
+    if (!parcelaEstorno) return;
+    const resultado = await estornarRecebimento(parcelaEstorno.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Recebimento estornado");
+    router.refresh();
+  }
 
   const opcoesCliente = React.useMemo<OpcaoFiltro[]>(
     () =>
@@ -788,8 +837,30 @@ export function RecebimentosCliente({
         meta: { alinharDireita: true },
         cell: ({ row }) => <CelulaValorRecebida parcela={row.original} />,
       },
+      ...(podeEstornar
+        ? [
+            {
+              id: "acoes",
+              header: "",
+              size: 120,
+              meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
+              cell: ({ row }) => (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => abrirEstorno(row.original)}
+                >
+                  Estornar
+                </Button>
+              ),
+            } satisfies ColumnDef<ParcelaRecebida, unknown>,
+          ]
+        : []),
     ],
-    [],
+    // Só `podeEstornar`: a aba lista exclusivamente parcelas pagas, então não há
+    // status a consultar para decidir se o botão aparece na linha.
+    [podeEstornar],
   );
 
   const semConta = contas.length === 0;
@@ -983,6 +1054,25 @@ export function RecebimentosCliente({
         podeAnexar={podeReceber}
         podePagar={false}
         onMudou={() => router.refresh()}
+      />
+
+      {/*
+        O aviso é o espelho invertido do de Pagamentos: lá o líquido VOLTA para o
+        saldo da conta, aqui ele SAI. Dinheiro que entrou e vai embora precisa
+        dizer isso antes do clique, não depois.
+      */}
+      <ConfirmDialog
+        aberto={estornoAberto}
+        onAbertoChange={setEstornoAberto}
+        titulo="Estornar este recebimento?"
+        descricao={
+          parcelaEstorno && textoDosAjustes(parcelaEstorno) !== null
+            ? `O líquido de ${formatarBRL(parcelaEstorno.valorLiquido)} sai do saldo da conta bancária, ${textoDosAjustes(parcelaEstorno)} e a parcela volta a valer ${formatarBRL(parcelaEstorno.valor)} a receber.`
+            : "O valor sai do saldo da conta bancária e a parcela volta para a fila de a receber. A conta de destino é preservada."
+        }
+        textoConfirmar="Estornar"
+        variante="destrutivo"
+        onConfirmar={confirmarEstorno}
       />
     </div>
   );
