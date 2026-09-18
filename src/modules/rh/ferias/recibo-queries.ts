@@ -113,3 +113,48 @@ export async function buscarRecibo(id: string): Promise<ReciboDetalhe | null> {
     motivoRejeicao: data.motivo_rejeicao,
   };
 }
+
+/**
+ * Colaborador para o drawer de lançar, com o contexto que a tela mostra ao
+ * lado dos campos.
+ *
+ * Tipo próprio em vez de estender `ColaboradorOpcao` do `_shared`: aquele é
+ * usado por meia dúzia de módulos que não precisam de salário nem de admissão,
+ * e engordar o compartilhado faz todos pagarem por um campo de um só.
+ *
+ * Salário e admissão são CONTEXTO, nunca base de conta: o app não calcula
+ * férias. Estão aqui para quem digita conferir se o valor faz sentido.
+ */
+export interface ColaboradorParaRecibo {
+  id: string;
+  nome: string;
+  funcao: string | null;
+  vinculo: string;
+  salarioBase: number | null;
+  dataAdmissao: string | null;
+}
+
+/** Colaboradores ativos dos três vínculos, com o contexto do cadastro. */
+export async function listarColaboradoresParaRecibo(): Promise<
+  ColaboradorParaRecibo[]
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select("id, nome, vinculo, salario, data_admissao, funcoes(nome)")
+    .eq("ativo", true)
+    .in("vinculo", ["clt", "terceiro", "diarista"])
+    .order("nome");
+
+  if (error) throw new Error("Não foi possível carregar os colaboradores");
+
+  return (data ?? []).map((linha) => ({
+    id: linha.id,
+    nome: linha.nome,
+    funcao: linha.funcoes?.nome ?? null,
+    vinculo: linha.vinculo,
+    salarioBase: linha.salario,
+    dataAdmissao: linha.data_admissao,
+  }));
+}

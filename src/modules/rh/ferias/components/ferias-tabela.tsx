@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Palmtree, Plus } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
@@ -13,6 +14,7 @@ import {
   FiltroBusca,
   FiltroPeriodo,
   FiltroSelect,
+  MoneyText,
   StatusBadge,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ import {
   ROTULO_STATUS_FERIAS,
   STATUS_FERIAS,
 } from "@/modules/rh/ferias/schemas";
+import { STATUS_RECIBO_INFO } from "@/modules/rh/ferias/recibo-formato";
 import { noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { FeriasFormDrawer } from "./ferias-form-drawer";
@@ -89,6 +92,7 @@ export function FeriasTabela({
   const [limiteDe, setLimiteDe] = useFiltroSessao("limiteDe", "");
   const [limiteAte, setLimiteAte] = useFiltroSessao("limiteAte", "");
 
+  const router = useRouter();
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<FeriasLista | null>(null);
 
@@ -216,6 +220,26 @@ export function FeriasTabela({
           return <StatusBadge status={config.status} rotulo={config.rotulo} />;
         },
       },
+      {
+        // O estado do PAGAMENTO, independente da Situação, que é do GOZO.
+        // Aprovado mostra o valor em vez do badge: a partir dali o que
+        // interessa é quanto virou conta a pagar, e o badge já está repetido
+        // na tela do recibo.
+        accessorKey: "statusRecibo",
+        header: "Recibo",
+        meta: { alinharDireita: true },
+        cell: ({ row }) => {
+          const registro = row.original;
+          if (registro.statusRecibo === "sem_recibo") {
+            return <span className="text-muted-foreground">Sem recibo</span>;
+          }
+          if (registro.statusRecibo === "aprovado") {
+            return <MoneyText valor={registro.valorLiquido} />;
+          }
+          const info = STATUS_RECIBO_INFO[registro.statusRecibo];
+          return <StatusBadge status={info.badge} rotulo={info.rotulo} />;
+        },
+      },
     ];
 
     if (!podeAgir) return base;
@@ -267,6 +291,18 @@ export function FeriasTabela({
         idTabela="rh.ferias"
         columns={colunas}
         data={dados}
+        // Linha COM recibo abre a tela do recibo, onde o dinheiro é digitado e
+        // aprovado. Linha sem recibo segue abrindo o drawer de cadastro: levar
+        // para uma tela de recibo vazia seria um clique a mais para voltar.
+        onRowClick={(registro) =>
+          registro.statusRecibo === "sem_recibo"
+            ? podeEditar
+              ? abrirEdicao(registro)
+              : undefined
+            : router.push(
+                `/rh/decimo-terceiro-e-ferias/ferias/${registro.id}`,
+              )
+        }
         filtros={[
           {
             id: "busca",

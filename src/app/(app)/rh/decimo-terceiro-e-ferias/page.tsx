@@ -17,6 +17,7 @@ import {
 import { FeriasAcoesCabecalho } from "@/modules/rh/ferias/components/ferias-acoes-cabecalho";
 import { FeriasTabela } from "@/modules/rh/ferias/components/ferias-tabela";
 import { listarFerias } from "@/modules/rh/ferias/queries";
+import { listarColaboradoresParaRecibo } from "@/modules/rh/ferias/recibo-queries";
 
 const RECURSO = "rh.decimo-terceiro-ferias" as const;
 
@@ -30,14 +31,16 @@ export default async function PaginaDecimoTerceiroEFerias() {
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
 
-  // Quatro leituras independentes: em paralelo para a página não somar quatro
+  // Cinco leituras independentes: em paralelo para a página não somar cinco
   // idas ao banco em sequência.
-  const [ferias, colaboradores, lotes, temProvisao] = await Promise.all([
-    listarFerias(),
-    listarColaboradores(),
-    listarLotes(),
-    temProvisaoDe13Ativa(),
-  ]);
+  const [ferias, colaboradores, colaboradoresParaRecibo, lotes, temProvisao] =
+    await Promise.all([
+      listarFerias(),
+      listarColaboradores(),
+      listarColaboradoresParaRecibo(),
+      listarLotes(),
+      temProvisaoDe13Ativa(),
+    ]);
 
   const vencidas = ferias.filter((item) => item.situacao === "vencida").length;
   const aVencer = ferias.filter((item) => item.situacao === "a_vencer").length;
@@ -72,7 +75,10 @@ export default async function PaginaDecimoTerceiroEFerias() {
           titulo="Férias"
           acao={
             podeCriar ? (
-              <FeriasAcoesCabecalho colaboradores={colaboradores} />
+              <FeriasAcoesCabecalho
+                colaboradores={colaboradores}
+                colaboradoresParaRecibo={colaboradoresParaRecibo}
+              />
             ) : undefined
           }
         >
