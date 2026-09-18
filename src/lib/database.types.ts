@@ -3625,53 +3625,114 @@ export type Database = {
       };
       rh_ferias: {
         Row: {
+          aprovado_em: string | null;
+          aprovado_por: string | null;
+          centro_custo_id: string | null;
           colaborador_id: string;
           created_at: string;
           created_by: string | null;
           data_fim: string | null;
           data_inicio: string | null;
+          data_vencimento: string | null;
           dias: number;
           id: string;
+          lancamento_id: string | null;
+          motivo_rejeicao: string | null;
           observacao: string | null;
           periodo_aquisitivo_fim: string;
           periodo_aquisitivo_inicio: string;
           status: string;
+          status_recibo: string;
           updated_at: string;
+          valor_bruto: number;
+          valor_inss: number;
+          valor_irrf: number;
+          valor_liquido: number;
         };
         Insert: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          centro_custo_id?: string | null;
           colaborador_id: string;
           created_at?: string;
           created_by?: string | null;
           data_fim?: string | null;
           data_inicio?: string | null;
+          data_vencimento?: string | null;
           dias?: number;
           id?: string;
+          lancamento_id?: string | null;
+          motivo_rejeicao?: string | null;
           observacao?: string | null;
           periodo_aquisitivo_fim: string;
           periodo_aquisitivo_inicio: string;
           status?: string;
+          status_recibo?: string;
           updated_at?: string;
+          valor_bruto?: number;
+          valor_inss?: number;
+          valor_irrf?: number;
+          valor_liquido?: number;
         };
         Update: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          centro_custo_id?: string | null;
           colaborador_id?: string;
           created_at?: string;
           created_by?: string | null;
           data_fim?: string | null;
           data_inicio?: string | null;
+          data_vencimento?: string | null;
           dias?: number;
           id?: string;
+          lancamento_id?: string | null;
+          motivo_rejeicao?: string | null;
           observacao?: string | null;
           periodo_aquisitivo_fim?: string;
           periodo_aquisitivo_inicio?: string;
           status?: string;
+          status_recibo?: string;
           updated_at?: string;
+          valor_bruto?: number;
+          valor_inss?: number;
+          valor_irrf?: number;
+          valor_liquido?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "rh_ferias_aprovado_por_fkey";
+            columns: ["aprovado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_ferias_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "rh_ferias_colaborador_id_fkey";
             columns: ["colaborador_id"];
             isOneToOne: false;
             referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_ferias_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_ferias_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
             referencedColumns: ["id"];
           },
         ];
