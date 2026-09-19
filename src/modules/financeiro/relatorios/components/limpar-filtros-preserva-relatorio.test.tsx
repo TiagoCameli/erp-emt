@@ -71,7 +71,6 @@ const CUSTO_CC_VAZIO: FiltrosCustoCc = {
 };
 
 const CUSTO_RECEITA_VAZIO: FiltrosCustoReceita = {
-  meses: [],
   de: "",
   ate: "",
   centrosCusto: [],
@@ -121,14 +120,12 @@ describe("Limpar filtros preserva o relatório aberto", () => {
     expect(query.get("rel")).toBe("custo-cc");
   });
 
-  it("Custo x receita: somem os meses, fica o `rel`", () => {
-    navegador.query = "rel=custo-receita&mes_ref=2026-08";
+  it("Custo x receita: some a janela de meses, fica o `rel`", () => {
+    navegador.query = "rel=custo-receita&de=2026-08&ate=2026-08";
     render(
       <FiltrosCustoReceitaBarra
-        filtros={{ ...CUSTO_RECEITA_VAZIO, meses: ["2026-08"] }}
-        mesesDisponiveis={["2026-07", "2026-08"]}
+        filtros={{ ...CUSTO_RECEITA_VAZIO, de: "2026-08", ate: "2026-08" }}
         centrosCusto={[]}
-        periodoDesabilitado={false}
       />,
     );
 
@@ -203,6 +200,7 @@ describe("Limpar filtros preserva o relatório aberto", () => {
           centrosReceita: [],
           etapasReceita: [],
         }}
+        janela={{}}
         centrosCusto={[]}
       />,
     );
@@ -222,9 +220,7 @@ describe("Limpar filtros preserva o relatório aberto", () => {
     render(
       <FiltrosCustoReceitaBarra
         filtros={CUSTO_RECEITA_VAZIO}
-        mesesDisponiveis={["2026-07", "2026-08"]}
         centrosCusto={[]}
-        periodoDesabilitado={false}
       />,
     );
 

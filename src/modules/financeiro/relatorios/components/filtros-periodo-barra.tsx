@@ -1,36 +1,41 @@
 "use client";
 
-import { FiltroMes, FiltroSelect, type FiltroDaBarra } from "@/components/canonicos";
+import type { FiltroDaBarra } from "@/components/canonicos";
+import { FiltroJanelaMeses } from "@/modules/financeiro/relatorios/components/filtro-janela-meses";
 import {
-  MODOS_PERIODO,
-  type ModoPeriodo,
+  escritaDaJanela,
+  janelaDoPeriodo,
   type PeriodoNaUrl,
 } from "@/modules/financeiro/relatorios/filtros-periodo";
 
 /**
- * Os campos de PERÍODO DE COMPETÊNCIA da barra de filtros, montados uma vez só.
+ * O campo de PERÍODO DE COMPETÊNCIA da barra de filtros, montado uma vez só.
  *
  * Três relatórios oferecem a mesma escolha de tempo (DRE gerencial, Custo por
  * grupo de insumo e o Custo por centro de custo, que tem um quarto modo próprio),
  * e a parte que não pode divergir entre eles não é o desenho: é a REGRA DE
- * ESCRITA. Trocar de modo tem que apagar, na MESMA navegação, o que não pertence
- * ao modo novo — em duas navegações o `de`/`ate` fica pendurado na URL e volta
- * sozinho quando a pessoa retorna ao modo período, recortando o relatório por uma
- * janela que ninguém escolheu.
+ * ESCRITA, que mora em `escritaDaJanela`. Régua limpa significa SEM LIMITE, que
+ * nesta URL é `modo=total` e não a ausência dos parâmetros — que cai no padrão, o
+ * mês corrente.
+ *
+ * ## Era um seletor de modo mais dois campos de mês
+ *
+ * Até 19/09/2026 o tempo ocupava três trilhos: um seletor "Um mês / Período /
+ * Tudo" e, conforme o modo, um `input type="month"` ou dois. O Tiago pediu a
+ * troca com o print do Custo x receita: "filtro de mês e data nos relatórios
+ * devem funcionar do mesmo jeito que funciona na área de lançamentos".
+ *
+ * A régua faz os três modos sem seletor nenhum: clicar num bloco é "um mês",
+ * arrastar é "período", e o X é "tudo". Os três continuam na URL do mesmo jeito,
+ * porque as RPCs e o drill já leem `modo`, `mes`, `de` e `ate`.
  *
  * Devolve `FiltroDaBarra[]` em vez de renderizar a barra inteira porque cada
- * relatório tem os filtros DELE depois destes, e a barra canônica é uma só.
+ * relatório tem os filtros DELE depois deste, e a barra canônica é uma só.
  */
-
-const ROTULO_MODO: Record<ModoPeriodo, string> = {
-  mes: "Um mês",
-  periodo: "Período",
-  total: "Tudo",
-};
-
 export function camposDePeriodo({
   escolha,
   mesNaUrl,
+  modoNaUrl,
   setMuitos,
 }: {
   escolha: PeriodoNaUrl;
@@ -43,97 +48,30 @@ export function camposDePeriodo({
    * que ninguém fez.
    */
   mesNaUrl: boolean;
+  /** O `modo` está ESCRITO na URL? Mesma razão do `mesNaUrl`. */
+  modoNaUrl: boolean;
   /** O `setMuitos` do `useFiltrosUrl` da tela: uma escrita por interação. */
   setMuitos: (mudancas: Record<string, string | null>) => void;
 }): FiltroDaBarra[] {
-  /**
-   * Troca o modo e limpa, na mesma navegação, só o que não pertence ao modo novo.
-   *
-   * Só o que não pertence: quem sai de "período" para "um mês" e volta encontra
-   * as datas onde deixou, em vez de digitá-las de novo.
-   */
-  function trocarModo(modo: string) {
-    const mudancas: Record<string, string | null> = {
-      modo: modo === "mes" ? null : modo,
-    };
-    if (modo !== "periodo") {
-      mudancas.de = null;
-      mudancas.ate = null;
-    }
-    setMuitos(mudancas);
-  }
+  const janela = janelaDoPeriodo(escolha);
 
-  const campos: FiltroDaBarra[] = [
+  return [
     {
-      id: "modo",
-      rotulo: "Período",
+      id: "periodo",
+      rotulo: "Mês de referência",
       fixo: true,
-      // O modo conta como filtro quando não é o padrão: é ele que faz o botão
-      // "Limpar filtros" aparecer num DRE apurado por trimestre ou por ano.
-      temValor: escolha.modo !== "mes",
-      onLimpar: () => setMuitos({ modo: null, de: null, ate: null }),
+      // Conta como filtro quando a URL DIZ alguma coisa. `escolha.mes` sozinho
+      // não serve: ele nasce no mês corrente em toda abertura da tela.
+      temValor: mesNaUrl || modoNaUrl || escolha.de !== "" || escolha.ate !== "",
+      onLimpar: () =>
+        setMuitos({ modo: null, mes: null, de: null, ate: null }),
       elemento: (
-        <FiltroSelect
-          valor={escolha.modo}
-          onValorChange={trocarModo}
-          opcoes={MODOS_PERIODO.map((modo) => ({
-            valor: modo,
-            rotulo: ROTULO_MODO[modo],
-          }))}
-          todosRotulo={ROTULO_MODO.mes}
+        <FiltroJanelaMeses
+          de={janela.de}
+          ate={janela.ate}
+          onJanelaChange={(de, ate) => setMuitos(escritaDaJanela(de, ate))}
         />
       ),
     },
   ];
-
-  if (escolha.modo === "mes") {
-    campos.push({
-      id: "mes",
-      rotulo: "Mês",
-      fixo: true,
-      temValor: mesNaUrl,
-      onLimpar: () => setMuitos({ mes: null }),
-      elemento: (
-        <FiltroMes
-          valor={escolha.mes}
-          onValorChange={(valor) => setMuitos({ mes: valor || null })}
-        />
-      ),
-    });
-  }
-
-  if (escolha.modo === "periodo") {
-    campos.push(
-      {
-        id: "de",
-        rotulo: "De",
-        fixo: true,
-        temValor: escolha.de !== "",
-        onLimpar: () => setMuitos({ de: null }),
-        elemento: (
-          <FiltroMes
-            rotulo="De"
-            valor={escolha.de}
-            onValorChange={(valor) => setMuitos({ de: valor || null })}
-          />
-        ),
-      },
-      {
-        id: "ate",
-        rotulo: "Até",
-        fixo: true,
-        temValor: escolha.ate !== "",
-        onLimpar: () => setMuitos({ ate: null }),
-        elemento: (
-          <FiltroMes
-            rotulo="Até"
-            valor={escolha.ate}
-            onValorChange={(valor) => setMuitos({ ate: valor || null })}
-          />
-        ),
-      },
-    );
-  }
-
-  return campos;
 }

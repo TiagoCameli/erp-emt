@@ -2,12 +2,15 @@
 
 import {
   BarraFiltrosConfiguravel,
-  FiltroMes,
-  FiltroSelect,
   FiltroSelectMulti,
   useFiltrosUrl,
   type FiltroDaBarra,
 } from "@/components/canonicos";
+import { FiltroJanelaMeses } from "@/modules/financeiro/relatorios/components/filtro-janela-meses";
+import {
+  escritaDaJanela,
+  janelaDoPeriodo,
+} from "@/modules/financeiro/relatorios/filtros-periodo";
 import { Checkbox } from "@/components/ui/checkbox";
 import type {
   CategoriaOpcao,
@@ -27,20 +30,12 @@ import {
   STATUS_CUSTO,
   TIPOS_CENTRO,
   type FiltrosCustoCc,
-  type ModoPeriodo,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
 import {
   escreverListaNaUrl,
   MAX_ITENS_FILTRO,
 } from "@/modules/financeiro/_shared/listas-na-url";
 import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";
-
-const MODOS: { valor: ModoPeriodo; rotulo: string }[] = [
-  { valor: "mes", rotulo: "Um mês" },
-  { valor: "periodo", rotulo: "Período" },
-  { valor: "total", rotulo: "Tudo" },
-  { valor: "vida", rotulo: "Vida do centro" },
-];
 
 const ROTULO_TIPO_CENTRO: Record<(typeof TIPOS_CENTRO)[number], string> = {
   obra: "Obra",
@@ -155,34 +150,43 @@ export function FiltrosCustoCcBarra({
 }: FiltrosCustoCcBarraProps) {
   // `naoSaoFiltro` preserva o `rel` no "Limpar filtros": ele diz qual relatório
   // está aberto, e apagá-lo devolvia a pessoa ao Fluxo de caixa.
-  const { setMuitos, limparTodos } = useFiltrosUrl({
+  const { get, setMuitos, limparTodos } = useFiltrosUrl({
     naoSaoFiltro: PARAMS_DE_NAVEGACAO,
   });
 
   const podeComparar = comparacaoPermitida(filtros.modo);
 
   /**
-   * Troca o modo e limpa, na MESMA navegação, só o que não pertence ao modo novo.
+   * Escreve a janela da régua, apagando na MESMA navegação o que ela desliga.
    *
-   * Numa navegação só porque em duas o parâmetro velho fica pendurado na URL e
-   * volta sozinho no meio do caminho. E limpando só o que não pertence: quem sai
-   * de "período" para "um mês" e volta encontra as datas onde deixou, em vez de
-   * ter que digitá-las de novo.
+   * Mexer no tempo tira do modo `vida`: lá a janela é de cada centro, a partir do
+   * primeiro lançamento dele, e uma régua que aparecesse marcada sem recortar
+   * nada seria um filtro mentindo. `escritaDaJanela` já troca o modo.
+   *
+   * `comparar` cai junto quando a régua fica sem limite: não existe período
+   * anterior a "tudo", e deixar `comparar=1` pendurado na URL o faria voltar
+   * ligado sozinho na próxima janela escolhida.
    */
-  function trocarModo(modo: string) {
-    const mudancas: Record<string, string | null> = {
-      modo: modo === "mes" ? null : modo,
-    };
-    if (modo !== "periodo") {
-      mudancas.de = null;
-      mudancas.ate = null;
-    }
-    if (modo !== "mes" && modo !== "periodo") {
-      // Comparar não existe em "tudo" nem em "vida": deixar comparar=1 na URL
-      // faria o filtro voltar ligado sozinho ao trocar de modo depois.
-      mudancas.comparar = null;
-    }
+  function escreverJanela(de: string, ate: string) {
+    const mudancas = escritaDaJanela(de, ate);
+    if (mudancas.modo === "total") mudancas.comparar = null;
     setMuitos(mudancas);
+  }
+
+  /**
+   * Liga e desliga a vida do centro.
+   *
+   * Ligar apaga a janela inteira (e o `comparar`, que não existe sem período
+   * anterior): quem manda no tempo passa a ser o primeiro lançamento de cada
+   * centro, e a régua volta a dizer "Todos os meses", que é a verdade. Desligar
+   * devolve a tela ao padrão dela, o mês corrente.
+   */
+  function trocarVida(marcado: boolean) {
+    setMuitos(
+      marcado
+        ? { modo: "vida", mes: null, de: null, ate: null, comparar: null }
+        : { modo: null },
+    );
   }
 
   /** Escreve uma lista de ids num parâmetro, ou remove o parâmetro (= todos). */
@@ -209,65 +213,47 @@ export function FiltrosCustoCcBarra({
 
   const nomesEtapa = rotuloDasEtapas(centrosCusto, filtros.centroIds);
 
+  const janela = janelaDoPeriodo(filtros);
+
   const filtrosDaBarra: FiltroDaBarra[] = [
     {
-      id: "modo",
-      rotulo: "Período",
+      id: "periodo",
+      rotulo: "Mês de referência",
       fixo: true,
+      // Conta como filtro quando a URL ESCREVE alguma coisa. `filtros.mes` não
+      // serve para decidir: ele nasce preenchido com o mês corrente em toda
+      // abertura da tela, e o botão "Limpar filtros" estaria sempre lá
+      // oferecendo apagar uma escolha que ninguém fez.
+      temValor:
+        get("modo") !== null ||
+        get("mes") !== null ||
+        filtros.de !== "" ||
+        filtros.ate !== "",
+      onLimpar: () => setMuitos({ modo: null, mes: null, de: null, ate: null }),
       elemento: (
-        <FiltroSelect
-          valor={filtros.modo}
-          onValorChange={trocarModo}
-          opcoes={MODOS.map((modo) => ({
-            valor: modo.valor,
-            rotulo: modo.rotulo,
-          }))}
-          todosRotulo="Um mês"
+        <FiltroJanelaMeses
+          de={janela.de}
+          ate={janela.ate}
+          onJanelaChange={escreverJanela}
+        />
+      ),
+    },
+    {
+      id: "vida",
+      rotulo: "Vida do centro",
+      fixo: true,
+      temValor: filtros.modo === "vida",
+      onLimpar: () => setMuitos({ modo: null }),
+      elemento: (
+        <FiltroMarcar
+          id="filtro-vida-do-centro"
+          rotulo="Desde o 1º lançamento de cada centro"
+          marcado={filtros.modo === "vida"}
+          onMarcarChange={trocarVida}
         />
       ),
     },
   ];
-
-  if (filtros.modo === "mes") {
-    filtrosDaBarra.push({
-      id: "mes",
-      rotulo: "Mês",
-      fixo: true,
-      elemento: (
-        <FiltroMes
-          valor={filtros.mes}
-          onValorChange={(valor) => setMuitos({ mes: valor || null })}
-        />
-      ),
-    });
-  }
-
-  if (filtros.modo === "periodo") {
-    filtrosDaBarra.push({
-      id: "de",
-      rotulo: "De",
-      fixo: true,
-      elemento: (
-        <FiltroMes
-          rotulo="De"
-          valor={filtros.de}
-          onValorChange={(valor) => setMuitos({ de: valor || null })}
-        />
-      ),
-    });
-    filtrosDaBarra.push({
-      id: "ate",
-      rotulo: "Até",
-      fixo: true,
-      elemento: (
-        <FiltroMes
-          rotulo="Até"
-          valor={filtros.ate}
-          onValorChange={(valor) => setMuitos({ ate: valor || null })}
-        />
-      ),
-    });
-  }
 
   filtrosDaBarra.push({
     id: "centro",

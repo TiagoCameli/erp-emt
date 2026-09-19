@@ -2,12 +2,11 @@
 
 import {
   BarraFiltrosConfiguravel,
-  FiltroMes,
-  FiltroSelect,
   FiltroSelectMulti,
   useFiltrosUrl,
   type FiltroDaBarra,
 } from "@/components/canonicos";
+import { FiltroJanelaMeses } from "@/modules/financeiro/relatorios/components/filtro-janela-meses";
 import {
   escreverListaNaUrl,
   MAX_ITENS_FILTRO,
@@ -20,12 +19,9 @@ import {
   temEtapasParaEscolher,
 } from "@/modules/_shared/centro-custo/filtro";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
-import {
-  MESES_PARA_FRENTE,
-  MESES_PARA_TRAS,
-  MODOS_FLUXO,
-  type FiltrosFluxoCaixa,
-  type ModoFluxo,
+import type {
+  FiltrosFluxoCaixa,
+  JanelaFluxo,
 } from "@/modules/financeiro/relatorios/filtros-fluxo-caixa";
 import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";
 
@@ -36,7 +32,9 @@ import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios"
  * O padrão da janela é doze meses para cada lado do mês corrente, e ele é o
  * ponto do filtro: sem janela, `fn_rel_fluxo_caixa()` devolve todo mês com
  * parcela e o gráfico desenhava 78 colunas indo até 05/2031 — as prestações dos
- * financiamentos. "Tudo" continua a um clique para quem quer o horizonte inteiro.
+ * financiamentos. "Tudo" continua a um clique para quem quer o horizonte inteiro:
+ * é o X da régua, que desde 19/09/2026 substitui o seletor de modo e os dois
+ * campos de mês (pedido do Tiago, o mesmo filtro de Lançamentos).
  *
  * Os parâmetros da janela são `fluxo_modo`, `fluxo_de` e `fluxo_ate`, e não os
  * `modo`/`de`/`ate` dos relatórios de competência: aqui o mês é o do pagamento ou
@@ -61,20 +59,23 @@ import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios"
  * em quase toda abertura da tela. É a mesma escada dos outros filtros de centro do
  * app, e o módulo puro dela é `_shared/centro-custo/filtro.ts`.
  */
-const ROTULO_MODO: Record<ModoFluxo, string> = {
-  janela: `${MESES_PARA_TRAS} meses atrás e ${MESES_PARA_FRENTE} à frente`,
-  periodo: "Período",
-  total: "Tudo",
-};
-
 export interface FiltrosFluxoCaixaBarraProps {
   filtros: FiltrosFluxoCaixa;
+  /**
+   * A janela que o gráfico está mostrando, já resolvida pelo modo (yyyy-MM).
+   *
+   * Vem pronta do servidor porque no modo padrão ela é RELATIVA ao mês corrente,
+   * e recalculá-la aqui com o relógio do navegador faria a régua e o gráfico
+   * discordarem na virada do mês.
+   */
+  janela: JanelaFluxo;
   /** Raízes e etapas, numa lista só. Ver `listarCentrosCustoParaFiltro`. */
   centrosCusto: CentroCustoOpcao[];
 }
 
 export function FiltrosFluxoCaixaBarra({
   filtros,
+  janela,
   centrosCusto,
 }: FiltrosFluxoCaixaBarraProps) {
   const { setMuitos, limparTodos } = useFiltrosUrl({
@@ -82,19 +83,20 @@ export function FiltrosFluxoCaixaBarra({
   });
 
   /**
-   * Troca o modo e apaga as pontas na MESMA navegação quando elas deixam de
-   * valer. Em duas escritas, o `fluxo_de` fica pendurado na URL e volta a
-   * recortar o gráfico sozinho quando a pessoa retornar ao modo período.
+   * Escreve a janela da régua numa navegação só.
+   *
+   * Régua limpa significa SEM LIMITE, que aqui é `fluxo_modo=total` — e não a
+   * ausência dos parâmetros, que cai no padrão (a janela de doze meses para cada
+   * lado). Escrever nada faria o X da régua devolver a pessoa ao padrão em vez de
+   * abrir o fluxo inteiro.
    */
-  function trocarModo(modo: string) {
-    const mudancas: Record<string, string | null> = {
-      fluxo_modo: modo === "janela" ? null : modo,
-    };
-    if (modo !== "periodo") {
-      mudancas.fluxo_de = null;
-      mudancas.fluxo_ate = null;
-    }
-    setMuitos(mudancas);
+  function escreverJanela(de: string, ate: string) {
+    const semLimite = de === "" && ate === "";
+    setMuitos({
+      fluxo_modo: semLimite ? "total" : "periodo",
+      fluxo_de: de === "" ? null : de,
+      fluxo_ate: ate === "" ? null : ate,
+    });
   }
 
   /**
@@ -128,60 +130,29 @@ export function FiltrosFluxoCaixaBarra({
 
   const filtrosDaBarra: FiltroDaBarra[] = [
     {
-      id: "fluxo_modo",
+      id: "fluxo_periodo",
       rotulo: "Janela",
       fixo: true,
       // Só conta como filtro fora do padrão: com a janela de sempre, o botão
-      // "Limpar filtros" ofereceria apagar uma escolha que ninguém fez.
+      // "Limpar filtros" ofereceria apagar uma escolha que ninguém fez. E é a
+      // ele que a pessoa volta ao limpar, e não a "tudo": o padrão desta tela é
+      // a janela relativa de doze meses para cada lado do mês corrente.
       temValor: filtros.modo !== "janela",
       onLimpar: () =>
         setMuitos({ fluxo_modo: null, fluxo_de: null, fluxo_ate: null }),
       elemento: (
-        <FiltroSelect
-          valor={filtros.modo}
-          onValorChange={trocarModo}
-          opcoes={MODOS_FLUXO.map((modo) => ({
-            valor: modo,
-            rotulo: ROTULO_MODO[modo],
-          }))}
-          todosRotulo={ROTULO_MODO.janela}
+        <FiltroJanelaMeses
+          rotulo="Janela"
+          // A régua mostra a janela EFETIVA, inclusive no modo padrão, em que ela
+          // é calculada a partir do mês corrente. Mostrá-la vazia diria que o
+          // fluxo está inteiro na tela quando ele está recortado em 25 meses.
+          de={janela.de ?? ""}
+          ate={janela.ate ?? ""}
+          onJanelaChange={escreverJanela}
         />
       ),
     },
   ];
-
-  if (filtros.modo === "periodo") {
-    filtrosDaBarra.push(
-      {
-        id: "fluxo_de",
-        rotulo: "De",
-        fixo: true,
-        temValor: filtros.de !== "",
-        onLimpar: () => setMuitos({ fluxo_de: null }),
-        elemento: (
-          <FiltroMes
-            rotulo="De"
-            valor={filtros.de}
-            onValorChange={(valor) => setMuitos({ fluxo_de: valor || null })}
-          />
-        ),
-      },
-      {
-        id: "fluxo_ate",
-        rotulo: "Até",
-        fixo: true,
-        temValor: filtros.ate !== "",
-        onLimpar: () => setMuitos({ fluxo_ate: null }),
-        elemento: (
-          <FiltroMes
-            rotulo="Até"
-            valor={filtros.ate}
-            onValorChange={(valor) => setMuitos({ fluxo_ate: valor || null })}
-          />
-        ),
-      },
-    );
-  }
 
   filtrosDaBarra.push({
     id: "centro_custo",

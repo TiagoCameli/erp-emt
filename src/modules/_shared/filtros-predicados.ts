@@ -79,6 +79,33 @@ export function mesmoMesReferencia(
 }
 
 /**
+ * Mês de referência do registro (yyyy-MM-01, como o banco guarda) dentro da
+ * JANELA escolhida na régua (as duas pontas em yyyy-MM).
+ *
+ * Ponta vazia significa sem limite daquele lado, igual ao resto dos filtros de
+ * intervalo. As duas vazias querem dizer todos os meses, inclusive os registros
+ * sem competência — filtro que ninguém aplicou não pode esconder linha.
+ *
+ * A comparação é de STRING: `yyyy-MM` ordena igual à data que representa, e
+ * converter para `Date` só abriria uma chance de o fuso mudar o mês de uma linha
+ * na virada. Mesma razão de `dentroDaJanela` do fluxo de caixa.
+ */
+export function dentroDaJanelaDeMeses(
+  competencia: string | null,
+  de: string,
+  ate: string,
+): boolean {
+  const inicio = de.trim();
+  const fim = ate.trim();
+  if (inicio === "" && fim === "") return true;
+  if (competencia === null) return false;
+  const mes = competencia.slice(0, 7);
+  if (inicio !== "" && mes < inicio) return false;
+  if (fim !== "" && mes > fim) return false;
+  return true;
+}
+
+/**
  * Opções de select montadas a partir dos próprios dados da tela, em ordem
  * alfabética pt-BR. Filtro que oferece opção sem nenhuma linha só devolve lista
  * vazia, então as opções saem do que está na tela, não do cadastro inteiro.

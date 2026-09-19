@@ -85,6 +85,55 @@ export function lerPeriodoDaUrl(
   return { modo, mes: mesLido === "" ? mesCorrente : mesLido, de, ate };
 }
 
+/**
+ * A JANELA em meses que a régua da barra mostra, dado o modo.
+ *
+ * A régua é um controle só para o que a URL guarda em três parâmetros (`modo`,
+ * `mes`, `de`/`ate`). Quem escolhe um mês só cai em `de === ate`, que é como a
+ * régua desenha um mês marcado.
+ *
+ * Vale para o Custo por centro de custo também: o modo `vida` não é uma janela
+ * (cada centro tem a dele, a partir do primeiro lançamento), então lá a régua
+ * abre vazia e quem manda é o modo.
+ */
+export function janelaDoPeriodo(escolha: {
+  modo: ModoPeriodo | "vida";
+  mes: string;
+  de: string;
+  ate: string;
+}): { de: string; ate: string } {
+  if (escolha.modo === "mes") return { de: escolha.mes, ate: escolha.mes };
+  if (escolha.modo === "periodo") return { de: escolha.de, ate: escolha.ate };
+  return { de: "", ate: "" };
+}
+
+/**
+ * O que escrever na URL quando a régua devolve uma janela.
+ *
+ * Régua limpa significa SEM LIMITE, que nesta URL é o modo `total` — e não a
+ * ausência dos parâmetros, que cai no padrão (o mês corrente). Escrever nada
+ * faria o X da régua devolver a pessoa ao mês corrente em vez de abrir o
+ * relatório inteiro.
+ *
+ * `mes` é apagado sempre: ele é o formato antigo da mesma pergunta, e dois
+ * parâmetros para uma pergunta só é o caminho para eles discordarem. A janela de
+ * um mês (`de === ate`) chega à RPC exatamente como o modo `mes` chegava.
+ */
+export function escritaDaJanela(
+  de: string,
+  ate: string,
+): Record<string, string | null> {
+  if (de === "" && ate === "") {
+    return { modo: "total", de: null, ate: null, mes: null };
+  }
+  return {
+    modo: "periodo",
+    de: de === "" ? null : de,
+    ate: ate === "" ? null : ate,
+    mes: null,
+  };
+}
+
 /** O período que vale, dado o modo. `total` é o período aberto dos dois lados. */
 export function periodoDoModo(escolha: PeriodoNaUrl): PeriodoCompetencia {
   switch (escolha.modo) {

@@ -2,17 +2,17 @@
 
 import {
   BarraFiltrosConfiguravel,
-  FiltroMes,
   FiltroSelectMulti,
   useFiltrosUrl,
   type FiltroDaBarra,
 } from "@/components/canonicos";
+import { FiltroJanelaMeses } from "@/modules/financeiro/relatorios/components/filtro-janela-meses";
+import { escritaDaJanela } from "@/modules/financeiro/relatorios/filtros-periodo";
 import type { CentroCustoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import {
   escreverListaNaUrl,
   MAX_ITENS_FILTRO,
 } from "@/modules/financeiro/_shared/listas-na-url";
-import { rotuloMes } from "@/modules/financeiro/relatorios/calculo";
 import {
   etapasValidas,
   opcoesDeEtapa,
@@ -20,22 +20,13 @@ import {
   rotuloDasEtapas,
   temEtapasParaEscolher,
 } from "@/modules/_shared/centro-custo/filtro";
-import {
-  MAX_MESES,
-  type FiltrosCustoReceita,
-} from "@/modules/financeiro/relatorios/filtros-custo-receita";
+import type { FiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
 import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";
-
-const MOTIVO_PERIODO_DESABILITADO =
-  "Há mês de referência marcado, e o mês marcado manda. Limpe os meses para voltar a usar a janela.";
 
 export interface FiltrosCustoReceitaBarraProps {
   filtros: FiltrosCustoReceita;
-  /** Só os meses que TÊM lançamento, em ordem crescente (yyyy-MM). */
-  mesesDisponiveis: string[];
   /** Raízes e etapas, numa lista só. Ver `listarCentrosCustoParaFiltro`. */
   centrosCusto: CentroCustoOpcao[];
-  periodoDesabilitado: boolean;
 }
 
 /**
@@ -54,20 +45,15 @@ export interface FiltrosCustoReceitaBarraProps {
  *    só, 61 das 76 opções eram equipamentos da mesma raiz e a lista desenhava
  *    sessenta e uma linhas idênticas, "Manutenção/Docume…", porque o nome que as
  *    distinguia vinha depois do corte do seletor.
- * 3. **A janela apaga quando há mês marcado.** O campo continua visível, com o
- *    motivo no title, em vez de sumir: filtro que desaparece deixa a pessoa
- *    procurando, e filtro que fica valendo em silêncio faz ela desconfiar do
- *    número.
- *
- * Os meses oferecidos são só os que existem em lançamento não cancelado. Um
- * calendário aberto deixaria escolher março de 2019 e ler "sem dados" como
- * resposta, quando a resposta é "esse mês não existe nesta base".
+ * 3. **O tempo é UM filtro só: a régua de mês de referência**, a mesma de
+ *    Lançamentos. Até 19/09/2026 eram três trilhos para a mesma pergunta (uma
+ *    lista de meses avulsos, um campo De e um campo Até), e os dois lados
+ *    brigavam: marcar mês apagava a janela, que ficava à vista, vazia e inerte.
+ *    O print que o Tiago mandou é justamente esse pedaço da barra.
  */
 export function FiltrosCustoReceitaBarra({
   filtros,
-  mesesDisponiveis,
   centrosCusto,
-  periodoDesabilitado,
 }: FiltrosCustoReceitaBarraProps) {
   // `naoSaoFiltro` preserva o `rel` no "Limpar filtros": ele diz qual relatório
   // está aberto, e apagá-lo devolvia a pessoa ao Fluxo de caixa.
@@ -76,12 +62,6 @@ export function FiltrosCustoReceitaBarra({
   });
 
   const opcoesCentro = opcoesDeRaiz(centrosCusto);
-
-  // Do mês mais novo para o mais velho: quem abre o seletor quer o mês recente.
-  const opcoesMes = [...mesesDisponiveis].reverse().map((mes) => ({
-    valor: mes,
-    rotulo: rotuloMes(mes),
-  }));
 
   /**
    * Troca as raízes de um lado e, na MESMA navegação, apaga as etapas que
@@ -207,56 +187,33 @@ export function FiltrosCustoReceitaBarra({
     });
   }
 
-  filtrosDaBarra.push(
-    {
-      id: "mes_ref",
-      rotulo: "Meses de referência",
-      fixo: true,
-      temValor: filtros.meses.length > 0,
-      onLimpar: () => setMuitos({ mes_ref: null }),
-      elemento: (
-        <FiltroSelectMulti
-          valores={filtros.meses}
-          onValoresChange={(meses) =>
-            setMuitos({ mes_ref: escreverListaNaUrl(meses, MAX_MESES) })
-          }
-          maximo={MAX_MESES}
-          opcoes={opcoesMes}
-          todosRotulo="Todos os meses"
-        />
-      ),
-    },
-    {
-      id: "de",
-      rotulo: "De",
-      temValor: filtros.de !== "",
-      onLimpar: () => setMuitos({ de: null }),
-      elemento: (
-        <FiltroMes
-          rotulo="De"
-          valor={filtros.de}
-          desabilitado={periodoDesabilitado}
-          motivo={MOTIVO_PERIODO_DESABILITADO}
-          onValorChange={(valor) => setMuitos({ de: valor || null })}
-        />
-      ),
-    },
-    {
-      id: "ate",
-      rotulo: "Até",
-      temValor: filtros.ate !== "",
-      onLimpar: () => setMuitos({ ate: null }),
-      elemento: (
-        <FiltroMes
-          rotulo="Até"
-          valor={filtros.ate}
-          desabilitado={periodoDesabilitado}
-          motivo={MOTIVO_PERIODO_DESABILITADO}
-          onValorChange={(valor) => setMuitos({ ate: valor || null })}
-        />
-      ),
-    },
-  );
+  filtrosDaBarra.push({
+    id: "mes_ref",
+    rotulo: "Mês de referência",
+    fixo: true,
+    temValor: filtros.de !== "" || filtros.ate !== "",
+    // `mes_ref` é apagado junto: quem chegou por link do formato antigo e limpa
+    // o filtro não pode ficar com os meses presos na URL, invisíveis na barra.
+    onLimpar: () =>
+      setMuitos({ modo: null, de: null, ate: null, mes_ref: null }),
+    elemento: (
+      <FiltroJanelaMeses
+        de={filtros.de}
+        ate={filtros.ate}
+        // A MESMA escrita dos outros relatórios de competência, de propósito: os
+        // parâmetros de tempo têm nome igual nos quatro para que trocar de
+        // relatório na barra de cima mantenha o recorte em vez de jogá-lo fora.
+        // Esta tela ignora o `modo` na leitura (aqui janela vazia já é "todos os
+        // meses"), mas quem sair daqui para o DRE leva a janela junto.
+        //
+        // `mes_ref` vai junto no lixo: é o formato antigo da mesma pergunta, e
+        // dois filtros para uma pergunta só é o caminho para eles discordarem.
+        onJanelaChange={(de, ate) =>
+          setMuitos({ ...escritaDaJanela(de, ate), mes_ref: null })
+        }
+      />
+    ),
+  });
 
   return (
     <BarraFiltrosConfiguravel
