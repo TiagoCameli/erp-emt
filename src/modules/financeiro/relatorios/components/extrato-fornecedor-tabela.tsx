@@ -14,18 +14,18 @@ import {
   KPICard,
   MoneyText,
   FiltroBusca,
-  FiltroMes,
   FiltroPeriodo,
   FiltroSelect,
   FiltroValor,
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
+import { FiltroJanelaMeses } from "@/modules/financeiro/relatorios/components/filtro-janela-meses";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   dentroDaFaixaValor,
   dentroDoPeriodo,
-  mesmoMesReferencia,
+  dentroDaJanelaDeMeses,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
 import {
@@ -140,7 +140,8 @@ export function ExtratoFornecedorTabela({
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = useFiltroSessao("status", "");
-  const [mes, setMes] = useFiltroSessao("mes", "");
+  const [mesDe, setMesDe] = useFiltroSessao("mesDe", "");
+  const [mesAte, setMesAte] = useFiltroSessao("mesAte", "");
   const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
   const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
   const [vencimentoDe, setVencimentoDe] = useFiltroSessao("vencimentoDe", "");
@@ -159,8 +160,9 @@ export function ExtratoFornecedorTabela({
     setStatus(valor);
     zerarPagina();
   }
-  function mudarMes(valor: string) {
-    setMes(valor);
+  function mudarMes(de: string, ate: string) {
+    setMesDe(de);
+    setMesAte(ate);
     zerarPagina();
   }
   function mudarValor(de: string, ate: string) {
@@ -197,7 +199,9 @@ export function ExtratoFornecedorTabela({
       } else if (status !== "" && lancamento.status !== status) {
         return false;
       }
-      if (!mesmoMesReferencia(lancamento.mesCompetencia, mes)) return false;
+      if (!dentroDaJanelaDeMeses(lancamento.mesCompetencia, mesDe, mesAte)) {
+        return false;
+      }
       if (!dentroDaFaixaValor(lancamento.valor, valorDe, valorAte))
         return false;
       if (
@@ -219,7 +223,8 @@ export function ExtratoFornecedorTabela({
     lancamentos,
     busca,
     status,
-    mes,
+    mesDe,
+    mesAte,
     valorDe,
     valorAte,
     vencimentoDe,
@@ -263,9 +268,15 @@ export function ExtratoFornecedorTabela({
       id: "mes",
       rotulo: "Mês de referência",
       ocultoPorPadrao: true,
-      temValor: mes !== "",
-      onLimpar: () => mudarMes(""),
-      elemento: <FiltroMes valor={mes} onValorChange={mudarMes} />,
+      temValor: mesDe !== "" || mesAte !== "",
+      onLimpar: () => mudarMes("", ""),
+      elemento: (
+        <FiltroJanelaMeses
+          de={mesDe}
+          ate={mesAte}
+          onJanelaChange={mudarMes}
+        />
+      ),
     },
     {
       id: "vencimento",
@@ -297,7 +308,8 @@ export function ExtratoFornecedorTabela({
   const filtrando =
     busca.trim() !== "" ||
     status !== "" ||
-    mes !== "" ||
+    mesDe !== "" ||
+    mesAte !== "" ||
     valorDe !== "" ||
     valorAte !== "" ||
     vencimentoDe !== "" ||

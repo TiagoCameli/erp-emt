@@ -19,30 +19,32 @@ describe("lerFiltrosCustoReceita", () => {
   it("sem nada na URL, o relatório é de TODOS os meses que existem", () => {
     // O padrão responde "quanto essa obra deu de resultado", que é a pergunta
     // que faz alguém abrir esta tela.
-    const { filtros, mesesEfetivos, periodoDesabilitado } =
-      lerFiltrosCustoReceita({}, DISPONIVEIS);
-    expect(filtros.meses).toEqual([]);
+    const { filtros, mesesEfetivos } = lerFiltrosCustoReceita({}, DISPONIVEIS);
+    expect(filtros.de).toBe("");
+    expect(filtros.ate).toBe("");
     expect(mesesEfetivos).toEqual(DISPONIVEIS);
-    expect(periodoDesabilitado).toBe(false);
   });
 
-  it("mês marcado MANDA, e desabilita o período", () => {
-    const { mesesEfetivos, periodoDesabilitado } = lerFiltrosCustoReceita(
+  it("`mes_ref` do formato antigo vira a janela que cobre os meses marcados", () => {
+    const { filtros, mesesEfetivos } = lerFiltrosCustoReceita(
       { mes_ref: "2026-07,2026-05", de: "2026-01", ate: "2026-03" },
       DISPONIVEIS,
     );
-    // Em ordem crescente, não na ordem de clique: o eixo do gráfico é o tempo.
-    expect(mesesEfetivos).toEqual(["2026-05", "2026-07"]);
-    expect(periodoDesabilitado).toBe(true);
+    // Manda sobre `de`/`ate`, que era a precedência da tela antiga ("mês marcado
+    // manda"), e a janela do menor ao maior traz junto o que está no meio. A
+    // régua da barra mostra exatamente esta janela: o relatório não pode
+    // recortar por uma lista que nenhum filtro da tela exibe.
+    expect(filtros.de).toBe("2026-05");
+    expect(filtros.ate).toBe("2026-07");
+    expect(mesesEfetivos).toEqual(["2026-05", "2026-06", "2026-07"]);
   });
 
   it("só período: vira a lista contígua de meses da janela", () => {
-    const { mesesEfetivos, periodoDesabilitado } = lerFiltrosCustoReceita(
+    const { mesesEfetivos } = lerFiltrosCustoReceita(
       { de: "2026-06", ate: "2026-08" },
       DISPONIVEIS,
     );
     expect(mesesEfetivos).toEqual(["2026-06", "2026-07", "2026-08"]);
-    expect(periodoDesabilitado).toBe(false);
   });
 
   it("janela invertida é trocada de lado, em vez de vir vazia", () => {
@@ -68,13 +70,14 @@ describe("lerFiltrosCustoReceita", () => {
       { mes_ref: "2026-13,julho,2026-7" },
       DISPONIVEIS,
     );
-    expect(filtros.meses).toEqual([]);
+    expect(filtros.de).toBe("");
+    expect(filtros.ate).toBe("");
     // Nenhum mês válido = cai no padrão, e não numa lista vazia que mostraria
     // "sem dados" para um filtro que a pessoa não conseguiu aplicar.
     expect(mesesEfetivos).toEqual(DISPONIVEIS);
   });
 
-  it("mês repetido conta uma vez", () => {
+  it("um mês só no `mes_ref` antigo vira janela de um mês", () => {
     const { mesesEfetivos } = lerFiltrosCustoReceita(
       { mes_ref: "2026-07,2026-07" },
       DISPONIVEIS,
@@ -138,7 +141,7 @@ describe("lerFiltrosCustoReceita", () => {
     expect(filtros.centrosReceita).toEqual([]);
   });
 
-  it("lista de meses corta no teto", () => {
+  it("janela do `mes_ref` antigo corta no teto", () => {
     const muitos = Array.from({ length: MAX_MESES + 12 }, (_, i) => {
       const ano = 2020 + Math.floor(i / 12);
       const mes = String((i % 12) + 1).padStart(2, "0");
@@ -165,12 +168,17 @@ describe("lerFiltrosCustoReceita", () => {
     expect(mesesEfetivos).toEqual([]);
   });
 
-  it("chave repetida na URL vale como lista", () => {
+  it("chave repetida na URL vale como lista, e vira a janela que a cobre", () => {
     const { mesesEfetivos } = lerFiltrosCustoReceita(
       { mes_ref: ["2026-05", "2026-08"] },
       DISPONIVEIS,
     );
-    expect(mesesEfetivos).toEqual(["2026-05", "2026-08"]);
+    expect(mesesEfetivos).toEqual([
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08",
+    ]);
   });
 });
 

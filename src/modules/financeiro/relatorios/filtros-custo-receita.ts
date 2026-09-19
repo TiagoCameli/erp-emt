@@ -21,14 +21,21 @@ import {
  * e quem lê a URL precisa saber qual é qual para o segundo campo abrir marcado.
  * A tradução dos dois numa lista só para o banco é de `_shared/centro-custo/filtro.ts`.
  *
- * ## O tempo entra como UMA lista de meses
+ * ## O tempo é UMA janela de meses, e só
  *
- * A tela tem dois controles (janela de/até e lista de meses), e o banco recebe um
- * só: a lista dos meses que valem. A regra, escolhida pelo dono: **mês marcado
- * manda**, e a janela fica desabilitada com o motivo à vista. Interseção entre os
- * dois daria combinação vazia sem explicação óbvia (marcar março numa janela de
- * abril a junho traz zero), e dois filtros de tempo brigando calados é a coisa que
- * faz a pessoa desconfiar do número.
+ * Desde 19/09/2026 a tela tem um controle de tempo só: a régua de mês de
+ * referência, a mesma de Lançamentos (pedido do Tiago, com o print desta tela).
+ * Antes eram TRÊS trilhos para a mesma pergunta — uma lista de meses avulsos
+ * (`mes_ref`), um campo De e um campo Até — com a regra "mês marcado manda" e a
+ * janela apagada em silêncio quando havia mês na lista. Dois controles de tempo
+ * brigando na mesma barra é a coisa que faz a pessoa desconfiar do número.
+ *
+ * `mes_ref` continua sendo LIDO, para link salvo e favorito não abrirem sem
+ * recorte nenhum: ele vira a janela que vai do menor ao maior mês marcado. Um
+ * link com meses NÃO contíguos (jan e jul) passa a mostrar também o que está no
+ * meio — e a barra diz isso, porque a régua exibe "jan - jul de 2026". O que não
+ * pode acontecer é o relatório recortar por uma lista que nenhum filtro da tela
+ * mostra.
  *
  * Sem nada escolhido, valem TODOS os meses que existem: é a pergunta que faz
  * alguém abrir esta tela ("quanto essa obra deu de resultado").
@@ -51,10 +58,9 @@ export const MAX_MESES = 60;
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export interface FiltrosCustoReceita {
-  /** Meses marcados (yyyy-MM), em ordem crescente. Vazio = usa a janela. */
-  meses: string[];
-  /** Pontas da janela (yyyy-MM). Só valem quando `meses` está vazio. */
+  /** Primeiro mês da janela (yyyy-MM). Vazio = sem limite desse lado. */
   de: string;
+  /** Último mês da janela (yyyy-MM). Vazio = sem limite desse lado. */
   ate: string;
   /** Centros-raiz cujo CUSTO entra. Vazio = todos. Cada um vale pela subárvore. */
   centrosCusto: string[];
@@ -104,8 +110,6 @@ export interface LeituraCustoReceita {
    * tempo que chega ao banco.
    */
   mesesEfetivos: string[];
-  /** A janela está desabilitada porque há mês marcado? */
-  periodoDesabilitado: boolean;
 }
 
 /**
@@ -119,20 +123,27 @@ export function lerFiltrosCustoReceita(
   params: ParametrosUrl,
   mesesDisponiveis: readonly string[],
 ): LeituraCustoReceita {
-  const meses = lerListaDaUrl(
-    params.mes_ref,
-    (item) => MES.test(item),
-    MAX_MESES,
-  ).sort();
-
   let de = parametroMes(params.de);
   let ate = parametroMes(params.ate);
   // Janela invertida é trocada de lado, senão o relatório vem vazio sem
   // explicação nenhuma. Mesma regra dos outros contratos de URL do módulo.
   if (de && ate && de > ate) [de, ate] = [ate, de];
 
+  // `mes_ref` do formato antigo, quando o tempo era uma lista de meses avulsos:
+  // vira a janela que cobre o que foi marcado, e MANDA sobre `de`/`ate`, que era
+  // a precedência da tela antiga (mês marcado desabilitava a janela). Sem isto,
+  // um link salvo abriria com a janela que o filtro velho tinha apagado.
+  const marcados = lerListaDaUrl(
+    params.mes_ref,
+    (item) => MES.test(item),
+    MAX_MESES,
+  ).sort();
+  if (marcados.length > 0) {
+    de = marcados[0]!;
+    ate = marcados[marcados.length - 1]!;
+  }
+
   const filtros: FiltrosCustoReceita = {
-    meses,
     de,
     ate,
     centrosCusto: lerUuidsDaUrl(params.centro_custo),
@@ -141,18 +152,11 @@ export function lerFiltrosCustoReceita(
     etapasReceita: lerUuidsDaUrl(params.etapa_receita),
   };
 
-  return {
-    filtros,
-    mesesEfetivos: resolverMeses(filtros, mesesDisponiveis),
-    // Só desabilita quando há mês VÁLIDO marcado: com `mes_ref=julho` na URL a
-    // janela continua valendo, senão a tela travaria os dois controles por causa
-    // de um parâmetro que não virou filtro.
-    periodoDesabilitado: meses.length > 0,
-  };
+  return { filtros, mesesEfetivos: resolverMeses(filtros, mesesDisponiveis) };
 }
 
 /**
- * Os meses que valem: a lista marcada, ou a janela, ou tudo.
+ * Os meses que valem: a janela, ou tudo.
  *
  * Com uma ponta só da janela, a outra vem do que EXISTE (o primeiro ou o último
  * mês com lançamento) em vez de virar um limite inventado: "de julho em diante"
@@ -162,8 +166,6 @@ function resolverMeses(
   filtros: FiltrosCustoReceita,
   mesesDisponiveis: readonly string[],
 ): string[] {
-  if (filtros.meses.length > 0) return filtros.meses;
-
   const existentes = [...mesesDisponiveis].sort();
   if (existentes.length === 0) return [];
 

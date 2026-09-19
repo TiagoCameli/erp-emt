@@ -29,6 +29,8 @@ import type { FiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtro
  * 2. O segundo campo só existe quando há o que escolher nele.
  * 3. Desmarcar a raiz apaga a etapa dela na MESMA navegação. Em duas, o
  *    `etapa_custo` fica pendurado na URL, invisível e vivo.
+ * 4. O tempo é UM filtro só (a régua de mês de referência), e escrever a janela
+ *    apaga o `mes_ref` do formato antigo.
  */
 
 const navegador = vi.hoisted(() => ({ query: "", destinos: [] as string[] }));
@@ -49,6 +51,13 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
   buscarPreferenciaTabela: vi.fn(async () => null),
   salvarPreferenciaTabela: vi.fn(async () => undefined),
   limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+// A régua desenha os meses a partir de hoje: sem travar a data, o teste
+// envelheceria na virada do ano.
+vi.mock("@/lib/formatadores", async (original) => ({
+  ...(await original<typeof import("@/lib/formatadores")>()),
+  dataHojeISO: () => "2026-09-19",
 }));
 
 vi.mock("@/components/canonicos/filtros-sessao", () => ({
@@ -89,7 +98,6 @@ const CADASTRO: CentroCustoOpcao[] = [
 ];
 
 const VAZIO: FiltrosCustoReceita = {
-  meses: [],
   de: "",
   ate: "",
   centrosCusto: [],
@@ -102,9 +110,7 @@ function montar(filtros: Partial<FiltrosCustoReceita>) {
   return render(
     <FiltrosCustoReceitaBarra
       filtros={{ ...VAZIO, ...filtros }}
-      mesesDisponiveis={["2026-07", "2026-08"]}
       centrosCusto={CADASTRO}
-      periodoDesabilitado={false}
     />,
   );
 }
@@ -201,5 +207,60 @@ describe("FiltrosCustoReceitaBarra: a escada de centro e etapa", () => {
     // dele continua escolhida.
     expect(query.get("centro_custo")).toBe(`${MANUT},${OBRA}`);
     expect(query.get("etapa_custo")).toBe(MAQ_B);
+  });
+});
+
+describe("FiltrosCustoReceitaBarra: o eixo de tempo", () => {
+  const regua = () => screen.getByRole("button", { name: "Mês de referência" });
+
+  it("é UM filtro só, e não sobrou campo de mês nativo", () => {
+    // Até 19/09/2026 eram três trilhos para a mesma pergunta: uma lista de meses
+    // avulsos, um campo De e um campo Até.
+    montar({});
+    expect(screen.queryByText("Meses de referência")).toBeNull();
+    expect(screen.queryByLabelText("De")).toBeNull();
+    expect(screen.queryByLabelText("Até")).toBeNull();
+    expect(regua().textContent).toContain("Todos os meses");
+  });
+
+  it("a janela escolhida vai para a URL em yyyy-MM, sem o dia", () => {
+    // A régua fala `yyyy-MM-01` (o dia que `mes_competencia` guarda) e a URL dos
+    // relatórios guarda `yyyy-MM` desde sempre. Trocar o formato da URL quebraria
+    // todo link salvo e todo drill que já escreve `de=2026-08`.
+    montar({});
+    fireEvent.click(regua());
+
+    const maio = screen.getByRole("button", { name: "maio de 2026" });
+    fireEvent.pointerDown(maio, { button: 0 });
+    fireEvent.pointerEnter(screen.getByRole("button", { name: "agosto de 2026" }));
+    fireEvent.pointerUp(screen.getByRole("button", { name: "agosto de 2026" }));
+
+    const query = new URLSearchParams(navegador.destinos.at(-1)!.split("?")[1]);
+    expect(query.get("de")).toBe("2026-05");
+    expect(query.get("ate")).toBe("2026-08");
+  });
+
+  it("escrever a janela apaga o `mes_ref` do formato antigo", () => {
+    // Dois filtros para a mesma pergunta na URL é o caminho para eles
+    // discordarem: o `mes_ref` manda na leitura, e ficaria pendurado e invisível.
+    // Janela de dois meses (e não de um trimestre redondo) porque a régua
+    // reabre pela BORDA do período: jan a mar abriria em Trimestres.
+    navegador.query = "mes_ref=2026-01,2026-02";
+    montar({ de: "2026-01", ate: "2026-02" });
+    fireEvent.click(regua());
+
+    const julho = screen.getByRole("button", { name: "julho de 2026" });
+    fireEvent.pointerDown(julho, { button: 0 });
+    fireEvent.pointerUp(julho);
+
+    const query = new URLSearchParams(navegador.destinos.at(-1)!.split("?")[1]);
+    expect(query.get("mes_ref")).toBeNull();
+    expect(query.get("de")).toBe("2026-07");
+    expect(query.get("ate")).toBe("2026-07");
+  });
+
+  it("a régua abre marcando a janela que veio do `mes_ref` antigo", () => {
+    montar({ de: "2026-05", ate: "2026-07" });
+    expect(regua().textContent).toContain("mai - jul de 2026");
   });
 });

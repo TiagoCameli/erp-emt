@@ -20,6 +20,7 @@ import type { PaginationState } from "@tanstack/react-table";
 
 export {
   dentroDaFaixaValor,
+  dentroDaJanelaDeMeses,
   dentroDoPeriodo,
   mesmoMesReferencia,
   opcoesDeNomes,

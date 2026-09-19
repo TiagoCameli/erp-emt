@@ -28,6 +28,7 @@ export function FiltrosDreBarra({ filtros }: { filtros: PeriodoNaUrl }) {
       filtros={camposDePeriodo({
         escolha: filtros,
         mesNaUrl: get("mes") !== null,
+        modoNaUrl: get("modo") !== null,
         setMuitos,
       })}
     />

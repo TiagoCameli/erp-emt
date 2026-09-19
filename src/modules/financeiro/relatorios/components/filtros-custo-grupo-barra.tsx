@@ -68,6 +68,7 @@ export function FiltrosCustoGrupoBarra({
     ...camposDePeriodo({
       escolha: filtros,
       mesNaUrl: get("mes") !== null,
+      modoNaUrl: get("modo") !== null,
       setMuitos,
     }),
     {

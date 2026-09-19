@@ -1129,11 +1129,8 @@ export default async function RelatoriosPage({
    */
   const centrosParaFluxo =
     relatorio === "fluxo-caixa" ? await listarCentrosCustoParaFiltro() : null;
-  const {
-    filtros: filtrosCustoReceita,
-    mesesEfetivos: mesesCustoReceita,
-    periodoDesabilitado,
-  } = lerFiltrosCustoReceita(params, mesesDisponiveis);
+  const { filtros: filtrosCustoReceita, mesesEfetivos: mesesCustoReceita } =
+    lerFiltrosCustoReceita(params, mesesDisponiveis);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1158,6 +1155,7 @@ export default async function RelatoriosPage({
         >
           <FiltrosFluxoCaixaBarra
             filtros={filtrosFluxo}
+            janela={janelaFluxo}
             centrosCusto={centrosParaFluxo ?? []}
           />
           <ConteudoFluxoCaixa
@@ -1294,9 +1292,7 @@ export default async function RelatoriosPage({
         >
           <FiltrosCustoReceitaBarra
             filtros={filtrosCustoReceita}
-            mesesDisponiveis={mesesDisponiveis}
             centrosCusto={centrosParaCustoReceita}
-            periodoDesabilitado={periodoDesabilitado}
           />
           <ConteudoCustoReceita
             centrosCusto={centrosEfetivos(

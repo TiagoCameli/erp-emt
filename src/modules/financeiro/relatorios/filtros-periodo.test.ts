@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   descreverPeriodo,
+  escritaDaJanela,
+  janelaDoPeriodo,
   lerPeriodoDaUrl,
   periodoDoModo,
   periodoFechado,
@@ -135,5 +137,97 @@ describe("descreverPeriodo", () => {
     expect(descreverPeriodo({}, "total")).toBe(
       "Todo o período, sem limite de data",
     );
+  });
+});
+
+/**
+ * A régua de mês de referência é UM controle para o que a URL guarda em três
+ * parâmetros. Estas duas funções são a ponte, e a regra que não pode se perder é
+ * a do X: régua limpa significa SEM LIMITE, que nesta URL é `modo=total`. Se ela
+ * escrevesse "nada", o X devolveria a pessoa ao mês corrente (o padrão da
+ * leitura) em vez de abrir o relatório inteiro.
+ */
+describe("janelaDoPeriodo", () => {
+  it("um mês vira janela com as duas pontas no mesmo mês", () => {
+    expect(
+      janelaDoPeriodo({ modo: "mes", mes: "2026-07", de: "", ate: "" }),
+    ).toEqual({ de: "2026-07", ate: "2026-07" });
+  });
+
+  it("período vira a janela dele, inclusive com ponta aberta", () => {
+    expect(
+      janelaDoPeriodo({
+        modo: "periodo",
+        mes: "2026-08",
+        de: "2026-01",
+        ate: "2026-03",
+      }),
+    ).toEqual({ de: "2026-01", ate: "2026-03" });
+    expect(
+      janelaDoPeriodo({ modo: "periodo", mes: "2026-08", de: "2026-01", ate: "" }),
+    ).toEqual({ de: "2026-01", ate: "" });
+  });
+
+  it("tudo e vida do centro abrem a régua vazia", () => {
+    // Em `vida` a janela é de cada centro, a partir do primeiro lançamento dele:
+    // uma régua marcada ali seria um filtro que não filtra.
+    expect(
+      janelaDoPeriodo({ modo: "total", mes: "2026-08", de: "2026-01", ate: "" }),
+    ).toEqual({ de: "", ate: "" });
+    expect(
+      janelaDoPeriodo({ modo: "vida", mes: "2026-08", de: "", ate: "" }),
+    ).toEqual({ de: "", ate: "" });
+  });
+});
+
+describe("escritaDaJanela", () => {
+  it("régua limpa é SEM LIMITE, e sem limite é `modo=total`", () => {
+    expect(escritaDaJanela("", "")).toEqual({
+      modo: "total",
+      de: null,
+      ate: null,
+      mes: null,
+    });
+  });
+
+  it("janela escolhida vira modo período com as duas pontas", () => {
+    expect(escritaDaJanela("2026-01", "2026-03")).toEqual({
+      modo: "periodo",
+      de: "2026-01",
+      ate: "2026-03",
+      mes: null,
+    });
+  });
+
+  it("um mês só também é janela, e chega à RPC como o modo mês chegava", () => {
+    const escrita = escritaDaJanela("2026-07", "2026-07");
+    expect(escrita.modo).toBe("periodo");
+
+    const comoAntes = pontasDaRpc(periodoDoModo(lerPeriodoDaUrl({ mes: "2026-07" }, CORRENTE)));
+    const agora = pontasDaRpc(
+      periodoDoModo(
+        lerPeriodoDaUrl(
+          { modo: "periodo", de: "2026-07", ate: "2026-07" },
+          CORRENTE,
+        ),
+      ),
+    );
+    expect(agora).toEqual(comoAntes);
+  });
+
+  it("apaga o `mes` do formato antigo em toda escrita", () => {
+    // Dois parâmetros para a mesma pergunta na URL é o caminho para eles
+    // discordarem: `mes` só vale no modo `mes`, e ficaria pendurado e invisível.
+    expect(escritaDaJanela("2026-01", "").mes).toBeNull();
+    expect(escritaDaJanela("", "").mes).toBeNull();
+  });
+
+  it("ponta aberta viaja como ausência, não como string vazia", () => {
+    expect(escritaDaJanela("2026-01", "")).toEqual({
+      modo: "periodo",
+      de: "2026-01",
+      ate: null,
+      mes: null,
+    });
   });
 });
