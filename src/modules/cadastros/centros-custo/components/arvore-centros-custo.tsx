@@ -47,6 +47,7 @@ import {
 } from "@/modules/cadastros/centros-custo/schemas";
 import { NoFormDrawer, type ModoNo } from "./no-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { motivoParaNaoDesativar } from "@/modules/cadastros/centros-custo/travas-de-status";
 
 const OPCOES_STATUS = [
   { valor: "ativos", rotulo: "Ativos" },
@@ -281,13 +282,21 @@ export function ArvoreCentrosCusto({
     const podeAdicionarItem = podeCriar && no.nivel === 2;
     // Editar: nó manual edita tudo; nó gerido só orçamento (ainda abre o drawer).
     const podeAbrirEditar = podeEditar;
-    // Desativar: só nó manual de nível 2 ou 3.
-    const podeDesativar = podeEditar && no.nivel !== 1 && !gerido;
+    // As duas metades vêm da MESMA regra que a action aplica: menu que oferece
+    // o que o servidor recusa é promessa quebrada, e trava de servidor sem item
+    // de menu é beco sem saída. Ver `travas-de-status.ts`.
+    const mostrarDesativar =
+      no.ativo &&
+      podeEditar &&
+      motivoParaNaoDesativar({ nivel: no.nivel, gerido }) === null;
+    // Ativar: qualquer nó inativo, CENTRO INCLUSIVE.
+    const mostrarAtivar = !no.ativo && podeEditar;
     const temAcoes =
       podeAdicionarEtapa ||
       podeAdicionarItem ||
       podeAbrirEditar ||
-      podeDesativar;
+      mostrarDesativar ||
+      mostrarAtivar;
 
     return (
       <React.Fragment key={no.id}>
@@ -403,21 +412,22 @@ export function ArvoreCentrosCusto({
                     {gerido ? "Editar orçamento" : "Editar"}
                   </DropdownMenuItem>
                 ) : null}
-                {podeDesativar ? (
+                {mostrarDesativar || mostrarAtivar ? (
                   <>
                     <DropdownMenuSeparator />
-                    {no.ativo ? (
+                    {mostrarDesativar ? (
                       <DropdownMenuItem
                         variant="destructive"
                         onSelect={() => setADesativar(no)}
                       >
                         Desativar
                       </DropdownMenuItem>
-                    ) : (
+                    ) : null}
+                    {mostrarAtivar ? (
                       <DropdownMenuItem onSelect={() => aoReativar(no)}>
                         Ativar
                       </DropdownMenuItem>
-                    )}
+                    ) : null}
                   </>
                 ) : null}
               </DropdownMenuContent>

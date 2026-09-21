@@ -9,6 +9,7 @@ import {
   type ColunaImportacao,
 } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
+import { motivoParaNaoAlternar } from "@/modules/cadastros/centros-custo/travas-de-status";
 import { createClient } from "@/lib/supabase/server";
 import {
   criarEtapaSchema,
@@ -206,12 +207,14 @@ export async function alternarAtivo(
   const no = await carregarNo(supabase, idValido.data);
   if (!no) return { erro: "Centro de custo não encontrado" };
 
-  if (no.nivel === 1) {
-    return { erro: "Centros não podem ser desativados aqui. São geridos pelo sistema" };
-  }
-  if (noGerido(no)) {
-    return { erro: "Este nó é gerido pelo sistema e não pode ser desativado" };
-  }
+  // A trava é de DESLIGAR, não de ligar: a regra e o porquê da assimetria estão
+  // em `travas-de-status.ts`, que a árvore usa para esconder o mesmo item de
+  // menu que esta action recusaria.
+  const impedimento = motivoParaNaoAlternar(
+    { nivel: no.nivel, gerido: noGerido(no) },
+    ativo,
+  );
+  if (impedimento) return { erro: impedimento };
 
   const { error } = await supabase
     .from(TABELA)
