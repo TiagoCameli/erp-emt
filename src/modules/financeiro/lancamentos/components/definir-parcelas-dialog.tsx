@@ -117,6 +117,11 @@ export function DefinirParcelasDialog({
   const [justificativa, setJustificativa] = React.useState("");
   const [gerando, setGerando] = React.useState(false);
 
+  /** A área rolável das parcelas em aberto, para levar a nova linha à vista. */
+  const listaEditavel = React.useRef<HTMLDivElement>(null);
+  /** Marca que a última mudança foi um "Adicionar parcela", e não uma digitação. */
+  const acabouDeAdicionar = React.useRef(false);
+
   // Recarrega ao abrir, ajustando o estado DURANTE a renderização (padrão
   // recomendado pelo React para "estado derivado de prop que mudou"), em vez de
   // um efeito com setState, que dispara render em cascata.
@@ -151,6 +156,41 @@ export function DefinirParcelasDialog({
   const podeSalvar =
     motivo === null && !dataVazia && !valorInvalido && !salvando;
   const totalMudou = Math.round((novoTotal - valor) * 100) !== 0;
+
+  /**
+   * Acrescenta uma linha em branco e leva o cursor até ela.
+   *
+   * O foco não é enfeite: com parcelas já pagas em cima e várias em aberto, a
+   * linha nova nasce no fim de uma área que rola, ou seja, fora do campo de
+   * visão de quem acabou de clicar no botão. Sem isto o botão parece não ter
+   * feito nada — foi o que o Tiago descreveu em 21/09/2026.
+   */
+  function adicionarParcela() {
+    acabouDeAdicionar.current = true;
+    setParcelas((atual) => [
+      ...atual,
+      { dataVencimento: "", valor: "", formaPagamentoId: "" },
+    ]);
+  }
+
+  // Depois do render que acrescentou a linha: foca o vencimento dela, que é o
+  // primeiro campo a preencher.
+  React.useEffect(() => {
+    if (!acabouDeAdicionar.current) return;
+    acabouDeAdicionar.current = false;
+    const campos =
+      listaEditavel.current?.querySelectorAll<HTMLInputElement>(
+        'input[type="date"]',
+      );
+    const ultimo = campos?.[campos.length - 1];
+    if (!ultimo) return;
+    ultimo.focus();
+    // `scrollIntoView` não existe em jsdom, e o teste do foco não pode morrer
+    // por causa de uma API de layout que o ambiente de teste não implementa.
+    if (typeof ultimo.scrollIntoView === "function") {
+      ultimo.scrollIntoView({ block: "nearest" });
+    }
+  }, [parcelas.length]);
 
   function alterar(indice: number, campo: keyof ParcelaForm, texto: string) {
     setParcelas((atual) =>
@@ -223,12 +263,26 @@ export function DefinirParcelasDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
+        {/* O corpo rola como válvula de último recurso. Numa tela baixa, a soma
+            dos mínimos (histórico + lista editável + justificativa) pode não
+            caber nos 85svh, e sem esta saída o excesso empurrava o rodapé para
+            fora da viewport: era o defeito de 30/08, com o Tiago procurando o
+            botão de salvar. Com ela, título e rodapé ficam presos e só o miolo
+            rola. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
           {temPreservada ? (
-            <div className="flex flex-col gap-1 rounded-md border border-border bg-surface px-3 py-2">
-              <span className="flex items-center gap-1.5 text-legenda font-medium text-muted-foreground">
+            /* Teto e rolagem PRÓPRIOS. Este bloco é só leitura, e sem teto ele
+               crescia com o número de parcelas pagas até não sobrar altura
+               nenhuma para a lista de baixo, que é a que se edita: com 12 pagas
+               o campo de vencimento ficava com uns poucos pixels, cortado ao
+               meio pela borda do dialog. Quem paga o preço da falta de espaço
+               tem que ser o histórico, não o formulário. */
+            <div className="flex max-h-36 shrink flex-col gap-1 overflow-y-auto rounded-md border border-border bg-surface px-3 py-2">
+              <span className="sticky top-0 flex items-center gap-1.5 bg-surface text-legenda font-medium text-muted-foreground">
                 <Lock className="size-3.5 shrink-0" aria-hidden="true" />
-                Já pagas ou aprovadas · {formatarBRL(pago)}
+                {preservadas.length} já{" "}
+                {preservadas.length === 1 ? "paga ou aprovada" : "pagas ou aprovadas"}{" "}
+                · {formatarBRL(pago)}
               </span>
               {preservadas.map((parcela) => (
                 <div
@@ -286,30 +340,40 @@ export function DefinirParcelasDialog({
               variant="outline"
               size="sm"
               disabled={salvando}
-              onClick={() =>
-                setParcelas((atual) => [
-                  ...atual,
-                  { dataVencimento: "", valor: "", formaPagamentoId: "" },
-                ])
-              }
+              onClick={adicionarParcela}
             >
               <Plus />
               Adicionar parcela
             </Button>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-            <div className="sticky top-0 z-10 hidden gap-3 bg-background px-1 pb-1 sm:grid sm:grid-cols-[48px_180px_minmax(0,1fr)_auto]">
-              <span className="text-legenda font-medium text-muted-foreground">
-                Nº
+          {/* Piso de altura, e não `min-h-0`: esta é a única parte editável do
+              dialog, e ela não pode ser a que encolhe quando falta espaço. O
+              `min-h-0` de antes autorizava exatamente isso. */}
+          <div
+            ref={listaEditavel}
+            className="flex min-h-[7.5rem] flex-1 flex-col gap-2 overflow-y-auto"
+          >
+            <div className="sticky top-0 z-10 flex flex-col gap-1 bg-background pb-1">
+              {/* O título diz onde é que se mexe. Sem ele, a parte de cima (só
+                  leitura) e a de baixo (os campos) eram duas listas de parcelas
+                  sem nome, uma embaixo da outra. */}
+              <span className="px-1 text-legenda font-medium text-foreground">
+                Em aberto · {parcelas.length}{" "}
+                {parcelas.length === 1 ? "parcela" : "parcelas"}
               </span>
-              <span className="text-legenda font-medium text-muted-foreground">
-                Vencimento
-              </span>
-              <span className="text-right text-legenda font-medium text-muted-foreground">
-                Valor
-              </span>
-              <span aria-hidden />
+              <div className="hidden gap-3 px-1 sm:grid sm:grid-cols-[48px_180px_minmax(0,1fr)_auto]">
+                <span className="text-legenda font-medium text-muted-foreground">
+                  Nº
+                </span>
+                <span className="text-legenda font-medium text-muted-foreground">
+                  Vencimento
+                </span>
+                <span className="text-right text-legenda font-medium text-muted-foreground">
+                  Valor
+                </span>
+                <span aria-hidden />
+              </div>
             </div>
 
             {parcelas.length === 0 ? (
