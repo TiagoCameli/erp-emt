@@ -13,7 +13,10 @@ import {
   COLUNAS_FORNECEDOR,
   type FornecedorImportacao,
 } from "@/modules/cadastros/fornecedores/importacao";
-import { fornecedorSchema } from "@/modules/cadastros/fornecedores/schemas";
+import {
+  fornecedorSchema,
+  taxaLitroParaNumero,
+} from "@/modules/cadastros/fornecedores/schemas";
 
 const RECURSO = "cadastros.fornecedores" as const;
 const ROTA = "/cadastros/fornecedores";
@@ -41,6 +44,9 @@ function paraLinha(dados: z.output<typeof fornecedorSchema>) {
     uf: uf ? uf.toUpperCase() : null,
     endereco: ouNull(dados.endereco),
     observacoes: ouNull(dados.observacoes),
+    eh_transportadora: dados.ehTransportadora,
+    eh_dona_de_tanque: dados.ehDonaDeTanque,
+    taxa_litro_padrao: taxaLitroParaNumero(dados.taxaLitroPadrao),
     ativo: dados.ativo,
   };
 }

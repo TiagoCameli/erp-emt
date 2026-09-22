@@ -17,6 +17,9 @@ export interface FornecedorLista {
   uf: string | null;
   endereco: string | null;
   observacoes: string | null;
+  ehTransportadora: boolean;
+  ehDonaDeTanque: boolean;
+  taxaLitroPadrao: number | null;
   ativo: boolean;
 }
 
@@ -31,7 +34,7 @@ export async function listar(): Promise<FornecedorLista[]> {
   const { data, error } = await supabase
     .from("fornecedores")
     .select(
-      "id, tipo, razao_social, nome_fantasia, cnpj_cpf, inscricao_estadual, email, telefone, cidade, uf, endereco, observacoes, ativo",
+      "id, tipo, razao_social, nome_fantasia, cnpj_cpf, inscricao_estadual, email, telefone, cidade, uf, endereco, observacoes, eh_transportadora, eh_dona_de_tanque, taxa_litro_padrao, ativo",
     )
     .order("razao_social");
 
@@ -52,6 +55,9 @@ export async function listar(): Promise<FornecedorLista[]> {
     uf: fornecedor.uf,
     endereco: fornecedor.endereco,
     observacoes: fornecedor.observacoes,
+    ehTransportadora: fornecedor.eh_transportadora,
+    ehDonaDeTanque: fornecedor.eh_dona_de_tanque,
+    taxaLitroPadrao: fornecedor.taxa_litro_padrao,
     ativo: fornecedor.ativo,
   }));
 }

@@ -106,6 +106,16 @@ export const RECURSOS = [
     acoes: CRUD,
   },
   {
+    // Origem e destino do frete (pedreira, usina, canteiro). Entrou na Fase 1 da
+    // migração do Gestão Obras (22/09/2026), antes do módulo Frete, porque é
+    // cadastro compartilhado: o Frete lê daqui e não mantém lista própria.
+    id: "cadastros.localidades",
+    nome: "Localidades",
+    modulo: "cadastros",
+    rota: "/cadastros/localidades",
+    acoes: CRUD,
+  },
+  {
     id: "cadastros.colaboradores",
     nome: "Colaboradores",
     modulo: "cadastros",

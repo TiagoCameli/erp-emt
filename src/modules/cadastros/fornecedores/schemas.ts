@@ -1,6 +1,18 @@
 import { z } from "zod";
 
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { validarCnpjCpf } from "@/lib/documentos";
+import { normalizarNumeroDigitado } from "@/lib/numero-digitado";
+
+/**
+ * Taxa por litro digitada (pt-BR, "0,3000") em número. Vazio vira null.
+ * Usa o mesmo normalizador do `InputPreco`, que é o que o campo mostra: o ponto
+ * de milhar e a vírgula decimal são lidos do mesmo jeito dos dois lados.
+ */
+export function taxaLitroParaNumero(texto: string): number | null {
+  const normalizado = normalizarNumeroDigitado(texto, CASAS_TAXA);
+  return normalizado === null ? null : Number(normalizado.replace(",", "."));
+}
 
 /** Tipos de fornecedor: pessoa física ou jurídica. */
 export const TIPOS_FORNECEDOR = ["pf", "pj"] as const;
@@ -69,6 +81,17 @@ export const fornecedorSchema = z.object({
     .string()
     .trim()
     .max(2000, { error: "Use no máximo 2000 caracteres" }),
+  // Frete e combustível (Fase 1 da migração do Gestão Obras, 22/09/2026).
+  // Transportadora tem conta corrente no Frete; dono de tanque recebe o crédito
+  // quando uma carreta abastece no tanque dele.
+  ehTransportadora: z.boolean(),
+  ehDonaDeTanque: z.boolean(),
+  taxaLitroPadrao: z
+    .string()
+    .trim()
+    .refine((valor) => valor === "" || taxaLitroParaNumero(valor) !== null, {
+      error: `Informe a taxa em R$ por litro, com até ${CASAS_TAXA} casas decimais`,
+    }),
   ativo: z.boolean(),
 });
 
