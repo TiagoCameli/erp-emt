@@ -3,7 +3,7 @@
 Uso: python3 scripts/migracao-gestao-obras/gerar_carga_fase1.py
 
 Lê os CSVs desta pasta (revisados pelo Tiago) e o retrato dos equipamentos da origem,
-e escreve supabase/migrations/_PENDENTE_20260922210000_fase1_carga_de_para.sql.
+e escreve supabase/migrations/20260922210000_fase1_carga_de_para.sql.
 
 Travas:
 - Fornecedor com confiança baixa ou média precisa estar em APROVADOS_PELO_TIAGO, senão
@@ -19,11 +19,19 @@ import sys
 
 D = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.abspath(os.path.join(D, '..', '..'))
-SAIDA = os.path.join(RAIZ, 'supabase/migrations/_PENDENTE_20260922210000_fase1_carga_de_para.sql')
+SAIDA = os.path.join(RAIZ, 'supabase/migrations/20260922210000_fase1_carga_de_para.sql')
 
 # gestao_obras_id dos fornecedores de confiança baixa/média que o Tiago aprovou, com
 # o erp_fornecedor_id que ele escolheu (None = aprovar o que está no CSV).
-APROVADOS_PELO_TIAGO = {}
+APROVADOS_PELO_TIAGO = {
+    # 22/09/2026, Tiago: "a EMT correta é a EMT Construtora Ltda". Os dois cadastros da
+    # própria EMT na origem apontam para ele; "EMT" e "E M T CONSTRUTORA LTDA" do ERP ficam
+    # como estão.
+    'mrcb97s0buj3b': '199e9f13-5e76-4c07-b54e-27fdf857f39c',  # EMT
+    'mrcb984g7ciwc': '199e9f13-5e76-4c07-b54e-27fdf857f39c',  # E M T CONSTRUTORA LTDA
+    # 22/09/2026, Tiago: CASAS DAS MÁQUINAS é a "Casa da máquina" do CSV.
+    'mrjfx4i9y8g98': None,
+}
 
 
 def ler(nome):
@@ -47,8 +55,10 @@ origem_equip = {e['id']: e for e in json.load(open(os.path.join(D, 'equipamentos
 pendencias = []
 for f in fornecedores:
     gid = f['gestao_obras_id']
-    if gid in APROVADOS_PELO_TIAGO and APROVADOS_PELO_TIAGO[gid]:
-        f['erp_fornecedor_id'] = APROVADOS_PELO_TIAGO[gid]
+    if gid in APROVADOS_PELO_TIAGO:
+        if APROVADOS_PELO_TIAGO[gid]:
+            f['erp_fornecedor_id'] = APROVADOS_PELO_TIAGO[gid]
+        f['confianca'] = 'aprovado_tiago'
     if f['metodo'] == 'CRIAR':
         continue
     if not f['erp_fornecedor_id']:

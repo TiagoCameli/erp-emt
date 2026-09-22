@@ -14,11 +14,6 @@
 --      na origem é o padrão do campo, não uma leitura: vira nulo.
 --
 -- Não cria lançamento, parcela nem rateio. Não mexe em permissão.
--- ============================================================================
--- PENDÊNCIAS: enquanto houver, esta migration recusa aplicar.
--- ============================================================================
-do $pendente$ begin raise exception E'Carga da Fase 1 com pendencias do Tiago:\nfornecedor CASA DAS MÁQUINAS (mrjfx4i9y8g98) -> Casa da máquina: confianca media, falta o ok do Tiago\nfornecedor E M T CONSTRUTORA LTDA (mrcb984g7ciwc) sem par no ERP\nfornecedor EMT (mrcb97s0buj3b) -> EMT: confianca media, falta o ok do Tiago'; end $pendente$;
-
 create schema if not exists legado;
 revoke all on schema legado from public, anon, authenticated;
 comment on schema legado is 'De-para dos ids do Gestão Obras. Só para carga e conferência; apagar depois da Fase 5.';
@@ -80,10 +75,11 @@ insert into legado.de_para_fornecedores (gestao_obras_id, nome_origem, fornecedo
   ('mpllm3usj6213', 'Atem Petroleo', 'b94e6399-c2eb-41ea-af36-6ee561f03bc5'::uuid, 'nome_normalizado', 'alta'),
   ('mrcb7u4otid05', 'AUTO ELETR. TEIXEIRA', 'dfb041b3-73bc-4707-b195-8b3ac021084f'::uuid, 'nome_normalizado', 'alta'),
   ('mlqw3xx5ruc6d', 'Britam', 'fd0a0138-163a-4ea5-9b00-039612981cde'::uuid, 'tabela_6_1', 'alta'),
-  ('mrjfx4i9y8g98', 'CASA DAS MÁQUINAS', '7f089958-2f95-4d29-946c-ba2bd0961fcd'::uuid, 'tabela_6_1', 'media'),
+  ('mrjfx4i9y8g98', 'CASA DAS MÁQUINAS', '7f089958-2f95-4d29-946c-ba2bd0961fcd'::uuid, 'tabela_6_1', 'aprovado_tiago'),
   ('mrcb8ri6wla88', 'CRUZEIRO PEÇAS', '9d03142e-a001-480c-a69c-1f0022e5c886'::uuid, 'nome_normalizado', 'alta'),
   ('mrcb8run7qg7n', 'CS46-PEMAZA', 'af4feea8-b719-4280-bbf3-2ecb64490411'::uuid, 'nome_normalizado', 'alta'),
-  ('mrcb97s0buj3b', 'EMT', 'c0500faa-e14a-4e22-afe9-91758a7d57db'::uuid, 'nome_normalizado', 'media'),
+  ('mrcb984g7ciwc', 'E M T CONSTRUTORA LTDA', '199e9f13-5e76-4c07-b54e-27fdf857f39c'::uuid, 'nome_normalizado', 'aprovado_tiago'),
+  ('mrcb97s0buj3b', 'EMT', '199e9f13-5e76-4c07-b54e-27fdf857f39c'::uuid, 'nome_normalizado', 'aprovado_tiago'),
   ('mnx9g4currw6p', 'EMT TRANSPORTES', (select id from public.fornecedores where public.fn_chave_nome(razao_social) = public.fn_chave_nome('EMT TRANSPORTES')), 'CRIAR', 'certa'),
   ('mltn8gcw20fy8', 'ETAM Construtora', '0830bcaa-0b9d-49bf-9ec6-c37c45f3a86f'::uuid, 'tabela_6_1', 'alta'),
   ('mlqw42sq4lzm9', 'Formate', '2aea7dcb-9189-4e70-9abb-d290c7dbe9b6'::uuid, 'tabela_6_1', 'alta'),
@@ -172,13 +168,13 @@ on conflict do nothing;
 insert into legado.de_para_usuarios values
   ('mlqtonq0rwdhy', 'Andreia Alencar Silva', '7d0194c2-fd7e-41d1-b6c4-f05c0a652229'::uuid, 'CASAR'),
   ('mohoe586bolhd', 'Brenda Ciacci', 'a7324fb8-8311-4986-b975-8a8141ec7efc'::uuid, 'CASAR'),
-  ('mq9vuzhst8cmm', 'Bruno Souza', null::uuid, 'CONVIDAR'),
+  ('mq9vuzhst8cmm', 'Bruno Souza', 'b5c1a4e2-0e51-41c5-9c73-a851d9193f8b'::uuid, 'CASAR'),
   ('mlpsse1i3t84s', 'Emanuel de Melo Cameli', 'd685726c-3776-44a1-b87c-a5712f1afec2'::uuid, 'CASAR'),
   ('mlpjsci4qbqg3', 'James Castro Cameli', 'fa3d729d-ad7d-43c7-8356-9436e4af3a92'::uuid, 'CASAR'),
   ('mlpg62qlekncc', 'Marvim Almeida', '9d4b8593-5d54-4b54-97c3-6d4df473e4fd'::uuid, 'CASAR'),
-  ('mmnirr0uajkvl', 'Racenilton', null::uuid, 'CONVIDAR'),
+  ('mmnirr0uajkvl', 'Racenilton', '962d8a51-76ca-45bb-8d7d-5df8321382ba'::uuid, 'CASAR'),
   ('mlpfw6yysr635', 'Tiago de Melo Cameli', 'c66fca9f-5428-4fb9-855f-dcff548764df'::uuid, 'CASAR'),
-  ('mqchin539fjqa', 'Yara Nylla', null::uuid, 'CONVIDAR')
+  ('mqchin539fjqa', 'Yara Nylla', 'f155865b-1d4b-4b25-bf3d-54d8de9176b0'::uuid, 'CASAR')
 on conflict do nothing;
 
 -- 1f. De-para de equipamentos (equipamentos-de-para.csv, feito em 22/09)
@@ -413,7 +409,7 @@ do $confere$
 declare v int;
 begin
   select count(*) into v from legado.de_para_fornecedores;
-  if v <> 55 then raise exception 'de_para_fornecedores: % linhas, esperado 55', v; end if;
+  if v <> 56 then raise exception 'de_para_fornecedores: % linhas, esperado 56', v; end if;
   select count(*) into v from legado.de_para_equipamentos;
   if v <> 109 then raise exception 'de_para_equipamentos: % linhas, esperado 109', v; end if;
   select count(*) into v from legado.de_para_obras;

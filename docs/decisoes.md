@@ -3739,3 +3739,21 @@ equipamentos. **Não foi aplicada**: linha de confiança baixa ou média sem o o
 - `fornecedores` é lido inteiro num select só na tela de Cadastros: são 977 linhas, a um passo do
   teto de 1.000 do PostgREST.
 - Os convites de Yara, Racenilton e Bruno mandam email para fora: esperam o ok do Tiago.
+
+### 22/09/2026 (noite) — Carga da Fase 1 aplicada, e as três contas novas
+
+Respostas do Tiago: a EMT certa é "EMT Construtora Ltda" (as duas EMT da origem apontam para ela);
+Casas das Máquinas = "Casa da máquina"; **as permissões vão ser refeitas por ele** (o de-para de
+permissões fica só como levantamento); **sem convite**: contas criadas com o email que já está no
+Gestão Obras.
+
+- `20260922210000_fase1_carga_de_para` aplicada. 56 fornecedores da origem → 53 do ERP, 109
+  equipamentos → 107, 7 obras, 4 insumos, 9 usuários. 6 transportadoras e 2 donos de tanque
+  marcados; EMT TRANSPORTES, JOHN DEERE e ARLA 32 - LITRO criados. As três aprovações ficam com
+  `confianca = aprovado_tiago` no de-para.
+- Yara Nylla, Racenilton e Bruno Souza: criados como o app faz em `convidarUsuario` (Auth com email
+  já confirmado, então nenhum email saiu; senha provisória em `usuario_senha_provisoria` e troca
+  obrigatória no 1º acesso). **Sem perfil e sem nenhuma permissão**: não veem nada até o Tiago
+  montar a matriz. A senha provisória se lê em Administração > Usuários.
+- O email das pessoas NÃO vai para o repositório: o repo é público. O de-para de usuários guarda
+  só nome e id.
