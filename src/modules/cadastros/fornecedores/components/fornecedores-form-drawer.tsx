@@ -11,6 +11,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
+  InputPreco,
   LinhaCampos,
   SelectAtivo,
   submeterComAviso,
@@ -42,6 +43,12 @@ function valoresPadrao(fornecedor: FornecedorLista | null): FornecedorInput {
     uf: fornecedor?.uf ?? "",
     endereco: fornecedor?.endereco ?? "",
     observacoes: fornecedor?.observacoes ?? "",
+    ehTransportadora: fornecedor?.ehTransportadora ?? false,
+    ehDonaDeTanque: fornecedor?.ehDonaDeTanque ?? false,
+    taxaLitroPadrao:
+      fornecedor?.taxaLitroPadrao != null
+        ? String(fornecedor.taxaLitroPadrao).replace(".", ",")
+        : "",
     ativo: fornecedor?.ativo ?? true,
   };
 }
@@ -287,6 +294,50 @@ export function FornecedoresFormDrawer({
             {...form.register("observacoes")}
           />
         </CampoFormulario>
+
+        <SelectAtivo
+          id="fornecedor-eh-transportadora"
+          value={form.watch("ehTransportadora")}
+          onChange={(valor) =>
+            form.setValue("ehTransportadora", valor, { shouldDirty: true })
+          }
+          disabled={salvando}
+          rotulo="É transportadora"
+          ajuda="Transportadora tem conta corrente no Frete: o frete credita, o pagamento e o abastecimento de carreta debitam."
+        />
+
+        <SelectAtivo
+          id="fornecedor-eh-dona-de-tanque"
+          value={form.watch("ehDonaDeTanque")}
+          onChange={(valor) =>
+            form.setValue("ehDonaDeTanque", valor, { shouldDirty: true })
+          }
+          disabled={salvando}
+          rotulo="É dono de tanque"
+          ajuda="Dono de tanque externo (ex. Areacre). Quando uma carreta abastece no tanque dele, o crédito vai para ele."
+        />
+
+        {form.watch("ehDonaDeTanque") ? (
+          <CampoFormulario
+            id="fornecedor-taxa-litro"
+            rotulo="Taxa por litro (R$/L)"
+            largura="curto"
+            ajuda="O que o dono do tanque cobra por litro além do combustível. Até 4 casas."
+            erro={form.formState.errors.taxaLitroPadrao?.message}
+          >
+            <InputPreco
+              id="fornecedor-taxa-litro"
+              valor={form.watch("taxaLitroPadrao")}
+              onValorChange={(valor) =>
+                form.setValue("taxaLitroPadrao", valor, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
+              disabled={salvando}
+            />
+          </CampoFormulario>
+        ) : null}
 
         <SelectAtivo
           value={form.watch("ativo")}

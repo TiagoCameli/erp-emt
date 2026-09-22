@@ -12,6 +12,7 @@ import {
   Combobox,
   ConfirmDialog,
   FormDrawer,
+  InputQuantidade,
   LinhaCampos,
   SelectAtivo,
   submeterComAviso,
@@ -32,10 +33,16 @@ import type {
   EquipamentoLista,
 } from "@/modules/cadastros/equipamentos/queries";
 import {
+  AJUDA_PROPRIEDADE,
   CONTROLE_POR,
   CONTROLE_POR_CONFIG,
   documentoFormSchema,
   equipamentoFormSchema,
+  medicaoParaNumero,
+  PROPRIEDADES,
+  ROTULO_PROPRIEDADE,
+  ROTULO_STATUS_EQUIPAMENTO,
+  STATUS_EQUIPAMENTO,
   type DocumentoFormInput,
   type EquipamentoFormInput,
 } from "@/modules/cadastros/equipamentos/schemas";
@@ -62,6 +69,15 @@ function valoresIniciais(
         : "",
     placa: equipamento?.placa ?? "",
     controlePor: equipamento?.controlePor ?? "horimetro",
+    propriedade: equipamento?.propriedade ?? "propria",
+    status: equipamento?.status ?? "ativa",
+    medicaoInicial:
+      equipamento?.medicaoInicial != null
+        ? String(equipamento.medicaoInicial).replace(".", ",")
+        : "",
+    numeroSerie: equipamento?.numeroSerie ?? "",
+    dataAquisicao: equipamento?.dataAquisicao ?? "",
+    dataVenda: equipamento?.dataVenda ?? "",
     ativo: equipamento?.ativo ?? true,
   };
 }
@@ -127,6 +143,12 @@ export function EquipamentosFormDrawer({
       ano,
       placa: valores.placa,
       controlePor: valores.controlePor,
+      propriedade: valores.propriedade,
+      status: valores.status,
+      medicaoInicial: medicaoParaNumero(valores.medicaoInicial),
+      numeroSerie: valores.numeroSerie,
+      dataAquisicao: valores.dataAquisicao === "" ? undefined : valores.dataAquisicao,
+      dataVenda: valores.dataVenda === "" ? undefined : valores.dataVenda,
       ativo: valores.ativo,
     };
 
@@ -317,6 +339,118 @@ export function EquipamentosFormDrawer({
               }))}
               disabled={salvando}
               id="equipamento-controle"
+            />
+          </CampoFormulario>
+        </LinhaCampos>
+
+        <LinhaCampos colunas={2}>
+          <CampoFormulario
+            id="equipamento-propriedade"
+            rotulo="De quem é"
+            obrigatorio
+            ajuda={AJUDA_PROPRIEDADE[form.watch("propriedade")]}
+            erro={form.formState.errors.propriedade?.message}
+          >
+            <Combobox
+              valor={form.watch("propriedade")}
+              onValorChange={(valor) =>
+                form.setValue(
+                  "propriedade",
+                  valor as EquipamentoFormInput["propriedade"],
+                  { shouldValidate: true, shouldDirty: true },
+                )
+              }
+              opcoes={PROPRIEDADES.map((propriedade) => ({
+                valor: propriedade,
+                rotulo: ROTULO_PROPRIEDADE[propriedade],
+              }))}
+              disabled={salvando}
+              id="equipamento-propriedade"
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="equipamento-status"
+            rotulo="Situação"
+            obrigatorio
+            erro={form.formState.errors.status?.message}
+          >
+            <Combobox
+              valor={form.watch("status")}
+              onValorChange={(valor) =>
+                form.setValue(
+                  "status",
+                  valor as EquipamentoFormInput["status"],
+                  { shouldValidate: true, shouldDirty: true },
+                )
+              }
+              opcoes={STATUS_EQUIPAMENTO.map((status) => ({
+                valor: status,
+                rotulo: ROTULO_STATUS_EQUIPAMENTO[status],
+              }))}
+              disabled={salvando}
+              id="equipamento-status"
+            />
+          </CampoFormulario>
+        </LinhaCampos>
+
+        <LinhaCampos colunas={2}>
+          <CampoFormulario
+            id="equipamento-medicao-inicial"
+            rotulo={controleValor === "km" ? "Km inicial" : "Horímetro inicial"}
+            erro={form.formState.errors.medicaoInicial?.message}
+          >
+            <InputQuantidade
+              id="equipamento-medicao-inicial"
+              valor={form.watch("medicaoInicial")}
+              onValorChange={(valor) =>
+                form.setValue("medicaoInicial", valor, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              disabled={salvando || controleValor === "nenhum"}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="equipamento-numero-serie"
+            rotulo="Número de série"
+            erro={form.formState.errors.numeroSerie?.message}
+          >
+            <Input
+              id="equipamento-numero-serie"
+              autoComplete="off"
+              disabled={salvando}
+              {...form.register("numeroSerie")}
+            />
+          </CampoFormulario>
+        </LinhaCampos>
+
+        <LinhaCampos colunas={2}>
+          <CampoFormulario
+            id="equipamento-data-aquisicao"
+            rotulo="Data de aquisição"
+            erro={form.formState.errors.dataAquisicao?.message}
+          >
+            <Input
+              id="equipamento-data-aquisicao"
+              type="date"
+              disabled={salvando}
+              {...form.register("dataAquisicao")}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="equipamento-data-venda"
+            rotulo="Data de venda"
+            erro={form.formState.errors.dataVenda?.message}
+          >
+            <Input
+              id="equipamento-data-venda"
+              type="date"
+              disabled={salvando}
+              {...form.register("dataVenda")}
             />
           </CampoFormulario>
         </LinhaCampos>

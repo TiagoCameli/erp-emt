@@ -1,0 +1,20 @@
+prestador_texto;n_linhas;soma_valor;candidato_erp_fornecedor_id;candidato_erp_razao_social;confianca;observacao
+ATAÍDE;1;15400.00;9f4aa45f-a017-410f-9a82-a2445e851fdb;ATAIDE LOPES;media;"unico fornecedor do ERP com Ataide; sem CPF/CNPJ; o texto so tem o primeiro nome. Maior valor da lista depois de John Deere"
+AUTO ELETRICA AMILTON;1;230.00;;;baixa;"NAO ESCOLHIDO. Candidatos: 31f31fb4-67e3-4d72-be94-b3de619db48a Amilton Santos de Oliveira; 33389a80-eb3c-454b-81e1-8c58eee4b83a ADAMILTON MOTA DA CUNHA; d433ff1b-475f-4190-995e-307da26f921a Hamilton Luiz de Araujo Rocha. Nenhum com Auto Eletrica no nome"
+AUTO ELETRICA TEIXEIRA;1;6.00;dfb041b3-73bc-4707-b195-8b3ac021084f;M S TEIXEIRA;alta;"fantasia AUTO ELETR. TEIXEIRA; e o mesmo do fornecedor mrcb7u4otid05 da origem. Outros Teixeira no ERP sao pessoas fisicas (MAURIZIA TEIXEIRA LOPES, ROSILENE TEIXEIRA SANTIAGO). Valor de R$ 6,00 parece erro de digitacao"
+BORRACHARIA;1;20.00;;;baixa;"NAO ESCOLHIDO, texto generico. Candidatos: d0b3ac3e-d872-e359-2f91-9222e828cde9 BORRACHARIA MJ (28237300000108); a23ae93f-07c6-40f7-abd7-9f8cf35ee609 BORRACHARIA DO GATO"
+JAPURÁ PNEUS;1;790.00;9fcb627c-d55a-4f7e-9021-1ed84f265461;JAPURA PNEUS S/A;alta;"nome normalizado identico; mesmo do fornecedor mrcba4wro0io5 da origem"
+JOHN DEERE;1;19907.30;CRIAR;;alta;"nenhum DEERE no ERP; e o mesmo JOHN DEERE (mt08la2o1a1ge) que o Tiago mandou criar em fornecedores-de-para. NAO e a JD COMERCIO E IMPORTACAO LTDA"
+NEGUINHO RADIADORES E AUTO ELETRICA;1;350.00;;;baixa;NAO ESCOLHIDO. Unico parecido: c63ff5d1-c56e-47d2-a1f2-237edc193035 NEGUINHO - GESSON - BALSA, que nao parece ser radiador/auto eletrica
+NISSEY CAMINHÕES LTDA;3;1973.76;35653ce4-5bff-4205-8a92-898c57b1cde8;NISSEY CAMINHOES LTDA;alta;"nome normalizado identico; NISSEY MAQUINAS AGRICOLA (1abc3ed6) e outra empresa"
+OFICINA;2;1400.00;;;baixa;"NAO ESCOLHIDO, texto generico. 5 fornecedores do ERP comecam com OFICINA (CICLOTRON, E AUTO PECAS SAO MARCOS, MOTO PECAS, BEIJAMIM, MECANICA FAISCA); precisa olhar a OS"
+PODIUM AUTO CENTER;3;1560.00;e1f1974b-04df-4c73-9633-6f150af2561e;PODIUM AUTO CENTER;alta;"nome identico; ERP sem CNPJ (origem fornecedores tem 45.444.377/0001-78)"
+POSTO DE MOLAS JABÁ;2;1500.00;5effb39c-9e40-48d2-abc5-f06258a038c6;POSTO DE MOLAS JABA;alta;nome normalizado identico. MC POSTO DE MOLAS, PECAS E ACESSORIOS (c85bc8a4) e outra empresa
+POSTO PIT STOP;4;370.00;8dd317bb-f4ca-48e2-82f9-7475ba4a3697;POSTO PIT STOP;alta;"nome identico; ERP sem CNPJ"
+RECOL VEÍCULOS JURÁ;1;281.18;516d4cfb-f858-4cf9-b571-04ea4f0a2178;Recol Veículos Juruá LTDA;media;"erro de digitacao (JURA x JURUA), unico Recol no ERP. ATENCAO: mesmo valor 281,18 da linha RECOL VEICULOS JURUA; conferir se e lancamento duplicado"
+RECOL VEÍCULOS JURUÁ;1;281.18;516d4cfb-f858-4cf9-b571-04ea4f0a2178;Recol Veículos Juruá LTDA;alta;nome normalizado identico. Ver a linha RECOL VEICULOS JURA, mesmo valor
+SASCAR;1;228.56;a42de23a-fbdc-452d-84fc-f81b73f60aea;SASCAR TECNOLOGIA E SEGURANCA AUTOMOTIVA SA;alta;fantasia SASCAR
+TORNEADORA SANTA LUZIA;1;500.00;1605dda9-1e55-472a-9757-76661c64b181;TORNEADORA SANTA LUZIA;alta;"nome identico; documento 59050225268 (CPF)"
+WANDERSON ELETRICISTA DE OLEO.;1;300.00;;;baixa;"NAO ESCOLHIDO. Unico Wanderson no ERP: cdeb92c2-909c-cd69-4350-3684dc5d28ee WANDERSON SOUZA DA COSTA; o texto nao confirma que e ele, nem que e o mesmo WANDERSON JUNIOR"
+WANDERSON JUNIOR;10;2330.00;;;baixa;"NAO ESCOLHIDO. Unico Wanderson no ERP: cdeb92c2-909c-cd69-4350-3684dc5d28ee WANDERSON SOUZA DA COSTA; ""Junior"" nao aparece no cadastro"
+XAPURI MOTORS;2;2111.78;d3f5314e-cd6d-4918-9b31-aa0d499dc140;ACRE COMERCIO E ADMINISTRACAO LTDA;alta;"fantasia XAPURI MOTORS (CNPJ 63605653000114); a filial XAPURI TOYOTA (7b81db62, 63605653000386) e outra"

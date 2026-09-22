@@ -1079,6 +1079,102 @@ export type Database = {
           },
         ];
       };
+      equipamento_especificacoes: {
+        Row: {
+          bateria_especificacao: string | null;
+          bateria_qtd: number | null;
+          capacidade_arrefecedor_l: number | null;
+          capacidade_oleo_diferencial_l: number | null;
+          capacidade_oleo_hidraulico_l: number | null;
+          capacidade_oleo_motor_l: number | null;
+          capacidade_oleo_transmissao_l: number | null;
+          capacidade_tanque_l: number | null;
+          consumo_esperado_km_l: number | null;
+          consumo_esperado_l_h: number | null;
+          created_at: string;
+          created_by: string | null;
+          equipamento_id: string;
+          filtros: Json | null;
+          garantia_fim_data: string | null;
+          garantia_fim_medicao: number | null;
+          id: string;
+          observacoes_tecnicas: string | null;
+          pneu_medida: string | null;
+          pneu_qtd: number | null;
+          tipo_oleo_hidraulico: string | null;
+          tipo_oleo_motor: string | null;
+          tipo_oleo_transmissao: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          bateria_especificacao?: string | null;
+          bateria_qtd?: number | null;
+          capacidade_arrefecedor_l?: number | null;
+          capacidade_oleo_diferencial_l?: number | null;
+          capacidade_oleo_hidraulico_l?: number | null;
+          capacidade_oleo_motor_l?: number | null;
+          capacidade_oleo_transmissao_l?: number | null;
+          capacidade_tanque_l?: number | null;
+          consumo_esperado_km_l?: number | null;
+          consumo_esperado_l_h?: number | null;
+          created_at?: string;
+          created_by?: string | null;
+          equipamento_id: string;
+          filtros?: Json | null;
+          garantia_fim_data?: string | null;
+          garantia_fim_medicao?: number | null;
+          id?: string;
+          observacoes_tecnicas?: string | null;
+          pneu_medida?: string | null;
+          pneu_qtd?: number | null;
+          tipo_oleo_hidraulico?: string | null;
+          tipo_oleo_motor?: string | null;
+          tipo_oleo_transmissao?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          bateria_especificacao?: string | null;
+          bateria_qtd?: number | null;
+          capacidade_arrefecedor_l?: number | null;
+          capacidade_oleo_diferencial_l?: number | null;
+          capacidade_oleo_hidraulico_l?: number | null;
+          capacidade_oleo_motor_l?: number | null;
+          capacidade_oleo_transmissao_l?: number | null;
+          capacidade_tanque_l?: number | null;
+          consumo_esperado_km_l?: number | null;
+          consumo_esperado_l_h?: number | null;
+          created_at?: string;
+          created_by?: string | null;
+          equipamento_id?: string;
+          filtros?: Json | null;
+          garantia_fim_data?: string | null;
+          garantia_fim_medicao?: number | null;
+          id?: string;
+          observacoes_tecnicas?: string | null;
+          pneu_medida?: string | null;
+          pneu_qtd?: number | null;
+          tipo_oleo_hidraulico?: string | null;
+          tipo_oleo_motor?: string | null;
+          tipo_oleo_transmissao?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "equipamento_especificacoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "equipamento_especificacoes_equipamento_id_fkey";
+            columns: ["equipamento_id"];
+            isOneToOne: true;
+            referencedRelation: "equipamentos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       equipamentos: {
         Row: {
           ano: number | null;
@@ -1087,11 +1183,17 @@ export type Database = {
           controle_por: string;
           created_at: string;
           created_by: string | null;
+          data_aquisicao: string | null;
+          data_venda: string | null;
           descricao: string;
           id: string;
           marca: string | null;
+          medicao_inicial: number | null;
           modelo: string | null;
+          numero_serie: string | null;
           placa: string | null;
+          propriedade: string;
+          status: string;
           tipo: string | null;
           updated_at: string;
         };
@@ -1102,11 +1204,17 @@ export type Database = {
           controle_por?: string;
           created_at?: string;
           created_by?: string | null;
+          data_aquisicao?: string | null;
+          data_venda?: string | null;
           descricao: string;
           id?: string;
           marca?: string | null;
+          medicao_inicial?: number | null;
           modelo?: string | null;
+          numero_serie?: string | null;
           placa?: string | null;
+          propriedade?: string;
+          status?: string;
           tipo?: string | null;
           updated_at?: string;
         };
@@ -1117,11 +1225,17 @@ export type Database = {
           controle_por?: string;
           created_at?: string;
           created_by?: string | null;
+          data_aquisicao?: string | null;
+          data_venda?: string | null;
           descricao?: string;
           id?: string;
           marca?: string | null;
+          medicao_inicial?: number | null;
           modelo?: string | null;
+          numero_serie?: string | null;
           placa?: string | null;
+          propriedade?: string;
+          status?: string;
           tipo?: string | null;
           updated_at?: string;
         };
@@ -1813,6 +1927,8 @@ export type Database = {
           cnpj_cpf: string | null;
           created_at: string;
           created_by: string | null;
+          eh_dona_de_tanque: boolean;
+          eh_transportadora: boolean;
           email: string | null;
           endereco: string | null;
           id: string;
@@ -1820,6 +1936,7 @@ export type Database = {
           nome_fantasia: string | null;
           observacoes: string | null;
           razao_social: string;
+          taxa_litro_padrao: number | null;
           telefone: string | null;
           tipo: string;
           uf: string | null;
@@ -1831,6 +1948,8 @@ export type Database = {
           cnpj_cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
+          eh_dona_de_tanque?: boolean;
+          eh_transportadora?: boolean;
           email?: string | null;
           endereco?: string | null;
           id?: string;
@@ -1838,6 +1957,7 @@ export type Database = {
           nome_fantasia?: string | null;
           observacoes?: string | null;
           razao_social: string;
+          taxa_litro_padrao?: number | null;
           telefone?: string | null;
           tipo?: string;
           uf?: string | null;
@@ -1849,6 +1969,8 @@ export type Database = {
           cnpj_cpf?: string | null;
           created_at?: string;
           created_by?: string | null;
+          eh_dona_de_tanque?: boolean;
+          eh_transportadora?: boolean;
           email?: string | null;
           endereco?: string | null;
           id?: string;
@@ -1856,6 +1978,7 @@ export type Database = {
           nome_fantasia?: string | null;
           observacoes?: string | null;
           razao_social?: string;
+          taxa_litro_padrao?: number | null;
           telefone?: string | null;
           tipo?: string;
           uf?: string | null;
@@ -1936,6 +2059,7 @@ export type Database = {
           created_by: string | null;
           descricao: string | null;
           id: string;
+          litros_por_unidade: number | null;
           nome: string;
           unidade_id: string;
           updated_at: string;
@@ -1949,6 +2073,7 @@ export type Database = {
           created_by?: string | null;
           descricao?: string | null;
           id?: string;
+          litros_por_unidade?: number | null;
           nome: string;
           unidade_id: string;
           updated_at?: string;
@@ -1962,6 +2087,7 @@ export type Database = {
           created_by?: string | null;
           descricao?: string | null;
           id?: string;
+          litros_por_unidade?: number | null;
           nome?: string;
           unidade_id?: string;
           updated_at?: string;
@@ -2488,6 +2614,44 @@ export type Database = {
           tabela?: string;
         };
         Relationships: [];
+      };
+      localidades: {
+        Row: {
+          ativo: boolean;
+          created_at: string;
+          created_by: string | null;
+          endereco: string | null;
+          id: string;
+          nome: string;
+          updated_at: string;
+        };
+        Insert: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          endereco?: string | null;
+          id?: string;
+          nome: string;
+          updated_at?: string;
+        };
+        Update: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          endereco?: string | null;
+          id?: string;
+          nome?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "localidades_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       obras: {
         Row: {

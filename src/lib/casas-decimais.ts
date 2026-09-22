@@ -24,3 +24,20 @@ export const CASAS_DINHEIRO = 2;
 
 /** Preço unitário, quantidade, percentual e extensão: NUMERIC(_,4). */
 export const CASAS_TAXA = 4;
+
+/**
+ * VALOR dos módulos operacionais (Frete, Combustível e Manutenção): conta
+ * corrente da transportadora, abastecimento, frete, pagamento de frete e custo
+ * da OS. NUMERIC(14,4).
+ *
+ * É a exceção à regra 3, decidida pelo Tiago em 22/09/2026 (plano
+ * `docs/PLANO-FRETE-COMBUSTIVEL-MANUTENCAO.md`, decisão 5). Esses valores nascem
+ * de litros × preço por litro e t·km × tarifa, e o Gestão Obras sempre guardou
+ * as 4 casas. Copiar sem arredondar é o que deixa o saldo da transportadora
+ * bater na quarta casa na virada.
+ *
+ * NUNCA usar no Financeiro. Nada destes módulos vira lançamento, parcela ou
+ * rateio; quem paga o frete lança à mão, em centavo, com `CASAS_DINHEIRO`.
+ * A tela mostra 2 casas em R$ (`MoneyText`) e o detalhe mostra as 4.
+ */
+export const CASAS_VALOR_OPERACIONAL = 4;

@@ -19,6 +19,7 @@ import {
   type ControlePor,
   type DocumentoInput,
   type EquipamentoInput,
+  type Propriedade,
 } from "@/modules/cadastros/equipamentos/schemas";
 
 const RECURSO = "cadastros.equipamentos" as const;
@@ -50,9 +51,25 @@ function paraRegistro(dados: EquipamentoInput) {
     ano: dados.ano ?? null,
     placa: dados.placa ?? null,
     controle_por: dados.controlePor,
+    propriedade: dados.propriedade,
+    status: dados.status,
+    medicao_inicial: dados.medicaoInicial ?? null,
+    numero_serie: dados.numeroSerie ?? null,
+    data_aquisicao: dados.dataAquisicao ?? null,
+    data_venda: dados.dataVenda ?? null,
     ativo: dados.ativo,
   };
 }
+
+/** O que o gatilho do banco fez com o centro de custo, dito ao usuário. */
+const AVISO_CRIACAO: Record<Propriedade, string> = {
+  propria:
+    "Equipamento criado. A etapa dele em Manutenção/Documentação de Equipamentos já foi gerada.",
+  colorado:
+    "Equipamento criado. A etapa dele na obra 002 - Equipamentos Colorado 2026 já foi gerada.",
+  alugada:
+    "Equipamento criado. Alugado não tem etapa: o custo vai para a obra onde ele trabalhar.",
+};
 
 /**
  * Cria um equipamento. O banco gera a etapa dele no centro de custo de
@@ -87,7 +104,7 @@ export async function criarEquipamento(
   revalidatePath(ROTA);
   return {
     ok: true,
-    aviso: "Equipamento criado. A etapa dele no centro de custo de Manutenção já foi gerada.",
+    aviso: AVISO_CRIACAO[validado.data.propriedade],
   };
 }
 
@@ -115,6 +132,16 @@ export async function editarEquipamento(
     .eq("id", idValido.data);
 
   if (error) {
+    // fn_equipamento_troca_propriedade recusa mover a etapa quando o centro de
+    // custo dela já tem lançamento, rateio, OC ou pessoa. A mensagem genérica
+    // esconderia o motivo, e a pessoa tentaria de novo.
+    if (error.message.includes("mudar a propriedade")) {
+      return erroAcao(
+        "cadastros.equipamentos.editarEquipamento",
+        error,
+        "A propriedade não pode mudar: o centro de custo deste equipamento já tem lançamento, rateio, item de OC ou pessoa. Fale com o administrador.",
+      );
+    }
     return erroAcao(
       "cadastros.equipamentos.editarEquipamento",
       error,

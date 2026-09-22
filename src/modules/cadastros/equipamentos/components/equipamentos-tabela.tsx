@@ -22,6 +22,8 @@ import type {
 import {
   CONTROLE_POR,
   CONTROLE_POR_CONFIG,
+  PROPRIEDADES,
+  ROTULO_PROPRIEDADE,
 } from "@/modules/cadastros/equipamentos/schemas";
 import { EquipamentosFormDrawer } from "./equipamentos-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -36,6 +38,11 @@ const OPCOES_STATUS = [
 const OPCOES_CONTROLE = CONTROLE_POR.map((controle) => ({
   valor: controle,
   rotulo: CONTROLE_POR_CONFIG[controle],
+}));
+
+const OPCOES_PROPRIEDADE = PROPRIEDADES.map((propriedade) => ({
+  valor: propriedade,
+  rotulo: ROTULO_PROPRIEDADE[propriedade],
 }));
 
 const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
@@ -83,6 +90,12 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
       ),
   },
   {
+    accessorKey: "propriedade",
+    header: "De quem é",
+    size: 170,
+    cell: ({ row }) => ROTULO_PROPRIEDADE[row.original.propriedade],
+  },
+  {
     accessorKey: "ativo",
     header: "Ativo",
     size: 110,
@@ -123,6 +136,7 @@ export function EquipamentosTabela({
   const [tipo, setTipo] = useFiltroSessao("tipo", "");
   const [marca, setMarca] = useFiltroSessao("marca", "");
   const [controle, setControle] = useFiltroSessao("controle", "");
+  const [propriedade, setPropriedade] = useFiltroSessao("propriedade", "");
   const [ano, setAno] = useFiltroSessao("ano", "");
 
   // Deriva da prop pra refletir edições depois do revalidatePath.
@@ -154,6 +168,7 @@ export function EquipamentosTabela({
       if (tipo !== "" && equipamento.tipo !== tipo) return false;
       if (marca !== "" && equipamento.marca !== marca) return false;
       if (controle !== "" && equipamento.controlePor !== controle) return false;
+      if (propriedade !== "" && equipamento.propriedade !== propriedade) return false;
       if (ano !== "" && String(equipamento.ano ?? "") !== ano) return false;
       if (termo === "") return true;
       // Código, descrição e placa: os três jeitos de alguém apontar para uma
@@ -164,7 +179,7 @@ export function EquipamentosTabela({
         .toLowerCase();
       return alvo.includes(termo);
     });
-  }, [equipamentos, busca, status, tipo, marca, controle, ano]);
+  }, [equipamentos, busca, status, tipo, marca, controle, propriedade, ano]);
 
   function abrirEdicao(equipamento: EquipamentoLista) {
     if (!podeEditar) return;
@@ -244,6 +259,21 @@ export function EquipamentosTabela({
                 placeholder="Marca"
                 todosRotulo="Todas as marcas"
                 className="max-w-56"
+              />
+            ),
+          },
+          {
+            id: "propriedade",
+            rotulo: "De quem é",
+            temValor: propriedade !== "",
+            onLimpar: () => setPropriedade(""),
+            elemento: (
+              <FiltroSelect
+                valor={propriedade}
+                onValorChange={setPropriedade}
+                opcoes={OPCOES_PROPRIEDADE}
+                placeholder="De quem é"
+                todosRotulo="Todas"
               />
             ),
           },

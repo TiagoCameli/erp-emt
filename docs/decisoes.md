@@ -3655,3 +3655,87 @@ E a prova parte 1 ganhou uma asserção de VISIBILIDADE (conta a linha depois de
 assim que a trava 1 apareceu: com `select ... into` sem linha, toda variável fica nula, e
 `if a_recibo <> 'rascunho'` com nulo dá NULL, que o `if` trata como falso. Das asserções, só a do
 centro de custo acusou, por ser a única com `is distinct from`. **Igualdade não prova presença.**
+
+## 22/09/2026 — Migração de Frete, Combustível e Manutenção: Fases 0 e 1
+
+Plano: `docs/PLANO-FRETE-COMBUSTIVEL-MANUTENCAO.md` (aprovado em 22/09). A Fase 0 foi no Gestão
+Obras (PR #7 de lá, registro em `docs/decisoes.md` daquele repo). Esta entrada é a Fase 1 no ERP,
+mais o que a Fase 0 mudou no plano.
+
+### Casas decimais: a exceção tem constante própria e um teste que a cerca
+
+`CASAS_VALOR_OPERACIONAL = 4` em `src/lib/casas-decimais.ts`, escrita na regra 3 do CLAUDE.md. É o
+VALOR dos módulos operacionais (conta corrente, abastecimento, frete, pagamento de frete, custo
+da OS), que nascem de litros × preço e t·km × tarifa e sempre tiveram 4 casas na origem. Copiar
+sem arredondar é o que deixa o saldo da transportadora bater na quarta casa na virada.
+`casas-decimais.test.ts` falha se qualquer arquivo de `src/modules/financeiro` citar a constante
+(mutação feita: um arquivo temporário no Financeiro derrubou o teste).
+
+### Propriedade do equipamento decide onde mora a etapa, e só enquanto a etapa não tem uso
+
+`equipamentos.propriedade` (`propria`, `colorado`, `alugada`) e o gatilho
+`fn_equipamento_cria_etapa_manutencao` reescrito: própria nasce na raiz de manutenção, Colorado na
+obra 002, alugada sem etapa. Isso fecha o defeito de hoje, em que o equipamento da Colorado
+cadastrado pela tela nascia na manutenção da EMT. Mudar a propriedade reposiciona a etapa
+(`fn_equipamento_troca_propriedade`), **mas recusa se a etapa já tem uso**: lançamento, rateio, item
+de OC, colaborador, folha, férias, rescisão, 13º ou etapa filha (`fn_centro_custo_em_uso`, as 9
+referências a `centros_custo` medidas em 22/09).
+
+- A seção 3 do plano dizia `propria, alugada, consorcio`; a 6.2 e a instrução do Tiago dizem
+  `propria, colorado, alugada`. Valeu a segunda.
+- A raiz da Colorado fica em `configuracoes.centro_custo_equipamentos_colorado`: nada de id em
+  função, nada de depender do nome da obra.
+- A marcação inicial saiu de onde a etapa JÁ estava (31 na obra 002, 4 sem etapa, 72 próprias), e a
+  migration para se o número for outro. **As 4 carretas são próprias com etapa em "001 - Carretas
+  EMT"**, por decisão do Tiago de 27/08. Nada foi movido; a regra nova vale para o que for
+  cadastrado daqui para a frente. Trocar a propriedade de uma carreta é recusado (tem rateio).
+- A importação de equipamentos por planilha não pede propriedade e cai no padrão `propria`, que é
+  o comportamento de antes.
+
+### Localidades é cadastro do ERP, com exclusão pela lixeira
+
+`cadastros.localidades` (CRUD, importação por planilha), no padrão de Unidades: sem DELETE direto,
+`fn_excluir_cadastro` joga na lixeira. `fn_recurso_do_cadastro` ganhou o caso, alterado a partir
+da definição viva (15 casos), não de cópia. Recurso para o perfil Admin e os 4 Admins ativos na
+mesma migration, conferido por contagem.
+
+### Ficha técnica em tabela 1:1, sem tela ainda
+
+`equipamento_especificacoes` com os campos da origem e `id` próprio: `fn_audit` identifica o
+registro por `id` ou `chave`, e sem nenhum dos dois a trilha ficaria sem identificador. A tela entra
+na Fase 2 com a Manutenção, que é quem usa.
+
+### O galão de Arla converte na entrada: `insumos.litros_por_unidade`
+
+1335M186 ganhou 20. O insumo ARLA 32 - LITRO nasce na carga (abaixo), sem código: 91 insumos já
+não têm, e o código não é único.
+
+### A carga dos de-paras é gerada e travada
+
+`supabase/migrations/_PENDENTE_20260922210000_fase1_carga_de_para.sql` é GERADA por
+`scripts/migracao-gestao-obras/gerar_carga_fase1.py` a partir dos CSVs. Cria o schema `legado` sem
+grant para o app, os de-paras (55 fornecedores, 109 equipamentos, 7 obras, 4 insumos, 9 usuários),
+EMT TRANSPORTES e JOHN DEERE (o Tiago confirmou que não é a JD COMERCIO), as marcas de
+transportadora/dono de tanque (Areacre e Areacre - Josias somam num só) e os dados de cadastro dos
+equipamentos. **Não foi aplicada**: linha de confiança baixa ou média sem o ok do Tiago vira um
+`raise` no topo do arquivo. Hoje são 3 (Casa das Máquinas, "EMT" e "E M T CONSTRUTORA LTDA").
+
+### O que o levantamento desmentiu no plano
+
+- **São 56 fornecedores usados, não 51**: a conta nova inclui entradas de material, OS e pedidos.
+- **`aprovar_lancamento_manual` não é do Frete**, é do Apontamento RH (policy de
+  `apont_registros_ponto`). A seção 4.2 errou. `frete.ajustes/aprovar` fica só com os Admins até o
+  Tiago dizer quem aprova ajuste de saldo.
+- **A lixeira não confere o recurso de origem.** A seção 4.1 conta com isso ("a lixeira confere o
+  recurso de origem"), mas `lixeira_select` pede só `administracao.lixeira/ver` e
+  `fn_restaurar_cadastro` só `administracao.lixeira/editar`: quem tem a lixeira vê e restaura
+  cadastro de qualquer módulo. As linhas de lixeira do de-para de permissões ficaram seguradas.
+- Da Fase 0: os 12 testes vermelhos já estavam verdes desde 09/07; a conferência 9.5 conta sem as
+  OS excluídas; e o FIFO do banco de origem não desconta transferência de saída nem esvaziamento
+  (só o Meloza EMT muda, 78 saídas, +R$ 440,69), o que é decisão do Tiago antes da Fase 3.
+
+### Duas coisas que ficaram de fora e merecem olho
+
+- `fornecedores` é lido inteiro num select só na tela de Cadastros: são 977 linhas, a um passo do
+  teto de 1.000 do PostgREST.
+- Os convites de Yara, Racenilton e Bruno mandam email para fora: esperam o ok do Tiago.

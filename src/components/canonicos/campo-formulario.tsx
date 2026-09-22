@@ -68,6 +68,7 @@ export function CampoFormulario({
 
 /** Switch "Ativo" pronto para react-hook-form (value/onChange) ou controle simples. */
 export function SelectAtivo({
+  id = "campo-ativo",
   value,
   onChange,
   disabled,
@@ -75,6 +76,8 @@ export function SelectAtivo({
   ajuda = "Registros inativos somem das listas de seleção, mas continuam no histórico.",
   className,
 }: {
+  /** Id do switch. Troque quando houver mais de um no mesmo formulário. */
+  id?: string;
   value: boolean;
   onChange: (value: boolean) => void;
   disabled?: boolean;
@@ -85,13 +88,13 @@ export function SelectAtivo({
   return (
     <div className={cn("flex items-start justify-between gap-4", className)}>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="campo-ativo">{rotulo}</Label>
+        <Label htmlFor={id}>{rotulo}</Label>
         {ajuda ? (
           <p className="text-legenda text-muted-foreground">{ajuda}</p>
         ) : null}
       </div>
       <Switch
-        id="campo-ativo"
+        id={id}
         checked={value}
         onCheckedChange={onChange}
         disabled={disabled}

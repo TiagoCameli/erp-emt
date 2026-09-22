@@ -1,7 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ControlePor } from "@/modules/cadastros/equipamentos/schemas";
+import type {
+  ControlePor,
+  Propriedade,
+  StatusEquipamento,
+} from "@/modules/cadastros/equipamentos/schemas";
 
 /** Linha da listagem de equipamentos. */
 export interface EquipamentoLista {
@@ -14,6 +18,12 @@ export interface EquipamentoLista {
   ano: number | null;
   placa: string | null;
   controlePor: ControlePor;
+  propriedade: Propriedade;
+  status: StatusEquipamento;
+  medicaoInicial: number | null;
+  numeroSerie: string | null;
+  dataAquisicao: string | null;
+  dataVenda: string | null;
   ativo: boolean;
 }
 
@@ -34,7 +44,7 @@ export async function listarEquipamentos(): Promise<EquipamentoLista[]> {
   const { data, error } = await supabase
     .from("equipamentos")
     .select(
-      "id, codigo, descricao, tipo, marca, modelo, ano, placa, controle_por, ativo",
+      "id, codigo, descricao, tipo, marca, modelo, ano, placa, controle_por, propriedade, status, medicao_inicial, numero_serie, data_aquisicao, data_venda, ativo",
     )
     .order("descricao");
 
@@ -52,6 +62,12 @@ export async function listarEquipamentos(): Promise<EquipamentoLista[]> {
     ano: equipamento.ano,
     placa: equipamento.placa,
     controlePor: equipamento.controle_por as ControlePor,
+    propriedade: equipamento.propriedade as Propriedade,
+    status: equipamento.status as StatusEquipamento,
+    medicaoInicial: equipamento.medicao_inicial,
+    numeroSerie: equipamento.numero_serie,
+    dataAquisicao: equipamento.data_aquisicao,
+    dataVenda: equipamento.data_venda,
     ativo: equipamento.ativo,
   }));
 }
