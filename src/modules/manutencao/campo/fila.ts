@@ -1,5 +1,6 @@
 import {
   ROTA_ENVIO_CAMPO,
+  TIPOS_DA_FILA,
   type EnvioCampo,
   type RespostaEnvioCampo,
 } from "@/modules/manutencao/campo/envio";
@@ -81,7 +82,10 @@ export async function enviarPendentes(
   usuarioId: string,
 ): Promise<ResultadoEnvio> {
   const resultado: ResultadoEnvio = { enviados: 0, recusados: 0, pendentes: 0, semSessao: false };
-  const itens = itensDoUsuario(await armazem.listar(), usuarioId).filter((item) => !item.recusado);
+  // Só reenvia o que o banco deduplica por id_cliente (abastecimento não: lançaria duas vezes).
+  const itens = itensDoUsuario(await armazem.listar(), usuarioId).filter(
+    (item) => !item.recusado && (TIPOS_DA_FILA as readonly string[]).includes(item.envio.tipo),
+  );
 
   for (let i = 0; i < itens.length; i++) {
     const item = itens[i]!;

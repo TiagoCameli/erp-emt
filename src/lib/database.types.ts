@@ -14,6 +14,51 @@ export type Database = {
   };
   public: {
     Tables: {
+      abastecimento_alocacoes: {
+        Row: {
+          centro_custo_id: string;
+          created_at: string;
+          etapa_legado: string | null;
+          id: string;
+          litros: number;
+          percentual: number;
+          saida_id: string;
+        };
+        Insert: {
+          centro_custo_id: string;
+          created_at?: string;
+          etapa_legado?: string | null;
+          id?: string;
+          litros: number;
+          percentual: number;
+          saida_id: string;
+        };
+        Update: {
+          centro_custo_id?: string;
+          created_at?: string;
+          etapa_legado?: string | null;
+          id?: string;
+          litros?: number;
+          percentual?: number;
+          saida_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "abastecimento_alocacoes_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "abastecimento_alocacoes_saida_id_fkey";
+            columns: ["saida_id"];
+            isOneToOne: false;
+            referencedRelation: "combustivel_saidas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       almoxarifado_depositos: {
         Row: {
           ativo: boolean;
@@ -956,6 +1001,562 @@ export type Database = {
           },
         ];
       };
+      combustivel_anomalias_conferidas: {
+        Row: {
+          chave: string;
+          conferido_em: string;
+          conferido_por: string | null;
+          motivo: string | null;
+        };
+        Insert: {
+          chave: string;
+          conferido_em?: string;
+          conferido_por?: string | null;
+          motivo?: string | null;
+        };
+        Update: {
+          chave?: string;
+          conferido_em?: string;
+          conferido_por?: string | null;
+          motivo?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_anomalias_conferidas_conferido_por_fkey";
+            columns: ["conferido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combustivel_camadas: {
+        Row: {
+          created_at: string;
+          fonte_id: string;
+          fonte_tipo: string;
+          id: string;
+          litros: number;
+          preco: number;
+          saida_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          fonte_id: string;
+          fonte_tipo: string;
+          id?: string;
+          litros: number;
+          preco: number;
+          saida_id: string;
+        };
+        Update: {
+          created_at?: string;
+          fonte_id?: string;
+          fonte_tipo?: string;
+          id?: string;
+          litros?: number;
+          preco?: number;
+          saida_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_camadas_saida_id_fkey";
+            columns: ["saida_id"];
+            isOneToOne: false;
+            referencedRelation: "combustivel_saidas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combustivel_entradas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data_hora: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          fornecedor_id: string | null;
+          id: string;
+          insumo_id: string;
+          litros: number;
+          motivo_exclusao: string | null;
+          nota_fiscal: string | null;
+          observacoes: string | null;
+          origem: string;
+          quantidade: number;
+          tanque_id: string;
+          updated_at: string;
+          valor_total: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data_hora: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          insumo_id: string;
+          litros: number;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          quantidade: number;
+          tanque_id: string;
+          updated_at?: string;
+          valor_total: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data_hora?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          insumo_id?: string;
+          litros?: number;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          quantidade?: number;
+          tanque_id?: string;
+          updated_at?: string;
+          valor_total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_entradas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_entradas_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_entradas_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_entradas_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_entradas_tanque_id_fkey";
+            columns: ["tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combustivel_esvaziamentos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data_hora: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          litros: number;
+          motivo: string;
+          motivo_exclusao: string | null;
+          origem: string;
+          tanque_id: string;
+          updated_at: string;
+          valor_perda: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data_hora: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          litros: number;
+          motivo: string;
+          motivo_exclusao?: string | null;
+          origem?: string;
+          tanque_id: string;
+          updated_at?: string;
+          valor_perda?: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data_hora?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          litros?: number;
+          motivo?: string;
+          motivo_exclusao?: string | null;
+          origem?: string;
+          tanque_id?: string;
+          updated_at?: string;
+          valor_perda?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_esvaziamentos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_esvaziamentos_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_esvaziamentos_tanque_id_fkey";
+            columns: ["tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combustivel_saidas: {
+        Row: {
+          canal: string;
+          centro_custo_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          equipamento_id: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          insumo_id: string;
+          litros: number;
+          medicao: number | null;
+          motivo_exclusao: string | null;
+          motorista: string | null;
+          observacoes: string | null;
+          origem: string;
+          pago: boolean;
+          pago_em: string | null;
+          placa: string | null;
+          preco_combustivel: number | null;
+          preco_medio_tanque: number | null;
+          preco_proprietario: number | null;
+          preco_unitario: number;
+          tanque_id: string | null;
+          taxa_litro: number;
+          tipo_consumidor: string;
+          tipo_medicao: string | null;
+          transportadora_id: string | null;
+          updated_at: string;
+          valor_total: number;
+        };
+        Insert: {
+          canal?: string;
+          centro_custo_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          equipamento_id?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id: string;
+          litros: number;
+          medicao?: number | null;
+          motivo_exclusao?: string | null;
+          motorista?: string | null;
+          observacoes?: string | null;
+          origem: string;
+          pago?: boolean;
+          pago_em?: string | null;
+          placa?: string | null;
+          preco_combustivel?: number | null;
+          preco_medio_tanque?: number | null;
+          preco_proprietario?: number | null;
+          preco_unitario?: number;
+          tanque_id?: string | null;
+          taxa_litro?: number;
+          tipo_consumidor: string;
+          tipo_medicao?: string | null;
+          transportadora_id?: string | null;
+          updated_at?: string;
+          valor_total?: number;
+        };
+        Update: {
+          canal?: string;
+          centro_custo_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          equipamento_id?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id?: string;
+          litros?: number;
+          medicao?: number | null;
+          motivo_exclusao?: string | null;
+          motorista?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          pago?: boolean;
+          pago_em?: string | null;
+          placa?: string | null;
+          preco_combustivel?: number | null;
+          preco_medio_tanque?: number | null;
+          preco_proprietario?: number | null;
+          preco_unitario?: number;
+          tanque_id?: string | null;
+          taxa_litro?: number;
+          tipo_consumidor?: string;
+          tipo_medicao?: string | null;
+          transportadora_id?: string | null;
+          updated_at?: string;
+          valor_total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_saidas_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_saidas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_saidas_equipamento_id_fkey";
+            columns: ["equipamento_id"];
+            isOneToOne: false;
+            referencedRelation: "equipamentos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_saidas_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_saidas_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_saidas_tanque_id_fkey";
+            columns: ["tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_saidas_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combustivel_sem_suprimento: {
+        Row: {
+          data_saida: string;
+          detectado_em: string;
+          id: string;
+          litros_sem_suprimento: number;
+          litros_solicitados: number;
+          litros_supridos: number;
+          saida_id: string;
+          tanque_id: string;
+        };
+        Insert: {
+          data_saida: string;
+          detectado_em?: string;
+          id?: string;
+          litros_sem_suprimento: number;
+          litros_solicitados: number;
+          litros_supridos: number;
+          saida_id: string;
+          tanque_id: string;
+        };
+        Update: {
+          data_saida?: string;
+          detectado_em?: string;
+          id?: string;
+          litros_sem_suprimento?: number;
+          litros_solicitados?: number;
+          litros_supridos?: number;
+          saida_id?: string;
+          tanque_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_sem_suprimento_saida_id_fkey";
+            columns: ["saida_id"];
+            isOneToOne: false;
+            referencedRelation: "combustivel_saidas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_sem_suprimento_tanque_id_fkey";
+            columns: ["tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combustivel_sem_suprimento_revisao: {
+        Row: {
+          observacao: string | null;
+          revisado_em: string;
+          revisado_por: string | null;
+          saida_id: string;
+        };
+        Insert: {
+          observacao?: string | null;
+          revisado_em?: string;
+          revisado_por?: string | null;
+          saida_id: string;
+        };
+        Update: {
+          observacao?: string | null;
+          revisado_em?: string;
+          revisado_por?: string | null;
+          saida_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_sem_suprimento_revisao_revisado_por_fkey";
+            columns: ["revisado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_sem_suprimento_revisao_saida_id_fkey";
+            columns: ["saida_id"];
+            isOneToOne: true;
+            referencedRelation: "combustivel_saidas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      combustivel_transferencias: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data_hora: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          insumo_id: string | null;
+          litros: number;
+          motivo_exclusao: string | null;
+          observacoes: string | null;
+          origem: string;
+          tanque_destino_id: string;
+          tanque_origem_id: string;
+          updated_at: string;
+          valor_total: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data_hora: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id?: string | null;
+          litros: number;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          tanque_destino_id: string;
+          tanque_origem_id: string;
+          updated_at?: string;
+          valor_total?: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data_hora?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id?: string | null;
+          litros?: number;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          tanque_destino_id?: string;
+          tanque_origem_id?: string;
+          updated_at?: string;
+          valor_total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_transferencias_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_transferencias_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_transferencias_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_transferencias_tanque_destino_id_fkey";
+            columns: ["tanque_destino_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_transferencias_tanque_origem_id_fkey";
+            columns: ["tanque_origem_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       competencia_eventos: {
         Row: {
           created_at: string;
@@ -1507,6 +2108,7 @@ export type Database = {
       };
       equipamento_medicoes: {
         Row: {
+          combustivel_saida_id: string | null;
           created_at: string;
           created_by: string | null;
           data: string;
@@ -1523,6 +2125,7 @@ export type Database = {
           valor: number;
         };
         Insert: {
+          combustivel_saida_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           data: string;
@@ -1539,6 +2142,7 @@ export type Database = {
           valor: number;
         };
         Update: {
+          combustivel_saida_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           data?: string;
@@ -1555,6 +2159,13 @@ export type Database = {
           valor?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "equipamento_medicoes_combustivel_saida_id_fkey";
+            columns: ["combustivel_saida_id"];
+            isOneToOne: false;
+            referencedRelation: "combustivel_saidas";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "equipamento_medicoes_created_by_fkey";
             columns: ["created_by"];
@@ -5044,6 +5655,76 @@ export type Database = {
           },
         ];
       };
+      tanques: {
+        Row: {
+          apelido: string | null;
+          ativo: boolean;
+          capacidade_litros: number;
+          combustivel_atual_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          eh_externo: boolean;
+          id: string;
+          nivel_atual_litros: number;
+          nome: string;
+          observacoes: string | null;
+          proprietario_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          apelido?: string | null;
+          ativo?: boolean;
+          capacidade_litros?: number;
+          combustivel_atual_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          eh_externo?: boolean;
+          id?: string;
+          nivel_atual_litros?: number;
+          nome: string;
+          observacoes?: string | null;
+          proprietario_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          apelido?: string | null;
+          ativo?: boolean;
+          capacidade_litros?: number;
+          combustivel_atual_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          eh_externo?: boolean;
+          id?: string;
+          nivel_atual_litros?: number;
+          nome?: string;
+          observacoes?: string | null;
+          proprietario_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tanques_combustivel_atual_id_fkey";
+            columns: ["combustivel_atual_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tanques_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tanques_proprietario_id_fkey";
+            columns: ["proprietario_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       tipos_oleo: {
         Row: {
           aplicacao: string;
@@ -5141,6 +5822,66 @@ export type Database = {
             columns: ["conta_origem_id"];
             isOneToOne: false;
             referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      transportadora_movimentos: {
+        Row: {
+          centro_custo_id: string | null;
+          created_at: string;
+          data: string;
+          descricao: string | null;
+          id: string;
+          mes_referencia: string;
+          origem: string;
+          origem_id: string;
+          origem_tabela: string;
+          tipo: string;
+          transportadora_id: string;
+          valor: number;
+        };
+        Insert: {
+          centro_custo_id?: string | null;
+          created_at?: string;
+          data: string;
+          descricao?: string | null;
+          id?: string;
+          mes_referencia: string;
+          origem?: string;
+          origem_id: string;
+          origem_tabela: string;
+          tipo: string;
+          transportadora_id: string;
+          valor: number;
+        };
+        Update: {
+          centro_custo_id?: string | null;
+          created_at?: string;
+          data?: string;
+          descricao?: string | null;
+          id?: string;
+          mes_referencia?: string;
+          origem?: string;
+          origem_id?: string;
+          origem_tabela?: string;
+          tipo?: string;
+          transportadora_id?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transportadora_movimentos_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transportadora_movimentos_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
             referencedColumns: ["id"];
           },
         ];
@@ -5534,6 +6275,68 @@ export type Database = {
       };
       fn_chave_nome: { Args: { p_texto: string }; Returns: string };
       fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean };
+      fn_comb_combustivel_na_data: {
+        Args: { p_data: string; p_tanque: string };
+        Returns: string;
+      };
+      fn_comb_conferir_anomalia: {
+        Args: { p_chave: string; p_conferida: boolean; p_motivo?: string };
+        Returns: undefined;
+      };
+      fn_comb_estoque_na_data: {
+        Args: { p_data: string; p_excluir?: string; p_tanque: string };
+        Returns: number;
+      };
+      fn_comb_excluir: {
+        Args: { p_id: string; p_motivo: string; p_tabela: string };
+        Returns: undefined;
+      };
+      fn_comb_inicio_ciclo_aberto: {
+        Args: { p_tanque: string };
+        Returns: string;
+      };
+      fn_comb_registrar_esvaziamento: {
+        Args: {
+          p_data_hora: string;
+          p_litros: number;
+          p_motivo: string;
+          p_tanque: string;
+        };
+        Returns: string;
+      };
+      fn_comb_revisar_sem_suprimento: {
+        Args: { p_observacao?: string; p_revisado: boolean; p_saida: string };
+        Returns: undefined;
+      };
+      fn_comb_salvar_entrada: {
+        Args: {
+          p_data_hora: string;
+          p_fornecedor: string;
+          p_id: string;
+          p_insumo: string;
+          p_nota_fiscal: string;
+          p_observacoes: string;
+          p_quantidade: number;
+          p_tanque: string;
+          p_valor_total: number;
+        };
+        Returns: string;
+      };
+      fn_comb_salvar_saida: {
+        Args: { p_dados: Json; p_id: string };
+        Returns: string;
+      };
+      fn_comb_salvar_transferencia: {
+        Args: {
+          p_data_hora: string;
+          p_destino: string;
+          p_id: string;
+          p_litros: number;
+          p_observacoes: string;
+          p_origem: string;
+        };
+        Returns: string;
+      };
       fn_competencias_painel: {
         Args: { p_meses?: number };
         Returns: {
@@ -6664,6 +7467,7 @@ export type Database = {
         Returns: number;
       };
       fn_ve_manutencao: { Args: never; Returns: boolean };
+      fn_ve_combustivel: { Args: never; Returns: boolean };
       fn_vencimento_folha: {
         Args: { p_competencia: string; p_dia: number };
         Returns: string;

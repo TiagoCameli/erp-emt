@@ -12,7 +12,7 @@ import { ROTULO_STATUS_EQUIPAMENTO } from "@/modules/cadastros/equipamentos/sche
 import { BADGE_STATUS_OS, ROTULO_STATUS_OS } from "@/modules/manutencao/_shared/rotulos";
 import { AcoesEquipamento } from "@/modules/manutencao/campo/components/acoes-equipamento";
 import { permissoesCampo, veManutencao } from "@/modules/manutencao/campo/permissao";
-import { obterEquipamentoCampo } from "@/modules/manutencao/campo/queries";
+import { listarTanquesCampo, obterEquipamentoCampo } from "@/modules/manutencao/campo/queries";
 import { UNIDADE_MEDICAO } from "@/modules/manutencao/medicoes/schemas";
 
 export const metadata = { title: "Equipamento" };
@@ -62,10 +62,11 @@ export default async function EquipamentoCampoPage({ params }: { params: Promise
   }
 
   const permissoes = permissoesCampo(usuario);
-  const [ficha, centros] = await Promise.all([
+  const [ficha, centros, tanques] = await Promise.all([
     obterFichaTecnica(equipamento.id),
-    // A lista de obras só vai para o alugado (sem etapa), que é quem a OS pede.
-    permissoes.abrirOs && !equipamento.temEtapa ? listarCentrosCusto() : Promise.resolve([]),
+    // A lista de obras só vai para o alugado (sem etapa), que é quem a OS e o abastecimento pedem.
+    (permissoes.abrirOs || permissoes.abastecer) && !equipamento.temEtapa ? listarCentrosCusto() : Promise.resolve([]),
+    permissoes.abastecer ? listarTanquesCampo() : Promise.resolve([]),
   ]);
   const unidade = equipamento.controlePor ? UNIDADE_MEDICAO[equipamento.controlePor] : "";
 
@@ -120,6 +121,8 @@ export default async function EquipamentoCampoPage({ params }: { params: Promise
           centros={centros}
           podeLancarLeitura={permissoes.lancarLeitura}
           podeAbrirOs={permissoes.abrirOs}
+          tanques={tanques}
+          podeAbastecer={permissoes.abastecer && tanques.length > 0}
         />
       ) : null}
 

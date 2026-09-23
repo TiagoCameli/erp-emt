@@ -7,6 +7,7 @@ import {
   enviarPendentes,
   itensDoUsuario,
   novoItem,
+  type Enviar,
   type ItemFila,
 } from "@/modules/manutencao/campo/fila";
 
@@ -110,6 +111,22 @@ describe("enviarPendentes", () => {
     // Linha de controle: o meu foi, o do outro ficou intacto.
     expect(enviados).toEqual([envio(2).idCliente]);
     expect((await armazem.listar()).map((i) => i.usuarioId)).toEqual([OUTRO]);
+  });
+});
+
+describe("abastecimento não entra no reenvio", () => {
+  it("item de abastecimento na fila nunca é mandado de novo (o banco não deduplica a saída)", async () => {
+    const abastecimento = novoItem({
+      usuarioId: EU, equipamentoId: EQUIP, resumo: "Abastecimento",
+      envio: { tipo: "abastecimento", idCliente: "09999999-0000-4000-8000-000000000000",
+        dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
+          centroCustoId: null, observacoes: "" } },
+    });
+    const enviar = vi.fn<Enviar>(async () => OK("x"));
+    await enviarPendentes(armazemEmMemoria([abastecimento, item(1)]), enviar, EU);
+    // Linha de controle: a leitura da mesma fila foi enviada.
+    expect(enviar).toHaveBeenCalledTimes(1);
+    expect(enviar.mock.calls[0]![0]).toMatchObject({ tipo: "medicao" });
   });
 });
 

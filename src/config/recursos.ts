@@ -36,6 +36,7 @@ export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
+  { id: "combustivel", nome: "Combustível", rota: "/combustivel" },
   { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
   { id: "rh", nome: "RH", rota: "/rh" },
@@ -209,6 +210,68 @@ export const RECURSOS = [
     modulo: "compras",
     rota: "/compras/ordens",
     acoes: CRUD_APROVA,
+  },
+  // Combustível (Fase 3 da migração do Gestão Obras, plano seção 4.1). Não gera
+  // lançamento, parcela nem rateio: o abastecimento de carreta vira débito na conta
+  // corrente da transportadora (Frete), nunca no Financeiro.
+  {
+    id: "combustivel.painel",
+    nome: "Visão geral",
+    modulo: "combustivel",
+    rota: "/combustivel",
+    acoes: ["ver"],
+  },
+  {
+    id: "combustivel.tanques",
+    nome: "Tanques",
+    modulo: "combustivel",
+    rota: "/combustivel/tanques",
+    acoes: CRUD,
+  },
+  {
+    id: "combustivel.entradas",
+    nome: "Entradas",
+    modulo: "combustivel",
+    rota: "/combustivel/entradas",
+    acoes: CRUD,
+  },
+  {
+    // Equipamento próprio e carreta de transportadora. É também a tela do celular.
+    id: "combustivel.saidas",
+    nome: "Abastecimentos",
+    modulo: "combustivel",
+    rota: "/combustivel/abastecimentos",
+    acoes: CRUD,
+  },
+  {
+    id: "combustivel.transferencias",
+    nome: "Transferências",
+    modulo: "combustivel",
+    rota: "/combustivel/transferencias",
+    acoes: CRUD,
+  },
+  {
+    // Perda com valor: ação separada de propósito, sem editar.
+    id: "combustivel.esvaziamentos",
+    nome: "Esvaziamentos",
+    modulo: "combustivel",
+    rota: "/combustivel/esvaziamentos",
+    acoes: ["ver", "criar", "excluir"],
+  },
+  {
+    // "editar" = marcar como conferida. Inclui as saídas sem suprimento.
+    id: "combustivel.anomalias",
+    nome: "Anomalias",
+    modulo: "combustivel",
+    rota: "/combustivel/anomalias",
+    acoes: ["ver", "editar"],
+  },
+  {
+    id: "combustivel.relatorios",
+    nome: "Relatórios",
+    modulo: "combustivel",
+    rota: "/combustivel/relatorios",
+    acoes: ["ver"],
   },
   // Manutenção (Fase 2 da migração do Gestão Obras, plano seção 4.1). Não gera
   // lançamento, parcela nem rateio: diz para onde foi a peça, o óleo e o serviço.

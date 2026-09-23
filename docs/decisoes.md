@@ -3971,3 +3971,56 @@ O staging (`legado.carga_fase2d`) fica até a Fase 5, como registro do que entro
 `supabase/rollbacks/20260923170000_fase2d_carga_manutencao_rollback.sql` no ERP e
 `20260923180100_rollback_manutencao_congelada_migrou_para_o_erp.sql` no Gestão Obras, antes de
 alguém lançar no ERP.
+
+## 24/09/2026: Migração, Fase 3 (Combustível): banco, telas e celular
+
+Desenho em `docs/FASE3-COMBUSTIVEL.md`. O Tiago disse "pode seguir com o plano".
+
+### Banco (`20260924100000_fase3_combustivel_banco`)
+
+- **Dinheiro e saldo portados do banco vivo da origem, sem melhoria** (decisão de 22/09: "o FIFO
+  do ERP vai ficar igual era no Gestão Obras"). O PEPS NÃO desconta transferência de saída nem
+  esvaziamento, como `private.recompute_fifo_tanque`; os 16 testes do TS da origem dizem o
+  contrário e perdem para o banco. Preço do equipamento próprio regravado a cada mudança no tanque
+  (a origem também regrava). Carreta: preço digitado, nunca regravado; em tanque da EMT, sem preço,
+  usa o PEPS das camadas que consumiu. Débito e crédito da conta corrente com a fórmula de
+  `fn_saidas_combustivel_movimentos`. Capacidade e mistura pelo nível ATUAL, como a origem.
+- **Mudou só o que não mexe em dinheiro:** `timestamptz` interpretando Rio Branco (a ordem do PEPS
+  não muda: fuso fixo); "data no futuro" por Rio Branco; esvaziamento com auditoria, lixeira e
+  trava de ciclo (a origem não tinha); anomalia conferida com permissão (na origem qualquer usuário);
+  tanque externo nunca para equipamento próprio (0 casos na base); fornecedor da entrada vira FK;
+  canal (computador/celular) vira coluna.
+- `transportadora_movimentos` nasce aqui (o combustível escreve nela); o Frete completa na Fase 4.
+- Leitura (estoque e combustível na data, ciclo) em SECURITY INVOKER: pela tela, a RLS vale.
+  Camada e sem suprimento sem auditoria: o recálculo refaz o tanque inteiro a cada edição.
+- Permissões: 23 ações x 4 Admins = 92, conferidas na migration.
+- **Ensaiada antes de aplicar**, num bloco que roda a migration e a prova e desfaz tudo; depois
+  aplicada pelo `apply_migration` e a prova repetida no banco aplicado, com o mesmo resultado.
+
+### Prova (`supabase/provas/fase3a_combustivel_banco.sql`), 24 casos
+
+PEPS 1000 L a R$ 6 + 1000 L a R$ 7: saída de 1.500 L = R$ 6,3333 e R$ 9.500 (duas camadas), com o
+centro de custo na etapa do equipamento e o horímetro virando medição. Carreta em tanque da EMT sem
+preço: R$ 7 + 0,30 = R$ 1.460, débito EMT igual. Tanque externo: débito R$ 640 da transportadora e
+crédito R$ 610 do dono, sem camada. Recusados: saldo insuficiente, saldo negativo no passado,
+mistura, entrada em externo, capacidade, data no futuro, exclusão em ciclo fechado. Transferência de
+saída não consome camada (a saída seguinte ainda paga R$ 7). Excluir a carreta apaga os movimentos.
+RLS: sem permissão vê 0 e não grava; controle, o Admin vê 3. 0 lançamentos.
+
+### Telas e celular
+
+- Visão geral, tanques (com planilha e detalhe com o nível movimento a movimento), entradas,
+  abastecimentos (detalhe com camadas, conta corrente e alocações), transferências,
+  esvaziamentos, anomalias (D1 a D5 calculadas no servidor; sem suprimento com revisão) e
+  relatórios em Excel (mensal, por obra, por equipamento, bruto).
+- Celular: botão "Abastecer" na tela do QR, para quem tem `combustivel.saidas/criar`. **Só com
+  sinal e sem reenvio**: a saída não tem id_cliente, e reenviar depois de um timeout lançaria o
+  diesel duas vezes; se a conexão cai sem resposta, a tela manda conferir antes de lançar de novo.
+  A fila offline recusa reenviar qualquer tipo que o banco não deduplica. A tela do QR passou a
+  abrir também para quem só vê o Combustível (o frentista).
+
+### A carga vai junto com a da Fase 4
+
+A conta corrente recebe o combustível e o frete; a conferência 9.1 (saldo por transportadora igual
+na quarta casa) só fecha com os dois. A carga do Combustível é preparada e ensaiada com a do Frete,
+e as duas viram no mesmo dia (plano, seção 7).
