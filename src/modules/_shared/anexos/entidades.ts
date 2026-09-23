@@ -22,6 +22,15 @@ const RECURSO_POR_ENTIDADE = {
   rh_epi: "rh.epis",
   rh_ocorrencia: "rh.ocorrencias",
   equipamento_documento: "cadastros.equipamentos",
+  // Frete: "frete_chegada" é a foto da chegada da carga (a primeira foto do frete na origem),
+  // separada das outras fotos e arquivos do frete.
+  frete: "frete.fretes",
+  frete_chegada: "frete.fretes",
+  frete_pagamento: "frete.pagamentos",
+  pedido_material: "frete.pedidos-material",
+  combustivel_entrada: "combustivel.entradas",
+  combustivel_saida: "combustivel.saidas",
+  combustivel_transferencia: "combustivel.transferencias",
 } as const satisfies Record<string, RecursoId>;
 
 /** Tipo de documento que aceita anexo. */
@@ -56,6 +65,13 @@ const ROTULO_ENTIDADE: Record<EntidadeAnexo, string> = {
   rh_epi: "EPI",
   rh_ocorrencia: "ocorrência",
   equipamento_documento: "documento do equipamento",
+  frete: "frete",
+  frete_chegada: "chegada do frete",
+  frete_pagamento: "pagamento de frete",
+  pedido_material: "pedido de material",
+  combustivel_entrada: "entrada de combustível",
+  combustivel_saida: "abastecimento",
+  combustivel_transferencia: "transferência de combustível",
 };
 
 export function rotuloDaEntidade(entidade: EntidadeAnexo): string {

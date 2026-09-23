@@ -3062,6 +3062,423 @@ export type Database = {
         };
         Relationships: [];
       };
+      frete_ajustes: {
+        Row: {
+          aprovado_em: string | null;
+          aprovado_por: string | null;
+          centro_custo_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          descricao: string;
+          id: string;
+          mes_referencia: string;
+          motivo_status: string | null;
+          origem: string;
+          sinal: string;
+          status: string;
+          transportadora_id: string;
+          updated_at: string;
+          updated_by: string | null;
+          valor: number;
+        };
+        Insert: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          centro_custo_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          descricao: string;
+          id?: string;
+          mes_referencia: string;
+          motivo_status?: string | null;
+          origem?: string;
+          sinal: string;
+          status?: string;
+          transportadora_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valor: number;
+        };
+        Update: {
+          aprovado_em?: string | null;
+          aprovado_por?: string | null;
+          centro_custo_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          descricao?: string;
+          id?: string;
+          mes_referencia?: string;
+          motivo_status?: string | null;
+          origem?: string;
+          sinal?: string;
+          status?: string;
+          transportadora_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "frete_ajustes_aprovado_por_fkey";
+            columns: ["aprovado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_ajustes_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_ajustes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_ajustes_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_ajustes_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
+          {
+            foreignKeyName: "frete_ajustes_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      frete_anomalias_conferidas: {
+        Row: {
+          chave: string;
+          conferido_em: string;
+          conferido_por: string | null;
+          motivo: string | null;
+        };
+        Insert: {
+          chave: string;
+          conferido_em?: string;
+          conferido_por?: string | null;
+          motivo?: string | null;
+        };
+        Update: {
+          chave?: string;
+          conferido_em?: string;
+          conferido_por?: string | null;
+          motivo?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "frete_anomalias_conferidas_conferido_por_fkey";
+            columns: ["conferido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      frete_pagamentos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          mes_referencia: string;
+          metodo: string;
+          motivo_exclusao: string | null;
+          nota_fiscal: string | null;
+          observacoes: string | null;
+          origem: string;
+          pago_por: string;
+          quantidade_combustivel: number;
+          responsavel: string;
+          transportadora_id: string;
+          updated_at: string;
+          updated_by: string | null;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          mes_referencia: string;
+          metodo?: string;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          pago_por: string;
+          quantidade_combustivel?: number;
+          responsavel: string;
+          transportadora_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          mes_referencia?: string;
+          metodo?: string;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          pago_por?: string;
+          quantidade_combustivel?: number;
+          responsavel?: string;
+          transportadora_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "frete_pagamentos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_pagamentos_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_pagamentos_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_pagamentos_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
+          {
+            foreignKeyName: "frete_pagamentos_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      frete_painel_config: {
+        Row: {
+          fornecedor_ids: string[];
+          id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          fornecedor_ids?: string[];
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          fornecedor_ids?: string[];
+          id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "frete_painel_config_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      fretes: {
+        Row: {
+          centro_custo_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          data_chegada: string | null;
+          destino_localidade_id: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          insumo_id: string;
+          km_rodados: number;
+          motivo_exclusao: string | null;
+          motorista: string;
+          nota_fiscal: string | null;
+          nota_fiscal2: string | null;
+          observacoes: string | null;
+          origem: string;
+          origem_localidade_id: string;
+          peso_toneladas: number;
+          placa_carreta: string | null;
+          tipo: string;
+          transportadora_id: string;
+          updated_at: string;
+          updated_by: string | null;
+          valor_material: number;
+          valor_tkm: number;
+          valor_total: number;
+        };
+        Insert: {
+          centro_custo_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          data_chegada?: string | null;
+          destino_localidade_id: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id: string;
+          km_rodados: number;
+          motivo_exclusao?: string | null;
+          motorista: string;
+          nota_fiscal?: string | null;
+          nota_fiscal2?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          origem_localidade_id: string;
+          peso_toneladas: number;
+          placa_carreta?: string | null;
+          tipo?: string;
+          transportadora_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valor_material?: number;
+          valor_tkm: number;
+          valor_total: number;
+        };
+        Update: {
+          centro_custo_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          data_chegada?: string | null;
+          destino_localidade_id?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id?: string;
+          km_rodados?: number;
+          motivo_exclusao?: string | null;
+          motorista?: string;
+          nota_fiscal?: string | null;
+          nota_fiscal2?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          origem_localidade_id?: string;
+          peso_toneladas?: number;
+          placa_carreta?: string | null;
+          tipo?: string;
+          transportadora_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+          valor_material?: number;
+          valor_tkm?: number;
+          valor_total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fretes_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_destino_localidade_id_fkey";
+            columns: ["destino_localidade_id"];
+            isOneToOne: false;
+            referencedRelation: "localidades";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_origem_localidade_id_fkey";
+            columns: ["origem_localidade_id"];
+            isOneToOne: false;
+            referencedRelation: "localidades";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
+          {
+            foreignKeyName: "fretes_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       funcoes: {
         Row: {
           ativo: boolean;
@@ -3697,6 +4114,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           endereco: string | null;
+          fornecedor_id: string | null;
           id: string;
           nome: string;
           updated_at: string;
@@ -3706,6 +4124,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           endereco?: string | null;
+          fornecedor_id?: string | null;
           id?: string;
           nome: string;
           updated_at?: string;
@@ -3715,6 +4134,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           endereco?: string | null;
+          fornecedor_id?: string | null;
           id?: string;
           nome?: string;
           updated_at?: string;
@@ -3726,6 +4146,20 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "usuarios";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "localidades_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "localidades_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
           },
         ];
       };
@@ -4523,6 +4957,132 @@ export type Database = {
             columns: ["parcela_id"];
             isOneToOne: false;
             referencedRelation: "lancamento_parcelas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      pedido_material_itens: {
+        Row: {
+          created_at: string;
+          id: string;
+          insumo_id: string;
+          ordem: number;
+          pedido_id: string;
+          quantidade: number;
+          valor_unitario: number;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          insumo_id: string;
+          ordem: number;
+          pedido_id: string;
+          quantidade: number;
+          valor_unitario: number;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          insumo_id?: string;
+          ordem?: number;
+          pedido_id?: string;
+          quantidade?: number;
+          valor_unitario?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pedido_material_itens_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pedido_material_itens_pedido_id_fkey";
+            columns: ["pedido_id"];
+            isOneToOne: false;
+            referencedRelation: "pedidos_material";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      pedidos_material: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          fornecedor_id: string;
+          id: string;
+          motivo_exclusao: string | null;
+          observacoes: string | null;
+          origem: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id: string;
+          id?: string;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id?: string;
+          id?: string;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pedidos_material_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pedidos_material_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pedidos_material_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pedidos_material_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
+          {
+            foreignKeyName: "pedidos_material_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
             referencedColumns: ["id"];
           },
         ];
@@ -6124,7 +6684,107 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      transportadora_movimentos_detalhe: {
+        Row: {
+          ajuste_criado_por: string | null;
+          centro_custo_id: string | null;
+          created_at: string | null;
+          data: string | null;
+          descricao: string | null;
+          frete_destino: string | null;
+          frete_insumo_id: string | null;
+          frete_km_rodados: number | null;
+          frete_motorista: string | null;
+          frete_nota_fiscal: string | null;
+          frete_nota_fiscal2: string | null;
+          frete_origem: string | null;
+          frete_peso_toneladas: number | null;
+          frete_placa_carreta: string | null;
+          frete_valor_tkm: number | null;
+          id: string | null;
+          mes_referencia: string | null;
+          origem: string | null;
+          origem_id: string | null;
+          origem_tabela: string | null;
+          pagamento_metodo: string | null;
+          pagamento_nota_fiscal: string | null;
+          pagamento_observacoes: string | null;
+          pagamento_pago_por: string | null;
+          pagamento_quantidade_combustivel: number | null;
+          pagamento_responsavel: string | null;
+          saida_insumo_id: string | null;
+          saida_litros: number | null;
+          saida_motorista: string | null;
+          saida_observacoes: string | null;
+          saida_placa: string | null;
+          saida_preco_combustivel: number | null;
+          saida_preco_medio_tanque: number | null;
+          saida_preco_proprietario: number | null;
+          saida_taxa_litro: number | null;
+          saida_tipo_consumidor: string | null;
+          tipo: string | null;
+          transportadora_id: string | null;
+          valor: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "combustivel_saidas_insumo_id_fkey";
+            columns: ["saida_insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "frete_ajustes_created_by_fkey";
+            columns: ["ajuste_criado_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fretes_insumo_id_fkey";
+            columns: ["frete_insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transportadora_movimentos_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transportadora_movimentos_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transportadora_movimentos_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
+        ];
+      };
+      transportadora_saldos: {
+        Row: {
+          credito_frete_total: number | null;
+          debito_combustivel_total: number | null;
+          eh_dona_de_tanque: boolean | null;
+          eh_transportadora: boolean | null;
+          nome: string | null;
+          pago_frete_total: number | null;
+          qtd_movimentos: number | null;
+          saldo: number | null;
+          transportadora_id: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       aplicar_perfil: {
@@ -6646,6 +7306,48 @@ export type Database = {
         Args: { p_folha: string };
         Returns: undefined;
       };
+      fn_frete_ajuste_aprovar: { Args: { p_id: string }; Returns: undefined };
+      fn_frete_ajuste_desaprovar: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_frete_ajuste_salvar: {
+        Args: { p_dados: Json; p_id: string };
+        Returns: string;
+      };
+      fn_frete_conferir_anomalia: {
+        Args: { p_chave: string; p_conferida: boolean; p_motivo?: string };
+        Returns: undefined;
+      };
+      fn_frete_excluir: {
+        Args: { p_id: string; p_motivo: string; p_tabela: string };
+        Returns: undefined;
+      };
+      fn_frete_meio_dia: { Args: { p_dia: string }; Returns: string };
+      fn_frete_pagamento_salvar: {
+        Args: { p_dados: Json; p_id: string };
+        Returns: string;
+      };
+      fn_frete_painel_config_salvar: {
+        Args: { p_fornecedores: string[] };
+        Returns: undefined;
+      };
+      fn_frete_recurso_da_tabela: {
+        Args: { p_tabela: string };
+        Returns: string;
+      };
+      fn_frete_registrar_chegada: {
+        Args: { p_data: string; p_id: string };
+        Returns: undefined;
+      };
+      fn_frete_restaurar: {
+        Args: { p_id: string; p_tabela: string };
+        Returns: undefined;
+      };
+      fn_frete_salvar: {
+        Args: { p_dados: Json; p_id: string };
+        Returns: string;
+      };
       fn_gerar_decimo_terceiro: {
         Args: { p_ano: number; p_data_vencimento?: string; p_parcela: number };
         Returns: string;
@@ -6876,6 +7578,10 @@ export type Database = {
           numero_parcela: number;
           valor: number;
         }[];
+      };
+      fn_pedido_material_salvar: {
+        Args: { p_dados: Json; p_id: string };
+        Returns: string;
       };
       fn_pode_lancar_tipo: {
         Args: { p_acao: string; p_tipo: string };
@@ -7476,6 +8182,7 @@ export type Database = {
       };
       fn_ve_manutencao: { Args: never; Returns: boolean };
       fn_ve_combustivel: { Args: never; Returns: boolean };
+      fn_ve_frete: { Args: never; Returns: boolean };
       fn_vencimento_folha: {
         Args: { p_competencia: string; p_dia: number };
         Returns: string;
