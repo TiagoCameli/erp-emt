@@ -210,3 +210,260 @@ export function percentualDoTanque(nivel: number, capacidade: number): number | 
   if (!(capacidade > 0)) return null;
   return Math.round((nivel / capacidade) * 1000) / 10;
 }
+
+// ---------------------------------------------------------------------------
+// Sparklines, evolução, heatmap, fornecedores e últimas saídas (v2/visao-geral)
+// ---------------------------------------------------------------------------
+
+/** "AAAA-MM-DD" -> milissegundos UTC do dia (calendário puro, sem fuso). */
+function diaUtc(dia: string): number {
+  const [a, m, d] = dia.split("-").map(Number);
+  return Date.UTC(a!, m! - 1, d!);
+}
+
+const UM_DIA = 86_400_000;
+
+function isoDoDia(tempo: number): string {
+  return new Date(tempo).toISOString().slice(0, 10);
+}
+
+/** Os dias de [de, ate], inclusivos. */
+export function diasDoPeriodo(de: string, ate: string): string[] {
+  const dias: string[] = [];
+  for (let t = diaUtc(de), fim = diaUtc(ate); t <= fim; t += UM_DIA) dias.push(isoDoDia(t));
+  return dias;
+}
+
+/**
+ * O `bucketByDia` da origem: um valor por dia do período, zero no dia sem saída (a série
+ * fica contínua). O dia é o do relógio de parede da saída.
+ */
+export function serieDiaria(
+  saidas: readonly SaidaBase[],
+  de: string,
+  ate: string,
+  valor: (s: SaidaBase) => number,
+): number[] {
+  const porDia = new Map<string, number[]>();
+  for (const s of saidas) {
+    const dia = s.data.slice(0, 10);
+    if (dia < de || dia > ate) continue;
+    const lista = porDia.get(dia) ?? [];
+    lista.push(valor(s));
+    porDia.set(dia, lista);
+  }
+  return diasDoPeriodo(de, ate).map((dia) => somar(porDia.get(dia) ?? []));
+}
+
+export interface SparksKpis {
+  volume: number[];
+  custo: number[];
+  /** R$/L por dia, SEM os dias zerados (dia sem saída puxaria a linha para zero). */
+  rPorL: number[];
+  /** Média do R$/L diário; 0 esconde o chip do R$/L, como na origem. */
+  mediaRpL: number;
+}
+
+/** As sparklines dos KPIs da origem (KpisRow): volume, custo e R$/L por dia. */
+export function sparksDosKpis(saidas: readonly SaidaBase[], de: string, ate: string): SparksKpis {
+  const volume = serieDiaria(saidas, de, ate, (s) => s.litros);
+  const custo = serieDiaria(saidas, de, ate, (s) => s.valorTotal);
+  const rPorL = volume
+    .map((litros, i) => (litros > 0 ? (custo[i] ?? 0) / litros : 0))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  const mediaRpL = rPorL.length > 0 ? rPorL.reduce((acc, v) => acc + v, 0) / rPorL.length : 0;
+  return { volume, custo, rPorL, mediaRpL };
+}
+
+/** A sparkline só aparece com 4+ pontos acima de zero (menos que isso é ruído), como na origem. */
+export function sparkVisivel(serie: readonly number[] | undefined): boolean {
+  return (serie ?? []).filter((v) => v > 0).length >= 4;
+}
+
+export type Granularidade = "dia" | "semana" | "mes";
+
+/**
+ * A granularidade automática da Evolução temporal (origem): até 92 dias (qualquer
+ * trimestre), por dia; até 731 (dois anos), por semana; acima, por mês.
+ */
+export function autoGranularidade(de: string, ate: string): Granularidade {
+  const dias = Math.round((diaUtc(ate) - diaUtc(de)) / UM_DIA) + 1;
+  if (dias > 731) return "mes";
+  if (dias > 92) return "semana";
+  return "dia";
+}
+
+export interface BaldeEvolucao {
+  /** Dia, segunda-feira da semana ou "AAAA-MM". */
+  chave: string;
+  rotulo: string;
+  /** Início e fim do balde (a semana e o mês podem passar das pontas do período). */
+  de: string;
+  ate: string;
+  litros: number;
+  custo: number;
+}
+
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** "dd/mm". */
+function diaMes(dia: string): string {
+  return `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
+}
+
+/** Segunda-feira da semana (semana ISO começa na segunda, como a origem). */
+export function inicioDaSemana(dia: string): string {
+  const t = diaUtc(dia);
+  const recuo = (new Date(t).getUTCDay() + 6) % 7;
+  return isoDoDia(t - recuo * UM_DIA);
+}
+
+function fimDoMes(dia: string): string {
+  const [a, m] = dia.split("-").map(Number);
+  return isoDoDia(Date.UTC(a!, m!, 0));
+}
+
+/**
+ * O `bucketize` da origem (EvolucaoTemporal): litros e custo por dia, semana ou mês, com os
+ * baldes vazios do período já criados (o eixo não pula dia sem saída).
+ */
+export function evolucaoTemporal(
+  saidas: readonly SaidaBase[],
+  de: string,
+  ate: string,
+  granularidade: Granularidade,
+): BaldeEvolucao[] {
+  const baldes = new Map<string, { balde: BaldeEvolucao; litros: number[]; custo: number[] }>();
+  const chaveDoDia = (dia: string) =>
+    granularidade === "dia" ? dia : granularidade === "semana" ? inicioDaSemana(dia) : dia.slice(0, 7);
+
+  for (const dia of diasDoPeriodo(de, ate)) {
+    const chave = chaveDoDia(dia);
+    if (baldes.has(chave)) continue;
+    let balde: BaldeEvolucao;
+    if (granularidade === "dia") {
+      balde = { chave, rotulo: diaMes(dia), de: dia, ate: dia, litros: 0, custo: 0 };
+    } else if (granularidade === "semana") {
+      const fim = isoDoDia(diaUtc(chave) + 6 * UM_DIA);
+      balde = { chave, rotulo: `${diaMes(chave)}–${diaMes(fim)}`, de: chave, ate: fim, litros: 0, custo: 0 };
+    } else {
+      const rotulo = `${MESES_CURTOS[Number(dia.slice(5, 7)) - 1]}/${dia.slice(2, 4)}`;
+      balde = { chave, rotulo, de: `${chave}-01`, ate: fimDoMes(dia), litros: 0, custo: 0 };
+    }
+    baldes.set(chave, { balde, litros: [], custo: [] });
+  }
+
+  for (const s of saidas) {
+    const alvo = baldes.get(chaveDoDia(s.data.slice(0, 10)));
+    if (!alvo) continue;
+    alvo.litros.push(s.litros);
+    alvo.custo.push(s.valorTotal);
+  }
+
+  return [...baldes.values()]
+    .map(({ balde, litros, custo }) => ({ ...balde, litros: somar(litros), custo: somar(custo) }))
+    .sort((a, b) => a.de.localeCompare(b.de));
+}
+
+export interface HeatmapDiaHora {
+  /** [dia da semana 0=domingo..6=sábado][hora 0..23] = quantidade de saídas. */
+  matriz: number[][];
+  maximo: number;
+}
+
+/**
+ * O DiaHoraHeatmap da origem: quantas saídas por dia da semana × hora, no relógio de parede
+ * (a origem lia `new Date(data)` de um texto sem fuso, que é o relógio de parede também).
+ */
+export function heatmapDiaHora(saidas: readonly SaidaBase[]): HeatmapDiaHora {
+  const matriz = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+  let maximo = 0;
+  for (const s of saidas) {
+    const dia = s.data.slice(0, 10);
+    const hora = Number(s.data.slice(11, 13));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || s.data.length < 13 || !Number.isInteger(hora) || hora < 0 || hora > 23) {
+      continue;
+    }
+    const linha = matriz[new Date(diaUtc(dia)).getUTCDay()]!;
+    linha[hora] = (linha[hora] ?? 0) + 1;
+    if (linha[hora]! > maximo) maximo = linha[hora]!;
+  }
+  return { matriz, maximo };
+}
+
+/** O mínimo de uma entrada para o R$/L por fornecedor. */
+export interface EntradaParaPreco {
+  fornecedorId: string | null;
+  litros: number;
+  valorTotal: number;
+}
+
+export interface PrecoFornecedor {
+  id: string;
+  litros: number;
+  custo: number;
+  /** custo ÷ litros. */
+  rPorL: number;
+  qtd: number;
+}
+
+/**
+ * O CustoPorFornecedor da origem (das ENTRADAS, não das saídas): R$/L de cada fornecedor,
+ * do mais barato ao mais caro, e a média ponderada do período (total R$ ÷ total L), que é
+ * a linha tracejada. Entrada sem fornecedor fica fora das barras e da média.
+ */
+export function precoPorFornecedor(entradas: readonly EntradaParaPreco[]): {
+  linhas: PrecoFornecedor[];
+  media: number;
+} {
+  const grupos = new Map<string, EntradaParaPreco[]>();
+  for (const e of entradas) {
+    if (!e.fornecedorId) continue;
+    const lista = grupos.get(e.fornecedorId) ?? [];
+    lista.push(e);
+    grupos.set(e.fornecedorId, lista);
+  }
+  const linhas = [...grupos.entries()].map(([id, lista]) => {
+    const litros = somar(lista.map((e) => e.litros));
+    const custo = somar(lista.map((e) => e.valorTotal));
+    return { id, litros, custo, rPorL: litros > 0 ? custo / litros : 0, qtd: lista.length };
+  });
+  linhas.sort((a, b) => a.rPorL - b.rPorL);
+  const totalLitros = somar(linhas.map((l) => l.litros));
+  const totalCusto = somar(linhas.map((l) => l.custo));
+  return { linhas, media: totalLitros > 0 ? totalCusto / totalLitros : 0 };
+}
+
+/**
+ * As `n` saídas mais recentes (UltimosAbastecimentosTable). No mesmo relógio de parede, a
+ * de id maior primeiro, para a ordem não mudar entre um carregamento e outro.
+ */
+export function ultimasSaidas<T extends SaidaBase>(saidas: readonly T[], n = 10): T[] {
+  return [...saidas].sort((a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id)).slice(0, n);
+}
+
+/**
+ * O `niceMax` da origem: um teto de eixo "redondo" com folga de ~10% (200 -> 250,
+ * 8470 -> 10000, 0 -> 1).
+ */
+export function niceMax(valor: number): number {
+  if (!Number.isFinite(valor) || valor <= 0) return 1;
+  const comFolga = valor * 1.1;
+  const base = 10 ** Math.floor(Math.log10(comFolga));
+  const relativo = comFolga / base;
+  for (const passo of [1, 2, 2.5, 5, 10]) if (relativo <= passo) return passo * base;
+  return 10 * base;
+}
+
+/** Os três tamanhos de barra da Evolução temporal, prontos (o botão Dia/Semana/Mês só troca). */
+export function evolucaoNasTresGranularidades(
+  saidas: readonly SaidaBase[],
+  de: string,
+  ate: string,
+): Record<Granularidade, BaldeEvolucao[]> {
+  return {
+    dia: evolucaoTemporal(saidas, de, ate, "dia"),
+    semana: evolucaoTemporal(saidas, de, ate, "semana"),
+    mes: evolucaoTemporal(saidas, de, ate, "mes"),
+  };
+}
