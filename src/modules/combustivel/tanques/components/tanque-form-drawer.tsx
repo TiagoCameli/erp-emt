@@ -209,13 +209,16 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
           <Textarea id="tanque-observacoes" rows={3} disabled={salvando} {...form.register("observacoes")} />
         </CampoFormulario>
 
-        <SelectAtivo
-          id="tanque-ativo"
-          value={ativo ?? true}
-          onChange={(valor) => form.setValue("ativo", valor, { shouldDirty: true })}
-          disabled={salvando}
-          ajuda="Tanques inativos somem das listas de seleção, mas continuam no histórico."
-        />
+        {/* Como a origem: tanque novo nasce ativo, e o "ativo" só aparece na edição. */}
+        {editando ? (
+          <SelectAtivo
+            id="tanque-ativo"
+            value={ativo ?? true}
+            onChange={(valor) => form.setValue("ativo", valor, { shouldDirty: true })}
+            disabled={salvando}
+            ajuda="Tanques inativos somem das listas de seleção, mas continuam no histórico."
+          />
+        ) : null}
       </form>
     </FormDrawer>
   );

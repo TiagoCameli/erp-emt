@@ -162,6 +162,9 @@ export interface EntradaLinha {
   notaFiscal: string | null;
   observacoes: string | null;
   origem: string;
+  /** Instante da exclusão (lixeira). Nulo: lançada. */
+  excluidoEm: string | null;
+  motivoExclusao: string | null;
 }
 
 function precoDaLinha(valorTotal: number, litros: number): { precoLitro: number | null } {
@@ -170,17 +173,18 @@ function precoDaLinha(valorTotal: number, litros: number): { precoLitro: number 
 
 /**
  * Todas as entradas não excluídas (poucas centenas), via `todasAsLinhas`: a tela
- * filtra em memória. Desempate por id para a paginação não repetir linha.
+ * filtra em memória. Desempate por id para a paginação não repetir linha. Com
+ * `excluidas`, só as da lixeira (o "Mostrar excluídos" de quem pode restaurar).
  */
-export async function listarEntradas(): Promise<EntradaLinha[]> {
+export async function listarEntradas(excluidas = false): Promise<EntradaLinha[]> {
   const supabase = await createClient();
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("combustivel_entradas")
       .select(
-        "id, data_hora, tanque_id, insumo_id, quantidade, litros, valor_total, fornecedor_id, nota_fiscal, observacoes, origem, tanques(nome, apelido), insumos(nome, unidades_medida(sigla)), fornecedores(razao_social, nome_fantasia)",
+        "id, data_hora, tanque_id, insumo_id, quantidade, litros, valor_total, fornecedor_id, nota_fiscal, observacoes, origem, excluido_em, motivo_exclusao, tanques(nome, apelido), insumos(nome, unidades_medida(sigla)), fornecedores(razao_social, nome_fantasia)",
       )
-      .is("excluido_em", null)
+      .filter("excluido_em", excluidas ? "not.is" : "is", null)
       .order("data_hora", { ascending: false })
       .order("id")
       .range(de, ate),
@@ -204,5 +208,7 @@ export async function listarEntradas(): Promise<EntradaLinha[]> {
     notaFiscal: linha.nota_fiscal,
     observacoes: linha.observacoes,
     origem: linha.origem,
+    excluidoEm: linha.excluido_em,
+    motivoExclusao: linha.motivo_exclusao,
   }));
 }

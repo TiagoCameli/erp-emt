@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { EsvaziamentoFormDrawer } from "@/modules/combustivel/esvaziamentos/components/esvaziamento-form-drawer";
+import { podeEsvaziar as temCombustivelParaEsvaziar } from "@/modules/combustivel/esvaziamentos/schemas";
 import type { FornecedorOpcao, TanqueLinha } from "@/modules/combustivel/tanques/queries";
 import { TanqueFormDrawer } from "./tanque-form-drawer";
 import { TanquesTabela } from "./tanques-tabela";
@@ -11,12 +13,15 @@ export interface TanquesListaProps {
   fornecedores: FornecedorOpcao[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** `combustivel.esvaziamentos`/criar: o "Esvaziar tanque" da linha (origem: TanqueList). */
+  podeEsvaziar?: boolean;
 }
 
-/** Tabela de tanques com o drawer de edição compartilhado. */
-export function TanquesLista({ tanques, fornecedores, podeEditar, podeExcluir }: TanquesListaProps) {
+/** Tabela de tanques com os drawers de edição e de esvaziamento compartilhados. */
+export function TanquesLista({ tanques, fornecedores, podeEditar, podeExcluir, podeEsvaziar = false }: TanquesListaProps) {
   const [editando, setEditando] = React.useState<TanqueLinha | null>(null);
   const [aberto, setAberto] = React.useState(false);
+  const [esvaziando, setEsvaziando] = React.useState<TanqueLinha | null>(null);
 
   const abrirEdicao = React.useCallback((tanque: TanqueLinha) => {
     setEditando(tanque);
@@ -28,9 +33,26 @@ export function TanquesLista({ tanques, fornecedores, podeEditar, podeExcluir }:
     if (!novoAberto) setEditando(null);
   }
 
+  const esvaziaveis = React.useMemo(
+    () =>
+      tanques.filter(temCombustivelParaEsvaziar).map((t) => ({
+        id: t.id,
+        nome: t.nome,
+        nivel: t.nivel,
+        combustivelNome: t.combustivelNome,
+      })),
+    [tanques],
+  );
+
   return (
     <>
-      <TanquesTabela tanques={tanques} podeEditar={podeEditar} podeExcluir={podeExcluir} onEditar={abrirEdicao} />
+      <TanquesTabela
+        tanques={tanques}
+        podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
+        onEditar={abrirEdicao}
+        onEsvaziar={podeEsvaziar ? setEsvaziando : undefined}
+      />
       {podeEditar ? (
         <TanqueFormDrawer
           key={editando?.id ?? "nenhum"}
@@ -38,6 +60,17 @@ export function TanquesLista({ tanques, fornecedores, podeEditar, podeExcluir }:
           onAbertoChange={aoMudarAberto}
           tanque={editando}
           fornecedores={fornecedores}
+        />
+      ) : null}
+      {podeEditar && podeEsvaziar ? (
+        <EsvaziamentoFormDrawer
+          key={esvaziando?.id ?? "nenhum"}
+          aberto={esvaziando !== null}
+          onAbertoChange={(novoAberto) => {
+            if (!novoAberto) setEsvaziando(null);
+          }}
+          tanques={esvaziaveis}
+          tanqueInicialId={esvaziando?.id}
         />
       ) : null}
     </>

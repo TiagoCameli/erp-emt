@@ -9,13 +9,12 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { esvaziamentoSchema, type EsvaziamentoInput } from "@/modules/combustivel/esvaziamentos/schemas";
 import { traduzErroMovimento } from "@/modules/combustivel/transferencias/erros";
-import { dataHoraIso } from "@/modules/combustivel/transferencias/schemas";
 
 /**
  * Mutações dos esvaziamentos (`combustivel.esvaziamentos`: ver, criar e
- * excluir; não há edição). Só por RPC: `fn_comb_registrar_esvaziamento` e
- * `fn_comb_excluir` (lixeira com motivo). Tanque externo e ciclo fechado são
- * recusados pelas travas do banco, e a mensagem delas vai para a tela.
+ * excluir; não há edição). Só por RPC: `fn_comb_registrar_esvaziamento` (grava
+ * o nível atual inteiro, agora, como a origem), `fn_comb_excluir` (lixeira com
+ * motivo) e `fn_comb_restaurar`. A recusa do banco vai para a tela.
  */
 
 const RECURSO = "combustivel.esvaziamentos" as const;
@@ -55,9 +54,7 @@ export async function registrarEsvaziamento(dados: EsvaziamentoInput): Promise<R
     const supabase = await createClient();
     const { error } = await supabase.rpc("fn_comb_registrar_esvaziamento", {
       p_tanque: validado.data.tanqueId,
-      p_litros: validado.data.litros,
       p_motivo: validado.data.motivo,
-      p_data_hora: validado.data.dataHora,
     });
 
     if (error) {
@@ -103,27 +100,42 @@ export async function excluirEsvaziamento(id: string, motivo: string): Promise<R
   });
 }
 
-/** Litros no tanque até a data: a dica do formulário. Quem decide é a trava do banco. */
-export async function consultarEstoqueEsvaziamento(
-  tanqueId: string,
-  dataHora: string,
-): Promise<{ ok: true; litros: number } | { erro: string }> {
-  return semLancar("combustivel.esvaziamentos.estoque", async () => {
-    if (!(await temAcao("ver"))) return { erro: "Sem permissão para ver esvaziamentos" };
+/**
+ * Tira o esvaziamento da lixeira (Lixeira da origem). Pede a lixeira
+ * (`administracao.lixeira`/editar) e a exclusão do recurso, como a RPC.
+ */
+export async function restaurarEsvaziamento(id: string): Promise<ResultadoAcao> {
+  return semLancar("combustivel.esvaziamentos.restaurar", async () => {
+    if (!(await temPermissaoDeRestaurar())) return { erro: "Sem permissão para restaurar esvaziamentos" };
 
-    const tanque = idSchema.safeParse(tanqueId);
-    const data = dataHoraIso.safeParse(dataHora);
-    if (!tanque.success || !data.success) return { erro: "Tanque ou data inválidos" };
+    const idValido = idSchema.safeParse(id);
+    if (!idValido.success) return { erro: "Esvaziamento inválido" };
 
     const supabase = await createClient();
-    const { data: litros, error } = await supabase.rpc("fn_comb_estoque_na_data", {
-      p_tanque: tanque.data,
-      p_data: data.data,
+    const { error } = await supabase.rpc("fn_comb_restaurar", {
+      p_tabela: "combustivel_esvaziamentos",
+      p_id: idValido.data,
     });
 
     if (error) {
-      return erroAcao("combustivel.esvaziamentos.estoque", error, "Não foi possível consultar o estoque do tanque");
+      return erroAcao(
+        "combustivel.esvaziamentos.restaurar",
+        error,
+        traduzErroMovimento(error, "Não foi possível restaurar o esvaziamento. Tente novamente"),
+      );
     }
-    return { ok: true, litros: Number(litros ?? 0) };
+
+    revalidar();
+    return { ok: true };
   });
+}
+
+async function temPermissaoDeRestaurar(): Promise<boolean> {
+  try {
+    await exigirPermissao("administracao.lixeira", "editar");
+    await exigirPermissao(RECURSO, "excluir");
+    return true;
+  } catch {
+    return false;
+  }
 }

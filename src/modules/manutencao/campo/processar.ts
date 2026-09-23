@@ -5,6 +5,7 @@ import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { envioCampoSchema, type RespostaEnvioCampo } from "@/modules/manutencao/campo/envio";
+import { precoFifoCampo } from "@/modules/manutencao/campo/queries";
 import { dataNoFuturo } from "@/modules/manutencao/medicoes/schemas";
 
 /**
@@ -99,8 +100,11 @@ export async function processarEnvioCampo(corpo: unknown): Promise<RespostaEnvio
       rpc = "fn_comb_salvar_saida";
       generica = "Não foi possível lançar o abastecimento";
       const dados = envio.dados;
-      // Equipamento próprio, do tanque, preço pelo PEPS (o banco calcula). Sem id_cliente: a
-      // tela manda uma vez só (envio.ts).
+      // Igual à origem: o FIFO em TS do tanque, com o combustível atual dele, vira o snapshot
+      // (e o preço do equipamento próprio, que o banco regrava pelas camadas).
+      const fifo = await precoFifoCampo(dados.tanqueId, dados.data, dados.litros);
+      if (!fifo) return falha("Não foi possível calcular o preço do tanque. Tente de novo", PASSAGEIRO);
+      // Equipamento próprio, do tanque. Sem id_cliente: a tela manda uma vez só (envio.ts).
       chamar = () =>
         supabase.rpc("fn_comb_salvar_saida", {
           p_id: null as unknown as string,
@@ -110,11 +114,15 @@ export async function processarEnvioCampo(corpo: unknown): Promise<RespostaEnvio
             tanque_id: dados.tanqueId,
             equipamento_id: dados.equipamentoId,
             litros: dados.litros,
+            insumo_id: fifo.insumoId,
+            preco_medio_tanque: fifo.preco,
             data: dados.data,
             medicao: dados.medicao,
             canal: "celular",
-            observacoes: dados.observacoes,
-            alocacoes: dados.centroCustoId ? [{ centro_custo_id: dados.centroCustoId, percentual: 100 }] : [],
+            // Igual à origem: motorista é quem lança e a observação vazia diz de onde veio.
+            motorista: usuario.nome,
+            observacoes: dados.observacoes || `Saída via mobile · ${usuario.nome}`,
+            alocacoes: [{ centro_custo_id: dados.centroCustoId, percentual: 100 }],
           },
         });
     } else {

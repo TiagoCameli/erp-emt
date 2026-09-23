@@ -59,8 +59,9 @@ describe("tanque", () => {
     expect(tanqueSchema.safeParse({ ...tanqueDoForm(form()), capacidade: 1.12345 }).success).toBe(false);
   });
 
-  it("nome curto é recusado", () => {
-    expect(tanqueFormSchema.safeParse(form({ nome: " T " })).success).toBe(false);
+  it("nome vazio é recusado; uma letra basta, como na origem", () => {
+    expect(tanqueFormSchema.safeParse(form({ nome: "   " })).success).toBe(false);
+    expect(tanqueFormSchema.safeParse(form({ nome: " T " })).success).toBe(true);
   });
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { CellContext, ColumnDef } from "@tanstack/react-table";
 
 import type { TanqueLinha } from "@/modules/combustivel/tanques/queries";
@@ -103,5 +103,44 @@ describe("TanquesTabela", () => {
   it("lista vazia oferece o caminho", () => {
     render(<TanquesTabela tanques={[]} podeEditar podeExcluir onEditar={vi.fn()} />);
     expect(screen.getByText("Nenhum tanque cadastrado")).toBeInTheDocument();
+  });
+
+  function abrirMenu() {
+    fireEvent.pointerDown(screen.getAllByRole("button", { name: /ações/i })[0]!, { button: 0, ctrlKey: false });
+  }
+
+  it("'Esvaziar tanque' aparece com editar, permissão de esvaziar e nível acima de zero (como a origem)", async () => {
+    const onEsvaziar = vi.fn();
+    render(<TanquesTabela tanques={[tanque({ nivel: 155.6 })]} podeEditar podeExcluir={false} onEditar={vi.fn()} onEsvaziar={onEsvaziar} />);
+    abrirMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Esvaziar tanque/ }));
+    expect(onEsvaziar).toHaveBeenCalledWith(expect.objectContaining({ nivel: 155.6 }));
+  });
+
+  it("sem nível, sem editar, sem permissão de esvaziar ou tanque de terceiro: não aparece", async () => {
+    const casos = [
+      { linha: tanque({ nivel: 0 }), podeEditar: true, onEsvaziar: vi.fn() },
+      { linha: tanque({ nivel: 155.6 }), podeEditar: true, onEsvaziar: undefined },
+      { linha: tanque({ nivel: 155.6, ehExterno: true, proprietarioId: "x" }), podeEditar: true, onEsvaziar: vi.fn() },
+    ];
+    for (const caso of casos) {
+      render(
+        <TanquesTabela
+          tanques={[caso.linha]}
+          podeEditar={caso.podeEditar}
+          podeExcluir
+          onEditar={vi.fn()}
+          onEsvaziar={caso.onEsvaziar}
+        />,
+      );
+      abrirMenu();
+      expect(await screen.findByRole("menuitem", { name: /Excluir tanque/ })).toBeInTheDocument();
+      expect(screen.queryByRole("menuitem", { name: /Esvaziar tanque/ })).not.toBeInTheDocument();
+      cleanup();
+    }
+    render(<TanquesTabela tanques={[tanque({ nivel: 155.6 })]} podeEditar={false} podeExcluir onEditar={vi.fn()} onEsvaziar={vi.fn()} />);
+    abrirMenu();
+    expect(await screen.findByRole("menuitem", { name: /Excluir tanque/ })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Esvaziar tanque/ })).not.toBeInTheDocument();
   });
 });

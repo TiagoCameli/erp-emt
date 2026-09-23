@@ -120,7 +120,7 @@ describe("abastecimento não entra no reenvio", () => {
       usuarioId: EU, equipamentoId: EQUIP, resumo: "Abastecimento",
       envio: { tipo: "abastecimento", idCliente: "09999999-0000-4000-8000-000000000000",
         dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
-          centroCustoId: null, observacoes: "" } },
+          centroCustoId: "44444444-4444-4444-8444-444444444444", observacoes: "" } },
     });
     const enviar = vi.fn<Enviar>(async () => OK("x"));
     await enviarPendentes(armazemEmMemoria([abastecimento, item(1)]), enviar, EU);

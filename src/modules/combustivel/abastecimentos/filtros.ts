@@ -25,6 +25,7 @@ export const CHAVES_FILTRO_ABASTECIMENTOS = {
   tipo: "tipo",
   origem: "origem",
   canal: "canal",
+  excluidos: "excluidos",
   pagina: "pagina",
   tamanho: "tamanho",
 } as const;
@@ -42,6 +43,11 @@ export interface FiltrosAbastecimentos {
   tipo?: TipoConsumidor;
   origem?: OrigemSaida;
   canal?: Canal;
+  /**
+   * "Mostrar excluídos": a lista mostra as da lixeira. A página só aceita para quem
+   * pode restaurar; para o resto, o parâmetro é ignorado.
+   */
+  excluidos?: boolean;
 }
 
 export const TAMANHO_PADRAO_ABASTECIMENTOS = 50;
@@ -100,6 +106,7 @@ export function lerFiltrosAbastecimentos(params: Parametros): FiltrosAbastecimen
     tipo: catalogo(params.tipo, TIPOS_CONSUMIDOR),
     origem: catalogo(params.origem, ORIGENS_SAIDA),
     canal: catalogo(params.canal, CANAIS),
+    excluidos: texto(params.excluidos) === "sim" ? true : undefined,
   };
 }
 
@@ -141,7 +148,7 @@ export interface ConsultaFiltravelAbastecimentos<T> {
  */
 export function aplicarFiltrosAbastecimentos<T extends ConsultaFiltravelAbastecimentos<T>>(
   consultaInicial: T,
-  filtros: Omit<FiltrosAbastecimentos, "pagina" | "tamanho">,
+  filtros: Omit<FiltrosAbastecimentos, "pagina" | "tamanho" | "excluidos">,
 ): T {
   let consulta = consultaInicial;
   if (filtros.de) consulta = consulta.gte("data", inicioDoDia(filtros.de));

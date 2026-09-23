@@ -1,102 +1,182 @@
 import ExcelJS from "exceljs";
 
-import { EMPRESA } from "@/config/marca";
-import { formatarData, formatarMesAno } from "@/lib/formatadores";
+import { argb, CORES_MARCA, EMPRESA } from "@/config/marca";
 import { escreverCabecalhoMarca, estilizarCabecalhoColunas } from "@/lib/planilha-marca";
-import { ROTULO_CANAL, ROTULO_ORIGEM_SAIDA } from "@/modules/combustivel/_shared/rotulos";
+import { SEVERITY_ORDER, type Anomalia, type Severidade } from "@/modules/combustivel/anomalias/detect";
+import type { SaidaBase, TanqueBase } from "@/modules/combustivel/anomalias/base";
 import {
-  consolidarMensal,
-  consolidarPorCarreta,
-  consolidarPorEquipamento,
-  consolidarPorObra,
-  resumoAlocacoes,
-  rotuloTipoConsumidor,
-  type LinhaCarreta,
-  type LinhaEquipamento,
-  type LinhaMensal,
-  type LinhaObra,
-  type SaidaRelatorio,
-  type TipoRelatorio,
+  consumidorDaSaida,
+  rPorLDaSaida,
+  saidasDesc,
+  type CadastrosRelatorio,
+  type DadosMensal,
+  type DadosPorEquipamento,
+  type DadosPorObra,
+  type EntradaRelatorio,
+  type LinhaCarretaTop,
+  type LinhaEquipamentoTop,
+  type LinhaTop,
+  type TransferenciaRelatorio,
 } from "@/modules/combustivel/relatorios/consolidar";
-import type { Periodo } from "@/modules/combustivel/relatorios/periodo";
 import { dataParaCelula, type CelulaPlanilha } from "@/modules/financeiro/lancamentos/planilha";
+import { somarValoresOperacionais } from "@/modules/manutencao/servicos/formato";
 
 /**
- * As planilhas do Combustível: colunas, células e montagem do arquivo.
+ * As planilhas dos relatórios do Combustível, com as abas, as colunas e os números dos
+ * workbooks da origem (Gestao_Obras v2/relatorios). O que muda é só a moldura: cada aba
+ * leva o cabeçalho de marca do ERP (logo, razão social, a Pista), que é regra de todo
+ * documento que o sistema emite, e o total é fórmula (SUBTOTAL 109) com o resultado junto.
  *
- * Cabeçalho e célula moram no MESMO objeto, como nas planilhas do Financeiro:
- * array de títulos separado do de valores quebra no dia em que alguém insere uma
- * coluna no meio de um só, e o número sai embaixo do título errado.
- *
- * Números saem como número (a célula soma), datas como data do Excel e o total
- * é FÓRMULA (SUBTOTAL 109, que soma só o visível: filtrar por um combustível
- * mostra o total dele). Média R$/L é fórmula por linha e no total, porque a
- * média do total não é a média das médias.
+ * Litros saem com 2 casas (regra do app; a origem formatava inteiro). O número na célula
+ * é o mesmo.
  *
  * **Módulo de servidor**: puxa o exceljs. A action o carrega por `await import`.
  */
 
-export type TipoColuna = "texto" | "inteiro" | "litros" | "leitura" | "dinheiro" | "preco" | "data" | "dataHora";
+export type TipoColuna = "texto" | "inteiro" | "litros" | "dinheiro" | "preco" | "data";
 
 export interface Coluna<L> {
   cabecalho: string;
   largura: number;
   tipo: TipoColuna;
   celula: (linha: L) => CelulaPlanilha;
-  /** Entra na linha de total por SUBTOTAL. */
+  /** Entra no total (SUBTOTAL 109, que soma só o visível) com o resultado já calculado. */
   somar?: boolean;
-  /**
-   * Coluna calculada: numerador ÷ denominador (pelos cabeçalhos), por fórmula na
-   * linha e no total. `celula` dá o resultado já calculado, para quem abre sem
-   * recalcular.
-   */
-  razao?: { numerador: string; denominador: string };
 }
 
 const FORMATOS: Partial<Record<TipoColuna, string>> = {
   inteiro: "#,##0",
-  litros: "#,##0.00",
-  leitura: "#,##0.0",
-  dinheiro: "R$ #,##0.00",
-  preco: "R$ #,##0.0000",
+  litros: '#,##0.00 "L"',
+  dinheiro: '"R$" #,##0.00',
+  preco: '"R$" #,##0.0000',
   data: "dd/mm/yyyy",
-  dataHora: "dd/mm/yyyy hh:mm",
 };
 
-/**
- * Instante (ISO) como data e hora do Excel no RELÓGIO DE RIO BRANCO.
- *
- * O exceljs converte `Date` com aritmética de UTC pura, então a célula guarda o
- * horário UTC do `Date`. Deslocar 5 horas faz os campos UTC valerem a hora de
- * Rio Branco (UTC-5 o ano todo), e o Excel mostra o que a tela mostra. É a mesma
- * convenção da data à meia-noite UTC do Financeiro, com a hora junto.
- */
-export function dataHoraParaCelula(iso: string | null | undefined): Date | null {
-  if (!iso) return null;
-  const tempo = Date.parse(iso);
-  if (Number.isNaN(tempo)) return null;
-  return new Date(tempo - 5 * 60 * 60 * 1000);
+const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+/** "2026-04" -> "Abr/2026" (o `formatMesRef` da origem). */
+export function formatarMesRef(mes: string): string {
+  const [ano, m] = mes.split("-");
+  const indice = Number(m) - 1;
+  return indice >= 0 && indice <= 11 ? `${MESES_CURTOS[indice]}/${ano}` : mes;
 }
 
-/** Dinheiro/quantidade opcional: vazio vira célula em branco, não zero. */
-const numeroOuVazio = (valor: number | null) => (valor === null ? null : valor);
+/** "2026-09-10" -> "10/09/2026". */
+export function formatarDiaBR(dia: string): string {
+  return dia.slice(0, 10).split("-").reverse().join("/");
+}
 
-/** Razão segura (0 quando o denominador é zero), para o `result` da fórmula. */
-function dividir(numerador: number, denominador: number): number {
-  return denominador === 0 ? 0 : numerador / denominador;
+/** Relógio de parede (ou dia) como data do Excel. */
+function diaParaCelula(valor: string | null | undefined): Date | null {
+  return dataParaCelula(valor ? valor.slice(0, 10) : null);
+}
+
+/** O `sanitizeFilenamePart` da origem. */
+export function parteDeNomeDeArquivo(texto: string): string {
+  return texto
+    .replace(/[/\\:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function novoWorkbook(): ExcelJS.Workbook {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "ERP EMT";
+  workbook.company = EMPRESA.razaoSocial;
+  return workbook;
+}
+
+function negrito(celula: ExcelJS.Cell, tamanho = 11): void {
+  celula.font = { bold: true, size: tamanho, color: { argb: argb(CORES_MARCA.verdeEscuro) } };
+}
+
+// ---------------------------------------------------------------------------
+// Blocos
+// ---------------------------------------------------------------------------
+
+export interface Indicador {
+  rotulo: string;
+  valor: number | string;
+  tipo?: TipoColuna;
+}
+
+/**
+ * A aba "Resumo" da origem: título, filtros aplicados e indicadores. A origem mostra os
+ * indicadores em cartões (e o `renderExcelKPIs` só desenhava os 4 primeiros); aqui saem
+ * todos, um por linha, com o mesmo valor.
+ */
+export function escreverResumo(
+  workbook: ExcelJS.Workbook,
+  {
+    titulo,
+    subtitulo,
+    filtros,
+    indicadores,
+    aviso,
+  }: {
+    titulo: string;
+    subtitulo: string;
+    filtros: [string, string][];
+    indicadores: Indicador[];
+    aviso?: { titulo: string; texto: string } | null;
+  },
+): ExcelJS.Worksheet {
+  const ws = workbook.addWorksheet("Resumo", { properties: { tabColor: { argb: argb(CORES_MARCA.verde) } } });
+  let linha = escreverCabecalhoMarca(workbook, ws, { titulo, colunas: 4 });
+  ws.columns = [{ width: 30 }, { width: 40 }, { width: 18 }, { width: 18 }];
+
+  ws.getCell(linha, 1).value = titulo;
+  negrito(ws.getCell(linha, 1), 14);
+  linha += 1;
+  ws.getCell(linha, 1).value = subtitulo;
+  ws.getCell(linha, 1).font = { size: 10, color: { argb: argb(CORES_MARCA.textoSecundario) } };
+  linha += 2;
+
+  ws.getCell(linha, 1).value = "FILTROS APLICADOS";
+  negrito(ws.getCell(linha, 1));
+  linha += 1;
+  for (const [rotulo, valor] of filtros) {
+    ws.getCell(linha, 1).value = rotulo;
+    ws.getCell(linha, 1).font = { bold: true };
+    ws.getCell(linha, 2).value = valor;
+    linha += 1;
+  }
+  linha += 1;
+
+  ws.getCell(linha, 1).value = "INDICADORES";
+  negrito(ws.getCell(linha, 1));
+  linha += 1;
+  for (const indicador of indicadores) {
+    ws.getCell(linha, 1).value = indicador.rotulo;
+    ws.getCell(linha, 1).font = { bold: true };
+    const celula = ws.getCell(linha, 2);
+    celula.value = indicador.valor;
+    const formato = indicador.tipo ? FORMATOS[indicador.tipo] : undefined;
+    if (formato) celula.numFmt = formato;
+    celula.alignment = { horizontal: "left" };
+    linha += 1;
+  }
+
+  if (aviso) {
+    linha += 1;
+    ws.getCell(linha, 1).value = aviso.titulo;
+    negrito(ws.getCell(linha, 1));
+    linha += 1;
+    ws.getCell(linha, 1).value = aviso.texto;
+    ws.getCell(linha, 1).font = { italic: true, size: 9, color: { argb: argb(CORES_MARCA.textoSecundario) } };
+  }
+  return ws;
 }
 
 export interface AbaMontada {
   nome: string;
-  /** Linha do cabeçalho de colunas. */
   linhaCabecalho: number;
-  /** Linha do total (sempre existe, mesmo sem dados). */
   linhaTotal: number;
 }
 
 /**
- * Escreve uma aba: marca no topo, cabeçalho congelado, linhas, filtro do Excel e
- * total. Nenhuma linha é contada na mão: tudo sai da linha do cabeçalho.
+ * Uma aba de detalhamento da origem (`renderExcelDetalhamento`): cabeçalho de colunas,
+ * uma linha por item e a linha "TOTAL (N registros)" com as colunas que somam.
  */
 export function escreverAba<L>(
   workbook: ExcelJS.Workbook,
@@ -107,33 +187,14 @@ export function escreverAba<L>(
 
   const cabecalho = worksheet.addRow(colunas.map((c) => c.cabecalho));
   estilizarCabecalhoColunas(cabecalho);
-
-  const letra = (cab: string): string => {
-    const indice = colunas.findIndex((c) => c.cabecalho === cab);
-    if (indice < 0) throw new Error(`A planilha "${nome}" divide pela coluna "${cab}", que não existe`);
-    return worksheet.getColumn(indice + 1).letter;
-  };
-  const formulaRazao = (razao: { numerador: string; denominador: string }, linha: number) =>
-    `IF(${letra(razao.denominador)}${linha}=0,0,${letra(razao.numerador)}${linha}/${letra(razao.denominador)}${linha})`;
-
-  for (const item of linhas) {
-    const row = worksheet.addRow(colunas.map((c) => c.celula(item)));
-    colunas.forEach((coluna, indice) => {
-      if (!coluna.razao) return;
-      const resultado = row.getCell(indice + 1).value;
-      row.getCell(indice + 1).value = {
-        formula: formulaRazao(coluna.razao, row.number),
-        result: typeof resultado === "number" ? resultado : 0,
-      };
-    });
-  }
+  for (const item of linhas) worksheet.addRow(colunas.map((c) => c.celula(item)));
 
   colunas.forEach((definicao, indice) => {
     const coluna = worksheet.getColumn(indice + 1);
     coluna.width = definicao.largura;
     const formato = FORMATOS[definicao.tipo];
     if (formato) coluna.numFmt = formato;
-    if (definicao.tipo === "data" || definicao.tipo === "dataHora") coluna.alignment = { horizontal: "center" };
+    if (definicao.tipo === "data") coluna.alignment = { horizontal: "center" };
     else if (definicao.tipo !== "texto") coluna.alignment = { horizontal: "right" };
   });
 
@@ -146,18 +207,19 @@ export function escreverAba<L>(
   }
 
   const total = worksheet.addRow([]);
-  total.getCell(1).value = `Total (${linhas.length.toLocaleString("pt-BR")} ${linhas.length === 1 ? "linha" : "linhas"})`;
-  if (linhas.length > 0) {
-    colunas.forEach((definicao, indice) => {
-      const celula = total.getCell(indice + 1);
-      if (definicao.somar) {
-        const l = worksheet.getColumn(indice + 1).letter;
-        celula.value = { formula: `SUBTOTAL(109,${l}${primeira}:${l}${ultima})` };
-      } else if (definicao.razao) {
-        celula.value = { formula: formulaRazao(definicao.razao, total.number) };
-      }
-    });
-  }
+  total.getCell(1).value = `TOTAL (${linhas.length} registros)`;
+  colunas.forEach((definicao, indice) => {
+    if (!definicao.somar || indice === 0) return;
+    const resultado = somarValoresOperacionais(
+      linhas.map((l) => {
+        const v = definicao.celula(l);
+        return typeof v === "number" ? v : 0;
+      }),
+    );
+    const letra = worksheet.getColumn(indice + 1).letter;
+    total.getCell(indice + 1).value =
+      linhas.length > 0 ? { formula: `SUBTOTAL(109,${letra}${primeira}:${letra}${ultima})`, result: resultado } : 0;
+  });
   total.eachCell((cell) => {
     cell.font = { bold: true };
   });
@@ -165,153 +227,512 @@ export function escreverAba<L>(
   return { nome, linhaCabecalho: cabecalho.number, linhaTotal: total.number };
 }
 
-// ---------------------------------------------------------------------------
-// As colunas de cada relatório
-// ---------------------------------------------------------------------------
-
-export const COLUNAS_MENSAL: Coluna<LinhaMensal>[] = [
-  { cabecalho: "Mês", largura: 10, tipo: "texto", celula: (l) => formatarMesAno(`${l.mes}-01`) },
-  { cabecalho: "Combustível", largura: 24, tipo: "texto", celula: (l) => l.combustivel },
-  { cabecalho: "Consumidor", largura: 26, tipo: "texto", celula: (l) => l.tipoConsumidor },
-  { cabecalho: "Abastecimentos", largura: 15, tipo: "inteiro", celula: (l) => l.abastecimentos, somar: true },
-  { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (l) => l.litros, somar: true },
-  { cabecalho: "Valor", largura: 16, tipo: "dinheiro", celula: (l) => l.valor, somar: true },
-  {
-    cabecalho: "Média R$/L",
-    largura: 13,
-    tipo: "preco",
-    celula: (l) => dividir(l.valor, l.litros),
-    razao: { numerador: "Valor", denominador: "Litros" },
-  },
-];
-
-export const COLUNAS_OBRA: Coluna<LinhaObra>[] = [
-  { cabecalho: "Centro de custo", largura: 40, tipo: "texto", celula: (l) => l.centro },
-  { cabecalho: "Abastecimentos", largura: 15, tipo: "inteiro", celula: (l) => l.abastecimentos, somar: true },
-  { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (l) => l.litros, somar: true },
-  { cabecalho: "Custo", largura: 16, tipo: "dinheiro", celula: (l) => l.custo, somar: true },
-];
-
-export const COLUNAS_EQUIPAMENTO: Coluna<LinhaEquipamento>[] = [
-  { cabecalho: "Equipamento", largura: 40, tipo: "texto", celula: (l) => l.equipamento },
-  { cabecalho: "Abastecimentos", largura: 15, tipo: "inteiro", celula: (l) => l.abastecimentos, somar: true },
-  { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (l) => l.litros, somar: true },
-  { cabecalho: "Valor", largura: 16, tipo: "dinheiro", celula: (l) => l.valor, somar: true },
-  {
-    cabecalho: "Média R$/L",
-    largura: 13,
-    tipo: "preco",
-    celula: (l) => dividir(l.valor, l.litros),
-    razao: { numerador: "Valor", denominador: "Litros" },
-  },
-  { cabecalho: "Medidor", largura: 11, tipo: "texto", celula: (l) => l.medidor ?? "" },
-  { cabecalho: "Leitura inicial", largura: 15, tipo: "leitura", celula: (l) => numeroOuVazio(l.leituraInicial) },
-  { cabecalho: "Leitura final", largura: 15, tipo: "leitura", celula: (l) => numeroOuVazio(l.leituraFinal) },
-  // Sem total: somar horas com km não dá número nenhum.
-  { cabecalho: "Rodado no período", largura: 17, tipo: "leitura", celula: (l) => numeroOuVazio(l.rodado) },
-];
-
-export const COLUNAS_CARRETA: Coluna<LinhaCarreta>[] = [
-  { cabecalho: "Transportadora", largura: 36, tipo: "texto", celula: (l) => l.transportadora },
-  { cabecalho: "Placa", largura: 12, tipo: "texto", celula: (l) => l.placa },
-  { cabecalho: "Abastecimentos", largura: 15, tipo: "inteiro", celula: (l) => l.abastecimentos, somar: true },
-  { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (l) => l.litros, somar: true },
-  { cabecalho: "Valor", largura: 16, tipo: "dinheiro", celula: (l) => l.valor, somar: true },
-  {
-    cabecalho: "Média R$/L",
-    largura: 13,
-    tipo: "preco",
-    celula: (l) => dividir(l.valor, l.litros),
-    razao: { numerador: "Valor", denominador: "Litros" },
-  },
-];
-
-const rotuloDe = (mapa: Record<string, string>, valor: string) => mapa[valor] ?? valor;
-
-export const COLUNAS_BRUTO: Coluna<SaidaRelatorio>[] = [
-  { cabecalho: "Data", largura: 17, tipo: "dataHora", celula: (s) => dataHoraParaCelula(s.data) },
-  { cabecalho: "Origem", largura: 18, tipo: "texto", celula: (s) => rotuloDe(ROTULO_ORIGEM_SAIDA, s.origem) },
-  { cabecalho: "Consumidor", largura: 24, tipo: "texto", celula: (s) => rotuloTipoConsumidor(s.tipoConsumidor) },
-  { cabecalho: "Tanque", largura: 22, tipo: "texto", celula: (s) => s.tanqueNome ?? "" },
-  { cabecalho: "Equipamento", largura: 34, tipo: "texto", celula: (s) => s.equipamentoNome ?? "" },
-  { cabecalho: "Transportadora", largura: 30, tipo: "texto", celula: (s) => s.transportadoraNome ?? "" },
-  { cabecalho: "Placa", largura: 11, tipo: "texto", celula: (s) => s.placa ?? "" },
-  { cabecalho: "Motorista", largura: 22, tipo: "texto", celula: (s) => s.motorista ?? "" },
-  { cabecalho: "Combustível", largura: 20, tipo: "texto", celula: (s) => s.combustivel },
-  { cabecalho: "Litros", largura: 12, tipo: "litros", celula: (s) => s.litros, somar: true },
-  { cabecalho: "Preço do combustível", largura: 16, tipo: "preco", celula: (s) => numeroOuVazio(s.precoCombustivel) },
-  { cabecalho: "Preço do dono do tanque", largura: 16, tipo: "preco", celula: (s) => numeroOuVazio(s.precoProprietario) },
-  { cabecalho: "Taxa por litro", largura: 13, tipo: "preco", celula: (s) => s.taxaLitro },
-  { cabecalho: "Preço unitário", largura: 14, tipo: "preco", celula: (s) => s.precoUnitario },
-  { cabecalho: "Preço médio do tanque", largura: 16, tipo: "preco", celula: (s) => numeroOuVazio(s.precoMedioTanque) },
-  // Preço de 4 casas; o valor também tem 4 no banco (CASAS_VALOR_OPERACIONAL) e sai como está.
-  { cabecalho: "Valor total", largura: 16, tipo: "preco", celula: (s) => s.valorTotal, somar: true },
-  { cabecalho: "Pago", largura: 7, tipo: "texto", celula: (s) => (s.pago ? "Sim" : "Não") },
-  { cabecalho: "Pago em", largura: 12, tipo: "data", celula: (s) => dataParaCelula(s.pagoEm) },
-  { cabecalho: "Leitura", largura: 12, tipo: "leitura", celula: (s) => numeroOuVazio(s.medicao) },
-  {
-    cabecalho: "Medidor",
-    largura: 11,
-    tipo: "texto",
-    celula: (s) => (s.tipoMedicao === "horimetro" ? "Horímetro" : s.tipoMedicao === "km" ? "Km" : ""),
-  },
-  { cabecalho: "Centro de custo", largura: 34, tipo: "texto", celula: (s) => s.centroCustoNome ?? "" },
-  { cabecalho: "Alocação por obra", largura: 40, tipo: "texto", celula: (s) => resumoAlocacoes(s.alocacoes) },
-  { cabecalho: "Canal", largura: 12, tipo: "texto", celula: (s) => rotuloDe(ROTULO_CANAL, s.canal) },
-  { cabecalho: "Observações", largura: 40, tipo: "texto", celula: (s) => s.observacoes ?? "" },
-  { cabecalho: "Lançado em", largura: 17, tipo: "dataHora", celula: (s) => dataHoraParaCelula(s.criadoEm) },
-  { cabecalho: "Id", largura: 38, tipo: "texto", celula: (s) => s.id },
-];
-
-// ---------------------------------------------------------------------------
-// Montagem
-// ---------------------------------------------------------------------------
-
-export const TITULO_RELATORIO: Record<TipoRelatorio, string> = {
-  mensal: "Consumo mensal consolidado",
-  obra: "Consumo por obra",
-  equipamento: "Consumo por equipamento",
-  bruto: "Abastecimentos do período",
+const ROTULO_SEVERIDADE_PLANILHA: Record<Severidade, string> = {
+  critical: "CRÍTICA",
+  warning: "ATENÇÃO",
+  info: "INFO",
 };
 
-const ARQUIVO_RELATORIO: Record<TipoRelatorio, string> = {
-  mensal: "combustivel-mensal",
-  obra: "combustivel-por-obra",
-  equipamento: "combustivel-por-equipamento",
-  bruto: "combustivel-abastecimentos",
-};
+/**
+ * A aba "Anomalias" da origem (`renderExcelAnomaliasSheet`), nos três relatórios
+ * consolidados: severidade desc, data desc; sem anomalia, a mensagem positiva.
+ */
+export function escreverAnomalias(workbook: ExcelJS.Workbook, anomalias: readonly Anomalia[]): ExcelJS.Worksheet {
+  const ws = workbook.addWorksheet("Anomalias", { properties: { tabColor: { argb: argb(CORES_MARCA.amarelo) } } });
+  let linha = escreverCabecalhoMarca(workbook, ws, { titulo: "Anomalias detectadas", colunas: 6 });
+  ws.getCell(linha, 1).value = "Anomalias detectadas";
+  negrito(ws.getCell(linha, 1), 14);
+  linha += 2;
 
-export function nomeArquivoRelatorio(tipo: TipoRelatorio, periodo: Periodo): string {
-  return `${ARQUIVO_RELATORIO[tipo]}-${periodo.de}-a-${periodo.ate}.xlsx`;
+  if (anomalias.length === 0) {
+    ws.getCell(linha, 1).value = "Nenhuma anomalia detectada no período.";
+    ws.getCell(linha, 1).font = { italic: true, size: 11, color: { argb: argb(CORES_MARCA.textoSecundario) } };
+    ws.getColumn(1).width = 60;
+    return ws;
+  }
+
+  const ordenadas = [...anomalias].sort((a, b) => {
+    const r = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+    if (r !== 0) return r;
+    return b.data.localeCompare(a.data);
+  });
+
+  ws.getCell(linha, 1).value = `${anomalias.length} anomalia(s), por severidade e da mais recente para a mais antiga`;
+  ws.getCell(linha, 1).font = { italic: true, size: 10, color: { argb: argb(CORES_MARCA.textoSecundario) } };
+  linha += 2;
+
+  const cabecalho = ws.getRow(linha);
+  ["Severidade", "Detector", "Data", "Título", "Descrição", "Ação sugerida"].forEach((texto, i) => {
+    cabecalho.getCell(i + 1).value = texto;
+  });
+  estilizarCabecalhoColunas(cabecalho);
+
+  for (const a of ordenadas) {
+    linha += 1;
+    const row = ws.getRow(linha);
+    row.getCell(1).value = ROTULO_SEVERIDADE_PLANILHA[a.severity];
+    row.getCell(2).value = a.detector;
+    row.getCell(3).value = diaParaCelula(a.data);
+    row.getCell(3).numFmt = "dd/mm/yyyy";
+    row.getCell(4).value = a.title;
+    row.getCell(5).value = a.description;
+    row.getCell(6).value = a.acaoSugerida ?? "";
+  }
+  [12, 10, 12, 50, 60, 50].forEach((largura, i) => {
+    ws.getColumn(i + 1).width = largura;
+  });
+  return ws;
 }
 
-/** Monta o .xlsx de um relatório, com o período no título de cada aba. */
-export function montarRelatorio(tipo: TipoRelatorio, saidas: readonly SaidaRelatorio[], periodo: Periodo): ExcelJS.Workbook {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = "ERP EMT";
-  workbook.company = EMPRESA.razaoSocial;
-  const sufixo = ` · ${formatarData(`${periodo.de}T12:00:00Z`)} a ${formatarData(`${periodo.ate}T12:00:00Z`)}`;
-  const titulo = TITULO_RELATORIO[tipo] + sufixo;
+// ---------------------------------------------------------------------------
+// Colunas das abas
+// ---------------------------------------------------------------------------
 
-  if (tipo === "mensal") {
-    escreverAba(workbook, { nome: "Mensal", titulo, colunas: COLUNAS_MENSAL, linhas: consolidarMensal(saidas) });
-  } else if (tipo === "obra") {
-    escreverAba(workbook, { nome: "Por obra", titulo, colunas: COLUNAS_OBRA, linhas: consolidarPorObra(saidas) });
-  } else if (tipo === "equipamento") {
-    escreverAba(workbook, {
-      nome: "Equipamentos",
-      titulo,
-      colunas: COLUNAS_EQUIPAMENTO,
-      linhas: consolidarPorEquipamento(saidas),
-    });
-    escreverAba(workbook, {
-      nome: "Carretas",
-      titulo: `Consumo por carreta de transportadora${sufixo}`,
-      colunas: COLUNAS_CARRETA,
-      linhas: consolidarPorCarreta(saidas),
-    });
-  } else {
-    escreverAba(workbook, { nome: "Abastecimentos", titulo, colunas: COLUNAS_BRUTO, linhas: saidas });
-  }
+type ComRank<T> = T & { rank: number };
+
+function comRank<T>(linhas: readonly T[]): ComRank<T>[] {
+  return linhas.map((l, i) => ({ ...l, rank: i + 1 }));
+}
+
+const colunaRank: Coluna<{ rank: number }> = { cabecalho: "#", largura: 6, tipo: "inteiro", celula: (r) => r.rank };
+
+export const COLUNAS_TOP_EQUIPAMENTOS: Coluna<ComRank<LinhaEquipamentoTop>>[] = [
+  colunaRank,
+  { cabecalho: "Equipamento", largura: 36, tipo: "texto", celula: (r) => r.nome },
+  { cabecalho: "Código", largura: 18, tipo: "texto", celula: (r) => r.codigo },
+  { cabecalho: "Saídas", largura: 10, tipo: "inteiro", celula: (r) => r.qtd, somar: true },
+  { cabecalho: "Litros", largura: 16, tipo: "litros", celula: (r) => r.litros, somar: true },
+  { cabecalho: "Custo", largura: 18, tipo: "dinheiro", celula: (r) => r.custo, somar: true },
+  { cabecalho: "R$/L", largura: 14, tipo: "preco", celula: (r) => r.rPorL },
+];
+
+export const COLUNAS_TOP_CARRETAS: Coluna<ComRank<LinhaCarretaTop>>[] = [
+  colunaRank,
+  { cabecalho: "Placa", largura: 14, tipo: "texto", celula: (r) => r.placa },
+  { cabecalho: "Transportadora", largura: 30, tipo: "texto", celula: (r) => r.transportadora },
+  { cabecalho: "Saídas", largura: 10, tipo: "inteiro", celula: (r) => r.qtd, somar: true },
+  { cabecalho: "Litros", largura: 16, tipo: "litros", celula: (r) => r.litros, somar: true },
+  { cabecalho: "Custo", largura: 18, tipo: "dinheiro", celula: (r) => r.custo, somar: true },
+  { cabecalho: "R$/L", largura: 14, tipo: "preco", celula: (r) => r.rPorL },
+];
+
+export const COLUNAS_TOP_OBRAS: Coluna<ComRank<LinhaTop>>[] = [
+  colunaRank,
+  { cabecalho: "Obra", largura: 50, tipo: "texto", celula: (r) => r.nome },
+  { cabecalho: "Saídas", largura: 10, tipo: "inteiro", celula: (r) => r.qtd, somar: true },
+  { cabecalho: "Litros", largura: 16, tipo: "litros", celula: (r) => r.litros, somar: true },
+  { cabecalho: "Custo", largura: 18, tipo: "dinheiro", celula: (r) => r.custo, somar: true },
+  { cabecalho: "R$/L", largura: 14, tipo: "preco", celula: (r) => r.rPorL },
+];
+
+export const COLUNAS_FORNECEDORES: Coluna<ComRank<LinhaTop>>[] = [
+  colunaRank,
+  { cabecalho: "Fornecedor", largura: 50, tipo: "texto", celula: (r) => r.nome },
+  { cabecalho: "Compras", largura: 10, tipo: "inteiro", celula: (r) => r.qtd, somar: true },
+  { cabecalho: "Litros", largura: 16, tipo: "litros", celula: (r) => r.litros, somar: true },
+  { cabecalho: "Custo", largura: 18, tipo: "dinheiro", celula: (r) => r.custo, somar: true },
+  { cabecalho: "R$/L médio", largura: 14, tipo: "preco", celula: (r) => r.rPorL },
+];
+
+function colunasSaidasObra(c: CadastrosRelatorio, combustivel: ReadonlyMap<string, string>): Coluna<SaidaBase>[] {
+  return [
+    { cabecalho: "Data", largura: 14, tipo: "data", celula: (s) => diaParaCelula(s.data) },
+    { cabecalho: "Consumidor", largura: 40, tipo: "texto", celula: (s) => consumidorDaSaida(s, c) },
+    {
+      cabecalho: "Tipo",
+      largura: 14,
+      tipo: "texto",
+      celula: (s) => (s.tipoConsumidor === "equipamento_proprio" ? "Equipamento" : "Carreta"),
+    },
+    { cabecalho: "Combustível", largura: 18, tipo: "texto", celula: (s) => combustivel.get(s.tipoCombustivel) ?? s.tipoCombustivel },
+    { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (s) => s.litros, somar: true },
+    { cabecalho: "R$/L", largura: 14, tipo: "preco", celula: (s) => rPorLDaSaida(s) },
+    { cabecalho: "Custo", largura: 16, tipo: "dinheiro", celula: (s) => s.valorTotal, somar: true },
+  ];
+}
+
+function colunasSaidasEquipamento(c: CadastrosRelatorio, combustivel: ReadonlyMap<string, string>): Coluna<SaidaBase>[] {
+  return [
+    { cabecalho: "Data", largura: 14, tipo: "data", celula: (s) => diaParaCelula(s.data) },
+    { cabecalho: "Obra", largura: 40, tipo: "texto", celula: (s) => (s.obraId ? (c.obraNome.get(s.obraId) ?? "-") : "-") },
+    { cabecalho: "Combustível", largura: 18, tipo: "texto", celula: (s) => combustivel.get(s.tipoCombustivel) ?? s.tipoCombustivel },
+    { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (s) => s.litros, somar: true },
+    { cabecalho: "R$/L", largura: 14, tipo: "preco", celula: (s) => rPorLDaSaida(s) },
+    { cabecalho: "Custo", largura: 16, tipo: "dinheiro", celula: (s) => s.valorTotal, somar: true },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Os quatro relatórios
+// ---------------------------------------------------------------------------
+
+export interface ContextoRelatorio {
+  cadastros: CadastrosRelatorio;
+  combustivelNome: ReadonlyMap<string, string>;
+  anomalias: readonly Anomalia[];
+}
+
+const aviso = (qtdSentinel: number) =>
+  qtdSentinel > 0
+    ? {
+        titulo: `Atenção: ${qtdSentinel} saída(s) sem equipamento identificado`,
+        texto: 'Atribuir o equipamento em Combustível > Anomalias (detector D1) melhora a precisão deste relatório.',
+      }
+    : null;
+
+/** Mensal Consolidado: Resumo · Equipamentos · Carretas · Obras · Fornecedores · Anomalias. */
+export function montarMensal(mes: string, dados: DadosMensal, contexto: ContextoRelatorio): ExcelJS.Workbook {
+  const workbook = novoWorkbook();
+  const titulo = "Combustível · Relatório Mensal Consolidado";
+  const subtitulo = `Visão executiva de consumo, custo e operação · ${formatarMesRef(mes)}`;
+  const t = dados.totais;
+  escreverResumo(workbook, {
+    titulo,
+    subtitulo,
+    filtros: [
+      ["Mês referência", formatarMesRef(mes)],
+      ["Total saídas", `${t.qtdSaidas} registros`],
+    ],
+    indicadores: [
+      { rotulo: "Volume Total", valor: t.volume, tipo: "litros" },
+      { rotulo: "Custo Total", valor: t.custo, tipo: "dinheiro" },
+      { rotulo: "R$/L Médio", valor: t.rPorL, tipo: "preco" },
+      { rotulo: "Compras", valor: t.custoCompras, tipo: "dinheiro" },
+      { rotulo: "Equipamentos próprios", valor: t.qtdEquipamentosProprios, tipo: "inteiro" },
+      { rotulo: "Carretas (placas)", valor: t.qtdCarretas, tipo: "inteiro" },
+      { rotulo: "Obras com saída", valor: t.qtdObras, tipo: "inteiro" },
+      { rotulo: "Fornecedores", valor: t.qtdFornecedores, tipo: "inteiro" },
+    ],
+    aviso: aviso(t.qtdSentinel),
+  });
+  escreverAba(workbook, { nome: "Equipamentos", titulo, colunas: COLUNAS_TOP_EQUIPAMENTOS, linhas: comRank(dados.topEquipamentos) });
+  escreverAba(workbook, { nome: "Carretas", titulo, colunas: COLUNAS_TOP_CARRETAS, linhas: comRank(dados.topCarretas) });
+  escreverAba(workbook, { nome: "Obras", titulo, colunas: COLUNAS_TOP_OBRAS, linhas: comRank(dados.topObras) });
+  escreverAba(workbook, { nome: "Fornecedores", titulo, colunas: COLUNAS_FORNECEDORES, linhas: comRank(dados.fornecedores) });
+  escreverAnomalias(workbook, contexto.anomalias);
   return workbook;
+}
+
+/** Por Obra: Resumo · Saídas · Equipamentos · Fornecedores · Anomalias. */
+export function montarPorObra(
+  obraNome: string,
+  mes: string,
+  dados: DadosPorObra,
+  contexto: ContextoRelatorio,
+): ExcelJS.Workbook {
+  const workbook = novoWorkbook();
+  const titulo = "Combustível · Relatório Por Obra";
+  const subtitulo = `${obraNome} · ${formatarMesRef(mes)}`;
+  const t = dados.totais;
+  escreverResumo(workbook, {
+    titulo,
+    subtitulo,
+    filtros: [
+      ["Obra", obraNome],
+      ["Mês referência", formatarMesRef(mes)],
+      ["Total saídas", `${t.qtdSaidas} registros`],
+    ],
+    indicadores: [
+      { rotulo: "Volume Total", valor: t.volume, tipo: "litros" },
+      { rotulo: "Custo Total", valor: t.custo, tipo: "dinheiro" },
+      { rotulo: "R$/L Médio", valor: t.rPorL, tipo: "preco" },
+      { rotulo: "Saídas", valor: t.qtdSaidas, tipo: "inteiro" },
+      { rotulo: "Equipamentos próprios", valor: t.qtdEquipamentos, tipo: "inteiro" },
+      { rotulo: "Carretas", valor: t.qtdCarretas, tipo: "inteiro" },
+      { rotulo: "Fornecedores (mês)", valor: t.qtdFornecedores, tipo: "inteiro" },
+      { rotulo: "Compras (Entradas)", valor: t.custoCompras, tipo: "dinheiro" },
+    ],
+    aviso: aviso(t.qtdSentinel),
+  });
+  escreverAba(workbook, {
+    nome: "Saídas",
+    titulo,
+    colunas: colunasSaidasObra(contexto.cadastros, contexto.combustivelNome),
+    linhas: dados.saidasDesc,
+  });
+  escreverAba(workbook, { nome: "Equipamentos", titulo, colunas: COLUNAS_TOP_EQUIPAMENTOS, linhas: comRank(dados.topEquipamentos) });
+  escreverAba(workbook, { nome: "Fornecedores", titulo, colunas: COLUNAS_FORNECEDORES, linhas: comRank(dados.fornecedores) });
+  escreverAnomalias(workbook, contexto.anomalias);
+  return workbook;
+}
+
+/** "Fev-Mai-2026" (mesmo ano), "Out-2025-Jan-2026", "Mai-2026": o `formatRangeLabel` da origem. */
+export function rotuloDoIntervalo(de: string, ate: string): string {
+  const [anoDe, mesDe] = de.split("-");
+  const [anoAte, mesAte] = ate.split("-");
+  const iDe = Number(mesDe) - 1;
+  const iAte = Number(mesAte) - 1;
+  if (iDe < 0 || iDe > 11 || iAte < 0 || iAte > 11) return `${de} a ${ate}`;
+  if (anoDe === anoAte) {
+    if (mesDe === mesAte) return `${MESES_CURTOS[iDe]}-${anoDe}`;
+    return `${MESES_CURTOS[iDe]}-${MESES_CURTOS[iAte]}-${anoDe}`;
+  }
+  return `${MESES_CURTOS[iDe]}-${anoDe}-${MESES_CURTOS[iAte]}-${anoAte}`;
+}
+
+export interface EquipamentoDoRelatorio {
+  rotulo: string;
+  tipo: string | null;
+  marca: string | null;
+}
+
+/** Por Equipamento: Resumo · Saídas · Obras · Fornecedores · Anomalias. */
+export function montarPorEquipamento(
+  equipamento: EquipamentoDoRelatorio,
+  periodo: { de: string; ate: string },
+  dados: DadosPorEquipamento,
+  contexto: ContextoRelatorio,
+): ExcelJS.Workbook {
+  const workbook = novoWorkbook();
+  const titulo = "Combustível · Relatório Por Equipamento";
+  const intervalo = `${formatarDiaBR(periodo.de)} a ${formatarDiaBR(periodo.ate)}`;
+  const t = dados.totais;
+  const tipoMarca = [equipamento.tipo?.trim() || "-", equipamento.marca?.trim()].filter(Boolean).join(" · ");
+  escreverResumo(workbook, {
+    titulo,
+    subtitulo: `${equipamento.rotulo} · ${intervalo}`,
+    filtros: [
+      ["Equipamento", equipamento.rotulo],
+      ["Período", intervalo],
+      ["Tipo / marca", tipoMarca],
+      ["Total saídas", `${t.qtdSaidas} registros · ${t.diasAtivos} dia(s) ativo(s)`],
+    ],
+    indicadores: [
+      { rotulo: "Volume Total", valor: t.volume, tipo: "litros" },
+      { rotulo: "Custo Total", valor: t.custo, tipo: "dinheiro" },
+      { rotulo: "R$/L Médio", valor: t.rPorL, tipo: "preco" },
+      { rotulo: "Saídas", valor: t.qtdSaidas, tipo: "inteiro" },
+      { rotulo: "Obras atendidas", valor: t.qtdObras, tipo: "inteiro" },
+      { rotulo: "Dias ativos", valor: t.diasAtivos, tipo: "inteiro" },
+      { rotulo: "Fornecedores (período)", valor: t.qtdFornecedores, tipo: "inteiro" },
+      { rotulo: "Compras no período", valor: t.custoCompras, tipo: "dinheiro" },
+    ],
+    aviso:
+      t.qtdSaidas === 0
+        ? { titulo: "Sem saídas para este equipamento no período.", texto: "Tente um intervalo maior ou outro equipamento." }
+        : null,
+  });
+  escreverAba(workbook, {
+    nome: "Saídas",
+    titulo,
+    colunas: colunasSaidasEquipamento(contexto.cadastros, contexto.combustivelNome),
+    linhas: dados.saidasDesc,
+  });
+  escreverAba(workbook, { nome: "Obras", titulo, colunas: COLUNAS_TOP_OBRAS, linhas: comRank(dados.topObras) });
+  escreverAba(workbook, { nome: "Fornecedores", titulo, colunas: COLUNAS_FORNECEDORES, linhas: comRank(dados.fornecedores) });
+  escreverAnomalias(workbook, contexto.anomalias);
+  return workbook;
+}
+
+// ---------------------------------------------------------------------------
+// Raw export
+// ---------------------------------------------------------------------------
+
+const TIPO_CONSUMIDOR_ROTULO: Record<string, string> = {
+  equipamento_proprio: "Equipamento próprio",
+  carreta_transportadora: "Carreta terceirizada",
+};
+
+const ORIGEM_ROTULO: Record<string, string> = {
+  tanque: "Tanque",
+  dinheiro: "Dinheiro",
+  requisicao: "Requisição",
+};
+
+export interface DadosBruto {
+  saidas: readonly SaidaBase[];
+  entradas: readonly EntradaRelatorio[];
+  transferencias: readonly TransferenciaRelatorio[];
+  tanques: readonly TanqueBase[];
+  /** Nome de quem lançou, pelo id do usuário. */
+  usuarioNome: ReadonlyMap<string, string>;
+  /** Cadastros de referência (aba Cadastros). */
+  equipamentosAtivos: readonly { descricao: string; codigo: string | null; tipo: string | null; marca: string | null; modelo: string | null }[];
+  transportadoras: readonly string[];
+  combustiveis: readonly { nome: string; unidade: string | null }[];
+}
+
+export function colunasBrutoSaidas(
+  c: CadastrosRelatorio,
+  combustivel: ReadonlyMap<string, string>,
+  tanqueNome: ReadonlyMap<string, string>,
+  usuarioNome: ReadonlyMap<string, string>,
+): Coluna<SaidaBase>[] {
+  return [
+    { cabecalho: "Data", largura: 14, tipo: "data", celula: (s) => diaParaCelula(s.data) },
+    { cabecalho: "Tipo Consumidor", largura: 22, tipo: "texto", celula: (s) => TIPO_CONSUMIDOR_ROTULO[s.tipoConsumidor] ?? s.tipoConsumidor },
+    { cabecalho: "Consumidor", largura: 36, tipo: "texto", celula: (s) => consumidorDaSaida(s, c) },
+    { cabecalho: "Origem", largura: 14, tipo: "texto", celula: (s) => ORIGEM_ROTULO[s.origem] ?? s.origem },
+    { cabecalho: "Tanque", largura: 22, tipo: "texto", celula: (s) => (s.tanqueId ? (tanqueNome.get(s.tanqueId) ?? "-") : "-") },
+    { cabecalho: "Obra", largura: 36, tipo: "texto", celula: (s) => (s.obraId ? (c.obraNome.get(s.obraId) ?? "-") : "-") },
+    { cabecalho: "Combustível", largura: 18, tipo: "texto", celula: (s) => combustivel.get(s.tipoCombustivel) ?? s.tipoCombustivel },
+    { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (s) => s.litros, somar: true },
+    { cabecalho: "Preço/L", largura: 14, tipo: "preco", celula: (s) => s.precoUnitario },
+    { cabecalho: "R$/L Total", largura: 14, tipo: "preco", celula: (s) => rPorLDaSaida(s) },
+    { cabecalho: "Valor Total", largura: 16, tipo: "dinheiro", celula: (s) => s.valorTotal, somar: true },
+    { cabecalho: "Motorista", largura: 22, tipo: "texto", celula: (s) => s.motorista ?? "" },
+    // Só faz sentido na requisição; nas outras a origem mostra o traço.
+    { cabecalho: "Pago", largura: 8, tipo: "texto", celula: (s) => (s.origem === "requisicao" ? (s.pago ? "Sim" : "Não") : "-") },
+    { cabecalho: "Pago em", largura: 14, tipo: "data", celula: (s) => diaParaCelula(s.pagoEm ? s.pagoEm : null) },
+    { cabecalho: "Observações", largura: 30, tipo: "texto", celula: (s) => s.observacoes ?? "" },
+    { cabecalho: "Criado por", largura: 22, tipo: "texto", celula: (s) => (s.createdBy ? (usuarioNome.get(s.createdBy) ?? "") : "") },
+  ];
+}
+
+/** Raw Export: Resumo · Saídas · Entradas · Transferências · Cadastros (sem agregação, sem Anomalias, como na origem). */
+export function montarBruto(mes: string, dados: DadosBruto, contexto: Omit<ContextoRelatorio, "anomalias">): ExcelJS.Workbook {
+  const workbook = novoWorkbook();
+  const titulo = "Combustível · Raw Export";
+  const tanqueNome = new Map(dados.tanques.map((t) => [t.id, t.nomeExibicao]));
+  const usuario = (id: string | null) => (id ? (dados.usuarioNome.get(id) ?? "") : "");
+  const somar = somarValoresOperacionais;
+
+  escreverResumo(workbook, {
+    titulo,
+    subtitulo: `Dados crus por mês: saídas, entradas, transferências · ${formatarMesRef(mes)}`,
+    filtros: [
+      ["Mês referência", formatarMesRef(mes)],
+      ["Saídas", `${dados.saidas.length} registros`],
+      ["Entradas", `${dados.entradas.length} registros`],
+      ["Transferências", `${dados.transferencias.length} registros`],
+    ],
+    indicadores: [
+      { rotulo: "Volume saídas", valor: somar(dados.saidas.map((s) => s.litros)), tipo: "litros" },
+      { rotulo: "Custo saídas", valor: somar(dados.saidas.map((s) => s.valorTotal)), tipo: "dinheiro" },
+      { rotulo: "Volume entradas", valor: somar(dados.entradas.map((e) => e.litros)), tipo: "litros" },
+      { rotulo: "Custo entradas", valor: dados.entradas.reduce((a, e) => a + e.valorTotal, 0), tipo: "dinheiro" },
+      { rotulo: "Volume transferências", valor: somar(dados.transferencias.map((t) => t.litros)), tipo: "litros" },
+      { rotulo: "Qtd saídas", valor: dados.saidas.length, tipo: "inteiro" },
+      { rotulo: "Qtd entradas", valor: dados.entradas.length, tipo: "inteiro" },
+      { rotulo: "Qtd transferências", valor: dados.transferencias.length, tipo: "inteiro" },
+    ],
+  });
+
+  escreverAba(workbook, {
+    nome: "Saídas",
+    titulo,
+    colunas: colunasBrutoSaidas(contexto.cadastros, contexto.combustivelNome, tanqueNome, dados.usuarioNome),
+    linhas: saidasDesc(dados.saidas),
+  });
+
+  escreverAba<EntradaRelatorio>(workbook, {
+    nome: "Entradas",
+    titulo,
+    colunas: [
+      { cabecalho: "Data", largura: 14, tipo: "data", celula: (e) => diaParaCelula(e.dataHora) },
+      { cabecalho: "Tanque", largura: 26, tipo: "texto", celula: (e) => tanqueNome.get(e.tanqueId) ?? "-" },
+      {
+        cabecalho: "Combustível",
+        largura: 18,
+        tipo: "texto",
+        celula: (e) => contexto.combustivelNome.get(e.tipoCombustivel) ?? e.tipoCombustivel,
+      },
+      { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (e) => e.litros, somar: true },
+      { cabecalho: "R$/L", largura: 14, tipo: "preco", celula: (e) => (e.litros > 0 ? e.valorTotal / e.litros : 0) },
+      { cabecalho: "Valor Total", largura: 16, tipo: "dinheiro", celula: (e) => e.valorTotal, somar: true },
+      { cabecalho: "Fornecedor", largura: 30, tipo: "texto", celula: (e) => e.fornecedor || "-" },
+      { cabecalho: "Nota Fiscal", largura: 16, tipo: "texto", celula: (e) => e.notaFiscal ?? "" },
+      { cabecalho: "Observações", largura: 30, tipo: "texto", celula: (e) => e.observacoes ?? "" },
+      { cabecalho: "Criado por", largura: 22, tipo: "texto", celula: (e) => usuario(e.createdBy) },
+    ],
+    linhas: [...dados.entradas].sort((a, b) => b.dataHora.localeCompare(a.dataHora)),
+  });
+
+  escreverAba<TransferenciaRelatorio>(workbook, {
+    nome: "Transferências",
+    titulo,
+    colunas: [
+      { cabecalho: "Data", largura: 14, tipo: "data", celula: (t) => diaParaCelula(t.dataHora) },
+      { cabecalho: "Tanque Origem", largura: 26, tipo: "texto", celula: (t) => tanqueNome.get(t.tanqueOrigemId) ?? "-" },
+      { cabecalho: "Tanque Destino", largura: 26, tipo: "texto", celula: (t) => tanqueNome.get(t.tanqueDestinoId) ?? "-" },
+      { cabecalho: "Litros", largura: 14, tipo: "litros", celula: (t) => t.litros, somar: true },
+      { cabecalho: "Valor Total", largura: 16, tipo: "dinheiro", celula: (t) => t.valorTotal, somar: true },
+      { cabecalho: "Observações", largura: 30, tipo: "texto", celula: (t) => t.observacoes ?? "" },
+      { cabecalho: "Criado por", largura: 22, tipo: "texto", celula: (t) => usuario(t.createdBy) },
+    ],
+    linhas: [...dados.transferencias].sort((a, b) => b.dataHora.localeCompare(a.dataHora)),
+  });
+
+  escreverCadastros(workbook, dados, contexto.cadastros);
+  return workbook;
+}
+
+/** A aba "Cadastros" da origem: tanques, equipamentos, transportadoras e combustíveis, empilhados. */
+function escreverCadastros(workbook: ExcelJS.Workbook, dados: DadosBruto, cadastros: CadastrosRelatorio): void {
+  const ws = workbook.addWorksheet("Cadastros");
+  let linha = escreverCabecalhoMarca(workbook, ws, { titulo: "Cadastros de referência", colunas: 5 });
+  ws.columns = [{ width: 36 }, { width: 22 }, { width: 22 }, { width: 22 }, { width: 30 }];
+
+  const bloco = (titulo: string, cabecalhos: string[], linhas: (string | number)[][]) => {
+    ws.getCell(linha, 1).value = titulo;
+    negrito(ws.getCell(linha, 1));
+    linha += 1;
+    const cabecalho = ws.getRow(linha);
+    cabecalhos.forEach((texto, i) => {
+      cabecalho.getCell(i + 1).value = texto;
+    });
+    estilizarCabecalhoColunas(cabecalho);
+    for (const valores of linhas) {
+      linha += 1;
+      const row = ws.getRow(linha);
+      valores.forEach((v, i) => {
+        row.getCell(i + 1).value = v;
+      });
+    }
+    linha += 2;
+  };
+
+  bloco(
+    "Tanques / Depósitos",
+    ["Nome", "Apelido", "Capacidade (L)", "Externo", "Proprietária"],
+    dados.tanques
+      .filter((t) => t.ativo)
+      .map((t) => [
+        t.nome,
+        t.apelido ?? "",
+        t.capacidadeLitros,
+        t.ehExterno ? "Sim" : "Não",
+        t.proprietarioId ? (cadastros.transportadoraNome.get(t.proprietarioId) ?? "-") : "EMT (interno)",
+      ]),
+  );
+  bloco(
+    "Equipamentos",
+    ["Nome", "Código", "Tipo", "Marca / Modelo"],
+    dados.equipamentosAtivos.map((e) => [
+      e.descricao,
+      e.codigo ?? "",
+      e.tipo ?? "",
+      `${e.marca ?? ""}${e.modelo ? ` · ${e.modelo}` : ""}`.trim(),
+    ]),
+  );
+  bloco(
+    "Transportadoras",
+    ["Nome"],
+    [...dados.transportadoras].sort((a, b) => a.localeCompare(b, "pt-BR")).map((nome) => [nome]),
+  );
+  bloco(
+    "Combustíveis",
+    ["Nome", "Unidade"],
+    dados.combustiveis.map((c) => [c.nome, c.unidade ?? ""]),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Nomes de arquivo (os da origem)
+// ---------------------------------------------------------------------------
+
+export function nomeArquivoMensal(mes: string): string {
+  return `EMT - Mensal Consolidado - ${formatarMesRef(mes).replace("/", "-")}.xlsx`;
+}
+
+export function nomeArquivoPorObra(obraNome: string, mes: string): string {
+  return `EMT - Por Obra - ${parteDeNomeDeArquivo(obraNome)} - ${formatarMesRef(mes).replace("/", "-")}.xlsx`;
+}
+
+export function nomeArquivoPorEquipamento(slug: string, de: string, ate: string): string {
+  return `EMT - Por Equipamento - ${parteDeNomeDeArquivo(slug)} - ${rotuloDoIntervalo(de, ate)}.xlsx`;
+}
+
+export function nomeArquivoBruto(mes: string): string {
+  return `EMT - Raw Export - ${formatarMesRef(mes).replace("/", "-")}.xlsx`;
 }

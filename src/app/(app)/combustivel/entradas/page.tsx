@@ -9,6 +9,7 @@ import {
   listarFornecedoresAtivos,
   listarInsumosCombustivel,
   listarTanques,
+  type EntradaLinha,
   type InsumoCombustivel,
   type Opcao,
 } from "@/modules/combustivel/entradas/queries";
@@ -25,9 +26,13 @@ export default async function PaginaEntradasCombustivel() {
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
   const carregaFormulario = podeCriar || podeEditar;
+  // Restaurar é a Lixeira da origem: pede editar a Lixeira e excluir na aba (a
+  // fn_comb_restaurar confere as duas de novo).
+  const podeRestaurar = temPermissao(usuario, "administracao.lixeira", "editar") && podeExcluir;
 
-  const [entradas, tanques, insumos, fornecedores] = await Promise.all([
+  const [entradas, excluidas, tanques, insumos, fornecedores] = await Promise.all([
     listarEntradas(),
+    podeRestaurar ? listarEntradas(true) : Promise.resolve<EntradaLinha[]>([]),
     listarTanques(),
     carregaFormulario ? listarInsumosCombustivel() : Promise.resolve<InsumoCombustivel[]>([]),
     carregaFormulario ? listarFornecedoresAtivos() : Promise.resolve<Opcao[]>([]),
@@ -55,6 +60,8 @@ export default async function PaginaEntradasCombustivel() {
       />
       <EntradasTabela
         entradas={entradas}
+        excluidas={excluidas}
+        podeRestaurar={podeRestaurar}
         tanquesFiltro={tanquesDaEmt.map((tanque) => ({
           id: tanque.id,
           nome: tanque.ativo ? tanque.rotulo : `${tanque.rotulo} (inativo)`,

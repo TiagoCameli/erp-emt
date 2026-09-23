@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { DropletOff, Trash2 } from "lucide-react";
+import { DropletOff, RotateCcw, Trash2 } from "lucide-react";
 
 import {
   ConfirmDialog,
@@ -11,12 +11,15 @@ import {
   FiltroBusca,
   FiltroSelect,
   MoneyText,
+  StatusBadge,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
-import { excluirEsvaziamento } from "@/modules/combustivel/esvaziamentos/actions";
+import { excluirEsvaziamento, restaurarEsvaziamento } from "@/modules/combustivel/esvaziamentos/actions";
 import type { EsvaziamentoLinha } from "@/modules/combustivel/esvaziamentos/queries";
 
 /** Colunas da lista. Exportadas para o teste desenhar célula por célula. */
@@ -26,7 +29,12 @@ export const colunas: ColumnDef<EsvaziamentoLinha, unknown>[] = [
     header: "Data",
     size: 140,
     meta: { atomico: true },
-    cell: ({ row }) => <span className="tabular-nums">{formatarDataHoraRioBranco(row.original.dataHora)}</span>,
+    cell: ({ row }) => (
+      <span className="flex items-center gap-2">
+        <span className="tabular-nums">{formatarDataHoraRioBranco(row.original.dataHora)}</span>
+        {row.original.excluidoEm ? <StatusBadge status="cancelado" rotulo="Excluído" /> : null}
+      </span>
+    ),
   },
   {
     accessorKey: "tanqueNome",
@@ -61,22 +69,35 @@ export interface EsvaziamentosTabelaProps {
   /** Tanques da EMT (inclusive inativos), para o filtro. */
   tanquesFiltro: { id: string; nome: string }[];
   podeExcluir: boolean;
+  /** `administracao.lixeira`/editar e excluir do recurso: mostra os excluídos e o "Restaurar". */
+  podeRestaurar?: boolean;
 }
 
-/** Esvaziamentos fora da lixeira. Sem edição: só exclusão com motivo. */
-export function EsvaziamentosTabela({ esvaziamentos, tanquesFiltro, podeExcluir }: EsvaziamentosTabelaProps) {
+/**
+ * Esvaziamentos. Sem edição: só exclusão com motivo, e quem pode restaurar liga
+ * "Mostrar excluídos" e tira da lixeira (Lixeira da origem).
+ */
+export function EsvaziamentosTabela({
+  esvaziamentos,
+  tanquesFiltro,
+  podeExcluir,
+  podeRestaurar = false,
+}: EsvaziamentosTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [excluidos, setExcluidos] = useFiltroSessao<"" | "1">("excluidos", "", ["", "1"]);
+  const mostrarExcluidos = podeRestaurar && excluidos === "1";
   const [tanque, setTanque] = useFiltroSessao("tanque", "");
   const [excluindo, setExcluindo] = React.useState<EsvaziamentoLinha | null>(null);
 
   const filtrados = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return esvaziamentos.filter((e) => {
+      if (e.excluidoEm && !mostrarExcluidos) return false;
       if (tanque && e.tanqueId !== tanque) return false;
       if (!termo) return true;
       return e.tanqueNome.toLowerCase().includes(termo) || e.motivo.toLowerCase().includes(termo);
     });
-  }, [esvaziamentos, busca, tanque]);
+  }, [esvaziamentos, busca, tanque, mostrarExcluidos]);
 
   async function aoConfirmarExclusao(motivo?: string) {
     if (!excluindo) return;
@@ -87,6 +108,15 @@ export function EsvaziamentosTabela({ esvaziamentos, tanquesFiltro, podeExcluir 
     }
     toast.success("Esvaziamento excluído");
     setExcluindo(null);
+  }
+
+  async function aoRestaurar(esvaziamento: EsvaziamentoLinha) {
+    const resultado = await restaurarEsvaziamento(esvaziamento.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Esvaziamento restaurado");
   }
 
   return (
@@ -119,15 +149,46 @@ export function EsvaziamentosTabela({ esvaziamentos, tanquesFiltro, podeExcluir 
               />
             ),
           },
+          ...(podeRestaurar
+            ? [
+                {
+                  id: "excluidos",
+                  rotulo: "Mostrar excluídos",
+                  fixo: true,
+                  temValor: mostrarExcluidos,
+                  onLimpar: () => setExcluidos(""),
+                  elemento: (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="esvaziamentos-mostrar-excluidos"
+                        checked={mostrarExcluidos}
+                        onCheckedChange={(marcado) => setExcluidos(marcado ? "1" : "")}
+                      />
+                      <Label htmlFor="esvaziamentos-mostrar-excluidos" className="text-detalhe text-muted-foreground">
+                        Mostrar excluídos
+                      </Label>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
         ]}
         acoesLinha={
-          podeExcluir
-            ? (esvaziamento) => (
-                <DropdownMenuItem variant="destructive" onSelect={() => setExcluindo(esvaziamento)}>
-                  <Trash2 />
-                  Excluir esvaziamento
-                </DropdownMenuItem>
-              )
+          podeExcluir || podeRestaurar
+            ? (esvaziamento) =>
+                esvaziamento.excluidoEm ? (
+                  podeRestaurar ? (
+                    <DropdownMenuItem onSelect={() => void aoRestaurar(esvaziamento)}>
+                      <RotateCcw />
+                      Restaurar esvaziamento
+                    </DropdownMenuItem>
+                  ) : null
+                ) : podeExcluir ? (
+                  <DropdownMenuItem variant="destructive" onSelect={() => setExcluindo(esvaziamento)}>
+                    <Trash2 />
+                    Excluir esvaziamento
+                  </DropdownMenuItem>
+                ) : null
             : undefined
         }
         emptyState={

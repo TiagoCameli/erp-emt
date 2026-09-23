@@ -19,7 +19,10 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
 
 vi.mock("@/modules/combustivel/transferencias/actions", () => ({
   consultarEstoqueTransferencia: vi.fn(async () => ({ ok: true, litros: 0 })),
+  consultarPrecoMedioTanque: vi.fn(async () => ({ ok: true, preco: 0 })),
+  consultarCombustivelNaData: vi.fn(async () => ({ ok: true, nome: null })),
   excluirTransferencia: vi.fn(),
+  restaurarTransferencia: vi.fn(),
   salvarTransferencia: vi.fn(),
 }));
 
@@ -40,6 +43,8 @@ function transferencia(troca: Partial<TransferenciaLinha> = {}): TransferenciaLi
     valorTotal: 9592.3456,
     observacoes: null,
     origem: "manual",
+    excluidoEm: null,
+    motivoExclusao: null,
     ...troca,
   };
 }
@@ -88,5 +93,19 @@ describe("TransferenciasTabela", () => {
       <TransferenciasTabela transferencias={[]} tanques={[]} tanquesFiltro={[]} podeEditar podeExcluir />,
     );
     expect(screen.getByText("Nenhuma transferência lançada")).toBeInTheDocument();
+  });
+
+  it("excluída não aparece sem permissão de restaurar, nem o filtro de excluídos", () => {
+    render(
+      <TransferenciasTabela
+        transferencias={[transferencia({ excluidoEm: "2026-09-23T20:00:00Z", origemNome: "Tanque Excluído" })]}
+        tanques={[]}
+        tanquesFiltro={[]}
+        podeEditar
+        podeExcluir
+      />,
+    );
+    expect(screen.queryByText("Tanque Excluído")).not.toBeInTheDocument();
+    expect(screen.queryByText("Mostrar excluídos")).not.toBeInTheDocument();
   });
 });

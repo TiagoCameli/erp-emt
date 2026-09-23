@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Fuel, Pencil, Trash2 } from "lucide-react";
+import { Fuel, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import {
   CelulaVazia,
@@ -21,7 +21,7 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
-import { excluirEntrada } from "@/modules/combustivel/entradas/actions";
+import { excluirEntrada, restaurarEntrada } from "@/modules/combustivel/entradas/actions";
 import { filtrarEntradas } from "@/modules/combustivel/entradas/filtros";
 import type { EntradaLinha, InsumoCombustivel, Opcao, TanqueOpcao } from "@/modules/combustivel/entradas/queries";
 import { formatarValorOperacional, somarValoresOperacionais } from "@/modules/manutencao/servicos/formato";
@@ -83,8 +83,32 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
   },
 ];
 
+/** Coluna da exclusão, só no "Mostrar excluídos". */
+const colunaExclusao: ColumnDef<EntradaLinha, unknown> = {
+  id: "exclusao",
+  header: "Excluída",
+  size: 220,
+  meta: { naoTruncar: true },
+  cell: ({ row }) => (
+    <span className="flex flex-col">
+      <span className="tabular-nums">{formatarDataHoraRioBranco(row.original.excluidoEm)}</span>
+      {row.original.motivoExclusao ? (
+        <span className="text-legenda text-muted-foreground">{row.original.motivoExclusao}</span>
+      ) : null}
+    </span>
+  ),
+};
+
+export const OPCOES_EXCLUIDOS = [{ valor: "sim", rotulo: "Só os excluídos" }];
+
 export interface EntradasTabelaProps {
   entradas: EntradaLinha[];
+  /**
+   * As da lixeira. Só vêm para quem pode restaurar (editar a Lixeira e excluir na aba);
+   * para o resto, lista vazia e o filtro nem aparece.
+   */
+  excluidas?: EntradaLinha[];
+  podeRestaurar?: boolean;
   /** Todos os tanques, para o filtro (entrada só existe em tanque da EMT). */
   tanquesFiltro: Opcao[];
   /** Tanques que recebem entrada, para a edição. */
@@ -100,7 +124,9 @@ export interface EntradasTabelaProps {
  * e a tabela filtra e pagina em memória; o rodapé soma o que o filtro acha.
  */
 export function EntradasTabela({
-  entradas,
+  entradas: lancadas,
+  excluidas = [],
+  podeRestaurar = false,
   tanquesFiltro,
   tanquesEdicao,
   insumos,
@@ -116,6 +142,14 @@ export function EntradasTabela({
   const [editando, setEditando] = React.useState<EntradaLinha | null>(null);
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<EntradaLinha | null>(null);
+  const [restaurando, setRestaurando] = React.useState<EntradaLinha | null>(null);
+  const [mostrarExcluidos, setMostrarExcluidos] = useFiltroSessao("excluidos", "");
+  const vendoExcluidas = podeRestaurar && mostrarExcluidos === "sim";
+  const entradas = vendoExcluidas ? excluidas : lancadas;
+  const colunas = React.useMemo(
+    () => (vendoExcluidas ? [...colunasEntradas, colunaExclusao] : colunasEntradas),
+    [vendoExcluidas],
+  );
 
   const filtradas = React.useMemo(
     () => filtrarEntradas(entradas, { busca, de, ate, tanqueId, insumoId }),
@@ -145,13 +179,24 @@ export function EntradasTabela({
     setExcluindo(null);
   }
 
-  const temAcoes = podeEditar || podeExcluir;
+  async function aoConfirmarRestauracao() {
+    if (!restaurando) return;
+    const resultado = await restaurarEntrada(restaurando.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Entrada restaurada");
+    setRestaurando(null);
+  }
+
+  const temAcoes = vendoExcluidas ? podeRestaurar : podeEditar || podeExcluir;
 
   return (
     <div className="flex flex-col gap-2">
       <DataTable
         idTabela="combustivel.entradas"
-        columns={colunasEntradas}
+        columns={colunas}
         data={filtradas}
         filtros={[
           {
@@ -198,6 +243,26 @@ export function EntradasTabela({
               />
             ),
           },
+          ...(podeRestaurar
+            ? [
+                {
+                  id: "excluidos",
+                  rotulo: "Mostrar excluídos",
+                  ocultoPorPadrao: true,
+                  temValor: mostrarExcluidos !== "",
+                  onLimpar: () => setMostrarExcluidos(""),
+                  elemento: (
+                    <FiltroSelect
+                      valor={mostrarExcluidos}
+                      onValorChange={setMostrarExcluidos}
+                      opcoes={OPCOES_EXCLUIDOS}
+                      placeholder="Mostrar excluídos"
+                      todosRotulo="Sem os excluídos"
+                    />
+                  ),
+                },
+              ]
+            : []),
           {
             id: "combustivel",
             rotulo: "Combustível",
@@ -216,7 +281,13 @@ export function EntradasTabela({
         ]}
         acoesLinha={
           temAcoes
-            ? (entrada) => (
+            ? (entrada) =>
+                entrada.excluidoEm ? (
+                  <DropdownMenuItem onSelect={() => setRestaurando(entrada)}>
+                    <RotateCcw />
+                    Restaurar entrada
+                  </DropdownMenuItem>
+                ) : (
                 <>
                   {podeEditar ? (
                     <DropdownMenuItem
@@ -236,17 +307,25 @@ export function EntradasTabela({
                     </DropdownMenuItem>
                   ) : null}
                 </>
-              )
+                )
             : undefined
         }
         emptyState={
           <EmptyState
             icone={Fuel}
-            titulo={entradas.length === 0 ? "Nenhuma entrada lançada" : "Nenhuma entrada encontrada"}
+            titulo={
+              vendoExcluidas
+                ? "Nenhuma entrada excluída"
+                : entradas.length === 0
+                  ? "Nenhuma entrada lançada"
+                  : "Nenhuma entrada encontrada"
+            }
             descricao={
-              entradas.length === 0
-                ? "Lance a nota fiscal do combustível para o tanque ter estoque e preço no PEPS"
-                : "Ajuste a busca, o período, o tanque ou o combustível"
+              vendoExcluidas
+                ? "A lixeira de entradas está vazia neste filtro"
+                : entradas.length === 0
+                  ? "Lance a nota fiscal do combustível para o tanque ter estoque e preço no PEPS"
+                  : "Ajuste a busca, o período, o tanque ou o combustível"
             }
             className="border-none bg-transparent"
           />
@@ -255,7 +334,8 @@ export function EntradasTabela({
 
       {filtradas.length > 0 ? (
         <p className="text-right text-legenda text-muted-foreground">
-          {filtradas.length} {filtradas.length === 1 ? "entrada" : "entradas"} no filtro,{" "}
+          {filtradas.length} {filtradas.length === 1 ? "entrada" : "entradas"}
+          {vendoExcluidas ? (filtradas.length === 1 ? " excluída" : " excluídas") : ""} no filtro,{" "}
           <span className="tabular-nums font-medium text-foreground">{formatarLitros(totalLitros)}</span>, valor de{" "}
           <MoneyText valor={totalValor} className="font-medium text-foreground" />
         </p>
@@ -291,6 +371,21 @@ export function EntradasTabela({
         variante="destrutivo"
         exigeMotivo
         onConfirmar={aoConfirmarExclusao}
+      />
+
+      <ConfirmDialog
+        aberto={restaurando !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setRestaurando(null);
+        }}
+        titulo="Restaurar entrada"
+        descricao={
+          restaurando
+            ? `A entrada de ${formatarLitros(restaurando.litros)} de ${restaurando.insumoNome} volta para o tanque ${restaurando.tanqueNome}, e o nível e o PEPS do tanque são refeitos.`
+            : ""
+        }
+        textoConfirmar="Restaurar entrada"
+        onConfirmar={aoConfirmarRestauracao}
       />
     </div>
   );

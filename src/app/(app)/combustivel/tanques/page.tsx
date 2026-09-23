@@ -21,6 +21,8 @@ export default async function PaginaTanques() {
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
+  // O "Esvaziar tanque" da linha: a RPC pede combustivel.esvaziamentos/criar.
+  const podeEsvaziar = temPermissao(usuario, "combustivel.esvaziamentos", "criar");
 
   // O dono só aparece no formulário: quem não cria nem edita não paga a leitura dos fornecedores.
   const [tanques, fornecedores] = await Promise.all([
@@ -36,7 +38,13 @@ export default async function PaginaTanques() {
         descricao="Tanques da EMT e de terceiros, com o nível calculado pelos movimentos"
         acoes={<TanquesAcoesCabecalho podeCriar={podeCriar} fornecedores={fornecedores} />}
       />
-      <TanquesLista tanques={tanques} fornecedores={fornecedores} podeEditar={podeEditar} podeExcluir={podeExcluir} />
+      <TanquesLista
+        tanques={tanques}
+        fornecedores={fornecedores}
+        podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
+        podeEsvaziar={podeEsvaziar}
+      />
     </>
   );
 }

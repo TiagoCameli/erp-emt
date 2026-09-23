@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CellContext, ColumnDef } from "@tanstack/react-table";
 
 import type { EsvaziamentoLinha } from "@/modules/combustivel/esvaziamentos/queries";
@@ -17,11 +17,12 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
 }));
 
 vi.mock("@/modules/combustivel/esvaziamentos/actions", () => ({
-  consultarEstoqueEsvaziamento: vi.fn(async () => ({ ok: true, litros: 0 })),
   excluirEsvaziamento: vi.fn(),
   registrarEsvaziamento: vi.fn(),
+  restaurarEsvaziamento: vi.fn(async () => ({ ok: true })),
 }));
 
+import { restaurarEsvaziamento } from "@/modules/combustivel/esvaziamentos/actions";
 import { colunas, EsvaziamentosTabela } from "@/modules/combustivel/esvaziamentos/components/esvaziamentos-tabela";
 
 afterEach(cleanup);
@@ -36,6 +37,8 @@ function esvaziamento(troca: Partial<EsvaziamentoLinha> = {}): EsvaziamentoLinha
     motivo: "Diesel contaminado",
     valorPerda: 0,
     origem: "manual",
+    excluidoEm: null,
+    motivoExclusao: null,
     ...troca,
   };
 }
@@ -71,5 +74,39 @@ describe("EsvaziamentosTabela", () => {
   it("com excluir, o menu aparece", () => {
     render(<EsvaziamentosTabela esvaziamentos={[esvaziamento()]} tanquesFiltro={[]} podeExcluir />);
     expect(screen.getAllByRole("button", { name: /ações/i }).length).toBeGreaterThan(0);
+  });
+
+  it("sem permissão de restaurar, o excluído não aparece e não há o filtro", () => {
+    render(
+      <EsvaziamentosTabela
+        esvaziamentos={[esvaziamento({ excluidoEm: "2026-09-23T20:00:00Z", motivo: "Motivo do excluído" })]}
+        tanquesFiltro={[]}
+        podeExcluir
+      />,
+    );
+    expect(screen.queryByText("Motivo do excluído")).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Mostrar excluídos" })).not.toBeInTheDocument();
+  });
+
+  it("com permissão, 'Mostrar excluídos' traz a linha e o 'Restaurar' chama a action", async () => {
+    render(
+      <EsvaziamentosTabela
+        esvaziamentos={[
+          esvaziamento({ id: "44444444-4444-4444-8444-444444444444", excluidoEm: "2026-09-23T20:00:00Z", motivo: "Motivo do excluído" }),
+        ]}
+        tanquesFiltro={[]}
+        podeExcluir
+        podeRestaurar
+      />,
+    );
+    expect(screen.queryByText("Motivo do excluído")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Mostrar excluídos" }));
+    expect(await screen.findByText("Motivo do excluído")).toBeInTheDocument();
+    expect(screen.getByText("Excluído")).toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getAllByRole("button", { name: /ações/i })[0]!, { button: 0, ctrlKey: false });
+    expect(screen.queryByRole("menuitem", { name: /Excluir esvaziamento/ })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Restaurar esvaziamento/ }));
+    await waitFor(() => expect(restaurarEsvaziamento).toHaveBeenCalledWith("44444444-4444-4444-8444-444444444444"));
   });
 });

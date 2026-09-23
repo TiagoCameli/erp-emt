@@ -2,42 +2,34 @@
 
 import * as React from "react";
 
-import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
-
-export type EstadoEstoque =
+export type EstadoConsulta<T> =
   | { tipo: "vazio" }
   | { tipo: "carregando" }
-  | { tipo: "ok"; litros: number }
+  | { tipo: "ok"; valor: T }
   | { tipo: "erro" };
 
-type Consulta = (tanqueId: string, dataIso: string) => Promise<{ ok: true; litros: number } | { erro: string }>;
-
 /**
- * Estoque do tanque na data, para a dica do formulário (transferência e
- * esvaziamento). A resposta fica guardada com a CHAVE da consulta (tanque +
- * data): enquanto a chave atual não tem resposta, o estado é "carregando", e
- * resposta de uma consulta antiga (a pessoa trocou de tanque no meio) é
- * descartada. Nada de setState síncrono no efeito, só no retorno da action.
+ * Consulta assíncrona do formulário (estoque na data, preço médio, combustível
+ * na data), guardada com a CHAVE da consulta: enquanto a chave atual não tem
+ * resposta, o estado é "carregando", e resposta de uma consulta antiga (a
+ * pessoa trocou de tanque no meio) é descartada. Chave null não consulta.
+ * Nada de setState síncrono no efeito, só no retorno da action.
  */
-export function useEstoqueNaData(
-  consultar: Consulta,
-  tanqueId: string | null | undefined,
-  dataIso: string | null,
-  ativo: boolean,
-): EstadoEstoque {
-  const chave = ativo && tanqueId && dataIso ? `${tanqueId}|${dataIso}` : null;
-  const [resposta, setResposta] = React.useState<{ chave: string; estado: EstadoEstoque } | null>(null);
+export function useConsulta<T>(chave: string | null, executar: () => Promise<T | null>): EstadoConsulta<T> {
+  const [resposta, setResposta] = React.useState<{ chave: string; estado: EstadoConsulta<T> } | null>(null);
+  const executarRef = React.useRef(executar);
+  React.useEffect(() => {
+    executarRef.current = executar;
+  });
 
   React.useEffect(() => {
-    if (!chave || !tanqueId || !dataIso) return;
+    if (!chave) return;
     let vigente = true;
-    void consultar(tanqueId, dataIso)
-      .then((resultado) => {
+    void executarRef
+      .current()
+      .then((valor) => {
         if (!vigente) return;
-        setResposta({
-          chave,
-          estado: "erro" in resultado ? { tipo: "erro" } : { tipo: "ok", litros: resultado.litros },
-        });
+        setResposta({ chave, estado: valor === null ? { tipo: "erro" } : { tipo: "ok", valor } });
       })
       .catch(() => {
         if (vigente) setResposta({ chave, estado: { tipo: "erro" } });
@@ -45,23 +37,14 @@ export function useEstoqueNaData(
     return () => {
       vigente = false;
     };
-  }, [chave, tanqueId, dataIso, consultar]);
+  }, [chave]);
 
   if (!chave) return { tipo: "vazio" };
   if (resposta?.chave !== chave) return { tipo: "carregando" };
   return resposta.estado;
 }
 
-/** Frase da dica embaixo do campo de litros. */
-export function dicaDoEstoque(estado: EstadoEstoque, prefixo: string, semConsulta?: string): string | undefined {
-  switch (estado.tipo) {
-    case "ok":
-      return `${prefixo}: ${formatarLitros(estado.litros)}`;
-    case "carregando":
-      return "Consultando o estoque do tanque...";
-    case "erro":
-      return "Não foi possível consultar o estoque; o banco confere ao salvar";
-    default:
-      return semConsulta;
-  }
+/** O valor da consulta quando respondeu, ou o `reserva` (vazio, carregando ou erro). */
+export function valorDaConsulta<T, R>(estado: EstadoConsulta<T>, reserva: R): T | R {
+  return estado.tipo === "ok" ? estado.valor : reserva;
 }

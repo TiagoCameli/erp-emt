@@ -18,7 +18,11 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/modules/combustivel/abastecimentos/actions", () => ({
   consultarEstoqueNaData: vi.fn(async () => ({ ok: true, litros: 500 })),
+  calcularPrecoFifo: vi.fn(async () => ({ ok: true, precoMedio: 6.5, detalhamento: [], litrosSemSuprimento: 0 })),
+  consultarInicioCiclo: vi.fn(async () => ({ ok: true, inicio: null })),
+  consultarUltimaLeitura: vi.fn(async () => ({ ok: true, valor: null })),
   excluirAbastecimento: vi.fn(),
+  restaurarAbastecimento: vi.fn(),
   salvarAbastecimento: vi.fn(),
 }));
 
@@ -151,13 +155,15 @@ describe("AbastecimentoFormDrawer", () => {
     { id: EXTERNO, rotulo: "Transterra", ehExterno: true, ativo: true, capacidadeLitros: 0, nivelAtualLitros: 0, combustivelAtualId: null, proprietarioId: "x", proprietarioNome: "Transterra", proprietarioTaxaLitro: 0.15 },
   ];
 
-  it("equipamento no tanque: o preço é do PEPS e o formulário não pede preço", () => {
+  it("equipamento no tanque: o preço é o do tanque (snapshot salvo na edição) e o formulário não pede preço", () => {
     render(
       <AbastecimentoFormDrawer aberto onAbertoChange={() => {}} abastecimento={completo()} opcoes={{ ...SEM_OPCOES, tanques }} />,
     );
-    expect(screen.getByText("Preço calculado pelo PEPS do tanque")).toBeTruthy();
+    expect(screen.getByText(/preço salvo \(snapshot\)/)).toBeTruthy();
     expect(screen.queryByLabelText(/Preço cobrado da transportadora/)).toBeNull();
-    expect(screen.queryByLabelText(/Preço por litro/)).toBeNull();
+    expect(screen.queryByLabelText(/Preço unitário/)).toBeNull();
+    // Tanque da EMT sem entrada no mapa: o estado "tanque sem entradas" da origem.
+    expect(screen.getByText(/Tanque sem entradas/)).toBeTruthy();
   });
 
   it("carreta em tanque externo: os dois preços e a taxa", () => {
@@ -173,9 +179,10 @@ describe("AbastecimentoFormDrawer", () => {
       />,
     );
     expect(screen.getByLabelText(/Preço cobrado da transportadora/)).toBeTruthy();
-    expect(screen.getByLabelText(/Preço que o dono cobra/)).toBeTruthy();
-    expect(screen.getByLabelText(/Taxa por litro/)).toBeTruthy();
-    expect(screen.queryByText("Preço calculado pelo PEPS do tanque")).toBeNull();
+    expect(screen.getByLabelText(/Preço que Transterra cobra/)).toBeTruthy();
+    expect(screen.getByLabelText(/Taxa Transterra/)).toBeTruthy();
+    // Tanque externo: o combustível pode trocar (campo editável, não o texto do tanque).
+    expect(screen.queryByText(/Tanque sem entradas/)).toBeNull();
   });
 
   it("requisição: preço por litro e o pago", () => {
@@ -187,8 +194,9 @@ describe("AbastecimentoFormDrawer", () => {
         opcoes={{ ...SEM_OPCOES, tanques }}
       />,
     );
-    expect(screen.getByLabelText(/Preço por litro/)).toBeTruthy();
-    expect(screen.getByText("Requisição a pagar")).toBeTruthy();
+    expect(screen.getByLabelText(/Preço unitário/)).toBeTruthy();
+    expect(screen.getByText("Pago")).toBeTruthy();
+    expect(screen.getByLabelText(/Pago em/)).toBeTruthy();
     expect(screen.queryByLabelText(/^Tanque/)).toBeNull();
   });
 });

@@ -2,9 +2,22 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
-import { percentualDoTanque, resumirMes, type ResumoMes } from "@/modules/combustivel/painel/calculo";
-import { diasDoMes, fimExclusivoDoDia, inicioDoDia } from "@/modules/combustivel/relatorios/periodo";
-import { paraNumeroDoBanco, rotuloEquipamento } from "@/modules/manutencao/servicos/formato";
+import { saidasDoRecorte, type Modo } from "@/modules/combustivel/anomalias/base";
+import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
+import {
+  calcularKpis,
+  custoPorObra,
+  ID_NAO_IDENTIFICADO,
+  ID_SEM_OBRA,
+  mixCombustivel,
+  percentualDoTanque,
+  periodoAnterior,
+  topConsumidores,
+  type KpisPainel,
+  type LinhaPainel,
+} from "@/modules/combustivel/painel/calculo";
+import type { Periodo } from "@/modules/combustivel/relatorios/periodo";
+import { paraNumeroDoBanco } from "@/modules/manutencao/servicos/formato";
 
 export interface TanquePainel {
   id: string;
@@ -15,43 +28,31 @@ export interface TanquePainel {
   percentual: number | null;
 }
 
-export interface LinhaNomeada {
-  id: string;
+export interface LinhaNomeada extends LinhaPainel {
   nome: string;
-  litros: number;
-  valor: number;
-  abastecimentos: number;
+  /** Código do equipamento ou transportadora da carreta. */
+  detalhe: string;
 }
 
 export interface PainelCombustivel {
-  resumo: ResumoMes;
+  kpis: KpisPainel;
+  /** Nome e detalhe do maior consumidor (equipamento ou placa). */
+  maior: { nome: string; detalhe: string } | null;
   porCombustivel: LinhaNomeada[];
-  maioresConsumidores: LinhaNomeada[];
+  topConsumidores: LinhaNomeada[];
+  porObra: LinhaNomeada[];
   tanques: TanquePainel[];
 }
 
 /**
- * Números do mês (yyyy-MM, dias de Rio Branco), todos no servidor.
- *
- * Saídas paginadas por `todasAsLinhas` (o PostgREST corta em 1.000 sem avisar),
- * só com as colunas que a conta usa. Tanque externo fica fora da lista de
- * níveis: é de terceiro e não tem estoque no ERP.
+ * A Visão Geral da origem sobre o recorte (modo + período), no servidor. As saídas vêm da
+ * base compartilhada (a mesma leitura das anomalias na requisição). Tanque externo fica
+ * fora da lista de níveis: é de terceiro e não tem estoque no ERP.
  */
-export async function carregarPainel(mes: string): Promise<PainelCombustivel> {
+export async function carregarPainel(periodo: Periodo, modo: Modo): Promise<PainelCombustivel> {
   const supabase = await createClient();
-  const { de, ate } = diasDoMes(mes);
-
-  const [saidas, tanques] = await Promise.all([
-    todasAsLinhas((inicio, fim) =>
-      supabase
-        .from("combustivel_saidas")
-        .select("id, tipo_consumidor, equipamento_id, insumo_id, litros, valor_total")
-        .is("excluido_em", null)
-        .gte("data", inicioDoDia(de))
-        .lt("data", fimExclusivoDoDia(ate))
-        .order("id")
-        .range(inicio, fim),
-    ),
+  const [base, tanques] = await Promise.all([
+    carregarBaseCombustivel(),
     todasAsLinhas((inicio, fim) =>
       supabase
         .from("tanques")
@@ -63,45 +64,41 @@ export async function carregarPainel(mes: string): Promise<PainelCombustivel> {
         .range(inicio, fim),
     ),
   ]);
-  if (saidas.erro || tanques.erro) throw new Error("Não foi possível carregar a visão geral do combustível");
+  if (tanques.erro) throw new Error("Não foi possível carregar os tanques");
 
-  const resumo = resumirMes(
-    saidas.linhas.map((s) => ({
-      tipoConsumidor: s.tipo_consumidor,
-      equipamentoId: s.equipamento_id,
-      insumoId: s.insumo_id,
-      litros: paraNumeroDoBanco(s.litros),
-      valorTotal: paraNumeroDoBanco(s.valor_total),
-    })),
-  );
+  const anterior = periodoAnterior(periodo.de, periodo.ate);
+  const noPeriodo = saidasDoRecorte(base.saidas, modo, periodo.de, periodo.ate);
+  const kpis = calcularKpis(noPeriodo, saidasDoRecorte(base.saidas, modo, anterior.de, anterior.ate), modo);
 
-  const insumoIds = [
-    ...new Set([
-      ...resumo.porCombustivel.map((c) => c.id),
-      ...tanques.linhas.map((t) => t.combustivel_atual_id).filter((id): id is string => id !== null),
-    ]),
-  ];
-  const equipamentoIds = resumo.maioresConsumidores.map((e) => e.id);
+  const equipamentoPorId = new Map(base.equipamentos.map((e) => [e.id, e]));
+  const transportadoraDaPlaca = (placa: string): string => {
+    const ref = noPeriodo.find((s) => (s.placa || "").trim() === placa);
+    return ref?.transportadoraId ? (base.transportadoraNome.get(ref.transportadoraId) ?? "") : "";
+  };
+  const nomeDoConsumidor = (id: string): { nome: string; detalhe: string } => {
+    if (modo === "carretas") return { nome: id, detalhe: transportadoraDaPlaca(id) };
+    if (id === ID_NAO_IDENTIFICADO) return { nome: "Não identificado", detalhe: "Saídas em Outros" };
+    const e = equipamentoPorId.get(id);
+    return e
+      ? { nome: e.descricao, detalhe: e.codigo?.trim() || e.tipo?.trim() || "" }
+      : { nome: "Equipamento não encontrado", detalhe: "" };
+  };
 
-  const [insumos, equipamentos] = await Promise.all([
-    insumoIds.length > 0
-      ? supabase.from("insumos").select("id, nome").in("id", insumoIds)
-      : Promise.resolve({ data: [], error: null }),
-    equipamentoIds.length > 0
-      ? supabase.from("equipamentos").select("id, codigo, descricao, placa").in("id", equipamentoIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  if (insumos.error || equipamentos.error) throw new Error("Não foi possível carregar os nomes da visão geral");
-
-  const nomeInsumo = new Map((insumos.data ?? []).map((i) => [i.id, i.nome]));
-  const nomeEquipamento = new Map((equipamentos.data ?? []).map((e) => [e.id, rotuloEquipamento(e)]));
+  const maior = kpis.maiorChave ? nomeDoConsumidor(kpis.maiorChave) : null;
 
   return {
-    resumo,
-    porCombustivel: resumo.porCombustivel.map((c) => ({ ...c, nome: nomeInsumo.get(c.id) ?? "Combustível não encontrado" })),
-    maioresConsumidores: resumo.maioresConsumidores.map((e) => ({
-      ...e,
-      nome: nomeEquipamento.get(e.id) ?? "Equipamento não encontrado",
+    kpis,
+    maior,
+    porCombustivel: mixCombustivel(noPeriodo).map((l) => ({
+      ...l,
+      nome: base.combustivelNome.get(l.id) ?? "Outros",
+      detalhe: "",
+    })),
+    topConsumidores: topConsumidores(noPeriodo, modo).map((l) => ({ ...l, ...nomeDoConsumidor(l.id) })),
+    porObra: custoPorObra(noPeriodo).map((l) => ({
+      ...l,
+      nome: l.id === ID_SEM_OBRA ? "Sem obra" : (base.obraNome.get(l.id) ?? "Obra não encontrada"),
+      detalhe: "",
     })),
     tanques: tanques.linhas.map((t) => {
       const nivel = paraNumeroDoBanco(t.nivel_atual_litros);
@@ -109,7 +106,7 @@ export async function carregarPainel(mes: string): Promise<PainelCombustivel> {
       return {
         id: t.id,
         nome: t.apelido?.trim() || t.nome,
-        combustivel: t.combustivel_atual_id ? (nomeInsumo.get(t.combustivel_atual_id) ?? null) : null,
+        combustivel: t.combustivel_atual_id ? (base.combustivelNome.get(t.combustivel_atual_id) ?? null) : null,
         nivel,
         capacidade,
         percentual: percentualDoTanque(nivel, capacidade),

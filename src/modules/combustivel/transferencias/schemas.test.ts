@@ -4,9 +4,11 @@ import {
   litrosNumero,
   litrosParaTexto,
   paraLitros,
+  paraValor,
   transferenciaDoForm,
   transferenciaFormSchema,
   transferenciaSchema,
+  valorParaTexto,
   type TransferenciaFormInput,
 } from "@/modules/combustivel/transferencias/schemas";
 
@@ -18,6 +20,7 @@ function form(troca: Partial<TransferenciaFormInput> = {}): TransferenciaFormInp
     origemId: ORIGEM,
     destinoId: DESTINO,
     litros: "1.500,1234",
+    valorTotal: "9.592,3456",
     dataHora: "2026-09-23T14:30",
     observacoes: "",
     ...troca,
@@ -59,6 +62,7 @@ describe("transferência", () => {
       origemId: ORIGEM,
       destinoId: ORIGEM,
       litros: 10,
+      valorTotal: 63.947,
       dataHora: "2026-09-23T14:30:00-05:00",
       observacoes: "",
     });
@@ -76,14 +80,40 @@ describe("transferência", () => {
       origemId: ORIGEM,
       destinoId: DESTINO,
       litros: 1500.1234,
+      valorTotal: 9592.3456,
       dataHora: "2026-09-23T14:30:00-05:00",
       observacoes: "",
     });
     expect(transferenciaSchema.safeParse(dados).success).toBe(true);
   });
 
+  it("edição sem mexer no valor manda null (o banco mantém o salvo)", () => {
+    const dados = transferenciaDoForm(form(), false);
+    expect(dados.valorTotal).toBeNull();
+    expect(transferenciaSchema.safeParse(dados).success).toBe(true);
+  });
+
   it("o servidor recusa data que não é ISO", () => {
     const dados = { ...transferenciaDoForm(form()), dataHora: "23/09/2026 14:30" };
     expect(transferenciaSchema.safeParse(dados).success).toBe(false);
+  });
+});
+
+describe("valor total", () => {
+  it("aceita zero (como a origem) e 4 casas; recusa negativo, 5 casas e vazio", () => {
+    expect(transferenciaFormSchema.safeParse(form({ valorTotal: "0" })).success).toBe(true);
+    expect(transferenciaFormSchema.safeParse(form({ valorTotal: "639,4700" })).success).toBe(true);
+    for (const valorTotal of ["-1", "639,47001", "", "abc"]) {
+      expect(transferenciaFormSchema.safeParse(form({ valorTotal })).success).toBe(false);
+    }
+    expect(transferenciaSchema.safeParse({ ...transferenciaDoForm(form()), valorTotal: 1.12345 }).success).toBe(false);
+    expect(transferenciaSchema.safeParse({ ...transferenciaDoForm(form()), valorTotal: -0.01 }).success).toBe(false);
+  });
+
+  it("vai e volta entre o campo e o número sem perder casa", () => {
+    expect(paraValor("9.592,3456")).toBe(9592.3456);
+    expect(valorParaTexto(9592.3456)).toBe("9592,3456");
+    expect(valorParaTexto(500)).toBe("500");
+    expect(valorParaTexto(null)).toBe("");
   });
 });

@@ -3,56 +3,49 @@
 import * as React from "react";
 import { FileSpreadsheet, LoaderCircle } from "lucide-react";
 
-import { BarraFiltrosConfiguravel, FiltroPeriodo, SecaoDetalhe, useFiltrosUrl } from "@/components/canonicos";
+import { Combobox, FiltroMes, FiltroPeriodo, SecaoDetalhe } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { baixarBase64 } from "@/lib/download";
 import { gerarPlanilhaCombustivel } from "@/modules/combustivel/relatorios/actions";
 import type { TipoRelatorio } from "@/modules/combustivel/relatorios/consolidar";
 
-const RELATORIOS: { tipo: TipoRelatorio; titulo: string; descricao: string }[] = [
-  {
-    tipo: "mensal",
-    titulo: "Consumo mensal consolidado",
-    descricao: "Litros e valor por mês, combustível e tipo de consumidor. Filtre no Excel para ver um corte só.",
-  },
-  {
-    tipo: "obra",
-    titulo: "Consumo por obra",
-    descricao:
-      "Litros e custo por centro de custo, pela alocação de cada abastecimento. O custo é só de equipamento próprio.",
-  },
-  {
-    tipo: "equipamento",
-    titulo: "Consumo por equipamento",
-    descricao: "Litros, valor, média por litro e a leitura de horímetro ou km. Carretas saem numa aba própria, por placa.",
-  },
-  {
-    tipo: "bruto",
-    titulo: "Abastecimentos do período",
-    descricao: "Um abastecimento por linha, com todas as colunas, para conferir ou cruzar com outra planilha.",
-  },
-];
+export interface Opcao {
+  valor: string;
+  rotulo: string;
+}
 
 export interface RelatoriosCombustivelProps {
-  /** Período (yyyy-MM-dd) já resolvido pela página, com o padrão aplicado. */
-  de: string;
-  ate: string;
+  /** Mês anterior (yyyy-MM): o padrão da origem nos relatórios por mês. */
+  mesPadrao: string;
+  /** Últimos 90 dias: o padrão da origem no Por Equipamento. */
+  periodoEquipamento: { de: string; ate: string };
+  /** Últimos 30 dias, para o atalho do Por Equipamento. */
+  periodo30: { de: string; ate: string };
+  obras: Opcao[];
+  equipamentos: Opcao[];
 }
 
 /**
- * Os quatro relatórios do Combustível em Excel, todos sobre o mesmo período.
- * O período vive na URL; o arquivo sai com o período que está na tela.
+ * A aba Relatórios da origem: quatro templates, cada um com os parâmetros do seu modal
+ * (mês; obra e mês; equipamento e intervalo; mês). Na origem saíam em PDF e Excel; aqui
+ * em Excel, com as mesmas abas e números.
  */
-export function RelatoriosCombustivel({ de, ate }: RelatoriosCombustivelProps) {
-  const { setMuitos } = useFiltrosUrl();
+export function RelatoriosCombustivel({ mesPadrao, periodoEquipamento, periodo30, obras, equipamentos }: RelatoriosCombustivelProps) {
   const [gerando, setGerando] = React.useState<TipoRelatorio | null>(null);
+  const [mesMensal, setMesMensal] = React.useState(mesPadrao);
+  const [mesObra, setMesObra] = React.useState(mesPadrao);
+  const [obraId, setObraId] = React.useState("");
+  const [equipamentoId, setEquipamentoId] = React.useState("");
+  const [intervalo, setIntervalo] = React.useState(periodoEquipamento);
+  const [mesBruto, setMesBruto] = React.useState(mesPadrao);
 
-  async function aoExportar(tipo: TipoRelatorio) {
+  async function exportar(tipo: TipoRelatorio, pedido: Record<string, string>) {
     if (gerando) return;
     setGerando(tipo);
     try {
-      const resultado = await gerarPlanilhaCombustivel({ tipo, de, ate });
+      const resultado = await gerarPlanilhaCombustivel({ tipo, ...pedido });
       if ("erro" in resultado) {
         toast.error(resultado.erro);
         return;
@@ -65,61 +58,110 @@ export function RelatoriosCombustivel({ de, ate }: RelatoriosCombustivelProps) {
     }
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      <BarraFiltrosConfiguravel
-        idTabela="combustivel.relatorios.filtros"
-        onLimparFiltros={() => setMuitos({ de: null, ate: null })}
-        filtros={[
-          {
-            id: "periodo",
-            rotulo: "Período",
-            fixo: true,
-            temValor: true,
-            onLimpar: () => setMuitos({ de: null, ate: null }),
-            elemento: (
-              <FiltroPeriodo
-                de={de}
-                ate={ate}
-                rotulo="Data do abastecimento"
-                onPeriodoChange={(novoDe, novoAte) =>
-                  setMuitos({ de: novoDe === "" ? null : novoDe, ate: novoAte === "" ? null : novoAte })
-                }
-              />
-            ),
-          },
-        ]}
-      />
+  const botao = (tipo: TipoRelatorio, desabilitado: boolean, aoClicar: () => void) => (
+    <Button type="button" variant="outline" size="sm" disabled={gerando !== null || desabilitado} onClick={aoClicar}>
+      {gerando === tipo ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <FileSpreadsheet />}
+      Exportar Excel
+    </Button>
+  );
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {RELATORIOS.map((relatorio) => (
-          <SecaoDetalhe
-            key={relatorio.tipo}
-            card
-            titulo={relatorio.titulo}
-            acao={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={gerando !== null}
-                onClick={() => {
-                  void aoExportar(relatorio.tipo);
-                }}
-              >
-                {gerando === relatorio.tipo ? (
-                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
-                ) : (
-                  <FileSpreadsheet />
-                )}
-                Exportar Excel
-              </Button>
-            }
-          >
-            <p className="text-detalhe text-muted-foreground">{relatorio.descricao}</p>
-          </SecaoDetalhe>
-        ))}
-      </div>
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <SecaoDetalhe
+        card
+        titulo="Mensal consolidado"
+        acao={botao("mensal", !mesMensal, () => void exportar("mensal", { mes: mesMensal }))}
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-detalhe text-muted-foreground">
+            Visão executiva do mês: indicadores gerais, top 10 equipamentos próprios, top 10 carretas, top 10 obras por
+            custo, fornecedores e anomalias. Padrão: mês anterior.
+          </p>
+          <FiltroMes valor={mesMensal} onValorChange={setMesMensal} rotulo="Mês de referência" />
+        </div>
+      </SecaoDetalhe>
+
+      <SecaoDetalhe
+        card
+        titulo="Por obra"
+        acao={botao("obra", !obraId || !mesObra, () => void exportar("obra", { obraId, mes: mesObra }))}
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-detalhe text-muted-foreground">
+            As saídas de uma obra no mês (equipamentos e carretas): indicadores, saídas, top equipamentos, fornecedores
+            e anomalias. Padrão: mês anterior.
+          </p>
+          <div className="grid gap-2">
+            <Label htmlFor="relatorio-obra">Obra</Label>
+            <Combobox
+              id="relatorio-obra"
+              valor={obraId}
+              onValorChange={setObraId}
+              opcoes={obras}
+              placeholder="Selecionar obra"
+              buscaPlaceholder="Buscar obra"
+              vazioTexto="Nenhuma obra com saída"
+            />
+          </div>
+          <FiltroMes valor={mesObra} onValorChange={setMesObra} rotulo="Mês de referência" />
+        </div>
+      </SecaoDetalhe>
+
+      <SecaoDetalhe
+        card
+        titulo="Por equipamento"
+        acao={botao("equipamento", !equipamentoId, () =>
+          void exportar("equipamento", { equipamentoId, de: intervalo.de, ate: intervalo.ate }),
+        )}
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-detalhe text-muted-foreground">
+            O histórico de um equipamento próprio no intervalo: indicadores, saídas, obras frequentes, fornecedores e
+            anomalias. Padrão: últimos 90 dias.
+          </p>
+          <div className="grid gap-2">
+            <Label htmlFor="relatorio-equipamento">Equipamento</Label>
+            <Combobox
+              id="relatorio-equipamento"
+              valor={equipamentoId}
+              onValorChange={setEquipamentoId}
+              opcoes={equipamentos}
+              placeholder="Selecionar equipamento"
+              buscaPlaceholder="Buscar por código ou nome"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <FiltroPeriodo
+              de={intervalo.de}
+              ate={intervalo.ate}
+              rotulo="Data da saída"
+              onPeriodoChange={(de, ate) => {
+                if (de && ate) setIntervalo({ de, ate });
+              }}
+            />
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIntervalo(periodo30)}>
+              Últimos 30 dias
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setIntervalo(periodoEquipamento)}>
+              Últimos 90 dias
+            </Button>
+          </div>
+        </div>
+      </SecaoDetalhe>
+
+      <SecaoDetalhe
+        card
+        titulo="Raw export"
+        acao={botao("bruto", !mesBruto, () => void exportar("bruto", { mes: mesBruto }))}
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-detalhe text-muted-foreground">
+            Todas as saídas, entradas, transferências e cadastros do mês, com os nomes no lugar dos códigos e sem
+            agregação. Cinco abas.
+          </p>
+          <FiltroMes valor={mesBruto} onValorChange={setMesBruto} rotulo="Mês de referência" />
+        </div>
+      </SecaoDetalhe>
     </div>
   );
 }

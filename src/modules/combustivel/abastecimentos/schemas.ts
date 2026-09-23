@@ -9,7 +9,6 @@ import {
   type TipoConsumidor,
 } from "@/modules/combustivel/_shared/rotulos";
 import {
-  arredondar,
   dataHoraFormSchema,
   dataHoraIsoSchema,
   numeroSchema,
@@ -19,19 +18,20 @@ import {
 import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
 /**
- * Abastecimento (saída de combustível): formulário, o que a action recebe, as
- * regras de consumidor × origem e o `p_dados` da `fn_comb_salvar_saida`.
+ * Abastecimento (saída de combustível): formulário, o que a action recebe, as regras e o
+ * `p_dados` da `fn_comb_salvar_saida`.
  *
- * As regras espelham a RPC e os gatilhos (20260924100000_fase3_combustivel_banco.sql),
- * para a tela recusar antes de ir ao banco. Quem decide continua sendo o banco:
+ * Tiago, 24/09/2026: "tudo do combustivel tem que ser exatamente igual no app gestao
+ * obras". As regras são as do SaidaCombustivelForm da origem (schema + submit):
  *
- * - equipamento próprio nunca usa tanque externo;
- * - carreta em tanque externo tem dois preços (o cobrado da transportadora e o que
- *   o dono do tanque cobra da EMT) e a taxa por litro;
- * - carreta em tanque da EMT: preço opcional (vazio = o PEPS das camadas que ela
- *   consumiu, calculado pela RPC);
- * - dinheiro e requisição (posto): preço por litro digitado; requisição tem pago;
- * - equipamento próprio no tanque: preço é do PEPS, a tela não pede.
+ * - equipamento próprio exige o equipamento; carreta exige a transportadora;
+ * - origem tanque exige o tanque;
+ * - dinheiro e requisição: preço por litro digitado (> 0);
+ * - carreta no tanque: preço do combustível obrigatório (> 0); unitário = preço + taxa;
+ * - equipamento próprio no tanque: unitário = preço médio do tanque (o FIFO em TS);
+ * - taxa só conta na carreta; o combustível é sempre obrigatório;
+ * - a obra é sempre obrigatória. Na origem é obra + etapa; a etapa da origem não tem
+ *   equivalente no ERP (virou `etapa_legado`), então é a obra a 100%.
  *
  * Preço e taxa são TAXA (4 casas, `CASAS_TAXA`); litros também.
  */
@@ -66,20 +66,13 @@ export const saidaSchema = z.strictObject({
   medicao: numeroSchema(CASAS_TAXA, "Medição", "naoNegativo").nullable(),
   tipoMedicao: z.enum(TIPOS_MEDICAO).nullable(),
   dataHora: dataHoraIsoSchema,
-  /** Obra (centro raiz) da alocação a 100%. Nulo: sem alocação. */
+  /** Obra (centro raiz) da alocação a 100%. */
   obraId: z.guid({ error: "Obra inválida" }).nullable(),
   /** Edição de saída com várias alocações (migração): mantém as que existem. */
   manterAlocacoes: z.boolean(),
   observacoes: z.string().trim().max(2000, { error: "Máximo de 2000 caracteres" }).nullable(),
 });
 export type SaidaInput = z.infer<typeof saidaSchema>;
-
-/** O que as regras precisam saber do banco (a action lê de lá; a tela, das opções). */
-export interface ContextoSaida {
-  tanqueExterno: boolean;
-  /** O equipamento tem etapa no centro de custo (próprio, Colorado). Alugado não tem. */
-  equipamentoTemEtapa: boolean;
-}
 
 export interface ProblemaSaida {
   campo: keyof SaidaFormInput;
@@ -91,42 +84,25 @@ export function ehPosto(origem: OrigemSaida): boolean {
 }
 
 /**
- * Precisa informar o combustível: posto e tanque externo (não têm estoque). No
- * tanque da EMT o gatilho grava o combustível do tanque na data.
+ * Regras do schema da origem (`saidaCombustivel.schema.ts`). Lista vazia: pode ir ao
+ * banco. As travas que dependem de consulta (saldo na data, combustível do tanque) são da
+ * tela e da action.
  */
-export function pedeCombustivel(origem: OrigemSaida, tanqueExterno: boolean): boolean {
-  return origem !== "tanque" || tanqueExterno;
-}
-
-/** Regras de consumidor × origem. Lista vazia: pode ir ao banco. */
-export function regrasSaida(d: SaidaInput, ctx: ContextoSaida): ProblemaSaida[] {
+export function regrasSaida(d: SaidaInput): ProblemaSaida[] {
   const problemas: ProblemaSaida[] = [];
   const noTanque = d.origem === "tanque";
-  const externo = noTanque && ctx.tanqueExterno;
   const carreta = d.tipoConsumidor === "carreta_transportadora";
 
+  if (!carreta && !d.equipamentoId) problemas.push({ campo: "equipamentoId", mensagem: "Selecione o equipamento" });
+  if (!d.obraId && !d.manterAlocacoes) problemas.push({ campo: "obraId", mensagem: "Selecione a obra" });
+  if (carreta && !d.transportadoraId) problemas.push({ campo: "transportadoraId", mensagem: "Selecione a transportadora" });
   if (noTanque && !d.tanqueId) problemas.push({ campo: "tanqueId", mensagem: "Selecione o tanque" });
-
-  if (carreta) {
-    if (!d.transportadoraId) problemas.push({ campo: "transportadoraId", mensagem: "Selecione a transportadora" });
-    if (externo && d.precoCombustivel === null) {
-      problemas.push({ campo: "precoCombustivel", mensagem: "Informe o preço cobrado da transportadora" });
-    }
-  } else {
-    if (!d.equipamentoId) problemas.push({ campo: "equipamentoId", mensagem: "Selecione o equipamento" });
-    if (externo) {
-      problemas.push({ campo: "tanqueId", mensagem: "Tanque externo é só para carreta de transportadora" });
-    }
-    if (!ctx.equipamentoTemEtapa && !d.obraId && !d.manterAlocacoes) {
-      problemas.push({ campo: "obraId", mensagem: "Equipamento sem etapa própria: informe a obra onde ele trabalhou" });
-    }
+  if (!d.insumoId) problemas.push({ campo: "insumoId", mensagem: "Selecione o combustível" });
+  if (!noTanque && !((d.precoUnitario ?? 0) > 0)) {
+    problemas.push({ campo: "precoUnitario", mensagem: "Informe o preço por litro, maior que zero" });
   }
-
-  if (ehPosto(d.origem) && d.precoUnitario === null) {
-    problemas.push({ campo: "precoUnitario", mensagem: "Informe o preço por litro" });
-  }
-  if (pedeCombustivel(d.origem, ctx.tanqueExterno) && !d.insumoId) {
-    problemas.push({ campo: "insumoId", mensagem: "Selecione o combustível" });
+  if (carreta && noTanque && !((d.precoCombustivel ?? 0) > 0)) {
+    problemas.push({ campo: "precoCombustivel", mensagem: "Informe o preço cobrado da transportadora, maior que zero" });
   }
   if (d.medicao !== null && !carreta && d.tipoMedicao === null) {
     problemas.push({ campo: "medicao", mensagem: "Este equipamento não tem horímetro nem hodômetro" });
@@ -164,6 +140,8 @@ export interface DadosSaidaRpc {
   preco_proprietario: number | null;
   taxa_litro: number;
   preco_unitario: number | null;
+  /** Snapshot do preço médio do tanque (o FIFO em TS da origem). Só na origem tanque. */
+  preco_medio_tanque: number | null;
   pago: boolean;
   pago_em: string | null;
   medicao: number | null;
@@ -194,19 +172,61 @@ function alocacoesDa(d: SaidaInput, originais: readonly AlocacaoOriginal[]): Alo
   ];
 }
 
+export interface ContextoDadosSaida {
+  tanqueExterno: boolean;
+  /**
+   * Preço médio do tanque (o `precoMedioTanque` da origem): o FIFO em TS, ou o snapshot
+   * salvo na edição que não trocou tanque nem origem. Só vale na origem tanque.
+   */
+  precoMedioTanque: number;
+  alocacoesOriginais?: readonly AlocacaoOriginal[];
+}
+
 /**
- * O `p_dados` da RPC. Manda `null` explícito no que não se aplica: a edição grava
- * cada coluna com o que chega, então um preço de carreta esquecido no formulário
- * de quem trocou para equipamento ficaria gravado.
+ * Taxa efetiva: só a carreta paga taxa (`taxaEfetiva` da origem). Na origem ela vai no
+ * payload da carreta em qualquer origem, mas só soma no preço da carreta no tanque.
  */
-export function montarDadosSaida(
-  d: SaidaInput,
-  ctx: { tanqueExterno: boolean; alocacoesOriginais?: readonly AlocacaoOriginal[] },
-): DadosSaidaRpc {
+export function taxaEfetiva(d: Pick<SaidaInput, "tipoConsumidor" | "taxaLitro">): number {
+  return d.tipoConsumidor === "carreta_transportadora" ? (d.taxaLitro ?? 0) : 0;
+}
+
+/**
+ * Preço unitário do submit da origem:
+ *   carreta + tanque  -> preço do combustível + taxa
+ *   próprio + tanque  -> preço médio do tanque + taxa (zero)
+ *   dinheiro/requisição -> o digitado
+ */
+export function precoUnitarioSaida(d: SaidaInput, precoMedioTanque: number): number {
+  const taxa = taxaEfetiva(d);
+  if (d.tipoConsumidor === "carreta_transportadora" && d.origem === "tanque") return (d.precoCombustivel ?? 0) + taxa;
+  if (d.origem === "tanque") return precoMedioTanque + taxa;
+  return d.precoUnitario ?? 0;
+}
+
+/** Valor da saída como a origem: litros × preço unitário, sem arredondar. */
+export function valorSaida(d: SaidaInput, precoMedioTanque: number): number {
+  return d.litros * precoUnitarioSaida(d, precoMedioTanque);
+}
+
+/**
+ * O `p_dados` da RPC, com os campos do payload da origem. Manda `null` explícito no que
+ * não se aplica: a edição grava cada coluna com o que chega.
+ */
+export function montarDadosSaida(d: SaidaInput, ctx: ContextoDadosSaida): DadosSaidaRpc {
   const noTanque = d.origem === "tanque";
   const externo = noTanque && ctx.tanqueExterno;
   const carreta = d.tipoConsumidor === "carreta_transportadora";
   const requisicao = d.origem === "requisicao";
+
+  // `precoCombustivel` da origem: carreta = o digitado; próprio no tanque = o preço médio;
+  // posto = o digitado. Carreta no posto não tem o campo na tela: vai nulo.
+  const precoCombustivel = carreta
+    ? noTanque
+      ? d.precoCombustivel
+      : null
+    : noTanque
+      ? ctx.precoMedioTanque
+      : d.precoUnitario;
 
   return {
     origem: d.origem,
@@ -218,13 +238,15 @@ export function montarDadosSaida(
     motorista: carreta ? d.motorista : null,
     insumo_id: d.insumoId,
     litros: d.litros,
-    preco_combustivel: carreta && noTanque ? d.precoCombustivel : null,
-    // Vazio = o mesmo preço cobrado da transportadora (o dono repassa sem margem).
-    preco_proprietario: carreta && externo ? (d.precoProprietario ?? d.precoCombustivel) : null,
-    taxa_litro: carreta && noTanque ? (d.taxaLitro ?? 0) : 0,
-    preco_unitario: ehPosto(d.origem) ? d.precoUnitario : null,
+    preco_combustivel: precoCombustivel,
+    // Tanque de dono externo: o que o dono cobra. Vazio = o preço cobrado da transportadora
+    // (a origem preenche o campo com ele enquanto está vazio).
+    preco_proprietario: externo ? (d.precoProprietario ?? d.precoCombustivel) : null,
+    taxa_litro: taxaEfetiva(d),
+    preco_unitario: ehPosto(d.origem) ? d.precoUnitario : precoUnitarioSaida(d, ctx.precoMedioTanque),
+    preco_medio_tanque: noTanque ? ctx.precoMedioTanque : null,
     pago: requisicao ? d.pago : false,
-    pago_em: requisicao && d.pago ? d.pagoEm : null,
+    pago_em: requisicao && d.pagoEm ? d.pagoEm : null,
     medicao: carreta ? null : d.medicao,
     tipo_medicao: carreta || d.medicao === null ? null : d.tipoMedicao,
     data: d.dataHora,
@@ -234,19 +256,64 @@ export function montarDadosSaida(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Regras de tela da origem que pedem consulta (a tela e a action usam)
+// ---------------------------------------------------------------------------
+
 /**
- * Prévia do valor, igual à RPC: posto = litros × preço; carreta com preço =
- * litros × (preço + taxa). Nulo quando é o PEPS que decide (equipamento no
- * tanque, carreta em tanque da EMT sem preço). Só mostra, nada daqui é gravado.
+ * Regra do snapshot da origem (HF.11): na edição que NÃO trocou tanque nem origem, e com
+ * snapshot salvo > 0, o preço médio é o salvo; senão, o FIFO corrente.
  */
-export function previaValorSaida(dados: DadosSaidaRpc): number | null {
-  if (ehPosto(dados.origem)) {
-    return dados.preco_unitario === null ? null : arredondar(dados.litros * dados.preco_unitario, CASAS_TAXA);
+export function usaSnapshotSalvo(
+  salvo: { tanqueId: string | null; origem: string; precoMedioTanque: number | null } | null,
+  atual: { tanqueId: string | null; origem: OrigemSaida },
+): boolean {
+  if (!salvo) return false;
+  return salvo.tanqueId === atual.tanqueId && salvo.origem === atual.origem && (salvo.precoMedioTanque ?? 0) > 0;
+}
+
+/**
+ * Combustível da saída diferente do que está no tanque da EMT (`tipoIncompativel` da
+ * origem). Tanque externo, sem tanque ou tanque sem entrada não bloqueiam.
+ */
+export function tipoIncompativel(params: {
+  origem: OrigemSaida;
+  tanqueEhExterno: boolean;
+  temTanque: boolean;
+  tipoDoTanque: string;
+  tipoDaSaida: string | null;
+}): boolean {
+  return (
+    params.origem === "tanque" &&
+    params.temTanque &&
+    !params.tanqueEhExterno &&
+    !!params.tipoDoTanque &&
+    !!params.tipoDaSaida &&
+    params.tipoDaSaida !== params.tipoDoTanque
+  );
+}
+
+/** Saldo insuficiente na data (`saldoInsuficiente` da origem): só tanque da EMT. */
+export function saldoInsuficiente(params: {
+  origem: OrigemSaida;
+  temTanque: boolean;
+  tanqueEhExterno: boolean;
+  litros: number;
+  saldoNaData: number;
+}): boolean {
+  return params.origem === "tanque" && params.temTanque && !params.tanqueEhExterno && params.litros > params.saldoNaData;
+}
+
+/** Os avisos de conferência da origem (F5.B.2): volume e valor altos. */
+export function avisosDeConferencia(litros: number, valor: number): string[] {
+  const avisos: string[] = [];
+  if (litros >= 1000) avisos.push(`${litros.toLocaleString("pt-BR")} L é um volume alto: confirme antes de salvar`);
+  if (valor >= 10000) {
+    avisos.push(
+      `${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} é um valor alto: confirme antes de salvar`,
+    );
   }
-  if (dados.tipo_consumidor === "carreta_transportadora" && dados.preco_combustivel !== null) {
-    return arredondar(dados.litros * (dados.preco_combustivel + dados.taxa_litro), CASAS_TAXA);
-  }
-  return null;
+  return avisos;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,7 +358,6 @@ const CAMPOS_FORM = z.object({
   observacoes: z.string().trim().max(2000, { error: "Máximo de 2000 caracteres" }),
   /** Contexto, preenchido pela tela a partir das opções. O servidor relê do banco. */
   tanqueExterno: z.boolean(),
-  equipamentoTemEtapa: z.boolean(),
 });
 export type SaidaFormInput = z.infer<typeof CAMPOS_FORM>;
 
@@ -335,10 +401,7 @@ export function saidaDoForm(form: SaidaFormInput): SaidaInput {
 }
 
 export const saidaFormSchema = CAMPOS_FORM.superRefine((form, ctx) => {
-  const problemas = regrasSaida(saidaDoForm(form), {
-    tanqueExterno: form.tanqueExterno,
-    equipamentoTemEtapa: form.equipamentoTemEtapa,
-  });
+  const problemas = regrasSaida(saidaDoForm(form));
   for (const problema of problemas) {
     ctx.addIssue({ code: "custom", path: [problema.campo], message: problema.mensagem });
   }

@@ -13,13 +13,14 @@ import {
   InputPreco,
   InputQuantidade,
   LinhaCampos,
+  MoneyText,
   submeterComAviso,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CASAS_TAXA, CASAS_VALOR_OPERACIONAL } from "@/lib/casas-decimais";
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import {
   agoraDataHoraLocal,
   formatarLitros,
@@ -28,16 +29,27 @@ import {
 import { salvarEntrada } from "@/modules/combustivel/entradas/actions";
 import type { EntradaLinha, InsumoCombustivel, Opcao, TanqueOpcao } from "@/modules/combustivel/entradas/queries";
 import {
+  conflitoCombustivel,
   entradaDoForm,
   entradaFormSchema,
+  espacoDisponivel,
+  excedeCapacidade,
   litrosDaEntrada,
-  precoPorLitro,
+  precoUnitarioDaEntrada,
+  valorTotalEntrada,
   type EntradaFormInput,
+  type PrecoDaEdicao,
 } from "@/modules/combustivel/entradas/schemas";
-import { formatarValorOperacional } from "@/modules/manutencao/servicos/formato";
 import { numeroParaCampo, textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
 const ID_FORM = "form-entrada-combustivel";
+
+/** Preço exato da edição (valor ÷ quantidade, como a origem) e o texto dele no campo. */
+function precoDaEdicao(entrada: EntradaLinha | null): PrecoDaEdicao | null {
+  if (!entrada) return null;
+  const valor = precoUnitarioDaEntrada(entrada.valorTotal, entrada.quantidade);
+  return { valor, texto: numeroParaCampo(valor) };
+}
 
 function valoresIniciais(entrada: EntradaLinha | null, tanques: TanqueOpcao[]): EntradaFormInput {
   if (entrada) {
@@ -45,7 +57,7 @@ function valoresIniciais(entrada: EntradaLinha | null, tanques: TanqueOpcao[]): 
       tanqueId: entrada.tanqueId,
       insumoId: entrada.insumoId,
       quantidade: numeroParaCampo(entrada.quantidade),
-      valorTotal: numeroParaCampo(entrada.valorTotal),
+      valorUnitario: precoDaEdicao(entrada)?.texto ?? "",
       fornecedorId: entrada.fornecedorId ?? "",
       notaFiscal: entrada.notaFiscal ?? "",
       dataHora: isoParaDataHoraLocal(entrada.dataHora),
@@ -57,7 +69,7 @@ function valoresIniciais(entrada: EntradaLinha | null, tanques: TanqueOpcao[]): 
     tanqueId: tanques.length === 1 ? tanques[0].id : "",
     insumoId: "",
     quantidade: "",
-    valorTotal: "",
+    valorUnitario: "",
     fornecedorId: "",
     notaFiscal: "",
     dataHora: agoraDataHoraLocal(),
@@ -77,11 +89,19 @@ export interface EntradaFormDrawerProps {
 }
 
 /**
- * Lançar ou editar uma entrada de combustível pela `fn_comb_salvar_entrada`.
+ * Lançar ou editar uma entrada de combustível pela `fn_comb_salvar_entrada`, com as regras
+ * da tela da origem (EntradaForm do Gestão Obras):
  *
- * A quantidade é na unidade do insumo; os litros e o preço por litro são só
- * prévia (quem grava é o banco). As travas (capacidade, mistura, data no futuro,
- * ciclo fechado) são do banco e voltam no toast com o texto delas.
+ * - a pessoa digita a quantidade e o valor unitário; o total é quantidade × valor unitário;
+ *   na edição o valor unitário vem preenchido com valor ÷ quantidade;
+ * - fornecedor obrigatório;
+ * - espaço livre = capacidade - nível atual (+ a própria entrada, na edição do mesmo
+ *   tanque); passar dele trava o botão;
+ * - tanque com outro combustível (e com nível) trava o botão: esvazie antes;
+ * - trocar o tanque numa entrada nova limpa o combustível escolhido.
+ *
+ * O galão de Arla (decisão do plano do ERP) continua: a quantidade é na unidade do
+ * insumo e a dica mostra os litros. O banco confere tudo de novo.
  */
 export function EntradaFormDrawer({
   aberto,
@@ -103,12 +123,22 @@ export function EntradaFormDrawer({
     form.reset(valoresIniciais(entrada, tanques));
   }, [aberto, entrada, tanques, form]);
 
-  const [tanqueId, insumoId, fornecedorId, quantidadeTexto, valorTexto] = useWatch({
+  const [tanqueId, insumoId, fornecedorId, quantidadeTexto, valorUnitarioTexto] = useWatch({
     control: form.control,
-    name: ["tanqueId", "insumoId", "fornecedorId", "quantidade", "valorTotal"],
+    name: ["tanqueId", "insumoId", "fornecedorId", "quantidade", "valorUnitario"],
   });
 
-  const opcoesTanques = React.useMemo(() => tanques.map((t) => ({ valor: t.id, rotulo: t.rotulo })), [tanques]);
+  const opcoesTanques = React.useMemo(
+    () =>
+      tanques.map((t) => ({
+        valor: t.id,
+        rotulo:
+          t.capacidadeLitros > 0
+            ? `${t.rotulo} (${formatarLitros(t.nivelAtualLitros)} de ${formatarLitros(t.capacidadeLitros)})`
+            : t.rotulo,
+      })),
+    [tanques],
+  );
   const opcoesInsumos = React.useMemo(
     () =>
       insumos
@@ -124,31 +154,54 @@ export function EntradaFormDrawer({
   const tanque = tanques.find((t) => t.id === tanqueId) ?? null;
   const insumo = insumos.find((i) => i.id === insumoId) ?? null;
   const quantidade = textoParaNumero(quantidadeTexto ?? "", CASAS_TAXA);
-  const valor = textoParaNumero(valorTexto ?? "", CASAS_VALOR_OPERACIONAL);
+  const valorUnitario = textoParaNumero(valorUnitarioTexto ?? "", CASAS_TAXA);
   const litros = quantidade !== null ? litrosDaEntrada(quantidade, insumo?.litrosPorUnidade ?? null) : null;
-  const precoLitro = litros !== null && valor !== null ? precoPorLitro(valor, litros) : null;
+  const edicaoNoTanque = entrada ? { tanqueId: entrada.tanqueId, litros: entrada.litros } : null;
 
-  const outroCombustivel =
-    tanque !== null &&
-    insumo !== null &&
-    tanque.combustivelAtualId !== null &&
-    tanque.nivelAtualLitros > 0 &&
-    tanque.combustivelAtualId !== insumo.id &&
-    !(editando && entrada?.tanqueId === tanque.id);
+  // O total: quantidade × valor unitário. Na edição sem mexer no preço, o exato.
+  const precoEdicao = precoDaEdicao(entrada);
+  const valorUnitarioEfetivo =
+    precoEdicao && (valorUnitarioTexto ?? "").trim() === precoEdicao.texto ? precoEdicao.valor : valorUnitario;
+  const valorTotal = valorTotalEntrada(quantidade, valorUnitarioEfetivo);
 
-  const ajudaTanque = tanque
-    ? outroCombustivel
-      ? "O tanque tem outro combustível: esvazie antes de receber este"
-      : tanque.capacidadeLitros > 0
-        ? `Nível atual ${formatarLitros(tanque.nivelAtualLitros)} de ${formatarLitros(tanque.capacidadeLitros)}`
-        : `Nível atual ${formatarLitros(tanque.nivelAtualLitros)}`
-    : undefined;
+  const espaco = tanque ? espacoDisponivel(tanque, edicaoNoTanque) : null;
+  const excede = tanque !== null && litros !== null && excedeCapacidade(tanque, litros, edicaoNoTanque);
+  const conflito = conflitoCombustivel(tanque, insumoId ?? "");
+  const nomeConflito = conflito ? (insumos.find((i) => i.id === conflito)?.nome ?? "outro combustível") : null;
+
+  function aoEscolherTanque(id: string) {
+    form.setValue("tanqueId", id, { shouldDirty: true, shouldValidate: true });
+    // Como a origem: trocar o tanque numa entrada nova limpa o combustível.
+    if (!editando) form.setValue("insumoId", "", { shouldDirty: true, shouldValidate: false });
+  }
+
+  const erros = form.formState.errors;
+
+  const ajudaTanque =
+    tanque && espaco !== null && tanque.capacidadeLitros > 0 ? `Espaço livre: ${formatarLitros(espaco)}` : undefined;
+  const erroConflito =
+    conflito && tanque
+      ? `Este tanque já contém ${nomeConflito} (${formatarLitros(tanque.nivelAtualLitros)}). Esvazie o tanque antes ou selecione o mesmo combustível`
+      : undefined;
 
   const ajudaQuantidade =
     insumo && (insumo.litrosPorUnidade ?? 1) > 1 && litros !== null ? `= ${formatarLitros(litros)}` : undefined;
+  const erroQuantidade =
+    excede && espaco !== null ? `Excede a capacidade do tanque (${formatarLitros(espaco)} livres)` : erros.quantidade?.message;
+
+  const rotuloPreco =
+    insumo?.unidade && (insumo.litrosPorUnidade ?? 1) > 1
+      ? `Valor unitário (R$/${insumo.unidade})`
+      : "Valor unitário (R$/L)";
+
+  const bloqueado = excede || conflito !== null;
 
   async function aoEnviar(dados: EntradaFormInput) {
-    const resultado = await salvarEntrada(entrada?.id ?? null, entradaDoForm(dados));
+    if (bloqueado) {
+      toast.error(erroConflito ?? erroQuantidade ?? "Confira o tanque e a quantidade");
+      return;
+    }
+    const resultado = await salvarEntrada(entrada?.id ?? null, entradaDoForm(dados, precoEdicao));
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
@@ -156,8 +209,6 @@ export function EntradaFormDrawer({
     toast.success(editando ? "Entrada salva" : "Entrada lançada");
     onAbertoChange(false);
   }
-
-  const erros = form.formState.errors;
 
   return (
     <FormDrawer
@@ -171,7 +222,7 @@ export function EntradaFormDrawer({
           <Button type="button" variant="outline" onClick={() => onAbertoChange(false)} disabled={salvando}>
             Cancelar
           </Button>
-          <Button type="submit" form={ID_FORM} disabled={salvando}>
+          <Button type="submit" form={ID_FORM} disabled={salvando || bloqueado}>
             {salvando ? (
               <>
                 <LoaderCircle className="animate-spin" />
@@ -188,12 +239,18 @@ export function EntradaFormDrawer({
     >
       <form id={ID_FORM} onSubmit={submeterComAviso(form, aoEnviar)} className={classesFormulario} noValidate>
         <LinhaCampos>
-          <CampoFormulario id="entrada-tanque" rotulo="Tanque" obrigatorio ajuda={ajudaTanque} erro={erros.tanqueId?.message}>
+          <CampoFormulario
+            id="entrada-tanque"
+            rotulo="Tanque"
+            obrigatorio
+            ajuda={erroConflito ? undefined : ajudaTanque}
+            erro={erros.tanqueId?.message ?? erroConflito}
+          >
             <Combobox
               id="entrada-tanque"
               valor={tanqueId ?? ""}
               rotuloDoValor={entrada?.tanqueNome}
-              onValorChange={(v) => form.setValue("tanqueId", v, { shouldDirty: true, shouldValidate: true })}
+              onValorChange={aoEscolherTanque}
               opcoes={opcoesTanques}
               placeholder="Selecione o tanque"
               vazioTexto="Nenhum tanque da EMT ativo"
@@ -217,10 +274,10 @@ export function EntradaFormDrawer({
         <LinhaCampos colunas={3}>
           <CampoFormulario
             id="entrada-quantidade"
-            rotulo={insumo?.unidade ? `Quantidade (${insumo.unidade})` : "Quantidade"}
+            rotulo={insumo?.unidade ? `Quantidade (${insumo.unidade})` : "Quantidade (litros)"}
             obrigatorio
-            ajuda={ajudaQuantidade}
-            erro={erros.quantidade?.message}
+            ajuda={erroQuantidade ? undefined : ajudaQuantidade}
+            erro={erroQuantidade}
           >
             <InputQuantidade
               id="entrada-quantidade"
@@ -230,25 +287,25 @@ export function EntradaFormDrawer({
               disabled={salvando}
             />
           </CampoFormulario>
-          <CampoFormulario id="entrada-valor" rotulo="Valor da nota (R$)" obrigatorio erro={erros.valorTotal?.message}>
+          <CampoFormulario id="entrada-valor-unitario" rotulo={rotuloPreco} obrigatorio erro={erros.valorUnitario?.message}>
             <InputPreco
-              id="entrada-valor"
-              valor={valorTexto ?? ""}
-              onValorChange={(v) => form.setValue("valorTotal", v, { shouldDirty: true })}
-              onBlur={() => void form.trigger("valorTotal")}
+              id="entrada-valor-unitario"
+              valor={valorUnitarioTexto ?? ""}
+              onValorChange={(v) => form.setValue("valorUnitario", v, { shouldDirty: true })}
+              onBlur={() => void form.trigger("valorUnitario")}
               disabled={salvando}
             />
           </CampoFormulario>
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">Preço por litro</span>
-            <span className="flex h-9 items-center justify-end tabular-nums text-detalhe">
-              {precoLitro !== null ? formatarValorOperacional(precoLitro) : "-"}
+            <span className="text-sm font-medium">Valor total</span>
+            <span className="flex h-9 items-center justify-end tabular-nums text-detalhe" data-testid="entrada-valor-total">
+              {valorTotal > 0 ? <MoneyText valor={valorTotal} /> : "-"}
             </span>
           </div>
         </LinhaCampos>
 
         <LinhaCampos>
-          <CampoFormulario id="entrada-fornecedor" rotulo="Fornecedor" erro={erros.fornecedorId?.message}>
+          <CampoFormulario id="entrada-fornecedor" rotulo="Fornecedor" obrigatorio erro={erros.fornecedorId?.message}>
             <Combobox
               id="entrada-fornecedor"
               valor={fornecedorId ?? ""}
@@ -256,7 +313,7 @@ export function EntradaFormDrawer({
               onValorChange={(v) => form.setValue("fornecedorId", v, { shouldDirty: true, shouldValidate: true })}
               opcoes={opcoesFornecedores}
               placeholder="Selecione o fornecedor"
-              limpavel
+              vazioTexto="Nenhum fornecedor cadastrado"
               disabled={salvando}
             />
           </CampoFormulario>

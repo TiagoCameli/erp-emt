@@ -2,6 +2,9 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { precoFifoDaSaida, relogioRioBranco } from "@/modules/combustivel/_shared/fifo-ts";
+import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
+import { lerMovimentosFifoDoTanque } from "@/modules/combustivel/abastecimentos/queries";
 import { STATUS_OS, type StatusOs } from "@/modules/manutencao/_shared/rotulos";
 import {
   buscarUltimaLeitura,
@@ -175,26 +178,61 @@ export interface TanqueCampo {
   id: string;
   rotulo: string;
   nivel: number;
+  externo: boolean;
+  combustivel: string | null;
+  combustivelId: string | null;
 }
 
 /**
- * Tanques da EMT com combustível, para abastecer equipamento pelo celular. Tanque externo
- * fica de fora (é só para carreta; a origem deixava o celular oferecer por engano). Quem não
- * vê o Combustível recebe a lista vazia pela RLS, e a tela nem mostra o botão.
+ * Tanques para abastecer equipamento pelo celular, igual à origem (MSaidaCombustivelPage):
+ * todos os ativos, inclusive o externo e o vazio, com o nível no rótulo. O saldo só trava no
+ * tanque da EMT, porque o externo não tem estoque nosso. Quem não vê o Combustível recebe a
+ * lista vazia pela RLS, e a tela nem mostra o botão.
  */
 export async function listarTanquesCampo(): Promise<TanqueCampo[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tanques")
-    .select("id, nome, apelido, nivel_atual_litros, insumos:combustivel_atual_id (nome)")
+    .select("id, nome, eh_externo, nivel_atual_litros, combustivel_atual_id, insumos:combustivel_atual_id (nome)")
     .eq("ativo", true)
-    .eq("eh_externo", false)
-    .gt("nivel_atual_litros", 0)
     .order("nome");
   if (error) throw new Error("Não foi possível carregar os tanques");
   return (data ?? []).map((t) => ({
     id: t.id,
-    rotulo: [t.apelido?.trim() || t.nome, t.insumos?.nome].filter(Boolean).join(" · "),
+    rotulo: `${t.nome} · ${formatarLitros(Number(t.nivel_atual_litros))}`,
     nivel: Number(t.nivel_atual_litros),
+    externo: t.eh_externo,
+    combustivel: t.insumos?.nome ?? null,
+    combustivelId: t.combustivel_atual_id,
   }));
+}
+
+/**
+ * Preço FIFO do abastecimento pelo celular, igual à origem (MSaidaCombustivelPage): o FIFO em
+ * TS do tanque, com o combustível atual do tanque e a hora do envio. Vai como snapshot
+ * (`preco_medio_tanque`); o banco regrava o preço do equipamento próprio pelas camadas.
+ * Devolve null quando não conseguiu ler.
+ */
+export async function precoFifoCampo(
+  tanqueId: string,
+  dataIso: string,
+  litros: number,
+): Promise<{ preco: number; insumoId: string | null } | null> {
+  const supabase = await createClient();
+  const { data: tanque, error } = await supabase
+    .from("tanques")
+    .select("combustivel_atual_id")
+    .eq("id", tanqueId)
+    .maybeSingle();
+  if (error || !tanque) return null;
+  const movimentos = await lerMovimentosFifoDoTanque(tanqueId);
+  if (!movimentos) return null;
+  const insumoId = tanque.combustivel_atual_id;
+  const { precoMedio } = precoFifoDaSaida(movimentos, {
+    tanqueId,
+    dataHora: relogioRioBranco(dataIso),
+    litros,
+    tipoCombustivel: insumoId ?? "",
+  });
+  return { preco: precoMedio, insumoId };
 }

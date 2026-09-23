@@ -4024,3 +4024,61 @@ RLS: sem permissão vê 0 e não grava; controle, o Admin vê 3. 0 lançamentos.
 A conta corrente recebe o combustível e o frete; a conferência 9.1 (saldo por transportadora igual
 na quarta casa) só fecha com os dois. A carga do Combustível é preparada e ensaiada com a do Frete,
 e as duas viram no mesmo dia (plano, seção 7).
+
+
+## 24/09/2026: Combustível igual ao Gestão Obras
+
+O Tiago: "tudo do combustivel tem que ser exatamente igual no app gestao obras, so mude o que for
+necessario, mas todos os calculos e regras devem continuar". A primeira versão da Fase 3 tinha
+regras a mais (travas que a origem não tem) e cálculos feitos de outro jeito. Esta volta tudo ao
+que a origem faz, pelo código das telas e pelo banco vivo dela.
+
+### Banco (`20260924120000_fase3_combustivel_igual_a_origem`, aplicada)
+
+- Valor da entrada e da transferência sem arredondar (a origem guarda até 12 casas; 5 entradas
+  passam de 4). Entrada: a pessoa digita o preço por litro, total = quantidade x preço.
+  Fornecedor obrigatório.
+- Transferência: valor = litros x preço médio da vida do tanque de origem, 4 casas, só na criação;
+  na edição fica o salvo. Trava de espaço no destino na data.
+- Esvaziamento: litros = nível atual, data = agora, motivo com 3 letras ou mais. Saíram as travas
+  que eu tinha posto (ciclo, saldo, externo).
+- Data no futuro: relógio de Rio Branco contra São Paulo + 24 h, como a origem (= agora + 26 h).
+- Movimento de valor zero volta a ser erro, como o CHECK da origem.
+- Abastecimento: carreta em tanque exige o preço do combustível; a obra é sempre obrigatória;
+  taxa só na carreta; próprio em tanque externo é aceito (na origem quem esconde é a tela).
+- Duas ações da origem que faltavam: atribuir equipamento em lote às saídas do "equipamento
+  desconhecido" (`fn_comb_atribuir_equipamento`) e restaurar excluído (`fn_comb_restaurar`).
+- Prova `fase3a_combustivel_banco.sql` refeita para as regras novas e rodada no banco aplicado.
+
+### Telas
+
+- **FIFO em TS da origem** (`_shared/fifo-ts.ts`) portado linha a linha, com os testes dela. É o
+  que a tela da origem usa para sugerir o preço da carreta e gravar o snapshot
+  `preco_medio_tanque`; o servidor recalcula na hora de salvar. O PEPS do banco continua sendo o
+  que regrava o preço do equipamento próprio (como a origem).
+- Entrada, abastecimento, transferência, esvaziamento, tanque e anomalias com as regras da tela
+  da origem (tanques oferecidos por tipo de consumidor, combustível da última entrada, Diesel S10
+  no externo, taxa pela transportadora, avisos de 1.000 L e R$ 10.000, leitura menor, estoque e
+  espaço na data, mistura). Anomalias D1 a D5 com a detecção da origem, sem ajuste.
+- "Mostrar excluídos" e "Restaurar" nas quatro listas (a Lixeira da origem), com
+  `administracao.lixeira/editar` e o `excluir` do módulo.
+- Celular: todos os tanques ativos (inclusive externo), obra obrigatória, motorista = quem lança,
+  observação vazia vira "Saída via mobile · nome", resumo com R$/L e total pelo FIFO, snapshot
+  gravado pelo servidor.
+
+### O que ficou diferente, por necessidade
+
+- **Senha de edição** da origem vira a permissão `editar` (o ERP não tem senha por ação).
+- **Etapa**: não existe no ERP; a obra (centro de custo) a 100% ocupa o lugar de "obra e etapa".
+- `timestamptz` lendo o relógio de Rio Branco; auditoria e lixeira em tudo; fornecedor como FK;
+  cadastros (combustível, fornecedor) só pelo Cadastros, sem o "+ Novo" dentro do formulário.
+- Lista de transportadoras: `eh_transportadora` (a origem somava quem aparece em frete; o frete
+  chega na Fase 4).
+- Arla em galão (decisão 6 do plano) e a revisão do "sem suprimento" continuam.
+- Capacidade 0 = sem limite, convenção do banco do ERP. Na origem só os 2 tanques externos têm
+  capacidade 0, e transferência só usa tanque interno: não muda nada hoje.
+
+### Conta do Bruno
+
+A conta já existia com o mesmo e-mail do Gestão Obras. Recebeu as 23 ações do Combustível e
+nenhuma outra (pedido do Tiago: "ele so deve ter permissoes para a area de combustivel").

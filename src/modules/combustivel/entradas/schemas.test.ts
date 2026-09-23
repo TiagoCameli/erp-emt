@@ -4,11 +4,16 @@ import { describe, expect, it } from "vitest";
 import { filtrarEntradas } from "@/modules/combustivel/entradas/filtros";
 import type { EntradaLinha } from "@/modules/combustivel/entradas/queries";
 import {
+  conflitoCombustivel,
   entradaDoForm,
   entradaFormSchema,
   entradaSchema,
+  espacoDisponivel,
+  excedeCapacidade,
   litrosDaEntrada,
   precoPorLitro,
+  precoUnitarioDaEntrada,
+  valorTotalEntrada,
   type EntradaFormInput,
 } from "@/modules/combustivel/entradas/schemas";
 
@@ -21,8 +26,8 @@ function form(troca: Partial<EntradaFormInput> = {}): EntradaFormInput {
     tanqueId: TANQUE,
     insumoId: DIESEL,
     quantidade: "1000",
-    valorTotal: "6394,7",
-    fornecedorId: "",
+    valorUnitario: "6,3947",
+    fornecedorId: FORNECEDOR,
     notaFiscal: " 12345 ",
     dataHora: "2026-09-20T14:30",
     observacoes: "",
@@ -30,37 +35,39 @@ function form(troca: Partial<EntradaFormInput> = {}): EntradaFormInput {
   };
 }
 
-describe("entradaFormSchema", () => {
-  it("aceita a entrada completa, com 4 casas na quantidade e no valor", () => {
-    expect(entradaFormSchema.safeParse(form({ quantidade: "1000,1234", valorTotal: "6394,7123" })).success).toBe(true);
+describe("entradaFormSchema (EntradaForm da origem)", () => {
+  it("aceita a entrada completa, com 4 casas na quantidade e no valor unitário", () => {
+    expect(entradaFormSchema.safeParse(form({ quantidade: "1000,1234", valorUnitario: "6,3947" })).success).toBe(true);
   });
 
-  it("recusa a quinta casa (quantidade e valor)", () => {
+  it("recusa a quinta casa (quantidade e valor unitário)", () => {
     expect(entradaFormSchema.safeParse(form({ quantidade: "1,12345" })).success).toBe(false);
-    expect(entradaFormSchema.safeParse(form({ valorTotal: "10,12345" })).success).toBe(false);
+    expect(entradaFormSchema.safeParse(form({ valorUnitario: "6,39471" })).success).toBe(false);
   });
 
-  it("quantidade zero não entra; valor zero entra (doação, sobra)", () => {
+  it("quantidade e valor unitário precisam ser > 0, como na origem", () => {
     expect(entradaFormSchema.safeParse(form({ quantidade: "0" })).success).toBe(false);
-    expect(entradaFormSchema.safeParse(form({ valorTotal: "0" })).success).toBe(true);
+    expect(entradaFormSchema.safeParse(form({ valorUnitario: "0" })).success).toBe(false);
   });
 
-  it("tanque, combustível e data são obrigatórios", () => {
-    const resultado = entradaFormSchema.safeParse(form({ tanqueId: "", insumoId: "", dataHora: "2026-02-31T10:00" }));
+  it("tanque, combustível, fornecedor e data são obrigatórios", () => {
+    const resultado = entradaFormSchema.safeParse(
+      form({ tanqueId: "", insumoId: "", fornecedorId: "", dataHora: "2026-02-31T10:00" }),
+    );
     expect(resultado.success).toBe(false);
     const campos = resultado.error?.issues.map((i) => i.path[0]);
-    expect(campos).toEqual(expect.arrayContaining(["tanqueId", "insumoId", "dataHora"]));
+    expect(campos).toEqual(expect.arrayContaining(["tanqueId", "insumoId", "fornecedorId", "dataHora"]));
   });
 });
 
 describe("entradaDoForm", () => {
   it("converte número pt-BR, data em Rio Branco e vazio em null", () => {
-    const d = entradaDoForm(form({ quantidade: "1.000,5", fornecedorId: FORNECEDOR }));
+    const d = entradaDoForm(form({ quantidade: "1.000,5" }));
     expect(d).toEqual({
       tanqueId: TANQUE,
       insumoId: DIESEL,
       quantidade: 1000.5,
-      valorTotal: 6394.7,
+      valorUnitario: 6.3947,
       fornecedorId: FORNECEDOR,
       notaFiscal: "12345",
       dataHora: "2026-09-20T14:30:00-05:00",
@@ -69,12 +76,68 @@ describe("entradaDoForm", () => {
     expect(entradaSchema.safeParse(d).success).toBe(true);
   });
 
+  it("na edição sem mexer no preço, vai o exato (valor ÷ quantidade); mexeu, vai o digitado", () => {
+    // 12.345,67 / 1.234,5 = 10,000542730... A tela mostra 10,0005.
+    const exato = precoUnitarioDaEntrada(12345.67, 1234.5);
+    const edicao = { valor: exato, texto: "10,0005" };
+    const semMexer = entradaDoForm(form({ quantidade: "1234,5", valorUnitario: "10,0005" }), edicao);
+    expect(semMexer.valorUnitario).toBe(exato);
+    expect(semMexer.quantidade * semMexer.valorUnitario).toBeCloseTo(12345.67, 8);
+    expect(entradaSchema.safeParse(semMexer).success).toBe(true);
+
+    const mexeu = entradaDoForm(form({ quantidade: "1234,5", valorUnitario: "10,01" }), edicao);
+    expect(mexeu.valorUnitario).toBe(10.01);
+  });
+
   it("o servidor recusa o que a tela deixaria passar errado", () => {
     const base = entradaDoForm(form());
     expect(entradaSchema.safeParse({ ...base, quantidade: 1.12345 }).success).toBe(false);
-    expect(entradaSchema.safeParse({ ...base, valorTotal: -1 }).success).toBe(false);
+    expect(entradaSchema.safeParse({ ...base, valorUnitario: 0 }).success).toBe(false);
+    expect(entradaSchema.safeParse({ ...base, valorUnitario: -1 }).success).toBe(false);
+    expect(entradaSchema.safeParse({ ...base, fornecedorId: null }).success).toBe(false);
     expect(entradaSchema.safeParse({ ...base, dataHora: "2026-09-20T14:30" }).success).toBe(false);
     expect(entradaSchema.safeParse({ ...base, extra: 1 }).success).toBe(false);
+  });
+});
+
+describe("total e unitário (origem: valorTotalCalc e o preenchimento da edição)", () => {
+  it("total = quantidade × valor unitário, sem arredondar", () => {
+    expect(valorTotalEntrada(1000, 6.3947)).toBeCloseTo(6394.7, 10);
+    expect(valorTotalEntrada(3, 1.23456789)).toBeCloseTo(3.70370367, 10);
+    expect(valorTotalEntrada(null, 6)).toBe(0);
+    expect(valorTotalEntrada(10, null)).toBe(0);
+  });
+
+  it("unitário da edição = valor ÷ quantidade; sem quantidade, zero", () => {
+    expect(precoUnitarioDaEntrada(6394.7, 1000)).toBeCloseTo(6.3947, 12);
+    expect(precoUnitarioDaEntrada(100, 0)).toBe(0);
+  });
+});
+
+describe("capacidade e mistura (origem: espacoDisponivel e conflitoCombustivel)", () => {
+  const tanque = { id: TANQUE, ehExterno: false, capacidadeLitros: 15000, nivelAtualLitros: 12000, combustivelAtualId: DIESEL };
+
+  it("espaço = capacidade - nível; na edição do mesmo tanque devolve os litros da própria entrada", () => {
+    expect(espacoDisponivel(tanque, null)).toBe(3000);
+    expect(espacoDisponivel(tanque, { tanqueId: TANQUE, litros: 1000 })).toBe(4000);
+    expect(espacoDisponivel(tanque, { tanqueId: "outro", litros: 1000 })).toBe(3000);
+  });
+
+  it("passar do espaço trava; capacidade zero (sem cadastro) não trava", () => {
+    expect(excedeCapacidade(tanque, 3000, null)).toBe(false);
+    expect(excedeCapacidade(tanque, 3000.5, null)).toBe(true);
+    expect(excedeCapacidade(tanque, 3500, { tanqueId: TANQUE, litros: 1000 })).toBe(false);
+    expect(excedeCapacidade({ ...tanque, capacidadeLitros: 0 }, 99999, null)).toBe(false);
+  });
+
+  it("outro combustível no tanque com nível bloqueia; vazio, externo ou o mesmo passa", () => {
+    const gasolina = "55555555-5555-4555-8555-555555555555";
+    expect(conflitoCombustivel(tanque, gasolina)).toBe(DIESEL);
+    expect(conflitoCombustivel(tanque, DIESEL)).toBeNull();
+    expect(conflitoCombustivel({ ...tanque, nivelAtualLitros: 0 }, gasolina)).toBeNull();
+    expect(conflitoCombustivel({ ...tanque, ehExterno: true }, gasolina)).toBeNull();
+    expect(conflitoCombustivel({ ...tanque, combustivelAtualId: null }, gasolina)).toBeNull();
+    expect(conflitoCombustivel(null, gasolina)).toBeNull();
   });
 });
 
@@ -111,6 +174,8 @@ describe("filtrarEntradas", () => {
       notaFiscal: "999",
       observacoes: null,
       origem: "manual",
+      excluidoEm: null,
+      motivoExclusao: null,
       ...troca,
     };
   }

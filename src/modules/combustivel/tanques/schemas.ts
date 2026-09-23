@@ -20,10 +20,11 @@ import {
 const MENSAGEM_CAPACIDADE = `Informe a capacidade em litros, zero ou mais, com até ${CASAS_TAXA} casas`;
 const MENSAGEM_DONO = "Selecione o dono do tanque de terceiro";
 
+// Como a origem (e o CHECK tanques_nome_nao_vazio): só não pode ser vazio.
 const nomeSchema = z
   .string()
   .trim()
-  .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" })
+  .min(1, { error: "Informe o nome do tanque" })
   .max(120, { error: "O nome pode ter no máximo 120 caracteres" });
 
 const apelidoSchema = z.string().trim().max(60, { error: "O apelido pode ter no máximo 60 caracteres" });

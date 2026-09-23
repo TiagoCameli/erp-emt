@@ -36,6 +36,20 @@ async function temAcao(acao: "criar" | "editar" | "excluir"): Promise<boolean> {
   }
 }
 
+/**
+ * Restaurar é a Lixeira da origem (`restaurar_lixeira_combustivel`). No ERP pede as duas
+ * permissões que a `fn_comb_restaurar` confere: editar a lixeira E excluir na aba.
+ */
+async function podeRestaurar(): Promise<boolean> {
+  try {
+    await exigirPermissao("administracao.lixeira", "editar");
+    await exigirPermissao(RECURSO, "excluir");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Depois do commit nada vira falha: revalidar que lança só vai para o log. */
 function revalidar(): void {
   for (const rota of ROTAS) {
@@ -67,8 +81,8 @@ export async function salvarEntrada(id: string | null, dados: EntradaInput): Pro
       p_tanque: d.tanqueId,
       p_insumo: d.insumoId,
       p_quantidade: d.quantidade,
-      p_valor_total: d.valorTotal,
-      p_fornecedor: d.fornecedorId as unknown as string,
+      p_valor_unitario: d.valorUnitario,
+      p_fornecedor: d.fornecedorId,
       p_nota_fiscal: d.notaFiscal as unknown as string,
       p_data_hora: d.dataHora,
       p_observacoes: d.observacoes as unknown as string,
@@ -107,6 +121,30 @@ export async function excluirEntrada(id: string, motivo: string): Promise<Result
         "combustivel.entradas.excluir",
         error,
         traduzirErroCombustivel(error, "Não foi possível excluir a entrada. Tente novamente"),
+      );
+    }
+
+    revalidar();
+    return { ok: true };
+  });
+}
+
+/**
+ * Tira a entrada da lixeira (`fn_comb_restaurar`). Os gatilhos refazem nível e PEPS do
+ * tanque; se a volta deixar o saldo negativo em algum momento, o banco recusa.
+ */
+export async function restaurarEntrada(id: string): Promise<ResultadoAcao> {
+  return semLancar("combustivel.entradas.restaurar", async () => {
+    if (!(await podeRestaurar())) return { erro: "Sem permissão para restaurar entrada" };
+    if (!idSchema.safeParse(id).success) return { erro: "Entrada inválida" };
+
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_comb_restaurar", { p_tabela: "combustivel_entradas", p_id: id });
+    if (error) {
+      return erroAcao(
+        "combustivel.entradas.restaurar",
+        error,
+        traduzirErroCombustivel(error, "Não foi possível restaurar a entrada. Tente novamente"),
       );
     }
 

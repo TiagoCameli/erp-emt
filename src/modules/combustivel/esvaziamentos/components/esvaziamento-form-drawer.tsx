@@ -3,41 +3,31 @@
 import * as React from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, TriangleAlert } from "lucide-react";
 
 import {
   CampoFormulario,
   classesFormulario,
   Combobox,
   FormDrawer,
-  InputQuantidade,
-  LinhaCampos,
   submeterComAviso,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  agoraDataHoraLocal,
-  dataHoraLocalParaIso,
-  formatarLitros,
-} from "@/modules/combustivel/_shared/rotulos";
-import {
-  consultarEstoqueEsvaziamento,
-  registrarEsvaziamento,
-} from "@/modules/combustivel/esvaziamentos/actions";
+import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
+import { registrarEsvaziamento } from "@/modules/combustivel/esvaziamentos/actions";
 import {
   esvaziamentoDoForm,
   esvaziamentoFormSchema,
+  litrosDescartados,
   type EsvaziamentoFormInput,
 } from "@/modules/combustivel/esvaziamentos/schemas";
-import { useEstoqueNaData, dicaDoEstoque } from "@/modules/combustivel/transferencias/components/use-estoque-na-data";
-import { litrosParaTexto } from "@/modules/combustivel/transferencias/schemas";
 
 const ID_FORM = "form-esvaziamento";
 
-/** Tanque da EMT oferecido no formulário (tanque de terceiro não se esvazia). */
+/** Tanque da EMT com combustível (tanque de terceiro e tanque vazio não se esvaziam). */
 export interface TanqueEsvaziavel {
   id: string;
   nome: string;
@@ -45,38 +35,42 @@ export interface TanqueEsvaziavel {
   combustivelNome: string | null;
 }
 
-function valoresIniciais(): EsvaziamentoFormInput {
-  return { tanqueId: "", litros: "", motivo: "", dataHora: agoraDataHoraLocal() };
-}
-
 export interface EsvaziamentoFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   tanques: TanqueEsvaziavel[];
+  /** Tanque já escolhido (o "Esvaziar" da lista de tanques). */
+  tanqueInicialId?: string;
 }
 
 /**
- * Registra um esvaziamento. Escolher o tanque preenche os litros com o nível
- * atual (esvaziar é, quase sempre, tirar tudo), e a pessoa pode mudar. Não há
- * edição: errou, exclui com motivo e registra de novo.
+ * Esvazia um tanque, como o EsvaziarTanqueModal do Gestão Obras: descarta o
+ * nível inteiro do tanque, agora, e libera o tanque para receber outro
+ * combustível. A pessoa escolhe o tanque e diz o motivo (pelo menos 3
+ * caracteres); os litros aparecem só para conferir. Não há edição: errou,
+ * exclui com motivo e registra de novo.
  */
-export function EsvaziamentoFormDrawer({ aberto, onAbertoChange, tanques }: EsvaziamentoFormDrawerProps) {
+export function EsvaziamentoFormDrawer({ aberto, onAbertoChange, tanques, tanqueInicialId }: EsvaziamentoFormDrawerProps) {
+  const iniciais = React.useCallback(
+    (): EsvaziamentoFormInput => ({ tanqueId: tanqueInicialId ?? "", motivo: "" }),
+    [tanqueInicialId],
+  );
+
   const form = useForm<EsvaziamentoFormInput>({
     resolver: zodResolver(esvaziamentoFormSchema),
-    defaultValues: valoresIniciais(),
+    defaultValues: iniciais(),
   });
 
   const salvando = form.formState.isSubmitting;
   const erros = form.formState.errors;
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais());
-  }, [aberto, form]);
+    if (aberto) form.reset(iniciais());
+  }, [aberto, form, iniciais]);
 
-  const [tanqueId, litros, dataHora] = useWatch({
-    control: form.control,
-    name: ["tanqueId", "litros", "dataHora"],
-  });
+  const tanqueId = useWatch({ control: form.control, name: "tanqueId" });
+  const tanque = tanques.find((t) => t.id === tanqueId) ?? null;
+  const litros = litrosDescartados(tanque);
 
   const opcoes = React.useMemo(
     () =>
@@ -87,33 +81,22 @@ export function EsvaziamentoFormDrawer({ aberto, onAbertoChange, tanques }: Esva
     [tanques],
   );
 
-  const dataIso = dataHoraLocalParaIso(dataHora ?? "");
-  const estoque = useEstoqueNaData(consultarEstoqueEsvaziamento, tanqueId, dataIso, aberto);
-
-  function aoEscolherTanque(valor: string) {
-    form.setValue("tanqueId", valor, { shouldDirty: true, shouldValidate: true });
-    const tanque = tanques.find((t) => t.id === valor);
-    form.setValue("litros", tanque && tanque.nivel > 0 ? litrosParaTexto(tanque.nivel) : "", { shouldDirty: true });
-  }
-
   async function aoEnviar(valores: EsvaziamentoFormInput) {
     const resultado = await registrarEsvaziamento(esvaziamentoDoForm(valores));
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Esvaziamento registrado");
+    toast.success("Tanque esvaziado");
     onAbertoChange(false);
   }
-
-  const dicaEstoque = dicaDoEstoque(estoque, "No tanque nessa data", "Preenchido com o nível atual do tanque");
 
   return (
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo="Esvaziar tanque"
-      descricao="Retira o combustível do tanque (descarte, contaminação, limpeza). Não consome o custo do PEPS"
+      descricao="Descarte explícito do combustível do tanque, para trocar de combustível"
       temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
@@ -124,10 +107,10 @@ export function EsvaziamentoFormDrawer({ aberto, onAbertoChange, tanques }: Esva
             {salvando ? (
               <>
                 <LoaderCircle className="animate-spin" />
-                Salvando...
+                Esvaziando...
               </>
             ) : (
-              "Registrar esvaziamento"
+              "Esvaziar tanque"
             )}
           </Button>
         </>
@@ -138,40 +121,55 @@ export function EsvaziamentoFormDrawer({ aberto, onAbertoChange, tanques }: Esva
           <Combobox
             id="esvaziamento-tanque"
             valor={tanqueId ?? ""}
-            onValorChange={aoEscolherTanque}
+            onValorChange={(valor) => form.setValue("tanqueId", valor, { shouldDirty: true, shouldValidate: true })}
             opcoes={opcoes}
-            placeholder="Selecione o tanque"
+            placeholder={tanques.length === 0 ? "Nenhum tanque com combustível" : "Selecione o tanque"}
             buscaPlaceholder="Buscar tanque"
             disabled={salvando}
           />
         </CampoFormulario>
 
-        <LinhaCampos colunas={2}>
-          <CampoFormulario id="esvaziamento-data" rotulo="Data e hora" obrigatorio erro={erros.dataHora?.message}>
-            <Input id="esvaziamento-data" type="datetime-local" disabled={salvando} {...form.register("dataHora")} />
-          </CampoFormulario>
-          <CampoFormulario
-            id="esvaziamento-litros"
-            rotulo="Litros"
-            obrigatorio
-            ajuda={dicaEstoque}
-            erro={erros.litros?.message}
+        {tanque ? (
+          <div
+            role="note"
+            className="flex items-start gap-2 rounded-md border border-status-pendente/30 bg-status-pendente/10 px-3 py-2 text-detalhe text-status-pendente"
           >
-            <InputQuantidade
-              id="esvaziamento-litros"
-              valor={litros ?? ""}
-              onValorChange={(valor) => form.setValue("litros", valor, { shouldDirty: true })}
-              onBlur={() => void form.trigger("litros")}
-              disabled={salvando}
-            />
-          </CampoFormulario>
-        </LinhaCampos>
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>
+              Registra o descarte de <strong>{formatarLitros(litros)}</strong>
+              {tanque.combustivelNome ? (
+                <>
+                  {" "}
+                  de <strong>{tanque.combustivelNome}</strong>
+                </>
+              ) : null}{" "}
+              do tanque <strong>{tanque.nome}</strong>, com a data de agora, e libera o tanque para receber outro
+              combustível.
+            </p>
+          </div>
+        ) : null}
+
+        <CampoFormulario
+          id="esvaziamento-litros"
+          rotulo="Litros descartados"
+          largura="medio"
+          ajuda="O nível atual do tanque inteiro"
+        >
+          <Input
+            id="esvaziamento-litros"
+            readOnly
+            tabIndex={-1}
+            value={tanque ? formatarLitros(litros) : ""}
+            placeholder="Escolha o tanque"
+            className="text-right tabular-nums"
+          />
+        </CampoFormulario>
 
         <CampoFormulario id="esvaziamento-motivo" rotulo="Motivo" obrigatorio erro={erros.motivo?.message}>
           <Textarea
             id="esvaziamento-motivo"
             rows={3}
-            placeholder="Diesel contaminado com água, descartado"
+            placeholder="Troca para Diesel S500 conforme demanda da obra Lote 09"
             disabled={salvando}
             {...form.register("motivo")}
           />

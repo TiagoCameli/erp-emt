@@ -3,25 +3,34 @@ import { notFound } from "next/navigation";
 import { GradeKpis, KPICard, PageHeader, SecaoDetalhe } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { modoDaUrl } from "@/modules/combustivel/anomalias/base";
 import { AnomaliasTabela } from "@/modules/combustivel/anomalias/components/anomalias-tabela";
 import { SemSuprimentoTabela } from "@/modules/combustivel/anomalias/components/sem-suprimento-tabela";
+import type { DetectorId, Severidade } from "@/modules/combustivel/anomalias/detect";
 import { carregarAnomalias, listarSemSuprimento } from "@/modules/combustivel/anomalias/queries";
 import { situacaoDaUrl } from "@/modules/combustivel/anomalias/schemas";
 import { periodoDaUrl, ultimosDias } from "@/modules/combustivel/relatorios/periodo";
 
 /**
- * A detecção lê o período e os 90 dias antes dele, página por página: num
- * período longo isso passa do teto padrão da Vercel (10 a 15s).
+ * A detecção lê todas as saídas (o D3 e o D5 olham o banco inteiro, como na origem),
+ * página por página: passa do teto padrão da Vercel (10 a 15s).
  */
 export const maxDuration = 60;
 
-/** Padrão da tela: os últimos 90 dias. */
-const DIAS_PADRAO = 90;
+/** Padrão da origem: os últimos 30 dias (preset "ultimos_30"). */
+const DIAS_PADRAO = 30;
+
+const SEVERIDADES: readonly Severidade[] = ["critical", "warning", "info"];
+const DETECTORES: readonly DetectorId[] = ["D1", "D2", "D3", "D4", "D5"];
+
+function primeiro(valor: string | string[] | undefined): string {
+  return (Array.isArray(valor) ? valor[0] : valor) ?? "";
+}
 
 /**
- * Anomalias do combustível: a detecção (D1 a D5) roda no servidor sobre as saídas
- * do período, e as saídas sem suprimento vêm do PEPS. Conferir e revisar pedem
- * combustivel.anomalias/editar (na origem qualquer usuário gravava).
+ * Anomalias do combustível: a aba Anomalias da origem (detecção D1 a D5 sobre as saídas
+ * do modo e do período) e as saídas sem suprimento do PEPS. Conferir, revisar e atribuir
+ * equipamento pedem combustivel.anomalias/editar (na origem, corrigir_anomalias_combustivel).
  */
 export default async function PaginaAnomalias({
   searchParams,
@@ -36,19 +45,25 @@ export default async function PaginaAnomalias({
 
   const params = await searchParams;
   const periodo = periodoDaUrl(params.de, params.ate, ultimosDias(dataHojeISO(), DIAS_PADRAO));
+  const modo = modoDaUrl(params.modo);
   const situacao = situacaoDaUrl(params.situacao);
   const revisao = situacaoDaUrl(params.revisao);
+  const severidadeUrl = primeiro(params.severidade);
+  const detectorUrl = primeiro(params.detector);
+  const severidade = (SEVERIDADES as readonly string[]).includes(severidadeUrl) ? (severidadeUrl as Severidade) : "";
+  const detector = (DETECTORES as readonly string[]).includes(detectorUrl) ? (detectorUrl as DetectorId) : "";
 
-  const [resultado, semSuprimento] = await Promise.all([carregarAnomalias(periodo), listarSemSuprimento()]);
+  const [resultado, semSuprimento] = await Promise.all([carregarAnomalias(periodo, modo), listarSemSuprimento()]);
   const semSuprimentoPendentes = semSuprimento.filter((linha) => linha.revisao === null).length;
-  const criticas = resultado.anomalias.filter((a) => a.severidade === "critica" && a.conferencia === null).length;
+  const criticas = resultado.anomalias.filter((a) => a.severity === "critical" && a.conferencia === null).length;
+  const semEquipamento = resultado.anomalias.filter((a) => a.detector === "D1" && a.conferencia === null).length;
 
   return (
     <>
       <PageHeader
         modulo="Combustível"
         titulo="Anomalias"
-        descricao="Abastecimentos fora do padrão no período e saídas que pediram mais do que o tanque tinha"
+        descricao="Saídas e estados fora do padrão no período, e saídas que pediram mais do que o tanque tinha"
       />
 
       <GradeKpis className="mb-4">
@@ -60,7 +75,12 @@ export default async function PaginaAnomalias({
         <KPICard
           titulo="Críticas pendentes"
           valor={<span className="tabular-nums">{criticas}</span>}
-          detalhe="Possíveis abastecimentos em duplicidade"
+          detalhe="Possíveis saídas duplicadas"
+        />
+        <KPICard
+          titulo="Sem equipamento identificado"
+          valor={<span className="tabular-nums">{semEquipamento}</span>}
+          detalhe="Saídas lançadas em Outros"
         />
         <KPICard
           titulo="Sem suprimento para revisar"
@@ -70,14 +90,18 @@ export default async function PaginaAnomalias({
       </GradeKpis>
 
       <div className="flex flex-col gap-6">
-        <SecaoDetalhe titulo="Abastecimentos fora do padrão">
+        <SecaoDetalhe titulo="Saídas fora do padrão">
           <AnomaliasTabela
             anomalias={resultado.anomalias}
             situacao={situacao}
+            modo={modo}
+            severidade={severidade}
+            detector={detector}
             de={periodo.de}
             ate={periodo.ate}
             podeEditar={podeEditar}
             veAbastecimentos={veAbastecimentos}
+            equipamentos={resultado.equipamentos}
           />
         </SecaoDetalhe>
 
