@@ -3,36 +3,46 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { opcoesDeEquipamento } from "@/modules/combustivel/anomalias/base";
+import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
 import { RelatoriosCombustivel } from "@/modules/combustivel/relatorios/components/relatorios-combustivel";
-import { periodoDaUrl } from "@/modules/combustivel/relatorios/periodo";
+import { mesAnterior, ultimosDias } from "@/modules/combustivel/relatorios/periodo";
 
 /**
- * A exportação roda nesta função: ler milhares de saídas página por página e
- * montar o arquivo na memória passa do teto padrão da Vercel (10 a 15s).
+ * A exportação roda nesta função: ler todas as saídas página por página (as anomalias
+ * de cada relatório olham o banco inteiro, como na origem) e montar o arquivo na
+ * memória passa do teto padrão da Vercel (10 a 15s).
  */
 export const maxDuration = 60;
 
-/** Relatórios do Combustível em Excel. Padrão: do dia 1 do mês até hoje. */
-export default async function PaginaRelatoriosCombustivel({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+/** Os quatro relatórios da origem, em Excel. */
+export default async function PaginaRelatoriosCombustivel() {
   const usuario = await getUsuarioLogado();
   if (!usuario || !temPermissao(usuario, "combustivel.relatorios", "ver")) notFound();
 
-  const params = await searchParams;
   const hoje = dataHojeISO();
-  const periodo = periodoDaUrl(params.de, params.ate, { de: `${hoje.slice(0, 7)}-01`, ate: hoje });
+  const base = await carregarBaseCombustivel();
+
+  // Obras que têm saída (a origem lista as não concluídas e as que têm saída).
+  const obrasComSaida = new Set(base.saidas.map((s) => s.obraId).filter((id): id is string => id !== null));
+  const obras = [...obrasComSaida]
+    .map((id) => ({ valor: id, rotulo: base.obraNome.get(id) ?? "Obra não encontrada" }))
+    .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
 
   return (
     <>
       <PageHeader
         modulo="Combustível"
         titulo="Relatórios"
-        descricao="Consumo e custo do combustível em Excel, pelo período escolhido"
+        descricao="Mensal consolidado, por obra, por equipamento e o export cru, em Excel"
       />
-      <RelatoriosCombustivel de={periodo.de} ate={periodo.ate} />
+      <RelatoriosCombustivel
+        mesPadrao={mesAnterior(hoje)}
+        periodoEquipamento={ultimosDias(hoje, 90)}
+        periodo30={ultimosDias(hoje, 30)}
+        obras={obras}
+        equipamentos={opcoesDeEquipamento(base.equipamentos)}
+      />
     </>
   );
 }

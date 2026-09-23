@@ -6,6 +6,7 @@ import {
   diasDoMes,
   fimExclusivoDoDia,
   inicioDoDia,
+  mesAnterior,
   mesEmRioBranco,
   mesValido,
   periodoDaUrl,
@@ -33,6 +34,9 @@ describe("período em dias de Rio Branco", () => {
     expect(somarDias("2026-03-01", -1)).toBe("2026-02-28");
     expect(ultimosDias("2026-09-23", 90)).toEqual({ de: "2026-06-26", ate: "2026-09-23" });
     expect(diasDoMes("2028-02")).toEqual({ de: "2028-02-01", ate: "2028-02-29" });
+    expect(mesAnterior("2026-09-23")).toBe("2026-08");
+    expect(mesAnterior("2026-01-31")).toBe("2025-12");
+    expect(mesAnterior("2026-03-31")).toBe("2026-02");
   });
 
   it("URL: ponta inválida cai no padrão e período invertido troca de lado", () => {

@@ -2,6 +2,10 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import {
+  relogioRioBranco,
+  type MovimentosFifoTanque,
+} from "@/modules/combustivel/_shared/fifo-ts";
 import type { Canal, OrigemSaida, TipoConsumidor, TipoMovimento } from "@/modules/combustivel/_shared/rotulos";
 import {
   aplicarFiltrosAbastecimentos,
@@ -55,6 +59,9 @@ export interface SaidaLista {
   precoUnitario: number;
   valorTotal: number;
   canal: Canal;
+  /** Instante da exclusão (lixeira). Nulo: lançado. */
+  excluidoEm: string | null;
+  motivoExclusao: string | null;
 }
 
 export interface ResultadoListaAbastecimentos {
@@ -67,13 +74,14 @@ export interface ResultadoListaAbastecimentos {
 }
 
 const SELECT_LISTA =
-  "id, data, origem, tipo_consumidor, placa, litros, preco_unitario, valor_total, canal, tanques(nome, apelido, eh_externo), equipamentos(codigo, descricao, placa), fornecedores(razao_social, nome_fantasia), insumos(nome)";
+  "id, data, origem, tipo_consumidor, placa, litros, preco_unitario, valor_total, canal, excluido_em, motivo_exclusao, tanques(nome, apelido, eh_externo), equipamentos(codigo, descricao, placa), fornecedores(razao_social, nome_fantasia), insumos(nome)";
 
 /**
  * Página dos abastecimentos (são ~3.100), com o total e as somas pelo MESMO
  * filtro. A soma vem de uma segunda consulta só com litros e valor, paginada por
  * `todasAsLinhas` (o PostgREST corta em 1.000 sem avisar). Desempate por id no
- * ORDER BY para a paginação não repetir nem perder linha.
+ * ORDER BY para a paginação não repetir nem perder linha. Com `excluidos`, as da
+ * lixeira (quem pode restaurar; a página decide).
  */
 export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Promise<ResultadoListaAbastecimentos> {
   const supabase = await createClient();
@@ -81,7 +89,10 @@ export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Prom
   const ate = de + filtros.tamanho - 1;
 
   const pagina = aplicarFiltrosAbastecimentos(
-    supabase.from("combustivel_saidas").select(SELECT_LISTA, { count: "exact" }).is("excluido_em", null),
+    supabase
+      .from("combustivel_saidas")
+      .select(SELECT_LISTA, { count: "exact" })
+      .filter("excluido_em", filtros.excluidos ? "not.is" : "is", null),
     filtros,
   )
     .order("data", { ascending: false })
@@ -93,7 +104,10 @@ export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Prom
     pagina,
     todasAsLinhas((inicio, fim) =>
       aplicarFiltrosAbastecimentos(
-        supabase.from("combustivel_saidas").select("litros, valor_total").is("excluido_em", null),
+        supabase
+          .from("combustivel_saidas")
+          .select("litros, valor_total")
+          .filter("excluido_em", filtros.excluidos ? "not.is" : "is", null),
         filtros,
       )
         .order("id")
@@ -118,6 +132,8 @@ export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Prom
     precoUnitario: paraNumeroDoBanco(linha.preco_unitario),
     valorTotal: paraNumeroDoBanco(linha.valor_total),
     canal: linha.canal as Canal,
+    excluidoEm: linha.excluido_em,
+    motivoExclusao: linha.motivo_exclusao,
   }));
 
   return {
@@ -418,6 +434,11 @@ export interface TransportadoraOpcao {
   id: string;
   nome: string;
   ativo: boolean;
+  /**
+   * `fornecedores.taxa_litro_padrao` da transportadora: a origem preenche a taxa por
+   * litro com ela quando a transportadora muda (só na saída nova).
+   */
+  taxaLitroPadrao: number | null;
 }
 
 /** Fornecedores marcados como transportadora, ativos e inativos. */
@@ -426,12 +447,148 @@ export async function listarTransportadoras(): Promise<TransportadoraOpcao[]> {
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("fornecedores")
-      .select("id, razao_social, nome_fantasia, ativo")
+      .select("id, razao_social, nome_fantasia, ativo, taxa_litro_padrao")
       .eq("eh_transportadora", true)
       .order("razao_social")
       .order("id")
       .range(de, ate),
   );
   if (erro) throw new Error("Não foi possível carregar as transportadoras");
-  return linhas.map((f) => ({ id: f.id, nome: nomeFornecedor(f), ativo: f.ativo }));
+  return linhas.map((f) => ({
+    id: f.id,
+    nome: nomeFornecedor(f),
+    ativo: f.ativo,
+    taxaLitroPadrao: paraNumeroOuNulo(f.taxa_litro_padrao),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// FIFO da tela (o PEPS em TS da origem)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tudo o que o FIFO da origem lê de UM tanque: entradas, transferências (as que entram
+ * e as que saem), saídas e esvaziamentos. Só os vivos (sem `excluido_em`), todos por
+ * `todasAsLinhas` (um tanque tem mais de mil saídas). As datas já saem no relógio de Rio
+ * Branco, o formato em que a origem compara. Null: não deu para ler.
+ */
+export async function lerMovimentosFifoDoTanque(tanqueId: string): Promise<MovimentosFifoTanque | null> {
+  const supabase = await createClient();
+  const [entradas, transferencias, saidas, esvaziamentos] = await Promise.all([
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("combustivel_entradas")
+        .select("id, tanque_id, data_hora, insumo_id, litros, valor_total")
+        .eq("tanque_id", tanqueId)
+        .is("excluido_em", null)
+        .order("data_hora", { ascending: false })
+        .order("id")
+        .range(de, ate),
+    ),
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("combustivel_transferencias")
+        .select("id, tanque_origem_id, tanque_destino_id, data_hora, insumo_id, litros, valor_total")
+        .or(`tanque_origem_id.eq.${tanqueId},tanque_destino_id.eq.${tanqueId}`)
+        .is("excluido_em", null)
+        .order("data_hora")
+        .order("id")
+        .range(de, ate),
+    ),
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("combustivel_saidas")
+        .select("id, tanque_id, data, litros, insumo_id")
+        .eq("tanque_id", tanqueId)
+        .is("excluido_em", null)
+        .order("data")
+        .order("id")
+        .range(de, ate),
+    ),
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("combustivel_esvaziamentos")
+        .select("id, tanque_id, data_hora, litros")
+        .eq("tanque_id", tanqueId)
+        .is("excluido_em", null)
+        .order("data_hora")
+        .order("id")
+        .range(de, ate),
+    ),
+  ]);
+  if (entradas.erro || transferencias.erro || saidas.erro || esvaziamentos.erro) return null;
+
+  return {
+    entradas: entradas.linhas.map((e) => ({
+      id: e.id,
+      depositoId: e.tanque_id,
+      dataHora: relogioRioBranco(e.data_hora),
+      tipoCombustivel: e.insumo_id,
+      quantidadeLitros: paraNumeroDoBanco(e.litros),
+      valorTotal: paraNumeroDoBanco(e.valor_total),
+    })),
+    transferencias: transferencias.linhas.map((t) => ({
+      id: t.id,
+      depositoOrigemId: t.tanque_origem_id,
+      depositoDestinoId: t.tanque_destino_id,
+      dataHora: relogioRioBranco(t.data_hora),
+      quantidadeLitros: paraNumeroDoBanco(t.litros),
+      valorTotal: paraNumeroDoBanco(t.valor_total),
+      tipoCombustivel: t.insumo_id,
+    })),
+    saidas: saidas.linhas.map((s) => ({
+      id: s.id,
+      tanqueId: s.tanque_id,
+      data: relogioRioBranco(s.data),
+      litros: paraNumeroDoBanco(s.litros),
+      tipoCombustivel: s.insumo_id,
+    })),
+    esvaziamentos: esvaziamentos.linhas.map((e) => ({
+      id: e.id,
+      depositoId: e.tanque_id,
+      dataHora: relogioRioBranco(e.data_hora),
+      litrosDescartados: paraNumeroDoBanco(e.litros),
+    })),
+  };
+}
+
+/**
+ * Combustível de cada tanque como a origem mostra no formulário: o da entrada viva mais
+ * nova do tanque (`tipoCombustivelDoTanque`). Tanque sem entrada não aparece.
+ */
+export async function listarCombustivelDaUltimaEntrada(): Promise<Record<string, string>> {
+  const supabase = await createClient();
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("combustivel_entradas")
+      .select("tanque_id, insumo_id")
+      .is("excluido_em", null)
+      .order("data_hora", { ascending: false })
+      .order("id")
+      .range(de, ate),
+  );
+  if (erro) throw new Error("Não foi possível carregar o combustível dos tanques");
+  const porTanque: Record<string, string> = {};
+  for (const linha of linhas) {
+    if (!(linha.tanque_id in porTanque)) porTanque[linha.tanque_id] = linha.insumo_id;
+  }
+  return porTanque;
+}
+
+/** O que a edição precisa da saída salva para a regra do snapshot da origem. */
+export interface SaidaSalvaSnapshot {
+  tanqueId: string | null;
+  origem: string;
+  precoMedioTanque: number | null;
+}
+
+export async function lerSnapshotDaSaida(id: string): Promise<SaidaSalvaSnapshot | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("combustivel_saidas")
+    .select("tanque_id, origem, preco_medio_tanque")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { tanqueId: data.tanque_id, origem: data.origem, precoMedioTanque: paraNumeroOuNulo(data.preco_medio_tanque) };
 }

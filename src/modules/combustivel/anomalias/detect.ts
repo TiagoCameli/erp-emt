@@ -1,400 +1,400 @@
-import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
-import { formatarValorOperacional } from "@/modules/manutencao/servicos/formato";
-
 /**
- * Detecção de anomalias do Combustível, portada da detecção que a origem (Gestão
- * Obras) rodava no navegador. Aqui roda no SERVIDOR, sobre as saídas do período.
- * Módulo puro: sem banco, sem relógio (a referência de tempo vem de quem chama).
+ * Detector de anomalias do Combustível, portado LINHA A LINHA de
+ * Gestao_Obras/src/components/combustivel/v2/anomalias/detect.ts (Tiago, 24/09/2026:
+ * "tudo do combustível tem que ser exatamente igual ao app Gestão Obras").
  *
- * Os ids são DETERMINÍSTICOS porque a conferência mora no banco pela chave
- * (`combustivel_anomalias_conferidas.chave`): a mesma anomalia tem que sair com
- * o mesmo id em toda recarga, senão a conferida "volta" como pendente.
+ * Função pura, sem banco. Mesmos limiares, mesma estatística, mesmas chaves, mesmos ids.
  *
- * ## As cinco regras
+ * 5 detectores:
+ *   D1 sentinela       equipamentoId = 'desconhecido'                           atenção
+ *   D2 R$/L outlier    saída fora de ±2σ por combustível no período              atenção
+ *   D3 volume atípico  saída fora de ±2σ da média dos últimos 90 dias do equip.  atenção
+ *   D4 duplicatas      mesmo consumidor + litros + valor + combustível em 5 min  crítica
+ *   D5 gap operacional equipamento ativo sem saída em 60 dias (janela fixa)      informação
  *
- * - D1 `D1-{saída}`: saída no equipamento-sentinela ("Outros", que na migração
- *   absorveu o "Equipamento Desconhecido"). Atenção.
- * - D2 `D2-{saída}`: preço por litro fora de média ± 2σ do mesmo combustível no
- *   período. Atenção.
- * - D3 `D3-{saída}`: litros fora de média ± 2σ do mesmo equipamento nos 90 dias
- *   anteriores à saída. Atenção.
- * - D4 `D4-{ids ordenados, unidos por '-'}`: duplicidade: mesmo consumidor, mesmos
- *   litros, mesmo valor e mesmo combustível em até 5 minutos. Crítica.
- * - D5 `D5-{equipamento}`: equipamento ativo com abastecimento anterior e nenhum
- *   nos últimos 60 dias. Informativa.
+ * Como a origem calcula (e aqui continua igual):
+ * - σ é o desvio POPULACIONAL (divide por n) e a própria saída avaliada ENTRA na
+ *   população com que é comparada. n = tamanho do grupo inteiro. n < 5 não acusa.
+ * - D2 compara R$/L = valorTotal / litros (não o preço unitário gravado), só litros > 0,
+ *   e pula grupo com σ < 0,0001. D3 pula σ < 0,001.
+ * - D3 usa o histórico dos 90 dias até HOJE (não os 90 antes da saída), de todas as
+ *   saídas de equipamento próprio fora do sentinela, com a saída avaliada dentro.
+ * - D4 agrupa por consumidor (equipamento, ou a placa em minúsculas), litros, valor e
+ *   combustível; o grupo ancora na primeira saída e para no primeiro fora da janela.
+ * - D5 olha a janela fixa de 60 dias até hoje em TODAS as saídas, independente do filtro,
+ *   e acusa também equipamento ativo que nunca teve saída.
+ * - `data` é o dia (AAAA-MM-DD) do relógio de parede da saída; "hoje" é a data UTC do
+ *   relógio (`toISOString`), como na origem.
  *
- * ## Decisões da estatística (D2 e D3)
+ * Adaptação necessária ao ERP: o sentinela da origem (a linha de equipamentos com id
+ * 'desconhecido', inativa) no ERP é o equipamento "Outros". Quem monta a entrada troca o
+ * id do "Outros" por EQUIPAMENTO_DESCONHECIDO e tira o "Outros" da lista de equipamentos
+ * (na origem ele é inativo, então o D5 também não o via). Ver `base.ts`.
  *
- * A saída avaliada fica FORA da população com que ela é comparada ("deixa um de
- * fora"), e `n` é o tamanho dessa população. Com a própria saída dentro e o
- * desvio populacional, um ponto isolado entre cinco nunca passa de 1,79σ
- * ((n-1)/√n): a regra "n ≥ 5" viraria uma regra que não dispara. σ é o desvio
- * POPULACIONAL (divide por n). Abaixo de 5 na população, não há alerta.
- *
- * D3 usa a janela móvel da própria saída (os 90 dias antes dela), e não o
- * período da tela: assim o veredito de uma saída não muda conforme o período
- * escolhido, e a conferência continua valendo.
+ * Diferença de texto (só exibição): litros aparecem com 2 casas (regra do app para
+ * litros; a origem mostrava inteiro) e o "—" da origem virou texto, pela regra de UI do ERP.
  */
 
-export type RegraAnomalia = "D1" | "D2" | "D3" | "D4" | "D5";
-export type SeveridadeAnomalia = "critica" | "atencao" | "info";
+export const EQUIPAMENTO_DESCONHECIDO = "desconhecido";
 
-export const ROTULO_REGRA: Record<RegraAnomalia, string> = {
-  D1: "Equipamento não identificado",
-  D2: "Preço fora da faixa",
-  D3: "Litros fora da faixa",
-  D4: "Possível duplicidade",
-  D5: "Equipamento sem abastecer",
-};
+export type Severidade = "info" | "warning" | "critical";
+export type DetectorId = "D1" | "D2" | "D3" | "D4" | "D5";
 
-export const ROTULO_SEVERIDADE: Record<SeveridadeAnomalia, string> = {
-  critica: "Crítica",
-  atencao: "Atenção",
-  info: "Informativa",
-};
-
-/** Peso para ordenar: crítica primeiro. */
-const PESO_SEVERIDADE: Record<SeveridadeAnomalia, number> = { critica: 0, atencao: 1, info: 2 };
-
-export const MINIMO_AMOSTRA = 5;
-export const JANELA_D3_DIAS = 90;
-export const JANELA_D4_MINUTOS = 5;
-export const JANELA_D5_DIAS = 60;
-
-const DIA_MS = 24 * 60 * 60 * 1000;
-const MINUTO_MS = 60 * 1000;
-/** Folga contra o ruído do ponto flutuante na comparação com 2σ. */
-const EPSILON = 1e-9;
-
-export interface SaidaParaDeteccao {
+export interface Anomalia {
+  /**
+   * Id determinístico: a mesma anomalia recalculada vira o mesmo id.
+   * D1/D2/D3 por saída, D4 pelo grupo, D5 por equipamento.
+   */
   id: string;
-  /** Instante ISO (timestamptz). */
+  severity: Severidade;
+  detector: DetectorId;
+  title: string;
+  description: string;
+  /** Saídas envolvidas. */
+  affectedSaidaIds: string[];
+  affectedEquipamentoId?: string;
+  affectedObraId?: string;
+  /** Dia AAAA-MM-DD da saída relacionada (ou hoje no D5 sem histórico). */
+  data: string;
+  acaoSugerida?: string;
+}
+
+/** O que o detector lê de uma saída (os mesmos campos da SaidaCombustivel da origem). */
+export interface SaidaDeteccao {
+  id: string;
+  /** Relógio de parede da saída, "AAAA-MM-DDTHH:MM:SS" (a coluna `data` da origem). */
   data: string;
   tipoConsumidor: string;
   equipamentoId: string | null;
   placa: string | null;
-  transportadoraId: string | null;
-  insumoId: string;
+  obraId: string | null;
+  tipoCombustivel: string;
   litros: number;
   valorTotal: number;
-  precoUnitario: number;
 }
 
-export interface EquipamentoParaDeteccao {
+export interface EquipamentoDeteccao {
   id: string;
-  codigo: string | null;
-  descricao: string;
+  nome: string;
   ativo: boolean;
-  /** Rótulo pronto para a descrição ("EQ-012 Escavadeira"). */
-  rotulo: string;
-  /**
-   * Último abastecimento ANTES da janela de saídas que foi entregue (a consulta
-   * não traz o histórico inteiro). Null quando não há nenhum.
-   */
-  ultimaSaidaAntesDaJanela?: string | null;
 }
 
-export interface EntradaDeteccao {
-  /**
-   * Saídas não excluídas do período E dos 90 dias antes dele (histórico do D3).
-   * As regras D1, D2 e D4 só acusam saída dentro do período.
-   */
-  saidas: readonly SaidaParaDeteccao[];
-  equipamentos: readonly EquipamentoParaDeteccao[];
-  /** Nome do combustível pelo id do insumo, para a descrição. */
-  combustiveis: ReadonlyMap<string, string>;
-  /** Início do período (ISO, inclusivo). */
-  inicio: string;
-  /** Fim do período (ISO, exclusivo). É a referência "agora" do D5. */
-  fim: string;
+export interface DetectInput {
+  /** Saídas no período do filtro (recorte da tela). D1, D2 e D4 trabalham aqui. */
+  saidasNoPeriodo: readonly SaidaDeteccao[];
+  /** TODAS as saídas (não excluídas). D3 precisa do histórico de 90 dias e o D5, de 60. */
+  saidasTodas: readonly SaidaDeteccao[];
+  equipamentos: readonly EquipamentoDeteccao[];
+  /** id do insumo -> nome do combustível, para as mensagens. */
+  combustivelNome: ReadonlyMap<string, string>;
+  /** id da obra -> nome, para as mensagens. */
+  obraNome: ReadonlyMap<string, string>;
+  /** O relógio. Padrão: agora. Parâmetro só para o teste fixar o dia. */
+  agora?: Date;
 }
 
-export interface Anomalia {
-  id: string;
-  regra: RegraAnomalia;
-  severidade: SeveridadeAnomalia;
-  descricao: string;
-  /** Saídas envolvidas (uma, várias no D4, nenhuma no D5). */
-  saidaIds: string[];
-  equipamentoId: string | null;
-  /** Instante da saída (ou da última saída, no D5), para ordenar e exibir. */
-  data: string | null;
+export const MIN_SAMPLES = 5;
+export const SIGMA_THRESHOLD = 2;
+export const DUP_WINDOW_MS = 5 * 60 * 1000;
+export const D5_GAP_DAYS = 60;
+export const D3_HIST_DAYS = 90;
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+function isoToday(agora: Date): string {
+  return agora.toISOString().slice(0, 10);
 }
 
-// ---------------------------------------------------------------------------
-// Sentinela
-// ---------------------------------------------------------------------------
-
-/** Nomes do equipamento-sentinela, já normalizados. "Equipamento Desconhecido" virou "Outros" na migração. */
-const NOMES_SENTINELA = new Set(["outros", "equipamento desconhecido"]);
-
-/** Minúsculo, sem acento, espaço colapsado. */
-export function normalizarNome(texto: string | null | undefined): string {
-  return (texto ?? "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
+/** A origem faz `setDate(getDate() - dias)` e `toISOString`: sem horário de verão, é isto. */
+function daysAgoIso(agora: Date, days: number): string {
+  return new Date(agora.getTime() - days * DIA_MS).toISOString().slice(0, 10);
 }
 
-/**
- * O equipamento é o sentinela de "não sei qual foi"? Casa pela descrição OU pelo
- * código, normalizados dos dois lados ("OUTROS", " Outros ", "Equipamento
- * desconhecido"). Não casa por "contém": "Outros serviços" seria outro equipamento.
- */
-export function ehEquipamentoSentinela(equipamento: { codigo: string | null; descricao: string }): boolean {
-  return NOMES_SENTINELA.has(normalizarNome(equipamento.descricao)) || NOMES_SENTINELA.has(normalizarNome(equipamento.codigo));
+function meanStd(values: number[]): { mean: number; sigma: number } {
+  if (values.length === 0) return { mean: 0, sigma: 0 };
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length;
+  return { mean, sigma: Math.sqrt(variance) };
 }
 
-// ---------------------------------------------------------------------------
-// Estatística
-// ---------------------------------------------------------------------------
-
-export interface Estatistica {
-  n: number;
-  media: number;
-  desvio: number;
+function fmtNum(n: number, dec: number): string {
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-/** Média e desvio POPULACIONAL. Lista vazia: n = 0. */
-export function estatistica(valores: readonly number[]): Estatistica {
-  const n = valores.length;
-  if (n === 0) return { n: 0, media: 0, desvio: 0 };
-  const media = valores.reduce((soma, v) => soma + v, 0) / n;
-  const variancia = valores.reduce((soma, v) => soma + (v - media) ** 2, 0) / n;
-  return { n, media, desvio: Math.sqrt(variancia) };
+function fmtBRL(n: number, dec = 2): string {
+  return `R$ ${fmtNum(n, dec)}`;
 }
 
-/** Fora de média ± 2σ, com população mínima. */
-export function foraDaFaixa(valor: number, est: Estatistica): boolean {
-  if (est.n < MINIMO_AMOSTRA) return false;
-  return Math.abs(valor - est.media) > 2 * est.desvio + EPSILON;
+/** Litros com 2 casas (regra do app; a origem usava `fmtNum(litros, 0)`). */
+function fmtLitros(n: number): string {
+  return fmtNum(n, 2);
 }
 
-// ---------------------------------------------------------------------------
-// Regras
-// ---------------------------------------------------------------------------
+// ────────────────────────────────────────────────────────────────────
+// D1: sentinela sem equipamento (equipamento próprio no "desconhecido")
+// ────────────────────────────────────────────────────────────────────
 
-function tempo(iso: string): number {
-  return Date.parse(iso);
-}
-
-function dentroDoPeriodo(saida: SaidaParaDeteccao, inicio: number, fim: number): boolean {
-  const t = tempo(saida.data);
-  return t >= inicio && t < fim;
-}
-
-/** Ordem estável: data, depois id. */
-function porDataEId(a: SaidaParaDeteccao, b: SaidaParaDeteccao): number {
-  return tempo(a.data) - tempo(b.data) || a.id.localeCompare(b.id);
-}
-
-/**
- * Quem consumiu: o equipamento, ou a placa da carreta (normalizada: "abc-1d23" e
- * "ABC1D23" são a mesma carreta). Carreta sem placa cai na transportadora.
- */
-export function chaveConsumidor(saida: SaidaParaDeteccao): string {
-  if (saida.tipoConsumidor === "carreta_transportadora") {
-    const placa = (saida.placa ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-    return placa ? `placa:${placa}` : `transportadora:${saida.transportadoraId ?? "?"}:sem-placa`;
-  }
-  return `equipamento:${saida.equipamentoId ?? "?"}`;
-}
-
-/** Número com 4 casas como chave (o banco guarda NUMERIC(14,4)). */
-function chave4(valor: number): string {
-  return Math.round(valor * 10_000).toString();
-}
-
-function nomeCombustivel(entrada: EntradaDeteccao, insumoId: string): string {
-  return entrada.combustiveis.get(insumoId) ?? "combustível";
-}
-
-function detectarD1(entrada: EntradaDeteccao, noPeriodo: SaidaParaDeteccao[]): Anomalia[] {
-  const sentinelas = new Set(entrada.equipamentos.filter(ehEquipamentoSentinela).map((e) => e.id));
-  if (sentinelas.size === 0) return [];
-  return noPeriodo
-    .filter((s) => s.equipamentoId !== null && sentinelas.has(s.equipamentoId))
-    .map((s) => ({
+function detectD1(input: DetectInput): Anomalia[] {
+  const sentinels = input.saidasNoPeriodo.filter(
+    (s) => s.tipoConsumidor === "equipamento_proprio" && s.equipamentoId === EQUIPAMENTO_DESCONHECIDO,
+  );
+  return sentinels.map((s) => {
+    const obraNm = s.obraId ? (input.obraNome.get(s.obraId) ?? "não encontrada") : "não informada";
+    return {
       id: `D1-${s.id}`,
-      regra: "D1" as const,
-      severidade: "atencao" as const,
-      descricao: `Abastecimento de ${formatarLitros(s.litros)} lançado em "Outros": identifique o equipamento que recebeu o combustível`,
-      saidaIds: [s.id],
-      equipamentoId: s.equipamentoId,
-      data: s.data,
-    }));
+      severity: "warning" as const,
+      detector: "D1" as const,
+      title: "Saída sem equipamento identificado",
+      description: `${fmtLitros(s.litros)} L · ${fmtBRL(s.valorTotal)} · obra ${obraNm}`,
+      affectedSaidaIds: [s.id],
+      affectedObraId: s.obraId ?? undefined,
+      data: s.data.slice(0, 10),
+      acaoSugerida: "Atribuir o equipamento à saída",
+    };
+  });
 }
 
-function detectarD2(entrada: EntradaDeteccao, noPeriodo: SaidaParaDeteccao[]): Anomalia[] {
-  // Preço zero não entra: é saída sem preço (carreta sem preço digitado), não um preço baixo.
-  const comPreco = noPeriodo.filter((s) => s.precoUnitario > 0);
-  const porInsumo = new Map<string, SaidaParaDeteccao[]>();
-  for (const s of comPreco) {
-    const lista = porInsumo.get(s.insumoId) ?? [];
-    lista.push(s);
-    porInsumo.set(s.insumoId, lista);
+// ────────────────────────────────────────────────────────────────────
+// D2: R$/L fora da faixa por combustível (±2σ no período)
+// ────────────────────────────────────────────────────────────────────
+
+function detectD2(input: DetectInput): Anomalia[] {
+  const byCombustivel = new Map<string, SaidaDeteccao[]>();
+  for (const s of input.saidasNoPeriodo) {
+    if (s.litros <= 0) continue;
+    const list = byCombustivel.get(s.tipoCombustivel) ?? [];
+    list.push(s);
+    byCombustivel.set(s.tipoCombustivel, list);
   }
 
-  const anomalias: Anomalia[] = [];
-  for (const [insumoId, lista] of porInsumo) {
-    for (const s of lista) {
-      const est = estatistica(lista.filter((outra) => outra.id !== s.id).map((outra) => outra.precoUnitario));
-      if (!foraDaFaixa(s.precoUnitario, est)) continue;
-      anomalias.push({
+  const results: Anomalia[] = [];
+  for (const [combId, saidas] of byCombustivel) {
+    if (saidas.length < MIN_SAMPLES) continue;
+    const rPorL = saidas.map((s) => s.valorTotal / s.litros);
+    const { mean, sigma } = meanStd(rPorL);
+    if (sigma < 0.0001) continue; // sem variância: todos iguais
+    const lo = mean - SIGMA_THRESHOLD * sigma;
+    const hi = mean + SIGMA_THRESHOLD * sigma;
+    const combNm = input.combustivelNome.get(combId) ?? combId;
+
+    for (const s of saidas) {
+      const rpl = s.valorTotal / s.litros;
+      if (rpl >= lo && rpl <= hi) continue;
+      const direcao = rpl > hi ? "acima" : "abaixo";
+      results.push({
         id: `D2-${s.id}`,
-        regra: "D2",
-        severidade: "atencao",
-        descricao:
-          `Preço de ${formatarValorOperacional(s.precoUnitario)}/L de ${nomeCombustivel(entrada, insumoId)} fora da faixa do período ` +
-          `(média ${formatarValorOperacional(est.media)}/L em ${est.n} abastecimentos)`,
-        saidaIds: [s.id],
-        equipamentoId: s.equipamentoId,
-        data: s.data,
+        severity: "warning",
+        detector: "D2",
+        title: `R$/L ${direcao} da média para ${combNm}`,
+        description: `${fmtBRL(rpl, 4)}/L vs média ${fmtBRL(mean, 4)} (±2 sigma ${fmtBRL(SIGMA_THRESHOLD * sigma, 4)}, n=${saidas.length})`,
+        affectedSaidaIds: [s.id],
+        affectedEquipamentoId: s.equipamentoId ?? undefined,
+        affectedObraId: s.obraId ?? undefined,
+        data: s.data.slice(0, 10),
+        acaoSugerida: "Verificar se preço está correto na nota fiscal",
       });
     }
   }
-  return anomalias;
+  return results;
 }
 
-function detectarD3(entrada: EntradaDeteccao, noPeriodo: SaidaParaDeteccao[], sentinelas: Set<string>): Anomalia[] {
-  const porEquipamento = new Map<string, SaidaParaDeteccao[]>();
-  for (const s of entrada.saidas) {
-    if (s.tipoConsumidor !== "equipamento_proprio" || s.equipamentoId === null) continue;
-    const lista = porEquipamento.get(s.equipamentoId) ?? [];
-    lista.push(s);
-    porEquipamento.set(s.equipamentoId, lista);
+// ────────────────────────────────────────────────────────────────────
+// D3: volume atípico por equipamento (±2σ do histórico de 90 dias)
+// ────────────────────────────────────────────────────────────────────
+
+function detectD3(input: DetectInput, agora: Date): Anomalia[] {
+  const cutoff = daysAgoIso(agora, D3_HIST_DAYS);
+  // Histórico por equipamento (últimos 90 dias, sem o sentinela)
+  const histByEquip = new Map<string, number[]>();
+  for (const s of input.saidasTodas) {
+    if (s.tipoConsumidor !== "equipamento_proprio") continue;
+    if (!s.equipamentoId || s.equipamentoId === EQUIPAMENTO_DESCONHECIDO) continue;
+    if (s.data.slice(0, 10) < cutoff) continue;
+    const list = histByEquip.get(s.equipamentoId) ?? [];
+    list.push(s.litros);
+    histByEquip.set(s.equipamentoId, list);
   }
 
-  const anomalias: Anomalia[] = [];
-  for (const s of noPeriodo) {
-    if (s.tipoConsumidor !== "equipamento_proprio" || s.equipamentoId === null) continue;
-    // O sentinela junta máquinas diferentes: a "média do equipamento" dele não existe.
-    if (sentinelas.has(s.equipamentoId)) continue;
-    const t = tempo(s.data);
-    const desde = t - JANELA_D3_DIAS * DIA_MS;
-    const historico = (porEquipamento.get(s.equipamentoId) ?? []).filter((outra) => {
-      if (outra.id === s.id) return false;
-      const to = tempo(outra.data);
-      return to >= desde && to <= t;
-    });
-    const est = estatistica(historico.map((outra) => outra.litros));
-    if (!foraDaFaixa(s.litros, est)) continue;
-    anomalias.push({
+  const eqMap = new Map(input.equipamentos.map((e) => [e.id, e]));
+  const results: Anomalia[] = [];
+  for (const s of input.saidasNoPeriodo) {
+    if (s.tipoConsumidor !== "equipamento_proprio") continue;
+    if (!s.equipamentoId || s.equipamentoId === EQUIPAMENTO_DESCONHECIDO) continue;
+    const hist = histByEquip.get(s.equipamentoId);
+    if (!hist || hist.length < MIN_SAMPLES) continue;
+    const { mean, sigma } = meanStd(hist);
+    if (sigma < 0.001) continue;
+    const lo = mean - SIGMA_THRESHOLD * sigma;
+    const hi = mean + SIGMA_THRESHOLD * sigma;
+    if (s.litros >= lo && s.litros <= hi) continue;
+    const eq = eqMap.get(s.equipamentoId);
+    const eqNome = eq?.nome ?? "equipamento não encontrado";
+    const direcao = s.litros > hi ? "acima" : "abaixo";
+    results.push({
       id: `D3-${s.id}`,
-      regra: "D3",
-      severidade: "atencao",
-      descricao:
-        `${formatarLitros(s.litros)} fora da faixa do equipamento nos ${JANELA_D3_DIAS} dias anteriores ` +
-        `(média ${formatarLitros(est.media)} em ${est.n} abastecimentos)`,
-      saidaIds: [s.id],
-      equipamentoId: s.equipamentoId,
-      data: s.data,
+      severity: "warning",
+      detector: "D3",
+      title: `Volume ${direcao} do padrão de ${eqNome}`,
+      description: `${fmtLitros(s.litros)} L vs média ${fmtLitros(mean)} L (±2 sigma ${fmtLitros(SIGMA_THRESHOLD * sigma)} L em 90d, n=${hist.length})`,
+      affectedSaidaIds: [s.id],
+      affectedEquipamentoId: s.equipamentoId,
+      affectedObraId: s.obraId ?? undefined,
+      data: s.data.slice(0, 10),
+      acaoSugerida: "Conferir leitura ou possível erro de digitação",
     });
   }
-  return anomalias;
+  return results;
 }
 
-function detectarD4(noPeriodo: SaidaParaDeteccao[]): Anomalia[] {
-  const grupos = new Map<string, SaidaParaDeteccao[]>();
-  for (const s of noPeriodo) {
-    const chave = [chaveConsumidor(s), s.insumoId, chave4(s.litros), chave4(s.valorTotal)].join("|");
-    const lista = grupos.get(chave) ?? [];
-    lista.push(s);
-    grupos.set(chave, lista);
+// ────────────────────────────────────────────────────────────────────
+// D4: duplicatas em janela de 5 minutos
+// ────────────────────────────────────────────────────────────────────
+
+function detectD4(input: DetectInput): Anomalia[] {
+  // Agrupa por (consumidor, litros, valor, combustível): saídas idênticas
+  const groups = new Map<string, SaidaDeteccao[]>();
+  for (const s of input.saidasNoPeriodo) {
+    const consumer =
+      s.tipoConsumidor === "equipamento_proprio"
+        ? `eq:${s.equipamentoId ?? "unk"}`
+        : `pl:${(s.placa ?? "unk").toLowerCase()}`;
+    const key = `${consumer}|${s.litros}|${s.valorTotal}|${s.tipoCombustivel}`;
+    const list = groups.get(key) ?? [];
+    list.push(s);
+    groups.set(key, list);
   }
 
-  const anomalias: Anomalia[] = [];
-  for (const lista of grupos.values()) {
-    if (lista.length < 2) continue;
-    const ordenadas = [...lista].sort(porDataEId);
-    // Agrupa pela PRIMEIRA do grupo: toda saída do grupo fica a até 5 minutos dela,
-    // então qualquer par dentro do grupo está a até 5 minutos. Encadear pela
-    // anterior deixaria uma fila de lançamentos de 4 em 4 minutos virar um grupo só.
-    let i = 0;
-    while (i < ordenadas.length) {
-      const ancora = ordenadas[i];
-      const limite = tempo(ancora.data) + JANELA_D4_MINUTOS * MINUTO_MS;
-      let j = i + 1;
-      while (j < ordenadas.length && tempo(ordenadas[j].data) <= limite) j += 1;
-      const grupo = ordenadas.slice(i, j);
-      if (grupo.length >= 2) {
-        const ids = grupo.map((s) => s.id).sort();
-        anomalias.push({
+  const results: Anomalia[] = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => a.data.localeCompare(b.data));
+    const used = new Set<string>();
+    for (let i = 0; i < list.length; i++) {
+      const base = list[i]!;
+      if (used.has(base.id)) continue;
+      const cluster: SaidaDeteccao[] = [base];
+      const tBase = new Date(base.data).getTime();
+      for (let j = i + 1; j < list.length; j++) {
+        const outra = list[j]!;
+        if (used.has(outra.id)) continue;
+        const tj = new Date(outra.data).getTime();
+        if (tj - tBase <= DUP_WINDOW_MS) {
+          cluster.push(outra);
+          used.add(outra.id);
+        } else {
+          break;
+        }
+      }
+      if (cluster.length >= 2) {
+        used.add(base.id);
+        const ids = cluster.map((c) => c.id).sort();
+        results.push({
           id: `D4-${ids.join("-")}`,
-          regra: "D4",
-          severidade: "critica",
-          descricao:
-            `${grupo.length} abastecimentos iguais em até ${JANELA_D4_MINUTOS} minutos (${formatarDataHoraRioBranco(ancora.data)}): ` +
-            `mesmo consumidor, ${formatarLitros(ancora.litros)}, mesmo valor e mesmo combustível`,
-          saidaIds: ids,
-          equipamentoId: ancora.equipamentoId,
-          data: ancora.data,
+          severity: "critical",
+          detector: "D4",
+          title: `${cluster.length} saídas idênticas em janela de 5 minutos`,
+          description: `Mesmo consumidor + ${fmtLitros(base.litros)} L + ${fmtBRL(base.valorTotal)}: provável duplicata`,
+          affectedSaidaIds: ids,
+          affectedEquipamentoId: base.equipamentoId ?? undefined,
+          data: base.data.slice(0, 10),
+          acaoSugerida: "Verificar e excluir registros duplicados",
         });
       }
-      i = j;
     }
   }
-  return anomalias;
+  return results;
 }
 
-function detectarD5(entrada: EntradaDeteccao, sentinelas: Set<string>): Anomalia[] {
-  const fim = tempo(entrada.fim);
-  const corte = fim - JANELA_D5_DIAS * DIA_MS;
+// ────────────────────────────────────────────────────────────────────
+// D5: gap operacional (equipamento ativo sem saída em 60 dias, janela fixa)
+// ────────────────────────────────────────────────────────────────────
 
-  const ultima = new Map<string, number>();
-  for (const s of entrada.saidas) {
-    if (s.equipamentoId === null) continue;
-    const t = tempo(s.data);
-    if (t >= fim) continue;
-    if (t > (ultima.get(s.equipamentoId) ?? -Infinity)) ultima.set(s.equipamentoId, t);
+function detectD5(input: DetectInput, agora: Date): Anomalia[] {
+  const today = isoToday(agora);
+  const cutoff = daysAgoIso(agora, D5_GAP_DAYS);
+  const equipsAtivos = input.saidasTodas.reduce((acc, s) => {
+    if (s.equipamentoId && s.equipamentoId !== EQUIPAMENTO_DESCONHECIDO && s.data.slice(0, 10) >= cutoff) {
+      acc.add(s.equipamentoId);
+    }
+    return acc;
+  }, new Set<string>());
+
+  // equipamento -> última saída (qualquer época), para o contexto
+  const ultimaPorEquip = new Map<string, SaidaDeteccao>();
+  for (const s of input.saidasTodas) {
+    if (!s.equipamentoId || s.equipamentoId === EQUIPAMENTO_DESCONHECIDO) continue;
+    const cur = ultimaPorEquip.get(s.equipamentoId);
+    if (!cur || s.data.localeCompare(cur.data) > 0) {
+      ultimaPorEquip.set(s.equipamentoId, s);
+    }
   }
 
-  const anomalias: Anomalia[] = [];
-  for (const equipamento of entrada.equipamentos) {
-    if (!equipamento.ativo || sentinelas.has(equipamento.id)) continue;
-    const antes = equipamento.ultimaSaidaAntesDaJanela ? tempo(equipamento.ultimaSaidaAntesDaJanela) : -Infinity;
-    const t = Math.max(ultima.get(equipamento.id) ?? -Infinity, antes);
-    // Nunca abasteceu: não é "parou de abastecer", é equipamento que não usa combustível.
-    if (t === -Infinity || t >= corte) continue;
-    const dias = Math.floor((fim - t) / DIA_MS);
-    const data = new Date(t).toISOString();
-    anomalias.push({
-      id: `D5-${equipamento.id}`,
-      regra: "D5",
-      severidade: "info",
-      descricao: `${equipamento.rotulo} está ativo e não abastece há ${dias} dias (último em ${formatarDataHoraRioBranco(data).slice(0, 10)})`,
-      saidaIds: [],
-      equipamentoId: equipamento.id,
-      data,
+  const results: Anomalia[] = [];
+  for (const eq of input.equipamentos) {
+    if (eq.ativo === false) continue;
+    if (equipsAtivos.has(eq.id)) continue;
+    const ultima = ultimaPorEquip.get(eq.id);
+    const ultimaData = ultima ? ultima.data.slice(0, 10) : null;
+    const diasGap = ultimaData
+      ? Math.floor(
+          (new Date(today + "T00:00:00").getTime() - new Date(ultimaData + "T00:00:00").getTime()) / DIA_MS,
+        )
+      : null;
+    results.push({
+      id: `D5-${eq.id}`,
+      severity: "info",
+      detector: "D5",
+      title: `${eq.nome} sem saída há ${diasGap !== null ? `${diasGap} dia(s)` : "60+ dias"}`,
+      description: ultimaData
+        ? `Última saída em ${ultimaData.split("-").reverse().join("/")}`
+        : "Nunca teve saída registrada",
+      affectedSaidaIds: ultima ? [ultima.id] : [],
+      affectedEquipamentoId: eq.id,
+      data: ultimaData ?? today,
+      acaoSugerida: "Confirmar uso ou inativar no cadastro",
     });
   }
-  return anomalias;
+  return results;
 }
 
-/** Crítica primeiro, depois a mais recente, depois o id (ordem estável entre recargas). */
-export function ordenarAnomalias(anomalias: readonly Anomalia[]): Anomalia[] {
-  return [...anomalias].sort(
-    (a, b) =>
-      PESO_SEVERIDADE[a.severidade] - PESO_SEVERIDADE[b.severidade] ||
-      (b.data ? tempo(b.data) : 0) - (a.data ? tempo(a.data) : 0) ||
-      a.id.localeCompare(b.id),
-  );
+// ────────────────────────────────────────────────────────────────────
+// detectAnomalias: ponto de entrada
+// ────────────────────────────────────────────────────────────────────
+
+export const SEVERITY_ORDER: Record<Severidade, number> = {
+  critical: 0,
+  warning: 1,
+  info: 2,
+};
+
+export function detectAnomalias(input: DetectInput): Anomalia[] {
+  const agora = input.agora ?? new Date();
+  const all: Anomalia[] = [
+    ...detectD1(input),
+    ...detectD2(input),
+    ...detectD3(input, agora),
+    ...detectD4(input),
+    ...detectD5(input, agora),
+  ];
+  // Severidade desc, depois data desc (sort estável: empate fica na ordem D1..D5).
+  all.sort((a, b) => {
+    const sev = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+    if (sev !== 0) return sev;
+    return b.data.localeCompare(a.data);
+  });
+  return all;
 }
 
-/** Roda as cinco regras. */
-export function detectarAnomalias(entrada: EntradaDeteccao): Anomalia[] {
-  const inicio = tempo(entrada.inicio);
-  const fim = tempo(entrada.fim);
-  const noPeriodo = entrada.saidas.filter((s) => dentroDoPeriodo(s, inicio, fim));
-  const sentinelas = new Set(entrada.equipamentos.filter(ehEquipamentoSentinela).map((e) => e.id));
+export const DETECTOR_LABEL: Record<DetectorId, string> = {
+  D1: "Sentinel sem equipamento",
+  D2: "R$/L outlier",
+  D3: "Volume atípico",
+  D4: "Duplicatas (5min)",
+  D5: "Gap operacional (60d)",
+};
 
-  return ordenarAnomalias([
-    ...detectarD1(entrada, noPeriodo),
-    ...detectarD2(entrada, noPeriodo),
-    ...detectarD3(entrada, noPeriodo, sentinelas),
-    ...detectarD4(noPeriodo),
-    ...detectarD5(entrada, sentinelas),
-  ]);
-}
+export const SEVERITY_LABEL: Record<Severidade, string> = {
+  critical: "Crítica",
+  warning: "Atenção",
+  info: "Informação",
+};

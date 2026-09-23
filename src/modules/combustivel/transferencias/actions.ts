@@ -19,9 +19,9 @@ import {
  *
  * Permissão tripla: a RPC checa `tem_permissao` no banco, aqui
  * `exigirPermissao`, e a tela esconde o botão. A tabela não tem grant de
- * escrita: tudo passa por `fn_comb_salvar_transferencia` (que calcula o valor
- * pelo preço médio do tanque de origem) e `fn_comb_excluir` (lixeira com
- * motivo). Nenhuma action lança: tudo volta `{ erro }`.
+ * escrita: tudo passa por `fn_comb_salvar_transferencia` (o valor vem da tela,
+ * como na origem; null mantém o salvo na edição), `fn_comb_excluir` (lixeira
+ * com motivo) e `fn_comb_restaurar`. Nenhuma action lança: tudo volta `{ erro }`.
  */
 
 const RECURSO = "combustivel.transferencias" as const;
@@ -82,6 +82,9 @@ export async function salvarTransferencia(
       p_litros: validado.data.litros,
       p_data_hora: validado.data.dataHora,
       p_observacoes: validado.data.observacoes,
+      // Sem valor (null), o parâmetro fica de fora: o default da RPC é null, e o
+      // banco mantém o valor salvo (edição) ou calcula pelo preço médio (criação).
+      ...(validado.data.valorTotal !== null ? { p_valor_total: validado.data.valorTotal } : {}),
     });
 
     if (error) {
@@ -125,6 +128,109 @@ export async function excluirTransferencia(id: string, motivo: string): Promise<
 
     revalidar();
     return { ok: true };
+  });
+}
+
+/**
+ * Tira a transferência da lixeira (Lixeira da origem). Pede a lixeira
+ * (`administracao.lixeira`/editar) e a exclusão do recurso, como a RPC. Os
+ * gatilhos refazem nível, PEPS e saldo; se o saldo não fechar, a mensagem da
+ * trava vai para a tela.
+ */
+export async function restaurarTransferencia(id: string): Promise<ResultadoAcao> {
+  return semLancar("combustivel.transferencias.restaurar", async () => {
+    if (!(await temPermissaoDeRestaurar())) return { erro: "Sem permissão para restaurar transferências" };
+
+    const idValido = idSchema.safeParse(id);
+    if (!idValido.success) return { erro: "Transferência inválida" };
+
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_comb_restaurar", {
+      p_tabela: "combustivel_transferencias",
+      p_id: idValido.data,
+    });
+
+    if (error) {
+      return erroAcao(
+        "combustivel.transferencias.restaurar",
+        error,
+        traduzErroMovimento(error, "Não foi possível restaurar a transferência. Tente novamente"),
+      );
+    }
+
+    revalidar();
+    return { ok: true };
+  });
+}
+
+async function temPermissaoDeRestaurar(): Promise<boolean> {
+  try {
+    await exigirPermissao("administracao.lixeira", "editar");
+    await exigirPermissao(RECURSO, "excluir");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Preço médio da vida inteira do tanque (todas as entradas e transferências
+ * recebidas), o `calcularPrecoMedioTanque` da origem. É o que o formulário usa
+ * para preencher o valor na criação.
+ */
+export async function consultarPrecoMedioTanque(
+  tanqueId: string,
+): Promise<{ ok: true; preco: number } | { erro: string }> {
+  return semLancar("combustivel.transferencias.preco_medio", async () => {
+    if (!(await temAcao("ver"))) return { erro: "Sem permissão para ver transferências" };
+
+    const tanque = idSchema.safeParse(tanqueId);
+    if (!tanque.success) return { erro: "Tanque inválido" };
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_comb_preco_medio_tanque", { p_tanque: tanque.data });
+    if (error) {
+      return erroAcao("combustivel.transferencias.preco_medio", error, "Não foi possível consultar o preço médio do tanque");
+    }
+    const preco = Number(data ?? 0);
+    return { ok: true, preco: Number.isFinite(preco) ? preco : 0 };
+  });
+}
+
+/**
+ * Combustível do tanque na data (o que vai ser transferido), pelo nome. Null
+ * quando o tanque não tem fonte rastreável nessa data.
+ */
+export async function consultarCombustivelNaData(
+  tanqueId: string,
+  dataHora: string,
+): Promise<{ ok: true; nome: string | null } | { erro: string }> {
+  return semLancar("combustivel.transferencias.combustivel_na_data", async () => {
+    if (!(await temAcao("ver"))) return { erro: "Sem permissão para ver transferências" };
+
+    const tanque = idSchema.safeParse(tanqueId);
+    const data = dataHoraIso.safeParse(dataHora);
+    if (!tanque.success || !data.success) return { erro: "Tanque ou data inválidos" };
+
+    const supabase = await createClient();
+    const { data: insumoId, error } = await supabase.rpc("fn_comb_combustivel_na_data", {
+      p_tanque: tanque.data,
+      p_data: data.data,
+    });
+    if (error) {
+      return erroAcao("combustivel.transferencias.combustivel_na_data", error, "Não foi possível consultar o combustível");
+    }
+    if (!insumoId) return { ok: true, nome: null };
+
+    const { data: insumo, error: erroInsumo } = await supabase
+      .from("insumos")
+      .select("nome")
+      .eq("id", insumoId)
+      .maybeSingle();
+    if (erroInsumo) {
+      return erroAcao("combustivel.transferencias.combustivel_na_data", erroInsumo, "Não foi possível consultar o combustível");
+    }
+    return { ok: true, nome: insumo?.nome ?? null };
   });
 }
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const estado = vi.hoisted(() => ({
   permitido: true,
+  negadas: [] as string[],
   chamadas: [] as { fn: string; args: Record<string, unknown> }[],
   resposta: { data: null as unknown, error: null as { code?: string; message?: string } | null },
 }));
@@ -9,8 +10,8 @@ const estado = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/permissoes", () => ({
-  exigirPermissao: vi.fn(async () => {
-    if (!estado.permitido) throw new Error("Sem permissão");
+  exigirPermissao: vi.fn(async (recurso: string, acao: string) => {
+    if (!estado.permitido || estado.negadas.includes(`${recurso}/${acao}`)) throw new Error("Sem permissão");
   }),
 }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -23,23 +24,19 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
-  consultarEstoqueEsvaziamento,
   excluirEsvaziamento,
   registrarEsvaziamento,
+  restaurarEsvaziamento,
 } from "@/modules/combustivel/esvaziamentos/actions";
 
 const TANQUE = "11111111-1111-4111-8111-111111111111";
 const ID = "33333333-3333-4333-8333-333333333333";
 
-const DADOS = {
-  tanqueId: TANQUE,
-  litros: 155.6,
-  motivo: "Diesel contaminado",
-  dataHora: "2026-09-23T07:05:00-05:00",
-};
+const DADOS = { tanqueId: TANQUE, motivo: "Diesel contaminado" };
 
 beforeEach(() => {
   estado.permitido = true;
+  estado.negadas = [];
   estado.chamadas = [];
   estado.resposta = { data: ID, error: null };
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -52,35 +49,22 @@ describe("registrarEsvaziamento", () => {
     expect(estado.chamadas).toEqual([]);
   });
 
-  it("chama a RPC com os nomes que ela lê", async () => {
+  it("chama a RPC só com o tanque e o motivo (o banco grava o nível inteiro, agora)", async () => {
     await expect(registrarEsvaziamento(DADOS)).resolves.toEqual({ ok: true });
     expect(estado.chamadas).toEqual([
-      {
-        fn: "fn_comb_registrar_esvaziamento",
-        args: {
-          p_tanque: TANQUE,
-          p_litros: 155.6,
-          p_motivo: "Diesel contaminado",
-          p_data_hora: "2026-09-23T07:05:00-05:00",
-        },
-      },
+      { fn: "fn_comb_registrar_esvaziamento", args: { p_tanque: TANQUE, p_motivo: "Diesel contaminado" } },
     ]);
   });
 
-  it("sem motivo não chega ao banco", async () => {
+  it("motivo com menos de 3 caracteres não chega ao banco", async () => {
     await expect(registrarEsvaziamento({ ...DADOS, motivo: " " })).resolves.toHaveProperty("erro");
+    await expect(registrarEsvaziamento({ ...DADOS, motivo: " ab " })).resolves.toHaveProperty("erro");
     expect(estado.chamadas).toEqual([]);
   });
 
   it("a recusa do banco (P0001) chega à tela", async () => {
-    const mensagem = "Tanque externo não se esvazia: o estoque é do dono";
+    const mensagem = "O tanque já está vazio";
     estado.resposta = { data: null, error: { code: "P0001", message: mensagem } };
-    await expect(registrarEsvaziamento(DADOS)).resolves.toEqual({ erro: mensagem });
-  });
-
-  it("saldo negativo (23514 da trava) chega à tela", async () => {
-    const mensagem = "O tanque ficaria com saldo negativo em algum momento: confira as datas e os litros";
-    estado.resposta = { data: null, error: { code: "23514", message: mensagem } };
     await expect(registrarEsvaziamento(DADOS)).resolves.toEqual({ erro: mensagem });
   });
 });
@@ -111,13 +95,20 @@ describe("excluirEsvaziamento", () => {
   });
 });
 
-describe("consultarEstoqueEsvaziamento", () => {
-  it("devolve o estoque na data, sem p_excluir", async () => {
-    estado.resposta = { data: "155.6000", error: null };
-    await expect(consultarEstoqueEsvaziamento(TANQUE, DADOS.dataHora)).resolves.toEqual({ ok: true, litros: 155.6 });
-    expect(estado.chamadas[0]).toEqual({
-      fn: "fn_comb_estoque_na_data",
-      args: { p_tanque: TANQUE, p_data: DADOS.dataHora },
-    });
+describe("restaurarEsvaziamento", () => {
+  it("sem a lixeira OU sem excluir esvaziamentos, não chama o banco", async () => {
+    estado.negadas = ["administracao.lixeira/editar"];
+    await expect(restaurarEsvaziamento(ID)).resolves.toEqual({ erro: "Sem permissão para restaurar esvaziamentos" });
+    estado.negadas = ["combustivel.esvaziamentos/excluir"];
+    await expect(restaurarEsvaziamento(ID)).resolves.toEqual({ erro: "Sem permissão para restaurar esvaziamentos" });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("com as duas, restaura pela RPC", async () => {
+    estado.resposta = { data: null, error: null };
+    await expect(restaurarEsvaziamento(ID)).resolves.toEqual({ ok: true });
+    expect(estado.chamadas).toEqual([
+      { fn: "fn_comb_restaurar", args: { p_tabela: "combustivel_esvaziamentos", p_id: ID } },
+    ]);
   });
 });

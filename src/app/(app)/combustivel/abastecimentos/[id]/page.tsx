@@ -7,6 +7,7 @@ import { AbastecimentoDetalheView } from "@/modules/combustivel/abastecimentos/c
 import { obrasParaAlocacao } from "@/modules/combustivel/abastecimentos/opcoes";
 import {
   buscarAbastecimento,
+  listarCombustivelDaUltimaEntrada,
   listarEquipamentos,
   listarTransportadoras,
   type EquipamentoOpcao,
@@ -37,12 +38,13 @@ export default async function PaginaAbastecimento({ params }: { params: Promise<
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
 
   // As opções do formulário só servem a quem pode editar.
-  const [tanques, equipamentos, transportadoras, insumos, centros] = await Promise.all([
+  const [tanques, equipamentos, transportadoras, insumos, centros, combustivelPorTanque] = await Promise.all([
     podeEditar ? listarTanques() : Promise.resolve<TanqueOpcao[]>([]),
     podeEditar ? listarEquipamentos() : Promise.resolve<EquipamentoOpcao[]>([]),
     podeEditar ? listarTransportadoras() : Promise.resolve<TransportadoraOpcao[]>([]),
     podeEditar ? listarInsumosCombustivel() : Promise.resolve<InsumoCombustivel[]>([]),
     podeEditar ? listarCentrosCusto() : Promise.resolve([]),
+    podeEditar ? listarCombustivelDaUltimaEntrada() : Promise.resolve<Record<string, string>>({}),
   ]);
 
   return (
@@ -50,7 +52,14 @@ export default async function PaginaAbastecimento({ params }: { params: Promise<
       abastecimento={abastecimento}
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
-      opcoes={{ tanques, equipamentos, transportadoras, insumos, obras: obrasParaAlocacao(centros) }}
+      opcoes={{
+        tanques,
+        equipamentos,
+        transportadoras,
+        insumos,
+        obras: obrasParaAlocacao(centros),
+        combustivelPorTanque,
+      }}
     />
   );
 }

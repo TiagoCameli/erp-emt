@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CASAS_TAXA } from "@/lib/casas-decimais";
+import { CASAS_TAXA, CASAS_VALOR_OPERACIONAL } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
 import { normalizarNumeroDigitado } from "@/lib/numero-digitado";
 import { dataHoraLocalParaIso } from "@/modules/combustivel/_shared/rotulos";
@@ -89,6 +89,48 @@ export const observacoesSchema = z
   .trim()
   .max(1000, { error: "Máximo de 1000 caracteres" });
 
+/**
+ * Valor digitado (pt-BR) em número, com as 4 casas do Combustível
+ * (`CASAS_VALOR_OPERACIONAL`). Null quando não é número ou tem casa demais.
+ */
+export function paraValor(texto: string): number | null {
+  const normalizado = normalizarNumeroDigitado(texto, CASAS_VALOR_OPERACIONAL);
+  if (normalizado === null) return null;
+  const numero = Number(normalizado.replace(",", "."));
+  return Number.isFinite(numero) ? numero : null;
+}
+
+/** Número para o texto cru do campo de valor ("1234,5678"). Nulo vira "". */
+export function valorParaTexto(valor: number | null | undefined): string {
+  if (valor === null || valor === undefined || !Number.isFinite(valor)) return "";
+  const texto = valor.toFixed(CASAS_VALOR_OPERACIONAL).replace(/\.?0+$/, "");
+  return texto.replace(".", ",");
+}
+
+const MENSAGEM_VALOR = `Informe o valor total, zero ou mais, com até ${CASAS_VALOR_OPERACIONAL} casas`;
+
+/** Valor total digitado: zero ou mais (a origem aceita zero), até 4 casas. */
+function valorTexto() {
+  return z.string().trim().refine(
+    (valor) => {
+      const numero = paraValor(valor);
+      return numero !== null && numero >= 0 && numero <= TETO_NUMERIC_14_4;
+    },
+    { error: MENSAGEM_VALOR },
+  );
+}
+
+/**
+ * Valor na action. Null = "não mexi": na edição o banco mantém o salvo; na
+ * criação calcula pelo preço médio da origem.
+ */
+const valorNumero = z
+  .number({ error: MENSAGEM_VALOR })
+  .min(0, { error: MENSAGEM_VALOR })
+  .max(TETO_NUMERIC_14_4, { error: "Valor acima do permitido" })
+  .refine((valor) => casasDecimais(valor) <= CASAS_VALOR_OPERACIONAL, { error: MENSAGEM_VALOR })
+  .nullable();
+
 const MENSAGEM_MESMO_TANQUE = "A origem e o destino precisam ser tanques diferentes";
 
 // ---------------------------------------------------------------------------
@@ -100,6 +142,7 @@ export const transferenciaFormSchema = z
     origemId: idSchemaCom("Selecione o tanque de origem"),
     destinoId: idSchemaCom("Selecione o tanque de destino"),
     litros: litrosTexto(),
+    valorTotal: valorTexto(),
     dataHora: dataHoraTexto(),
     observacoes: observacoesSchema,
   })
@@ -115,6 +158,7 @@ export const transferenciaSchema = z
     origemId: idSchemaCom("Selecione o tanque de origem"),
     destinoId: idSchemaCom("Selecione o tanque de destino"),
     litros: litrosNumero,
+    valorTotal: valorNumero,
     dataHora: dataHoraIso,
     observacoes: observacoesSchema,
   })
@@ -125,12 +169,16 @@ export const transferenciaSchema = z
 
 export type TransferenciaInput = z.infer<typeof transferenciaSchema>;
 
-/** Formulário validado para o contrato da action. */
-export function transferenciaDoForm(form: TransferenciaFormInput): TransferenciaInput {
+/**
+ * Formulário validado para o contrato da action. `enviarValor` falso (edição
+ * sem mexer no valor) manda null, e o banco mantém o valor salvo.
+ */
+export function transferenciaDoForm(form: TransferenciaFormInput, enviarValor = true): TransferenciaInput {
   return {
     origemId: form.origemId,
     destinoId: form.destinoId,
     litros: paraLitros(form.litros) ?? Number.NaN,
+    valorTotal: enviarValor ? (paraValor(form.valorTotal) ?? Number.NaN) : null,
     dataHora: dataHoraLocalParaIso(form.dataHora) ?? "",
     observacoes: form.observacoes.trim(),
   };

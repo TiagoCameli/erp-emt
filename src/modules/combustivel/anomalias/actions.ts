@@ -6,8 +6,10 @@ import { erroAcao } from "@/lib/erros";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  atribuirEquipamentoSchema,
   conferirAnomaliaSchema,
   revisarSemSuprimentoSchema,
+  type AtribuirEquipamentoInput,
   type ConferirAnomaliaInput,
   type RevisarSemSuprimentoInput,
 } from "@/modules/combustivel/anomalias/schemas";
@@ -59,6 +61,58 @@ export async function conferirAnomalia(dados: ConferirAnomaliaInput): Promise<Re
   revalidatePath(ROTA);
   revalidatePath("/combustivel");
   return { ok: true };
+}
+
+export type ResultadoAtribuicao = { ok: true; atualizadas: number } | { erro: string };
+
+/**
+ * Atribui um equipamento a uma ou várias saídas do sentinela ("Outros"): o
+ * AtribuirSentinelModal e a atribuição do drawer de anomalia D1 da origem, cuja
+ * permissão era `corrigir_anomalias_combustivel` (aqui combustivel.anomalias/editar).
+ *
+ * A RPC confere a permissão de novo, só troca o equipamento de saída de equipamento
+ * próprio não excluída e devolve quantas mudou: é esse número que a tela mostra.
+ */
+export async function atribuirEquipamento(dados: AtribuirEquipamentoInput): Promise<ResultadoAtribuicao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para atribuir equipamento" };
+  }
+
+  const validado = atribuirEquipamentoSchema.safeParse(dados);
+  if (!validado.success) return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  const saidaIds = [...new Set(validado.data.saidaIds)];
+  const { equipamentoId } = validado.data;
+
+  let atualizadas: number;
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_comb_atribuir_equipamento", {
+      p_saidas: saidaIds,
+      p_equipamento: equipamentoId,
+    });
+    if (error) {
+      return erroDaRpc("combustivel.anomalias.atribuirEquipamento", error, "Não foi possível atribuir o equipamento");
+    }
+    atualizadas = typeof data === "number" ? data : 0;
+  } catch (erro) {
+    return erroAcao(
+      "combustivel.anomalias.atribuirEquipamento",
+      erro,
+      "Não foi possível atribuir o equipamento. Tente novamente",
+    );
+  }
+
+  // Depois do commit nada vira falha: revalidar é melhor esforço.
+  try {
+    revalidatePath(ROTA);
+    revalidatePath("/combustivel");
+    revalidatePath("/combustivel/abastecimentos");
+  } catch {
+    // a gravação já aconteceu
+  }
+  return { ok: true, atualizadas };
 }
 
 /** Marca (ou desfaz) a revisão de uma saída sem suprimento. */

@@ -6,6 +6,13 @@ Plano mestre: `docs/PLANO-FRETE-COMBUSTIVEL-MANUTENCAO.md`, Fase 3. Levantamento
 `fn_saidas_combustivel_movimentos` e companhia. A virada é no mesmo dia da Fase 4 (Frete):
 o abastecimento de carreta gera débito na conta corrente da transportadora.
 
+> **24/09/2026: tudo igual à origem.** O Tiago pediu o Combustível exatamente igual ao Gestão
+> Obras. A migration `20260924120000_fase3_combustivel_igual_a_origem` e as telas voltaram cada
+> regra e cálculo ao da origem (FIFO em TS para o preço sugerido e o snapshot, entrada por preço
+> por litro, valor da transferência, esvaziamento do nível inteiro, detecção de anomalias, lixeira,
+> atribuição em lote). Onde este desenho diz outra coisa, vale o registro em `docs/decisoes.md`
+> ("Combustível igual ao Gestão Obras").
+
 ## Regra geral: dinheiro e saldo iguais à origem
 
 O Tiago decidiu (22/09) que o FIFO do ERP fica igual ao do Gestão Obras. O mesmo vale para

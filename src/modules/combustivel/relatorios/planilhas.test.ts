@@ -2,211 +2,256 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
-import type { SaidaRelatorio } from "@/modules/combustivel/relatorios/consolidar";
+import { EQUIPAMENTO_DESCONHECIDO, type SaidaBase, type TanqueBase } from "@/modules/combustivel/anomalias/base";
+import type { Anomalia } from "@/modules/combustivel/anomalias/detect";
 import {
-  COLUNAS_BRUTO,
-  COLUNAS_MENSAL,
-  dataHoraParaCelula,
-  escreverAba,
-  montarRelatorio,
-  nomeArquivoRelatorio,
-  type Coluna,
+  consolidarMensal,
+  consolidarPorEquipamento,
+  consolidarPorObra,
+  type CadastrosRelatorio,
+} from "@/modules/combustivel/relatorios/consolidar";
+import {
+  formatarMesRef,
+  montarBruto,
+  montarMensal,
+  montarPorEquipamento,
+  montarPorObra,
+  nomeArquivoBruto,
+  nomeArquivoMensal,
+  nomeArquivoPorEquipamento,
+  nomeArquivoPorObra,
+  rotuloDoIntervalo,
 } from "@/modules/combustivel/relatorios/planilhas";
 
-const PERIODO = { de: "2026-09-01", ate: "2026-09-30" };
-
-function saida(parcial: Partial<SaidaRelatorio> = {}): SaidaRelatorio {
+let n = 0;
+function saida(parcial: Partial<SaidaBase> = {}): SaidaBase {
+  n += 1;
   return {
-    id: "s1",
-    data: "2026-09-10T15:30:00.000Z",
-    origem: "tanque",
+    id: `s${n}`,
+    data: "2026-09-10T08:00:00",
+    instante: "2026-09-10T13:00:00Z",
     tipoConsumidor: "equipamento_proprio",
-    tanqueNome: "Tanque 1",
     equipamentoId: "eq-1",
-    equipamentoNome: "EQ-1 Escavadeira",
-    transportadoraId: null,
-    transportadoraNome: null,
+    equipamentoIdReal: "eq-1",
     placa: null,
-    motorista: null,
-    insumoId: "diesel",
-    combustivel: "Diesel S10",
+    obraId: "obra-1",
+    tipoCombustivel: "diesel",
     litros: 100,
-    precoCombustivel: 6.3947,
-    precoProprietario: null,
-    taxaLitro: 0,
-    precoUnitario: 6.3947,
-    precoMedioTanque: 6.3947,
     valorTotal: 639.47,
-    pago: false,
+    origem: "requisicao",
+    tanqueId: "t1",
+    transportadoraId: null,
+    motorista: "João",
+    precoUnitario: 6.3947,
+    pago: true,
     pagoEm: "2026-09-12",
-    medicao: 1200,
-    tipoMedicao: "horimetro",
-    centroCustoNome: "Manutenção",
-    canal: "celular",
     observacoes: null,
-    criadoEm: "2026-09-10T15:31:00.000Z",
-    alocacoes: [{ centroRaizId: "o9", centroRaizNome: "Obra 009", percentual: 100, litros: 100 }],
+    createdBy: "u1",
     ...parcial,
   };
 }
 
-/** Acha a linha de cabeçalho e devolve um leitor de célula por nome de coluna. */
-function leitor(ws: ExcelJS.Worksheet, cabecalhos: string[]) {
-  let linhaCabecalho = 0;
-  ws.eachRow((row, numero) => {
-    if (linhaCabecalho === 0 && row.getCell(1).value === cabecalhos[0] && row.getCell(2).value === cabecalhos[1]) {
-      linhaCabecalho = numero;
-    }
-  });
-  expect(linhaCabecalho).toBeGreaterThan(0);
-  const col = (nome: string) => {
-    const i = cabecalhos.indexOf(nome);
-    expect(i, `coluna ${nome}`).toBeGreaterThanOrEqual(0);
-    return i + 1;
-  };
-  return {
-    linhaCabecalho,
-    valor: (linha: number, nome: string) => ws.getRow(linha).getCell(col(nome)).value,
-    letra: (nome: string) => ws.getColumn(col(nome)).letter,
-  };
+const CADASTROS: CadastrosRelatorio = {
+  equipamentos: new Map([["eq-1", { descricao: "Escavadeira 320", codigo: "EQ-01", tipo: "Escavadeira" }]]),
+  transportadoraNome: new Map([["tr-1", "Transterra"]]),
+  obraNome: new Map([["obra-1", "Obra 009"]]),
+};
+const COMBUSTIVEL = new Map([["diesel", "Diesel S10"]]);
+
+const ANOMALIAS: Anomalia[] = [
+  {
+    id: "D5-eq-1",
+    severity: "info",
+    detector: "D5",
+    title: "Escavadeira sem saída há 70 dia(s)",
+    description: "Última saída em 01/07/2026",
+    affectedSaidaIds: [],
+    data: "2026-07-01",
+  },
+  {
+    id: "D4-a-b",
+    severity: "critical",
+    detector: "D4",
+    title: "2 saídas idênticas em janela de 5 minutos",
+    description: "provável duplicata",
+    affectedSaidaIds: ["a", "b"],
+    data: "2026-09-02",
+    acaoSugerida: "Verificar e excluir registros duplicados",
+  },
+];
+
+async function reabrir(wb: ExcelJS.Workbook): Promise<ExcelJS.Workbook> {
+  const buffer = await wb.xlsx.writeBuffer();
+  const lido = new ExcelJS.Workbook();
+  await lido.xlsx.load(buffer);
+  return lido;
 }
 
-describe("escreverAba", () => {
-  interface L {
-    nome: string;
-    litros: number;
-    valor: number;
-  }
-  const colunas: Coluna<L>[] = [
-    { cabecalho: "Nome", largura: 10, tipo: "texto", celula: (l) => l.nome },
-    { cabecalho: "Litros", largura: 10, tipo: "litros", celula: (l) => l.litros, somar: true },
-    { cabecalho: "Valor", largura: 10, tipo: "dinheiro", celula: (l) => l.valor, somar: true },
-    {
-      cabecalho: "Média",
-      largura: 10,
-      tipo: "preco",
-      celula: (l) => (l.litros === 0 ? 0 : l.valor / l.litros),
-      razao: { numerador: "Valor", denominador: "Litros" },
-    },
-  ];
-
-  it("números como número, total por SUBTOTAL e média por fórmula na linha e no total", () => {
-    const wb = new ExcelJS.Workbook();
-    const aba = escreverAba(wb, {
-      nome: "Teste",
-      titulo: "Teste",
-      colunas,
-      linhas: [
-        { nome: "a", litros: 10, valor: 60 },
-        { nome: "b", litros: 0, valor: 0 },
-      ],
-    });
-    const ws = wb.getWorksheet("Teste")!;
-    const cab = aba.linhaCabecalho;
-    expect(ws.getRow(cab).values).toEqual([undefined, "Nome", "Litros", "Valor", "Média"]);
-    expect(ws.getRow(cab + 1).getCell(2).value).toBe(10);
-    expect(ws.getRow(cab + 1).getCell(4).value).toEqual({ formula: `IF(B${cab + 1}=0,0,C${cab + 1}/B${cab + 1})`, result: 6 });
-    // Denominador zero: a fórmula devolve 0 em vez de #DIV/0!.
-    expect(ws.getRow(cab + 2).getCell(4).value).toMatchObject({ formula: `IF(B${cab + 2}=0,0,C${cab + 2}/B${cab + 2})` });
-
-    expect(aba.linhaTotal).toBe(cab + 3);
-    const total = ws.getRow(aba.linhaTotal);
-    expect(total.getCell(1).value).toBe("Total (2 linhas)");
-    expect(total.getCell(2).value).toEqual({ formula: `SUBTOTAL(109,B${cab + 1}:B${cab + 2})` });
-    expect(total.getCell(3).value).toEqual({ formula: `SUBTOTAL(109,C${cab + 1}:C${cab + 2})` });
-    expect(total.getCell(4).value).toEqual({ formula: `IF(B${aba.linhaTotal}=0,0,C${aba.linhaTotal}/B${aba.linhaTotal})` });
-    expect(ws.getColumn(3).numFmt).toBe("R$ #,##0.00");
-    expect(ws.getColumn(4).numFmt).toBe("R$ #,##0.0000");
-    expect(ws.autoFilter).toEqual({ from: { row: cab, column: 1 }, to: { row: cab + 2, column: 4 } });
+/** Linha (1-based) cujo primeiro texto é `texto`. */
+function linhaCom(ws: ExcelJS.Worksheet, texto: string): number {
+  let achada = -1;
+  ws.eachRow((row, numero) => {
+    if (achada < 0 && row.getCell(1).value === texto) achada = numero;
   });
+  return achada;
+}
 
-  it("aba vazia: sem filtro e sem fórmula de total apontando intervalo invertido", () => {
-    const wb = new ExcelJS.Workbook();
-    const aba = escreverAba(wb, { nome: "Vazia", titulo: "Vazia", colunas, linhas: [] });
-    const ws = wb.getWorksheet("Vazia")!;
-    expect(ws.autoFilter).toBeFalsy();
-    expect(ws.getRow(aba.linhaTotal).getCell(1).value).toBe("Total (0 linhas)");
-    expect(ws.getRow(aba.linhaTotal).getCell(2).value).toBeNull();
-  });
-
-  it("razão que aponta coluna inexistente quebra em vez de sair errada", () => {
-    const wb = new ExcelJS.Workbook();
-    const quebrada: Coluna<L>[] = [
-      ...colunas.slice(0, 3),
-      { ...colunas[3], razao: { numerador: "Valor", denominador: "Não existe" } },
-    ];
-    expect(() => escreverAba(wb, { nome: "X", titulo: "X", colunas: quebrada, linhas: [{ nome: "a", litros: 1, valor: 1 }] })).toThrow(
-      /Não existe/,
+describe("Mensal consolidado", () => {
+  it("as abas da origem, na ordem, com o total por fórmula e a aba Anomalias ordenada", async () => {
+    const saidas = [saida(), saida({ litros: 50.25, valorTotal: 321.34 }), saida({ equipamentoId: EQUIPAMENTO_DESCONHECIDO })];
+    const wb = await reabrir(
+      montarMensal("2026-09", consolidarMensal(saidas, [], CADASTROS), {
+        cadastros: CADASTROS,
+        combustivelNome: COMBUSTIVEL,
+        anomalias: ANOMALIAS,
+      }),
     );
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumo", "Equipamentos", "Carretas", "Obras", "Fornecedores", "Anomalias"]);
+
+    const equipamentos = wb.getWorksheet("Equipamentos")!;
+    const cabecalho = linhaCom(equipamentos, "#");
+    expect((equipamentos.getRow(cabecalho).values as unknown[]).slice(1)).toEqual([
+      "#",
+      "Equipamento",
+      "Código",
+      "Saídas",
+      "Litros",
+      "Custo",
+      "R$/L",
+    ]);
+    const linha = equipamentos.getRow(cabecalho + 1);
+    expect(linha.getCell(2).value).toBe("Escavadeira 320");
+    expect(linha.getCell(4).value).toBe(2);
+    expect(linha.getCell(5).value).toBe(150.25);
+    expect(linha.getCell(6).value).toBe(960.81);
+    const total = equipamentos.getRow(cabecalho + 2);
+    expect(total.getCell(1).value).toBe("TOTAL (1 registros)");
+    expect(total.getCell(6).value).toMatchObject({ formula: `SUBTOTAL(109,F${cabecalho + 1}:F${cabecalho + 1})`, result: 960.81 });
+
+    const resumo = wb.getWorksheet("Resumo")!;
+    const aviso = linhaCom(resumo, "Atenção: 1 saída(s) sem equipamento identificado");
+    expect(aviso).toBeGreaterThan(0);
+    const volume = linhaCom(resumo, "Volume Total");
+    expect(resumo.getRow(volume).getCell(2).value).toBe(250.25);
+
+    const anomalias = wb.getWorksheet("Anomalias")!;
+    const cabAnomalias = linhaCom(anomalias, "Severidade");
+    expect(anomalias.getRow(cabAnomalias + 1).getCell(1).value).toBe("CRÍTICA");
+    expect(anomalias.getRow(cabAnomalias + 1).getCell(6).value).toBe("Verificar e excluir registros duplicados");
+    expect(anomalias.getRow(cabAnomalias + 2).getCell(1).value).toBe("INFO");
+  });
+
+  it("sem anomalia, a aba sai com a mensagem positiva", async () => {
+    const wb = await reabrir(
+      montarMensal("2026-09", consolidarMensal([saida()], [], CADASTROS), {
+        cadastros: CADASTROS,
+        combustivelNome: COMBUSTIVEL,
+        anomalias: [],
+      }),
+    );
+    expect(linhaCom(wb.getWorksheet("Anomalias")!, "Nenhuma anomalia detectada no período.")).toBeGreaterThan(0);
   });
 });
 
-describe("dataHoraParaCelula", () => {
-  it("a célula guarda o relógio de Rio Branco em campos UTC", () => {
-    const celula = dataHoraParaCelula("2026-09-10T15:30:00.000Z")!;
-    expect(celula.toISOString()).toBe("2026-09-10T10:30:00.000Z");
-    expect(dataHoraParaCelula(null)).toBeNull();
-    expect(dataHoraParaCelula("lixo")).toBeNull();
+describe("Por obra e Por equipamento", () => {
+  it("Por obra: Resumo · Saídas · Equipamentos · Fornecedores · Anomalias, saídas com a coluna R$/L", async () => {
+    const wb = await reabrir(
+      montarPorObra("Obra 009", "2026-09", consolidarPorObra([saida()], [], CADASTROS), {
+        cadastros: CADASTROS,
+        combustivelNome: COMBUSTIVEL,
+        anomalias: [],
+      }),
+    );
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumo", "Saídas", "Equipamentos", "Fornecedores", "Anomalias"]);
+    const ws = wb.getWorksheet("Saídas")!;
+    const cab = linhaCom(ws, "Data");
+    expect((ws.getRow(cab).values as unknown[]).slice(1)).toEqual(["Data", "Consumidor", "Tipo", "Combustível", "Litros", "R$/L", "Custo"]);
+    expect(ws.getRow(cab + 1).getCell(2).value).toBe("EQ-01 · Escavadeira 320");
+    expect(ws.getRow(cab + 1).getCell(6).value).toBeCloseTo(6.3947, 10);
+  });
+
+  it("Por equipamento: Resumo · Saídas · Obras · Fornecedores · Anomalias", async () => {
+    const wb = await reabrir(
+      montarPorEquipamento(
+        { rotulo: "EQ-01 · Escavadeira 320", tipo: "Escavadeira", marca: "CAT" },
+        { de: "2026-06-26", ate: "2026-09-23" },
+        consolidarPorEquipamento([saida()], [], CADASTROS),
+        { cadastros: CADASTROS, combustivelNome: COMBUSTIVEL, anomalias: [] },
+      ),
+    );
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumo", "Saídas", "Obras", "Fornecedores", "Anomalias"]);
+    const resumo = wb.getWorksheet("Resumo")!;
+    expect(resumo.getRow(linhaCom(resumo, "Tipo / marca")).getCell(2).value).toBe("Escavadeira · CAT");
   });
 });
 
-describe("montarRelatorio", () => {
-  it("mensal: uma linha por grupo e total por fórmula, e o arquivo abre de volta", async () => {
-    const wb = montarRelatorio(
-      "mensal",
-      [saida({ id: "a", litros: 10, valorTotal: 63.947 }), saida({ id: "b", litros: 20, valorTotal: 127.894 })],
-      PERIODO,
+describe("Raw export", () => {
+  it("cinco abas, sem Anomalias; 'Pago' só na requisição e 'Criado por' pelo nome", async () => {
+    const tanque: TanqueBase = {
+      id: "t1",
+      nome: "Tanque 1",
+      apelido: "Base",
+      nomeExibicao: "Base",
+      capacidadeLitros: 15000,
+      ehExterno: false,
+      proprietarioId: null,
+      ativo: true,
+    };
+    const wb = await reabrir(
+      montarBruto(
+        "2026-09",
+        {
+          saidas: [saida(), saida({ origem: "tanque" })],
+          entradas: [],
+          transferencias: [],
+          tanques: [tanque],
+          usuarioNome: new Map([["u1", "Maria"]]),
+          equipamentosAtivos: [{ descricao: "Escavadeira 320", codigo: "EQ-01", tipo: "Escavadeira", marca: "CAT", modelo: "320" }],
+          transportadoras: ["Transterra"],
+          combustiveis: [{ nome: "Diesel S10", unidade: "L" }],
+        },
+        { cadastros: CADASTROS, combustivelNome: COMBUSTIVEL },
+      ),
     );
-    const buffer = await wb.xlsx.writeBuffer();
-    const relido = new ExcelJS.Workbook();
-    await relido.xlsx.load(buffer as ArrayBuffer);
-    const ws = relido.getWorksheet("Mensal")!;
-    const r = leitor(
-      ws,
-      COLUNAS_MENSAL.map((c) => c.cabecalho),
-    );
-    const primeira = r.linhaCabecalho + 1;
-    expect(r.valor(primeira, "Mês")).toBe("09/2026");
-    expect(r.valor(primeira, "Litros")).toBe(30);
-    expect(r.valor(primeira, "Valor")).toBe(191.841);
-    const l = r.letra("Litros");
-    expect(r.valor(primeira + 1, "Litros")).toEqual({ formula: `SUBTOTAL(109,${l}${primeira}:${l}${primeira})` });
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Resumo", "Saídas", "Entradas", "Transferências", "Cadastros"]);
+    const ws = wb.getWorksheet("Saídas")!;
+    const cab = linhaCom(ws, "Data");
+    const cabecalhos = (ws.getRow(cab).values as unknown[]).slice(1);
+    expect(cabecalhos).toEqual([
+      "Data",
+      "Tipo Consumidor",
+      "Consumidor",
+      "Origem",
+      "Tanque",
+      "Obra",
+      "Combustível",
+      "Litros",
+      "Preço/L",
+      "R$/L Total",
+      "Valor Total",
+      "Motorista",
+      "Pago",
+      "Pago em",
+      "Observações",
+      "Criado por",
+    ]);
+    const pago = cabecalhos.indexOf("Pago") + 1;
+    const valores = [ws.getRow(cab + 1).getCell(pago).value, ws.getRow(cab + 2).getCell(pago).value].sort();
+    expect(valores).toEqual(["-", "Sim"]);
+    expect(ws.getRow(cab + 1).getCell(cabecalhos.indexOf("Criado por") + 1).value).toBe("Maria");
+    expect(ws.getRow(cab + 1).getCell(cabecalhos.indexOf("Tanque") + 1).value).toBe("Base");
   });
+});
 
-  it("equipamento gera as abas Equipamentos e Carretas; obra usa o custo da alocação", () => {
-    const eq = montarRelatorio("equipamento", [saida()], PERIODO);
-    expect(eq.worksheets.map((w) => w.name)).toEqual(["Equipamentos", "Carretas"]);
-    const obra = montarRelatorio("obra", [saida({ valorTotal: 100 })], PERIODO);
-    const ws = obra.getWorksheet("Por obra")!;
-    const r = leitor(ws, ["Centro de custo", "Abastecimentos", "Litros", "Custo"]);
-    expect(r.valor(r.linhaCabecalho + 1, "Centro de custo")).toBe("Obra 009");
-    expect(r.valor(r.linhaCabecalho + 1, "Custo")).toBe(100);
-  });
-
-  it("bruto: todas as colunas, data e hora em Rio Branco, datas como data do Excel", () => {
-    const wb = montarRelatorio("bruto", [saida()], PERIODO);
-    const ws = wb.getWorksheet("Abastecimentos")!;
-    const r = leitor(
-      ws,
-      COLUNAS_BRUTO.map((c) => c.cabecalho),
-    );
-    const linha = r.linhaCabecalho + 1;
-    expect((r.valor(linha, "Data") as Date).toISOString()).toBe("2026-09-10T10:30:00.000Z");
-    expect((r.valor(linha, "Pago em") as Date).toISOString()).toBe("2026-09-12T00:00:00.000Z");
-    expect(r.valor(linha, "Litros")).toBe(100);
-    expect(r.valor(linha, "Valor total")).toBe(639.47);
-    expect(r.valor(linha, "Preço do dono do tanque")).toBeNull();
-    expect(r.valor(linha, "Canal")).toBe("Celular");
-    expect(r.valor(linha, "Origem")).toBe("Tanque");
-    expect(r.valor(linha, "Consumidor")).toBe("Equipamento");
-    expect(r.valor(linha, "Medidor")).toBe("Horímetro");
-    expect(r.valor(linha, "Alocação por obra")).toBe("Obra 009 (100%)");
-    expect(r.valor(linha, "Id")).toBe("s1");
-    const letra = r.letra("Valor total");
-    expect(r.valor(linha + 1, "Valor total")).toEqual({ formula: `SUBTOTAL(109,${letra}${linha}:${letra}${linha})` });
-  });
-
-  it("nome do arquivo leva o relatório e o período", () => {
-    expect(nomeArquivoRelatorio("obra", PERIODO)).toBe("combustivel-por-obra-2026-09-01-a-2026-09-30.xlsx");
+describe("nomes de arquivo da origem", () => {
+  it("mês curto, obra saneada e o rótulo do intervalo", () => {
+    expect(formatarMesRef("2026-04")).toBe("Abr/2026");
+    expect(nomeArquivoMensal("2026-04")).toBe("EMT - Mensal Consolidado - Abr-2026.xlsx");
+    expect(nomeArquivoPorObra("BR-364 / Lote 9", "2026-08")).toBe("EMT - Por Obra - BR-364 - Lote 9 - Ago-2026.xlsx");
+    expect(nomeArquivoBruto("2026-01")).toBe("EMT - Raw Export - Jan-2026.xlsx");
+    expect(rotuloDoIntervalo("2026-02-01", "2026-05-31")).toBe("Fev-Mai-2026");
+    expect(rotuloDoIntervalo("2025-10-01", "2026-01-31")).toBe("Out-2025-Jan-2026");
+    expect(rotuloDoIntervalo("2026-05-01", "2026-05-31")).toBe("Mai-2026");
+    expect(nomeArquivoPorEquipamento("EQ-01", "2026-06-26", "2026-09-23")).toBe("EMT - Por Equipamento - EQ-01 - Jun-Set-2026.xlsx");
   });
 });

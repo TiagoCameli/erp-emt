@@ -40,6 +40,22 @@ export const revisarSemSuprimentoSchema = z.strictObject({
 });
 export type RevisarSemSuprimentoInput = z.input<typeof revisarSemSuprimentoSchema>;
 
+/** Teto de saídas por atribuição (a lista vai num array do Postgres, sem estourar URL). */
+export const MAXIMO_SAIDAS_ATRIBUICAO = 1000;
+
+/**
+ * Atribuir equipamento às saídas do sentinela ("Outros"): o AtribuirSentinelModal e a
+ * atribuição do AnomaliaDrawer da origem. Um equipamento para uma ou várias saídas.
+ */
+export const atribuirEquipamentoSchema = z.strictObject({
+  saidaIds: z
+    .array(idSchema)
+    .min(1, { error: "Selecione ao menos uma saída" })
+    .max(MAXIMO_SAIDAS_ATRIBUICAO, { error: `No máximo ${MAXIMO_SAIDAS_ATRIBUICAO} saídas por vez` }),
+  equipamentoId: idSchema,
+});
+export type AtribuirEquipamentoInput = z.input<typeof atribuirEquipamentoSchema>;
+
 /** Filtro de situação das duas listas. */
 export const SITUACOES = ["pendentes", "conferidas", "todas"] as const;
 export type Situacao = (typeof SITUACOES)[number];

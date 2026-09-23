@@ -71,7 +71,7 @@ export function AcoesEquipamento({
         {aberto === "leitura" && controlePor ? (
           <LancarLeitura equipamentoId={equipamentoId} tipo={controlePor} ultima={ultimaLeitura} onFeito={feito} />
         ) : aberto === "abastecer" ? (
-          <Abastecer equipamentoId={equipamentoId} temEtapa={temEtapa} tanques={tanques} centros={centros} onFeito={feito} />
+          <Abastecer equipamentoId={equipamentoId} tanques={tanques} centros={centros} onFeito={feito} />
         ) : (
           <AbrirOs equipamentoId={equipamentoId} temEtapa={temEtapa} centros={centros} onFeito={feito} />
         )}

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const rpc = vi.fn();
-let usuario: { id: string; permissoes: { recurso: string; acao: string }[] } | null = null;
+let usuario: { id: string; nome: string; permissoes: { recurso: string; acao: string }[] } | null = null;
 
 vi.mock("@/lib/erros", () => ({ logErroServidor: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc }) }));
@@ -11,6 +11,10 @@ vi.mock("@/lib/permissoes", () => ({
     !!u && u.permissoes.some((p) => p.recurso === recurso && p.acao === acao),
 }));
 vi.mock("@/lib/formatadores", () => ({ dataHojeISO: () => "2026-09-23" }));
+const precoFifoCampo = vi.fn();
+vi.mock("@/modules/manutencao/campo/queries", () => ({
+  precoFifoCampo: (...args: unknown[]) => precoFifoCampo(...args),
+}));
 
 import { processarEnvioCampo } from "@/modules/manutencao/campo/processar";
 
@@ -41,11 +45,13 @@ const os = {
 };
 
 function com(...permissoes: [string, string][]) {
-  usuario = { id: "u", permissoes: permissoes.map(([recurso, acao]) => ({ recurso, acao })) };
+  usuario = { id: "u", nome: "Operador Teste", permissoes: permissoes.map(([recurso, acao]) => ({ recurso, acao })) };
 }
 
 beforeEach(() => {
   rpc.mockReset();
+  precoFifoCampo.mockReset();
+  precoFifoCampo.mockResolvedValue({ preco: 6.3745, insumoId: "55555555-5555-4555-8555-555555555555" });
   usuario = null;
 });
 
@@ -141,8 +147,22 @@ describe("processarEnvioCampo", () => {
     expect(rpc).toHaveBeenCalledWith("fn_comb_salvar_saida", {
       p_id: null,
       p_dados: expect.objectContaining({ origem: "tanque", tipo_consumidor: "equipamento_proprio", tanque_id: TANQUE,
-        equipamento_id: EQUIP, litros: 120.5, canal: "celular", alocacoes: [{ centro_custo_id: OBRA, percentual: 100 }] }),
+        equipamento_id: EQUIP, litros: 120.5, canal: "celular", motorista: "Operador Teste",
+        preco_medio_tanque: 6.3745, insumo_id: "55555555-5555-4555-8555-555555555555",
+        observacoes: "Saída via mobile · Operador Teste", alocacoes: [{ centro_custo_id: OBRA, percentual: 100 }] }),
     });
+  });
+
+  it("abastecimento sem obra é recusado sem ir ao banco (a origem pede obra sempre)", async () => {
+    com(["combustivel.saidas", "criar"]);
+    const resposta = await processarEnvioCampo({
+      tipo: "abastecimento",
+      idCliente: ID_CLIENTE,
+      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
+        centroCustoId: null, observacoes: "" },
+    });
+    expect(resposta).toMatchObject({ ok: false, definitivo: true });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("abastecimento sem permissão de combustível é recusado sem ir ao banco (manutenção não basta)", async () => {
@@ -151,9 +171,22 @@ describe("processarEnvioCampo", () => {
       tipo: "abastecimento",
       idCliente: ID_CLIENTE,
       dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
-        centroCustoId: null, observacoes: "" },
+        centroCustoId: EQUIP, observacoes: "" },
     });
     expect(resposta).toMatchObject({ ok: false, definitivo: true });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("abastecimento sem conseguir ler o FIFO não grava e deixa tentar de novo", async () => {
+    com(["combustivel.saidas", "criar"]);
+    precoFifoCampo.mockResolvedValue(null);
+    const resposta = await processarEnvioCampo({
+      tipo: "abastecimento",
+      idCliente: ID_CLIENTE,
+      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
+        centroCustoId: EQUIP, observacoes: "" },
+    });
+    expect(resposta).toMatchObject({ ok: false, definitivo: false });
     expect(rpc).not.toHaveBeenCalled();
   });
 });

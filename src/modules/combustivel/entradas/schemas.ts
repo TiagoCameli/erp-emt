@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CASAS_TAXA, CASAS_VALOR_OPERACIONAL } from "@/lib/casas-decimais";
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { dataHoraLocalParaIso } from "@/modules/combustivel/_shared/rotulos";
 import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
@@ -14,9 +14,13 @@ import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
  * - `entradaSchema`: o que a Server Action recebe, com número de verdade e a data
  *   em ISO com fuso. O servidor valida de novo.
  *
+ * Igual à tela da origem (EntradaForm do Gestão Obras, 24/09/2026): a pessoa digita a
+ * quantidade e o PREÇO UNITÁRIO; o total é quantidade × preço, exato (o banco grava
+ * `p_quantidade * p_valor_unitario`, sem arredondar). Fornecedor é obrigatório.
+ *
  * Quantidade é na unidade do insumo (galão de Arla, litro de diesel); os litros
- * quem converte é o banco (`fn_comb_litros_da_entrada`). O valor é o total da NF,
- * com as 4 casas do Combustível (`CASAS_VALOR_OPERACIONAL`).
+ * quem converte é o banco (`fn_comb_litros_da_entrada`). O preço multiplica a
+ * quantidade, então no galão de Arla é o preço do galão.
  */
 
 /** Teto das colunas NUMERIC(14,4): 10 dígitos inteiros. */
@@ -32,14 +36,6 @@ export function arredondar(valor: number, casas: number): number {
   const fator = 10 ** casas;
   const sinal = valor < 0 ? -1 : 1;
   return (sinal * Math.round(Math.abs(valor) * fator * (1 + Number.EPSILON))) / fator;
-}
-
-/** Id opcional no formulário: "" é "nenhum". */
-function idOpcionalForm(mensagem: string) {
-  return z
-    .string()
-    .trim()
-    .refine((valor) => valor === "" || z.guid().safeParse(valor).success, { error: mensagem });
 }
 
 /** Texto numérico do formulário com regra de mínimo. */
@@ -101,12 +97,12 @@ export const entradaFormSchema = z.object({
     `Informe a quantidade maior que zero, com até ${CASAS_TAXA} casas`,
     "positivo",
   ),
-  valorTotal: numeroTexto(
-    CASAS_VALOR_OPERACIONAL,
-    `Informe o valor da nota, com até ${CASAS_VALOR_OPERACIONAL} casas`,
-    "naoNegativo",
+  valorUnitario: numeroTexto(
+    CASAS_TAXA,
+    `Informe o valor unitário maior que zero, com até ${CASAS_TAXA} casas`,
+    "positivo",
   ),
-  fornecedorId: idOpcionalForm("Fornecedor inválido"),
+  fornecedorId: z.string().trim().min(1, { error: "Selecione o fornecedor" }),
   notaFiscal: z.string().trim().max(60, { error: "Máximo de 60 caracteres" }),
   dataHora: dataHoraFormSchema,
   observacoes: z.string().trim().max(2000, { error: "Máximo de 2000 caracteres" }),
@@ -121,8 +117,17 @@ export const entradaSchema = z.strictObject({
   tanqueId: z.guid({ error: "Selecione o tanque" }),
   insumoId: z.guid({ error: "Selecione o combustível" }),
   quantidade: numeroSchema(CASAS_TAXA, "Quantidade", "positivo"),
-  valorTotal: numeroSchema(CASAS_VALOR_OPERACIONAL, "Valor", "naoNegativo"),
-  fornecedorId: z.guid({ error: "Fornecedor inválido" }).nullable(),
+  /**
+   * Sem teto de casas: na edição, o preço que a tela da origem preenche é valor ÷
+   * quantidade, cheio. Se a pessoa não mexe nele, é ele que volta, e o total salvo
+   * continua o mesmo (a origem guarda até 12 casas no valor). O que a pessoa DIGITA
+   * passa pelo campo, que aceita 4 casas.
+   */
+  valorUnitario: z
+    .number({ error: "Valor unitário inválido" })
+    .refine((valor) => Number.isFinite(valor) && valor > 0, { error: "Valor unitário precisa ser maior que zero" })
+    .refine((valor) => valor <= TETO_NUMERIC_14_4, { error: "Valor unitário acima do permitido" }),
+  fornecedorId: z.guid({ error: "Selecione o fornecedor" }),
   notaFiscal: z.string().trim().max(60, { error: "Máximo de 60 caracteres" }).nullable(),
   dataHora: dataHoraIsoSchema,
   observacoes: z.string().trim().max(2000, { error: "Máximo de 2000 caracteres" }).nullable(),
@@ -134,18 +139,97 @@ function textoOuNulo(valor: string): string | null {
   return limpo === "" ? null : limpo;
 }
 
-/** Formulário validado -> o que a action recebe. */
-export function entradaDoForm(form: EntradaFormInput): EntradaInput {
+/**
+ * Preço unitário que a tela da origem preenche na edição: valor_total ÷ quantidade
+ * (`initial.valorTotal / initial.quantidadeLitros`). Sem quantidade, zero.
+ */
+export function precoUnitarioDaEntrada(valorTotal: number, quantidade: number): number {
+  return quantidade > 0 ? valorTotal / quantidade : 0;
+}
+
+/** O preço exato da edição e o texto em que ele aparece no campo. */
+export interface PrecoDaEdicao {
+  texto: string;
+  valor: number;
+}
+
+/**
+ * Formulário validado -> o que a action recebe. Na edição, se o campo do preço
+ * continua com o texto que a tela preencheu, vai o preço exato (valor ÷ quantidade),
+ * não o arredondado a 4 casas: salvar sem mexer não muda o total.
+ */
+export function entradaDoForm(form: EntradaFormInput, precoDaEdicao?: PrecoDaEdicao | null): EntradaInput {
+  const digitado = textoParaNumero(form.valorUnitario, CASAS_TAXA) ?? 0;
+  const valorUnitario =
+    precoDaEdicao && form.valorUnitario.trim() === precoDaEdicao.texto ? precoDaEdicao.valor : digitado;
   return {
     tanqueId: form.tanqueId,
     insumoId: form.insumoId,
     quantidade: textoParaNumero(form.quantidade, CASAS_TAXA) ?? 0,
-    valorTotal: textoParaNumero(form.valorTotal, CASAS_VALOR_OPERACIONAL) ?? 0,
-    fornecedorId: textoOuNulo(form.fornecedorId),
+    valorUnitario,
+    fornecedorId: form.fornecedorId,
     notaFiscal: textoOuNulo(form.notaFiscal),
     dataHora: dataHoraLocalParaIso(form.dataHora) ?? "",
     observacoes: textoOuNulo(form.observacoes),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Regras da tela da origem (só mostram e travam o botão; o banco confere de novo)
+// ---------------------------------------------------------------------------
+
+/** Total da entrada: quantidade × valor unitário, como a origem (`valorTotalCalc`). */
+export function valorTotalEntrada(quantidade: number | null, valorUnitario: number | null): number {
+  return (quantidade || 0) * (valorUnitario || 0);
+}
+
+/** O que a regra de capacidade e de mistura precisa do tanque. */
+export interface TanqueDaEntrada {
+  id: string;
+  ehExterno: boolean;
+  capacidadeLitros: number;
+  nivelAtualLitros: number;
+  combustivelAtualId: string | null;
+}
+
+/**
+ * Espaço livre do tanque, como a origem: capacidade - nível atual + (na edição, no MESMO
+ * tanque, os litros da própria entrada, que já estão no nível). Os litros são os do
+ * tanque, então no galão de Arla a entrada anterior conta convertida.
+ */
+export function espacoDisponivel(
+  tanque: TanqueDaEntrada,
+  edicao: { tanqueId: string; litros: number } | null,
+): number {
+  const ajusteEdicao = edicao && edicao.tanqueId === tanque.id ? edicao.litros : 0;
+  return tanque.capacidadeLitros - tanque.nivelAtualLitros + ajusteEdicao;
+}
+
+/**
+ * Passa da capacidade? Capacidade zero é "sem capacidade cadastrada" no ERP (o banco
+ * também só trava quando `capacidade_litros > 0`); na origem todo tanque tem capacidade.
+ */
+export function excedeCapacidade(
+  tanque: TanqueDaEntrada,
+  litros: number,
+  edicao: { tanqueId: string; litros: number } | null,
+): boolean {
+  if (!(tanque.capacidadeLitros > 0)) return false;
+  return litros > espacoDisponivel(tanque, edicao);
+}
+
+/**
+ * Pré-checagem de mistura da origem: bloqueia se o tanque tem OUTRO combustível corrente.
+ * Tanque vazio (nível <= 0) ou externo passa. Devolve o id do combustível que está no
+ * tanque, ou null.
+ */
+export function conflitoCombustivel(tanque: TanqueDaEntrada | null, insumoId: string): string | null {
+  if (!tanque || !insumoId) return null;
+  if (tanque.ehExterno) return null;
+  if (tanque.nivelAtualLitros <= 0) return null;
+  if (!tanque.combustivelAtualId) return null;
+  if (tanque.combustivelAtualId === insumoId) return null;
+  return tanque.combustivelAtualId;
 }
 
 // ---------------------------------------------------------------------------

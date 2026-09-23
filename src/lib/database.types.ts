@@ -6275,6 +6275,10 @@ export type Database = {
       };
       fn_chave_nome: { Args: { p_texto: string }; Returns: string };
       fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean };
+      fn_comb_atribuir_equipamento: {
+        Args: { p_equipamento: string; p_saidas: string[] };
+        Returns: number;
+      };
       fn_comb_combustivel_na_data: {
         Args: { p_data: string; p_tanque: string };
         Returns: string;
@@ -6295,14 +6299,17 @@ export type Database = {
         Args: { p_tanque: string };
         Returns: string;
       };
+      fn_comb_preco_medio_tanque: {
+        Args: { p_tanque: string };
+        Returns: number;
+      };
       fn_comb_registrar_esvaziamento: {
-        Args: {
-          p_data_hora: string;
-          p_litros: number;
-          p_motivo: string;
-          p_tanque: string;
-        };
+        Args: { p_motivo: string; p_tanque: string };
         Returns: string;
+      };
+      fn_comb_restaurar: {
+        Args: { p_id: string; p_tabela: string };
+        Returns: undefined;
       };
       fn_comb_revisar_sem_suprimento: {
         Args: { p_observacao?: string; p_revisado: boolean; p_saida: string };
@@ -6318,7 +6325,7 @@ export type Database = {
           p_observacoes: string;
           p_quantidade: number;
           p_tanque: string;
-          p_valor_total: number;
+          p_valor_unitario: number;
         };
         Returns: string;
       };
@@ -6334,6 +6341,7 @@ export type Database = {
           p_litros: number;
           p_observacoes: string;
           p_origem: string;
+          p_valor_total?: number;
         };
         Returns: string;
       };

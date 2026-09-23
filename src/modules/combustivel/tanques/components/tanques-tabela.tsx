@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Fuel, Pencil, Power, Trash2 } from "lucide-react";
+import { Eraser, Fuel, Pencil, Power, Trash2 } from "lucide-react";
 
 import {
   CelulaVazia,
@@ -18,6 +18,7 @@ import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
+import { podeEsvaziar } from "@/modules/combustivel/esvaziamentos/schemas";
 import { alternarAtivoTanque, excluirTanque } from "@/modules/combustivel/tanques/actions";
 import type { TanqueLinha } from "@/modules/combustivel/tanques/queries";
 import { NivelTanque } from "./nivel-tanque";
@@ -112,6 +113,11 @@ export interface TanquesTabelaProps {
   podeEditar: boolean;
   podeExcluir: boolean;
   onEditar: (tanque: TanqueLinha) => void;
+  /**
+   * Abre o esvaziamento do tanque. Presente só com permissão de esvaziar; o
+   * item aparece, como na origem, quando pode editar e o nível passa de zero.
+   */
+  onEsvaziar?: (tanque: TanqueLinha) => void;
 }
 
 /**
@@ -119,7 +125,7 @@ export interface TanquesTabelaProps {
  * busca e filtros rodam em memória. Clicar na linha abre o detalhe com os
  * movimentos do tanque.
  */
-export function TanquesTabela({ tanques, podeEditar, podeExcluir, onEditar }: TanquesTabelaProps) {
+export function TanquesTabela({ tanques, podeEditar, podeExcluir, onEditar, onEsvaziar }: TanquesTabelaProps) {
   const router = useRouter();
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [dono, setDono] = useFiltroSessao<FiltroDono>("dono", "", ["", "emt", "terceiro"]);
@@ -217,6 +223,12 @@ export function TanquesTabela({ tanques, podeEditar, podeExcluir, onEditar }: Ta
           temAcoes
             ? (tanque) => (
                 <>
+                  {podeEditar && onEsvaziar && podeEsvaziar(tanque) ? (
+                    <DropdownMenuItem onSelect={() => onEsvaziar(tanque)}>
+                      <Eraser />
+                      Esvaziar tanque
+                    </DropdownMenuItem>
+                  ) : null}
                   {podeEditar ? (
                     <>
                       <DropdownMenuItem onSelect={() => onEditar(tanque)}>

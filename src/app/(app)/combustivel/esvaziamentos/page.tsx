@@ -5,7 +5,9 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { EsvaziamentosAcoesCabecalho } from "@/modules/combustivel/esvaziamentos/components/esvaziamentos-acoes-cabecalho";
 import { EsvaziamentosTabela } from "@/modules/combustivel/esvaziamentos/components/esvaziamentos-tabela";
 import { listarEsvaziamentos } from "@/modules/combustivel/esvaziamentos/queries";
+import { podeEsvaziar } from "@/modules/combustivel/esvaziamentos/schemas";
 import { listarTanques } from "@/modules/combustivel/tanques/queries";
+import { podeRestaurarMovimento } from "@/modules/combustivel/transferencias/regras";
 
 const RECURSO = "combustivel.esvaziamentos" as const;
 
@@ -17,13 +19,17 @@ export default async function PaginaEsvaziamentos() {
 
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
+  const podeRestaurar = podeRestaurarMovimento((recurso, acao) => temPermissao(usuario, recurso, acao), RECURSO);
 
-  const [esvaziamentos, tanques] = await Promise.all([listarEsvaziamentos(), listarTanques()]);
+  const [esvaziamentos, tanques] = await Promise.all([
+    listarEsvaziamentos({ incluirExcluidos: podeRestaurar }),
+    listarTanques(),
+  ]);
 
-  // Tanque de terceiro não se esvazia (o estoque é do dono): nem aparece.
+  // Como a origem: só tanque da EMT com combustível (nível > 0) se esvazia.
   const daEmt = tanques.filter((tanque) => !tanque.ehExterno);
   const opcoes = daEmt
-    .filter((tanque) => tanque.ativo)
+    .filter(podeEsvaziar)
     .map((tanque) => ({
       id: tanque.id,
       nome: tanque.nome,
@@ -37,10 +43,15 @@ export default async function PaginaEsvaziamentos() {
       <PageHeader
         modulo="Combustível"
         titulo="Esvaziamentos"
-        descricao="Combustível retirado de um tanque da EMT, com o motivo. Tira do nível sem consumir o PEPS"
+        descricao="Descarte do combustível de um tanque da EMT, com o motivo, para trocar de combustível"
         acoes={<EsvaziamentosAcoesCabecalho podeCriar={podeCriar} tanques={opcoes} />}
       />
-      <EsvaziamentosTabela esvaziamentos={esvaziamentos} tanquesFiltro={tanquesFiltro} podeExcluir={podeExcluir} />
+      <EsvaziamentosTabela
+        esvaziamentos={esvaziamentos}
+        tanquesFiltro={tanquesFiltro}
+        podeExcluir={podeExcluir}
+        podeRestaurar={podeRestaurar}
+      />
     </>
   );
 }

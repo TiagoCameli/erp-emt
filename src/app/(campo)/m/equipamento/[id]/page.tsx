@@ -64,8 +64,8 @@ export default async function EquipamentoCampoPage({ params }: { params: Promise
   const permissoes = permissoesCampo(usuario);
   const [ficha, centros, tanques] = await Promise.all([
     obterFichaTecnica(equipamento.id),
-    // A lista de obras só vai para o alugado (sem etapa), que é quem a OS e o abastecimento pedem.
-    (permissoes.abrirOs || permissoes.abastecer) && !equipamento.temEtapa ? listarCentrosCusto() : Promise.resolve([]),
+    // A OS só pede obra ao alugado (sem etapa); o abastecimento pede sempre, igual à origem.
+    permissoes.abastecer || (permissoes.abrirOs && !equipamento.temEtapa) ? listarCentrosCusto() : Promise.resolve([]),
     permissoes.abastecer ? listarTanquesCampo() : Promise.resolve([]),
   ]);
   const unidade = equipamento.controlePor ? UNIDADE_MEDICAO[equipamento.controlePor] : "";

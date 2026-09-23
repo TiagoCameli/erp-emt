@@ -1,213 +1,190 @@
 import { describe, expect, it } from "vitest";
 
+import { EQUIPAMENTO_DESCONHECIDO, type SaidaBase } from "@/modules/combustivel/anomalias/base";
 import {
+  consolidarCompras,
   consolidarMensal,
-  consolidarPorCarreta,
   consolidarPorEquipamento,
   consolidarPorObra,
-  raizDoCentro,
-  resumoAlocacoes,
-  SEM_ALOCACAO,
-  type SaidaRelatorio,
+  consumidorDaSaida,
+  rPorLDaSaida,
+  type CadastrosRelatorio,
+  type EntradaRelatorio,
 } from "@/modules/combustivel/relatorios/consolidar";
 
+/**
+ * As contas dos relatórios da origem (mensalConsolidadoExport, porObraExport,
+ * porEquipamentoExport), com as regras de lá: custo = valor total da saída (próprio e
+ * carreta), obra leva a saída inteira, sentinela fora do top e contado à parte, carreta
+ * pela placa aparada, tops de 10.
+ */
+
 let n = 0;
-function saidaRelatorio(parcial: Partial<SaidaRelatorio> = {}): SaidaRelatorio {
+function saida(parcial: Partial<SaidaBase> = {}): SaidaBase {
   n += 1;
   return {
     id: `s${n}`,
-    data: "2026-09-10T15:00:00.000Z",
-    origem: "tanque",
+    data: "2026-09-10T08:00:00",
+    instante: "2026-09-10T13:00:00Z",
     tipoConsumidor: "equipamento_proprio",
-    tanqueNome: "Tanque 1",
     equipamentoId: "eq-1",
-    equipamentoNome: "EQ-1 Escavadeira",
-    transportadoraId: null,
-    transportadoraNome: null,
+    equipamentoIdReal: "eq-1",
     placa: null,
-    motorista: null,
-    insumoId: "diesel",
-    combustivel: "Diesel S10",
+    obraId: "obra-1",
+    tipoCombustivel: "diesel",
     litros: 100,
-    precoCombustivel: 6.3947,
-    precoProprietario: null,
-    taxaLitro: 0,
-    precoUnitario: 6.3947,
-    precoMedioTanque: 6.3947,
-    valorTotal: 639.47,
+    valorTotal: 600,
+    origem: "tanque",
+    tanqueId: "t1",
+    transportadoraId: null,
+    motorista: null,
+    precoUnitario: 6,
     pago: false,
     pagoEm: null,
-    medicao: null,
-    tipoMedicao: null,
-    centroCustoNome: "Manutenção",
-    canal: "computador",
     observacoes: null,
-    criadoEm: "2026-09-10T15:01:00.000Z",
-    alocacoes: [],
+    createdBy: null,
     ...parcial,
   };
 }
 
-const carreta = (parcial: Partial<SaidaRelatorio> = {}) =>
-  saidaRelatorio({
-    tipoConsumidor: "carreta_transportadora",
-    equipamentoId: null,
-    equipamentoNome: null,
-    transportadoraId: "t1",
-    transportadoraNome: "Transterra",
-    placa: "ABC1D23",
+function entrada(parcial: Partial<EntradaRelatorio> = {}): EntradaRelatorio {
+  return {
+    id: "e1",
+    dataHora: "2026-09-05T10:00:00",
+    tanqueId: "t1",
+    tipoCombustivel: "diesel",
+    litros: 5000,
+    valorTotal: 31973.5,
+    fornecedor: "Posto Progresso",
+    notaFiscal: "123",
+    observacoes: null,
+    createdBy: null,
     ...parcial,
-  });
+  };
+}
 
-describe("consolidarMensal", () => {
-  it("agrupa por mês de Rio Branco, combustível e consumidor, em 4 casas", () => {
-    const linhas = consolidarMensal([
-      saidaRelatorio({ litros: 0.1, valorTotal: 0.6395 }),
-      saidaRelatorio({ litros: 0.2, valorTotal: 1.2789 }),
-      // 01/10 03:00 UTC é 30/09 22:00 em Rio Branco: setembro.
-      saidaRelatorio({ data: "2026-10-01T03:00:00.000Z", litros: 1, valorTotal: 1 }),
-      saidaRelatorio({ data: "2026-10-01T06:00:00.000Z", litros: 5, valorTotal: 5 }),
-      carreta({ litros: 50, valorTotal: 300 }),
-      saidaRelatorio({ insumoId: "arla", combustivel: "Arla 32", litros: 20, valorTotal: 80 }),
-    ]);
-    expect(linhas.map((l) => [l.mes, l.combustivel, l.tipoConsumidor, l.abastecimentos, l.litros, l.valor])).toEqual([
-      ["2026-09", "Arla 32", "Equipamento", 1, 20, 80],
-      ["2026-09", "Diesel S10", "Carreta de transportadora", 1, 50, 300],
-      ["2026-09", "Diesel S10", "Equipamento", 3, 1.3, 2.9184],
-      ["2026-10", "Diesel S10", "Equipamento", 1, 5, 5],
-    ]);
-  });
-});
+const CADASTROS: CadastrosRelatorio = {
+  equipamentos: new Map([
+    ["eq-1", { descricao: "Escavadeira 320", codigo: "EQ-01", tipo: "Escavadeira" }],
+    ["eq-2", { descricao: "Rolo", codigo: null, tipo: "Compactador" }],
+  ]),
+  transportadoraNome: new Map([["tr-1", "Transterra"]]),
+  obraNome: new Map([
+    ["obra-1", "Obra 009"],
+    ["obra-2", "Obra 002"],
+  ]),
+};
 
-describe("consolidarPorObra", () => {
-  it("litros da alocação e custo = percentual × valor, só de equipamento próprio", () => {
-    const linhas = consolidarPorObra([
-      saidaRelatorio({
-        valorTotal: 1000,
-        litros: 100,
-        alocacoes: [
-          { centroRaizId: "o9", centroRaizNome: "Obra 009", percentual: 60, litros: 60 },
-          { centroRaizId: "o2", centroRaizNome: "Obra 002", percentual: 40, litros: 40 },
-        ],
-      }),
-      saidaRelatorio({
-        valorTotal: 100,
-        litros: 10,
-        alocacoes: [{ centroRaizId: "o9", centroRaizNome: "Obra 009", percentual: 100, litros: 10 }],
-      }),
-      carreta({
-        valorTotal: 500,
-        litros: 80,
-        alocacoes: [{ centroRaizId: "o2", centroRaizNome: "Obra 002", percentual: 100, litros: 80 }],
-      }),
-    ]);
-    expect(linhas).toEqual([
-      { centro: "Obra 009", abastecimentos: 2, litros: 70, custo: 700 },
-      { centro: "Obra 002", abastecimentos: 2, litros: 120, custo: 400 },
-    ]);
-  });
+const carreta = (placa: string, extra: Partial<SaidaBase> = {}) =>
+  saida({ tipoConsumidor: "carreta_transportadora", equipamentoId: null, equipamentoIdReal: null, placa, transportadoraId: "tr-1", ...extra });
 
-  it("fatia arredonda em 4 casas antes de somar; sem alocação vai inteira para a linha própria", () => {
-    const linhas = consolidarPorObra([
-      saidaRelatorio({
-        valorTotal: 100,
-        alocacoes: [
-          { centroRaizId: "a", centroRaizNome: "A", percentual: 33.3333, litros: 33.3333 },
-          { centroRaizId: "b", centroRaizNome: "B", percentual: 66.6667, litros: 66.6667 },
-        ],
-      }),
-      saidaRelatorio({ valorTotal: 12.3456, litros: 2 }),
-      carreta({ valorTotal: 99, litros: 3 }),
-    ]);
-    expect(linhas.find((l) => l.centro === "A")?.custo).toBe(33.3333);
-    expect(linhas.find((l) => l.centro === "B")?.custo).toBe(66.6667);
-    expect(linhas.find((l) => l.centro === SEM_ALOCACAO)).toEqual({
-      centro: SEM_ALOCACAO,
-      abastecimentos: 2,
-      litros: 5,
-      custo: 12.3456,
+describe("Mensal consolidado", () => {
+  it("totais somam próprios e carretas; sentinela fora do top e contado à parte", () => {
+    const saidas = [
+      saida({ litros: 100.1, valorTotal: 640.1 }),
+      saida({ litros: 0.2, valorTotal: 1.3 }),
+      saida({ equipamentoId: EQUIPAMENTO_DESCONHECIDO, litros: 50, valorTotal: 300 }),
+      carreta(" ABC1D23 ", { litros: 200, valorTotal: 1300, obraId: "obra-2" }),
+      carreta("", { litros: 10, valorTotal: 60, obraId: null }),
+    ];
+    const d = consolidarMensal(saidas, [entrada()], CADASTROS);
+    expect(d.totais).toMatchObject({
+      volume: 360.3,
+      custo: 2301.4,
+      qtdSaidas: 5,
+      qtdEquipamentosProprios: 1,
+      qtdSentinel: 1,
+      qtdCarretas: 1,
+      qtdObras: 2,
+      volumeCompras: 5000,
+      custoCompras: 31973.5,
+      qtdFornecedores: 1,
     });
+    expect(d.totais.rPorL).toBeCloseTo(2301.4 / 360.3, 12);
+    expect(d.topEquipamentos).toEqual([
+      { nome: "Escavadeira 320", codigo: "EQ-01", litros: 100.3, custo: 641.4, qtd: 2, rPorL: 641.4 / 100.3 },
+    ]);
+    expect(d.topCarretas).toEqual([
+      { nome: "ABC1D23", placa: "ABC1D23", transportadora: "Transterra", litros: 200, custo: 1300, qtd: 1, rPorL: 6.5 },
+    ]);
   });
 
-  it("homônimos com ids diferentes são dois centros", () => {
-    const linhas = consolidarPorObra([
-      saidaRelatorio({ alocacoes: [{ centroRaizId: "x1", centroRaizNome: "Obra", percentual: 100, litros: 1 }] }),
-      saidaRelatorio({ alocacoes: [{ centroRaizId: "x2", centroRaizNome: "Obra", percentual: 100, litros: 1 }] }),
+  it("obras: a saída inteira (carreta também) na obra dela, top 10 por CUSTO", () => {
+    const saidas = [
+      saida({ obraId: "obra-1", litros: 300, valorTotal: 1000 }),
+      carreta("XYZ9A99", { obraId: "obra-2", litros: 100, valorTotal: 2000 }),
+    ];
+    const d = consolidarMensal(saidas, [], CADASTROS);
+    expect(d.topObras.map((o) => [o.nome, o.custo, o.litros])).toEqual([
+      ["Obra 002", 2000, 100],
+      ["Obra 009", 1000, 300],
     ]);
-    expect(linhas).toHaveLength(2);
+  });
+
+  it("top de 10 equipamentos por litros, somando antes de cortar", () => {
+    const saidas = Array.from({ length: 12 }, (_, i) =>
+      saida({ equipamentoId: `eq-x${i}`, equipamentoIdReal: `eq-x${i}`, litros: 10 + i }),
+    );
+    const d = consolidarMensal(saidas, [], CADASTROS);
+    expect(d.topEquipamentos).toHaveLength(10);
+    expect(d.topEquipamentos[0]!.litros).toBe(21);
+    // Equipamento sem cadastro mostra o id, como na origem.
+    expect(d.topEquipamentos[0]!.nome).toBe("eq-x11");
   });
 });
 
-describe("consolidarPorEquipamento e por carreta", () => {
-  it("soma por equipamento e mede o rodado pelo medidor mais usado", () => {
-    const linhas = consolidarPorEquipamento([
-      saidaRelatorio({ litros: 100, valorTotal: 600, medicao: 1200.5, tipoMedicao: "horimetro" }),
-      saidaRelatorio({ litros: 50, valorTotal: 310, medicao: 1250, tipoMedicao: "horimetro" }),
-      saidaRelatorio({ litros: 10, valorTotal: 60, medicao: 99999, tipoMedicao: "km" }),
-      saidaRelatorio({ equipamentoId: "eq-2", equipamentoNome: "EQ-2", litros: 5, valorTotal: 30 }),
-      carreta({ litros: 999 }),
+describe("compras (entradas)", () => {
+  it("fornecedores pelo nome aparado, todos, por litros; sem fornecedor fica fora da lista mas entra no total", () => {
+    const c = consolidarCompras([
+      entrada({ fornecedor: " Posto A ", litros: 100, valorTotal: 600 }),
+      entrada({ fornecedor: "Posto A", litros: 50, valorTotal: 310 }),
+      entrada({ fornecedor: "Posto B", litros: 300, valorTotal: 1800 }),
+      entrada({ fornecedor: "", litros: 10, valorTotal: 60 }),
     ]);
-    expect(linhas).toEqual([
-      {
-        equipamento: "EQ-1 Escavadeira",
-        abastecimentos: 3,
-        litros: 160,
-        valor: 970,
-        medidor: "Horímetro",
-        leituraInicial: 1200.5,
-        leituraFinal: 1250,
-        rodado: 49.5,
-      },
-      {
-        equipamento: "EQ-2",
-        abastecimentos: 1,
-        litros: 5,
-        valor: 30,
-        medidor: null,
-        leituraInicial: null,
-        leituraFinal: null,
-        rodado: null,
-      },
-    ]);
-  });
-
-  it("carreta por transportadora e placa normalizada", () => {
-    const linhas = consolidarPorCarreta([
-      carreta({ placa: "abc-1d23", litros: 10, valorTotal: 60 }),
-      carreta({ placa: "ABC1D23", litros: 20, valorTotal: 120 }),
-      carreta({ placa: null, litros: 1, valorTotal: 6 }),
-      saidaRelatorio(),
-    ]);
-    expect(linhas.map((l) => [l.transportadora, l.placa, l.abastecimentos, l.litros, l.valor])).toEqual([
-      ["Transterra", "ABC1D23", 2, 30, 180],
-      ["Transterra", "Sem placa", 1, 1, 6],
+    expect(c.volumeCompras).toBe(460);
+    expect(c.custoCompras).toBe(2770);
+    expect(c.qtdFornecedores).toBe(2);
+    expect(c.fornecedores.map((f) => [f.nome, f.litros, f.custo, f.qtd])).toEqual([
+      ["Posto B", 300, 1800, 1],
+      ["Posto A", 150, 910, 2],
     ]);
   });
 });
 
-describe("raizDoCentro e resumo da alocação", () => {
-  it("sobe até a raiz, e para em ciclo ou pai que sumiu", () => {
-    const arvore = new Map([
-      ["raiz", { nome: "Obra 009", paiId: null }],
-      ["etapa", { nome: "Terraplenagem", paiId: "raiz" }],
-      ["item", { nome: "Corte", paiId: "etapa" }],
-      ["orfao", { nome: "Órfão", paiId: "sumiu" }],
-      ["c1", { nome: "C1", paiId: "c2" }],
-      ["c2", { nome: "C2", paiId: "c1" }],
-    ]);
-    expect(raizDoCentro("item", arvore)).toEqual({ id: "raiz", nome: "Obra 009" });
-    expect(raizDoCentro("raiz", arvore)).toEqual({ id: "raiz", nome: "Obra 009" });
-    expect(raizDoCentro("orfao", arvore)).toEqual({ id: "orfao", nome: "Órfão" });
-    expect(raizDoCentro("c1", arvore)).toEqual({ id: "c2", nome: "C2" });
-    expect(raizDoCentro("nao-existe", arvore)).toBeNull();
+describe("Por obra", () => {
+  it("saídas da obra (próprios e carretas), da mais recente para a mais antiga", () => {
+    const antiga = saida({ data: "2026-09-01T08:00:00" });
+    const nova = carreta("ABC1D23", { data: "2026-09-20T08:00:00" });
+    const d = consolidarPorObra([antiga, nova], [], CADASTROS);
+    expect(d.saidasDesc.map((s) => s.id)).toEqual([nova.id, antiga.id]);
+    expect(d.totais).toMatchObject({ qtdSaidas: 2, qtdEquipamentos: 1, qtdCarretas: 1, volume: 200, custo: 1200 });
   });
+});
 
-  it("resumo em uma célula", () => {
-    expect(
-      resumoAlocacoes([
-        { centroRaizId: "a", centroRaizNome: "Obra 009", percentual: 60, litros: 6 },
-        { centroRaizId: "b", centroRaizNome: "Obra 002", percentual: 40.5, litros: 4 },
-      ]),
-    ).toBe("Obra 009 (60%); Obra 002 (40,5%)");
+describe("Por equipamento", () => {
+  it("dias ativos pelo dia do relógio de parede e obras frequentes por LITROS", () => {
+    const d = consolidarPorEquipamento(
+      [
+        saida({ data: "2026-09-01T08:00:00", obraId: "obra-1", litros: 100, valorTotal: 900 }),
+        saida({ data: "2026-09-01T17:00:00", obraId: "obra-2", litros: 300, valorTotal: 100 }),
+        saida({ data: "2026-09-03T08:00:00", obraId: null }),
+      ],
+      [],
+      CADASTROS,
+    );
+    expect(d.totais.diasAtivos).toBe(2);
+    expect(d.totais.qtdObras).toBe(2);
+    expect(d.topObras.map((o) => o.nome)).toEqual(["Obra 002", "Obra 009"]);
+  });
+});
+
+describe("rótulos das linhas", () => {
+  it("consumidor como na origem e R$/L = valor ÷ litros", () => {
+    expect(consumidorDaSaida(saida(), CADASTROS)).toBe("EQ-01 · Escavadeira 320");
+    expect(consumidorDaSaida(saida({ equipamentoId: "eq-2" }), CADASTROS)).toBe("Compactador · Rolo");
+    expect(consumidorDaSaida(saida({ equipamentoId: EQUIPAMENTO_DESCONHECIDO }), CADASTROS)).toBe("Não identificado");
+    expect(consumidorDaSaida(carreta("ABC1D23"), CADASTROS)).toBe("ABC1D23 · Transterra");
+    expect(rPorLDaSaida({ litros: 0, valorTotal: 10 })).toBe(0);
+    expect(rPorLDaSaida({ litros: 100, valorTotal: 639.47 })).toBeCloseTo(6.3947, 10);
   });
 });

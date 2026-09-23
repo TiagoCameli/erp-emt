@@ -6,6 +6,7 @@ import { listarTanques } from "@/modules/combustivel/tanques/queries";
 import { TransferenciasAcoesCabecalho } from "@/modules/combustivel/transferencias/components/transferencias-acoes-cabecalho";
 import { TransferenciasTabela } from "@/modules/combustivel/transferencias/components/transferencias-tabela";
 import { listarTransferencias } from "@/modules/combustivel/transferencias/queries";
+import { podeRestaurarMovimento } from "@/modules/combustivel/transferencias/regras";
 
 const RECURSO = "combustivel.transferencias" as const;
 
@@ -18,8 +19,12 @@ export default async function PaginaTransferencias() {
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
+  const podeRestaurar = podeRestaurarMovimento((recurso, acao) => temPermissao(usuario, recurso, acao), RECURSO);
 
-  const [transferencias, tanques] = await Promise.all([listarTransferencias(), listarTanques()]);
+  const [transferencias, tanques] = await Promise.all([
+    listarTransferencias({ incluirExcluidos: podeRestaurar }),
+    listarTanques(),
+  ]);
 
   // Transferência nunca envolve tanque de terceiro: o banco recusa, e a tela nem oferece.
   const daEmt = tanques.filter((tanque) => !tanque.ehExterno);
@@ -29,6 +34,8 @@ export default async function PaginaTransferencias() {
       id: tanque.id,
       nome: tanque.nome,
       nivel: tanque.nivel,
+      capacidade: tanque.capacidade,
+      combustivelId: tanque.combustivelId,
       combustivelNome: tanque.combustivelNome,
     }));
   const tanquesFiltro = daEmt.map((tanque) => ({ id: tanque.id, nome: tanque.nome }));
@@ -38,7 +45,7 @@ export default async function PaginaTransferencias() {
       <PageHeader
         modulo="Combustível"
         titulo="Transferências"
-        descricao="Combustível passado de um tanque da EMT para outro, com o valor pelo preço médio da origem"
+        descricao="Combustível passado de um tanque da EMT para outro"
         acoes={<TransferenciasAcoesCabecalho podeCriar={podeCriar} tanques={opcoes} />}
       />
       <TransferenciasTabela
@@ -47,6 +54,7 @@ export default async function PaginaTransferencias() {
         tanquesFiltro={tanquesFiltro}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        podeRestaurar={podeRestaurar}
       />
     </>
   );

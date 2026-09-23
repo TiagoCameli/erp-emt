@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeftRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import {
   CelulaVazia,
@@ -12,12 +12,15 @@ import {
   FiltroBusca,
   FiltroSelect,
   MoneyText,
+  StatusBadge,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
-import { excluirTransferencia } from "@/modules/combustivel/transferencias/actions";
+import { excluirTransferencia, restaurarTransferencia } from "@/modules/combustivel/transferencias/actions";
 import type { TransferenciaLinha } from "@/modules/combustivel/transferencias/queries";
 import { TransferenciaFormDrawer, type TanqueOpcao } from "./transferencia-form-drawer";
 
@@ -28,7 +31,12 @@ export const colunas: ColumnDef<TransferenciaLinha, unknown>[] = [
     header: "Data",
     size: 140,
     meta: { atomico: true },
-    cell: ({ row }) => <span className="tabular-nums">{formatarDataHoraRioBranco(row.original.dataHora)}</span>,
+    cell: ({ row }) => (
+      <span className="flex items-center gap-2">
+        <span className="tabular-nums">{formatarDataHoraRioBranco(row.original.dataHora)}</span>
+        {row.original.excluidoEm ? <StatusBadge status="cancelado" rotulo="Excluída" /> : null}
+      </span>
+    ),
   },
   {
     accessorKey: "origemNome",
@@ -72,6 +80,8 @@ export interface TransferenciasTabelaProps {
   tanquesFiltro: { id: string; nome: string }[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** `administracao.lixeira`/editar e excluir do recurso: mostra os excluídos e o "Restaurar". */
+  podeRestaurar?: boolean;
 }
 
 /**
@@ -84,8 +94,11 @@ export function TransferenciasTabela({
   tanquesFiltro,
   podeEditar,
   podeExcluir,
+  podeRestaurar = false,
 }: TransferenciasTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
+  const [excluidos, setExcluidos] = useFiltroSessao<"" | "1">("excluidos", "", ["", "1"]);
+  const mostrarExcluidos = podeRestaurar && excluidos === "1";
   const [tanque, setTanque] = useFiltroSessao("tanque", "");
   const [editando, setEditando] = React.useState<TransferenciaLinha | null>(null);
   const [drawerAberto, setDrawerAberto] = React.useState(false);
@@ -94,6 +107,7 @@ export function TransferenciasTabela({
   const filtradas = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return transferencias.filter((t) => {
+      if (t.excluidoEm && !mostrarExcluidos) return false;
       if (tanque && t.origemId !== tanque && t.destinoId !== tanque) return false;
       if (!termo) return true;
       return (
@@ -102,7 +116,7 @@ export function TransferenciasTabela({
         (t.observacoes ?? "").toLowerCase().includes(termo)
       );
     });
-  }, [transferencias, busca, tanque]);
+  }, [transferencias, busca, tanque, mostrarExcluidos]);
 
   async function aoConfirmarExclusao(motivo?: string) {
     if (!excluindo) return;
@@ -115,7 +129,16 @@ export function TransferenciasTabela({
     setExcluindo(null);
   }
 
-  const temAcoes = podeEditar || podeExcluir;
+  async function aoRestaurar(transferencia: TransferenciaLinha) {
+    const resultado = await restaurarTransferencia(transferencia.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Transferência restaurada");
+  }
+
+  const temAcoes = podeEditar || podeExcluir || podeRestaurar;
 
   return (
     <>
@@ -149,10 +172,41 @@ export function TransferenciasTabela({
               />
             ),
           },
+          ...(podeRestaurar
+            ? [
+                {
+                  id: "excluidos",
+                  rotulo: "Mostrar excluídos",
+                  fixo: true,
+                  temValor: mostrarExcluidos,
+                  onLimpar: () => setExcluidos(""),
+                  elemento: (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="transferencias-mostrar-excluidos"
+                        checked={mostrarExcluidos}
+                        onCheckedChange={(marcado) => setExcluidos(marcado ? "1" : "")}
+                      />
+                      <Label htmlFor="transferencias-mostrar-excluidos" className="text-detalhe text-muted-foreground">
+                        Mostrar excluídos
+                      </Label>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
         ]}
         acoesLinha={
           temAcoes
-            ? (transferencia) => (
+            ? (transferencia) =>
+                transferencia.excluidoEm ? (
+                  podeRestaurar ? (
+                    <DropdownMenuItem onSelect={() => void aoRestaurar(transferencia)}>
+                      <RotateCcw />
+                      Restaurar transferência
+                    </DropdownMenuItem>
+                  ) : null
+                ) : (
                 <>
                   {podeEditar ? (
                     <DropdownMenuItem
@@ -172,7 +226,7 @@ export function TransferenciasTabela({
                     </DropdownMenuItem>
                   ) : null}
                 </>
-              )
+                )
             : undefined
         }
         emptyState={

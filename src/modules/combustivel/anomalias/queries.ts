@@ -1,150 +1,273 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
-  detectarAnomalias,
+  detectarNaBase,
+  EQUIPAMENTO_DESCONHECIDO,
   ehEquipamentoSentinela,
-  JANELA_D3_DIAS,
-  ROTULO_REGRA,
-  type Anomalia,
-  type EquipamentoParaDeteccao,
-  type SaidaParaDeteccao,
-} from "@/modules/combustivel/anomalias/detect";
-import { fimExclusivoDoDia, inicioDoDia, somarDias, type Periodo } from "@/modules/combustivel/relatorios/periodo";
+  montarSaidaBase,
+  opcoesDeEquipamento,
+  raizDoCentro,
+  rotuloOrigemEquipamento,
+  saidasDoRecorte,
+  type BaseCombustivel,
+  type EquipamentoBase,
+  type LinhaSaidaBanco,
+  type Modo,
+} from "@/modules/combustivel/anomalias/base";
+import { DETECTOR_LABEL, type Anomalia } from "@/modules/combustivel/anomalias/detect";
+import type { Periodo } from "@/modules/combustivel/relatorios/periodo";
 import { paraNumeroDoBanco, rotuloEquipamento } from "@/modules/manutencao/servicos/formato";
+
+const SELECT_SAIDA =
+  "id, data, origem, tipo_consumidor, tanque_id, equipamento_id, transportadora_id, placa, motorista, insumo_id, " +
+  "litros, preco_unitario, valor_total, pago, pago_em, observacoes, created_by, " +
+  "abastecimento_alocacoes(centro_custo_id, percentual)";
+
+/**
+ * Todas as saídas NÃO EXCLUÍDAS e os cadastros, no formato da origem. É o que a origem
+ * carrega (`useSaidasCombustivel` busca a tabela inteira, página por página) e o que a
+ * detecção precisa: o D3 olha 90 dias até hoje e o D5 a última saída de cada
+ * equipamento, independente do período da tela.
+ *
+ * `cache` do React: painel e anomalias na mesma requisição leem uma vez só.
+ * Paginado por `todasAsLinhas` (o PostgREST corta em 1.000 sem avisar), com desempate
+ * por id (senão a paginação repete e pula linha).
+ */
+export const carregarBaseCombustivel = cache(async (): Promise<BaseCombustivel> => {
+  const supabase = await createClient();
+
+  const [saidas, equipamentos, insumos, centros, tanques] = await Promise.all([
+    todasAsLinhas<LinhaSaidaBanco>((de, ate) =>
+      supabase
+        .from("combustivel_saidas")
+        .select(SELECT_SAIDA)
+        .is("excluido_em", null)
+        .order("data", { ascending: false })
+        .order("id", { ascending: false })
+        .range(de, ate)
+        .returns<LinhaSaidaBanco[]>(),
+    ),
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("equipamentos")
+        .select("id, codigo, descricao, placa, tipo, marca, modelo, ativo")
+        .order("id")
+        .range(de, ate),
+    ),
+    todasAsLinhas((de, ate) => supabase.from("insumos").select("id, nome").order("id").range(de, ate)),
+    todasAsLinhas((de, ate) => supabase.from("centros_custo").select("id, nome, pai_id").order("id").range(de, ate)),
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("tanques")
+        .select("id, nome, apelido, capacidade_litros, eh_externo, proprietario_id, ativo")
+        .order("id")
+        .range(de, ate),
+    ),
+  ]);
+  if (saidas.erro || equipamentos.erro || insumos.erro || centros.erro || tanques.erro) {
+    throw new Error("Não foi possível carregar as saídas de combustível");
+  }
+
+  const listaEquipamentos: EquipamentoBase[] = equipamentos.linhas.map((e) => ({
+    id: e.id,
+    codigo: e.codigo,
+    descricao: e.descricao,
+    placa: e.placa,
+    tipo: e.tipo,
+    marca: e.marca,
+    modelo: e.modelo,
+    ativo: e.ativo,
+    sentinela: ehEquipamentoSentinela(e),
+  }));
+  const sentinelas = new Set(listaEquipamentos.filter((e) => e.sentinela).map((e) => e.id));
+  const arvore = new Map(centros.linhas.map((c) => [c.id, { nome: c.nome, paiId: c.pai_id }]));
+
+  const listaSaidas = saidas.linhas.map((linha) => montarSaidaBase(linha, sentinelas, arvore));
+
+  const obraNome = new Map<string, string>();
+  for (const c of centros.linhas) {
+    const raiz = raizDoCentro(c.id, arvore);
+    if (raiz && raiz.id === c.id) obraNome.set(c.id, c.nome);
+  }
+
+  // Transportadoras: as das saídas e as donas de tanque. São poucas dezenas.
+  const fornecedorIds = [
+    ...new Set(
+      [
+        ...listaSaidas.map((s) => s.transportadoraId),
+        ...tanques.linhas.map((t) => t.proprietario_id),
+      ].filter((id): id is string => id !== null),
+    ),
+  ];
+  const transportadoraNome = new Map<string, string>();
+  for (let i = 0; i < fornecedorIds.length; i += 100) {
+    const { data, error } = await supabase
+      .from("fornecedores")
+      .select("id, razao_social, nome_fantasia")
+      .in("id", fornecedorIds.slice(i, i + 100));
+    if (error) throw new Error("Não foi possível ler as transportadoras");
+    for (const f of data ?? []) transportadoraNome.set(f.id, f.nome_fantasia?.trim() || f.razao_social);
+  }
+
+  return {
+    saidas: listaSaidas,
+    equipamentos: listaEquipamentos,
+    combustivelNome: new Map(insumos.linhas.map((i) => [i.id, i.nome])),
+    obraNome,
+    tanques: tanques.linhas.map((t) => ({
+      id: t.id,
+      nome: t.nome,
+      apelido: t.apelido,
+      nomeExibicao: t.apelido?.trim() || t.nome,
+      capacidadeLitros: paraNumeroDoBanco(t.capacidade_litros),
+      ehExterno: t.eh_externo,
+      proprietarioId: t.proprietario_id,
+      ativo: t.ativo,
+    })),
+    transportadoraNome,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Anomalias
+// ---------------------------------------------------------------------------
 
 export interface Conferencia {
   motivo: string | null;
   conferidoEm: string;
 }
 
+/** Uma saída afetada, para a lista da origem (SaidasAfetadasList) e a atribuição. */
+export interface SaidaDaAnomalia {
+  id: string;
+  /** Relógio de parede de Rio Branco. */
+  data: string;
+  tanque: string | null;
+  obra: string | null;
+  consumidor: string;
+  litros: number;
+  valorTotal: number;
+}
+
 export interface AnomaliaLista extends Anomalia {
-  rotuloRegra: string;
+  rotuloDetector: string;
   equipamentoRotulo: string | null;
   conferencia: Conferencia | null;
+  saidas: SaidaDaAnomalia[];
 }
 
 export interface ResultadoAnomalias {
   anomalias: AnomaliaLista[];
   pendentes: number;
   conferidas: number;
+  /** Opções do seletor de equipamento da atribuição. */
+  equipamentos: { valor: string; rotulo: string }[];
+}
+
+/** A conferência mora no banco pela chave (o id determinístico da anomalia). */
+async function lerConferidas(): Promise<Map<string, Conferencia>> {
+  const supabase = await createClient();
+  const conferidas = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("combustivel_anomalias_conferidas")
+      .select("chave, motivo, conferido_em")
+      .order("chave")
+      .range(de, ate),
+  );
+  if (conferidas.erro) throw new Error("Não foi possível ler as anomalias conferidas");
+  return new Map(conferidas.linhas.map((c) => [c.chave, { motivo: c.motivo, conferidoEm: c.conferido_em }]));
 }
 
 /**
- * Roda a detecção no servidor para o período (dias de Rio Branco, fim incluído).
- *
- * Lê as saídas não excluídas do período e dos 90 dias antes dele (o D3 compara
- * com os 90 dias anteriores a cada saída), paginadas por `todasAsLinhas` porque o
- * PostgREST corta em 1.000 sem avisar. O D5 precisa do último abastecimento de
- * cada equipamento ativo; quem não aparece na janela lida ganha uma consulta de
- * uma linha (são poucas dezenas de equipamentos).
+ * A aba Anomalias da origem: `saidasNoPeriodo` = saídas do modo (próprios ou carretas)
+ * no período, `saidasTodas` = o banco inteiro.
  */
-export async function carregarAnomalias(periodo: Periodo): Promise<ResultadoAnomalias> {
-  const supabase = await createClient();
-  const inicio = inicioDoDia(periodo.de);
-  const fim = fimExclusivoDoDia(periodo.ate);
-  const buscaDesde = inicioDoDia(somarDias(periodo.de, -JANELA_D3_DIAS));
+export async function carregarAnomalias(periodo: Periodo, modo: Modo): Promise<ResultadoAnomalias> {
+  const [base, porChave] = await Promise.all([carregarBaseCombustivel(), lerConferidas()]);
+  const anomalias = detectarNaBase(base, saidasDoRecorte(base.saidas, modo, periodo.de, periodo.ate));
 
-  const [saidas, equipamentos, conferidas] = await Promise.all([
-    todasAsLinhas((de, ate) =>
-      supabase
-        .from("combustivel_saidas")
-        .select(
-          "id, data, tipo_consumidor, equipamento_id, placa, transportadora_id, insumo_id, litros, valor_total, preco_unitario",
-        )
-        .is("excluido_em", null)
-        .gte("data", buscaDesde)
-        .lt("data", fim)
-        .order("data")
-        .order("id")
-        .range(de, ate),
-    ),
-    todasAsLinhas((de, ate) =>
-      supabase.from("equipamentos").select("id, codigo, descricao, placa, ativo").order("id").range(de, ate),
-    ),
-    todasAsLinhas((de, ate) =>
-      supabase
-        .from("combustivel_anomalias_conferidas")
-        .select("chave, motivo, conferido_em")
-        .order("chave")
-        .range(de, ate),
-    ),
-  ]);
-  if (saidas.erro || equipamentos.erro || conferidas.erro) {
-    throw new Error("Não foi possível carregar as anomalias do combustível");
-  }
+  const saidaPorId = new Map(base.saidas.map((s) => [s.id, s]));
+  const equipamentoPorId = new Map(base.equipamentos.map((e) => [e.id, e]));
+  const tanqueNome = new Map(base.tanques.map((t) => [t.id, t.nomeExibicao]));
+  const rotuloSentinela =
+    base.equipamentos.find((e) => e.sentinela) !== undefined
+      ? rotuloEquipamento(base.equipamentos.find((e) => e.sentinela)!)
+      : "Outros";
+  const rotuloDoEquipamento = (id: string | null | undefined): string | null => {
+    if (!id) return null;
+    if (id === EQUIPAMENTO_DESCONHECIDO) return rotuloSentinela;
+    const equipamento = equipamentoPorId.get(id);
+    return equipamento ? rotuloEquipamento(equipamento) : null;
+  };
 
-  const linhasSaida: SaidaParaDeteccao[] = saidas.linhas.map((s) => ({
-    id: s.id,
-    data: s.data,
-    tipoConsumidor: s.tipo_consumidor,
-    equipamentoId: s.equipamento_id,
-    placa: s.placa,
-    transportadoraId: s.transportadora_id,
-    insumoId: s.insumo_id,
-    litros: paraNumeroDoBanco(s.litros),
-    valorTotal: paraNumeroDoBanco(s.valor_total),
-    precoUnitario: paraNumeroDoBanco(s.preco_unitario),
-  }));
-
-  // D5: último abastecimento antes da janela, só de quem é ativo e não apareceu nela.
-  const naJanela = new Set(linhasSaida.map((s) => s.equipamentoId).filter((id): id is string => id !== null));
-  const semNaJanela = equipamentos.linhas.filter(
-    (e) => e.ativo && !naJanela.has(e.id) && !ehEquipamentoSentinela(e),
-  );
-  const ultimas = await Promise.all(
-    semNaJanela.map(async (e) => {
-      const { data, error } = await supabase
-        .from("combustivel_saidas")
-        .select("data")
-        .eq("equipamento_id", e.id)
-        .is("excluido_em", null)
-        .lt("data", buscaDesde)
-        .order("data", { ascending: false })
-        .limit(1);
-      if (error) throw new Error("Não foi possível ler o último abastecimento dos equipamentos");
-      return [e.id, data?.[0]?.data ?? null] as const;
-    }),
-  );
-  const ultimaAntes = new Map(ultimas);
-
-  const listaEquipamentos: EquipamentoParaDeteccao[] = equipamentos.linhas.map((e) => ({
-    id: e.id,
-    codigo: e.codigo,
-    descricao: e.descricao,
-    ativo: e.ativo,
-    rotulo: rotuloEquipamento(e),
-    ultimaSaidaAntesDaJanela: ultimaAntes.get(e.id) ?? null,
-  }));
-
-  const insumoIds = [...new Set(linhasSaida.map((s) => s.insumoId))];
-  const combustiveis = new Map<string, string>();
-  if (insumoIds.length > 0) {
-    const { data, error } = await supabase.from("insumos").select("id, nome").in("id", insumoIds);
-    if (error) throw new Error("Não foi possível ler os combustíveis");
-    for (const insumo of data ?? []) combustiveis.set(insumo.id, insumo.nome);
-  }
-
-  const anomalias = detectarAnomalias({
-    saidas: linhasSaida,
-    equipamentos: listaEquipamentos,
-    combustiveis,
-    inicio,
-    fim,
-  });
-
-  const porChave = new Map(conferidas.linhas.map((c) => [c.chave, { motivo: c.motivo, conferidoEm: c.conferido_em }]));
-  const rotulos = new Map(listaEquipamentos.map((e) => [e.id, e.rotulo]));
   const lista: AnomaliaLista[] = anomalias.map((a) => ({
     ...a,
-    rotuloRegra: ROTULO_REGRA[a.regra],
-    equipamentoRotulo: a.equipamentoId ? (rotulos.get(a.equipamentoId) ?? null) : null,
+    rotuloDetector: DETECTOR_LABEL[a.detector],
+    equipamentoRotulo: rotuloDoEquipamento(a.affectedEquipamentoId),
     conferencia: porChave.get(a.id) ?? null,
+    saidas: a.affectedSaidaIds.flatMap((id) => {
+      const s = saidaPorId.get(id);
+      if (!s) return [];
+      const consumidor =
+        s.tipoConsumidor === "equipamento_proprio"
+          ? s.equipamentoId === EQUIPAMENTO_DESCONHECIDO
+            ? "Não identificado"
+            : (() => {
+                const e = s.equipamentoIdReal ? equipamentoPorId.get(s.equipamentoIdReal) : undefined;
+                return e ? rotuloOrigemEquipamento(e) : "Equipamento não encontrado";
+              })()
+          : [s.placa ?? "Sem placa", s.transportadoraId ? base.transportadoraNome.get(s.transportadoraId) : null]
+              .filter(Boolean)
+              .join(" · ");
+      return [
+        {
+          id: s.id,
+          data: s.data,
+          tanque: s.tanqueId ? (tanqueNome.get(s.tanqueId) ?? null) : null,
+          obra: s.obraId ? (base.obraNome.get(s.obraId) ?? null) : null,
+          consumidor,
+          litros: s.litros,
+          valorTotal: s.valorTotal,
+        },
+      ];
+    }),
   }));
   const conferidasNoPeriodo = lista.filter((a) => a.conferencia !== null).length;
 
-  return { anomalias: lista, pendentes: lista.length - conferidasNoPeriodo, conferidas: conferidasNoPeriodo };
+  return {
+    anomalias: lista,
+    pendentes: lista.length - conferidasNoPeriodo,
+    conferidas: conferidasNoPeriodo,
+    equipamentos: opcoesDeEquipamento(base.equipamentos),
+  };
+}
+
+/**
+ * O KPI "Anomalias" da Visão Geral da origem: críticas + atenção do recorte, tirando as
+ * verificadas (conferidas). D5 (informação) não conta.
+ */
+export async function contarAnomaliasDoPainel(
+  periodo: Periodo,
+  modo: Modo,
+): Promise<{ criticas: number; atencao: number; total: number; conferidas: number }> {
+  const [base, porChave] = await Promise.all([carregarBaseCombustivel(), lerConferidas()]);
+  const anomalias = detectarNaBase(base, saidasDoRecorte(base.saidas, modo, periodo.de, periodo.ate));
+  let criticas = 0;
+  let atencao = 0;
+  let conferidas = 0;
+  for (const a of anomalias) {
+    if (porChave.has(a.id)) {
+      conferidas += 1;
+      continue;
+    }
+    if (a.severity === "critical") criticas += 1;
+    else if (a.severity === "warning") atencao += 1;
+  }
+  return { criticas, atencao, total: criticas + atencao, conferidas };
 }
 
 // ---------------------------------------------------------------------------

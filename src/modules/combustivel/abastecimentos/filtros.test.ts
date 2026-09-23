@@ -57,6 +57,12 @@ describe("lerFiltrosAbastecimentos", () => {
     });
   });
 
+  it("'Mostrar excluídos' só com ?excluidos=sim (a página ainda confere a permissão)", () => {
+    expect(lerFiltrosAbastecimentos({ excluidos: "sim" }).excluidos).toBe(true);
+    expect(lerFiltrosAbastecimentos({ excluidos: "1" }).excluidos).toBeUndefined();
+    expect(lerFiltrosAbastecimentos({}).excluidos).toBeUndefined();
+  });
+
   it("período invertido é trocado de lado", () => {
     expect(lerFiltrosAbastecimentos({ de: "2026-09-30", ate: "2026-09-01" })).toMatchObject({
       de: "2026-09-01",

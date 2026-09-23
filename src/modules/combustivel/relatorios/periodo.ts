@@ -87,6 +87,12 @@ export function periodoDaUrl(
   return { de: inicio, ate: fim };
 }
 
+/** O mês anterior ao do dia (yyyy-MM-dd -> yyyy-MM): o padrão dos relatórios mensais da origem. */
+export function mesAnterior(hoje: string): string {
+  const [ano, mes] = hoje.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 2, 1)).toISOString().slice(0, 7);
+}
+
 /** Os últimos `dias` dias até hoje, inclusive (90 dias = hoje e os 89 anteriores). */
 export function ultimosDias(hoje: string, dias: number): Periodo {
   return { de: somarDias(hoje, -(dias - 1)), ate: hoje };

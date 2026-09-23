@@ -3,12 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef, PaginationState } from "@tanstack/react-table";
-import { ExternalLink, Fuel } from "lucide-react";
+import { ExternalLink, Fuel, RotateCcw } from "lucide-react";
 
 import {
   CelulaVazia,
   colunaData,
   colunaDinheiro,
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroPeriodo,
@@ -16,6 +17,8 @@ import {
   MoneyText,
   useFiltrosUrl,
 } from "@/components/canonicos";
+import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
+import { toast } from "@/components/canonicos/toast";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
   CANAIS,
@@ -27,6 +30,7 @@ import {
   ROTULO_TIPO_CONSUMIDOR,
   TIPOS_CONSUMIDOR,
 } from "@/modules/combustivel/_shared/rotulos";
+import { restaurarAbastecimento } from "@/modules/combustivel/abastecimentos/actions";
 import { CHAVES_FILTRO_ABASTECIMENTOS as CHAVE, rotaDoAbastecimento } from "@/modules/combustivel/abastecimentos/filtros";
 import type { SaidaLista } from "@/modules/combustivel/abastecimentos/queries";
 import { formatarValorOperacional } from "@/modules/manutencao/servicos/formato";
@@ -34,6 +38,23 @@ import { formatarValorOperacional } from "@/modules/manutencao/servicos/formato"
 const OPCOES_ORIGEM = ORIGENS_SAIDA.map((o) => ({ valor: o, rotulo: ROTULO_ORIGEM_SAIDA[o] }));
 const OPCOES_TIPO = TIPOS_CONSUMIDOR.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_CONSUMIDOR[t] }));
 const OPCOES_CANAL = CANAIS.map((c) => ({ valor: c, rotulo: ROTULO_CANAL[c] }));
+const OPCOES_EXCLUIDOS = [{ valor: "sim", rotulo: "Só os excluídos" }];
+
+/** Coluna da exclusão, só no "Mostrar excluídos". */
+const colunaExclusao: ColumnDef<SaidaLista, unknown> = {
+  id: "exclusao",
+  header: "Excluído",
+  size: 220,
+  meta: { naoTruncar: true },
+  cell: ({ row }) => (
+    <span className="flex flex-col">
+      <span className="tabular-nums">{formatarDataHoraRioBranco(row.original.excluidoEm)}</span>
+      {row.original.motivoExclusao ? (
+        <span className="text-legenda text-muted-foreground">{row.original.motivoExclusao}</span>
+      ) : null}
+    </span>
+  ),
+};
 
 /** Colunas da lista. Exportadas para o teste olhar sem montar a tela. */
 export const colunasAbastecimentos: ColumnDef<SaidaLista, unknown>[] = [
@@ -116,6 +137,10 @@ export interface AbastecimentosTabelaProps {
   tipo: string;
   origem: string;
   canal: string;
+  /** "Mostrar excluídos" ligado (a página só aceita para quem pode restaurar). */
+  excluidos?: boolean;
+  /** Editar a Lixeira e excluir na aba: vê o filtro e o "Restaurar". */
+  podeRestaurar?: boolean;
   tanques: OpcaoFiltroAbastecimento[];
   equipamentos: OpcaoFiltroAbastecimento[];
   transportadoras: OpcaoFiltroAbastecimento[];
@@ -140,12 +165,32 @@ export function AbastecimentosTabela({
   tipo,
   origem,
   canal,
+  excluidos = false,
+  podeRestaurar = false,
   tanques,
   equipamentos,
   transportadoras,
 }: AbastecimentosTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
+  const [restaurando, setRestaurando] = React.useState<SaidaLista | null>(null);
+  const vendoExcluidos = podeRestaurar && excluidos;
+  const colunas = React.useMemo(
+    () => (vendoExcluidos ? [...colunasAbastecimentos, colunaExclusao] : colunasAbastecimentos),
+    [vendoExcluidos],
+  );
+
+  async function aoConfirmarRestauracao() {
+    if (!restaurando) return;
+    const resultado = await restaurarAbastecimento(restaurando.id);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Abastecimento restaurado");
+    setRestaurando(null);
+    semDerrubarSucesso("combustivel.saidas.restaurar", () => router.refresh());
+  }
 
   function aoMudarPaginacao(paginacao: PaginationState) {
     setMuitos({
@@ -155,6 +200,8 @@ export function AbastecimentosTabela({
   }
 
   function abrir(saida: SaidaLista) {
+    // O excluído não tem detalhe (a página só abre os lançados).
+    if (saida.excluidoEm) return;
     router.push(rotaDoAbastecimento(saida.id));
   }
 
@@ -176,7 +223,7 @@ export function AbastecimentosTabela({
     <div className="flex flex-col gap-2">
       <DataTable
         idTabela="combustivel.saidas"
-        columns={colunasAbastecimentos}
+        columns={colunas}
         data={abastecimentos}
         total={total}
         pageIndex={pagina}
@@ -254,6 +301,24 @@ export function AbastecimentosTabela({
             onLimpar: () => setMuitos({ [CHAVE.origem]: null, [CHAVE.pagina]: "1" }),
             elemento: filtroSelect(CHAVE.origem, origem, OPCOES_ORIGEM, "Origem", "Todas as origens"),
           },
+          ...(podeRestaurar
+            ? [
+                {
+                  id: "excluidos",
+                  rotulo: "Mostrar excluídos",
+                  ocultoPorPadrao: true,
+                  temValor: excluidos,
+                  onLimpar: () => setMuitos({ [CHAVE.excluidos]: null, [CHAVE.pagina]: "1" }),
+                  elemento: filtroSelect(
+                    CHAVE.excluidos,
+                    excluidos ? "sim" : "",
+                    OPCOES_EXCLUIDOS,
+                    "Mostrar excluídos",
+                    "Sem os excluídos",
+                  ),
+                },
+              ]
+            : []),
           {
             id: "canal",
             rotulo: "Canal",
@@ -263,17 +328,30 @@ export function AbastecimentosTabela({
             elemento: filtroSelect(CHAVE.canal, canal, OPCOES_CANAL, "Canal", "Todos os canais"),
           },
         ]}
-        acoesLinha={(saida) => (
-          <DropdownMenuItem onSelect={() => abrir(saida)}>
-            <ExternalLink />
-            Abrir abastecimento
-          </DropdownMenuItem>
-        )}
+        acoesLinha={(saida) =>
+          saida.excluidoEm ? (
+            podeRestaurar ? (
+              <DropdownMenuItem onSelect={() => setRestaurando(saida)}>
+                <RotateCcw />
+                Restaurar abastecimento
+              </DropdownMenuItem>
+            ) : null
+          ) : (
+            <DropdownMenuItem onSelect={() => abrir(saida)}>
+              <ExternalLink />
+              Abrir abastecimento
+            </DropdownMenuItem>
+          )
+        }
         emptyState={
           <EmptyState
             icone={Fuel}
-            titulo="Nenhum abastecimento encontrado"
-            descricao="Ajuste os filtros ou lance um abastecimento pelo botão do cabeçalho"
+            titulo={vendoExcluidos ? "Nenhum abastecimento excluído" : "Nenhum abastecimento encontrado"}
+            descricao={
+              vendoExcluidos
+                ? "A lixeira de abastecimentos está vazia neste filtro"
+                : "Ajuste os filtros ou lance um abastecimento pelo botão do cabeçalho"
+            }
             className="border-none bg-transparent"
           />
         }
@@ -281,11 +359,27 @@ export function AbastecimentosTabela({
 
       {total > 0 ? (
         <p className="text-right text-legenda text-muted-foreground">
-          {total} {total === 1 ? "abastecimento" : "abastecimentos"} no filtro,{" "}
+          {total} {total === 1 ? "abastecimento" : "abastecimentos"}
+          {vendoExcluidos ? (total === 1 ? " excluído" : " excluídos") : ""} no filtro,{" "}
           <span className="tabular-nums font-medium text-foreground">{formatarLitros(litrosDoFiltro)}</span>, valor de{" "}
           <MoneyText valor={valorDoFiltro} className="font-medium text-foreground" />
         </p>
       ) : null}
+
+      <ConfirmDialog
+        aberto={restaurando !== null}
+        onAbertoChange={(aberto) => {
+          if (!aberto) setRestaurando(null);
+        }}
+        titulo="Restaurar abastecimento"
+        descricao={
+          restaurando
+            ? `O abastecimento de ${formatarLitros(restaurando.litros)} de ${restaurando.insumoNome} volta para a lista: o PEPS do tanque, o nível e a conta corrente são refeitos.`
+            : ""
+        }
+        textoConfirmar="Restaurar abastecimento"
+        onConfirmar={aoConfirmarRestauracao}
+      />
     </div>
   );
 }

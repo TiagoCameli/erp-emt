@@ -1,286 +1,357 @@
-import { ROTULO_TIPO_CONSUMIDOR, type TipoConsumidor } from "@/modules/combustivel/_shared/rotulos";
-import { mesEmRioBranco } from "@/modules/combustivel/relatorios/periodo";
+import { EQUIPAMENTO_DESCONHECIDO, type SaidaBase } from "@/modules/combustivel/anomalias/base";
 import { somarValoresOperacionais } from "@/modules/manutencao/servicos/formato";
 
 /**
- * Consolidações dos relatórios do Combustível: transformam as saídas lidas do
- * banco nas linhas de cada planilha. Módulo puro (sem banco e sem exceljs),
- * testado em consolidar.test.ts.
+ * As contas dos quatro relatórios da origem (Gestao_Obras v2/relatorios:
+ * mensalConsolidadoExport, porObraExport, porEquipamentoExport, rawExportExcel),
+ * portadas com as mesmas regras. Módulo puro (sem banco e sem exceljs), testado em
+ * consolidar.test.ts.
  *
- * Litros e valor somam em inteiros de décimo de milésimo: o banco guarda os dois
- * com 4 casas, e somar centenas de saídas em float erra a última.
+ * Mesmas decisões da origem:
+ * - o custo de cada linha é o valor total da saída, de equipamento próprio E de carreta;
+ * - a obra de uma saída leva a saída inteira (a origem tem uma obra por saída);
+ * - o sentinela ("Outros", o 'desconhecido' da origem) não entra no top de equipamentos,
+ *   é contado à parte para o aviso;
+ * - carreta é agrupada pela placa aparada (sem mexer em maiúsculas);
+ * - tops de 10: equipamentos e carretas por litros, obras por custo (Mensal) ou por
+ *   litros (Por Equipamento); fornecedores todos, por litros;
+ * - R$/L de cada linha = custo ÷ litros.
+ *
+ * Diferença só de aritmética: litros e valor das saídas somam em inteiros de décimo de
+ * milésimo (o banco guarda 4 casas; somar centenas de saídas em float erra a última).
  */
 
 /** Os quatro relatórios da tela. Mora aqui (e não na planilha) para a action validar sem carregar o exceljs. */
 export const TIPOS_RELATORIO = ["mensal", "obra", "equipamento", "bruto"] as const;
 export type TipoRelatorio = (typeof TIPOS_RELATORIO)[number];
 
-const ESCALA = 10_000;
+const somar = somarValoresOperacionais;
 
-/** Arredonda para 4 casas (a fatia do custo por obra é gravada assim antes de somar). */
-export function quatroCasas(valor: number): number {
-  return Math.round(valor * ESCALA) / ESCALA;
-}
-
-export interface AlocacaoRelatorio {
-  /** Id da RAIZ do centro de custo (a obra). Null se o centro sumiu do cadastro. */
-  centroRaizId: string | null;
-  centroRaizNome: string;
-  percentual: number;
-  litros: number;
-}
-
-export interface SaidaRelatorio {
+export interface EntradaRelatorio {
   id: string;
-  /** Instante ISO. */
-  data: string;
-  origem: string;
-  tipoConsumidor: string;
-  tanqueNome: string | null;
-  equipamentoId: string | null;
-  equipamentoNome: string | null;
-  transportadoraId: string | null;
-  transportadoraNome: string | null;
-  placa: string | null;
-  motorista: string | null;
-  insumoId: string;
-  combustivel: string;
+  /** Relógio de parede de Rio Branco. */
+  dataHora: string;
+  tanqueId: string;
+  tipoCombustivel: string;
   litros: number;
-  precoCombustivel: number | null;
-  precoProprietario: number | null;
-  taxaLitro: number;
-  precoUnitario: number;
-  precoMedioTanque: number | null;
   valorTotal: number;
-  pago: boolean;
-  pagoEm: string | null;
-  medicao: number | null;
-  tipoMedicao: string | null;
-  centroCustoNome: string | null;
-  canal: string;
+  /** Nome do fornecedor ("" sem fornecedor). */
+  fornecedor: string;
+  notaFiscal: string | null;
   observacoes: string | null;
-  criadoEm: string;
-  alocacoes: AlocacaoRelatorio[];
+  createdBy: string | null;
 }
 
-export function rotuloTipoConsumidor(tipo: string): string {
-  return (ROTULO_TIPO_CONSUMIDOR as Record<string, string>)[tipo as TipoConsumidor] ?? tipo;
+export interface TransferenciaRelatorio {
+  id: string;
+  dataHora: string;
+  tanqueOrigemId: string;
+  tanqueDestinoId: string;
+  litros: number;
+  valorTotal: number;
+  observacoes: string | null;
+  createdBy: string | null;
 }
 
-const ehProprio = (s: SaidaRelatorio) => s.tipoConsumidor === "equipamento_proprio";
+/** O que os relatórios precisam dos cadastros para dar nome às coisas. */
+export interface CadastrosRelatorio {
+  equipamentos: ReadonlyMap<string, { descricao: string; codigo: string | null; tipo: string | null }>;
+  transportadoraNome: ReadonlyMap<string, string>;
+  obraNome: ReadonlyMap<string, string>;
+}
 
-function somar(valores: readonly number[]): number {
-  return somarValoresOperacionais(valores);
+export interface LinhaTop {
+  nome: string;
+  litros: number;
+  custo: number;
+  rPorL: number;
+  qtd: number;
+}
+
+export interface LinhaEquipamentoTop extends LinhaTop {
+  codigo: string;
+}
+
+export interface LinhaCarretaTop extends LinhaTop {
+  placa: string;
+  transportadora: string;
+}
+
+interface Acumulado {
+  litros: number[];
+  custo: number[];
+  qtd: number;
+}
+
+function acumular<K>(mapa: Map<K, Acumulado>, chave: K, litros: number, custo: number): void {
+  const atual = mapa.get(chave) ?? { litros: [], custo: [], qtd: 0 };
+  atual.litros.push(litros);
+  atual.custo.push(custo);
+  atual.qtd += 1;
+  mapa.set(chave, atual);
+}
+
+function fechar(a: Acumulado, somaLitros: (v: number[]) => number = somar, somaCusto: (v: number[]) => number = somar) {
+  const litros = somaLitros(a.litros);
+  const custo = somaCusto(a.custo);
+  return { litros, custo, qtd: a.qtd, rPorL: litros > 0 ? custo / litros : 0 };
+}
+
+/** Soma simples em float, como a origem: o valor da entrada pode ter mais de 4 casas. */
+function somaFloat(valores: readonly number[]): number {
+  return valores.reduce((a, b) => a + b, 0);
+}
+
+/** Sort estável por litros (ou custo) desc, corta em n: o `topByLitros` da origem. */
+function top<T>(linhas: T[], chave: (l: T) => number, n: number): T[] {
+  return [...linhas].sort((a, b) => chave(b) - chave(a)).slice(0, n);
+}
+
+function codigoDoEquipamento(e: { codigo: string | null; tipo: string | null } | undefined): string {
+  return e?.codigo?.trim() || e?.tipo?.trim() || "";
+}
+
+// ---------------------------------------------------------------------------
+// Blocos compartilhados
+// ---------------------------------------------------------------------------
+
+export interface Compras {
+  volumeCompras: number;
+  custoCompras: number;
+  qtdFornecedores: number;
+  fornecedores: LinhaTop[];
+}
+
+/** Entradas do período: compras e fornecedores (pelo nome aparado), todos, por litros. */
+export function consolidarCompras(entradas: readonly EntradaRelatorio[]): Compras {
+  const porFornecedor = new Map<string, Acumulado>();
+  for (const e of entradas) {
+    const nome = e.fornecedor.trim();
+    if (nome) acumular(porFornecedor, nome, e.litros, e.valorTotal);
+  }
+  return {
+    volumeCompras: somar(entradas.map((e) => e.litros)),
+    custoCompras: somaFloat(entradas.map((e) => e.valorTotal)),
+    qtdFornecedores: porFornecedor.size,
+    fornecedores: top(
+      [...porFornecedor.entries()].map(([nome, a]) => ({ nome, ...fechar(a, somar, somaFloat) })),
+      (l) => l.litros,
+      Number.POSITIVE_INFINITY,
+    ),
+  };
+}
+
+function consolidarConsumidores(saidas: readonly SaidaBase[], cadastros: CadastrosRelatorio) {
+  const porEquipamento = new Map<string, Acumulado>();
+  const porPlaca = new Map<string, Acumulado & { transportadora: string }>();
+  let qtdSentinel = 0;
+  for (const s of saidas) {
+    if (s.tipoConsumidor === "equipamento_proprio") {
+      if (s.equipamentoId === EQUIPAMENTO_DESCONHECIDO) qtdSentinel += 1;
+      else if (s.equipamentoId) acumular(porEquipamento, s.equipamentoId, s.litros, s.valorTotal);
+    } else if (s.tipoConsumidor === "carreta_transportadora") {
+      const placa = (s.placa || "").trim();
+      if (!placa) continue;
+      const transportadora = s.transportadoraId ? (cadastros.transportadoraNome.get(s.transportadoraId) ?? "") : "";
+      const atual = porPlaca.get(placa) ?? { litros: [], custo: [], qtd: 0, transportadora };
+      atual.litros.push(s.litros);
+      atual.custo.push(s.valorTotal);
+      atual.qtd += 1;
+      porPlaca.set(placa, atual);
+    }
+  }
+  const topEquipamentos: LinhaEquipamentoTop[] = top(
+    [...porEquipamento.entries()].map(([id, a]) => {
+      const e = cadastros.equipamentos.get(id);
+      return { nome: e?.descricao ?? id, codigo: codigoDoEquipamento(e), ...fechar(a) };
+    }),
+    (l) => l.litros,
+    10,
+  );
+  const topCarretas: LinhaCarretaTop[] = top(
+    [...porPlaca.entries()].map(([placa, a]) => ({ nome: placa, placa, transportadora: a.transportadora, ...fechar(a) })),
+    (l) => l.litros,
+    10,
+  );
+  return { qtdEquipamentos: porEquipamento.size, qtdCarretas: porPlaca.size, qtdSentinel, topEquipamentos, topCarretas };
+}
+
+function totais(saidas: readonly SaidaBase[]) {
+  const volume = somar(saidas.map((s) => s.litros));
+  const custo = somar(saidas.map((s) => s.valorTotal));
+  return { volume, custo, rPorL: volume > 0 ? custo / volume : 0, qtdSaidas: saidas.length };
+}
+
+/** Saídas da mais recente para a mais antiga (a origem ordena a string da data). */
+export function saidasDesc<T extends { data: string }>(saidas: readonly T[]): T[] {
+  return [...saidas].sort((a, b) => b.data.localeCompare(a.data));
 }
 
 // ---------------------------------------------------------------------------
 // (a) Mensal consolidado
 // ---------------------------------------------------------------------------
 
-export interface LinhaMensal {
-  /** yyyy-MM, mês de Rio Branco. */
-  mes: string;
-  combustivel: string;
-  tipoConsumidor: string;
-  abastecimentos: number;
-  litros: number;
-  valor: number;
+export interface DadosMensal {
+  totais: ReturnType<typeof totais> & {
+    qtdEquipamentosProprios: number;
+    qtdSentinel: number;
+    qtdCarretas: number;
+    qtdObras: number;
+    volumeCompras: number;
+    custoCompras: number;
+    qtdFornecedores: number;
+  };
+  topEquipamentos: LinhaEquipamentoTop[];
+  topCarretas: LinhaCarretaTop[];
+  topObras: LinhaTop[];
+  fornecedores: LinhaTop[];
 }
 
-/** Uma linha por mês × combustível × tipo de consumidor. Filtrar no Excel dá qualquer um dos cortes. */
-export function consolidarMensal(saidas: readonly SaidaRelatorio[]): LinhaMensal[] {
-  const grupos = new Map<string, { base: Omit<LinhaMensal, "abastecimentos" | "litros" | "valor">; itens: SaidaRelatorio[] }>();
-  for (const s of saidas) {
-    const mes = mesEmRioBranco(s.data);
-    const chave = [mes, s.insumoId, s.tipoConsumidor].join("|");
-    const grupo = grupos.get(chave) ?? {
-      base: { mes, combustivel: s.combustivel, tipoConsumidor: rotuloTipoConsumidor(s.tipoConsumidor) },
-      itens: [],
-    };
-    grupo.itens.push(s);
-    grupos.set(chave, grupo);
+export function consolidarMensal(
+  saidasNoMes: readonly SaidaBase[],
+  entradasNoMes: readonly EntradaRelatorio[],
+  cadastros: CadastrosRelatorio,
+): DadosMensal {
+  const consumidores = consolidarConsumidores(saidasNoMes, cadastros);
+  const compras = consolidarCompras(entradasNoMes);
+  const porObra = new Map<string, Acumulado>();
+  for (const s of saidasNoMes) {
+    if (s.obraId) acumular(porObra, s.obraId, s.litros, s.valorTotal);
   }
-  return [...grupos.values()]
-    .map(({ base, itens }) => ({
-      ...base,
-      abastecimentos: itens.length,
-      litros: somar(itens.map((s) => s.litros)),
-      valor: somar(itens.map((s) => s.valorTotal)),
-    }))
-    .sort(
-      (a, b) =>
-        a.mes.localeCompare(b.mes) ||
-        a.combustivel.localeCompare(b.combustivel, "pt-BR") ||
-        a.tipoConsumidor.localeCompare(b.tipoConsumidor, "pt-BR"),
-    );
+  return {
+    totais: {
+      ...totais(saidasNoMes),
+      qtdEquipamentosProprios: consumidores.qtdEquipamentos,
+      qtdSentinel: consumidores.qtdSentinel,
+      qtdCarretas: consumidores.qtdCarretas,
+      qtdObras: porObra.size,
+      volumeCompras: compras.volumeCompras,
+      custoCompras: compras.custoCompras,
+      qtdFornecedores: compras.qtdFornecedores,
+    },
+    topEquipamentos: consumidores.topEquipamentos,
+    topCarretas: consumidores.topCarretas,
+    topObras: top(
+      [...porObra.entries()].map(([id, a]) => ({ nome: cadastros.obraNome.get(id) ?? id, ...fechar(a) })),
+      (l) => l.custo,
+      10,
+    ),
+    fornecedores: compras.fornecedores,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // (b) Por obra
 // ---------------------------------------------------------------------------
 
-export const SEM_ALOCACAO = "Sem alocação de obra";
-
-export interface LinhaObra {
-  centro: string;
-  abastecimentos: number;
-  litros: number;
-  /** Só equipamento próprio: percentual × valor_total da saída. */
-  custo: number;
-}
-
-/**
- * Onde o equipamento trabalhou (`abastecimento_alocacoes`): litros da alocação e
- * custo = percentual × valor da saída, só para equipamento próprio (a carreta é
- * da transportadora e não é custo da EMT).
- *
- * Agrupa pelo ID da raiz, não pelo nome: dois cadastros homônimos são dois
- * centros. A saída sem alocação vai inteira para "Sem alocação de obra", para o
- * total da planilha bater com o total de litros do período.
- */
-export function consolidarPorObra(saidas: readonly SaidaRelatorio[]): LinhaObra[] {
-  const grupos = new Map<string, { centro: string; saidas: Set<string>; litros: number[]; custo: number[] }>();
-  const grupo = (chave: string, centro: string) => {
-    const existente = grupos.get(chave);
-    if (existente) return existente;
-    const novo = { centro, saidas: new Set<string>(), litros: [] as number[], custo: [] as number[] };
-    grupos.set(chave, novo);
-    return novo;
+export interface DadosPorObra {
+  totais: ReturnType<typeof totais> & {
+    qtdEquipamentos: number;
+    qtdSentinel: number;
+    qtdCarretas: number;
+    volumeCompras: number;
+    custoCompras: number;
+    qtdFornecedores: number;
   };
+  topEquipamentos: LinhaEquipamentoTop[];
+  topCarretas: LinhaCarretaTop[];
+  fornecedores: LinhaTop[];
+  saidasDesc: SaidaBase[];
+}
 
-  for (const s of saidas) {
-    if (s.alocacoes.length === 0) {
-      const g = grupo("sem-alocacao", SEM_ALOCACAO);
-      g.saidas.add(s.id);
-      g.litros.push(s.litros);
-      if (ehProprio(s)) g.custo.push(s.valorTotal);
-      continue;
-    }
-    for (const [indice, alocacao] of s.alocacoes.entries()) {
-      const g = grupo(alocacao.centroRaizId ?? `sem-centro:${s.id}:${indice}`, alocacao.centroRaizNome);
-      g.saidas.add(s.id);
-      g.litros.push(alocacao.litros);
-      if (ehProprio(s)) g.custo.push(quatroCasas((s.valorTotal * alocacao.percentual) / 100));
-    }
-  }
-
-  return [...grupos.values()]
-    .map((g) => ({ centro: g.centro, abastecimentos: g.saidas.size, litros: somar(g.litros), custo: somar(g.custo) }))
-    .sort((a, b) => b.custo - a.custo || b.litros - a.litros || a.centro.localeCompare(b.centro, "pt-BR"));
+/** `saidasObra`: as saídas da obra no mês, próprios E carretas (a origem quer o consumo inteiro da obra). */
+export function consolidarPorObra(
+  saidasObra: readonly SaidaBase[],
+  entradasNoMes: readonly EntradaRelatorio[],
+  cadastros: CadastrosRelatorio,
+): DadosPorObra {
+  const consumidores = consolidarConsumidores(saidasObra, cadastros);
+  const compras = consolidarCompras(entradasNoMes);
+  return {
+    totais: {
+      ...totais(saidasObra),
+      qtdEquipamentos: consumidores.qtdEquipamentos,
+      qtdSentinel: consumidores.qtdSentinel,
+      qtdCarretas: consumidores.qtdCarretas,
+      volumeCompras: compras.volumeCompras,
+      custoCompras: compras.custoCompras,
+      qtdFornecedores: compras.qtdFornecedores,
+    },
+    topEquipamentos: consumidores.topEquipamentos,
+    topCarretas: consumidores.topCarretas,
+    fornecedores: compras.fornecedores,
+    saidasDesc: saidasDesc(saidasObra),
+  };
 }
 
 // ---------------------------------------------------------------------------
-// (c) Por equipamento e por carreta
+// (c) Por equipamento
 // ---------------------------------------------------------------------------
 
-export interface LinhaEquipamento {
-  equipamento: string;
-  abastecimentos: number;
-  litros: number;
-  valor: number;
-  /** "Horímetro" ou "Km", quando o equipamento tem leitura nos abastecimentos. */
-  medidor: string | null;
-  leituraInicial: number | null;
-  leituraFinal: number | null;
-  /** Final menos inicial: horas ou km rodados entre o primeiro e o último abastecimento do período. */
-  rodado: number | null;
+export interface DadosPorEquipamento {
+  totais: ReturnType<typeof totais> & {
+    qtdObras: number;
+    diasAtivos: number;
+    volumeCompras: number;
+    custoCompras: number;
+    qtdFornecedores: number;
+  };
+  topObras: LinhaTop[];
+  fornecedores: LinhaTop[];
+  saidasDesc: SaidaBase[];
 }
 
-const ROTULO_MEDIDOR: Record<string, string> = { horimetro: "Horímetro", km: "Km" };
-
-/**
- * Equipamento próprio, um por linha. A leitura (horímetro ou km) vem do próprio
- * abastecimento, só do medidor mais usado nele: misturar hora com km daria um
- * "rodado" sem unidade.
- */
-export function consolidarPorEquipamento(saidas: readonly SaidaRelatorio[]): LinhaEquipamento[] {
-  const grupos = new Map<string, SaidaRelatorio[]>();
-  for (const s of saidas) {
-    if (!ehProprio(s) || s.equipamentoId === null) continue;
-    const lista = grupos.get(s.equipamentoId) ?? [];
-    lista.push(s);
-    grupos.set(s.equipamentoId, lista);
+/** `saidasEquipamento`: as de equipamento próprio daquele equipamento no intervalo. */
+export function consolidarPorEquipamento(
+  saidasEquipamento: readonly SaidaBase[],
+  entradasNoPeriodo: readonly EntradaRelatorio[],
+  cadastros: CadastrosRelatorio,
+): DadosPorEquipamento {
+  const compras = consolidarCompras(entradasNoPeriodo);
+  const porObra = new Map<string, Acumulado>();
+  const dias = new Set<string>();
+  for (const s of saidasEquipamento) {
+    dias.add(s.data.slice(0, 10));
+    if (s.obraId) acumular(porObra, s.obraId, s.litros, s.valorTotal);
   }
-
-  return [...grupos.values()]
-    .map((lista) => {
-      const contagem = new Map<string, number>();
-      for (const s of lista) {
-        if (s.medicao !== null && s.tipoMedicao) contagem.set(s.tipoMedicao, (contagem.get(s.tipoMedicao) ?? 0) + 1);
-      }
-      const tipo = [...contagem.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null;
-      const leituras = tipo
-        ? lista.filter((s) => s.tipoMedicao === tipo && s.medicao !== null).map((s) => s.medicao as number)
-        : [];
-      const inicial = leituras.length > 0 ? Math.min(...leituras) : null;
-      const final = leituras.length > 0 ? Math.max(...leituras) : null;
-      return {
-        equipamento: lista[0].equipamentoNome ?? "Equipamento não encontrado",
-        abastecimentos: lista.length,
-        litros: somar(lista.map((s) => s.litros)),
-        valor: somar(lista.map((s) => s.valorTotal)),
-        medidor: tipo ? (ROTULO_MEDIDOR[tipo] ?? tipo) : null,
-        leituraInicial: inicial,
-        leituraFinal: final,
-        rodado: inicial !== null && final !== null ? quatroCasas(final - inicial) : null,
-      };
-    })
-    .sort((a, b) => b.litros - a.litros || a.equipamento.localeCompare(b.equipamento, "pt-BR"));
+  return {
+    totais: {
+      ...totais(saidasEquipamento),
+      qtdObras: porObra.size,
+      diasAtivos: dias.size,
+      volumeCompras: compras.volumeCompras,
+      custoCompras: compras.custoCompras,
+      qtdFornecedores: compras.qtdFornecedores,
+    },
+    topObras: top(
+      [...porObra.entries()].map(([id, a]) => ({ nome: cadastros.obraNome.get(id) ?? id, ...fechar(a) })),
+      (l) => l.litros,
+      10,
+    ),
+    fornecedores: compras.fornecedores,
+    saidasDesc: saidasDesc(saidasEquipamento),
+  };
 }
 
-export interface LinhaCarreta {
-  transportadora: string;
-  placa: string;
-  abastecimentos: number;
-  litros: number;
-  valor: number;
-}
+// ---------------------------------------------------------------------------
+// Rótulos das linhas de saída
+// ---------------------------------------------------------------------------
 
-/** Carreta de transportadora, por transportadora e placa (normalizada: "abc-1d23" = "ABC1D23"). */
-export function consolidarPorCarreta(saidas: readonly SaidaRelatorio[]): LinhaCarreta[] {
-  const grupos = new Map<string, SaidaRelatorio[]>();
-  for (const s of saidas) {
-    if (s.tipoConsumidor !== "carreta_transportadora") continue;
-    const placa = (s.placa ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const chave = `${s.transportadoraId ?? "?"}|${placa}`;
-    const lista = grupos.get(chave) ?? [];
-    lista.push(s);
-    grupos.set(chave, lista);
+/** "Consumidor" da origem: "COD · Nome", "Não identificado", ou "PLACA · Transportadora". */
+export function consumidorDaSaida(s: SaidaBase, cadastros: CadastrosRelatorio): string {
+  if (s.tipoConsumidor === "equipamento_proprio") {
+    if (s.equipamentoId === EQUIPAMENTO_DESCONHECIDO) return "Não identificado";
+    if (!s.equipamentoId) return "-";
+    const e = cadastros.equipamentos.get(s.equipamentoId);
+    if (!e) return s.equipamentoId;
+    const codigo = codigoDoEquipamento(e);
+    return codigo ? `${codigo} · ${e.descricao}` : e.descricao;
   }
-  return [...grupos.values()]
-    .map((lista) => ({
-      transportadora: lista[0].transportadoraNome ?? "Transportadora não encontrada",
-      placa: (lista[0].placa ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "") || "Sem placa",
-      abastecimentos: lista.length,
-      litros: somar(lista.map((s) => s.litros)),
-      valor: somar(lista.map((s) => s.valorTotal)),
-    }))
-    .sort(
-      (a, b) =>
-        a.transportadora.localeCompare(b.transportadora, "pt-BR") || a.placa.localeCompare(b.placa) || b.litros - a.litros,
-    );
+  const transportadora = s.transportadoraId ? (cadastros.transportadoraNome.get(s.transportadoraId) ?? "") : "";
+  return `${s.placa ?? "-"}${transportadora ? ` · ${transportadora}` : ""}`;
 }
 
-/** Sobe pela árvore até a raiz (a obra). Ciclo ou pai sumido para no último conhecido. */
-export function raizDoCentro(
-  id: string,
-  centros: ReadonlyMap<string, { nome: string; paiId: string | null }>,
-): { id: string; nome: string } | null {
-  let atual = centros.get(id);
-  if (!atual) return null;
-  let atualId = id;
-  const vistos = new Set<string>([id]);
-  while (atual.paiId && centros.has(atual.paiId) && !vistos.has(atual.paiId)) {
-    vistos.add(atual.paiId);
-    atualId = atual.paiId;
-    atual = centros.get(atualId)!;
-  }
-  return { id: atualId, nome: atual.nome };
-}
-
-/** "Obra 009 (60%); Obra 002 (40%)", para a coluna de alocação do export bruto. */
-export function resumoAlocacoes(alocacoes: readonly AlocacaoRelatorio[]): string {
-  return alocacoes
-    .map((a) => `${a.centroRaizNome} (${a.percentual.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%)`)
-    .join("; ");
+/** R$/L da linha: valor ÷ litros (0 sem litros). */
+export function rPorLDaSaida(s: { litros: number; valorTotal: number }): number {
+  return s.litros > 0 ? s.valorTotal / s.litros : 0;
 }

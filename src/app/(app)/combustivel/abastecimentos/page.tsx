@@ -12,6 +12,7 @@ import {
 } from "@/modules/combustivel/abastecimentos/filtros";
 import {
   listarAbastecimentos,
+  listarCombustivelDaUltimaEntrada,
   listarEquipamentos,
   listarTransportadoras,
 } from "@/modules/combustivel/abastecimentos/queries";
@@ -40,15 +41,21 @@ export default async function PaginaAbastecimentos({
   if (saidaDoLink) redirect(rotaDoAbastecimento(saidaDoLink));
 
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
-  const filtros = lerFiltrosAbastecimentos(params);
+  // Restaurar é a Lixeira da origem: pede editar a Lixeira e excluir na aba (a
+  // fn_comb_restaurar confere as duas de novo). Sem isso, "excluidos" na URL é ignorado.
+  const podeRestaurar =
+    temPermissao(usuario, "administracao.lixeira", "editar") && temPermissao(usuario, RECURSO, "excluir");
+  const lidos = lerFiltrosAbastecimentos(params);
+  const filtros = { ...lidos, excluidos: podeRestaurar && lidos.excluidos ? true : undefined };
 
-  const [lista, tanques, equipamentos, transportadoras, insumos, centros] = await Promise.all([
+  const [lista, tanques, equipamentos, transportadoras, insumos, centros, combustivelPorTanque] = await Promise.all([
     listarAbastecimentos(filtros),
     listarTanques(),
     listarEquipamentos(),
     listarTransportadoras(),
     podeCriar ? listarInsumosCombustivel() : Promise.resolve<InsumoCombustivel[]>([]),
     podeCriar ? listarCentrosCusto() : Promise.resolve([]),
+    podeCriar ? listarCombustivelDaUltimaEntrada() : Promise.resolve<Record<string, string>>({}),
   ]);
 
   const inativo = (rotulo: string, ativo: boolean) => (ativo ? rotulo : `${rotulo} (inativo)`);
@@ -62,7 +69,14 @@ export default async function PaginaAbastecimentos({
         acoes={
           podeCriar ? (
             <NovoAbastecimentoBotao
-              opcoes={{ tanques, equipamentos, transportadoras, insumos, obras: obrasParaAlocacao(centros) }}
+              opcoes={{
+                tanques,
+                equipamentos,
+                transportadoras,
+                insumos,
+                obras: obrasParaAlocacao(centros),
+                combustivelPorTanque,
+              }}
             />
           ) : undefined
         }
@@ -82,6 +96,8 @@ export default async function PaginaAbastecimentos({
         tipo={filtros.tipo ?? ""}
         origem={filtros.origem ?? ""}
         canal={filtros.canal ?? ""}
+        excluidos={filtros.excluidos ?? false}
+        podeRestaurar={podeRestaurar}
         tanques={tanques.map((t) => ({ id: t.id, rotulo: inativo(t.ehExterno ? `${t.rotulo} (externo)` : t.rotulo, t.ativo) }))}
         equipamentos={equipamentos.map((e) => ({ id: e.id, rotulo: inativo(e.rotulo, e.ativo) }))}
         transportadoras={transportadoras.map((t) => ({ id: t.id, rotulo: inativo(t.nome, t.ativo) }))}

@@ -16,22 +16,31 @@ export interface EsvaziamentoLinha {
   valorPerda: number;
   /** "manual" ou "migracao". */
   origem: string;
+  /** Preenchido só nas linhas da lixeira (quando a página pede os excluídos). */
+  excluidoEm: string | null;
+  motivoExclusao: string | null;
 }
 
-/** Esvaziamentos fora da lixeira, do mais recente para o mais antigo. */
-export async function listarEsvaziamentos(): Promise<EsvaziamentoLinha[]> {
+/**
+ * Esvaziamentos, do mais recente para o mais antigo. Sem `incluirExcluidos`, só
+ * os fora da lixeira; com ele (quem pode restaurar), os excluídos vêm junto e a
+ * tela mostra ao ligar "Mostrar excluídos".
+ */
+export async function listarEsvaziamentos(
+  { incluirExcluidos = false }: { incluirExcluidos?: boolean } = {},
+): Promise<EsvaziamentoLinha[]> {
   const supabase = await createClient();
 
-  const { linhas, erro } = await todasAsLinhas((de, ate) =>
-    supabase
+  const { linhas, erro } = await todasAsLinhas((de, ate) => {
+    const consulta = supabase
       .from("combustivel_esvaziamentos")
-      .select("id, data_hora, tanque_id, litros, motivo, valor_perda, origem, tanques(nome)")
-      .is("excluido_em", null)
+      .select("id, data_hora, tanque_id, litros, motivo, valor_perda, origem, excluido_em, motivo_exclusao, tanques(nome)");
+    return (incluirExcluidos ? consulta : consulta.is("excluido_em", null))
       .order("data_hora", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id")
-      .range(de, ate),
-  );
+      .range(de, ate);
+  });
 
   if (erro) {
     throw new Error("Não foi possível carregar os esvaziamentos");
@@ -46,5 +55,7 @@ export async function listarEsvaziamentos(): Promise<EsvaziamentoLinha[]> {
     motivo: linha.motivo,
     valorPerda: Number(linha.valor_perda),
     origem: linha.origem,
+    excluidoEm: linha.excluido_em,
+    motivoExclusao: linha.motivo_exclusao,
   }));
 }

@@ -19,31 +19,39 @@ export interface TransferenciaLinha {
   observacoes: string | null;
   /** "manual" ou "migracao". */
   origem: string;
+  /** Preenchido só nas linhas da lixeira (quando a página pede os excluídos). */
+  excluidoEm: string | null;
+  motivoExclusao: string | null;
 }
 
 /**
- * Transferências fora da lixeira, da mais recente para a mais antiga. Passa por
- * `todasAsLinhas` (teto de 1.000 do PostgREST) e termina a ordem no id, para a
- * paginação por `.range()` não repetir nem pular linha.
+ * Transferências, da mais recente para a mais antiga. Sem `incluirExcluidos`,
+ * só as fora da lixeira; com ele (quem pode restaurar), as excluídas vêm junto
+ * e a tela mostra ao ligar "Mostrar excluídos". Passa por `todasAsLinhas` (teto
+ * de 1.000 do PostgREST) e termina a ordem no id, para a paginação por
+ * `.range()` não repetir nem pular linha.
  */
-export async function listarTransferencias(): Promise<TransferenciaLinha[]> {
+export async function listarTransferencias(
+  { incluirExcluidos = false }: { incluirExcluidos?: boolean } = {},
+): Promise<TransferenciaLinha[]> {
   const supabase = await createClient();
 
-  const { linhas, erro } = await todasAsLinhas((de, ate) =>
-    supabase
+  const { linhas, erro } = await todasAsLinhas((de, ate) => {
+    const consulta = supabase
       .from("combustivel_transferencias")
       .select(
         `id, data_hora, tanque_origem_id, tanque_destino_id, litros, valor_total, observacoes, origem,
+         excluido_em, motivo_exclusao,
          tanque_origem:tanques!combustivel_transferencias_tanque_origem_id_fkey(nome),
          tanque_destino:tanques!combustivel_transferencias_tanque_destino_id_fkey(nome),
          insumos(nome)`,
-      )
-      .is("excluido_em", null)
+      );
+    return (incluirExcluidos ? consulta : consulta.is("excluido_em", null))
       .order("data_hora", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id")
-      .range(de, ate),
-  );
+      .range(de, ate);
+  });
 
   if (erro) {
     throw new Error("Não foi possível carregar as transferências");
@@ -61,5 +69,7 @@ export async function listarTransferencias(): Promise<TransferenciaLinha[]> {
     valorTotal: Number(linha.valor_total),
     observacoes: linha.observacoes,
     origem: linha.origem,
+    excluidoEm: linha.excluido_em,
+    motivoExclusao: linha.motivo_exclusao,
   }));
 }
