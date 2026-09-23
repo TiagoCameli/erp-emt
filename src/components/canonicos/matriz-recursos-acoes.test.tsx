@@ -22,7 +22,12 @@ import { RECURSOS, type Acao } from "@/config/recursos";
  * tela ficaria dizendo que a permissão existe até alguém recarregar.
  */
 const COMPLETO = RECURSOS.find((recurso) => recurso.acoes.length === 6)!;
-const PARCIAL = RECURSOS.reduce((menor, recurso) =>
+// O teste acha a linha pelo NOME do recurso, então o escolhido tem que ter nome
+// único no catálogo: "Painel" existe na Gestão e na Manutenção.
+const NOMES_UNICOS = RECURSOS.filter(
+  (recurso) => RECURSOS.filter((outro) => outro.nome === recurso.nome).length === 1,
+);
+const PARCIAL = NOMES_UNICOS.reduce((menor, recurso) =>
   recurso.acoes.length < menor.acoes.length ? recurso : menor,
 );
 

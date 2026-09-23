@@ -6715,6 +6715,13 @@ export type Database = {
           nome: string;
         }[];
       };
+      nomes_usuarios_manutencao: {
+        Args: { p_ids: string[] };
+        Returns: {
+          id: string;
+          nome: string;
+        }[];
+      };
       proximo_numero_documento: { Args: { p_tipo: string }; Returns: string };
       salvar_condicao: {
         Args: {
