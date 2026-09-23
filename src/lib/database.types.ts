@@ -5710,6 +5710,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_equipamento_do_legado: {
+        Args: { p_id_antigo: string };
+        Returns: string;
+      };
       fn_editar_recibo_ferias: {
         Args: {
           p_bruto: number;
