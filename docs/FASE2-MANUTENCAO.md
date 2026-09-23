@@ -63,6 +63,11 @@ todas. Soft delete da OS e da entrada pela lixeira, com motivo.
 
 ## Pendências de dado para a carga (2d), não para o código
 
+**Resolvidas em 23/09/2026** (o Tiago: "pode seguir, não precisa esperar"). As decisões, uma por
+uma, estão em `docs/decisoes.md` (entrada da Fase 2d) e no topo de
+`scripts/migracao-gestao-obras/gerar_carga_manutencao.py`; o roteiro da virada, em
+`docs/VIRADA-MANUTENCAO.md`. O levantamento original fica abaixo.
+
 - **249 peças** casam com os insumos do ERP pelo nome, com revisão do Tiago (decisão d).
 - **19 prestadores** de `os_terceiros` viram fornecedor (fornecedor obrigatório): 11 casam, 8 o
   Tiago decide ou cria.

@@ -3871,3 +3871,75 @@ outra máquina; Admin resolve o adesivo; id inexistente dá nulo; leitura em equ
 recusada pelo banco; e, por diferença, a mesma conta sem permissão não resolve o adesivo nem vê a
 ficha, e com só `manutencao.medicoes/ver` resolve e vê, mas não edita a ficha (0 linhas) nem lança
 leitura. 0 lançamentos. Conferido depois que nada ficou gravado.
+
+## 23/09/2026: Migração, Fase 2d: carga da Manutenção pronta e ensaiada; virada espera a permissão da equipe
+
+O Tiago respondeu "pode seguir, não precisa esperar" à lista de pendências da 2d. As decisões
+abaixo foram tomadas com essa autorização, pela regra que ele já tinha dado (decisão d: casar com
+o cadastro do ERP, criar só o que não tem par), e estão todas no topo de
+`scripts/migracao-gestao-obras/gerar_carga_manutencao.py`.
+
+### O que foi decidido em nome do Tiago
+
+- **Peças: casa só quando é a MESMA peça e a unidade é compatível; na dúvida cria.** Casar errado
+  corrompe custo e saldo; duplicata se funde depois. Das 248 peças usadas, 88 casam com insumo do
+  ERP e 160 são criadas. Dos 50 casos de confiança baixa, 28 casam (erro de digitação, artigo,
+  ordem das palavras, nome truncado, código com e sem hífen) e o resto é criado (dois candidatos,
+  nome genérico contra específico, variante diferente). Óleo com unidade diferente (L na origem, un
+  ou BD no ERP) é criado: conversão inventada erraria o saldo. O ERP tem dois "FILTRO DE OLEO" e
+  dois "ROLAMENTO NACHI": fica o de menor código. Insumo criado com o mesmo nome de um que já existe
+  em outra unidade leva a unidade no nome ("ÓLEO 15W40 - L").
+- **6 peças novas** apareceram na origem depois do CSV de 22/09: 3 casam por nome e unidade iguais,
+  3 são criadas.
+- **Prestadores:** Wanderson Junior e Wanderson Eletricista vão para WANDERSON SOUZA DA COSTA (o
+  único Wanderson do ERP, 14 lançamentos de serviço elétrico; a dúvida de ele receber vale
+  adiantamento fica anotada). AUTO ELETRICA AMILTON, NEGUINHO RADIADORES e OFICINA - DOLAR (esta
+  apareceu hoje) são criados com o nome da origem. "BORRACHARIA" e "OFICINA", texto genérico sem
+  evidência, vão para um fornecedor "NÃO IDENTIFICADO (MIGRAÇÃO GESTÃO OBRAS)", com o texto
+  original na descrição da linha.
+- **Silo:** não vira depósito. A entrada e a única peça dele (uma chapa, na OS-2026-0061) entram no
+  Almoxarifado Central com a observação; o saldo continua o mesmo. Deixar de fora tiraria a chapa
+  da OS e a conferência de custo não bateria.
+- **Número da OS:** o ERP tem 0 OS, então a OS migrada fica com o MESMO número da origem
+  (`OS-2026-NNNN`, que já é o formato do ERP), com `numero_legado` igual, e a sequência continua da
+  maior da origem, inclusive das 5 excluídas.
+- **Datas das entradas:** o ERP guarda só a data, e nenhuma das 313 entradas 5 h à frente muda de
+  dia (o gerador confere uma por uma), então a correção não altera nada.
+- **Fica na origem:** a medição de teste, as 5 OS excluídas (custo zero) e os 94 documentos de
+  equipamento "aguardando upload", sem arquivo. Entram os 4 documentos com PDF (1 CRLV e 3 notas
+  de aquisição), com o anexo em `arquivos` + `anexo_vinculos`.
+
+### Como a carga funciona
+
+- `extrair_manutencao.py` lê a origem (só GET, chave de serviço dela, fora do app) para
+  `_retrato/`, fora do git: o repositório é público.
+- `gerar_carga_manutencao.py` decide e valida, e para em qualquer coisa nova sem decisão (peça,
+  prestador, depósito, medição, saída avulsa). Escreve lotes de ~35 KB para
+  `legado.carga_fase2d` (staging, schema legado, sem grant, RLS sem policy), que
+  `carregar_staging_fase2d.py` sobe pelo `supabase db query --linked` (a mesma API de SQL do MCP;
+  `db push` continua proibido e as migrations continuam pelo `apply_migration`).
+- **A migration da carga não tem dado.** Lê o staging, grava, e confere contra os números da origem
+  que o gerador contou do retrato: contagem por tabela, OS por status e custo, saldo de cada peça e
+  anexos. Um bloco só: se um número não bater, nada entra. Ids derivados do id da origem
+  (`legado.fn_uid`, o mesmo md5 do gerador): rodar de novo não duplica.
+- **O saldo esperado é o que o app antigo mostra** (`v_saldo_estoque`, plano 9.1), não uma soma
+  nova; o gerador para se a soma e a view discordarem. Isso pegou, no ensaio, uma linha de 60 L
+  de óleo lançada na origem no meio da extração: no dia, o congelamento vem antes do retrato.
+- O `fn_recurso_da_entidade` ganhou `equipamento_documento` (dono `cadastros.equipamentos`), e o
+  documento de equipamento passou a mostrar e aceitar anexo na tela. Remover o documento agora
+  desvincula os anexos (`anexo_vinculos` não cascateia).
+
+### Prova (`provar_carga_fase2d.py`, sem gravar)
+
+Com o retrato de 23/09 (172 OS: 169 concluídas, R$ 305.127,43, e 3 canceladas; 311 peças, 59
+óleos, 41 terceiros, 338 entradas, 18 tipos de óleo, 47 fichas, 4 documentos): **ensaio OK**, todas
+as contagens iguais à origem, 0 peça com saldo diferente, 0 lançamento criado. **Controle:** o
+custo esperado 1 centavo menor derruba a carga. **Rollback:** carga de verdade e rollback no mesmo
+statement deixam tudo em zero.
+
+### Por que a virada não foi feita hoje
+
+Congelar a origem agora deixaria Andreia e Marvim (autores das OS de lá) sem lugar para lançar:
+no ERP só os 4 Admins têm `manutencao.*`, e a matriz dos outros é o Tiago que refaz (22/09). O
+roteiro está em `docs/VIRADA-MANUTENCAO.md`: congelamento com prova e linha de controle na origem,
+retrato, carga, anexos, redirecionamento do QR antigo, e o desfazer dos dois lados.

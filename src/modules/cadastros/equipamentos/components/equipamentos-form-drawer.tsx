@@ -24,6 +24,7 @@ import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import {
   adicionarDocumento,
+  carregarAnexosDosDocumentos,
   criarEquipamento,
   editarEquipamento,
   removerDocumento,
@@ -47,6 +48,12 @@ import {
   type EquipamentoFormInput,
 } from "@/modules/cadastros/equipamentos/schemas";
 
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+
+import {
+  AnexosDocumentoEquipamento,
+  BotaoAnexosDocumento,
+} from "./documento-anexos";
 import { SecaoFichaTecnica } from "./ficha-tecnica-secao";
 
 const ID_FORM = "form-equipamento";
@@ -157,7 +164,8 @@ export function EquipamentosFormDrawer({
       status: valores.status,
       medicaoInicial: medicaoParaNumero(valores.medicaoInicial),
       numeroSerie: valores.numeroSerie,
-      dataAquisicao: valores.dataAquisicao === "" ? undefined : valores.dataAquisicao,
+      dataAquisicao:
+        valores.dataAquisicao === "" ? undefined : valores.dataAquisicao,
       dataVenda: valores.dataVenda === "" ? undefined : valores.dataVenda,
       ativo: valores.ativo,
     };
@@ -191,7 +199,9 @@ export function EquipamentosFormDrawer({
           ? "Atualize os dados deste equipamento"
           : "Cadastre um equipamento. A etapa dele no centro de custo de Manutenção é gerada automaticamente"
       }
-      temAlteracoesNaoSalvas={(form.formState.isDirty || fichaSuja) && !salvando}
+      temAlteracoesNaoSalvas={
+        (form.formState.isDirty || fichaSuja) && !salvando
+      }
       rodape={
         <>
           <Button
@@ -489,7 +499,8 @@ export function EquipamentosFormDrawer({
         </>
       ) : (
         <p className="mt-6 border-t border-border pt-5 text-detalhe text-muted-foreground">
-          Salve o equipamento para registrar a ficha técnica e os documentos dele.
+          Salve o equipamento para registrar a ficha técnica e os documentos
+          dele.
         </p>
       )}
     </FormDrawer>
@@ -509,10 +520,63 @@ interface SecaoDocumentosProps {
   podeEditar: boolean;
 }
 
+type CargaAnexos =
+  | { estado: "carregando" }
+  | { estado: "erro"; mensagem: string }
+  | { estado: "pronto"; porDocumento: Record<string, AnexoDoDocumento[]> };
+
+/**
+ * Anexos dos documentos do equipamento, carregados quando a seção monta (o
+ * drawer só a monta com o equipamento salvo), igual à ficha técnica. A
+ * listagem de equipamentos não traz anexo nenhum.
+ *
+ * `recarregar` não volta para "carregando": a seção de anexos aberta não
+ * desmonta no meio do envio, só recebe a lista nova.
+ */
+function useAnexosDosDocumentos(equipamentoId: string) {
+  const [carga, setCarga] = React.useState<CargaAnexos>({
+    estado: "carregando",
+  });
+  const [tentativa, setTentativa] = React.useState(0);
+
+  React.useEffect(() => {
+    let ativo = true;
+    carregarAnexosDosDocumentos(equipamentoId)
+      .then((resultado) => {
+        if (!ativo) return;
+        if ("erro" in resultado) {
+          setCarga({ estado: "erro", mensagem: resultado.erro });
+          return;
+        }
+        setCarga({ estado: "pronto", porDocumento: resultado.anexos });
+      })
+      .catch(() => {
+        if (!ativo) return;
+        setCarga({
+          estado: "erro",
+          mensagem:
+            "Não foi possível carregar os anexos dos documentos. Tente novamente",
+        });
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [equipamentoId, tentativa]);
+
+  const recarregar = React.useCallback(() => setTentativa((n) => n + 1), []);
+  const tentarDeNovo = React.useCallback(() => {
+    setCarga({ estado: "carregando" });
+    setTentativa((n) => n + 1);
+  }, []);
+
+  return { carga, recarregar, tentarDeNovo };
+}
+
 /**
  * Seção de documentos no detalhe do equipamento: subtabela com vencimento
  * formatado e badge âmbar quando vencido ou perto, mais o formulário de
- * adicionar. Remoção pede confirmação.
+ * adicionar. Remoção pede confirmação. Cada linha abre os anexos do
+ * documento (componente canônico `Anexos`).
  */
 function SecaoDocumentos({
   equipamentoId,
@@ -522,6 +586,29 @@ function SecaoDocumentos({
   const [adicionando, setAdicionando] = React.useState(false);
   const [paraRemover, setParaRemover] =
     React.useState<EquipamentoDocumento | null>(null);
+  const [anexosAbertos, setAnexosAbertos] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const {
+    carga: cargaAnexos,
+    recarregar,
+    tentarDeNovo,
+  } = useAnexosDosDocumentos(equipamentoId);
+
+  function alternarAnexos(documentoId: string) {
+    setAnexosAbertos((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(documentoId)) proximo.delete(documentoId);
+      else proximo.add(documentoId);
+      return proximo;
+    });
+  }
+
+  /** null enquanto carrega ou quando falhou: nunca "Sem anexo" por engano. */
+  function anexosDe(documentoId: string): AnexoDoDocumento[] | null {
+    if (cargaAnexos.estado !== "pronto") return null;
+    return cargaAnexos.porDocumento[documentoId] ?? [];
+  }
 
   const form = useForm<DocumentoFormInput>({
     resolver: zodResolver(documentoFormSchema),
@@ -663,56 +750,89 @@ function SecaoDocumentos({
         <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
           {documentos.map((documento) => {
             const alerta = vencimentoEmAlerta(documento.vencimento);
+            const anexos = anexosDe(documento.id);
+            const anexosAberto =
+              anexos !== null && anexosAbertos.has(documento.id);
             return (
-              <li
-                key={documento.id}
-                className="flex items-center justify-between gap-3 px-3 py-2.5"
-              >
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="truncate text-detalhe font-medium">
-                    {documento.tipo}
-                  </span>
-                  {documento.descricao ? (
-                    <span className="truncate text-legenda text-muted-foreground">
-                      {documento.descricao}
+              <li key={documento.id} className="flex flex-col">
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate text-detalhe font-medium">
+                      {documento.tipo}
                     </span>
-                  ) : null}
+                    {documento.descricao ? (
+                      <span className="truncate text-legenda text-muted-foreground">
+                        {documento.descricao}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {documento.vencimento ? (
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "border-transparent tabular-nums",
+                          alerta
+                            ? "bg-status-pendente/10 text-status-pendente"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {formatarData(documento.vencimento)}
+                      </Badge>
+                    ) : (
+                      <span className="text-legenda text-muted-foreground">
+                        Sem vencimento
+                      </span>
+                    )}
+                    <BotaoAnexosDocumento
+                      tipoDocumento={documento.tipo}
+                      anexos={anexos}
+                      aberto={anexosAberto}
+                      onAlternar={() => alternarAnexos(documento.id)}
+                    />
+                    {podeEditar ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Remover documento ${documento.tipo}`}
+                        onClick={() => setParaRemover(documento)}
+                      >
+                        <Trash2 className="text-status-rejeitado" />
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {documento.vencimento ? (
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        "border-transparent tabular-nums",
-                        alerta
-                          ? "bg-status-pendente/10 text-status-pendente"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {formatarData(documento.vencimento)}
-                    </Badge>
-                  ) : (
-                    <span className="text-legenda text-muted-foreground">
-                      Sem vencimento
-                    </span>
-                  )}
-                  {podeEditar ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Remover documento ${documento.tipo}`}
-                      onClick={() => setParaRemover(documento)}
-                    >
-                      <Trash2 className="text-status-rejeitado" />
-                    </Button>
-                  ) : null}
-                </div>
+                {anexosAberto ? (
+                  <AnexosDocumentoEquipamento
+                    documentoId={documento.id}
+                    anexos={anexos}
+                    podeEditar={podeEditar}
+                    onMudou={recarregar}
+                  />
+                ) : null}
               </li>
             );
           })}
         </ul>
       )}
+
+      {documentos.length > 0 && cargaAnexos.estado === "erro" ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 rounded-md border border-status-rejeitado/30 px-3 py-2 text-legenda text-status-rejeitado"
+        >
+          <span>{cargaAnexos.mensagem}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={tentarDeNovo}
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         aberto={paraRemover !== null}

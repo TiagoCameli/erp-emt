@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import type { Acao } from "@/config/recursos";
-import { erroAcao } from "@/lib/erros";
+import { erroAcao, logErroServidor } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import {
   lerEValidarXlsx,
@@ -12,6 +12,10 @@ import {
 } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import {
+  listarAnexosPorDocumento,
+  type AnexoDoDocumento,
+} from "@/modules/_shared/anexos/queries";
 import {
   fichaTecnicaSchema,
   registroDaFicha,
@@ -236,7 +240,17 @@ export async function adicionarDocumento(
   return { ok: true };
 }
 
-/** Remove um documento do equipamento. Segue a permissão de editar. */
+/**
+ * Remove um documento do equipamento. Segue a permissão de editar.
+ *
+ * `anexo_vinculos` é polimórfica e não tem FK para o documento: nenhum cascade
+ * limpa os vínculos dele. Por isso os vínculos são lidos ANTES e desfeitos
+ * DEPOIS do delete, pela mesma RPC do "Remover anexo" (o arquivo continua no
+ * bucket enquanto outro vínculo o usar; sem nenhum, a faxina cuida). A ordem
+ * importa: desvincular antes e o delete falhar deixaria um documento vivo sem
+ * os anexos. Falha ao desvincular depois do delete não desfaz o sucesso: vira
+ * log, e o vínculo órfão não aparece em tela nenhuma.
+ */
 export async function removerDocumento(id: string): Promise<ResultadoAcao> {
   if (!(await checarPermissao("editar"))) {
     return { erro: "Sem permissão para editar equipamentos" };
@@ -246,10 +260,26 @@ export async function removerDocumento(id: string): Promise<ResultadoAcao> {
   if (!idValido.success) return { erro: "Documento inválido" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+
+  const { data: vinculos, error: erroVinculos } = await supabase
+    .from("anexo_vinculos")
+    .select("id")
+    .eq("entidade_tipo", "equipamento_documento")
+    .eq("entidade_id", idValido.data);
+
+  if (erroVinculos) {
+    return erroAcao(
+      "cadastros.equipamentos.removerDocumento.vinculos",
+      erroVinculos,
+      "Não foi possível remover o documento. Tente novamente",
+    );
+  }
+
+  const { data: removidos, error } = await supabase
     .from(TABELA_DOCUMENTOS)
     .delete()
-    .eq("id", idValido.data);
+    .eq("id", idValido.data)
+    .select("id");
 
   if (error) {
     return erroAcao(
@@ -259,8 +289,74 @@ export async function removerDocumento(id: string): Promise<ResultadoAcao> {
     );
   }
 
+  // Delete barrado pela RLS não dá erro, volta zero linha. Sem esta trava os
+  // anexos de um documento que continua vivo seriam desvinculados abaixo.
+  if (!removidos || removidos.length === 0) {
+    return { erro: "Documento não encontrado ou sem permissão para remover" };
+  }
+
+  for (const vinculo of vinculos ?? []) {
+    const { error: erroDesvincular } = await supabase.rpc(
+      "fn_desvincular_arquivo",
+      { p_vinculo_id: vinculo.id },
+    );
+    if (erroDesvincular) {
+      logErroServidor(
+        "cadastros.equipamentos.removerDocumento.desvincular",
+        erroDesvincular,
+      );
+    }
+  }
+
   revalidatePath(ROTA);
   return { ok: true };
+}
+
+export type ResultadoAnexosDosDocumentos =
+  | { ok: true; anexos: Record<string, AnexoDoDocumento[]> }
+  | { erro: string };
+
+/**
+ * Anexos dos documentos de UM equipamento, agrupados pelo id do documento. O
+ * drawer chama ao abrir, igual à ficha técnica: a listagem não traz os anexos
+ * da frota inteira.
+ *
+ * Os ids dos documentos saem do banco, não da tela: o cliente manda só o
+ * equipamento. A fonte da verdade é o vínculo em `anexo_vinculos`
+ * (entidade "equipamento_documento"); a coluna legada `anexo_path` não entra.
+ * Pede `ver`, igual ao `anexosDoDocumento` do módulo de anexos.
+ */
+export async function carregarAnexosDosDocumentos(
+  equipamentoId: string,
+): Promise<ResultadoAnexosDosDocumentos> {
+  if (!(await checarPermissao("ver"))) {
+    return { erro: "Sem permissão para ver equipamentos" };
+  }
+
+  const idValido = idSchema.safeParse(equipamentoId);
+  if (!idValido.success) return { erro: "Equipamento inválido" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from(TABELA_DOCUMENTOS)
+    .select("id")
+    .eq("equipamento_id", idValido.data);
+
+  if (error) {
+    return erroAcao(
+      "cadastros.equipamentos.carregarAnexosDosDocumentos",
+      error,
+      "Não foi possível carregar os anexos dos documentos. Tente novamente",
+    );
+  }
+
+  const ids = (data ?? []).map((documento) => documento.id);
+  if (ids.length === 0) return { ok: true, anexos: {} };
+
+  return {
+    ok: true,
+    anexos: await listarAnexosPorDocumento("equipamento_documento", ids),
+  };
 }
 
 // ---------------------------------------------------------------------------
