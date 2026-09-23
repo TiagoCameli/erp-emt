@@ -36,6 +36,7 @@ export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
+  { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
   { id: "rh", nome: "RH", rota: "/rh" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
@@ -208,6 +209,45 @@ export const RECURSOS = [
     modulo: "compras",
     rota: "/compras/ordens",
     acoes: CRUD_APROVA,
+  },
+  // Manutenção (Fase 2 da migração do Gestão Obras, plano seção 4.1). Não gera
+  // lançamento, parcela nem rateio: diz para onde foi a peça, o óleo e o serviço.
+  {
+    id: "manutencao.painel",
+    nome: "Painel",
+    modulo: "manutencao",
+    rota: "/manutencao",
+    acoes: ["ver"],
+  },
+  {
+    // A OS. Peça, óleo e terceiro são linhas da OS, cobertas por "editar".
+    id: "manutencao.servicos",
+    nome: "Caderno de serviços",
+    modulo: "manutencao",
+    rota: "/manutencao/servicos",
+    acoes: CRUD,
+  },
+  {
+    id: "manutencao.almoxarifado",
+    nome: "Almoxarifado de peças",
+    modulo: "manutencao",
+    rota: "/manutencao/almoxarifado",
+    acoes: CRUD,
+  },
+  {
+    // Horímetro e km. É também a tela do celular, com fila offline.
+    id: "manutencao.medicoes",
+    nome: "Horímetro e km",
+    modulo: "manutencao",
+    rota: "/manutencao/medicoes",
+    acoes: ["ver", "criar", "editar"],
+  },
+  {
+    id: "manutencao.tipos-oleo",
+    nome: "Tipos de óleo",
+    modulo: "manutencao",
+    rota: "/manutencao/tipos-oleo",
+    acoes: CRUD,
   },
   // Financeiro
   {

@@ -1,0 +1,22 @@
+tipo;gestao_obras_id;nome;eh_almoxarifado_pecas;aplicacao;intervalo_meses;ativo;n_entradas;qtd_entradas;n_os_pecas;n_os_oleos;n_insumos;saldo_origem;insumos_origem;erp_id;sugestao
+deposito;mp8hueeq1ppr2;Almoxarifado Central;true;;;true;331;2479;305;58;;1122.8;;;"criar em almoxarifado_depositos (vazio no ERP) e levar tudo: 331 das 332 entradas, 305 das 306 pecas e os 58 oleos. Todo o saldo da origem (1.122,8 pela v_saldo_estoque) esta aqui. Sem obra na origem (obra_id nulo). O ERP nao tem eh_almoxarifado_pecas nem obra_id em almoxarifado_depositos"
+deposito;mpah58owqqm1a;Depósito Central (Silo);false;;;true;1;1;1;0;;0;;;"NAO e almoxarifado de pecas. Tem 1 movimento de cada: a entrada de 1 un de CHAPA DE FERRO (insumo ms6m48z3ehi98) por R$ 450,00 em 30/07/2026 e a peca ms6myg9zuf2zm, 1 un de CHAPA DE FERRO a R$ 450,00 na OS-2026-0061 (concluida). Saldo 0. Sugestao: nao criar o deposito; lancar a entrada e a peca no Almoxarifado Central (o saldo continua 0) e registrar na observacao da OS que a chapa saiu do Silo. Alternativa: criar o deposito Silo so para essas 2 linhas. Decisao do Tiago"
+deposito;mpah7albj6h6x;Canteiro BR-364;false;;;true;0;0;0;0;;0;;;"sem movimento (0 entradas, 0 pecas, 0 oleos, saldo 0). Unico com obra na origem (99a8ba7d-1b26-4d19-a983-379d46ac86aa). Sugestao: nao migrar"
+tipo_oleo;mrmmvuf8hr4yr;Aditivo Radiador Concentrado;;outro;;true;;;;2;1;;Aditivo Radiador Concentrado;;criar em tipos_oleo (vazio no ERP)
+tipo_oleo;mrmmwhs4hady8;Água Desmineralizada p/ Bateria;;outro;;true;;;;1;1;;Água Desmineralizada p/ Bateria;;criar
+tipo_oleo;mu1rf958fukja;Arla;;outro;;true;;;;1;1;;Arla 20 L;;"criar. Arla nao e oleo; esta aqui porque o modal de oleo exige tipo_oleo_id"
+tipo_oleo;toleo_atf;ATF (transmissão automática);;transmissao;12;true;;;;3;1;;ÓLEO ATF;;criar
+tipo_oleo;toleo_graxa;Graxa;;graxa;;true;;;;1;1;;GRAXA BALDE MARFAK MP2 20KG;;criar
+tipo_oleo;mrp5lbhe2okdd;ÓLEO 10W30 - DAF EXTREME;;motor;;true;;;;4;1;;ÓLEO 10W30 - DAF EXTREME;;criar
+tipo_oleo;mt0iwbghixay8;Óleo 20w50;;motor;;true;;;;1;1;;Óleo Mineral Motor GTX Anti-BC;;"criar. O unico insumo e o GTX Anti-BC (o duplicado inativo mt0ipdz3akmk5 nao tem tipo)"
+tipo_oleo;mt0kka3gkxki4;Óleo 5w40;;motor;;true;;;;4;1;;Óleo 5w40;;criar
+tipo_oleo;mtj7ptw21sz9x;Óleo 80W;;motor;;true;;;;0;0;;;;"sem uso: 0 os_oleos e 0 insumos. O insumo OLEO 80W EP GL4 (mtj7q4ysulkmm) esta sem tipo_oleo_id; sugestao: criar o tipo e ligar esse insumo a ele. Aplicacao motor parece errada para 80W (e oleo de transmissao/diferencial), conferir"
+tipo_oleo;toleo_diferencial;Óleo de Diferencial - 90;;diferencial;12;true;;;;3;2;;ÓLEO 90, OLEO MULTIGEAR SAE90 GL05;;criar
+tipo_oleo;mrml0qrwspfax;Óleo de Freio - DOT 4;;outro;;true;;;;1;1;;Óleo de Freio - DOT 4;;criar
+tipo_oleo;toleo_motor_15w40;Óleo de Motor 15W40;;motor;6;true;;;;27;3;;ÓLEO 15W40, PLUS 50 II 15W40 20L, OLEO URSA 15W40 TDS PREMIUM CI4;;"criar. O mais usado: 27 dos 58 os_oleos"
+tipo_oleo;mtralgg0sffkk;Óleo de Motor Motul X-Tech Clean;;motor;;true;;;;1;1;;Óleo de Motor Motul X-Tech Clean;;criar
+tipo_oleo;toleo_transmissao_85w140;Óleo de Transmissão 50;;transmissao;12;true;;;;2;2;;ÓLEO 50, OLEO URSA SAE50 LA3;;"criar. O id da origem diz 85w140 mas o nome e os insumos sao SAE 50"
+tipo_oleo;mrl7n4ovju8oq;Óleo Eaton - Caixa de Marcha Pesada;;outro;;true;;;;1;1;;Óleo Eaton - Caixa de Marcha Pesada;;"criar. Aplicacao outro; caberia transmissao"
+tipo_oleo;toleo_hidraulico_68;Óleo Hidráulico 68;;hidraulico;12;true;;;;1;1;;ÓLEO 68;;criar
+tipo_oleo;mt7qdzat93kel;Óleo Lubrificante;;outro;;true;;;;1;1;;OLEO SINTETICO VG220;;criar
+tipo_oleo;mrzee4rpjwx8d;Óleo Mobil 10w30;;motor;;true;;;;4;1;;Óleo Mobil 10w30;;criar

@@ -3757,3 +3757,49 @@ Gestão Obras.
   montar a matriz. A senha provisória se lê em Administração > Usuários.
 - O email das pessoas NÃO vai para o repositório: o repo é público. O de-para de usuários guarda
   só nome e id.
+
+## 23/09/2026 — Migração, Fase 2a e 2b: o banco e as telas da Manutenção
+
+Desenho e regras em `docs/FASE2-MANUTENCAO.md` (decisões do Tiago de 23/09 marcadas com [T]: OS
+aberta e concluída direto, custo médio igual à origem, fornecedor obrigatório no terceiro, baixa
+real com estorno).
+
+### Banco (2a): `20260923100000_fase2_manutencao_banco`
+
+- 13 tabelas (tipos de óleo, almoxarifado com depósito, item, entrada, saída e saldo, OS com peças,
+  óleos, terceiros e transições, medições e histórico de status do equipamento). Valores e
+  quantidades com 4 casas. **Nenhuma escreve em `lancamentos`, parcela ou rateio.**
+- Toda escrita por RPC SECURITY DEFINER com `tem_permissao` (16 RPCs). Custo e saldo só por
+  gatilho: a tela nunca manda `custo_*`, que era o defeito da origem.
+- O gatilho de status do equipamento só age ao ENTRAR ou SAIR de `em_execucao`. A primeira versão
+  agia em qualquer insert de OS e desfazia um `em_manutencao` posto à mão.
+- Quem só tem Manutenção precisa ler equipamento, fornecedor, insumo, centro de custo e unidade:
+  `fn_ve_manutencao()` entrou no SELECT dessas 5 tabelas. Sem isso a OS abriria sem nome de nada.
+- Permissões: 5 recursos novos (`manutencao.painel`, `.servicos`, `.almoxarifado`, `.medicoes`,
+  `.tipos-oleo`), 16 ações × 4 Admins = 64 linhas, conferidas na migration. Ninguém mais ganhou.
+- Prova: `supabase/provas/fase2a_manutencao_banco.sql`, 15 casos em transação desfeita, todos
+  passaram. Custo médio 6 com duas entradas; saldo não fica negativo; estorno devolve; o
+  equipamento vai a `em_manutencao` e volta a `ativa`; reabrir sem motivo é recusado; alugado sem
+  obra é recusado; `id_cliente` repetido devolve a mesma linha; RLS com linha de controle (979
+  fornecedores para o Admin, 0 para quem não tem permissão); 0 lançamentos criados.
+- Advisors: só os 16 avisos esperados de RPC SECURITY DEFINER executável por `authenticated`, o
+  padrão do repo.
+
+### Telas (2b) e `20260923110000_fase2_nomes_e_medicao_ativo`
+
+- Menu Manutenção: Painel, Serviços (lista e OS com linhas, iniciar, concluir, reabrir com motivo,
+  cancelar), Almoxarifado (saldos, entradas por NF, depósitos, peças), Medições e Tipos de óleo.
+- `nomes_usuarios_manutencao`: as RPCs de nome que existiam devolvem vazio para quem só tem
+  Manutenção, e o histórico da OS saía sem nome.
+- `fn_registrar_medicao` recusa equipamento inativo. A tela já recusava; agora o banco concorda, e
+  a fila offline do celular (2c) herda a regra.
+- A lista de saldos mostra, com saldo 0, a peça ativa com estoque mínimo que ainda não teve
+  entrada. Sem isso a peça que mais falta não aparecia no alerta.
+- O teste da matriz de permissões escolhia o recurso pelo nome, e "Painel" agora existe duas vezes:
+  passou a escolher entre nomes únicos.
+
+### Para a carga (2d), esperando o Tiago
+
+`scripts/migracao-gestao-obras/pecas-de-para.csv` (246 peças: 64 casam, 182 a criar, 133 destas
+com insumo parecido no ERP), `prestadores-de-para.csv` (13 casam, 6 de confiança baixa) e
+`depositos-e-oleos-de-para.csv`.

@@ -14,6 +14,336 @@ export type Database = {
   };
   public: {
     Tables: {
+      almoxarifado_depositos: {
+        Row: {
+          ativo: boolean;
+          created_at: string;
+          created_by: string | null;
+          endereco: string | null;
+          id: string;
+          nome: string;
+          updated_at: string;
+        };
+        Insert: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          endereco?: string | null;
+          id?: string;
+          nome: string;
+          updated_at?: string;
+        };
+        Update: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          endereco?: string | null;
+          id?: string;
+          nome?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "almoxarifado_depositos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      almoxarifado_entradas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          deposito_id: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          fornecedor_id: string;
+          id: string;
+          insumo_id: string;
+          motivo_exclusao: string | null;
+          nota_fiscal: string | null;
+          observacoes: string | null;
+          origem: string;
+          quantidade: number;
+          updated_at: string;
+          valor_total: number;
+          valor_unitario: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          deposito_id: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id: string;
+          id?: string;
+          insumo_id: string;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          quantidade: number;
+          updated_at?: string;
+          valor_total: number;
+          valor_unitario: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          deposito_id?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id?: string;
+          id?: string;
+          insumo_id?: string;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          quantidade?: number;
+          updated_at?: string;
+          valor_total?: number;
+          valor_unitario?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "almoxarifado_entradas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_entradas_deposito_id_fkey";
+            columns: ["deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_entradas_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_entradas_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_entradas_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      almoxarifado_itens: {
+        Row: {
+          ativo: boolean;
+          created_at: string;
+          created_by: string | null;
+          equipamento_ids: string[];
+          estoque_maximo: number | null;
+          estoque_minimo: number | null;
+          id: string;
+          insumo_id: string;
+          observacoes: string | null;
+          tipo_oleo_id: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          equipamento_ids?: string[];
+          estoque_maximo?: number | null;
+          estoque_minimo?: number | null;
+          id?: string;
+          insumo_id: string;
+          observacoes?: string | null;
+          tipo_oleo_id?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          equipamento_ids?: string[];
+          estoque_maximo?: number | null;
+          estoque_minimo?: number | null;
+          id?: string;
+          insumo_id?: string;
+          observacoes?: string | null;
+          tipo_oleo_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "almoxarifado_itens_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_itens_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: true;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_itens_tipo_oleo_id_fkey";
+            columns: ["tipo_oleo_id"];
+            isOneToOne: false;
+            referencedRelation: "tipos_oleo";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      almoxarifado_saidas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          custo_unitario: number;
+          deposito_id: string;
+          estornada_em: string | null;
+          estornada_por: string | null;
+          id: string;
+          insumo_id: string;
+          motivo: string;
+          motivo_estorno: string | null;
+          ordem_servico_id: string;
+          quantidade: number;
+          valor_total: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          custo_unitario: number;
+          deposito_id: string;
+          estornada_em?: string | null;
+          estornada_por?: string | null;
+          id?: string;
+          insumo_id: string;
+          motivo: string;
+          motivo_estorno?: string | null;
+          ordem_servico_id: string;
+          quantidade: number;
+          valor_total: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          custo_unitario?: number;
+          deposito_id?: string;
+          estornada_em?: string | null;
+          estornada_por?: string | null;
+          id?: string;
+          insumo_id?: string;
+          motivo?: string;
+          motivo_estorno?: string | null;
+          ordem_servico_id?: string;
+          quantidade?: number;
+          valor_total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "almoxarifado_saidas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_saidas_deposito_id_fkey";
+            columns: ["deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_saidas_estornada_por_fkey";
+            columns: ["estornada_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_saidas_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_saidas_os_fkey";
+            columns: ["ordem_servico_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_servico";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      almoxarifado_saldos: {
+        Row: {
+          atualizado_em: string;
+          custo_medio: number;
+          deposito_id: string;
+          insumo_id: string;
+          quantidade_entradas: number;
+          quantidade_saidas: number;
+          saldo: number;
+          valor_entradas: number;
+        };
+        Insert: {
+          atualizado_em?: string;
+          custo_medio?: number;
+          deposito_id: string;
+          insumo_id: string;
+          quantidade_entradas?: number;
+          quantidade_saidas?: number;
+          saldo?: number;
+          valor_entradas?: number;
+        };
+        Update: {
+          atualizado_em?: string;
+          custo_medio?: number;
+          deposito_id?: string;
+          insumo_id?: string;
+          quantidade_entradas?: number;
+          quantidade_saidas?: number;
+          saldo?: number;
+          valor_entradas?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "almoxarifado_saldos_deposito_id_fkey";
+            columns: ["deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_saldos_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       anexo_vinculos: {
         Row: {
           arquivo_id: string;
@@ -1171,6 +1501,141 @@ export type Database = {
             columns: ["equipamento_id"];
             isOneToOne: true;
             referencedRelation: "equipamentos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      equipamento_medicoes: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          equipamento_id: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          id_cliente: string | null;
+          observacoes: string | null;
+          ordem_servico_id: string | null;
+          origem: string;
+          tipo: string;
+          updated_at: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          equipamento_id: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          id_cliente?: string | null;
+          observacoes?: string | null;
+          ordem_servico_id?: string | null;
+          origem?: string;
+          tipo: string;
+          updated_at?: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          equipamento_id?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          id_cliente?: string | null;
+          observacoes?: string | null;
+          ordem_servico_id?: string | null;
+          origem?: string;
+          tipo?: string;
+          updated_at?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "equipamento_medicoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "equipamento_medicoes_equipamento_id_fkey";
+            columns: ["equipamento_id"];
+            isOneToOne: false;
+            referencedRelation: "equipamentos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "equipamento_medicoes_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "equipamento_medicoes_ordem_servico_id_fkey";
+            columns: ["ordem_servico_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_servico";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      equipamento_status_historico: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          equipamento_id: string;
+          id: string;
+          motivo: string | null;
+          ordem_servico_id: string | null;
+          status_de: string | null;
+          status_para: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          equipamento_id: string;
+          id?: string;
+          motivo?: string | null;
+          ordem_servico_id?: string | null;
+          status_de?: string | null;
+          status_para: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          equipamento_id?: string;
+          id?: string;
+          motivo?: string | null;
+          ordem_servico_id?: string | null;
+          status_de?: string | null;
+          status_para?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "equipamento_status_historico_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "equipamento_status_historico_equipamento_id_fkey";
+            columns: ["equipamento_id"];
+            isOneToOne: false;
+            referencedRelation: "equipamentos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "equipamento_status_historico_ordem_servico_id_fkey";
+            columns: ["ordem_servico_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_servico";
             referencedColumns: ["id"];
           },
         ];
@@ -3003,6 +3468,400 @@ export type Database = {
           },
         ];
       };
+      ordens_servico: {
+        Row: {
+          causa_raiz: string | null;
+          centro_custo_id: string;
+          created_at: string;
+          created_by: string | null;
+          custo_oleos: number;
+          custo_pecas: number;
+          custo_terceiros: number;
+          custo_total: number;
+          data_abertura: string;
+          data_conclusao: string | null;
+          data_inicio: string | null;
+          defeito_reportado: string | null;
+          descricao: string;
+          equipamento_id: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          id_cliente: string | null;
+          medicao_abertura: number | null;
+          medicao_conclusao: number | null;
+          motivo_cancelamento: string | null;
+          motivo_exclusao: string | null;
+          numero: string;
+          numero_legado: string | null;
+          observacoes: string | null;
+          origem: string;
+          prioridade: string;
+          status: string;
+          tipo: string;
+          updated_at: string;
+        };
+        Insert: {
+          causa_raiz?: string | null;
+          centro_custo_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          custo_oleos?: number;
+          custo_pecas?: number;
+          custo_terceiros?: number;
+          custo_total?: number;
+          data_abertura: string;
+          data_conclusao?: string | null;
+          data_inicio?: string | null;
+          defeito_reportado?: string | null;
+          descricao: string;
+          equipamento_id: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          id_cliente?: string | null;
+          medicao_abertura?: number | null;
+          medicao_conclusao?: number | null;
+          motivo_cancelamento?: string | null;
+          motivo_exclusao?: string | null;
+          numero: string;
+          numero_legado?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          prioridade?: string;
+          status?: string;
+          tipo: string;
+          updated_at?: string;
+        };
+        Update: {
+          causa_raiz?: string | null;
+          centro_custo_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          custo_oleos?: number;
+          custo_pecas?: number;
+          custo_terceiros?: number;
+          custo_total?: number;
+          data_abertura?: string;
+          data_conclusao?: string | null;
+          data_inicio?: string | null;
+          defeito_reportado?: string | null;
+          descricao?: string;
+          equipamento_id?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          id_cliente?: string | null;
+          medicao_abertura?: number | null;
+          medicao_conclusao?: number | null;
+          motivo_cancelamento?: string | null;
+          motivo_exclusao?: string | null;
+          numero?: string;
+          numero_legado?: string | null;
+          observacoes?: string | null;
+          origem?: string;
+          prioridade?: string;
+          status?: string;
+          tipo?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ordens_servico_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ordens_servico_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ordens_servico_equipamento_id_fkey";
+            columns: ["equipamento_id"];
+            isOneToOne: false;
+            referencedRelation: "equipamentos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ordens_servico_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      os_oleos: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          deposito_id: string;
+          id: string;
+          insumo_id: string;
+          ordem_servico_id: string;
+          quantidade: number;
+          saida_id: string;
+          tipo_oleo_id: string;
+          unidade: string;
+          valor_total: number;
+          valor_unitario: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          deposito_id: string;
+          id?: string;
+          insumo_id: string;
+          ordem_servico_id: string;
+          quantidade: number;
+          saida_id: string;
+          tipo_oleo_id: string;
+          unidade?: string;
+          valor_total: number;
+          valor_unitario: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          deposito_id?: string;
+          id?: string;
+          insumo_id?: string;
+          ordem_servico_id?: string;
+          quantidade?: number;
+          saida_id?: string;
+          tipo_oleo_id?: string;
+          unidade?: string;
+          valor_total?: number;
+          valor_unitario?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "os_oleos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_oleos_deposito_id_fkey";
+            columns: ["deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_oleos_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_oleos_ordem_servico_id_fkey";
+            columns: ["ordem_servico_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_servico";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_oleos_saida_id_fkey";
+            columns: ["saida_id"];
+            isOneToOne: true;
+            referencedRelation: "almoxarifado_saidas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_oleos_tipo_oleo_id_fkey";
+            columns: ["tipo_oleo_id"];
+            isOneToOne: false;
+            referencedRelation: "tipos_oleo";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      os_pecas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          custo_total: number;
+          custo_unitario: number;
+          deposito_id: string;
+          id: string;
+          insumo_id: string;
+          observacoes: string | null;
+          ordem_servico_id: string;
+          quantidade: number;
+          saida_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          custo_total: number;
+          custo_unitario: number;
+          deposito_id: string;
+          id?: string;
+          insumo_id: string;
+          observacoes?: string | null;
+          ordem_servico_id: string;
+          quantidade: number;
+          saida_id: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          custo_total?: number;
+          custo_unitario?: number;
+          deposito_id?: string;
+          id?: string;
+          insumo_id?: string;
+          observacoes?: string | null;
+          ordem_servico_id?: string;
+          quantidade?: number;
+          saida_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "os_pecas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_pecas_deposito_id_fkey";
+            columns: ["deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_pecas_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_pecas_ordem_servico_id_fkey";
+            columns: ["ordem_servico_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_servico";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_pecas_saida_id_fkey";
+            columns: ["saida_id"];
+            isOneToOne: true;
+            referencedRelation: "almoxarifado_saidas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      os_terceiros: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          descricao: string;
+          fornecedor_id: string;
+          id: string;
+          nota_fiscal: string | null;
+          ordem_servico_id: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          descricao: string;
+          fornecedor_id: string;
+          id?: string;
+          nota_fiscal?: string | null;
+          ordem_servico_id: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          descricao?: string;
+          fornecedor_id?: string;
+          id?: string;
+          nota_fiscal?: string | null;
+          ordem_servico_id?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "os_terceiros_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_terceiros_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_terceiros_ordem_servico_id_fkey";
+            columns: ["ordem_servico_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_servico";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      os_transicoes: {
+        Row: {
+          criado_em: string;
+          id: string;
+          motivo: string | null;
+          ordem_servico_id: string;
+          status_de: string | null;
+          status_para: string;
+          usuario_id: string | null;
+        };
+        Insert: {
+          criado_em?: string;
+          id?: string;
+          motivo?: string | null;
+          ordem_servico_id: string;
+          status_de?: string | null;
+          status_para: string;
+          usuario_id?: string | null;
+        };
+        Update: {
+          criado_em?: string;
+          id?: string;
+          motivo?: string | null;
+          ordem_servico_id?: string;
+          status_de?: string | null;
+          status_para?: string;
+          usuario_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "os_transicoes_ordem_servico_id_fkey";
+            columns: ["ordem_servico_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_servico";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_transicoes_usuario_id_fkey";
+            columns: ["usuario_id"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       parcela_eventos: {
         Row: {
           created_at: string;
@@ -4185,6 +5044,47 @@ export type Database = {
           },
         ];
       };
+      tipos_oleo: {
+        Row: {
+          aplicacao: string;
+          ativo: boolean;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          intervalo_meses: number | null;
+          nome: string;
+          updated_at: string;
+        };
+        Insert: {
+          aplicacao?: string;
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          intervalo_meses?: number | null;
+          nome: string;
+          updated_at?: string;
+        };
+        Update: {
+          aplicacao?: string;
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          intervalo_meses?: number | null;
+          nome?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tipos_oleo_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       transferencias_contas: {
         Row: {
           conta_destino_id: string;
@@ -4519,6 +5419,32 @@ export type Database = {
         };
         Returns: string;
       };
+      fn_almox_editar_entrada: {
+        Args: {
+          p_data: string;
+          p_fornecedor: string;
+          p_id: string;
+          p_nota_fiscal: string;
+          p_quantidade: number;
+          p_valor_unitario: number;
+        };
+        Returns: undefined;
+      };
+      fn_almox_excluir_entrada: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_almox_registrar_entrada: {
+        Args: {
+          p_data: string;
+          p_deposito: string;
+          p_fornecedor: string;
+          p_itens: Json;
+          p_nota_fiscal: string;
+          p_observacoes?: string;
+        };
+        Returns: number;
+      };
       fn_alterar_mes_competencia: {
         Args: { p_entidade: string; p_id: string; p_mes: string };
         Returns: undefined;
@@ -4775,6 +5701,15 @@ export type Database = {
         Args: { p_item: string; p_valor: number };
         Returns: undefined;
       };
+      fn_editar_medicao: {
+        Args: {
+          p_data: string;
+          p_id: string;
+          p_observacoes: string;
+          p_valor: number;
+        };
+        Returns: undefined;
+      };
       fn_editar_recibo_ferias: {
         Args: {
           p_bruto: number;
@@ -5026,6 +5961,80 @@ export type Database = {
         Args: { p_oc_id: string };
         Returns: undefined;
       };
+      fn_os_adicionar_oleo: {
+        Args: {
+          p_deposito: string;
+          p_insumo: string;
+          p_os: string;
+          p_quantidade: number;
+          p_tipo_oleo: string;
+          p_unidade?: string;
+        };
+        Returns: string;
+      };
+      fn_os_adicionar_peca: {
+        Args: {
+          p_deposito: string;
+          p_insumo: string;
+          p_observacoes?: string;
+          p_os: string;
+          p_quantidade: number;
+        };
+        Returns: string;
+      };
+      fn_os_adicionar_terceiro: {
+        Args: {
+          p_descricao: string;
+          p_fornecedor: string;
+          p_nota_fiscal?: string;
+          p_os: string;
+          p_valor: number;
+        };
+        Returns: string;
+      };
+      fn_os_cancelar: {
+        Args: { p_motivo: string; p_os: string };
+        Returns: undefined;
+      };
+      fn_os_concluir: {
+        Args: {
+          p_data_conclusao: string;
+          p_medicao_conclusao: number;
+          p_os: string;
+        };
+        Returns: undefined;
+      };
+      fn_os_excluir: {
+        Args: { p_motivo: string; p_os: string };
+        Returns: undefined;
+      };
+      fn_os_iniciar: { Args: { p_os: string }; Returns: undefined };
+      fn_os_reabrir: {
+        Args: { p_motivo: string; p_os: string };
+        Returns: undefined;
+      };
+      fn_os_remover_linha: {
+        Args: { p_linha: string; p_tipo: string };
+        Returns: undefined;
+      };
+      fn_os_salvar: {
+        Args: {
+          p_causa: string;
+          p_centro_custo: string;
+          p_data_abertura: string;
+          p_defeito: string;
+          p_descricao: string;
+          p_equipamento: string;
+          p_id: string;
+          p_id_cliente?: string;
+          p_medicao_abertura: number;
+          p_observacoes: string;
+          p_origem?: string;
+          p_prioridade: string;
+          p_tipo: string;
+        };
+        Returns: string;
+      };
       fn_padrao_categoria_de_custo: {
         Args: never;
         Returns: {
@@ -5128,6 +6137,17 @@ export type Database = {
           p_nome: string;
           p_path: string;
           p_tamanho: number;
+        };
+        Returns: string;
+      };
+      fn_registrar_medicao: {
+        Args: {
+          p_data: string;
+          p_equipamento: string;
+          p_id_cliente?: string;
+          p_observacoes?: string;
+          p_origem?: string;
+          p_valor: number;
         };
         Returns: string;
       };
@@ -5639,6 +6659,7 @@ export type Database = {
         };
         Returns: number;
       };
+      fn_ve_manutencao: { Args: never; Returns: boolean };
       fn_vencimento_folha: {
         Args: { p_competencia: string; p_dia: number };
         Returns: string;
@@ -5688,6 +6709,13 @@ export type Database = {
         }[];
       };
       nomes_usuarios_financeiro: {
+        Args: { p_ids: string[] };
+        Returns: {
+          id: string;
+          nome: string;
+        }[];
+      };
+      nomes_usuarios_manutencao: {
         Args: { p_ids: string[] };
         Returns: {
           id: string;

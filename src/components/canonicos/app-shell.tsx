@@ -15,6 +15,7 @@ import {
   ShoppingCart,
   Users,
   Wallet,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -36,6 +37,7 @@ const MAPA_ICONES: Record<string, LucideIcon> = {
   cadastros: FolderOpen,
   compras: ShoppingCart,
   financeiro: Wallet,
+  manutencao: Wrench,
   rh: Users,
 };
 
