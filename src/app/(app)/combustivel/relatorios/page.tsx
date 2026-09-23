@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 
-import { PageHeader } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { opcoesDeEquipamento } from "@/modules/combustivel/anomalias/base";
 import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
+import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import { RelatoriosCombustivel } from "@/modules/combustivel/relatorios/components/relatorios-combustivel";
 import { mesAnterior, ultimosDias } from "@/modules/combustivel/relatorios/periodo";
 
@@ -31,8 +31,7 @@ export default async function PaginaRelatoriosCombustivel() {
 
   return (
     <>
-      <PageHeader
-        modulo="Combustível"
+      <TituloAba
         titulo="Relatórios"
         descricao="Mensal consolidado, por obra, por equipamento e o export cru, em Excel"
       />

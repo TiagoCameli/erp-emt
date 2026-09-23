@@ -25,7 +25,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { atribuirEquipamento, conferirAnomalia } from "@/modules/combustivel/anomalias/actions";
-import { MODOS, ROTULO_MODO, type Modo } from "@/modules/combustivel/anomalias/base";
 import {
   DETECTOR_LABEL,
   SEVERITY_LABEL,
@@ -48,7 +47,6 @@ const OPCOES_SITUACAO = [
   { valor: "conferidas", rotulo: "Conferidas" },
 ];
 
-const OPCOES_MODO = MODOS.map((modo) => ({ valor: modo, rotulo: ROTULO_MODO[modo] }));
 const OPCOES_SEVERIDADE = (["critical", "warning", "info"] as const).map((s) => ({ valor: s, rotulo: SEVERITY_LABEL[s] }));
 const OPCOES_DETECTOR = (["D1", "D2", "D3", "D4", "D5"] as const).map((d) => ({
   valor: d,
@@ -78,7 +76,6 @@ function saidasDaSelecao(anomalias: readonly AnomaliaLista[], ids: readonly stri
 export interface AnomaliasTabelaProps {
   anomalias: AnomaliaLista[];
   situacao: Situacao;
-  modo: Modo;
   severidade: Severidade | "";
   detector: DetectorId | "";
   /** Período (yyyy-MM-dd) já resolvido pela página, com o padrão aplicado. */
@@ -99,7 +96,6 @@ export interface AnomaliasTabelaProps {
 export function AnomaliasTabela({
   anomalias,
   situacao,
-  modo,
   severidade,
   detector,
   de,
@@ -373,7 +369,8 @@ export function AnomaliasTabela({
         // Limpa só os filtros DESTA lista: a de sem suprimento, na mesma página, tem o dela.
         onLimparFiltros={() => {
           setBusca("");
-          setMuitos({ de: null, ate: null, situacao: null, modo: null, severidade: null, detector: null });
+          // O modo é do cabeçalho do módulo (vale para todas as abas): limpar a lista não o troca.
+          setMuitos({ de: null, ate: null, situacao: null, severidade: null, detector: null });
         }}
         idTabela="combustivel.anomalias"
         columns={colunas}
@@ -412,21 +409,6 @@ export function AnomaliasTabela({
                 onPeriodoChange={(novoDe, novoAte) =>
                   setMuitos({ de: novoDe === "" ? null : novoDe, ate: novoAte === "" ? null : novoAte })
                 }
-              />
-            ),
-          },
-          {
-            id: "modo",
-            rotulo: "Consumidor",
-            fixo: true,
-            temValor: modo !== "proprios",
-            onLimpar: () => setMuitos({ modo: null }),
-            elemento: (
-              <FiltroSelect
-                valor={modo}
-                obrigatorio
-                onValorChange={(valor) => setMuitos({ modo: valor === "proprios" || valor === "" ? null : valor })}
-                opcoes={OPCOES_MODO}
               />
             ),
           },
