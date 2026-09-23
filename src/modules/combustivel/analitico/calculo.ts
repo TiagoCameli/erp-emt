@@ -315,14 +315,6 @@ export interface EntradaAnalitica {
   valorTotal: number;
 }
 
-/** O recorte da origem para entradas: só o período (entrada não tem consumidor nem obra). */
-export function entradasDoPeriodo<T extends { data: string }>(entradas: readonly T[], de: string, ate: string): T[] {
-  return entradas.filter((e) => {
-    const dia = e.data.slice(0, 10);
-    return dia >= de && dia <= ate;
-  });
-}
-
 export interface KpisFornecedores {
   volume: number;
   custo: number;

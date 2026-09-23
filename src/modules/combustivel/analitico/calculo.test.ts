@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   chipDeContagem,
-  entradasDoPeriodo,
   ID_NAO_IDENTIFICADO,
   kpisConsumidores,
   kpisFornecedores,
@@ -253,15 +252,5 @@ describe("Fornecedores (KpisRowFornecedores e FornecedoresRankingTable)", () => 
     // Entrada de 0 L não entra no mín/máx: sem nenhum preço, 0 (a tela mostra "—").
     expect(linhas[2]!.rPorLMin).toBe(0);
     expect(linhas[2]!.rPorLMedio).toBe(0);
-  });
-
-  it("entradasDoPeriodo recorta pelo dia do relógio de parede, pontas inclusivas", () => {
-    const lista = [
-      entrada({ data: "2026-08-31T23:59:59" }),
-      entrada({ data: "2026-09-01T00:00:00" }),
-      entrada({ data: "2026-09-30T23:59:59" }),
-      entrada({ data: "2026-10-01T00:00:00" }),
-    ];
-    expect(entradasDoPeriodo(lista, "2026-09-01", "2026-09-30")).toHaveLength(2);
   });
 });

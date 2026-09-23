@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { textoDiferenca, formatarRPorL, leituraDaTendencia } from "@/modules/combustivel/analitico/formato";
 import { linkSaidasDoConsumidor } from "@/modules/combustivel/analitico/links";
-import { recorteDaUrl } from "@/modules/combustivel/analitico/recorte";
 import { ID_NAO_IDENTIFICADO } from "@/modules/combustivel/painel/calculo";
 
 const SET = { de: "2026-09-01", ate: "2026-09-30" };
@@ -39,23 +38,6 @@ describe("link da linha do ranking para as Saídas (mesmo recorte, mesmo número
     expect(linkSaidasDoConsumidor("ABC1D23", { modo: "carretas", ...SET }, [])).toBe(
       "/combustivel/abastecimentos?modo=carretas&de=2026-09-01&ate=2026-09-30&placa=ABC1D23",
     );
-  });
-});
-
-describe("recorte da URL", () => {
-  it("padrão: próprios e os últimos 30 dias; anterior de mesma duração", () => {
-    const r = recorteDaUrl({}, "2026-09-30");
-    expect(r).toEqual({
-      modo: "proprios",
-      periodo: { de: "2026-09-01", ate: "2026-09-30" },
-      anterior: { de: "2026-08-02", ate: "2026-08-31" },
-    });
-  });
-
-  it("lê modo e período; invertido troca de lado", () => {
-    const r = recorteDaUrl({ modo: "carretas", de: "2026-09-10", ate: "2026-09-01" }, "2026-09-30");
-    expect(r.modo).toBe("carretas");
-    expect(r.periodo).toEqual({ de: "2026-09-01", ate: "2026-09-10" });
   });
 });
 

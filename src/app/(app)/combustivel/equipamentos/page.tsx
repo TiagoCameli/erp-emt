@@ -22,9 +22,11 @@ import {
   textoDiferenca,
 } from "@/modules/combustivel/analitico/formato";
 import { linkSaidasDoConsumidor } from "@/modules/combustivel/analitico/links";
-import { recorteDaUrl } from "@/modules/combustivel/analitico/recorte";
-import { saidasDoRecorte } from "@/modules/combustivel/anomalias/base";
+import { BarraFiltrosCombustivel } from "@/modules/combustivel/_shared/components/barra-filtros-combustivel";
+import { aplicarFiltroGlobal, filtroGlobalDaUrl } from "@/modules/combustivel/_shared/filtro-global";
 import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
+import { periodoAnterior } from "@/modules/combustivel/painel/calculo";
+import { carregarOpcoesFiltroGlobal } from "@/modules/combustivel/painel/queries";
 
 /** Lê todas as saídas (a base inteira, página por página): passa do teto padrão da Vercel. */
 export const maxDuration = 60;
@@ -46,14 +48,14 @@ export default async function PaginaEquipamentosCombustivel({
   const veSaidas = temPermissao(usuario, "combustivel.saidas", "ver");
 
   const params = await searchParams;
-  const { modo, periodo, anterior } = recorteDaUrl(params, dataHojeISO());
-  const base = await carregarBaseCombustivel();
+  const hoje = dataHojeISO();
+  const filtro = filtroGlobalDaUrl(params, hoje);
+  const { modo, periodo } = filtro;
+  const [base, opcoes] = await Promise.all([carregarBaseCombustivel(), carregarOpcoesFiltroGlobal(filtro)]);
 
-  // BARRA-FILTROS-GLOBAL: aplicar aqui o filtro global sobre as duas listas (o mesmo
-  // filtro nas duas, senão o delta compara recortes diferentes). Os cálculos abaixo
-  // recebem a lista pronta e não mudam.
-  const noPeriodo = saidasDoRecorte(base.saidas, modo, periodo.de, periodo.ate);
-  const doAnterior = saidasDoRecorte(base.saidas, modo, anterior.de, anterior.ate);
+  // O filtro global nas duas listas: o mesmo nas duas, senão o delta compara recortes diferentes.
+  const noPeriodo = aplicarFiltroGlobal(base.saidas, filtro);
+  const doAnterior = aplicarFiltroGlobal(base.saidas, filtro, periodoAnterior(periodo.de, periodo.ate));
 
   const proprios = modo === "proprios";
   const kpis = kpisConsumidores(noPeriodo, doAnterior, modo, periodo.de, periodo.ate);
@@ -88,7 +90,7 @@ export default async function PaginaEquipamentosCombustivel({
         }
       />
 
-      {/* BARRA-FILTROS-GLOBAL: a barra entra aqui, acima dos KPIs. */}
+      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} hoje={hoje} ocultar={["fornecedores"]} />
 
       {vazio ? (
         <EmptyState

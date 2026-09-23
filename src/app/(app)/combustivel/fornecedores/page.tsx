@@ -5,7 +5,6 @@ import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import {
-  entradasDoPeriodo,
   kpisFornecedores,
   MINIMO_PONTOS_TENDENCIA,
   rankingFornecedores,
@@ -20,10 +19,21 @@ import {
   textoDiferenca,
 } from "@/modules/combustivel/analitico/formato";
 import { carregarEntradasAnaliticas } from "@/modules/combustivel/analitico/queries";
-import { recorteDaUrl } from "@/modules/combustivel/analitico/recorte";
+import { BarraFiltrosCombustivel } from "@/modules/combustivel/_shared/components/barra-filtros-combustivel";
+import {
+  aplicarFiltroGlobalEntradas,
+  filtroGlobalDaUrl,
+  opcoesDoFiltroGlobal,
+  type DimensaoFiltro,
+} from "@/modules/combustivel/_shared/filtro-global";
+import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
+import { periodoAnterior } from "@/modules/combustivel/painel/calculo";
 
 /** Mesmo teto das outras abas analíticas (lê todas as entradas, página por página). */
 export const maxDuration = 60;
+
+/** Entrada não tem consumidor, obra nem operador: só período, combustível, fornecedor e tanque filtram. */
+const OCULTAR_EM_ENTRADAS: readonly DimensaoFiltro[] = ["obras", "equipamentos", "transportadoras", "placas", "operadores"];
 
 /**
  * Aba Fornecedores: a FornecedoresTab da origem, sobre as ENTRADAS (compras). Não depende
@@ -39,13 +49,16 @@ export default async function PaginaFornecedoresCombustivel({
   const usuario = await getUsuarioLogado();
   if (!temPermissao(usuario, "combustivel.painel", "ver")) notFound();
 
-  const { periodo, anterior } = recorteDaUrl(await searchParams, dataHojeISO());
-  const entradas = await carregarEntradasAnaliticas();
+  const hoje = dataHojeISO();
+  const filtro = filtroGlobalDaUrl(await searchParams, hoje);
+  const { periodo } = filtro;
+  // A base dá os nomes de tanque e combustível das opções da barra (é a mesma leitura cacheada das outras abas).
+  const [entradas, base] = await Promise.all([carregarEntradasAnaliticas(), carregarBaseCombustivel()]);
+  const opcoes = opcoesDoFiltroGlobal(base, entradas, filtro);
 
-  // BARRA-FILTROS-GLOBAL: das chaves globais, só combustível, fornecedor e tanque valem
-  // para entradas (como na origem). Aplicar aqui, nas duas listas.
-  const noPeriodo = entradasDoPeriodo(entradas, periodo.de, periodo.ate);
-  const doAnterior = entradasDoPeriodo(entradas, anterior.de, anterior.ate);
+  // Das chaves globais, só período, combustível, fornecedor e tanque valem para entradas (como na origem).
+  const noPeriodo = aplicarFiltroGlobalEntradas(entradas, filtro);
+  const doAnterior = aplicarFiltroGlobalEntradas(entradas, filtro, periodoAnterior(periodo.de, periodo.ate));
 
   const kpis = kpisFornecedores(noPeriodo, doAnterior, periodo.de, periodo.ate);
   const linhas = rankingFornecedores(noPeriodo, periodo.de, periodo.ate);
@@ -56,7 +69,7 @@ export default async function PaginaFornecedoresCombustivel({
     <>
       <TituloAba titulo="Fornecedores" descricao="Compras de combustível por fornecedor no período" />
 
-      {/* BARRA-FILTROS-GLOBAL: a barra entra aqui, acima dos KPIs. */}
+      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} hoje={hoje} ocultar={OCULTAR_EM_ENTRADAS} />
 
       {noPeriodo.length === 0 ? (
         <EmptyState titulo="Nenhuma entrada de combustível no período" descricao="Ajuste o período ou os filtros" />
