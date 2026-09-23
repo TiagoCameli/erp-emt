@@ -54,9 +54,12 @@ todas. Soft delete da OS e da entrada pela lixeira, com motivo.
 2. **2b. Telas desktop:** painel, caderno de serviços (lista, OS, linhas), almoxarifado, tipos de
    óleo, horímetro e km.
 3. **2c. Celular:** `/m/equipamento/[id]` com leitura do QR, abrir OS e lançar horímetro com fila
-   offline idempotente, etiqueta QR nova, e o adesivo antigo redirecionando no Gestão Obras.
-4. **2d. Carga e virada:** migração dos dados da origem com conferência 9.5 a 9.7, e a virada só da
-   manutenção (origem só leitura nela). Precisa do ok do Tiago para congelar a origem.
+   offline idempotente, etiqueta QR nova, ficha técnica, e `/m/eq/<id antigo>` resolvendo o
+   adesivo antigo pelo de-para.
+4. **2d. Carga e virada:** migração dos dados da origem com conferência 9.5 a 9.7, a virada só da
+   manutenção (origem só leitura nela) e, na mesma hora, o redirecionamento de `/m/eq/:id` no
+   `vercel.json` do Gestão Obras para o ERP (antes da carga ele levaria o mecânico a um ERP sem o
+   histórico da máquina). Precisa do ok do Tiago para congelar a origem.
 
 ## Pendências de dado para a carga (2d), não para o código
 

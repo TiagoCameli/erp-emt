@@ -1,0 +1,13 @@
+{
+  "name": "ERP EMT Campo",
+  "short_name": "EMT Campo",
+  "description": "Horímetro, km e abertura de OS pelo QR do equipamento",
+  "start_url": "/m/leitor",
+  "scope": "/m/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#3E7744",
+  "lang": "pt-BR",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

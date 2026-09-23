@@ -33,7 +33,8 @@ import { describe, expect, it } from "vitest";
 const RAIZ = "src";
 
 /** Nome de Server Action que exporta arquivo. Sem flag `g`: `test` é stateful. */
-const NOME_DE_EXPORT = /^\s*export async function (gerar(?:Planilha|Pdf)\w*)/;
+const NOME_DE_EXPORT =
+  /^\s*export async function (gerar(?:Planilha|Pdf|Etiquetas)\w*)/;
 
 /** Todo arquivo .ts/.tsx de código (teste não conta) sob `dir`. */
 function fontes(dir: string): string[] {

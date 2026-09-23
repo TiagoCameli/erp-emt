@@ -1,6 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  COLUNAS_FICHA_TECNICA,
+  fichaDoRegistro,
+  type FichaTecnica,
+} from "@/modules/cadastros/equipamentos/ficha-tecnica";
 import type {
   ControlePor,
   Propriedade,
@@ -99,4 +104,26 @@ export async function listarDocumentos(
     vencimento: documento.vencimento,
     anexoPath: documento.anexo_path,
   }));
+}
+
+/**
+ * Ficha técnica do equipamento, ou null quando ainda não foi preenchida (a
+ * linha só nasce no primeiro "Salvar ficha técnica").
+ */
+export async function obterFichaTecnica(
+  equipamentoId: string,
+): Promise<FichaTecnica | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("equipamento_especificacoes")
+    .select(COLUNAS_FICHA_TECNICA)
+    .eq("equipamento_id", equipamentoId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error("Não foi possível carregar a ficha técnica do equipamento");
+  }
+
+  return data ? fichaDoRegistro(data) : null;
 }

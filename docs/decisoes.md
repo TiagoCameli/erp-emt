@@ -3656,7 +3656,7 @@ assim que a trava 1 apareceu: com `select ... into` sem linha, toda variável fi
 `if a_recibo <> 'rascunho'` com nulo dá NULL, que o `if` trata como falso. Das asserções, só a do
 centro de custo acusou, por ser a única com `is distinct from`. **Igualdade não prova presença.**
 
-## 22/09/2026 — Migração de Frete, Combustível e Manutenção: Fases 0 e 1
+## 22/09/2026: Migração de Frete, Combustível e Manutenção: Fases 0 e 1
 
 Plano: `docs/PLANO-FRETE-COMBUSTIVEL-MANUTENCAO.md` (aprovado em 22/09). A Fase 0 foi no Gestão
 Obras (PR #7 de lá, registro em `docs/decisoes.md` daquele repo). Esta entrada é a Fase 1 no ERP,
@@ -3740,7 +3740,7 @@ equipamentos. **Não foi aplicada**: linha de confiança baixa ou média sem o o
   teto de 1.000 do PostgREST.
 - Os convites de Yara, Racenilton e Bruno mandam email para fora: esperam o ok do Tiago.
 
-### 22/09/2026 (noite) — Carga da Fase 1 aplicada, e as três contas novas
+### 22/09/2026 (noite): Carga da Fase 1 aplicada, e as três contas novas
 
 Respostas do Tiago: a EMT certa é "EMT Construtora Ltda" (as duas EMT da origem apontam para ela);
 Casas das Máquinas = "Casa da máquina"; **as permissões vão ser refeitas por ele** (o de-para de
@@ -3758,7 +3758,7 @@ Gestão Obras.
 - O email das pessoas NÃO vai para o repositório: o repo é público. O de-para de usuários guarda
   só nome e id.
 
-## 23/09/2026 — Migração, Fase 2a e 2b: o banco e as telas da Manutenção
+## 23/09/2026: Migração, Fase 2a e 2b: o banco e as telas da Manutenção
 
 Desenho e regras em `docs/FASE2-MANUTENCAO.md` (decisões do Tiago de 23/09 marcadas com [T]: OS
 aberta e concluída direto, custo médio igual à origem, fornecedor obrigatório no terceiro, baixa
@@ -3803,3 +3803,71 @@ real com estorno).
 `scripts/migracao-gestao-obras/pecas-de-para.csv` (246 peças: 64 casam, 182 a criar, 133 destas
 com insumo parecido no ERP), `prestadores-de-para.csv` (13 casam, 6 de confiança baixa) e
 `depositos-e-oleos-de-para.csv`.
+
+## 23/09/2026: Migração, Fase 2c: o celular do equipamento (QR)
+
+### Telas de campo em `/m/`, fora da moldura do sistema
+
+Grupo `(campo)`: `/m/leitor` (leitor de QR e lista), `/m/equipamento/[id]` (situação, última
+leitura, OS em aberto, ficha técnica, e os botões Lançar horímetro/km e Abrir OS) e `/m/eq/[id]`
+(o endereço do adesivo antigo). O layout repete as travas de conta do `(app)` (desativado,
+senha provisória), que o grupo não herda. Abre para quem vê alguma aba da Manutenção, o mesmo
+corte da `fn_ve_manutencao()`. Lançar pede `manutencao.medicoes/criar`; abrir OS,
+`manutencao.servicos/criar`. Peça, óleo, terceiro e conclusão seguem no computador.
+
+### A fila do celular fala com uma ROTA, não com Server Action
+
+`/api/campo/envio` (POST). O id de uma Server Action muda a cada deploy: a fila guardada ontem
+bateria hoje em "Failed to find Server Action". A rota tem URL fixa. Ela está em
+`ROTAS_PUBLICAS` do proxy para responder 401 em JSON sem sessão (com o portão, o `fetch` seguiria
+o 307 até o login e leria HTML), e confere sessão e permissão sozinha. O `dados` do envio é o
+MESMO schema da tela do computador.
+
+- Grava na fila (IndexedDB) ANTES de mandar. Mandar primeiro e guardar só na falha perde o
+  lançamento quando a aba fecha no meio. O `idCliente` (uuid do celular) vai em `p_id_cliente`:
+  reenviar devolve a linha que já existe. Corrida do mesmo id (23505) repete uma vez.
+- Erro definitivo (permissão, schema, trava P0001, CHECK/FK) fica na fila marcado como recusado,
+  com o motivo, até a pessoa descartar. Passageiro (sem rede, sessão vencida, 5xx) reenvia ao
+  abrir, ao voltar a rede, ao voltar o foco e a cada 30 s.
+- Cada item leva o usuário. Celular emprestado: a fila de um não sai com a sessão do outro, e as
+  telas guardadas no cache são apagadas quando quem entra é outra pessoa.
+- Navegador sem IndexedDB (aba anônima): a fila fica na memória e o chip avisa para não fechar.
+
+### Service worker só em `/m/`
+
+`public/sw-campo.js`, escopo `/m/`. Página: rede primeiro, guarda a última resposta boa (nunca um
+redirecionamento para o login). `/_next/static`: cache primeiro. O resto passa direto. **O leitor
+mora em `/m/leitor`, não em `/m`**: escopo é prefixo, e `/m` sem barra pegaria `/manutencao` do
+computador; `/m` só redireciona. Mudou o worker, sobe a `VERSAO` dele.
+
+### Leitor de QR dentro do app, e o adesivo antigo
+
+`BarcodeDetector` quando existe (Android), jsQR (dependência nova, 1.4.0) quando não (iPhone). O
+leitor lê o endereço como texto e ignora o host, porque 57 adesivos antigos gravaram `localhost` e
+a câmera do celular não os abre. `/m/eq/[id]` tenta, nesta ordem, o id antigo (RPC
+`fn_equipamento_do_legado`, que lê o de-para do schema `legado` só para quem veria o equipamento),
+o uuid do ERP e o código impresso na etiqueta (só quando UM equipamento tem o código, e com `%`/`_`
+escapados). Conferido: 69 dos 109 ids antigos são iguais a um código do ERP, e **0** apontam para
+outra máquina.
+
+**O redirecionamento do domínio antigo (`vercel.json` do Gestão Obras) fica para a virada (2d).**
+Redirecionar antes manda o mecânico para um ERP sem o histórico da máquina, enquanto a equipe
+ainda lança no Gestão Obras.
+
+### Etiqueta QR nova e ficha técnica
+
+- Cadastros > Equipamentos > "Etiquetas QR": PDF A4 no servidor (pdfmake, QR nativo dele), 8 por
+  folha, medido no PDF (8 = 1 folha, 9 = 2). O QR leva `NEXT_PUBLIC_SITE_URL` + `/m/equipamento/<id>`;
+  sem a variável, o botão avisa em vez de imprimir QR quebrado.
+- Ficha técnica no drawer do equipamento (`cadastros.equipamentos/editar`), resumo na tela do
+  celular. A policy de leitura de `equipamento_especificacoes` passou a aceitar quem vê a
+  Manutenção. A tabela está vazia hoje; a carga (2d) grava `filtros` já no formato novo
+  (`[{tipo, codigo}]`).
+
+### Prova
+
+`supabase/provas/fase2c_campo_qr.sql`, transação desfeita, 10 casos: nenhum id antigo aponta para
+outra máquina; Admin resolve o adesivo; id inexistente dá nulo; leitura em equipamento inativo é
+recusada pelo banco; e, por diferença, a mesma conta sem permissão não resolve o adesivo nem vê a
+ficha, e com só `manutencao.medicoes/ver` resolve e vê, mas não edita a ficha (0 linhas) nem lança
+leitura. 0 lançamentos. Conferido depois que nada ficou gravado.

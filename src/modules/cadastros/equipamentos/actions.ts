@@ -13,6 +13,13 @@ import {
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  fichaTecnicaSchema,
+  registroDaFicha,
+  type FichaTecnica,
+  type FichaTecnicaFormInput,
+} from "@/modules/cadastros/equipamentos/ficha-tecnica";
+import { obterFichaTecnica } from "@/modules/cadastros/equipamentos/queries";
+import {
   CONTROLE_POR,
   documentoSchema,
   equipamentoSchema,
@@ -26,6 +33,7 @@ const RECURSO = "cadastros.equipamentos" as const;
 const ROTA = "/cadastros/equipamentos";
 const TABELA = "equipamentos" as const;
 const TABELA_DOCUMENTOS = "equipamento_documentos" as const;
+const TABELA_FICHA = "equipamento_especificacoes" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoCriacao = { ok: true; aviso: string } | { erro: string };
@@ -248,6 +256,80 @@ export async function removerDocumento(id: string): Promise<ResultadoAcao> {
       "cadastros.equipamentos.removerDocumento",
       error,
       "Não foi possível remover o documento. Tente novamente",
+    );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Ficha técnica do equipamento (1:1, segue a permissão de editar)
+// ---------------------------------------------------------------------------
+
+export type ResultadoFichaTecnica =
+  | { ok: true; ficha: FichaTecnica | null }
+  | { erro: string };
+
+/**
+ * Lê a ficha técnica para o drawer, que só a carrega quando abre: a página
+ * não traz a ficha de cada equipamento na listagem. Pede `ver`, igual à
+ * policy de SELECT (que também abre para quem vê a Manutenção).
+ */
+export async function carregarFichaTecnica(
+  equipamentoId: string,
+): Promise<ResultadoFichaTecnica> {
+  if (!(await checarPermissao("ver"))) {
+    return { erro: "Sem permissão para ver equipamentos" };
+  }
+
+  const idValido = idSchema.safeParse(equipamentoId);
+  if (!idValido.success) return { erro: "Equipamento inválido" };
+
+  try {
+    return { ok: true, ficha: await obterFichaTecnica(idValido.data) };
+  } catch (erro) {
+    return erroAcao(
+      "cadastros.equipamentos.carregarFichaTecnica",
+      erro,
+      "Não foi possível carregar a ficha técnica. Tente novamente",
+    );
+  }
+}
+
+/**
+ * Grava a ficha técnica do equipamento. Upsert por `equipamento_id` (unique):
+ * a primeira gravação cria a linha, as seguintes atualizam. RLS cobre o
+ * insert e o update; a auditoria sai pelo trigger fn_audit da tabela.
+ */
+export async function salvarFichaTecnica(
+  equipamentoId: string,
+  dados: FichaTecnicaFormInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar equipamentos" };
+  }
+
+  const idValido = idSchema.safeParse(equipamentoId);
+  if (!idValido.success) return { erro: "Equipamento inválido" };
+
+  const validado = fichaTecnicaSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from(TABELA_FICHA)
+    .upsert(registroDaFicha(idValido.data, validado.data), {
+      onConflict: "equipamento_id",
+    });
+
+  if (error) {
+    return erroAcao(
+      "cadastros.equipamentos.salvarFichaTecnica",
+      error,
+      "Não foi possível salvar a ficha técnica. Tente novamente",
     );
   }
 

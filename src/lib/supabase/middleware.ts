@@ -10,8 +10,21 @@ import { PARAM_DESTINO } from "@/modules/auth/destino";
  * `Authorization: Bearer`, não cookie de sessão: sem estar aqui, o middleware
  * redirecionava para /login e a faxina nunca rodava. A própria rota exige o
  * CRON_SECRET, então ficar fora da sessão não a deixa aberta.
+ *
+ * `/api/campo` é a fila do celular: sem sessão ela tem que responder 401 em JSON, e não
+ * um 307 para a página de login que o `fetch` seguiria calado. A rota confere sessão e
+ * permissão por conta própria. `/sw-campo.js` e `/campo.webmanifest` são o service
+ * worker e o manifesto das telas de campo: o navegador os busca sem cookie de sessão
+ * garantido, e redirecionados eles quebram a atualização do worker.
  */
-const ROTAS_PUBLICAS = ["/login", "/auth", "/api/faxina-arquivos"];
+const ROTAS_PUBLICAS = [
+  "/login",
+  "/auth",
+  "/api/faxina-arquivos",
+  "/api/campo/",
+  "/sw-campo.js",
+  "/campo.webmanifest",
+];
 
 /**
  * Renova a sessão a cada request e protege as rotas do app.

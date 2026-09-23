@@ -47,6 +47,8 @@ import {
   type EquipamentoFormInput,
 } from "@/modules/cadastros/equipamentos/schemas";
 
+import { SecaoFichaTecnica } from "./ficha-tecnica-secao";
+
 const ID_FORM = "form-equipamento";
 const ID_FORM_DOCUMENTO = "form-documento";
 
@@ -105,7 +107,8 @@ export interface EquipamentosFormDrawerProps {
 /**
  * Drawer de criação e edição de equipamento. Mesmo formulário para os dois
  * modos: quando equipamento é null, cria; quando vem preenchido, edita.
- * No modo edição mostra a seção de documentos (listar, adicionar, remover).
+ * No modo edição mostra a ficha técnica (formulário e botão próprios) e a
+ * seção de documentos (listar, adicionar, remover).
  */
 export function EquipamentosFormDrawer({
   aberto,
@@ -127,6 +130,13 @@ export function EquipamentosFormDrawer({
   }, [aberto, equipamento, form]);
 
   const salvando = form.formState.isSubmitting;
+
+  // A ficha técnica tem formulário e botão próprios; a alteração não salva
+  // dela também segura o fechamento do drawer.
+  const [fichaSuja, setFichaSuja] = React.useState(false);
+  React.useEffect(() => {
+    if (!aberto) setFichaSuja(false);
+  }, [aberto]);
 
   async function aoEnviar(valores: EquipamentoFormInput) {
     const ano =
@@ -181,7 +191,7 @@ export function EquipamentosFormDrawer({
           ? "Atualize os dados deste equipamento"
           : "Cadastre um equipamento. A etapa dele no centro de custo de Manutenção é gerada automaticamente"
       }
-      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
+      temAlteracoesNaoSalvas={(form.formState.isDirty || fichaSuja) && !salvando}
       rodape={
         <>
           <Button
@@ -463,14 +473,23 @@ export function EquipamentosFormDrawer({
       </form>
 
       {editando ? (
-        <SecaoDocumentos
-          equipamentoId={equipamento.id}
-          documentos={documentos}
-          podeEditar={podeEditar}
-        />
+        <>
+          <SecaoFichaTecnica
+            key={equipamento.id}
+            equipamentoId={equipamento.id}
+            controlePor={equipamento.controlePor}
+            podeEditar={podeEditar}
+            onSujaChange={setFichaSuja}
+          />
+          <SecaoDocumentos
+            equipamentoId={equipamento.id}
+            documentos={documentos}
+            podeEditar={podeEditar}
+          />
+        </>
       ) : (
         <p className="mt-6 border-t border-border pt-5 text-detalhe text-muted-foreground">
-          Salve o equipamento para registrar os documentos dele.
+          Salve o equipamento para registrar a ficha técnica e os documentos dele.
         </p>
       )}
     </FormDrawer>
