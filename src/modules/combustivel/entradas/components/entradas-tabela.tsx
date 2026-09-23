@@ -2,45 +2,103 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Fuel, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { Eye, Fuel, Pencil, RotateCcw, Trash2 } from "lucide-react";
 
 import {
   CelulaVazia,
-  colunaData,
-  colunaDinheiro,
   ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroBusca,
   FiltroPeriodo,
   FiltroSelect,
+  FiltroSelectMulti,
   MoneyText,
+  useFiltrosUrl,
+  type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
+import {
+  BadgeCombustivel,
+  FaixaResumo,
+  formatarDataHoraCurta,
+} from "@/modules/combustivel/_shared/components/lista-operacional";
+import { useNovoDaUrl } from "@/modules/combustivel/_shared/use-novo-da-url";
 import { excluirEntrada, restaurarEntrada } from "@/modules/combustivel/entradas/actions";
-import { filtrarEntradas } from "@/modules/combustivel/entradas/filtros";
+import {
+  CHAVES_FILTRO_ENTRADAS as CHAVE,
+  filtrarEntradas,
+  type FiltrosEntradasUrl,
+} from "@/modules/combustivel/entradas/filtros";
 import type { EntradaLinha, InsumoCombustivel, Opcao, TanqueOpcao } from "@/modules/combustivel/entradas/queries";
 import { formatarValorOperacional, somarValoresOperacionais } from "@/modules/manutencao/servicos/formato";
+import { EntradaDetalheDrawer } from "./entrada-detalhe-drawer";
 import { EntradaFormDrawer } from "./entrada-form-drawer";
 
+/**
+ * Colunas da EntradaListV2 da origem, na mesma ordem (Data/Hora, Tanque, Combustível,
+ * Fornecedor, Litros, Valor). Quantidade, R$/L e NF são do ERP e nascem escondidas.
+ */
 export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
-  colunaData<EntradaLinha>("dataHora", "Data", formatarDataHoraRioBranco, { size: 140 }),
-  { accessorKey: "tanqueNome", header: "Tanque", size: 180 },
+  {
+    accessorKey: "dataHora",
+    header: "Data/Hora",
+    size: 120,
+    meta: { atomico: true },
+    cell: ({ row }) => <span className="font-medium tabular-nums">{formatarDataHoraCurta(row.original.dataHora)}</span>,
+  },
+  {
+    accessorKey: "tanqueNome",
+    header: "Tanque",
+    size: 180,
+    cell: ({ row }) => <span className="text-legenda text-muted-foreground">{row.original.tanqueNome}</span>,
+  },
   {
     accessorKey: "insumoNome",
     header: "Combustível",
-    size: 180,
-    cell: ({ row }) => <span className="font-medium">{row.original.insumoNome}</span>,
+    size: 160,
+    meta: { naoTruncar: true },
+    cell: ({ row }) => <BadgeCombustivel nome={row.original.insumoNome} />,
+  },
+  {
+    accessorKey: "fornecedorNome",
+    header: "Fornecedor",
+    size: 200,
+    cell: ({ row }) =>
+      row.original.fornecedorNome ? (
+        <span className="block truncate" title={row.original.fornecedorNome}>
+          {row.original.fornecedorNome}
+        </span>
+      ) : (
+        <CelulaVazia />
+      ),
+  },
+  {
+    accessorKey: "litros",
+    header: "Litros",
+    size: 130,
+    meta: { alinharDireita: true, atomico: true },
+    // Entrada soma no tanque: "+" e verde, como na origem.
+    cell: ({ row }) => (
+      <span className="font-medium tabular-nums text-emt-verde">+{formatarLitros(row.original.litros)}</span>
+    ),
+  },
+  {
+    accessorKey: "valorTotal",
+    header: "Valor",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <MoneyText valor={row.original.valorTotal} className="font-semibold" />,
   },
   {
     accessorKey: "quantidade",
     header: "Quantidade",
     size: 130,
-    meta: { alinharDireita: true, atomico: true },
+    meta: { alinharDireita: true, atomico: true, ocultaPorPadrao: true },
     cell: ({ row }) => (
       <span className="tabular-nums">
         {formatarQuantidade(row.original.quantidade)}
@@ -49,18 +107,10 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
     ),
   },
   {
-    accessorKey: "litros",
-    header: "Litros",
-    size: 130,
-    meta: { alinharDireita: true, atomico: true },
-    cell: ({ row }) => <span className="tabular-nums">{formatarLitros(row.original.litros)}</span>,
-  },
-  colunaDinheiro<EntradaLinha>("valorTotal", "Valor", { size: 140 }),
-  {
     accessorKey: "precoLitro",
     header: "R$/L",
     size: 120,
-    meta: { alinharDireita: true, atomico: true },
+    meta: { alinharDireita: true, atomico: true, ocultaPorPadrao: true },
     cell: ({ row }) =>
       row.original.precoLitro === null ? (
         <CelulaVazia />
@@ -69,15 +119,10 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
       ),
   },
   {
-    accessorKey: "fornecedorNome",
-    header: "Fornecedor",
-    size: 220,
-    cell: ({ row }) => row.original.fornecedorNome ?? <CelulaVazia />,
-  },
-  {
     accessorKey: "notaFiscal",
     header: "NF",
     size: 110,
+    meta: { ocultaPorPadrao: true },
     cell: ({ row }) =>
       row.original.notaFiscal ? <span className="codigo-doc">{row.original.notaFiscal}</span> : <CelulaVazia />,
   },
@@ -101,6 +146,18 @@ const colunaExclusao: ColumnDef<EntradaLinha, unknown> = {
 
 export const OPCOES_EXCLUIDOS = [{ valor: "sim", rotulo: "Só os excluídos" }];
 
+/** O modo do cabeçalho é navegação: o "Limpar filtros" não o derruba. */
+const NAO_SAO_FILTRO = ["modo"] as const;
+
+/** Valores distintos de uma lista, ordenados pelo rótulo: filtro não oferece o que não acha nada. */
+function distintos(pares: Iterable<[string | null, string | null]>): { valor: string; rotulo: string }[] {
+  const vistos = new Map<string, string>();
+  for (const [valor, rotulo] of pares) if (valor && rotulo) vistos.set(valor, rotulo);
+  return [...vistos.entries()]
+    .map(([valor, rotulo]) => ({ valor, rotulo }))
+    .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+}
+
 export interface EntradasTabelaProps {
   entradas: EntradaLinha[];
   /**
@@ -109,38 +166,43 @@ export interface EntradasTabelaProps {
    */
   excluidas?: EntradaLinha[];
   podeRestaurar?: boolean;
+  /** O recorte da URL (período, tanque, combustível, fornecedor). */
+  filtrosUrl: FiltrosEntradasUrl;
   /** Todos os tanques, para o filtro (entrada só existe em tanque da EMT). */
   tanquesFiltro: Opcao[];
-  /** Tanques que recebem entrada, para a edição. */
+  /** Tanques que recebem entrada, para o formulário. */
   tanquesEdicao: TanqueOpcao[];
   insumos: InsumoCombustivel[];
   fornecedores: Opcao[];
+  podeCriar?: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
 }
 
 /**
- * Entradas de combustível. A página traz todas as não excluídas (`todasAsLinhas`)
- * e a tabela filtra e pagina em memória; o rodapé soma o que o filtro acha.
+ * Entradas: a EntradaListV2 da origem. A página traz todas as não excluídas
+ * (`todasAsLinhas`) e a tabela filtra e pagina em memória; a faixa acima soma o que o
+ * filtro acha (todas as páginas). O clique na linha abre o detalhe; `?novo=1` (o
+ * "+ Nova Entrada" do topo) abre o formulário.
  */
 export function EntradasTabela({
   entradas: lancadas,
   excluidas = [],
   podeRestaurar = false,
+  filtrosUrl,
   tanquesFiltro,
   tanquesEdicao,
   insumos,
   fornecedores,
+  podeCriar = false,
   podeEditar,
   podeExcluir,
 }: EntradasTabelaProps) {
+  const { setMuitos, limparTodos } = useFiltrosUrl({ naoSaoFiltro: NAO_SAO_FILTRO });
   const [busca, setBusca] = useFiltroSessao("busca", "");
-  const [de, setDe] = useFiltroSessao("de", "");
-  const [ate, setAte] = useFiltroSessao("ate", "");
-  const [tanqueId, setTanqueId] = useFiltroSessao("tanque", "");
-  const [insumoId, setInsumoId] = useFiltroSessao("combustivel", "");
+  const [novoAberto, setNovoAberto] = useNovoDaUrl(podeCriar);
+  const [detalhe, setDetalhe] = React.useState<EntradaLinha | null>(null);
   const [editando, setEditando] = React.useState<EntradaLinha | null>(null);
-  const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<EntradaLinha | null>(null);
   const [restaurando, setRestaurando] = React.useState<EntradaLinha | null>(null);
   const [mostrarExcluidos, setMostrarExcluidos] = useFiltroSessao("excluidos", "");
@@ -152,18 +214,18 @@ export function EntradasTabela({
   );
 
   const filtradas = React.useMemo(
-    () => filtrarEntradas(entradas, { busca, de, ate, tanqueId, insumoId }),
-    [entradas, busca, de, ate, tanqueId, insumoId],
+    () => filtrarEntradas(entradas, { ...filtrosUrl, busca }),
+    [entradas, filtrosUrl, busca],
   );
 
-  // Combustíveis que aparecem nas entradas: filtro não oferece o que não acha nada.
-  const opcoesCombustivel = React.useMemo(() => {
-    const vistos = new Map<string, string>();
-    for (const entrada of entradas) vistos.set(entrada.insumoId, entrada.insumoNome);
-    return [...vistos.entries()]
-      .map(([valor, rotulo]) => ({ valor, rotulo }))
-      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
-  }, [entradas]);
+  const opcoesCombustivel = React.useMemo(
+    () => distintos(entradas.map((e) => [e.insumoId, e.insumoNome] as [string, string])),
+    [entradas],
+  );
+  const opcoesFornecedor = React.useMemo(
+    () => distintos(entradas.map((e) => [e.fornecedorId, e.fornecedorNome] as [string | null, string | null])),
+    [entradas],
+  );
 
   const totalLitros = somarValoresOperacionais(filtradas.map((e) => e.litros));
   const totalValor = somarValoresOperacionais(filtradas.map((e) => e.valorTotal));
@@ -177,6 +239,7 @@ export function EntradasTabela({
     }
     toast.success("Entrada excluída");
     setExcluindo(null);
+    setDetalhe(null);
   }
 
   async function aoConfirmarRestauracao() {
@@ -190,14 +253,55 @@ export function EntradasTabela({
     setRestaurando(null);
   }
 
+  function filtroMulti(
+    id: string,
+    rotulo: string,
+    chave: string,
+    valores: readonly string[],
+    opcoes: { valor: string; rotulo: string }[],
+    todos: string,
+  ): FiltroConfiguravel {
+    return {
+      id,
+      rotulo,
+      temValor: valores.length > 0,
+      onLimpar: () => setMuitos({ [chave]: null }),
+      elemento: (
+        <FiltroSelectMulti
+          valores={[...valores]}
+          onValoresChange={(novos) => setMuitos({ [chave]: novos.length > 0 ? novos.join(",") : null })}
+          opcoes={opcoes}
+          placeholder={rotulo}
+          todosRotulo={todos}
+        />
+      ),
+    };
+  }
+
+  // Como a origem: sem editar nem excluir, a linha não tem menu (o clique abre o detalhe).
   const temAcoes = vendoExcluidas ? podeRestaurar : podeEditar || podeExcluir;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
+      {filtradas.length > 0 ? (
+        <FaixaResumo
+          quantidade={filtradas.length}
+          singular={vendoExcluidas ? "entrada excluída" : "entrada"}
+          plural={vendoExcluidas ? "entradas excluídas" : "entradas"}
+          litros={totalLitros}
+          valor={totalValor}
+        />
+      ) : null}
+
       <DataTable
         idTabela="combustivel.entradas"
         columns={colunas}
         data={filtradas}
+        onRowClick={setDetalhe}
+        onLimparFiltros={() => {
+          setBusca("");
+          limparTodos();
+        }}
         filtros={[
           {
             id: "busca",
@@ -212,36 +316,45 @@ export function EntradasTabela({
           {
             id: "periodo",
             rotulo: "Período",
-            temValor: de !== "" || ate !== "",
-            onLimpar: () => {
-              setDe("");
-              setAte("");
-            },
+            fixo: true,
+            temValor: filtrosUrl.de !== "" || filtrosUrl.ate !== "",
+            onLimpar: () => setMuitos({ [CHAVE.de]: null, [CHAVE.ate]: null }),
             elemento: (
               <FiltroPeriodo
-                de={de}
-                ate={ate}
-                onPeriodoChange={(novoDe, novoAte) => {
-                  setDe(novoDe);
-                  setAte(novoAte);
-                }}
+                de={filtrosUrl.de}
+                ate={filtrosUrl.ate}
+                onPeriodoChange={(novoDe, novoAte) =>
+                  setMuitos({ [CHAVE.de]: novoDe === "" ? null : novoDe, [CHAVE.ate]: novoAte === "" ? null : novoAte })
+                }
               />
             ),
           },
+          filtroMulti(
+            "tanque",
+            "Tanque",
+            CHAVE.tanque,
+            filtrosUrl.tanqueIds,
+            tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome })),
+            "Todos os tanques",
+          ),
+          filtroMulti(
+            "combustivel",
+            "Combustível",
+            CHAVE.combustivel,
+            filtrosUrl.insumoIds,
+            opcoesCombustivel,
+            "Todos os combustíveis",
+          ),
           {
-            id: "tanque",
-            rotulo: "Tanque",
-            temValor: tanqueId !== "",
-            onLimpar: () => setTanqueId(""),
-            elemento: (
-              <FiltroSelect
-                valor={tanqueId}
-                onValorChange={setTanqueId}
-                opcoes={tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome }))}
-                placeholder="Tanque"
-                todosRotulo="Todos os tanques"
-              />
+            ...filtroMulti(
+              "fornecedor",
+              "Fornecedor",
+              CHAVE.fornecedor,
+              filtrosUrl.fornecedorIds,
+              opcoesFornecedor,
+              "Todos os fornecedores",
             ),
+            ocultoPorPadrao: true,
           },
           ...(podeRestaurar
             ? [
@@ -263,21 +376,6 @@ export function EntradasTabela({
                 },
               ]
             : []),
-          {
-            id: "combustivel",
-            rotulo: "Combustível",
-            temValor: insumoId !== "",
-            onLimpar: () => setInsumoId(""),
-            elemento: (
-              <FiltroSelect
-                valor={insumoId}
-                onValorChange={setInsumoId}
-                opcoes={opcoesCombustivel}
-                placeholder="Combustível"
-                todosRotulo="Todos os combustíveis"
-              />
-            ),
-          },
         ]}
         acoesLinha={
           temAcoes
@@ -285,28 +383,27 @@ export function EntradasTabela({
                 entrada.excluidoEm ? (
                   <DropdownMenuItem onSelect={() => setRestaurando(entrada)}>
                     <RotateCcw />
-                    Restaurar entrada
+                    Restaurar
                   </DropdownMenuItem>
                 ) : (
-                <>
-                  {podeEditar ? (
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        setEditando(entrada);
-                        setDrawerAberto(true);
-                      }}
-                    >
-                      <Pencil />
-                      Editar entrada
+                  <>
+                    <DropdownMenuItem onSelect={() => setDetalhe(entrada)}>
+                      <Eye />
+                      Ver detalhe
                     </DropdownMenuItem>
-                  ) : null}
-                  {podeExcluir ? (
-                    <DropdownMenuItem variant="destructive" onSelect={() => setExcluindo(entrada)}>
-                      <Trash2 />
-                      Excluir entrada
-                    </DropdownMenuItem>
-                  ) : null}
-                </>
+                    {podeEditar ? (
+                      <DropdownMenuItem onSelect={() => setEditando(entrada)}>
+                        <Pencil />
+                        Editar
+                      </DropdownMenuItem>
+                    ) : null}
+                    {podeExcluir ? (
+                      <DropdownMenuItem variant="destructive" onSelect={() => setExcluindo(entrada)}>
+                        <Trash2 />
+                        Excluir
+                      </DropdownMenuItem>
+                    ) : null}
+                  </>
                 )
             : undefined
         }
@@ -317,8 +414,8 @@ export function EntradasTabela({
               vendoExcluidas
                 ? "Nenhuma entrada excluída"
                 : entradas.length === 0
-                  ? "Nenhuma entrada lançada"
-                  : "Nenhuma entrada encontrada"
+                  ? "Nenhuma entrada registrada"
+                  : "Nenhuma entrada para os filtros atuais"
             }
             descricao={
               vendoExcluidas
@@ -332,21 +429,34 @@ export function EntradasTabela({
         }
       />
 
-      {filtradas.length > 0 ? (
-        <p className="text-right text-legenda text-muted-foreground">
-          {filtradas.length} {filtradas.length === 1 ? "entrada" : "entradas"}
-          {vendoExcluidas ? (filtradas.length === 1 ? " excluída" : " excluídas") : ""} no filtro,{" "}
-          <span className="tabular-nums font-medium text-foreground">{formatarLitros(totalLitros)}</span>, valor de{" "}
-          <MoneyText valor={totalValor} className="font-medium text-foreground" />
-        </p>
+      <EntradaDetalheDrawer
+        entrada={detalhe}
+        onFechar={() => setDetalhe(null)}
+        podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
+        onEditar={(entrada) => {
+          setDetalhe(null);
+          setEditando(entrada);
+        }}
+        onExcluir={setExcluindo}
+      />
+
+      {podeCriar ? (
+        <EntradaFormDrawer
+          aberto={novoAberto}
+          onAbertoChange={setNovoAberto}
+          entrada={null}
+          tanques={tanquesEdicao}
+          insumos={insumos}
+          fornecedores={fornecedores}
+        />
       ) : null}
 
-      {podeEditar ? (
+      {podeEditar && editando ? (
         <EntradaFormDrawer
-          key={editando?.id ?? "nenhuma"}
-          aberto={drawerAberto}
+          key={editando.id}
+          aberto
           onAbertoChange={(aberto) => {
-            setDrawerAberto(aberto);
             if (!aberto) setEditando(null);
           }}
           entrada={editando}

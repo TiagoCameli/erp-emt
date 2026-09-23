@@ -78,6 +78,7 @@ function transferencia(troca: Partial<TransferenciaLinha> = {}): TransferenciaLi
     origemNome: "Tanque Base",
     destinoId: B,
     destinoNome: "Comboio 01",
+    insumoId: null,
     insumoNome: "Diesel S10",
     litros: 100,
     valorTotal: 500,
