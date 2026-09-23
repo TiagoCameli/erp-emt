@@ -8,6 +8,10 @@ import type { Acao, RecursoId } from "@/config/recursos";
  *
  * "pagamento" é a PARCELA paga (lancamento_parcelas): no ERP não existe tabela
  * de pagamentos, o pagamento é a baixa da parcela.
+ *
+ * "equipamento_documento" é a linha de equipamento_documentos (licenciamento,
+ * seguro, laudo). Segue o recurso do cadastro de equipamentos: quem edita o
+ * equipamento anexa no documento dele.
  */
 const RECURSO_POR_ENTIDADE = {
   cotacao: "compras.cotacoes",
@@ -17,6 +21,7 @@ const RECURSO_POR_ENTIDADE = {
   rh_documento: "rh.documentos",
   rh_epi: "rh.epis",
   rh_ocorrencia: "rh.ocorrencias",
+  equipamento_documento: "cadastros.equipamentos",
 } as const satisfies Record<string, RecursoId>;
 
 /** Tipo de documento que aceita anexo. */
@@ -50,6 +55,7 @@ const ROTULO_ENTIDADE: Record<EntidadeAnexo, string> = {
   rh_documento: "documento",
   rh_epi: "EPI",
   rh_ocorrencia: "ocorrência",
+  equipamento_documento: "documento do equipamento",
 };
 
 export function rotuloDaEntidade(entidade: EntidadeAnexo): string {

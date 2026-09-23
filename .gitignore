@@ -47,3 +47,6 @@ supabase/.temp/
 # Conflitos de sincronizacao do iCloud (pasta Documents)
 * 2.*
 *\ 2
+
+# Retrato da origem para a carga da migração (dado operacional; o repositório é público)
+scripts/migracao-gestao-obras/_retrato/

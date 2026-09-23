@@ -1,0 +1,18 @@
+{
+  "redirects": [
+    {
+      "source": "/m/eq/:id",
+      "destination": "https://erp-emt-tiagocameli-4731s-projects.vercel.app/m/eq/:id",
+      "permanent": false
+    }
+  ],
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "headers": [
+    {
+      "source": "/face-models/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
+}
