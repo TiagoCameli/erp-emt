@@ -3943,3 +3943,31 @@ Congelar a origem agora deixaria Andreia e Marvim (autores das OS de lá) sem lu
 no ERP só os 4 Admins têm `manutencao.*`, e a matriz dos outros é o Tiago que refaz (22/09). O
 roteiro está em `docs/VIRADA-MANUTENCAO.md`: congelamento com prova e linha de controle na origem,
 retrato, carga, anexos, redirecionamento do QR antigo, e o desfazer dos dois lados.
+
+## 23/09/2026 (tarde): Virada da Manutenção feita
+
+O Tiago deu as permissões de Manutenção (Andreia e Marvin com o módulo inteiro, conferido no banco)
+e mandou virar. Seguido `docs/VIRADA-MANUTENCAO.md`, passo a passo:
+
+1. Gestão Obras congelado (`manutencao_congelada_migrou_para_o_erp`, gatilho nas 9 tabelas).
+   Prova: OS nova, edição de OS e entrada no almoxarifado de peças **recusadas pelo
+   congelamento**; linha de controle: a medição do abastecimento **continua passando**.
+2. Retrato da origem já congelada: 172 OS, os mesmos números do último ensaio; nenhuma trava do
+   gerador disparou.
+3. `provar_carga_fase2d.py`: PROVA OK (ensaio, controle de 1 centavo, rollback).
+4. 4 PDFs no bucket, conferidos por hash; carga `20260923170000_fase2d_carga_manutencao` aplicada.
+5. Conferido no banco, fora da migration: 172 OS (169 concluídas, **R$ 305.127,43**; 3
+   canceladas), 311 peças, 59 óleos, 41 terceiros, 338 entradas, 47 fichas, 4 anexos. **Saldo total
+   do almoxarifado 1.064,8 no ERP = 1.064,8 na `v_saldo_estoque` da origem.** 0 lançamento. Próxima
+   OS: 181. Advisors sem nada novo.
+6. Gestão Obras `11e7f03` (main): `vercel.json` redireciona `/m/eq/:id` para o ERP, e o
+   congelamento e o rollback dele versionados lá. Conferido: `emtconstrutora.com/m/eq/cb-001` dá
+   307 para o ERP, que resolve para o CB-001 (Caminhão Caçamba 2423 K/36) com as 5 OS dele; o resto
+   do Gestão Obras abre normal.
+7. Pelo caminho que o celular usa (as RPCs, como o Tiago, em transação desfeita): OS nova nasce
+   **OS-2026-0181**, horímetro grava, 0 lançamento; a sequência não foi consumida.
+
+O staging (`legado.carga_fase2d`) fica até a Fase 5, como registro do que entrou. Desfazer:
+`supabase/rollbacks/20260923170000_fase2d_carga_manutencao_rollback.sql` no ERP e
+`20260923180100_rollback_manutencao_congelada_migrou_para_o_erp.sql` no Gestão Obras, antes de
+alguém lançar no ERP.

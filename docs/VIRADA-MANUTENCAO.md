@@ -1,7 +1,7 @@
 # Virada da Manutenção (Fase 2d): roteiro
 
 Plano: `docs/PLANO-FRETE-COMBUSTIVEL-MANUTENCAO.md`, seções 8 a 10. Desenho: `docs/FASE2-MANUTENCAO.md`.
-Tudo abaixo já foi ensaiado em 23/09/2026 contra o banco de produção do ERP, sem gravar
+**Feita em 23/09/2026 à tarde** (registro em `docs/decisoes.md`). Tudo abaixo foi ensaiado antes contra o banco de produção do ERP, sem gravar
 (`provar_carga_fase2d.py`: ensaio, controle de 1 centavo e rollback).
 
 Scripts em `scripts/migracao-gestao-obras/`. O retrato e os lotes ficam em `_retrato/`, fora do
