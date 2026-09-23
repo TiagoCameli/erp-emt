@@ -125,4 +125,35 @@ describe("processarEnvioCampo", () => {
     rpc.mockRejectedValue(new Error("boom"));
     expect(await processarEnvioCampo(medicao())).toMatchObject({ ok: false, definitivo: false });
   });
+
+  it("abastecimento vai como equipamento próprio do tanque, canal celular, obra a 100%", async () => {
+    com(["combustivel.saidas", "criar"]);
+    rpc.mockResolvedValue({ data: "s1", error: null });
+    const TANQUE = "33333333-3333-4333-8333-333333333333";
+    const OBRA = "44444444-4444-4444-8444-444444444444";
+    const resposta = await processarEnvioCampo({
+      tipo: "abastecimento",
+      idCliente: ID_CLIENTE,
+      dados: { equipamentoId: EQUIP, tanqueId: TANQUE, litros: 120.5, data: "2026-09-23T14:00:00-05:00", medicao: 5000,
+        centroCustoId: OBRA, observacoes: "" },
+    });
+    expect(resposta).toEqual({ ok: true, id: "s1" });
+    expect(rpc).toHaveBeenCalledWith("fn_comb_salvar_saida", {
+      p_id: null,
+      p_dados: expect.objectContaining({ origem: "tanque", tipo_consumidor: "equipamento_proprio", tanque_id: TANQUE,
+        equipamento_id: EQUIP, litros: 120.5, canal: "celular", alocacoes: [{ centro_custo_id: OBRA, percentual: 100 }] }),
+    });
+  });
+
+  it("abastecimento sem permissão de combustível é recusado sem ir ao banco (manutenção não basta)", async () => {
+    com(["manutencao.servicos", "criar"], ["manutencao.medicoes", "criar"]);
+    const resposta = await processarEnvioCampo({
+      tipo: "abastecimento",
+      idCliente: ID_CLIENTE,
+      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
+        centroCustoId: null, observacoes: "" },
+    });
+    expect(resposta).toMatchObject({ ok: false, definitivo: true });
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });

@@ -2,12 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardPlus, Gauge, X } from "lucide-react";
+import { ClipboardPlus, Fuel, Gauge, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import { Abastecer } from "@/modules/manutencao/campo/components/abastecer";
 import { AbrirOs } from "@/modules/manutencao/campo/components/abrir-os";
 import { LancarLeitura } from "@/modules/manutencao/campo/components/lancar-leitura";
+import type { TanqueCampo } from "@/modules/manutencao/campo/queries";
 import { ROTULO_TIPO_MEDICAO, type TipoMedicao } from "@/modules/manutencao/medicoes/schemas";
 
 interface Props {
@@ -16,27 +18,37 @@ interface Props {
   ultimaLeitura: number | null;
   temEtapa: boolean;
   centros: CentroCustoOpcao[];
+  tanques: TanqueCampo[];
   podeLancarLeitura: boolean;
   podeAbrirOs: boolean;
+  podeAbastecer: boolean;
 }
 
-type Aberto = "leitura" | "os" | null;
+type Aberto = "leitura" | "os" | "abastecer" | null;
 
-/** Os dois botões grandes da tela do QR, e o formulário de quem foi tocado. */
+const TITULO: Record<Exclude<Aberto, null>, string> = {
+  leitura: "",
+  os: "Abrir OS",
+  abastecer: "Abastecer",
+};
+
+/** Os botões grandes da tela do QR, e o formulário de quem foi tocado. */
 export function AcoesEquipamento({
   equipamentoId,
   controlePor,
   ultimaLeitura,
   temEtapa,
   centros,
+  tanques,
   podeLancarLeitura,
   podeAbrirOs,
+  podeAbastecer,
 }: Props) {
   const router = useRouter();
   const [aberto, setAberto] = React.useState<Aberto>(null);
 
   const oferecerLeitura = podeLancarLeitura && controlePor !== null;
-  if (!oferecerLeitura && !podeAbrirOs) return null;
+  if (!oferecerLeitura && !podeAbrirOs && !podeAbastecer) return null;
 
   function feito() {
     setAberto(null);
@@ -50,7 +62,7 @@ export function AcoesEquipamento({
       <section className="flex flex-col gap-4 rounded-lg border border-border p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-secao font-semibold">
-            {aberto === "leitura" && controlePor ? `Lançar ${ROTULO_TIPO_MEDICAO[controlePor].toLowerCase()}` : "Abrir OS"}
+            {aberto === "leitura" && controlePor ? `Lançar ${ROTULO_TIPO_MEDICAO[controlePor].toLowerCase()}` : TITULO[aberto]}
           </h2>
           <Button variant="ghost" size="icon" onClick={() => setAberto(null)} aria-label="Fechar">
             <X aria-hidden />
@@ -58,6 +70,8 @@ export function AcoesEquipamento({
         </div>
         {aberto === "leitura" && controlePor ? (
           <LancarLeitura equipamentoId={equipamentoId} tipo={controlePor} ultima={ultimaLeitura} onFeito={feito} />
+        ) : aberto === "abastecer" ? (
+          <Abastecer equipamentoId={equipamentoId} temEtapa={temEtapa} tanques={tanques} centros={centros} onFeito={feito} />
         ) : (
           <AbrirOs equipamentoId={equipamentoId} temEtapa={temEtapa} centros={centros} onFeito={feito} />
         )}
@@ -71,6 +85,12 @@ export function AcoesEquipamento({
         <Button size="lg" className="h-14 justify-start text-base" onClick={() => setAberto("leitura")}>
           <Gauge aria-hidden />
           Lançar {ROTULO_TIPO_MEDICAO[controlePor].toLowerCase()}
+        </Button>
+      ) : null}
+      {podeAbastecer ? (
+        <Button size="lg" variant="outline" className="h-14 justify-start text-base" onClick={() => setAberto("abastecer")}>
+          <Fuel aria-hidden />
+          Abastecer
         </Button>
       ) : null}
       {podeAbrirOs ? (

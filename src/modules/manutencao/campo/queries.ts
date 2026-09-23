@@ -170,3 +170,31 @@ export async function equipamentoPeloCodigo(codigo: string): Promise<string | nu
   if (error) throw new Error("Não foi possível procurar o código");
   return data && data.length === 1 ? data[0]!.id : null;
 }
+
+export interface TanqueCampo {
+  id: string;
+  rotulo: string;
+  nivel: number;
+}
+
+/**
+ * Tanques da EMT com combustível, para abastecer equipamento pelo celular. Tanque externo
+ * fica de fora (é só para carreta; a origem deixava o celular oferecer por engano). Quem não
+ * vê o Combustível recebe a lista vazia pela RLS, e a tela nem mostra o botão.
+ */
+export async function listarTanquesCampo(): Promise<TanqueCampo[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tanques")
+    .select("id, nome, apelido, nivel_atual_litros, insumos:combustivel_atual_id (nome)")
+    .eq("ativo", true)
+    .eq("eh_externo", false)
+    .gt("nivel_atual_litros", 0)
+    .order("nome");
+  if (error) throw new Error("Não foi possível carregar os tanques");
+  return (data ?? []).map((t) => ({
+    id: t.id,
+    rotulo: [t.apelido?.trim() || t.nome, t.insumos?.nome].filter(Boolean).join(" · "),
+    nivel: Number(t.nivel_atual_litros),
+  }));
+}

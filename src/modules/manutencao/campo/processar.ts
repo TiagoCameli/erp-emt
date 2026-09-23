@@ -39,7 +39,7 @@ function falhaDoBanco(contexto: string, error: ErroBanco, generica: string): Res
   return falha(generica, PASSAGEIRO);
 }
 
-type RpcCampo = "fn_registrar_medicao" | "fn_os_salvar";
+type RpcCampo = "fn_registrar_medicao" | "fn_os_salvar" | "fn_comb_salvar_saida";
 
 /**
  * Duas chamadas com o mesmo idCliente ao mesmo tempo (o celular reenviou antes da
@@ -91,6 +91,31 @@ export async function processarEnvioCampo(corpo: unknown): Promise<RespostaEnvio
           p_origem: "celular",
           p_id_cliente: envio.idCliente,
           p_observacoes: dados.observacoes,
+        });
+    } else if (envio.tipo === "abastecimento") {
+      if (!temPermissao(usuario, "combustivel.saidas", "criar")) {
+        return falha("Sem permissão para lançar abastecimento", DEFINITIVO);
+      }
+      rpc = "fn_comb_salvar_saida";
+      generica = "Não foi possível lançar o abastecimento";
+      const dados = envio.dados;
+      // Equipamento próprio, do tanque, preço pelo PEPS (o banco calcula). Sem id_cliente: a
+      // tela manda uma vez só (envio.ts).
+      chamar = () =>
+        supabase.rpc("fn_comb_salvar_saida", {
+          p_id: null as unknown as string,
+          p_dados: {
+            origem: "tanque",
+            tipo_consumidor: "equipamento_proprio",
+            tanque_id: dados.tanqueId,
+            equipamento_id: dados.equipamentoId,
+            litros: dados.litros,
+            data: dados.data,
+            medicao: dados.medicao,
+            canal: "celular",
+            observacoes: dados.observacoes,
+            alocacoes: dados.centroCustoId ? [{ centro_custo_id: dados.centroCustoId, percentual: 100 }] : [],
+          },
         });
     } else {
       if (!temPermissao(usuario, "manutencao.servicos", "criar")) {

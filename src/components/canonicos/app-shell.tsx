@@ -16,6 +16,7 @@ import {
   Users,
   Wallet,
   Wrench,
+  Fuel,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -37,6 +38,7 @@ const MAPA_ICONES: Record<string, LucideIcon> = {
   cadastros: FolderOpen,
   compras: ShoppingCart,
   financeiro: Wallet,
+  combustivel: Fuel,
   manutencao: Wrench,
   rh: Users,
 };
