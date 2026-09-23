@@ -21,7 +21,7 @@ import {
   type TipoMovimentoTanque,
 } from "@/modules/combustivel/tanques/calculo";
 import type { TanqueLinha } from "@/modules/combustivel/tanques/queries";
-import { NivelTanque } from "./nivel-tanque";
+import { SeloCombustivel, TanqueVisual } from "./tanque-visual";
 
 const TIPOS: TipoMovimentoTanque[] = [
   "entrada",
@@ -116,7 +116,6 @@ export function TanqueDetalhe({ tanque, movimentos }: TanqueDetalheProps) {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        modulo="Combustível"
         titulo={tanque.nome}
         descricao={tanque.apelido ?? undefined}
         voltarPara={{ rota: "/combustivel/tanques", rotulo: "Voltar para a lista de tanques" }}
@@ -134,35 +133,53 @@ export function TanqueDetalhe({ tanque, movimentos }: TanqueDetalheProps) {
       />
 
       <SecaoDetalhe titulo="Tanque" card>
-        <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <Dado rotulo="Dono">{tanque.ehExterno ? tanque.proprietarioNome ?? "Terceiro" : "EMT"}</Dado>
-          <Dado rotulo="Capacidade">
-            {tanque.capacidade > 0 ? (
-              <span className="tabular-nums">{formatarLitros(tanque.capacidade)}</span>
-            ) : (
-              <span className="text-muted-foreground">Sem trava de capacidade</span>
-            )}
-          </Dado>
-          <Dado rotulo="Nível atual">
-            <div className="flex">
-              <NivelTanque nivel={tanque.nivel} capacidade={tanque.capacidade} ehExterno={tanque.ehExterno} />
-            </div>
-          </Dado>
-          <Dado rotulo="Combustível atual">
-            {tanque.combustivelNome && !tanque.ehExterno ? (
-              tanque.combustivelNome
-            ) : (
-              <span className="text-muted-foreground">Vazio</span>
-            )}
-          </Dado>
-          {tanque.observacoes ? (
-            <div className="sm:col-span-2 lg:col-span-4">
-              <Dado rotulo="Observações">
-                <span className="whitespace-pre-line">{tanque.observacoes}</span>
-              </Dado>
-            </div>
-          ) : null}
-        </dl>
+        <div
+          className={
+            tanque.ehExterno ? undefined : "grid grid-cols-1 items-center gap-6 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]"
+          }
+        >
+          {tanque.ehExterno ? null : (
+            <TanqueVisual
+              id={tanque.id}
+              nome={tanque.nome}
+              capacidade={tanque.capacidade}
+              nivel={tanque.nivel}
+              combustivelNome={tanque.combustivelNome}
+              comCabecalho={false}
+            />
+          )}
+          <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+            <Dado rotulo="Dono">{tanque.ehExterno ? tanque.proprietarioNome ?? "Terceiro" : "EMT"}</Dado>
+            <Dado rotulo="Capacidade">
+              {tanque.capacidade > 0 ? (
+                <span className="tabular-nums">{formatarLitros(tanque.capacidade)}</span>
+              ) : (
+                <span className="text-muted-foreground">Sem trava de capacidade</span>
+              )}
+            </Dado>
+            <Dado rotulo="Nível atual">
+              {tanque.ehExterno ? (
+                <span className="text-muted-foreground">Tanque de terceiro, sem estoque</span>
+              ) : (
+                <span className="tabular-nums">{formatarLitros(tanque.nivel)}</span>
+              )}
+            </Dado>
+            <Dado rotulo="Combustível atual">
+              {tanque.ehExterno ? (
+                <span className="text-muted-foreground">Sem controle de estoque</span>
+              ) : (
+                <SeloCombustivel nome={tanque.combustivelNome} vazio={tanque.nivel <= 0} />
+              )}
+            </Dado>
+            {tanque.observacoes ? (
+              <div className="sm:col-span-2">
+                <Dado rotulo="Observações">
+                  <span className="whitespace-pre-line">{tanque.observacoes}</span>
+                </Dado>
+              </div>
+            ) : null}
+          </dl>
+        </div>
       </SecaoDetalhe>
 
       <SecaoDetalhe titulo="Movimentos">

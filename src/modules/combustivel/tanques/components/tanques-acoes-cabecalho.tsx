@@ -14,7 +14,7 @@ export interface TanquesAcoesCabecalhoProps {
   fornecedores: FornecedorOpcao[];
 }
 
-/** Cabeçalho de Tanques: importar planilha e "Novo tanque", só com `criar`. */
+/** Ações da aba Tanques, só com `criar`: "Novo Tanque" (a da origem) e a importação por planilha, secundária. */
 export function TanquesAcoesCabecalho({ podeCriar, fornecedores }: TanquesAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
@@ -30,7 +30,7 @@ export function TanquesAcoesCabecalho({ podeCriar, fornecedores }: TanquesAcoesC
       />
       <Button type="button" size="sm" onClick={() => setAberto(true)}>
         <Plus />
-        Novo tanque
+        Novo Tanque
       </Button>
       <TanqueFormDrawer aberto={aberto} onAbertoChange={setAberto} fornecedores={fornecedores} />
     </>
