@@ -73,12 +73,31 @@ describe("FiltroMesPeriodo", () => {
       expect(screen.queryByRole("button", { name: "Dias" })).toBeNull();
     });
 
-    it("não mostra campo de data exata", () => {
-      abrir();
+    it("tem o campo de digitar, em MÊS e não em dia", () => {
+      // Todo filtro de data tem o campo manual (pedido de 24/09/2026); aqui ele
+      // é de mês, porque um corte no dia 17 não existe no dado.
+      const onPeriodoChange = abrir("2026-05-01", "2026-08-01");
       fireEvent.click(botao());
       expect(
         screen.queryByLabelText("Mês de referência: data inicial"),
       ).toBeNull();
+
+      const inicial = screen.getByLabelText(
+        "Mês de referência: mês inicial",
+      ) as HTMLInputElement;
+      const final = screen.getByLabelText(
+        "Mês de referência: mês final",
+      ) as HTMLInputElement;
+      expect(inicial.type).toBe("month");
+      expect(inicial.value).toBe("2026-05");
+      expect(final.value).toBe("2026-08");
+
+      // Digitar um mês de outro ano funciona, e a ponta sai no dia 1.
+      fireEvent.change(final, { target: { value: "2027-02" } });
+      expect(onPeriodoChange).toHaveBeenLastCalledWith(
+        "2026-05-01",
+        "2027-02-01",
+      );
     });
 
     it("as pontas saem no DIA 1, não no último dia do mês", () => {

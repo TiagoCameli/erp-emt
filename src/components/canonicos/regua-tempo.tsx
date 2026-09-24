@@ -40,8 +40,11 @@ export interface ReguaTempoProps {
    * oferecer um corte que o dado não tem.
    */
   granularidades?: readonly Granularidade[];
-  /** Some com os campos de data exata. O filtro de competência não os usa. */
-  semDataExata?: boolean;
+  /**
+   * O campo de digitar embaixo da régua: data (dd/mm/aaaa) ou mês (mm/aaaa). O
+   * filtro de competência usa "mes": a coluna guarda o dia 1 de cada mês.
+   */
+  dataExata?: "dia" | "mes";
 }
 
 /**
@@ -89,7 +92,7 @@ export function ReguaTempo({
   onPeriodoChange,
   rotulo,
   granularidades = GRANULARIDADES,
-  semDataExata = false,
+  dataExata = "dia",
 }: ReguaTempoProps) {
   const hoje = React.useMemo(() => dataHojeISO(), []);
 
@@ -524,10 +527,43 @@ export function ReguaTempo({
 
       {/* As datas exatas. Ficam DEPOIS da régua porque são o ajuste fino: a
           régua dá o intervalo redondo, e aqui se corta no dia. */}
-      {/* Não renderizado, e não só escondido por CSS: campo com `hidden` continua
-          no DOM, continua alcançável por leitor de tela e continua entrando na
-          navegação por Tab em alguns navegadores. */}
-      {semDataExata ? null : (
+      {/* Todo filtro de data tem o campo para digitar (pedido do Tiago em
+          24/09/2026). No de competência o campo é de MÊS: a coluna guarda o dia
+          1, e um "até 17/08" não existiria no dado. */}
+      {dataExata === "mes" ? (
+        <div className="flex items-center gap-1.5">
+          <span className="text-legenda text-muted-foreground">De</span>
+          <Input
+            type="month"
+            value={de.slice(0, 7)}
+            max={ate === "" ? undefined : ate.slice(0, 7)}
+            onChange={(evento) =>
+              onPeriodoChange(
+                evento.target.value === "" ? "" : `${evento.target.value}-01`,
+                ate,
+              )
+            }
+            aria-label={`${rotulo}: mês inicial`}
+            className="h-8 flex-1 text-detalhe tabular-nums"
+          />
+          <span className="text-legenda text-muted-foreground">até</span>
+          <Input
+            type="month"
+            value={ate.slice(0, 7)}
+            min={de === "" ? undefined : de.slice(0, 7)}
+            onChange={(evento) =>
+              onPeriodoChange(
+                de,
+                evento.target.value === ""
+                  ? ""
+                  : ultimoDiaDoMesDe(evento.target.value),
+              )
+            }
+            aria-label={`${rotulo}: mês final`}
+            className="h-8 flex-1 text-detalhe tabular-nums"
+          />
+        </div>
+      ) : (
         <div className="flex items-center gap-1.5">
           <span className="text-legenda text-muted-foreground">De</span>
           <Input
@@ -605,6 +641,11 @@ function mesDe(iso: string): [string, string] {
   const ultimo = new Date(Date.UTC(ano, mes, 0));
   const dia = String(ultimo.getUTCDate()).padStart(2, "0");
   return [primeiro, `${iso.slice(0, 7)}-${dia}`];
+}
+
+/** "2026-02" -> "2026-02-28": a ponta final de um mês digitado no campo. */
+function ultimoDiaDoMesDe(mes: string): string {
+  return mesDe(`${mes}-01`)[1];
 }
 
 /** Um mês para trás, sobre o dia 1: só alimenta `mesDe`. */
