@@ -35,7 +35,7 @@ export function CampoChegada({ freteId, dataChegada, podeEditar, onSalvo }: Camp
     return dataChegada ? (
       <span className="tabular-nums">{diaBR(dataChegada)}</span>
     ) : (
-      <span className="text-muted-foreground">sem chegada</span>
+      <span className="text-legenda text-muted-foreground italic">sem chegada</span>
     );
   }
 

@@ -44,6 +44,8 @@ export default async function AppLayout({
     nome: modulo.nome,
     rota: modulo.rota,
     icone: modulo.id,
+    // O Combustível desenha as abas no próprio cabeçalho (CabecalhoCombustivel).
+    abasNaPagina: modulo.id === "combustivel",
     abas: abasVisiveis(usuario, modulo.id).map((aba) => ({
       id: aba.id,
       nome: aba.nome,
