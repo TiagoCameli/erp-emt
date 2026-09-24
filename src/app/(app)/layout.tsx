@@ -44,8 +44,9 @@ export default async function AppLayout({
     nome: modulo.nome,
     rota: modulo.rota,
     icone: modulo.id,
-    // O Combustível desenha as abas no próprio cabeçalho (CabecalhoCombustivel).
-    abasNaPagina: modulo.id === "combustivel",
+    // Combustível (CabecalhoCombustivel) e Frete (frete/layout.tsx) desenham as
+    // abas na própria tela, então a faixa do mobile não repete.
+    abasNaPagina: modulo.id === "combustivel" || modulo.id === "frete",
     abas: abasVisiveis(usuario, modulo.id).map((aba) => ({
       id: aba.id,
       nome: aba.nome,
