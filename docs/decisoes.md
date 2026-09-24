@@ -4082,3 +4082,59 @@ que a origem faz, pelo código das telas e pelo banco vivo dela.
 
 A conta já existia com o mesmo e-mail do Gestão Obras. Recebeu as 23 ações do Combustível e
 nenhuma outra (pedido do Tiago: "ele so deve ter permissoes para a area de combustivel").
+
+
+## 24/09/2026: Migração, Fase 4 (Frete): banco
+
+Desenho em `docs/FASE4-FRETE.md`. O Tiago disse "pode comecar a fase 4" e que a D5 do Combustível
+fica como está (lista todo equipamento ativo que nunca abasteceu).
+
+### Números medidos de novo (origem, 24/09)
+
+fretes 853 (816 vivos; 771 material e 45 transferência), pagamentos_frete 114 (112),
+transportadora_movimentos 2.670 (2.615), pedidos_material 66 (65), localidades 7. O plano dizia
+849 e 2.641.
+
+### Decisões do Tiago (24/09)
+
+- **Ajuste de saldo com aprovação** (plano 4.1, e não como a origem, que grava direto): nasce
+  pendente e só vira movimento aprovado.
+- **Defeitos dos gatilhos da origem corrigidos:** no ERP o movimento é refeito inteiro a cada
+  gravação. Na origem, frete criado sem valor e corrigido depois nunca ganhava crédito, trocar
+  a transportadora podia deixar o crédito na antiga, zerar o valor travava a edição e a obra do
+  movimento não acompanhava (29 divergentes hoje).
+- **Os 12 créditos "pagamento estendido em nome de Areacre"** (11 da ETAM, R$ 671.000, e 1 da EMT
+  TRANSPORTES, R$ 7.007,31) entram como ajustes aprovados soltos: na origem estavam presos ao
+  pagamento da Areacre, e editar esse pagamento mexia no crédito da ETAM.
+- **Falha de segurança na origem, corrigida com autorização:** as views `transportadora_saldos` e
+  `transportadora_movimentos_detalhe` rodavam como dono e o `anon` tinha todos os privilégios; sem
+  login, a API devolvia saldos e extrato. Só o `anon` saiu (Gestão Obras `556dfe9`, provado: anon
+  recusado, controle lê 2.615). Ligar `security_invoker` lá mudaria o extrato de quem só tem
+  `ver_frete`, por isso não.
+
+### Banco (`20260925100000_fase4_frete_banco` + `20260925100100_fase4_frete_indices`)
+
+- Tabelas `fretes`, `frete_pagamentos`, `pedidos_material` + `pedido_material_itens`,
+  `frete_ajustes`, `frete_painel_config`, `frete_anomalias_conferidas`; `localidades.fornecedor_id`
+  (a pedreira; a origem casava por "contém" no nome, que no ERP não casa com a razão social).
+- Valor do frete = peso × km × R$/t·km **exato**, como a origem (`valor_total numeric` sem escala,
+  para a carga copiar as 12 casas das linhas antigas); o movimento guarda 4 casas, como lá.
+- Transportadora obrigatória e marcada no cadastro (na origem, sem ela o frete gravava sem crédito).
+- Views `transportadora_saldos` e `transportadora_movimentos_detalhe` com `security_invoker` (a RLS de
+  quem lê vale). `abatido_em_pagamento_id` não veio: nunca foi usado.
+- O extrato da origem mostra litros e placa do abastecimento de carreta: `combustivel_saidas` passa
+  a ser lida também por quem tem `frete.conta-corrente/ver`.
+- Entidades de anexo novas: `frete`, `frete_chegada`, `frete_pagamento`, `pedido_material` e as do
+  Combustível (`combustivel_entrada`, `combustivel_saida`, `combustivel_transferencia`), porque a
+  carga das duas fases é uma só.
+- Data do movimento: meio-dia de Rio Branco (a origem: meio-dia de São Paulo; mesmo dia).
+- Permissões: 20 ações × 4 Admins = 80, conferidas na migration.
+
+### Prova (`supabase/provas/fase4a_frete_banco.sql`), ensaiada e repetida no banco aplicado
+
+30,5 t × 800 km × 0,37 = 9.028,0000 e o crédito igual (meio-dia de Rio Branco, 17:00 UTC);
+253,0226 × 710 × 0,35 = 62.876,1161 exato. Saldo 72.792,1161 → pagamento 5.000 → 67.792,1161 → o
+frete trocado de transportadora leva os 9.028 junto (58.764,1161 e 9.028) → excluir e restaurar a
+transferência tira e devolve os 888. Ajuste de 100: pendente não muda o saldo, quem só cria não
+aprova, aprovado soma, desaprovado volta; o rejeitado não gera movimento. RLS: sem o Frete vê 0 e
+não grava; controle, o Admin vê 3 fretes e 4 movimentos. 0 lançamentos.
