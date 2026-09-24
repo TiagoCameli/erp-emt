@@ -4213,3 +4213,20 @@ outros" e decidiu que o "Outros" conta como identificado.
   sentinela. Some o aviso do painel, a D1 não aponta nada, e o "Outros" entra nas médias, rankings
   e na D5 como qualquer equipamento. Nenhum litro ou valor muda (nada no banco foi alterado).
 - A regra da origem fica guardada em `ehNomeDeSentinela`, para religar se precisar.
+
+## 24/09/2026: Migração, Fase 5 (desligamento): Gestão Obras só leitura
+
+O Tiago: "pode seguir para a fase 5". Plano, Fase 5: os três módulos ficam só leitura no Gestão
+Obras por um ciclo de fechamento, e depois as rotas saem do menu.
+
+- **Banco da origem:** já recusava gravação desde as viradas (gatilhos de congelamento da
+  Manutenção, 23/09, e do Combustível e Frete, 24/09).
+- **Telas da origem** (Gestão Obras `a24f0fc`, deploy ok): `temAcao` nega para todos as ações de
+  lançar e editar dos três módulos (lista em `src/utils/modulosMigrados.ts`), então os botões
+  somem em vez de dar erro ao salvar; ver e exportar continuam. Faixa no topo de Frete,
+  Combustível e Manutenção com o link para o módulo no ERP. Teste com linha de controle: o que
+  fica no Gestão Obras (depósitos de material, medição, obras, equipamentos, horímetro) não é
+  tocado.
+- **Falta, depois de um ciclo de fechamento:** tirar as três rotas do menu do Gestão Obras (os
+  dados ficam no banco de origem, sem apagar) e apagar o staging e os de-paras do schema
+  `legado` no ERP.
