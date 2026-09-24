@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 
-import { GradeKpis, KPICard, PageHeader, SecaoDetalhe } from "@/components/canonicos";
+import { GradeKpis, KPICard, SecaoDetalhe } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { modoDaUrl } from "@/modules/combustivel/anomalias/base";
+import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import { AnomaliasTabela } from "@/modules/combustivel/anomalias/components/anomalias-tabela";
 import { SemSuprimentoTabela } from "@/modules/combustivel/anomalias/components/sem-suprimento-tabela";
 import type { DetectorId, Severidade } from "@/modules/combustivel/anomalias/detect";
@@ -60,8 +61,7 @@ export default async function PaginaAnomalias({
 
   return (
     <>
-      <PageHeader
-        modulo="Combustível"
+      <TituloAba
         titulo="Anomalias"
         descricao="Saídas e estados fora do padrão no período, e saídas que pediram mais do que o tanque tinha"
       />
@@ -94,7 +94,6 @@ export default async function PaginaAnomalias({
           <AnomaliasTabela
             anomalias={resultado.anomalias}
             situacao={situacao}
-            modo={modo}
             severidade={severidade}
             detector={detector}
             de={periodo.de}

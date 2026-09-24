@@ -246,30 +246,6 @@ export async function carregarAnomalias(periodo: Periodo, modo: Modo): Promise<R
   };
 }
 
-/**
- * O KPI "Anomalias" da Visão Geral da origem: críticas + atenção do recorte, tirando as
- * verificadas (conferidas). D5 (informação) não conta.
- */
-export async function contarAnomaliasDoPainel(
-  periodo: Periodo,
-  modo: Modo,
-): Promise<{ criticas: number; atencao: number; total: number; conferidas: number }> {
-  const [base, porChave] = await Promise.all([carregarBaseCombustivel(), lerConferidas()]);
-  const anomalias = detectarNaBase(base, saidasDoRecorte(base.saidas, modo, periodo.de, periodo.ate));
-  let criticas = 0;
-  let atencao = 0;
-  let conferidas = 0;
-  for (const a of anomalias) {
-    if (porChave.has(a.id)) {
-      conferidas += 1;
-      continue;
-    }
-    if (a.severity === "critical") criticas += 1;
-    else if (a.severity === "warning") atencao += 1;
-  }
-  return { criticas, atencao, total: criticas + atencao, conferidas };
-}
-
 // ---------------------------------------------------------------------------
 // Sem suprimento
 // ---------------------------------------------------------------------------

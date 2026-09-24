@@ -2,16 +2,27 @@ import { describe, expect, it } from "vitest";
 
 import { EQUIPAMENTO_DESCONHECIDO, type SaidaBase } from "@/modules/combustivel/anomalias/base";
 import {
+  autoGranularidade,
   calcularKpis,
   custoPorObra,
+  evolucaoNasTresGranularidades,
+  evolucaoTemporal,
+  heatmapDiaHora,
   ID_NAO_IDENTIFICADO,
   ID_SEM_OBRA,
+  inicioDaSemana,
   mixCombustivel,
+  niceMax,
   pctChange,
   percentualDoTanque,
   periodoAnterior,
+  precoPorFornecedor,
+  serieDiaria,
+  sparksDosKpis,
+  sparkVisivel,
   tendencia,
   topConsumidores,
+  ultimasSaidas,
 } from "@/modules/combustivel/painel/calculo";
 
 let n = 0;
@@ -133,5 +144,134 @@ describe("quadros da Visão Geral", () => {
     expect(percentualDoTanque(1500, 3000)).toBe(50);
     expect(percentualDoTanque(1, 3)).toBe(33.3);
     expect(percentualDoTanque(10, 0)).toBeNull();
+  });
+});
+
+describe("sparklines dos KPIs (bucketByDia da origem)", () => {
+  it("um valor por dia do período, zero no dia sem saída, dia do relógio de parede", () => {
+    const serie = serieDiaria(
+      [
+        saida({ data: "2026-09-01T23:59:00", litros: 10 }),
+        saida({ data: "2026-09-01T06:00:00", litros: 0.1 }),
+        saida({ data: "2026-09-03T00:00:00", litros: 0.2 }),
+        saida({ data: "2026-09-04T00:00:00", litros: 999 }),
+      ],
+      "2026-09-01",
+      "2026-09-03",
+      (s) => s.litros,
+    );
+    expect(serie).toEqual([10.1, 0, 0.2]);
+  });
+
+  it("R$/L por dia sem os dias zerados; média do R$/L diário; 4 pontos para aparecer", () => {
+    const sparks = sparksDosKpis(
+      [
+        saida({ data: "2026-09-01T08:00:00", litros: 100, valorTotal: 600 }),
+        saida({ data: "2026-09-03T08:00:00", litros: 100, valorTotal: 700 }),
+      ],
+      "2026-09-01",
+      "2026-09-03",
+    );
+    expect(sparks.volume).toEqual([100, 0, 100]);
+    expect(sparks.custo).toEqual([600, 0, 700]);
+    expect(sparks.rPorL).toEqual([6, 7]);
+    expect(sparks.mediaRpL).toBe(6.5);
+    expect(sparkVisivel(sparks.volume)).toBe(false);
+    expect(sparkVisivel([1, 0, 2, 3, 4])).toBe(true);
+    expect(sparksDosKpis([], "2026-09-01", "2026-09-02").mediaRpL).toBe(0);
+  });
+});
+
+describe("Evolução temporal (bucketize da origem)", () => {
+  it("granularidade automática: até 92 dias por dia, até 731 por semana, acima por mês", () => {
+    expect(autoGranularidade("2026-07-01", "2026-09-30")).toBe("dia"); // 92 dias
+    expect(autoGranularidade("2026-07-01", "2026-10-01")).toBe("semana"); // 93
+    expect(autoGranularidade("2024-05-08", "2026-05-08")).toBe("semana"); // 731
+    expect(autoGranularidade("2024-05-08", "2026-05-09")).toBe("mes"); // 732
+  });
+
+  it("por dia: todos os dias do período, vazios inclusive, com litros e custo somados", () => {
+    const baldes = evolucaoTemporal(
+      [saida({ data: "2026-09-02T10:00:00", litros: 10, valorTotal: 60 }), saida({ data: "2026-09-02T11:00:00", litros: 5, valorTotal: 31 })],
+      "2026-09-01",
+      "2026-09-03",
+      "dia",
+    );
+    expect(baldes.map((b) => [b.rotulo, b.litros, b.custo])).toEqual([
+      ["01/09", 0, 0],
+      ["02/09", 15, 91],
+      ["03/09", 0, 0],
+    ]);
+    expect(baldes[1]).toMatchObject({ de: "2026-09-02", ate: "2026-09-02" });
+  });
+
+  it("por semana: semana começa na segunda e o balde passa das pontas do período", () => {
+    // 2026-09-02 é quarta; a semana é 31/08 (seg) a 06/09 (dom).
+    const baldes = evolucaoTemporal([saida({ data: "2026-09-07T10:00:00", litros: 7 })], "2026-09-02", "2026-09-08", "semana");
+    expect(inicioDaSemana("2026-09-06")).toBe("2026-08-31");
+    expect(baldes.map((b) => [b.de, b.ate, b.rotulo, b.litros])).toEqual([
+      ["2026-08-31", "2026-09-06", "31/08–06/09", 0],
+      ["2026-09-07", "2026-09-13", "07/09–13/09", 7],
+    ]);
+  });
+
+  it("por mês: rótulo 'set/26' e o mês inteiro", () => {
+    const baldes = evolucaoTemporal([saida({ data: "2026-10-05T10:00:00", valorTotal: 10 })], "2026-09-15", "2026-10-10", "mes");
+    expect(baldes.map((b) => [b.rotulo, b.de, b.ate, b.custo])).toEqual([
+      ["set/26", "2026-09-01", "2026-09-30", 0],
+      ["out/26", "2026-10-01", "2026-10-31", 10],
+    ]);
+    const tres = evolucaoNasTresGranularidades([], "2026-09-01", "2026-09-03");
+    expect(Object.keys(tres)).toEqual(["dia", "semana", "mes"]);
+  });
+});
+
+describe("heatmap dia da semana × hora", () => {
+  it("conta saídas no relógio de parede; 0 = domingo", () => {
+    // 2026-09-06 é domingo, 2026-09-07 é segunda.
+    const { matriz, maximo } = heatmapDiaHora([
+      saida({ data: "2026-09-06T23:30:00" }),
+      saida({ data: "2026-09-07T07:10:00" }),
+      saida({ data: "2026-09-14T07:59:00" }),
+      saida({ data: "sem data" }),
+    ]);
+    expect(matriz[0]![23]).toBe(1);
+    expect(matriz[1]![7]).toBe(2);
+    expect(maximo).toBe(2);
+    expect(matriz.flat().reduce((a, b) => a + b, 0)).toBe(3);
+  });
+});
+
+describe("R$/L por fornecedor (das entradas)", () => {
+  it("do mais barato ao mais caro; média ponderada; entrada sem fornecedor fica de fora", () => {
+    const { linhas, media } = precoPorFornecedor([
+      { fornecedorId: "caro", litros: 100, valorTotal: 700 },
+      { fornecedorId: "barato", litros: 300, valorTotal: 1800 },
+      { fornecedorId: "barato", litros: 100, valorTotal: 600 },
+      { fornecedorId: null, litros: 1000, valorTotal: 1 },
+    ]);
+    expect(linhas.map((l) => [l.id, l.litros, l.custo, l.rPorL, l.qtd])).toEqual([
+      ["barato", 400, 2400, 6, 2],
+      ["caro", 100, 700, 7, 1],
+    ]);
+    // (2400 + 700) / (400 + 100), e não a média simples de 6 e 7.
+    expect(media).toBe(6.2);
+    expect(precoPorFornecedor([]).media).toBe(0);
+  });
+});
+
+describe("últimas saídas e eixo", () => {
+  it("as mais recentes primeiro; no mesmo instante, a de id maior", () => {
+    const a = saida({ id: "a", data: "2026-09-10T08:00:00" });
+    const b = saida({ id: "b", data: "2026-09-10T08:00:00" });
+    const c = saida({ id: "c", data: "2026-09-11T08:00:00" });
+    expect(ultimasSaidas([a, b, c], 2).map((s) => s.id)).toEqual(["c", "b"]);
+  });
+
+  it("niceMax da origem", () => {
+    expect(niceMax(200)).toBe(250);
+    expect(niceMax(8470)).toBe(10_000);
+    expect(niceMax(0)).toBe(1);
+    expect(niceMax(4)).toBe(5);
   });
 });

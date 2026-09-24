@@ -66,7 +66,6 @@ function props(parcial: Partial<AnomaliasTabelaProps> = {}): AnomaliasTabelaProp
   return {
     anomalias: [d1(), d2()],
     situacao: "pendentes",
-    modo: "proprios",
     severidade: "",
     detector: "",
     de: "2026-08-25",

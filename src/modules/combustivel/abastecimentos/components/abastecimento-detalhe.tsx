@@ -90,6 +90,140 @@ function Tabela<L extends { id: string }>({
   );
 }
 
+/**
+ * O corpo do detalhe (dados, camadas do PEPS, conta corrente e alocações), sem cabeçalho
+ * nem ações: serve a página `[id]` e o drawer de detalhe da lista.
+ */
+export function AbastecimentoDetalheConteudo({ abastecimento }: { abastecimento: AbastecimentoCompleto }) {
+  const { saida, camadas, movimentos, alocacoes, semSuprimento } = abastecimento;
+  const carreta = saida.tipoConsumidor === "carreta_transportadora";
+  const litrosCamadas = somarValoresOperacionais(camadas.map((c) => c.litros));
+  const valorCamadas = somarValoresOperacionais(camadas.map((c) => c.litros * c.preco));
+
+  return (
+    <div className="flex flex-col gap-6">
+      {semSuprimento ? (
+        <div role="alert" className="flex items-start gap-2 rounded-md border border-border bg-surface p-3 text-detalhe">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden />
+          <p>
+            Sem suprimento: o tanque não tinha camada para {formatarLitros(semSuprimento.litrosSemSuprimento)} dos{" "}
+            {formatarLitros(semSuprimento.litrosSolicitados)} pedidos. O preço saiu só das camadas encontradas.
+          </p>
+        </div>
+      ) : null}
+
+      <SecaoDetalhe titulo="Dados" card>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <Dado rotulo="Consumidor">{ROTULO_TIPO_CONSUMIDOR[saida.tipoConsumidor]}</Dado>
+          <Dado rotulo="Origem">{ROTULO_ORIGEM_SAIDA[saida.origem]}</Dado>
+          <Dado rotulo="Tanque">
+            {saida.tanqueNome ? `${saida.tanqueNome}${saida.tanqueExterno ? " (externo)" : ""}` : <CelulaVazia />}
+          </Dado>
+          <Dado rotulo="Combustível">{saida.insumoNome}</Dado>
+          {carreta ? (
+            <>
+              <Dado rotulo="Transportadora">{saida.transportadoraNome ?? <CelulaVazia />}</Dado>
+              <Dado rotulo="Placa">{saida.placa ? <span className="codigo-doc">{saida.placa}</span> : <CelulaVazia />}</Dado>
+              <Dado rotulo="Motorista">{saida.motorista ?? <CelulaVazia />}</Dado>
+            </>
+          ) : (
+            <>
+              <Dado rotulo="Equipamento">{saida.equipamentoNome ?? <CelulaVazia />}</Dado>
+              <Dado rotulo="Centro de custo">{saida.centroCustoNome ?? <CelulaVazia />}</Dado>
+              <Dado rotulo={saida.tipoMedicao === "km" ? "Hodômetro" : "Horímetro"}>
+                {saida.medicao !== null ? (
+                  <span className="tabular-nums">
+                    {formatarQuantidade(saida.medicao)} {saida.tipoMedicao === "km" ? "km" : "h"}
+                  </span>
+                ) : (
+                  <CelulaVazia />
+                )}
+              </Dado>
+            </>
+          )}
+          <Dado rotulo="Litros">
+            <span className="tabular-nums">{formatarLitros(saida.litros)}</span>
+          </Dado>
+          <Dado rotulo="Preço por litro">
+            <Preco valor={saida.precoUnitario} />
+          </Dado>
+          <Dado rotulo="Valor">
+            <Preco valor={saida.valorTotal} />
+          </Dado>
+          {carreta && saida.origem === "tanque" ? (
+            <>
+              <Dado rotulo="Preço cobrado da transportadora">
+                <Preco valor={saida.precoCombustivel} />
+              </Dado>
+              {saida.tanqueExterno ? (
+                <Dado rotulo="Preço que o dono cobra">
+                  <Preco valor={saida.precoProprietario} />
+                </Dado>
+              ) : null}
+              <Dado rotulo="Taxa por litro">
+                <Preco valor={saida.taxaLitro} />
+              </Dado>
+            </>
+          ) : null}
+          {saida.origem === "requisicao" ? (
+            <Dado rotulo="Pagamento">
+              {saida.pago ? `Pago${saida.pagoEm ? ` em ${formatarData(saida.pagoEm)}` : ""}` : "A pagar"}
+            </Dado>
+          ) : null}
+          <Dado rotulo="Canal">{ROTULO_CANAL[saida.canal]}</Dado>
+        </div>
+        {saida.observacoes ? <p className="mt-4 whitespace-pre-wrap text-detalhe">{saida.observacoes}</p> : null}
+      </SecaoDetalhe>
+
+      {saida.origem === "tanque" && !saida.tanqueExterno ? (
+        <SecaoDetalhe titulo="Camadas do PEPS">
+          <Tabela
+            linhas={camadas}
+            vazio="Nenhuma camada consumida"
+            colunas={[
+              { rotulo: "Fonte", celula: (c) => (c.fonteTipo === "entrada" ? "Entrada" : "Transferência recebida") },
+              { rotulo: "Data da fonte", celula: (c) => (c.fonteData ? formatarDataHoraRioBranco(c.fonteData) : <CelulaVazia />) },
+              { rotulo: "NF", celula: (c) => (c.fonteNotaFiscal ? <span className="codigo-doc">{c.fonteNotaFiscal}</span> : <CelulaVazia />) },
+              { rotulo: "Litros", direita: true, celula: (c) => formatarLitros(c.litros) },
+              { rotulo: "Preço por litro", direita: true, celula: (c) => formatarValorOperacional(c.preco) },
+              { rotulo: "Valor", direita: true, celula: (c) => formatarValorOperacional(c.litros * c.preco) },
+            ]}
+            rodape={["Total", "", "", formatarLitros(litrosCamadas), "", formatarValorOperacional(valorCamadas)]}
+          />
+        </SecaoDetalhe>
+      ) : null}
+
+      {carreta ? (
+        <SecaoDetalhe titulo="Conta corrente da transportadora">
+          <Tabela
+            linhas={movimentos}
+            vazio="Nenhum movimento: só abastecimento de carreta em tanque gera movimento"
+            colunas={[
+              { rotulo: "Movimento", celula: (m) => ROTULO_TIPO_MOVIMENTO[m.tipo] ?? m.tipo },
+              { rotulo: "Fornecedor", celula: (m) => m.transportadoraNome },
+              { rotulo: "Data", celula: (m) => formatarDataHoraRioBranco(m.data) },
+              { rotulo: "Valor", direita: true, celula: (m) => formatarValorOperacional(m.valor) },
+            ]}
+          />
+        </SecaoDetalhe>
+      ) : null}
+
+      <SecaoDetalhe titulo="Alocações">
+        <Tabela
+          linhas={alocacoes}
+          vazio="Sem alocação de obra"
+          colunas={[
+            { rotulo: "Obra", celula: (a) => a.centroCustoNome },
+            { rotulo: "Etapa na origem", celula: (a) => a.etapaLegado ?? <CelulaVazia /> },
+            { rotulo: "Percentual", direita: true, celula: (a) => formatarPercentual(a.percentual, 4) },
+            { rotulo: "Litros", direita: true, celula: (a) => formatarLitros(a.litros) },
+          ]}
+        />
+      </SecaoDetalhe>
+    </div>
+  );
+}
+
 export interface AbastecimentoDetalheViewProps {
   abastecimento: AbastecimentoCompleto;
   podeEditar: boolean;
@@ -105,13 +239,9 @@ export interface AbastecimentoDetalheViewProps {
  */
 export function AbastecimentoDetalheView({ abastecimento, podeEditar, podeExcluir, opcoes }: AbastecimentoDetalheViewProps) {
   const router = useRouter();
-  const { saida, camadas, movimentos, alocacoes, semSuprimento } = abastecimento;
+  const { saida } = abastecimento;
   const [editando, setEditando] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState(false);
-
-  const carreta = saida.tipoConsumidor === "carreta_transportadora";
-  const litrosCamadas = somarValoresOperacionais(camadas.map((c) => c.litros));
-  const valorCamadas = somarValoresOperacionais(camadas.map((c) => c.litros * c.preco));
 
   async function aoExcluir(motivo?: string) {
     const resultado = await excluirAbastecimento(saida.id, motivo ?? "");
@@ -149,127 +279,7 @@ export function AbastecimentoDetalheView({ abastecimento, podeEditar, podeExclui
         }
       />
 
-      <div className="flex flex-col gap-6">
-        {semSuprimento ? (
-          <div role="alert" className="flex items-start gap-2 rounded-md border border-border bg-surface p-3 text-detalhe">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden />
-            <p>
-              Sem suprimento: o tanque não tinha camada para {formatarLitros(semSuprimento.litrosSemSuprimento)} dos{" "}
-              {formatarLitros(semSuprimento.litrosSolicitados)} pedidos. O preço saiu só das camadas encontradas.
-            </p>
-          </div>
-        ) : null}
-
-        <SecaoDetalhe titulo="Dados" card>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            <Dado rotulo="Consumidor">{ROTULO_TIPO_CONSUMIDOR[saida.tipoConsumidor]}</Dado>
-            <Dado rotulo="Origem">{ROTULO_ORIGEM_SAIDA[saida.origem]}</Dado>
-            <Dado rotulo="Tanque">
-              {saida.tanqueNome ? `${saida.tanqueNome}${saida.tanqueExterno ? " (externo)" : ""}` : <CelulaVazia />}
-            </Dado>
-            <Dado rotulo="Combustível">{saida.insumoNome}</Dado>
-            {carreta ? (
-              <>
-                <Dado rotulo="Transportadora">{saida.transportadoraNome ?? <CelulaVazia />}</Dado>
-                <Dado rotulo="Placa">{saida.placa ? <span className="codigo-doc">{saida.placa}</span> : <CelulaVazia />}</Dado>
-                <Dado rotulo="Motorista">{saida.motorista ?? <CelulaVazia />}</Dado>
-              </>
-            ) : (
-              <>
-                <Dado rotulo="Equipamento">{saida.equipamentoNome ?? <CelulaVazia />}</Dado>
-                <Dado rotulo="Centro de custo">{saida.centroCustoNome ?? <CelulaVazia />}</Dado>
-                <Dado rotulo={saida.tipoMedicao === "km" ? "Hodômetro" : "Horímetro"}>
-                  {saida.medicao !== null ? (
-                    <span className="tabular-nums">
-                      {formatarQuantidade(saida.medicao)} {saida.tipoMedicao === "km" ? "km" : "h"}
-                    </span>
-                  ) : (
-                    <CelulaVazia />
-                  )}
-                </Dado>
-              </>
-            )}
-            <Dado rotulo="Litros">
-              <span className="tabular-nums">{formatarLitros(saida.litros)}</span>
-            </Dado>
-            <Dado rotulo="Preço por litro">
-              <Preco valor={saida.precoUnitario} />
-            </Dado>
-            <Dado rotulo="Valor">
-              <Preco valor={saida.valorTotal} />
-            </Dado>
-            {carreta && saida.origem === "tanque" ? (
-              <>
-                <Dado rotulo="Preço cobrado da transportadora">
-                  <Preco valor={saida.precoCombustivel} />
-                </Dado>
-                {saida.tanqueExterno ? (
-                  <Dado rotulo="Preço que o dono cobra">
-                    <Preco valor={saida.precoProprietario} />
-                  </Dado>
-                ) : null}
-                <Dado rotulo="Taxa por litro">
-                  <Preco valor={saida.taxaLitro} />
-                </Dado>
-              </>
-            ) : null}
-            {saida.origem === "requisicao" ? (
-              <Dado rotulo="Pagamento">
-                {saida.pago ? `Pago${saida.pagoEm ? ` em ${formatarData(saida.pagoEm)}` : ""}` : "A pagar"}
-              </Dado>
-            ) : null}
-            <Dado rotulo="Canal">{ROTULO_CANAL[saida.canal]}</Dado>
-          </div>
-          {saida.observacoes ? <p className="mt-4 whitespace-pre-wrap text-detalhe">{saida.observacoes}</p> : null}
-        </SecaoDetalhe>
-
-        {saida.origem === "tanque" && !saida.tanqueExterno ? (
-          <SecaoDetalhe titulo="Camadas do PEPS">
-            <Tabela
-              linhas={camadas}
-              vazio="Nenhuma camada consumida"
-              colunas={[
-                { rotulo: "Fonte", celula: (c) => (c.fonteTipo === "entrada" ? "Entrada" : "Transferência recebida") },
-                { rotulo: "Data da fonte", celula: (c) => (c.fonteData ? formatarDataHoraRioBranco(c.fonteData) : <CelulaVazia />) },
-                { rotulo: "NF", celula: (c) => (c.fonteNotaFiscal ? <span className="codigo-doc">{c.fonteNotaFiscal}</span> : <CelulaVazia />) },
-                { rotulo: "Litros", direita: true, celula: (c) => formatarLitros(c.litros) },
-                { rotulo: "Preço por litro", direita: true, celula: (c) => formatarValorOperacional(c.preco) },
-                { rotulo: "Valor", direita: true, celula: (c) => formatarValorOperacional(c.litros * c.preco) },
-              ]}
-              rodape={["Total", "", "", formatarLitros(litrosCamadas), "", formatarValorOperacional(valorCamadas)]}
-            />
-          </SecaoDetalhe>
-        ) : null}
-
-        {carreta ? (
-          <SecaoDetalhe titulo="Conta corrente da transportadora">
-            <Tabela
-              linhas={movimentos}
-              vazio="Nenhum movimento: só abastecimento de carreta em tanque gera movimento"
-              colunas={[
-                { rotulo: "Movimento", celula: (m) => ROTULO_TIPO_MOVIMENTO[m.tipo] ?? m.tipo },
-                { rotulo: "Fornecedor", celula: (m) => m.transportadoraNome },
-                { rotulo: "Data", celula: (m) => formatarDataHoraRioBranco(m.data) },
-                { rotulo: "Valor", direita: true, celula: (m) => formatarValorOperacional(m.valor) },
-              ]}
-            />
-          </SecaoDetalhe>
-        ) : null}
-
-        <SecaoDetalhe titulo="Alocações">
-          <Tabela
-            linhas={alocacoes}
-            vazio="Sem alocação de obra"
-            colunas={[
-              { rotulo: "Obra", celula: (a) => a.centroCustoNome },
-              { rotulo: "Etapa na origem", celula: (a) => a.etapaLegado ?? <CelulaVazia /> },
-              { rotulo: "Percentual", direita: true, celula: (a) => formatarPercentual(a.percentual, 4) },
-              { rotulo: "Litros", direita: true, celula: (a) => formatarLitros(a.litros) },
-            ]}
-          />
-        </SecaoDetalhe>
-
-      </div>
+      <AbastecimentoDetalheConteudo abastecimento={abastecimento} />
 
       {podeEditar ? (
         <AbastecimentoFormDrawer
