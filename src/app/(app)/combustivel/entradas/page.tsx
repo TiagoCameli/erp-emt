@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 
-import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import { EntradasTabela } from "@/modules/combustivel/entradas/components/entradas-tabela";
@@ -14,12 +13,8 @@ import {
   type InsumoCombustivel,
   type Opcao,
 } from "@/modules/combustivel/entradas/queries";
-import { ultimosDias } from "@/modules/combustivel/relatorios/periodo";
 
 const RECURSO = "combustivel.entradas" as const;
-
-/** A origem abre as listas nos últimos 30 dias (preset "ultimos_30"), como o painel. */
-const DIAS_PADRAO = 30;
 
 export default async function PaginaEntradasCombustivel({
   searchParams,
@@ -38,7 +33,9 @@ export default async function PaginaEntradasCombustivel({
   // Restaurar é a Lixeira da origem: pede editar a Lixeira e excluir na aba (a
   // fn_comb_restaurar confere as duas de novo).
   const podeRestaurar = temPermissao(usuario, "administracao.lixeira", "editar") && podeExcluir;
-  const filtrosUrl = lerFiltrosEntradas(await searchParams, ultimosDias(dataHojeISO(), DIAS_PADRAO));
+  // Sem `de`/`ate` na URL é qualquer data, como no resto do ERP. Os últimos 30 dias da
+  // origem eram reinjetados aqui, e limpar o período nunca desligava o filtro (24/09/2026).
+  const filtrosUrl = lerFiltrosEntradas(await searchParams);
 
   const [entradas, excluidas, tanques, insumos, fornecedores] = await Promise.all([
     listarEntradas(),

@@ -24,6 +24,8 @@ import {
   aplicarFiltroGlobalEntradas,
   filtroGlobalDaUrl,
   opcoesDoFiltroGlobal,
+  periodoEfetivo,
+  periodoFechado,
   type DimensaoFiltro,
 } from "@/modules/combustivel/_shared/filtro-global";
 import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
@@ -50,15 +52,21 @@ export default async function PaginaFornecedoresCombustivel({
   if (!temPermissao(usuario, "combustivel.painel", "ver")) notFound();
 
   const hoje = dataHojeISO();
-  const filtro = filtroGlobalDaUrl(await searchParams, hoje);
-  const { periodo } = filtro;
+  const filtro = filtroGlobalDaUrl(await searchParams);
   // A base dá os nomes de tanque e combustível das opções da barra (é a mesma leitura cacheada das outras abas).
   const [entradas, base] = await Promise.all([carregarEntradasAnaliticas(), carregarBaseCombustivel()]);
   const opcoes = opcoesDoFiltroGlobal(base, entradas, filtro);
 
   // Das chaves globais, só período, combustível, fornecedor e tanque valem para entradas (como na origem).
   const noPeriodo = aplicarFiltroGlobalEntradas(entradas, filtro);
-  const doAnterior = aplicarFiltroGlobalEntradas(entradas, filtro, periodoAnterior(periodo.de, periodo.ate));
+  // Sem as duas pontas não existe "período anterior de mesma duração": os deltas somem em
+  // vez de comparar com um vazio e mostrar +100%. `periodo` fecha as pontas abertas na
+  // extensão dos dados, para os baldes das sparklines e do ranking.
+  const comparavel = periodoFechado(filtro.periodo);
+  const periodo = periodoEfetivo(filtro.periodo, noPeriodo, hoje);
+  const doAnterior = comparavel
+    ? aplicarFiltroGlobalEntradas(entradas, filtro, periodoAnterior(periodo.de, periodo.ate))
+    : [];
 
   const kpis = kpisFornecedores(noPeriodo, doAnterior, periodo.de, periodo.ate);
   const linhas = rankingFornecedores(noPeriodo, periodo.de, periodo.ate);
@@ -69,7 +77,7 @@ export default async function PaginaFornecedoresCombustivel({
     <>
       <TituloAba titulo="Fornecedores" descricao="Compras de combustível por fornecedor no período" />
 
-      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} hoje={hoje} ocultar={OCULTAR_EM_ENTRADAS} />
+      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} ocultar={OCULTAR_EM_ENTRADAS} />
 
       {noPeriodo.length === 0 ? (
         <EmptyState titulo="Nenhuma entrada de combustível no período" descricao="Ajuste o período ou os filtros" />
@@ -80,7 +88,7 @@ export default async function PaginaFornecedoresCombustivel({
               titulo="Volume comprado"
               valor={formatarLitros(kpis.volume)}
               detalhe="no período"
-              delta={kpis.deltaVolume}
+              delta={comparavel ? kpis.deltaVolume : undefined}
               serie={kpis.sparkVolume}
               explicacao="Soma de litros das entradas no período (compras de combustível)."
             />
@@ -88,7 +96,7 @@ export default async function PaginaFornecedoresCombustivel({
               titulo="Custo das compras"
               valor={<MoneyText valor={kpis.custo} />}
               detalhe="no período"
-              delta={kpis.deltaCusto}
+              delta={comparavel ? kpis.deltaCusto : undefined}
               altaRuim
               serie={kpis.sparkCusto}
               explicacao="Soma do valor total das entradas no período. Alta de custo em vermelho."
@@ -97,8 +105,8 @@ export default async function PaginaFornecedoresCombustivel({
               titulo="Fornecedores ativos"
               valor={formatarContagem(kpis.qtdFornecedores)}
               detalhe="com ao menos uma compra no período"
-              delta={kpis.chipFornecedores.tipo === "percentual" ? kpis.chipFornecedores.valor : undefined}
-              diferenca={textoDiferenca(kpis.chipFornecedores)}
+              delta={comparavel && kpis.chipFornecedores.tipo === "percentual" ? kpis.chipFornecedores.valor : undefined}
+              diferenca={comparavel ? textoDiferenca(kpis.chipFornecedores) : undefined}
               explicacao="Fornecedores distintos que aparecem em entradas no período."
             />
             <KpiAnalitico

@@ -5,7 +5,8 @@ import { MoneyText } from "@/components/canonicos";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
 import { abasVisiveis, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { BarraFiltrosCombustivel } from "@/modules/combustivel/_shared/components/barra-filtros-combustivel";
-import { diasNoPeriodo, filtroGlobalDaUrl } from "@/modules/combustivel/_shared/filtro-global";
+import { diasNoPeriodo, filtroGlobalDaUrl, pontasDoPeriodo } from "@/modules/combustivel/_shared/filtro-global";
+import type { Periodo } from "@/modules/combustivel/relatorios/periodo";
 import { hrefComRecorte } from "@/modules/combustivel/_shared/navegacao";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { ROTA_ANOMALIAS } from "@/modules/combustivel/anomalias/links";
@@ -56,11 +57,14 @@ function paramsDaUrl(params: Record<string, string | string[] | undefined>): URL
   return url;
 }
 
-/** O link com o recorte E o período explícito (a aba de destino pode ter outro padrão). */
-function hrefComPeriodo(rota: string, url: URLSearchParams, periodo: { de: string; ate: string }, extra?: Record<string, string>) {
+/** O link com o recorte e o período da tela; sem período, o destino também fica sem. */
+function hrefComPeriodo(rota: string, url: URLSearchParams, periodo: Periodo | null, extra?: Record<string, string>) {
   const params = new URLSearchParams(hrefComRecorte(rota, url).split("?")[1] ?? "");
-  params.set("de", periodo.de);
-  params.set("ate", periodo.ate);
+  const pontas = pontasDoPeriodo(periodo);
+  if (pontas.de) params.set("de", pontas.de);
+  else params.delete("de");
+  if (pontas.ate) params.set("ate", pontas.ate);
+  else params.delete("ate");
   for (const [chave, valor] of Object.entries(extra ?? {})) params.set(chave, valor);
   return `${rota}?${params.toString()}`;
 }
@@ -84,13 +88,15 @@ export default async function VisaoGeralCombustivel({
 
   const params = await searchParams;
   const hoje = dataHojeISO();
-  const filtro = filtroGlobalDaUrl(params, hoje);
+  const filtro = filtroGlobalDaUrl(params);
   const url = paramsDaUrl(params);
   const veAnomalias = temPermissao(usuario, "combustivel.anomalias", "ver");
 
-  const painel = await carregarPainel(filtro);
+  const painel = await carregarPainel(filtro, hoje);
   const { kpis, sparks, anomalias } = painel;
   const vazio = kpis.qtdSaidas === 0;
+  // Sem período fechado não há "anterior" de mesma duração: a variação some.
+  const semVariacao = vazio || !painel.comparavel;
   const proprios = filtro.modo === "proprios";
 
   const linkAnomalias = veAnomalias ? hrefComPeriodo(ROTA_ANOMALIAS, url, filtro.periodo) : undefined;
@@ -109,7 +115,7 @@ export default async function VisaoGeralCombustivel({
 
   return (
     <>
-      <BarraFiltrosCombustivel filtro={filtro} opcoes={painel.opcoes} hoje={hoje} />
+      <BarraFiltrosCombustivel filtro={filtro} opcoes={painel.opcoes} />
 
       {proprios ? (
         <AvisoSentinela volumeTotal={kpis.volume} volumeSentinela={kpis.volumeSentinela} hrefAtribuir={linkAtribuir} />
@@ -122,7 +128,7 @@ export default async function VisaoGeralCombustivel({
             icone={Droplet}
             valor={litrosCompactos(kpis.volume)}
             detalhe={vazio ? undefined : `${formatarLitros(kpis.volume)} no período`}
-            variacao={vazio ? undefined : variacaoComBase(kpis.deltaVolume, kpis.qtdSaidasAnt, kpis.diffVolume, "litros")}
+            variacao={semVariacao ? undefined : variacaoComBase(kpis.deltaVolume, kpis.qtdSaidasAnt, kpis.diffVolume, "litros")}
             spark={sparks.volume}
             dica="Soma de litros das saídas no período filtrado."
             vazio={vazio}
@@ -132,7 +138,7 @@ export default async function VisaoGeralCombustivel({
             icone={Wallet}
             valor={brlCompactoDe(kpis.custo)}
             detalhe={vazio ? undefined : <MoneyText valor={kpis.custo} />}
-            variacao={vazio ? undefined : { tipo: "percentual", valor: kpis.deltaCusto, inverter: true }}
+            variacao={semVariacao ? undefined : { tipo: "percentual", valor: kpis.deltaCusto, inverter: true }}
             spark={sparks.custo}
             dica="Soma do valor total das saídas no período. Alta de custo = vermelho."
             vazio={vazio}
@@ -142,7 +148,7 @@ export default async function VisaoGeralCombustivel({
             icone={Gauge}
             valor={`R$ ${numero(kpis.rPorL, 2)}`}
             detalhe={vazio ? undefined : "custo ÷ volume"}
-            variacao={vazio || sparks.mediaRpL === 0 ? undefined : { tipo: "percentual", valor: kpis.deltaRpL, inverter: true }}
+            variacao={semVariacao || sparks.mediaRpL === 0 ? undefined : { tipo: "percentual", valor: kpis.deltaRpL, inverter: true }}
             spark={sparks.rPorL}
             dica={`Custo total ÷ volume total no período (${formatarBRL(kpis.custo)} ÷ ${formatarLitros(kpis.volume)}).`}
             vazio={vazio}
@@ -153,7 +159,7 @@ export default async function VisaoGeralCombustivel({
             valor={numero(kpis.qtdConsumidores, 0)}
             detalhe={vazio ? undefined : proprios ? "abastecidos no período" : "placas distintas no período"}
             variacao={
-              vazio
+              semVariacao
                 ? undefined
                 : variacaoComBase(kpis.deltaConsumidores, kpis.qtdConsumidoresAnt, kpis.diffConsumidores, "contagem")
             }
@@ -193,7 +199,7 @@ export default async function VisaoGeralCombustivel({
           <div className="lg:col-span-2">
             <EvolucaoTemporal
               evolucao={painel.evolucao}
-              granularidadeInicial={autoGranularidade(filtro.periodo.de, filtro.periodo.ate)}
+              granularidadeInicial={autoGranularidade(painel.periodo.de, painel.periodo.ate)}
               vazio={vazio}
               filtro={filtro}
             />
@@ -209,7 +215,7 @@ export default async function VisaoGeralCombustivel({
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <CustoPorFornecedor fornecedores={painel.fornecedores.linhas} media={painel.fornecedores.media} filtro={filtro} />
           {/* A origem só mostra o heatmap com 14+ dias: em recorte curto a grade fica quase vazia. */}
-          {diasNoPeriodo(filtro.periodo) >= 14 ? <HeatmapDiaHora dados={painel.heatmap} /> : <div className="hidden lg:block" />}
+          {diasNoPeriodo(painel.periodo) >= 14 ? <HeatmapDiaHora dados={painel.heatmap} /> : <div className="hidden lg:block" />}
         </div>
 
         <UltimosAbastecimentos

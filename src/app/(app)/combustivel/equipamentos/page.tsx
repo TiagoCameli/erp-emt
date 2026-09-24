@@ -23,7 +23,13 @@ import {
 } from "@/modules/combustivel/analitico/formato";
 import { linkSaidasDoConsumidor } from "@/modules/combustivel/analitico/links";
 import { BarraFiltrosCombustivel } from "@/modules/combustivel/_shared/components/barra-filtros-combustivel";
-import { aplicarFiltroGlobal, filtroGlobalDaUrl } from "@/modules/combustivel/_shared/filtro-global";
+import {
+  aplicarFiltroGlobal,
+  filtroGlobalDaUrl,
+  periodoEfetivo,
+  periodoFechado,
+  pontasDoPeriodo,
+} from "@/modules/combustivel/_shared/filtro-global";
 import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
 import { periodoAnterior } from "@/modules/combustivel/painel/calculo";
 import { carregarOpcoesFiltroGlobal } from "@/modules/combustivel/painel/queries";
@@ -49,13 +55,18 @@ export default async function PaginaEquipamentosCombustivel({
 
   const params = await searchParams;
   const hoje = dataHojeISO();
-  const filtro = filtroGlobalDaUrl(params, hoje);
-  const { modo, periodo } = filtro;
+  const filtro = filtroGlobalDaUrl(params);
+  const { modo } = filtro;
   const [base, opcoes] = await Promise.all([carregarBaseCombustivel(), carregarOpcoesFiltroGlobal(filtro)]);
 
   // O filtro global nas duas listas: o mesmo nas duas, senão o delta compara recortes diferentes.
   const noPeriodo = aplicarFiltroGlobal(base.saidas, filtro);
-  const doAnterior = aplicarFiltroGlobal(base.saidas, filtro, periodoAnterior(periodo.de, periodo.ate));
+  // Sem as duas pontas não existe "período anterior de mesma duração": os deltas somem em
+  // vez de comparar com um vazio e mostrar +100%. `periodo` fecha as pontas abertas na
+  // extensão dos dados, para os baldes das sparklines e do ranking.
+  const comparavel = periodoFechado(filtro.periodo);
+  const periodo = periodoEfetivo(filtro.periodo, noPeriodo, hoje);
+  const doAnterior = comparavel ? aplicarFiltroGlobal(base.saidas, filtro, periodoAnterior(periodo.de, periodo.ate)) : [];
 
   const proprios = modo === "proprios";
   const kpis = kpisConsumidores(noPeriodo, doAnterior, modo, periodo.de, periodo.ate);
@@ -90,7 +101,7 @@ export default async function PaginaEquipamentosCombustivel({
         }
       />
 
-      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} hoje={hoje} ocultar={["fornecedores"]} />
+      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} ocultar={["fornecedores"]} />
 
       {vazio ? (
         <EmptyState
@@ -104,7 +115,7 @@ export default async function PaginaEquipamentosCombustivel({
               titulo="Volume total"
               valor={formatarLitros(kpis.volume)}
               detalhe="no período"
-              delta={kpis.deltaVolume}
+              delta={comparavel ? kpis.deltaVolume : undefined}
               serie={kpis.sparkVolume}
               explicacao="Soma de litros das saídas no período (modo e filtros)."
             />
@@ -112,7 +123,7 @@ export default async function PaginaEquipamentosCombustivel({
               titulo="Custo total"
               valor={<MoneyText valor={kpis.custo} />}
               detalhe="no período"
-              delta={kpis.deltaCusto}
+              delta={comparavel ? kpis.deltaCusto : undefined}
               altaRuim
               serie={kpis.sparkCusto}
               explicacao="Soma do valor total das saídas no período. Alta de custo em vermelho."
@@ -125,8 +136,8 @@ export default async function PaginaEquipamentosCombustivel({
                   ? `+${plural(kpis.qtdSentinela, "saída", "saídas")} sem ID`
                   : "no período"
               }
-              delta={kpis.chipConsumidores.tipo === "percentual" ? kpis.chipConsumidores.valor : undefined}
-              diferenca={textoDiferenca(kpis.chipConsumidores)}
+              delta={comparavel && kpis.chipConsumidores.tipo === "percentual" ? kpis.chipConsumidores.valor : undefined}
+              diferenca={comparavel ? textoDiferenca(kpis.chipConsumidores) : undefined}
               explicacao={
                 proprios
                   ? "Equipamentos cadastrados distintos com pelo menos uma saída no período. Saídas sem identificação (Outros) não entram no total."
@@ -170,7 +181,7 @@ export default async function PaginaEquipamentosCombustivel({
             cabecalhoNome={proprios ? "Equipamento" : "Placa"}
             nome={(l) => (proprios || l.sentinela ? nome(l) : <span className="font-mono">{l.id}</span>)}
             meta={meta}
-            href={veSaidas ? (l) => linkSaidasDoConsumidor(l.id, { modo, de: periodo.de, ate: periodo.ate }, sentinelas, params) : undefined}
+            href={veSaidas ? (l) => linkSaidasDoConsumidor(l.id, { modo, ...pontasDoPeriodo(filtro.periodo) }, sentinelas, params) : undefined}
             destacar={(l) => l.sentinela}
             colunas={[
               { cabecalho: "Litros", celula: (l) => formatarLitros(l.litros) },

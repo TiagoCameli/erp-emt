@@ -61,17 +61,18 @@ function saida(parcial: Partial<SaidaBase> = {}): SaidaBase {
 
 function filtro(parcial: Partial<FiltroGlobal> = {}): FiltroGlobal {
   return {
-    ...filtroGlobalDaUrl({ de: "2026-09-01", ate: "2026-09-30" }, HOJE),
+    ...filtroGlobalDaUrl({ de: "2026-09-01", ate: "2026-09-30" }),
     ...parcial,
   };
 }
 
 describe("filtroGlobalDaUrl", () => {
-  it("sem nada na URL: modo próprios, últimos 30 dias, nenhum filtro, nada a limpar", () => {
-    const f = filtroGlobalDaUrl({}, HOJE);
+  it("sem nada na URL: modo próprios, QUALQUER data, nenhum filtro, nada a limpar", () => {
+    // Antes caía nos últimos 30 dias, e limpar o período devolvia os 30 dias: o filtro
+    // nunca desligava. Sem `de`/`ate` é qualquer data, como no resto do ERP.
+    const f = filtroGlobalDaUrl({});
     expect(f.modo).toBe("proprios");
-    expect(f.periodo).toEqual({ de: "2026-08-25", ate: HOJE });
-    expect(f.periodoEscolhido).toBe(false);
+    expect(f.periodo).toBeNull();
     expect(f.obras).toEqual([]);
     expect(temFiltroAtivo(f)).toBe(false);
   });
@@ -79,7 +80,6 @@ describe("filtroGlobalDaUrl", () => {
   it("lê listas por vírgula ou chave repetida, dedup, e descarta id que não é uuid", () => {
     const f = filtroGlobalDaUrl(
       { obra: [`${OBRA_A},${OBRA_B}`, OBRA_A], equipamento: `lixo,${EQ_1}`, placa: " ABC1D23 ,XYZ9Z99", operador: "Maria" },
-      HOJE,
     );
     expect(f.obras).toEqual([OBRA_A, OBRA_B]);
     expect(f.equipamentos).toEqual([EQ_1]);
@@ -89,21 +89,24 @@ describe("filtroGlobalDaUrl", () => {
   });
 
   it("aceita URLSearchParams (o cliente) e lê o modo e o período escolhido", () => {
-    const f = filtroGlobalDaUrl(new URLSearchParams(`modo=carretas&de=2026-09-01&ate=2026-09-15&tanque=${TANQUE_1}`), HOJE);
+    const f = filtroGlobalDaUrl(new URLSearchParams(`modo=carretas&de=2026-09-01&ate=2026-09-15&tanque=${TANQUE_1}`));
     expect(f.modo).toBe("carretas");
     expect(f.periodo).toEqual({ de: "2026-09-01", ate: "2026-09-15" });
-    expect(f.periodoEscolhido).toBe(true);
+    expect(temFiltroAtivo(f)).toBe(true);
     expect(f.tanques).toEqual([TANQUE_1]);
   });
 
-  it("período invertido troca de lado; data inválida cai no padrão", () => {
-    expect(filtroGlobalDaUrl({ de: "2026-09-20", ate: "2026-09-01" }, HOJE).periodo).toEqual({
+  it("período invertido troca de lado; data inválida é o mesmo que nenhuma", () => {
+    expect(filtroGlobalDaUrl({ de: "2026-09-20", ate: "2026-09-01" }).periodo).toEqual({
       de: "2026-09-01",
       ate: "2026-09-20",
     });
-    const invalido = filtroGlobalDaUrl({ de: "2026-02-31" }, HOJE);
-    expect(invalido.periodo.de).toBe("2026-08-25");
-    expect(invalido.periodoEscolhido).toBe(false);
+    expect(filtroGlobalDaUrl({ de: "2026-02-31" }).periodo).toBeNull();
+  });
+
+  it("uma ponta só é limite aberto do outro lado", () => {
+    expect(filtroGlobalDaUrl({ de: "2026-09-01" }).periodo).toEqual({ de: "2026-09-01", ate: "9999-12-31" });
+    expect(filtroGlobalDaUrl({ ate: "2026-09-01" }).periodo).toEqual({ de: "0000-01-01", ate: "2026-09-01" });
   });
 
   it("toda chave que o filtro lê é chave do recorte (senão não atravessa as abas)", () => {

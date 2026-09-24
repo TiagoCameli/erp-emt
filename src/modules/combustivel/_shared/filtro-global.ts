@@ -40,8 +40,16 @@ import {
  * deduzido deles (a origem gravava `preset`); placa compara normalizada dos dois lados.
  */
 
-/** Padrão da origem: os últimos 30 dias (preset "ultimos_30"). */
+/**
+ * Os últimos 30 dias da origem (preset "ultimos_30"). NÃO é mais o padrão do filtro: sem
+ * `de`/`ate` na URL o Combustível mostra qualquer data, como o resto do ERP. Com o padrão
+ * reinjetado pela página, limpar o período devolvia os 30 dias e o filtro nunca desligava
+ * (relatado pelo Tiago em 24/09/2026).
+ */
 export const DIAS_PADRAO = 30;
+
+/** As pontas de "qualquer data" para quem precisa de um período concreto para comparar texto. */
+export const SEM_LIMITE: Periodo = { de: "0000-01-01", ate: "9999-12-31" };
 
 /** As listas do filtro e a chave de cada uma na URL (as de `CHAVES_RECORTE`). */
 export const CHAVE_DA_DIMENSAO = {
@@ -64,10 +72,8 @@ const DIMENSOES_TEXTO: ReadonlySet<DimensaoFiltro> = new Set(["placas", "operado
 
 export interface FiltroGlobal {
   modo: Modo;
-  /** Sempre preenchido: sem `de`/`ate` na URL, os últimos 30 dias até hoje. */
-  periodo: Periodo;
-  /** O período veio da URL (e não do padrão)? Só então há chip de período. */
-  periodoEscolhido: boolean;
+  /** O período da URL; `null` = qualquer data (sem `de`/`ate`, como no resto do ERP). */
+  periodo: Periodo | null;
   obras: string[];
   /** Só vale no modo próprios. */
   equipamentos: string[];
@@ -109,8 +115,60 @@ export function lerDimensao(valor: string | string[] | undefined, dimensao: Dime
   return DIMENSOES_TEXTO.has(dimensao) ? lerListaDaUrl(valor, textoValido) : lerUuidsDaUrl(valor);
 }
 
-/** O filtro global a partir da URL. `hoje` (AAAA-MM-DD de Rio Branco) dá o período padrão. */
-export function filtroGlobalDaUrl(params: ParamsDaUrl, hoje: string): FiltroGlobal {
+/**
+ * O período da URL, ou `null` quando ela não traz nenhum. Uma ponta só vale como limite
+ * aberto do outro lado: "a partir de 01/09" é um filtro legítimo.
+ */
+export function periodoOpcionalDaUrl(
+  de: string | string[] | undefined,
+  ate: string | string[] | undefined,
+): Periodo | null {
+  const inicio = diaValido(primeiro(de));
+  const fim = diaValido(primeiro(ate));
+  if (inicio === null && fim === null) return null;
+  return periodoDaUrl(de, ate, SEM_LIMITE);
+}
+
+/**
+ * O período concreto de um recorte: o escolhido, com a ponta aberta (ou as duas, sem
+ * período) fechada na extensão das linhas — do dia mais antigo até hoje, ou até o mais
+ * novo se passar de hoje. É o que gráfico, sparkline e ranking precisam para montar os
+ * baldes; o FILTRO continua sendo "qualquer data". `linhas` já vêm filtradas.
+ */
+export function periodoEfetivo(periodo: Periodo | null, linhas: readonly { data: string }[], hoje: string): Periodo {
+  let menor: string | null = null;
+  let maior: string | null = null;
+  for (const linha of linhas) {
+    const dia = linha.data.slice(0, 10);
+    if (menor === null || dia < menor) menor = dia;
+    if (maior === null || dia > maior) maior = dia;
+  }
+  const aberto = periodo ?? SEM_LIMITE;
+  let ate = aberto.ate !== SEM_LIMITE.ate ? aberto.ate : maior !== null && maior > hoje ? maior : hoje;
+  const de = aberto.de !== SEM_LIMITE.de ? aberto.de : menor !== null && menor < ate ? menor : ate;
+  if (de > ate) ate = de;
+  return { de, ate };
+}
+
+/**
+ * O período tem as duas pontas escolhidas? Só então existe "período anterior de mesma
+ * duração" para os deltas dos KPIs; sem isso eles somem, em vez de comparar com um vazio e
+ * mostrar +100%.
+ */
+export function periodoFechado(periodo: Periodo | null): periodo is Periodo {
+  return periodo !== null && periodo.de !== SEM_LIMITE.de && periodo.ate !== SEM_LIMITE.ate;
+}
+
+/** As pontas como a URL e o `FiltroPeriodo` as escrevem: ponta aberta (ou sem período) é "". */
+export function pontasDoPeriodo(periodo: Periodo | null): Periodo {
+  return {
+    de: periodo === null || periodo.de === SEM_LIMITE.de ? "" : periodo.de,
+    ate: periodo === null || periodo.ate === SEM_LIMITE.ate ? "" : periodo.ate,
+  };
+}
+
+/** O filtro global a partir da URL. */
+export function filtroGlobalDaUrl(params: ParamsDaUrl): FiltroGlobal {
   const de = valorDaUrl(params, "de");
   const ate = valorDaUrl(params, "ate");
   const listas = Object.fromEntries(
@@ -118,15 +176,14 @@ export function filtroGlobalDaUrl(params: ParamsDaUrl, hoje: string): FiltroGlob
   ) as Record<DimensaoFiltro, string[]>;
   return {
     modo: modoDaUrl(valorDaUrl(params, "modo")),
-    periodo: periodoDaUrl(de, ate, ultimosDias(hoje, DIAS_PADRAO)),
-    periodoEscolhido: diaValido(primeiro(de)) !== null || diaValido(primeiro(ate)) !== null,
+    periodo: periodoOpcionalDaUrl(de, ate),
     ...listas,
   };
 }
 
-/** Há filtro além do padrão (período padrão e modo não contam)? O `hasActiveFilters` da origem. */
+/** Há filtro (o modo não conta)? O `hasActiveFilters` da origem. */
 export function temFiltroAtivo(filtro: FiltroGlobal): boolean {
-  return filtro.periodoEscolhido || DIMENSOES_FILTRO.some((dimensao) => filtro[dimensao].length > 0);
+  return filtro.periodo !== null || DIMENSOES_FILTRO.some((dimensao) => filtro[dimensao].length > 0);
 }
 
 function normalizarPlaca(placa: string | null | undefined): string {
@@ -140,7 +197,7 @@ function normalizarPlaca(placa: string | null | undefined): string {
 export function aplicarFiltroGlobal<T extends SaidaBase>(
   saidas: readonly T[],
   filtro: FiltroGlobal,
-  periodo: Periodo = filtro.periodo,
+  periodo: Periodo | null = filtro.periodo,
 ): T[] {
   const tipo = TIPO_POR_MODO[filtro.modo];
   const obras = new Set(filtro.obras);
@@ -152,7 +209,7 @@ export function aplicarFiltroGlobal<T extends SaidaBase>(
   const tanques = new Set(filtro.tanques);
   return saidas.filter((s) => {
     if (s.tipoConsumidor !== tipo) return false;
-    if (!noPeriodo(s, periodo.de, periodo.ate)) return false;
+    if (periodo !== null && !noPeriodo(s, periodo.de, periodo.ate)) return false;
     if (obras.size > 0 && (!s.obraId || !obras.has(s.obraId))) return false;
     if (tanques.size > 0 && (!s.tanqueId || !tanques.has(s.tanqueId))) return false;
     if (filtro.modo === "proprios") {
@@ -182,13 +239,13 @@ export interface EntradaFiltravel {
 export function aplicarFiltroGlobalEntradas<T extends EntradaFiltravel>(
   entradas: readonly T[],
   filtro: FiltroGlobal,
-  periodo: Periodo = filtro.periodo,
+  periodo: Periodo | null = filtro.periodo,
 ): T[] {
   const combustiveis = new Set(filtro.combustiveis);
   const fornecedores = new Set(filtro.fornecedores);
   const tanques = new Set(filtro.tanques);
   return entradas.filter((e) => {
-    if (!noPeriodo(e, periodo.de, periodo.ate)) return false;
+    if (periodo !== null && !noPeriodo(e, periodo.de, periodo.ate)) return false;
     if (combustiveis.size > 0 && (!e.insumoId || !combustiveis.has(e.insumoId))) return false;
     if (fornecedores.size > 0 && (!e.fornecedorId || !fornecedores.has(e.fornecedorId))) return false;
     if (tanques.size > 0 && (!e.tanqueId || !tanques.has(e.tanqueId))) return false;

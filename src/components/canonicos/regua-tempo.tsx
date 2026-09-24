@@ -61,6 +61,28 @@ export interface ReguaTempoProps {
  * Este componente é só a régua. Quem a põe dentro de um popover (e decide quando
  * ela aparece) é o `FiltroPeriodo` da barra de filtros.
  */
+/** Um arraste: onde começou e onde o ponteiro está, como blocos (datas). */
+interface Arraste {
+  ancora: BlocoDaRegua;
+  ponta: BlocoDaRegua;
+}
+
+/**
+ * De quanto em quanto tempo a janela anda enquanto o arraste segura fora da
+ * régua. Devagar o bastante para soltar no ano certo: em MESES cada passo é um
+ * ano inteiro.
+ */
+const ROLAGEM_MS = 700;
+
+/** "além deste ano", "além deste mês": o que a janela de cada tamanho mostra. */
+const DESTA_JANELA: Record<Granularidade, string> = {
+  ano: "destes doze anos",
+  trimestre: "destes dois anos",
+  mes: "deste ano",
+  semana: "deste mês",
+  dia: "deste mês",
+};
+
 export function ReguaTempo({
   de,
   ate,
@@ -95,7 +117,14 @@ export function ReguaTempo({
   );
 
   /**
-   * O arraste em curso, em índices de bloco. `null` quando ninguém arrasta.
+   * O arraste em curso: o bloco onde começou e o bloco onde o ponteiro está.
+   * `null` quando ninguém arrasta.
+   *
+   * Guarda os BLOCOS (datas), e não a posição deles na régua: com índices o
+   * arraste morria na borda da janela, e em MESES a janela é um ano — era
+   * impossível escolher "out/2025 a mar/2026" (relatado pelo Tiago em
+   * 24/09/2026). Com datas, a janela pode andar no meio do gesto (rolagem pela
+   * borda, Shift+clique depois de ◀ ▶) e o intervalo continua inteiro.
    *
    * Enquanto arrasta, o intervalo vive AQUI e não sobe para o filtro. Antes cada
    * bloco que o cursor atravessava chamava `onPeriodoChange`, e cada chamada
@@ -103,10 +132,7 @@ export function ReguaTempo({
    * isso que fazia a tela tremer enquanto a pessoa arrastava (relatado pelo
    * Tiago em 30/08/2026, com gravação). O filtro é aplicado UMA vez, ao soltar.
    */
-  const [arraste, setArraste] = React.useState<{
-    inicio: number;
-    fim: number;
-  } | null>(null);
+  const [arraste, setArraste] = React.useState<Arraste | null>(null);
 
   /**
    * O mesmo arraste, num ref, e é ele que manda na hora de SOLTAR.
@@ -117,13 +143,96 @@ export function ReguaTempo({
    * filtro era aplicado três vezes — três navegações, três consultas. O ref é
    * zerado no primeiro, então os outros dois saem na porta.
    */
-  const arrasteRef = React.useRef<{ inicio: number; fim: number } | null>(null);
+  const arrasteRef = React.useRef<Arraste | null>(null);
 
   const trilhoRef = React.useRef<HTMLDivElement>(null);
 
-  function definirArraste(valor: { inicio: number; fim: number } | null) {
+  function definirArraste(valor: Arraste | null) {
     arrasteRef.current = valor;
     setArraste(valor);
+  }
+
+  /**
+   * A janela e a granularidade de agora, num ref, para a rolagem pela borda: ela
+   * roda num intervalo que nasceu num render antigo e leria valores velhos.
+   */
+  const janelaRef = React.useRef({ inicioJanela, granularidade });
+  React.useEffect(() => {
+    janelaRef.current = { inicioJanela, granularidade };
+  }, [inicioJanela, granularidade]);
+
+  /** A rolagem pela borda em curso: o timer e para que lado anda. */
+  const rolagemRef = React.useRef<{
+    timer: ReturnType<typeof setInterval>;
+    direcao: -1 | 1;
+  } | null>(null);
+
+  function pararRolagem() {
+    if (rolagemRef.current === null) return;
+    clearInterval(rolagemRef.current.timer);
+    rolagemRef.current = null;
+  }
+
+  // Timer órfão depois de fechar o popover continuaria mexendo em estado de
+  // componente desmontado.
+  React.useEffect(
+    () => () => {
+      if (rolagemRef.current !== null) clearInterval(rolagemRef.current.timer);
+    },
+    [],
+  );
+
+  /**
+   * Arrastar para fora da régua, segurando, anda a janela para aquele lado e
+   * leva a ponta do arraste junto. É o que o slicer do Excel faz, e é o caminho
+   * do mouse e do dedo para um intervalo que atravessa o ano.
+   */
+  function rolarPelaBorda(direcao: -1 | 0 | 1) {
+    if (direcao === 0) {
+      pararRolagem();
+      return;
+    }
+    if (rolagemRef.current?.direcao === direcao) return;
+    pararRolagem();
+    const timer = setInterval(() => {
+      const atual = arrasteRef.current;
+      if (atual === null) {
+        pararRolagem();
+        return;
+      }
+      const { inicioJanela: janela, granularidade: tamanho } =
+        janelaRef.current;
+      const nova = janelaVizinha(janela, tamanho, direcao);
+      const blocosNovos = blocosDaJanela(nova, tamanho);
+      const ponta =
+        direcao === 1 ? blocosNovos[blocosNovos.length - 1] : blocosNovos[0];
+      janelaRef.current = { inicioJanela: nova, granularidade: tamanho };
+      setInicioJanela(nova);
+      if (ponta) definirArraste({ ...atual, ponta });
+    }, ROLAGEM_MS);
+    rolagemRef.current = { timer, direcao };
+  }
+
+  /**
+   * O ponto fixo de um Shift+clique: a seleção que já existe, como se fosse um
+   * bloco só. `intervaloEntre(ancora, clicado)` então estende pelo lado certo —
+   * clicar depois dela puxa o fim, clicar antes puxa o começo —, que é o que o
+   * Shift faz no Excel. Sem seleção, não há o que estender.
+   */
+  function ancoraDaSelecao(): BlocoDaRegua | null {
+    if (de === "" && ate === "") return null;
+    return {
+      inicio: de === "" ? ate : de,
+      fim: ate === "" ? de : ate,
+      rotulo: "",
+      descricao: "",
+    };
+  }
+
+  /** Começa o gesto num bloco; com Shift, estende a seleção que já existe. */
+  function comecarArraste(bloco: BlocoDaRegua, comShift: boolean) {
+    const ancora = comShift ? ancoraDaSelecao() : null;
+    definirArraste({ ancora: ancora ?? bloco, ponta: bloco });
   }
 
   const blocos = React.useMemo(
@@ -138,9 +247,8 @@ export function ReguaTempo({
    */
   const pintados = React.useMemo(() => {
     if (arraste === null) return blocosNoPeriodo(blocos, de, ate);
-    const primeiro = Math.min(arraste.inicio, arraste.fim);
-    const ultimo = Math.max(arraste.inicio, arraste.fim);
-    return blocos.map((_, i) => i >= primeiro && i <= ultimo);
+    const intervalo = intervaloEntre(arraste.ancora, arraste.ponta);
+    return blocosNoPeriodo(blocos, intervalo.de, intervalo.ate);
   }, [blocos, de, ate, arraste]);
 
   /**
@@ -171,12 +279,13 @@ export function ReguaTempo({
   /** Aplica o intervalo do arraste e encerra. É a ÚNICA navegação do gesto. */
   function aoSoltar() {
     const atual = arrasteRef.current;
+    pararRolagem();
     if (atual === null) return;
-    const inicio = blocos[Math.min(atual.inicio, atual.fim)];
-    const fim = blocos[Math.max(atual.inicio, atual.fim)];
     definirArraste(null);
-    if (!inicio || !fim) return;
-    const { de: novoDe, ate: novoAte } = intervaloEntre(inicio, fim);
+    const { de: novoDe, ate: novoAte } = intervaloEntre(
+      atual.ancora,
+      atual.ponta,
+    );
     onPeriodoChange(novoDe, novoAte);
   }
 
@@ -196,6 +305,17 @@ export function ReguaTempo({
     const posicao = (clientX - caixa.left) / caixa.width;
     const indice = Math.floor(posicao * blocos.length);
     return Math.min(Math.max(indice, 0), blocos.length - 1);
+  }
+
+  /** De que lado do trilho o ponteiro saiu: -1 esquerda, 1 direita, 0 dentro. */
+  function ladoForaDoTrilho(clientX: number): -1 | 0 | 1 {
+    const trilho = trilhoRef.current;
+    if (!trilho) return 0;
+    const caixa = trilho.getBoundingClientRect();
+    if (caixa.width === 0) return 0;
+    if (clientX < caixa.left) return -1;
+    if (clientX > caixa.right) return 1;
+    return 0;
   }
 
   const emArraste = arraste !== null;
@@ -308,18 +428,25 @@ export function ReguaTempo({
             // o arraste preso.
             if (evento.button !== 0) return;
             const indice = blocoNoPonteiro(evento.clientX);
-            if (indice === null) return;
+            const bloco = indice === null ? undefined : blocos[indice];
+            if (!bloco) return;
             evento.preventDefault();
             // Captura o ponteiro: o gesto continua valendo mesmo quando o cursor
             // sai do trilho, que é o que acontece em todo arraste rápido.
             evento.currentTarget.setPointerCapture(evento.pointerId);
-            definirArraste({ inicio: indice, fim: indice });
+            comecarArraste(bloco, evento.shiftKey);
           }}
           onPointerMove={(evento) => {
-            if (arraste === null) return;
+            const atual = arrasteRef.current;
+            if (atual === null) return;
+            const lado = ladoForaDoTrilho(evento.clientX);
+            rolarPelaBorda(lado);
+            // Fora do trilho quem move a ponta é a rolagem, não a posição.
+            if (lado !== 0) return;
             const indice = blocoNoPonteiro(evento.clientX);
-            if (indice === null || indice === arraste.fim) return;
-            definirArraste({ ...arraste, fim: indice });
+            const bloco = indice === null ? undefined : blocos[indice];
+            if (!bloco || bloco.inicio === atual.ponta.inicio) return;
+            definirArraste({ ...atual, ponta: bloco });
           }}
           onPointerUp={aoSoltar}
         >
@@ -354,11 +481,14 @@ export function ReguaTempo({
                 onPointerDown={(evento) => {
                   if (evento.button !== 0) return;
                   evento.preventDefault();
-                  definirArraste({ inicio: i, fim: i });
+                  comecarArraste(bloco, evento.shiftKey);
                 }}
                 onPointerEnter={() => {
-                  if (arraste === null || arraste.fim === i) return;
-                  definirArraste({ ...arraste, fim: i });
+                  const atual = arrasteRef.current;
+                  if (atual === null || atual.ponta.inicio === bloco.inicio) {
+                    return;
+                  }
+                  definirArraste({ ...atual, ponta: bloco });
                 }}
                 onPointerUp={aoSoltar}
                 onKeyDown={(evento) => {
@@ -370,8 +500,10 @@ export function ReguaTempo({
                   // componente foi mexido para acabar.
                   if (evento.key !== "Enter" && evento.key !== " ") return;
                   evento.preventDefault();
+                  const ancora =
+                    (evento.shiftKey ? ancoraDaSelecao() : null) ?? bloco;
                   const { de: novoDe, ate: novoAte } = intervaloEntre(
-                    bloco,
+                    ancora,
                     bloco,
                   );
                   onPeriodoChange(novoDe, novoAte);
@@ -382,6 +514,13 @@ export function ReguaTempo({
           </div>
         </div>
       </div>
+
+      {/* O caminho para o intervalo que atravessa a janela precisa estar
+          escrito: Shift+clique não se descobre por acidente. */}
+      <p className="text-legenda text-muted-foreground">
+        Para ir além {DESTA_JANELA[granularidade]}, escolha o início, avance com
+        ◀ ▶ e dê Shift + clique no fim — ou arraste para fora da régua.
+      </p>
 
       {/* As datas exatas. Ficam DEPOIS da régua porque são o ajuste fino: a
           régua dá o intervalo redondo, e aqui se corta no dia. */}

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { ReguaTempo } from "@/components/canonicos/regua-tempo";
 
@@ -321,6 +321,110 @@ describe("ReguaTempo", () => {
       const onPeriodoChange = abrir("2026-08-01", "2026-08-31");
       fireEvent.click(screen.getByRole("button", { name: "Limpar" }));
       expect(onPeriodoChange).toHaveBeenLastCalledWith("", "");
+    });
+  });
+
+  describe("intervalo que atravessa o ano (relato do Tiago, 24/09/2026)", () => {
+    // Em MESES a régua mostra um ano por vez, e o arraste vivia em posições da
+    // janela: era impossível escolher "out/2025 a mar/2026".
+
+    it("Shift + clique num mês de outro ano estende a seleção até ele", () => {
+      const onPeriodoChange = abrir("2025-10-01", "2025-10-31");
+      fireEvent.click(screen.getByRole("button", { name: "Próximo período" }));
+
+      fireEvent.pointerDown(bloco("março de 2026"), { button: 0, shiftKey: true });
+      fireEvent.pointerUp(bloco("março de 2026"));
+
+      expect(onPeriodoChange).toHaveBeenCalledTimes(1);
+      expect(onPeriodoChange).toHaveBeenCalledWith("2025-10-01", "2026-03-31");
+    });
+
+    it("Shift + clique ANTES da seleção puxa o começo, e mantém o fim", () => {
+      const onPeriodoChange = abrir("2026-03-01", "2026-03-31");
+      fireEvent.click(screen.getByRole("button", { name: "Período anterior" }));
+
+      fireEvent.pointerDown(bloco("outubro de 2025"), { button: 0, shiftKey: true });
+      fireEvent.pointerUp(bloco("outubro de 2025"));
+
+      expect(onPeriodoChange).toHaveBeenLastCalledWith("2025-10-01", "2026-03-31");
+    });
+
+    it("a seleção de outro ano aparece pintada ao navegar até ele", () => {
+      // Nov a fev: não fecha em trimestre, então a régua abre em meses.
+      abrir("2025-11-01", "2026-02-28");
+      expect(bloco("dezembro de 2025").getAttribute("aria-pressed")).toBe("true");
+      fireEvent.click(screen.getByRole("button", { name: "Próximo período" }));
+      expect(bloco("fevereiro de 2026").getAttribute("aria-pressed")).toBe("true");
+      expect(bloco("março de 2026").getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("Shift + Enter faz o mesmo pelo teclado", () => {
+      const onPeriodoChange = abrir("2025-10-01", "2025-10-31");
+      fireEvent.click(screen.getByRole("button", { name: "Próximo período" }));
+      fireEvent.keyDown(bloco("fevereiro de 2026"), { key: "Enter", shiftKey: true });
+      expect(onPeriodoChange).toHaveBeenLastCalledWith("2025-10-01", "2026-02-28");
+    });
+
+    it("clique sem Shift continua escolhendo só aquele mês", () => {
+      const onPeriodoChange = abrir("2025-10-01", "2025-10-31");
+      fireEvent.click(screen.getByRole("button", { name: "Próximo período" }));
+      fireEvent.pointerDown(bloco("março de 2026"), { button: 0 });
+      fireEvent.pointerUp(bloco("março de 2026"));
+      expect(onPeriodoChange).toHaveBeenLastCalledWith("2026-03-01", "2026-03-31");
+    });
+
+    describe("arrastar para fora da régua anda o ano", () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+        // Trilho de 120px: 10px por mês. O jsdom não mede nada sozinho.
+        vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+          left: 0,
+          right: 120,
+          width: 120,
+          top: 0,
+          bottom: 28,
+          height: 28,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } as DOMRect);
+        HTMLElement.prototype.setPointerCapture = vi.fn();
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+      });
+
+      it("segurar à direita leva a ponta para o ano seguinte, e voltar escolhe o mês", () => {
+        const onPeriodoChange = abrir();
+        const trilho = bloco("janeiro de 2026").parentElement!.parentElement!;
+
+        fireEvent.pointerDown(trilho, { button: 0, clientX: 5 });
+        fireEvent.pointerMove(trilho, { clientX: 200 });
+        act(() => {
+          vi.advanceTimersByTime(700);
+        });
+        expect(screen.getByText("2027")).toBeTruthy();
+
+        fireEvent.pointerMove(trilho, { clientX: 25 });
+        fireEvent.pointerUp(trilho);
+
+        expect(onPeriodoChange).toHaveBeenCalledTimes(1);
+        expect(onPeriodoChange).toHaveBeenCalledWith("2026-01-01", "2027-03-31");
+      });
+
+      it("soltar para a rolagem: o ano não anda mais depois", () => {
+        abrir();
+        const trilho = bloco("janeiro de 2026").parentElement!.parentElement!;
+        fireEvent.pointerDown(trilho, { button: 0, clientX: 5 });
+        fireEvent.pointerMove(trilho, { clientX: -50 });
+        fireEvent.pointerUp(trilho);
+        act(() => {
+          vi.advanceTimersByTime(3000);
+        });
+        expect(screen.getByText("2026")).toBeTruthy();
+      });
     });
   });
 
