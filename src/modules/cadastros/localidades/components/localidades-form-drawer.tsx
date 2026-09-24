@@ -9,6 +9,7 @@ import { toast } from "@/components/canonicos/toast";
 import {
   CampoFormulario,
   classesFormulario,
+  Combobox,
   FormDrawer,
   SelectAtivo,
   submeterComAviso,
@@ -16,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { criar, editar } from "@/modules/cadastros/localidades/actions";
-import type { LocalidadeLista } from "@/modules/cadastros/localidades/queries";
+import type { FornecedorOpcao, LocalidadeLista } from "@/modules/cadastros/localidades/queries";
 import {
   localidadeSchema,
   type LocalidadeFormInput,
@@ -27,6 +28,7 @@ const ID_FORM = "form-localidade";
 const PADRAO: LocalidadeFormInput = {
   nome: "",
   endereco: "",
+  fornecedorId: "",
   ativo: true,
 };
 
@@ -35,6 +37,8 @@ export interface LocalidadesFormDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Localidade em edição. Ausente abre o drawer em modo de criação. */
   localidade?: LocalidadeLista | null;
+  /** Fornecedores ativos, para a pedreira. */
+  fornecedores: FornecedorOpcao[];
 }
 
 /**
@@ -45,6 +49,7 @@ export function LocalidadesFormDrawer({
   aberto,
   onAbertoChange,
   localidade,
+  fornecedores,
 }: LocalidadesFormDrawerProps) {
   const editando = Boolean(localidade);
 
@@ -55,12 +60,18 @@ export function LocalidadesFormDrawer({
 
   const salvando = form.formState.isSubmitting;
 
+  const opcoesFornecedores = React.useMemo(
+    () => fornecedores.map((f) => ({ valor: f.id, rotulo: f.nome })),
+    [fornecedores],
+  );
+
   React.useEffect(() => {
     if (!aberto) return;
     if (localidade) {
       form.reset({
         nome: localidade.nome,
         endereco: localidade.endereco ?? "",
+        fornecedorId: localidade.fornecedorId ?? "",
         ativo: localidade.ativo,
       });
     } else {
@@ -151,6 +162,27 @@ export function LocalidadesFormDrawer({
             placeholder="BR-364, km 120"
             disabled={salvando}
             {...form.register("endereco")}
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="localidade-fornecedor"
+          rotulo="Pedreira (fornecedor)"
+          ajuda="Preencha quando a localidade é uma pedreira: o fornecedor que vende o material ali. É o que liga o frete ao pedido de material no saldo na pedreira."
+          erro={form.formState.errors.fornecedorId?.message}
+        >
+          <Combobox
+            id="localidade-fornecedor"
+            valor={form.watch("fornecedorId") ?? ""}
+            rotuloDoValor={localidade?.fornecedorNome ?? undefined}
+            onValorChange={(valor) =>
+              form.setValue("fornecedorId", valor, { shouldDirty: true, shouldValidate: true })
+            }
+            opcoes={opcoesFornecedores}
+            placeholder="Não é pedreira"
+            vazioTexto="Nenhum fornecedor ativo"
+            limpavel
+            disabled={salvando}
           />
         </CampoFormulario>
 

@@ -8238,6 +8238,13 @@ export type Database = {
           nome: string;
         }[];
       };
+      nomes_usuarios_frete: {
+        Args: { p_ids: string[] };
+        Returns: {
+          id: string;
+          nome: string;
+        }[];
+      };
       nomes_usuarios_manutencao: {
         Args: { p_ids: string[] };
         Returns: {

@@ -9,10 +9,13 @@ import {
   importar,
   validarImport,
 } from "@/modules/cadastros/localidades/actions";
+import type { FornecedorOpcao } from "@/modules/cadastros/localidades/queries";
 import { LocalidadesFormDrawer } from "./localidades-form-drawer";
 
 export interface LocalidadesAcoesCabecalhoProps {
   podeCriar: boolean;
+  /** Fornecedores ativos, para a pedreira. */
+  fornecedores: FornecedorOpcao[];
 }
 
 /**
@@ -21,6 +24,7 @@ export interface LocalidadesAcoesCabecalhoProps {
  */
 export function LocalidadesAcoesCabecalho({
   podeCriar,
+  fornecedores,
 }: LocalidadesAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
@@ -38,7 +42,7 @@ export function LocalidadesAcoesCabecalho({
         <Plus />
         Nova localidade
       </Button>
-      <LocalidadesFormDrawer aberto={aberto} onAbertoChange={setAberto} />
+      <LocalidadesFormDrawer aberto={aberto} onAbertoChange={setAberto} fornecedores={fornecedores} />
     </>
   );
 }

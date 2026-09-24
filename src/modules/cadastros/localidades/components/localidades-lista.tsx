@@ -2,12 +2,13 @@
 
 import * as React from "react";
 
-import type { LocalidadeLista } from "@/modules/cadastros/localidades/queries";
+import type { FornecedorOpcao, LocalidadeLista } from "@/modules/cadastros/localidades/queries";
 import { LocalidadesFormDrawer } from "./localidades-form-drawer";
 import { LocalidadesTabela } from "./localidades-tabela";
 
 export interface LocalidadesListaProps {
   localidades: LocalidadeLista[];
+  fornecedores: FornecedorOpcao[];
   podeEditar: boolean;
   podeExcluir: boolean;
 }
@@ -18,6 +19,7 @@ export interface LocalidadesListaProps {
  */
 export function LocalidadesLista({
   localidades,
+  fornecedores,
   podeEditar,
   podeExcluir,
 }: LocalidadesListaProps) {
@@ -48,6 +50,7 @@ export function LocalidadesLista({
         aberto={aberto}
         onAbertoChange={aoMudarAberto}
         localidade={editando}
+        fornecedores={fornecedores}
       />
     </>
   );

@@ -14,6 +14,7 @@ export async function GET() {
     [
       { rotulo: "Nome", exemplo: "Pedreira Vale do Abunã" },
       { rotulo: "Endereço", exemplo: "BR-364, km 120" },
+      { rotulo: "Pedreira (fornecedor)", exemplo: "" },
     ],
     "Localidades",
   );
