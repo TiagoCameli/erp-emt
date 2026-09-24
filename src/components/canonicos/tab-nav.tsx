@@ -10,15 +10,31 @@ interface TabNavProps {
   pathname: string;
 }
 
+/**
+ * A aba ativa é a de rota mais específica que casa com o pathname. Só com
+ * `startsWith`, a aba cuja rota é a raiz do módulo (o Painel do Frete, "/frete")
+ * ficaria acesa em todas as outras.
+ */
+function idAbaAtiva(recursos: readonly RecursoDef[], pathname: string): string | null {
+  let escolhida: RecursoDef | null = null;
+  for (const recurso of recursos) {
+    if (pathname === recurso.rota || pathname.startsWith(`${recurso.rota}/`)) {
+      if (!escolhida || recurso.rota.length > escolhida.rota.length) escolhida = recurso;
+    }
+  }
+  return escolhida?.id ?? null;
+}
+
 /** Régua de abas do módulo. Aba ativa recebe a Faixa âmbar embaixo. */
 export function TabNav({ recursos, pathname }: TabNavProps) {
+  const ativaId = idAbaAtiva(recursos, pathname);
   return (
     <nav
       aria-label="Abas do módulo"
       className="barra-scroll-x flex items-center overflow-x-auto border-b border-border"
     >
       {recursos.map((recurso) => {
-        const ativa = pathname.startsWith(recurso.rota);
+        const ativa = recurso.id === ativaId;
         return (
           <Link
             key={recurso.id}
