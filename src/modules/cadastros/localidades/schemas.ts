@@ -11,6 +11,8 @@ export const localidadeSchema = z.object({
     .string()
     .trim()
     .max(300, { error: "O endereço pode ter no máximo 300 caracteres" }),
+  /** Pedreira (fornecedor), opcional. Vazio: a localidade não é pedreira. */
+  fornecedorId: z.union([z.literal(""), z.guid({ error: "Fornecedor inválido" })]).optional(),
   ativo: z.boolean().default(true),
 });
 

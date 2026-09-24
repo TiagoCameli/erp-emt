@@ -36,6 +36,7 @@ export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
+  { id: "frete", nome: "Frete", rota: "/frete" },
   { id: "combustivel", nome: "Combustível", rota: "/combustivel" },
   { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
@@ -210,6 +211,64 @@ export const RECURSOS = [
     modulo: "compras",
     rota: "/compras/ordens",
     acoes: CRUD_APROVA,
+  },
+  // Frete (Fase 4 da migração do Gestão Obras, plano seção 4.1). Não gera lançamento,
+  // parcela nem rateio: frete, pagamento e ajuste mexem só na conta corrente da
+  // transportadora. O pagamento lançado no Financeiro é manual (decisão f do plano).
+  {
+    // Configurar os cards pede também frete.pagamentos/criar (regra de tela do plano).
+    id: "frete.painel",
+    nome: "Painel",
+    modulo: "frete",
+    rota: "/frete",
+    acoes: ["ver"],
+  },
+  {
+    id: "frete.fretes",
+    nome: "Fretes",
+    modulo: "frete",
+    rota: "/frete/fretes",
+    acoes: CRUD,
+  },
+  {
+    // Pedido na pedreira: base do saldo na pedreira.
+    id: "frete.pedidos-material",
+    nome: "Pedidos de material",
+    modulo: "frete",
+    rota: "/frete/pedidos-material",
+    acoes: CRUD,
+  },
+  {
+    // Extrato por transportadora, só leitura: nasce dos fretes, pagamentos, ajustes e abastecimentos.
+    id: "frete.conta-corrente",
+    nome: "Conta corrente",
+    modulo: "frete",
+    rota: "/frete/conta-corrente",
+    acoes: ["ver"],
+  },
+  {
+    id: "frete.pagamentos",
+    nome: "Pagamentos de frete",
+    modulo: "frete",
+    rota: "/frete/pagamentos",
+    acoes: CRUD,
+  },
+  {
+    // O ajuste só mexe no saldo depois de aprovado (decisão do Tiago, 24/09). Sem editar:
+    // o pendente se corrige com 'criar'; o aprovado se desaprova.
+    id: "frete.ajustes",
+    nome: "Ajustes de saldo",
+    modulo: "frete",
+    rota: "/frete/ajustes",
+    acoes: ["ver", "criar", "aprovar", "desaprovar"],
+  },
+  {
+    // "editar" = marcar como conferida.
+    id: "frete.anomalias",
+    nome: "Anomalias",
+    modulo: "frete",
+    rota: "/frete/anomalias",
+    acoes: ["ver", "editar"],
   },
   // Combustível (Fase 3 da migração do Gestão Obras, plano seção 4.1). Não gera
   // lançamento, parcela nem rateio: o abastecimento de carreta vira débito na conta

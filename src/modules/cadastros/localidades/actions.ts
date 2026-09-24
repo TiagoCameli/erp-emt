@@ -7,6 +7,7 @@ import { erroAcao } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   type ColunaImportacao,
   lerEValidarXlsx,
@@ -21,16 +22,22 @@ const RECURSO = "cadastros.localidades" as const;
 const ROTA = "/cadastros/localidades";
 const TABELA = "localidades" as const;
 const ERRO_NOME_REPETIDO = "Já existe uma localidade com este nome";
+/** Rótulo da coluna da pedreira no modelo e na leitura (tem de ser o mesmo). */
+const COLUNA_PEDREIRA = "Pedreira (fornecedor)";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
 const motivoSchema = z.string().trim().min(1);
 
-/** Endereço vazio vira null: a coluna é opcional e texto vazio não é endereço. */
+/**
+ * Endereço vazio vira null: a coluna é opcional e texto vazio não é endereço. A
+ * pedreira (fornecedor) vazia também: a localidade não é pedreira.
+ */
 function paraLinha(dados: LocalidadeInput) {
   return {
     nome: dados.nome,
     endereco: dados.endereco === "" ? null : dados.endereco,
+    fornecedor_id: dados.fornecedorId ? dados.fornecedorId : null,
     ativo: dados.ativo,
   };
 }
@@ -176,13 +183,54 @@ export async function excluir(
 interface LinhaImportLocalidade {
   nome: string;
   endereco: string;
+  pedreira: string;
 }
 
-/** Colunas esperadas na planilha de importação de localidades. */
-const COLUNAS_IMPORT: ColunaImportacao<LinhaImportLocalidade>[] = [
-  { chave: "nome", rotulo: "Nome", obrigatoria: true, exemplo: "Pedreira Vale do Abunã" },
-  { chave: "endereco", rotulo: "Endereço", obrigatoria: false, exemplo: "BR-364, km 120" },
-];
+/**
+ * Colunas esperadas na planilha de importação de localidades. A pedreira casa pelo
+ * nome do fornecedor ativo (razão social ou nome fantasia, sem diferenciar maiúscula);
+ * nome que não casa é erro da linha, para o vínculo não sumir calado.
+ */
+function colunasImport(fornecedores: Map<string, string>): ColunaImportacao<LinhaImportLocalidade>[] {
+  return [
+    { chave: "nome", rotulo: "Nome", obrigatoria: true, exemplo: "Pedreira Vale do Abunã" },
+    { chave: "endereco", rotulo: "Endereço", obrigatoria: false, exemplo: "BR-364, km 120" },
+    {
+      chave: "pedreira",
+      rotulo: COLUNA_PEDREIRA,
+      obrigatoria: false,
+      exemplo: "",
+      validar: (valor) => {
+        const nome = String(valor ?? "").trim();
+        if (!nome) return null;
+        return fornecedores.has(nome.toLowerCase()) ? null : `Pedreira "${nome}" não encontrada entre os fornecedores ativos`;
+      },
+    },
+  ];
+}
+
+/** Índice nome minúsculo -> id, pela razão social e pelo nome fantasia. */
+async function indiceDeFornecedores(): Promise<Map<string, string>> {
+  const supabase = await createClient();
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("fornecedores")
+      .select("id, razao_social, nome_fantasia")
+      .eq("ativo", true)
+      .order("razao_social")
+      .order("id")
+      .range(de, ate),
+  );
+  if (erro) throw new Error("Não foi possível carregar os fornecedores");
+  const mapa = new Map<string, string>();
+  for (const f of linhas) {
+    for (const nome of [f.razao_social, f.nome_fantasia]) {
+      const chave = (nome ?? "").trim().toLowerCase();
+      if (chave && !mapa.has(chave)) mapa.set(chave, f.id);
+    }
+  }
+  return mapa;
+}
 
 async function lerArquivo(formData: FormData): Promise<Buffer> {
   const arquivo = formData.get("arquivo");
@@ -206,9 +254,10 @@ export async function validarImport(
   await exigirPermissao(RECURSO, "criar");
 
   const buffer = await lerArquivo(formData);
+  const fornecedores = await indiceDeFornecedores();
   const resultado = await lerEValidarXlsx<LinhaImportLocalidade>(
     buffer,
-    COLUNAS_IMPORT,
+    colunasImport(fornecedores),
   );
 
   return {
@@ -239,10 +288,12 @@ export async function importar(
   }
 
   let resultado;
+  let fornecedores: Map<string, string>;
   try {
+    fornecedores = await indiceDeFornecedores();
     resultado = await lerEValidarXlsx<LinhaImportLocalidade>(
       buffer,
-      COLUNAS_IMPORT,
+      colunasImport(fornecedores),
     );
   } catch (erro) {
     return erroAcao(
@@ -260,9 +311,11 @@ export async function importar(
 
   const linhas = resultado.validas.map((linha) => {
     const endereco = String(linha.dados.endereco ?? "").trim();
+    const pedreira = String(linha.dados.pedreira ?? "").trim().toLowerCase();
     return {
       nome: String(linha.dados.nome).trim(),
       endereco: endereco === "" ? null : endereco,
+      fornecedor_id: pedreira ? (fornecedores.get(pedreira) ?? null) : null,
     };
   });
 

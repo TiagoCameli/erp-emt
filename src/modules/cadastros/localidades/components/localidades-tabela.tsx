@@ -63,7 +63,8 @@ export function LocalidadesTabela({
       if (
         termo &&
         !localidade.nome.toLowerCase().includes(termo) &&
-        !(localidade.endereco ?? "").toLowerCase().includes(termo)
+        !(localidade.endereco ?? "").toLowerCase().includes(termo) &&
+        !(localidade.fornecedorNome ?? "").toLowerCase().includes(termo)
       ) {
         return false;
       }
@@ -108,6 +109,17 @@ export function LocalidadesTabela({
         cell: ({ row }) =>
           row.original.endereco ? (
             row.original.endereco
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      },
+      {
+        accessorKey: "fornecedorNome",
+        header: "Pedreira (fornecedor)",
+        size: 260,
+        cell: ({ row }) =>
+          row.original.fornecedorNome ? (
+            row.original.fornecedorNome
           ) : (
             <span className="text-muted-foreground">—</span>
           ),
@@ -195,7 +207,7 @@ export function LocalidadesTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome ou endereço"
+                placeholder="Buscar por nome, endereço ou pedreira"
               />
             ),
           },
