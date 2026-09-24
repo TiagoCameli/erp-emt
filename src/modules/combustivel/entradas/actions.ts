@@ -25,6 +25,9 @@ const ROTAS = ["/combustivel/entradas", "/combustivel", "/combustivel/tanques"];
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
+/** O salvar devolve o id da entrada: é nele que os anexos da fila são pendurados. */
+export type ResultadoSalvarEntrada = { ok: true; id: string | null } | { erro: string };
+
 const motivoSchema = z.string().trim().min(1);
 
 async function temAcao(acao: "criar" | "editar" | "excluir"): Promise<boolean> {
@@ -62,7 +65,7 @@ function revalidar(): void {
 }
 
 /** Cria (id nulo) ou edita uma entrada pela `fn_comb_salvar_entrada`. */
-export async function salvarEntrada(id: string | null, dados: EntradaInput): Promise<ResultadoAcao> {
+export async function salvarEntrada(id: string | null, dados: EntradaInput): Promise<ResultadoSalvarEntrada> {
   return semLancar("combustivel.entradas.salvar", async () => {
     const criando = id === null;
     if (!(await temAcao(criando ? "criar" : "editar"))) {
@@ -75,7 +78,7 @@ export async function salvarEntrada(id: string | null, dados: EntradaInput): Pro
     const d = validado.data;
 
     const supabase = await createClient();
-    const { error } = await supabase.rpc("fn_comb_salvar_entrada", {
+    const { data, error } = await supabase.rpc("fn_comb_salvar_entrada", {
       // Os tipos gerados não aceitam null nos argumentos; a RPC aceita.
       p_id: id as unknown as string,
       p_tanque: d.tanqueId,
@@ -97,7 +100,7 @@ export async function salvarEntrada(id: string | null, dados: EntradaInput): Pro
     }
 
     revalidar();
-    return { ok: true };
+    return { ok: true as const, id: typeof data === "string" && data !== "" ? data : id };
   });
 }
 

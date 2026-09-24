@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { Pencil, RotateCcw, Trash2, Truck } from "lucide-react";
 
 import {
@@ -39,14 +39,19 @@ import { formatarValorOperacional } from "@/modules/manutencao/servicos/formato"
 import { CampoChegada } from "./campo-chegada";
 import { FreteDetalheDrawer } from "./frete-detalhe-drawer";
 import { FreteFormDrawer } from "./frete-form-drawer";
+import { FreteLinhaExpandida } from "./frete-linha-expandida";
 import { FretesPresets } from "./fretes-presets";
 
 const OPCOES_TIPO = TIPOS_FRETE.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_FRETE[t] }));
 const OPCOES_EXCLUIDOS = [{ valor: "sim", rotulo: "Só os excluídos" }];
+/** A origem abre a lista pela saída mais recente (`data desc`). */
+const ORDENACAO_INICIAL: SortingState = [{ id: "data", desc: true }];
 
 /**
- * Colunas da lista (FreteListV2 da origem), no mesmo desenho de célula: rota em duas linhas,
- * transportadora em três (nome, motorista, placa). A Chegada é editável na hora com `editar`.
+ * Colunas da lista (FreteListV2 da origem), na mesma ordem e no mesmo desenho de célula:
+ * rota em duas linhas, transportadora em três (nome, motorista, placa). A Chegada é
+ * editável na hora com `editar`. O expansor da origem é o chevron da DataTable
+ * (`linhaExpandida`), e o menu de Editar/Excluir é o `acoesLinha`.
  * No celular ficam Saída, rota, transportadora e valor do frete; o resto volta a partir do
  * breakpoint indicado em `esconderAte`.
  */
@@ -354,6 +359,9 @@ export function FretesTabela({
         columns={colunas}
         data={filtradas}
         onRowClick={(frete) => setDetalhe(frete)}
+        idDaLinha={(frete) => frete.id}
+        sorting={ORDENACAO_INICIAL}
+        linhaExpandida={(frete) => <FreteLinhaExpandida frete={frete} podeEditar={podeEditar} />}
         onLimparFiltros={limparTodos}
         cabecalhoFixo
         filtros={filtrosDaTabela}

@@ -30,6 +30,9 @@ const ROTA_TANQUES = "/combustivel/tanques";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
+/** O salvar devolve o id da transferência: é nele que os anexos da fila são pendurados. */
+export type ResultadoSalvarTransferencia = { ok: true; id: string | null } | { erro: string };
+
 const motivoSchema = z.string().trim().min(1);
 
 async function temAcao(acao: "ver" | "criar" | "editar" | "excluir"): Promise<boolean> {
@@ -56,7 +59,7 @@ function revalidar() {
 export async function salvarTransferencia(
   id: string | null,
   dados: TransferenciaInput,
-): Promise<ResultadoAcao> {
+): Promise<ResultadoSalvarTransferencia> {
   return semLancar("combustivel.transferencias.salvar", async () => {
     const editando = id !== null;
     if (!(await temAcao(editando ? "editar" : "criar"))) {
@@ -74,7 +77,7 @@ export async function salvarTransferencia(
     if (!validado.success) return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
 
     const supabase = await createClient();
-    const { error } = await supabase.rpc("fn_comb_salvar_transferencia", {
+    const { data, error } = await supabase.rpc("fn_comb_salvar_transferencia", {
       // A RPC aceita null para criar; o tipo gerado não sabe disso.
       p_id: idValido as unknown as string,
       p_origem: validado.data.origemId,
@@ -96,7 +99,7 @@ export async function salvarTransferencia(
     }
 
     revalidar();
-    return { ok: true };
+    return { ok: true as const, id: typeof data === "string" && data !== "" ? data : idValido };
   });
 }
 

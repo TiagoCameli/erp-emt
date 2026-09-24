@@ -2,10 +2,11 @@
 
 import { Calendar, Container, Droplet, FileText, Gauge, Pencil, Trash2, Truck, Wallet } from "lucide-react";
 
-import { MoneyText } from "@/components/canonicos";
+import { MoneyText, SecaoDetalhe } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatarQuantidade } from "@/lib/formatadores";
+import { AnexosCombustivel, useAnexosDoRegistro } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import {
   BadgeCombustivel,
@@ -38,6 +39,7 @@ export function EntradaDetalheDrawer({
   onExcluir,
 }: EntradaDetalheDrawerProps) {
   const lancada = entrada !== null && entrada.excluidoEm === null;
+  const anexos = useAnexosDoRegistro("combustivel_entrada", entrada?.id ?? null);
   return (
     <Sheet
       open={entrada !== null}
@@ -95,6 +97,17 @@ export function EntradaDetalheDrawer({
                 <p className="whitespace-pre-wrap">{entrada.observacoes}</p>
               </CampoDetalhe>
             ) : null}
+
+            <SecaoDetalhe titulo="Anexos">
+              <AnexosCombustivel
+                entidade="combustivel_entrada"
+                entidadeId={entrada.id}
+                anexos={anexos.anexos}
+                erro={anexos.erro}
+                podeEditar={podeEditar && lancada}
+                onMudou={anexos.recarregar}
+              />
+            </SecaoDetalhe>
           </div>
         ) : null}
 

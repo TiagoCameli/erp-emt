@@ -2,14 +2,23 @@
 
 import * as React from "react";
 import { Fuel, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+
 
 import { CampoFormulario, Combobox, InputQuantidade, SeletorCentroCusto } from "@/components/canonicos";
+import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { formatarBRL } from "@/lib/formatadores";
+import { avisoDeFalhas, type FalhaDeEnvio } from "@/modules/_shared/anexos/fila";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import {
+  FILA_VAZIA,
+  FilaAnexosCombustivel,
+  filaTemAlgo,
+  subirFilaCombustivel,
+  type FilaCombustivel,
+} from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { calcularPrecoFifo } from "@/modules/combustivel/abastecimentos/actions";
 import { enviarPelaRede } from "@/modules/manutencao/campo/fila";
@@ -28,6 +37,10 @@ interface Props {
  * estoque do tanque naquele instante) e sem reenvio: a saída não tem id_cliente no banco, e
  * mandar de novo lançaria o diesel duas vezes. Se a conexão cai sem resposta, a tela não diz
  * "não lançou": diz para conferir, porque pode ter lançado.
+ *
+ * Fotos (bomba, hodômetro, equipamento), até 8, como a origem: esperam no celular e sobem
+ * depois que a saída foi lançada, penduradas no id que a rota devolveu. Foto que não sobe
+ * não desfaz o abastecimento: vira aviso com o nome dela.
  */
 export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
   const [tanqueId, setTanqueId] = React.useState(tanques.length === 1 ? tanques[0]!.id : "");
@@ -37,6 +50,8 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
   const [observacoes, setObservacoes] = React.useState("");
   const [erros, setErros] = React.useState<{ tanque?: string; litros?: string; centro?: string; medicao?: string }>({});
   const [enviando, setEnviando] = React.useState(false);
+  const [fotos, setFotos] = React.useState<FilaCombustivel>(FILA_VAZIA);
+  const [enviandoFotos, setEnviandoFotos] = React.useState(false);
 
   const tanque = tanques.find((t) => t.id === tanqueId);
   const litrosNumero = textoParaNumero(litros, CASAS_TAXA);
@@ -102,7 +117,19 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
         },
       });
       if (resposta.ok) {
-        toast.success(`Abastecimento de ${formatarLitros(numero)} lançado`);
+        let falhas: FalhaDeEnvio[] = [];
+        if (filaTemAlgo(fotos)) {
+          setEnviandoFotos(true);
+          try {
+            falhas = await subirFilaCombustivel("combustivel_saida", resposta.id, fotos);
+          } finally {
+            setEnviandoFotos(false);
+          }
+        }
+        const lancado = `Abastecimento de ${formatarLitros(numero)} lançado`;
+        const aviso = avisoDeFalhas(lancado, falhas);
+        if (aviso) toast.warning(aviso, { duration: 12000 });
+        else toast.success(lancado);
         onFeito();
       } else if (resposta.semSessao) {
         toast.error("Sua sessão acabou. Entre de novo; nada foi lançado.");
@@ -168,9 +195,13 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
       <CampoFormulario id="abast-obs" rotulo="Observação">
         <Textarea id="abast-obs" value={observacoes} placeholder="Opcional" maxLength={500} onChange={(e) => setObservacoes(e.target.value)} rows={2} />
       </CampoFormulario>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">Fotos da bomba, do hodômetro ou do equipamento (opcional)</span>
+        <FilaAnexosCombustivel fila={fotos} onMudar={setFotos} ocupado={enviando} soFotos />
+      </div>
       <Button type="submit" size="lg" className="h-12" disabled={enviando}>
         {enviando ? <Loader2 className="animate-spin" aria-hidden /> : <Fuel aria-hidden />}
-        Lançar abastecimento
+        {enviandoFotos ? "Enviando fotos..." : "Lançar abastecimento"}
       </Button>
     </form>
   );
