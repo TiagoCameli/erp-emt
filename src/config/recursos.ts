@@ -31,16 +31,19 @@ export interface RecursoDef {
   acoes: readonly Acao[];
 }
 
-/** Módulos na ordem de exibição da sidebar */
+/**
+ * Módulos na ordem de exibição da sidebar. Frete, Combustível e Manutenção ficam
+ * entre RH e Administração (pedido do Tiago em 24/09/2026).
+ */
 export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
+  { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
+  { id: "rh", nome: "RH", rota: "/rh" },
   { id: "frete", nome: "Frete", rota: "/frete" },
   { id: "combustivel", nome: "Combustível", rota: "/combustivel" },
   { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
-  { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
-  { id: "rh", nome: "RH", rota: "/rh" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
