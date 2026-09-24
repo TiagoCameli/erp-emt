@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 
-import { PageHeader } from "@/components/canonicos";
+import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { EntradasAcoesCabecalho } from "@/modules/combustivel/entradas/components/entradas-acoes-cabecalho";
+import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import { EntradasTabela } from "@/modules/combustivel/entradas/components/entradas-tabela";
+import { lerFiltrosEntradas } from "@/modules/combustivel/entradas/filtros";
 import {
   listarEntradas,
   listarFornecedoresAtivos,
@@ -13,10 +14,18 @@ import {
   type InsumoCombustivel,
   type Opcao,
 } from "@/modules/combustivel/entradas/queries";
+import { ultimosDias } from "@/modules/combustivel/relatorios/periodo";
 
 const RECURSO = "combustivel.entradas" as const;
 
-export default async function PaginaEntradasCombustivel() {
+/** A origem abre as listas nos últimos 30 dias (preset "ultimos_30"), como o painel. */
+const DIAS_PADRAO = 30;
+
+export default async function PaginaEntradasCombustivel({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const usuario = await getUsuarioLogado();
   if (!usuario || !temPermissao(usuario, RECURSO, "ver")) {
     notFound();
@@ -29,6 +38,7 @@ export default async function PaginaEntradasCombustivel() {
   // Restaurar é a Lixeira da origem: pede editar a Lixeira e excluir na aba (a
   // fn_comb_restaurar confere as duas de novo).
   const podeRestaurar = temPermissao(usuario, "administracao.lixeira", "editar") && podeExcluir;
+  const filtrosUrl = lerFiltrosEntradas(await searchParams, ultimosDias(dataHojeISO(), DIAS_PADRAO));
 
   const [entradas, excluidas, tanques, insumos, fornecedores] = await Promise.all([
     listarEntradas(),
@@ -45,23 +55,12 @@ export default async function PaginaEntradasCombustivel() {
 
   return (
     <>
-      <PageHeader
-        modulo="Combustível"
-        titulo="Entradas"
-        descricao="Combustível que entrou nos tanques por nota fiscal. Cada entrada é uma camada do PEPS do tanque"
-        acoes={
-          <EntradasAcoesCabecalho
-            podeCriar={podeCriar}
-            tanques={tanquesParaLancar}
-            insumos={insumos}
-            fornecedores={fornecedores}
-          />
-        }
-      />
+      <TituloAba titulo="Entradas" />
       <EntradasTabela
         entradas={entradas}
         excluidas={excluidas}
         podeRestaurar={podeRestaurar}
+        filtrosUrl={filtrosUrl}
         tanquesFiltro={tanquesDaEmt.map((tanque) => ({
           id: tanque.id,
           nome: tanque.ativo ? tanque.rotulo : `${tanque.rotulo} (inativo)`,
@@ -69,6 +68,7 @@ export default async function PaginaEntradasCombustivel() {
         tanquesEdicao={tanquesParaLancar}
         insumos={insumos}
         fornecedores={fornecedores}
+        podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
       />

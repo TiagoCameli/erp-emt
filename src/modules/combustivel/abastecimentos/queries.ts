@@ -9,8 +9,12 @@ import {
 import type { Canal, OrigemSaida, TipoConsumidor, TipoMovimento } from "@/modules/combustivel/_shared/rotulos";
 import {
   aplicarFiltrosAbastecimentos,
+  ORDENS_SAIDA,
+  type ContextoFiltro,
   type FiltrosAbastecimentos,
+  type VisaoSaida,
 } from "@/modules/combustivel/abastecimentos/filtros";
+import { ehEquipamentoSentinela } from "@/modules/combustivel/anomalias/base";
 import type { AlocacaoOriginal } from "@/modules/combustivel/abastecimentos/schemas";
 import { rotuloTanque } from "@/modules/combustivel/entradas/queries";
 import {
@@ -51,7 +55,17 @@ export interface SaidaLista {
   data: string;
   origem: OrigemSaida;
   tipoConsumidor: TipoConsumidor;
+  /** Rótulo de texto do consumidor (confirmações, busca). */
   consumidor: string;
+  equipamentoCodigo: string | null;
+  equipamentoDescricao: string | null;
+  /** O equipamento é o "Outros" (o sentinela de "não sei qual foi" da origem). */
+  equipamentoSentinela: boolean;
+  transportadoraNome: string | null;
+  placa: string | null;
+  motorista: string | null;
+  /** A obra da alocação de maior percentual (empate: a primeira), como na origem. */
+  obraNome: string | null;
   tanqueNome: string | null;
   tanqueExterno: boolean;
   insumoNome: string;
@@ -59,9 +73,16 @@ export interface SaidaLista {
   precoUnitario: number;
   valorTotal: number;
   canal: Canal;
+  observacoes: string | null;
   /** Instante da exclusão (lixeira). Nulo: lançado. */
   excluidoEm: string | null;
   motivoExclusao: string | null;
+}
+
+export interface ContagemVisoes {
+  todas: number;
+  internas: number;
+  externas: number;
 }
 
 export interface ResultadoListaAbastecimentos {
@@ -71,53 +92,86 @@ export interface ResultadoListaAbastecimentos {
   /** Soma de TODOS os do filtro (não só da página). */
   litrosDoFiltro: number;
   valorDoFiltro: number;
+  /** As contagens das sub-abas, com o resto do filtro igual. */
+  contagens: ContagemVisoes;
 }
 
 const SELECT_LISTA =
-  "id, data, origem, tipo_consumidor, placa, litros, preco_unitario, valor_total, canal, excluido_em, motivo_exclusao, tanques(nome, apelido, eh_externo), equipamentos(codigo, descricao, placa), fornecedores(razao_social, nome_fantasia), insumos(nome)";
+  "id, data, origem, tipo_consumidor, placa, motorista, litros, preco_unitario, valor_total, canal, observacoes, excluido_em, motivo_exclusao, tanques(nome, apelido, eh_externo), equipamentos(codigo, descricao, placa), fornecedores(razao_social, nome_fantasia), insumos(nome), abastecimento_alocacoes(percentual, centros_custo(nome)), filtro_obra:abastecimento_alocacoes(centro_custo_id)";
+
+/** A obra da origem: a alocação de maior percentual; empate, a primeira. */
+export function obraDaAlocacao(
+  alocacoes: readonly { percentual: number | string; centros_custo: { nome: string } | null }[] | null,
+): string | null {
+  let melhor: { nome: string; percentual: number } | null = null;
+  for (const a of alocacoes ?? []) {
+    const percentual = paraNumeroDoBanco(a.percentual);
+    if (!a.centros_custo) continue;
+    if (melhor === null || percentual > melhor.percentual) melhor = { nome: a.centros_custo.nome, percentual };
+  }
+  return melhor?.nome ?? null;
+}
 
 /**
- * Página dos abastecimentos (são ~3.100), com o total e as somas pelo MESMO
- * filtro. A soma vem de uma segunda consulta só com litros e valor, paginada por
- * `todasAsLinhas` (o PostgREST corta em 1.000 sem avisar). Desempate por id no
- * ORDER BY para a paginação não repetir nem perder linha. Com `excluidos`, as da
+ * Página dos abastecimentos (são ~3.100), com o total, as somas e as contagens das
+ * sub-abas pelo MESMO filtro. A soma vem de uma segunda consulta só com litros e valor,
+ * paginada por `todasAsLinhas` (o PostgREST corta em 1.000 sem avisar). Desempate por id
+ * no ORDER BY para a paginação não repetir nem perder linha. Com `excluidos`, as da
  * lixeira (quem pode restaurar; a página decide).
  */
-export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Promise<ResultadoListaAbastecimentos> {
+export async function listarAbastecimentos(
+  filtros: FiltrosAbastecimentos,
+  contexto: ContextoFiltro,
+): Promise<ResultadoListaAbastecimentos> {
   const supabase = await createClient();
   const de = filtros.pagina * filtros.tamanho;
   const ate = de + filtros.tamanho - 1;
+  const lixeira = filtros.excluidos ? "not.is" : "is";
 
   const pagina = aplicarFiltrosAbastecimentos(
-    supabase
-      .from("combustivel_saidas")
-      .select(SELECT_LISTA, { count: "exact" })
-      .filter("excluido_em", filtros.excluidos ? "not.is" : "is", null),
+    supabase.from("combustivel_saidas").select(SELECT_LISTA, { count: "exact" }).filter("excluido_em", lixeira, null),
     filtros,
+    contexto,
   )
-    .order("data", { ascending: false })
+    .order(ORDENS_SAIDA[filtros.ordem], { ascending: filtros.direcao === "asc" })
     .order("created_at", { ascending: false })
     .order("id")
     .range(de, ate);
 
-  const [resultadoPagina, resultadoSoma] = await Promise.all([
+  const contar = (visao: VisaoSaida) =>
+    aplicarFiltrosAbastecimentos(
+      supabase
+        .from("combustivel_saidas")
+        .select("id, filtro_obra:abastecimento_alocacoes(centro_custo_id)", { count: "exact", head: true })
+        .filter("excluido_em", lixeira, null),
+      filtros,
+      contexto,
+      visao,
+    );
+
+  const [resultadoPagina, resultadoSoma, todas, internas, externas] = await Promise.all([
     pagina,
     todasAsLinhas((inicio, fim) =>
       aplicarFiltrosAbastecimentos(
         supabase
           .from("combustivel_saidas")
-          .select("litros, valor_total")
-          .filter("excluido_em", filtros.excluidos ? "not.is" : "is", null),
+          .select("litros, valor_total, filtro_obra:abastecimento_alocacoes(centro_custo_id)")
+          .filter("excluido_em", lixeira, null),
         filtros,
+        contexto,
       )
         .order("id")
         .range(inicio, fim),
     ),
+    contar("todas"),
+    contar("internas"),
+    contar("externas"),
   ]);
 
   if (resultadoPagina.error) throw new Error("Não foi possível carregar os abastecimentos");
   // Soma pela metade é pior que soma nenhuma.
   if (resultadoSoma.erro) throw new Error("Não foi possível somar os abastecimentos");
+  if (todas.error || internas.error || externas.error) throw new Error("Não foi possível contar os abastecimentos");
 
   const itens: SaidaLista[] = (resultadoPagina.data ?? []).map((linha) => ({
     id: linha.id,
@@ -125,6 +179,13 @@ export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Prom
     origem: linha.origem as OrigemSaida,
     tipoConsumidor: linha.tipo_consumidor as TipoConsumidor,
     consumidor: rotuloConsumidor(linha),
+    equipamentoCodigo: linha.equipamentos?.codigo?.trim() || null,
+    equipamentoDescricao: linha.equipamentos?.descricao ?? null,
+    equipamentoSentinela: linha.equipamentos ? ehEquipamentoSentinela(linha.equipamentos) : false,
+    transportadoraNome: linha.fornecedores ? nomeFornecedor(linha.fornecedores) : null,
+    placa: linha.placa?.trim() || null,
+    motorista: linha.motorista?.trim() || null,
+    obraNome: obraDaAlocacao(linha.abastecimento_alocacoes),
     tanqueNome: linha.tanques ? rotuloTanque(linha.tanques) : null,
     tanqueExterno: linha.tanques?.eh_externo ?? false,
     insumoNome: linha.insumos?.nome ?? "",
@@ -132,6 +193,7 @@ export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Prom
     precoUnitario: paraNumeroDoBanco(linha.preco_unitario),
     valorTotal: paraNumeroDoBanco(linha.valor_total),
     canal: linha.canal as Canal,
+    observacoes: linha.observacoes,
     excluidoEm: linha.excluido_em,
     motivoExclusao: linha.motivo_exclusao,
   }));
@@ -141,6 +203,7 @@ export async function listarAbastecimentos(filtros: FiltrosAbastecimentos): Prom
     total: resultadoPagina.count ?? itens.length,
     litrosDoFiltro: somarValoresOperacionais(resultadoSoma.linhas.map((l) => paraNumeroDoBanco(l.litros))),
     valorDoFiltro: somarValoresOperacionais(resultadoSoma.linhas.map((l) => paraNumeroDoBanco(l.valor_total))),
+    contagens: { todas: todas.count ?? 0, internas: internas.count ?? 0, externas: externas.count ?? 0 },
   };
 }
 

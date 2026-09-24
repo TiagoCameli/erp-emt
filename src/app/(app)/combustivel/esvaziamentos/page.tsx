@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
-import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import { EsvaziamentosAcoesCabecalho } from "@/modules/combustivel/esvaziamentos/components/esvaziamentos-acoes-cabecalho";
 import { EsvaziamentosTabela } from "@/modules/combustivel/esvaziamentos/components/esvaziamentos-tabela";
 import { listarEsvaziamentos } from "@/modules/combustivel/esvaziamentos/queries";
@@ -40,8 +42,15 @@ export default async function PaginaEsvaziamentos() {
 
   return (
     <>
-      <PageHeader
-        modulo="Combustível"
+      {/* Fora da barra de abas: na origem o esvaziamento é ação do card do tanque. */}
+      <Link
+        href="/combustivel/tanques"
+        className="mb-2 inline-flex items-center gap-1 text-detalhe text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" aria-hidden />
+        Tanques
+      </Link>
+      <TituloAba
         titulo="Esvaziamentos"
         descricao="Descarte do combustível de um tanque da EMT, com o motivo, para trocar de combustível"
         acoes={<EsvaziamentosAcoesCabecalho podeCriar={podeCriar} tanques={opcoes} />}

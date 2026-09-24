@@ -4083,6 +4083,31 @@ que a origem faz, pelo código das telas e pelo banco vivo dela.
 A conta já existia com o mesmo e-mail do Gestão Obras. Recebeu as 23 ações do Combustível e
 nenhuma outra (pedido do Tiago: "ele so deve ter permissoes para a area de combustivel").
 
+## 23/09/2026: Combustível com a cara do Gestão Obras
+
+O Tiago: "o modulo do combustivel esta muito diferente no erp, tem que ficar bem mais parecido
+como esta no gestao de obras, desde o tanques ate as saidas e o dashboard". As regras e os
+cálculos já eram os da origem (entrada de 24/09 acima); o que mudou foi a tela. Tema, cores e
+componentes continuam os do ERP; estrutura, gráficos e colunas seguem a origem.
+
+- **Topo comum** (`combustivel/layout.tsx`): título, "+ Nova Entrada/Saída/Transferência"
+  (levam à lista com `?novo=1`, que abre o formulário), modo de consumidor e as abas agrupadas
+  da origem (Visão Geral · Operacional · Analítico · Relatórios · Lixeira). Cada aba segue uma
+  rota com a própria permissão; o recorte (modo, período e filtros globais) viaja na URL.
+- **Barra de filtros global** (`_shared/filtro-global.ts`): período com presets (padrão 30
+  dias), obra, equipamento ou transportadora/placa, tanque, combustível, fornecedor, operador,
+  visões salvas no navegador. Vale na Visão Geral e nas abas analíticas.
+- **Visão Geral** igual à `VisaoGeralTab`: KPIs com sparkline e variação, evolução temporal,
+  mix, top equipamentos/carretas, custo por obra, R$/L por fornecedor (acima da média em âmbar,
+  não vermelho), padrão semanal e últimos abastecimentos.
+- **Tanques** em cards com a cápsula da origem; externos em lista à parte.
+- **Saídas, Entradas, Transferências** com as colunas, a faixa de resumo e o drawer de detalhe
+  da origem. As listas passam a abrir nos últimos 30 dias, como a origem.
+- **Abas novas:** Equipamentos/Carretas, Obras, Fornecedores (KPIs + ranking) e Lixeira
+  (restaurar pelas actions que já existiam).
+- Ficou de fora: coluna de anexos e aba Histórico dos drawers (o combustível não tem anexo nem
+  histórico no ERP), e o rodapé "Página 1 de N" (a tabela padrão do ERP tem o dela).
+
 
 ## 24/09/2026: Migração, Fase 4 (Frete): banco
 

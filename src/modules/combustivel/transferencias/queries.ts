@@ -12,6 +12,7 @@ export interface TransferenciaLinha {
   origemNome: string;
   destinoId: string;
   destinoNome: string;
+  insumoId: string | null;
   insumoNome: string | null;
   litros: number;
   /** 4 casas (CASAS_VALOR_OPERACIONAL). A lista mostra 2 com MoneyText. */
@@ -40,7 +41,7 @@ export async function listarTransferencias(
     const consulta = supabase
       .from("combustivel_transferencias")
       .select(
-        `id, data_hora, tanque_origem_id, tanque_destino_id, litros, valor_total, observacoes, origem,
+        `id, data_hora, tanque_origem_id, tanque_destino_id, insumo_id, litros, valor_total, observacoes, origem,
          excluido_em, motivo_exclusao,
          tanque_origem:tanques!combustivel_transferencias_tanque_origem_id_fkey(nome),
          tanque_destino:tanques!combustivel_transferencias_tanque_destino_id_fkey(nome),
@@ -64,6 +65,7 @@ export async function listarTransferencias(
     origemNome: linha.tanque_origem?.nome ?? "",
     destinoId: linha.tanque_destino_id,
     destinoNome: linha.tanque_destino?.nome ?? "",
+    insumoId: linha.insumo_id,
     insumoNome: linha.insumos?.nome ?? null,
     litros: Number(linha.litros),
     valorTotal: Number(linha.valor_total),

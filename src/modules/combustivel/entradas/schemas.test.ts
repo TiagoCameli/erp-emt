@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { filtrarEntradas } from "@/modules/combustivel/entradas/filtros";
+import { filtrarEntradas, lerFiltrosEntradas } from "@/modules/combustivel/entradas/filtros";
 import type { EntradaLinha } from "@/modules/combustivel/entradas/queries";
 import {
   conflitoCombustivel,
@@ -180,7 +180,7 @@ describe("filtrarEntradas", () => {
     };
   }
 
-  const vazio = { busca: "", de: "", ate: "", tanqueId: "", insumoId: "" };
+  const vazio = { busca: "", de: "", ate: "", tanqueIds: [], insumoIds: [], fornecedorIds: [] };
 
   it("o período conta o dia de Rio Branco, não o de UTC", () => {
     // 21/09 01:00 UTC = 20/09 20:00 em Rio Branco.
@@ -192,9 +192,46 @@ describe("filtrarEntradas", () => {
   it("tanque, combustível e busca (fornecedor ou NF)", () => {
     const outro = "44444444-4444-4444-8444-444444444444";
     const lista = [entrada("a", "2026-09-20T12:00:00Z"), entrada("b", "2026-09-20T12:00:00Z", { tanqueId: outro, insumoId: outro, notaFiscal: "777", fornecedorNome: "Ipiranga" })];
-    expect(filtrarEntradas(lista, { ...vazio, tanqueId: outro }).map((e) => e.id)).toEqual(["b"]);
-    expect(filtrarEntradas(lista, { ...vazio, insumoId: DIESEL }).map((e) => e.id)).toEqual(["a"]);
+    expect(filtrarEntradas(lista, { ...vazio, tanqueIds: [outro] }).map((e) => e.id)).toEqual(["b"]);
+    expect(filtrarEntradas(lista, { ...vazio, insumoIds: [DIESEL] }).map((e) => e.id)).toEqual(["a"]);
     expect(filtrarEntradas(lista, { ...vazio, busca: "ipir" }).map((e) => e.id)).toEqual(["b"]);
     expect(filtrarEntradas(lista, { ...vazio, busca: "999" }).map((e) => e.id)).toEqual(["a"]);
+  });
+
+  it("lista do recorte: qualquer um dos marcados; fornecedor sem cadastro não casa", () => {
+    const outro = "44444444-4444-4444-8444-444444444444";
+    const lista = [
+      entrada("a", "2026-09-20T12:00:00Z", { fornecedorId: FORNECEDOR }),
+      entrada("b", "2026-09-20T12:00:00Z", { tanqueId: outro }),
+    ];
+    expect(filtrarEntradas(lista, { ...vazio, tanqueIds: [TANQUE, outro] }).map((e) => e.id)).toEqual(["a", "b"]);
+    expect(filtrarEntradas(lista, { ...vazio, fornecedorIds: [FORNECEDOR] }).map((e) => e.id)).toEqual(["a"]);
+  });
+});
+
+describe("lerFiltrosEntradas", () => {
+  const padrao = { de: "2026-08-25", ate: "2026-09-23" };
+
+  it("sem período na URL, o padrão; com uma ponta, a outra fica aberta", () => {
+    expect(lerFiltrosEntradas({}, padrao)).toMatchObject(padrao);
+    expect(lerFiltrosEntradas({ de: "2026-09-01" }, padrao)).toMatchObject({ de: "2026-09-01", ate: "" });
+    expect(lerFiltrosEntradas({})).toMatchObject({ de: "", ate: "" });
+  });
+
+  it("listas do recorte por vírgula, só uuid; período invertido troca", () => {
+    const f = lerFiltrosEntradas({
+      tanque: `${TANQUE},lixo`,
+      combustivel: DIESEL,
+      fornecedor: [FORNECEDOR],
+      de: "2026-09-30",
+      ate: "2026-09-01",
+    });
+    expect(f).toEqual({
+      de: "2026-09-01",
+      ate: "2026-09-30",
+      tanqueIds: [TANQUE],
+      insumoIds: [DIESEL],
+      fornecedorIds: [FORNECEDOR],
+    });
   });
 });
