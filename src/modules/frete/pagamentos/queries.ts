@@ -66,8 +66,8 @@ export interface OpcaoPagoPor {
 
 /**
  * Opções do "Pago por" da origem: "EMT Construtora" + fornecedores ativos + funcionários
- * ativos. Os colaboradores passam pela RLS do cadastro (`cadastros.colaboradores/ver`):
- * quem não vê o cadastro de colaboradores não recebe os nomes deles.
+ * ativos. Os nomes dos funcionários vêm de `nomes_colaboradores_frete` (só id e nome, para quem
+ * vê o Frete), sem abrir o cadastro de colaboradores do RH.
  */
 export async function listarOpcoesPagoPor(): Promise<OpcaoPagoPor[]> {
   const supabase = await createClient();
@@ -81,9 +81,8 @@ export async function listarOpcoesPagoPor(): Promise<OpcaoPagoPor[]> {
         .order("id")
         .range(de, ate),
     ),
-    todasAsLinhas((de, ate) =>
-      supabase.from("colaboradores").select("id, nome").eq("ativo", true).order("nome").order("id").range(de, ate),
-    ),
+    // Só os nomes, para quem vê o Frete (decisão do Tiago, 24/09): a RLS de colaboradores é do RH.
+    todasAsLinhas((de, ate) => supabase.rpc("nomes_colaboradores_frete").range(de, ate)),
   ]);
   if (fornecedores.erro) throw new Error("Não foi possível carregar os fornecedores");
   // Sem permissão de ver colaboradores a RLS devolve vazio; erro de verdade também só tira
