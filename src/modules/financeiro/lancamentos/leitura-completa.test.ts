@@ -149,4 +149,46 @@ describe("lerLancamentosEmPaginas", () => {
     expect(leitura.itens).toHaveLength(1000);
     expect(leitura.total).toBe(4000);
   });
+  it("depois da primeira, as páginas que faltam saem em paralelo", async () => {
+    // O resumo dos cartões lê o filtro inteiro. Em fila, 6,7 mil lançamentos
+    // eram 7 esperas da listagem completa antes de o número aparecer.
+    const itens = lote(1, 6757);
+    let emVoo = 0;
+    let maxEmVoo = 0;
+    const paginasPedidas: number[] = [];
+    const ler = async (pagina: number, tamanho: number) => {
+      paginasPedidas.push(pagina);
+      emVoo += 1;
+      maxEmVoo = Math.max(maxEmVoo, emVoo);
+      await new Promise((r) => setTimeout(r, 5));
+      emVoo -= 1;
+      return {
+        itens: itens.slice(pagina * tamanho, pagina * tamanho + tamanho),
+        total: itens.length,
+      };
+    };
+
+    const leitura = await lerLancamentosEmPaginas(ler, 25_000, 1000);
+
+    expect(leitura.itens).toHaveLength(6757);
+    expect(maxEmVoo).toBe(5);
+    // O total é conhecido na primeira: nenhuma página vazia de sobra.
+    expect([...paginasPedidas].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it("a ordem é a das páginas, não a de chegada das respostas", async () => {
+    const itens = lote(1, 3500);
+    const ler = async (pagina: number, tamanho: number) => {
+      // A página 1 é a última a chegar.
+      await new Promise((r) => setTimeout(r, pagina === 1 ? 30 : 0));
+      return {
+        itens: itens.slice(pagina * tamanho, pagina * tamanho + tamanho),
+        total: itens.length,
+      };
+    };
+
+    const leitura = await lerLancamentosEmPaginas(ler, 25_000, 1000);
+
+    expect(leitura.itens.map((l) => l.id)).toEqual(itens.map((l) => l.id));
+  });
 });

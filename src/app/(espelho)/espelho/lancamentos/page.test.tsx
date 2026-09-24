@@ -51,6 +51,7 @@ const USUARIO: UsuarioLogado = {
   ativo: true,
   perfilId: null,
   fotoPath: null,
+  senhaTemporaria: false,
   permissoes: [],
 };
 

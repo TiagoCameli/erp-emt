@@ -27,16 +27,18 @@ export const viewport: Viewport = {
  */
 export default async function CampoLayout({ children }: { children: ReactNode }) {
   const usuario = await getUsuarioLogado();
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   if (!usuario) {
+    // Só no caminho raro vale a segunda ida ao Auth: separar "sem sessão" de
+    // "sessão de conta desativada".
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (user) redirect("/conta-desativada");
     redirect("/login");
   }
-  if (user?.user_metadata?.senha_temporaria === true) redirect("/definir-senha");
+  if (usuario.senhaTemporaria) redirect("/definir-senha");
 
   return (
     <FilaCampoProvider usuarioId={usuario.id}>
