@@ -32,7 +32,7 @@ Scripts em `scripts/migracao-gestao-obras/`. O retrato, os anexos baixados e os 
    Brita 0 → 1335M280 BRITA 0", Brita 4 → 1335M349 BRITA 4 ( RACHINHA), Rachão → 1335M348 RACHÃO
    (PEDRA DE MÃ0). **Criados pela carga**, em tonelada, com a categoria do BGS e sem código (no ERP o
    código é opcional e livre): "BRITA 1" e "PÓ DE PEDRA" (não o PÓ DE BRITA 1335M139).
-   **A virada não está autorizada:** tudo preparado e ensaiado, nada aplicado.
+   **Virada feita em 24/09/2026** (autorizada pelo Tiago): registro em `docs/decisoes.md`.
 2. **Permissões** de Combustível e Frete no ERP para quem lança hoje no Gestão Obras (só os 4
    Admins têm). Sem isso, depois do congelamento a equipe não lança em lugar nenhum. É do Tiago.
 3. **Aplicar o preparo** `20260925120000_fase34_preparo_carga` (staging vazio, sem dado) pelo

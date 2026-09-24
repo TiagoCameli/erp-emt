@@ -41,11 +41,11 @@ select jsonb_build_object(
   'ultimo', (select jsonb_object_agg(saida_id, p) from (select saida_id, round(sum(litros * preco) / sum(litros), 4) p
      from public.combustivel_camadas group by saida_id) x),
   'mes', (select jsonb_object_agg(k, v) from (
-     select 'fretes|' || to_char(data, 'YYYY-MM') k, jsonb_build_array(count(*), sum(valor_total), sum(valor_material)) v
+     select 'fretes|' || to_char(data, 'YYYY-MM') k, jsonb_build_array(count(*), sum(valor_total)::text, sum(valor_material)::text) v
        from public.fretes where excluido_em is null group by 1
      union all select 'saidas|' || to_char(data at time zone 'America/Rio_Branco', 'YYYY-MM'),
-       jsonb_build_array(count(*), sum(valor_total), sum(litros)) from public.combustivel_saidas where excluido_em is null group by 1
-     union all select 'pagamentos|' || to_char(data, 'YYYY-MM'), jsonb_build_array(count(*), sum(valor), sum(quantidade_combustivel))
+       jsonb_build_array(count(*), sum(valor_total)::text, sum(litros)::text) from public.combustivel_saidas where excluido_em is null group by 1
+     union all select 'pagamentos|' || to_char(data, 'YYYY-MM'), jsonb_build_array(count(*), sum(valor)::text, sum(quantidade_combustivel)::text)
        from public.frete_pagamentos where excluido_em is null group by 1) x),
   'conta', jsonb_build_object(
      'fretes', (select count(*) from public.fretes where excluido_em is null),
