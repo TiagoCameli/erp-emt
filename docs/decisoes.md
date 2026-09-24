@@ -4163,3 +4163,40 @@ frete trocado de transportadora leva os 9.028 junto (58.764,1161 e 9.028) → ex
 transferência tira e devolve os 888. Ajuste de 100: pendente não muda o saldo, quem só cria não
 aprova, aprovado soma, desaprovado volta; o rejeitado não gera movimento. RLS: sem o Frete vê 0 e
 não grava; controle, o Admin vê 3 fretes e 4 movimentos. 0 lançamentos.
+
+
+## 24/09/2026 (tarde): Virada do Combustível e do Frete feita
+
+O Tiago: "confira a carga conjunta do frete e do combustivel mais uma vez e faca a virada".
+Roteiro `docs/VIRADA-COMBUSTIVEL-FRETE.md`, na ordem.
+
+- **Permissões da equipe antes de congelar** (decisão do Tiago: "Conceder o equivalente"). Quem
+  lançou nos últimos 30 dias na origem: Bruno (126 abastecimentos, 10 fretes), Marvim (96
+  abastecimentos), Andreia (40 abastecimentos, 39 fretes). Migration
+  `20260925140000_virada34_permissoes_equipe`, só acrescentando (Compras deles intacto: 58 e 66):
+  Andreia todo o Combustível e o Frete sem aprovar ajuste (40); Marvin o Combustível sem excluir,
+  anomalias e relatórios, e fretes ver/criar/editar (18); Bruno + fretes com excluir (27 no total).
+- **Conferência antes de congelar**, com a origem ainda viva: extração, geração (0 divergências na
+  regeneração da conta corrente) e ensaio completo OK (ensaio, controle recusado, rollback a zero).
+- **Congelamento da origem** (Gestão Obras `79bdde3`): gatilho que recusa gravação nas 15 tabelas do
+  Combustível e do Frete. Prova: editar frete, pagamento novo, editar abastecimento, entrada nova e
+  ajuste recusados pelo congelamento; controle, a medição de equipamento continua passando.
+- **Retrato de novo com a origem parada**: as mesmas contagens do retrato anterior (ninguém lançou
+  no meio). Ensaio completo OK de novo.
+- **Anexos**: 6.397 arquivos (11,75 GB) subidos, 0 falhas; a carga aplicada logo em seguida (a
+  faxina apaga em 24 h o objeto sem linha em `arquivos`).
+- **Carga `20260925130000` aplicada** pelo `apply_migration`: ela confere e abortaria se um número não
+  batesse. Prova depois do commit (`provar_carga_fase34.py`): PROVA OK, 88 linhas iguais. Saldo de
+  cada transportadora na 4ª casa: Areacre 301.064,5819, EMT TRANSPORTES 1.360.549,0474, Andrade
+  247.803,4403, Posto Progresso 13.940,0000, LMC 0,0037, Soares 0,0032, ETAM 0. Tanques (nível,
+  estoque, PEPS da última saída), soma por mês, contagens, 6.997 anexos, 0 lançamentos.
+  - O script de prova lia os valores do ERP como número JSON (float) e acusava os fretes com mais de
+    12 casas das cargas antigas da origem; a soma exata no banco é idêntica (853.461,583449999957).
+    Corrigido para ler como texto.
+- **Advisors**: nenhum aviso novo.
+- **Depois da carga, em transação desfeita, como o Admin**: a tela de saldo mostra os mesmos
+  números; uma carreta de teste de 100 L a 6,50 + 0,30 gera um débito de 680,00; um frete de teste
+  de 10 t × 100 km × 0,37 gera exatamente um crédito de 370,00 e zero lançamentos (plano 9.8).
+
+Fica aberto na origem: `medicoes_equipamento` e os cadastros compartilhados. O Gestão Obras fica só
+leitura no Combustível e no Frete por um ciclo de fechamento (plano, Fase 5).
