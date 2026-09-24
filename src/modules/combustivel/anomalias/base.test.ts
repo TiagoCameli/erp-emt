@@ -4,6 +4,7 @@ import {
   detectarNaBase,
   EQUIPAMENTO_DESCONHECIDO,
   ehEquipamentoSentinela,
+  ehNomeDeSentinela,
   equipamentosParaDeteccao,
   modoDaUrl,
   montarSaidaBase,
@@ -66,13 +67,18 @@ const CENTROS = new Map([
 ]);
 
 describe("sentinela", () => {
-  it("casa descrição ou código normalizados, e só o nome inteiro", () => {
-    expect(ehEquipamentoSentinela({ codigo: null, descricao: "Outros" })).toBe(true);
-    expect(ehEquipamentoSentinela({ codigo: null, descricao: "  OUTROS " })).toBe(true);
-    expect(ehEquipamentoSentinela({ codigo: "OUTROS", descricao: "Sem nome" })).toBe(true);
-    expect(ehEquipamentoSentinela({ codigo: null, descricao: "Equipamento Desconhecido" })).toBe(true);
-    expect(ehEquipamentoSentinela({ codigo: null, descricao: "Outros serviços" })).toBe(false);
+  it("a regra da origem (guardada) casa descrição ou código normalizados, e só o nome inteiro", () => {
+    expect(ehNomeDeSentinela({ codigo: null, descricao: "Outros" })).toBe(true);
+    expect(ehNomeDeSentinela({ codigo: null, descricao: "  OUTROS " })).toBe(true);
+    expect(ehNomeDeSentinela({ codigo: "OUTROS", descricao: "Sem nome" })).toBe(true);
+    expect(ehNomeDeSentinela({ codigo: null, descricao: "Equipamento Desconhecido" })).toBe(true);
+    expect(ehNomeDeSentinela({ codigo: null, descricao: "Outros serviços" })).toBe(false);
     expect(normalizarNome("  Equipamento   DESCONHECÍDO ")).toBe("equipamento desconhecido");
+  });
+
+  it("decisão do Tiago (24/09): o 'Outros' conta como identificado, não é sentinela", () => {
+    expect(ehEquipamentoSentinela({ codigo: null, descricao: "Outros" })).toBe(false);
+    expect(ehEquipamentoSentinela({ codigo: null, descricao: "Equipamento Desconhecido" })).toBe(false);
   });
 
   it("o 'Outros' vira o 'desconhecido' da origem na saída e sai da lista de equipamentos do D5", () => {

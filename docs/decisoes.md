@@ -4200,3 +4200,16 @@ Roteiro `docs/VIRADA-COMBUSTIVEL-FRETE.md`, na ordem.
 
 Fica aberto na origem: `medicoes_equipamento` e os cadastros compartilhados. O Gestão Obras fica só
 leitura no Combustível e no Frete por um ciclo de fechamento (plano, Fase 5).
+
+## 24/09/2026: "Outros" conta como equipamento identificado
+
+O aviso do painel do Combustível dizia que 26% do volume (68.963,56 L, 710 abastecimentos) estava
+"sem equipamento identificado". Esses abastecimentos já estavam no equipamento "Outros", que
+absorveu o "Equipamento Desconhecido" da origem; a regra da origem conta esse equipamento como
+não identificado. O Tiago pediu "todo abastecimento sem equipamento identificado coloque para
+outros" e decidiu que o "Outros" conta como identificado.
+
+- `ehEquipamentoSentinela` (combustivel/anomalias/base.ts) passa a devolver falso: não há mais
+  sentinela. Some o aviso do painel, a D1 não aponta nada, e o "Outros" entra nas médias, rankings
+  e na D5 como qualquer equipamento. Nenhum litro ou valor muda (nada no banco foi alterado).
+- A regra da origem fica guardada em `ehNomeDeSentinela`, para religar se precisar.
