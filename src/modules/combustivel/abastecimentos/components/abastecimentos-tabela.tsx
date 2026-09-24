@@ -138,6 +138,7 @@ export const colunasAbastecimentos: ColumnDef<SaidaLista, unknown>[] = [
   {
     accessorKey: "origem",
     header: "Origem",
+    meta: { esconderAte: "md" },
     size: 110,
     enableSorting: false,
     cell: ({ row }) => (
@@ -147,6 +148,7 @@ export const colunasAbastecimentos: ColumnDef<SaidaLista, unknown>[] = [
   {
     accessorKey: "tanqueNome",
     header: "Tanque",
+    meta: { esconderAte: "md" },
     size: 160,
     enableSorting: false,
     cell: ({ row }) =>
@@ -162,6 +164,7 @@ export const colunasAbastecimentos: ColumnDef<SaidaLista, unknown>[] = [
   {
     accessorKey: "obraNome",
     header: "Obra",
+    meta: { esconderAte: "md" },
     size: 150,
     enableSorting: false,
     cell: ({ row }) =>
@@ -178,7 +181,7 @@ export const colunasAbastecimentos: ColumnDef<SaidaLista, unknown>[] = [
     header: "Combustível",
     size: 150,
     enableSorting: false,
-    meta: { naoTruncar: true },
+    meta: { esconderAte: "sm", naoTruncar: true },
     cell: ({ row }) => <BadgeCombustivel nome={row.original.insumoNome} />,
   },
   {

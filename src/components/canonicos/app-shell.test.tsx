@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { AppShell } from "@/components/canonicos";
+import { modulosDaBarraMobile } from "@/components/canonicos/app-shell";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/financeiro/lancamentos",
@@ -76,5 +77,82 @@ describe("AppShell, nome do módulo na sidebar", () => {
     expect(within(rail).getByRole("link", { name: "Gestão" })).not.toHaveAttribute(
       "aria-current",
     );
+  });
+});
+
+/**
+ * A barra inferior do celular pegava os seis primeiros módulos do catálogo, e
+ * Frete, Combustível e Manutenção (os de campo) ficavam sem caminho no mobile.
+ */
+describe("AppShell, barra inferior do mobile", () => {
+  const CATALOGO = [
+    { id: "gestao", nome: "Gestão", rota: "/gestao" },
+    { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
+    { id: "compras", nome: "Compras", rota: "/compras" },
+    { id: "frete", nome: "Frete", rota: "/frete" },
+    { id: "combustivel", nome: "Combustível", rota: "/combustivel" },
+    { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
+    { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
+  ];
+
+  it("põe os módulos de campo primeiro e manda o resto para o Menu", () => {
+    const { naBarra, temMenu } = modulosDaBarraMobile(CATALOGO);
+    expect(naBarra.map((m) => m.id)).toEqual(["combustivel", "frete", "manutencao", "gestao"]);
+    expect(temMenu).toBe(true);
+  });
+
+  it("sem módulo sobrando, não mostra o Menu", () => {
+    const { naBarra, temMenu } = modulosDaBarraMobile(MODULOS);
+    expect(naBarra).toHaveLength(3);
+    expect(temMenu).toBe(false);
+  });
+
+  it("mostra as abas do módulo atual numa faixa própria", () => {
+    render(
+      <AppShell
+        usuario={{ nome: "Tiago Cameli", email: "tiago@emtconstrutora.com" }}
+        modulos={[
+          {
+            id: "financeiro",
+            nome: "Financeiro",
+            rota: "/financeiro",
+            abas: [
+              { id: "a", nome: "Lançamentos", rota: "/financeiro/lancamentos" },
+              { id: "b", nome: "Pagamentos", rota: "/financeiro/pagamentos" },
+            ],
+          },
+        ]}
+        onSair={() => {}}
+      >
+        <p>conteúdo</p>
+      </AppShell>,
+    );
+    const faixa = screen.getByRole("navigation", { name: "Abas de Financeiro" });
+    expect(within(faixa).getByRole("link", { name: "Lançamentos" })).toHaveAttribute("aria-current", "page");
+    expect(within(faixa).getByRole("link", { name: "Pagamentos" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("não repete a faixa quando o módulo desenha as próprias abas", () => {
+    render(
+      <AppShell
+        usuario={{ nome: "Tiago Cameli", email: "tiago@emtconstrutora.com" }}
+        modulos={[
+          {
+            id: "financeiro",
+            nome: "Financeiro",
+            rota: "/financeiro",
+            abasNaPagina: true,
+            abas: [
+              { id: "a", nome: "Lançamentos", rota: "/financeiro/lancamentos" },
+              { id: "b", nome: "Pagamentos", rota: "/financeiro/pagamentos" },
+            ],
+          },
+        ]}
+        onSair={() => {}}
+      >
+        <p>conteúdo</p>
+      </AppShell>,
+    );
+    expect(screen.queryByRole("navigation", { name: "Abas de Financeiro" })).toBeNull();
   });
 });

@@ -11,12 +11,14 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Menu,
   Settings,
   ShoppingCart,
   Users,
   Wallet,
   Wrench,
   Fuel,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -28,6 +30,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { LogoEmt } from "@/components/canonicos/logo-emt";
 import { useRestaurarFiltrosDaSessao } from "@/components/canonicos/use-restaurar-filtros";
 import { cn } from "@/lib/utils";
@@ -37,6 +46,7 @@ const MAPA_ICONES: Record<string, LucideIcon> = {
   administracao: Settings,
   cadastros: FolderOpen,
   compras: ShoppingCart,
+  frete: Truck,
   financeiro: Wallet,
   combustivel: Fuel,
   manutencao: Wrench,
@@ -49,8 +59,41 @@ const COLUNAS_MOBILE: Record<number, string> = {
   3: "grid-cols-3",
   4: "grid-cols-4",
   5: "grid-cols-5",
-  6: "grid-cols-6",
 };
+
+/**
+ * Módulos que ganham lugar fixo na barra inferior do celular, nesta ordem.
+ *
+ * São os de campo: quem abre o ERP no celular está abastecendo, lançando frete
+ * ou apontando manutenção. Antes a barra pegava os seis primeiros do catálogo
+ * (Gestão, Cadastros, Compras...) e esses três ficavam de fora, sem caminho
+ * nenhum até eles no celular.
+ */
+const PRIORIDADE_MOBILE = ["combustivel", "frete", "manutencao"];
+/** Botões de módulo na barra inferior; o quinto lugar é o "Menu" quando sobra módulo. */
+const MAX_MODULOS_BARRA = 4;
+
+/**
+ * Separa os módulos entre a barra inferior e o menu completo: os de campo
+ * primeiro, o resto na ordem do catálogo. Se tudo cabe, não há botão "Menu".
+ */
+export function modulosDaBarraMobile(modulos: ModuloNavegacao[]): {
+  naBarra: ModuloNavegacao[];
+  temMenu: boolean;
+} {
+  const prioridade = (id: string) => {
+    const i = PRIORIDADE_MOBILE.indexOf(id);
+    return i === -1 ? PRIORIDADE_MOBILE.length : i;
+  };
+  const ordenados = [...modulos].sort(
+    (a, b) => prioridade(a.id) - prioridade(b.id),
+  );
+  const cabem = ordenados.length <= MAX_MODULOS_BARRA + 1;
+  return {
+    naBarra: cabem ? ordenados : ordenados.slice(0, MAX_MODULOS_BARRA),
+    temMenu: !cabem,
+  };
+}
 
 /**
  * Largura da sidebar. Fixa: ela nunca expande.
@@ -87,6 +130,12 @@ export interface ModuloNavegacao {
   icone?: string;
   /** Abas visíveis do módulo, na ordem do catálogo, já filtradas por permissão. */
   abas?: AbaNavegacao[];
+  /**
+   * O módulo desenha as próprias abas no topo da página (o Combustível, que
+   * repete a tela da origem). Aí a faixa de abas do mobile não aparece, senão
+   * o celular mostra duas barras de abas iguais uma embaixo da outra.
+   */
+  abasNaPagina?: boolean;
 }
 
 export interface AppShellProps {
@@ -378,7 +427,13 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   useRestaurarFiltrosDaSessao(pathname);
-  const modulosMobile = modulos.slice(0, 6);
+  const { naBarra: modulosMobile, temMenu: temMenuMobile } =
+    modulosDaBarraMobile(modulos);
+  const [menuMobileAberto, setMenuMobileAberto] = React.useState(false);
+  const moduloAtual = modulos.find((m) => pathname.startsWith(m.rota));
+  const abasModuloAtual = moduloAtual?.abasNaPagina ? [] : (moduloAtual?.abas ?? []);
+  const idAbaAtualMobile = abaAtiva(abasModuloAtual, pathname);
+  const moduloAtualNaBarra = modulosMobile.some((m) => m.id === moduloAtual?.id);
   const [moduloAberto, setModuloAberto] = React.useState<string | null>(null);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -499,17 +554,55 @@ export function AppShell({
           </DropdownMenu>
         </header>
 
+        {/*
+          Abas do módulo atual, só no mobile. No desktop elas moram no submenu
+          flutuante da sidebar, que abre no hover; no celular não há hover nem
+          sidebar, e sem esta faixa não havia como sair da primeira aba.
+        */}
+        {abasModuloAtual.length > 1 ? (
+          <nav
+            aria-label={`Abas de ${moduloAtual?.nome ?? "módulo"}`}
+            className="shrink-0 overflow-x-auto border-b border-border bg-background md:hidden"
+          >
+            <ul className="flex w-max gap-1 px-2">
+              {abasModuloAtual.map((aba) => {
+                const ativa = aba.id === idAbaAtualMobile;
+                return (
+                  <li key={aba.id}>
+                    <Link
+                      href={aba.rota}
+                      aria-current={ativa ? "page" : undefined}
+                      className={cn(
+                        "flex h-10 items-center border-b-[3px] px-2.5 text-detalhe whitespace-nowrap",
+                        ativa
+                          ? "border-faixa font-medium text-foreground"
+                          : "border-transparent text-muted-foreground",
+                      )}
+                    >
+                      {aba.nome}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        ) : null}
+
         {/* Conteúdo */}
-        <main className="flex-1 overflow-auto bg-background p-4 pb-16 md:p-6 md:pb-6">
+        <main className="flex-1 overflow-auto bg-background p-4 pb-20 md:p-6 md:pb-6">
           {children}
         </main>
       </div>
 
-      {/* Menu inferior mobile (inalterado) */}
+      {/*
+        Menu inferior mobile: os módulos de campo com lugar fixo e, quando não
+        cabem todos, um "Menu" que abre a lista completa com as abas de cada um.
+      */}
       <nav
         className={cn(
-          "fixed inset-x-0 bottom-0 z-40 grid border-t border-border bg-background md:hidden",
-          COLUNAS_MOBILE[modulosMobile.length] ?? "grid-cols-5",
+          "fixed inset-x-0 bottom-0 z-40 grid border-t border-border bg-background pb-[env(safe-area-inset-bottom)] md:hidden",
+          COLUNAS_MOBILE[modulosMobile.length + (temMenuMobile ? 1 : 0)] ??
+            "grid-cols-5",
         )}
         aria-label="Módulos"
       >
@@ -522,18 +615,98 @@ export function AppShell({
               href={modulo.rota}
               aria-current={ativo ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-0.5 border-t-[3px] py-2",
+                "flex min-w-0 flex-col items-center gap-0.5 border-t-[3px] px-1 py-2",
                 ativo
                   ? "border-faixa text-primary"
                   : "border-transparent text-muted-foreground",
               )}
             >
               <Icone className="size-5" aria-hidden="true" />
-              <span className="truncate text-legenda">{modulo.nome}</span>
+              <span className="w-full truncate text-center text-legenda">
+                {modulo.nome}
+              </span>
             </Link>
           );
         })}
+        {temMenuMobile ? (
+          <button
+            type="button"
+            onClick={() => setMenuMobileAberto(true)}
+            aria-haspopup="dialog"
+            aria-expanded={menuMobileAberto}
+            className={cn(
+              "flex min-w-0 flex-col items-center gap-0.5 border-t-[3px] px-1 py-2",
+              moduloAtual && !moduloAtualNaBarra
+                ? "border-faixa text-primary"
+                : "border-transparent text-muted-foreground",
+            )}
+          >
+            <Menu className="size-5" aria-hidden="true" />
+            <span className="w-full truncate text-center text-legenda">Menu</span>
+          </button>
+        ) : null}
       </nav>
+
+      {temMenuMobile ? (
+        <Sheet open={menuMobileAberto} onOpenChange={setMenuMobileAberto}>
+          <SheetContent
+            side="bottom"
+            className="max-h-[85vh] gap-0 overflow-y-auto rounded-t-xl p-0 md:hidden"
+          >
+            <SheetHeader className="border-b border-border">
+              <SheetTitle>Módulos</SheetTitle>
+              <SheetDescription className="sr-only">
+                Todos os módulos e abas que você pode acessar
+              </SheetDescription>
+            </SheetHeader>
+            <ul className="pb-[env(safe-area-inset-bottom)]">
+              {modulos.map((modulo) => {
+                const Icone = iconeDoModulo(modulo);
+                const ativo = pathname.startsWith(modulo.rota);
+                const abas = modulo.abas ?? [];
+                const idAba = ativo ? abaAtiva(abas, pathname) : null;
+                return (
+                  <li key={modulo.id} className="border-b border-border last:border-b-0">
+                    <Link
+                      href={modulo.rota}
+                      onClick={() => setMenuMobileAberto(false)}
+                      aria-current={ativo ? "page" : undefined}
+                      className={cn(
+                        "flex h-12 items-center gap-3 px-4 text-corpo font-medium",
+                        ativo ? "text-primary" : "text-foreground",
+                      )}
+                    >
+                      <Icone className="size-5 shrink-0" aria-hidden="true" />
+                      {modulo.nome}
+                    </Link>
+                    {abas.length > 1 ? (
+                      <ul className="flex flex-wrap gap-1.5 px-4 pb-3 pl-12">
+                        {abas.map((aba) => (
+                          <li key={aba.id}>
+                            <Link
+                              href={aba.rota}
+                              onClick={() => setMenuMobileAberto(false)}
+                              aria-current={aba.id === idAba ? "page" : undefined}
+                              className={cn(
+                                "inline-flex h-8 items-center rounded-md border px-2.5 text-detalhe",
+                                aba.id === idAba
+                                  ? "border-primary bg-accent font-medium text-accent-foreground"
+                                  : "border-border text-muted-foreground",
+                              )}
+                            >
+                              {aba.nome}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </div>
   );
 }

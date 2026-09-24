@@ -54,6 +54,7 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
   {
     accessorKey: "tanqueNome",
     header: "Tanque",
+    meta: { esconderAte: "md" },
     size: 180,
     cell: ({ row }) => <span className="text-legenda text-muted-foreground">{row.original.tanqueNome}</span>,
   },
@@ -61,12 +62,13 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
     accessorKey: "insumoNome",
     header: "Combustível",
     size: 160,
-    meta: { naoTruncar: true },
+    meta: { esconderAte: "sm", naoTruncar: true },
     cell: ({ row }) => <BadgeCombustivel nome={row.original.insumoNome} />,
   },
   {
     accessorKey: "fornecedorNome",
     header: "Fornecedor",
+    meta: { esconderAte: "md" },
     size: 200,
     cell: ({ row }) =>
       row.original.fornecedorNome ? (

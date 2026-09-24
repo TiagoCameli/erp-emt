@@ -214,7 +214,6 @@ export function AbastecimentoDetalheConteudo({ abastecimento }: { abastecimento:
           vazio="Sem alocação de obra"
           colunas={[
             { rotulo: "Obra", celula: (a) => a.centroCustoNome },
-            { rotulo: "Etapa na origem", celula: (a) => a.etapaLegado ?? <CelulaVazia /> },
             { rotulo: "Percentual", direita: true, celula: (a) => formatarPercentual(a.percentual, 4) },
             { rotulo: "Litros", direita: true, celula: (a) => formatarLitros(a.litros) },
           ]}

@@ -44,7 +44,12 @@ import { FretesPresets } from "./fretes-presets";
 const OPCOES_TIPO = TIPOS_FRETE.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_FRETE[t] }));
 const OPCOES_EXCLUIDOS = [{ valor: "sim", rotulo: "Só os excluídos" }];
 
-/** Colunas da lista (FreteListV2 da origem). A Chegada é editável na hora com `editar`. */
+/**
+ * Colunas da lista (FreteListV2 da origem), no mesmo desenho de célula: rota em duas linhas,
+ * transportadora em três (nome, motorista, placa). A Chegada é editável na hora com `editar`.
+ * No celular ficam Saída, rota, transportadora e valor do frete; o resto volta a partir do
+ * breakpoint indicado em `esconderAte`.
+ */
 export function colunasFretes(podeEditar: boolean): ColumnDef<FreteLinha, unknown>[] {
   return [
     {
@@ -52,13 +57,13 @@ export function colunasFretes(podeEditar: boolean): ColumnDef<FreteLinha, unknow
       header: "Saída",
       size: 104,
       meta: { atomico: true },
-      cell: ({ row }) => <span className="tabular-nums">{diaBR(row.original.data)}</span>,
+      cell: ({ row }) => <span className="font-medium tabular-nums">{diaBR(row.original.data)}</span>,
     },
     {
       accessorKey: "dataChegada",
       header: "Chegada",
       size: 160,
-      meta: { atomico: true, naoTruncar: true },
+      meta: { atomico: true, naoTruncar: true, esconderAte: "md" },
       cell: ({ row }) => (
         <CampoChegada
           freteId={row.original.id}
@@ -74,13 +79,11 @@ export function colunasFretes(podeEditar: boolean): ColumnDef<FreteLinha, unknow
       size: 260,
       meta: { naoTruncar: true },
       cell: ({ row }) => (
-        <span className="flex flex-col">
-          <span>
-            {row.original.origemNome || "-"} <span className="text-muted-foreground">→</span>{" "}
-            {row.original.destinoNome || "-"}
-          </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate font-medium">{row.original.origemNome || "-"}</span>
+          <span className="truncate text-legenda text-muted-foreground">→ {row.original.destinoNome || "-"}</span>
           {row.original.tipo === "transferencia" ? (
-            <Badge variant="secondary" className="mt-0.5">
+            <Badge className="mt-0.5 w-fit rounded-full border-transparent bg-amber-100 px-2 text-[10px] font-semibold tracking-wide text-amber-800 uppercase">
               Transferência
             </Badge>
           ) : null}
@@ -95,33 +98,35 @@ export function colunasFretes(podeEditar: boolean): ColumnDef<FreteLinha, unknow
       cell: ({ row }) => (
         <span className="flex flex-col">
           <span className="font-medium">{row.original.transportadoraNome}</span>
-          <span className="text-legenda text-muted-foreground">
-            {row.original.motorista}
-            {row.original.placaCarreta ? (
-              <>
-                {" · "}
-                <span className="codigo-doc">{row.original.placaCarreta}</span>
-              </>
-            ) : null}
-          </span>
+          {row.original.motorista ? (
+            <span className="text-legenda text-muted-foreground">{row.original.motorista}</span>
+          ) : null}
+          {row.original.placaCarreta ? (
+            <span className="codigo-doc text-[11px] tracking-wide text-muted-foreground uppercase">
+              {row.original.placaCarreta}
+            </span>
+          ) : null}
         </span>
       ),
     },
-    { accessorKey: "insumoNome", header: "Material", size: 180 },
+    { accessorKey: "insumoNome", header: "Material", size: 180, meta: { esconderAte: "md" } },
     {
       accessorKey: "pesoToneladas",
       header: "Peso (t)",
       size: 110,
-      meta: { alinharDireita: true, atomico: true },
+      meta: { alinharDireita: true, atomico: true, esconderAte: "sm" },
       cell: ({ row }) => <span className="tabular-nums">{formatarQuantidade(row.original.pesoToneladas)} t</span>,
     },
-    colunaDinheiro<FreteLinha>("valorTotal", "Valor frete", { size: 130 }),
-    colunaDinheiro<FreteLinha>("valorMaterial", "Valor material", { size: 130 }),
+    colunaDinheiro<FreteLinha>("valorTotal", "Valor frete", {
+      size: 130,
+      cell: ({ row }) => <MoneyText valor={row.original.valorTotal} className="font-semibold" />,
+    }),
+    colunaDinheiro<FreteLinha>("valorMaterial", "Valor material", { size: 130, meta: { esconderAte: "md" } }),
     {
       accessorKey: "precoUnitario",
       header: "Preço unit.",
       size: 130,
-      meta: { alinharDireita: true, atomico: true },
+      meta: { alinharDireita: true, atomico: true, esconderAte: "lg" },
       cell: ({ row }) =>
         row.original.precoUnitario === 0 ? (
           <CelulaVazia />

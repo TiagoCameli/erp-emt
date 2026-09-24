@@ -77,7 +77,7 @@ export const colunas: ColumnDef<TransferenciaLinha, unknown>[] = [
     accessorKey: "insumoNome",
     header: "Combustível",
     size: 160,
-    meta: { naoTruncar: true },
+    meta: { esconderAte: "sm", naoTruncar: true },
     cell: ({ row }) => <BadgeCombustivel nome={row.original.insumoNome} />,
   },
   {
