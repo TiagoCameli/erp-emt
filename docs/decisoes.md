@@ -4230,3 +4230,15 @@ Obras por um ciclo de fechamento, e depois as rotas saem do menu.
 - **Falta, depois de um ciclo de fechamento:** tirar as três rotas do menu do Gestão Obras (os
   dados ficam no banco de origem, sem apagar) e apagar o staging e os de-paras do schema
   `legado` no ERP.
+
+## 24/09/2026: Triunfo é a LMC; nomes dos funcionários no "Pago por"
+
+- **Triunfo = LMC** (confirmação do Tiago). Os 14 fretes com o texto "Transportadora Triunfo"
+  (R$ 221.533,73) já estavam creditados na LMC, na origem e no ERP. O fornecedor "TRANSPORTADORA
+  TRIUNFO" do ERP (0 fretes, não era transportadora) foi **desativado** a pedido do Tiago. Ele tem 4
+  lançamentos pagos no Financeiro (aluguel de carreta, R$ 168.783,43, de 05 a 08/2026); ficam como
+  estão: desativar só tira o fornecedor das listas de escolha.
+- **"Pago por" com os nomes dos funcionários** (decisão do Tiago): migration
+  `20260925150000_frete_nomes_colaboradores`, função `nomes_colaboradores_frete()` com só id e nome
+  dos ativos para quem vê o Frete. Prova: com o Frete, 58 nomes (os 58 ativos); sem o Frete, 0;
+  anon sem execute.
