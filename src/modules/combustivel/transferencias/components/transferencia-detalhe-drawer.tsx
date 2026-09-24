@@ -2,9 +2,10 @@
 
 import { ArrowRight, Calendar, Container, Droplet, FileText, Pencil, Trash2, Wallet } from "lucide-react";
 
-import { MoneyText } from "@/components/canonicos";
+import { MoneyText, SecaoDetalhe } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { AnexosCombustivel, useAnexosDoRegistro } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import {
   BadgeCombustivel,
@@ -36,6 +37,7 @@ export function TransferenciaDetalheDrawer({
   onExcluir,
 }: TransferenciaDetalheDrawerProps) {
   const lancada = transferencia !== null && transferencia.excluidoEm === null;
+  const anexos = useAnexosDoRegistro("combustivel_transferencia", transferencia?.id ?? null);
   return (
     <Sheet
       open={transferencia !== null}
@@ -91,6 +93,17 @@ export function TransferenciaDetalheDrawer({
                 <p className="whitespace-pre-wrap">{transferencia.observacoes}</p>
               </CampoDetalhe>
             ) : null}
+
+            <SecaoDetalhe titulo="Anexos">
+              <AnexosCombustivel
+                entidade="combustivel_transferencia"
+                entidadeId={transferencia.id}
+                anexos={anexos.anexos}
+                erro={anexos.erro}
+                podeEditar={podeEditar && lancada}
+                onMudou={anexos.recarregar}
+              />
+            </SecaoDetalhe>
           </div>
         ) : null}
 

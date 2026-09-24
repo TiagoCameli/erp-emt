@@ -4,10 +4,11 @@ import * as React from "react";
 import Link from "next/link";
 import { Droplet, ExternalLink, Gauge, LoaderCircle, Pencil, Trash2, Wallet } from "lucide-react";
 
-import { MoneyText } from "@/components/canonicos";
+import { MoneyText, SecaoDetalhe } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
+import { AnexosCombustivel, useAnexosDoRegistro } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import { formatarDataHoraCurta, KpiDetalhe } from "@/modules/combustivel/_shared/components/lista-operacional";
 import { carregarAbastecimento } from "@/modules/combustivel/abastecimentos/detalhe-actions";
 import { rotaDoAbastecimento } from "@/modules/combustivel/abastecimentos/filtros";
@@ -64,6 +65,8 @@ export function AbastecimentoDetalheDrawer({
     };
   }, [id]);
 
+  const anexos = useAnexosDoRegistro("combustivel_saida", id);
+
   const resultado = carga && carga.id === id ? carga.resultado : null;
   const completo = resultado && !("erro" in resultado) ? resultado : null;
 
@@ -111,6 +114,17 @@ export function AbastecimentoDetalheDrawer({
                 Carregando o detalhe
               </p>
             )}
+
+            <SecaoDetalhe titulo="Anexos">
+              <AnexosCombustivel
+                entidade="combustivel_saida"
+                entidadeId={saida.id}
+                anexos={anexos.anexos}
+                erro={anexos.erro}
+                podeEditar={podeEditar && saida.excluidoEm === null}
+                onMudou={anexos.recarregar}
+              />
+            </SecaoDetalhe>
           </div>
         ) : null}
 

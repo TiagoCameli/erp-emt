@@ -78,7 +78,7 @@ describe("salvarTransferencia", () => {
   });
 
   it("cria com p_id null, os litros com 4 casas e o valor da tela em p_valor_total", async () => {
-    await expect(salvarTransferencia(null, DADOS)).resolves.toEqual({ ok: true });
+    await expect(salvarTransferencia(null, DADOS)).resolves.toEqual({ ok: true, id: ID });
     expect(estado.chamadas).toEqual([
       {
         fn: "fn_comb_salvar_transferencia",
@@ -96,7 +96,7 @@ describe("salvarTransferencia", () => {
   });
 
   it("edição sem mexer no valor não manda p_valor_total (o banco mantém o salvo)", async () => {
-    await expect(salvarTransferencia(ID, { ...DADOS, valorTotal: null })).resolves.toEqual({ ok: true });
+    await expect(salvarTransferencia(ID, { ...DADOS, valorTotal: null })).resolves.toEqual({ ok: true, id: ID });
     expect(estado.chamadas).toHaveLength(1);
     expect(estado.chamadas[0]?.args).not.toHaveProperty("p_valor_total");
     expect(estado.chamadas[0]?.args).toMatchObject({ p_id: ID, p_litros: 500.1234 });

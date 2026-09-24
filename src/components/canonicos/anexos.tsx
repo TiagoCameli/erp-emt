@@ -16,6 +16,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 
 import { ConfirmDialog } from "@/components/canonicos/confirm-dialog";
+import { BotaoTirarFoto } from "@/components/canonicos/fila-anexos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,6 +86,26 @@ export interface AnexosProps {
   podeEditar: boolean;
   /** Chamado depois de enviar ou remover, para a página recarregar o resto. */
   onMudou?: () => void;
+  /**
+   * Mostra só parte dos anexos do documento (as fotos, ou os arquivos), quando a
+   * tela divide o mesmo documento em duas seções.
+   */
+  filtro?: (anexo: AnexoDoDocumento) => boolean;
+  /**
+   * Regra da tela antes de enviar (limite por grupo, tipos aceitos). Recebe
+   * quantos a seção já mostra; os recusados viram aviso com o motivo.
+   */
+  validarNovos?: (arquivos: File[], jaTem: number) => { aceitos: File[]; recusados: string[] };
+  /** Tipos oferecidos no seletor (`accept`). Sem isto, qualquer arquivo. */
+  aceitar?: string;
+  /** Convite da área de arrastar. */
+  convite?: string;
+  /** Texto embaixo do convite. */
+  legenda?: string;
+  /** Texto da lista vazia. */
+  textoVazio?: string;
+  /** Liga o botão "Tirar foto" (câmera do celular), com o tratamento da foto. */
+  aoTirarFoto?: (fotos: File[]) => Promise<File[]>;
 }
 
 /**
@@ -105,8 +126,16 @@ export function Anexos({
   anexos: anexosIniciais,
   podeEditar,
   onMudou,
+  filtro,
+  validarNovos,
+  aceitar,
+  convite = "Arraste arquivos aqui ou clique para escolher",
+  legenda = `Qualquer tipo, até ${TAMANHO_MAXIMO_MB} MB por arquivo`,
+  textoVazio = "Nenhum anexo",
+  aoTirarFoto,
 }: AnexosProps) {
-  const [anexos, setAnexos] = React.useState(anexosIniciais);
+  const [todosAnexos, setAnexos] = React.useState(anexosIniciais);
+  const anexos = filtro ? todosAnexos.filter(filtro) : todosAnexos;
   const [enviando, setEnviando] = React.useState(false);
   const [progresso, setProgresso] = React.useState({ feitos: 0, total: 0 });
   const [arrastando, setArrastando] = React.useState(false);
@@ -130,7 +159,13 @@ export function Anexos({
   }
 
   /** Envia um por vez para a barra de progresso dizer a verdade. */
-  async function enviar(arquivos: File[]) {
+  async function enviar(escolhidos: File[]) {
+    let arquivos = escolhidos;
+    if (validarNovos) {
+      const { aceitos: validos, recusados } = validarNovos(escolhidos, anexos.length);
+      for (const motivo of recusados) toast.error(motivo);
+      arquivos = validos;
+    }
     const aceitos: File[] = [];
     for (const arquivo of arquivos) {
       if (arquivo.size > TAMANHO_MAXIMO_MB * BYTES_POR_MB) {
@@ -221,6 +256,7 @@ export function Anexos({
             ref={inputRef}
             type="file"
             multiple
+            accept={aceitar}
             className="hidden"
             onChange={(evento) => {
               const arquivos = Array.from(evento.target.files ?? []);
@@ -228,6 +264,13 @@ export function Anexos({
               void enviar(arquivos);
             }}
           />
+          {aoTirarFoto ? (
+            <BotaoTirarFoto
+              aoTirarFoto={aoTirarFoto}
+              onFotos={(fotos) => void enviar(fotos)}
+              disabled={enviando}
+            />
+          ) : null}
           <button
             type="button"
             disabled={enviando}
@@ -274,11 +317,9 @@ export function Anexos({
             ) : (
               <>
                 <Upload className="size-5 text-muted-foreground" aria-hidden />
-                <span className="font-medium">
-                  Arraste arquivos aqui ou clique para escolher
-                </span>
+                <span className="font-medium">{convite}</span>
                 <span className="text-legenda text-muted-foreground">
-                  Qualquer tipo, até {TAMANHO_MAXIMO_MB} MB por arquivo
+                  {legenda}
                 </span>
               </>
             )}
@@ -287,7 +328,7 @@ export function Anexos({
       ) : null}
 
       {anexos.length === 0 ? (
-        <p className="text-detalhe text-muted-foreground">Nenhum anexo</p>
+        <p className="text-detalhe text-muted-foreground">{textoVazio}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {anexos.map((anexo) => (

@@ -101,7 +101,7 @@ beforeEach(() => {
   vi.mocked(consultarEstoqueTransferencia).mockResolvedValue({ ok: true, litros: 5000 });
   vi.mocked(consultarPrecoMedioTanque).mockResolvedValue({ ok: true, preco: 6.3947 });
   vi.mocked(consultarCombustivelNaData).mockResolvedValue({ ok: true, nome: "Diesel S10" });
-  vi.mocked(salvarTransferencia).mockResolvedValue({ ok: true });
+  vi.mocked(salvarTransferencia).mockResolvedValue({ ok: true, id: "99999999-9999-4999-8999-999999999999" });
 });
 
 afterEach(() => {

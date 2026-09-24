@@ -17,6 +17,8 @@ import {
   ROTULO_TIPO_CONSUMIDOR,
   ROTULO_TIPO_MOVIMENTO,
 } from "@/modules/combustivel/_shared/rotulos";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import { AnexosCombustivel } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import { excluirAbastecimento } from "@/modules/combustivel/abastecimentos/actions";
 import type { AbastecimentoCompleto } from "@/modules/combustivel/abastecimentos/queries";
 import { formatarValorOperacional, somarValoresOperacionais } from "@/modules/manutencao/servicos/formato";
@@ -227,6 +229,8 @@ export interface AbastecimentoDetalheViewProps {
   abastecimento: AbastecimentoCompleto;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Fotos e arquivos da saída, lidos no servidor. */
+  anexos: AnexoDoDocumento[];
   /** Carregadas só quando dá para editar. */
   opcoes: OpcoesAbastecimento;
 }
@@ -236,7 +240,13 @@ export interface AbastecimentoDetalheViewProps {
  * consumiu, os movimentos que gerou na conta corrente da transportadora e as
  * alocações. Tudo vem do banco; a tela não soma preço nem valor para gravar.
  */
-export function AbastecimentoDetalheView({ abastecimento, podeEditar, podeExcluir, opcoes }: AbastecimentoDetalheViewProps) {
+export function AbastecimentoDetalheView({
+  abastecimento,
+  podeEditar,
+  podeExcluir,
+  anexos,
+  opcoes,
+}: AbastecimentoDetalheViewProps) {
   const router = useRouter();
   const { saida } = abastecimento;
   const [editando, setEditando] = React.useState(false);
@@ -279,6 +289,18 @@ export function AbastecimentoDetalheView({ abastecimento, podeEditar, podeExclui
       />
 
       <AbastecimentoDetalheConteudo abastecimento={abastecimento} />
+
+      <div className="mt-6">
+        <SecaoDetalhe titulo="Anexos">
+          <AnexosCombustivel
+            entidade="combustivel_saida"
+            entidadeId={saida.id}
+            anexos={anexos}
+            podeEditar={podeEditar}
+            onMudou={() => semDerrubarSucesso("combustivel.saidas.anexos", () => router.refresh())}
+          />
+        </SecaoDetalhe>
+      </div>
 
       {podeEditar ? (
         <AbastecimentoFormDrawer

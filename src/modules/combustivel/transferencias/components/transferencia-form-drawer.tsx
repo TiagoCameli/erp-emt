@@ -13,12 +13,23 @@ import {
   InputPreco,
   InputQuantidade,
   LinhaCampos,
+  SecaoFormulario,
   submeterComAviso,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { avisoDeFalhas, type FalhaDeEnvio } from "@/modules/_shared/anexos/fila";
+import {
+  AnexosCombustivel,
+  FILA_VAZIA,
+  FilaAnexosCombustivel,
+  filaTemAlgo,
+  subirFilaCombustivel,
+  useAnexosDoRegistro,
+  type FilaCombustivel,
+} from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import {
   agoraDataHoraLocal,
   dataHoraLocalParaIso,
@@ -125,6 +136,20 @@ export function TransferenciaFormDrawer({
   React.useEffect(() => {
     if (aberto) form.reset(valoresIniciais(transferencia));
   }, [aberto, transferencia, form]);
+
+  // Anexos (foto do nível antes e depois, comprovante): na criação esperam na fila e sobem
+  // depois do salvar; na edição sobem na hora.
+  const [fila, setFila] = React.useState<FilaCombustivel>(FILA_VAZIA);
+  const [enviandoAnexos, setEnviandoAnexos] = React.useState(false);
+  const [abertoAntes, setAbertoAntes] = React.useState(aberto);
+  if (aberto !== abertoAntes) {
+    setAbertoAntes(aberto);
+    if (aberto) setFila(FILA_VAZIA);
+  }
+  const anexosDaTransferencia = useAnexosDoRegistro(
+    "combustivel_transferencia",
+    aberto && transferencia ? transferencia.id : null,
+  );
 
   const [origemId, destinoId, litros, valorTotal, dataHora] = useWatch({
     control: form.control,
@@ -238,7 +263,19 @@ export function TransferenciaFormDrawer({
       toast.error(resultado.erro);
       return;
     }
-    toast.success(editando ? "Transferência salva" : "Transferência lançada");
+    // Depois do salvar nada vira falha: anexo que não subiu é aviso, e a transferência fica.
+    let falhas: FalhaDeEnvio[] = [];
+    if (!editando && filaTemAlgo(fila)) {
+      setEnviandoAnexos(true);
+      try {
+        falhas = await subirFilaCombustivel("combustivel_transferencia", resultado.id, fila);
+      } finally {
+        setEnviandoAnexos(false);
+      }
+    }
+    const aviso = avisoDeFalhas("Transferência lançada", falhas);
+    if (aviso) toast.warning(aviso, { duration: 12000 });
+    else toast.success(editando ? "Transferência salva" : "Transferência lançada");
     onAbertoChange(false);
   }
 
@@ -265,7 +302,7 @@ export function TransferenciaFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar transferência" : "Nova transferência"}
       descricao="Combustível que passa de um tanque da EMT para outro"
-      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
+      temAlteracoesNaoSalvas={(form.formState.isDirty || filaTemAlgo(fila)) && !salvando}
       rodape={
         <>
           <Button type="button" variant="outline" onClick={() => onAbertoChange(false)} disabled={salvando}>
@@ -275,7 +312,7 @@ export function TransferenciaFormDrawer({
             {salvando ? (
               <>
                 <LoaderCircle className="animate-spin" />
-                Salvando...
+                {enviandoAnexos ? "Enviando anexos..." : "Salvando..."}
               </>
             ) : editando ? (
               "Salvar transferência"
@@ -387,6 +424,21 @@ export function TransferenciaFormDrawer({
             {...form.register("observacoes")}
           />
         </CampoFormulario>
+
+        <SecaoFormulario titulo="Anexos (opcional)">
+          {transferencia ? (
+            <AnexosCombustivel
+              entidade="combustivel_transferencia"
+              entidadeId={transferencia.id}
+              anexos={anexosDaTransferencia.anexos}
+              erro={anexosDaTransferencia.erro}
+              podeEditar
+              onMudou={anexosDaTransferencia.recarregar}
+            />
+          ) : (
+            <FilaAnexosCombustivel fila={fila} onMudar={setFila} ocupado={salvando} />
+          )}
+        </SecaoFormulario>
       </form>
     </FormDrawer>
   );
