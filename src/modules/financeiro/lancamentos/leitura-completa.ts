@@ -23,6 +23,9 @@ import type { LancamentoLista } from "@/modules/financeiro/lancamentos/queries";
  */
 export const PAGINA_LEITURA = 1000;
 
+/** Páginas pedidas ao mesmo tempo depois da primeira. */
+const ONDA_DE_PAGINAS = 5;
+
 /**
  * Uma página da listagem, com o total exato do filtro.
  *
@@ -73,26 +76,50 @@ export async function lerLancamentosEmPaginas<
 ): Promise<LeituraCompleta<T>> {
   const vistos = new Set<string>();
   const itens: T[] = [];
-  let total = 0;
 
-  const maximoDePaginas = Math.ceil(teto / tamanhoPagina);
-  for (let pagina = 0; pagina < maximoDePaginas; pagina += 1) {
-    const lote = await ler(pagina, tamanhoPagina);
-    total = lote.total;
-
-    // Passou do teto: para na primeira página, sem varrer o banco à toa.
-    if (total > teto) return { itens: [], total };
-
+  const juntar = (lote: PaginaDeLancamentos<T>) => {
     for (const item of lote.itens) {
       if (vistos.has(item.id)) continue;
       vistos.add(item.id);
       itens.push(item);
     }
+  };
 
-    // Página curta é fim de lista. E o total fechado também: sem essa saída, um
-    // filtro de 1000 exatas pediria uma página a mais só para ouvir "vazio".
-    if (lote.itens.length < tamanhoPagina) break;
-    if (itens.length >= total) break;
+  // A primeira página vai sozinha porque é ela que diz o total.
+  const primeira = await ler(0, tamanhoPagina);
+  const total = primeira.total;
+
+  // Passou do teto: para na primeira página, sem varrer o banco à toa.
+  if (total > teto) return { itens: [], total };
+
+  juntar(primeira);
+
+  // Página curta é fim de lista. E o total fechado também: sem essa saída, um
+  // filtro de 1000 exatas pediria uma página a mais só para ouvir "vazio".
+  if (primeira.itens.length < tamanhoPagina || itens.length >= total) {
+    return { itens, total };
+  }
+
+  // Com o total na mão, as páginas que faltam são conhecidas: saem em ondas
+  // PARALELAS de `ONDA_DE_PAGINAS`, em vez de uma atrás da outra. Cada página
+  // é a listagem completa (embeds, count, anexos), de 300 a 600 ms; em fila,
+  // o resumo de 6,7 mil lançamentos esperava 7 delas. A ordem de `itens` segue
+  // a das páginas, não a de chegada.
+  const paginas = Math.min(
+    Math.ceil(total / tamanhoPagina),
+    Math.ceil(teto / tamanhoPagina),
+  );
+  for (let inicio = 1; inicio < paginas; inicio += ONDA_DE_PAGINAS) {
+    const onda = Array.from(
+      { length: Math.min(ONDA_DE_PAGINAS, paginas - inicio) },
+      (_, i) => ler(inicio + i, tamanhoPagina),
+    );
+    const lotes = await Promise.all(onda);
+
+    for (const lote of lotes) {
+      juntar(lote);
+      if (lote.itens.length < tamanhoPagina) return { itens, total };
+    }
   }
 
   return { itens, total };

@@ -966,15 +966,18 @@ export async function listarLancamentos(
   if (revisaoDoFiltro?.soAPagar && params.tipo && params.tipo !== "a_pagar") {
     return { itens: [], total: 0 };
   }
-  if (params.atraso) {
-    listasDeIds.push(await idsPorAtraso(supabase, params.atraso, hojeISO));
-  }
+  // As leituras auxiliares abaixo não dependem umas das outras (só os valores
+  // do centro dependem da subárvore), então saem juntas. Em fila, filtrar por
+  // centro com recorte esperava cinco idas ao banco antes da consulta principal.
+  const idsAtrasoP = params.atraso
+    ? idsPorAtraso(supabase, params.atraso, hojeISO)
+    : null;
   // A conta bancária NÃO vira lista de ids: a maior conta tem 4.901 lançamentos
   // (medido 01/09/2026), 181 KB de URL, e acima de ~1.800 ids a requisição nem
   // completa — some sem log em lugar nenhum. Vai no embed, como o centro.
-  if (params.comSaldoAberto) {
-    listasDeIds.push(await idsComSaldoAberto(supabase));
-  }
+  const idsSaldoAbertoP = params.comSaldoAberto
+    ? idsComSaldoAberto(supabase)
+    : null;
   // O centro é FILTRO e RECORTE, mas os dois entram por caminhos diferentes: o
   // filtro vai no embed da consulta (mais abaixo) e o recorte vira o
   // `valorRecorte` de cada linha. A subárvore é lida uma vez e serve aos dois,
@@ -984,12 +987,15 @@ export async function listarLancamentos(
   // na query string, e o Escritório Central tem 1.871 lançamentos — 69 KB de URL,
   // que morre antes de chegar ao servidor (medido: 1.115 ids dão HTTP 400, 1.753
   // dão 520 e 1.871 não completam a requisição).
-  const subarvoreCentro = params.centroCustoIds?.length
-    ? await subarvoreDosCentros(supabase, params.centroCustoIds)
-    : null;
-  const valoresCentro = subarvoreCentro?.length
-    ? await valoresPorCentroCusto(supabase, subarvoreCentro)
-    : null;
+  const centroP = (async () => {
+    const subarvore = params.centroCustoIds?.length
+      ? await subarvoreDosCentros(supabase, params.centroCustoIds)
+      : null;
+    const valores = subarvore?.length
+      ? await valoresPorCentroCusto(supabase, subarvore)
+      : null;
+    return { subarvore, valores };
+  })();
   // O recorte de parcela também é filtro E medida, e agora pelos mesmos dois
   // caminhos do centro: a MEDIDA continua vindo da RPC (POST, sem limite de URL)
   // e o FILTRO desceu para o embed aliasado.
@@ -998,20 +1004,38 @@ export async function listarLancamentos(
   // comentário acima proíbe. Custou 400 no clique do fluxo de caixa (732
   // lançamentos, URL de 29.342 caracteres, medido no edge_logs em 01/09/2026) e,
   // no `conta_paga`, uma requisição de 4.818 ids que nem chegava a virar erro.
-  const valoresRecorte = params.recorte
-    ? await valoresDoRecorte(supabase, params.recorte, params.contaBancariaId)
+  const valoresRecorteP = params.recorte
+    ? valoresDoRecorte(supabase, params.recorte, params.contaBancariaId)
     : null;
   // O corte do saldo inicial é da CONTA, então só o banco sabe. Uma leitura, e
   // só quando o recorte é o da posição bancária.
-  const saldoInicialData =
+  const saldoInicialDataP =
     params.recorte?.tipo === "conta_paga" && params.contaBancariaId
-      ? await saldoInicialDaConta(supabase, params.contaBancariaId)
+      ? saldoInicialDaConta(supabase, params.contaBancariaId)
       : null;
   // As categorias de natureza `movimentacao` (4 hoje): os três recortes as
   // descartam, e a regra mora no lançamento, não na parcela.
-  const categoriasDeMovimentacao = params.recorte
-    ? await idsDeCategoriaDeMovimentacao(supabase)
+  const categoriasDeMovimentacaoP = params.recorte
+    ? idsDeCategoriaDeMovimentacao(supabase)
     : [];
+
+  const [
+    idsAtraso,
+    idsSaldoAberto,
+    { subarvore: subarvoreCentro, valores: valoresCentro },
+    valoresRecorte,
+    saldoInicialData,
+    categoriasDeMovimentacao,
+  ] = await Promise.all([
+    idsAtrasoP,
+    idsSaldoAbertoP,
+    centroP,
+    valoresRecorteP,
+    saldoInicialDataP,
+    categoriasDeMovimentacaoP,
+  ]);
+  if (idsAtraso) listasDeIds.push(idsAtraso);
+  if (idsSaldoAberto) listasDeIds.push(idsSaldoAberto);
 
   let idsFiltrados: string[] | null = null;
   if (listasDeIds.length > 0) {

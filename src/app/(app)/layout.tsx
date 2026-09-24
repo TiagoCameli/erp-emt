@@ -32,11 +32,7 @@ export default async function AppLayout({
 
   // Senha temporária (fallback de convite sem email): força a troca
   // antes de qualquer outra tela.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user?.user_metadata?.senha_temporaria === true) {
+  if (usuario.senhaTemporaria) {
     redirect("/definir-senha");
   }
 

@@ -33,6 +33,12 @@ export interface UsuarioLogado {
    * roda. A coluna a mais não custa nada; a consulta a mais, sim.
    */
   fotoPath: string | null;
+  /**
+   * Senha provisória ainda não trocada (convite sem email). O layout manda para
+   * /definir-senha. Sai do MESMO `getUser` desta função: antes o layout fazia um
+   * segundo `getUser`, uma ida a mais ao Auth em toda página só para ler isto.
+   */
+  senhaTemporaria: boolean;
   permissoes: PermissaoUsuario[];
 }
 
@@ -73,6 +79,7 @@ export const getUsuarioLogado = cache(
       ativo: usuario.ativo,
       perfilId: usuario.perfil_id,
       fotoPath: usuario.foto_path,
+      senhaTemporaria: user.user_metadata?.senha_temporaria === true,
       permissoes: (permissoes ?? []) as PermissaoUsuario[],
     };
   },

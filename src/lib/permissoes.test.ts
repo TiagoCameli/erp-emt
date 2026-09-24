@@ -21,6 +21,7 @@ function criarUsuario(permissoes: PermissaoUsuario[] = []): UsuarioLogado {
     ativo: true,
     perfilId: null,
     fotoPath: null,
+    senhaTemporaria: false,
     permissoes,
   };
 }
