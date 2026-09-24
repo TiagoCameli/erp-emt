@@ -16,7 +16,12 @@ import {
   textoDiferenca,
 } from "@/modules/combustivel/analitico/formato";
 import { BarraFiltrosCombustivel } from "@/modules/combustivel/_shared/components/barra-filtros-combustivel";
-import { aplicarFiltroGlobal, filtroGlobalDaUrl } from "@/modules/combustivel/_shared/filtro-global";
+import {
+  aplicarFiltroGlobal,
+  filtroGlobalDaUrl,
+  periodoEfetivo,
+  periodoFechado,
+} from "@/modules/combustivel/_shared/filtro-global";
 import { carregarBaseCombustivel } from "@/modules/combustivel/anomalias/queries";
 import { periodoAnterior } from "@/modules/combustivel/painel/calculo";
 import { carregarOpcoesFiltroGlobal } from "@/modules/combustivel/painel/queries";
@@ -41,13 +46,17 @@ export default async function PaginaObrasCombustivel({
   if (!temPermissao(usuario, "combustivel.painel", "ver")) notFound();
 
   const hoje = dataHojeISO();
-  const filtro = filtroGlobalDaUrl(await searchParams, hoje);
-  const { periodo } = filtro;
+  const filtro = filtroGlobalDaUrl(await searchParams);
   const [base, opcoes] = await Promise.all([carregarBaseCombustivel(), carregarOpcoesFiltroGlobal(filtro)]);
 
   // O filtro global nas duas listas: o mesmo nas duas, senão o delta compara recortes diferentes.
   const noPeriodo = aplicarFiltroGlobal(base.saidas, filtro);
-  const doAnterior = aplicarFiltroGlobal(base.saidas, filtro, periodoAnterior(periodo.de, periodo.ate));
+  // Sem as duas pontas não existe "período anterior de mesma duração": os deltas somem em
+  // vez de comparar com um vazio e mostrar +100%. `periodo` fecha as pontas abertas na
+  // extensão dos dados, para os baldes das sparklines e do ranking.
+  const comparavel = periodoFechado(filtro.periodo);
+  const periodo = periodoEfetivo(filtro.periodo, noPeriodo, hoje);
+  const doAnterior = comparavel ? aplicarFiltroGlobal(base.saidas, filtro, periodoAnterior(periodo.de, periodo.ate)) : [];
 
   const kpis = kpisObras(noPeriodo, doAnterior, periodo.de, periodo.ate);
   const linhas = rankingObras(noPeriodo, periodo.de, periodo.ate);
@@ -58,14 +67,14 @@ export default async function PaginaObrasCombustivel({
     <>
       <TituloAba titulo="Obras" descricao="Consumo e custo de combustível por obra no período" />
 
-      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} hoje={hoje} ocultar={["fornecedores"]} />
+      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} ocultar={["fornecedores"]} />
 
       <GradeKpis className="mb-4">
         <KpiAnalitico
           titulo="Volume total"
           valor={formatarLitros(kpis.volume)}
           detalhe="no período"
-          delta={kpis.deltaVolume}
+          delta={comparavel ? kpis.deltaVolume : undefined}
           serie={kpis.sparkVolume}
           explicacao="Soma de litros das saídas no período (modo e filtros)."
           vazio={vazio}
@@ -74,7 +83,7 @@ export default async function PaginaObrasCombustivel({
           titulo="Custo total"
           valor={<MoneyText valor={kpis.custo} />}
           detalhe="no período"
-          delta={kpis.deltaCusto}
+          delta={comparavel ? kpis.deltaCusto : undefined}
           altaRuim
           serie={kpis.sparkCusto}
           explicacao="Soma do valor total das saídas no período. Alta de custo em vermelho."
@@ -84,8 +93,8 @@ export default async function PaginaObrasCombustivel({
           titulo="Obras ativas"
           valor={formatarContagem(kpis.qtdObras)}
           detalhe="com ao menos uma saída no período"
-          delta={kpis.chipObras.tipo === "percentual" ? kpis.chipObras.valor : undefined}
-          diferenca={textoDiferenca(kpis.chipObras)}
+          delta={comparavel && kpis.chipObras.tipo === "percentual" ? kpis.chipObras.valor : undefined}
+          diferenca={comparavel ? textoDiferenca(kpis.chipObras) : undefined}
           explicacao="Obras distintas com pelo menos uma saída no período."
           vazio={vazio}
         />

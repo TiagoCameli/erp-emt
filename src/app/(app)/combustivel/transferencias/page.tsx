@@ -1,9 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
-import { ultimosDias } from "@/modules/combustivel/relatorios/periodo";
 import { listarTanques } from "@/modules/combustivel/tanques/queries";
 import { TransferenciasTabela } from "@/modules/combustivel/transferencias/components/transferencias-tabela";
 import { lerFiltrosTransferencias } from "@/modules/combustivel/transferencias/filtros";
@@ -11,9 +9,6 @@ import { listarTransferencias } from "@/modules/combustivel/transferencias/queri
 import { podeRestaurarMovimento } from "@/modules/combustivel/transferencias/regras";
 
 const RECURSO = "combustivel.transferencias" as const;
-
-/** A origem abre as listas nos últimos 30 dias (preset "ultimos_30"), como o painel. */
-const DIAS_PADRAO = 30;
 
 export default async function PaginaTransferencias({
   searchParams,
@@ -29,7 +24,9 @@ export default async function PaginaTransferencias({
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
   const podeRestaurar = podeRestaurarMovimento((recurso, acao) => temPermissao(usuario, recurso, acao), RECURSO);
-  const filtrosUrl = lerFiltrosTransferencias(await searchParams, ultimosDias(dataHojeISO(), DIAS_PADRAO));
+  // Sem `de`/`ate` na URL é qualquer data, como no resto do ERP. Os últimos 30 dias da
+  // origem eram reinjetados aqui, e limpar o período nunca desligava o filtro (24/09/2026).
+  const filtrosUrl = lerFiltrosTransferencias(await searchParams);
 
   const [transferencias, tanques] = await Promise.all([
     listarTransferencias({ incluirExcluidos: podeRestaurar }),

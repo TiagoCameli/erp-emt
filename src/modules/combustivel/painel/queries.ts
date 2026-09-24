@@ -11,6 +11,8 @@ import {
   type EntradaComFornecedor,
   type FiltroGlobal,
   type OpcoesFiltroGlobal,
+  periodoEfetivo,
+  periodoFechado,
 } from "@/modules/combustivel/_shared/filtro-global";
 import {
   detectarNaBase,
@@ -153,6 +155,13 @@ export interface SaidaRecente {
 }
 
 export interface PainelCombustivel {
+  /**
+   * O período concreto dos gráficos: o escolhido, ou (sem período) a extensão das saídas do
+   * recorte. O filtro continua "qualquer data"; isto só dá as pontas dos baldes.
+   */
+  periodo: { de: string; ate: string };
+  /** Há período anterior para comparar? Só com as duas pontas escolhidas. */
+  comparavel: boolean;
   kpis: KpisPainel;
   sparks: SparksKpis;
   /** Nome e detalhe do maior consumidor (equipamento ou placa). */
@@ -187,15 +196,16 @@ function nomeDoConsumidor(
  * duração) usa os mesmos filtros; as anomalias saem das saídas do recorte contra o banco
  * inteiro (o D3 e o D5 precisam dele), sem as conferidas.
  */
-export async function carregarPainel(filtro: FiltroGlobal): Promise<PainelCombustivel> {
+export async function carregarPainel(filtro: FiltroGlobal, hoje: string): Promise<PainelCombustivel> {
   const [base, entradas, conferidas] = await Promise.all([
     carregarBaseCombustivel(),
     carregarEntradasCombustivel(),
     lerChavesConferidas(),
   ]);
-  const { de, ate } = filtro.periodo;
   const noPeriodo = aplicarFiltroGlobal(base.saidas, filtro);
-  const anterior = aplicarFiltroGlobal(base.saidas, filtro, periodoAnterior(de, ate));
+  const comparavel = periodoFechado(filtro.periodo);
+  const { de, ate } = periodoEfetivo(filtro.periodo, noPeriodo, hoje);
+  const anterior = comparavel ? aplicarFiltroGlobal(base.saidas, filtro, periodoAnterior(de, ate)) : [];
   const kpis = calcularKpis(noPeriodo, anterior, filtro.modo);
 
   let criticas = 0;
@@ -217,6 +227,8 @@ export async function carregarPainel(filtro: FiltroGlobal): Promise<PainelCombus
   const fornecedorNome = new Map(entradas.map((e) => [e.fornecedorId, e.fornecedorNome]));
 
   return {
+    periodo: { de, ate },
+    comparavel,
     kpis,
     sparks: sparksDosKpis(noPeriodo, de, ate),
     maior: kpis.maiorChave ? nome(kpis.maiorChave) : null,

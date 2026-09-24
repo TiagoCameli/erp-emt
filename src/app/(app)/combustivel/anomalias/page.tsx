@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 
 import { GradeKpis, KPICard, SecaoDetalhe } from "@/components/canonicos";
-import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { modoDaUrl } from "@/modules/combustivel/anomalias/base";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
@@ -10,16 +9,13 @@ import { SemSuprimentoTabela } from "@/modules/combustivel/anomalias/components/
 import type { DetectorId, Severidade } from "@/modules/combustivel/anomalias/detect";
 import { carregarAnomalias, listarSemSuprimento } from "@/modules/combustivel/anomalias/queries";
 import { situacaoDaUrl } from "@/modules/combustivel/anomalias/schemas";
-import { periodoDaUrl, ultimosDias } from "@/modules/combustivel/relatorios/periodo";
+import { periodoOpcionalDaUrl, pontasDoPeriodo, SEM_LIMITE } from "@/modules/combustivel/_shared/filtro-global";
 
 /**
  * A detecção lê todas as saídas (o D3 e o D5 olham o banco inteiro, como na origem),
  * página por página: passa do teto padrão da Vercel (10 a 15s).
  */
 export const maxDuration = 60;
-
-/** Padrão da origem: os últimos 30 dias (preset "ultimos_30"). */
-const DIAS_PADRAO = 30;
 
 const SEVERIDADES: readonly Severidade[] = ["critical", "warning", "info"];
 const DETECTORES: readonly DetectorId[] = ["D1", "D2", "D3", "D4", "D5"];
@@ -45,7 +41,10 @@ export default async function PaginaAnomalias({
   const veAbastecimentos = temPermissao(usuario, "combustivel.saidas", "ver");
 
   const params = await searchParams;
-  const periodo = periodoDaUrl(params.de, params.ate, ultimosDias(dataHojeISO(), DIAS_PADRAO));
+  // Sem `de`/`ate` na URL é qualquer data, como no resto do ERP. Os últimos 30 dias da
+  // origem eram reinjetados aqui, e limpar o período nunca desligava o filtro (24/09/2026).
+  const periodoUrl = periodoOpcionalDaUrl(params.de, params.ate);
+  const periodo = periodoUrl ?? SEM_LIMITE;
   const modo = modoDaUrl(params.modo);
   const situacao = situacaoDaUrl(params.situacao);
   const revisao = situacaoDaUrl(params.revisao);
@@ -96,8 +95,8 @@ export default async function PaginaAnomalias({
             situacao={situacao}
             severidade={severidade}
             detector={detector}
-            de={periodo.de}
-            ate={periodo.ate}
+            de={pontasDoPeriodo(periodoUrl).de}
+            ate={pontasDoPeriodo(periodoUrl).ate}
             podeEditar={podeEditar}
             veAbastecimentos={veAbastecimentos}
             equipamentos={resultado.equipamentos}

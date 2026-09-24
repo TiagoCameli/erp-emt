@@ -826,7 +826,7 @@ export function FiltroMesPeriodo({
               }
               rotulo={rotulo}
               granularidades={["ano", "trimestre", "mes"]}
-              semDataExata
+              dataExata="mes"
             />
           </PopoverContent>
         </Popover>

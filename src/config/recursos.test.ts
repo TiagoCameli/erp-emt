@@ -172,6 +172,21 @@ describe("módulo Gestão", () => {
     expect(MODULOS[0].rota).toBe("/gestao");
   });
 
+  it("a sidebar põe Frete, Combustível e Manutenção entre RH e Administração", () => {
+    // Pedido do Tiago em 24/09/2026, com print da sidebar.
+    expect(MODULOS.map((m) => m.id)).toEqual([
+      "gestao",
+      "cadastros",
+      "compras",
+      "financeiro",
+      "rh",
+      "frete",
+      "combustivel",
+      "manutencao",
+      "administracao",
+    ]);
+  });
+
   it("existe o recurso gestao.painel só com a ação ver", () => {
     const painel = RECURSOS.find((r) => r.id === "gestao.painel");
     expect(painel, "recurso gestao.painel não encontrado").toBeDefined();

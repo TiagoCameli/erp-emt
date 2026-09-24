@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
 
-import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
@@ -18,12 +17,8 @@ import {
 } from "@/modules/combustivel/abastecimentos/queries";
 import { obrasParaAlocacao } from "@/modules/combustivel/abastecimentos/opcoes";
 import { listarInsumosCombustivel, listarTanques } from "@/modules/combustivel/entradas/queries";
-import { ultimosDias } from "@/modules/combustivel/relatorios/periodo";
 
 const RECURSO = "combustivel.saidas" as const;
-
-/** A origem abre as listas nos últimos 30 dias (preset "ultimos_30"), como o painel. */
-const DIAS_PADRAO = 30;
 
 export default async function PaginaAbastecimentos({
   searchParams,
@@ -47,7 +42,9 @@ export default async function PaginaAbastecimentos({
   // Restaurar é a Lixeira da origem: pede editar a Lixeira e excluir na aba (a
   // fn_comb_restaurar confere as duas de novo). Sem isso, "excluidos" na URL é ignorado.
   const podeRestaurar = temPermissao(usuario, "administracao.lixeira", "editar") && podeExcluir;
-  const lidos = lerFiltrosAbastecimentos(params, { periodoPadrao: ultimosDias(dataHojeISO(), DIAS_PADRAO) });
+  // Sem `de`/`ate` na URL é qualquer data, como no resto do ERP. Os últimos 30 dias da
+  // origem eram reinjetados aqui, e limpar o período nunca desligava o filtro (24/09/2026).
+  const lidos = lerFiltrosAbastecimentos(params);
   const filtros = { ...lidos, excluidos: podeRestaurar && lidos.excluidos ? true : undefined };
 
   // Os tanques vêm antes: as sub-abas Internas/Externas dependem de quais são de terceiro.

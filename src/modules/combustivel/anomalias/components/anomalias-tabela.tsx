@@ -399,7 +399,7 @@ export function AnomaliasTabela({
             id: "periodo",
             rotulo: "Período",
             fixo: true,
-            temValor: true,
+            temValor: de !== "" || ate !== "",
             onLimpar: () => setMuitos({ de: null, ate: null }),
             elemento: (
               <FiltroPeriodo

@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Bookmark, CalendarDays, ChevronDown, Plus, Trash2, X } from "lucide-react";
+import { Bookmark, Plus, Trash2, X } from "lucide-react";
 
-import { FiltroSelectMulti, useFiltrosUrl } from "@/components/canonicos";
+import { FiltroPeriodo, FiltroSelectMulti, useFiltrosUrl } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -13,17 +13,12 @@ import { escreverListaNaUrl } from "@/modules/financeiro/_shared/listas-na-url";
 import {
   alternarValor,
   CHAVE_DA_DIMENSAO,
-  diasNoPeriodo,
   mudancasParaLimpar,
-  periodoDoPreset,
-  presetDoPeriodo,
-  PRESETS_PERIODO,
-  rotuloPeriodo,
+  pontasDoPeriodo,
   temFiltroAtivo,
   type DimensaoFiltro,
   type FiltroGlobal,
   type OpcoesFiltroGlobal,
-  type PresetPeriodo,
 } from "@/modules/combustivel/_shared/filtro-global";
 import { CHAVES_RECORTE } from "@/modules/combustivel/_shared/navegacao";
 
@@ -32,12 +27,17 @@ import { CHAVES_RECORTE } from "@/modules/combustivel/_shared/navegacao";
  * (v2/filters), sobre a URL (`CHAVES_RECORTE`). Qualquer aba a usa assim:
  *
  * ```tsx
- * const filtro = filtroGlobalDaUrl(await searchParams, dataHojeISO());
+ * const filtro = filtroGlobalDaUrl(await searchParams);
  * const opcoes = await carregarOpcoesFiltroGlobal(filtro);
- * <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} hoje={hoje} />
+ * <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} />
  * ```
  *
- * `filtro` vem da página (já com o período padrão resolvido); `opcoes`, prontas. Cada
+ * O período é o `FiltroPeriodo` canônico, o mesmo do resto do ERP: sem período é qualquer
+ * data, e o X limpa de verdade. Antes era um popover próprio com presets e "Aplicar", e a
+ * página reinjetava os últimos 30 dias quando a URL ficava sem `de`/`ate` — o filtro nunca
+ * desligava (relatado pelo Tiago em 24/09/2026).
+ *
+ * `filtro` vem da página; `opcoes`, prontas. Cada
  * mudança é UMA navegação (`useFiltrosUrl().setMuitos`), e zera a `pagina` de quem lista.
  */
 
@@ -47,8 +47,6 @@ const GATILHO_ATIVO = "border-primary bg-primary/10 font-medium text-primary hov
 export interface BarraFiltrosCombustivelProps {
   filtro: FiltroGlobal;
   opcoes: OpcoesFiltroGlobal;
-  /** Hoje (AAAA-MM-DD de Rio Branco), para os presets de período. */
-  hoje: string;
   /** Listas que a aba não usa (ex.: fornecedor numa aba só de saídas). */
   ocultar?: readonly DimensaoFiltro[];
   className?: string;
@@ -71,11 +69,9 @@ export function useRecorteCombustivel(filtro: FiltroGlobal) {
           pagina: null,
         });
       },
-      /** Período escolhido; o dos últimos 30 dias sai da URL (é o padrão, como na origem). */
-      definirPeriodo(de: string, ate: string, hoje?: string) {
-        const padrao = hoje ? periodoDoPreset("ultimos_30", hoje) : null;
-        const ehPadrao = padrao !== null && padrao.de === de && padrao.ate === ate;
-        setMuitos({ de: ehPadrao ? null : de, ate: ehPadrao ? null : ate, pagina: null });
+      /** Período escolhido; ponta vazia sai da URL (os dois vazios = qualquer data). */
+      definirPeriodo(de: string, ate: string) {
+        setMuitos({ de: de === "" ? null : de, ate: ate === "" ? null : ate, pagina: null });
       },
       limpar() {
         setMuitos({ ...mudancasParaLimpar(), pagina: null });
@@ -85,7 +81,7 @@ export function useRecorteCombustivel(filtro: FiltroGlobal) {
   );
 }
 
-export function BarraFiltrosCombustivel({ filtro, opcoes, hoje, ocultar = [], className }: BarraFiltrosCombustivelProps) {
+export function BarraFiltrosCombustivel({ filtro, opcoes, ocultar = [], className }: BarraFiltrosCombustivelProps) {
   const recorte = useRecorteCombustivel(filtro);
   const proprios = filtro.modo === "proprios";
   const mostra = (dimensao: DimensaoFiltro) => !ocultar.includes(dimensao) && opcoes[dimensao].length > 0;
@@ -105,7 +101,11 @@ export function BarraFiltrosCombustivel({ filtro, opcoes, hoje, ocultar = [], cl
   return (
     <div className={cn("mb-4 rounded-lg border border-border bg-card", className)}>
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-        <FiltroPeriodoCombustivel filtro={filtro} hoje={hoje} onAplicar={(de, ate) => recorte.definirPeriodo(de, ate, hoje)} />
+        <FiltroPeriodo
+          de={pontasDoPeriodo(filtro.periodo).de}
+          ate={pontasDoPeriodo(filtro.periodo).ate}
+          onPeriodoChange={(de, ate) => recorte.definirPeriodo(de, ate)}
+        />
         {multi("obras", "Obra")}
         {proprios ? multi("equipamentos", "Equipamento") : null}
         {!proprios ? multi("transportadoras", "Transportadora") : null}
@@ -125,115 +125,6 @@ export function BarraFiltrosCombustivel({ filtro, opcoes, hoje, ocultar = [], cl
       </div>
       <ChipsAtivos filtro={filtro} opcoes={opcoes} ocultar={ocultar} />
     </div>
-  );
-}
-
-/** O filtro de período da origem (PeriodoPanel): presets numa coluna, datas ao lado. */
-function FiltroPeriodoCombustivel({
-  filtro,
-  hoje,
-  onAplicar,
-}: {
-  filtro: FiltroGlobal;
-  hoje: string;
-  onAplicar: (de: string, ate: string) => void;
-}) {
-  const [aberto, setAberto] = React.useState(false);
-  const [rascunho, setRascunho] = React.useState(filtro.periodo);
-  const presetRascunho = presetDoPeriodo(rascunho, hoje);
-  const valido = rascunho.de !== "" && rascunho.ate !== "" && rascunho.de <= rascunho.ate;
-
-  function abrir(proximo: boolean) {
-    if (proximo) setRascunho(filtro.periodo);
-    setAberto(proximo);
-  }
-
-  return (
-    <Popover open={aberto} onOpenChange={abrir}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-label="Período"
-          className={cn(GATILHO, (filtro.periodoEscolhido || aberto) && GATILHO_ATIVO)}
-        >
-          <CalendarDays className="size-3.5" />
-          <span className="whitespace-nowrap tabular-nums">{rotuloPeriodo(filtro.periodo)}</span>
-          <ChevronDown className="size-3 opacity-60" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[28rem] max-w-[92vw] p-0">
-        <div className="flex">
-          <div className="w-40 shrink-0 border-r border-border py-1">
-            {PRESETS_PERIODO.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => setRascunho(periodoDoPreset(preset.id as PresetPeriodo, hoje))}
-                className={cn(
-                  "w-full px-3 py-2 text-left text-sm transition-colors",
-                  presetRascunho === preset.id
-                    ? "bg-primary/10 font-medium text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                {preset.rotulo}
-              </button>
-            ))}
-          </div>
-          <div className="min-w-0 flex-1 p-3">
-            <div className="mb-2 text-legenda uppercase tracking-wide text-muted-foreground">Personalizado</div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className="mb-1 block text-legenda text-muted-foreground">De</span>
-                <Input
-                  type="date"
-                  value={rascunho.de}
-                  onChange={(e) => setRascunho((atual) => ({ ...atual, de: e.target.value }))}
-                  className="h-8 text-detalhe"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-legenda text-muted-foreground">Até</span>
-                <Input
-                  type="date"
-                  value={rascunho.ate}
-                  onChange={(e) => setRascunho((atual) => ({ ...atual, ate: e.target.value }))}
-                  className="h-8 text-detalhe"
-                />
-              </label>
-            </div>
-            <p className="mt-3 text-detalhe text-muted-foreground">
-              {valido ? (
-                <>
-                  {rotuloPeriodo(rascunho)} ·{" "}
-                  <span className="font-medium text-foreground">{diasNoPeriodo(rascunho)} dias</span>
-                </>
-              ) : (
-                "Escolha o início e o fim"
-              )}
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setAberto(false)}>
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={!valido}
-                onClick={() => {
-                  onAplicar(rascunho.de, rascunho.ate);
-                  setAberto(false);
-                }}
-              >
-                Aplicar
-              </Button>
-            </div>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -288,7 +179,7 @@ function ChipsCombustivel({
 }
 
 interface Chip {
-  dimensao: DimensaoFiltro | "periodo";
+  dimensao: DimensaoFiltro;
   valor: string;
   rotulo: string;
 }
@@ -323,10 +214,9 @@ function ChipsAtivos({
     !(proprios && (dimensao === "transportadoras" || dimensao === "placas")) &&
     !(!proprios && dimensao === "equipamentos");
 
+  // O período não vira chip: o FiltroPeriodo já mostra o resumo e tem o X dele, como em
+  // toda barra do ERP. Dois lugares para limpar a mesma coisa só confundem.
   const chips: Chip[] = [];
-  if (filtro.periodoEscolhido) {
-    chips.push({ dimensao: "periodo", valor: "", rotulo: `Período: ${rotuloPeriodo(filtro.periodo)}` });
-  }
   for (const dimensao of Object.keys(PREFIXO) as DimensaoFiltro[]) {
     if (!vale(dimensao)) continue;
     const prefixo = dimensao === "operadores" && !proprios ? "Motorista" : PREFIXO[dimensao];
@@ -345,12 +235,10 @@ function ChipsAtivos({
           type="button"
           aria-label={`Remover ${chip.rotulo}`}
           onClick={() =>
-            chip.dimensao === "periodo"
-              ? recorte.definirPeriodo("", "")
-              : recorte.definirLista(
-                  chip.dimensao,
-                  filtro[chip.dimensao].filter((v) => v !== chip.valor),
-                )
+            recorte.definirLista(
+              chip.dimensao,
+              filtro[chip.dimensao].filter((v) => v !== chip.valor),
+            )
           }
           className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-legenda font-medium text-primary transition-colors hover:bg-primary/15"
         >

@@ -16,6 +16,7 @@ export const ROTA_SAIDAS = "/combustivel/abastecimentos";
 
 export interface RecorteDoLink {
   modo: Modo;
+  /** Vazio = sem limite daquele lado (o link não leva a ponta). */
   de: string;
   ate: string;
 }
@@ -52,8 +53,8 @@ export function linkSaidasDoConsumidor(
     for (const item of Array.isArray(valor) ? valor : valor !== undefined ? [valor] : []) params.append(chave, item);
   }
   if (recorte.modo === "carretas") params.set("modo", "carretas");
-  params.set("de", recorte.de);
-  params.set("ate", recorte.ate);
+  if (recorte.de) params.set("de", recorte.de);
+  if (recorte.ate) params.set("ate", recorte.ate);
   if (equipamento) params.set("equipamento", equipamento);
   else params.set("placa", consumidorId);
   return `${ROTA_SAIDAS}?${params.toString()}`;
