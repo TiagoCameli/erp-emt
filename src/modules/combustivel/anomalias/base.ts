@@ -39,6 +39,19 @@ export function normalizarNome(texto: string | null | undefined): string {
  * normalizados dos dois lados. Não casa por "contém": "Outros serviços" é outro equipamento.
  */
 export function ehEquipamentoSentinela(equipamento: { codigo: string | null; descricao: string }): boolean {
+  // Decisão do Tiago (24/09/2026): o "Outros" conta como equipamento identificado. Com isso não
+  // há sentinela no ERP: some o aviso de "volume sem equipamento" do painel, a D1 não aponta
+  // nada e o "Outros" entra nas médias e rankings como qualquer equipamento. Litros e valores
+  // não mudam. Para voltar à regra da origem, trocar para `ehNomeDeSentinela(equipamento)`.
+  void equipamento;
+  return OUTROS_E_SENTINELA;
+}
+
+/** A regra da origem ("Outros"/"Equipamento Desconhecido" = não identificado), desligada. */
+const OUTROS_E_SENTINELA = false;
+
+/** O casamento pelo nome da regra da origem, guardado para quem religar a regra. */
+export function ehNomeDeSentinela(equipamento: { codigo: string | null; descricao: string }): boolean {
   return NOMES_SENTINELA.has(normalizarNome(equipamento.descricao)) || NOMES_SENTINELA.has(normalizarNome(equipamento.codigo));
 }
 
