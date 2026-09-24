@@ -22,7 +22,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { avisoDeFalhas, type FalhaDeEnvio } from "@/modules/_shared/anexos/fila";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import {
+  AnexosCombustivel,
+  FILA_VAZIA,
+  FilaAnexosCombustivel,
+  filaTemAlgo,
+  subirFilaCombustivel,
+  useAnexosDoRegistro,
+  type FilaCombustivel,
+} from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import type { FIFOResult } from "@/modules/combustivel/_shared/fifo-ts";
 import {
   dataHoraLocalParaIso,
@@ -164,6 +174,16 @@ export function AbastecimentoFormDrawer({
     defaultValues: iniciais(),
   });
   const salvando = form.formState.isSubmitting;
+
+  // Anexos: na criação esperam na fila e sobem depois do salvar; na edição sobem na hora.
+  const [fila, setFila] = React.useState<FilaCombustivel>(FILA_VAZIA);
+  const [enviandoAnexos, setEnviandoAnexos] = React.useState(false);
+  const [abertoAntes, setAbertoAntes] = React.useState(aberto);
+  if (aberto !== abertoAntes) {
+    setAbertoAntes(aberto);
+    if (aberto) setFila(FILA_VAZIA);
+  }
+  const anexosDaSaida = useAnexosDoRegistro("combustivel_saida", aberto && saida ? saida.id : null);
 
   React.useEffect(() => {
     if (!aberto) return;
@@ -430,7 +450,19 @@ export function AbastecimentoFormDrawer({
       toast.error(resultado.erro);
       return;
     }
-    toast.success(editando ? "Abastecimento salvo" : "Abastecimento lançado");
+    // Depois do salvar nada vira falha: anexo que não subiu é aviso, e o abastecimento fica.
+    let falhas: FalhaDeEnvio[] = [];
+    if (!editando && filaTemAlgo(fila)) {
+      setEnviandoAnexos(true);
+      try {
+        falhas = await subirFilaCombustivel("combustivel_saida", resultado.id, fila);
+      } finally {
+        setEnviandoAnexos(false);
+      }
+    }
+    const aviso = avisoDeFalhas("Abastecimento lançado", falhas);
+    if (aviso) toast.warning(aviso, { duration: 12000 });
+    else toast.success(editando ? "Abastecimento salvo" : "Abastecimento lançado");
     onAbertoChange(false);
     onSalvo?.(resultado.id);
   }
@@ -445,7 +477,7 @@ export function AbastecimentoFormDrawer({
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar abastecimento" : "Lançar abastecimento"}
       descricao="Saída de combustível para um equipamento da EMT ou para a carreta de uma transportadora"
-      temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
+      temAlteracoesNaoSalvas={(form.formState.isDirty || filaTemAlgo(fila)) && !salvando}
       larguraClassName="max-w-3xl"
       rodape={
         <>
@@ -456,7 +488,7 @@ export function AbastecimentoFormDrawer({
             {salvando ? (
               <>
                 <LoaderCircle className="animate-spin" />
-                Salvando...
+                {enviandoAnexos ? "Enviando anexos..." : "Salvando..."}
               </>
             ) : editando ? (
               "Salvar abastecimento"
@@ -471,7 +503,7 @@ export function AbastecimentoFormDrawer({
         {cicloFechado ? (
           <p className="rounded-md border border-status-pendente/40 bg-status-pendente/10 px-3 py-2 text-detalhe">
             Ciclo fechado: este tanque já zerou e recebeu combustível novo depois desta saída. Para não bagunçar o
-            saldo, tanque, litros e data ficam travados. Você ainda pode ajustar equipamento, obra, observação e medição.
+            saldo, tanque, litros e data ficam travados. Você ainda pode ajustar equipamento, obra, observação, medição e anexos.
           </p>
         ) : null}
 
@@ -832,6 +864,21 @@ export function AbastecimentoFormDrawer({
         <CampoFormulario id="abast-observacoes" rotulo="Observações" erro={erros.observacoes?.message}>
           <Textarea id="abast-observacoes" rows={2} disabled={salvando} {...form.register("observacoes")} />
         </CampoFormulario>
+
+        <SecaoFormulario titulo="Anexos (opcional)">
+          {saida ? (
+            <AnexosCombustivel
+              entidade="combustivel_saida"
+              entidadeId={saida.id}
+              anexos={anexosDaSaida.anexos}
+              erro={anexosDaSaida.erro}
+              podeEditar
+              onMudou={anexosDaSaida.recarregar}
+            />
+          ) : (
+            <FilaAnexosCombustivel fila={fila} onMudar={setFila} ocupado={salvando} />
+          )}
+        </SecaoFormulario>
 
         {avisos.length > 0 ? (
           <div className="flex flex-col gap-1">

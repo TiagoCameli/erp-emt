@@ -61,7 +61,7 @@ describe("actions de entrada", () => {
   it("cria com p_id nulo, a quantidade e o valor UNITÁRIO (o banco multiplica)", async () => {
     exigirPermissao.mockResolvedValue(undefined);
     rpc.mockResolvedValue({ data: ID, error: null });
-    await expect(salvarEntrada(null, DADOS)).resolves.toEqual({ ok: true });
+    await expect(salvarEntrada(null, DADOS)).resolves.toEqual({ ok: true, id: ID });
     expect(rpc).toHaveBeenCalledWith("fn_comb_salvar_entrada", {
       p_id: null,
       p_tanque: DADOS.tanqueId,

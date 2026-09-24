@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 import { AbastecimentoDetalheView } from "@/modules/combustivel/abastecimentos/components/abastecimento-detalhe";
 import { obrasParaAlocacao } from "@/modules/combustivel/abastecimentos/opcoes";
@@ -38,13 +39,15 @@ export default async function PaginaAbastecimento({ params }: { params: Promise<
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
 
   // As opções do formulário só servem a quem pode editar.
-  const [tanques, equipamentos, transportadoras, insumos, centros, combustivelPorTanque] = await Promise.all([
+  const [tanques, equipamentos, transportadoras, insumos, centros, combustivelPorTanque, anexos] = await Promise.all([
     podeEditar ? listarTanques() : Promise.resolve<TanqueOpcao[]>([]),
     podeEditar ? listarEquipamentos() : Promise.resolve<EquipamentoOpcao[]>([]),
     podeEditar ? listarTransportadoras() : Promise.resolve<TransportadoraOpcao[]>([]),
     podeEditar ? listarInsumosCombustivel() : Promise.resolve<InsumoCombustivel[]>([]),
     podeEditar ? listarCentrosCusto() : Promise.resolve([]),
     podeEditar ? listarCombustivelDaUltimaEntrada() : Promise.resolve<Record<string, string>>({}),
+    // Fotos e arquivos (os migrados da origem também): a RLS dos vínculos pede "ver".
+    listarAnexosDoDocumento("combustivel_saida", id),
   ]);
 
   return (
@@ -52,6 +55,7 @@ export default async function PaginaAbastecimento({ params }: { params: Promise<
       abastecimento={abastecimento}
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
+      anexos={anexos}
       opcoes={{
         tanques,
         equipamentos,

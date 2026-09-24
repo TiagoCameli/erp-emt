@@ -85,13 +85,13 @@ const SEM_OPCOES = { tanques: [], equipamentos: [], transportadoras: [], insumos
 
 describe("AbastecimentoDetalheView", () => {
   it("sem permissão, sem botão de editar nem de excluir", () => {
-    render(<AbastecimentoDetalheView abastecimento={completo()} podeEditar={false} podeExcluir={false} opcoes={SEM_OPCOES} />);
+    render(<AbastecimentoDetalheView anexos={[]} abastecimento={completo()} podeEditar={false} podeExcluir={false} opcoes={SEM_OPCOES} />);
     expect(screen.queryByRole("button", { name: /Editar abastecimento/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Excluir abastecimento/ })).toBeNull();
   });
 
   it("com permissão, os dois botões", () => {
-    render(<AbastecimentoDetalheView abastecimento={completo()} podeEditar podeExcluir opcoes={SEM_OPCOES} />);
+    render(<AbastecimentoDetalheView anexos={[]} abastecimento={completo()} podeEditar podeExcluir opcoes={SEM_OPCOES} />);
     expect(screen.getByRole("button", { name: /Editar abastecimento/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Excluir abastecimento/ })).toBeTruthy();
   });
@@ -99,6 +99,7 @@ describe("AbastecimentoDetalheView", () => {
   it("camadas do PEPS com o preço em 4 casas, e o aviso de sem suprimento", () => {
     render(
       <AbastecimentoDetalheView
+        anexos={[]}
         abastecimento={completo({
           semSuprimento: { litrosSolicitados: 150, litrosSupridos: 100, litrosSemSuprimento: 50 },
         })}
@@ -118,6 +119,7 @@ describe("AbastecimentoDetalheView", () => {
   it("carreta mostra a conta corrente com os movimentos do banco", () => {
     render(
       <AbastecimentoDetalheView
+        anexos={[]}
         abastecimento={completo(
           {
             camadas: [],

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Download, Eye, Paperclip, Trash2, Upload } from "lucide-react";
+import { Camera, Download, Eye, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,67 @@ export async function subirFilaDeAnexos(
   return falhas;
 }
 
+export interface BotaoTirarFotoProps {
+  /**
+   * Recebe as fotos da câmera e devolve as que seguem (o carimbo de data, hora e
+   * GPS entra aqui). Enquanto roda, o botão diz que está marcando.
+   */
+  aoTirarFoto: (fotos: File[]) => Promise<File[]>;
+  /** Para onde vão as fotos já tratadas. */
+  onFotos: (fotos: File[]) => void;
+  disabled?: boolean;
+}
+
+/**
+ * "Tirar foto": abre a câmera traseira no celular (`capture="environment"`). No
+ * computador o navegador ignora o `capture` e abre o seletor de imagem.
+ */
+export function BotaoTirarFoto({ aoTirarFoto, onFotos, disabled = false }: BotaoTirarFotoProps) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [marcando, setMarcando] = React.useState(false);
+
+  async function tratar(fotos: File[]) {
+    if (fotos.length === 0) return;
+    setMarcando(true);
+    try {
+      onFotos(await aoTirarFoto(fotos));
+    } catch {
+      // O tratamento é acréscimo: se estourar, a foto segue como veio.
+      onFotos(fotos);
+    } finally {
+      setMarcando(false);
+    }
+  }
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        data-testid="input-camera"
+        onChange={(evento) => {
+          const fotos = Array.from(evento.target.files ?? []);
+          evento.target.value = "";
+          void tratar(fotos);
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full sm:w-auto"
+        disabled={disabled || marcando}
+        onClick={() => inputRef.current?.click()}
+      >
+        {marcando ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Camera aria-hidden="true" />}
+        {marcando ? "Marcando data e local..." : "Tirar foto"}
+      </Button>
+    </>
+  );
+}
+
 export interface FilaAnexosProps {
   arquivos: File[];
   onMudar: (arquivos: File[]) => void;
@@ -59,6 +120,12 @@ export interface FilaAnexosProps {
   ocupado?: boolean;
   /** Texto embaixo do convite, dizendo quando os arquivos sobem. */
   legenda?: string;
+  /** Tipos oferecidos no seletor (`accept`). Sem isto, qualquer arquivo. */
+  aceitar?: string;
+  /** Convite da área de arrastar. */
+  convite?: string;
+  /** Liga o botão "Tirar foto" (câmera do celular), com o tratamento da foto. */
+  aoTirarFoto?: (fotos: File[]) => Promise<File[]>;
 }
 
 /**
@@ -71,6 +138,9 @@ export function FilaAnexos({
   onMudar,
   ocupado = false,
   legenda = "Sobem junto quando você salvar",
+  aceitar,
+  convite = "Arraste arquivos aqui ou clique para escolher",
+  aoTirarFoto,
 }: FilaAnexosProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [arrastando, setArrastando] = React.useState(false);
@@ -110,12 +180,15 @@ export function FilaAnexos({
         ref={inputRef}
         type="file"
         multiple
+        accept={aceitar}
         className="hidden"
         onChange={(evento) => {
           adicionar(Array.from(evento.target.files ?? []));
           evento.target.value = "";
         }}
       />
+
+      {aoTirarFoto ? <BotaoTirarFoto aoTirarFoto={aoTirarFoto} onFotos={adicionar} disabled={ocupado} /> : null}
 
       <button
         type="button"
@@ -140,9 +213,7 @@ export function FilaAnexos({
         )}
       >
         <Upload className="size-5 text-muted-foreground" aria-hidden="true" />
-        <span className="font-medium">
-          Arraste arquivos aqui ou clique para escolher
-        </span>
+        <span className="font-medium">{convite}</span>
         <span className="text-legenda text-muted-foreground">{legenda}</span>
       </button>
 
