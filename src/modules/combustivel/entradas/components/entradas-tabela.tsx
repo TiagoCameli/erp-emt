@@ -27,6 +27,7 @@ import {
   FaixaResumo,
   formatarDataHoraCurta,
 } from "@/modules/combustivel/_shared/components/lista-operacional";
+import { useDetalheDaUrl } from "@/modules/combustivel/_shared/use-detalhe-da-url";
 import { useNovoDaUrl } from "@/modules/combustivel/_shared/use-novo-da-url";
 import { excluirEntrada, restaurarEntrada } from "@/modules/combustivel/entradas/actions";
 import {
@@ -203,7 +204,7 @@ export function EntradasTabela({
   const { setMuitos, limparTodos } = useFiltrosUrl({ naoSaoFiltro: NAO_SAO_FILTRO });
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [novoAberto, setNovoAberto] = useNovoDaUrl(podeCriar);
-  const [detalhe, setDetalhe] = React.useState<EntradaLinha | null>(null);
+  const [detalhe, setDetalhe] = useDetalheDaUrl(lancadas);
   const [editando, setEditando] = React.useState<EntradaLinha | null>(null);
   const [excluindo, setExcluindo] = React.useState<EntradaLinha | null>(null);
   const [restaurando, setRestaurando] = React.useState<EntradaLinha | null>(null);

@@ -27,6 +27,7 @@ import {
   FaixaResumo,
   formatarDataHoraCurta,
 } from "@/modules/combustivel/_shared/components/lista-operacional";
+import { useDetalheDaUrl } from "@/modules/combustivel/_shared/use-detalhe-da-url";
 import { useNovoDaUrl } from "@/modules/combustivel/_shared/use-novo-da-url";
 import { excluirTransferencia, restaurarTransferencia } from "@/modules/combustivel/transferencias/actions";
 import {
@@ -133,7 +134,7 @@ export function TransferenciasTabela({
   const [excluidos, setExcluidos] = useFiltroSessao<"" | "1">("excluidos", "", ["", "1"]);
   const mostrarExcluidos = podeRestaurar && excluidos === "1";
   const [novoAberto, setNovoAberto] = useNovoDaUrl(podeCriar);
-  const [detalhe, setDetalhe] = React.useState<TransferenciaLinha | null>(null);
+  const [detalhe, setDetalhe] = useDetalheDaUrl(transferencias);
   const [editando, setEditando] = React.useState<TransferenciaLinha | null>(null);
   const [excluindo, setExcluindo] = React.useState<TransferenciaLinha | null>(null);
 

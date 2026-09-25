@@ -95,3 +95,14 @@ export function hrefNovo(rota: string, atual: URLSearchParams): string {
   const base = hrefComRecorte(rota, atual);
   return `${base}${base.includes("?") ? "&" : "?"}${PARAM_NOVO}=1`;
 }
+
+/**
+ * Link para o detalhe de um registro que abre em drawer por cima da lista (entrada,
+ * transferência): a lista vê `?detalhe=<id>` e abre o drawer daquele registro. Usado pelos
+ * movimentos do detalhe do tanque.
+ */
+export const PARAM_DETALHE = "detalhe";
+
+export function hrefDetalhe(rota: string, id: string): string {
+  return `${rota}?${PARAM_DETALHE}=${encodeURIComponent(id)}`;
+}
