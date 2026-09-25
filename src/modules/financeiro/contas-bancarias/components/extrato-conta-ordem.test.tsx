@@ -54,7 +54,6 @@ const CONTA: ContaLista = {
   saldoInicialData: "2026-08-21",
   saldoAtual: 0, // sobrescrito abaixo pelo que o extrato fecha.
   movimentoAnteriorAoCorte: null,
-  posicaoAplicacao: null,
   podeVerSaldo: true,
   ativo: true,
 };

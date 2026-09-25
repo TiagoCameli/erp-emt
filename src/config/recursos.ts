@@ -448,6 +448,19 @@ export const RECURSOS = [
     rota: "/financeiro/contas-bancarias",
     acoes: CRUD,
   },
+  /**
+   * Aplicações financeiras (CDB, fundo): posição do extrato, rendimento e
+   * rentabilidade. "editar" grava e exclui posição e mexe no cadastro da
+   * aplicação. Aplicar e resgatar continuam sendo transferência, com a
+   * permissão de Transferências.
+   */
+  {
+    id: "financeiro.aplicacoes",
+    nome: "Aplicações",
+    modulo: "financeiro",
+    rota: "/financeiro/aplicacoes",
+    acoes: ["ver", "editar"],
+  },
   {
     id: "financeiro.conciliacao",
     nome: "Conciliação",

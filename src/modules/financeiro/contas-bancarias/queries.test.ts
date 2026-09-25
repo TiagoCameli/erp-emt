@@ -288,54 +288,6 @@ describe("listarContas", () => {
     });
   });
 
-  it("a posição em aplicação chega na linha, e negativa não é arredondada para zero", async () => {
-    // Negativo é IMPOSSÍVEL (não se resgata mais principal do que se aplica) e é
-    // o tamanho do furo: some com ele e o alerta da tela some junto.
-    saldos({
-      data: [
-        dinheiro({
-          conta: CONTA,
-          saldoInicial: 1000,
-          saldo: 1000,
-          aplicado: "100.00",
-          resgatado: "3670000.00",
-          posicaoAplicacao: "-3569900.00",
-        }),
-      ],
-      error: null,
-    });
-
-    const contas = await listarContas();
-
-    expect(contas[0].posicaoAplicacao).toEqual({
-      aplicado: 100,
-      resgatado: 3670000,
-      posicao: -3569900,
-    });
-  });
-
-  it("a posição em aplicação NÃO entra no saldo", async () => {
-    // Opção A (22/08/2026): o saldo inicial já vem do extrato COM o aplicado
-    // dentro, então somar a posição de novo contaria o mesmo dinheiro duas vezes.
-    saldos({
-      data: [
-        dinheiro({
-          conta: CONTA,
-          saldoInicial: 1000,
-          saldo: 1000,
-          aplicado: "500.00",
-          resgatado: "0.00",
-          posicaoAplicacao: "500.00",
-        }),
-      ],
-      error: null,
-    });
-
-    const contas = await listarContas();
-
-    expect(contas[0].saldoAtual).toBe(1000);
-  });
-
   it("erro no cadastro das contas estoura com a mensagem do cadastro", async () => {
     from.mockImplementation(() => ({
       select: () => ({ order: () => ({ data: null, error: { message: "x" } }) }),

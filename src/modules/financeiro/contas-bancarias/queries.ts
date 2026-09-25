@@ -25,23 +25,6 @@ export interface MovimentoAnteriorAoCorte {
 }
 
 /**
- * Principal aplicado menos resgatado, por conta. NÃO é parcela do saldo: desde a
- * opção A (22/08/2026) o `saldoInicial` já vem do extrato COM o que está
- * aplicado, e a varredura não mexe no saldo. Este número é de CONFERÊNCIA, e a
- * regra dele é simples: tem que ser maior ou igual a zero, porque não existe
- * resgatar mais principal do que se aplicou.
- *
- * Negativo significa aplicação que ninguém importou do extrato, e mede
- * exatamente quanto o saldo da conta está abaixo do real por isso.
- */
-export interface PosicaoAplicacao {
-  aplicado: number;
-  resgatado: number;
-  /** aplicado − resgatado. Negativo é impossível, e é o tamanho do furo. */
-  posicao: number;
-}
-
-/**
  * Linha da listagem de contas.
  *
  * TODO CAMPO DE DINHEIRO É `number | null`, e o null tem UM significado só:
@@ -76,8 +59,6 @@ export interface ContaLista {
   saldoAtual: number | null;
   /** Null quando não há corte, quando o corte nada deixou de fora, ou sem permissão. */
   movimentoAnteriorAoCorte: MovimentoAnteriorAoCorte | null;
-  /** Null quando a conta nunca teve aplicação nem resgate, ou sem permissão. */
-  posicaoAplicacao: PosicaoAplicacao | null;
   /** O usuário logado pode ver o saldo desta conta? */
   podeVerSaldo: boolean;
   ativo: boolean;
@@ -124,8 +105,9 @@ export interface ContaLista {
  * OPÇÃO A (22/08/2026): a RPC também ignora categoria de natureza
  * `movimentacao`, então aplicação e resgate do principal não mexem no saldo. O
  * saldo aqui é o DINHEIRO QUE A EMPRESA TEM naquele banco (corrente mais
- * aplicado), que é o número que o próprio extrato chama de "Saldo". A posição em
- * aplicação vem à parte, como conferência — ver `PosicaoAplicacao`.
+ * aplicado), que é o número que o próprio extrato chama de "Saldo". O aplicado
+ * mora na subconta de investimentos, e a posição por aplicação é da aba
+ * Financeiro > Aplicações (25/09/2026).
  */
 export async function listarContas(): Promise<ContaLista[]> {
   const supabase = await createClient();
@@ -191,14 +173,6 @@ export async function listarContas(): Promise<ContaLista[]> {
               parcelas: dinheiro.anterior_parcelas,
               recebido: Number(dinheiro.anterior_recebido),
               pago: Number(dinheiro.anterior_pago),
-            }
-          : null,
-      posicaoAplicacao:
-        dinheiro && dinheiro.posicao_aplicacao !== null
-          ? {
-              aplicado: Number(dinheiro.aplicado),
-              resgatado: Number(dinheiro.resgatado),
-              posicao: Number(dinheiro.posicao_aplicacao),
             }
           : null,
       podeVerSaldo: dinheiro !== undefined,

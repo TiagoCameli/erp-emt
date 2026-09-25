@@ -5,6 +5,10 @@
     {
       "path": "/api/faxina-arquivos",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cdi",
+      "schedule": "0 13 * * *"
     }
   ]
 }

@@ -877,6 +877,7 @@ export const ORIGENS_LANCAMENTO = [
   "rescisao",
   "decimo_terceiro",
   "decimo_terceiro_guia",
+  "aplicacao",
 ] as const;
 
 export type OrigemLancamento = (typeof ORIGENS_LANCAMENTO)[number];
@@ -891,6 +892,7 @@ export const ROTULO_ORIGEM_LANCAMENTO: Record<OrigemLancamento, string> = {
   rescisao: "Rescisão",
   decimo_terceiro: "13º salário",
   decimo_terceiro_guia: "Guia do 13º",
+  aplicacao: "Aplicação financeira",
 };
 
 /**
