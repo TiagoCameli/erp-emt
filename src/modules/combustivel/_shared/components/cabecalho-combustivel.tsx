@@ -30,6 +30,10 @@ export interface CabecalhoCombustivelProps {
 /**
  * O topo da tela da origem (pages/Combustivel + ModeSwitch + CombustivelTabsNav), comum a
  * todas as abas: título, os três botões de lançamento, o modo de consumidor e as abas.
+ *
+ * Os lançamentos ficam à direita do título, como no PageHeader das outras telas, e só a
+ * Nova Saída é botão cheio: é o lançamento do dia a dia (o abastecimento). Entrada e
+ * Transferência são de contorno para os três não disputarem o olho com o mesmo peso.
  */
 export function CabecalhoCombustivel({
   grupos,
@@ -59,36 +63,44 @@ export function CabecalhoCombustivel({
   }
 
   const botoes = [
-    podeNovaEntrada ? { rotulo: "Nova Entrada", rota: "/combustivel/entradas" } : null,
-    podeNovaSaida ? { rotulo: "Nova Saída", rota: "/combustivel/abastecimentos" } : null,
-    podeNovaTransferencia ? { rotulo: "Nova Transferência", rota: "/combustivel/transferencias" } : null,
+    podeNovaEntrada
+      ? { rotulo: "Nova Entrada", rota: "/combustivel/entradas", principal: false }
+      : null,
+    podeNovaTransferencia
+      ? { rotulo: "Nova Transferência", rota: "/combustivel/transferencias", principal: false }
+      : null,
+    podeNovaSaida
+      ? { rotulo: "Nova Saída", rota: "/combustivel/abastecimentos", principal: true }
+      : null,
   ].filter((b) => b !== null);
 
   return (
     <div className="mb-4 flex flex-col gap-4">
-      <h1 className="text-titulo font-semibold tracking-tight">Combustível</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-titulo font-semibold tracking-tight">Combustível</h1>
 
-      {botoes.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {botoes.map((botao) => (
-            <Button key={botao.rota} asChild>
-              <Link href={hrefNovo(botao.rota, atual)} scroll={false}>
-                <Plus />
-                {botao.rotulo}
-              </Link>
-            </Button>
-          ))}
-        </div>
-      ) : null}
+        {botoes.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {botoes.map((botao) => (
+              <Button key={botao.rota} asChild variant={botao.principal ? "default" : "outline"}>
+                <Link href={hrefNovo(botao.rota, atual)} scroll={false}>
+                  <Plus />
+                  {botao.rotulo}
+                </Link>
+              </Button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <span className="px-1 text-legenda font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="text-legenda font-semibold uppercase tracking-wide text-muted-foreground">
           Modo de consumidor
         </span>
         <div
           role="tablist"
           aria-label="Modo de consumidor de combustível"
-          className="inline-flex w-full items-stretch self-start rounded-lg border border-border bg-surface p-1 sm:w-auto"
+          className="inline-flex w-full items-stretch rounded-lg border border-border bg-surface p-0.5 sm:w-auto"
         >
           {MODOS.map(({ id, rotulo, Icone }) => {
             const selecionado = modo === id;
@@ -100,7 +112,7 @@ export function CabecalhoCombustivel({
                 aria-selected={selecionado}
                 onClick={() => trocarModo(id)}
                 className={cn(
-                  "inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold transition-colors sm:flex-none",
+                  "inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition-colors sm:flex-none",
                   selecionado
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
