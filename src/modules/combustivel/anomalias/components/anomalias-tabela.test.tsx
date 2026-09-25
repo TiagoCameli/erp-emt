@@ -17,10 +17,11 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
 
 vi.mock("@/modules/combustivel/anomalias/actions", () => ({
   conferirAnomalia: vi.fn(async () => ({ ok: true })),
+  conferirAnomalias: vi.fn(async () => ({ ok: true, conferidas: 2 })),
   atribuirEquipamento: vi.fn(async () => ({ ok: true, atualizadas: 1 })),
 }));
 
-import { atribuirEquipamento } from "@/modules/combustivel/anomalias/actions";
+import { atribuirEquipamento, conferirAnomalias } from "@/modules/combustivel/anomalias/actions";
 import { AnomaliasTabela, type AnomaliasTabelaProps } from "@/modules/combustivel/anomalias/components/anomalias-tabela";
 
 afterEach(() => {
@@ -104,5 +105,24 @@ describe("AnomaliasTabela", () => {
     const dialogo = await screen.findByRole("dialog");
     fireEvent.click(within(dialogo).getByRole("button", { name: "Atribuir" }));
     await waitFor(() => expect(atribuirEquipamento).not.toHaveBeenCalled());
+  });
+
+  it("marca várias de uma vez como conferidas, com o mesmo motivo", async () => {
+    render(<AnomaliasTabela {...props()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Selecionar todos desta página" }));
+    fireEvent.click(screen.getByRole("button", { name: "Marcar 2 como conferidas" }));
+    const dialogo = await screen.findByRole("dialog");
+    fireEvent.change(within(dialogo).getByLabelText(/Por que essas anomalias/), { target: { value: "notas conferidas" } });
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Marcar como conferidas" }));
+    await waitFor(() =>
+      expect(conferirAnomalias).toHaveBeenCalledWith({ chaves: [`D1-${SAIDA}`, `D2-${SAIDA}`], motivo: "notas conferidas" }),
+    );
+  });
+
+  it("só D2 marcada: a barra oferece conferir, sem o seletor de equipamento", () => {
+    render(<AnomaliasTabela {...props({ detector: "D2" })} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Selecionar todos desta página" }));
+    expect(screen.getByRole("button", { name: "Marcar 1 como conferida" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Equipamento para as saídas selecionadas")).not.toBeInTheDocument();
   });
 });

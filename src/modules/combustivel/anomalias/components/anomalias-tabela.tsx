@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
-import { atribuirEquipamento, conferirAnomalia } from "@/modules/combustivel/anomalias/actions";
+import { atribuirEquipamento, conferirAnomalia, conferirAnomalias } from "@/modules/combustivel/anomalias/actions";
 import {
   DETECTOR_LABEL,
   SEVERITY_LABEL,
@@ -90,8 +90,9 @@ export interface AnomaliasTabelaProps {
 
 /**
  * A aba Anomalias da origem. A detecção roda no servidor e chega pronta; aqui só se
- * filtra (situação, severidade, detector, busca) e se age: conferir e, nas D1,
- * atribuir o equipamento a uma ou várias saídas (AtribuirSentinelModal da origem).
+ * filtra (situação, severidade, detector, busca) e se age: conferir (uma ou várias
+ * marcadas) e, nas D1, atribuir o equipamento a uma ou várias saídas
+ * (AtribuirSentinelModal da origem).
  */
 export function AnomaliasTabela({
   anomalias,
@@ -113,6 +114,8 @@ export function AnomaliasTabela({
   const [selecionados, setSelecionados] = React.useState<string[]>([]);
   const [equipamentoLote, setEquipamentoLote] = React.useState("");
   const [confirmandoLote, setConfirmandoLote] = React.useState(false);
+  const [conferindoLote, setConferindoLote] = React.useState(false);
+  const [motivoLote, setMotivoLote] = React.useState("");
   const [atribuindoUma, setAtribuindoUma] = React.useState<AnomaliaLista | null>(null);
   const [equipamentoUma, setEquipamentoUma] = React.useState("");
 
@@ -132,6 +135,7 @@ export function AnomaliasTabela({
   const idsVisiveis = React.useMemo(() => new Set(visiveis.map((a) => a.id)), [visiveis]);
   const selecionadosValidos = selecionados.filter((id) => idsVisiveis.has(id));
   const saidasMarcadas = saidasDaSelecao(anomalias, selecionadosValidos);
+  const pendentesMarcadas = visiveis.filter((a) => a.conferencia === null && selecionadosValidos.includes(a.id));
   const rotuloEquipamentoLote = equipamentos.find((e) => e.valor === equipamentoLote)?.rotulo ?? "";
 
   async function aoConfirmarConferencia() {
@@ -154,6 +158,18 @@ export function AnomaliasTabela({
     }
     toast.success("Anomalia voltou para pendentes");
     setDesmarcando(null);
+  }
+
+  async function aoConfirmarConferenciaLote() {
+    if (pendentesMarcadas.length === 0) return;
+    const resultado = await conferirAnomalias({ chaves: pendentesMarcadas.map((a) => a.id), motivo: motivoLote });
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success(`${plural(resultado.conferidas, "anomalia marcada", "anomalias marcadas")} como conferida${resultado.conferidas === 1 ? "" : "s"}`);
+    setSelecionados([]);
+    setConferindoLote(false);
   }
 
   async function atribuir(saidaIds: string[], equipamentoId: string): Promise<boolean> {
@@ -341,27 +357,48 @@ export function AnomaliasTabela({
         <BarraSelecao
           quantidade={selecionadosValidos.length}
           onLimpar={() => setSelecionados([])}
-          resumo={`${plural(saidasMarcadas.length, "saída", "saídas")} sem equipamento · ${formatarLitros(litrosMarcados)}`}
+          resumo={
+            saidasMarcadas.length > 0
+              ? `${plural(saidasMarcadas.length, "saída", "saídas")} sem equipamento · ${formatarLitros(litrosMarcados)}`
+              : undefined
+          }
         >
-          <div className="w-72">
-            <Combobox
-              valor={equipamentoLote}
-              onValorChange={setEquipamentoLote}
-              opcoes={equipamentos}
-              placeholder="Selecionar equipamento"
-              buscaPlaceholder="Buscar por código ou nome"
+          {saidasMarcadas.length > 0 ? (
+            <>
+              <div className="w-72">
+                <Combobox
+                  valor={equipamentoLote}
+                  onValorChange={setEquipamentoLote}
+                  opcoes={equipamentos}
+                  placeholder="Selecionar equipamento"
+                  buscaPlaceholder="Buscar por código ou nome"
+                  size="sm"
+                  ariaLabel="Equipamento para as saídas selecionadas"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!equipamentoLote}
+                onClick={() => setConfirmandoLote(true)}
+              >
+                Atribuir a {plural(saidasMarcadas.length, "saída", "saídas")}
+              </Button>
+            </>
+          ) : null}
+          {pendentesMarcadas.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
               size="sm"
-              ariaLabel="Equipamento para as saídas selecionadas"
-            />
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!equipamentoLote || saidasMarcadas.length === 0}
-            onClick={() => setConfirmandoLote(true)}
-          >
-            Atribuir a {plural(saidasMarcadas.length, "saída", "saídas")}
-          </Button>
+              onClick={() => {
+                setMotivoLote("");
+                setConferindoLote(true);
+              }}
+            >
+              Marcar {pendentesMarcadas.length === 1 ? "1 como conferida" : `${pendentesMarcadas.length.toLocaleString("pt-BR")} como conferidas`}
+            </Button>
+          ) : null}
         </BarraSelecao>
       ) : null}
 
@@ -381,8 +418,7 @@ export function AnomaliasTabela({
                 idDaLinha: (a: AnomaliaLista) => a.id,
                 selecionados: selecionadosValidos,
                 onSelecionadosChange: setSelecionados,
-                // Só D1 recebe equipamento; as outras não têm o que atribuir.
-                habilitada: (a: AnomaliaLista) => a.detector === "D1" && a.saidas.length > 0,
+                // Toda anomalia pode ser conferida em lote; a D1 também recebe equipamento.
               }
             : undefined
         }
@@ -501,6 +537,27 @@ export function AnomaliasTabela({
               </div>
             }
             onConfirmar={aoConfirmarConferencia}
+          />
+          <ConfirmDialog
+            aberto={conferindoLote}
+            onAbertoChange={setConferindoLote}
+            titulo="Marcar como conferidas"
+            descricao={`${plural(pendentesMarcadas.length, "anomalia pendente sai", "anomalias pendentes saem")} da lista. O motivo vale para todas.`}
+            textoConfirmar="Marcar como conferidas"
+            conteudo={
+              <div className="grid gap-2">
+                <Label htmlFor="motivo-conferencia-lote">Por que essas anomalias estão OK? (opcional)</Label>
+                <Textarea
+                  id="motivo-conferencia-lote"
+                  value={motivoLote}
+                  maxLength={MAXIMO_MOTIVO}
+                  onChange={(evento) => setMotivoLote(evento.target.value)}
+                  placeholder="Ex.: preço conferido nas notas fiscais"
+                  rows={3}
+                />
+              </div>
+            }
+            onConfirmar={aoConfirmarConferenciaLote}
           />
           <ConfirmDialog
             aberto={desmarcando !== null}

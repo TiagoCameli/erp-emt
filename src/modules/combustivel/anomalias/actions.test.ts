@@ -16,7 +16,12 @@ vi.mock("@/lib/erros", () => ({
   erroAcao: (_contexto: string, _erro: unknown, mensagem: string) => ({ erro: mensagem }),
 }));
 
-import { atribuirEquipamento, conferirAnomalia, revisarSemSuprimento } from "@/modules/combustivel/anomalias/actions";
+import {
+  atribuirEquipamento,
+  conferirAnomalia,
+  conferirAnomalias,
+  revisarSemSuprimento,
+} from "@/modules/combustivel/anomalias/actions";
 
 const SAIDA = "c4e0f922-3aec-8c72-7089-225523e04557";
 const OUTRA = "0b3c5d7e-1111-4222-8333-444455556666";
@@ -62,6 +67,47 @@ describe("conferirAnomalia", () => {
     const resultado = await conferirAnomalia({ chave: `D5-${SAIDA}`, conferida: false, motivo: "   " });
     expect(rpc).toHaveBeenCalledWith("fn_comb_conferir_anomalia", { p_chave: `D5-${SAIDA}`, p_conferida: false });
     expect(resultado).toEqual({ erro: "Sem permissão para conferir anomalia" });
+  });
+});
+
+describe("conferirAnomalias", () => {
+  it("sem permissão: recusa e nem abre o banco", async () => {
+    exigirPermissao.mockRejectedValue(new Error("Sem permissão"));
+    const resultado = await conferirAnomalias({ chaves: [`D2-${SAIDA}`] });
+    expect(resultado).toEqual({ erro: "Sem permissão para conferir anomalias" });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("lista vazia ou chave inválida não chegam à RPC", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    expect(await conferirAnomalias({ chaves: [] })).toEqual({ erro: "Selecione ao menos uma anomalia" });
+    expect(await conferirAnomalias({ chaves: [`D2-${SAIDA}`, "qualquer-coisa"] })).toEqual({ erro: "Anomalia inválida" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("confere cada chave uma vez, com o mesmo motivo, e devolve quantas", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    rpc.mockResolvedValue({ error: null });
+    const resultado = await conferirAnomalias({
+      chaves: [`D2-${SAIDA}`, `D2-${OUTRA}`, `D2-${SAIDA}`],
+      motivo: "  preço conferido na nota  ",
+    });
+    expect(resultado).toEqual({ ok: true, conferidas: 2 });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenCalledWith("fn_comb_conferir_anomalia", {
+      p_chave: `D2-${OUTRA}`,
+      p_conferida: true,
+      p_motivo: "preço conferido na nota",
+    });
+  });
+
+  it("falha no meio diz quantas já foram gravadas", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    rpc
+      .mockResolvedValueOnce({ error: null })
+      .mockResolvedValueOnce({ error: { code: "P0001", message: "Sem permissão para conferir anomalia" } });
+    const resultado = await conferirAnomalias({ chaves: [`D2-${SAIDA}`, `D2-${OUTRA}`] });
+    expect(resultado).toEqual({ erro: "Sem permissão para conferir anomalia. 1 de 2 já foram conferidas" });
   });
 });
 

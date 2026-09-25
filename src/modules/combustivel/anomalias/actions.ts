@@ -8,9 +8,11 @@ import { createClient } from "@/lib/supabase/server";
 import {
   atribuirEquipamentoSchema,
   conferirAnomaliaSchema,
+  conferirAnomaliasSchema,
   revisarSemSuprimentoSchema,
   type AtribuirEquipamentoInput,
   type ConferirAnomaliaInput,
+  type ConferirAnomaliasInput,
   type RevisarSemSuprimentoInput,
 } from "@/modules/combustivel/anomalias/schemas";
 
@@ -61,6 +63,73 @@ export async function conferirAnomalia(dados: ConferirAnomaliaInput): Promise<Re
   revalidatePath(ROTA);
   revalidatePath("/combustivel");
   return { ok: true };
+}
+
+export type ResultadoConferenciaLote = { ok: true; conferidas: number } | { erro: string };
+
+/** Quantas chamadas da RPC vão ao banco ao mesmo tempo no lote. */
+const PARALELO_LOTE = 10;
+
+/**
+ * Marca várias anomalias como conferidas, todas com o mesmo motivo. Reusa a RPC
+ * de uma (ela já é idempotente: conferir de novo só atualiza motivo e data), em
+ * blocos pequenos. Se um bloco falha, para ali e diz quantas já foram gravadas.
+ */
+export async function conferirAnomalias(dados: ConferirAnomaliasInput): Promise<ResultadoConferenciaLote> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conferir anomalias" };
+  }
+
+  const validado = conferirAnomaliasSchema.safeParse(dados);
+  if (!validado.success) return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  const chaves = [...new Set(validado.data.chaves)];
+  const { motivo } = validado.data;
+
+  let conferidas = 0;
+  let falha: { erro: string } | null = null;
+  try {
+    const supabase = await createClient();
+    for (let inicio = 0; inicio < chaves.length && !falha; inicio += PARALELO_LOTE) {
+      const bloco = chaves.slice(inicio, inicio + PARALELO_LOTE);
+      const respostas = await Promise.all(
+        bloco.map((chave) =>
+          supabase.rpc("fn_comb_conferir_anomalia", {
+            p_chave: chave,
+            p_conferida: true,
+            ...(motivo ? { p_motivo: motivo } : {}),
+          }),
+        ),
+      );
+      for (const { error } of respostas) {
+        if (error) {
+          falha ??= erroDaRpc(
+            "combustivel.anomalias.conferirLote",
+            error,
+            "Não foi possível marcar as anomalias como conferidas",
+          );
+        } else {
+          conferidas += 1;
+        }
+      }
+    }
+  } catch (erro) {
+    falha = erroAcao("combustivel.anomalias.conferirLote", erro, "Não foi possível gravar a conferência. Tente novamente");
+  }
+
+  if (conferidas > 0) {
+    try {
+      revalidatePath(ROTA);
+      revalidatePath("/combustivel");
+    } catch {
+      // a gravação já aconteceu
+    }
+  }
+  if (falha) {
+    return conferidas > 0 ? { erro: `${falha.erro}. ${conferidas} de ${chaves.length} já foram conferidas` } : falha;
+  }
+  return { ok: true, conferidas };
 }
 
 export type ResultadoAtribuicao = { ok: true; atualizadas: number } | { erro: string };
