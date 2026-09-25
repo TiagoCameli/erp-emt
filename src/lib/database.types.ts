@@ -8240,15 +8240,6 @@ export type Database = {
           recebido: number;
         }[];
       };
-      fn_rel_posicao_aplicacao: {
-        Args: never;
-        Returns: {
-          aplicado: number;
-          conta_bancaria_id: string;
-          posicao: number;
-          resgatado: number;
-        }[];
-      };
       fn_rel_posicao_bancaria: {
         Args: never;
         Returns: {
@@ -8314,11 +8305,8 @@ export type Database = {
           anterior_pago: number;
           anterior_parcelas: number;
           anterior_recebido: number;
-          aplicado: number;
           conta_bancaria_id: string;
           entradas: number;
-          posicao_aplicacao: number;
-          resgatado: number;
           saidas: number;
           saldo: number;
           saldo_inicial: number;

@@ -4296,3 +4296,13 @@ dividir o saldo".
 **`fn_rel_posicao_aplicacao` aposentada.** O único chamador era `fn_saldos_das_contas`, que alimentava a coluna oculta "Em aplicação" de Contas bancárias com o modelo antigo. O código deixou de ler as três colunas neste PR, e a migration `20260926130000` que tira as colunas e dropa a função só roda **depois do deploy** (lição do incidente de 27/08).
 
 **Prova** `supabase/provas/aplicacoes_financeiras.sql`: 15 ok, 0 falha. Subconta 5.913.186,79 → 6.017.484,75. DRE e fluxo de setembro iguais com a abertura, e +1.000,00 nos dois com um rendimento de teste. Regravar mantém 1 lançamento. Excluir volta o saldo. Andreia com a aba e sem saldo recebe 0 linhas; Dora com os dois recebe 12 (controle). Transferências 51 / 26.856.813,21 antes e depois.
+
+**Tela (PR #321, 25/09/2026).**
+- Aplicar e Resgatar abrem a MESMA transferência (`TransferenciaFormDrawer` ganhou `inicial` e `tituloNovo`) já com conta, subconta e etapa. Aparecem só com `financeiro.transferencias/criar`, porque aplicar continua sendo transferência.
+- O drawer "Atualizar posição" mostra o rendimento ANTES de salvar, pela `fn_simular_posicao_aplicacao` (a mesma conta do motor; uma cópia em TS divergiria na tarifa ou na transferência do mesmo dia). O PDF do extrato é obrigatório na criação.
+- % do conjunto de aplicações = Σ rendimento ÷ Σ base, com a base de cada uma tirada do próprio % (Dietz agregado, não média simples); ano composto mês a mês.
+- Antes da abertura, o mês a mês mostra só o principal. O Fundo termina ago/2026 com principal −12.806,30, porque os resgates levaram rendimento nunca registrado, e a tela explica o salto de setembro.
+- `?rel=investimentos` redireciona para a aba quem tem `financeiro.aplicacoes/ver`.
+- Card **Caixa real** no Gestão: contas correntes + subcontas − posição das aplicações sem liquidez diária; contas sem permissão de saldo ficam fora e contadas.
+- O preview da Vercel deste projeto responde 500 em qualquer rota, até no /login (suspeita: faltam as variáveis do Supabase no ambiente de preview, não conferido). Por isso a conferência visual é em produção.
+- Depois do deploy rodou `20260926130000`: `fn_rel_posicao_aplicacao` saiu, e `fn_saldos_das_contas` perdeu as três colunas (tipos acertados à mão).
