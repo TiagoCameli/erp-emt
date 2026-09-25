@@ -53,7 +53,7 @@ declare
   v_tiago constant uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_k1 uuid; v_k2 uuid; v_k3 uuid; v_n bigint; v_txt text; v_regra text; v_j jsonb; v_acc jsonb; r jsonb := '{}'::jsonb;
-  v_obras0 bigint; v_cc0 bigint; v_lanc0 bigint;
+  v_obras0 bigint; v_cc0 bigint; v_lanc0 bigint; v_versao_rascunho uuid;
 begin
   select count(*) into v_obras0 from public.obras;
   select count(*) into v_cc0 from public.centros_custo;
@@ -219,6 +219,51 @@ begin
   begin update public.mc_ajustes set quantidade = 0.2 where contrato_id = v_k1;
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('5i_ajuste_alterado', v_txt);
+
+  -- 5j. Reponte da aprovação de REV00 (K2, aprovada) para uma revisão em aberto (K1 REV0)
+  begin update public.mc_aprovacoes_item set revisao_id = (select id from public.mc_medicao_revisoes where contrato_id = v_k1 and numero = 0)
+      where contrato_id = v_k2 and revisao_id = (select id from public.mc_medicao_revisoes where contrato_id = v_k2 and numero = 0);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5j_aprovacao_repontada', v_txt);
+
+  -- 5k. Mover linha da versão vigente (K2 v0) para uma versão rascunho nova
+  insert into public.mc_planilha_versoes (contrato_id, numero, aditivo_id, vigente_desde, status)
+  values (v_k2, 2, (select id from public.mc_aditivos where contrato_id = v_k2 limit 1), '2026-03-01', 'rascunho')
+  returning id into v_versao_rascunho;
+  begin update public.mc_planilha_itens set versao_id = v_versao_rascunho, pai_id = null
+      where contrato_id = v_k2 and ordem = 2 and versao_id = (select id from public.mc_planilha_versoes where contrato_id = v_k2 and numero = 0);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5k_linha_movida_de_versao', v_txt);
+
+  -- 5l. Revisão nasce aprovada, direto na 1ª medição de K2 (já aprovada), fora de carga
+  begin insert into public.mc_medicao_revisoes (medicao_id, contrato_id, numero, status, motivo)
+      select id, v_k2, 9, 'aprovada', 'Tentativa' from public.mc_medicoes where contrato_id = v_k2 and numero = 1;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5l_revisao_nasce_aprovada', v_txt);
+
+  -- 5m. Repontar a REV0 em aberto de K1 para a 1ª medição de K2, já aprovando-a no mesmo update
+  begin update public.mc_medicao_revisoes set medicao_id = (select id from public.mc_medicoes where contrato_id = v_k2 and numero = 1),
+         contrato_id = v_k2, numero = 1, motivo = 'Reponte de teste', status = 'aprovada'
+      where contrato_id = v_k1 and numero = 0;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5m_revisao_repontada_aprovada', v_txt);
+
+  -- 5n. Renumerar a 2ª medição de K1 (aberta)
+  begin update public.mc_medicoes set numero = 9 where contrato_id = v_k1 and numero = 2;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5n_medicao_renumerada', v_txt);
+
+  -- 5o. Aprovar a 2ª medição de K1 com a 1ª ainda aberta
+  begin update public.mc_medicoes set status = 'aprovada', aprovada_em = now() where contrato_id = v_k1 and numero = 2;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5o_aprovacao_fora_de_ordem', v_txt);
+
+  -- 6. Truncate nas tabelas transacionais do módulo tem gatilho de recusa (não roda o truncate)
+  select count(*) into v_n from pg_trigger t join pg_class c on c.oid = t.tgrelid
+   where c.relname = any(array['mc_lancamentos', 'mc_ajustes', 'mc_aprovacoes_item', 'mc_revisao_itens',
+                               'mc_medicao_revisoes', 'mc_medicoes', 'mc_planilha_itens', 'mc_planilha_versoes'])
+     and t.tgname = 'trg_mc_trava_truncate';
+  r := r || jsonb_build_object('6_truncate_travas', v_n);
 
   -- 9. O módulo não escreveu em outro módulo
   r := r || jsonb_build_object('9_outros_modulos_intactos',
