@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  contasDoOutroLado,
+  ehMovimentoDeInvestimento,
   transferenciaFormSchema,
   transferenciaSchema,
 } from "@/modules/financeiro/transferencias/schemas";
@@ -28,6 +30,7 @@ function formulario(troca: Record<string, unknown> = {}) {
     tarifa: "",
     descricao: "",
     observacoes: "",
+    aplicacaoId: "",
     ...troca,
   };
 }
@@ -132,5 +135,42 @@ describe("transferenciaFormSchema (cliente)", () => {
       expect(resultado.data.descricao).toBe("");
       expect(resultado.data.observacoes).toBe("");
     }
+  });
+});
+
+describe("subconta de investimentos", () => {
+  const caixa = { id: "caixa", tipo: "corrente", contaPaiId: null };
+  const subCaixa = { id: "sub-caixa", tipo: "investimento", contaPaiId: "caixa" };
+  const bb = { id: "bb", tipo: "corrente", contaPaiId: null };
+  const subBb = { id: "sub-bb", tipo: "investimento", contaPaiId: "bb" };
+  const contas = [caixa, subCaixa, bb, subBb];
+  const ids = (lista: { id: string }[]) => lista.map((c) => c.id);
+
+  it("escolhida a subconta, o outro lado só pode ser a própria conta", () => {
+    expect(ids(contasDoOutroLado(contas, subCaixa))).toEqual(["caixa"]);
+  });
+
+  it("escolhida a conta, a subconta de OUTRA conta não aparece", () => {
+    // Aplicar do BB na subconta da Caixa não existe no banco e deixaria as duas
+    // contas erradas: a mesma trava da fn_salvar_transferencia.
+    expect(ids(contasDoOutroLado(contas, caixa))).toEqual(["sub-caixa", "bb"]);
+  });
+
+  it("sem nada escolhido, todas aparecem", () => {
+    expect(ids(contasDoOutroLado(contas, null))).toEqual(ids(contas));
+  });
+
+  it("é investimento quando uma das pontas é subconta", () => {
+    expect(ehMovimentoDeInvestimento(caixa, subCaixa)).toBe(true);
+    expect(ehMovimentoDeInvestimento(subCaixa, caixa)).toBe(true);
+    expect(ehMovimentoDeInvestimento(caixa, bb)).toBe(false);
+    expect(ehMovimentoDeInvestimento(null, null)).toBe(false);
+  });
+
+  it("o servidor aceita a aplicação como id, e rejeita lixo", () => {
+    expect(
+      transferenciaSchema.safeParse(servidor({ aplicacaoId: "33333333-3333-4333-8333-333333333333" })).success,
+    ).toBe(true);
+    expect(transferenciaSchema.safeParse(servidor({ aplicacaoId: "cdb" })).success).toBe(false);
   });
 });

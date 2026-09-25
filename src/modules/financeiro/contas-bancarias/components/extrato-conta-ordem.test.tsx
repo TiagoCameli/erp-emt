@@ -49,6 +49,7 @@ const CONTA: ContaLista = {
   agencia: "1234",
   conta: "102.124-9",
   tipo: "corrente",
+  contaPaiId: null,
   saldoInicial: 155484.34,
   saldoInicialData: "2026-08-21",
   saldoAtual: 0, // sobrescrito abaixo pelo que o extrato fecha.

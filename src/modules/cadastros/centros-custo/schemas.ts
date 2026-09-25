@@ -11,6 +11,7 @@ export const TIPOS_CENTRO = [
   "escritorio",
   "manutencao",
   "financeiro",
+  "investimento",
 ] as const;
 
 export type TipoCentro = (typeof TIPOS_CENTRO)[number];
@@ -26,6 +27,12 @@ export const ROTULO_TIPO_CENTRO: Record<TipoCentro, string> = {
    * nada ainda, virou parcela a pagar.
    */
   financeiro: "Financeiro",
+  /**
+   * Dinheiro aplicado (CDB, fundo): uma etapa por aplicação, como Empréstimos
+   * tem uma por contrato. Fora de todo relatório de custo — aplicar não é
+   * gastar, é mudar o dinheiro de bolso (pedido do Tiago em 24/09/2026).
+   */
+  investimento: "Investimento",
 };
 
 const nomeSchema = z

@@ -5,16 +5,26 @@ import type { BancoConta } from "@/modules/financeiro/_shared/formato";
 /** Bancos possíveis de uma conta. Igual ao check do banco. */
 export const BANCO_CONTA = ["caixa", "bb", "sicredi", "outro"] as const;
 
-/** Tipos de conta possíveis. Igual ao check do banco. */
+/**
+ * Tipos de conta que se CADASTRAM pelo formulário.
+ *
+ * O banco aceita um quarto, "investimento", que fica fora daqui de propósito: a
+ * subconta de investimentos é criada e mantida pelo próprio banco (trigger
+ * trg_conta_cria_subconta, 25/09/2026), uma por conta corrente ou poupança.
+ */
 export const TIPO_CONTA = ["corrente", "poupanca", "caixa"] as const;
 
-export type TipoConta = (typeof TIPO_CONTA)[number];
+export type TipoContaCadastro = (typeof TIPO_CONTA)[number];
+
+/** Todo tipo que uma conta pode ter, inclusive a subconta de investimentos. */
+export type TipoConta = TipoContaCadastro | "investimento";
 
 /** Rótulo pt-BR de cada tipo de conta, para select e exibição. */
 export const ROTULO_TIPO_CONTA: Record<TipoConta, string> = {
   corrente: "Conta corrente",
   poupanca: "Poupança",
   caixa: "Caixa",
+  investimento: "Investimentos",
 };
 
 /**

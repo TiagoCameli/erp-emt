@@ -1732,6 +1732,7 @@ export type Database = {
           ativo: boolean;
           banco: string;
           conta: string | null;
+          conta_pai_id: string | null;
           created_at: string;
           created_by: string | null;
           id: string;
@@ -1746,6 +1747,7 @@ export type Database = {
           ativo?: boolean;
           banco?: string;
           conta?: string | null;
+          conta_pai_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           id?: string;
@@ -1760,6 +1762,7 @@ export type Database = {
           ativo?: boolean;
           banco?: string;
           conta?: string | null;
+          conta_pai_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           id?: string;
@@ -1769,7 +1772,15 @@ export type Database = {
           tipo?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "contas_bancarias_conta_pai_id_fkey";
+            columns: ["conta_pai_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       cotacao_fornecedores: {
         Row: {
@@ -6328,6 +6339,7 @@ export type Database = {
       };
       transferencias_contas: {
         Row: {
+          centro_custo_id: string | null;
           conta_destino_id: string;
           conta_origem_id: string;
           created_at: string;
@@ -6342,6 +6354,7 @@ export type Database = {
           valor: number;
         };
         Insert: {
+          centro_custo_id?: string | null;
           conta_destino_id: string;
           conta_origem_id: string;
           created_at?: string;
@@ -6356,6 +6369,7 @@ export type Database = {
           valor: number;
         };
         Update: {
+          centro_custo_id?: string | null;
           conta_destino_id?: string;
           conta_origem_id?: string;
           created_at?: string;
@@ -6370,6 +6384,13 @@ export type Database = {
           valor?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "transferencias_contas_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "transferencias_contas_conta_destino_id_fkey";
             columns: ["conta_destino_id"];
@@ -8137,6 +8158,9 @@ export type Database = {
       };
       fn_salvar_transferencia: {
         Args: {
+          // A aplicação (etapa do centro de investimento). Obrigatória quando uma
+          // ponta é subconta de investimentos, proibida entre contas correntes.
+          p_centro_custo_id?: string;
           p_conta_destino_id: string;
           p_conta_origem_id: string;
           p_data: string;

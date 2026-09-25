@@ -72,6 +72,7 @@ export function etapasDaRaiz(
 const ROTULO_DO_NIVEL_2: Record<string, string> = {
   manutencao: "Equipamento",
   financeiro: "Empréstimo",
+  investimento: "Aplicação",
 };
 
 export function rotuloDaEtapa(

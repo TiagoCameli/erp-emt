@@ -85,6 +85,7 @@ export async function salvarTransferencia(
     p_tarifa: validado.data.tarifa,
     p_descricao: validado.data.descricao ?? undefined,
     p_observacoes: validado.data.observacoes ?? undefined,
+    p_centro_custo_id: validado.data.aplicacaoId ?? undefined,
   });
 
   if (error) {

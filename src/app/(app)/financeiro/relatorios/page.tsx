@@ -83,6 +83,16 @@ import {
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
 import { FiltrosCreditosBarra } from "@/modules/financeiro/relatorios/components/filtros-creditos-barra";
+import { FiltrosInvestimentosBarra } from "@/modules/financeiro/relatorios/components/filtros-investimentos-barra";
+import {
+  AplicacoesTabela,
+  InvestimentosPorMesTabela,
+  MovimentosInvestimentoTabela,
+} from "@/modules/financeiro/relatorios/components/investimentos-tabela";
+import {
+  lerPeriodoInvestimentos,
+  type PeriodoInvestimentos,
+} from "@/modules/financeiro/relatorios/investimentos";
 import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
   normalizarRelatorio,
@@ -95,6 +105,7 @@ import {
   custoPorGrupo,
   custoReceita,
   creditos,
+  investimentos,
   emprestimosPorContrato,
   dreGerencial,
   extratoPorFornecedor,
@@ -561,6 +572,83 @@ async function ConteudoCreditos({
           total={dados.totalProximosMeses}
         />
       </div>
+    </>
+  );
+}
+
+async function ConteudoInvestimentos({
+  periodo,
+}: {
+  periodo: PeriodoInvestimentos;
+}) {
+  const dados = await investimentos(periodo);
+  if (dados.subcontas.length === 0 && dados.aplicacoes.length === 0) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Nenhuma aplicação ainda"
+        descricao="Aplicar é transferir da conta para a subconta · INVESTIMENTOS dela, em Financeiro > Transferências, escolhendo a aplicação (CDB, fundo)."
+      />
+    );
+  }
+  const temPeriodo = periodo.de !== "" || periodo.ate !== "";
+  return (
+    <>
+      <GradeKpis>
+        <KPICard
+          titulo="Saldo aplicado"
+          valor={<MoneyText valor={dados.saldoAplicado} />}
+          detalhe={
+            dados.subcontasOcultas > 0
+              ? `Sem ${dados.subcontasOcultas} subconta(s) que você não pode ver`
+              : "Somando as subcontas de investimentos"
+          }
+        />
+        <KPICard
+          titulo={temPeriodo ? "Aplicado no período" : "Aplicado (total)"}
+          valor={<MoneyText valor={dados.aplicadoPeriodo} />}
+          detalhe="Da conta para a subconta"
+        />
+        <KPICard
+          titulo={temPeriodo ? "Resgatado no período" : "Resgatado (total)"}
+          valor={<MoneyText valor={dados.resgatadoPeriodo} />}
+          detalhe="Da subconta de volta para a conta"
+        />
+        <KPICard
+          titulo="Aplicações"
+          valor={String(dados.aplicacoes.length)}
+          detalhe="Etapas do centro Investimentos"
+        />
+      </GradeKpis>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h3 className="text-corpo font-medium text-foreground">
+            Saldo por aplicação
+          </h3>
+          <p className="text-legenda text-muted-foreground">
+            Saldo aplicado é tudo o que foi aplicado menos o que foi resgatado,
+            no histórico inteiro. O período recorta só as colunas do período.
+          </p>
+        </div>
+        <AplicacoesTabela dados={dados} />
+      </div>
+
+      {dados.meses.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-corpo font-medium text-foreground">Mês a mês</h3>
+          <InvestimentosPorMesTabela dados={dados} />
+        </div>
+      ) : null}
+
+      {dados.movimentos.length > 0 ? (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-corpo font-medium text-foreground">
+            Aplicações e resgates
+          </h3>
+          <MovimentosInvestimentoTabela dados={dados} />
+        </div>
+      ) : null}
     </>
   );
 }
@@ -1069,6 +1157,7 @@ export default async function RelatoriosPage({
   // Créditos: a situação do contrato (em aberto x quitado). Leitura pura, feita
   // sempre, e o recorte é aplicado dentro de `ConteudoCreditos`.
   const filtrosCreditos = lerFiltrosCreditos(params);
+  const periodoInvestimentos = lerPeriodoInvestimentos(params);
 
   const periodoDre = lerPeriodoDaUrl(params, mesCorrente());
   const filtrosCustoGrupo = lerFiltrosCustoGrupo(params, mesCorrente());
@@ -1255,6 +1344,17 @@ export default async function RelatoriosPage({
             situacao={filtrosCreditos.situacao}
             podeVerLancamentos={podeVerLancamentos}
           />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "investimentos" ? (
+        <SecaoRelatorio
+          exportar={relatorio}
+          titulo="Investimentos"
+          descricao="Dinheiro aplicado (CDB, fundo) na subconta de investimentos de cada conta. Aplicar não é despesa: o dinheiro só muda de bolso e continua da empresa, por isso fica fora do custo, do DRE e do fluxo de caixa."
+        >
+          <FiltrosInvestimentosBarra periodo={periodoInvestimentos} />
+          <ConteudoInvestimentos periodo={periodoInvestimentos} />
         </SecaoRelatorio>
       ) : null}
 

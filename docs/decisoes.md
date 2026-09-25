@@ -4242,3 +4242,35 @@ Obras por um ciclo de fechamento, e depois as rotas saem do menu.
   `20260925150000_frete_nomes_colaboradores`, função `nomes_colaboradores_frete()` com só id e nome
   dos ativos para quem vê o Frete. Prova: com o Frete, 58 nomes (os 58 ativos); sem o Frete, 0;
   anon sem execute.
+
+## 25/09/2026: Investimento não é despesa: subconta de investimentos e centro próprio
+
+O Tiago (24/09): "cc de investimentos deve funcionar igual cc de emprestimos e ter o seu proprio
+aba de relatorios. todas as contas bancarias deve ter uma subconta de investimentos para onde o
+dinheiro vai quando um investimento e lancado". Escolhas dele: saldo SEPARADO, converter tudo o
+que estava lançado no CC Investimentos, uma etapa por aplicação, e "o saldo em aplicação é tudo
+que foi aplicado menos o que foi resgatado". Autorizou a conversão em 25/09: "pode converter e
+dividir o saldo".
+
+- **Centro de tipo `investimento`** (`20260925190000`): novo tipo de raiz ao lado de `financeiro`.
+  Os 10 cortes "fora do custo" das 9 funções de custo passam a excluir os dois. O CC Investimentos
+  (que nasceu de uma Obra em 20/08) solta da obra, que é desativada, e ganha as etapas "Caixa
+  Econômica - CDB 95" e "Caixa Econômica - Fundo". Tipo próprio, e não `financeiro`, porque
+  Créditos lê `financeiro` como lista de contratos de empréstimo.
+- **Subconta de investimentos** (`20260925191000`): `contas_bancarias.tipo = 'investimento'` com
+  `conta_pai_id`. Uma por conta corrente/poupança, criada por trigger, e herda da mãe o nome, o
+  banco, o ativo e a permissão de ver saldo. Aplicar = transferência conta → subconta; resgatar =
+  volta. A transferência ganha `centro_custo_id` (a aplicação), obrigatório quando uma ponta é
+  subconta e proibido entre contas correntes; a subconta só troca dinheiro com a própria conta.
+- **Conversão** (`20260925192000`): 51 lançamentos da Caixa viram transferências (cópia em
+  `arquivo_morto.*_investimentos_20260925`). Fica de fora o LAN-2026-7048 "DEBITO AUTORIZADO"
+  (R$ 19.519,44), que é débito coberto por resgate e precisa ser reclassificado. O saldo inicial
+  da Caixa em 26/08 (R$ 4.599.100,34) se divide em R$ 69.690,90 corrente e R$ 4.529.409,44 na
+  subconta. Ensaiado em transação desfeita: corrente R$ 718.814,96 + subconta R$ 5.913.186,79 =
+  o mesmo total de antes; outras contas e custo das obras intactos.
+- **Relatório Investimentos** (`?rel=investimentos`): saldo aplicado, aplicado e resgatado no
+  período, saldo por aplicação, mês a mês e movimentos. O período recorta o movimento, nunca o
+  saldo.
+- **Rendimento** ainda não tem lançamento próprio: pela regra do Tiago o saldo é aplicado menos
+  resgatado, e o juro vem embutido no resgate. Quando ele quiser a rentabilidade separada, o
+  rendimento entra como receita financeira ("Juros de aplicações financeiras") na subconta.

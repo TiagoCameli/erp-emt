@@ -18,6 +18,9 @@ export interface TransferenciaLista {
   totalSaida: number;
   descricao: string | null;
   observacoes: string | null;
+  /** A aplicação (CDB, fundo) quando uma ponta é subconta de investimentos. */
+  aplicacaoId: string | null;
+  aplicacaoNome: string | null;
   /**
    * Quando a transferência foi REGISTRADA no sistema, que não é quando ela
    * aconteceu no banco (`dataTransferencia`). Serve ao filtro "Período de
@@ -32,6 +35,9 @@ export interface ContaOpcao {
   id: string;
   nome: string;
   banco: string;
+  /** "investimento" = subconta de investimentos (tem `contaPaiId`). */
+  tipo: string;
+  contaPaiId: string | null;
   /**
    * Saldo atual, para o formulário mostrar de quanto a conta dispõe.
    *
@@ -73,9 +79,10 @@ export async function listarTransferencias(): Promise<TransferenciaLista[]> {
       .from("transferencias_contas")
       .select(
         `id, numero, data_transferencia, valor, tarifa, descricao, observacoes,
-         created_at, conta_origem_id, conta_destino_id,
+         created_at, conta_origem_id, conta_destino_id, centro_custo_id,
          origem:contas_bancarias!transferencias_contas_conta_origem_id_fkey(nome),
-         destino:contas_bancarias!transferencias_contas_conta_destino_id_fkey(nome)`,
+         destino:contas_bancarias!transferencias_contas_conta_destino_id_fkey(nome),
+         aplicacao:centros_custo!transferencias_contas_centro_custo_id_fkey(nome)`,
       )
       .order("data_transferencia", { ascending: false })
       .order("id")
@@ -104,6 +111,8 @@ export async function listarTransferencias(): Promise<TransferenciaLista[]> {
       totalSaida: valor + tarifa,
       descricao: linha.descricao,
       observacoes: linha.observacoes,
+      aplicacaoId: linha.centro_custo_id,
+      aplicacaoNome: linha.aplicacao?.nome ?? null,
       criadoEm: linha.created_at,
     };
   });
@@ -126,7 +135,7 @@ export async function listarContasAtivas(): Promise<ContaOpcao[]> {
   const [contas, saldos] = await Promise.all([
     supabase
       .from("contas_bancarias")
-      .select("id, nome, banco")
+      .select("id, nome, banco, tipo, conta_pai_id")
       .eq("ativo", true)
       .order("nome"),
     supabase.rpc("fn_saldos_das_contas"),
@@ -151,6 +160,46 @@ export async function listarContasAtivas(): Promise<ContaOpcao[]> {
     id: conta.id,
     nome: conta.nome,
     banco: conta.banco,
+    tipo: conta.tipo,
+    contaPaiId: conta.conta_pai_id,
     saldoAtual: saldoPorConta.get(conta.id) ?? null,
   }));
+}
+
+/** Uma aplicação (CDB, fundo): etapa ativa do centro de investimento. */
+export interface AplicacaoOpcao {
+  id: string;
+  nome: string;
+}
+
+/**
+ * As aplicações que uma transferência para a subconta pode escolher.
+ *
+ * São as etapas ATIVAS das raízes de tipo `investimento`, do mesmo jeito que os
+ * contratos de Empréstimos são as etapas da raiz `financeiro`. Aplicação nova se
+ * cadastra em Cadastros > Centros de custo, como etapa de "Investimentos".
+ */
+export async function listarAplicacoes(): Promise<AplicacaoOpcao[]> {
+  const supabase = await createClient();
+  const raizes = await supabase
+    .from("centros_custo")
+    .select("id")
+    .eq("nivel", 1)
+    .eq("tipo", "investimento");
+  if (raizes.error) {
+    throw new Error("Não foi possível carregar as aplicações");
+  }
+  const ids = (raizes.data ?? []).map((raiz) => raiz.id);
+  if (ids.length === 0) return [];
+
+  const etapas = await supabase
+    .from("centros_custo")
+    .select("id, nome")
+    .in("pai_id", ids)
+    .eq("ativo", true)
+    .order("nome");
+  if (etapas.error) {
+    throw new Error("Não foi possível carregar as aplicações");
+  }
+  return (etapas.data ?? []).map((etapa) => ({ id: etapa.id, nome: etapa.nome }));
 }
