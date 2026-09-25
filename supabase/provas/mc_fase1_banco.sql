@@ -54,6 +54,7 @@ declare
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_k1 uuid; v_k2 uuid; v_k3 uuid; v_n bigint; v_txt text; v_regra text; v_j jsonb; v_acc jsonb; r jsonb := '{}'::jsonb;
   v_obras0 bigint; v_cc0 bigint; v_lanc0 bigint; v_versao_rascunho uuid;
+  v_versao_k3 uuid; v_med_k3 uuid; v_rev00_k3 uuid; v_rev01_k3 uuid; v_rev01_k2 uuid;
 begin
   select count(*) into v_obras0 from public.obras;
   select count(*) into v_cc0 from public.centros_custo;
@@ -257,6 +258,60 @@ begin
   begin update public.mc_medicoes set status = 'aprovada', aprovada_em = now() where contrato_id = v_k1 and numero = 2;
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('5o_aprovacao_fora_de_ordem', v_txt);
+
+  -- 5p. Carga deixa REV01 (antes_aprovacao, em_aberto) pendurada numa medição já aprovada (K3);
+  -- fora da carga, inserir aprovação nela tem de recusar
+  insert into public.mc_contratos (codigo, nome_obra, objeto, numero_contrato, contratante_nome, contratante_tipo,
+    valor_inicial, data_assinatura, prazo_meses, regra_arredondamento, created_by)
+  values ('PROVA-K3', 'Prova K3', 'Prova', 'K3', 'Contratante prova', 'privado', 1, '2025-12-01', 12, 'item_por_medicao', v_tiago)
+  returning id into v_k3;
+  insert into public.mc_contrato_usuarios (contrato_id, usuario_id) values (v_k3, v_tiago);
+  perform public.fn_mc_prova_planilha(v_k3, 0, null, '2025-12-01', jsonb_build_array(
+    jsonb_build_object('ordem', 1, 'codigo', '01', 'descricao', 'Serviço único', 'unidade', 'un', 'tipo', 'servico', 'preco', '1', 'qtd', '1')));
+  select id into v_versao_k3 from public.mc_planilha_versoes where contrato_id = v_k3 and numero = 0;
+  perform set_config('app.mc_carga', '1', true);
+  insert into public.mc_medicoes (contrato_id, numero, periodo_inicio, periodo_fim, versao_id, status, origem)
+  values (v_k3, 1, '2026-01-01', '2026-01-31', v_versao_k3, 'aprovada', 'carga')
+  returning id into v_med_k3;
+  insert into public.mc_medicao_revisoes (medicao_id, contrato_id, numero, status)
+  values (v_med_k3, v_k3, 0, 'aprovada') returning id into v_rev00_k3;
+  insert into public.mc_medicao_revisoes (medicao_id, contrato_id, numero, status, motivo)
+  values (v_med_k3, v_k3, 1, 'em_aberto', 'Carga: revisão extra deixada aberta') returning id into v_rev01_k3;
+  perform set_config('app.mc_carga', '0', true);
+  begin insert into public.mc_aprovacoes_item (revisao_id, item_id, contrato_id, quantidade_aprovada)
+      select v_rev01_k3, item_id, v_k3, 1 from public.mc_planilha_itens where contrato_id = v_k3 and ordem = 1;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5p_revisao_antes_aprovacao_em_medicao_aprovada', v_txt);
+
+  -- 5q. Aprovar K1 med1 com a REV00 ainda em aberto (de 5i)
+  begin update public.mc_medicoes set status = 'aprovada', aprovada_em = now() where contrato_id = v_k1 and numero = 1;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5q_aprovacao_sem_revisao_fechada', v_txt);
+
+  -- 5r. Uma segunda revisão de K2 med1 (pós-aprovação) tentando virar aprovada com a REV00 já aprovada
+  insert into public.mc_medicao_revisoes (medicao_id, contrato_id, numero, fase, motivo)
+  select id, v_k2, 1, 'pos_aprovacao', 'Correção pós-aprovação de prova' from public.mc_medicoes where contrato_id = v_k2 and numero = 1
+  returning id into v_rev01_k2;
+  begin update public.mc_medicao_revisoes set status = 'aprovada' where id = v_rev01_k2;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5r_duas_aprovadas', v_txt);
+
+  -- 5s. Revisão fora de ordem (REV09 direto, sem as anteriores)
+  begin insert into public.mc_medicao_revisoes (medicao_id, contrato_id, numero, motivo)
+      select id, v_k1, 9, 'Fora de ordem' from public.mc_medicoes where contrato_id = v_k1 and numero = 2;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s_revisao_fora_de_ordem', v_txt);
+
+  -- 5t. Medição nascendo aprovada fora da carga
+  begin insert into public.mc_medicoes (contrato_id, numero, periodo_inicio, periodo_fim, versao_id, status)
+      select v_k1, 3, '2026-03-01', '2026-03-31', versao_id, 'aprovada' from public.mc_medicoes where contrato_id = v_k1 and numero = 2;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5t_medicao_nasce_aprovada_fora_carga', v_txt);
+
+  -- 5u. Aprovar K2 med2 com a REV01 (pós-aprovação) de K2 med1 ainda em aberto
+  begin update public.mc_medicoes set status = 'aprovada', aprovada_em = now() where contrato_id = v_k2 and numero = 2;
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5u_pos_aprovacao_pendente', v_txt);
 
   -- 6. Truncate nas tabelas transacionais do módulo tem gatilho de recusa (não roda o truncate)
   select count(*) into v_n from pg_trigger t join pg_class c on c.oid = t.tgrelid
