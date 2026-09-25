@@ -23,10 +23,13 @@ import { formatarBRL } from "@/lib/formatadores";
 import { paraNumero } from "@/modules/compras/ordens/calculo";
 import { salvarTransferencia } from "@/modules/financeiro/transferencias/actions";
 import type {
+  AplicacaoOpcao,
   ContaOpcao,
   TransferenciaLista,
 } from "@/modules/financeiro/transferencias/queries";
 import {
+  contasDoOutroLado,
+  ehMovimentoDeInvestimento,
   transferenciaFormSchema,
   type TransferenciaFormInput,
 } from "@/modules/financeiro/transferencias/schemas";
@@ -61,6 +64,7 @@ function valoresIniciais(
         : "",
     descricao: transferencia?.descricao ?? "",
     observacoes: transferencia?.observacoes ?? "",
+    aplicacaoId: transferencia?.aplicacaoId ?? "",
   };
 }
 
@@ -82,6 +86,8 @@ export interface TransferenciaFormDrawerProps {
   /** Transferência em edição, ou null para criar uma nova. */
   transferencia: TransferenciaLista | null;
   contas: ContaOpcao[];
+  /** As aplicações (CDB, fundo) para quando uma ponta é subconta de investimentos. */
+  aplicacoes: AplicacaoOpcao[];
   /**
    * Abre a confirmação de exclusão. Ausente quando o usuário não tem permissão
    * de excluir, e o botão some junto — botão que sempre recusa é pior que
@@ -103,6 +109,7 @@ export function TransferenciaFormDrawer({
   onAbertoChange,
   transferencia,
   contas,
+  aplicacoes,
   onSolicitarExclusao,
 }: TransferenciaFormDrawerProps) {
   const editando = transferencia !== null;
@@ -125,10 +132,21 @@ export function TransferenciaFormDrawer({
 
   const valor = paraNumero(valorTexto ?? "");
   const tarifa = paraNumero(tarifaTexto ?? "");
+  const aplicacaoId = form.watch("aplicacaoId");
   const contaOrigem = contas.find((conta) => conta.id === origemId) ?? null;
   const contaDestino = contas.find((conta) => conta.id === destinoId) ?? null;
+  const deInvestimento = ehMovimentoDeInvestimento(contaOrigem, contaDestino);
+  const aplicando = contaDestino?.tipo === "investimento";
 
   async function aoEnviar(valores: TransferenciaFormInput) {
+    // Aplicação é obrigatória só quando uma ponta é subconta; fora disso ela não
+    // vai, mesmo que tenha sobrado escolhida de uma troca de conta.
+    if (deInvestimento && valores.aplicacaoId === "") {
+      form.setError("aplicacaoId", {
+        message: "Escolha em qual aplicação o dinheiro está",
+      });
+      return;
+    }
     const resultado = await salvarTransferencia(transferencia?.id ?? null, {
       contaOrigemId: valores.contaOrigemId,
       contaDestinoId: valores.contaDestinoId,
@@ -139,6 +157,10 @@ export function TransferenciaFormDrawer({
         valores.descricao.trim() === "" ? undefined : valores.descricao,
       observacoes:
         valores.observacoes.trim() === "" ? undefined : valores.observacoes,
+      aplicacaoId:
+        deInvestimento && valores.aplicacaoId !== ""
+          ? valores.aplicacaoId
+          : undefined,
     });
 
     if ("erro" in resultado) {
@@ -147,22 +169,29 @@ export function TransferenciaFormDrawer({
     }
 
     toast.success(
-      editando ? "Transferência salva" : "Transferência registrada",
+      editando
+        ? "Transferência salva"
+        : deInvestimento
+          ? aplicando
+            ? "Aplicação registrada"
+            : "Resgate registrado"
+          : "Transferência registrada",
     );
     onAbertoChange(false);
   }
 
-  // O destino não oferece a conta já escolhida como origem: banir depois, no
-  // envio, faria a pessoa preencher tudo para só então descobrir.
-  const opcoesOrigem = contas.filter((conta) => conta.id !== destinoId);
-  const opcoesDestino = contas.filter((conta) => conta.id !== origemId);
+  // Cada lado só oferece o que combina com o outro: a conta já escolhida some, e
+  // a subconta de investimentos só aparece do lado da própria conta. Barrar
+  // depois, no envio, faria a pessoa preencher tudo para só então descobrir.
+  const opcoesOrigem = contasDoOutroLado(contas, contaDestino);
+  const opcoesDestino = contasDoOutroLado(contas, contaOrigem);
 
   return (
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar transferência" : "Nova transferência"}
-      descricao="Movimentação entre contas da empresa. Não entra no resultado: só muda o saldo das duas contas"
+      descricao="Movimentação entre contas da empresa. Não entra no resultado: só muda o saldo das duas contas. Para aplicar, escolha como destino a subconta · INVESTIMENTOS da conta; para resgatar, ela como origem"
       temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
@@ -252,6 +281,35 @@ export function TransferenciaFormDrawer({
             id="transferencia-destino"
           />
         </CampoFormulario>
+
+        {deInvestimento ? (
+          <CampoFormulario
+            id="transferencia-aplicacao"
+            rotulo="Aplicação"
+            obrigatorio
+            ajuda={
+              aplicando
+                ? "Em qual aplicação o dinheiro entra. Aplicar não é despesa: o dinheiro só muda de bolso e continua da empresa."
+                : "De qual aplicação o dinheiro está saindo."
+            }
+            erro={form.formState.errors.aplicacaoId?.message}
+          >
+            <Combobox
+              valor={aplicacaoId}
+              onValorChange={(valor) =>
+                form.setValue("aplicacaoId", valor, { shouldValidate: true })
+              }
+              opcoes={aplicacoes.map((aplicacao) => ({
+                valor: aplicacao.id,
+                rotulo: aplicacao.nome,
+              }))}
+              placeholder="Selecione a aplicação"
+              disabled={salvando}
+              className="w-full"
+              id="transferencia-aplicacao"
+            />
+          </CampoFormulario>
+        ) : null}
 
         <LinhaCampos>
           <CampoFormulario

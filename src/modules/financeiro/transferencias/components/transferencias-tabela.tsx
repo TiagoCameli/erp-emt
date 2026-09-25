@@ -24,6 +24,7 @@ import {
 } from "@/modules/_shared/filtros-cliente";
 import { excluirTransferencia } from "@/modules/financeiro/transferencias/actions";
 import type {
+  AplicacaoOpcao,
   ContaOpcao,
   TransferenciaLista,
 } from "@/modules/financeiro/transferencias/queries";
@@ -71,10 +72,20 @@ const colunas: ColumnDef<TransferenciaLista, unknown>[] = [
     accessorKey: "descricao",
     header: "Descrição",
     size: 260,
-    cell: ({ row }) =>
-      row.original.descricao ?? (
-        <span className="text-muted-foreground">-</span>
-      ),
+    cell: ({ row }) => (
+      <div className="flex flex-col gap-0.5">
+        {row.original.descricao ?? (
+          <span className="text-muted-foreground">-</span>
+        )}
+        {/* A aplicação (CDB, fundo) quando o dinheiro vai ou volta da subconta
+            de investimentos: é o que responde "aplicou em quê?". */}
+        {row.original.aplicacaoNome ? (
+          <span className="text-legenda text-muted-foreground">
+            Aplicação: {row.original.aplicacaoNome}
+          </span>
+        ) : null}
+      </div>
+    ),
   },
   {
     accessorKey: "totalSaida",
@@ -112,6 +123,7 @@ const colunas: ColumnDef<TransferenciaLista, unknown>[] = [
 export interface TransferenciasTabelaProps {
   transferencias: TransferenciaLista[];
   contas: ContaOpcao[];
+  aplicacoes: AplicacaoOpcao[];
   podeEditar: boolean;
   podeExcluir: boolean;
 }
@@ -120,6 +132,7 @@ export interface TransferenciasTabelaProps {
 export function TransferenciasTabela({
   transferencias,
   contas,
+  aplicacoes,
   podeEditar,
   podeExcluir,
 }: TransferenciasTabelaProps) {
@@ -430,6 +443,7 @@ export function TransferenciasTabela({
         onAbertoChange={setAberto}
         transferencia={selecionada}
         contas={contas}
+        aplicacoes={aplicacoes}
         onSolicitarExclusao={
           podeExcluir ? () => setDialogExcluir(true) : undefined
         }

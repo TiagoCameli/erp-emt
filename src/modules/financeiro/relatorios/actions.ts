@@ -32,6 +32,7 @@ import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-fi
 import {
   abaAging,
   abaCreditos,
+  abaInvestimentos,
   abaCustoCc,
   abaCustoGrupo,
   abaCustoReceita,
@@ -48,6 +49,7 @@ import {
 import {
   aging,
   creditos,
+  investimentos,
   custoPorCentroCusto,
   custoPorGrupo,
   custoPorInsumo,
@@ -61,6 +63,7 @@ import {
   posicaoBancaria,
   primeirosMesesDosCentros,
 } from "@/modules/financeiro/relatorios/queries";
+import { lerPeriodoInvestimentos } from "@/modules/financeiro/relatorios/investimentos";
 import type { RelatorioId } from "@/modules/financeiro/relatorios/relatorios";
 
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -258,6 +261,15 @@ async function abaDoRelatorio(
 
     case "creditos":
       return abaCreditos(await creditos(), "todos os contratos");
+
+    case "investimentos": {
+      const periodo = lerPeriodoInvestimentos(params);
+      const recorte =
+        periodo.de === "" && periodo.ate === ""
+          ? "histórico inteiro"
+          : `movimento de ${periodo.de || "o início"} a ${periodo.ate || "hoje"}`;
+      return abaInvestimentos(await investimentos(periodo), recorte);
+    }
 
     case "custo-cc": {
       const { filtros } = lerFiltrosCustoCc(params, mesCorrente());

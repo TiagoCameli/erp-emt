@@ -41,7 +41,9 @@ function valoresIniciais(conta: ContaLista | null): ContaFormInput {
     banco: conta?.banco ?? "caixa",
     agencia: conta?.agencia ?? "",
     conta: conta?.conta ?? "",
-    tipo: conta?.tipo ?? "corrente",
+    // A subconta de investimentos não abre este formulário (a tabela manda para
+    // o extrato dela); o fallback só existe para o tipo fechar com o do select.
+    tipo: conta && conta.tipo !== "investimento" ? conta.tipo : "corrente",
     // `saldoInicial` null é SEM PERMISSÃO de ver o saldo desta conta, e o campo
     // fica escondido. O teste explícito contra null não é zelo: `null !==
     // undefined` é true, então a versão anterior caía no `String(null)` e o

@@ -54,6 +54,7 @@ function conta(
     agencia: null,
     conta: null,
     tipo: "corrente",
+    conta_pai_id: null,
     saldo_inicial_data: saldoInicialData,
     ativo: true,
   };

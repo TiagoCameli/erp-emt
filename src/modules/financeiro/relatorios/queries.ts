@@ -2,6 +2,7 @@ import "server-only";
 
 import { dataHojeISO } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
   abertoPorPrazo,
   pagoDasParcelas,
@@ -13,6 +14,14 @@ import {
 } from "@/modules/cadastros/_shared/insumo-grupos";
 import type { CentroCustoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
+import {
+  montarInvestimentos,
+  sentidoDaTransferencia,
+  type Investimentos,
+  type MovimentoInvestimento,
+  type PeriodoInvestimentos,
+  type SubcontaInvestimento,
+} from "@/modules/financeiro/relatorios/investimentos";
 import {
   montarCreditos,
   type Creditos,
@@ -770,7 +779,9 @@ export async function listarCentrosCustoParaFiltro(): Promise<
       const tipoDaRaiz = centro.pai_id
         ? tipoPorId.get(centro.pai_id)
         : centro.tipo;
-      return tipoDaRaiz !== "financeiro";
+      // Investimento também fica fora (24/09/2026): o banco já o exclui de todo
+      // relatório de custo, e oferecê-lo no filtro devolveria sempre R$ 0,00.
+      return tipoDaRaiz !== "financeiro" && tipoDaRaiz !== "investimento";
     })
     .map((centro) => ({
       id: centro.id,
@@ -1327,4 +1338,97 @@ export async function creditos(): Promise<Creditos> {
   }
 
   return montarCreditos(contratosRpc.data ?? [], mesesRpc.data ?? []);
+}
+
+/**
+ * O relatório de Investimentos: as transferências entre cada conta e a sua
+ * subconta de investimentos, com a aplicação (CDB, fundo) de cada uma, mais o
+ * saldo das subcontas.
+ *
+ * O saldo sai de `fn_saldos_das_contas`, a mesma função de Contas bancárias e de
+ * Posição bancária: o "saldo aplicado" daqui não tem como discordar do que a
+ * subconta mostra lá. A subconta herda a permissão de ver saldo da conta-mãe
+ * (fn_pode_ver_saldo), e a que a pessoa não pode ver fica fora do total, contada.
+ */
+export async function investimentos(
+  periodo: PeriodoInvestimentos,
+): Promise<Investimentos> {
+  const supabase = await createClient();
+
+  const [contasResultado, saldosResultado] = await Promise.all([
+    supabase
+      .from("contas_bancarias")
+      .select("id, nome, tipo, conta_pai_id, ativo")
+      .order("nome"),
+    supabase.rpc("fn_saldos_das_contas"),
+  ]);
+  if (contasResultado.error) {
+    throw new Error("Não foi possível carregar as contas bancárias");
+  }
+  if (saldosResultado.error) {
+    throw new Error("Não foi possível carregar o saldo das contas");
+  }
+
+  const contas = contasResultado.data ?? [];
+  const nomePorId = new Map(contas.map((conta) => [conta.id, conta.nome]));
+  const saldoPorConta = new Map(
+    (saldosResultado.data ?? []).map((linha) => [
+      linha.conta_bancaria_id,
+      Number(linha.saldo),
+    ]),
+  );
+  const subcontasTodas = contas.filter((conta) => conta.tipo === "investimento");
+  const idsSubcontas = new Set(subcontasTodas.map((conta) => conta.id));
+
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .from("transferencias_contas")
+      .select(
+        `id, numero, data_transferencia, valor, descricao, conta_origem_id,
+         conta_destino_id, centro_custo_id,
+         aplicacao:centros_custo!transferencias_contas_centro_custo_id_fkey(nome)`,
+      )
+      .not("centro_custo_id", "is", null)
+      .order("data_transferencia")
+      .order("id")
+      .range(de, ate),
+  );
+  if (erro) {
+    throw new Error("Não foi possível carregar as aplicações");
+  }
+
+  const movimentos: MovimentoInvestimento[] = [];
+  for (const linha of linhas) {
+    const destinoEhSubconta = idsSubcontas.has(linha.conta_destino_id);
+    const subcontaId = destinoEhSubconta
+      ? linha.conta_destino_id
+      : linha.conta_origem_id;
+    // A RPC só grava aplicação com uma ponta subconta; a checagem aqui é para
+    // um dado que alguém escreveu à mão não virar resgate de uma conta corrente.
+    if (!idsSubcontas.has(subcontaId) || linha.centro_custo_id === null) continue;
+    movimentos.push({
+      id: linha.id,
+      numero: linha.numero,
+      data: linha.data_transferencia,
+      valor: Number(linha.valor),
+      sentido: sentidoDaTransferencia(destinoEhSubconta),
+      aplicacaoId: linha.centro_custo_id,
+      aplicacaoNome: linha.aplicacao?.nome ?? "Aplicação",
+      subcontaId,
+      descricao: linha.descricao,
+    });
+  }
+
+  // Subconta inativa sem movimento não tem o que dizer; com movimento, fica.
+  const comMovimento = new Set(movimentos.map((m) => m.subcontaId));
+  const subcontas: SubcontaInvestimento[] = subcontasTodas
+    .filter((conta) => conta.ativo || comMovimento.has(conta.id))
+    .map((conta) => ({
+      contaId: conta.id,
+      nome: conta.nome,
+      contaPaiNome: nomePorId.get(conta.conta_pai_id ?? "") ?? conta.nome,
+      saldoAtual: saldoPorConta.get(conta.id) ?? null,
+    }));
+
+  return montarInvestimentos(movimentos, subcontas, periodo);
 }

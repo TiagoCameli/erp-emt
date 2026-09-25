@@ -4,12 +4,16 @@ import * as React from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { ContaOpcao } from "@/modules/financeiro/transferencias/queries";
+import type {
+  AplicacaoOpcao,
+  ContaOpcao,
+} from "@/modules/financeiro/transferencias/queries";
 import { TransferenciaFormDrawer } from "./transferencia-form-drawer";
 
 export interface TransferenciasAcoesCabecalhoProps {
   podeCriar: boolean;
   contas: ContaOpcao[];
+  aplicacoes: AplicacaoOpcao[];
 }
 
 /**
@@ -19,6 +23,7 @@ export interface TransferenciasAcoesCabecalhoProps {
 export function TransferenciasAcoesCabecalho({
   podeCriar,
   contas,
+  aplicacoes,
 }: TransferenciasAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
 
@@ -37,6 +42,7 @@ export function TransferenciasAcoesCabecalho({
         onAbertoChange={setAberto}
         transferencia={null}
         contas={contas}
+        aplicacoes={aplicacoes}
       />
     </>
   );

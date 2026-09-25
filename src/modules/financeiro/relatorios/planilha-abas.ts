@@ -2,6 +2,10 @@ import { formatarMesAno } from "@/lib/formatadores";
 import type { CreditoContrato, Creditos } from "@/modules/financeiro/relatorios/creditos";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 import type {
+  Investimentos,
+  LinhaAplicacao,
+} from "@/modules/financeiro/relatorios/investimentos";
+import type {
   Aging,
   CustoPorCentroCusto,
   CustoPorGrupo,
@@ -379,6 +383,60 @@ export function abaCreditos(dados: Creditos, recorte: string): EscritaDeAba {
     colunas: COLUNAS_CREDITOS,
     linhas: dados.contratos,
     rotuloTotal: `Total (${dados.contratos.length} contrato(s))`,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Investimentos                                                      */
+/* ------------------------------------------------------------------ */
+
+const COLUNAS_INVESTIMENTOS: ColunaRelatorio<LinhaAplicacao>[] = [
+  { cabecalho: "Aplicação", largura: 34, tipo: "texto", celula: (a) => a.nome },
+  { cabecalho: "Conta", largura: 32, tipo: "texto", celula: (a) => a.conta },
+  {
+    cabecalho: "Aplicado no período",
+    largura: 20,
+    tipo: "dinheiro",
+    celula: (a) => a.aplicadoPeriodo,
+    somar: true,
+  },
+  {
+    cabecalho: "Resgatado no período",
+    largura: 20,
+    tipo: "dinheiro",
+    celula: (a) => a.resgatadoPeriodo,
+    somar: true,
+  },
+  {
+    cabecalho: "Aplicado (total)",
+    largura: 18,
+    tipo: "dinheiro",
+    celula: (a) => a.aplicado,
+    somar: true,
+  },
+  {
+    cabecalho: "Resgatado (total)",
+    largura: 18,
+    tipo: "dinheiro",
+    celula: (a) => a.resgatado,
+    somar: true,
+  },
+  {
+    cabecalho: "Saldo aplicado",
+    largura: 18,
+    tipo: "dinheiro",
+    celula: (a) => a.posicao,
+    somar: true,
+  },
+];
+
+export function abaInvestimentos(dados: Investimentos, recorte: string): EscritaDeAba {
+  return aba({
+    nome: "Investimentos",
+    titulo: `Investimentos · saldo por aplicação · ${recorte}`,
+    colunas: COLUNAS_INVESTIMENTOS,
+    linhas: dados.aplicacoes,
+    rotuloTotal: `Total (${dados.aplicacoes.length} aplicação(ões); saldo = aplicado menos resgatado)`,
   });
 }
 

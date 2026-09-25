@@ -61,6 +61,8 @@ export interface ContaLista {
   agencia: string | null;
   conta: string | null;
   tipo: TipoConta;
+  /** Subconta de investimentos: a conta corrente dona dela. */
+  contaPaiId: string | null;
   /** Null sem permissão de ver o saldo desta conta. */
   saldoInicial: number | null;
   /**
@@ -139,7 +141,7 @@ export async function listarContas(): Promise<ContaLista[]> {
   const [contasResultado, saldosResultado] = await Promise.all([
     supabase
       .from("contas_bancarias")
-      .select("id, nome, banco, agencia, conta, tipo, saldo_inicial_data, ativo")
+      .select("id, nome, banco, agencia, conta, tipo, conta_pai_id, saldo_inicial_data, ativo")
       .order("nome"),
     supabase.rpc("fn_saldos_das_contas"),
   ]);
@@ -172,6 +174,7 @@ export async function listarContas(): Promise<ContaLista[]> {
       agencia: conta.agencia,
       conta: conta.conta,
       tipo: conta.tipo as TipoConta,
+      contaPaiId: conta.conta_pai_id,
       saldoInicial: dinheiro ? Number(dinheiro.saldo_inicial) : null,
       saldoInicialData: conta.saldo_inicial_data,
       // O saldo vem SOMADO do banco, por `fn_saldos_das_contas`, com a mesma

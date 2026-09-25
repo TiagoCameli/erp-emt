@@ -104,7 +104,14 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
     accessorKey: "nome",
     header: "Nome",
     size: 300,
-    cell: ({ row }) => <span className="font-medium">{row.original.nome}</span>,
+    cell: ({ row }) =>
+      // A subconta de investimentos vem logo abaixo da conta, recuada: é o
+      // dinheiro aplicado DAQUELA conta, e ler as duas juntas é ler o saldo real.
+      row.original.contaPaiId ? (
+        <span className="pl-4 text-muted-foreground">↳ {row.original.nome}</span>
+      ) : (
+        <span className="font-medium">{row.original.nome}</span>
+      ),
   },
   {
     accessorKey: "banco",
@@ -318,6 +325,13 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
   }, [contas, busca, status, banco, tipo, saldoDe, saldoAte]);
 
   function abrirEdicao(conta: ContaLista) {
+    // A subconta é mantida pelo banco (nome, banco, agência e ativo seguem a
+    // conta-mãe): o clique leva ao extrato dela, não a um formulário que não
+    // teria o que editar.
+    if (conta.tipo === "investimento") {
+      abrirExtrato(conta);
+      return;
+    }
     if (!podeEditar) return;
     setSelecionadaId(conta.id);
     setAberto(true);

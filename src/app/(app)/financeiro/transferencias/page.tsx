@@ -10,6 +10,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TransferenciasAcoesCabecalho } from "@/modules/financeiro/transferencias/components/transferencias-acoes-cabecalho";
 import { TransferenciasTabela } from "@/modules/financeiro/transferencias/components/transferencias-tabela";
 import {
+  listarAplicacoes,
   listarContasAtivas,
   listarTransferencias,
 } from "@/modules/financeiro/transferencias/queries";
@@ -31,9 +32,10 @@ export default async function PaginaTransferencias() {
     notFound();
   }
 
-  const [transferencias, contas] = await Promise.all([
+  const [transferencias, contas, aplicacoes] = await Promise.all([
     listarTransferencias(),
     listarContasAtivas(),
+    listarAplicacoes(),
   ]);
 
   const mes = mesCorrente();
@@ -66,6 +68,7 @@ export default async function PaginaTransferencias() {
           <TransferenciasAcoesCabecalho
             podeCriar={temPermissao(usuario, RECURSO, "criar")}
             contas={contas}
+            aplicacoes={aplicacoes}
           />
         }
       />
@@ -91,6 +94,7 @@ export default async function PaginaTransferencias() {
       <TransferenciasTabela
         transferencias={transferencias}
         contas={contas}
+        aplicacoes={aplicacoes}
         podeEditar={temPermissao(usuario, RECURSO, "editar")}
         podeExcluir={temPermissao(usuario, RECURSO, "excluir")}
       />
