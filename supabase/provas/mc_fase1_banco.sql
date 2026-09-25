@@ -19,6 +19,31 @@
 --     01.02 novo 5 x 2 = 10,00, total v1 14,80. 2ª medição (v1) lança 1,5: valor 0,60;
 --     acumulado do 01.01: quantidade 2,7, valor 1,00.
 
+begin;
+create function public.fn_mc_prova_planilha(p_contrato uuid, p_numero int, p_aditivo uuid, p_desde date, p_linhas jsonb)
+returns uuid language plpgsql set search_path to '' as $$
+declare v_versao uuid; l jsonb; v_item uuid; v_pai uuid;
+begin
+  insert into public.mc_planilha_versoes (contrato_id, numero, aditivo_id, vigente_desde)
+  values (p_contrato, p_numero, p_aditivo, p_desde) returning id into v_versao;
+  for l in select * from jsonb_array_elements(p_linhas) loop
+    v_item := nullif(l ->> 'item_id', '')::uuid;
+    if v_item is null then insert into public.mc_itens (contrato_id) values (p_contrato) returning id into v_item; end if;
+    select id into v_pai from public.mc_planilha_itens where versao_id = v_versao and ordem = (l ->> 'pai')::int;
+    insert into public.mc_planilha_itens (versao_id, contrato_id, item_id, ordem, codigo, pai_id, descricao, unidade, tipo, preco_unitario, quantidade_prevista)
+    values (v_versao, p_contrato, v_item, (l ->> 'ordem')::int, l ->> 'codigo', v_pai, l ->> 'descricao', l ->> 'unidade', l ->> 'tipo',
+            (l ->> 'preco')::numeric, (l ->> 'qtd')::numeric);
+  end loop;
+  update public.mc_planilha_versoes set status = 'vigente' where id = v_versao;
+  return v_versao;
+end $$;
+create function public.fn_mc_prova_medicao(p_contrato uuid, p_ini date, p_fim date) returns uuid language sql set search_path to '' as $$
+  insert into public.mc_medicoes (contrato_id, numero, periodo_inicio, periodo_fim, versao_id)
+  select p_contrato, coalesce((select max(numero) from public.mc_medicoes where contrato_id = p_contrato), 0) + 1, p_ini, p_fim,
+         (select id from public.mc_planilha_versoes where contrato_id = p_contrato and status = 'vigente' order by numero desc limit 1)
+  returning id;
+$$;
+
 do $prova$
 declare
   v_tiago constant uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
@@ -42,7 +67,54 @@ begin
    where c.relname like 'mc\_%' and t.tgname like 'trg_audit_%';
   r := r || jsonb_build_object('1c_tabelas_auditadas', v_n);
 
-  -- [casos 2 em diante entram nas próximas tasks]
+  -- Dados de K1 (cálculo) e K2 (versões e travas), montados como dono.
+  insert into public.mc_contratos (codigo, nome_obra, objeto, numero_contrato, contratante_nome, contratante_tipo,
+    valor_inicial, data_assinatura, prazo_meses, regra_arredondamento, created_by)
+  values ('PROVA-K1', 'Prova K1', 'Prova', 'K1', 'Contratante prova', 'privado', 123.03, '2025-12-01', 12, 'item_por_medicao', v_tiago)
+  returning id into v_k1;
+  insert into public.mc_contrato_usuarios (contrato_id, usuario_id) values (v_k1, v_tiago);
+  perform public.fn_mc_prova_planilha(v_k1, 0, null, '2025-12-01', jsonb_build_array(
+    jsonb_build_object('ordem', 1, 'codigo', '01', 'descricao', 'Grupo A', 'tipo', 'titulo'),
+    jsonb_build_object('ordem', 2, 'codigo', '01.01', 'pai', 1, 'descricao', 'Serviço 1', 'unidade', 'un', 'tipo', 'servico', 'preco', '0.335', 'qtd', '3'),
+    jsonb_build_object('ordem', 3, 'codigo', '01.02', 'pai', 1, 'descricao', 'Serviço 2', 'unidade', 'm2', 'tipo', 'servico', 'preco', '0.335', 'qtd', '3'),
+    jsonb_build_object('ordem', 4, 'codigo', '01.02.01', 'pai', 3, 'descricao', 'Filho com preço', 'unidade', 't', 'tipo', 'servico', 'preco', '10.004', 'qtd', '2'),
+    jsonb_build_object('ordem', 5, 'codigo', '02', 'descricao', 'Grupo B', 'tipo', 'titulo'),
+    jsonb_build_object('ordem', 6, 'codigo', '02.01', 'pai', 5, 'descricao', 'Serviço 3', 'unidade', 'un', 'tipo', 'servico', 'preco', '100', 'qtd', '1'),
+    jsonb_build_object('ordem', 7, 'codigo', '02.01', 'pai', 5, 'descricao', 'Código repetido', 'unidade', 'un', 'tipo', 'servico', 'preco', '1', 'qtd', '1')));
+
+  -- 2. Previsto por linha, subárvore, grupo e total, nas três regras. Um comando por regra: dentro
+  --    de um SELECT só, o update da regra não seria visto pelas views (snapshot do comando).
+  v_acc := '{}'::jsonb;
+  foreach v_regra in array array['item_por_medicao', 'item_por_acumulado', 'sem_arredondar'] loop
+    update public.mc_contratos set regra_arredondamento = v_regra where id = v_k1;
+    select jsonb_build_object(
+      'linha_01_01', (select valor_previsto from public.mc_v_planilha_linhas where contrato_id = v_k1 and ordem = 2),
+      'subarvore_01_02', (select t.total_previsto from public.mc_v_planilha_totais t join public.mc_planilha_itens i on i.id = t.id where i.contrato_id = v_k1 and i.ordem = 3),
+      'grupo_01', (select t.total_previsto from public.mc_v_planilha_totais t join public.mc_planilha_itens i on i.id = t.id where i.contrato_id = v_k1 and i.ordem = 1),
+      'grupo_02', (select t.total_previsto from public.mc_v_planilha_totais t join public.mc_planilha_itens i on i.id = t.id where i.contrato_id = v_k1 and i.ordem = 5),
+      'total', (select total_previsto from public.mc_v_versao_totais where contrato_id = v_k1)) into v_j;
+    v_acc := v_acc || jsonb_build_object(v_regra, v_j);
+  end loop;
+  r := r || jsonb_build_object('2_previsto', v_acc);
+
+  -- 3. Medições de K1: 1ª (jan) lança 1 + 0,5; 2ª (fev) lança 1,5, as duas abertas
+  perform public.fn_mc_prova_medicao(v_k1, '2026-01-01', '2026-01-31');
+  perform public.fn_mc_prova_medicao(v_k1, '2026-02-01', '2026-02-28');
+  insert into public.mc_lancamentos (contrato_id, item_id, medicao_id, data, quantidade)
+  select v_k1, i.item_id, '00000000-0000-0000-0000-000000000000', d.data, d.qtd
+  from public.mc_planilha_itens i, (values ('2026-01-10'::date, 1::numeric), ('2026-01-20', 0.5), ('2026-02-05', 1.5)) d(data, qtd)
+  where i.contrato_id = v_k1 and i.ordem = 2;
+  v_acc := '{}'::jsonb;
+  foreach v_regra in array array['item_por_medicao', 'item_por_acumulado', 'sem_arredondar'] loop
+    update public.mc_contratos set regra_arredondamento = v_regra where id = v_k1;
+    select jsonb_build_object(
+      'med1', (select valor_medicao from public.mc_v_medicao_itens where contrato_id = v_k1 and numero = 1),
+      'med2', (select valor_medicao from public.mc_v_medicao_itens where contrato_id = v_k1 and numero = 2),
+      'acumulado', (select valor_acumulado from public.mc_v_item_acumulado where contrato_id = v_k1),
+      'total_med2', (select valor from public.mc_v_medicao_totais t join public.mc_medicoes m on m.id = t.medicao_id where m.contrato_id = v_k1 and m.numero = 2)) into v_j;
+    v_acc := v_acc || jsonb_build_object(v_regra, v_j);
+  end loop;
+  r := r || jsonb_build_object('3_medicoes', v_acc);
 
   -- 9. O módulo não escreveu em outro módulo
   r := r || jsonb_build_object('9_outros_modulos_intactos',
@@ -52,3 +124,4 @@ begin
   raise exception 'PROVA %', r;
 end $prova$;
 do $aborto$ begin raise exception 'ABORTO GARANTIDO'; end $aborto$;
+rollback;
