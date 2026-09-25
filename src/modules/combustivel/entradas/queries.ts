@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import { precoPorLitro } from "@/modules/combustivel/entradas/schemas";
 import { paraNumeroDoBanco, paraNumeroOuNulo } from "@/modules/manutencao/servicos/formato";
 
@@ -165,6 +166,8 @@ export interface EntradaLinha {
   /** Instante da exclusão (lixeira). Nulo: lançada. */
   excluidoEm: string | null;
   motivoExclusao: string | null;
+  /** Quantas fotos e arquivos a entrada tem (o clipe da lista). */
+  anexos: number;
 }
 
 function precoDaLinha(valorTotal: number, litros: number): { precoLitro: number | null } {
@@ -191,6 +194,11 @@ export async function listarEntradas(excluidas = false): Promise<EntradaLinha[]>
   );
   if (erro) throw new Error("Não foi possível carregar as entradas de combustível");
 
+  const anexos = await contarAnexosPorDocumento(
+    "combustivel_entrada",
+    linhas.map((linha) => linha.id),
+  );
+
   return linhas.map((linha) => ({
     ...precoDaLinha(paraNumeroDoBanco(linha.valor_total), paraNumeroDoBanco(linha.litros)),
     id: linha.id,
@@ -210,5 +218,6 @@ export async function listarEntradas(excluidas = false): Promise<EntradaLinha[]>
     origem: linha.origem,
     excluidoEm: linha.excluido_em,
     motivoExclusao: linha.motivo_exclusao,
+    anexos: anexos[linha.id] ?? 0,
   }));
 }

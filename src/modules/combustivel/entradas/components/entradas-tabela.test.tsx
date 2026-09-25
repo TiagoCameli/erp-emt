@@ -66,6 +66,7 @@ function entrada(troca: Partial<EntradaLinha> = {}): EntradaLinha {
     origem: "manual",
     excluidoEm: null,
     motivoExclusao: null,
+    anexos: 0,
     ...troca,
   };
 }
@@ -96,6 +97,16 @@ describe("EntradasTabela", () => {
     expect(faixa.textContent).toContain("2 entradas");
     expect(faixa.textContent).toContain("1.500,50 L");
     expect(faixa.textContent).toContain(formatarBRL(9594.7));
+  });
+
+  it("entrada com nota ou foto ganha o clipe na data; sem anexo, nada", () => {
+    montar({
+      entradas: [entrada({ anexos: 1 }), entrada({ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", tanqueNome: "Comboio" })],
+    });
+    const comAnexo = screen.getByText("Tanque Canteiro").closest("tr")!;
+    const semAnexo = screen.getByText("Comboio").closest("tr")!;
+    expect(within(comAnexo).getByRole("img", { name: "1 anexo" })).toBeInTheDocument();
+    expect(within(semAnexo).queryByRole("img", { name: /anexo/ })).not.toBeInTheDocument();
   });
 
   it("o recorte da URL filtra a lista e a faixa junto", () => {

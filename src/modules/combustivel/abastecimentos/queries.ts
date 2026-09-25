@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import {
   relogioRioBranco,
   type MovimentosFifoTanque,
@@ -77,6 +78,8 @@ export interface SaidaLista {
   /** Instante da exclusão (lixeira). Nulo: lançado. */
   excluidoEm: string | null;
   motivoExclusao: string | null;
+  /** Quantas fotos e arquivos a saída tem (o clipe da lista). */
+  anexos: number;
 }
 
 export interface ContagemVisoes {
@@ -173,7 +176,14 @@ export async function listarAbastecimentos(
   if (resultadoSoma.erro) throw new Error("Não foi possível somar os abastecimentos");
   if (todas.error || internas.error || externas.error) throw new Error("Não foi possível contar os abastecimentos");
 
-  const itens: SaidaLista[] = (resultadoPagina.data ?? []).map((linha) => ({
+  const linhasPagina = resultadoPagina.data ?? [];
+  // Só os da página: o clipe é por linha, e a contagem nunca derruba a lista.
+  const anexos = await contarAnexosPorDocumento(
+    "combustivel_saida",
+    linhasPagina.map((linha) => linha.id),
+  );
+
+  const itens: SaidaLista[] = linhasPagina.map((linha) => ({
     id: linha.id,
     data: linha.data,
     origem: linha.origem as OrigemSaida,
@@ -196,6 +206,7 @@ export async function listarAbastecimentos(
     observacoes: linha.observacoes,
     excluidoEm: linha.excluido_em,
     motivoExclusao: linha.motivo_exclusao,
+    anexos: anexos[linha.id] ?? 0,
   }));
 
   return {

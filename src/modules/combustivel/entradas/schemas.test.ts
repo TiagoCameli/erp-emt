@@ -176,6 +176,7 @@ describe("filtrarEntradas", () => {
       origem: "manual",
       excluidoEm: null,
       motivoExclusao: null,
+      anexos: 0,
       ...troca,
     };
   }
