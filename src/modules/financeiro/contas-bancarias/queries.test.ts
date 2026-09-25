@@ -71,9 +71,6 @@ function dinheiro(opcoes: {
   anteriorParcelas?: number | null;
   anteriorRecebido?: number | string | null;
   anteriorPago?: number | string | null;
-  aplicado?: number | string | null;
-  resgatado?: number | string | null;
-  posicaoAplicacao?: number | string | null;
 }) {
   return {
     conta_bancaria_id: opcoes.conta,
@@ -85,9 +82,6 @@ function dinheiro(opcoes: {
     anterior_parcelas: opcoes.anteriorParcelas ?? null,
     anterior_recebido: opcoes.anteriorRecebido ?? null,
     anterior_pago: opcoes.anteriorPago ?? null,
-    aplicado: opcoes.aplicado ?? null,
-    resgatado: opcoes.resgatado ?? null,
-    posicao_aplicacao: opcoes.posicaoAplicacao ?? null,
   };
 }
 
