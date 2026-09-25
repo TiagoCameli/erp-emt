@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
 import { History } from "lucide-react";
 
 import {
@@ -17,6 +18,7 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { formatarLitros, formatarDataHoraRioBranco } from "@/modules/combustivel/_shared/rotulos";
 import {
   ROTULO_MOVIMENTO_TANQUE,
+  rotaDoMovimento,
   type MovimentoComNivel,
   type TipoMovimentoTanque,
 } from "@/modules/combustivel/tanques/calculo";
@@ -101,9 +103,11 @@ export interface TanqueDetalheProps {
  * Detalhe do tanque (somente leitura): o cadastro e todos os movimentos que
  * mexeram no nível, com o nível logo depois de cada um. O nível corrido segue a
  * ordem da trava do banco (no mesmo instante, a saída antes da entrada). Tanque
- * de terceiro não tem estoque: mostra só os abastecimentos, sem nível.
+ * de terceiro não tem estoque: mostra só os abastecimentos, sem nível. O clique no
+ * movimento leva ao registro de origem (`rotaDoMovimento`).
  */
 export function TanqueDetalhe({ tanque, movimentos }: TanqueDetalheProps) {
+  const router = useRouter();
   const [tipo, setTipo] = useFiltroSessao<string>("tipo", "", ["", ...TIPOS]);
 
   const filtrados = React.useMemo(
@@ -187,6 +191,7 @@ export function TanqueDetalhe({ tanque, movimentos }: TanqueDetalheProps) {
           idTabela="combustivel.tanques.movimentos"
           columns={colunas}
           data={filtrados}
+          onRowClick={(movimento) => router.push(rotaDoMovimento(movimento))}
           filtros={[
             {
               id: "tipo",

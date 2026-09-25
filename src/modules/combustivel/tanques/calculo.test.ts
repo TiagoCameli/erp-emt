@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { linhaDoTempo, percentualDoNivel, type MovimentoTanque } from "@/modules/combustivel/tanques/calculo";
+import { linhaDoTempo, percentualDoNivel, rotaDoMovimento, type MovimentoTanque } from "@/modules/combustivel/tanques/calculo";
 
 describe("percentualDoNivel", () => {
   it("sem capacidade não tem régua", () => {
@@ -54,5 +54,23 @@ describe("linhaDoTempo", () => {
       mov({ id: "b", tipo: "entrada", dataHora: "2026-09-20T11:00:00Z", litros: 0.2 }),
     ]);
     expect(linha[1]!.nivelDepois).toBe(0.3);
+  });
+});
+
+describe("rotaDoMovimento", () => {
+  const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+  it("abastecimento vai para a página do abastecimento", () => {
+    expect(rotaDoMovimento({ id, tipo: "abastecimento" })).toBe(`/combustivel/abastecimentos/${id}`);
+  });
+
+  it("entrada e transferência abrem o detalhe por cima da lista", () => {
+    expect(rotaDoMovimento({ id, tipo: "entrada" })).toBe(`/combustivel/entradas?detalhe=${id}`);
+    expect(rotaDoMovimento({ id, tipo: "transferencia_enviada" })).toBe(`/combustivel/transferencias?detalhe=${id}`);
+    expect(rotaDoMovimento({ id, tipo: "transferencia_recebida" })).toBe(`/combustivel/transferencias?detalhe=${id}`);
+  });
+
+  it("esvaziamento, sem detalhe, vai para a lista", () => {
+    expect(rotaDoMovimento({ id, tipo: "esvaziamento" })).toBe("/combustivel/esvaziamentos");
   });
 });

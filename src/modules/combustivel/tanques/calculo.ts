@@ -4,6 +4,9 @@
  * "use server", sem server-only: serve tela e Vitest.
  */
 
+import { hrefDetalhe } from "@/modules/combustivel/_shared/navegacao";
+import { rotaDoAbastecimento } from "@/modules/combustivel/abastecimentos/filtros";
+
 /**
  * Nível em percentual da capacidade, de 0 a 100, para a barra. Sem capacidade
  * (0) não há régua: devolve null e a tela mostra só os litros. Acima da
@@ -46,6 +49,26 @@ export interface MovimentoComNivel extends MovimentoTanque {
   delta: number;
   /** Nível do tanque logo depois deste movimento. */
   nivelDepois: number;
+}
+
+/**
+ * Para onde leva o clique num movimento do detalhe do tanque. Abastecimento tem página
+ * própria; entrada e transferência abrem o drawer de detalhe por cima da lista
+ * (`?detalhe=`). Esvaziamento não tem detalhe (a linha do tanque já mostra tudo): leva à
+ * lista de esvaziamentos.
+ */
+export function rotaDoMovimento(movimento: Pick<MovimentoTanque, "id" | "tipo">): string {
+  switch (movimento.tipo) {
+    case "abastecimento":
+      return rotaDoAbastecimento(movimento.id);
+    case "entrada":
+      return hrefDetalhe("/combustivel/entradas", movimento.id);
+    case "transferencia_enviada":
+    case "transferencia_recebida":
+      return hrefDetalhe("/combustivel/transferencias", movimento.id);
+    case "esvaziamento":
+      return "/combustivel/esvaziamentos";
+  }
 }
 
 function ehEntrada(tipo: TipoMovimentoTanque): boolean {

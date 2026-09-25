@@ -126,6 +126,20 @@ describe("EntradasTabela", () => {
     expect(navegacao.replace).toHaveBeenCalledWith(`/combustivel/entradas?tanque=${TANQUE}`, { scroll: false });
   });
 
+  it("?detalhe=<id> (link do detalhe do tanque) abre o detalhe daquela entrada e sai da URL", () => {
+    navegacao.params = new URLSearchParams("detalhe=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    montar();
+    expect(screen.getByText("Entrada de combustível")).toBeInTheDocument();
+    expect(navegacao.replace).toHaveBeenCalledWith("/combustivel/entradas", { scroll: false });
+  });
+
+  it("?detalhe= de id que não está na lista não abre nada, só sai da URL", () => {
+    navegacao.params = new URLSearchParams("detalhe=99999999-9999-4999-8999-999999999999");
+    montar();
+    expect(screen.queryByText("Entrada de combustível")).not.toBeInTheDocument();
+    expect(navegacao.replace).toHaveBeenCalledWith("/combustivel/entradas", { scroll: false });
+  });
+
   it("linha de controle: sem ?novo=1 o formulário não abre", () => {
     montar();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

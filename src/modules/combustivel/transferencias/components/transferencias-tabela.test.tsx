@@ -168,6 +168,13 @@ describe("TransferenciasTabela", () => {
     expect(navegacao.replace).toHaveBeenCalledWith("/combustivel/transferencias?de=2026-09-01", { scroll: false });
   });
 
+  it("?detalhe=<id> (link do detalhe do tanque) abre o detalhe daquela transferência e sai da URL", () => {
+    navegacao.params = new URLSearchParams("detalhe=11111111-1111-4111-8111-111111111111");
+    render(<TransferenciasTabela transferencias={[transferencia()]} tanques={[]} tanquesFiltro={[]} podeEditar podeExcluir />);
+    expect(screen.getByText("Transferência de combustível")).toBeInTheDocument();
+    expect(navegacao.replace).toHaveBeenCalledWith("/combustivel/transferencias", { scroll: false });
+  });
+
   it("linha de controle: sem ?novo=1 o formulário não abre", () => {
     render(<TransferenciasTabela transferencias={[]} tanques={[]} tanquesFiltro={[]} podeCriar podeEditar podeExcluir />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
