@@ -17,6 +17,7 @@ describe("acoesDaOs", () => {
       reabrir: false,
       cancelar: true,
       excluir: true,
+      anexar: true,
     });
   });
 
@@ -30,10 +31,11 @@ describe("acoesDaOs", () => {
       reabrir: false,
       cancelar: true,
       excluir: false,
+      anexar: true,
     });
   });
 
-  it("concluída: só reabre; linha e cabeçalho travados", () => {
+  it("concluída: reabre e anexa foto do serviço; linha e cabeçalho travados", () => {
     expect(acoesDaOs("concluida", TUDO)).toEqual({
       editarCabecalho: false,
       adicionarLinha: false,
@@ -43,10 +45,11 @@ describe("acoesDaOs", () => {
       reabrir: true,
       cancelar: false,
       excluir: false,
+      anexar: true,
     });
   });
 
-  it("cancelada: só exclui", () => {
+  it("cancelada: só exclui; não recebe anexo", () => {
     expect(acoesDaOs("cancelada", TUDO)).toEqual({
       editarCabecalho: false,
       adicionarLinha: false,
@@ -56,6 +59,7 @@ describe("acoesDaOs", () => {
       reabrir: false,
       cancelar: false,
       excluir: true,
+      anexar: false,
     });
   });
 

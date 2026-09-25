@@ -30,6 +30,15 @@ vi.mock("@/modules/manutencao/servicos/actions", () => ({
   salvarOs: vi.fn(),
 }));
 
+vi.mock("@/modules/_shared/anexos/actions", () => ({
+  anexosDoDocumento: vi.fn(async () => []),
+  removerAnexo: vi.fn(),
+  urlDoAnexo: vi.fn(),
+}));
+vi.mock("@/modules/_shared/anexos/enviar-do-navegador", () => ({
+  enviarAnexoDoNavegador: vi.fn(async () => ({ ok: true })),
+}));
+
 afterEach(cleanup);
 
 function os(status: StatusOs, troca: Partial<OsDetalhe> = {}): OsDetalhe {
@@ -74,6 +83,7 @@ function renderizar(status: StatusOs, permissoes = { podeEditar: true, podeExclu
       os={os(status, troca)}
       linhas={linhas}
       trilha={[]}
+      anexos={[]}
       {...permissoes}
       equipamentos={[]}
       centros={[]}
@@ -143,6 +153,29 @@ describe("OsDetalheView: ações por status", () => {
   it("sem permissão de editar nem excluir: nenhum botão de ação", () => {
     renderizar("aberta", { podeEditar: false, podeExcluir: false });
     expect(botoes()).toEqual([]);
+  });
+});
+
+describe("OsDetalheView: fotos e documentos do serviço", () => {
+  const CONVITE_FOTOS = "Arraste fotos aqui ou clique para escolher da galeria";
+
+  it("aberta e concluída aceitam anexo: a foto do serviço chega no fim", () => {
+    renderizar("aberta");
+    expect(screen.getByText("Fotos e documentos do serviço")).toBeTruthy();
+    expect(screen.getByText(CONVITE_FOTOS)).toBeTruthy();
+    cleanup();
+    renderizar("concluida", undefined, SEM_LINHAS, { dataConclusao: "2026-09-22" });
+    expect(screen.getByText(CONVITE_FOTOS)).toBeTruthy();
+  });
+
+  it("cancelada ou sem permissão de editar: só vê, não anexa", () => {
+    renderizar("cancelada");
+    expect(screen.getByText("Fotos e documentos do serviço")).toBeTruthy();
+    expect(screen.queryByText(CONVITE_FOTOS)).toBeNull();
+    expect(screen.getByText("Nenhuma foto")).toBeTruthy();
+    cleanup();
+    renderizar("aberta", { podeEditar: false, podeExcluir: false });
+    expect(screen.queryByText(CONVITE_FOTOS)).toBeNull();
   });
 });
 
