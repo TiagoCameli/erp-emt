@@ -22,16 +22,31 @@ const textoOpcional = z
   .optional()
   .transform((valor) => (valor ? valor : null));
 
+const chaveAnomalia = z
+  .string()
+  .trim()
+  .max(2000, { error: "Anomalia inválida" })
+  .regex(CHAVE_ANOMALIA, { error: "Anomalia inválida" });
+
 export const conferirAnomaliaSchema = z.strictObject({
-  chave: z
-    .string()
-    .trim()
-    .max(2000, { error: "Anomalia inválida" })
-    .regex(CHAVE_ANOMALIA, { error: "Anomalia inválida" }),
+  chave: chaveAnomalia,
   conferida: z.boolean(),
   motivo: textoOpcional,
 });
 export type ConferirAnomaliaInput = z.input<typeof conferirAnomaliaSchema>;
+
+/** Teto de anomalias por conferência em lote (uma chamada da RPC por chave). */
+export const MAXIMO_CONFERENCIA_LOTE = 500;
+
+/** Marcar várias anomalias como conferidas de uma vez, com o mesmo motivo. */
+export const conferirAnomaliasSchema = z.strictObject({
+  chaves: z
+    .array(chaveAnomalia)
+    .min(1, { error: "Selecione ao menos uma anomalia" })
+    .max(MAXIMO_CONFERENCIA_LOTE, { error: `No máximo ${MAXIMO_CONFERENCIA_LOTE} anomalias por vez` }),
+  motivo: textoOpcional,
+});
+export type ConferirAnomaliasInput = z.input<typeof conferirAnomaliasSchema>;
 
 export const revisarSemSuprimentoSchema = z.strictObject({
   saidaId: idSchema,
