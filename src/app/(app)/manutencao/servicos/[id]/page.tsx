@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 import { osEditavel } from "@/modules/manutencao/_shared/rotulos";
 import { OsDetalheView } from "@/modules/manutencao/servicos/components/os-detalhe";
@@ -36,9 +37,10 @@ export default async function PaginaOsDetalhe({ params }: { params: Promise<{ id
   // As listas dos formulários só servem quando dá para editar esta OS agora.
   const carregaFormularios = podeEditar && osEditavel(os.status);
 
-  const [linhas, trilha, equipamentos, centros, fornecedores, saldos] = await Promise.all([
+  const [linhas, trilha, anexos, equipamentos, centros, fornecedores, saldos] = await Promise.all([
     listarLinhasOs(id),
     trilhaOs(id, { id: usuario.id, nome: usuario.nome }),
+    listarAnexosDoDocumento("manutencao_os", id),
     carregaFormularios ? listarEquipamentosParaOs() : Promise.resolve([]),
     carregaFormularios ? listarCentrosCusto() : Promise.resolve([]),
     carregaFormularios ? listarFornecedoresAtivos() : Promise.resolve([]),
@@ -50,6 +52,7 @@ export default async function PaginaOsDetalhe({ params }: { params: Promise<{ id
       os={os}
       linhas={linhas}
       trilha={trilha}
+      anexos={anexos}
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
       equipamentos={equipamentos}

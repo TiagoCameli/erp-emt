@@ -18,6 +18,8 @@ import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
+import { FotosEArquivos } from "@/modules/_shared/anexos/fotos-e-arquivos";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import {
   BADGE_STATUS_OS,
@@ -159,6 +161,8 @@ export interface OsDetalheViewProps {
   os: OsDetalhe;
   linhas: LinhasOs;
   trilha: EventoTrilha[];
+  /** Fotos e documentos do serviço executado. */
+  anexos: AnexoDoDocumento[];
   podeEditar: boolean;
   podeExcluir: boolean;
   /** Carregados só quando a OS aceita edição e o usuário pode editar. */
@@ -177,6 +181,7 @@ export function OsDetalheView({
   os,
   linhas,
   trilha,
+  anexos,
   podeEditar,
   podeExcluir,
   equipamentos,
@@ -469,6 +474,16 @@ export function OsDetalheView({
                 { rotulo: "Nota fiscal", celula: (linha) => linha.notaFiscal ?? <CelulaVazia /> },
                 { rotulo: "Valor", direita: true, celula: (linha) => formatarValorOperacional(linha.valor) },
               ]}
+            />
+          </SecaoDetalhe>
+
+          <SecaoDetalhe card titulo="Fotos e documentos do serviço">
+            <FotosEArquivos
+              entidade="manutencao_os"
+              entidadeId={os.id}
+              anexos={anexos}
+              podeEditar={acoes.anexar}
+              onMudou={() => router.refresh()}
             />
           </SecaoDetalhe>
         </div>

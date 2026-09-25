@@ -24,6 +24,8 @@ export interface AcoesOs {
   reabrir: boolean;
   cancelar: boolean;
   excluir: boolean;
+  /** Fotos e documentos do serviço: seguem depois de concluída, que é quando o serviço tem foto. */
+  anexar: boolean;
 }
 
 export function acoesDaOs(status: StatusOs, permissoes: PermissoesOs): AcoesOs {
@@ -39,6 +41,7 @@ export function acoesDaOs(status: StatusOs, permissoes: PermissoesOs): AcoesOs {
     cancelar: editavel && podeEditar,
     // Concluída precisa ser reaberta antes; em execução precisa ser cancelada.
     excluir: (status === "aberta" || status === "cancelada") && permissoes.excluir,
+    anexar: status !== "cancelada" && podeEditar,
   };
 }
 
