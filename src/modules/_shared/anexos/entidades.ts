@@ -33,6 +33,8 @@ const RECURSO_POR_ENTIDADE = {
   combustivel_transferencia: "combustivel.transferencias",
   // Fotos e documentos do serviço executado na OS (ordens_servico).
   manutencao_os: "manutencao.servicos",
+  // PDF do extrato na posição da aplicação (aplicacao_posicoes).
+  aplicacao_posicao: "financeiro.aplicacoes",
 } as const satisfies Record<string, RecursoId>;
 
 /** Tipo de documento que aceita anexo. */
@@ -75,6 +77,7 @@ const ROTULO_ENTIDADE: Record<EntidadeAnexo, string> = {
   combustivel_saida: "abastecimento",
   combustivel_transferencia: "transferência de combustível",
   manutencao_os: "ordem de serviço",
+  aplicacao_posicao: "posição da aplicação",
 };
 
 export function rotuloDaEntidade(entidade: EntidadeAnexo): string {

@@ -116,6 +116,7 @@ describe("recursosDoModulo", () => {
       "financeiro.competencias",
       "financeiro.programados",
       "financeiro.contas-bancarias",
+      "financeiro.aplicacoes",
       "financeiro.conciliacao",
       "financeiro.relatorios",
     ]);
