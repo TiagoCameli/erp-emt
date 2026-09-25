@@ -57,6 +57,7 @@ function entrada(troca: Partial<EntradaLinha> = {}): EntradaLinha {
     origem: "manual",
     excluidoEm: null,
     motivoExclusao: null,
+    anexos: 0,
     ...troca,
   };
 }

@@ -14,6 +14,7 @@ import {
   FiltroSelect,
   FiltroSelectMulti,
   MoneyText,
+  SeloAnexos,
   useFiltrosUrl,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
@@ -121,10 +122,17 @@ export const colunasAbastecimentos: ColumnDef<SaidaLista, unknown>[] = [
   {
     accessorKey: "data",
     header: "Data",
-    size: 120,
+    size: 140,
     sortDescFirst: true,
     meta: { atomico: true },
-    cell: ({ row }) => <span className="font-medium tabular-nums">{formatarDataHoraCurta(row.original.data)}</span>,
+    // O clipe mora na Data, que está sempre à mostra: quem confere a lista vê de relance
+    // quais saídas têm foto ou comprovante, sem abrir uma por uma.
+    cell: ({ row }) => (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="font-medium tabular-nums">{formatarDataHoraCurta(row.original.data)}</span>
+        <SeloAnexos quantidade={row.original.anexos} />
+      </span>
+    ),
   },
   {
     id: "consumidor",

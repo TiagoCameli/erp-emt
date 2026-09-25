@@ -14,6 +14,7 @@ import {
   FiltroSelect,
   FiltroSelectMulti,
   MoneyText,
+  SeloAnexos,
   useFiltrosUrl,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
@@ -47,9 +48,15 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
   {
     accessorKey: "dataHora",
     header: "Data/Hora",
-    size: 120,
+    size: 140,
     meta: { atomico: true },
-    cell: ({ row }) => <span className="font-medium tabular-nums">{formatarDataHoraCurta(row.original.dataHora)}</span>,
+    // O clipe mora na Data, como nas Saídas: a nota ou a foto aparece de relance.
+    cell: ({ row }) => (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="font-medium tabular-nums">{formatarDataHoraCurta(row.original.dataHora)}</span>
+        <SeloAnexos quantidade={row.original.anexos} />
+      </span>
+    ),
   },
   {
     accessorKey: "tanqueNome",

@@ -77,6 +77,7 @@ function saida(troca: Partial<SaidaLista> = {}): SaidaLista {
     observacoes: null,
     excluidoEm: null,
     motivoExclusao: null,
+    anexos: 0,
     ...troca,
   };
 }
@@ -132,6 +133,19 @@ describe("AbastecimentosTabela", () => {
     expect(within(linha).getByText("009 - BR-364/AC")).toBeInTheDocument();
     expect(within(linha).getByText("Diesel S10")).toBeInTheDocument();
     expect(within(linha).getByText("150,00 L")).toBeInTheDocument();
+  });
+
+  it("saída com foto ou comprovante ganha o clipe na data; sem anexo, nada", () => {
+    montar({
+      abastecimentos: [
+        saida({ id: "com-anexo", anexos: 3 }),
+        saida({ id: "sem-anexo", equipamentoCodigo: "EQ-02", anexos: 0 }),
+      ],
+    });
+    const comAnexo = screen.getByText("EQ-01 — Escavadeira 320").closest("tr")!;
+    const semAnexo = screen.getByText("EQ-02 — Escavadeira 320").closest("tr")!;
+    expect(within(comAnexo).getByRole("img", { name: "3 anexos" })).toBeInTheDocument();
+    expect(within(semAnexo).queryByRole("img", { name: /anexo/ })).not.toBeInTheDocument();
   });
 
   it("carreta: transportadora · placa", () => {
