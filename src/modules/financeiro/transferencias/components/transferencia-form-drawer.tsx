@@ -50,10 +50,11 @@ function paraCampo(valor: number): string {
 
 function valoresIniciais(
   transferencia: TransferenciaLista | null,
+  inicial?: Partial<TransferenciaFormInput>,
 ): TransferenciaFormInput {
   return {
-    contaOrigemId: transferencia?.contaOrigemId ?? "",
-    contaDestinoId: transferencia?.contaDestinoId ?? "",
+    contaOrigemId: transferencia?.contaOrigemId ?? inicial?.contaOrigemId ?? "",
+    contaDestinoId: transferencia?.contaDestinoId ?? inicial?.contaDestinoId ?? "",
     dataTransferencia: transferencia?.dataTransferencia ?? hojeISO(),
     valor: transferencia ? paraCampo(transferencia.valor) : "",
     // Tarifa nasce vazia, não "0,00": a maioria das transferências não tem
@@ -64,7 +65,7 @@ function valoresIniciais(
         : "",
     descricao: transferencia?.descricao ?? "",
     observacoes: transferencia?.observacoes ?? "",
-    aplicacaoId: transferencia?.aplicacaoId ?? "",
+    aplicacaoId: transferencia?.aplicacaoId ?? inicial?.aplicacaoId ?? "",
   };
 }
 
@@ -94,6 +95,14 @@ export interface TransferenciaFormDrawerProps {
    * botão nenhum.
    */
   onSolicitarExclusao?: () => void;
+  /**
+   * Pré-preenchimento de uma transferência NOVA. A aba Aplicações abre
+   * "Aplicar" e "Resgatar" com a conta, a subconta e a aplicação já escolhidas:
+   * a ação é a mesma transferência, só que sem a pessoa ter de achar a subconta.
+   */
+  inicial?: Partial<TransferenciaFormInput>;
+  /** Título no lugar de "Nova transferência" (ex.: "Aplicar"). */
+  tituloNovo?: string;
 }
 
 /**
@@ -111,16 +120,21 @@ export function TransferenciaFormDrawer({
   contas,
   aplicacoes,
   onSolicitarExclusao,
+  inicial,
+  tituloNovo,
 }: TransferenciaFormDrawerProps) {
   const editando = transferencia !== null;
 
   const form = useForm<TransferenciaFormInput>({
     resolver: zodResolver(transferenciaFormSchema),
-    defaultValues: valoresIniciais(transferencia),
+    defaultValues: valoresIniciais(transferencia, inicial),
   });
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(transferencia));
+    if (aberto) form.reset(valoresIniciais(transferencia, inicial));
+    // `inicial` entra só na abertura: mudar a referência dele com o drawer
+    // aberto apagaria o que a pessoa já digitou.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberto, transferencia, form]);
 
   const salvando = form.formState.isSubmitting;
@@ -190,7 +204,7 @@ export function TransferenciaFormDrawer({
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
-      titulo={editando ? "Editar transferência" : "Nova transferência"}
+      titulo={editando ? "Editar transferência" : (tituloNovo ?? "Nova transferência")}
       descricao="Movimentação entre contas da empresa. Não entra no resultado: só muda o saldo das duas contas. Para aplicar, escolha como destino a subconta · INVESTIMENTOS da conta; para resgatar, ela como origem"
       temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={

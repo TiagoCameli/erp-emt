@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { BarChart3 } from "lucide-react";
 
 import {
@@ -1138,6 +1138,13 @@ export default async function RelatoriosPage({
 
   const params = await searchParams;
   const relatorio: RelatorioId = normalizarRelatorio(primeiro(params.rel));
+
+  // O relatório de investimentos virou a aba Financeiro > Aplicações (25/09/2026),
+  // que mostra o mesmo movimento mais a posição do extrato e o rendimento. Quem
+  // tem a aba vai para ela; quem só tem Relatórios continua vendo o relatório.
+  if (relatorio === "investimentos" && temPermissao(usuario, "financeiro.aplicacoes", "ver")) {
+    redirect("/financeiro/aplicacoes");
+  }
 
   // Lista, com uuid validado, deduplicada e no teto do filtro `in`. Regra e teto
   // moram em extrato-filtros.ts, que o seletor também usa para escrever.

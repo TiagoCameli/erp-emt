@@ -45,6 +45,7 @@ import { ResumoPeriodoTabela } from "@/modules/gestao/components/resumo-periodo-
 import { Painel, PainelComFalha } from "@/modules/gestao/components/painel";
 import {
   aPagarPorVencimento,
+  caixaReal,
   comprasResumo,
   custoPorCentroCusto,
   custoPorGrupo,
@@ -199,6 +200,7 @@ export default async function GestaoPage({
     fornecedores,
     financeiro,
     rh,
+    caixa,
   ] = await Promise.allSettled([
     comprasResumo(),
     custoPorMes(doBanco),
@@ -210,6 +212,7 @@ export default async function GestaoPage({
     maioresFornecedores(doBanco),
     financeiroResumo(),
     rhResumo(),
+    caixaReal(),
   ]);
 
   registrarFalhas({
@@ -223,6 +226,7 @@ export default async function GestaoPage({
     "maiores fornecedores": fornecedores,
     financeiro,
     RH: rh,
+    "caixa real": caixa,
   });
 
   /**
@@ -291,6 +295,17 @@ export default async function GestaoPage({
       {/* Os números que decidem o dia: o que a obra custou, o que o caixa tem
           pela frente, o que está parado esperando alguém e o que já saiu. */}
       <GradeKpis>
+        <KPICard
+          titulo="Caixa real"
+          valor={ler(caixa, (d) => <MoneyText valor={d.total} />)}
+          detalhe={ler(caixa, (d) => (
+            <>
+              Contas <MoneyText valor={d.correntes} /> + aplicações de liquidez diária{" "}
+              <MoneyText valor={d.aplicacoesDiarias} />
+              {d.contasOcultas > 0 ? `. ${d.contasOcultas} conta(s) fora: sem permissão de saldo` : ""}
+            </>
+          ))}
+        />
         <KPICard
           titulo="Custo do mês"
           valor={ler(custo, (d) => <MoneyText valor={d.mesAtual.valor} />)}

@@ -19,6 +19,11 @@ import {
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
 import type { FiltrosPainel } from "@/modules/gestao/filtros";
+import {
+  calcularCaixaReal,
+  type AplicacaoPresa,
+  type CaixaReal,
+} from "@/modules/gestao/caixa-real";
 
 /**
  * Leituras do painel de Gestão (BI). Tudo somente leitura e agregado no banco
@@ -757,4 +762,49 @@ export async function receitaPorMes(
     porMes.set(mes, (porMes.get(mes) ?? 0) + paraReais(paraCentavos(linha.total)));
   }
   return porMes;
+}
+
+/**
+ * Caixa real: contas correntes mais aplicações com liquidez diária (regra em
+ * `caixa-real.ts`). O saldo vem de `fn_saldos_das_contas`, filtrada por
+ * permissão; a posição presa (carência, D+n) vem de `fn_aba_aplicacoes`. Sem
+ * permissão da aba Aplicações a lista de aplicações volta vazia pela RLS, e
+ * nada é descontado: hoje as duas aplicações da Caixa são de liquidez diária.
+ */
+export async function caixaReal(): Promise<CaixaReal> {
+  const supabase = await createClient();
+  const [contas, saldos, aplicacoes] = await Promise.all([
+    supabase.from("contas_bancarias").select("id, tipo, ativo"),
+    supabase.rpc("fn_saldos_das_contas"),
+    supabase.from("aplicacoes").select("id, conta_bancaria_id, liquidez").neq("liquidez", "diaria"),
+  ]);
+  if (contas.error || saldos.error) {
+    throw new Error("Não foi possível carregar o saldo das contas");
+  }
+  const cadastro = new Map((contas.data ?? []).map((c) => [c.id, c]));
+
+  let presas: AplicacaoPresa[] = [];
+  const naoDiarias = aplicacoes.data ?? [];
+  if (naoDiarias.length > 0) {
+    const { data } = await supabase.rpc("fn_aba_aplicacoes", {
+      p_inicio: `${mesHojeISO()}-01`,
+      p_fim: dataHojeISO(),
+    });
+    const posicao = new Map((data ?? []).map((l) => [l.aplicacao_id, Number(l.posicao_final)]));
+    presas = naoDiarias.map((a) => ({
+      contaId: a.conta_bancaria_id,
+      posicao: posicao.get(a.id) ?? 0,
+    }));
+  }
+
+  return calcularCaixaReal(
+    (saldos.data ?? []).map((s) => ({
+      contaId: s.conta_bancaria_id,
+      tipo: cadastro.get(s.conta_bancaria_id)?.tipo ?? "corrente",
+      ativo: cadastro.get(s.conta_bancaria_id)?.ativo ?? false,
+      saldo: Number(s.saldo),
+    })),
+    presas,
+    (contas.data ?? []).filter((c) => c.ativo).length,
+  );
 }
