@@ -440,6 +440,161 @@ export type Database = {
           },
         ];
       };
+      aplicacao_posicoes: {
+        Row: {
+          aplicacao_id: string;
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          e_abertura: boolean;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          iof: number | null;
+          ir: number | null;
+          motivo_exclusao: string | null;
+          observacoes: string | null;
+          saldo_bruto: number | null;
+          saldo_liquido: number;
+          updated_at: string;
+        };
+        Insert: {
+          aplicacao_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          e_abertura?: boolean;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          iof?: number | null;
+          ir?: number | null;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          saldo_bruto?: number | null;
+          saldo_liquido: number;
+          updated_at?: string;
+        };
+        Update: {
+          aplicacao_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          e_abertura?: boolean;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          iof?: number | null;
+          ir?: number | null;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          saldo_bruto?: number | null;
+          saldo_liquido?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "aplicacao_posicoes_aplicacao_id_fkey";
+            columns: ["aplicacao_id"];
+            isOneToOne: false;
+            referencedRelation: "aplicacoes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "aplicacao_posicoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "aplicacao_posicoes_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      aplicacoes: {
+        Row: {
+          ativa: boolean;
+          carencia_ate: string | null;
+          centro_custo_id: string;
+          conta_bancaria_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          indexador: string;
+          liquidez: string;
+          liquidez_dias: number | null;
+          observacoes: string | null;
+          produto: string;
+          taxa_percentual: number | null;
+          tipo_ir: string;
+          updated_at: string;
+          vencimento: string | null;
+        };
+        Insert: {
+          ativa?: boolean;
+          carencia_ate?: string | null;
+          centro_custo_id: string;
+          conta_bancaria_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          indexador?: string;
+          liquidez: string;
+          liquidez_dias?: number | null;
+          observacoes?: string | null;
+          produto: string;
+          taxa_percentual?: number | null;
+          tipo_ir: string;
+          updated_at?: string;
+          vencimento?: string | null;
+        };
+        Update: {
+          ativa?: boolean;
+          carencia_ate?: string | null;
+          centro_custo_id?: string;
+          conta_bancaria_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          indexador?: string;
+          liquidez?: string;
+          liquidez_dias?: number | null;
+          observacoes?: string | null;
+          produto?: string;
+          taxa_percentual?: number | null;
+          tipo_ir?: string;
+          updated_at?: string;
+          vencimento?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "aplicacoes_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: true;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "aplicacoes_conta_bancaria_id_fkey";
+            columns: ["conta_bancaria_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "aplicacoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       arquivos: {
         Row: {
           created_at: string;
@@ -697,6 +852,51 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      cdi_diario: {
+        Row: {
+          atualizado_em: string;
+          data: string;
+          fonte: string;
+          taxa: number;
+        };
+        Insert: {
+          atualizado_em?: string;
+          data: string;
+          fonte?: string;
+          taxa: number;
+        };
+        Update: {
+          atualizado_em?: string;
+          data?: string;
+          fonte?: string;
+          taxa?: number;
+        };
+        Relationships: [];
+      };
+      cdi_mensal: {
+        Row: {
+          atualizado_em: string;
+          fonte: string;
+          mes: string;
+          parcial: boolean;
+          taxa: number;
+        };
+        Insert: {
+          atualizado_em?: string;
+          fonte?: string;
+          mes: string;
+          parcial?: boolean;
+          taxa: number;
+        };
+        Update: {
+          atualizado_em?: string;
+          fonte?: string;
+          mes?: string;
+          parcial?: boolean;
+          taxa?: number;
+        };
+        Relationships: [];
       };
       centros_custo: {
         Row: {
@@ -6812,6 +7012,26 @@ export type Database = {
         Args: { p_perfil_id: string; p_usuario_id: string };
         Returns: undefined;
       };
+      fn_aba_aplicacoes: {
+        Args: { p_fim?: string; p_inicio?: string };
+        // Editado a mao (25/09/2026): o gerador escreve tudo nao nulo, mas
+        // rendimento/ajuste/percentuais vem NULL quando nao ha posicao ou CDI no
+        // mes, e ultima_posicao antes da primeira posicao. Ausencia nao e zero.
+        Returns: {
+          ajuste_abertura: number | null;
+          aplicacao_id: string;
+          aplicado: number;
+          cdi_pct: number | null;
+          mes: string;
+          pct_cdi: number | null;
+          posicao_final: number;
+          posicao_inicial: number;
+          rendimento: number | null;
+          rendimento_pct: number | null;
+          resgatado: number;
+          ultima_posicao: string | null;
+        }[];
+      };
       fn_adiantamento_em_folha: {
         Args: { p_adiantamento_id: string };
         Returns: boolean;
@@ -6941,6 +7161,14 @@ export type Database = {
       };
       fn_centro_custo_bloqueio: { Args: { p_id: string }; Returns: string };
       fn_centro_custo_dependencias: { Args: { p_id: string }; Returns: Json };
+      fn_cdi_gravar: {
+        Args: { p_diario: Json; p_mensal: Json };
+        Returns: number;
+      };
+      fn_cdi_mensal_manual: {
+        Args: { p_mes: string; p_taxa: number };
+        Returns: undefined;
+      };
       fn_centro_custo_subarvore: {
         Args: { p_centro: string };
         Returns: {
@@ -7264,6 +7492,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_excluir_ordem_compra: { Args: { p_id: string }; Returns: undefined };
+      fn_excluir_posicao_aplicacao: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
       fn_excluir_rescisao: {
         Args: { p_motivo: string; p_rescisao: string };
         Returns: undefined;
@@ -8093,6 +8325,24 @@ export type Database = {
           saldo_inicial_data: string;
         }[];
       };
+      fn_salvar_aplicacao: {
+        Args: {
+          p_ativa: boolean;
+          p_carencia_ate: string;
+          p_centro_custo_id: string;
+          p_conta_bancaria_id: string;
+          p_id: string;
+          p_indexador: string;
+          p_liquidez: string;
+          p_liquidez_dias: number;
+          p_observacoes?: string;
+          p_produto: string;
+          p_taxa_percentual: number;
+          p_tipo_ir: string;
+          p_vencimento: string;
+        };
+        Returns: string;
+      };
       fn_salvar_cartao_credito: {
         Args: {
           p_ativo: boolean;
@@ -8152,6 +8402,18 @@ export type Database = {
         Args: { p_formas?: Json; p_oc_id: string; p_parcelas: Json };
         Returns: undefined;
       };
+      fn_salvar_posicao_aplicacao: {
+        Args: {
+          p_aplicacao_id: string;
+          p_data: string;
+          p_iof?: number;
+          p_ir?: number;
+          p_observacoes?: string;
+          p_saldo_bruto?: number;
+          p_saldo_liquido: number;
+        };
+        Returns: string;
+      };
       fn_salvar_preferencia_tabela: {
         Args: { p_preferencia: Json; p_tabela: string };
         Returns: undefined;
@@ -8179,6 +8441,22 @@ export type Database = {
           p_valor: number;
         };
         Returns: string;
+      };
+      fn_simular_posicao_aplicacao: {
+        Args: {
+          p_aplicacao_id: string;
+          p_data: string;
+          p_saldo_liquido: number;
+        };
+        Returns: {
+          aplicado: number;
+          // Editado a mao: sem posicao anterior as duas vem NULL.
+          data_anterior: string | null;
+          e_abertura: boolean;
+          rendimento: number;
+          resgatado: number;
+          saldo_anterior: number | null;
+        }[];
       };
       fn_tirar_da_folha: {
         // `p_motivo` opcional no banco (default null). Os dois ids são

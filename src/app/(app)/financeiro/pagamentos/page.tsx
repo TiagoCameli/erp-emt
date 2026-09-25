@@ -69,6 +69,7 @@ const ORIGENS = new Set([
   "rescisao",
   "decimo_terceiro",
   "decimo_terceiro_guia",
+  "aplicacao",
 ]);
 
 function parametroOrigem(valor: Parametro): string | undefined {

@@ -215,6 +215,7 @@ describe("rótulo de origem do lançamento", () => {
       "Rescisão",
       "13º salário",
       "Guia do 13º",
+      "Aplicação financeira",
     ]);
   });
 
