@@ -25,6 +25,9 @@ const ROTAS_QUE_MOSTRAM_SALDO = [
   ROTA,
   "/financeiro/contas-bancarias",
   "/financeiro/relatorios",
+  // Aplicar e resgatar mudam a posição da aplicação e o caixa real do Gestão.
+  "/financeiro/aplicacoes",
+  "/gestao",
 ];
 
 export type ResultadoAcao = { ok: true } | { erro: string };
