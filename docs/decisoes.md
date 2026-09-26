@@ -4444,9 +4444,11 @@ formatado e cortava a planilha em cerca de 86 linhas.
 12. Staging em `legado.carga_mc_l09` (migration `20260926192737_mc_fase2_preparo_carga_l09`). A
     migration de carga fica `_PENDENTE_` até o ok do Tiago para aplicar em produção.
 
-**Consequência:** a carga está ensaiada (3 rodadas, ensaio limpo) e pronta para o PR; falta só o ok
-do Tiago para aplicar `_PENDENTE_mc_fase2_carga_l09.sql`, renomear para a versão real e rodar a
-prova pós-carga. Depois: Lote 10 (CT 184/2026) e as demais obras, uma de cada vez, pelo mesmo
+**Consequência:** carga aplicada em 26/09/2026 com o ok do Tiago, como
+`20260926205029_mc_fase2_carga_l09` (arquivo com o md5 do que foi aplicado), depois de o ensaio em 3
+rodadas sair OK no mesmo dia. Conferido em produção: previsto 243.927.483,49, acumulado 36.541.661,77,
+10ª 680.738,27, 10 medições aprovadas, acesso dos 4 Admins, gatilhos ligados. O ensaio agora recusa
+sozinho ("o contrato já existe"), como deve. Depois: Lote 10 (CT 184/2026) e as demais obras, uma de cada vez, pelo mesmo
 importador.
 
 ## 2026-09-26 - Tema escuro

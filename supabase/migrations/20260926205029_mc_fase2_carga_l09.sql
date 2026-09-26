@@ -1,8 +1,8 @@
 -- Medição de Contratos, Fase 2: carga do Lote 09 (L09-BR364, CT 00615/2025, DNIT).
 -- Plano: docs/superpowers/plans/2026-09-26-medicao-contratos-fase2-carga-lote09.md (Task 3).
 --
--- PENDENTE: este arquivo só é aplicado com o ok do Tiago. Até lá roda apenas em transação
--- abortada (ensaio). Quando for aplicado, ganha o nome da versão real (schema_migrations).
+-- Aplicada em 26/09/2026 com o ok do Tiago ("continue"), depois do ensaio em 3 rodadas
+-- (scripts/migracao-medicao/ensaiar_carga_lote09.py) sair OK no mesmo dia.
 --
 -- Sem dado aqui: lê legado.carga_mc_l09 (legado.fn_staging_mc_l09, enchido por
 -- scripts/migracao-medicao/carregar_staging_lote09.py a partir da planilha oficial v12), grava

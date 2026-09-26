@@ -3,7 +3,7 @@
 Uso:
   python3 scripts/migracao-medicao/ensaiar_carga_lote09.py
 
-Lê supabase/migrations/_PENDENTE_mc_fase2_carga_l09.sql (Task 3) e
+Lê supabase/migrations/20260926205029_mc_fase2_carga_l09.sql (Task 3) e
 supabase/rollbacks/mc_fase2_carga_l09_rollback.sql. O staging (legado.carga_mc_l09) já foi
 enchido em produção por carregar_staging_lote09.py (Task 2): este script só lê.
 
@@ -37,7 +37,7 @@ D = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.abspath(os.path.join(D, '..', '..'))
 RETRATO = os.path.join(D, '_retrato')
 ERP = 'vsesgvqjgqpapoxhnbqx'
-CARGA = os.path.join(RAIZ, 'supabase/migrations/_PENDENTE_mc_fase2_carga_l09.sql')
+CARGA = os.path.join(RAIZ, 'supabase/migrations/20260926205029_mc_fase2_carga_l09.sql')
 ROLLBACK = os.path.join(RAIZ, 'supabase/rollbacks/mc_fase2_carga_l09_rollback.sql')
 
 # Todas as tabelas mc_* com contrato_id (mc_contratos entra à parte, pelo id). mc_indices e
