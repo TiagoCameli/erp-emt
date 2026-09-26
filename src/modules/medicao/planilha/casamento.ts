@@ -89,9 +89,9 @@ export function casarComVersaoAnterior(
     }
   }
 
-  // Pre-reserve itemIds chosen by exactly one valid escolha (so auto-matching doesn't take them).
-  for (const [itemId, count] of contadorEscolhas.entries()) {
-    if (count === 1 && itemId && porId.has(itemId)) {
+  // Pre-reserve all itemIds chosen by valid escolhas (single or disputed) so auto-matching doesn't take them.
+  for (const [itemId] of contadorEscolhas.entries()) {
+    if (itemId && porId.has(itemId)) {
       usados.add(itemId);
     }
   }

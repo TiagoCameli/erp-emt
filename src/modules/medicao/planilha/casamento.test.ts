@@ -150,4 +150,20 @@ describe("casarComVersaoAnterior", () => {
     expect(itemIds).toContain("i2");
     expect(itemIds).not.toContain("i3");
   });
+
+  it("probe: item disputado (count > 1) não é auto-matched por linha sem escolha", () => {
+    const r = casarComVersaoAnterior(
+      [
+        nova(1, "01.02", "Capina", "2", "5"),
+        nova(2, "01.02", "Capina", "2", "5"),
+        nova(3, "01.02", "Capina", "2", "5"),
+      ],
+      [antiga("i3", "01.02", "Capina", "2", "5")],
+      { 1: "i3", 2: "i3" }
+    );
+    expect(r.linhas[0]).toEqual({ ordem: 1, itemId: null, situacao: "ambiguo", candidatos: ["i3"] });
+    expect(r.linhas[1]).toEqual({ ordem: 2, itemId: null, situacao: "ambiguo", candidatos: ["i3"] });
+    expect(r.linhas[2]).toEqual({ ordem: 3, itemId: null, situacao: "novo", candidatos: [] });
+    expect(r.sairam).toEqual([]);
+  });
 });
