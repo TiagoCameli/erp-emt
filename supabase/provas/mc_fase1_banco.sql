@@ -55,7 +55,7 @@ declare
   v_k1 uuid; v_k2 uuid; v_k3 uuid; v_n bigint; v_txt text; v_regra text; v_j jsonb; v_acc jsonb; r jsonb := '{}'::jsonb;
   v_obras0 bigint; v_cc0 bigint; v_lanc0 bigint; v_versao_rascunho uuid;
   v_versao_k3 uuid; v_med_k3 uuid; v_rev00_k3 uuid; v_rev01_k3 uuid; v_rev01_k2 uuid;
-  v_k4 uuid; v_aditivo_prazo uuid; v_aditivo2 uuid; v_aditivo3 uuid; v_arq_k2 uuid;
+  v_k4 uuid; v_versao_k4 uuid; v_aditivo_prazo uuid; v_aditivo2 uuid; v_aditivo3 uuid; v_arq_k2 uuid;
 begin
   select count(*) into v_obras0 from public.obras;
   select count(*) into v_cc0 from public.centros_custo;
@@ -428,6 +428,28 @@ begin
       'tipos', jsonb_build_array(), 'motivo', 'Prova tipos vazio'));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4n_tipos_vazio', v_txt);
+
+  -- 4q/4r. Restaurar versão da planilha: não cria segundo rascunho nem devolve 23505 cru
+  reset role;
+  insert into public.usuario_permissoes (usuario_id, recurso, acao) values (v_tiago, 'medicao.planilha', 'excluir') on conflict do nothing;
+  set local role authenticated;
+  v_versao_k4 := public.fn_mc_planilha_criar_rascunho(v_k4, jsonb_build_object('vigente_desde', '2026-01-01'));
+  perform public.fn_mc_excluir('mc_planilha_versoes', v_versao_k4, 'Prova restaurar versão');
+  perform public.fn_mc_planilha_criar_rascunho(v_k4, jsonb_build_object('vigente_desde', '2026-01-01'));
+  begin perform public.fn_mc_restaurar('mc_planilha_versoes', v_versao_k4);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou (' || sqlstate || '): ' || sqlerrm; end;
+  r := r || jsonb_build_object('4q_restaurar_segundo_rascunho', v_txt);
+  perform public.fn_mc_planilha_gravar_linhas(
+    (select id from public.mc_planilha_versoes where contrato_id = v_k4 and status = 'rascunho' and excluido_em is null), jsonb_build_array(
+      jsonb_build_object('ordem', 1, 'codigo', '01', 'pai_ordem', null, 'descricao', 'Serviço', 'unidade', 'un', 'tipo', 'servico',
+                         'preco_unitario', '1', 'quantidade_prevista', '1', 'linha_origem', 5, 'item_id', null)),
+    'planilha-k4.xlsx', 'k4');
+  perform public.fn_mc_planilha_aprovar((select id from public.mc_planilha_versoes where contrato_id = v_k4 and status = 'rascunho' and excluido_em is null));
+  begin perform public.fn_mc_restaurar('mc_planilha_versoes', v_versao_k4);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou (' || sqlstate || '): ' || sqlerrm; end;
+  r := r || jsonb_build_object('4r_restaurar_numero_reusado', jsonb_build_object('resultado', v_txt,
+    'versoes_ativas_k4', (select jsonb_agg(jsonb_build_object('numero', numero, 'status', status)) from public.mc_planilha_versoes
+                          where contrato_id = v_k4 and excluido_em is null)));
   reset role;
 
   -- 6. Acesso por contrato
@@ -460,6 +482,19 @@ begin
   set local role authenticated;
   r := r || jsonb_build_object('6f_desativado', (select count(*) from public.mc_contratos where codigo like 'PROVA-%'));
   reset role;
+  -- 6g. Desativado não escreve: mesmo com criar e editar e estando na lista de K2, as RPCs recusam
+  insert into public.usuario_permissoes (usuario_id, recurso, acao)
+  values (v_zero, 'medicao.contratos', 'criar'), (v_zero, 'medicao.contratos', 'editar') on conflict do nothing;
+  set local role authenticated;
+  begin perform public.fn_mc_acesso_definir(v_k2, v_tiago, true);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  v_j := jsonb_build_object('acesso_definir', v_txt);
+  begin perform public.fn_mc_contrato_salvar(jsonb_build_object('codigo', 'X2', 'nome_obra', 'XX', 'objeto', 'X', 'numero_contrato', 'X',
+      'contratante_nome', 'X', 'contratante_tipo', 'privado', 'valor_inicial', '1', 'data_assinatura', '2026-01-01', 'prazo_meses', 1));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('6g_desativado_nao_escreve', v_j || jsonb_build_object('contrato_salvar', v_txt));
+  reset role;
+  delete from public.usuario_permissoes where usuario_id = v_zero and recurso = 'medicao.contratos' and acao in ('criar', 'editar');
   update public.usuarios set ativo = true where id = v_zero;
 
   -- 8. Anexo de contrato fora da lista não aparece; dentro aparece (controle)
