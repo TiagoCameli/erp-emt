@@ -46,20 +46,27 @@ script recusa qualquer arquivo cujo sha256 não seja o combinado com o Tiago.
   quantidade prevista).
 - **Saldo = previsto − acumulado** pela conta direta (o módulo não trunca por item como a
   planilha faz na coluna AV).
-- **Ajustes:** só entram no staging os pares (item, medição) com quantidade diferente de
-  zero (regra do banco: `mc_ajustes.quantidade <> 0`). São 255 dos 2.450 pares possíveis
-  (245 serviços × 10 medições).
+- **Ajustes:** o staging carrega os 2.450 pares (item, medição) inteiros — 245 serviços ×
+  10 medições, inclusive os com quantidade zero — para a conferência linha a linha da
+  Task 3. Quem filtra é o carregador: só grava em `mc_ajustes` os 255 pares com
+  quantidade diferente de zero (regra do banco: `mc_ajustes.quantidade <> 0`).
 - **Contrato e períodos** não vêm da planilha: vêm do vault (`business/lote09-br364`) e do
   PDF do contrato (SEI 22563019), decididos pelo Tiago em 26/09/2026. Ver o dicionário
   `CONTRATO` e a lista `MEDICOES` no topo do script.
-- Números sempre por `Decimal` a partir de `repr(float(célula))`; recusa notação
-  científica.
+- Números sempre por `Decimal` a partir de `repr(float(célula))`, no mesmo formato do
+  importador do app (`src/modules/medicao/planilha/leitor.ts`, `numeroParaTexto`): um
+  float inteiro sai como `"36"`, não `"36.0"`. Recusa notação científica. A soma e a
+  multiplicação da regra `sem_arredondar` rodam sob precisão alta (100 dígitos) com o
+  trap de `Inexact` ligado: qualquer perda de precisão levanta exceção em vez de passar
+  batida; o arredondamento em 2 casas (grupo e total) é deliberado e fica fora desse
+  context.
 
 ### Testes
 
 `test_gerar_carga_lote09.py` roda com a cópia local do xlsx (env var `L09_XLSX`, com a
 cópia de trabalho como default). Se o arquivo não existir (caso do CI, que não tem a
-planilha), os testes são pulados, não falham.
+planilha) ou se `openpyxl` não estiver instalado, os testes são pulados, não falham nem
+quebram a coleta.
 
 ```
 python3 -m unittest scripts/migracao-medicao/test_gerar_carga_lote09.py -v

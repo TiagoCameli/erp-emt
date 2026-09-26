@@ -25,9 +25,16 @@ fase2-carga-lote09.md, seção "Fonte e decisões":
   - Grupo 08 (linha 278) tem preço 0 e é título mesmo assim (código de 2 dígitos).
   - Saldo = previsto - acumulado pela conta direta (o módulo não trunca por item como a
     planilha faz na coluna AV).
+  - Números como texto no mesmo formato do importador do app (src/modules/medicao/
+    planilha/leitor.ts, numeroParaTexto): repr(float(célula)), mas um float inteiro sai
+    "36", não "36.0"; recusa notação científica. A soma e a multiplicação da regra
+    sem_arredondar rodam com precisão alta (100 dígitos) e Inexact travado: nenhuma perda
+    de precisão passa batida (o numeric do banco também não arredonda); só o
+    arredondamento em 2 casas na saída de grupo e total é deliberado.
   - Os 10 períodos (NFs no ERP) e os dados do contrato vêm do vault/PDF do contrato, não
     da planilha: ver CONTRATO e MEDICOES abaixo.
 """
+import decimal
 import hashlib
 import json
 import os
@@ -235,7 +242,13 @@ def calcular_esperado(linhas, quantidades):
     """Regra sem_arredondar: soma exata (Decimal) por item e por grupo; só arredonda em
     2 casas na saída de cada grupo e do total. O total sai do arredondamento da soma
     exata de TODOS os serviços, não da soma dos grupos já arredondados (por isso o total
-    pode diferir em 1 centavo da soma dos grupos: decisão registrada no plano)."""
+    pode diferir em 1 centavo da soma dos grupos: decisão registrada no plano).
+
+    A soma e a multiplicação (a fase "exata") rodam sob um context com precisão alta
+    (100 dígitos) e o trap de Inexact ligado: se alguma conta precisasse arredondar para
+    caber, o Python levanta exceção em vez de silenciosamente perder dígito — o numeric
+    do banco também não arredonda. O arredondamento em 2 casas na saída (grupo e total) é
+    deliberado e roda FORA desse context, no context padrão."""
     servicos = [l for l in linhas if l['tipo'] == 'servico']
     titulos = [l for l in linhas if l['tipo'] == 'titulo']
 
@@ -254,36 +267,39 @@ def calcular_esperado(linhas, quantidades):
     qtds_acumuladas = {}
     ajustes = 0
 
-    for linha in servicos:
-        ordem = linha['ordem']
-        grupo = linha['codigo'].split('.')[0]
-        preco = Decimal(linha['preco_unitario'])
-        qtd_prevista = Decimal(linha['quantidade_prevista'])
+    with decimal.localcontext() as ctx:
+        ctx.prec = 100
+        ctx.traps[decimal.Inexact] = True
+        for linha in servicos:
+            ordem = linha['ordem']
+            grupo = linha['codigo'].split('.')[0]
+            preco = Decimal(linha['preco_unitario'])
+            qtd_prevista = Decimal(linha['quantidade_prevista'])
 
-        precos[ordem] = linha['preco_unitario']
-        qtds_previstas[ordem] = linha['quantidade_prevista']
+            precos[ordem] = linha['preco_unitario']
+            qtds_previstas[ordem] = linha['quantidade_prevista']
 
-        valor_previsto = preco * qtd_prevista
-        previstos[ordem] = _fmt(valor_previsto)
+            valor_previsto = preco * qtd_prevista
+            previstos[ordem] = _fmt(valor_previsto)
 
-        medidas = [qtd_por_chave[(ordem, n)] for n in range(1, 11)]
-        acumulada = sum(medidas, Decimal('0'))
-        qtds_acumuladas[ordem] = _fmt(acumulada)
-        decima_qtd = medidas[9]
+            medidas = [qtd_por_chave[(ordem, n)] for n in range(1, 11)]
+            acumulada = sum(medidas, Decimal('0'))
+            qtds_acumuladas[ordem] = _fmt(acumulada)
+            decima_qtd = medidas[9]
 
-        valor_acumulado = preco * acumulada
-        valor_decimo = preco * decima_qtd
+            valor_acumulado = preco * acumulada
+            valor_decimo = preco * decima_qtd
 
-        grupos_prev[grupo] += valor_previsto
-        grupos_acum[grupo] += valor_acumulado
-        grupos_dec[grupo] += valor_decimo
-        total_prev += valor_previsto
-        total_acum += valor_acumulado
-        total_dec += valor_decimo
+            grupos_prev[grupo] += valor_previsto
+            grupos_acum[grupo] += valor_acumulado
+            grupos_dec[grupo] += valor_decimo
+            total_prev += valor_previsto
+            total_acum += valor_acumulado
+            total_dec += valor_decimo
 
-        for qtd in medidas:
-            if qtd != 0:
-                ajustes += 1
+            for qtd in medidas:
+                if qtd != 0:
+                    ajustes += 1
 
     grupos_saida = {
         g: {
