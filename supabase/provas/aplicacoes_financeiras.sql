@@ -6,7 +6,7 @@
 -- `sub` do usuario no jwt (so set_config nao vale, o MCP entra como owner).
 --
 -- Se a abertura ainda nao foi carregada, a prova cria a mesma abertura que
--- 20260926120000_abertura_das_aplicacoes.sql cria, dentro da transacao.
+-- 20260925210317_abertura_das_aplicacoes.sql cria, dentro da transacao.
 --
 -- (a) depois da abertura a subconta fecha em 6.017.484,75 e cada aplicacao
 --     no seu valor. CONTROLE: antes dela, 5.913.186,79.

@@ -1,5 +1,5 @@
--- Rollback de 20260926100000_aplicacoes_financeiras.
--- ANTES: rode o rollback da abertura (20260926120000) e exclua as posicoes
+-- Rollback de 20260925204853_aplicacoes_financeiras.
+-- ANTES: rode o rollback da abertura (20260925210317) e exclua as posicoes
 -- pela aba. Este arquivo recusa se ainda houver lancamento de origem aplicacao.
 do $pre$
 begin
