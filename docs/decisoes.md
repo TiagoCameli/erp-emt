@@ -4319,9 +4319,11 @@ do Tiago, e a abertura do PR.
 1. Prefixo `mc_` (`medicoes` e `fn_registrar_medicao` são da Manutenção). Nenhuma FK para outro módulo;
    o contrato tem os próprios dados e não cria nem se vincula a obra (Tiago, 25/09).
 2. Acesso por contrato só por lista (`mc_contrato_usuarios`, a linha é o acesso), Admin inclusive. Toda
-   policy do módulo exige a lista. A regra se estende aos anexos: `fn_recurso_da_entidade`, função
-   compartilhada com o resto do ERP, passou a também checar `fn_mc_acessa_contrato` para as entidades
-   `mc_*` (mudança aditiva, lida na definição viva, nunca em cópia; para os outros módulos nada muda).
+   policy do módulo exige a lista. A regra se estende aos anexos: a checagem é
+   `fn_anexo_entidade_visivel` (que, para as entidades `mc_*`, exige o contrato em `fn_mc_meus_contratos()`), chamada
+   nas duas policies de anexos e em `fn_vincular_arquivo`/`fn_desvincular_arquivo` (mudança aditiva,
+   lida na definição viva, nunca em cópia; para os outros módulos nada muda). `fn_recurso_da_entidade`
+   só ganhou o mapeamento das entidades `mc_*` para o recurso de permissão; não checa a lista.
 3. As ações pedidas (cadastrar, lançar, fechar, importar, reajuste) viram recursos por aba com as 6
    ações de sempre (decisão de 2026-08 sobre não criar ação nova). Na Fase 1 só `medicao.contratos` e
    `medicao.planilha` entram no catálogo de permissões; aba nova entra na fase dela, com o backfill
@@ -4361,6 +4363,18 @@ do Tiago, e a abertura do PR.
 14. O backfill de permissões (`mc_fase1f_permissoes`, 4 Admins, trava `$confere$`) fica salvo como
     `supabase/migrations/_PENDENTE_mc_fase1f_permissoes.sql`, sem aplicar, até o Tiago aprovar o PR;
     só então é aplicado por `apply_migration` e o arquivo é renomeado para a versão real.
+15. Auditoria por contrato, também PENDENTE: o `fn_audit` grava a linha inteira das tabelas `mc_*` e a
+    policy `audit_log_select` só pede `administracao.auditoria/ver`, então quem vê a auditoria veria
+    contrato fora da lista dele (fura a regra 2). `_PENDENTE_mc_fase1f_auditoria_por_contrato.sql`
+    parte da expressão viva da policy e acrescenta: linha de tabela `mc_*` (menos `mc_indices` e
+    `mc_indice_valores`, catálogo sem contrato) só aparece se o contrato dela (`->>'id'` em
+    `mc_contratos`, `->>'contrato_id'` nas outras, de `coalesce(dados_depois, dados_antes)`) está em
+    `fn_mc_meus_contratos()`; as outras tabelas ficam com a regra de hoje. Provado em bloco que aborta
+    (linha de contrato fora da lista some, a do contrato na lista e a de outra tabela continuam, e a
+    contagem de linhas não-mc visíveis ao Tiago é a mesma antes e depois). Aplica junto com o backfill.
+16. Restaurar versão da planilha (`20260926041333_mc_fase1d_restaurar_versao`) recusa com mensagem
+    quando já há outro rascunho no contrato ou quando o número da versão foi reusado, em vez de criar
+    um segundo rascunho ou devolver o 23505 cru do unique.
 
 **Consequência:** a Fase 2 descobre a regra de arredondamento do Lote 09 com o diagnóstico da
 importação e mostra ao Tiago antes de gravar. Aba nova do módulo entra no catálogo junto com a tela
