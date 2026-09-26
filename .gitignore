@@ -50,3 +50,4 @@ supabase/.temp/
 
 # Retrato da origem para a carga da migração (dado operacional; o repositório é público)
 scripts/migracao-gestao-obras/_retrato/
+scripts/migracao-medicao/_retrato/
