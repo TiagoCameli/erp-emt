@@ -320,6 +320,70 @@ begin
      and t.tgname = 'trg_mc_trava_truncate';
   r := r || jsonb_build_object('6_truncate_travas', v_n);
 
+  -- 4d/4e. Rascunho pela RPC: gravar duas vezes substitui; segundo rascunho é recusado
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  insert into public.usuario_permissoes (usuario_id, recurso, acao)
+  select v_tiago, x.recurso, x.acao from (values ('medicao.contratos', 'ver'), ('medicao.contratos', 'criar'), ('medicao.contratos', 'editar'),
+    ('medicao.planilha', 'ver'), ('medicao.planilha', 'criar'), ('medicao.planilha', 'aprovar')) x(recurso, acao)
+  on conflict do nothing;
+  set local role authenticated;
+  v_k3 := public.fn_mc_contrato_salvar(jsonb_build_object('codigo', 'prova-rpc', 'nome_obra', 'Prova K3', 'objeto', 'Prova',
+    'numero_contrato', 'K3', 'contratante_nome', 'Prova', 'contratante_tipo', 'estadual', 'valor_inicial', '10',
+    'data_assinatura', '2026-01-01', 'prazo_meses', 12));
+  perform public.fn_mc_planilha_criar_rascunho(v_k3, jsonb_build_object('vigente_desde', '2026-01-01'));
+  for v_n in 1..2 loop
+    perform public.fn_mc_planilha_gravar_linhas(
+      (select id from public.mc_planilha_versoes where contrato_id = v_k3), jsonb_build_array(
+        jsonb_build_object('ordem', 1, 'codigo', '01', 'pai_ordem', null, 'descricao', 'Grupo', 'unidade', null, 'tipo', 'titulo',
+                           'preco_unitario', null, 'quantidade_prevista', null, 'linha_origem', 5, 'item_id', null),
+        jsonb_build_object('ordem', 2, 'codigo', '01.01', 'pai_ordem', 1, 'descricao', 'Serviço', 'unidade', 'un', 'tipo', 'servico',
+                           'preco_unitario', '580.86429961', 'quantidade_prevista', '17057.717', 'linha_origem', 6, 'item_id', null)),
+      'planilha.xlsx', 'abc');
+  end loop;
+  select jsonb_build_object('linhas', (select count(*) from public.mc_planilha_itens where contrato_id = v_k3),
+    'preco_cheio', (select preco_unitario::text from public.mc_planilha_itens where contrato_id = v_k3 and ordem = 2),
+    'codigo_maiusculo', (select codigo from public.mc_contratos where id = v_k3),
+    'criador_na_lista', exists (select 1 from public.mc_contrato_usuarios where contrato_id = v_k3 and usuario_id = v_tiago)) into v_txt;
+  r := r || jsonb_build_object('4d_gravar_duas_vezes', v_txt::jsonb);
+  begin perform public.fn_mc_planilha_criar_rascunho(v_k3, jsonb_build_object('vigente_desde', '2026-01-01'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4e_segundo_rascunho', v_txt);
+  perform public.fn_mc_planilha_aprovar((select id from public.mc_planilha_versoes where contrato_id = v_k3));
+  r := r || jsonb_build_object('4f_aprovada', (select status from public.mc_planilha_versoes where contrato_id = v_k3));
+  reset role;
+
+  -- 6. Acesso por contrato
+  insert into public.usuario_permissoes (usuario_id, recurso, acao)
+  values (v_zero, 'medicao.contratos', 'ver'), (v_zero, 'medicao.planilha', 'ver') on conflict do nothing;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('6a_fora_da_lista',
+    jsonb_build_object('contratos', (select count(*) from public.mc_contratos where codigo like 'PROVA-%'),
+                       'linhas', (select count(*) from public.mc_planilha_itens where contrato_id in (v_k1, v_k2, v_k3)),
+                       'views', (select count(*) from public.mc_v_planilha_linhas where contrato_id in (v_k1, v_k2, v_k3))));
+  begin perform public.fn_mc_contrato_salvar(jsonb_build_object('codigo', 'X1', 'nome_obra', 'X', 'objeto', 'X', 'numero_contrato', 'X',
+      'contratante_nome', 'X', 'contratante_tipo', 'privado', 'valor_inicial', '1', 'data_assinatura', '2026-01-01', 'prazo_meses', 1));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('6b_sem_criar', v_txt);
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  perform public.fn_mc_acesso_definir(v_k2, v_zero, true);
+  begin perform public.fn_mc_acesso_definir(v_k3, v_tiago, false);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('6c_ultimo_da_lista', v_txt);
+  r := r || jsonb_build_object('6d_controle_tiago', (select count(*) from public.mc_contratos where codigo like 'PROVA-%'));
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('6e_na_lista_de_k2', (select array_agg(codigo) from public.mc_contratos where codigo like 'PROVA-%'));
+  reset role;
+  update public.usuarios set ativo = false where id = v_zero;
+  set local role authenticated;
+  r := r || jsonb_build_object('6f_desativado', (select count(*) from public.mc_contratos where codigo like 'PROVA-%'));
+  reset role;
+  update public.usuarios set ativo = true where id = v_zero;
+
   -- 9. O módulo não escreveu em outro módulo
   r := r || jsonb_build_object('9_outros_modulos_intactos',
     (select count(*) from public.obras) = v_obras0 and (select count(*) from public.centros_custo) = v_cc0
