@@ -299,7 +299,7 @@ export function LoteDetalhe({
       {emRascunho && emBranco > 0 ? (
         <div
           role="status"
-          className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm"
+          className="flex items-start gap-2 rounded-md border border-status-pendente/40 bg-status-pendente/5 p-3 text-sm"
         >
           <TriangleAlert
             className="mt-0.5 size-4 shrink-0 text-status-pendente"

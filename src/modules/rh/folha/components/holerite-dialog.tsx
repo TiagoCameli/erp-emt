@@ -120,7 +120,7 @@ export function HoleriteDialog({
   return (
     <Dialog open={aberto} onOpenChange={onAbertoChange}>
       <DialogContent className="max-w-md">
-        <div className="holerite-print flex flex-col gap-4">
+        <div className="holerite-print tema-claro flex flex-col gap-4">
           {/*
             A mesma moldura do espelho, pelo mesmo motivo: o holerite sai da
             impressora e vai pra mão do funcionário, então precisa dizer de qual

@@ -23,7 +23,11 @@ const CSS = readFileSync(join(__dirname, "../app/globals.css"), "utf8");
 
 /** Tokens `--nome: valor` de um bloco `seletor { ... }`, com `var()` resolvido. */
 function tokensDoBloco(seletor: string): Record<string, string> | null {
-  const inicio = CSS.search(new RegExp(`^${seletor.replace(".", "\\.")}\\s*\\{`, "m"));
+  // `(,[^{]*)?`: o bloco claro é `:root, .tema-claro { ... }` (uma lista de
+  // seletores), e o `.tema-claro` é o que devolve o claro aos documentos.
+  const inicio = CSS.search(
+    new RegExp(`^${seletor.replace(".", "\\.")}(?:,[^{]*)?\\s*\\{`, "m"),
+  );
   if (inicio < 0) return null;
   const corpo = CSS.slice(CSS.indexOf("{", inicio) + 1, CSS.indexOf("}", inicio));
   const brutos: Record<string, string> = {};

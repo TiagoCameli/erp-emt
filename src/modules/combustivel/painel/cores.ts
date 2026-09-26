@@ -11,8 +11,8 @@ export const COR_PAINEL = {
   principal: "var(--color-emt-verde)",
   /** Item marcado no filtro (a `accent-hover` da origem). */
   marcado: "var(--color-emt-verde-escuro)",
-  /** Custo (a linha preta da origem): o asfalto. */
-  custo: "var(--color-emt-asfalto)",
+  /** Custo (a linha preta da origem): o asfalto, pelo `--chart-3`, que clareia no tema escuro (o `--emt-asfalto` puro some no fundo escuro). */
+  custo: "var(--color-chart-3)",
   /**
    * O que pede atenção sem ser erro: o sentinela ("Não identificado") e o fornecedor acima
    * da média. É o âmbar, e não o vermelho da origem: verde x vermelho some em deuteranopia

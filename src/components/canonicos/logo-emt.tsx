@@ -14,6 +14,13 @@
  * nao traco, porque ela e retangulo puro e traco de retangulo so carrega a
  * serrilha do JPEG.
  *
+ * Tema escuro: so o "Construtora Ltda" muda de cor. Ele le `--logo-texto`
+ * (#1D1D1F no claro, #ECECEA no escuro), porque o quase-preto some no fundo
+ * escuro. As letras EMT, a pista e o eixo sao a marca e ficam iguais nos dois
+ * temas. Documento (espelho, holerite, recibo) fica em `.tema-claro`, que
+ * devolve o #1D1D1F. O fallback no `var()` mantem o texto escuro onde nao ha
+ * CSS do app nenhum.
+ *
  * Coordenadas: viewBox recortado no desenho (932 x 742). O wordmark
  * "Construtora Ltda" ocupa y 0..66, as letras EMT y 150..557 e a pista
  * y 579..742 — e por isso que a variante `simbolo` so muda o viewBox, sem
@@ -25,7 +32,7 @@ const VERDE = "#3E7744";
 const ASFALTO = "#45464B";
 const EIXO = "#CF943A";
 const TRACEJADO = "#A3A4A8";
-const TEXTO = "#1D1D1F";
+const TEXTO = "var(--logo-texto, #1D1D1F)";
 
 /** "Construtora Ltda". */
 const D_WORDMARK =

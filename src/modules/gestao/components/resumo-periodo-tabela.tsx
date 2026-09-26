@@ -48,7 +48,7 @@ export function ResumoPeriodoTabela({
    */
   function corDo(valor: number, colorir: boolean): string {
     if (!colorir || valor === 0) return "text-foreground";
-    return valor < 0 ? "text-destructive" : "text-emt-verde";
+    return valor < 0 ? "text-destructive" : "text-primary";
   }
 
   return (

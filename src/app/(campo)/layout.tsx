@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { LogoEmt } from "@/components/canonicos";
+import { LogoEmt, SeletorTema } from "@/components/canonicos";
 import { getUsuarioLogado } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { FilaCampoProvider, IndicadorFila } from "@/modules/manutencao/campo/components/fila-campo";
@@ -51,11 +51,15 @@ export default async function CampoLayout({ children }: { children: ReactNode })
           <IndicadorFila />
         </header>
         <main className="flex flex-1 flex-col gap-5 px-4 py-5">{children}</main>
-        <footer className="px-4 pb-6 text-center text-legenda text-muted-foreground">
-          {usuario.nome} ·{" "}
-          <Link href="/" className="underline">
-            Abrir o sistema completo
-          </Link>
+        <footer className="flex flex-col items-center gap-3 px-4 pb-6 text-center text-legenda text-muted-foreground">
+          {/* O campo não tem o AppShell nem o menu do usuário: o tema fica aqui. */}
+          <SeletorTema />
+          <p>
+            {usuario.nome} ·{" "}
+            <Link href="/" className="underline">
+              Abrir o sistema completo
+            </Link>
+          </p>
         </footer>
       </div>
     </FilaCampoProvider>

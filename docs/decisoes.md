@@ -4448,3 +4448,17 @@ formatado e cortava a planilha em cerca de 86 linhas.
 do Tiago para aplicar `_PENDENTE_mc_fase2_carga_l09.sql`, renomear para a versão real e rodar a
 prova pós-carga. Depois: Lote 10 (CT 184/2026) e as demais obras, uma de cada vez, pelo mesmo
 importador.
+
+## 2026-09-26 - Tema escuro
+
+**Contexto:** O design system "ERP EMT" ganhou uma versão escura. O `globals.css` já declarava a variante `dark`, e o `next-themes` estava no package.json sem uso.
+
+**Decisão:**
+- Tokens escuros num bloco `.dark` logo abaixo do `:root`. Só mudam neutros, status, `--chart-3`, `--chart-5`, sidebar e o texto da logo. A marca (`--emt-*`), o primário, a Faixa âmbar, o `--ring`, o destrutivo e `--chart-1/2/4` são iguais nos dois temas: é o mesmo logo e o mesmo botão.
+- `next-themes` com `attribute="class"`, padrão `system`. A escolha fica no menu do usuário do AppShell (o mesmo menu serve desktop e mobile) e no rodapé das telas de campo `/m/`, que não têm AppShell.
+- **Documento é sempre claro.** `.tema-claro` redeclara os tokens claros (é o mesmo bloco do `:root`) e está no espelho, no holerite e no recibo de rescisão. A variante `dark:` ignora `.tema-claro` e a impressão, e `@media print` devolve o claro a `:root.dark`: qualquer tela impressa com o tema escuro ligado sai clara. `src/config/marca.ts` (exceljs e pdfmake) não muda.
+- `--input` escuro #71706B, e não o #6A6964 do desenho: o #6A6964 dava 2,9:1 em `--surface` e no popover (o teste de contraste do tema claro, que também roda no `.dark`, pegou). O `--ring` claro virou #C26A05 no ajuste de contraste e o escuro herda: 4,1:1 ou mais nos fundos escuros.
+- Sombras `shadow-xs`/`shadow-sm` com a cor num token (`--sombra-*`): 5-10% no claro, 40-50% no escuro.
+- Verde da marca e vermelho de erro como TEXTO têm token próprio (`--primary-texto`, `--destrutivo-texto`), iguais ao fundo no claro e clareados no escuro (`#a9d4b1`, `#f07c7c`), porque como texto no fundo escuro davam 3,3:1 e 2,7:1. Ligados por `--text-color-primary`/`--text-color-destructive` no `@theme`, então `text-primary`/`text-destructive` (inclusive em components/ui) usam o token de texto e `bg-*`/`border-*` seguem no de fundo. Aprovado pelo Tiago em 26/09/2026.
+
+**Consequência:** Os valores claros existem em dois lugares no CSS (`:root, .tema-claro` e a cópia do `@media print`). O teste `src/app/tema-escuro-css.test.ts` falha se os dois divergirem ou se um token proibido entrar no `.dark`. Cor nova em tela tem que passar por token; hex solto só dentro de documento impresso, e documentado.

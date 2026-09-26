@@ -1,7 +1,20 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+  Variante `dark:` das classes (as do shadcn em components/ui). Ela NAO vale
+  dentro de `.tema-claro` nem na impressao: documento que vai pra contador e
+  processo sai sempre claro, e sem esta exclusao um `dark:bg-input/30` de um
+  componente shadcn dentro do holerite pintaria o papel de cinza mesmo com os
+  tokens ja voltados pro claro.
+*/
+@custom-variant dark {
+  @media not print {
+    &:is(.dark *):not(.tema-claro, .tema-claro *) {
+      @slot;
+    }
+  }
+}
 
 /*
   Design system EMT
@@ -17,9 +30,14 @@
   aba ativa e na borda esquerda dos KPICards. Ela continua ambar de proposito: e
   o eixo da pista do logo, e trocar ela por verde apagaria a unica peca do
   desenho do app que ja era marca.
+
+  Tema escuro: `.dark` logo abaixo. Os valores claros sao declarados UMA vez,
+  em `:root, .tema-claro`, e `.tema-claro` e o que devolve o claro a qualquer
+  subarvore (espelho, holerite, recibo) mesmo com o app no escuro.
 */
 
-:root {
+:root,
+.tema-claro {
   /* Neutros (base Notion) */
   --background: #ffffff;
   --foreground: #1f1f1f;
@@ -64,6 +82,16 @@
   --destructive-foreground: #ffffff;
 
   /*
+    Cor de TEXTO do verde da marca e do vermelho de erro. No claro e o mesmo hex
+    do fundo; no escuro clareia, porque #3e7744 como texto no fundo escuro da
+    3,3:1 e #b91c1c da 2,7:1, abaixo dos 4,5:1. Quem le isto e o `text-primary`
+    e o `text-destructive` (ver `--text-color-*` no `@theme inline`): o botao,
+    a borda e o preenchimento continuam no `--primary`/`--destructive`.
+  */
+  --primary-texto: var(--emt-verde);
+  --destrutivo-texto: #b91c1c;
+
+  /*
     Status. "aprovado" segue verde, e de proposito NAO e o verde da marca: o
     #137537 e mais saturado e mais frio que o #3e7744, entao um badge de
     aprovado nao se confunde com um botao primario. Fundir os dois faria a cor
@@ -97,7 +125,114 @@
   --sidebar-border: #e8e6e1;
   --sidebar-ring: #c26a05;
 
+  /* "Construtora Ltda" do LogoEmt. As letras EMT e o eixo nao mudam de tema. */
+  --logo-texto: #1d1d1f;
+
+  /* Cor das sombras `shadow-xs` e `shadow-sm` (ver `@theme inline`). */
+  --sombra-xs: rgb(0 0 0 / 0.05);
+  --sombra-sm: rgb(0 0 0 / 0.1);
+
   --radius: 0.5rem;
+  color-scheme: light;
+}
+
+/*
+  Tema escuro. Token que nao aparece aqui continua igual ao claro, e isso e de
+  proposito.
+
+  A marca (`--emt-*`) e a Faixa ambar sao iguais nos dois temas: e o mesmo logo
+  e o mesmo eixo da pista. O botao primario continua verde com texto branco
+  (5,4:1), e `--primary`, `--ring`, `--destructive`, `--chart-1`, `--chart-2`,
+  `--chart-4` e o `--sidebar-primary*` ficam como estao.
+
+  Os status foram clareados para ler no fundo escuro: todos dao 5,7:1 ou mais
+  sobre o fundo de 10% do badge. `--status-efeito` fica mais claro que
+  `--status-aprovado` para os dois verdes nao se confundirem.
+
+  `--input` e mais claro que `--border`: a borda do campo precisa de 3:1 no
+  fundo escuro, e a borda de separacao nao. #71706b (e nao o #6a6964 do
+  desenho) porque o #6a6964 dava 2,9:1 em `--surface` e no popover; este da
+  3,1:1 ou mais em todos os fundos escuros (src/lib/contraste.test.ts confere).
+
+  `--chart-3` e `--chart-5` clareados porque o asfalto e o vermelho originais
+  somem no fundo escuro.
+*/
+.dark {
+  --background: #191919;
+  --foreground: #ececea;
+  --surface: #222221;
+  --card: #202020;
+  --card-foreground: #ececea;
+  --popover: #252525;
+  --popover-foreground: #ececea;
+  --muted: #222221;
+  --muted-foreground: #9b9b98;
+  --border: #353432;
+  --input: #71706b;
+
+  --accent: #233227;
+  --accent-foreground: #a9d4b1;
+  --secondary: #2a2a29;
+  --secondary-foreground: #ececea;
+
+  /* Texto verde e texto de erro: o mesmo tom do accent-foreground e do
+     status rejeitado, que ja passam no fundo escuro (10:1 e 6,6:1). */
+  --primary-texto: #a9d4b1;
+  --destrutivo-texto: #f07c7c;
+
+  --status-aprovado: #5cc98a;
+  --status-pendente: #e8a15a;
+  --status-rejeitado: #f07c7c;
+  --status-rascunho: #a1a7b3;
+  --status-efeito: #8fd9a8;
+
+  --chart-3: #8e8f95;
+  --chart-5: #e06666;
+
+  --sidebar: #202020;
+  --sidebar-foreground: #ececea;
+  --sidebar-accent: #2a332b;
+  --sidebar-accent-foreground: #ececea;
+  --sidebar-border: #353432;
+
+  --logo-texto: #ececea;
+
+  /* No fundo escuro a sombra de 5-10% nao aparece: sobe para 40-50%. */
+  --sombra-xs: rgb(0 0 0 / 0.4);
+  --sombra-sm: rgb(0 0 0 / 0.5);
+
+  color-scheme: dark;
+}
+
+/*
+  Superficie que fica SEMPRE clara (os tokens ja voltaram pelo `:root,
+  .tema-claro` acima). O fundo e a cor do texto sao repintados aqui porque o
+  holerite e o recibo moram dentro de um dialogo, e sem isto o bloco herdaria o
+  fundo escuro do dialogo com o texto ja escuro por cima.
+*/
+.tema-claro {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+/* No dialogo escuro, a folha clara ganha margem propria para o texto nao
+   encostar na borda dela. So na tela: no papel quem manda e o @media print. */
+@media screen {
+  .dark .tema-claro:is(.holerite-print, .recibo-rescisao-print) {
+    padding: 1rem;
+    border-radius: var(--radius-md);
+  }
+}
+
+/*
+  Legenda dos graficos (Recharts). O Recharts pinta o TEXTO de cada item com a
+  cor da serie num `style` inline, por cima do `wrapperStyle` que os graficos ja
+  declaram (`--muted-foreground`). No escuro o verde da marca como texto fica em
+  3:1; aqui o texto herda a cor do wrapper e o quadradinho continua com a cor da
+  serie. So no escuro, para o claro nao mudar neste PR. O `!important` e o unico
+  jeito de vencer um `style` inline.
+*/
+.dark .recharts-legend-item-text {
+  color: inherit !important;
 }
 
 @theme inline {
@@ -118,6 +253,14 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /*
+    O Tailwind procura `--text-color-*` antes de `--color-*` para a utilidade
+    `text-*`. Assim `text-primary` e `text-destructive` (inclusive os de
+    components/ui, que nao se edita na mao) usam a cor de texto, e `bg-primary`,
+    `border-destructive` e `fill-*` seguem no token de fundo.
+  */
+  --text-color-primary: var(--primary-texto);
+  --text-color-destructive: var(--destrutivo-texto);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -157,6 +300,10 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* A geometria e a padrao do Tailwind; so a cor vem do tema (`--sombra-*`). */
+  --shadow-xs: 0 1px 2px 0 var(--sombra-xs);
+  --shadow-sm: 0 1px 3px 0 var(--sombra-sm), 0 1px 2px -1px var(--sombra-sm);
 
   /* Escala tipografica fixa: 24/18/15/13/12 */
   --text-titulo: 1.5rem;
@@ -226,6 +373,60 @@
     font-family: var(--font-mono);
     font-size: var(--text-detalhe);
     letter-spacing: -0.01em;
+  }
+}
+
+/*
+  Impressao com o tema escuro ligado: o papel sai claro, de qualquer tela.
+  Redeclara em `:root.dark` os mesmos valores claros de `:root, .tema-claro` (o
+  `@media` nao entra numa lista de seletores, por isso a copia). A variante
+  `dark:` ja se desliga sozinha na impressao (ver `@custom-variant` no topo).
+  O teste `tema-escuro-css.test.ts` confere que esta copia e o `:root` nao
+  divergem: mudou um, muda o outro.
+*/
+@media print {
+  :root.dark {
+    --background: #ffffff;
+    --foreground: #1f1f1f;
+    --surface: #f7f7f5;
+    --card: #ffffff;
+    --card-foreground: #1f1f1f;
+    --popover: #ffffff;
+    --popover-foreground: #1f1f1f;
+    --muted: #f7f7f5;
+    --muted-foreground: #6b6b6b;
+    --border: #e8e6e1;
+    --input: #8c8a84;
+
+    --accent: var(--emt-verde-lavado);
+    --accent-foreground: var(--emt-verde-escuro);
+    --secondary: #f7f7f5;
+    --secondary-foreground: #1f1f1f;
+
+    --primary-texto: var(--emt-verde);
+    --destrutivo-texto: #b91c1c;
+
+    --status-aprovado: #137537;
+    --status-pendente: #a14a07;
+    --status-rejeitado: #b91c1c;
+    --status-rascunho: #5f6673;
+    --status-efeito: #166534;
+
+    --chart-3: var(--emt-asfalto);
+    --chart-5: #b91c1c;
+
+    --sidebar: #f7f7f5;
+    --sidebar-foreground: #1f1f1f;
+    --sidebar-accent: #eaefe9;
+    --sidebar-accent-foreground: #1f1f1f;
+    --sidebar-border: #e8e6e1;
+
+    --logo-texto: #1d1d1f;
+
+    --sombra-xs: rgb(0 0 0 / 0.05);
+    --sombra-sm: rgb(0 0 0 / 0.1);
+
+    color-scheme: light;
   }
 }
 
@@ -319,6 +520,9 @@
   imprimir por padrão, e sem isto a Faixa âmbar sai branca. Mesmo com a regra o
   usuário pode desligar "gráficos de fundo" no diálogo do sistema, e por isso
   nenhum dado do espelho depende de cor: status sai como texto.
+
+  O layout do espelho tambem leva `.tema-claro` (tokens claros com o app no
+  escuro). O fundo e o texto fixos abaixo ficam de proposito: sao a folha.
 */
 .espelho-raiz {
   background: #ffffff;

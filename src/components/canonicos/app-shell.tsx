@@ -39,6 +39,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { LogoEmt } from "@/components/canonicos/logo-emt";
+import { ItensMenuTema } from "@/components/canonicos/seletor-tema";
 import { useRestaurarFiltrosDaSessao } from "@/components/canonicos/use-restaurar-filtros";
 import { cn } from "@/lib/utils";
 
@@ -214,7 +215,7 @@ function abaAtiva(abas: AbaNavegacao[], pathname: string): string | null {
   return escolhida?.id ?? null;
 }
 
-/** Itens do menu do usuário. Mesmo conteúdo no rodapé (desktop) e no topo (mobile). */
+/** Itens do menu do usuário (conta, tema, sair). Mesmo conteúdo no rodapé (desktop) e no topo (mobile). */
 function ItensMenuUsuario({
   usuario,
   onSair,
@@ -237,6 +238,15 @@ function ItensMenuUsuario({
           Minha conta
         </Link>
       </DropdownMenuItem>
+      {/*
+        Tema aqui, e não num botão solto na sidebar: este menu é o MESMO no
+        rodapé da sidebar (desktop) e no topo (mobile), então um lugar só cobre
+        as duas telas, e a sidebar de 80px não perde altura com um controle que
+        a pessoa usa uma vez.
+      */}
+      <DropdownMenuSeparator />
+      <ItensMenuTema />
+      <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={onSair}>
         <LogOut className="size-4" aria-hidden="true" />
         Sair

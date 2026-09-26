@@ -94,7 +94,7 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
     meta: { alinharDireita: true, atomico: true },
     // Entrada soma no tanque: "+" e verde, como na origem.
     cell: ({ row }) => (
-      <span className="font-medium tabular-nums text-emt-verde">+{formatarLitros(row.original.litros)}</span>
+      <span className="font-medium tabular-nums text-primary">+{formatarLitros(row.original.litros)}</span>
     ),
   },
   {

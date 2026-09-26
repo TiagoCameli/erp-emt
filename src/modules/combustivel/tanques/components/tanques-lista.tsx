@@ -257,7 +257,7 @@ export function TanquesLista({
                       </p>
                     </div>
                     <div className="relative z-10 flex shrink-0 items-center gap-1">
-                      <span className="rounded bg-violet-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-violet-700 uppercase">
+                      <span className="rounded bg-violet-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-violet-700 uppercase dark:bg-violet-500/15 dark:text-violet-300">
                         Externo
                       </span>
                       {!tanque.ativo ? <StatusBadge status="rascunho" rotulo="Inativo" /> : null}

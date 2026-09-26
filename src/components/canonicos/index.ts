@@ -48,3 +48,5 @@ export * from "./barra-selecao";
 export * from "./botao-espelho";
 export * from "./logo-emt";
 export * from "./marca-documento";
+export * from "./provedor-tema";
+export * from "./seletor-tema";
