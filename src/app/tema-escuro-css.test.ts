@@ -53,6 +53,8 @@ describe("tema escuro no globals.css", () => {
       "--accent-foreground": "#a9d4b1",
       "--secondary": "#2a2a29",
       "--secondary-foreground": "#ececea",
+      "--primary-texto": "#a9d4b1",
+      "--destrutivo-texto": "#f07c7c",
       "--status-aprovado": "#5cc98a",
       "--status-pendente": "#e8a15a",
       "--status-rejeitado": "#f07c7c",
@@ -103,6 +105,14 @@ describe("tema escuro no globals.css", () => {
     for (const [token, valor] of impressao) {
       expect(valor, token).toBe(claro.get(token));
     }
+  });
+
+  it("texto verde e texto de erro têm token próprio, e o text-* usa ele", () => {
+    // No claro é o mesmo hex do fundo: o tema claro não muda.
+    expect(claro.get("--primary-texto")).toBe("var(--emt-verde)");
+    expect(claro.get("--destrutivo-texto")).toBe(claro.get("--destructive"));
+    expect(css).toContain("--text-color-primary: var(--primary-texto);");
+    expect(css).toContain("--text-color-destructive: var(--destrutivo-texto);");
   });
 
   it("o texto da logo é token nos dois temas", () => {

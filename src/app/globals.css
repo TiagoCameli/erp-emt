@@ -71,6 +71,16 @@
   --destructive-foreground: #ffffff;
 
   /*
+    Cor de TEXTO do verde da marca e do vermelho de erro. No claro e o mesmo hex
+    do fundo; no escuro clareia, porque #3e7744 como texto no fundo escuro da
+    3,3:1 e #b91c1c da 2,7:1, abaixo dos 4,5:1. Quem le isto e o `text-primary`
+    e o `text-destructive` (ver `--text-color-*` no `@theme inline`): o botao,
+    a borda e o preenchimento continuam no `--primary`/`--destructive`.
+  */
+  --primary-texto: var(--emt-verde);
+  --destrutivo-texto: #b91c1c;
+
+  /*
     Status. "aprovado" segue verde, e de proposito NAO e o verde da marca: o
     #15803d e mais saturado e mais frio que o #3e7744, entao um badge de
     aprovado nao se confunde com um botao primario. Fundir os dois faria a cor
@@ -148,6 +158,11 @@
   --secondary: #2a2a29;
   --secondary-foreground: #ececea;
 
+  /* Texto verde e texto de erro: o mesmo tom do accent-foreground e do
+     status rejeitado, que ja passam no fundo escuro (10:1 e 6,6:1). */
+  --primary-texto: #a9d4b1;
+  --destrutivo-texto: #f07c7c;
+
   --status-aprovado: #5cc98a;
   --status-pendente: #e8a15a;
   --status-rejeitado: #f07c7c;
@@ -191,6 +206,18 @@
   }
 }
 
+/*
+  Legenda dos graficos (Recharts). O Recharts pinta o TEXTO de cada item com a
+  cor da serie num `style` inline, por cima do `wrapperStyle` que os graficos ja
+  declaram (`--muted-foreground`). No escuro o verde da marca como texto fica em
+  3:1; aqui o texto herda a cor do wrapper e o quadradinho continua com a cor da
+  serie. So no escuro, para o claro nao mudar neste PR. O `!important` e o unico
+  jeito de vencer um `style` inline.
+*/
+.dark .recharts-legend-item-text {
+  color: inherit !important;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -209,6 +236,14 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /*
+    O Tailwind procura `--text-color-*` antes de `--color-*` para a utilidade
+    `text-*`. Assim `text-primary` e `text-destructive` (inclusive os de
+    components/ui, que nao se edita na mao) usam a cor de texto, e `bg-primary`,
+    `border-destructive` e `fill-*` seguem no token de fundo.
+  */
+  --text-color-primary: var(--primary-texto);
+  --text-color-destructive: var(--destrutivo-texto);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -322,6 +357,9 @@
     --accent-foreground: var(--emt-verde-escuro);
     --secondary: #f7f7f5;
     --secondary-foreground: #1f1f1f;
+
+    --primary-texto: var(--emt-verde);
+    --destrutivo-texto: #b91c1c;
 
     --status-aprovado: #15803d;
     --status-pendente: #b45309;
