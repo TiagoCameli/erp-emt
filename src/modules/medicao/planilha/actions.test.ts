@@ -12,6 +12,7 @@ const estado = vi.hoisted(() => ({
   buffer: new ArrayBuffer(0),
   anteriores: [] as unknown[] | null,
   hash: "hash-do-servidor",
+  erroRpc: null as { code: string; message: string } | null,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -25,7 +26,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     rpc: async (fn: string, args: Record<string, unknown>) => {
       estado.chamadas.push({ fn, args });
-      return { data: 2, error: null };
+      return estado.erroRpc ? { data: null, error: estado.erroRpc } : { data: 2, error: null };
     },
   }),
 }));
@@ -69,6 +70,7 @@ beforeEach(async () => {
   estado.arquivo = { path: "anexos/x.xlsx", nome: "planilha.xlsx" };
   estado.anteriores = [];
   estado.hash = "hash-do-servidor";
+  estado.erroRpc = null;
   estado.buffer = await planilha([["02.07", "Pavimentação"], ["02.07.04", "CBUQ", "t", 580.8642996, 17057.717]]);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -127,6 +129,18 @@ describe("gravarImportacao", () => {
       { ordem: 2, codigo: "02.07.04", pai_ordem: 1, descricao: "CBUQ", unidade: "t", tipo: "servico",
         preco_unitario: "580.8642996", quantidade_prevista: "17057.717", linha_origem: 3, item_id: null },
     ]);
+  });
+
+  it("check da tabela (23514) vira mensagem clara, e não Tente novamente", async () => {
+    estado.erroRpc = { code: "23514", message: 'new row violates check constraint "mc_planilha_itens_descricao_check"' };
+    const r = await gravarImportacao(V, MAPA, OK, H);
+    expect(r).toEqual({ erro: expect.stringContaining("O banco recusou uma linha da planilha") });
+  });
+
+  it("sem descrição, preço negativo ou número com expoente bloqueiam antes do banco (e o arquivo abre)", async () => {
+    estado.buffer = await planilha([["01", null, "un", 1, 1], ["02", "Roçada", "un", -5, 1], ["03", "Capina", "un", 1e-7, 1]]);
+    await expect(gravarImportacao(V, MAPA, OK, H)).resolves.toEqual({ erro: "A planilha tem 3 problemas que impedem a importação" });
+    expect(estado.chamadas).toEqual([]);
   });
 
   it("aditivo com item ambíguo não grava", async () => {

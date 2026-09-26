@@ -6,7 +6,9 @@ import { enderecoCelula, type CelulaLida } from "./leitor";
  * - o pai é a linha anterior de código mais longo que é prefixo do código (com ponto);
  *   código repetido torna o pai ambíguo: sugere o mais próximo e pede confirmação;
  * - campo vazio de serviço vira "0" com alerta, nunca some;
- * - texto em coluna de número, fórmula sem valor e erro de fórmula BLOQUEIAM;
+ * - texto em coluna de número, fórmula sem valor, erro de fórmula e número com expoente BLOQUEIAM;
+ * - linha com código e sem descrição BLOQUEIA, e preço ou quantidade negativos BLOQUEIAM
+ *   (o banco recusaria na gravação; aqui o aviso sai na prévia, com a célula);
  * - código digitado como NÚMERO na planilha BLOQUEIA: o Excel come zero à esquerda ("01" vira 1)
  *   e à direita ("1.10" vira 1.1), o que quebra tanto a hierarquia quanto a conciliação por
  *   código; a linha é montada normalmente (para não perder o resto do diagnóstico), mas o
@@ -42,7 +44,10 @@ export type TipoAlerta =
   | "erro_de_formula"
   | "linha_sem_codigo"
   | "codigo_como_numero"
-  | "codigo_termina_com_ponto";
+  | "codigo_termina_com_ponto"
+  | "linha_sem_descricao"
+  | "numero_negativo"
+  | "numero_fora_da_faixa";
 
 export interface Alerta {
   tipo: TipoAlerta;
@@ -80,18 +85,25 @@ export interface Montagem {
 }
 
 function texto(c: CelulaLida): string | null {
-  if (c.tipo === "texto") return c.bruto;
+  if (c.tipo === "texto" || c.tipo === "numero_fora_da_faixa") return c.bruto;
   if (c.tipo === "numero") return c.texto;
   return null;
 }
 
-/** Célula de número: devolve o texto do número, null se vazia, ou o alerta que bloqueia. */
-function numero(c: CelulaLida, linha: number, coluna: number): { valor: string | null } | { alerta: Omit<Alerta, "ordem"> } {
+/**
+ * Célula de número: devolve o texto do número, null se vazia, ou o alerta que bloqueia.
+ * `aceitaNegativo` é só para a coluna de valor (diagnóstico); preço e quantidade não aceitam.
+ */
+function numero(c: CelulaLida, linha: number, coluna: number, aceitaNegativo = false): { valor: string | null } | { alerta: Omit<Alerta, "ordem"> } {
   const endereco = enderecoCelula(linha, coluna);
   switch (c.tipo) {
     case "vazia":
       return { valor: null };
     case "numero":
+      if (!aceitaNegativo && c.texto.startsWith("-")) {
+        return { alerta: { tipo: "numero_negativo", bloqueia: true, linhaOrigem: linha,
+          mensagem: `A célula ${endereco} tem número negativo (${c.texto}). A planilha contratual não aceita valor negativo` } };
+      }
       return { valor: c.texto };
     case "formula_sem_valor":
       return { alerta: { tipo: "formula_sem_valor", bloqueia: true, linhaOrigem: linha,
@@ -99,6 +111,9 @@ function numero(c: CelulaLida, linha: number, coluna: number): { valor: string |
     case "erro":
       return { alerta: { tipo: "erro_de_formula", bloqueia: true, linhaOrigem: linha,
         mensagem: `A célula ${endereco} tem erro de fórmula (${c.bruto})` } };
+    case "numero_fora_da_faixa":
+      return { alerta: { tipo: "numero_fora_da_faixa", bloqueia: true, linhaOrigem: linha,
+        mensagem: `A célula ${endereco} tem um número que só se escreve com expoente (${c.bruto}). Confira o valor e arredonde no Excel` } };
     case "texto":
       return { alerta: { tipo: "numero_como_texto", bloqueia: true, linhaOrigem: linha,
         mensagem: `A célula ${endereco} tem o texto "${c.bruto}" onde devia haver número. Use o xlsx oficial, com a célula em formato de número` } };
@@ -121,15 +136,20 @@ export function montarPlanilha(brutas: LinhaBruta[], paiEscolhido: Record<number
     }
     const ordem = linhas.length + 1;
 
-    if (b.codigo.tipo === "numero") {
+    if (descricao === "") {
+      alertas.push({ tipo: "linha_sem_descricao", bloqueia: true, ordem, linhaOrigem: b.linhaOrigem,
+        mensagem: `A linha ${b.linhaOrigem} (código ${codigo}) não tem descrição` });
+    }
+
+    if (b.codigo.tipo === "numero" || b.codigo.tipo === "numero_fora_da_faixa") {
       const endereco = enderecoCelula(b.linhaOrigem, b.colunas.codigo);
       alertas.push({ tipo: "codigo_como_numero", bloqueia: true, ordem, linhaOrigem: b.linhaOrigem,
-        mensagem: `A célula ${endereco} tem o código como número (${b.codigo.texto}). Formate a coluna de código como texto no Excel e envie de novo` });
+        mensagem: `A célula ${endereco} tem o código como número (${codigo}). Formate a coluna de código como texto no Excel e envie de novo` });
     }
 
     const preco = numero(b.preco, b.linhaOrigem, b.colunas.preco);
     const qtd = numero(b.quantidade, b.linhaOrigem, b.colunas.quantidade);
-    const valorBruto = b.valor && b.colunas.valor ? numero(b.valor, b.linhaOrigem, b.colunas.valor) : { valor: null };
+    const valorBruto = b.valor && b.colunas.valor ? numero(b.valor, b.linhaOrigem, b.colunas.valor, true) : { valor: null };
     // Problema na coluna de valor nunca bloqueia: ela só alimenta o diagnóstico.
     const valor = "alerta" in valorBruto ? { alerta: { ...valorBruto.alerta, bloqueia: false } } : valorBruto;
     for (const r of [preco, qtd, valor]) if ("alerta" in r) alertas.push({ ...r.alerta, ordem });

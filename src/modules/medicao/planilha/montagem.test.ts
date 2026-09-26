@@ -146,4 +146,40 @@ describe("montarPlanilha", () => {
     expect(m.linhas).toHaveLength(0);
     expect(m.alertas).toMatchObject([{ tipo: "linha_sem_codigo", bloqueia: true, linhaOrigem: 6 }]);
   });
+  it("linha com código e sem descrição bloqueia, com a linha e o código", () => {
+    const m = montarPlanilha([linha(12, "01.02", "", s("un"), n("1"), n("1"), { descricao: vazia })]);
+    expect(m.alertas).toMatchObject([
+      { tipo: "linha_sem_descricao", bloqueia: true, linhaOrigem: 12, mensagem: "A linha 12 (código 01.02) não tem descrição" },
+      { tipo: "codigo_sem_pai" },
+    ]);
+  });
+
+  it("preço ou quantidade negativos bloqueiam, com o endereço da célula", () => {
+    const m = montarPlanilha([
+      linha(12, "01", "Preço negativo", s("un"), n("-5"), n("1")),
+      linha(13, "02", "Quantidade negativa", s("un"), n("5"), n("-0.5")),
+    ]);
+    expect(m.alertas).toMatchObject([
+      { tipo: "numero_negativo", bloqueia: true, linhaOrigem: 12,
+        mensagem: "A célula D12 tem número negativo (-5). A planilha contratual não aceita valor negativo" },
+      { tipo: "numero_negativo", bloqueia: true, linhaOrigem: 13 },
+    ]);
+    expect(m.alertas[1].mensagem).toContain("E13");
+    expect(m.linhas.map((l) => l.tipo)).toEqual(["servico", "servico"]);
+  });
+
+  it("valor negativo na coluna de valor não bloqueia (só alimenta o diagnóstico)", () => {
+    const m = montarPlanilha([
+      linha(5, "01", "X", s("un"), n("1"), n("1"), { valor: n("-3"), colunas: { codigo: 1, preco: 4, quantidade: 5, valor: 6 } }),
+    ]);
+    expect(m.alertas).toEqual([]);
+    expect(m.linhas[0].valorPlanilha).toBe("-3");
+  });
+
+  it("número com expoente no preço bloqueia, com o endereço da célula", () => {
+    const m = montarPlanilha([linha(12, "01", "X", s("un"), { tipo: "numero_fora_da_faixa", bruto: "1e-7" }, n("1"))]);
+    expect(m.alertas).toMatchObject([{ tipo: "numero_fora_da_faixa", bloqueia: true, linhaOrigem: 12 }]);
+    expect(m.alertas[0].mensagem).toContain("D12");
+    expect(m.alertas[0].mensagem).toContain("1e-7");
+  });
 });

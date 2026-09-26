@@ -32,6 +32,12 @@ describe("lerCelula", () => {
     expect(lerCelula(0)).toEqual({ tipo: "numero", texto: "0" });
   });
 
+  it("número com expoente é marcado, sem derrubar a leitura do arquivo", () => {
+    expect(lerCelula(1e-7)).toEqual({ tipo: "numero_fora_da_faixa", bruto: "1e-7" });
+    expect(lerCelula(1e21)).toEqual({ tipo: "numero_fora_da_faixa", bruto: "1e+21" });
+    expect(lerCelula({ formula: "D5*E5", result: 1e-9 } as never)).toEqual({ tipo: "numero_fora_da_faixa", bruto: "1e-9" });
+  });
+
   it("rich text vira o texto emendado", () => {
     expect(lerCelula({ richText: [{ text: "Imprima" }, { text: "ção" }] } as never)).toEqual({ tipo: "texto", bruto: "Imprimação" });
   });

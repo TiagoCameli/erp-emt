@@ -227,7 +227,14 @@ export async function gravarImportacao(
       p_arquivo_nome: arquivo.nome,
       p_arquivo_hash: previa.arquivoHash,
     });
-    if (error) return erroAcao("medicao.planilha.gravar", error, mensagemDeNegocio(error, "Não foi possível gravar a planilha. Tente novamente"));
+    if (error) {
+      // Rede de segurança: a prévia já bloqueia descrição vazia e número negativo, mas se um check
+      // da tabela recusar mesmo assim, a mensagem diz o que olhar em vez de "Tente novamente".
+      const mensagem = error.code === "23514"
+        ? "O banco recusou uma linha da planilha (descrição vazia, código vazio ou preço ou quantidade negativos). Corrija o xlsx e veja a prévia de novo"
+        : mensagemDeNegocio(error, "Não foi possível gravar a planilha. Tente novamente");
+      return erroAcao("medicao.planilha.gravar", error, mensagem);
+    }
     revalidar(versaoId);
     return { ok: true as const, linhas: typeof data === "number" ? data : previa.linhas.length };
   });

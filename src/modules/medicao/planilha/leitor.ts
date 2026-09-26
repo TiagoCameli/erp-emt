@@ -14,7 +14,9 @@ export type CelulaLida =
   | { tipo: "numero"; texto: string }
   | { tipo: "texto"; bruto: string }
   | { tipo: "formula_sem_valor" }
-  | { tipo: "erro"; bruto: string };
+  | { tipo: "erro"; bruto: string }
+  /** Número que só se escreve com expoente (ex.: 1e-7, 1e+21): o numeric do banco não recebe sem perder o controle das casas. */
+  | { tipo: "numero_fora_da_faixa"; bruto: string };
 
 export function numeroParaTexto(n: number): string {
   const texto = String(n);
@@ -24,7 +26,11 @@ export function numeroParaTexto(n: number): string {
 
 function deValorSimples(valor: unknown): CelulaLida {
   if (valor === null || valor === undefined) return { tipo: "vazia" };
-  if (typeof valor === "number") return { tipo: "numero", texto: numeroParaTexto(valor) };
+  if (typeof valor === "number") {
+    const texto = String(valor);
+    if (!Number.isFinite(valor) || /e/i.test(texto)) return { tipo: "numero_fora_da_faixa", bruto: texto };
+    return { tipo: "numero", texto: numeroParaTexto(valor) };
+  }
   if (typeof valor === "string") return valor.trim() === "" ? { tipo: "vazia" } : { tipo: "texto", bruto: valor };
   if (typeof valor === "boolean") return { tipo: "texto", bruto: valor ? "VERDADEIRO" : "FALSO" };
   if (valor instanceof Date) return { tipo: "texto", bruto: valor.toISOString().slice(0, 10) };

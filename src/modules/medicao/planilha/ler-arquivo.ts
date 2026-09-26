@@ -34,7 +34,7 @@ export async function abrirPlanilha(buffer: ArrayBuffer): Promise<ExcelJS.Workbo
 function textoDaCelula(valor: ExcelJS.CellValue): string {
   const c = lerCelula(valor);
   if (c.tipo === "numero") return c.texto;
-  if (c.tipo === "texto" || c.tipo === "erro") return c.bruto;
+  if (c.tipo === "texto" || c.tipo === "erro" || c.tipo === "numero_fora_da_faixa") return c.bruto;
   if (c.tipo === "formula_sem_valor") return "(fórmula sem valor)";
   return "";
 }
