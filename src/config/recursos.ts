@@ -33,7 +33,8 @@ export interface RecursoDef {
 
 /**
  * Módulos na ordem de exibição da sidebar. Frete, Combustível e Manutenção ficam
- * entre RH e Administração (pedido do Tiago em 24/09/2026).
+ * entre RH e Administração (pedido do Tiago em 24/09/2026). Medição de Contratos
+ * fica depois da Manutenção (25/09/2026).
  */
 export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
@@ -44,6 +45,7 @@ export const MODULOS = [
   { id: "frete", nome: "Frete", rota: "/frete" },
   { id: "combustivel", nome: "Combustível", rota: "/combustivel" },
   { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
+  { id: "medicao", nome: "Medição", rota: "/medicao" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -566,6 +568,22 @@ export const RECURSOS = [
     modulo: "rh",
     rota: "/rh/banco-horas",
     acoes: ["ver", "criar", "editar"],
+  },
+  // Medição de Contratos (spec 2026-09-25). As outras abas entram nas fases delas, cada uma com o
+  // seu backfill: registrar aba sem tela deixaria link morto no menu.
+  {
+    id: "medicao.contratos",
+    nome: "Contratos",
+    modulo: "medicao",
+    rota: "/medicao/contratos",
+    acoes: CRUD,
+  },
+  {
+    id: "medicao.planilha",
+    nome: "Planilha contratual",
+    modulo: "medicao",
+    rota: "/medicao/planilha",
+    acoes: ["ver", "criar", "excluir", "aprovar", "desaprovar"],
   },
   // Administração
   {

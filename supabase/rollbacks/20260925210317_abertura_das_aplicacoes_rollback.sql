@@ -1,4 +1,4 @@
--- Rollback da abertura das aplicacoes (20260926120000).
+-- Rollback da abertura das aplicacoes (20260925210317).
 -- Apaga os dois lancamentos de ajuste e as duas posicoes de abertura. Recusa se
 -- ja houver posicao depois da abertura: o rendimento dela depende da abertura,
 -- e apagar por baixo deixaria o lancamento dela errado.

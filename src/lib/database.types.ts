@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17";
+    PostgrestVersion: "14.5";
   };
   public: {
     Tables: {
@@ -183,6 +183,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "almoxarifado_entradas_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
           },
           {
             foreignKeyName: "almoxarifado_entradas_insumo_id_fkey";
@@ -1349,6 +1356,13 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "combustivel_entradas_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
+          {
             foreignKeyName: "combustivel_entradas_insumo_id_fkey";
             columns: ["insumo_id"];
             isOneToOne: false;
@@ -1580,6 +1594,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "combustivel_saidas_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
           },
         ];
       };
@@ -2045,6 +2066,13 @@ export type Database = {
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "cotacao_fornecedores_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
         ];
       };
       cotacao_itens: {
@@ -2156,6 +2184,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cotacoes_vencedor_fornecedor_id_fkey";
+            columns: ["vencedor_fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
           },
         ];
       };
@@ -3941,6 +3976,7 @@ export type Database = {
           juros: number;
           lancamento_forma_id: string | null;
           lancamento_id: string;
+          mes_fluxo: string | null;
           numero_parcela: number;
           outras_despesas: number;
           pago_em: string | null;
@@ -3967,6 +4003,7 @@ export type Database = {
           juros?: number;
           lancamento_forma_id?: string | null;
           lancamento_id: string;
+          mes_fluxo?: string | null;
           numero_parcela?: number;
           outras_despesas?: number;
           pago_em?: string | null;
@@ -3993,6 +4030,7 @@ export type Database = {
           juros?: number;
           lancamento_forma_id?: string | null;
           lancamento_id?: string;
+          mes_fluxo?: string | null;
           numero_parcela?: number;
           outras_despesas?: number;
           pago_em?: string | null;
@@ -4252,6 +4290,13 @@ export type Database = {
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "lancamentos_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
         ];
       };
       lancamentos_numero_reparo: {
@@ -4371,6 +4416,1288 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "transportadora_saldos";
             referencedColumns: ["transportadora_id"];
+          },
+        ];
+      };
+      mc_aditivos: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          data_assinatura: string;
+          data_vigencia: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          motivo: string;
+          motivo_exclusao: string | null;
+          numero: number;
+          prazo_acrescido_meses: number | null;
+          tipos: string[];
+          updated_at: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_assinatura: string;
+          data_vigencia: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          motivo: string;
+          motivo_exclusao?: string | null;
+          numero: number;
+          prazo_acrescido_meses?: number | null;
+          tipos: string[];
+          updated_at?: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_assinatura?: string;
+          data_vigencia?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          motivo?: string;
+          motivo_exclusao?: string | null;
+          numero?: number;
+          prazo_acrescido_meses?: number | null;
+          tipos?: string[];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_aditivos_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_aditivos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_aditivos_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_ajustes: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          item_id: string;
+          medicao_id: string;
+          motivo: string;
+          quantidade: number;
+          revisao_id: string;
+          tipo: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          item_id: string;
+          medicao_id: string;
+          motivo: string;
+          quantidade: number;
+          revisao_id: string;
+          tipo?: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          item_id?: string;
+          medicao_id?: string;
+          motivo?: string;
+          quantidade?: number;
+          revisao_id?: string;
+          tipo?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_ajustes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_ajustes_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_ajustes_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_ajustes_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_ajustes_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_ajustes_revisao_id_medicao_id_fkey";
+            columns: ["revisao_id", "medicao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicao_revisoes";
+            referencedColumns: ["id", "medicao_id"];
+          },
+          {
+            foreignKeyName: "mc_ajustes_revisao_id_medicao_id_fkey";
+            columns: ["revisao_id", "medicao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_revisao_aprovada";
+            referencedColumns: ["revisao_id", "medicao_id"];
+          },
+        ];
+      };
+      mc_aprovacoes_item: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          item_id: string;
+          quantidade_aprovada: number;
+          revisao_id: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          item_id: string;
+          quantidade_aprovada: number;
+          revisao_id: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          item_id?: string;
+          quantidade_aprovada?: number;
+          revisao_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_aprovacoes_item_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_aprovacoes_item_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_aprovacoes_item_revisao_id_fkey";
+            columns: ["revisao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicao_revisoes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_aprovacoes_item_revisao_id_fkey";
+            columns: ["revisao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_revisao_aprovada";
+            referencedColumns: ["revisao_id"];
+          },
+        ];
+      };
+      mc_contrato_usuarios: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          usuario_id: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          usuario_id: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          usuario_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_contrato_usuarios_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_contrato_usuarios_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_contrato_usuarios_usuario_id_fkey";
+            columns: ["usuario_id"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_contratos: {
+        Row: {
+          alerta_prazo_dias: number;
+          alerta_valor_pct: number;
+          codigo: string;
+          contratante_documento: string | null;
+          contratante_nome: string;
+          contratante_tipo: string;
+          created_at: string;
+          created_by: string | null;
+          data_assinatura: string;
+          data_ordem_servico: string | null;
+          dia_inicio_periodo: number;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          inicio_prazo: string;
+          local: string | null;
+          motivo_exclusao: string | null;
+          nome_obra: string;
+          numero_contrato: string;
+          objeto: string;
+          observacoes: string | null;
+          prazo_meses: number;
+          regra_arredondamento: string | null;
+          status: string;
+          tipo_localizacao: string;
+          updated_at: string;
+          valor_inicial: number;
+        };
+        Insert: {
+          alerta_prazo_dias?: number;
+          alerta_valor_pct?: number;
+          codigo: string;
+          contratante_documento?: string | null;
+          contratante_nome: string;
+          contratante_tipo: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_assinatura: string;
+          data_ordem_servico?: string | null;
+          dia_inicio_periodo?: number;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          inicio_prazo?: string;
+          local?: string | null;
+          motivo_exclusao?: string | null;
+          nome_obra: string;
+          numero_contrato: string;
+          objeto: string;
+          observacoes?: string | null;
+          prazo_meses: number;
+          regra_arredondamento?: string | null;
+          status?: string;
+          tipo_localizacao?: string;
+          updated_at?: string;
+          valor_inicial: number;
+        };
+        Update: {
+          alerta_prazo_dias?: number;
+          alerta_valor_pct?: number;
+          codigo?: string;
+          contratante_documento?: string | null;
+          contratante_nome?: string;
+          contratante_tipo?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data_assinatura?: string;
+          data_ordem_servico?: string | null;
+          dia_inicio_periodo?: number;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          inicio_prazo?: string;
+          local?: string | null;
+          motivo_exclusao?: string | null;
+          nome_obra?: string;
+          numero_contrato?: string;
+          objeto?: string;
+          observacoes?: string | null;
+          prazo_meses?: number;
+          regra_arredondamento?: string | null;
+          status?: string;
+          tipo_localizacao?: string;
+          updated_at?: string;
+          valor_inicial?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_contratos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_contratos_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_indice_valores: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data_publicacao: string | null;
+          fonte: string;
+          id: string;
+          indice_id: string;
+          mes: string;
+          situacao: string;
+          valor: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data_publicacao?: string | null;
+          fonte: string;
+          id?: string;
+          indice_id: string;
+          mes: string;
+          situacao: string;
+          valor: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data_publicacao?: string | null;
+          fonte?: string;
+          id?: string;
+          indice_id?: string;
+          mes?: string;
+          situacao?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_indice_valores_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_indice_valores_indice_id_fkey";
+            columns: ["indice_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_indices";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_indices: {
+        Row: {
+          ativo: boolean;
+          created_at: string;
+          created_by: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          fonte: string | null;
+          id: string;
+          motivo_exclusao: string | null;
+          nome: string;
+          observacao: string | null;
+          sigla: string;
+          updated_at: string;
+        };
+        Insert: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fonte?: string | null;
+          id?: string;
+          motivo_exclusao?: string | null;
+          nome: string;
+          observacao?: string | null;
+          sigla: string;
+          updated_at?: string;
+        };
+        Update: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fonte?: string | null;
+          id?: string;
+          motivo_exclusao?: string | null;
+          nome?: string;
+          observacao?: string | null;
+          sigla?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_indices_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_indices_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_item_indices: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          indice_id: string;
+          item_id: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          indice_id: string;
+          item_id: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          indice_id?: string;
+          item_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_item_indices_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_item_indices_indice_id_fkey";
+            columns: ["indice_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_indices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_item_indices_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+        ];
+      };
+      mc_itens: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          id: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          id?: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_itens_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_lancamentos: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          estaca: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          item_id: string;
+          km_final: number | null;
+          km_inicial: number | null;
+          local_texto: string | null;
+          medicao_id: string;
+          motivo_excesso: string | null;
+          motivo_exclusao: string | null;
+          observacao: string | null;
+          quantidade: number;
+          updated_at: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          estaca?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          item_id: string;
+          km_final?: number | null;
+          km_inicial?: number | null;
+          local_texto?: string | null;
+          medicao_id: string;
+          motivo_excesso?: string | null;
+          motivo_exclusao?: string | null;
+          observacao?: string | null;
+          quantidade: number;
+          updated_at?: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          estaca?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          item_id?: string;
+          km_final?: number | null;
+          km_inicial?: number | null;
+          local_texto?: string | null;
+          medicao_id?: string;
+          motivo_excesso?: string | null;
+          motivo_exclusao?: string | null;
+          observacao?: string | null;
+          quantidade?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_lancamentos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+        ];
+      };
+      mc_medicao_eventos: {
+        Row: {
+          contrato_id: string;
+          criado_em: string;
+          de_status: string | null;
+          evento: string;
+          id: string;
+          medicao_id: string;
+          motivo: string | null;
+          para_status: string | null;
+          usuario_id: string | null;
+        };
+        Insert: {
+          contrato_id: string;
+          criado_em?: string;
+          de_status?: string | null;
+          evento: string;
+          id?: string;
+          medicao_id: string;
+          motivo?: string | null;
+          para_status?: string | null;
+          usuario_id?: string | null;
+        };
+        Update: {
+          contrato_id?: string;
+          criado_em?: string;
+          de_status?: string | null;
+          evento?: string;
+          id?: string;
+          medicao_id?: string;
+          motivo?: string | null;
+          para_status?: string | null;
+          usuario_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_medicao_eventos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_medicao_eventos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_medicao_eventos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_medicao_eventos_usuario_id_fkey";
+            columns: ["usuario_id"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_medicao_revisoes: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          fase: string;
+          id: string;
+          medicao_id: string;
+          motivo: string | null;
+          numero: number;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          fase?: string;
+          id?: string;
+          medicao_id: string;
+          motivo?: string | null;
+          numero: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          fase?: string;
+          id?: string;
+          medicao_id?: string;
+          motivo?: string | null;
+          numero?: number;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_medicao_revisoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_medicao_revisoes_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_medicao_revisoes_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_medicao_revisoes_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+        ];
+      };
+      mc_medicoes: {
+        Row: {
+          aprovada_em: string | null;
+          aprovada_por: string | null;
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          numero: number;
+          origem: string;
+          periodo_fim: string;
+          periodo_inicio: string;
+          status: string;
+          updated_at: string;
+          versao_id: string;
+        };
+        Insert: {
+          aprovada_em?: string | null;
+          aprovada_por?: string | null;
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          numero: number;
+          origem?: string;
+          periodo_fim: string;
+          periodo_inicio: string;
+          status?: string;
+          updated_at?: string;
+          versao_id: string;
+        };
+        Update: {
+          aprovada_em?: string | null;
+          aprovada_por?: string | null;
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          numero?: number;
+          origem?: string;
+          periodo_fim?: string;
+          periodo_inicio?: string;
+          status?: string;
+          updated_at?: string;
+          versao_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_medicoes_aprovada_por_fkey";
+            columns: ["aprovada_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_medicoes_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_medicoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_medicoes_versao_id_contrato_id_fkey";
+            columns: ["versao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_planilha_versoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+        ];
+      };
+      mc_planilha_itens: {
+        Row: {
+          codigo: string;
+          contrato_id: string;
+          created_at: string;
+          descricao: string;
+          id: string;
+          item_id: string;
+          linha_origem: number | null;
+          ordem: number;
+          pai_id: string | null;
+          preco_unitario: number | null;
+          quantidade_prevista: number | null;
+          tipo: string;
+          unidade: string | null;
+          versao_id: string;
+        };
+        Insert: {
+          codigo: string;
+          contrato_id: string;
+          created_at?: string;
+          descricao: string;
+          id?: string;
+          item_id: string;
+          linha_origem?: number | null;
+          ordem: number;
+          pai_id?: string | null;
+          preco_unitario?: number | null;
+          quantidade_prevista?: number | null;
+          tipo: string;
+          unidade?: string | null;
+          versao_id: string;
+        };
+        Update: {
+          codigo?: string;
+          contrato_id?: string;
+          created_at?: string;
+          descricao?: string;
+          id?: string;
+          item_id?: string;
+          linha_origem?: number | null;
+          ordem?: number;
+          pai_id?: string | null;
+          preco_unitario?: number | null;
+          quantidade_prevista?: number | null;
+          tipo?: string;
+          unidade?: string | null;
+          versao_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_planilha_itens_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_itens_pai_id_versao_id_fkey";
+            columns: ["pai_id", "versao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_planilha_itens";
+            referencedColumns: ["id", "versao_id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_itens_pai_id_versao_id_fkey";
+            columns: ["pai_id", "versao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_planilha_linhas";
+            referencedColumns: ["id", "versao_id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_itens_versao_id_contrato_id_fkey";
+            columns: ["versao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_planilha_versoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+        ];
+      };
+      mc_planilha_versoes: {
+        Row: {
+          aditivo_id: string | null;
+          aprovada_em: string | null;
+          aprovada_por: string | null;
+          arquivo_hash: string | null;
+          arquivo_nome: string | null;
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          motivo: string | null;
+          motivo_desaprovacao: string | null;
+          motivo_exclusao: string | null;
+          numero: number;
+          status: string;
+          updated_at: string;
+          vigente_desde: string;
+        };
+        Insert: {
+          aditivo_id?: string | null;
+          aprovada_em?: string | null;
+          aprovada_por?: string | null;
+          arquivo_hash?: string | null;
+          arquivo_nome?: string | null;
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          motivo?: string | null;
+          motivo_desaprovacao?: string | null;
+          motivo_exclusao?: string | null;
+          numero: number;
+          status?: string;
+          updated_at?: string;
+          vigente_desde: string;
+        };
+        Update: {
+          aditivo_id?: string | null;
+          aprovada_em?: string | null;
+          aprovada_por?: string | null;
+          arquivo_hash?: string | null;
+          arquivo_nome?: string | null;
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          motivo?: string | null;
+          motivo_desaprovacao?: string | null;
+          motivo_exclusao?: string | null;
+          numero?: number;
+          status?: string;
+          updated_at?: string;
+          vigente_desde?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_planilha_versoes_aditivo_id_contrato_id_fkey";
+            columns: ["aditivo_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_aditivos";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_versoes_aprovada_por_fkey";
+            columns: ["aprovada_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_versoes_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_versoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_versoes_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_reajuste_aplicado: {
+        Row: {
+          aplicado_em: string;
+          contrato_id: string;
+          fator: number;
+          i: number;
+          i0: number;
+          id: string;
+          indice_id: string;
+          medicao_id: string;
+          mes_i: string;
+          revisao_id: string;
+          situacao: string;
+        };
+        Insert: {
+          aplicado_em?: string;
+          contrato_id: string;
+          fator: number;
+          i: number;
+          i0: number;
+          id?: string;
+          indice_id: string;
+          medicao_id: string;
+          mes_i: string;
+          revisao_id: string;
+          situacao: string;
+        };
+        Update: {
+          aplicado_em?: string;
+          contrato_id?: string;
+          fator?: number;
+          i?: number;
+          i0?: number;
+          id?: string;
+          indice_id?: string;
+          medicao_id?: string;
+          mes_i?: string;
+          revisao_id?: string;
+          situacao?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_aplicado_indice_id_fkey";
+            columns: ["indice_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_indices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_revisao_id_medicao_id_fkey";
+            columns: ["revisao_id", "medicao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicao_revisoes";
+            referencedColumns: ["id", "medicao_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_revisao_id_medicao_id_fkey";
+            columns: ["revisao_id", "medicao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_revisao_aprovada";
+            referencedColumns: ["revisao_id", "medicao_id"];
+          },
+        ];
+      };
+      mc_reajuste_aplicado_itens: {
+        Row: {
+          contrato_id: string;
+          indice_id: string;
+          item_id: string;
+          revisao_id: string;
+        };
+        Insert: {
+          contrato_id: string;
+          indice_id: string;
+          item_id: string;
+          revisao_id: string;
+        };
+        Update: {
+          contrato_id?: string;
+          indice_id?: string;
+          item_id?: string;
+          revisao_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_aplicado_itens_indice_id_fkey";
+            columns: ["indice_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_indices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_itens_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_itens_revisao_id_fkey";
+            columns: ["revisao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicao_revisoes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_aplicado_itens_revisao_id_fkey";
+            columns: ["revisao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_revisao_aprovada";
+            referencedColumns: ["revisao_id"];
+          },
+        ];
+      };
+      mc_reajuste_config: {
+        Row: {
+          casas_fator: number | null;
+          contrato_id: string;
+          created_at: string;
+          data_base: string | null;
+          defasagem_meses: number;
+          formula: string;
+          indice_padrao_id: string | null;
+          modo_indice_i: string | null;
+          periodicidade_meses: number;
+          regra_aniversario: string | null;
+          tem_reajuste: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          casas_fator?: number | null;
+          contrato_id: string;
+          created_at?: string;
+          data_base?: string | null;
+          defasagem_meses?: number;
+          formula?: string;
+          indice_padrao_id?: string | null;
+          modo_indice_i?: string | null;
+          periodicidade_meses?: number;
+          regra_aniversario?: string | null;
+          tem_reajuste?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          casas_fator?: number | null;
+          contrato_id?: string;
+          created_at?: string;
+          data_base?: string | null;
+          defasagem_meses?: number;
+          formula?: string;
+          indice_padrao_id?: string | null;
+          modo_indice_i?: string | null;
+          periodicidade_meses?: number;
+          regra_aniversario?: string | null;
+          tem_reajuste?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_config_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: true;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_config_indice_padrao_id_fkey";
+            columns: ["indice_padrao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_indices";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_revisao_itens: {
+        Row: {
+          contrato_id: string;
+          item_id: string;
+          quantidade: number;
+          revisao_id: string;
+        };
+        Insert: {
+          contrato_id: string;
+          item_id: string;
+          quantidade: number;
+          revisao_id: string;
+        };
+        Update: {
+          contrato_id?: string;
+          item_id?: string;
+          quantidade?: number;
+          revisao_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_revisao_itens_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_revisao_itens_revisao_id_fkey";
+            columns: ["revisao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicao_revisoes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_revisao_itens_revisao_id_fkey";
+            columns: ["revisao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_revisao_aprovada";
+            referencedColumns: ["revisao_id"];
           },
         ];
       };
@@ -4722,6 +6049,13 @@ export type Database = {
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "ordens_compra_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
         ];
       };
       ordens_servico: {
@@ -5063,6 +6397,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "os_terceiros_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
           },
           {
             foreignKeyName: "os_terceiros_ordem_servico_id_fkey";
@@ -6494,6 +7835,13 @@ export type Database = {
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "tanques_proprietario_id_fkey";
+            columns: ["proprietario_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
         ];
       };
       tipos_oleo: {
@@ -6664,6 +8012,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "fornecedores";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transportadora_movimentos_transportadora_id_fkey";
+            columns: ["transportadora_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
           },
         ];
       };
@@ -6905,6 +8260,164 @@ export type Database = {
       };
     };
     Views: {
+      mc_v_item_acumulado: {
+        Row: {
+          contrato_id: string | null;
+          item_id: string | null;
+          qtd_acumulada: number | null;
+          valor_acumulado: number | null;
+          valor_acumulado_exato: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_medicoes_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_v_medicao_itens: {
+        Row: {
+          contrato_id: string | null;
+          glosa: number | null;
+          item_id: string | null;
+          medicao_id: string | null;
+          numero: number | null;
+          planilha_item_id: string | null;
+          preco_unitario: number | null;
+          qtd_acumulada: number | null;
+          qtd_aprovada: number | null;
+          qtd_efetiva: number | null;
+          qtd_medida: number | null;
+          status: string | null;
+          valor_medicao: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_medicoes_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_v_medicao_qtd: {
+        Row: {
+          item_id: string | null;
+          medicao_id: string | null;
+          qtd_ajustada: number | null;
+          qtd_lancada: number | null;
+          qtd_medida: number | null;
+        };
+        Relationships: [];
+      };
+      mc_v_medicao_revisao_aprovada: {
+        Row: {
+          medicao_id: string | null;
+          numero: number | null;
+          revisao_id: string | null;
+        };
+        Relationships: [];
+      };
+      mc_v_medicao_totais: {
+        Row: {
+          contrato_id: string | null;
+          medicao_id: string | null;
+          valor: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_medicoes_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_v_planilha_linhas: {
+        Row: {
+          codigo: string | null;
+          contrato_id: string | null;
+          descricao: string | null;
+          grupo_id: string | null;
+          id: string | null;
+          item_id: string | null;
+          nivel: number | null;
+          ordem: number | null;
+          pai_id: string | null;
+          preco_unitario: number | null;
+          quantidade_prevista: number | null;
+          tipo: string | null;
+          unidade: string | null;
+          valor_previsto: number | null;
+          versao_id: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_planilha_itens_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_itens_pai_id_versao_id_fkey";
+            columns: ["pai_id", "versao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_planilha_itens";
+            referencedColumns: ["id", "versao_id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_itens_pai_id_versao_id_fkey";
+            columns: ["pai_id", "versao_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_planilha_linhas";
+            referencedColumns: ["id", "versao_id"];
+          },
+          {
+            foreignKeyName: "mc_planilha_itens_versao_id_contrato_id_fkey";
+            columns: ["versao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_planilha_versoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+        ];
+      };
+      mc_v_planilha_subarvore: {
+        Row: {
+          ancestral_id: string | null;
+          linha_id: string | null;
+        };
+        Relationships: [];
+      };
+      mc_v_planilha_totais: {
+        Row: {
+          id: string | null;
+          total_previsto: number | null;
+          versao_id: string | null;
+        };
+        Relationships: [];
+      };
+      mc_v_versao_totais: {
+        Row: {
+          contrato_id: string | null;
+          total_previsto: number | null;
+          versao_id: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_planilha_itens_versao_id_contrato_id_fkey";
+            columns: ["versao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_planilha_versoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+        ];
+      };
       transportadora_movimentos_detalhe: {
         Row: {
           ajuste_criado_por: string | null;
@@ -7076,6 +8589,10 @@ export type Database = {
         Args: { p_id: string; p_motivo: string };
         Returns: undefined;
       };
+      fn_almox_recalcular_saldo: {
+        Args: { p_deposito: string; p_insumo: string };
+        Returns: undefined;
+      };
       fn_almox_registrar_entrada: {
         Args: {
           p_data: string;
@@ -7091,6 +8608,10 @@ export type Database = {
         Args: { p_entidade: string; p_id: string; p_mes: string };
         Returns: undefined;
       };
+      fn_anexo_entidade_visivel: {
+        Args: { p_id: string; p_tipo: string };
+        Returns: boolean;
+      };
       fn_antecipar_adiantamentos_colaborador: {
         Args: { p_colaborador: string };
         Returns: Json;
@@ -7098,6 +8619,14 @@ export type Database = {
       fn_apagar_arquivo_orfao: {
         Args: { p_arquivo_id: string; p_carencia_horas?: number };
         Returns: boolean;
+      };
+      fn_aplicacao_recalcular: {
+        Args: { p_aplicacao: string; p_desde: string };
+        Returns: undefined;
+      };
+      fn_aplicacao_sincronizar_posicao: {
+        Args: { p_posicao: string };
+        Returns: undefined;
       };
       fn_aplicar_regra_pagamento: {
         Args: { p_lanc_id: string };
@@ -7159,8 +8688,6 @@ export type Database = {
         Args: { p_colaborador: string; p_evento: string };
         Returns: string;
       };
-      fn_centro_custo_bloqueio: { Args: { p_id: string }; Returns: string };
-      fn_centro_custo_dependencias: { Args: { p_id: string }; Returns: Json };
       fn_cdi_gravar: {
         Args: { p_diario: Json; p_mensal: Json };
         Returns: number;
@@ -7169,11 +8696,21 @@ export type Database = {
         Args: { p_mes: string; p_taxa: number };
         Returns: undefined;
       };
+      fn_centro_custo_bloqueio: { Args: { p_id: string }; Returns: string };
+      fn_centro_custo_dependencias: { Args: { p_id: string }; Returns: Json };
+      fn_centro_custo_em_uso: {
+        Args: { p_centro_id: string };
+        Returns: boolean;
+      };
       fn_centro_custo_subarvore: {
         Args: { p_centro: string };
         Returns: {
           id: string;
         }[];
+      };
+      fn_centro_raiz_da_propriedade: {
+        Args: { p_propriedade: string };
+        Returns: string;
       };
       fn_centros_custo_bloqueios: {
         Args: { p_ids?: string[] };
@@ -7183,7 +8720,6 @@ export type Database = {
         }[];
       };
       fn_chave_nome: { Args: { p_texto: string }; Returns: string };
-      fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean };
       fn_comb_atribuir_equipamento: {
         Args: { p_equipamento: string; p_saidas: string[] };
         Returns: number;
@@ -7196,6 +8732,7 @@ export type Database = {
         Args: { p_chave: string; p_conferida: boolean; p_motivo?: string };
         Returns: undefined;
       };
+      fn_comb_em_carga: { Args: never; Returns: boolean };
       fn_comb_estoque_na_data: {
         Args: { p_data: string; p_excluir?: string; p_tanque: string };
         Returns: number;
@@ -7204,14 +8741,40 @@ export type Database = {
         Args: { p_id: string; p_motivo: string; p_tabela: string };
         Returns: undefined;
       };
+      fn_comb_exigir_ciclo_aberto: {
+        Args: { p_quando: string; p_tanque: string };
+        Returns: undefined;
+      };
+      fn_comb_exigir_data_valida: {
+        Args: { p_quando: string };
+        Returns: undefined;
+      };
+      fn_comb_exigir_saldo: { Args: { p_tanque: string }; Returns: undefined };
+      fn_comb_gerar_movimentos: {
+        Args: { p_saida: string };
+        Returns: undefined;
+      };
       fn_comb_inicio_ciclo_aberto: {
         Args: { p_tanque: string };
         Returns: string;
+      };
+      fn_comb_litros_da_entrada: {
+        Args: { p_insumo: string; p_quantidade: number };
+        Returns: number;
       };
       fn_comb_preco_medio_tanque: {
         Args: { p_tanque: string };
         Returns: number;
       };
+      fn_comb_recalcular_nivel: {
+        Args: { p_tanque: string };
+        Returns: undefined;
+      };
+      fn_comb_recalcular_peps: {
+        Args: { p_tanque: string };
+        Returns: undefined;
+      };
+      fn_comb_recalcular_tudo: { Args: never; Returns: undefined };
       fn_comb_registrar_esvaziamento: {
         Args: { p_motivo: string; p_tanque: string };
         Returns: string;
@@ -7224,6 +8787,7 @@ export type Database = {
         Args: { p_observacao?: string; p_revisado: boolean; p_saida: string };
         Returns: undefined;
       };
+      fn_comb_saldo_minimo: { Args: { p_tanque: string }; Returns: number };
       fn_comb_salvar_entrada: {
         Args: {
           p_data_hora: string;
@@ -7254,6 +8818,8 @@ export type Database = {
         };
         Returns: string;
       };
+      fn_comb_tanque_externo: { Args: { p_tanque: string }; Returns: boolean };
+      fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean };
       fn_competencias_painel: {
         Args: { p_meses?: number };
         Returns: {
@@ -7430,10 +8996,6 @@ export type Database = {
         };
         Returns: undefined;
       };
-      fn_equipamento_do_legado: {
-        Args: { p_id_antigo: string };
-        Returns: string;
-      };
       fn_editar_recibo_ferias: {
         Args: {
           p_bruto: number;
@@ -7466,6 +9028,10 @@ export type Database = {
           id: string;
           quantidade: number;
         }[];
+      };
+      fn_equipamento_do_legado: {
+        Args: { p_id_antigo: string };
+        Returns: string;
       };
       fn_estornar_pagamento: {
         Args: { p_parcela_id: string };
@@ -7564,6 +9130,10 @@ export type Database = {
         Args: { p_id: string; p_motivo: string };
         Returns: undefined;
       };
+      fn_frete_ajuste_gerar_movimento: {
+        Args: { p_ajuste: string };
+        Returns: undefined;
+      };
       fn_frete_ajuste_salvar: {
         Args: { p_dados: Json; p_id: string };
         Returns: string;
@@ -7576,7 +9146,19 @@ export type Database = {
         Args: { p_id: string; p_motivo: string; p_tabela: string };
         Returns: undefined;
       };
+      fn_frete_exigir_transportadora: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+      fn_frete_gerar_movimento: {
+        Args: { p_frete: string };
+        Returns: undefined;
+      };
       fn_frete_meio_dia: { Args: { p_dia: string }; Returns: string };
+      fn_frete_pagamento_gerar_movimento: {
+        Args: { p_pagamento: string };
+        Returns: undefined;
+      };
       fn_frete_pagamento_salvar: {
         Args: { p_dados: Json; p_id: string };
         Returns: string;
@@ -7585,6 +9167,7 @@ export type Database = {
         Args: { p_fornecedores: string[] };
         Returns: undefined;
       };
+      fn_frete_recalcular_movimentos: { Args: never; Returns: undefined };
       fn_frete_recurso_da_tabela: {
         Args: { p_tabela: string };
         Returns: string;
@@ -7718,6 +9301,90 @@ export type Database = {
         Args: { p_conferido?: boolean; p_parcela_id: string };
         Returns: undefined;
       };
+      fn_mc_acessa_contrato: { Args: { p_contrato: string }; Returns: boolean };
+      fn_mc_acesso_definir: {
+        Args: { p_contrato: string; p_tem: boolean; p_usuario: string };
+        Returns: undefined;
+      };
+      fn_mc_aditivo_salvar: {
+        Args: { p_contrato: string; p_dados: Json; p_id?: string };
+        Returns: string;
+      };
+      fn_mc_contrato_da_entidade: {
+        Args: { p_id: string; p_tipo: string };
+        Returns: string;
+      };
+      fn_mc_contrato_salvar: {
+        Args: { p_dados: Json; p_id?: string };
+        Returns: string;
+      };
+      fn_mc_em_carga: { Args: never; Returns: boolean };
+      fn_mc_excluir: {
+        Args: { p_id: string; p_motivo: string; p_tabela: string };
+        Returns: undefined;
+      };
+      fn_mc_exigir: {
+        Args: {
+          p_acao: string;
+          p_contrato: string;
+          p_mensagem: string;
+          p_recurso: string;
+        };
+        Returns: undefined;
+      };
+      fn_mc_meus_contratos: { Args: never; Returns: string[] };
+      fn_mc_planilha_aprovar: {
+        Args: { p_versao: string };
+        Returns: undefined;
+      };
+      fn_mc_planilha_criar_rascunho: {
+        Args: { p_contrato: string; p_dados: Json };
+        Returns: string;
+      };
+      fn_mc_planilha_desaprovar: {
+        Args: { p_motivo: string; p_versao: string };
+        Returns: undefined;
+      };
+      fn_mc_planilha_gravar_linhas: {
+        Args: {
+          p_arquivo_hash: string;
+          p_arquivo_nome: string;
+          p_linhas: Json;
+          p_versao: string;
+        };
+        Returns: number;
+      };
+      fn_mc_recurso_da_tabela: { Args: { p_tabela: string }; Returns: string };
+      fn_mc_restaurar: {
+        Args: { p_id: string; p_tabela: string };
+        Returns: undefined;
+      };
+      fn_mc_rotulo_status: { Args: { p_status: string }; Returns: string };
+      fn_mc_rotulo_status_revisao: {
+        Args: { p_status: string };
+        Returns: string;
+      };
+      fn_mc_usuarios_ativos: {
+        Args: never;
+        Returns: {
+          email: string;
+          id: string;
+          nome: string;
+        }[];
+      };
+      fn_mc_usuarios_do_contrato: {
+        Args: { p_contrato: string };
+        Returns: {
+          ativo: boolean;
+          email: string;
+          nome: string;
+          usuario_id: string;
+        }[];
+      };
+      fn_mc_valor: {
+        Args: { p_preco: number; p_qtd: number; p_regra: string };
+        Returns: number;
+      };
       fn_obra_bloqueio: { Args: { p_id: string }; Returns: string };
       fn_obra_dependencias: { Args: { p_id: string }; Returns: Json };
       fn_obras_bloqueios: {
@@ -7762,6 +9429,16 @@ export type Database = {
         };
         Returns: string;
       };
+      fn_os_baixar: {
+        Args: {
+          p_deposito: string;
+          p_insumo: string;
+          p_motivo: string;
+          p_os: string;
+          p_quantidade: number;
+        };
+        Returns: Record<string, unknown>;
+      };
       fn_os_cancelar: {
         Args: { p_motivo: string; p_os: string };
         Returns: undefined;
@@ -7774,13 +9451,23 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_os_estornar_saidas: {
+        Args: { p_motivo: string; p_os: string };
+        Returns: undefined;
+      };
       fn_os_excluir: {
         Args: { p_motivo: string; p_os: string };
         Returns: undefined;
       };
+      fn_os_exigir_editavel: { Args: { p_os: string }; Returns: undefined };
       fn_os_iniciar: { Args: { p_os: string }; Returns: undefined };
       fn_os_reabrir: {
         Args: { p_motivo: string; p_os: string };
+        Returns: undefined;
+      };
+      fn_os_recalcular_custo: { Args: { p_os: string }; Returns: undefined };
+      fn_os_registrar_transicao: {
+        Args: { p_de: string; p_motivo: string; p_os: string; p_para: string };
         Returns: undefined;
       };
       fn_os_remover_linha: {
@@ -7804,6 +9491,10 @@ export type Database = {
           p_tipo: string;
         };
         Returns: string;
+      };
+      fn_os_sincronizar_equipamento: {
+        Args: { p_equipamento: string; p_motivo: string; p_os: string };
+        Returns: undefined;
       };
       fn_padrao_categoria_de_custo: {
         Args: never;
@@ -8141,10 +9832,7 @@ export type Database = {
         }[];
       };
       fn_rel_fluxo_caixa: {
-        Args: {
-          p_centros_custo?: string[];
-          p_centros_receita?: string[];
-        };
+        Args: { p_centros_custo?: string[]; p_centros_receita?: string[] };
         Returns: {
           mes: string;
           realizado: boolean;
@@ -8157,6 +9845,28 @@ export type Database = {
         Returns: {
           id: string;
           nome: string;
+        }[];
+      };
+      fn_rel_gestao_compras_resumo: {
+        Args: never;
+        Returns: {
+          cotacoes_abertas: number;
+          ocs_abertas_contagem: number;
+          ocs_abertas_valor: number;
+          ocs_aprovar_contagem: number;
+          ocs_aprovar_valor: number;
+        }[];
+      };
+      fn_rel_gestao_financeiro_resumo: {
+        Args: { p_hoje?: string };
+        Returns: {
+          a_aprovar_contagem: number;
+          a_aprovar_valor: number;
+          a_pagar_contagem: number;
+          a_pagar_valor: number;
+          a_pagar_vencidas: number;
+          pago_mes_contagem: number;
+          pago_mes_valor: number;
         }[];
       };
       fn_rel_gestao_maiores_custos: {
@@ -8200,28 +9910,6 @@ export type Database = {
           pago: number;
           tipo_linha: string;
           total: number;
-        }[];
-      };
-      fn_rel_gestao_compras_resumo: {
-        Args: never;
-        Returns: {
-          cotacoes_abertas: number;
-          ocs_abertas_contagem: number;
-          ocs_abertas_valor: number;
-          ocs_aprovar_contagem: number;
-          ocs_aprovar_valor: number;
-        }[];
-      };
-      fn_rel_gestao_financeiro_resumo: {
-        Args: { p_hoje?: string };
-        Returns: {
-          a_aprovar_contagem: number;
-          a_aprovar_valor: number;
-          a_pagar_contagem: number;
-          a_pagar_valor: number;
-          a_pagar_vencidas: number;
-          pago_mes_contagem: number;
-          pago_mes_valor: number;
         }[];
       };
       fn_rel_meses_competencia: {
@@ -8470,9 +10158,10 @@ export type Database = {
         };
         Returns: number;
       };
-      fn_ve_manutencao: { Args: never; Returns: boolean };
       fn_ve_combustivel: { Args: never; Returns: boolean };
       fn_ve_frete: { Args: never; Returns: boolean };
+      fn_ve_manutencao: { Args: never; Returns: boolean };
+      fn_ve_medicao: { Args: never; Returns: boolean };
       fn_vencimento_folha: {
         Args: { p_competencia: string; p_dia: number };
         Returns: string;
@@ -8507,6 +10196,13 @@ export type Database = {
         Args: { p_ferias: string };
         Returns: undefined;
       };
+      nomes_colaboradores_frete: {
+        Args: never;
+        Returns: {
+          id: string;
+          nome: string;
+        }[];
+      };
       nomes_usuarios_auditoria: {
         Args: { p_ids: string[] };
         Returns: {
@@ -8523,13 +10219,6 @@ export type Database = {
       };
       nomes_usuarios_financeiro: {
         Args: { p_ids: string[] };
-        Returns: {
-          id: string;
-          nome: string;
-        }[];
-      };
-      nomes_colaboradores_frete: {
-        Args: never;
         Returns: {
           id: string;
           nome: string;

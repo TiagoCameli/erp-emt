@@ -6,7 +6,7 @@
 -- `sub` do usuario no jwt (so set_config nao vale, o MCP entra como owner).
 --
 -- Se a abertura ainda nao foi carregada, a prova cria a mesma abertura que
--- 20260926120000_abertura_das_aplicacoes.sql cria, dentro da transacao.
+-- 20260925210317_abertura_das_aplicacoes.sql cria, dentro da transacao.
 --
 -- (a) depois da abertura a subconta fecha em 6.017.484,75 e cada aplicacao
 --     no seu valor. CONTROLE: antes dela, 5.913.186,79.
@@ -254,6 +254,6 @@ end $prova$;
 -- (e) Andreia sem a aba: recusado (Sem permissao para ver aplicacoes)
 -- (f) transferencias: antes 51 / 26856813.21, depois 51 / 26856813.21
 --
--- 25/09/2026, DEPOIS de aplicar 20260926120000 (abertura real, LAN-2026-7145 e
+-- 25/09/2026, DEPOIS de aplicar 20260925210317 (abertura real, LAN-2026-7145 e
 -- LAN-2026-7146): PROVA DESFEITA. 15 ok, 0 falha(s). Mesmos numeros acima,
 -- com "[info] abertura ja carregada" no lugar da linha de controle.

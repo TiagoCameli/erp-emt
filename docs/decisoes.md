@@ -4306,3 +4306,79 @@ dividir o saldo".
 - Card **Caixa real** no Gestão: contas correntes + subcontas − posição das aplicações sem liquidez diária; contas sem permissão de saldo ficam fora e contadas.
 - O preview da Vercel deste projeto responde 500 em qualquer rota, até no /login (suspeita: faltam as variáveis do Supabase no ambiente de preview, não conferido). Por isso a conferência visual é em produção.
 - Depois do deploy rodou `20260926130000`: `fn_rel_posicao_aplicacao` saiu, e `fn_saldos_das_contas` perdeu as três colunas (tipos acertados à mão).
+
+## 2026-09-26 - Medição de Contratos, Fase 1: banco, acesso por contrato e telas de cadastro/planilha
+
+**Contexto:** o Tiago pediu um módulo de medição para todos os contratos, com a planilha que só muda
+por aditivo, lançamento diário e reajuste. O módulo da Fase 6 saiu na reforma de 20/07 porque gerava
+fatura e a receber sozinho. A Fase 1 (banco inteiro do módulo, cadastro de contratos e planilha
+contratual) foi implementada e revisada tarefa a tarefa; falta só o backfill de permissões, com o ok
+do Tiago, e a abertura do PR.
+
+**Decisão:**
+1. Prefixo `mc_` (`medicoes` e `fn_registrar_medicao` são da Manutenção). Nenhuma FK para outro módulo;
+   o contrato tem os próprios dados e não cria nem se vincula a obra (Tiago, 25/09).
+2. Acesso por contrato só por lista (`mc_contrato_usuarios`, a linha é o acesso), Admin inclusive. Toda
+   policy do módulo exige a lista. A regra se estende aos anexos: a checagem é
+   `fn_anexo_entidade_visivel` (que, para as entidades `mc_*`, exige o contrato em `fn_mc_meus_contratos()`), chamada
+   nas duas policies de anexos e em `fn_vincular_arquivo`/`fn_desvincular_arquivo` (mudança aditiva,
+   lida na definição viva, nunca em cópia; para os outros módulos nada muda). `fn_recurso_da_entidade`
+   só ganhou o mapeamento das entidades `mc_*` para o recurso de permissão; não checa a lista.
+3. As ações pedidas (cadastrar, lançar, fechar, importar, reajuste) viram recursos por aba com as 6
+   ações de sempre (decisão de 2026-08 sobre não criar ação nova). Na Fase 1 só `medicao.contratos` e
+   `medicao.planilha` entram no catálogo de permissões; aba nova entra na fase dela, com o backfill
+   dela.
+4. Exceção à regra 3 do CLAUDE.md: preço, quantidade prevista e quantidade de carga são `numeric` sem
+   escala, porque a planilha oficial tem casas escondidas (02.07.04 do Lote 09: 17.057,717 x 580,86
+   com preço arredondado em 4 casas erra o previsto em centavos). Quantidade digitada continua com
+   4 casas.
+5. Valor, acumulado, total e glosa só em view `security_invoker`; o TypeScript não recalcula dinheiro.
+   A regra de arredondamento é do contrato (três opções), nula até ser descoberta na planilha oficial
+   (regra nula = contrato sem valor). Em qualquer regra, o acumulado do item é a soma dos valores já
+   calculados por medição, nunca o recálculo de qtd acumulada x preço vigente: importa porque um
+   aditivo pode trocar o preço no meio do contrato, e o acumulado não pode refazer o passado com o
+   preço novo.
+6. O xlsx da planilha sobe direto para o Storage como anexo da versão; o servidor baixa e lê, o
+   navegador nunca manda os números (limite de 4 MB da Server Action e confiança).
+7. Medições são sequenciais: `numero` e `contrato_id` congelam na criação, e a Nª só aprova com a
+   (N-1)ª já aprovada. Aprovar exige uma revisão aprovada para aquela medição e nenhuma `em_aberto`
+   ou `enviada` pendente; só existe uma revisão aprovada por medição.
+8. Fora da carga inicial, toda medição nasce `aberta`; só a carga insere medição já `aprovada`.
+9. Na importação, código gravado como número na célula (perde o zero à esquerda) é alerta
+   BLOQUEANTE, porque alterar o código em silêncio quebraria a hierarquia e o casamento do aditivo;
+   problema na célula da coluna VALOR é alerta NÃO bloqueante, porque a coluna só serve ao
+   diagnóstico. Gravar a importação exige o hash do arquivo que gerou a prévia; arquivo trocado
+   depois da prévia é recusado.
+10. O casamento do aditivo ganhou a situação `mudou_tipo` (linha trocou entre título e serviço), com
+    precedência sobre as situações de quantidade e preço.
+11. Na Fase 1, o anexo do xlsx em `mc_planilha_versao` não se remove (remover exige `editar`, que a
+    aba não tem); não é um problema porque a importação sempre lê o xlsx mais recente da versão.
+12. As tabelas de reajuste (seção 5.5 da spec) nasceram nesta fase, vazias, para a Fase 6 não mexer
+    em estrutura já em produção.
+13. Nome de arquivo de migration no repo é sempre a versão REAL aplicada (conferida em
+    `schema_migrations`), nunca a prevista no plano; aplicado na prática ao renomear os 3 arquivos
+    da frente Aplicações financeiras (antes `20260926100000/120000/130000`, agora
+    `20260925204853/210317/213619`) para destravar `entidades.test.ts`, que lê a migration mais
+    recente por nome.
+14. O backfill de permissões (`mc_fase1f_permissoes`, 4 Admins, trava `$confere$`) fica salvo como
+    `_PENDENTE_` até o Tiago aprovar o PR. Aprovado em 26/09 ("continue, tudo ok"): aplicado como
+    `20260926150625_mc_fase1f_permissoes` (36 permissões, Tiago, James, Emanuel e Lorenzo).
+15. Auditoria por contrato (aplicada em 26/09 como `20260926150604_mc_fase1f_auditoria_por_contrato`,
+    antes do backfill, para não haver janela de vazamento): o `fn_audit` grava a linha inteira das tabelas `mc_*` e a
+    policy `audit_log_select` só pede `administracao.auditoria/ver`, então quem vê a auditoria veria
+    contrato fora da lista dele (fura a regra 2). A migration
+    parte da expressão viva da policy e acrescenta: linha de tabela `mc_*` (menos `mc_indices` e
+    `mc_indice_valores`, catálogo sem contrato) só aparece se o contrato dela (`->>'id'` em
+    `mc_contratos`, `->>'contrato_id'` nas outras, de `coalesce(dados_depois, dados_antes)`) está em
+    `fn_mc_meus_contratos()`; as outras tabelas ficam com a regra de hoje. Provado em bloco que aborta
+    (linha de contrato fora da lista some, a do contrato na lista e a de outra tabela continuam, e a
+    contagem de linhas não-mc visíveis ao Tiago é a mesma antes e depois).
+16. Restaurar versão da planilha (`20260926041333_mc_fase1d_restaurar_versao`) recusa com mensagem
+    quando já há outro rascunho no contrato ou quando o número da versão foi reusado, em vez de criar
+    um segundo rascunho ou devolver o 23505 cru do unique.
+
+**Consequência:** a Fase 2 descobre a regra de arredondamento do Lote 09 com o diagnóstico da
+importação e mostra ao Tiago antes de gravar. Aba nova do módulo entra no catálogo junto com a tela
+e o backfill dela. Fica em aberto para a Fase 5: revisão `enviada` rejeitada pela contratante não tem
+estado terminal que guarde histórico (hoje só se refaz reabrindo e apagando a REV enviada); o RPC do
+ciclo da Fase 5 decide (ex.: liberar `enviada -> substituida`).
