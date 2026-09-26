@@ -35,6 +35,11 @@ const RECURSO_POR_ENTIDADE = {
   manutencao_os: "manutencao.servicos",
   // PDF do extrato na posição da aplicação (aplicacao_posicoes).
   aplicacao_posicao: "financeiro.aplicacoes",
+  // Medição de Contratos: documentos do contrato e do aditivo, e o xlsx oficial de cada versão da
+  // planilha. O banco também exige estar na lista do contrato (fn_anexo_entidade_visivel).
+  mc_contrato: "medicao.contratos",
+  mc_aditivo: "medicao.contratos",
+  mc_planilha_versao: "medicao.planilha",
 } as const satisfies Record<string, RecursoId>;
 
 /** Tipo de documento que aceita anexo. */
@@ -78,6 +83,9 @@ const ROTULO_ENTIDADE: Record<EntidadeAnexo, string> = {
   combustivel_transferencia: "transferência de combustível",
   manutencao_os: "ordem de serviço",
   aplicacao_posicao: "posição da aplicação",
+  mc_contrato: "contrato",
+  mc_aditivo: "aditivo",
+  mc_planilha_versao: "planilha contratual",
 };
 
 export function rotuloDaEntidade(entidade: EntidadeAnexo): string {

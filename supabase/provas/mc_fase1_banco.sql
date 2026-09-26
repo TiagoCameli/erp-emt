@@ -55,7 +55,7 @@ declare
   v_k1 uuid; v_k2 uuid; v_k3 uuid; v_n bigint; v_txt text; v_regra text; v_j jsonb; v_acc jsonb; r jsonb := '{}'::jsonb;
   v_obras0 bigint; v_cc0 bigint; v_lanc0 bigint; v_versao_rascunho uuid;
   v_versao_k3 uuid; v_med_k3 uuid; v_rev00_k3 uuid; v_rev01_k3 uuid; v_rev01_k2 uuid;
-  v_k4 uuid; v_aditivo_prazo uuid; v_aditivo2 uuid; v_aditivo3 uuid;
+  v_k4 uuid; v_aditivo_prazo uuid; v_aditivo2 uuid; v_aditivo3 uuid; v_arq_k2 uuid;
 begin
   select count(*) into v_obras0 from public.obras;
   select count(*) into v_cc0 from public.centros_custo;
@@ -461,6 +461,34 @@ begin
   r := r || jsonb_build_object('6f_desativado', (select count(*) from public.mc_contratos where codigo like 'PROVA-%'));
   reset role;
   update public.usuarios set ativo = true where id = v_zero;
+
+  -- 8. Anexo de contrato fora da lista não aparece; dentro aparece (controle)
+  insert into public.arquivos (path_storage, nome_original, tipo_mime, tamanho_bytes, hash_sha256)
+  values ('prova/k1.pdf', 'k1.pdf', 'application/pdf', 10, 'prova-k1'), ('prova/k2.pdf', 'k2.pdf', 'application/pdf', 11, 'prova-k2');
+  select id into v_arq_k2 from public.arquivos where hash_sha256 = 'prova-k2';
+  insert into public.anexo_vinculos (arquivo_id, entidade_tipo, entidade_id, origem)
+  select id, 'mc_contrato', case hash_sha256 when 'prova-k1' then v_k1 else v_k2 end, 'upload_direto'
+  from public.arquivos where hash_sha256 in ('prova-k1', 'prova-k2');
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('8a_anexos_visiveis_ao_zero',
+    (select array_agg(a.nome_original order by a.nome_original) from public.anexo_vinculos v join public.arquivos a on a.id = v.arquivo_id
+     where v.entidade_tipo = 'mc_contrato'));
+  reset role;
+  insert into public.usuario_permissoes (usuario_id, recurso, acao) values (v_zero, 'medicao.contratos', 'editar') on conflict do nothing;
+  set local role authenticated;
+  begin perform public.fn_vincular_arquivo(v_arq_k2, 'mc_contrato', v_k1);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('8b_anexar_fora_da_lista', v_txt);
+  reset role;
+
+  -- 8c. Regressão para outros módulos: a trava só vale para entidades mc_, o resto continua igual
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('8c_outros_modulos_tiago', jsonb_build_object(
+    'frete_sempre_visivel', public.fn_anexo_entidade_visivel('frete', gen_random_uuid()),
+    'vinculos_visiveis', (select count(*) from public.anexo_vinculos where entidade_tipo in ('frete', 'lancamento', 'ordem_compra'))));
+  reset role;
 
   -- 9. O módulo não escreveu em outro módulo
   r := r || jsonb_build_object('9_outros_modulos_intactos',
