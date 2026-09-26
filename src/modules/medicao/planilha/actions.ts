@@ -15,6 +15,7 @@ import { abrirPlanilha, lerLinhasBrutas, previaDasAbas, type AbaPrevia, type Map
 import { montarPlanilha, type LinhaBruta, type Montagem } from "@/modules/medicao/planilha/montagem";
 import { arquivoDaVersao, carregarVersaoParaImportar, linhasDaVersaoAnterior } from "@/modules/medicao/planilha/queries";
 import {
+  arquivoEsperadoSchema,
   escolhasSchema,
   mapeamentoSchema,
   rascunhoSchema,
@@ -41,6 +42,8 @@ export type Previa = Montagem & {
   diagnostico: Diagnostico | null;
   casamento: ResultadoCasamento | null;
   anteriores: LinhaAnterior[] | null;
+  /** SHA-256 do arquivo lido NESTA prévia, medido no servidor. A gravação exige o mesmo. */
+  arquivoHash: string;
   numeroVersao: number;
   bloqueios: number;
 };
@@ -93,7 +96,6 @@ type Montada =
   | { erro: string }
   | {
       arquivo: { path: string; nome: string };
-      binario: { blob: Blob };
       previa: Previa;
     };
 
@@ -125,6 +127,9 @@ async function montarDaVersao(versaoId: string, mapaBruto: Mapeamento, escolhasB
 
   const montagem = montarPlanilha(brutas, escolhas.paiPorOrdem as Record<number, number>);
   const anteriores = versao.numero > 0 ? await linhasDaVersaoAnterior(versao.contratoId, versao.numero) : null;
+  if (versao.numero > 0 && anteriores === null) {
+    return { erro: `A versão ${versao.numero - 1} do contrato não foi encontrada. Não dá para casar os itens do aditivo` };
+  }
   const casamento = anteriores
     ? casarComVersaoAnterior(montagem.linhas, anteriores, escolhas.itemPorOrdem as Record<number, string | null>)
     : null;
@@ -133,10 +138,11 @@ async function montarDaVersao(versaoId: string, mapaBruto: Mapeamento, escolhasB
     diagnostico: diagnosticarValores(montagem.linhas),
     casamento,
     anteriores,
+    arquivoHash: await hashDoArquivo(binario.blob),
     numeroVersao: versao.numero,
     bloqueios: montagem.alertas.filter((a) => a.bloqueia).length,
   };
-  return { arquivo, binario, previa };
+  return { arquivo, previa };
 }
 
 export async function lerAbasDaVersao(versaoId: string): Promise<{ ok: true; abas: AbaPrevia[]; arquivo: string } | { erro: string }> {
@@ -186,16 +192,25 @@ function recusaDaGravacao(previa: Previa, escolhas: Escolhas): string | null {
   return null;
 }
 
+/**
+ * `arquivoEsperado` é o `arquivoHash` da prévia que o usuário conferiu. Se outro xlsx foi anexado
+ * depois (nesta aba ou em outra), o servidor lê o novo e o hash não bate: as confirmações da tela
+ * eram do arquivo antigo, então a gravação recusa.
+ */
 export async function gravarImportacao(
   versaoId: string,
   mapa: Mapeamento,
   escolhas: Escolhas,
+  arquivoEsperado: string,
 ): Promise<{ ok: true; linhas: number } | { erro: string }> {
   return semLancar("medicao.planilha.gravar", async () => {
     if (!(await pode("criar"))) return { erro: "Sem permissão para importar planilha" };
+    const esperado = arquivoEsperadoSchema.safeParse(arquivoEsperado);
+    if (!esperado.success) return { erro: "Veja a prévia antes de gravar" };
     const r = await montarDaVersao(versaoId, mapa, escolhas);
     if ("erro" in r) return r;
-    const { previa, arquivo, binario } = r;
+    const { previa, arquivo } = r;
+    if (previa.arquivoHash !== esperado.data) return { erro: "O arquivo mudou desde a prévia. Veja a prévia de novo" };
     const recusa = recusaDaGravacao(previa, escolhas);
     if (recusa) return { erro: recusa };
 
@@ -210,7 +225,7 @@ export async function gravarImportacao(
         item_id: itemPorOrdem.get(l.ordem) ?? null,
       })),
       p_arquivo_nome: arquivo.nome,
-      p_arquivo_hash: await hashDoArquivo(binario.blob),
+      p_arquivo_hash: previa.arquivoHash,
     });
     if (error) return erroAcao("medicao.planilha.gravar", error, mensagemDeNegocio(error, "Não foi possível gravar a planilha. Tente novamente"));
     revalidar(versaoId);

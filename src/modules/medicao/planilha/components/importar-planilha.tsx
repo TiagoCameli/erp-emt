@@ -80,6 +80,11 @@ export interface ImportarPlanilhaProps {
   versaoId: string;
   numeroVersao: number;
   anexos: AnexoDoDocumento[];
+  /**
+   * Nome do xlsx que o servidor vai ler (`arquivoDaVersao`: o mais recente), calculado no
+   * servidor para a dica da tela seguir a MESMA regra da leitura. Null sem xlsx anexado.
+   */
+  arquivoAtual: string | null;
 }
 
 /**
@@ -88,7 +93,7 @@ export interface ImportarPlanilhaProps {
  * valor e, no aditivo, o casamento com a versão anterior) e gravar. O navegador NUNCA manda
  * número: cada prévia e a gravação releem o arquivo guardado no servidor.
  */
-export function ImportarPlanilha({ versaoId, numeroVersao, anexos }: ImportarPlanilhaProps) {
+export function ImportarPlanilha({ versaoId, numeroVersao, anexos, arquivoAtual }: ImportarPlanilhaProps) {
   const router = useRouter();
   const [abas, setAbas] = React.useState<AbaPrevia[] | null>(null);
   const [arquivoLido, setArquivoLido] = React.useState("");
@@ -100,12 +105,23 @@ export function ImportarPlanilha({ versaoId, numeroVersao, anexos }: ImportarPla
   const [ambiguidades, setAmbiguidades] = React.useState<Record<number, Ambiguidade>>({});
   const [ocupado, setOcupado] = React.useState<"lendo" | "previa" | "gravando" | null>(null);
 
-  const xlsxAnexados = anexos.filter((a) => a.nome.toLowerCase().endsWith(".xlsx"));
-  const ultimoXlsx = xlsxAnexados.length > 0 ? xlsxAnexados[xlsxAnexados.length - 1] : null;
   const abaAtual = abas?.find((a) => a.nome === mapa?.aba) ?? null;
 
   function mudarMapa(novo: Mapeamento) {
     setMapa(novo);
+    setPrevia(null);
+    setEscolhas(ESCOLHAS_VAZIAS);
+    setAmbiguidades({});
+  }
+
+  /**
+   * Anexo novo muda o arquivo que o servidor lê: tudo que foi lido, mapeado e confirmado era do
+   * arquivo anterior e sai da tela (a gravação também recusa, pelo hash da prévia).
+   */
+  function descartarLeitura() {
+    setAbas(null);
+    setArquivoLido("");
+    setMapa(null);
     setPrevia(null);
     setEscolhas(ESCOLHAS_VAZIAS);
     setAmbiguidades({});
@@ -151,10 +167,10 @@ export function ImportarPlanilha({ versaoId, numeroVersao, anexos }: ImportarPla
   }
 
   async function gravar() {
-    if (!mapa) return;
+    if (!mapa || !previa) return;
     setOcupado("gravando");
     try {
-      const r = await gravarImportacao(versaoId, mapa, escolhas);
+      const r = await gravarImportacao(versaoId, mapa, escolhas, previa.arquivoHash);
       if ("erro" in r) {
         toast.error(r.erro);
         return;
@@ -185,19 +201,22 @@ export function ImportarPlanilha({ versaoId, numeroVersao, anexos }: ImportarPla
             const recusados = arquivos.filter((f) => !aceitos.includes(f)).map((f) => `${f.name}: só o xlsx oficial entra aqui`);
             return { aceitos, recusados };
           }}
-          onMudou={() => semDerrubarSucesso("medicao.planilha.anexos", () => router.refresh())}
+          onMudou={() => {
+            descartarLeitura();
+            semDerrubarSucesso("medicao.planilha.anexos", () => router.refresh());
+          }}
           convite="Arraste o xlsx oficial da planilha contratual"
           legenda="Vale sempre o xlsx enviado por último"
           textoVazio="Nenhum xlsx anexado"
         />
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button type="button" size="sm" onClick={lerPlanilha} disabled={!ultimoXlsx || ocupado !== null}>
+          <Button type="button" size="sm" onClick={lerPlanilha} disabled={!arquivoAtual || ocupado !== null}>
             {ocupado === "lendo" ? <LoaderCircle className="animate-spin" /> : <FileSearch />}
             Ler planilha
           </Button>
-          {ultimoXlsx ? (
+          {arquivoAtual ? (
             <span className="text-detalhe text-muted-foreground">
-              Será lido: <span className="font-medium text-foreground">{ultimoXlsx.nome}</span>
+              Será lido: <span className="font-medium text-foreground">{arquivoAtual}</span>
             </span>
           ) : null}
         </div>

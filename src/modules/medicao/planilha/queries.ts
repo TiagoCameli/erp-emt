@@ -236,9 +236,9 @@ export async function arquivoDaVersao(versaoId: string): Promise<{ path: string;
 /**
  * Linhas da versão `numero - 1` do contrato, para casar os itens do aditivo. Preço e quantidade
  * em TEXTO (ver o comentário do topo): o casamento compara decimal exato, e um double cortado
- * transformaria "igual" em "mudou o preço".
+ * transformaria "igual" em "mudou o preço". Null quando a versão anterior não existe.
  */
-export async function linhasDaVersaoAnterior(contratoId: string, numero: number): Promise<LinhaAnterior[]> {
+export async function linhasDaVersaoAnterior(contratoId: string, numero: number): Promise<LinhaAnterior[] | null> {
   const supabase = await createClient();
   const { data: anterior, error } = await supabase
     .from("mc_planilha_versoes")
@@ -248,7 +248,8 @@ export async function linhasDaVersaoAnterior(contratoId: string, numero: number)
     .is("excluido_em", null)
     .maybeSingle();
   if (error) throw error;
-  if (!anterior) throw new Error(`A versão ${numero - 1} do contrato não foi encontrada`);
+  // Sem a versão anterior não há com o que casar: quem chama recusa (nunca vira "tudo novo").
+  if (!anterior) return null;
 
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase

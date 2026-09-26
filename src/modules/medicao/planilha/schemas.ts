@@ -23,6 +23,9 @@ export const escolhasSchema = z.object({
   alertasLidos: z.boolean(),
 });
 
+/** Hash (SHA-256) do arquivo da prévia conferida, devolvido pelo servidor em `Previa.arquivoHash`. */
+export const arquivoEsperadoSchema = z.string().trim().min(1).max(128);
+
 export const rascunhoSchema = z.object({
   aditivoId: z.string().nullable(),
   vigenteDesde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data de início da versão"),

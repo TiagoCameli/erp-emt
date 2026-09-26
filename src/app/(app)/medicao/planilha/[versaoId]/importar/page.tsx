@@ -6,7 +6,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import { carregarContrato } from "@/modules/medicao/contratos/queries";
 import { ImportarPlanilha } from "@/modules/medicao/planilha/components/importar-planilha";
-import { carregarVersaoParaImportar } from "@/modules/medicao/planilha/queries";
+import { arquivoDaVersao, carregarVersaoParaImportar } from "@/modules/medicao/planilha/queries";
 
 const RECURSO = "medicao.planilha" as const;
 
@@ -23,9 +23,10 @@ export default async function PaginaImportarPlanilha({ params }: { params: Promi
   // Versão vigente é imutável: a importação só existe no rascunho.
   if (versao.status !== "rascunho") redirect(`/medicao/planilha/${versaoId}`);
 
-  const [contrato, anexos] = await Promise.all([
+  const [contrato, anexos, arquivo] = await Promise.all([
     carregarContrato(versao.contratoId),
     listarAnexosDoDocumento("mc_planilha_versao", versaoId),
+    arquivoDaVersao(versaoId),
   ]);
   if (!contrato) notFound();
 
@@ -37,7 +38,7 @@ export default async function PaginaImportarPlanilha({ params }: { params: Promi
         descricao={`${contrato.codigo} · ${contrato.nome_obra}`}
         voltarPara={{ rota: `/medicao/planilha/${versaoId}`, rotulo: "Voltar para a versão" }}
       />
-      <ImportarPlanilha versaoId={versaoId} numeroVersao={versao.numero} anexos={anexos} />
+      <ImportarPlanilha versaoId={versaoId} numeroVersao={versao.numero} anexos={anexos} arquivoAtual={arquivo?.nome ?? null} />
     </>
   );
 }
