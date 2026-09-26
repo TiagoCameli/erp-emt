@@ -65,7 +65,7 @@ export function Sparkline({ dados, largura = 60, altura = 24 }: { dados: readonl
   const area = `${linha} L${ultimoX.toFixed(1)},${altura} L0,${altura} Z`;
   return (
     <svg width={largura} height={altura} viewBox={`0 0 ${largura} ${altura}`} className="shrink-0" aria-hidden data-slot="sparkline">
-      <path d={area} fill="var(--color-emt-verde-lavado)" stroke="none" />
+      <path d={area} fill="var(--color-accent)" stroke="none" />
       <path d={linha} fill="none" stroke="var(--color-emt-verde)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );

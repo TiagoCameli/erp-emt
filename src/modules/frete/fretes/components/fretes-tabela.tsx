@@ -88,7 +88,7 @@ export function colunasFretes(podeEditar: boolean): ColumnDef<FreteLinha, unknow
           <span className="truncate font-medium">{row.original.origemNome || "-"}</span>
           <span className="truncate text-legenda text-muted-foreground">→ {row.original.destinoNome || "-"}</span>
           {row.original.tipo === "transferencia" ? (
-            <Badge className="mt-0.5 w-fit self-center rounded-full border-transparent bg-amber-100 px-2 text-[10px] font-semibold tracking-wide text-amber-800 uppercase">
+            <Badge className="mt-0.5 w-fit self-center rounded-full border-transparent bg-amber-100 px-2 text-[10px] font-semibold tracking-wide text-amber-800 uppercase dark:bg-amber-500/15 dark:text-amber-300">
               Transferência
             </Badge>
           ) : null}

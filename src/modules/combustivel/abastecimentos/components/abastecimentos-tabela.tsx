@@ -80,7 +80,7 @@ function CelulaConsumidor({ saida }: { saida: SaidaLista }) {
   }
   if (saida.equipamentoSentinela || !saida.equipamentoDescricao) {
     return (
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-amber-700">
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-status-pendente">
         <AlertCircle className="size-3.5 shrink-0" aria-hidden />
         <span className="truncate text-legenda">Não identificado (Outros)</span>
       </span>

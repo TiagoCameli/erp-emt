@@ -106,7 +106,7 @@ export function AbastecimentoDetalheConteudo({ abastecimento }: { abastecimento:
     <div className="flex flex-col gap-6">
       {semSuprimento ? (
         <div role="alert" className="flex items-start gap-2 rounded-md border border-border bg-surface p-3 text-detalhe">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden />
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-pendente" aria-hidden />
           <p>
             Sem suprimento: o tanque não tinha camada para {formatarLitros(semSuprimento.litrosSemSuprimento)} dos{" "}
             {formatarLitros(semSuprimento.litrosSolicitados)} pedidos. O preço saiu só das camadas encontradas.

@@ -96,7 +96,7 @@ export function ReciboRescisaoDialog({ rescisao }: ReciboRescisaoDialogProps) {
             desfazer os dois: no papel a folha não rola, e um `max-height` vivo
             cortaria o documento na altura da caixa. */}
         <DialogContent className="recibo-rescisao-caixa max-h-[85vh] max-w-lg overflow-y-auto">
-          <div className="recibo-rescisao-print flex flex-col gap-4">
+          <div className="recibo-rescisao-print tema-claro flex flex-col gap-4">
             <CabecalhoDocumento
               titulo="Recibo de rescisão"
               subtitulo={rescisao.numero}

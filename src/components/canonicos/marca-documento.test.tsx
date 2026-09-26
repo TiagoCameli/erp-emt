@@ -61,6 +61,16 @@ describe("LogoEmt", () => {
     expect(svg.outerHTML).not.toMatch(/#[0-9A-Fa-f]{6}/);
     expect(svg.outerHTML).toContain("currentColor");
   });
+
+  it("o 'Construtora Ltda' lê o token do tema; as letras EMT continuam verdes", () => {
+    const { container } = render(<LogoEmt variante="completa" />);
+    const [wordmark, letras] = Array.from(container.querySelectorAll("path"));
+
+    // Fixo em #1D1D1F o texto sumia no tema escuro. O fallback mantém o
+    // quase-preto onde não há CSS do app.
+    expect(wordmark.getAttribute("fill")).toBe("var(--logo-texto, #1D1D1F)");
+    expect(letras.getAttribute("fill")).toBe("#3E7744");
+  });
 });
 
 describe("RodapeEmpresa", () => {

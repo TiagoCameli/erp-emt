@@ -183,7 +183,7 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
         </div>
       ) : null}
       {previa && previa.semSuprimento > 0 ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-detalhe text-amber-800">
+        <p className="rounded-md border border-status-pendente/40 bg-status-pendente/10 px-3 py-2 text-detalhe text-status-pendente">
           {formatarLitros(previa.semSuprimento)} sem suprimento registrado neste tanque.
         </p>
       ) : null}

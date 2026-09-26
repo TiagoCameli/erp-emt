@@ -4382,3 +4382,15 @@ importação e mostra ao Tiago antes de gravar. Aba nova do módulo entra no cat
 e o backfill dela. Fica em aberto para a Fase 5: revisão `enviada` rejeitada pela contratante não tem
 estado terminal que guarde histórico (hoje só se refaz reabrindo e apagando a REV enviada); o RPC do
 ciclo da Fase 5 decide (ex.: liberar `enviada -> substituida`).
+
+## 2026-09-26 - Tema escuro
+
+**Contexto:** O design system "ERP EMT" ganhou uma versão escura. O `globals.css` já declarava a variante `dark`, e o `next-themes` estava no package.json sem uso.
+
+**Decisão:**
+- Tokens escuros num bloco `.dark` logo abaixo do `:root`. Só mudam neutros, status, `--chart-3`, `--chart-5`, sidebar e o texto da logo. A marca (`--emt-*`), o primário, a Faixa âmbar, o `--ring`, o destrutivo e `--chart-1/2/4` são iguais nos dois temas: é o mesmo logo e o mesmo botão.
+- `next-themes` com `attribute="class"`, padrão `system`. A escolha fica no menu do usuário do AppShell (o mesmo menu serve desktop e mobile) e no rodapé das telas de campo `/m/`, que não têm AppShell.
+- **Documento é sempre claro.** `.tema-claro` redeclara os tokens claros (é o mesmo bloco do `:root`) e está no espelho, no holerite e no recibo de rescisão. A variante `dark:` ignora `.tema-claro` e a impressão, e `@media print` devolve o claro a `:root.dark`: qualquer tela impressa com o tema escuro ligado sai clara. `src/config/marca.ts` (exceljs e pdfmake) não muda.
+- Sombras `shadow-xs`/`shadow-sm` com a cor num token (`--sombra-*`): 5-10% no claro, 40-50% no escuro.
+
+**Consequência:** Os valores claros existem em dois lugares no CSS (`:root, .tema-claro` e a cópia do `@media print`). O teste `src/app/tema-escuro-css.test.ts` falha se os dois divergirem ou se um token proibido entrar no `.dark`. Cor nova em tela tem que passar por token; hex solto só dentro de documento impresso, e documentado.
