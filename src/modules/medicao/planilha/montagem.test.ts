@@ -15,16 +15,18 @@ function linha(l: number, codigo: string, descricao: string, unidade: CelulaLida
 describe("montarPlanilha", () => {
   it("título sem preço, serviço com preço, e filho com preço de serviço com preço", () => {
     const m = montarPlanilha([
+      linha(4, "02", "Conservação", vazia, vazia, vazia),
       linha(5, "02.07", "Pavimentação", vazia, vazia, vazia),
       linha(6, "02.07.05", "Imprimação", s("m2"), n("4.5"), n("100")),
       linha(7, "02.07.05.01", "Aquisição CM-30", s("t"), n("5000"), n("1.2")),
       linha(8, "02.07.05.02", "Transporte", s("tkm"), n("0.9"), n("300")),
     ]);
     expect(m.linhas.map((x) => [x.ordem, x.codigo, x.tipo, x.paiOrdem])).toEqual([
-      [1, "02.07", "titulo", null],
-      [2, "02.07.05", "servico", 1],
-      [3, "02.07.05.01", "servico", 2],
-      [4, "02.07.05.02", "servico", 2],
+      [1, "02", "titulo", null],
+      [2, "02.07", "titulo", 1],
+      [3, "02.07.05", "servico", 2],
+      [4, "02.07.05.01", "servico", 3],
+      [5, "02.07.05.02", "servico", 3],
     ]);
     expect(m.alertas).toEqual([]);
   });

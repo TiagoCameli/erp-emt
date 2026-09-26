@@ -162,7 +162,7 @@ export function montarPlanilha(brutas: LinhaBruta[], paiEscolhido: Record<number
         paiOrdem = sugerido;
       }
     }
-    if (paiOrdem === null && partes.length > 2) {
+    if (paiOrdem === null && partes.length > 1) {
       alertas.push({ tipo: "codigo_sem_pai", bloqueia: false, ordem, linhaOrigem: b.linhaOrigem,
         mensagem: `O código ${codigo} não tem linha de grupo acima dele na planilha: entra na raiz` });
     }
