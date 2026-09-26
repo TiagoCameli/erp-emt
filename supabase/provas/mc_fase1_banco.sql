@@ -393,6 +393,16 @@ begin
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4l_vigente_desde_ausente', v_txt);
 
+  -- 4o. vigente_desde com texto que não é data nenhuma (não o erro cru do Postgres)
+  begin perform public.fn_mc_planilha_criar_rascunho(v_k4, jsonb_build_object('vigente_desde', 'abc'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4o_vigente_desde_nao_e_data', v_txt);
+
+  -- 4p. vigente_desde com data que não existe no calendário (29/02 fora de ano bissexto etc.)
+  begin perform public.fn_mc_planilha_criar_rascunho(v_k4, jsonb_build_object('vigente_desde', '2026-02-30'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4p_vigente_desde_dia_inexistente', v_txt);
+
   -- 4m. Restaurar um filho (aditivo) cujo contrato pai ainda está na lixeira é recusado
   v_aditivo3 := public.fn_mc_aditivo_salvar(v_k4, jsonb_build_object('data_assinatura', '2026-02-01', 'data_vigencia', '2026-03-01',
     'tipos', jsonb_build_array('valor'), 'motivo', 'Prova restaurar'));
