@@ -1,4 +1,5 @@
--- Medição de Contratos, Fase 1f (PENDENTE, NÃO APLICADA): auditoria respeita a lista do contrato (D3).
+-- Medição de Contratos, Fase 1f: auditoria respeita a lista do contrato (D3). Aplicada em 26/09/2026
+-- com o ok do Tiago, depois de conferir que a expressão viva da policy era a de baixo.
 --
 -- O fn_audit grava a linha inteira (to_jsonb) das tabelas mc_*, e a policy audit_log_select só
 -- pede administracao.auditoria/ver: quem vê a auditoria veria todo contrato, inclusive fora da

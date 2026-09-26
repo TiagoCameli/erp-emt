@@ -4361,17 +4361,18 @@ do Tiago, e a abertura do PR.
     `20260925204853/210317/213619`) para destravar `entidades.test.ts`, que lê a migration mais
     recente por nome.
 14. O backfill de permissões (`mc_fase1f_permissoes`, 4 Admins, trava `$confere$`) fica salvo como
-    `supabase/migrations/_PENDENTE_mc_fase1f_permissoes.sql`, sem aplicar, até o Tiago aprovar o PR;
-    só então é aplicado por `apply_migration` e o arquivo é renomeado para a versão real.
-15. Auditoria por contrato, também PENDENTE: o `fn_audit` grava a linha inteira das tabelas `mc_*` e a
+    `_PENDENTE_` até o Tiago aprovar o PR. Aprovado em 26/09 ("continue, tudo ok"): aplicado como
+    `20260926150625_mc_fase1f_permissoes` (36 permissões, Tiago, James, Emanuel e Lorenzo).
+15. Auditoria por contrato (aplicada em 26/09 como `20260926150604_mc_fase1f_auditoria_por_contrato`,
+    antes do backfill, para não haver janela de vazamento): o `fn_audit` grava a linha inteira das tabelas `mc_*` e a
     policy `audit_log_select` só pede `administracao.auditoria/ver`, então quem vê a auditoria veria
-    contrato fora da lista dele (fura a regra 2). `_PENDENTE_mc_fase1f_auditoria_por_contrato.sql`
+    contrato fora da lista dele (fura a regra 2). A migration
     parte da expressão viva da policy e acrescenta: linha de tabela `mc_*` (menos `mc_indices` e
     `mc_indice_valores`, catálogo sem contrato) só aparece se o contrato dela (`->>'id'` em
     `mc_contratos`, `->>'contrato_id'` nas outras, de `coalesce(dados_depois, dados_antes)`) está em
     `fn_mc_meus_contratos()`; as outras tabelas ficam com a regra de hoje. Provado em bloco que aborta
     (linha de contrato fora da lista some, a do contrato na lista e a de outra tabela continuam, e a
-    contagem de linhas não-mc visíveis ao Tiago é a mesma antes e depois). Aplica junto com o backfill.
+    contagem de linhas não-mc visíveis ao Tiago é a mesma antes e depois).
 16. Restaurar versão da planilha (`20260926041333_mc_fase1d_restaurar_versao`) recusa com mensagem
     quando já há outro rascunho no contrato ou quando o número da versão foi reusado, em vez de criar
     um segundo rascunho ou devolver o 23505 cru do unique.
