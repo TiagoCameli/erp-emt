@@ -23,6 +23,8 @@ export default async function PaginaContratos({
 
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
+  // Mesmas duas permissões que `restaurarContrato` confere de novo no servidor.
+  const podeRestaurar = podeExcluir && temPermissao(usuario, "administracao.lixeira", "editar");
 
   const params = await searchParams;
   const statusParam = primeiro(params.status);
@@ -52,6 +54,7 @@ export default async function PaginaContratos({
         lixeira={lixeira}
         podeCriar={podeCriar}
         podeExcluir={podeExcluir}
+        podeRestaurar={podeRestaurar}
       />
     </>
   );

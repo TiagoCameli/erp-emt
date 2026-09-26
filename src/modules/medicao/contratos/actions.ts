@@ -37,6 +37,23 @@ async function pode(acao: "criar" | "editar" | "excluir"): Promise<boolean> {
   }
 }
 
+/**
+ * Restaurar é a Lixeira do contrato: pede as duas permissões que
+ * `fn_mc_restaurar` confere de novo no banco (mesmo padrão de
+ * `combustivel/entradas/actions.ts`): editar a lixeira administrativa E
+ * excluir na aba, para quem só tem uma das duas não conseguir tirar um
+ * contrato da lixeira.
+ */
+async function podeRestaurar(): Promise<boolean> {
+  try {
+    await exigirPermissao("administracao.lixeira", "editar");
+    await exigirPermissao(RECURSO, "excluir");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function revalidar(id?: string) {
   for (const rota of [ROTA, "/medicao/planilha", ...(id ? [`${ROTA}/${id}`] : [])]) {
     try {
@@ -123,6 +140,7 @@ export async function excluirAditivo(id: string, motivo: string): Promise<Result
 
 export async function restaurarContrato(id: string): Promise<ResultadoAcao> {
   return semLancar("medicao.contratos.restaurar", async () => {
+    if (!(await podeRestaurar())) return { erro: "Sem permissão para restaurar" };
     if (!idSchema.safeParse(id).success) return { erro: "Registro inválido" };
     const supabase = await createClient();
     const { error } = await supabase.rpc("fn_mc_restaurar", { p_tabela: "mc_contratos", p_id: id });

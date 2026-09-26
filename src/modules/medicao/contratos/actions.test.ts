@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { definirAcesso, excluirContrato, salvarContrato } from "@/modules/medicao/contratos/actions";
+import { definirAcesso, excluirContrato, restaurarContrato, salvarContrato } from "@/modules/medicao/contratos/actions";
 import type { ContratoInput } from "@/modules/medicao/contratos/schemas";
 
 const ID = "33333333-3333-4333-8333-333333333333";
@@ -89,5 +89,25 @@ describe("excluirContrato", () => {
   it("exige motivo antes do banco", async () => {
     await expect(excluirContrato(ID, " ")).resolves.toEqual({ erro: "Informe o motivo" });
     expect(estado.chamadas).toEqual([]);
+  });
+});
+
+describe("restaurarContrato", () => {
+  it("sem administracao.lixeira/editar não chama o banco", async () => {
+    estado.negadas = ["administracao.lixeira/editar"];
+    await expect(restaurarContrato(ID)).resolves.toEqual({ erro: "Sem permissão para restaurar" });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("sem medicao.contratos/excluir também não chama o banco", async () => {
+    estado.negadas = ["medicao.contratos/excluir"];
+    await expect(restaurarContrato(ID)).resolves.toEqual({ erro: "Sem permissão para restaurar" });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("com as duas permissões, restaura", async () => {
+    estado.resposta = { data: null, error: null };
+    await expect(restaurarContrato(ID)).resolves.toEqual({ ok: true });
+    expect(estado.chamadas).toEqual([{ fn: "fn_mc_restaurar", args: { p_tabela: "mc_contratos", p_id: ID } }]);
   });
 });

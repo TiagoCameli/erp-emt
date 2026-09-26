@@ -10,7 +10,7 @@ import {
   classesFormulario,
   Combobox,
   FormDrawer,
-  InputPreco,
+  InputMoeda,
   SecaoFormulario,
   submeterComAviso,
 } from "@/components/canonicos";
@@ -18,7 +18,7 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CASAS_TAXA } from "@/lib/casas-decimais";
+import { CASAS_DINHEIRO } from "@/lib/casas-decimais";
 import { salvarContrato } from "@/modules/medicao/contratos/actions";
 import { contratoSchema, type ContratoInput } from "@/modules/medicao/contratos/schemas";
 import type { ContratoDetalhe } from "@/modules/medicao/contratos/queries";
@@ -109,9 +109,10 @@ function iniciaisDoContrato(contrato: ContratoDetalhe): ContratoInput {
  * Cadastro de contrato: FormDrawer + React Hook Form validado direto pelo
  * `contratoSchema` (molde de `ajuste-form-drawer.tsx`, mas sem um schema de
  * formulário à parte, porque aqui o valor tem só 2 casas e não precisa da
- * ponte de 4 casas que o Frete usa). O campo de dinheiro (`InputPreco`) é a
- * única exceção: ele fala texto pt-BR, então o valor observado vira string só
- * para a exibição, e volta a número a cada tecla.
+ * ponte de 4 casas que o Frete usa). O campo de dinheiro (`InputMoeda`, 2
+ * casas fixas, canônico de VALOR) é a única exceção: ele fala texto pt-BR,
+ * então o valor observado vira string só para a exibição, e volta a número a
+ * cada tecla.
  */
 export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }: ContratoFormDrawerProps) {
   const editando = Boolean(contrato);
@@ -219,11 +220,11 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
         <SecaoFormulario titulo="Valores e prazo">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <CampoFormulario id="contrato-valor" rotulo="Valor do contrato (R$)" obrigatorio erro={erros.valorInicial?.message}>
-              <InputPreco
+              <InputMoeda
                 id="contrato-valor"
                 valor={valorTexto}
                 onValorChange={(texto) =>
-                  form.setValue("valorInicial", textoParaNumero(texto, CASAS_TAXA) ?? 0, {
+                  form.setValue("valorInicial", textoParaNumero(texto, CASAS_DINHEIRO) ?? 0, {
                     shouldDirty: true,
                     shouldValidate: form.formState.isSubmitted,
                   })

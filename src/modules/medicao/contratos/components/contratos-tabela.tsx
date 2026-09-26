@@ -96,16 +96,22 @@ export interface ContratosTabelaProps {
   lixeira: boolean;
   podeCriar: boolean;
   podeExcluir: boolean;
+  /**
+   * `restaurarContrato` pede as DUAS permissões que a action confere de novo
+   * (`administracao.lixeira/editar` E `medicao.contratos/excluir`). O botão só
+   * aparece com as duas; com só uma, a linha na lixeira ainda abre para
+   * consulta, mas não oferece restaurar.
+   */
+  podeRestaurar: boolean;
 }
 
 /**
  * Lista dos contratos: a RLS já mostra só os que estão na lista de acesso do
  * usuário (D3). Filtros na URL (status, contratante, lixeira). A lixeira só
- * aparece para quem pode excluir, e nela a ação da linha é restaurar, não
- * abrir: o registro continua existindo, mas a ação certa é sair da lixeira
- * antes de editar.
+ * aparece para quem pode excluir; a ação de restaurar, só para quem tem as
+ * duas permissões de `podeRestaurar`.
  */
-export function ContratosTabela({ contratos, status, tipo, lixeira, podeCriar, podeExcluir }: ContratosTabelaProps) {
+export function ContratosTabela({ contratos, status, tipo, lixeira, podeCriar, podeExcluir, podeRestaurar }: ContratosTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
   const [restaurando, setRestaurando] = React.useState<ContratoLista | null>(null);
@@ -179,7 +185,7 @@ export function ContratosTabela({ contratos, status, tipo, lixeira, podeCriar, p
             : []),
         ]}
         acoesLinha={(c) =>
-          lixeira && podeExcluir ? (
+          lixeira && podeRestaurar ? (
             <DropdownMenuItem onSelect={() => setRestaurando(c)}>
               <RotateCcw />
               Restaurar contrato
