@@ -246,7 +246,7 @@ def calcular_esperado(linhas, quantidades):
 
     A soma e a multiplicação (a fase "exata") rodam sob um context com precisão alta
     (100 dígitos) e o trap de Inexact ligado: se alguma conta precisasse arredondar para
-    caber, o Python levanta exceção em vez de silenciosamente perder dígito — o numeric
+    caber, o Python levanta exceção em vez de silenciosamente perder dígito: o numeric
     do banco também não arredonda. O arredondamento em 2 casas na saída (grupo e total) é
     deliberado e roda FORA desse context, no context padrão."""
     servicos = [l for l in linhas if l['tipo'] == 'servico']

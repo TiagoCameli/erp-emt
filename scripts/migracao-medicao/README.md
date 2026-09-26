@@ -46,8 +46,8 @@ script recusa qualquer arquivo cujo sha256 não seja o combinado com o Tiago.
   quantidade prevista).
 - **Saldo = previsto − acumulado** pela conta direta (o módulo não trunca por item como a
   planilha faz na coluna AV).
-- **Ajustes:** o staging carrega os 2.450 pares (item, medição) inteiros — 245 serviços ×
-  10 medições, inclusive os com quantidade zero — para a conferência linha a linha da
+- **Ajustes:** o staging carrega os 2.450 pares (item, medição) inteiros: 245 serviços ×
+  10 medições, inclusive os com quantidade zero, para a conferência linha a linha da
   Task 3. Quem filtra é o carregador: só grava em `mc_ajustes` os 255 pares com
   quantidade diferente de zero (regra do banco: `mc_ajustes.quantidade <> 0`).
 - **Contrato e períodos** não vêm da planilha: vêm do vault (`business/lote09-br364`) e do
