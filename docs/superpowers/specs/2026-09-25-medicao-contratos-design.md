@@ -279,6 +279,17 @@ Todas em `/medicao/*`, desktop, com os canônicos (`FilterBar`, `DataTable`, `Fo
 - Alvos: a tabela de grupos do pedido (previsto e acumulado até a 10ª), a 10ª medição (R$ 680.738,27; 02 = 3.312,02; 04 = 660.861,19; 08 = 16.565,06), % executado 14,981%, saldo R$ 207.385.821,63, **e toda célula do boletim**, não só os totais.
 - A carga só é aplicada com o seu ok.
 - Depois: Lote 10 (CT 184/2026) e as demais obras, uma de cada vez, pelo mesmo importador.
+- (emenda 26/09/2026): regra de arredondamento encontrada e reproduzida ao centavo: `sem_arredondar`
+  (quantidade x preço exato, acumulado como soma dos valores já calculados por medição). Ver
+  `docs/decisoes.md`, 26/09/2026.
+- (emenda 26/09/2026): saldo = previsto menos acumulado = R$ 207.385.821,72 (decisão do Tiago), não
+  R$ 207.385.821,63: a planilha trunca o saldo por item (`TRUNC(H-AT,3)`); o módulo usa a conta
+  direta.
+- (emenda 26/09/2026): períodos das 10 medições pelas NFs do ERP, mês civil (`dia_inicio_periodo =
+  1`). Responde a Q1 da seção 12: vale o resumo do DNIT/NF (mês cheio), não a página da medição. A
+  10ª (01/08 a 31/08/2026) é inferida do padrão mensal, ainda sem NF.
+- (emenda 26/09/2026): linha 20 (DOPE) entra com código `02.02.01` (decisão do Tiago), não `02.02`
+  como está no xlsx; fica irmã de `02.02.02` a `02.02.05` sob a linha 19 (`02.02`, Usinagem).
 
 ## 11. Testes e provas
 
@@ -296,11 +307,11 @@ Não decido nenhuma destas sozinho. As que dependem da cláusula ou do xlsx fica
 
 | # | Pergunta | Depende de | Bloqueia |
 |---|---|---|---|
-| Q1 | **Período do Lote 09**: a 8ª aparece como 26/05 a 25/06 na página da medição e como 01/06 a 30/06 no resumo do DNIT/NF. Qual vale para o módulo? | Você + boletim | Fase 2 |
+| Q1 | **Período do Lote 09**: a 8ª aparece como 26/05 a 25/06 na página da medição e como 01/06 a 30/06 no resumo do DNIT/NF. Qual vale para o módulo? | Você + boletim | Fase 2, respondida 26/09/2026 (docs/decisoes.md): vale o resumo do DNIT/NF, mês civil |
 | Q2 | **I do reajuste**: é o índice do mês de cada medição (muda todo mês) ou o do mês do aniversário, fixo por 12 meses (ciclo anual)? | Cláusula | Fase 6 |
 | Q3 | **Aniversário no meio do período**: proporcional por data do lançamento ou pela medição inteira? | Você + cláusula | Fase 6 |
 | Q4 | **Aditivo no meio do período**: a medição usa a versão vigente no início ou no fim do período? | Você | Fase 5 |
-| Q5 | **Regra de arredondamento do Lote 09** e a origem do centavo. | xlsx oficial | Fase 2 |
+| Q5 | **Regra de arredondamento do Lote 09** e a origem do centavo. | xlsx oficial | Fase 2, respondida 26/09/2026 (docs/decisoes.md): `sem_arredondar` |
 | Q6 | **O reajuste incide sobre a quantidade enviada ou a aprovada?** A proposta é calcular no envio sobre a medida e recalcular na aprovação sobre a aprovada. E o reajuste é arredondado por item ou por medição? | Cláusula + reajuste real recebido | Fase 6 |
 | Q7 | **Data-base e índices do Lote 09.** A 9ª já teve reajuste (R$ 88.589,82 sobre R$ 4.802.025,99), menos de 12 meses depois da assinatura (01/10/2025), então a data-base não é a assinatura. | Cláusula | Fase 6 |
 
