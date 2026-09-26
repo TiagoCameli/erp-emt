@@ -4396,6 +4396,59 @@ ciclo da Fase 5 decide (ex.: liberar `enviada -> substituida`).
 
 **Consequência:** `src/lib/contraste.test.ts` lê os tokens do `globals.css` (e do `.dark`, quando existir) e reprova qualquer par abaixo do mínimo, além de barrar âmbar claro como texto, cinza fixo do Tailwind e a volta do anel translúcido. Ficaram de fora, de propósito: o esmaecimento interativo dos rankings e gráficos (item não selecionado a 40%, some ao limpar a seleção), a paleta dos gráficos do Gestão (`--chart-2` âmbar da marca é cor de série, não de texto; revisar em tarefa própria se algum gráfico depender só da cor) e o traço decorativo da matriz de permissões.
 
+## 2026-09-26 - Medição de Contratos, Fase 2: carga do Lote 09
+
+**Contexto:** a Fase 2 carrega no módulo o contrato do Lote 09 (CT 00615/2025, DNIT) com a
+planilha contratual v0 e as 10 medições já aprovadas pelo DNIT, conferindo cada número contra a
+planilha oficial e abortando se algo não bater. A fonte é o xlsx v12 do SharePoint, lido pelo
+arquivo (valor bruto da célula, openpyxl), não pelo conector do Microsoft 365, que devolve texto
+formatado e cortava a planilha em cerca de 86 linhas.
+
+**Decisão:**
+1. Fonte única: `Medicao_Teste_3_ATUALIZADA_v12_NOVO.xlsx` (SharePoint), lido no arquivo, não no
+   conector do Microsoft 365 (texto formatado, cortava em ~86 linhas). O script confere o sha256 e
+   recusa arquivo com outro hash.
+2. Regra de arredondamento do Lote 09: `sem_arredondar` (quantidade x preço exato; o acumulado do
+   item soma os valores já calculados por medição). Descoberta reproduzindo ao centavo os alvos do
+   Tiago: previsto 243.927.483,49, acumulado até a 10ª 36.541.661,77, 10ª 680.738,27, e os 8
+   grupos. O centavo entre a soma dos 8 grupos já arredondados (36.541.661,76) e o total
+   (36.541.661,77) existe porque o total sai do arredondamento da soma exata dos 245 serviços,
+   nunca da soma dos grupos.
+3. Saldo = previsto menos acumulado = 207.385.821,72 (decisão do Tiago). A planilha mostra
+   207.385.821,63 porque trunca o saldo por item (`TRUNC(H-AT,3)`); o módulo usa a conta direta,
+   sem esse truncamento.
+4. Linha 20 (DOPE) entra com código `02.02.01` (decisão do Tiago); no xlsx está `02.02`, repetido
+   da linha 19. `02.02.01` a `02.02.05` ficam irmãs, filhas do serviço da linha 19 (`02.02`,
+   Usinagem), nunca do título `02`.
+5. Linhas 184 a 199 (`03.16.01` a `03.16.09`, ocultas no xlsx, com preço preenchido e quantidade
+   vazia) entram com quantidade prevista 0, como a importação já faz com campo vazio.
+6. Períodos das 10 medições pelas NFs do ERP, mês civil (`dia_inicio_periodo = 1`): 1ª a 9ª com NF
+   (345, 350, 356, 359, 360, 361, 362, 363, 368, na ordem); a 10ª (01/08 a 31/08/2026) é inferida
+   do padrão mensal, ainda sem NF.
+7. Quantidades aprovadas = quantidades medidas na planilha oficial (pedido do Tiago); as glosas do
+   DNIT só entram no módulo na Fase 5.
+8. Cada medição entra `aprovada`, `origem = carga`, com a REV00 `aprovada`, os `mc_ajustes` tipo
+   `carga` (só quantidade diferente de zero, motivo "Carga inicial da planilha oficial v12"),
+   `aprovada_em` = momento da carga (sem aprovador) e um `mc_medicao_eventos` ("carga") por
+   medição, porque não existe no vault a data de aprovação de cada uma das 10 pelo DNIT.
+9. O contrato e os 10 períodos entram como constantes fixas na migration de carga; ela confere
+   campo a campo contra o staging e aborta em qualquer divergência, porque medição aprovada é
+   imutável.
+10. Ensaio em 3 rodadas antes de aplicar: ENSAIO (tem de sair "ENSAIO OK" com todos os números);
+    CONTROLE (um alvo desviado em R$ 0,01 tem de ser recusado); ROLLBACK (carga real e rollback na
+    mesma transação voltam tudo a zero).
+11. O rollback desliga, dentro da própria transação, só os 4 gatilhos que travam delete de
+    aprovada (`trg_mc_trava_aprovacoes`, `trg_mc_trava_ajuste`, `trg_mc_trava_revisao`,
+    `trg_mc_trava_medicao`) e os religa no fim; não usa `session_replication_role`, que desligaria
+    também as FKs e a auditoria.
+12. Staging em `legado.carga_mc_l09` (migration `20260926192737_mc_fase2_preparo_carga_l09`). A
+    migration de carga fica `_PENDENTE_` até o ok do Tiago para aplicar em produção.
+
+**Consequência:** a carga está ensaiada (3 rodadas, ensaio limpo) e pronta para o PR; falta só o ok
+do Tiago para aplicar `_PENDENTE_mc_fase2_carga_l09.sql`, renomear para a versão real e rodar a
+prova pós-carga. Depois: Lote 10 (CT 184/2026) e as demais obras, uma de cada vez, pelo mesmo
+importador.
+
 ## 2026-09-26 - Tema escuro
 
 **Contexto:** O design system "ERP EMT" ganhou uma versão escura. O `globals.css` já declarava a variante `dark`, e o `next-themes` estava no package.json sem uso.
