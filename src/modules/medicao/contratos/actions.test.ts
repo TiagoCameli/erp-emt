@@ -23,8 +23,15 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { definirAcesso, excluirContrato, restaurarContrato, salvarContrato } from "@/modules/medicao/contratos/actions";
-import type { ContratoInput } from "@/modules/medicao/contratos/schemas";
+import {
+  definirAcesso,
+  excluirAditivo,
+  excluirContrato,
+  restaurarContrato,
+  salvarAditivo,
+  salvarContrato,
+} from "@/modules/medicao/contratos/actions";
+import type { AditivoInput, ContratoInput } from "@/modules/medicao/contratos/schemas";
 
 const ID = "33333333-3333-4333-8333-333333333333";
 const USUARIO = "44444444-4444-4444-8444-444444444444";
@@ -33,6 +40,13 @@ const DADOS: ContratoInput = {
   contratanteNome: "DNIT", contratanteTipo: "federal", contratanteDocumento: "", valorInicial: 243927498.02,
   dataAssinatura: "2025-10-01", dataOrdemServico: "", prazoMeses: 39, inicioPrazo: "assinatura", diaInicioPeriodo: 26,
   tipoLocalizacao: "rodovia", regraArredondamento: null, alertaPrazoDias: 90, alertaValorPct: 90, status: "ativo", observacoes: "",
+};
+const ADITIVO: AditivoInput = {
+  dataAssinatura: "2026-05-01",
+  dataVigencia: "2026-05-01",
+  tipos: ["prazo"],
+  prazoAcrescidoMeses: 6,
+  motivo: "Chuvas",
 };
 
 beforeEach(() => {
@@ -83,12 +97,59 @@ describe("definirAcesso", () => {
     estado.resposta = { data: null, error: { code: "P0001", message: "O contrato ficaria sem ninguém ativo com acesso" } };
     await expect(definirAcesso(ID, USUARIO, false)).resolves.toEqual({ erro: "O contrato ficaria sem ninguém ativo com acesso" });
   });
+
+  it("concede acesso com sucesso", async () => {
+    estado.resposta = { data: null, error: null };
+    await expect(definirAcesso(ID, USUARIO, true)).resolves.toEqual({ ok: true });
+    expect(estado.chamadas).toEqual([{ fn: "fn_mc_acesso_definir", args: { p_contrato: ID, p_usuario: USUARIO, p_tem: true } }]);
+  });
+});
+
+describe("salvarAditivo", () => {
+  it("sem medicao.contratos/editar não chama o banco", async () => {
+    estado.negadas = ["medicao.contratos/editar"];
+    await expect(salvarAditivo(ID, null, ADITIVO)).resolves.toEqual({ erro: "Sem permissão para registrar aditivo" });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("monta o payload com p_contrato e os tipos do aditivo", async () => {
+    await expect(salvarAditivo(ID, null, ADITIVO)).resolves.toEqual({ ok: true, id: ID });
+    expect(estado.chamadas).toEqual([
+      {
+        fn: "fn_mc_aditivo_salvar",
+        args: {
+          p_contrato: ID,
+          p_dados: {
+            data_assinatura: "2026-05-01",
+            data_vigencia: "2026-05-01",
+            tipos: ["prazo"],
+            prazo_acrescido_meses: 6,
+            motivo: "Chuvas",
+          },
+          p_id: undefined,
+        },
+      },
+    ]);
+  });
 });
 
 describe("excluirContrato", () => {
   it("exige motivo antes do banco", async () => {
-    await expect(excluirContrato(ID, " ")).resolves.toEqual({ erro: "Informe o motivo" });
+    await expect(excluirContrato(ID, " ")).resolves.toEqual({ erro: "Informe o motivo (mínimo 3 caracteres)" });
     expect(estado.chamadas).toEqual([]);
+  });
+});
+
+describe("excluirAditivo", () => {
+  it("exige motivo com pelo menos 3 caracteres antes do banco", async () => {
+    await expect(excluirAditivo(ID, "ok")).resolves.toEqual({ erro: "Informe o motivo (mínimo 3 caracteres)" });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("com motivo válido, exclui", async () => {
+    estado.resposta = { data: null, error: null };
+    await expect(excluirAditivo(ID, "Lançado errado")).resolves.toEqual({ ok: true });
+    expect(estado.chamadas).toEqual([{ fn: "fn_mc_excluir", args: { p_tabela: "mc_aditivos", p_id: ID, p_motivo: "Lançado errado" } }]);
   });
 });
 

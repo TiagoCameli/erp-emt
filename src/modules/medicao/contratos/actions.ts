@@ -122,11 +122,15 @@ async function excluir(tabela: "mc_contratos" | "mc_aditivos", id: string, motiv
   if (!(await pode("excluir"))) return { erro: "Sem permissão para excluir" };
   if (!idSchema.safeParse(id).success) return { erro: "Registro inválido" };
   const m = motivoSchema.safeParse(motivo);
-  if (!m.success) return { erro: "Informe o motivo" };
+  if (!m.success) return { erro: m.error.issues[0]?.message ?? "Informe o motivo" };
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_mc_excluir", { p_tabela: tabela, p_id: id, p_motivo: m.data });
   if (error) return erroAcao(contexto, error, mensagemDeNegocio(error, "Não foi possível excluir"));
-  revalidar();
+  // Contrato excluído revalida o PRÓPRIO detalhe também, para ele passar a mostrar o aviso
+  // de lixeira (sem isto, quem já estava na tela via cache via router.refresh só via a
+  // lista mudar). Aditivo não tem essa revalidação aqui porque `id` é o dele, não o do
+  // contrato: a tela de aditivos já se atualiza sozinha, com o router.refresh do cliente.
+  revalidar(tabela === "mc_contratos" ? id : undefined);
   return { ok: true };
 }
 

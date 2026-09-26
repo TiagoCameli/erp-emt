@@ -28,6 +28,10 @@ export default async function PaginaContrato({ params }: { params: Promise<{ id:
 
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
+  // Contrato na lixeira: quem não pode excluir (a mesma permissão que abre a lixeira na
+  // lista) também não vê o detalhe dele. Mesmo raciocínio do 404 acima: existência não vaza.
+  if (contrato.excluido_em !== null && !podeExcluir) notFound();
+  const podeRestaurar = podeExcluir && temPermissao(usuario, "administracao.lixeira", "editar");
 
   const [usuarios, usuariosAtivos, aditivos, anexos, trilha] = await Promise.all([
     listarUsuariosDoContrato(id),
@@ -42,6 +46,7 @@ export default async function PaginaContrato({ params }: { params: Promise<{ id:
       contrato={contrato}
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
+      podeRestaurar={podeRestaurar}
       usuarios={usuarios}
       usuariosAtivos={usuariosAtivos}
       aditivos={aditivos}

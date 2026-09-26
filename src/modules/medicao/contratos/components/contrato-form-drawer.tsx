@@ -18,9 +18,8 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { CASAS_DINHEIRO } from "@/lib/casas-decimais";
 import { salvarContrato } from "@/modules/medicao/contratos/actions";
-import { contratoSchema, type ContratoInput } from "@/modules/medicao/contratos/schemas";
+import { contratoDoForm, contratoFormSchema, type ContratoFormInput } from "@/modules/medicao/contratos/schemas";
 import type { ContratoDetalhe } from "@/modules/medicao/contratos/queries";
 import {
   REGRAS_ARREDONDAMENTO,
@@ -30,7 +29,7 @@ import {
   STATUS_CONTRATO,
   TIPOS_CONTRATANTE,
 } from "@/modules/medicao/_shared/rotulos";
-import { numeroParaCampo, textoParaNumero } from "@/modules/manutencao/servicos/numero";
+import { numeroParaCampo } from "@/modules/manutencao/servicos/numero";
 
 const ID_FORM = "form-contrato";
 
@@ -49,7 +48,7 @@ const OPCOES_REGRA = [
 ];
 const OPCOES_STATUS = STATUS_CONTRATO.map((s) => ({ valor: s, rotulo: ROTULO_STATUS_CONTRATO[s] }));
 
-const VALORES_INICIAIS: ContratoInput = {
+const VALORES_INICIAIS: ContratoFormInput = {
   codigo: "",
   nomeObra: "",
   local: "",
@@ -58,7 +57,7 @@ const VALORES_INICIAIS: ContratoInput = {
   contratanteNome: "",
   contratanteTipo: "federal",
   contratanteDocumento: "",
-  valorInicial: 0,
+  valorInicial: "",
   dataAssinatura: "",
   dataOrdemServico: "",
   prazoMeses: 12,
@@ -80,7 +79,7 @@ export interface ContratoFormDrawerProps {
   onSalvo?: (id: string) => void;
 }
 
-function iniciaisDoContrato(contrato: ContratoDetalhe): ContratoInput {
+function iniciaisDoContrato(contrato: ContratoDetalhe): ContratoFormInput {
   return {
     codigo: contrato.codigo,
     nomeObra: contrato.nome_obra,
@@ -88,41 +87,50 @@ function iniciaisDoContrato(contrato: ContratoDetalhe): ContratoInput {
     objeto: contrato.objeto,
     numeroContrato: contrato.numero_contrato,
     contratanteNome: contrato.contratante_nome,
-    contratanteTipo: contrato.contratante_tipo as ContratoInput["contratanteTipo"],
+    contratanteTipo: contrato.contratante_tipo as ContratoFormInput["contratanteTipo"],
     contratanteDocumento: contrato.contratante_documento ?? "",
-    valorInicial: Number(contrato.valor_inicial),
+    // Só aqui, na carga inicial, o número vira texto. Depois disso o campo é
+    // SEMPRE string (ver o comentário do componente).
+    valorInicial: numeroParaCampo(Number(contrato.valor_inicial)),
     dataAssinatura: contrato.data_assinatura,
     dataOrdemServico: contrato.data_ordem_servico ?? "",
     prazoMeses: contrato.prazo_meses,
-    inicioPrazo: contrato.inicio_prazo as ContratoInput["inicioPrazo"],
+    inicioPrazo: contrato.inicio_prazo as ContratoFormInput["inicioPrazo"],
     diaInicioPeriodo: contrato.dia_inicio_periodo,
-    tipoLocalizacao: contrato.tipo_localizacao as ContratoInput["tipoLocalizacao"],
-    regraArredondamento: contrato.regra_arredondamento as ContratoInput["regraArredondamento"],
+    tipoLocalizacao: contrato.tipo_localizacao as ContratoFormInput["tipoLocalizacao"],
+    regraArredondamento: contrato.regra_arredondamento as ContratoFormInput["regraArredondamento"],
     alertaPrazoDias: contrato.alerta_prazo_dias,
     alertaValorPct: contrato.alerta_valor_pct,
-    status: contrato.status as ContratoInput["status"],
+    status: contrato.status as ContratoFormInput["status"],
     observacoes: contrato.observacoes ?? "",
   };
 }
 
 /**
- * Cadastro de contrato: FormDrawer + React Hook Form validado direto pelo
- * `contratoSchema` (molde de `ajuste-form-drawer.tsx`, mas sem um schema de
- * formulário à parte, porque aqui o valor tem só 2 casas e não precisa da
- * ponte de 4 casas que o Frete usa). O campo de dinheiro (`InputMoeda`, 2
- * casas fixas, canônico de VALOR) é a única exceção: ele fala texto pt-BR,
- * então o valor observado vira string só para a exibição, e volta a número a
- * cada tecla.
+ * Cadastro de contrato: FormDrawer + React Hook Form validado por um schema DE
+ * FORMULÁRIO (`contratoFormSchema`), separado do schema de domínio
+ * (`contratoSchema`, o que a action valida de novo). O `valorInicial` do RHF
+ * é SEMPRE STRING (o que o `InputMoeda` escreve, "1234,56"): a conversão para
+ * número só acontece no envio, em `contratoDoForm`.
+ *
+ * Isto corrige um defeito achado na revisão da Task 11: a versão anterior
+ * guardava `valorInicial` como número no RHF e reconstruía o texto do campo a
+ * cada render com `numeroParaCampo(valorObservado)`. Resultado: digitar "12,"
+ * virava "12" (a vírgula sumia, porque `numeroParaCampo` de um número inteiro
+ * não a devolve) e qualquer tecla que `textoParaNumero` não reconhecesse
+ * zerava o campo silenciosamente (`?? 0`). Mesmo molde de
+ * `transferencia-form-drawer.tsx` e `ajuste-form-drawer.tsx`, que já guardam o
+ * campo de dinheiro como string por este motivo.
  */
 export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }: ContratoFormDrawerProps) {
   const editando = Boolean(contrato);
 
   const iniciais = React.useCallback(
-    (): ContratoInput => (contrato ? iniciaisDoContrato(contrato) : VALORES_INICIAIS),
+    (): ContratoFormInput => (contrato ? iniciaisDoContrato(contrato) : VALORES_INICIAIS),
     [contrato],
   );
 
-  const form = useForm<ContratoInput>({ resolver: zodResolver(contratoSchema), defaultValues: iniciais() });
+  const form = useForm<ContratoFormInput>({ resolver: zodResolver(contratoFormSchema), defaultValues: iniciais() });
   const salvando = form.formState.isSubmitting;
   const erros = form.formState.errors;
 
@@ -130,14 +138,13 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
     if (aberto) form.reset(iniciais());
   }, [aberto, form, iniciais]);
 
-  const [contratanteTipo, valorInicial, inicioPrazo, tipoLocalizacao, regraArredondamento, status] = useWatch({
+  const [contratanteTipo, valorTexto, inicioPrazo, tipoLocalizacao, regraArredondamento, status] = useWatch({
     control: form.control,
     name: ["contratanteTipo", "valorInicial", "inicioPrazo", "tipoLocalizacao", "regraArredondamento", "status"],
   });
-  const valorTexto = numeroParaCampo(valorInicial);
 
-  async function aoEnviar(valores: ContratoInput) {
-    const resultado = await salvarContrato(contrato?.id ?? null, valores);
+  async function aoEnviar(valores: ContratoFormInput) {
+    const resultado = await salvarContrato(contrato?.id ?? null, contratoDoForm(valores));
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
@@ -205,7 +212,7 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
                 id="contrato-contratante-tipo"
                 valor={contratanteTipo ?? ""}
                 onValorChange={(v) =>
-                  form.setValue("contratanteTipo", v as ContratoInput["contratanteTipo"], { shouldDirty: true, shouldValidate: true })
+                  form.setValue("contratanteTipo", v as ContratoFormInput["contratanteTipo"], { shouldDirty: true, shouldValidate: true })
                 }
                 opcoes={OPCOES_CONTRATANTE}
                 disabled={salvando}
@@ -222,9 +229,9 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
             <CampoFormulario id="contrato-valor" rotulo="Valor do contrato (R$)" obrigatorio erro={erros.valorInicial?.message}>
               <InputMoeda
                 id="contrato-valor"
-                valor={valorTexto}
+                valor={valorTexto ?? ""}
                 onValorChange={(texto) =>
-                  form.setValue("valorInicial", textoParaNumero(texto, CASAS_DINHEIRO) ?? 0, {
+                  form.setValue("valorInicial", texto, {
                     shouldDirty: true,
                     shouldValidate: form.formState.isSubmitted,
                   })
@@ -260,7 +267,7 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
                 id="contrato-inicio-prazo"
                 valor={inicioPrazo ?? ""}
                 onValorChange={(v) =>
-                  form.setValue("inicioPrazo", v as ContratoInput["inicioPrazo"], { shouldDirty: true, shouldValidate: true })
+                  form.setValue("inicioPrazo", v as ContratoFormInput["inicioPrazo"], { shouldDirty: true, shouldValidate: true })
                 }
                 opcoes={OPCOES_INICIO_PRAZO}
                 disabled={salvando}
@@ -295,7 +302,7 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
                 id="contrato-localizacao"
                 valor={tipoLocalizacao ?? ""}
                 onValorChange={(v) =>
-                  form.setValue("tipoLocalizacao", v as ContratoInput["tipoLocalizacao"], { shouldDirty: true, shouldValidate: true })
+                  form.setValue("tipoLocalizacao", v as ContratoFormInput["tipoLocalizacao"], { shouldDirty: true, shouldValidate: true })
                 }
                 opcoes={OPCOES_LOCALIZACAO}
                 disabled={salvando}
@@ -312,7 +319,7 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
               id="contrato-regra"
               valor={regraArredondamento ?? ""}
               onValorChange={(v) =>
-                form.setValue("regraArredondamento", (v === "" ? null : v) as ContratoInput["regraArredondamento"], {
+                form.setValue("regraArredondamento", (v === "" ? null : v) as ContratoFormInput["regraArredondamento"], {
                   shouldDirty: true,
                   shouldValidate: true,
                 })
@@ -370,7 +377,7 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
             <Combobox
               id="contrato-status"
               valor={status ?? ""}
-              onValorChange={(v) => form.setValue("status", v as ContratoInput["status"], { shouldDirty: true, shouldValidate: true })}
+              onValorChange={(v) => form.setValue("status", v as ContratoFormInput["status"], { shouldDirty: true, shouldValidate: true })}
               opcoes={OPCOES_STATUS}
               disabled={salvando}
             />

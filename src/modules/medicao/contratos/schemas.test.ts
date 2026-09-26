@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { aditivoSchema, contratoSchema, payloadDoContrato } from "./schemas";
+import { aditivoSchema, contratoDoForm, contratoFormSchema, contratoSchema, payloadDoContrato } from "./schemas";
 
 const valido = {
   codigo: "l09-br364", nomeObra: "BR-364 Lote 09", local: "Cruzeiro do Sul/AC", objeto: "Manutenção rodoviária",
@@ -28,7 +28,53 @@ describe("contratoSchema", () => {
   });
 
   it("dia de início do período vai de 1 a 28", () => {
-    expect(contratoSchema.safeParse({ ...valido, diaInicioPeriodo: 29 }).success).toBe(false);
+    const r = contratoSchema.safeParse({ ...valido, diaInicioPeriodo: 29 });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.message).toBe("O período começa entre o dia 1 e o dia 28");
+  });
+
+  it("campo numérico vazio (NaN, do valueAsNumber do navegador) pede em português, não 'Expected number'", () => {
+    expect(contratoSchema.safeParse({ ...valido, prazoMeses: NaN }).error?.issues[0]?.message).toBe(
+      "Informe o prazo em meses",
+    );
+    expect(contratoSchema.safeParse({ ...valido, diaInicioPeriodo: NaN }).error?.issues[0]?.message).toBe(
+      "Informe o dia de início do período",
+    );
+    expect(contratoSchema.safeParse({ ...valido, alertaPrazoDias: NaN }).error?.issues[0]?.message).toBe(
+      "Informe os dias do alerta de prazo",
+    );
+    expect(contratoSchema.safeParse({ ...valido, alertaValorPct: NaN }).error?.issues[0]?.message).toBe(
+      "Informe o percentual do alerta de valor",
+    );
+  });
+
+  it("alerta de prazo não aceita dias negativos, e alerta de valor fica entre 0 e 100", () => {
+    expect(contratoSchema.safeParse({ ...valido, alertaPrazoDias: -1 }).error?.issues[0]?.message).toBe(
+      "Os dias do alerta de prazo não podem ser negativos",
+    );
+    expect(contratoSchema.safeParse({ ...valido, alertaValorPct: 101 }).error?.issues[0]?.message).toBe(
+      "O percentual do alerta de valor vai de 0 a 100",
+    );
+  });
+});
+
+describe("contratoFormSchema / contratoDoForm", () => {
+  const validoForm = { ...valido, valorInicial: "243.927.498,02" };
+
+  it("aceita o valor digitado com milhar e converte para o número exato no envio", () => {
+    const r = contratoFormSchema.parse(validoForm);
+    expect(contratoDoForm(r).valorInicial).toBe(243927498.02);
+  });
+
+  it("aceita '12,50' e converte para 12.5, sem perder o centavo", () => {
+    const r = contratoFormSchema.parse({ ...validoForm, valorInicial: "12,50" });
+    expect(contratoDoForm(r).valorInicial).toBe(12.5);
+  });
+
+  it("valor vazio pede o valor, e não vira 0 em silêncio", () => {
+    const r = contratoFormSchema.safeParse({ ...validoForm, valorInicial: "" });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0]?.message).toBe("Informe o valor");
   });
 });
 

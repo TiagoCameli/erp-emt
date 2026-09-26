@@ -3,17 +3,19 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileSpreadsheet, Info, Pencil } from "lucide-react";
+import { FileSpreadsheet, Info, Pencil, Trash2 } from "lucide-react";
 
-import { CelulaVazia, MoneyText, PageHeader, SecaoDetalhe, StatusBadge, Trilha, type EventoTrilha } from "@/components/canonicos";
+import { CelulaVazia, ConfirmDialog, MoneyText, PageHeader, SecaoDetalhe, StatusBadge, Trilha, type EventoTrilha } from "@/components/canonicos";
 import { Anexos } from "@/components/canonicos/anexos";
 import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
+import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { AcessoContrato, type UsuarioAtivo, type UsuarioDoContrato } from "@/modules/medicao/contratos/components/acesso-contrato";
 import { AditivosContrato, type AditivoLista } from "@/modules/medicao/contratos/components/aditivos-contrato";
 import { ContratoFormDrawer } from "@/modules/medicao/contratos/components/contrato-form-drawer";
+import { excluirContrato } from "@/modules/medicao/contratos/actions";
 import type { ContratoDetalhe as ContratoDetalheRow } from "@/modules/medicao/contratos/queries";
 import {
   ROTULO_REGRA,
@@ -34,6 +36,8 @@ export interface ContratoDetalheProps {
   contrato: ContratoDetalheRow;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** As duas permissões que `restaurarContrato` confere de novo (só usada para o texto do aviso de lixeira). */
+  podeRestaurar: boolean;
   usuarios: UsuarioDoContrato[];
   usuariosAtivos: UsuarioAtivo[];
   aditivos: AditivoLista[];
@@ -50,6 +54,7 @@ export function ContratoDetalhe({
   contrato,
   podeEditar,
   podeExcluir,
+  podeRestaurar,
   usuarios,
   usuariosAtivos,
   aditivos,
@@ -58,10 +63,27 @@ export function ContratoDetalhe({
 }: ContratoDetalheProps) {
   const router = useRouter();
   const [editando, setEditando] = React.useState(false);
+  const [excluindo, setExcluindo] = React.useState(false);
 
   const naLixeira = contrato.excluido_em !== null;
   const rotuloStatus =
     ROTULO_STATUS_CONTRATO[contrato.status as keyof typeof ROTULO_STATUS_CONTRATO] ?? contrato.status;
+
+  // Enquanto o contrato está na lixeira, ninguém edita nada dele: acesso, aditivos e
+  // anexos ficam só de consulta até alguém restaurar (Important 3 da revisão).
+  const podeEditarAgora = podeEditar && !naLixeira;
+  const podeExcluirAditivoAgora = podeExcluir && !naLixeira;
+
+  async function confirmarExclusao(motivo?: string) {
+    const resultado = await excluirContrato(contrato.id, motivo ?? "");
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return;
+    }
+    toast.success("Contrato excluído. Ele foi para a lixeira");
+    setExcluindo(false);
+    router.push("/medicao/contratos");
+  }
 
   return (
     <>
@@ -85,6 +107,12 @@ export function ContratoDetalhe({
                 Editar contrato
               </Button>
             ) : null}
+            {podeExcluir && !naLixeira ? (
+              <Button type="button" size="sm" variant="destructive" onClick={() => setExcluindo(true)}>
+                <Trash2 />
+                Excluir contrato
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -94,8 +122,8 @@ export function ContratoDetalhe({
           <div role="note" className="flex items-start gap-2 rounded-md border border-border bg-surface p-3 text-detalhe">
             <Info className="mt-0.5 size-4 shrink-0 text-status-rejeitado" aria-hidden />
             <p>
-              Este contrato está na lixeira{contrato.motivo_exclusao ? `: ${contrato.motivo_exclusao}` : ""}. Restaure-o pela
-              lista de contratos para voltar a editá-lo.
+              Este contrato está na lixeira{contrato.motivo_exclusao ? `: ${contrato.motivo_exclusao}` : ""}.
+              {podeRestaurar ? " Restaure-o pela lista de contratos para voltar a editá-lo." : ""}
             </p>
           </div>
         ) : null}
@@ -148,16 +176,21 @@ export function ContratoDetalhe({
           ) : null}
         </SecaoDetalhe>
 
-        <AcessoContrato contratoId={contrato.id} usuarios={usuarios} usuariosAtivos={usuariosAtivos} podeEditar={podeEditar} />
+        <AcessoContrato contratoId={contrato.id} usuarios={usuarios} usuariosAtivos={usuariosAtivos} podeEditar={podeEditarAgora} />
 
-        <AditivosContrato contratoId={contrato.id} aditivos={aditivos} podeEditar={podeEditar} podeExcluir={podeExcluir} />
+        <AditivosContrato
+          contratoId={contrato.id}
+          aditivos={aditivos}
+          podeEditar={podeEditarAgora}
+          podeExcluir={podeExcluirAditivoAgora}
+        />
 
         <SecaoDetalhe titulo="Anexos" card>
           <Anexos
             entidade="mc_contrato"
             entidadeId={contrato.id}
             anexos={anexos}
-            podeEditar={podeEditar}
+            podeEditar={podeEditarAgora}
             onMudou={() => semDerrubarSucesso("medicao.contratos.anexos", () => router.refresh())}
             convite="Arraste o contrato assinado, a cláusula de reajuste ou a ordem de serviço"
             textoVazio="Nenhum documento anexado"
@@ -169,7 +202,7 @@ export function ContratoDetalhe({
         </SecaoDetalhe>
       </div>
 
-      {podeEditar ? (
+      {podeEditarAgora ? (
         <ContratoFormDrawer
           aberto={editando}
           onAbertoChange={setEditando}
@@ -177,6 +210,17 @@ export function ContratoDetalhe({
           onSalvo={() => semDerrubarSucesso("medicao.contratos.editar", () => router.refresh())}
         />
       ) : null}
+
+      <ConfirmDialog
+        aberto={excluindo}
+        onAbertoChange={setExcluindo}
+        titulo="Excluir contrato"
+        descricao={`${contrato.codigo} vai para a lixeira, com tudo que está nele. Informe o motivo.`}
+        textoConfirmar="Excluir contrato"
+        variante="destrutivo"
+        exigeMotivo
+        onConfirmar={confirmarExclusao}
+      />
     </>
   );
 }
