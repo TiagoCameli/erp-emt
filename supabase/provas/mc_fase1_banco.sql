@@ -55,6 +55,7 @@ declare
   v_k1 uuid; v_k2 uuid; v_k3 uuid; v_n bigint; v_txt text; v_regra text; v_j jsonb; v_acc jsonb; r jsonb := '{}'::jsonb;
   v_obras0 bigint; v_cc0 bigint; v_lanc0 bigint; v_versao_rascunho uuid;
   v_versao_k3 uuid; v_med_k3 uuid; v_rev00_k3 uuid; v_rev01_k3 uuid; v_rev01_k2 uuid;
+  v_k4 uuid; v_aditivo_prazo uuid; v_aditivo2 uuid;
 begin
   select count(*) into v_obras0 from public.obras;
   select count(*) into v_cc0 from public.centros_custo;
@@ -324,6 +325,7 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
   insert into public.usuario_permissoes (usuario_id, recurso, acao)
   select v_tiago, x.recurso, x.acao from (values ('medicao.contratos', 'ver'), ('medicao.contratos', 'criar'), ('medicao.contratos', 'editar'),
+    ('medicao.contratos', 'excluir'), ('administracao.lixeira', 'editar'),
     ('medicao.planilha', 'ver'), ('medicao.planilha', 'criar'), ('medicao.planilha', 'aprovar')) x(recurso, acao)
   on conflict do nothing;
   set local role authenticated;
@@ -350,6 +352,41 @@ begin
   r := r || jsonb_build_object('4e_segundo_rascunho', v_txt);
   perform public.fn_mc_planilha_aprovar((select id from public.mc_planilha_versoes where contrato_id = v_k3));
   r := r || jsonb_build_object('4f_aprovada', (select status from public.mc_planilha_versoes where contrato_id = v_k3));
+
+  -- 4g/4h/4i. Contrato excluído recusa RPCs de escrita na árvore; restaurar funciona
+  v_k4 := public.fn_mc_contrato_salvar(jsonb_build_object('codigo', 'prova-k4', 'nome_obra', 'Prova K4', 'objeto', 'Prova',
+    'numero_contrato', 'K4', 'contratante_nome', 'Prova', 'contratante_tipo', 'estadual', 'valor_inicial', '10',
+    'data_assinatura', '2026-01-01', 'prazo_meses', 12));
+  perform public.fn_mc_excluir('mc_contratos', v_k4, 'Prova de exclusão');
+  begin perform public.fn_mc_aditivo_salvar(v_k4, jsonb_build_object('data_assinatura', '2026-02-01', 'data_vigencia', '2026-03-01',
+      'tipos', jsonb_build_array('prazo'), 'prazo_acrescido_meses', 1, 'motivo', 'Prova'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4g_aditivo_em_contrato_excluido', v_txt);
+  begin perform public.fn_mc_planilha_criar_rascunho(v_k4, jsonb_build_object('vigente_desde', '2026-01-01'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4h_rascunho_em_contrato_excluido', v_txt);
+  perform public.fn_mc_restaurar('mc_contratos', v_k4);
+  r := r || jsonb_build_object('4i_restaurado', (select excluido_em is null from public.mc_contratos where id = v_k4));
+
+  -- 4j. Aditivo só de prazo não libera nova versão da planilha
+  v_aditivo_prazo := public.fn_mc_aditivo_salvar(v_k3, jsonb_build_object('data_assinatura', '2026-02-01', 'data_vigencia', '2026-03-01',
+    'tipos', jsonb_build_array('prazo'), 'prazo_acrescido_meses', 2, 'motivo', 'Prova prazo'));
+  begin perform public.fn_mc_planilha_criar_rascunho(v_k3, jsonb_build_object('aditivo_id', v_aditivo_prazo, 'vigente_desde', '2026-02-01'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4j_aditivo_so_prazo', v_txt);
+
+  -- 4k. Linha citando item de outro contrato é recusada
+  v_aditivo2 := public.fn_mc_aditivo_salvar(v_k3, jsonb_build_object('data_assinatura', '2026-02-01', 'data_vigencia', '2026-03-01',
+    'tipos', jsonb_build_array('quantidade'), 'motivo', 'Prova quantidade'));
+  perform public.fn_mc_planilha_criar_rascunho(v_k3, jsonb_build_object('aditivo_id', v_aditivo2, 'vigente_desde', '2026-02-01'));
+  begin perform public.fn_mc_planilha_gravar_linhas(
+      (select id from public.mc_planilha_versoes where contrato_id = v_k3 and status = 'rascunho'), jsonb_build_array(
+        jsonb_build_object('ordem', 1, 'codigo', '01', 'pai_ordem', null, 'descricao', 'Serviço de outro contrato', 'unidade', 'un',
+                           'tipo', 'servico', 'preco_unitario', '1', 'quantidade_prevista', '1', 'linha_origem', null,
+                           'item_id', (select item_id from public.mc_planilha_itens where contrato_id = v_k1 and ordem = 2 limit 1))),
+      'planilha2.xlsx', 'def');
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4k_item_de_outro_contrato', v_txt);
   reset role;
 
   -- 6. Acesso por contrato
@@ -361,7 +398,7 @@ begin
     jsonb_build_object('contratos', (select count(*) from public.mc_contratos where codigo like 'PROVA-%'),
                        'linhas', (select count(*) from public.mc_planilha_itens where contrato_id in (v_k1, v_k2, v_k3)),
                        'views', (select count(*) from public.mc_v_planilha_linhas where contrato_id in (v_k1, v_k2, v_k3))));
-  begin perform public.fn_mc_contrato_salvar(jsonb_build_object('codigo', 'X1', 'nome_obra', 'X', 'objeto', 'X', 'numero_contrato', 'X',
+  begin perform public.fn_mc_contrato_salvar(jsonb_build_object('codigo', 'X1', 'nome_obra', 'XX', 'objeto', 'X', 'numero_contrato', 'X',
       'contratante_nome', 'X', 'contratante_tipo', 'privado', 'valor_inicial', '1', 'data_assinatura', '2026-01-01', 'prazo_meses', 1));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('6b_sem_criar', v_txt);
