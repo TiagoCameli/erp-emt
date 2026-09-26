@@ -95,7 +95,7 @@ export function EspelhoImpresso({
  */
 const TONS = {
   aberto: { fundo: "#FDF3E3", borda: "#EBD5AE", texto: "#8A5A0B" },
-  efetivado: { fundo: "#ECF4EE", borda: "#BFDAC6", texto: "#15803D" },
+  efetivado: { fundo: "#ECF4EE", borda: "#BFDAC6", texto: "#137537" },
   recusado: { fundo: "#FCECEC", borda: "#EFC5C5", texto: "#B91C1C" },
   neutro: { fundo: "#F1F1EF", borda: "#DEDCD6", texto: "#57534E" },
 } as const;
@@ -169,13 +169,13 @@ export function EspelhoTarja({
             aria-hidden="true"
           />
           {tipo}
-          {situacao ? <span className="opacity-70">· {situacao}</span> : null}
+          {situacao ? <span>· {situacao}</span> : null}
         </span>
         <span className="truncate font-mono text-[11px] font-semibold text-[#57534E]">
           {numero ?? "sem número"}
         </span>
       </span>
-      <span className="text-[9.5px] text-[#8A8A8A]">
+      <span className="text-[9.5px] text-[#6B6B6B]">
         Emitido em {formatarDataHora(emitidoEm)} · Por: {emitidoPor}
       </span>
     </div>

@@ -409,7 +409,7 @@ export function FiltroPeriodo({
               size="sm"
               aria-label={rotulo}
               className={cn(
-                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 border-input text-detalhe font-normal",
                 temPeriodo ? "" : "text-muted-foreground",
               )}
             >
@@ -804,7 +804,7 @@ export function FiltroMesPeriodo({
               size="sm"
               aria-label={rotulo}
               className={cn(
-                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 border-input text-detalhe font-normal",
                 temPeriodo ? "" : "text-muted-foreground",
               )}
             >
@@ -919,7 +919,7 @@ export function FiltroValor({
               size="sm"
               aria-label={rotulo}
               className={cn(
-                "h-8 min-w-0 flex-1 justify-start gap-1.5 text-detalhe font-normal",
+                "h-8 min-w-0 flex-1 justify-start gap-1.5 border-input text-detalhe font-normal",
                 temFaixa ? "" : "text-muted-foreground",
               )}
             >

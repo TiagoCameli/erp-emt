@@ -285,7 +285,7 @@ export function SubAbasSaidas({
         <TabsList variant="line">
           {VISOES_SAIDA.map((v) => (
             <TabsTrigger key={v} value={v}>
-              {ROTULO_VISAO[v]} <span className="tabular-nums opacity-60">({contagens[v].toLocaleString("pt-BR")})</span>
+              {ROTULO_VISAO[v]} <span className="tabular-nums text-muted-foreground">({contagens[v].toLocaleString("pt-BR")})</span>
             </TabsTrigger>
           ))}
         </TabsList>

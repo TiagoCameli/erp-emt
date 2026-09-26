@@ -4383,6 +4383,19 @@ e o backfill dela. Fica em aberto para a Fase 5: revisão `enviada` rejeitada pe
 estado terminal que guarde histórico (hoje só se refaz reabrindo e apagando a REV enviada); o RPC do
 ciclo da Fase 5 decide (ex.: liberar `enviada -> substituida`).
 
+## 2026-09-26 - Ajustes de contraste no tema claro
+
+**Contexto:** Vários pares de cor do tema claro ficavam abaixo do mínimo de leitura (WCAG: texto ≥ 4,5:1; borda de campo, anel de foco e ícone ≥ 3:1). Os piores: borda do campo `--input` #E8E6E1 a 1,2:1 (o campo quase não aparecia), anel de foco `ring-ring/50` com #F59E0B a 2,2:1 mesmo cheio (quem navega por teclado não via o foco) e três status abaixo de 4,5:1 no próprio badge.
+
+**Decisão:**
+- Status: aprovado #15803D → #137537, pendente #B45309 → #A14A07, rascunho #6B7280 → #5F6673. Rejeitado e efeito ficam. Aprovado continua diferente do verde da marca.
+- Anel de foco separado da Faixa: `--ring` e `--sidebar-ring` #C26A05. A Faixa continua #F59E0B. Foco é aplicado num lugar só, pelas utilities `foco-anel` (outline sólido 2px, offset 2px; vira destructive com `aria-invalid`) e `foco-anel-dentro` (offset -2px, para célula de tabela, botão da sidebar e cartão com overflow cortado). Outline e não box-shadow: o vão do offset fica transparente em qualquer fundo.
+- `--input` #8C8A84 (3,45:1). `--border` continua #E8E6E1: é decorativa e é a cara Notion. Gatilho do Combobox e seletores de período do FilterBar, que são `Button outline`, passam a usar `border-input`.
+- Âmbar como texto sai: `text-amber-*` de atenção vira `text-status-pendente`.
+- Opacidade em texto que não é desabilitado sai (selo `discreto`, aba inativa, contagem das abas de Saídas, percentual do gráfico de Combustível, centro de custo inativo, tarja do espelho). O espelho impresso troca o verde de efetivado para #137537 e o cinza #8A8A8A (3,45:1) para #6B6B6B.
+
+**Consequência:** `src/lib/contraste.test.ts` lê os tokens do `globals.css` (e do `.dark`, quando existir) e reprova qualquer par abaixo do mínimo, além de barrar âmbar claro como texto, cinza fixo do Tailwind e a volta do anel translúcido. Ficaram de fora, de propósito: o esmaecimento interativo dos rankings e gráficos (item não selecionado a 40%, some ao limpar a seleção), a paleta dos gráficos do Gestão (`--chart-2` âmbar da marca é cor de série, não de texto; revisar em tarefa própria se algum gráfico depender só da cor) e o traço decorativo da matriz de permissões.
+
 ## 2026-09-26 - Tema escuro
 
 **Contexto:** O design system "ERP EMT" ganhou uma versão escura. O `globals.css` já declarava a variante `dark`, e o `next-themes` estava no package.json sem uso.
@@ -4391,6 +4404,7 @@ ciclo da Fase 5 decide (ex.: liberar `enviada -> substituida`).
 - Tokens escuros num bloco `.dark` logo abaixo do `:root`. Só mudam neutros, status, `--chart-3`, `--chart-5`, sidebar e o texto da logo. A marca (`--emt-*`), o primário, a Faixa âmbar, o `--ring`, o destrutivo e `--chart-1/2/4` são iguais nos dois temas: é o mesmo logo e o mesmo botão.
 - `next-themes` com `attribute="class"`, padrão `system`. A escolha fica no menu do usuário do AppShell (o mesmo menu serve desktop e mobile) e no rodapé das telas de campo `/m/`, que não têm AppShell.
 - **Documento é sempre claro.** `.tema-claro` redeclara os tokens claros (é o mesmo bloco do `:root`) e está no espelho, no holerite e no recibo de rescisão. A variante `dark:` ignora `.tema-claro` e a impressão, e `@media print` devolve o claro a `:root.dark`: qualquer tela impressa com o tema escuro ligado sai clara. `src/config/marca.ts` (exceljs e pdfmake) não muda.
+- `--input` escuro #71706B, e não o #6A6964 do desenho: o #6A6964 dava 2,9:1 em `--surface` e no popover (o teste de contraste do tema claro, que também roda no `.dark`, pegou). O `--ring` claro virou #C26A05 no ajuste de contraste e o escuro herda: 4,1:1 ou mais nos fundos escuros.
 - Sombras `shadow-xs`/`shadow-sm` com a cor num token (`--sombra-*`): 5-10% no claro, 40-50% no escuro.
 - Verde da marca e vermelho de erro como TEXTO têm token próprio (`--primary-texto`, `--destrutivo-texto`), iguais ao fundo no claro e clareados no escuro (`#a9d4b1`, `#f07c7c`), porque como texto no fundo escuro davam 3,3:1 e 2,7:1. Ligados por `--text-color-primary`/`--text-color-destructive` no `@theme`, então `text-primary`/`text-destructive` (inclusive em components/ui) usam o token de texto e `bg-*`/`border-*` seguem no de fundo. Aprovado pelo Tiago em 26/09/2026.
 

@@ -799,7 +799,7 @@ const CLASSES_PESO: Record<number, string> = {
 function IconeOrdenacao({ direcao }: { direcao: false | "asc" | "desc" }) {
   if (direcao === "asc") return <ArrowUp className="size-3.5 shrink-0" />;
   if (direcao === "desc") return <ArrowDown className="size-3.5 shrink-0" />;
-  return <ArrowUpDown className="size-3.5 shrink-0 opacity-40" />;
+  return <ArrowUpDown className="size-3.5 shrink-0 text-muted-foreground" />;
 }
 
 /**
@@ -2538,7 +2538,7 @@ export function DataTable<TData>({
                       "bg-linear-to-r from-transparent from-40% via-50% to-transparent to-60%",
                       // Foco de teclado precisa de marca própria: 2px de linha
                       // âmbar num vão de 12px ninguém acha na tela.
-                      "focus-visible:outline-2 focus-visible:outline-ring",
+                      "foco-anel-dentro",
                       // Na última coluna a alça fica DENTRO: transbordar ali sobra
                       // para fora da tabela e inventa 6px de rolagem horizontal.
                       header.column.id === idUltimaColuna
@@ -2622,7 +2622,7 @@ export function DataTable<TData>({
                 // A alça de altura é posicionada em relação à linha.
                 personalizavel && "group/linha relative",
                 onRowClick &&
-                  "cursor-pointer focus-visible:bg-muted/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                  "cursor-pointer foco-anel-dentro focus-visible:bg-muted/50"
               )}
             >
               {linha.getVisibleCells().map((celula, indiceCelula) => {

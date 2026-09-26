@@ -162,7 +162,7 @@ export function RodapeEmpresa({ className }: { className?: string }) {
  */
 export function RodapeDocumento({ tipo }: { tipo: string }) {
   return (
-    <div className="border-t border-dashed border-[#D4D2CC] pt-[5px] text-center text-[9px] tracking-[0.08em] text-[#8A8A8A] uppercase">
+    <div className="border-t border-dashed border-[#D4D2CC] pt-[5px] text-center text-[9px] tracking-[0.08em] text-[#6B6B6B] uppercase">
       {EMPRESA.razaoSocial} · CNPJ {EMPRESA.cnpj} · Documento interno — {tipo}
     </div>
   );

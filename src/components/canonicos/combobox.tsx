@@ -376,14 +376,14 @@ export function Combobox({
             // lista. Não mexe no nome acessível: o botão já tem texto e
             // `aria-label`, que ganham do `title`.
             title={rotuloSelecionado || undefined}
-            className={cn("w-full justify-between font-normal", className)}
+            className={cn("w-full justify-between border-input font-normal", className)}
           >
             <span
               className={cn("truncate", !rotuloSelecionado && "text-muted-foreground")}
             >
               {rotuloSelecionado || placeholder}
             </span>
-            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 text-muted-foreground" />
           </Button>
         </PopoverTrigger>
       </span>

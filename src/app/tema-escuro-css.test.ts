@@ -48,7 +48,7 @@ describe("tema escuro no globals.css", () => {
       "--muted": "#222221",
       "--muted-foreground": "#9b9b98",
       "--border": "#353432",
-      "--input": "#6a6964",
+      "--input": "#71706b",
       "--accent": "#233227",
       "--accent-foreground": "#a9d4b1",
       "--secondary": "#2a2a29",

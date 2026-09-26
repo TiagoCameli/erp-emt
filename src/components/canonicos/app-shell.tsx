@@ -415,7 +415,7 @@ function ModuloSidebar({
                 aria-current={ativa ? "page" : undefined}
                 onClick={onFecharAgora}
                 className={cn(
-                  "block px-3 py-1.5 text-detalhe outline-none transition-colors",
+                  "block px-3 py-1.5 text-detalhe foco-anel-dentro transition-colors",
                   ativa
                     ? "bg-accent font-medium text-accent-foreground"
                     : "text-foreground hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent",
@@ -522,7 +522,7 @@ export function AppShell({
         <div className="shrink-0 border-t border-sidebar-border">
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="flex h-14 w-full items-center justify-center outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              className="flex h-14 w-full items-center justify-center foco-anel-dentro hover:bg-sidebar-accent"
               aria-label={`Menu do usuário: ${usuario.nome}`}
             >
               <AvatarUsuario nome={usuario.nome} fotoUrl={usuario.fotoUrl} />
@@ -555,7 +555,7 @@ export function AppShell({
           />
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-full foco-anel"
               aria-label="Menu do usuário"
             >
               <AvatarUsuario nome={usuario.nome} fotoUrl={usuario.fotoUrl} />

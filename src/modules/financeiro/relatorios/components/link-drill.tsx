@@ -39,7 +39,7 @@ export function LinkDrill({
       className={cn(
         "group inline-flex items-center gap-1 text-foreground underline-offset-2",
         "hover:text-primario hover:underline focus-visible:text-primario",
-        "focus-visible:underline focus-visible:outline-none",
+        "foco-anel focus-visible:underline",
         className,
       )}
     >
