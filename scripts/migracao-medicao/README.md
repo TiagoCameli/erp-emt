@@ -78,3 +78,40 @@ Confere: hash do xlsx; contagens (265 linhas, 20 títulos, 245 serviços, 10 med
 linha do DOPE (`02.02.01`); preço e quantidade de `02.07.04` e `01.01`; a 9ª medição de
 `01.01`; a hierarquia por maior prefixo; os 8 grupos e os totais (previsto
 243.927.483,49; acumulado 36.541.661,77; 10ª 680.738,27; saldo 207.385.821,72).
+
+## Task 2: preparo e carregador do staging
+
+Migration `supabase/migrations/20260926192737_mc_fase2_preparo_carga_l09.sql` (aplicada em
+produção): cria `legado.carga_mc_l09 (secao text, parte int, dados jsonb, carregado_em,
+pk (secao, parte))`, RLS ligada, sem policy, `revoke all` de `public, anon,
+authenticated`, e a função `legado.fn_staging_mc_l09(p_secao text) returns setof jsonb`
+(sem grant: só `postgres`/MCP a usam). Mesmo molde da Fase 3/4
+(`20260925120000_fase34_preparo_carga.sql`). O advisor de segurança acusa "RLS enabled,
+no policies" para essa tabela, esperado (mesmo aviso das outras tabelas de staging:
+`carga_fase2d`, `carga_fase34`).
+
+`carregar_staging_lote09.py` lê `_retrato/staging_l09.json` e `_retrato/esperado_l09.json`
+(Task 1), monta lotes de ~35 KB por seção (`contrato`, `linhas`, `medicoes`,
+`quantidades`, `esperado`; `contrato` e `esperado` entram como lista de um elemento, para
+a função devolver uma linha) como arquivos `_retrato/staging_l09_NNN.sql`, e
+apaga-e-regrava `legado.carga_mc_l09` (idempotente):
+
+```
+python3 scripts/migracao-medicao/carregar_staging_lote09.py
+```
+
+Dois caminhos, os dois documentados aqui:
+
+- **Caminho principal (usado nesta carga):** `supabase db query --linked`, no projeto
+  linkado deste repositório (`supabase/.temp/project-ref`). O script recusa seguir se o
+  ref linkado não for o ERP (`vsesgvqjgqpapoxhnbqx`) e para sem tocar em nada.
+- **Caminho alternativo:** se o CLI não estiver linkado (ou não estiver logado) nesta
+  máquina, o script só gera os arquivos `_retrato/staging_l09_NNN.sql` e para, sem tentar
+  logar. Quem estiver rodando aplica cada arquivo, na ordem, pelo MCP
+  (`mcp__plugin_supabase_supabase__execute_sql`, o conteúdo do arquivo como `query`, uma
+  chamada por lote) e confere as contagens do mesmo jeito.
+
+Conferência (pelo MCP `execute_sql`, os dois caminhos): contagem por seção
+(`select secao, count(*) from legado.carga_mc_l09, jsonb_array_elements(dados) group by
+secao`: 1 contrato, 265 linhas, 10 medições, 2.450 quantidades, 1 esperado) e um valor de
+ponta (`02.07.04` com preço `580.8643`).
