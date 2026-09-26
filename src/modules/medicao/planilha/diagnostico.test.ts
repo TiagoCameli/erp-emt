@@ -20,9 +20,14 @@ describe("diagnosticarValores", () => {
     expect(d?.diverge).toEqual([{ ordem: 4, codigo: "01.04", classe: "diverge", exato: "9908145.49662", arredondado: "9908145.5", planilha: "9908218.84" }]);
   });
 
-  it("valor da planilha com ruído de double conta como exato", () => {
+  it("valor da planilha com ruído de double conta como indistinto quando q x p já tem até 2 casas", () => {
     const d = diagnosticarValores([serv(1, "01", "0.1", "3", "0.30000000000000004")]);
     expect(d).toMatchObject({ indistinto: 1, diverge: [] });
+  });
+
+  it("valor da planilha com ruído de double conta como exato quando q x p tem mais de 2 casas", () => {
+    const d = diagnosticarValores([serv(1, "01", "0.1", "0.11", "0.011000000000000001")]);
+    expect(d).toMatchObject({ exato: 1, indistinto: 0, diverge: [] });
   });
 
   it("sem coluna de valor não há diagnóstico", () => {

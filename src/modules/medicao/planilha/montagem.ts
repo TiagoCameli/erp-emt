@@ -6,7 +6,14 @@ import { enderecoCelula, type CelulaLida } from "./leitor";
  * - o pai é a linha anterior de código mais longo que é prefixo do código (com ponto);
  *   código repetido torna o pai ambíguo: sugere o mais próximo e pede confirmação;
  * - campo vazio de serviço vira "0" com alerta, nunca some;
- * - texto em coluna de número, fórmula sem valor e erro de fórmula BLOQUEIAM.
+ * - texto em coluna de número, fórmula sem valor e erro de fórmula BLOQUEIAM;
+ * - código digitado como NÚMERO na planilha BLOQUEIA: o Excel come zero à esquerda ("01" vira 1)
+ *   e à direita ("1.10" vira 1.1), o que quebra tanto a hierarquia quanto a conciliação por
+ *   código; a linha é montada normalmente (para não perder o resto do diagnóstico), mas o
+ *   alerta impede a gravação;
+ * - problema na coluna de VALOR nunca bloqueia: ela só alimenta o diagnóstico (Task 9,
+ *   diagnostico.ts), nunca vai para o banco como número oficial;
+ * - código terminado em ponto entra como está (não é cortado), só com alerta.
  * Nada aqui calcula dinheiro.
  */
 
@@ -19,7 +26,7 @@ export interface LinhaBruta {
   preco: CelulaLida;
   quantidade: CelulaLida;
   valor: CelulaLida | null;
-  colunas: { preco: number; quantidade: number; valor: number | null };
+  colunas: { codigo: number; preco: number; quantidade: number; valor: number | null };
 }
 
 export type TipoAlerta =
@@ -33,7 +40,9 @@ export type TipoAlerta =
   | "formula_sem_valor"
   | "numero_como_texto"
   | "erro_de_formula"
-  | "linha_sem_codigo";
+  | "linha_sem_codigo"
+  | "codigo_como_numero"
+  | "codigo_termina_com_ponto";
 
 export interface Alerta {
   tipo: TipoAlerta;
@@ -112,9 +121,17 @@ export function montarPlanilha(brutas: LinhaBruta[], paiEscolhido: Record<number
     }
     const ordem = linhas.length + 1;
 
+    if (b.codigo.tipo === "numero") {
+      const endereco = enderecoCelula(b.linhaOrigem, b.colunas.codigo);
+      alertas.push({ tipo: "codigo_como_numero", bloqueia: true, ordem, linhaOrigem: b.linhaOrigem,
+        mensagem: `A célula ${endereco} tem o código como número (${b.codigo.texto}). Formate a coluna de código como texto no Excel e envie de novo` });
+    }
+
     const preco = numero(b.preco, b.linhaOrigem, b.colunas.preco);
     const qtd = numero(b.quantidade, b.linhaOrigem, b.colunas.quantidade);
-    const valor = b.valor && b.colunas.valor ? numero(b.valor, b.linhaOrigem, b.colunas.valor) : { valor: null };
+    const valorBruto = b.valor && b.colunas.valor ? numero(b.valor, b.linhaOrigem, b.colunas.valor) : { valor: null };
+    // Problema na coluna de valor nunca bloqueia: ela só alimenta o diagnóstico.
+    const valor = "alerta" in valorBruto ? { alerta: { ...valorBruto.alerta, bloqueia: false } } : valorBruto;
     for (const r of [preco, qtd, valor]) if ("alerta" in r) alertas.push({ ...r.alerta, ordem });
     const precoTexto = "valor" in preco ? preco.valor : null;
     const qtdTexto = "valor" in qtd ? qtd.valor : null;
@@ -138,6 +155,10 @@ export function montarPlanilha(brutas: LinhaBruta[], paiEscolhido: Record<number
     if (b.oculta) {
       alertas.push({ tipo: "linha_oculta", bloqueia: false, ordem, linhaOrigem: b.linhaOrigem,
         mensagem: `A linha ${b.linhaOrigem} (${codigo}) está oculta na planilha e foi importada. Confira se ela é do contrato` });
+    }
+    if (codigo.endsWith(".")) {
+      alertas.push({ tipo: "codigo_termina_com_ponto", bloqueia: false, ordem, linhaOrigem: b.linhaOrigem,
+        mensagem: `O código ${codigo} (linha ${b.linhaOrigem}) termina com ponto. Confira na planilha` });
     }
 
     // Pai: a linha anterior com o maior código que é prefixo deste, seguido de ponto.

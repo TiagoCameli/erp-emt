@@ -9,7 +9,7 @@ const vazia: CelulaLida = { tipo: "vazia" };
 
 function linha(l: number, codigo: string, descricao: string, unidade: CelulaLida, preco: CelulaLida, qtd: CelulaLida, extra: Partial<LinhaBruta> = {}): LinhaBruta {
   return { linhaOrigem: l, oculta: false, codigo: s(codigo), descricao: s(descricao), unidade, preco, quantidade: qtd, valor: null,
-           colunas: { preco: 4, quantidade: 5, valor: null }, ...extra };
+           colunas: { codigo: 1, preco: 4, quantidade: 5, valor: null }, ...extra };
 }
 
 describe("montarPlanilha", () => {
@@ -44,6 +44,7 @@ describe("montarPlanilha", () => {
     expect(m.ambiguidades).toEqual([{ ordem: 5, codigo: "02.02.01", candidatos: [2, 3, 4], sugerido: 4 }]);
     expect(m.linhas[4].paiOrdem).toBe(4);
     expect(m.alertas.map((a) => a.tipo).sort()).toEqual(["codigo_duplicado", "hierarquia_ambigua"]);
+    expect(m.alertas.find((a) => a.tipo === "codigo_duplicado")?.mensagem).toContain("linhas 6, 7, 8");
   });
 
   it("a escolha do usuário resolve a ambiguidade", () => {
@@ -54,6 +55,17 @@ describe("montarPlanilha", () => {
     ], { 3: 1 });
     expect(m.linhas[2].paiOrdem).toBe(1);
     expect(m.alertas.find((a) => a.tipo === "hierarquia_ambigua")).toBeUndefined();
+  });
+
+  it("escolha do usuário fora dos candidatos não resolve a ambiguidade", () => {
+    const m = montarPlanilha([
+      linha(5, "02.02", "Usinagem", s("t"), n("10"), n("1")),
+      linha(6, "02.02", "CAP", s("t"), n("30"), n("1")),
+      linha(7, "02.02.01", "Transporte", s("tkm"), n("1"), n("1")),
+    ], { 3: 99 });
+    expect(m.linhas[2].paiOrdem).toBe(2);
+    expect(m.ambiguidades).toEqual([{ ordem: 3, codigo: "02.02.01", candidatos: [1, 2], sugerido: 2 }]);
+    expect(m.alertas.find((a) => a.tipo === "hierarquia_ambigua")).toBeDefined();
   });
 
   it("unidade com espaço sobrando entra aparada e gera alerta", () => {
@@ -81,6 +93,37 @@ describe("montarPlanilha", () => {
     const m = montarPlanilha([linha(12, "01", "X", s("un"), n("1"), { tipo: "formula_sem_valor" })]);
     expect(m.alertas).toMatchObject([{ tipo: "formula_sem_valor", bloqueia: true }]);
     expect(m.alertas[0].mensagem).toBe("A célula E12 é fórmula sem valor calculado. Abra o arquivo no Excel, salve e envie de novo");
+  });
+
+  it("erro de fórmula no preço bloqueia, com o endereço da célula", () => {
+    const m = montarPlanilha([linha(12, "01", "X", s("un"), { tipo: "erro", bruto: "#DIV/0!" }, n("1"))]);
+    expect(m.alertas).toMatchObject([{ tipo: "erro_de_formula", bloqueia: true, linhaOrigem: 12 }]);
+    expect(m.alertas[0].mensagem).toContain("D12");
+  });
+
+  it("código digitado como número bloqueia, com o endereço da célula", () => {
+    const m = montarPlanilha([linha(12, "01", "X", s("un"), n("1"), n("1"), { codigo: n("1") })]);
+    expect(m.alertas).toMatchObject([{ tipo: "codigo_como_numero", bloqueia: true, linhaOrigem: 12 }]);
+    expect(m.alertas[0].mensagem).toContain("A12");
+  });
+
+  it("erro na coluna de valor não bloqueia e não impede o título", () => {
+    const m = montarPlanilha([
+      linha(5, "01", "Pavimentação", vazia, vazia, vazia,
+        { valor: { tipo: "erro", bruto: "#DIV/0!" }, colunas: { codigo: 1, preco: 4, quantidade: 5, valor: 6 } }),
+    ]);
+    expect(m.linhas[0].tipo).toBe("titulo");
+    expect(m.linhas[0].valorPlanilha).toBeNull();
+    expect(m.alertas).toMatchObject([{ tipo: "erro_de_formula", bloqueia: false, linhaOrigem: 5 }]);
+  });
+
+  it("código terminado em ponto entra como está, com alerta", () => {
+    const m = montarPlanilha([
+      linha(5, "02", "Grupo", vazia, vazia, vazia),
+      linha(6, "02.", "Item", s("m2"), n("1"), n("1")),
+    ]);
+    expect(m.linhas[1].codigo).toBe("02.");
+    expect(m.alertas).toMatchObject([{ tipo: "codigo_termina_com_ponto", bloqueia: false, linhaOrigem: 6 }]);
   });
 
   it("linha oculta entra e é sinalizada", () => {
