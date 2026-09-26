@@ -56,7 +56,7 @@ export function KPICard({
     return (
       <Link
         href={href}
-        className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="block rounded-lg foco-anel"
       >
         {conteudo}
       </Link>
