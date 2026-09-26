@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 
 import { AppShell } from "@/components/canonicos";
-import { modulosDaBarraMobile } from "@/components/canonicos/app-shell";
+import { MAPA_ICONES, modulosDaBarraMobile } from "@/components/canonicos/app-shell";
+import { MODULOS as MODULOS_DO_CATALOGO } from "@/config/recursos";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/financeiro/lancamentos",
@@ -77,6 +78,20 @@ describe("AppShell, nome do módulo na sidebar", () => {
     expect(within(rail).getByRole("link", { name: "Gestão" })).not.toHaveAttribute(
       "aria-current",
     );
+  });
+});
+
+/**
+ * Módulo sem entrada em MAPA_ICONES cai no ícone genérico (Circle) e ninguém
+ * percebe: nem o tsc acusa, porque o mapa é `Record<string, LucideIcon>`, não
+ * `Record<ModuloId, LucideIcon>`. Este teste é a trava contra isso: todo módulo
+ * do catálogo tem de ter um ícone próprio.
+ */
+describe("MAPA_ICONES", () => {
+  it("tem um ícone para todo módulo do catálogo", () => {
+    for (const modulo of MODULOS_DO_CATALOGO) {
+      expect(MAPA_ICONES[modulo.id], `sem ícone para o módulo ${modulo.id}`).toBeDefined();
+    }
   });
 });
 

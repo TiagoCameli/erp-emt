@@ -19,6 +19,7 @@ import {
   Wrench,
   Fuel,
   Truck,
+  Ruler,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -41,7 +42,7 @@ import { LogoEmt } from "@/components/canonicos/logo-emt";
 import { useRestaurarFiltrosDaSessao } from "@/components/canonicos/use-restaurar-filtros";
 import { cn } from "@/lib/utils";
 
-const MAPA_ICONES: Record<string, LucideIcon> = {
+export const MAPA_ICONES: Record<string, LucideIcon> = {
   gestao: LayoutDashboard,
   administracao: Settings,
   cadastros: FolderOpen,
@@ -50,6 +51,7 @@ const MAPA_ICONES: Record<string, LucideIcon> = {
   financeiro: Wallet,
   combustivel: Fuel,
   manutencao: Wrench,
+  medicao: Ruler,
   rh: Users,
 };
 
