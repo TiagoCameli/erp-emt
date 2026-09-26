@@ -108,14 +108,21 @@ def sha256_arquivo(caminho):
 
 
 def numero_texto(valor):
-    """Texto exato do número da célula, por repr(float()). Recusa notação científica."""
+    """Texto exato do número da célula, no mesmo formato do importador do app
+    (src/modules/medicao/planilha/leitor.ts, numeroParaTexto: JS String(n)). Um float
+    inteiro vira "36", não "36.0"; o não inteiro mantém o repr do Python (mesmos dígitos
+    de ida e volta que o JS produz, nas grandezas desta planilha). Recusa notação
+    científica."""
     if valor is None:
         return None
     if isinstance(valor, bool) or isinstance(valor, str):
         raise TypeError(f'valor numérico inesperado (tipo {type(valor).__name__}): {valor!r}')
-    texto = repr(float(valor))
+    numero = float(valor)
+    texto = repr(numero)
     if 'e' in texto or 'E' in texto:
         raise ValueError(f'número em notação científica, recusado: {valor!r} -> {texto}')
+    if numero.is_integer():
+        return str(int(numero))
     return texto
 
 

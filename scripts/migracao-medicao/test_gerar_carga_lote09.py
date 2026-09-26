@@ -72,6 +72,14 @@ class TestGerarCargaLote09(unittest.TestCase):
         qtd_9a = self.quantidades_por_chave[(linha['ordem'], 9)]
         self.assertEqual(qtd_9a, '0.749996')
 
+    def test_numero_texto_bate_com_o_importador_do_app(self):
+        # numeroParaTexto do app (leitor.ts) usa JS String(n): float inteiro vira "36",
+        # não "36.0"; não inteiro mantém os mesmos dígitos do repr do Python.
+        linha_01_01 = self.linhas_por_codigo['01.01']
+        self.assertEqual(linha_01_01['quantidade_prevista'], '36')
+        linha_02_07_04 = self.linhas_por_codigo['02.07.04']
+        self.assertEqual(linha_02_07_04['quantidade_prevista'], '17057.717')
+
     def test_linhas_ocultas_184_a_199_quantidade_zero(self):
         for codigo in ('03.16.01', '03.16.05', '03.16.05.01', '03.16.09'):
             linha = self.linhas_por_codigo[codigo]
