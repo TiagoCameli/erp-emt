@@ -178,7 +178,7 @@ export function BarrasHorizontais({ linhas, series }: BarrasHorizontaisProps) {
                   href={linha.href}
                   className={cn(
                     "block rounded-sm",
-                    "hover:[&_span]:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2",
+                    "hover:[&_span]:text-foreground foco-anel",
                   )}
                 >
                   {conteudo}

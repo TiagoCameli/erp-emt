@@ -511,7 +511,7 @@ export function ReguaTempo({
                   );
                   onPeriodoChange(novoDe, novoAte);
                 }}
-                className="min-w-0 flex-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="min-w-0 flex-1 foco-anel"
               />
             ))}
           </div>

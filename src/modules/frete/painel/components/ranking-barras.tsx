@@ -68,7 +68,7 @@ export function RankingBarras({ itens, selecionado, onAlternar, vazio }: Ranking
                 type="button"
                 onClick={() => onAlternar(item.id)}
                 aria-pressed={selecionado === item.id}
-                className="block w-full rounded-sm text-left hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="block w-full rounded-sm text-left hover:bg-surface foco-anel"
               >
                 {conteudo}
               </button>

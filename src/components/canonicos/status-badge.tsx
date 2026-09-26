@@ -50,6 +50,10 @@ interface StatusBadgeProps {
    * dinheiro e este diz a etapa já vencida. Dois selos do mesmo peso lado a lado
    * competem, e o olho não sabe qual responde "e daí?". Continua sendo texto +
    * cor (nunca só cor), só com menos ênfase.
+   *
+   * A ênfase menor vem do fundo transparente e do corpo menor, NUNCA de
+   * opacidade: a cor do status a 80% caía para 3,1 a 4,0:1, abaixo dos 4,5:1
+   * de texto.
    */
   discreto?: boolean;
   className?: string;
@@ -75,7 +79,7 @@ export function StatusBadge({
       className={cn(
         "border-transparent",
         config.classes,
-        discreto && "bg-transparent px-1.5 py-0 text-legenda opacity-80",
+        discreto && "bg-transparent px-1.5 py-0 text-legenda",
         className,
       )}
     >

@@ -80,7 +80,7 @@ function CelulaConsumidor({ saida }: { saida: SaidaLista }) {
   }
   if (saida.equipamentoSentinela || !saida.equipamentoDescricao) {
     return (
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-amber-700">
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-status-pendente">
         <AlertCircle className="size-3.5 shrink-0" aria-hidden />
         <span className="truncate text-legenda">Não identificado (Outros)</span>
       </span>
@@ -285,7 +285,7 @@ export function SubAbasSaidas({
         <TabsList variant="line">
           {VISOES_SAIDA.map((v) => (
             <TabsTrigger key={v} value={v}>
-              {ROTULO_VISAO[v]} <span className="tabular-nums opacity-60">({contagens[v].toLocaleString("pt-BR")})</span>
+              {ROTULO_VISAO[v]} <span className="tabular-nums text-muted-foreground">({contagens[v].toLocaleString("pt-BR")})</span>
             </TabsTrigger>
           ))}
         </TabsList>

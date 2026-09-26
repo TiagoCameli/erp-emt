@@ -192,7 +192,7 @@ export function TanquesLista({
                     <Link
                       href={`/combustivel/tanques/${tanque.id}`}
                       aria-label={`Abrir o tanque ${tanque.nome}`}
-                      className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-ring"
+                      className="absolute inset-0 rounded-xl foco-anel-dentro"
                     />
                     <TanqueVisual
                       id={tanque.id}
@@ -248,7 +248,7 @@ export function TanquesLista({
                     <Link
                       href={`/combustivel/tanques/${tanque.id}`}
                       aria-label={`Abrir o tanque ${tanque.nome}`}
-                      className="absolute inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                      className="absolute inset-0 foco-anel-dentro"
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{tanque.nome}</p>

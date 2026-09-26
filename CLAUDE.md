@@ -55,10 +55,12 @@ docs/                       PLANO-ERP-EMT.md, decisoes.md
 
 ## Design system EMT (resumo; detalhe no plano, seção 7)
 
-- Base neutra estilo Notion: fundo #FFFFFF, superfície #F7F7F5, borda #E8E6E1, texto #1F1F1F, secundário #6B6B6B.
+- Base neutra estilo Notion: fundo #FFFFFF, superfície #F7F7F5, borda #E8E6E1, texto #1F1F1F, secundário #6B6B6B. Borda de **campo de formulário** é outra, #8C8A84 (`--input`, `border-input`): a #E8E6E1 é decorativa e some num campo.
 - **Marca EMT, medida no arquivo da logo**: verde #3E7744 (ação primária), asfalto #45464B, amarelo do eixo da pista #CF943A. Tokens `--emt-*` no `globals.css`; os mesmos hexes em `src/config/marca.ts` para o exceljs e o pdfmake, que não leem CSS. Os dois têm que concordar.
-- Assinatura "a Faixa": barra âmbar #F59E0B de 3px no item ativo da sidebar, na aba ativa e na borda esquerda dos KPICards. Sempre igual, em todo o app. **Continua âmbar de propósito**: é o eixo da pista do logo.
-- Status com badge de texto + cor: aprovado #15803D, pendente #B45309, rejeitado/vencido #B91C1C, rascunho #6B7280. O verde de "aprovado" **não** é o verde da marca: fundir os dois faz o badge ter a cor do botão primário e a cor deixa de dizer "isto passou pela aprovação".
+- Assinatura "a Faixa": barra âmbar #F59E0B de 3px no item ativo da sidebar, na aba ativa e na borda esquerda dos KPICards. Sempre igual, em todo o app. **Continua âmbar de propósito**: é o eixo da pista do logo. Âmbar claro nunca é cor de texto nem de ícone solto (#CF943A e #F59E0B não chegam a 3:1 no branco); atenção em texto é `text-status-pendente`.
+- **Foco de teclado**: anel sólido #C26A05 (`--ring`, separado da Faixa) aplicado só pelas utilities `foco-anel` (2px, offset 2px) e `foco-anel-dentro` (offset -2px, para o que preenche container que corta transbordo). Nada de `ring-ring/50`.
+- **Contraste**: texto ≥ 4,5:1; borda de campo, foco e ícone ≥ 3:1. `src/lib/contraste.test.ts` lê os tokens do `globals.css` e reprova quem clarear.
+- Status com badge de texto + cor: aprovado #137537, pendente #A14A07, rejeitado/vencido #B91C1C, rascunho #5F6673, efeito #166534. Nunca por opacidade: o selo `discreto` perde ênfase no fundo e no corpo, não na cor. O verde de "aprovado" **não** é o verde da marca: fundir os dois faz o badge ter a cor do botão primário e a cor deixa de dizer "isto passou pela aprovação".
 - **Logo**: componente canônico `LogoEmt` (SVG inline, variantes `completa` e `simbolo`, mais `mono` para fundo colorido). Nunca `<img>` de `/public`: relatório vai pra impressora e imagem que não chegou a tempo sai como retângulo vazio.
 - **Todo documento que o app emite** (espelho, holerite, planilha) usa a moldura canônica `marca-documento` (`CabecalhoDocumento`, `PistaEmt`, `RodapeEmpresa`, `EmissaoDocumento`) e lê os dados cadastrais de `EMPRESA`. Cabeçalho próprio por tela é proibido: dois relatórios com CNPJ diferente é problema de contabilidade. Nada da marca pode carregar dado, porque quem imprime pode desligar "gráficos de fundo".
 - Inter na UI (escala 24/18/15/13/12, hierarquia por peso), JetBrains Mono para códigos de documento e placas.

@@ -107,7 +107,7 @@ export default async function EspelhoPagamentosPage({
       <BotaoImprimir />
 
       {ocultos > 0 || invalidos > 0 ? (
-        <p className="nao-imprime mx-auto max-w-[190mm] px-6 pt-2 text-[13px] text-[#B45309]">
+        <p className="nao-imprime mx-auto max-w-[190mm] px-6 pt-2 text-[13px] text-[#A14A07]">
           {ocultos > 0
             ? `${ocultos} pagamento(s) pedido(s) não estão visíveis para você e ficaram fora. `
             : ""}
