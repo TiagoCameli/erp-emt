@@ -1,4 +1,4 @@
--- Rollback de 20260926130000: devolve fn_rel_posicao_aplicacao e as tres
+-- Rollback de 20260925213619: devolve fn_rel_posicao_aplicacao e as tres
 -- colunas de fn_saldos_das_contas (texto de 20260822180000 e 20260827184118).
 create or replace function public.fn_rel_posicao_aplicacao()
  returns table(conta_bancaria_id uuid, aplicado numeric, resgatado numeric, posicao numeric)

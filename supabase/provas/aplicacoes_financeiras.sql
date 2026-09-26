@@ -254,6 +254,6 @@ end $prova$;
 -- (e) Andreia sem a aba: recusado (Sem permissao para ver aplicacoes)
 -- (f) transferencias: antes 51 / 26856813.21, depois 51 / 26856813.21
 --
--- 25/09/2026, DEPOIS de aplicar 20260926120000 (abertura real, LAN-2026-7145 e
+-- 25/09/2026, DEPOIS de aplicar 20260925210317 (abertura real, LAN-2026-7145 e
 -- LAN-2026-7146): PROVA DESFEITA. 15 ok, 0 falha(s). Mesmos numeros acima,
 -- com "[info] abertura ja carregada" no lugar da linha de controle.
