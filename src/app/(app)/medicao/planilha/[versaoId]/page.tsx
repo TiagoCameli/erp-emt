@@ -2,9 +2,8 @@ import { notFound } from "next/navigation";
 
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
 import { VersaoDetalhe } from "@/modules/medicao/planilha/components/versao-detalhe";
-import { carregarVersao, ehXlsx } from "@/modules/medicao/planilha/queries";
+import { carregarVersao, xlsxImportadoDaVersao } from "@/modules/medicao/planilha/queries";
 
 const RECURSO = "medicao.planilha" as const;
 
@@ -20,18 +19,16 @@ export default async function PaginaVersao({ params }: { params: Promise<{ versa
   if (!dados) notFound();
 
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
-  if (dados.versao.excluidoEm !== null && !podeExcluir) notFound();
+  // Versão na lixeira, ou de contrato na lixeira: só quem pode excluir abre (a existência não vaza).
+  if ((dados.versao.excluidoEm !== null || dados.contrato.excluidoEm !== null) && !podeExcluir) notFound();
 
-  // O xlsx para baixar: o anexo mais recente com o nome que foi importado.
-  const anexos = await listarAnexosDoDocumento("mc_planilha_versao", versaoId);
-  const importado = [...anexos]
-    .reverse()
-    .find((a) => ehXlsx(a.nome) && (dados.versao.arquivoNome === null || a.nome === dados.versao.arquivoNome));
+  // O xlsx para baixar: o anexo cujo conteúdo (SHA-256) é o que foi importado.
+  const xlsx = await xlsxImportadoDaVersao(versaoId, dados.versao.arquivoHash);
 
   return (
     <VersaoDetalhe
       dados={dados}
-      xlsx={importado ? { vinculoId: importado.vinculoId, nome: importado.nome } : null}
+      xlsx={xlsx}
       podeCriar={temPermissao(usuario, RECURSO, "criar")}
       podeAprovar={temPermissao(usuario, RECURSO, "aprovar")}
       podeDesaprovar={temPermissao(usuario, RECURSO, "desaprovar")}

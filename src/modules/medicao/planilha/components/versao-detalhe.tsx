@@ -91,7 +91,7 @@ export const colunasLinhas: ColumnDef<LinhaDaVersao, unknown>[] = [
 
 export interface VersaoDetalheProps {
   dados: VersaoCarregada;
-  /** Vínculo do xlsx importado (o anexo de mesmo nome mais recente), para baixar. */
+  /** Vínculo do xlsx importado (o anexo com o mesmo SHA-256 da versão), para baixar. */
   xlsx: { vinculoId: string; nome: string } | null;
   podeCriar: boolean;
   podeAprovar: boolean;
@@ -148,7 +148,9 @@ export function VersaoDetalhe({ dados, xlsx, podeCriar, podeAprovar, podeDesapro
     semDerrubarSucesso("medicao.planilha.transicao", () => router.refresh());
   }
 
-  const ativo = !naLixeira;
+  // Versão na lixeira ou contrato na lixeira: só consulta, nenhuma transição nem importação.
+  const contratoNaLixeira = contrato.excluidoEm !== null;
+  const ativo = !naLixeira && !contratoNaLixeira;
 
   return (
     <>
@@ -209,6 +211,12 @@ export function VersaoDetalhe({ dados, xlsx, podeCriar, podeAprovar, podeDesapro
           <div role="note" className="flex items-start gap-2 rounded-md border border-border bg-surface p-3 text-detalhe">
             <Info className="mt-0.5 size-4 shrink-0 text-status-rejeitado" aria-hidden />
             <p>Esta versão está na lixeira{versao.motivoExclusao ? `: ${versao.motivoExclusao}` : ""}.</p>
+          </div>
+        ) : null}
+        {contratoNaLixeira && !naLixeira ? (
+          <div role="note" className="flex items-start gap-2 rounded-md border border-border bg-surface p-3 text-detalhe">
+            <Info className="mt-0.5 size-4 shrink-0 text-status-rejeitado" aria-hidden />
+            <p>O contrato desta versão está na lixeira. A planilha fica só para consulta até ele ser restaurado.</p>
           </div>
         ) : null}
         {rascunho && versao.motivoDesaprovacao ? (

@@ -29,6 +29,8 @@ export default async function PaginaImportarPlanilha({ params }: { params: Promi
     arquivoDaVersao(versaoId),
   ]);
   if (!contrato) notFound();
+  // Contrato na lixeira: a planilha dele fica só para consulta.
+  if (contrato.excluido_em !== null) redirect(`/medicao/planilha/${versaoId}`);
 
   return (
     <>

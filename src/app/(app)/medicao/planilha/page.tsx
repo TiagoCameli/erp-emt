@@ -23,7 +23,7 @@ export default async function PaginaPlanilha({
 }) {
   const usuario = await getUsuarioLogado();
   if (!usuario || !temPermissao(usuario, RECURSO, "ver")) notFound();
-  const podeCriar = temPermissao(usuario, RECURSO, "criar");
+  const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
 
   const params = await searchParams;
   const contratoParam = primeiro(params.contrato);
@@ -52,7 +52,11 @@ export default async function PaginaPlanilha({
 
   // A RLS esconde o contrato fora da lista de acesso (D3): fora da lista é 404.
   const contrato = await carregarContrato(contratoId);
-  if (!contrato || contrato.excluido_em !== null) notFound();
+  if (!contrato) notFound();
+  // Contrato na lixeira: só quem pode excluir vê (como no detalhe do contrato), e só para consulta.
+  const naLixeira = contrato.excluido_em !== null;
+  if (naLixeira && !podeExcluir) notFound();
+  const podeCriar = !naLixeira && temPermissao(usuario, RECURSO, "criar");
 
   const versoes = await listarVersoes(contratoId);
   const proximoNumero = versoes.length === 0 ? 0 : Math.max(...versoes.map((v) => v.numero)) + 1;
@@ -78,6 +82,11 @@ export default async function PaginaPlanilha({
         </Link>
         {contrato.regra_arredondamento === null ? " · o contrato ainda não tem regra de arredondamento" : null}
       </p>
+      {naLixeira ? (
+        <p role="note" className="mb-2 text-detalhe text-muted-foreground">
+          O contrato está na lixeira. A planilha fica só para consulta até ele ser restaurado.
+        </p>
+      ) : null}
       <VersoesTabela versoes={versoes} podeCriar={podeCriar} />
     </>
   );

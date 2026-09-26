@@ -34,14 +34,15 @@ import type { VersaoCarregada } from "@/modules/medicao/planilha/queries";
 
 const V = "33333333-3333-4333-8333-333333333333";
 
-function dados(over: { status?: string; regra?: string | null } = {}): VersaoCarregada {
+function dados(over: { status?: string; regra?: string | null; contratoExcluido?: boolean } = {}): VersaoCarregada {
   return {
     versao: {
       id: V, contratoId: "c", numero: 0, status: over.status ?? "rascunho", vigenteDesde: "2025-10-01", aditivoNumero: null,
       arquivoNome: "planilha.xlsx", arquivoHash: "abc", motivo: null, motivoDesaprovacao: null, aprovadaEm: null,
       excluidoEm: null, motivoExclusao: null,
     },
-    contrato: { id: "c", codigo: "L09", nomeObra: "BR-364 Lote 09", regraArredondamento: over.regra === undefined ? "sem_arredondar" : over.regra },
+    contrato: { id: "c", codigo: "L09", nomeObra: "BR-364 Lote 09", regraArredondamento: over.regra === undefined ? "sem_arredondar" : over.regra,
+      excluidoEm: over.contratoExcluido ? "2026-01-01T00:00:00Z" : null },
     linhas: [
       { id: "1", ordem: 1, codigo: "02.07", paiId: null, nivel: 1, descricao: "Pavimentação", unidade: null, tipo: "titulo",
         precoUnitario: null, quantidadePrevista: null, valorPrevisto: 9908218.84 },
@@ -82,6 +83,19 @@ describe("VersaoDetalhe", () => {
     render(<VersaoDetalhe dados={dados({ status: "vigente" })} {...props} podeDesaprovar={false} />);
     expect(screen.queryByRole("link", { name: /Reimportar/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Excluir rascunho/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Voltar a rascunho/ })).toBeNull();
+  });
+
+  it("contrato na lixeira: rascunho sem importar, aprovar nem excluir, e com o aviso", () => {
+    render(<VersaoDetalhe dados={dados({ contratoExcluido: true })} {...props} />);
+    expect(screen.queryByRole("link", { name: /Reimportar|Importar planilha/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Tornar vigente/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Excluir rascunho/ })).toBeNull();
+    expect(screen.getByText(/O contrato desta versão está na lixeira/)).toBeTruthy();
+  });
+
+  it("contrato na lixeira: vigente sem voltar a rascunho", () => {
+    render(<VersaoDetalhe dados={dados({ status: "vigente", contratoExcluido: true })} {...props} />);
     expect(screen.queryByRole("button", { name: /Voltar a rascunho/ })).toBeNull();
   });
 });

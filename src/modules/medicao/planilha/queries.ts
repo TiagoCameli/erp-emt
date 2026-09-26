@@ -127,7 +127,11 @@ export async function carregarVersao(versaoId: string) {
   if (!versao) return null;
 
   const [contrato, linhas, totais, totalVersao, aditivos] = await Promise.all([
-    supabase.from("mc_contratos").select("id, codigo, nome_obra, regra_arredondamento").eq("id", versao.contrato_id).maybeSingle(),
+    supabase
+      .from("mc_contratos")
+      .select("id, codigo, nome_obra, regra_arredondamento, excluido_em")
+      .eq("id", versao.contrato_id)
+      .maybeSingle(),
     todasAsLinhas((de, ate) =>
       supabase
         .from("mc_v_planilha_linhas")
@@ -186,6 +190,7 @@ export async function carregarVersao(versaoId: string) {
       codigo: contrato.data.codigo,
       nomeObra: contrato.data.nome_obra,
       regraArredondamento: contrato.data.regra_arredondamento,
+      excluidoEm: contrato.data.excluido_em,
     },
     linhas: linhasDaVersao,
     totalPrevisto: numeroOuNulo(totalVersao.data?.total_previsto),
@@ -231,6 +236,35 @@ export async function arquivoDaVersao(versaoId: string): Promise<{ path: string;
     if (arquivo && ehXlsx(arquivo.nome_original)) return { path: arquivo.path_storage, nome: arquivo.nome_original };
   }
   return null;
+}
+
+/**
+ * O anexo que É o xlsx importado, para baixar no detalhe da versão. Casa pelo CONTEÚDO:
+ * `arquivos.hash_sha256` (medido no servidor no envio) igual a `mc_planilha_versoes.arquivo_hash`
+ * (medido no servidor na gravação), os dois SHA-256 em hex. O nome não serve: dois envios com o
+ * mesmo nome e conteúdo diferente fariam o botão baixar o arquivo errado.
+ */
+export async function xlsxImportadoDaVersao(
+  versaoId: string,
+  arquivoHash: string | null,
+): Promise<{ vinculoId: string; nome: string } | null> {
+  if (!arquivoHash) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("anexo_vinculos")
+    .select("id, created_at, arquivos!inner(nome_original, hash_sha256)")
+    .eq("entidade_tipo", "mc_planilha_versao")
+    .eq("entidade_id", versaoId)
+    .eq("arquivos.hash_sha256", arquivoHash)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const vinculo = data?.[0];
+  const arquivo = vinculo?.arquivos as { nome_original: string; hash_sha256: string | null } | null | undefined;
+  // Confere de novo aqui: o filtro no recurso embutido é do PostgREST, e o preço de errar é baixar outro arquivo.
+  if (!vinculo || !arquivo || arquivo.hash_sha256 !== arquivoHash) return null;
+  return { vinculoId: vinculo.id, nome: arquivo.nome_original };
 }
 
 /**
