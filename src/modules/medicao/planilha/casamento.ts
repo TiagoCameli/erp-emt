@@ -89,6 +89,13 @@ export function casarComVersaoAnterior(
     }
   }
 
+  // Pre-reserve itemIds chosen by exactly one valid escolha (so auto-matching doesn't take them).
+  for (const [itemId, count] of contadorEscolhas.entries()) {
+    if (count === 1 && itemId && porId.has(itemId)) {
+      usados.add(itemId);
+    }
+  }
+
   const linhas: Casamento[] = novas.map((nova) => {
     if (nova.ordem in validEscolhas) {
       const itemId = validEscolhas[nova.ordem];

@@ -117,4 +117,37 @@ describe("casarComVersaoAnterior", () => {
     );
     expect(r.linhas[0]).toMatchObject({ itemId: "i1", situacao: "igual" });
   });
+
+  it("probe: linha sem escolha não rouba item da linha com escolha explícita", () => {
+    const r = casarComVersaoAnterior(
+      [
+        nova(1, "01.02", "Capina", "2", "5"),
+        nova(2, "01.02", "Capina", "2", "5"),
+      ],
+      [antiga("i3", "01.02", "Capina", "2", "5")],
+      { 2: "i3" }
+    );
+    expect(r.linhas[0].itemId).not.toBe("i3");
+    expect(r.linhas[0].situacao).toBe("novo");
+    expect(r.linhas[1]).toMatchObject({ itemId: "i3", situacao: "igual" });
+    const itemIds = r.linhas.map((c) => c.itemId).filter((id): id is string => id !== null);
+    expect(new Set(itemIds).size).toBe(itemIds.length);
+  });
+
+  it("sem duplicados de itemId em cenário misto (auto + escolha + ambíguo)", () => {
+    const r = casarComVersaoAnterior(
+      [
+        nova(1, "01.01", "Roçada manual", "0.335", "10"),
+        nova(2, "01.02", "Capina", "2", "5"),
+        nova(3, "01.02", "Capina", "2", "6"),
+        nova(4, "01.03", "Novo", "1", "1"),
+      ],
+      anteriores,
+      { 2: "i3", 3: "i3" }
+    );
+    const itemIds = r.linhas.map((c) => c.itemId).filter((id): id is string => id !== null);
+    expect(new Set(itemIds).size).toBe(itemIds.length);
+    expect(itemIds).toContain("i2");
+    expect(itemIds).not.toContain("i3");
+  });
 });
