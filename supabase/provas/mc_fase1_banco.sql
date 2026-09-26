@@ -55,7 +55,7 @@ declare
   v_k1 uuid; v_k2 uuid; v_k3 uuid; v_n bigint; v_txt text; v_regra text; v_j jsonb; v_acc jsonb; r jsonb := '{}'::jsonb;
   v_obras0 bigint; v_cc0 bigint; v_lanc0 bigint; v_versao_rascunho uuid;
   v_versao_k3 uuid; v_med_k3 uuid; v_rev00_k3 uuid; v_rev01_k3 uuid; v_rev01_k2 uuid;
-  v_k4 uuid; v_aditivo_prazo uuid; v_aditivo2 uuid;
+  v_k4 uuid; v_aditivo_prazo uuid; v_aditivo2 uuid; v_aditivo3 uuid;
 begin
   select count(*) into v_obras0 from public.obras;
   select count(*) into v_cc0 from public.centros_custo;
@@ -387,6 +387,28 @@ begin
       'planilha2.xlsx', 'def');
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4k_item_de_outro_contrato', v_txt);
+
+  -- 4l. vigente_desde ausente é recusado com mensagem de negócio (não o not null cru da coluna)
+  begin perform public.fn_mc_planilha_criar_rascunho(v_k4, jsonb_build_object());
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4l_vigente_desde_ausente', v_txt);
+
+  -- 4m. Restaurar um filho (aditivo) cujo contrato pai ainda está na lixeira é recusado
+  v_aditivo3 := public.fn_mc_aditivo_salvar(v_k4, jsonb_build_object('data_assinatura', '2026-02-01', 'data_vigencia', '2026-03-01',
+    'tipos', jsonb_build_array('valor'), 'motivo', 'Prova restaurar'));
+  perform public.fn_mc_excluir('mc_aditivos', v_aditivo3, 'Prova exclusão do aditivo');
+  perform public.fn_mc_excluir('mc_contratos', v_k4, 'Prova exclusão do contrato de novo');
+  begin perform public.fn_mc_restaurar('mc_aditivos', v_aditivo3);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4m_restaurar_filho_contrato_excluido', v_txt);
+  perform public.fn_mc_restaurar('mc_contratos', v_k4);
+  perform public.fn_mc_restaurar('mc_aditivos', v_aditivo3);
+
+  -- 4n. Tipos vazio é recusado
+  begin perform public.fn_mc_aditivo_salvar(v_k4, jsonb_build_object('data_assinatura', '2026-02-01', 'data_vigencia', '2026-03-01',
+      'tipos', jsonb_build_array(), 'motivo', 'Prova tipos vazio'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4n_tipos_vazio', v_txt);
   reset role;
 
   -- 6. Acesso por contrato
