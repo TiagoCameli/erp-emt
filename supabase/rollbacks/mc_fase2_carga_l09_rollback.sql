@@ -2,9 +2,12 @@
 -- L09-BR364 que a carga criou e tudo dele, na ordem das dependências. As linhas de audit_log
 -- ficam (são o rastro, inclusive destas exclusões).
 --
--- Vale ANTES de alguém mexer no contrato pelo app: se houver lançamento, evento, aditivo,
--- revisão além da REV00, versão além da v0, medição fora da carga, anexo, reajuste ou índice
--- por item, o bloco para em vez de apagar o que não é da carga (desfazer à mão).
+-- Vale ANTES de alguém mexer no contrato pelo app: se houver lançamento, evento que não seja o
+-- da carga, aditivo, revisão além da REV00, versão além da v0, medição fora da carga, anexo,
+-- reajuste ou índice por item, o bloco para em vez de apagar o que não é da carga (desfazer à
+-- mão). Também para se o audit_log tiver QUALQUER linha com usuário (usuario_id não nulo) de um
+-- registro deste contrato: a carga grava tudo sem usuário, então usuário no rastro quer dizer
+-- que alguém mexeu pelo app.
 --
 -- Como passa pelas travas: medição aprovada, revisão aprovada, ajuste e aprovação por item não
 -- se apagam nem com app.mc_carga = '1' (o caminho de carga das travas vale só para INSERT).
@@ -31,7 +34,8 @@ begin
 
   select string_agg(t, ', ') into v_txt from (
     select 'lançamentos' t where exists (select 1 from public.mc_lancamentos where contrato_id = v_contrato)
-    union all select 'eventos de medição' where exists (select 1 from public.mc_medicao_eventos where contrato_id = v_contrato)
+    union all select 'eventos de medição' where exists (select 1 from public.mc_medicao_eventos where contrato_id = v_contrato
+                                                           and (evento <> 'carga' or usuario_id is not null))
     union all select 'aditivos' where exists (select 1 from public.mc_aditivos where contrato_id = v_contrato)
     union all select 'versões além da v0' where exists (select 1 from public.mc_planilha_versoes where contrato_id = v_contrato and numero <> 0)
     union all select 'medições fora da carga' where exists (select 1 from public.mc_medicoes where contrato_id = v_contrato and origem <> 'carga')
@@ -50,6 +54,15 @@ begin
     raise exception 'O contrato L09-BR364 já foi mexido pelo app (%): desfazer à mão', v_txt;
   end if;
 
+  select count(*) into v_n from public.audit_log a
+   where a.usuario_id is not null and a.tabela like 'mc\_%'
+     and ((a.tabela = 'mc_contratos' and a.registro_id = v_contrato::text)
+          or a.dados_depois ->> 'contrato_id' = v_contrato::text
+          or a.dados_antes ->> 'contrato_id' = v_contrato::text);
+  if v_n > 0 then
+    raise exception 'O audit_log tem % registros do contrato L09-BR364 feitos por usuário: alguém mexeu pelo app, desfazer à mão', v_n;
+  end if;
+
   perform set_config('app.mc_carga', '1', true);
   alter table public.mc_aprovacoes_item disable trigger trg_mc_trava_aprovacoes;
   alter table public.mc_ajustes disable trigger trg_mc_trava_ajuste;
@@ -59,6 +72,7 @@ begin
   delete from public.mc_aprovacoes_item where contrato_id = v_contrato;
   delete from public.mc_ajustes where contrato_id = v_contrato;
   delete from public.mc_medicao_revisoes where contrato_id = v_contrato;
+  delete from public.mc_medicao_eventos where contrato_id = v_contrato and evento = 'carga';
   delete from public.mc_medicoes where contrato_id = v_contrato;
 
   alter table public.mc_aprovacoes_item enable trigger trg_mc_trava_aprovacoes;

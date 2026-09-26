@@ -22,6 +22,13 @@
 -- (texto exato) e valor previsto (exato); por medição e item, a quantidade (texto exato); por
 -- item, a quantidade acumulada; por grupo, previsto, acumulado até a 10ª e 10ª (2 casas); total
 -- previsto, acumulado, 10ª e saldo = previsto - acumulado. Qualquer diferença aborta.
+-- A conferência por medição e item compara com o STAGING: prova que a carga gravou o que leu
+-- (correção da escrita). A correção contra a FONTE (planilha oficial) é coberta pelo acumulado
+-- por item, pelos grupos, pelos totais e pela 10ª, que vêm do esperado do extrator.
+-- Os dados do contrato e os 10 períodos são os decididos no plano (constantes abaixo): se o
+-- staging trouxer qualquer outro valor, a carga aborta antes de gravar.
+-- Rastro: um mc_medicao_eventos 'carga' por medição (aprovada pelo DNIT antes do módulo);
+-- aprovada_em = now() e aprovada_por nulo.
 --
 -- Ensaio: com app.carga_ensaio = 'sim' faz tudo, confere e desfaz no fim (raise).
 -- Desfazer: supabase/rollbacks/mc_fase2_carga_l09_rollback.sql.
@@ -32,6 +39,21 @@ declare
   c_motivo constant text := 'Carga inicial da planilha oficial v12';
   c_arquivo constant text := 'Medicao_Teste_3_ATUALIZADA_v12_NOVO.xlsx';
   c_hash constant text := '2a29e7473cca3e057a700a91c58d8d992e89ea42e2c74a094d1f3e59121fcb0b';
+  c_evento constant text := 'Carga inicial da planilha oficial v12: medição aprovada pelo DNIT antes do módulo';
+  -- Decidido no plano (Fonte e decisões, 26/09/2026); o staging tem de trazer exatamente isto.
+  c_contrato constant jsonb := jsonb_build_object(
+    'codigo', 'L09-BR364', 'numero_contrato', '00615/2025', 'contratante_tipo', 'federal',
+    'valor_inicial', 243927498.02, 'data_assinatura', '2025-10-01', 'prazo_meses', 39, 'inicio_prazo', 'assinatura',
+    'dia_inicio_periodo', 1, 'tipo_localizacao', 'rodovia', 'regra_arredondamento', 'sem_arredondar', 'status', 'ativo',
+    'nome_obra', 'BR-364/AC Lote 09 (manutenção)', 'local', 'BR-364/AC, km 620,90 a 682,90',
+    'objeto', 'Serviços de manutenção rodoviária (conservação/recuperação) na BR-364/AC',
+    'contratante_nome', 'DNIT - Superintendência Regional do Acre');
+  c_periodos constant daterange[] := array[
+    daterange('2025-11-01', '2025-11-30', '[]'), daterange('2025-12-01', '2025-12-31', '[]'),
+    daterange('2026-01-01', '2026-01-31', '[]'), daterange('2026-02-01', '2026-02-28', '[]'),
+    daterange('2026-03-01', '2026-03-31', '[]'), daterange('2026-04-01', '2026-04-30', '[]'),
+    daterange('2026-05-01', '2026-05-31', '[]'), daterange('2026-06-01', '2026-06-30', '[]'),
+    daterange('2026-07-01', '2026-07-31', '[]'), daterange('2026-08-01', '2026-08-31', '[]')];
   v_esp jsonb;
   v_ct jsonb;
   v_contrato uuid;
@@ -103,6 +125,31 @@ begin
   if v_ct ->> 'codigo' is distinct from c_codigo then
     raise exception 'Staging do contrato é de %, não de %', v_ct ->> 'codigo', c_codigo;
   end if;
+  -- Contrato: cada campo decidido, comparado pelo valor (numérico, data ou texto exato).
+  select string_agg(k.key || ' = ' || coalesce(v_ct ->> k.key, '(vazio)') || ' (decidido ' || (c_contrato ->> k.key) || ')', '; '
+                    order by k.key) into v_txt
+    from jsonb_each(c_contrato) k
+   where case k.key
+           when 'valor_inicial' then (v_ct ->> k.key)::numeric is distinct from (c_contrato ->> k.key)::numeric
+           when 'data_assinatura' then (v_ct ->> k.key)::date is distinct from (c_contrato ->> k.key)::date
+           when 'prazo_meses' then (v_ct ->> k.key)::int is distinct from (c_contrato ->> k.key)::int
+           when 'dia_inicio_periodo' then (v_ct ->> k.key)::int is distinct from (c_contrato ->> k.key)::int
+           else v_ct ->> k.key is distinct from c_contrato ->> k.key
+         end;
+  if v_txt is not null then
+    raise exception 'Staging do contrato difere do decidido no plano: %', v_txt;
+  end if;
+  -- Períodos: os 10 decididos, na ordem (1ª a 10ª).
+  select string_agg(coalesce(p.n, m.n)::text || 'ª: staging ' || coalesce(m.ini || ' a ' || m.fim, '(falta)')
+                    || ', decidido ' || coalesce(lower(p.r) || ' a ' || (upper(p.r) - 1), '(nenhum)'), '; ' order by coalesce(p.n, m.n))
+    into v_txt
+    from (select n::int, c_periodos[n] r from generate_subscripts(c_periodos, 1) n) p
+    full join (select (e ->> 'numero')::int n, (e ->> 'periodo_inicio')::date ini, (e ->> 'periodo_fim')::date fim
+                 from legado.fn_staging_mc_l09('medicoes') e) m on m.n = p.n
+   where p.n is null or m.n is null or m.ini is distinct from lower(p.r) or m.fim is distinct from upper(p.r) - 1;
+  if v_txt is not null then
+    raise exception 'Staging de períodos difere do decidido no plano: %', v_txt;
+  end if;
   if exists (select 1 from public.mc_contratos where codigo = c_codigo and excluido_em is null) then
     raise exception 'O contrato % já existe: a carga não roda de novo', c_codigo;
   end if;
@@ -171,6 +218,9 @@ begin
 
     insert into public.mc_aprovacoes_item (revisao_id, item_id, contrato_id, quantidade_aprovada, created_by)
     select v_revisao, a.item_id, v_contrato, a.quantidade, null from public.mc_ajustes a where a.revisao_id = v_revisao;
+
+    insert into public.mc_medicao_eventos (medicao_id, contrato_id, evento, de_status, para_status, motivo, usuario_id)
+    values (v_medicao, v_contrato, 'carga', null, 'aprovada', c_evento, null);
   end loop;
 
   -- ================================================================ conferência
@@ -185,6 +235,7 @@ begin
     union all select 'ajustes', (select count(*) from public.mc_ajustes where contrato_id = v_contrato and tipo = 'carga'), (v_esp ->> 'ajustes')::bigint
     union all select 'aprovacoes_item', (select count(*) from public.mc_aprovacoes_item where contrato_id = v_contrato), (v_esp ->> 'ajustes')::bigint
     union all select 'acessos', (select count(*) from public.mc_contrato_usuarios where contrato_id = v_contrato), 4::bigint
+    union all select 'eventos', (select count(*) from public.mc_medicao_eventos where contrato_id = v_contrato and evento = 'carga'), (v_esp ->> 'medicoes')::bigint
   loop
     v_rel := v_rel || jsonb_build_object(r.k, r.n);
     if r.n is distinct from r.e then v_erros := v_erros || r.k || ': ' || r.n || ' (esperado ' || r.e || '); '; end if;
