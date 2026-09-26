@@ -58,6 +58,8 @@ O ERP fixou `ACOES = ver, criar, editar, excluir, aprovar, desaprovar` e decidiu
 
 No começo, só os 4 Admins. **Migration de backfill** no padrão do Frete: insere em `perfil_permissoes` (perfil Admin) e em `usuario_permissoes` (Admins ativos e não excluídos), e termina com `do $confere$` que aborta se não forem exatamente 4 usuários e o número esperado de linhas.
 
+Na Fase 1 só `medicao.contratos` e `medicao.planilha` entram no catálogo; cada aba entra na fase dela, com o seu backfill. (emenda 26/09/2026)
+
 `desaprovar` em `medicao.medicoes` **não desfaz a aprovação**. Ele abre uma revisão pós-aprovação (seção 7.4). A medição aprovada continua imutável.
 
 ### 4.2 Acesso por contrato (D3)
@@ -76,6 +78,8 @@ No começo, só os 4 Admins. **Migration de backfill** no padrão do Frete: inse
 Usa a infraestrutura de `arquivos` + `anexo_vinculos` e o bucket `anexos`. Tipos de entidade novos: `mc_contrato`, `mc_aditivo`, `mc_planilha_versao`, `mc_lancamento`, `mc_medicao`, `mc_indice_valor`.
 
 **Ponto de atenção:** hoje a visibilidade do anexo deriva só do recurso (`fn_recurso_da_entidade`). Isso deixaria a foto de um lançamento da BR-364 visível para quem tem `medicao.lancamentos/ver` mas não está no contrato. A Fase 1 estende a regra: para as entidades `mc_*`, o anexo também exige `fn_mc_acessa_contrato`. A mudança é aditiva: para os outros tipos, nada muda. Ela se aplica relendo a definição viva da função e da policy, nunca de cópia (decisoes.md L1750). A prova da Fase 1 cobre esse caso.
+
+(emenda 26/09/2026): na Fase 1, o anexo do xlsx em `mc_planilha_versao` não se remove (remover exige `editar`, e a aba de planilha não tem essa ação). Não é preciso: a importação sempre lê o xlsx mais recente anexado à versão, então um arquivo trocado por engano fica anexado ao rascunho, visível mas não usado.
 
 ## 5. Modelo de dados
 
@@ -120,6 +124,8 @@ Fim da vigência = início do prazo + `prazo_meses` + soma dos `prazo_acrescido_
 
 **Aditivo.** A importação de uma versão nova casa cada linha com um `mc_itens` da versão anterior por código + descrição + unidade, mostra a prévia (igual, mudou quantidade, mudou preço, item novo, item que saiu) e deixa o usuário resolver o que não casou sozinho. Item que saiu continua na versão anterior e no histórico.
 
+(emenda 26/09/2026): a prévia também tem a situação `mudou_tipo`, quando a linha trocou entre título e serviço (ou vice-versa) de uma versão para a outra. Tem precedência sobre as situações de quantidade e preço, porque o item deixa de poder ser lançado.
+
 **Índice por item.** O vínculo **não** fica na linha da planilha, porque a versão vigente é imutável e o vínculo precisa poder ser ajustado depois. Fica em `mc_item_indices (contrato_id, item_id, indice_id)`, na configuração do reajuste (`medicao.reajuste/editar`), pela identidade estável do item, e por isso atravessa aditivos. Item sem vínculo herda do pai; se ninguém acima tem, vale o índice padrão do contrato. A resolução sai de view recursiva (`mc_v_item_indice`). Configurar no grupo cobre os filhos. Mudar o vínculo não altera medição já fechada: o fechamento grava o índice usado por item (abaixo).
 
 ### 5.3 Medição
@@ -127,6 +133,7 @@ Fim da vigência = início do prazo + `prazo_meses` + soma dos `prazo_acrescido_
 **`mc_medicoes`**: `contrato_id`, `numero` (1, 2, ...), `periodo_inicio`, `periodo_fim`, `status` (`aberta | em_conferencia | enviada | aprovada`), `versao_id` (versão da planilha usada), `aprovada_em`, `aprovada_por`, `origem` (`app | carga`).
 - Períodos do mesmo contrato **não se sobrepõem**: `exclude using gist (contrato_id with =, daterange(periodo_inicio, periodo_fim, '[]') with &&)`.
 - Número sequencial por contrato, sem buraco.
+- (emenda 26/09/2026): fora da carga inicial, toda medição nasce com status `aberta`. A carga (seção 10) é a única origem que insere medição já `aprovada`.
 
 **`mc_medicao_revisoes`**: `medicao_id`, `numero` (0 = REV00), `fase` (`antes_aprovacao | pos_aprovacao`), `motivo` (obrigatório a partir da REV01), `status` (`em_aberto | enviada | aprovada | substituida`).
 
@@ -178,16 +185,19 @@ Fim da vigência = início do prazo + `prazo_meses` + soma dos `prazo_acrescido_
 - `preco_unitario`, `quantidade_prevista` e índice: `numeric` **sem escala**. Isso é uma **exceção à regra 3 do CLAUDE.md** (taxa com 4 casas), e fica registrada em decisoes.md. O motivo é medido: no `02.07.04`, 17.057,717 × 580,86 dá R$ 9.908.145,50, e o previsto oficial é R$ 9.908.218,84 (preço real ≈ 580,8643). Com 4 casas, o preço vira 580,8643 e o previsto erra em centavos.
 - Quantidade **digitada** (lançamento, ajuste, aprovada): 4 casas, pelo `CASAS_TAXA`.
 - Dinheiro: arredondado a 2 casas **no ponto que a regra do contrato manda** e somado depois, ou seja, soma de centavos inteiros. Nunca float.
+- O xlsx sobe direto para o Storage como anexo da versão; o servidor baixa e lê. O navegador nunca manda os números (limite de 4 MB da Server Action e confiança). (emenda 26/09/2026)
 
 ### 6.2 Regra de arredondamento do valor
 
-`mc_contratos.regra_arredondamento` é configuração, porque cada planilha arredonda num lugar. Opções previstas; só entra no CHECK a que a planilha oficial provar:
+`mc_contratos.regra_arredondamento` é configuração, porque cada planilha arredonda num lugar. As três regras são opções genéricas do contrato, implementadas e provadas na Fase 1 com números feitos à mão. Qual delas é a do Lote 09 é descoberto na planilha oficial (Fase 2), com o diagnóstico da importação, e mostrado ao Tiago antes de gravar. Regra nula = contrato sem valor. (emenda 26/09/2026)
 
 | Regra | Valor do item na medição | Acumulado do item |
 |---|---|---|
 | `item_por_medicao` | arred(qtd_med × preço, 2) | Σ dos valores por medição |
-| `item_por_acumulado` | arred(qtd_acum_até_N × preço, 2) − arred(qtd_acum_até_N−1 × preço, 2) | arred(qtd_acum × preço, 2) |
-| `sem_arredondar` | qtd × preço exato | arredondado só no total exibido |
+| `item_por_acumulado` | arred(qtd_acum_até_N × preço, 2) − arred(qtd_acum_até_N−1 × preço, 2) | Σ dos valores por medição |
+| `sem_arredondar` | qtd × preço exato | Σ dos valores por medição |
+
+(emenda 26/09/2026): em qualquer regra, o acumulado do item é sempre a soma dos valores já calculados por medição (o que foi de fato medido e cobrado), nunca arred(qtd_acum × preço vigente, 2) recalculado com o preço de hoje. Isso vale inclusive na regra `item_por_acumulado` quando um aditivo troca o preço do item no meio do contrato: o acumulado não refaz a conta das medições antigas com o preço novo, só soma o que cada uma já valeu com o preço da época.
 
 Para o Lote 09, a regra **tem de ser descoberta na planilha oficial e reproduzida até o centavo**. O centavo dos grupos (Σ grupos = R$ 36.541.661,76 contra R$ 36.541.661,77 no total) é o teste: cada hipótese é rodada contra todas as células do boletim (item × medição, acumulado, grupo, total). As diferenças vão para você antes de qualquer escolha. Se nenhuma fechar, eu paro e mostro.
 
@@ -208,6 +218,8 @@ aberta ──fechar──▶ em_conferencia ──enviar (REVnn)──▶ enviad
 - `aprovada`: lança a quantidade aprovada e grava os índices de novo, se mudaram desde o envio. **Imutável por trigger no banco**: recusa insert, update e delete em lançamentos, ajustes, aprovações e revisões dessa medição, e na própria linha.
 
 "Fechamento", para o reajuste, é o envio (seção 12, Q6).
+
+(emenda 26/09/2026): `numero` e `contrato_id` da medição são congelados assim que ela é criada, nunca mudam depois. Aprovar a medição N exige que a medição N-1 do mesmo contrato já esteja aprovada (as medições são sequenciais e o acumulado do item depende das anteriores). Aprovar também exige que exista uma revisão aprovada para aquela medição e que não haja nenhuma revisão `em_aberto` ou `enviada` pendente; só pode existir uma revisão aprovada por medição.
 
 ### 7.2 Abrir medição
 
@@ -240,6 +252,8 @@ Enquanto a 10ª está em conferência, a 11ª já pode estar aberta: os período
 - `valor_inicial` diferente do previsto da v0.
 
 **Alertas da importação (prévia, antes de gravar):** linha de serviço sem preço, código duplicado, unidade com espaço sobrando (`"un "`, gravada aparada, com aviso), hierarquia ambígua, célula vazia (vira zero e é listada, nunca misturada com zero digitado).
+
+(emenda 26/09/2026): código gravado como número na célula (perde o zero à esquerda, ex.: `01` vira `1`, `1.10` vira `1.1`) é alerta **bloqueante** (`codigo_como_numero`): pede para formatar a coluna como texto, porque alterar o código em silêncio quebraria a hierarquia e o casamento do aditivo. Problema na célula da coluna VALOR (fórmula sem valor, erro, texto) é alerta **não bloqueante**: a coluna só serve ao diagnóstico, e a linha fica sinalizada e fora do diagnóstico. Gravar a importação exige o hash do arquivo que gerou a prévia; se o arquivo mudou depois da prévia, a gravação é recusada.
 
 ## 9. Telas
 
@@ -274,6 +288,7 @@ Todas em `/medicao/*`, desktop, com os canônicos (`FilterBar`, `DataTable`, `Fo
 - **Vitest** no que é TypeScript: leitura do xlsx (valor da célula, fórmula, vazio), montagem da hierarquia, colar do Excel, layout do export (ida e volta).
 - **Portão de cada PR:** `tsc`, lint, testes, build, CI verde, prova SQL rodada no banco vivo e advisors do Supabase limpos. O status do projeto (`vault/projects/erp-emt/status.md`) e o `docs/decisoes.md` são atualizados no fim de cada fase.
 - Migration vai direto para produção: só mudança **aditiva** até o código que usa estar no ar. Aplicada por `apply_migration`, com o `.sql` versionado no repo.
+- (emenda 26/09/2026): o nome do arquivo de migration no repo usa a versão REAL aplicada (conferida em `supabase_migrations.schema_migrations`), nunca a versão prevista no plano. Se divergir, o conserto é só renomear o arquivo, nunca reaplicar.
 
 ## 12. Perguntas em aberto
 

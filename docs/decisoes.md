@@ -4306,3 +4306,64 @@ dividir o saldo".
 - Card **Caixa real** no Gestão: contas correntes + subcontas − posição das aplicações sem liquidez diária; contas sem permissão de saldo ficam fora e contadas.
 - O preview da Vercel deste projeto responde 500 em qualquer rota, até no /login (suspeita: faltam as variáveis do Supabase no ambiente de preview, não conferido). Por isso a conferência visual é em produção.
 - Depois do deploy rodou `20260926130000`: `fn_rel_posicao_aplicacao` saiu, e `fn_saldos_das_contas` perdeu as três colunas (tipos acertados à mão).
+
+## 2026-09-26 - Medição de Contratos, Fase 1: banco, acesso por contrato e telas de cadastro/planilha
+
+**Contexto:** o Tiago pediu um módulo de medição para todos os contratos, com a planilha que só muda
+por aditivo, lançamento diário e reajuste. O módulo da Fase 6 saiu na reforma de 20/07 porque gerava
+fatura e a receber sozinho. A Fase 1 (banco inteiro do módulo, cadastro de contratos e planilha
+contratual) foi implementada e revisada tarefa a tarefa; falta só o backfill de permissões, com o ok
+do Tiago, e a abertura do PR.
+
+**Decisão:**
+1. Prefixo `mc_` (`medicoes` e `fn_registrar_medicao` são da Manutenção). Nenhuma FK para outro módulo;
+   o contrato tem os próprios dados e não cria nem se vincula a obra (Tiago, 25/09).
+2. Acesso por contrato só por lista (`mc_contrato_usuarios`, a linha é o acesso), Admin inclusive. Toda
+   policy do módulo exige a lista. A regra se estende aos anexos: `fn_recurso_da_entidade`, função
+   compartilhada com o resto do ERP, passou a também checar `fn_mc_acessa_contrato` para as entidades
+   `mc_*` (mudança aditiva, lida na definição viva, nunca em cópia; para os outros módulos nada muda).
+3. As ações pedidas (cadastrar, lançar, fechar, importar, reajuste) viram recursos por aba com as 6
+   ações de sempre (decisão de 2026-08 sobre não criar ação nova). Na Fase 1 só `medicao.contratos` e
+   `medicao.planilha` entram no catálogo de permissões; aba nova entra na fase dela, com o backfill
+   dela.
+4. Exceção à regra 3 do CLAUDE.md: preço, quantidade prevista e quantidade de carga são `numeric` sem
+   escala, porque a planilha oficial tem casas escondidas (02.07.04 do Lote 09: 17.057,717 x 580,86
+   com preço arredondado em 4 casas erra o previsto em centavos). Quantidade digitada continua com
+   4 casas.
+5. Valor, acumulado, total e glosa só em view `security_invoker`; o TypeScript não recalcula dinheiro.
+   A regra de arredondamento é do contrato (três opções), nula até ser descoberta na planilha oficial
+   (regra nula = contrato sem valor). Em qualquer regra, o acumulado do item é a soma dos valores já
+   calculados por medição, nunca o recálculo de qtd acumulada x preço vigente: importa porque um
+   aditivo pode trocar o preço no meio do contrato, e o acumulado não pode refazer o passado com o
+   preço novo.
+6. O xlsx da planilha sobe direto para o Storage como anexo da versão; o servidor baixa e lê, o
+   navegador nunca manda os números (limite de 4 MB da Server Action e confiança).
+7. Medições são sequenciais: `numero` e `contrato_id` congelam na criação, e a Nª só aprova com a
+   (N-1)ª já aprovada. Aprovar exige uma revisão aprovada para aquela medição e nenhuma `em_aberto`
+   ou `enviada` pendente; só existe uma revisão aprovada por medição.
+8. Fora da carga inicial, toda medição nasce `aberta`; só a carga insere medição já `aprovada`.
+9. Na importação, código gravado como número na célula (perde o zero à esquerda) é alerta
+   BLOQUEANTE, porque alterar o código em silêncio quebraria a hierarquia e o casamento do aditivo;
+   problema na célula da coluna VALOR é alerta NÃO bloqueante, porque a coluna só serve ao
+   diagnóstico. Gravar a importação exige o hash do arquivo que gerou a prévia; arquivo trocado
+   depois da prévia é recusado.
+10. O casamento do aditivo ganhou a situação `mudou_tipo` (linha trocou entre título e serviço), com
+    precedência sobre as situações de quantidade e preço.
+11. Na Fase 1, o anexo do xlsx em `mc_planilha_versao` não se remove (remover exige `editar`, que a
+    aba não tem); não é um problema porque a importação sempre lê o xlsx mais recente da versão.
+12. As tabelas de reajuste (seção 5.5 da spec) nasceram nesta fase, vazias, para a Fase 6 não mexer
+    em estrutura já em produção.
+13. Nome de arquivo de migration no repo é sempre a versão REAL aplicada (conferida em
+    `schema_migrations`), nunca a prevista no plano; aplicado na prática ao renomear os 3 arquivos
+    da frente Aplicações financeiras (antes `20260926100000/120000/130000`, agora
+    `20260925204853/210317/213619`) para destravar `entidades.test.ts`, que lê a migration mais
+    recente por nome.
+14. O backfill de permissões (`mc_fase1f_permissoes`, 4 Admins, trava `$confere$`) fica salvo como
+    `supabase/migrations/_PENDENTE_mc_fase1f_permissoes.sql`, sem aplicar, até o Tiago aprovar o PR;
+    só então é aplicado por `apply_migration` e o arquivo é renomeado para a versão real.
+
+**Consequência:** a Fase 2 descobre a regra de arredondamento do Lote 09 com o diagnóstico da
+importação e mostra ao Tiago antes de gravar. Aba nova do módulo entra no catálogo junto com a tela
+e o backfill dela. Fica em aberto para a Fase 5: revisão `enviada` rejeitada pela contratante não tem
+estado terminal que guarde histórico (hoje só se refaz reabrindo e apagando a REV enviada); o RPC do
+ciclo da Fase 5 decide (ex.: liberar `enviada -> substituida`).
