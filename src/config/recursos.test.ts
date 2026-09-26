@@ -174,7 +174,8 @@ describe("módulo Gestão", () => {
   });
 
   it("a sidebar põe Frete, Combustível e Manutenção entre RH e Administração", () => {
-    // Pedido do Tiago em 24/09/2026, com print da sidebar.
+    // Pedido do Tiago em 24/09/2026, com print da sidebar. Medição de Contratos
+    // entrou depois da Manutenção em 25/09/2026.
     expect(MODULOS.map((m) => m.id)).toEqual([
       "gestao",
       "cadastros",
@@ -184,6 +185,7 @@ describe("módulo Gestão", () => {
       "frete",
       "combustivel",
       "manutencao",
+      "medicao",
       "administracao",
     ]);
   });

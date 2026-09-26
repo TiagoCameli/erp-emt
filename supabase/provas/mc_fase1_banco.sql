@@ -73,6 +73,15 @@ begin
    where c.relname like 'mc\_%' and t.tgname like 'trg_audit_%';
   r := r || jsonb_build_object('1c_tabelas_auditadas', v_n);
 
+  -- 7. Backfill: os 4 Admins, 9 permissões cada. Lido logo depois do caso 1, antes do caso 4
+  -- inserir as permissões avulsas do Tiago na transação. A migration do backfill (Task 5) fica
+  -- pendente até o deploy das telas (Task 13): até lá, esta prova commitada le {"admins": 0,
+  -- "linhas": 0} aqui, porque produção ainda não tem nenhuma linha usuario_permissoes com
+  -- recurso like 'medicao.%'. Isso é esperado.
+  select jsonb_build_object('admins', count(distinct usuario_id), 'linhas', count(*)) into v_txt
+  from public.usuario_permissoes where recurso like 'medicao.%';
+  r := r || jsonb_build_object('7_backfill', v_txt::jsonb);
+
   -- Dados de K1 (cálculo) e K2 (versões e travas), montados como dono.
   insert into public.mc_contratos (codigo, nome_obra, objeto, numero_contrato, contratante_nome, contratante_tipo,
     valor_inicial, data_assinatura, prazo_meses, regra_arredondamento, created_by)
