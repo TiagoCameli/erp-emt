@@ -151,7 +151,7 @@ export function CartaoKpi({
 
   if (href) {
     return (
-      <Link href={href} className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2">
+      <Link href={href} className="block rounded-lg foco-anel">
         {conteudo}
       </Link>
     );

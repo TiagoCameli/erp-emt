@@ -30,8 +30,14 @@
   --popover-foreground: #1f1f1f;
   --muted: #f7f7f5;
   --muted-foreground: #6b6b6b;
+  /* Borda decorativa (cards, tabelas, divisorias): e ela que da a cara Notion. */
   --border: #e8e6e1;
-  --input: #e8e6e1;
+  /*
+    Borda de campo de formulario. Separada da --border porque o campo precisa
+    ser visto: WCAG pede 3:1 para o contorno que identifica um controle, e a
+    #e8e6e1 dava 1,2:1 no branco. #8c8a84 da 3,45:1 no branco e 3,2:1 em surface.
+  */
+  --input: #8c8a84;
 
   /* Marca EMT, direto do logo */
   --emt-verde: #3e7744;
@@ -45,7 +51,12 @@
   --accent: var(--emt-verde-lavado);
   --accent-foreground: var(--emt-verde-escuro);
   --faixa: #f59e0b;
-  --ring: #f59e0b;
+  /*
+    Anel de foco, separado da Faixa. O #f59e0b da Faixa da 2,2:1 no branco e o
+    foco de teclado sumia. #c26a05 e o mesmo ambar escurecido: 3,9:1 no branco,
+    3,65:1 em surface (WCAG pede 3:1 para indicador de foco).
+  */
+  --ring: #c26a05;
 
   --secondary: #f7f7f5;
   --secondary-foreground: #1f1f1f;
@@ -54,14 +65,18 @@
 
   /*
     Status. "aprovado" segue verde, e de proposito NAO e o verde da marca: o
-    #15803d e mais saturado e mais frio que o #3e7744, entao um badge de
+    #137537 e mais saturado e mais frio que o #3e7744, entao um badge de
     aprovado nao se confunde com um botao primario. Fundir os dois faria a cor
     perder a funcao de dizer "isto passou pela aprovacao".
+
+    O StatusBadge pinta o texto na cor do status sobre o mesmo status a 10%.
+    Todos passam de 4,5:1 nesse fundo, no branco e em surface (o teste
+    src/lib/contraste.test.ts confere). Nao clareie sem rodar o teste.
   */
-  --status-aprovado: #15803d;
-  --status-pendente: #b45309;
+  --status-aprovado: #137537;
+  --status-pendente: #a14a07;
   --status-rejeitado: #b91c1c;
-  --status-rascunho: #6b7280;
+  --status-rascunho: #5f6673;
   /* Efeito do modulo: recebido, pago, faturado, executado */
   --status-efeito: #166534;
 
@@ -80,7 +95,7 @@
   --sidebar-accent: #eaefe9;
   --sidebar-accent-foreground: #1f1f1f;
   --sidebar-border: #e8e6e1;
-  --sidebar-ring: #f59e0b;
+  --sidebar-ring: #c26a05;
 
   --radius: 0.5rem;
 }
@@ -159,7 +174,7 @@
 @layer base {
   * {
     border-color: var(--color-border);
-    outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
+    outline-color: var(--color-ring);
   }
   body {
     background: var(--color-background);
@@ -167,6 +182,34 @@
     font-family: var(--font-sans);
     font-size: var(--text-corpo);
     line-height: var(--text-corpo--line-height);
+  }
+}
+
+/*
+  Foco de teclado: um jeito so no app todo. Anel solido de 2px na cor --ring,
+  afastado 2px do controle. E outline, nao box-shadow, porque o vao do offset
+  fica transparente e funciona igual em fundo branco, surface ou verde; e o
+  outline nao briga com a sombra nem com o anel de erro do shadcn.
+  Com aria-invalid o anel vira destructive: erro continua vermelho com foco.
+*/
+@utility foco-anel {
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  &[aria-invalid="true"]:focus-visible {
+    outline-color: var(--color-destructive);
+  }
+}
+/*
+  Mesmo anel, por dentro. Para o que preenche um container que corta o
+  transbordo (celula de tabela, botao da sidebar, cartao clicavel com
+  overflow-hidden): o anel de fora seria cortado.
+*/
+@utility foco-anel-dentro {
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
   }
 }
 

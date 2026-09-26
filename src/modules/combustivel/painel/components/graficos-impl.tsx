@@ -552,7 +552,7 @@ export function CustoPorObra({ obras, filtro }: { obras: ObraPainel[]; filtro: F
               <span className="mb-1 flex items-center justify-between gap-2 text-legenda">
                 <span className="truncate font-medium text-foreground">{o.nome}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {formatarBRL(o.custo)} <span className="opacity-60">· {porcento(o.pct)}</span>
+                  {formatarBRL(o.custo)} <span>· {porcento(o.pct)}</span>
                 </span>
               </span>
               <span className="block h-3 overflow-hidden rounded-full bg-muted">

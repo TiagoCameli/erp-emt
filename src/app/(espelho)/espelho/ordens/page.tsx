@@ -92,7 +92,7 @@ export default async function EspelhoOrdensPage({
       <BotaoImprimir />
 
       {ocultas > 0 || invalidos > 0 ? (
-        <p className="nao-imprime mx-auto max-w-[190mm] px-6 pt-2 text-[13px] text-[#B45309]">
+        <p className="nao-imprime mx-auto max-w-[190mm] px-6 pt-2 text-[13px] text-[#A14A07]">
           {ocultas > 0
             ? `${ocultas} ordem(ns) pedida(s) não estão visíveis para você e ficaram fora. `
             : ""}

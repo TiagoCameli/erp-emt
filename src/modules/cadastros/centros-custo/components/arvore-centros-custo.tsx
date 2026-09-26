@@ -303,7 +303,6 @@ export function ArvoreCentrosCusto({
         <div
           className={cn(
             "group flex items-center gap-2 rounded-md py-1.5 pr-2 transition-colors hover:bg-surface",
-            !no.ativo && "opacity-50",
           )}
           style={{ paddingLeft: profundidade * INDENTACAO_PX + 4 }}
         >
@@ -330,6 +329,9 @@ export function ArvoreCentrosCusto({
               className={cn(
                 "truncate",
                 no.nivel === 1 ? "font-semibold" : "font-medium",
+                // Inativo se diz no selo "Inativo" e no tom do nome, não em
+                // opacidade: a linha a 50% deixava o código abaixo de 2:1.
+                !no.ativo && "text-muted-foreground",
               )}
             >
               {no.nome}

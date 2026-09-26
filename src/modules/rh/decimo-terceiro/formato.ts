@@ -8,7 +8,7 @@ import type { StatusLote } from "@/modules/rh/decimo-terceiro/schemas";
 /**
  * Rótulo e badge de cada status do lote.
  *
- * O badge de "aprovado" usa o verde de status (#15803D), que **não** é o verde
+ * O badge de "aprovado" usa o verde de status (#137537), que **não** é o verde
  * da marca (#3E7744): fundir os dois faria o selo ter a cor do botão primário
  * e a cor deixaria de dizer "isto passou pela aprovação".
  */
