@@ -6,7 +6,7 @@ const t = (s: string) => lerDecimal(s);
 
 describe("decimal exato", () => {
   it("multiplica sem perder casa (02.07.04 do Lote 09)", () => {
-    expect(paraTexto(multiplicar(t("17057.717"), t("580.86")))).toBe("9908145.49062");
+    expect(paraTexto(multiplicar(t("17057.717"), t("580.86")))).toBe("9908145.49662");
   });
 
   it("arredonda meio para longe do zero, como o round do Postgres", () => {
