@@ -39,7 +39,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { LogoEmt } from "@/components/canonicos/logo-emt";
-import { ItensMenuTema } from "@/components/canonicos/seletor-tema";
+import { BotaoTema, ItensMenuTema } from "@/components/canonicos/seletor-tema";
 import { useRestaurarFiltrosDaSessao } from "@/components/canonicos/use-restaurar-filtros";
 import { cn } from "@/lib/utils";
 
@@ -239,10 +239,9 @@ function ItensMenuUsuario({
         </Link>
       </DropdownMenuItem>
       {/*
-        Tema aqui, e não num botão solto na sidebar: este menu é o MESMO no
-        rodapé da sidebar (desktop) e no topo (mobile), então um lugar só cobre
-        as duas telas, e a sidebar de 80px não perde altura com um controle que
-        a pessoa usa uma vez.
+        As três opções (Sistema, Claro, Escuro) ficam aqui. A troca rápida entre
+        claro e escuro é o BotaoTema, à vista no rodapé da sidebar e no topo do
+        mobile; "Sistema" só se escolhe por este menu.
       */}
       <DropdownMenuSeparator />
       <ItensMenuTema />
@@ -518,8 +517,9 @@ export function AppShell({
           ))}
         </nav>
 
-        {/* Perfil fixo no rodapé */}
+        {/* Tema e perfil fixos no rodapé */}
         <div className="shrink-0 border-t border-sidebar-border">
+          <BotaoTema className="h-10 w-full foco-anel-dentro hover:bg-sidebar-accent" />
           <DropdownMenu>
             <DropdownMenuTrigger
               className="flex h-14 w-full items-center justify-center foco-anel-dentro hover:bg-sidebar-accent"
@@ -553,17 +553,20 @@ export function AppShell({
             titulo="EMT Construtora"
             className="w-10"
           />
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className="rounded-full foco-anel"
-              aria-label="Menu do usuário"
-            >
-              <AvatarUsuario nome={usuario.nome} fotoUrl={usuario.fotoUrl} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <ItensMenuUsuario usuario={usuario} onSair={onSair} />
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-1">
+            <BotaoTema className="size-10 rounded-md foco-anel" />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="rounded-full foco-anel"
+                aria-label="Menu do usuário"
+              >
+                <AvatarUsuario nome={usuario.nome} fotoUrl={usuario.fotoUrl} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <ItensMenuUsuario usuario={usuario} onSair={onSair} />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         {/*
