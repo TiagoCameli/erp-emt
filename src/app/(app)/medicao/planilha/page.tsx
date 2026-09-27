@@ -7,7 +7,8 @@ import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { carregarContrato, listarContratos } from "@/modules/medicao/contratos/queries";
 import { NovaVersaoBotao } from "@/modules/medicao/planilha/components/nova-versao-botao";
-import { SeletorContrato, VersoesTabela } from "@/modules/medicao/planilha/components/versoes-tabela";
+import { VersoesTabela } from "@/modules/medicao/planilha/components/versoes-tabela";
+import { SeletorContrato } from "@/modules/medicao/_shared/seletor-contrato";
 import { aditivosSemVersao, listarVersoes } from "@/modules/medicao/planilha/queries";
 
 const RECURSO = "medicao.planilha" as const;

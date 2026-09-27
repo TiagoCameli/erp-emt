@@ -30,3 +30,9 @@ export const ROTULO_TIPO_ADITIVO: Record<TipoAditivo, string> = {
 };
 
 export const ROTULO_STATUS_VERSAO = { rascunho: "Rascunho", vigente: "Vigente" } as const;
+
+export const STATUS_MEDICAO = ["aberta", "em_conferencia", "enviada", "aprovada"] as const;
+export type StatusMedicao = (typeof STATUS_MEDICAO)[number];
+export const ROTULO_STATUS_MEDICAO: Record<StatusMedicao, string> = {
+  aberta: "Aberta", em_conferencia: "Em conferência", enviada: "Enviada", aprovada: "Aprovada",
+};

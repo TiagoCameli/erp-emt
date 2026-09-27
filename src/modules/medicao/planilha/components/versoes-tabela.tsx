@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ExternalLink, FileSpreadsheet, Upload } from "lucide-react";
 
-import { CelulaVazia, DataTable, EmptyState, FilterBar, FiltroSelect, MoneyText, StatusBadge, useFiltrosUrl } from "@/components/canonicos";
+import { CelulaVazia, DataTable, EmptyState, MoneyText, StatusBadge } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
 import type { VersaoLista } from "@/modules/medicao/planilha/queries";
@@ -26,22 +26,6 @@ export function ValorPrevisto({ valor }: { valor: number | null }) {
     <span className="text-muted-foreground">Sem regra de arredondamento</span>
   ) : (
     <MoneyText valor={valor} />
-  );
-}
-
-/** Escolha do contrato, por `?contrato=` na URL. Lista só os contratos da lista de acesso (RLS). */
-export function SeletorContrato({ contratos, contratoId }: { contratos: { id: string; codigo: string; nomeObra: string }[]; contratoId: string }) {
-  const { setMuitos } = useFiltrosUrl();
-  return (
-    <FilterBar>
-      <FiltroSelect
-        valor={contratoId}
-        onValorChange={(novo) => setMuitos({ contrato: novo === "" ? null : novo })}
-        opcoes={contratos.map((c) => ({ valor: c.id, rotulo: `${c.codigo} · ${c.nomeObra}` }))}
-        todosRotulo="Escolha o contrato"
-        className="max-w-80"
-      />
-    </FilterBar>
   );
 }
 
