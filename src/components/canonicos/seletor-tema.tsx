@@ -115,3 +115,40 @@ export function SeletorTema({ className }: { className?: string }) {
     </div>
   );
 }
+
+/**
+ * Botão de um toque: claro vira escuro, escuro vira claro. Fica à vista no
+ * AppShell (rodapé da sidebar e topo do mobile), porque trocar o tema pelo
+ * menu do usuário pedia três cliques. Quem quer "Sistema" de volta escolhe no
+ * menu do usuário.
+ *
+ * Lê o tema EFETIVO (`resolvedTheme`): com "Sistema" num computador escuro, o
+ * botão mostra o sol e leva para o claro, que é o que a pessoa está vendo.
+ * O ícone é o do destino (lua = ir para o escuro), com o nome acessível
+ * dizendo a ação. Antes de montar, nenhum ícone: o servidor não sabe o tema.
+ */
+export function BotaoTema({ className }: { className?: string }) {
+  const { resolvedTheme, setTheme } = useTheme();
+  const montado = useMontado();
+  const escuro = montado && resolvedTheme === "dark";
+  const rotulo = !montado
+    ? "Alternar tema"
+    : escuro
+      ? "Ativar tema claro"
+      : "Ativar tema escuro";
+  const Icone = escuro ? Sun : Moon;
+  return (
+    <button
+      type="button"
+      aria-label={rotulo}
+      title={rotulo}
+      onClick={() => setTheme(escuro ? "light" : "dark")}
+      className={cn(
+        "inline-flex items-center justify-center text-muted-foreground transition-colors hover:text-foreground",
+        className,
+      )}
+    >
+      {montado ? <Icone className="size-5" aria-hidden="true" /> : <span className="size-5" />}
+    </button>
+  );
+}

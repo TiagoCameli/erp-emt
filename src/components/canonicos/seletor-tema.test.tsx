@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ProvedorTema } from "@/components/canonicos/provedor-tema";
-import { ItensMenuTema, SeletorTema } from "@/components/canonicos/seletor-tema";
+import { BotaoTema, ItensMenuTema, SeletorTema } from "@/components/canonicos/seletor-tema";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // Sem globals: true no vitest.config, o cleanup automático da RTL não roda.
@@ -145,5 +145,34 @@ describe("ItensMenuTema (menu do usuário do AppShell)", () => {
     });
     await waitFor(() => expect(html()).toHaveClass("dark"));
     expect(screen.getByRole("menuitemradio", { name: "Sistema" })).toHaveAttribute("aria-checked", "true");
+  });
+});
+
+describe("BotaoTema (troca rápida no AppShell)", () => {
+  it("um toque troca claro por escuro e escuro por claro", async () => {
+    render(
+      <ProvedorTema>
+        <BotaoTema />
+      </ProvedorTema>,
+    );
+
+    // Sistema claro: o botão oferece o escuro.
+    fireEvent.click(await screen.findByRole("button", { name: "Ativar tema escuro" }));
+    await waitFor(() => expect(html()).toHaveClass("dark"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ativar tema claro" }));
+    await waitFor(() => expect(html()).toHaveClass("light"));
+    expect(html()).not.toHaveClass("dark");
+  });
+
+  it("com o tema do sistema escuro, leva para o claro (o que a pessoa está vendo)", async () => {
+    sistemaPrefere(true);
+    render(
+      <ProvedorTema>
+        <BotaoTema />
+      </ProvedorTema>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Ativar tema claro" }));
+    await waitFor(() => expect(html()).toHaveClass("light"));
   });
 });
