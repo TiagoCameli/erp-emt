@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
@@ -17,6 +18,7 @@ import {
   type Header,
   type OnChangeFn,
   type PaginationState,
+  type Row,
   type RowData,
   type SortingState,
   type VisibilityState,
@@ -561,6 +563,57 @@ function colunaExpansao<TData>(): ColumnDef<TData, unknown> {
 }
 
 /**
+ * Célula da coluna que carrega a árvore no modo `subLinhas`: recuo por
+ * profundidade e chevron de abrir/fechar, para a tela montar a própria coluna
+ * (a árvore não impõe uma coluna fixa como o `colunaExpansao`, porque o recuo
+ * faz sentido dentro da coluna de código/descrição, não numa coluna à parte).
+ *
+ * Sem filhos (`linha.getCanExpand()` falso) o chevron vira um espaço vazio do
+ * mesmo tamanho: sem isso, o texto da linha folha ficaria desalinhado do texto
+ * da linha com filhos, um rasteiro à esquerda do outro.
+ *
+ * `stopPropagation` no clique e no teclado, do mesmo jeito que o chevron da
+ * linha expandida: abrir/fechar galho é um gesto diferente do `onRowClick`.
+ */
+export function CelulaArvore<TData>({
+  linha,
+  children,
+}: {
+  linha: Row<TData>;
+  children: React.ReactNode;
+}) {
+  const podeExpandir = linha.getCanExpand();
+  const aberta = linha.getIsExpanded();
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1"
+      style={{ paddingLeft: `${linha.depth}rem` }}
+    >
+      {podeExpandir ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-expanded={aberta}
+          aria-label={aberta ? "Recolher" : "Expandir"}
+          className="text-muted-foreground hover:text-foreground shrink-0"
+          onClick={(evento) => {
+            evento.stopPropagation();
+            linha.toggleExpanded();
+          }}
+          onKeyDown={(evento) => evento.stopPropagation()}
+        >
+          {aberta ? <ChevronDown /> : <ChevronRight />}
+        </Button>
+      ) : (
+        <span aria-hidden="true" className="size-8 shrink-0" />
+      )}
+      <span className="min-w-0 truncate">{children}</span>
+    </div>
+  );
+}
+
+/**
  * Coluna de checkbox, prependada só quando a prop `selecao` existe.
  *
  * Fica FORA da personalização (não entra no menu "Colunas", não reordena, não
@@ -744,6 +797,23 @@ export interface DataTableProps<TData> {
    * passar a ser outra.
    */
   idDaLinha?: (registro: TData) => string;
+  /**
+   * Liga o modo árvore: devolve os filhos de um registro (`getSubRows` do
+   * TanStack). Todas as linhas nascem abertas, a ordenação fica desligada
+   * (misturaria filho de pai diferente) e a paginação some: a tabela mostra a
+   * árvore inteira. A barra ganha o botão "Recolher tudo"/"Expandir tudo"
+   * (`table.toggleAllRowsExpanded`). Enquanto a busca (`searchKey`) tiver
+   * texto, toda linha fica aberta, e a linha que casa mantém os ancestrais
+   * visíveis (`filterFromLeafRows`).
+   *
+   * A pintura de cada célula (recuo e chevron) é o `CelulaArvore` exportado
+   * por este módulo; a tela escolhe em qual coluna ele entra.
+   *
+   * **Incompatível** com `linhaExpandida` e com `selecao` (concorrem pelo
+   * mesmo lugar, o chevron/checkbox da primeira coluna) e com o modo servidor
+   * (`total`/`onPaginationChange`): a combinação lança erro.
+   */
+  subLinhas?: (registro: TData) => TData[] | undefined;
 }
 
 /** Um filtro que o usuário pode ligar ou desligar no menu "Filtros". */
@@ -1043,9 +1113,22 @@ export function DataTable<TData>({
   selecao,
   linhaExpandida,
   idDaLinha,
+  subLinhas,
 }: DataTableProps<TData>) {
   const modoServidor = total !== undefined && onPaginationChange !== undefined;
   const personalizavel = idTabela !== undefined;
+  const arvoreAtiva = subLinhas !== undefined;
+
+  if (arvoreAtiva && (linhaExpandida !== undefined || selecao !== undefined)) {
+    throw new Error(
+      "DataTable: subLinhas não combina com linhaExpandida nem selecao",
+    );
+  }
+  if (arvoreAtiva && modoServidor) {
+    throw new Error(
+      "DataTable: subLinhas não combina com paginação no servidor",
+    );
+  }
 
   const colunasComAcoes = React.useMemo<ColumnDef<TData, unknown>[]>(() => {
     if (!acoesLinha) return columns;
@@ -2127,7 +2210,28 @@ export function DataTable<TData>({
    * salvas). Checkbox não é coluna de dado e não pode virar preferência.
    */
   const expansivel = linhaExpandida !== undefined;
-  const [expandidas, setExpandidas] = React.useState<ExpandedState>({});
+  const [expandidas, setExpandidas] = React.useState<ExpandedState>(() =>
+    arvoreAtiva ? true : {},
+  );
+  /**
+   * Texto de busca da árvore, espelhado à parte do filtro de coluna do
+   * TanStack (ver o `onValorChange` do campo de busca, mais abaixo). Só serve
+   * para UMA coisa: saber, ainda NESTE render, se há busca em andamento, para
+   * forçar `expanded: true` no `state` de baixo. Ler o filtro de volta do
+   * `table` não dava: o `table` que devolve o valor novo só existe DEPOIS
+   * desta chamada de `useReactTable`, e é ela que precisa do texto agora.
+   */
+  const [buscaArvoreTexto, setBuscaArvoreTexto] = React.useState("");
+  /**
+   * Enquanto a árvore tem busca em andamento, tudo fica aberto: a linha que
+   * casa mantém os ancestrais visíveis (`filterFromLeafRows`, no `table`
+   * abaixo), mas só APARECE se o ancestral também estiver expandido. Ignora
+   * o "Recolher tudo" e qualquer chevron fechado nesse meio tempo, de
+   * propósito: procurar e não achar nada por causa de um galho fechado é o
+   * defeito que esta regra existe para evitar.
+   */
+  const expandidoNaArvore: ExpandedState =
+    arvoreAtiva && buscaArvoreTexto.trim() !== "" ? true : expandidas;
   const colunasFinais = React.useMemo<ColumnDef<TData, unknown>[]>(
     () => [
       ...(expansivel ? [colunaExpansao<TData>()] : []),
@@ -2163,6 +2267,7 @@ export function DataTable<TData>({
       pagination: paginacao,
       sorting: ordenacao,
       ...(expansivel ? { expanded: expandidas } : {}),
+      ...(arvoreAtiva ? { expanded: expandidoNaArvore } : {}),
       ...(personalizavel
         ? {
             columnVisibility: visibilidade,
@@ -2177,8 +2282,20 @@ export function DataTable<TData>({
     ...(expansivel
       ? { onExpandedChange: setExpandidas, getRowCanExpand: () => true }
       : {}),
+    ...(arvoreAtiva
+      ? {
+          // `subLinhas` só recebe o registro (ver DataTableProps); o TanStack
+          // manda também o índice, que a árvore não usa.
+          getSubRows: (registro: TData) => subLinhas?.(registro),
+          getExpandedRowModel: getExpandedRowModel(),
+          onExpandedChange: setExpandidas,
+          filterFromLeafRows: true,
+        }
+      : {}),
     getCoreRowModel: getCoreRowModel(),
-    enableSorting: !modoServidor || onSortingChange !== undefined,
+    enableSorting: arvoreAtiva
+      ? false
+      : !modoServidor || onSortingChange !== undefined,
     ...(personalizavel
       ? {
           onColumnVisibilityChange: aoMudarVisibilidade,
@@ -2199,7 +2316,11 @@ export function DataTable<TData>({
           pageCount: Math.max(1, Math.ceil((total ?? 0) / paginacao.pageSize)),
         }
       : {
-          getPaginationRowModel: getPaginationRowModel(),
+          // Árvore: SEM getPaginationRowModel. `table.getRowModel()` cai de
+          // volta no modelo anterior a paginação (ver RowPagination no
+          // TanStack), que é a árvore inteira, e a barra de baixo (que lista
+          // "Próxima página") fica escondida (ver o retorno, mais abaixo).
+          ...(arvoreAtiva ? {} : { getPaginationRowModel: getPaginationRowModel() }),
           getSortedRowModel: getSortedRowModel(),
           getFilteredRowModel: getFilteredRowModel(),
         }),
@@ -2238,7 +2359,8 @@ export function DataTable<TData>({
     colunaBusca !== undefined ||
     exportar !== undefined ||
     toolbar !== undefined ||
-    personalizavel;
+    personalizavel ||
+    arvoreAtiva;
 
   function classesResponsivas<T>(
     header: Header<T, unknown> | Cell<T, unknown>,
@@ -2883,9 +3005,13 @@ export function DataTable<TData>({
                           (colunaBusca.getFilterValue() as string | undefined) ??
                           ""
                         }
-                        onValorChange={(texto) =>
-                          colunaBusca.setFilterValue(texto)
-                        }
+                        onValorChange={(texto) => {
+                          colunaBusca.setFilterValue(texto);
+                          // Ver o comentário de `buscaArvoreTexto`: só a
+                          // árvore lê este espelho, para decidir o `expanded`
+                          // do render seguinte.
+                          if (arvoreAtiva) setBuscaArvoreTexto(texto);
+                        }}
                         placeholder={searchPlaceholder ?? "Buscar"}
                       />
                     ),
@@ -2901,7 +3027,7 @@ export function DataTable<TData>({
               })),
           ]}
           acoesEsquerda={
-            temFiltroAtivo || toolbar !== undefined ? (
+            temFiltroAtivo || toolbar !== undefined || arvoreAtiva ? (
               <>
                 {/*
                   Só aparece com filtro ativo. Botão morto em toda tela do app é
@@ -2917,6 +3043,18 @@ export function DataTable<TData>({
                   >
                     <FilterX />
                     Limpar filtros
+                  </Button>
+                ) : null}
+                {arvoreAtiva ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.toggleAllRowsExpanded()}
+                  >
+                    {table.getIsAllRowsExpanded()
+                      ? "Recolher tudo"
+                      : "Expandir tudo"}
                   </Button>
                 ) : null}
                 {toolbar}
@@ -2996,53 +3134,55 @@ export function DataTable<TData>({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-detalhe text-muted-foreground tabular-nums">
-          {de} a {ate} de {totalRegistros}
-        </p>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-detalhe text-muted-foreground">
-              Linhas por página
-            </span>
-            <Combobox
-              valor={String(tamanhoPagina)}
-              onValorChange={(valor) =>
-                aoMudarPaginacao({ pageIndex: 0, pageSize: Number(valor) })
-              }
-              opcoes={TAMANHOS_PAGINA.map((tamanho) => ({
-                valor: String(tamanho),
-                rotulo: String(tamanho),
-              }))}
-              size="sm"
-              className="w-[4.5rem] text-detalhe"
-              ariaLabel="Linhas por página"
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-              aria-label="Página anterior"
-            >
-              <ChevronLeft />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-              aria-label="Próxima página"
-            >
-              <ChevronRight />
-            </Button>
+      {arvoreAtiva ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-detalhe text-muted-foreground tabular-nums">
+            {de} a {ate} de {totalRegistros}
+          </p>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-detalhe text-muted-foreground">
+                Linhas por página
+              </span>
+              <Combobox
+                valor={String(tamanhoPagina)}
+                onValorChange={(valor) =>
+                  aoMudarPaginacao({ pageIndex: 0, pageSize: Number(valor) })
+                }
+                opcoes={TAMANHOS_PAGINA.map((tamanho) => ({
+                  valor: String(tamanho),
+                  rotulo: String(tamanho),
+                }))}
+                size="sm"
+                className="w-[4.5rem] text-detalhe"
+                ariaLabel="Linhas por página"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                aria-label="Próxima página"
+              >
+                <ChevronRight />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
