@@ -4464,3 +4464,98 @@ importador.
 - Verde da marca e vermelho de erro como TEXTO têm token próprio (`--primary-texto`, `--destrutivo-texto`), iguais ao fundo no claro e clareados no escuro (`#a9d4b1`, `#f07c7c`), porque como texto no fundo escuro davam 3,3:1 e 2,7:1. Ligados por `--text-color-primary`/`--text-color-destructive` no `@theme`, então `text-primary`/`text-destructive` (inclusive em components/ui) usam o token de texto e `bg-*`/`border-*` seguem no de fundo. Aprovado pelo Tiago em 26/09/2026.
 
 **Consequência:** Os valores claros existem em dois lugares no CSS (`:root, .tema-claro` e a cópia do `@media print`). O teste `src/app/tema-escuro-css.test.ts` falha se os dois divergirem ou se um token proibido entrar no `.dark`. Cor nova em tela tem que passar por token; hex solto só dentro de documento impresso, e documentado.
+
+## 2026-09-27 - Medição de Contratos, Fase 3: Painel, Boletim e export conferido
+
+**Contexto:** a Fase 3 entrega as telas só de leitura do Painel de contratos e do Boletim, o export
+xlsx do boletim e a conferência célula a célula desse export contra a planilha oficial do Lote 09.
+O `DataTable` canônico ganhou o modo árvore para mostrar a hierarquia da planilha contratual. Nenhum
+dado é digitado nesta fase; todo número de dinheiro continua saindo só do banco (D7).
+
+**Decisão:**
+1. Duas RPCs novas, `security invoker`, só leitura: `fn_mc_boletim(p_contrato, p_ate)` devolve a
+   árvore de linhas do boletim até a medição `p_ate` (padrão: a última do contrato) com todo numeric
+   como texto; `fn_mc_painel(p_status, p_tipos)` devolve um contrato por linha (da lista do usuário)
+   e o total consolidado. Aplicadas em produção pela migration
+   `supabase/migrations/20260927181327_mc_fase3a_boletim_painel.sql`.
+2. Recursos `medicao.painel` e `medicao.boletim` (só ação `ver`) e o backfill dos 4 Admins ativos,
+   pela migration `supabase/migrations/20260927182333_mc_fase3b_permissoes.sql`: `usuario_permissoes`
+   com `recurso like 'medicao.%'` foi de 36 para 44 linhas, sempre 4 usuários (os mesmos 4 Admins da
+   Fase 1).
+3. Tela do Boletim (`/medicao/boletim`): árvore da planilha contratual, filtro "até a Nª medição"
+   (padrão = a última medição do contrato, o cartão "até hoje"), cartões e rodapé com os totais da
+   RPC. Tela do Painel (`/medicao/painel`): previsto, acumulado, % executado, saldo e medição
+   corrente por contrato e no total consolidado. Reajuste acumulado e pendências não entram no
+   Painel nesta fase, nem como coluna vazia: ficam para as Fases 5 e 6.
+4. Export xlsx do boletim, no mesmo layout da tela, com o cabeçalho de marca
+   (`escreverCabecalhoMarca`) e todo valor escrito a partir do texto que vem do banco, nunca por
+   fórmula da planilha.
+5. Exibição de preço e quantidade (tela e export) com 15 algarismos significativos, zeros finais da
+   fração cortados, sem passar por `Number` (é o que o Excel mostra: `102.34700000000001` vira
+   `102,347`, `580.8643` continua com a casa escondida). O dado gravado no banco não muda.
+6. Regras de cálculo mostradas na tela: a linha de serviço mostra os próprios valores; o título
+   mostra a soma exata das linhas de serviço da sua subárvore, arredondada só no fim; em toda linha,
+   grupo e total o dinheiro é `round(soma exata, 2)`; o saldo é o previsto menos o acumulado, os dois
+   já arredondados; a % executada e a % a medir saem nulas quando o previsto é zero; o subtítulo
+   (título de nível 2 ou mais) mostra o subtotal da própria subárvore mesmo onde a planilha oficial
+   do Lote 09 deixa essas células em branco.
+7. Sete decisões tomadas durante a implementação (ledger da Fase 3), cada uma com o custo de reverter
+   se o Tiago discordar:
+   - a prova da Task 3 inseriu, só dentro da própria transação, as permissões
+     `medicao.boletim/ver` e `medicao.painel/ver` do Tiago, porque o backfill de verdade (item 2
+     acima) ainda não tinha rodado quando a prova foi escrita. Custo se errado: só a prova muda.
+   - as duas migrations aditivas desta fase (RPCs de leitura e backfill de permissões) foram
+     aplicadas sem pedir confirmação de novo, porque as duas já eram o combinado da spec (seção 4.1)
+     e nenhuma altera dado existente. Custo se errado: revogar as 8 permissões novas (2 recursos x 4
+     Admins) e derrubar as 2 funções.
+   - as regras "exibição com 15 algarismos significativos" e "`fora_da_versao` entra no acumulado e
+     no valor da Nª do total" entraram no plano como derivações das regras já decididas (D7, seção
+     6), não como regra de medição nova; a segunda virou a pergunta Q8 na spec (seção 12), em aberto,
+     bloqueando a Fase 5. Custo se errado: muda só a RPC e a tela.
+   - os subtítulos (títulos de nível 2 ou mais que a planilha oficial deixa em branco) mantêm, no
+     export e na tela, a soma da subárvore; o conferidor trata isso como diferença explicada só
+     quando o valor previsto, o valor na Nª e o acumulado exportados batem com `round` da soma exata
+     dos serviços da própria subárvore na planilha oficial, e o saldo e as % seguem da mesma conta.
+     Custo se errado: se o Tiago preferir a célula em branco no xlsx, é só deixar essas células
+     vazias em `planilha.ts` (custo pequeno).
+   - a % com previsto zero (`#DIV/0!` na oficial, vazio no export, nas linhas `03.16.x`) fica como
+     diferença explicada, pela regra do plano ("% nulos quando o previsto é zero"). Custo se errado:
+     só o conferidor muda.
+   - a célula AS102 (título `02.10`, com uma fórmula de serviço solta na oficial,
+     `=$F102*HLOOKUP(...)`, sobre o preço da própria linha vazio, que dá 0 na oficial) vira diferença
+     explicada "fórmula de serviço em título na oficial", só quando a fórmula da célula oficial
+     referencia o preço vazio da própria linha e o valor exportado é a soma recalculada da subárvore
+     (R$ 3.312,02, que também é o valor do grupo `02` na própria oficial). É um defeito da planilha
+     oficial, não do módulo. Custo se errado: o conferidor volta a acusar 1 célula.
+   - a coluna nova que aparece numa tabela que o usuário já reordenou passa a entrar logo depois da
+     coluna vizinha da definição original, e não mais no fim da ordem salva (o `DataTable` não tem
+     como desligar a reordenação só numa tabela, então a correção foi na regra geral de
+     `preferencias-tabela.ts`/`data-table.tsx`, no escopo mais estreito que dava para fazer). Custo
+     se errado: reverter só essa função.
+8. O `DataTable` canônico ganhou o modo árvore: prop `subLinhas` liga `getSubRows` do TanStack
+   (paginação desligada, ordenação desligada, todas as linhas abertas ao entrar), com a célula
+   `CelulaArvore` (recuo por nível, chevron de recolher/expandir). Não foi criada tabela paralela.
+   Consequência que vale para **toda** tabela personalizável do sistema, não só o Boletim: uma coluna
+   nova na definição da tela entra ao lado da coluna que a precede, mesmo numa tabela que o usuário já
+   reordenou; e uma coluna que sai do conjunto atual (por exemplo, o Boletim "até a 9ª" escondendo a
+   coluna da 10ª medição) some da ordem salva e, quando volta a aparecer, entra de novo depois da sua
+   vizinha, não necessariamente onde estava antes.
+9. Números conferidos no banco vivo (prova SQL da Task 3, impersonando o Tiago, sem gravar nada) para
+   o Lote 09: previsto R$ 243.927.483,49, acumulado R$ 36.541.661,77, valor da 10ª medição
+   R$ 680.738,27, saldo R$ 207.385.821,72, os 8 grupos batendo com os alvos da Fase 2, 265 linhas. O
+   boletim do Lote 09 levou 76 ms (79 ms no pré-voo antes da migration).
+10. Conferência célula a célula do export contra a planilha oficial do Lote 09
+    (`scripts/migracao-medicao/conferir_export_lote09.py`): 265 linhas casadas, 12.461 células
+    comparadas, 12.169 iguais, 292 explicadas, 0 não explicadas. As 292 explicadas, por categoria:
+    saldo pela conta direta contra o TRUNC da oficial, 190; subtítulo em branco na oficial com o
+    subtotal da subárvore no export, 50; % com previsto zero, 32; quantidade prevista vazia, 16;
+    unidade aparada, 2; código do DOPE gravado como número na oficial, 1; fórmula de serviço em
+    título na oficial (AS102), 1.
+
+**Consequência:** ficam para as próximas fases o reajuste acumulado e as pendências no Painel (Fases
+5 e 6) e a resposta definitiva da pergunta Q8 (Fase 5, quando existir um aditivo de verdade para
+confirmar com o Tiago). Pontos menores registrados no ledger da fase: o chevron e o botão "Recolher
+tudo" da árvore não reagem visualmente durante a busca (segue como minor, deferido); o clique de
+linha no Painel e o link do contrato no Boletim já passaram a exigir a permissão do usuário
+(`medicao.boletim/ver` e `medicao.contratos/ver`, respectivamente), corrigido na última onda de
+revisão desta fase.

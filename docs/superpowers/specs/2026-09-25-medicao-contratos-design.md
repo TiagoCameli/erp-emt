@@ -186,6 +186,10 @@ Fim da vigência = início do prazo + `prazo_meses` + soma dos `prazo_acrescido_
 - Quantidade **digitada** (lançamento, ajuste, aprovada): 4 casas, pelo `CASAS_TAXA`.
 - Dinheiro: arredondado a 2 casas **no ponto que a regra do contrato manda** e somado depois, ou seja, soma de centavos inteiros. Nunca float.
 - O xlsx sobe direto para o Storage como anexo da versão; o servidor baixa e lê. O navegador nunca manda os números (limite de 4 MB da Server Action e confiança). (emenda 26/09/2026)
+- (emenda 27/09/2026): a **exibição** de preço e quantidade, na tela e no export, usa 15 algarismos
+  significativos, com os zeros finais da fração cortados, sem passar por `Number` (função
+  `numeroExibicao`). É o que o Excel mostra: tira o ruído de double (`102.34700000000001` vira
+  `102,347`) e mantém a casa escondida (`580,8643`). O dado gravado no banco não muda.
 
 ### 6.2 Regra de arredondamento do valor
 
@@ -200,6 +204,16 @@ Fim da vigência = início do prazo + `prazo_meses` + soma dos `prazo_acrescido_
 (emenda 26/09/2026): em qualquer regra, o acumulado do item é sempre a soma dos valores já calculados por medição (o que foi de fato medido e cobrado), nunca arred(qtd_acum × preço vigente, 2) recalculado com o preço de hoje. Isso vale inclusive na regra `item_por_acumulado` quando um aditivo troca o preço do item no meio do contrato: o acumulado não refaz a conta das medições antigas com o preço novo, só soma o que cada uma já valeu com o preço da época.
 
 Para o Lote 09, a regra **tem de ser descoberta na planilha oficial e reproduzida até o centavo**. O centavo dos grupos (Σ grupos = R$ 36.541.661,76 contra R$ 36.541.661,77 no total) é o teste: cada hipótese é rodada contra todas as células do boletim (item × medição, acumulado, grupo, total). As diferenças vão para você antes de qualquer escolha. Se nenhuma fechar, eu paro e mostro.
+
+(emenda 27/09/2026): regras de exibição do cálculo, implementadas na Fase 3 (Painel e Boletim). A
+linha de serviço mostra os próprios valores: previsto, valor da Nª medição e acumulado dela mesma.
+O título mostra a soma exata das linhas de serviço da sua subárvore, arredondada só no fim. Em toda
+linha, grupo e total, o dinheiro é `round(soma exata, 2)`. O saldo é o previsto menos o acumulado,
+os dois já arredondados. A % executada e a % a medir saem nulas quando o previsto é zero. O
+subtítulo (título de nível 2 ou mais) mostra o subtotal da própria subárvore mesmo nos casos em que
+a planilha oficial do Lote 09 deixa essas células em branco: a conferência célula a célula (seção
+11) trata isso como diferença explicada, porque o número bate com a soma dos serviços da subárvore
+calculada na própria oficial.
 
 ## 7. Ciclo da medição
 
@@ -271,6 +285,15 @@ Todas em `/medicao/*`, desktop, com os canônicos (`FilterBar`, `DataTable`, `Fo
 8. **Alertas** (`/medicao/alertas`): tudo o que está pendente, por contrato.
 9. **Exportar xlsx**: boletim no layout da tela 4, com o cabeçalho de marca, e o demonstrativo de reajuste por medição.
 
+(emenda 27/09/2026): Painel e Boletim implementados na Fase 3, só leitura. **Painel** (tela 1):
+previsto, acumulado, saldo e % executado por contrato e no total consolidado, mais a medição
+corrente em R$; reajuste acumulado e pendências não entram nesta fase, nem como coluna vazia (ficam
+para as Fases 5 e 6). **Boletim** (tela 4): "até a Nª medição", com N escolhido pelo usuário, padrão
+= a última medição do contrato (o cartão "até hoje"); árvore de linhas pelo `DataTable` canônico
+evoluído com a prop `subLinhas` e a célula `CelulaArvore`, sem tabela paralela. **Export** (tela 9):
+xlsx no mesmo layout da tela 4, com o cabeçalho de marca (`escreverCabecalhoMarca`) e todo valor
+escrito a partir do texto que vem do banco, nunca por fórmula da planilha.
+
 ## 10. Carga inicial
 
 - **Lote 09 primeiro.** Fontes: o xlsx oficial da planilha (v0) e o do boletim com as 10 medições. **Nada digitado.**
@@ -300,6 +323,14 @@ Todas em `/medicao/*`, desktop, com os canônicos (`FilterBar`, `DataTable`, `Fo
 - **Portão de cada PR:** `tsc`, lint, testes, build, CI verde, prova SQL rodada no banco vivo e advisors do Supabase limpos. O status do projeto (`vault/projects/erp-emt/status.md`) e o `docs/decisoes.md` são atualizados no fim de cada fase.
 - Migration vai direto para produção: só mudança **aditiva** até o código que usa estar no ar. Aplicada por `apply_migration`, com o `.sql` versionado no repo.
 - (emenda 26/09/2026): o nome do arquivo de migration no repo usa a versão REAL aplicada (conferida em `supabase_migrations.schema_migrations`), nunca a versão prevista no plano. Se divergir, o conserto é só renomear o arquivo, nunca reaplicar.
+- (emenda 27/09/2026): conferência célula a célula do export do boletim contra a planilha oficial do
+  Lote 09 (`scripts/migracao-medicao/conferir_export_lote09.py`): 265 linhas casadas, 12.461 células
+  comparadas, 12.169 iguais, 292 diferenças explicadas, 0 não explicadas. As 292 explicadas, por
+  categoria: saldo pela conta direta contra o TRUNC da oficial, 190; subtítulo em branco na oficial
+  com o subtotal da subárvore no export, 50; % com previsto zero (`#DIV/0!` na oficial), 32;
+  quantidade prevista vazia na oficial, 16; unidade aparada, 2; código do DOPE gravado como número
+  na oficial (linha 20, `02.02` → `02.02.01`), 1; fórmula de serviço em título na oficial (AS102,
+  `02.10`), 1.
 
 ## 12. Perguntas em aberto
 
@@ -314,6 +345,12 @@ Não decido nenhuma destas sozinho. As que dependem da cláusula ou do xlsx fica
 | Q5 | **Regra de arredondamento do Lote 09** e a origem do centavo. | xlsx oficial | Fase 2, respondida 26/09/2026 (docs/decisoes.md): `sem_arredondar` |
 | Q6 | **O reajuste incide sobre a quantidade enviada ou a aprovada?** A proposta é calcular no envio sobre a medida e recalcular na aprovação sobre a aprovada. E o reajuste é arredondado por item ou por medição? | Cláusula + reajuste real recebido | Fase 6 |
 | Q7 | **Data-base e índices do Lote 09.** A 9ª já teve reajuste (R$ 88.589,82 sobre R$ 4.802.025,99), menos de 12 meses depois da assinatura (01/10/2025), então a data-base não é a assinatura. | Cláusula | Fase 6 |
+| Q8 | **Item medido que saiu num aditivo**: entra no acumulado e no valor da Nª do total, com o previsto da versão nova? | Você + aditivo real | Fase 5 |
+
+(emenda 27/09/2026): enquanto não existe aditivo real no módulo, a Fase 3 já aplica essa regra
+(`fora_da_versao` entra no acumulado e no valor da Nª do total; o previsto do total é o da versão
+exibida), só para nada que já foi medido sumir do total do boletim. Q8 fica em aberto para quando
+houver um aditivo de verdade e a resposta puder ser confirmada com o Tiago.
 
 ## 13. Fases (1 PR por fase, você aprova cada uma)
 

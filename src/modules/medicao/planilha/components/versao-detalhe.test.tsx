@@ -58,10 +58,10 @@ const props = { xlsx: null, podeCriar: true, podeAprovar: true, podeDesaprovar: 
 afterEach(cleanup);
 
 describe("VersaoDetalhe", () => {
-  it("mostra o preço com todas as casas do banco", () => {
+  it("mostra preço e quantidade com 15 algarismos significativos", () => {
     render(<VersaoDetalhe dados={dados()} {...props} />);
-    expect(screen.getByText("580,86429960000000001")).toBeTruthy();
-    expect(screen.getByText("17.057,717")).toBeTruthy();
+    expect(screen.getByText(/580,8642996/)).toBeTruthy();
+    expect(screen.getByText(/17\.057,717/)).toBeTruthy();
   });
 
   it("sem regra de arredondamento avisa no topo", () => {

@@ -9310,6 +9310,10 @@ export type Database = {
         Args: { p_contrato: string; p_dados: Json; p_id?: string };
         Returns: string;
       };
+      fn_mc_boletim: {
+        Args: { p_ate?: number; p_contrato: string };
+        Returns: Json;
+      };
       fn_mc_contrato_da_entidade: {
         Args: { p_id: string; p_tipo: string };
         Returns: string;
@@ -9333,6 +9337,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_mc_meus_contratos: { Args: never; Returns: string[] };
+      fn_mc_painel: {
+        Args: { p_status?: string[]; p_tipos?: string[] };
+        Returns: Json;
+      };
       fn_mc_planilha_aprovar: {
         Args: { p_versao: string };
         Returns: undefined;

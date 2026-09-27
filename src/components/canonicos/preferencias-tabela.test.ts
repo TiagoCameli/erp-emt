@@ -162,6 +162,29 @@ describe("ordemEfetiva", () => {
     expect(ordemEfetiva([], IDS)).toEqual(IDS);
   });
 
+  it("coluna nova entra logo depois da vizinha que a precede na tela, não no fim", () => {
+    // Boletim: uma coluna por medição. A ordem salva é de antes da 1ª e da 2ª.
+    expect(ordemEfetiva(["a", "c", "b"], ["a", "m1", "m2", "b", "c"])).toEqual([
+      "a",
+      "m1",
+      "m2",
+      "c",
+      "b",
+    ]);
+    // Só a 2ª é nova: entra logo depois da 1ª, onde quer que o usuário a tenha posto.
+    expect(ordemEfetiva(["a", "c", "m1", "b"], ["a", "m1", "m2", "b", "c"])).toEqual([
+      "a",
+      "c",
+      "m1",
+      "m2",
+      "b",
+    ]);
+  });
+
+  it("coluna nova sem vizinha antes (a primeira da tela) continua indo para o fim", () => {
+    expect(ordemEfetiva(["c", "b"], ["novo", "b", "c"])).toEqual(["c", "b", "novo"]);
+  });
+
   it("ignora id salvo que não existe mais", () => {
     expect(ordemEfetiva(["morta", "status"], IDS)).toEqual([
       "status",

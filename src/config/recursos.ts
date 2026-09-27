@@ -572,6 +572,13 @@ export const RECURSOS = [
   // Medição de Contratos (spec 2026-09-25). As outras abas entram nas fases delas, cada uma com o
   // seu backfill: registrar aba sem tela deixaria link morto no menu.
   {
+    id: "medicao.painel",
+    nome: "Painel",
+    modulo: "medicao",
+    rota: "/medicao/painel",
+    acoes: ["ver"],
+  },
+  {
     id: "medicao.contratos",
     nome: "Contratos",
     modulo: "medicao",
@@ -584,6 +591,13 @@ export const RECURSOS = [
     modulo: "medicao",
     rota: "/medicao/planilha",
     acoes: ["ver", "criar", "excluir", "aprovar", "desaprovar"],
+  },
+  {
+    id: "medicao.boletim",
+    nome: "Boletim",
+    modulo: "medicao",
+    rota: "/medicao/boletim",
+    acoes: ["ver"],
   },
   // Administração
   {
