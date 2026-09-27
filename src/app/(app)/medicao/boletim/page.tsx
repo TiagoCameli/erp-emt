@@ -5,6 +5,7 @@ import { CircleAlert, FileSpreadsheet } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/canonicos";
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { BotaoExportarBoletim } from "@/modules/medicao/boletim/components/botao-exportar-boletim";
 import { BoletimCartoes } from "@/modules/medicao/boletim/components/boletim-cartoes";
 import { BoletimTabela } from "@/modules/medicao/boletim/components/boletim-tabela";
 import { SeletorBoletim } from "@/modules/medicao/boletim/components/seletor-boletim";
@@ -12,6 +13,12 @@ import { carregarBoletim } from "@/modules/medicao/boletim/queries";
 import { listarContratos } from "@/modules/medicao/contratos/queries";
 
 const RECURSO = "medicao.boletim" as const;
+
+/**
+ * O "Exportar Excel" roda na função desta página: ler o boletim inteiro pela RPC e montar o xlsx
+ * (265 linhas no Lote 09) não pode morrer no teto padrão da Vercel (10 a 15s).
+ */
+export const maxDuration = 60;
 
 function primeiro(valor: string | string[] | undefined): string {
   return (Array.isArray(valor) ? valor[0] : valor)?.trim() ?? "";
@@ -43,7 +50,12 @@ export default async function PaginaBoletim({
   if (!contratoId) {
     return (
       <>
-        <PageHeader modulo="Medição" titulo={TITULO} descricao="Escolha o contrato para ver o boletim" />
+        <PageHeader
+          modulo="Medição"
+          titulo={TITULO}
+          descricao="Escolha o contrato para ver o boletim"
+          acoes={<BotaoExportarBoletim contratoId="" ate={null} />}
+        />
         <SeletorBoletim contratos={contratos} contratoId="" medicoes={[]} ate="" grupos={[]} grupoId="" />
         <EmptyState
           icone={FileSpreadsheet}
@@ -65,7 +77,12 @@ export default async function PaginaBoletim({
     const medicoes = ate !== null ? ((await carregarBoletim(contratoId, null)).boletim?.medicoes ?? []) : [];
     return (
       <>
-        <PageHeader modulo="Medição" titulo={TITULO} descricao="A planilha do contrato com as quantidades e os valores de cada medição" />
+        <PageHeader
+          modulo="Medição"
+          titulo={TITULO}
+          descricao="A planilha do contrato com as quantidades e os valores de cada medição"
+          acoes={<BotaoExportarBoletim contratoId={contratoId} ate={ate} />}
+        />
         <SeletorBoletim contratos={contratos} contratoId={contratoId} medicoes={medicoes} ate={ate === null ? "" : String(ate)} grupos={[]} grupoId="" />
         <EmptyState icone={CircleAlert} titulo="Não foi possível montar o boletim" descricao={erro ?? undefined} />
       </>
@@ -83,6 +100,7 @@ export default async function PaginaBoletim({
         modulo="Medição"
         titulo={TITULO}
         descricao="A planilha do contrato com as quantidades de cada medição, o acumulado e o saldo a medir"
+        acoes={<BotaoExportarBoletim contratoId={contratoId} ate={ate} />}
       />
       <SeletorBoletim
         contratos={contratos}
