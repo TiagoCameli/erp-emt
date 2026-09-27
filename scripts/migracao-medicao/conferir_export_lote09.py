@@ -22,11 +22,16 @@ Regras (linha oficial r casa com a linha exportada de mesma ordem; oficial lido 
 - AU e AW (%): |oficial - exportado| < 0.00005.
 - AV saldo: exportado == round(H, 2) - round(AT, 2) da oficial (regra do Tiago); a
   diferença contra o AV oficial (TRUNC(H - AT, 3) nos serviços, soma nos títulos) é
-  explicada e contada à parte.
+  explicada e contada à parte, com limite do lado da oficial: no serviço,
+  |AV oficial - exportado| < 0.01 (TRUNC em 3 casas tira menos de um centavo); no título,
+  AV oficial a menos de 0.0005 da Σ do AV oficial dos serviços da subárvore, e no total da
+  Σ do AV oficial dos títulos de nível 1 (como a oficial soma). Fora disso, não explicada.
 
 Diferenças explicadas (decisões do Tiago, 26/09/2026, e regra da fase):
 - `codigo_dope`: linha 20 da oficial `02.02` virou `02.02.01` no módulo.
-- `saldo_trunc`: saldo pela conta direta, não pelo TRUNC da oficial.
+- `saldo_trunc`: saldo pela conta direta, não pelo TRUNC da oficial. Limitada do lado da
+  oficial: serviço a menos de 0.01 do exportado; título e total a menos de 0.0005 da soma do
+  AV oficial dos filhos (serviços da subárvore; no total, os títulos de nível 1).
 - `qtd_prevista_vazia`: serviço com quantidade prevista vazia na oficial (03.16.x) vale 0.
 - `unidade_aparada`: unidade com espaço sobrando na oficial (`'un '`) gravada aparada.
 - `pct_previsto_zero`: % com previsto zero sai `#DIV/0!` na oficial e vazio no export
@@ -80,11 +85,15 @@ COL_PCT_EXEC, COL_SALDO, COL_PCT_MEDIR = 47, 48, 49       # AU, AV, AW
 
 TOLERANCIA_PCT = Decimal('0.00005')
 DOIS = Decimal('0.01')
+# Limites do `saldo_trunc` do lado da oficial (ver _saldo).
+LIMITE_SALDO_SERVICO = Decimal('0.01')
+TOLERANCIA_SOMA_SALDO = Decimal('0.0005')
 
 EXPLICACOES = OrderedDict([
     ('codigo_dope', 'linha 20 da oficial: código 02.02 virou 02.02.01 no módulo (Tiago, 26/09)'),
     ('saldo_trunc', 'saldo = round(H,2) - round(AT,2) no módulo; oficial usa TRUNC(H-AT,3) '
-                    'nos serviços e soma nos títulos (Tiago, 26/09)'),
+                    'nos serviços (a menos de 0.01 do exportado) e soma nos títulos (a menos de '
+                    '0.0005 da soma do AV oficial dos filhos) (Tiago, 26/09)'),
     ('qtd_prevista_vazia', 'quantidade prevista vazia na oficial vale 0 no módulo (03.16.x, Tiago, 26/09)'),
     ('unidade_aparada', 'unidade com espaço sobrando na oficial gravada aparada (Tiago, 26/09)'),
     ('pct_previsto_zero', '% com previsto zero: #DIV/0! na oficial, vazio no módulo '
@@ -377,11 +386,42 @@ def _saldo(res, ctx, campo, col_o, col_e, o, e, previsto_o, acumulado_o):
             ctx, campo, col_o, col_e, o, e,
             f'exportado não é round(H,2) - round(AT,2) da oficial = {esperado}'))
         return
-    if (do if do is not None else Decimal(0)) == de:
+    do = do if do is not None else Decimal(0)
+    if do == de:
         res.ok(campo)
         return
-    res.explicada(_diferenca(ctx, campo, col_o, col_e, do, de,
-                             f'oficial - exportado = {(do or Decimal(0)) - de}'), 'saldo_trunc')
+    base = f'oficial - exportado = {do - de}'
+    if ctx.get('tipo') == 'serviço':
+        # TRUNC(H - AT, 3) contra round(H) - round(AT): diferem em menos de um centavo.
+        if abs(do - de) < LIMITE_SALDO_SERVICO:
+            res.explicada(_diferenca(ctx, campo, col_o, col_e, do, de, base), 'saldo_trunc')
+        else:
+            res.nao_explicada(_diferenca(
+                ctx, campo, col_o, col_e, do, de,
+                f'{base}; |oficial - exportado| >= {LIMITE_SALDO_SERVICO}, o TRUNC em 3 casas não explica'))
+        return
+    # Título e total: o AV oficial tem de ser a soma do AV oficial dos filhos, como a oficial soma.
+    filhos = ctx.get('filhos_saldo')
+    ws = ctx.get('ws_oficial')
+    if filhos is None or ws is None:
+        res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, do, de,
+                                     f'{base}; sem as linhas filhas para conferir o AV oficial'))
+        return
+    soma = Decimal(0)
+    for r in filhos:
+        try:
+            soma += numero(ws.cell(r, COL_SALDO).value) or Decimal(0)
+        except ValueError as erro:
+            res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, do, de,
+                                         f'{base}; AV oficial da linha {r}: {erro}'))
+            return
+    detalhe = f'Σ do AV oficial de {len(filhos)} linha(s) filha(s) = {soma}'
+    if abs(do - soma) < TOLERANCIA_SOMA_SALDO:
+        res.explicada(_diferenca(ctx, campo, col_o, col_e, do, de, f'{base}; {detalhe}'), 'saldo_trunc')
+    else:
+        res.nao_explicada(_diferenca(
+            ctx, campo, col_o, col_e, do, de,
+            f'{base}; AV oficial fora da {detalhe} (tolerância {TOLERANCIA_SOMA_SALDO})'))
 
 
 # ---------------------------------------------------------------- conferência
@@ -441,7 +481,9 @@ def conferir(caminho_oficial, caminho_exportado, sha256_esperado=SHA256_ESPERADO
                'tipo': 'serviço' if servico else 'título',
                'subtitulo': sub if (sub is not None and sub['subtitulo']) else None,
                'subarvore': sub if titulo_no_export else None,
-               'formulas': wf}
+               'formulas': wf, 'ws_oficial': wo,
+               # Título: o AV oficial é a SUM das linhas da subárvore (só serviço tem valor).
+               'filhos_saldo': sub['linhas'] if (sub is not None and not servico) else None}
 
         # B código
         e_cod = ve(rex, ce['codigo'])
@@ -481,7 +523,10 @@ def conferir(caminho_oficial, caminho_exportado, sha256_esperado=SHA256_ESPERADO
         _conferir_valores(res, ctx, vo, ve, ro, rex, ce)
 
     # Linha do total
-    ctx = {'linha_oficial': total_o, 'linha_exportada': total_e, 'codigo': 'Total:', 'tipo': 'total'}
+    # Total: na oficial, =AV278+AV269+... (os títulos de nível 1).
+    nivel1 = [r for r in linhas_o if not _eh_servico(wo, r) and '.' not in _codigo_hierarquia(wo, r)]
+    ctx = {'linha_oficial': total_o, 'linha_exportada': total_e, 'codigo': 'Total:', 'tipo': 'total',
+           'ws_oficial': wo, 'filhos_saldo': nivel1}
     _conferir_valores(res, ctx, vo, ve, total_o, total_e, ce, sufixo=' (total)')
     for campo, co, key in [('previsto', COL_PREVISTO, 'previsto'), ('valor na Nª', COL_VALOR_N, 'valor_n'),
                            ('acumulado', COL_ACUMULADO, 'acumulado'), ('% executada', COL_PCT_EXEC, 'pct_exec'),

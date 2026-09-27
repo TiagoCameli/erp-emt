@@ -72,6 +72,16 @@ def _saldo_trunc(previsto, acumulado):
     return float(d.quantize(Decimal('0.001'), rounding='ROUND_DOWN'))
 
 
+def _saldo_oficial(linha, linhas):
+    """AV como a oficial: TRUNC(H - AT, 3) no serviço; no título, =SUM(AV) das linhas da
+    subárvore (só os serviços têm valor; subtítulo fica em branco)."""
+    if linha['preco'] is not None:
+        return _saldo_trunc(linha['previsto'], linha['acumulado'])
+    return float(sum((Decimal(repr(_saldo_trunc(l['previsto'], l['acumulado']))) for l in linhas
+                      if l['preco'] is not None and l['codigo'].startswith(linha['codigo'] + '.')),
+                     Decimal(0)))
+
+
 def _saldo_modulo(previsto, acumulado):
     return float(ce.round_half_up(Decimal(repr(previsto))) - ce.round_half_up(Decimal(repr(acumulado))))
 
@@ -105,7 +115,7 @@ def montar_oficial(caminho, linhas=LINHAS, total=TOTAL):
         ws.cell(r, 45, l['decima'])
         ws.cell(r, 46, l['acumulado'])
         ws.cell(r, 47, l['acumulado'] / l['previsto'])
-        ws.cell(r, 48, _saldo_trunc(l['previsto'], l['acumulado']))
+        ws.cell(r, 48, _saldo_oficial(l, linhas))
         ws.cell(r, 49, 1 - l['acumulado'] / l['previsto'])
         r += 1
     ws.cell(r, 1, 267)  # como na oficial: A tem um número, B vazia, rótulo em G
@@ -115,8 +125,9 @@ def montar_oficial(caminho, linhas=LINHAS, total=TOTAL):
     ws.cell(r, 45, total['decima'])
     ws.cell(r, 46, total['acumulado'])
     ws.cell(r, 47, total['acumulado'] / total['previsto'])
-    ws.cell(r, 48, sum(_saldo_trunc(l['previsto'], l['acumulado'])
-                       for l in linhas if l['preco'] is not None))
+    # Como a oficial: =AV278+AV269+... (a soma dos títulos de nível 1).
+    ws.cell(r, 48, sum(_saldo_oficial(l, linhas) for l in linhas
+                       if l['preco'] is None and '.' not in l['codigo']))
     ws.cell(r, 49, 1 - total['acumulado'] / total['previsto'])
     wb.save(caminho)
 
@@ -250,6 +261,49 @@ class TestConferirExport(unittest.TestCase):
         self.assertEqual(saldo_linhas[0].codigo, '01.01')
         self.assertEqual(saldo_linhas[0].oficial, Decimal('90.333'))
         self.assertEqual(saldo_linhas[0].exportado, Decimal('90.34'))
+
+    def _av_oficial(self, **por_linha):
+        """Troca o AV (col 48) da oficial nas linhas dadas: {'r15': valor, ...}."""
+        wb = openpyxl.load_workbook(self.oficial)
+        for chave, valor in por_linha.items():
+            wb[ce.ABA_OFICIAL].cell(int(chave[1:]), 48, valor)
+        wb.save(self.oficial)
+
+    def test_saldo_de_servico_com_oficial_dois_centavos_fora_acusa(self):
+        # 01.01: exportado 90.34; oficial 90.32 (TRUNC em 3 casas nunca tira 2 centavos). O
+        # título e o total seguem a soma da oficial, então só o serviço fica sem explicação.
+        montar_oficial(self.oficial)
+        self._av_oficial(r16=90.32, r15=180.32, r18=180.32)
+        montar_exportado(self.exportado)
+        res = self.conferir()
+        self.assertEqual([(d.linha_oficial, d.coluna_oficial, d.codigo) for d in res.nao_explicadas],
+                         [(16, 'AV', '01.01')], ce.formatar_relatorio(res))
+        self.assertIn('0.01', res.nao_explicadas[0].motivo)
+
+    def test_saldo_de_servico_com_oficial_a_menos_de_um_centavo_e_explicado(self):
+        montar_oficial(self.oficial)
+        self._av_oficial(r16=90.331, r15=180.331, r18=180.331)
+        montar_exportado(self.exportado)
+        res = self.conferir()
+        self.assertEqual(res.nao_explicadas, [], ce.formatar_relatorio(res))
+
+    def test_saldo_de_titulo_que_nao_e_a_soma_dos_filhos_na_oficial_acusa(self):
+        # 01: Σ AV dos filhos na oficial = 90.333 + 90 = 180.333; o título diz 180.335.
+        montar_oficial(self.oficial)
+        self._av_oficial(r15=180.335, r18=180.335)
+        montar_exportado(self.exportado)
+        res = self.conferir()
+        self.assertEqual([(d.linha_oficial, d.coluna_oficial, d.codigo) for d in res.nao_explicadas],
+                         [(15, 'AV', '01')], ce.formatar_relatorio(res))
+        self.assertIn('180.333', res.nao_explicadas[0].motivo)
+
+    def test_saldo_do_total_que_nao_e_a_soma_dos_titulos_na_oficial_acusa(self):
+        montar_oficial(self.oficial)
+        self._av_oficial(r18=180.336)
+        montar_exportado(self.exportado)
+        res = self.conferir()
+        self.assertEqual([(d.linha_oficial, d.coluna_oficial, d.codigo) for d in res.nao_explicadas],
+                         [(18, 'AV', 'Total:')], ce.formatar_relatorio(res))
 
     def test_saldo_que_nao_segue_a_regra_do_modulo_acusa(self):
         montar_oficial(self.oficial)

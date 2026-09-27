@@ -165,10 +165,11 @@ cabeçalho da coluna AS da oficial. Números sempre por `Decimal(repr(v))`, ofic
 | (N+1)ª..36ª da oficial | vazio ou zero |
 | H previsto, valor na Nª, AT acumulado | `round_half_up(oficial, 2) == exportado` |
 | AU, AW (%) | `abs(oficial - exportado) < 0.00005` |
-| AV saldo | exportado `== round(H,2) - round(AT,2)` da oficial; diferença contra o AV oficial é explicada |
+| AV saldo | exportado `== round(H,2) - round(AT,2)` da oficial; diferença contra o AV oficial é explicada só dentro do limite: serviço com `abs(AV oficial - exportado) < 0.01`; título com AV oficial a menos de 0.0005 da soma do AV oficial dos serviços da subárvore; total a menos de 0.0005 da soma do AV oficial dos títulos de nível 1 |
 
 Diferenças explicadas: `codigo_dope` (linha 20, `02.02` virou `02.02.01`), `saldo_trunc`
-(conta direta contra `TRUNC(H-AT,3)`; no total 207.385.821,72 contra ,63), `qtd_prevista_vazia`
+(conta direta contra `TRUNC(H-AT,3)`; no total 207.385.821,72 contra ,63; limitada pelo lado da
+oficial como na tabela acima, e fora do limite vira não explicada), `qtd_prevista_vazia`
 (03.16.x vazio = 0), `unidade_aparada` (`'un '`), `pct_previsto_zero` (`#DIV/0!` na oficial,
 vazio no export, quando o previsto é zero) e `subtitulo_em_branco` (subtítulo, título abaixo
 do nível 1, com a célula vazia na oficial: só é explicada se o valor exportado bater com o
