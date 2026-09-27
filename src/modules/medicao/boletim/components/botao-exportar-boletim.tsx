@@ -10,15 +10,27 @@ import { gerarPlanilhaBoletim } from "@/modules/medicao/boletim/actions";
 
 /**
  * "Exportar Excel" do boletim, nas ações do cabeçalho da página (como no Financeiro). Exporta o
- * mesmo recorte da tela: o contrato e o "até a Nª" da URL (`ate` nulo = última medição). A busca e
- * o filtro por grupo da tabela não entram: o boletim exportado é o do contrato inteiro.
- * Sem contrato escolhido, fica desabilitado.
+ * mesmo recorte da tela: o contrato e a Nª que a tela MOSTRA (`boletim.ate`), não o `?ate=` da URL:
+ * em "Última" a URL não tem número, e uma medição aberta entre carregar a tela e clicar faria o
+ * xlsx sair até a N+1 com a tela na Nª. `ate` nulo só sobra para contrato sem medição nenhuma.
+ * A busca e o filtro por grupo da tabela não entram: o boletim exportado é o do contrato inteiro.
+ * Sem contrato escolhido, ou com `motivoDesabilitado` (boletim que não montou: exportar só
+ * repetiria o erro da RPC), fica desabilitado.
  */
-export function BotaoExportarBoletim({ contratoId, ate }: { contratoId: string; ate: number | null }) {
+export function BotaoExportarBoletim({
+  contratoId,
+  ate,
+  motivoDesabilitado,
+}: {
+  contratoId: string;
+  ate: number | null;
+  motivoDesabilitado?: string;
+}) {
+  const desabilitado = !contratoId || motivoDesabilitado !== undefined;
   const [exportando, setExportando] = React.useState(false);
 
   async function aoExportar() {
-    if (exportando || !contratoId) return;
+    if (exportando || desabilitado) return;
     setExportando(true);
     try {
       const resultado = await gerarPlanilhaBoletim(contratoId, ate);
@@ -37,8 +49,8 @@ export function BotaoExportarBoletim({ contratoId, ate }: { contratoId: string; 
       type="button"
       variant="outline"
       size="sm"
-      disabled={exportando || !contratoId}
-      title={contratoId ? undefined : "Escolha o contrato para exportar"}
+      disabled={exportando || desabilitado}
+      title={!contratoId ? "Escolha o contrato para exportar" : motivoDesabilitado}
       onClick={() => {
         void aoExportar();
       }}

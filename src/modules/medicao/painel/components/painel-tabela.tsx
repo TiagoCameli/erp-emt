@@ -139,14 +139,19 @@ function idDaLinha(c: ContratoPainel): string {
 
 export interface PainelTabelaProps {
   painel: Painel;
+  /**
+   * `medicao.boletim/ver`, lido no servidor pela página. Sem ele a linha não é clicável: o
+   * boletim daria 404.
+   */
+  podeAbrirBoletim: boolean;
 }
 
 /**
  * Uma linha por contrato (a RPC já filtra pela lista de acesso do usuário, D3), com o rodapé do
  * `total` consolidado da RPC: a tela não soma nada (D7). Clique na linha abre o boletim do
- * contrato.
+ * contrato, para quem pode ver o boletim.
  */
-export function PainelTabela({ painel }: PainelTabelaProps) {
+export function PainelTabela({ painel, podeAbrirBoletim }: PainelTabelaProps) {
   const router = useRouter();
   const t = painel.total;
 
@@ -156,7 +161,7 @@ export function PainelTabela({ painel }: PainelTabelaProps) {
       columns={colunas}
       data={painel.contratos}
       idDaLinha={idDaLinha}
-      onRowClick={(c) => router.push(`/medicao/boletim?contrato=${c.id}`)}
+      onRowClick={podeAbrirBoletim ? (c) => router.push(`/medicao/boletim?contrato=${c.id}`) : undefined}
       cabecalhoFixo
       rodape={{
         contrato: <span className="font-semibold">Total consolidado</span>,

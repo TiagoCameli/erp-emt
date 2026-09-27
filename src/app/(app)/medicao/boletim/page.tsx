@@ -81,7 +81,13 @@ export default async function PaginaBoletim({
           modulo="Medição"
           titulo={TITULO}
           descricao="A planilha do contrato com as quantidades e os valores de cada medição"
-          acoes={<BotaoExportarBoletim contratoId={contratoId} ate={ate} />}
+          acoes={
+            <BotaoExportarBoletim
+              contratoId={contratoId}
+              ate={ate}
+              motivoDesabilitado="O boletim não pôde ser montado, então não há o que exportar"
+            />
+          }
         />
         <SeletorBoletim contratos={contratos} contratoId={contratoId} medicoes={medicoes} ate={ate === null ? "" : String(ate)} grupos={[]} grupoId="" />
         <EmptyState icone={CircleAlert} titulo="Não foi possível montar o boletim" descricao={erro ?? undefined} />
@@ -93,6 +99,13 @@ export default async function PaginaBoletim({
     .filter((l) => l.nivel === 1 && l.tipo === "titulo")
     .map((l) => ({ id: l.id, codigo: l.codigo, descricao: l.descricao }));
   const semRegra = boletim.contrato.regra_arredondamento === null;
+  // O link para o contrato só aparece para quem pode abrir a página dele (senão, 404).
+  const podeVerContrato = temPermissao(usuario, "medicao.contratos", "ver");
+  const identificacaoContrato = (
+    <>
+      <span className="font-mono">{boletim.contrato.codigo}</span> · {boletim.contrato.nome_obra}
+    </>
+  );
 
   return (
     <>
@@ -100,7 +113,7 @@ export default async function PaginaBoletim({
         modulo="Medição"
         titulo={TITULO}
         descricao="A planilha do contrato com as quantidades de cada medição, o acumulado e o saldo a medir"
-        acoes={<BotaoExportarBoletim contratoId={contratoId} ate={ate} />}
+        acoes={<BotaoExportarBoletim contratoId={contratoId} ate={boletim.ate} />}
       />
       <SeletorBoletim
         contratos={contratos}
@@ -111,9 +124,13 @@ export default async function PaginaBoletim({
         grupoId={grupoId}
       />
       <p className="mb-2 text-detalhe text-muted-foreground">
-        <Link href={`/medicao/contratos/${boletim.contrato.id}`} className="underline-offset-2 hover:underline">
-          <span className="font-mono">{boletim.contrato.codigo}</span> · {boletim.contrato.nome_obra}
-        </Link>
+        {podeVerContrato ? (
+          <Link href={`/medicao/contratos/${boletim.contrato.id}`} className="underline-offset-2 hover:underline">
+            {identificacaoContrato}
+          </Link>
+        ) : (
+          identificacaoContrato
+        )}
         {boletim.versao ? ` · planilha v${boletim.versao.numero}` : " · sem versão vigente da planilha"}
         {semRegra ? " · o contrato ainda não tem regra de arredondamento, então os valores ficam em branco" : null}
       </p>

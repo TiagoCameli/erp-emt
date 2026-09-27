@@ -59,7 +59,7 @@ export default async function PaginaPainel({
           detalhe="Soma da medição corrente de cada contrato"
         />
       </GradeKpis>
-      <PainelTabela painel={painel} />
+      <PainelTabela painel={painel} podeAbrirBoletim={temPermissao(usuario, "medicao.boletim", "ver")} />
     </>
   );
 }

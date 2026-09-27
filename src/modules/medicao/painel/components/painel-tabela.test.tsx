@@ -68,7 +68,7 @@ function texto(el: Element | null | undefined): string {
 
 describe("PainelTabela", () => {
   it("uma linha por contrato: contrato, contratante, status e medição corrente", () => {
-    const { container } = render(<PainelTabela painel={painel([contrato()])} />);
+    const { container } = render(<PainelTabela painel={painel([contrato()])} podeAbrirBoletim />);
     expect(texto(container.querySelector('tbody [data-coluna="contrato"]'))).toContain("001/2026");
     expect(texto(container.querySelector('tbody [data-coluna="contrato"]'))).toContain("Obra Um");
     expect(texto(container.querySelector('tbody [data-coluna="contratante"]'))).toContain("DER");
@@ -89,7 +89,7 @@ describe("PainelTabela", () => {
       contrato({ id: "c2", codigo: "002/2026", nome_obra: "Obra Dois", previsto: "500.00", acumulado: "200.00" }),
     ];
     // Soma das linhas seria 1.500,00 / 600,00; o rodapé mostra o total da RPC (999,00), sem "corrigir".
-    const { container } = render(<PainelTabela painel={painel(dois, { previsto: "999.00", acumulado: "999.00" })} />);
+    const { container } = render(<PainelTabela painel={painel(dois, { previsto: "999.00", acumulado: "999.00" })} podeAbrirBoletim />);
     const pe = container.querySelector("tfoot")!;
     expect(texto(pe.querySelector('[data-coluna="contrato"]'))).toBe("Total consolidado");
     expect(texto(pe.querySelector('[data-coluna="previsto"]'))).toBe("R$ 999,00");
@@ -97,14 +97,23 @@ describe("PainelTabela", () => {
   });
 
   it("clique na linha navega para o boletim do contrato", () => {
-    render(<PainelTabela painel={painel([contrato({ id: "abc" })])} />);
+    render(<PainelTabela painel={painel([contrato({ id: "abc" })])} podeAbrirBoletim />);
     fireEvent.click(screen.getByText("Obra Um"));
     expect(push).toHaveBeenCalledWith("/medicao/boletim?contrato=abc");
   });
 
+  it("sem medicao.boletim/ver, a linha não é clicável (o boletim daria 404)", () => {
+    const { container } = render(
+      <PainelTabela painel={painel([contrato({ id: "abc" })])} podeAbrirBoletim={false} />,
+    );
+    fireEvent.click(screen.getByText("Obra Um"));
+    expect(push).not.toHaveBeenCalled();
+    expect(container.querySelector("tbody tr")?.getAttribute("tabindex")).toBeNull();
+  });
+
   it("contrato sem regra de arredondamento: dinheiro em traço e nota no contrato", () => {
     const c = contrato({ previsto: null, acumulado: null, saldo: null, pct_executado: null });
-    const { container } = render(<PainelTabela painel={painel([c])} />);
+    const { container } = render(<PainelTabela painel={painel([c])} podeAbrirBoletim />);
     expect(texto(container.querySelector('tbody [data-coluna="previsto"]'))).toBe("—");
     expect(texto(container.querySelector('tbody [data-coluna="acumulado"]'))).toBe("—");
     expect(texto(container.querySelector('tbody [data-coluna="saldo"]'))).toBe("—");
@@ -114,12 +123,12 @@ describe("PainelTabela", () => {
 
   it("contrato sem medição nenhuma", () => {
     const c = contrato({ corrente: null });
-    render(<PainelTabela painel={painel([c])} />);
+    render(<PainelTabela painel={painel([c])} podeAbrirBoletim />);
     expect(screen.getByText("Nenhuma medição")).toBeTruthy();
   });
 
   it("nenhum contrato: estado vazio, sem quebrar no rodapé", () => {
-    render(<PainelTabela painel={painel([])} />);
+    render(<PainelTabela painel={painel([])} podeAbrirBoletim />);
     expect(screen.getByText("Nenhum contrato encontrado")).toBeTruthy();
   });
 });
