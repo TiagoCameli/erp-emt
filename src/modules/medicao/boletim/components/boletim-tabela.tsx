@@ -36,7 +36,8 @@ function montarColunas(ate: number | null): ColumnDef<NoBoletim, unknown>[] {
     {
       id: "item",
       header: "Item",
-      size: 150,
+      // Recuo de 1rem por nível + chevron de 2rem + código de até 11 caracteres (02.07.05.01).
+      size: 230,
       meta: { fixa: true, naoTruncar: true },
       cell: ({ row }) => (
         <CelulaArvore linha={row}>
@@ -59,7 +60,8 @@ function montarColunas(ate: number | null): ColumnDef<NoBoletim, unknown>[] {
     {
       id: "preco",
       header: "Preço Unitário",
-      size: 130,
+      // Preço com a casa escondida inteira, ex.: 21.154,6358333333 (17 caracteres).
+      size: 180,
       meta: { alinharDireita: true, atomico: true },
       cell: ({ row }) => <Numero texto={numeroExibicao(row.original.preco_unitario)} />,
     },
