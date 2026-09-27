@@ -31,6 +31,13 @@ Diferenças explicadas (decisões do Tiago, 26/09/2026, e regra da fase):
 - `unidade_aparada`: unidade com espaço sobrando na oficial (`'un '`) gravada aparada.
 - `pct_previsto_zero`: % com previsto zero sai `#DIV/0!` na oficial e vazio no export
   (contexto da Fase 3: "% nulos quando o previsto é zero").
+- `subtitulo_em_branco`: subtítulo (título abaixo do nível 1) com a célula vazia na oficial.
+  Só é explicada se o valor exportado for o recalculado da própria oficial: H, AS e AT =
+  round_half_up(soma das linhas de serviço da subárvore, 2), cada linha com preço contada uma
+  vez, títulos fora da soma; AV = round(H) - round(AT) desses; AU e AW a menos de 0.00005 da
+  razão desses (nulo com previsto zero). Subárvore = linhas seguintes cujo código começa com
+  o do subtítulo + "." (linha 20 como 02.02.01, a mesma hierarquia do módulo). Célula da
+  oficial preenchida (ex.: AS102 = 0, fórmula solta) segue a regra normal.
 Qualquer outra diferença é não explicada e aparece no relatório: o conferidor não corrige nada.
 """
 import argparse
@@ -77,6 +84,8 @@ EXPLICACOES = OrderedDict([
     ('unidade_aparada', 'unidade com espaço sobrando na oficial gravada aparada (Tiago, 26/09)'),
     ('pct_previsto_zero', '% com previsto zero: #DIV/0! na oficial, vazio no módulo '
                           '(regra da Fase 3: % nulo quando o previsto é zero)'),
+    ('subtitulo_em_branco', 'subtítulo em branco na oficial; o módulo mostra o subtotal da subárvore, '
+                            'conferido contra a soma dos serviços da própria oficial (controlador, 27/09)'),
 ])
 
 
@@ -311,9 +320,16 @@ def _dinheiro(res, ctx, campo, col_o, col_e, o, e):
     if round_half_up(do) == de:
         res.ok(campo)
     else:
+        extra = ''
+        sub = ctx.get('subtitulo')
+        if sub is not None and not sub['erro']:
+            chave = {COL_PREVISTO: 'previsto', COL_VALOR_N: 'valor_n', COL_ACUMULADO: 'acumulado'}.get(col_o)
+            if chave:
+                extra = (f'; célula preenchida na oficial, fora da regra do subtítulo '
+                         f'(Σ serviços da subárvore = {sub[chave]})')
         res.nao_explicada(_diferenca(
             ctx, campo, col_o, col_e, o, e,
-            f'round_half_up(oficial, 2) = {round_half_up(do)} diferente do exportado {de}'))
+            f'round_half_up(oficial, 2) = {round_half_up(do)} diferente do exportado {de}{extra}'))
 
 
 def _pct(res, ctx, campo, col_o, col_e, o, e, previsto_oficial):
@@ -404,12 +420,14 @@ def conferir(caminho_oficial, caminho_exportado, sha256_esperado=SHA256_ESPERADO
     vo = lambda r, c: wo.cell(r, c).value  # noqa: E731
     ve = lambda r, c: we.cell(r, c).value  # noqa: E731
 
+    subtotais = _subtotais_subtitulos(wo, linhas_o)
+
     for ro, rex in zip(linhas_o, linhas_e):
         res.linhas_casadas += 1
         codigo_o = vo(ro, COL_CODIGO)
-        servico = not vazio(vo(ro, COL_PRECO)) and _normal(vo(ro, COL_UNIDADE)) != ''
+        servico = _eh_servico(wo, ro)
         ctx = {'linha_oficial': ro, 'linha_exportada': rex, 'codigo': str(codigo_o),
-               'tipo': 'serviço' if servico else 'título'}
+               'tipo': 'serviço' if servico else 'título', 'subtitulo': subtotais.get(ro)}
 
         # B código
         e_cod = ve(rex, ce['codigo'])
@@ -465,17 +483,111 @@ def _conferir_valores(res, ctx, vo, ve, ro, rex, ce, sufixo=''):
         dprev = numero(previsto_o)
     except ValueError:
         dprev = None
-    _dinheiro(res, ctx, 'previsto' + sufixo, COL_PREVISTO, ce['previsto'], previsto_o, ve(rex, ce['previsto']))
-    _dinheiro(res, ctx, 'valor na Nª' + sufixo, COL_VALOR_N, ce['valor_n'],
-              vo(ro, COL_VALOR_N), ve(rex, ce['valor_n']))
-    _dinheiro(res, ctx, 'acumulado' + sufixo, COL_ACUMULADO, ce['acumulado'],
-              vo(ro, COL_ACUMULADO), ve(rex, ce['acumulado']))
-    _pct(res, ctx, '% executada' + sufixo, COL_PCT_EXEC, ce['pct_exec'],
-         vo(ro, COL_PCT_EXEC), ve(rex, ce['pct_exec']), dprev)
-    _saldo(res, ctx, 'saldo' + sufixo, COL_SALDO, ce['saldo'], vo(ro, COL_SALDO), ve(rex, ce['saldo']),
-           previsto_o, vo(ro, COL_ACUMULADO))
-    _pct(res, ctx, '% a medir' + sufixo, COL_PCT_MEDIR, ce['pct_medir'],
-         vo(ro, COL_PCT_MEDIR), ve(rex, ce['pct_medir']), dprev)
+    sub = ctx.get('subtitulo')
+    colunas = [
+        ('previsto', COL_PREVISTO, 'previsto'), ('valor na Nª', COL_VALOR_N, 'valor_n'),
+        ('acumulado', COL_ACUMULADO, 'acumulado'), ('% executada', COL_PCT_EXEC, 'pct_exec'),
+        ('saldo', COL_SALDO, 'saldo'), ('% a medir', COL_PCT_MEDIR, 'pct_medir'),
+    ]
+    for campo, col_o, chave in colunas:
+        o, e = vo(ro, col_o), ve(rex, ce[chave])
+        if sub is not None and vazio(o):
+            _subtitulo(res, ctx, campo + sufixo, col_o, ce[chave], o, e, sub, chave)
+        elif chave in ('previsto', 'valor_n', 'acumulado'):
+            _dinheiro(res, ctx, campo + sufixo, col_o, ce[chave], o, e)
+        elif chave in ('pct_exec', 'pct_medir'):
+            _pct(res, ctx, campo + sufixo, col_o, ce[chave], o, e, dprev)
+        else:
+            _saldo(res, ctx, campo + sufixo, col_o, ce[chave], o, e, previsto_o, vo(ro, COL_ACUMULADO))
+
+
+# ---------------------------------------------------------------- subtítulos
+
+def _eh_servico(ws, r):
+    return not vazio(ws.cell(r, COL_PRECO).value) and _normal(ws.cell(r, COL_UNIDADE).value) != ''
+
+
+def _codigo_hierarquia(ws, r):
+    """Código na hierarquia do módulo: a linha 20 (02.02 repetido, DOPE) é 02.02.01."""
+    codigo = _normal(ws.cell(r, COL_CODIGO).value)
+    return '02.02.01' if (r == 20 and codigo == '02.02') else codigo
+
+
+def _subtotais_subtitulos(ws, linhas):
+    """{linha: subtotais} dos subtítulos (títulos abaixo do nível 1), recalculados da oficial.
+
+    Soma exata (Decimal(repr)) de H, AS e AT das linhas de serviço da subárvore (linhas
+    seguintes com código começando por código + "."), cada linha com preço uma vez, títulos
+    fora; depois round_half_up em 2 casas. Célula não numérica numa linha da soma deixa o
+    subtítulo sem subtotal ("erro"), e aí nada dele é explicado.
+    """
+    codigos = [(r, _codigo_hierarquia(ws, r)) for r in linhas]
+    saida = {}
+    for i, (r, codigo) in enumerate(codigos):
+        if _eh_servico(ws, r) or '.' not in codigo:
+            continue
+        somas = {'H': Decimal(0), 'AS': Decimal(0), 'AT': Decimal(0)}
+        erro = None
+        linhas_soma = []
+        for r2, c2 in codigos[i + 1:]:
+            if not c2.startswith(codigo + '.'):
+                break
+            if not _eh_servico(ws, r2):
+                continue
+            linhas_soma.append(r2)
+            for chave, col in (('H', COL_PREVISTO), ('AS', COL_VALOR_N), ('AT', COL_ACUMULADO)):
+                try:
+                    somas[chave] += numero(ws.cell(r2, col).value) or Decimal(0)
+                except ValueError as e:
+                    erro = f'linha {r2} col {get_column_letter(col)}: {e}'
+        h, as_, at = (round_half_up(somas[k]) for k in ('H', 'AS', 'AT'))
+        saldo = h - at
+        saida[r] = {
+            'erro': erro, 'linhas': linhas_soma,
+            'previsto': h, 'valor_n': as_, 'acumulado': at, 'saldo': saldo,
+            'pct_exec': (at / h) if h != 0 else None,
+            'pct_medir': (saldo / h) if h != 0 else None,
+        }
+    return saida
+
+
+def _subtitulo(res, ctx, campo, col_o, col_e, o, e, sub, chave):
+    if sub['erro']:
+        res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, o, e,
+                                     f'subtítulo sem subtotal recalculável ({sub["erro"]})'))
+        return
+    esperado = sub[chave]
+    base = f'Σ de {len(sub["linhas"])} serviço(s) da subárvore na oficial'
+    try:
+        de = numero(e)
+    except ValueError as erro:
+        res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, o, e, str(erro)))
+        return
+    if chave in ('pct_exec', 'pct_medir'):
+        if esperado is None:
+            if de is None:
+                res.ok(campo)
+            else:
+                res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, o, e,
+                                             f'{base}: previsto zero, % deveria ser vazio'))
+            return
+        if de is not None and abs(de - esperado) < TOLERANCIA_PCT:
+            res.explicada(_diferenca(ctx, campo, col_o, col_e, o, e,
+                                     f'{base}: razão recalculada {esperado:.10f}'), 'subtitulo_em_branco')
+        else:
+            res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, o, e,
+                                         f'{base}: razão recalculada {esperado:.10f}, fora da tolerância'))
+        return
+    # dinheiro e saldo
+    if esperado == 0 and (de is None or de == 0):
+        res.ok(campo)  # vazio na oficial e zero no export, como em qualquer linha
+        return
+    if de is not None and de == esperado:
+        res.explicada(_diferenca(ctx, campo, col_o, col_e, o, e, f'{base} = {esperado}'),
+                      'subtitulo_em_branco')
+    else:
+        res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, o, e,
+                                     f'{base} = {esperado}, diferente do exportado'))
 
 
 # ---------------------------------------------------------------- relatório

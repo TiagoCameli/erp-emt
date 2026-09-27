@@ -170,7 +170,15 @@ cabeçalho da coluna AS da oficial. Números sempre por `Decimal(repr(v))`, ofic
 Diferenças explicadas: `codigo_dope` (linha 20, `02.02` virou `02.02.01`), `saldo_trunc`
 (conta direta contra `TRUNC(H-AT,3)`; no total 207.385.821,72 contra ,63), `qtd_prevista_vazia`
 (03.16.x vazio = 0), `unidade_aparada` (`'un '`), `pct_previsto_zero` (`#DIV/0!` na oficial,
-vazio no export, quando o previsto é zero). Qualquer outra é não explicada.
+vazio no export, quando o previsto é zero) e `subtitulo_em_branco` (subtítulo, título abaixo
+do nível 1, com a célula vazia na oficial: só é explicada se o valor exportado bater com o
+recalculado da própria oficial, isto é, H, AS e AT = `round_half_up` da soma das linhas de
+serviço da subárvore, cada linha com preço uma vez e títulos fora; AV = round(H) - round(AT)
+desses; AU e AW a menos de 0.00005 da razão desses, nulos com previsto zero; subárvore pelas
+linhas seguintes com o código do subtítulo + ".", linha 20 como `02.02.01`). Célula
+preenchida na oficial num subtítulo (o AS102 = 0 de uma fórmula solta) segue a regra normal
+e, se diferir, sai como não explicada com a soma recalculada no motivo. Qualquer outra
+diferença é não explicada.
 
 Os avisos inofensivos do openpyxl ("Data Validation extension" da oficial e "DrawingML" da
 logo do export) são calados só por essas mensagens.

@@ -88,6 +88,9 @@ def montar_oficial(caminho, linhas=LINHAS, total=TOTAL):
     for l in linhas:
         ws.cell(r, 2, l['codigo'])
         ws.cell(r, 3, l['descricao'])
+        if l.get('em_branco'):  # subtítulo: a oficial deixa tudo em branco
+            r += 1
+            continue
         ws.cell(r, 4, 'memória de cálculo')
         ws.cell(r, 5, l['unidade'])
         ws.cell(r, 6, l['preco'])
@@ -110,7 +113,8 @@ def montar_oficial(caminho, linhas=LINHAS, total=TOTAL):
     ws.cell(r, 45, total['decima'])
     ws.cell(r, 46, total['acumulado'])
     ws.cell(r, 47, total['acumulado'] / total['previsto'])
-    ws.cell(r, 48, sum(_saldo_trunc(l['previsto'], l['acumulado']) for l in linhas[1:]))
+    ws.cell(r, 48, sum(_saldo_trunc(l['previsto'], l['acumulado'])
+                       for l in linhas if l['preco'] is not None))
     ws.cell(r, 49, 1 - total['acumulado'] / total['previsto'])
     wb.save(caminho)
 
@@ -158,6 +162,37 @@ def montar_exportado(caminho, linhas=LINHAS, total=TOTAL, mexer=None):
     if mexer:
         mexer(ws)
     wb.save(caminho)
+
+
+def _servico(codigo, previsto, decima, acumulado):
+    return {'codigo': codigo, 'descricao': f'Serviço {codigo}', 'unidade': 'm', 'preco': 1.5,
+            'qtd': 2, 'previsto': previsto, 'qtds': [None] * (MEDICOES - 1) + [1],
+            'decima': decima, 'acumulado': acumulado}
+
+
+def _soma(linhas, campo):
+    return float(sum((Decimal(repr(l[campo])) for l in linhas), Decimal(0)))
+
+
+# Título 01 > subtítulo 01.01 (em branco na oficial) > 01.01.01 e 01.01.02 (este com filho com
+# preço 01.01.02.01, que também soma, como no módulo) ; 01.02 fora do subtítulo.
+_S1 = _servico('01.01.01', 50.1234, 0.5, 5.0617)
+_S2 = _servico('01.01.02', 30.005, 0.505, 3.001)
+_S21 = _servico('01.01.02.01', 10.0004, 0, 1.0001)
+_S3 = _servico('01.02', 100, 0, 10)
+_SUB = [_S1, _S2, _S21]
+_TODOS = _SUB + [_S3]
+LINHAS_SUBTITULO = [
+    {'codigo': '01', 'descricao': 'TÍTULO', 'unidade': None, 'preco': None, 'qtd': None,
+     'previsto': _soma(_TODOS, 'previsto'), 'qtds': [None] * MEDICOES,
+     'decima': _soma(_TODOS, 'decima'), 'acumulado': _soma(_TODOS, 'acumulado')},
+    {'codigo': '01.01', 'descricao': 'SUBTÍTULO', 'unidade': None, 'preco': None, 'qtd': None,
+     'previsto': _soma(_SUB, 'previsto'), 'qtds': [None] * MEDICOES,
+     'decima': _soma(_SUB, 'decima'), 'acumulado': _soma(_SUB, 'acumulado'), 'em_branco': True},
+    _S1, _S2, _S21, _S3,
+]
+TOTAL_SUBTITULO = {'previsto': _soma(_TODOS, 'previsto'), 'decima': _soma(_TODOS, 'decima'),
+                   'acumulado': _soma(_TODOS, 'acumulado')}
 
 
 @unittest.skipIf(MOTIVO_PULO is not None, MOTIVO_PULO or '')
@@ -262,6 +297,38 @@ class TestConferirExport(unittest.TestCase):
         res = self.conferir()
         self.assertEqual([(d.linha_oficial, d.coluna_oficial) for d in res.nao_explicadas],
                          [(17, 'AU')])
+
+    def test_subtitulo_em_branco_com_subtotal_conferido_e_explicado(self):
+        montar_oficial(self.oficial, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+        montar_exportado(self.exportado, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+        res = self.conferir()
+        self.assertEqual(res.nao_explicadas, [], ce.formatar_relatorio(res))
+        sub = sorted(d.coluna_oficial for d in res.explicadas
+                     if d.codigo == '01.01' and d.explicacao == 'subtitulo_em_branco')
+        self.assertEqual(sub, ['AS', 'AT', 'AU', 'AV', 'AW', 'H'], ce.formatar_relatorio(res))
+        # 50.1234 + 30.005 + 10.0004 = 90.1288: o export do subtítulo é o round da soma exata
+        h = [d for d in res.explicadas if d.codigo == '01.01' and d.coluna_oficial == 'H'][0]
+        self.assertEqual(Decimal(repr(h.exportado)), Decimal('90.13'))
+
+    def test_subtitulo_com_um_centavo_a_mais_acusa(self):
+        montar_oficial(self.oficial, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+
+        def mexer(ws):
+            ws.cell(9, 6, ws.cell(9, 6).value + 0.01)  # previsto do subtítulo 01.01 (linha 9, F)
+        montar_exportado(self.exportado, LINHAS_SUBTITULO, TOTAL_SUBTITULO, mexer=mexer)
+        res = self.conferir()
+        self.assertEqual([(d.linha_oficial, d.coluna_oficial, d.codigo) for d in res.nao_explicadas],
+                         [(16, 'H', '01.01')], ce.formatar_relatorio(res))
+
+    def test_subtitulo_com_zero_na_oficial_e_soma_nao_zero_acusa(self):
+        montar_oficial(self.oficial, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+        wb = openpyxl.load_workbook(self.oficial)
+        wb[ce.ABA_OFICIAL].cell(16, 45, 0)  # AS16 = 0 solto, como o AS102 da oficial
+        wb.save(self.oficial)
+        montar_exportado(self.exportado, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+        res = self.conferir()
+        self.assertEqual([(d.linha_oficial, d.coluna_oficial) for d in res.nao_explicadas],
+                         [(16, 'AS')], ce.formatar_relatorio(res))
 
     def test_recusa_hash_diferente(self):
         montar_oficial(self.oficial)
