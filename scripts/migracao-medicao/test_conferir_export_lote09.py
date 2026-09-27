@@ -10,10 +10,12 @@ Uso:
   python3 -m unittest scripts/migracao-medicao/test_conferir_export_lote09.py -v
 """
 import os
+import re
 import shutil
 import sys
 import tempfile
 import unittest
+import zipfile
 from decimal import Decimal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -329,6 +331,48 @@ class TestConferirExport(unittest.TestCase):
         res = self.conferir()
         self.assertEqual([(d.linha_oficial, d.coluna_oficial) for d in res.nao_explicadas],
                          [(16, 'AS')], ce.formatar_relatorio(res))
+
+    def _formula_em_as16(self):
+        """AS16 (subtítulo 01.01) com fórmula de serviço sobre F16 vazio e valor em cache 0,
+        como o AS102 da oficial. O openpyxl não grava cache de fórmula: edita o XML."""
+        wb = openpyxl.load_workbook(self.oficial)
+        wb[ce.ABA_OFICIAL].cell(16, 45, 0)
+        wb.save(self.oficial)
+        with zipfile.ZipFile(self.oficial) as z:
+            itens = {n: z.read(n) for n in z.namelist()}
+        folha = [n for n in itens if n.startswith('xl/worksheets/sheet')][0]
+        xml = itens[folha].decode()
+        novo, trocas = re.subn(r'<c r="AS16"([^>]*)><v>0</v></c>',
+                               r'<c r="AS16"\1><f>$F16*HLOOKUP($AU$7,$I$14:$AR$36,20,FALSE)</f><v>0</v></c>',
+                               xml)
+        self.assertEqual(trocas, 1)
+        itens[folha] = novo.encode()
+        with zipfile.ZipFile(self.oficial, 'w', zipfile.ZIP_DEFLATED) as z:
+            for n, dados in itens.items():
+                z.writestr(n, dados)
+
+    def test_formula_de_servico_em_titulo_com_soma_conferida_e_explicada(self):
+        montar_oficial(self.oficial, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+        self._formula_em_as16()
+        montar_exportado(self.exportado, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+        res = self.conferir()
+        self.assertEqual(res.nao_explicadas, [], ce.formatar_relatorio(res))
+        achadas = [(d.linha_oficial, d.coluna_oficial) for d in res.explicadas
+                   if d.explicacao == 'formula_servico_em_titulo']
+        self.assertEqual(achadas, [(16, 'AS')])
+        self.assertIn('formula_servico_em_titulo', ce.formatar_relatorio(res))
+
+    def test_formula_de_servico_em_titulo_com_soma_errada_acusa(self):
+        montar_oficial(self.oficial, LINHAS_SUBTITULO, TOTAL_SUBTITULO)
+        self._formula_em_as16()
+
+        def mexer(ws):
+            ws.cell(9, 17, ws.cell(9, 17).value + 0.01)  # valor na 10ª do subtítulo (Q9)
+        montar_exportado(self.exportado, LINHAS_SUBTITULO, TOTAL_SUBTITULO, mexer=mexer)
+        res = self.conferir()
+        self.assertEqual([(d.linha_oficial, d.coluna_oficial) for d in res.nao_explicadas],
+                         [(16, 'AS')], ce.formatar_relatorio(res))
+        self.assertEqual([d for d in res.explicadas if d.explicacao == 'formula_servico_em_titulo'], [])
 
     def test_recusa_hash_diferente(self):
         montar_oficial(self.oficial)

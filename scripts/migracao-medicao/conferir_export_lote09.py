@@ -37,7 +37,12 @@ Diferenças explicadas (decisões do Tiago, 26/09/2026, e regra da fase):
   vez, títulos fora da soma; AV = round(H) - round(AT) desses; AU e AW a menos de 0.00005 da
   razão desses (nulo com previsto zero). Subárvore = linhas seguintes cujo código começa com
   o do subtítulo + "." (linha 20 como 02.02.01, a mesma hierarquia do módulo). Célula da
-  oficial preenchida (ex.: AS102 = 0, fórmula solta) segue a regra normal.
+  oficial preenchida segue a regra normal, salvo o caso abaixo.
+- `formula_servico_em_titulo`: célula de título na oficial com fórmula de serviço que
+  referencia `F<linha>`/`$F<linha>` da própria linha, com esse F vazio (o AS102 = 0 do 02.10).
+  Só é explicada se o título for título no export (sem preço e sem unidade) e o valor
+  exportado passar na mesma verificação do subtotal recalculado da subárvore. Fórmula lida
+  numa segunda carga com `data_only=False`.
 Qualquer outra diferença é não explicada e aparece no relatório: o conferidor não corrige nada.
 """
 import argparse
@@ -86,6 +91,9 @@ EXPLICACOES = OrderedDict([
                           '(regra da Fase 3: % nulo quando o previsto é zero)'),
     ('subtitulo_em_branco', 'subtítulo em branco na oficial; o módulo mostra o subtotal da subárvore, '
                             'conferido contra a soma dos serviços da própria oficial (controlador, 27/09)'),
+    ('formula_servico_em_titulo', 'fórmula de serviço em título na oficial (sobre o F vazio da própria linha); '
+                                  'o módulo mostra o subtotal da subárvore, conferido contra a soma dos '
+                                  'serviços da própria oficial (controlador, 27/09)'),
 ])
 
 
@@ -209,7 +217,8 @@ def _abrir_oficial(caminho, sha256_esperado):
     while r <= ws.max_row:
         # Na oficial o rótulo "Total:" fica na coluna G (B vazia); aceita de B a G.
         if any(_normal(ws.cell(r, c).value) == 'Total:' for c in range(COL_CODIGO, COL_QTD + 1)):
-            return ws, linhas, r, medicoes
+            formulas = openpyxl.load_workbook(caminho, data_only=False)[ABA_OFICIAL]
+            return ws, formulas, linhas, r, medicoes
         linhas.append(r)
         r += 1
     raise SystemExit('planilha oficial sem a linha "Total:" (colunas B a G)')
@@ -383,7 +392,7 @@ def conferir(caminho_oficial, caminho_exportado, sha256_esperado=SHA256_ESPERADO
     res.arquivo_exportado = os.path.abspath(caminho_exportado)
     res.sha256_oficial = sha256_arquivo(caminho_oficial)
 
-    wo, linhas_o, total_o, n = _abrir_oficial(caminho_oficial, sha256_esperado)
+    wo, wf, linhas_o, total_o, n = _abrir_oficial(caminho_oficial, sha256_esperado)
     we, cab_e, colunas, medicoes_e, linhas_e, total_e = _abrir_exportado(caminho_exportado)
     res.medicoes = n
     res.linhas_oficial, res.linhas_exportadas = len(linhas_o), len(linhas_e)
@@ -426,8 +435,13 @@ def conferir(caminho_oficial, caminho_exportado, sha256_esperado=SHA256_ESPERADO
         res.linhas_casadas += 1
         codigo_o = vo(ro, COL_CODIGO)
         servico = _eh_servico(wo, ro)
+        sub = subtotais.get(ro)
+        titulo_no_export = vazio(ve(rex, ce['preco'])) and vazio(ve(rex, ce['unidade']))
         ctx = {'linha_oficial': ro, 'linha_exportada': rex, 'codigo': str(codigo_o),
-               'tipo': 'serviço' if servico else 'título', 'subtitulo': subtotais.get(ro)}
+               'tipo': 'serviço' if servico else 'título',
+               'subtitulo': sub if (sub is not None and sub['subtitulo']) else None,
+               'subarvore': sub if titulo_no_export else None,
+               'formulas': wf}
 
         # B código
         e_cod = ve(rex, ce['codigo'])
@@ -493,6 +507,8 @@ def _conferir_valores(res, ctx, vo, ve, ro, rex, ce, sufixo=''):
         o, e = vo(ro, col_o), ve(rex, ce[chave])
         if sub is not None and vazio(o):
             _subtitulo(res, ctx, campo + sufixo, col_o, ce[chave], o, e, sub, chave)
+        elif _formula_de_servico_sobre_f_vazio(ctx, ro, col_o, vo):
+            _formula_titulo(res, ctx, campo + sufixo, col_o, ce[chave], o, e, chave)
         elif chave in ('previsto', 'valor_n', 'acumulado'):
             _dinheiro(res, ctx, campo + sufixo, col_o, ce[chave], o, e)
         elif chave in ('pct_exec', 'pct_medir'):
@@ -502,6 +518,47 @@ def _conferir_valores(res, ctx, vo, ve, ro, rex, ce, sufixo=''):
 
 
 # ---------------------------------------------------------------- subtítulos
+
+def _formula_de_servico_sobre_f_vazio(ctx, ro, col_o, vo):
+    """Título na oficial e no export, célula com fórmula que usa o F da própria linha, F vazio."""
+    if ctx.get('subarvore') is None or ctx.get('formulas') is None:
+        return False
+    formula = ctx['formulas'].cell(ro, col_o).value
+    if not (isinstance(formula, str) and formula.startswith('=')):
+        return False
+    if not re.search(rf'(?<![A-Z$])\$?F\$?{ro}(?!\d)', formula):
+        return False
+    return vazio(vo(ro, COL_PRECO))
+
+
+def _formula_titulo(res, ctx, campo, col_o, col_e, o, e, chave):
+    sub = ctx['subarvore']
+    formula = ctx['formulas'].cell(ctx['linha_oficial'], col_o).value
+    try:
+        do, de = numero(o), numero(e)
+    except ValueError as erro:
+        res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, o, e, str(erro)))
+        return
+    if chave in ('pct_exec', 'pct_medir'):
+        if do is not None and de is not None and abs(do - de) < TOLERANCIA_PCT:
+            res.ok(campo)
+            return
+        esperado = sub[chave]
+        passou = (not sub['erro'] and esperado is not None and de is not None
+                  and abs(de - esperado) < TOLERANCIA_PCT)
+    else:
+        if de is not None and round_half_up(do or Decimal(0)) == de:
+            res.ok(campo)
+            return
+        esperado = sub[chave]
+        passou = not sub['erro'] and de is not None and de == esperado
+    base = (f'fórmula {formula} sobre F{ctx["linha_oficial"]} vazio; '
+            f'Σ de {len(sub["linhas"])} serviço(s) da subárvore na oficial = {esperado}')
+    if passou:
+        res.explicada(_diferenca(ctx, campo, col_o, col_e, o, e, base), 'formula_servico_em_titulo')
+    else:
+        res.nao_explicada(_diferenca(ctx, campo, col_o, col_e, o, e, base + ', diferente do exportado'))
+
 
 def _eh_servico(ws, r):
     return not vazio(ws.cell(r, COL_PRECO).value) and _normal(ws.cell(r, COL_UNIDADE).value) != ''
@@ -524,7 +581,7 @@ def _subtotais_subtitulos(ws, linhas):
     codigos = [(r, _codigo_hierarquia(ws, r)) for r in linhas]
     saida = {}
     for i, (r, codigo) in enumerate(codigos):
-        if _eh_servico(ws, r) or '.' not in codigo:
+        if _eh_servico(ws, r):
             continue
         somas = {'H': Decimal(0), 'AS': Decimal(0), 'AT': Decimal(0)}
         erro = None
@@ -543,7 +600,7 @@ def _subtotais_subtitulos(ws, linhas):
         h, as_, at = (round_half_up(somas[k]) for k in ('H', 'AS', 'AT'))
         saldo = h - at
         saida[r] = {
-            'erro': erro, 'linhas': linhas_soma,
+            'erro': erro, 'linhas': linhas_soma, 'subtitulo': '.' in codigo,
             'previsto': h, 'valor_n': as_, 'acumulado': at, 'saldo': saldo,
             'pct_exec': (at / h) if h != 0 else None,
             'pct_medir': (saldo / h) if h != 0 else None,

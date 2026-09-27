@@ -177,7 +177,12 @@ serviço da subárvore, cada linha com preço uma vez e títulos fora; AV = roun
 desses; AU e AW a menos de 0.00005 da razão desses, nulos com previsto zero; subárvore pelas
 linhas seguintes com o código do subtítulo + ".", linha 20 como `02.02.01`). Célula
 preenchida na oficial num subtítulo (o AS102 = 0 de uma fórmula solta) segue a regra normal
-e, se diferir, sai como não explicada com a soma recalculada no motivo. Qualquer outra
+e, se diferir, sai como não explicada com a soma recalculada no motivo. Exceção estreita,
+`formula_servico_em_titulo`: célula de título (sem preço e sem unidade também no export) que
+na oficial tem uma fórmula de serviço sobre o `F`/`$F` da própria linha, com esse F vazio (o
+AS102 = 0 do 02.10, `=$F102*HLOOKUP(...)`); só é explicada se o valor exportado passar na
+mesma verificação do subtotal recalculado da subárvore. A fórmula é lida numa segunda carga
+com `data_only=False`, e cada célula assim aparece listada no relatório. Qualquer outra
 diferença é não explicada.
 
 Os avisos inofensivos do openpyxl ("Data Validation extension" da oficial e "DrawingML" da
