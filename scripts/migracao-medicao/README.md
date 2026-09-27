@@ -115,3 +115,73 @@ Conferência (pelo MCP `execute_sql`, os dois caminhos): contagem por seção
 (`select secao, count(*) from legado.carga_mc_l09, jsonb_array_elements(dados) group by
 secao`: 1 contrato, 265 linhas, 10 medições, 2.450 quantidades, 1 esperado) e um valor de
 ponta (`02.07.04` com preço `580.8643`).
+
+## Conferência do export (Fase 3, Task 8)
+
+`conferir_export_lote09.py` compara, célula a célula, o xlsx do boletim que o app exporta
+(aba "Boletim") com a planilha oficial do Lote 09 (aba "Planilha de Medição", recusada se o
+sha256 não for o combinado). Não corrige nada: toda diferença sai no relatório, separada em
+explicada (decisão já tomada pelo Tiago) e não explicada. Sai com 1 se houver qualquer
+diferença não explicada.
+
+Passo a passo (só leitura no banco; a transação termina em `rollback`):
+
+```
+# 1. jsonb da RPC como o Tiago, pelo CLI linkado
+cat > scripts/migracao-medicao/_retrato/boletim_l09.sql <<'SQL'
+begin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"c66fca9f-5428-4fb9-855f-dcff548764df","role":"authenticated"}';
+select public.fn_mc_boletim('c4109738-9af7-4ddb-8982-3b2c79fe6e43');
+rollback;
+SQL
+supabase db query --linked -f scripts/migracao-medicao/_retrato/boletim_l09.sql \
+  > scripts/migracao-medicao/_retrato/boletim_l09_cli.out
+python3 -c "import json; d=json.load(open('scripts/migracao-medicao/_retrato/boletim_l09_cli.out')); \
+json.dump(d['rows'][0]['fn_mc_boletim'], open('scripts/migracao-medicao/_retrato/boletim_l09.json','w'), ensure_ascii=False)"
+
+# 2. xlsx pelo mesmo código do botão "Exportar Excel"
+MC_BOLETIM_JSON=$PWD/scripts/migracao-medicao/_retrato/boletim_l09.json \
+MC_BOLETIM_XLSX=$PWD/scripts/migracao-medicao/_retrato/boletim_l09.xlsx \
+  npx vitest run src/modules/medicao/boletim/exportar-local.test.ts
+
+# 3. conferência (relatório em _retrato/conferencia_export.txt)
+python3 scripts/migracao-medicao/conferir_export_lote09.py \
+  ~/Downloads/Medicao_Teste_3_ATUALIZADA_v12_NOVO.xlsx \
+  scripts/migracao-medicao/_retrato/boletim_l09.xlsx
+```
+
+Como casa: linha oficial r com a linha exportada de mesma ordem (dados da 15 até a linha do
+rótulo "Total:", que na oficial fica na coluna G; no export, do cabeçalho "Item" até
+"Total:" na coluna A). Colunas do export achadas pelo texto do cabeçalho; N (até a Nª) vem do
+cabeçalho da coluna AS da oficial. Números sempre por `Decimal(repr(v))`, oficial lida com
+`data_only=True`.
+
+| Campo | Regra |
+|---|---|
+| B código | texto igual |
+| C descrição, E unidade | iguais depois de aparadas |
+| F preço, G qtd prevista, 1ª..Nª | o mesmo double; vazio = 0 = vazio |
+| (N+1)ª..36ª da oficial | vazio ou zero |
+| H previsto, valor na Nª, AT acumulado | `round_half_up(oficial, 2) == exportado` |
+| AU, AW (%) | `abs(oficial - exportado) < 0.00005` |
+| AV saldo | exportado `== round(H,2) - round(AT,2)` da oficial; diferença contra o AV oficial é explicada |
+
+Diferenças explicadas: `codigo_dope` (linha 20, `02.02` virou `02.02.01`), `saldo_trunc`
+(conta direta contra `TRUNC(H-AT,3)`; no total 207.385.821,72 contra ,63), `qtd_prevista_vazia`
+(03.16.x vazio = 0), `unidade_aparada` (`'un '`), `pct_previsto_zero` (`#DIV/0!` na oficial,
+vazio no export, quando o previsto é zero). Qualquer outra é não explicada.
+
+Os avisos inofensivos do openpyxl ("Data Validation extension" da oficial e "DrawingML" da
+logo do export) são calados só por essas mensagens.
+
+Testes (arquivos mínimos montados em `tempfile`, não precisam da planilha oficial; pulam só
+sem openpyxl):
+
+```
+python3 -m unittest scripts/migracao-medicao/test_conferir_export_lote09.py -v
+```
+
+Mutação: para provar que o conferidor acusa, editar o XML de uma célula do xlsx exportado
+(não reabrir e salvar pelo openpyxl: ele regrava os doubles com menos dígitos e gera ruído
+em outras células), rodar a conferência e regenerar o xlsx pelo passo 2.
