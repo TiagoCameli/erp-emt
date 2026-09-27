@@ -1,25 +1,7 @@
-import { GradeKpis, KPICard, MoneyText, StatusBadge } from "@/components/canonicos";
+import { GradeKpis, KPICard, MoneyText } from "@/components/canonicos";
 import { percentualExibicao, periodoMedicao } from "@/modules/medicao/boletim/formato";
 import type { Boletim } from "@/modules/medicao/boletim/tipos";
-import { ROTULO_STATUS_MEDICAO, type StatusMedicao } from "@/modules/medicao/_shared/rotulos";
-
-/** Cor do selo pelo status da medição: só a aprovada é verde; em trânsito, pendente. */
-const COR_STATUS: Record<StatusMedicao, string> = {
-  aberta: "rascunho",
-  em_conferencia: "pendente_aprovacao",
-  enviada: "pendente_aprovacao",
-  aprovada: "aprovado",
-};
-
-function SeloMedicao({ status }: { status: string }) {
-  const conhecido = status in ROTULO_STATUS_MEDICAO ? (status as StatusMedicao) : null;
-  return (
-    <StatusBadge
-      status={conhecido ? COR_STATUS[conhecido] : status}
-      rotulo={conhecido ? ROTULO_STATUS_MEDICAO[conhecido] : status}
-    />
-  );
-}
+import { SeloMedicao } from "@/modules/medicao/_shared/selo-medicao";
 
 /** Dinheiro do cartão: nulo é contrato sem regra de arredondamento, nunca "R$ 0,00". */
 function Valor({ texto }: { texto: string | null }) {
