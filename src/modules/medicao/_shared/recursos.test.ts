@@ -9,10 +9,12 @@ describe("catálogo da Medição de Contratos", () => {
     expect(ids.indexOf("administracao")).toBe(ids.indexOf("medicao") + 1);
   });
 
-  it("a Fase 1 registra só as abas que já têm tela, com as ações do backfill", () => {
+  it("as abas do módulo seguem a ordem do menu, com as ações do backfill", () => {
     expect(recursosDoModulo("medicao").map((r) => [r.id, [...r.acoes]])).toEqual([
+      ["medicao.painel", ["ver"]],
       ["medicao.contratos", ["ver", "criar", "editar", "excluir"]],
       ["medicao.planilha", ["ver", "criar", "excluir", "aprovar", "desaprovar"]],
+      ["medicao.boletim", ["ver"]],
     ]);
   });
 });
