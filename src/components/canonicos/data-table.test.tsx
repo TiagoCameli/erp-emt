@@ -2345,3 +2345,52 @@ describe("DataTable: botão de limpar filtros", () => {
     }).not.toThrow();
   });
 });
+
+describe("DataTable: coluna nova depois de reordenar", () => {
+  // Boletim de medição: uma coluna por medição (m1..mN), e a ordem salva é uma
+  // só para todo contrato e todo N. Coluna que a ordem salva não conhece entra
+  // logo depois da vizinha que a precede na definição, não no fim da tabela.
+  interface Linha {
+    id: string;
+  }
+  const coluna = (id: string): ColumnDef<Linha, unknown> => ({
+    id,
+    header: `Col ${id}`,
+    cell: () => id,
+  });
+  const colunasDe = (ids: string[]) => ids.map(coluna);
+  const ordemNaTela = () =>
+    screen
+      .getAllByRole("columnheader")
+      .map((th) => th.getAttribute("data-coluna"));
+
+  it("m2 nova entra logo depois de m1, na hidratação e quando a tela ganha coluna", async () => {
+    preferencia.salva = escreverPreferenciasTabela({
+      ...preferenciasVazias(),
+      ordem: ["a", "c", "b"],
+    });
+    let resultado: ReturnType<typeof render> | undefined;
+    await act(async () => {
+      resultado = render(
+        <DataTable<Linha>
+          idTabela="medicao.boletim.linhas"
+          columns={colunasDe(["a", "m1", "m2", "b", "c"])}
+          data={[{ id: "x" }]}
+        />,
+      );
+    });
+    expect(ordemNaTela()).toEqual(["a", "m1", "m2", "c", "b"]);
+
+    // Outra medição abre (ou outro contrato com mais medições) sem remontar a tabela.
+    await act(async () => {
+      resultado?.rerender(
+        <DataTable<Linha>
+          idTabela="medicao.boletim.linhas"
+          columns={colunasDe(["a", "m1", "m2", "m3", "b", "c"])}
+          data={[{ id: "x" }]}
+        />,
+      );
+    });
+    expect(ordemNaTela()).toEqual(["a", "m1", "m2", "m3", "c", "b"]);
+  });
+});

@@ -1590,7 +1590,8 @@ export function DataTable<TData>({
 
   function reordenar(idOrigem: string, idDestino: string) {
     if (idOrigem === idDestino) return;
-    const atual = ordemColunas.length > 0 ? ordemColunas : idsColunas;
+    const atual =
+      ordemColunas.length > 0 ? ordemEfetiva(ordemColunas, idsColunas) : idsColunas;
     const proxima = atual.filter((id) => id !== idOrigem);
     const posicao = proxima.indexOf(idDestino);
     proxima.splice(posicao < 0 ? proxima.length : posicao, 0, idOrigem);
@@ -2247,6 +2248,11 @@ export function DataTable<TData>({
    * Prepender o id da seleção é obrigatório: com `columnOrder` ligado (tabela
    * personalizável), o TanStack coloca no FIM toda coluna que não está na lista,
    * e o checkbox apareceria na ponta direita da tabela.
+   *
+   * Pelo mesmo motivo a ordem salva passa de novo pelo `ordemEfetiva` contra as
+   * colunas de AGORA: a tela pode ganhar coluna sem remontar (o boletim de
+   * medição tem uma coluna por medição, e trocar de contrato ou abrir a medição
+   * do mês acrescenta uma), e coluna fora da lista iria para o fim.
    */
   const ordemFinal = React.useMemo(
     () =>
@@ -2254,10 +2260,10 @@ export function DataTable<TData>({
         ? [
             ...(expansivel ? [ID_COLUNA_EXPANSAO] : []),
             ...(selecao ? [ID_COLUNA_SELECAO] : []),
-            ...ordemColunas,
+            ...ordemEfetiva(ordemColunas, idsColunas),
           ]
         : ordemColunas,
-    [expansivel, selecao, ordemColunas],
+    [expansivel, selecao, ordemColunas, idsColunas],
   );
 
   const table = useReactTable({

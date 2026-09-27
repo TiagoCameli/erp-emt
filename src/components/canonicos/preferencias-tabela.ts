@@ -244,14 +244,31 @@ export function escreverPreferenciasTabela(
 }
 
 /**
- * Ordem final das colunas: o que o usuário arrumou primeiro, e as colunas que
- * ele nunca viu (adicionadas depois) no fim, na ordem natural da tela.
+ * Ordem final das colunas: o que o usuário arrumou, e cada coluna que ele nunca
+ * viu (adicionada depois) logo depois da vizinha que a precede na ordem natural
+ * da tela. A que não tem vizinha antes (a primeira da tela) vai para o fim,
+ * como era antes desta regra.
+ *
+ * Não vai para o fim porque há tabela com coluna por período: o boletim de
+ * medição tem uma coluna por medição (m1..mN) e a ordem salva é uma só para todo
+ * contrato e todo N. No fim, a medição nova do mês nasceria depois do saldo.
  */
 export function ordemEfetiva(
   ordemSalva: string[],
   idsNaturais: string[],
 ): string[] {
-  const salvos = ordemSalva.filter((id) => idsNaturais.includes(id));
-  const restantes = idsNaturais.filter((id) => !salvos.includes(id));
-  return [...salvos, ...restantes];
+  const resultado = ordemSalva.filter(
+    (id, indice) => idsNaturais.includes(id) && ordemSalva.indexOf(id) === indice,
+  );
+  idsNaturais.forEach((id, indice) => {
+    if (resultado.includes(id)) return;
+    // Na ordem natural, a anterior já está no resultado: ou estava salva, ou
+    // acabou de entrar nesta mesma volta.
+    if (indice === 0) {
+      resultado.push(id);
+      return;
+    }
+    resultado.splice(resultado.indexOf(idsNaturais[indice - 1]) + 1, 0, id);
+  });
+  return resultado;
 }
