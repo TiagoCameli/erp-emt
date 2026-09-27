@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { urlDoAnexo } from "@/modules/_shared/anexos/actions";
 import { aprovarVersao, desaprovarVersao, excluirVersao } from "@/modules/medicao/planilha/actions";
 import { SeloVersao, ValorPrevisto } from "@/modules/medicao/planilha/components/versoes-tabela";
-import { decimalPtBr } from "@/modules/medicao/planilha/formato";
+import { numeroExibicao } from "@/modules/medicao/planilha/formato";
 import type { LinhaDaVersao, VersaoCarregada } from "@/modules/medicao/planilha/queries";
 
 function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
@@ -59,19 +59,19 @@ export const colunasLinhas: ColumnDef<LinhaDaVersao, unknown>[] = [
     cell: ({ row }) => row.original.unidade ?? (row.original.tipo === "servico" ? <CelulaVazia /> : null),
   },
   {
-    // Texto do numeric COMPLETO: a casa escondida do xlsx aparece aqui como está no banco.
+    // Preço unitário: 15 algarismos significativos, sem ruído de double.
     accessorKey: "precoUnitario",
     header: "Preço unitário",
     size: 150,
     meta: { alinharDireita: true, atomico: true },
-    cell: ({ row }) => <span className="tabular-nums">{decimalPtBr(row.original.precoUnitario)}</span>,
+    cell: ({ row }) => <span className="tabular-nums">{numeroExibicao(row.original.precoUnitario)}</span>,
   },
   {
     accessorKey: "quantidadePrevista",
     header: "Quantidade prevista",
     size: 150,
     meta: { alinharDireita: true, atomico: true },
-    cell: ({ row }) => <span className="tabular-nums">{decimalPtBr(row.original.quantidadePrevista)}</span>,
+    cell: ({ row }) => <span className="tabular-nums">{numeroExibicao(row.original.quantidadePrevista)}</span>,
   },
   {
     id: "valor",
