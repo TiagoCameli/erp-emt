@@ -1142,7 +1142,9 @@ export default async function RelatoriosPage({
   // O relatório de investimentos virou a aba Financeiro > Aplicações (25/09/2026),
   // que mostra o mesmo movimento mais a posição do extrato e o rendimento. Quem
   // tem a aba vai para ela; quem só tem Relatórios continua vendo o relatório.
-  if (relatorio === "investimentos" && temPermissao(usuario, "financeiro.aplicacoes", "ver")) {
+  // A barra vai direto para lá; o redirect fica para link antigo e favorito.
+  const investimentosEmAplicacoes = temPermissao(usuario, "financeiro.aplicacoes", "ver");
+  if (relatorio === "investimentos" && investimentosEmAplicacoes) {
     redirect("/financeiro/aplicacoes");
   }
 
@@ -1241,7 +1243,10 @@ export default async function RelatoriosPage({
         descricao="Como está o caixa e onde entra o custo. Escolha o relatório na barra abaixo."
       />
 
-      <RelatoriosNav ativo={relatorio} />
+      <RelatoriosNav
+        ativo={relatorio}
+        investimentosEmAplicacoes={investimentosEmAplicacoes}
+      />
 
       {relatorio === "fluxo-caixa" ? (
         <SecaoRelatorio
