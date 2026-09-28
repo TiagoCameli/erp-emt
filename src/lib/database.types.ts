@@ -8278,6 +8278,76 @@ export type Database = {
           },
         ];
       };
+      mc_v_lancamentos: {
+        Row: {
+          codigo: string | null;
+          contrato_id: string | null;
+          created_at: string | null;
+          created_by: string | null;
+          data: string | null;
+          descricao: string | null;
+          estaca: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string | null;
+          item_id: string | null;
+          km_final: number | null;
+          km_inicial: number | null;
+          local_texto: string | null;
+          medicao_id: string | null;
+          medicao_numero: number | null;
+          medicao_status: string | null;
+          motivo_excesso: string | null;
+          motivo_exclusao: string | null;
+          observacao: string | null;
+          quantidade: number | null;
+          unidade: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_lancamentos_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_lancamentos_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+        ];
+      };
       mc_v_medicao_itens: {
         Row: {
           contrato_id: string | null;
@@ -9336,6 +9406,23 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_mc_lancamento_excluir: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_mc_lancamento_salvar: {
+        Args: { p_contrato: string; p_dados: Json; p_id?: string };
+        Returns: string;
+      };
+      fn_mc_lancamentos_colar: {
+        Args: { p_contrato: string; p_gravar: boolean; p_linhas: Json };
+        Returns: Json;
+      };
+      fn_mc_medicao_abrir: {
+        Args: { p_contrato: string; p_fim: string; p_inicio: string };
+        Returns: string;
+      };
+      fn_mc_medicao_sugestao: { Args: { p_contrato: string }; Returns: Json };
       fn_mc_meus_contratos: { Args: never; Returns: string[] };
       fn_mc_painel: {
         Args: { p_status?: string[]; p_tipos?: string[] };
