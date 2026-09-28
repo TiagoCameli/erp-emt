@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -16,7 +15,6 @@ import {
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
-  Treemap,
   XAxis,
   YAxis,
 } from "recharts";
@@ -28,7 +26,6 @@ import type { FiltroGlobal } from "@/modules/combustivel/_shared/filtro-global";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import {
   ID_SEM_OBRA,
-  niceMax,
   type BaldeEvolucao,
   type Granularidade,
 } from "@/modules/combustivel/painel/calculo";
@@ -42,10 +39,12 @@ import type {
 } from "@/modules/combustivel/painel/queries";
 
 import { Alternador, CartaoGrafico, GraficoVazio } from "./cartao-grafico";
+import { ALTURA_RANKING, ListaRanking, type ItemRanking } from "./lista-ranking";
 
 /**
  * Os gráficos da Visão Geral da origem (v2/visao-geral/charts), em Recharts, com as cores
- * do ERP. O que os gráficos da origem faziam ao clique continua: clicar num item liga ou
+ * do ERP. Top e Custo por obra são ranking em HTML (`ListaRanking`), não Recharts: o nome
+ * longo quebrava no eixo e o treemap não lia com uma obra dominante. O que os gráficos da origem faziam ao clique continua: clicar num item liga ou
  * desliga aquele item no filtro global (na URL), e clicar numa barra da Evolução estreita o
  * período para ela.
  *
@@ -340,11 +339,9 @@ export function TopConsumidores({
   const marcados = filtro[dimensao];
   const linhas = topPorMetrica(consumidores, metrica);
   const maximo = linhas.reduce((acc, l) => Math.max(acc, l[metrica]), 0);
-  const emLista = linhas.length > 0 && linhas.length < 3;
-  const alturaGrafico = emLista ? Math.max(140, linhas.length * 56 + 16) : Math.max(180, linhas.length * (proprios ? 30 : 36));
-  const formatar = (l: ConsumidorPainel) => (metrica === "litros" ? formatarLitros(l.litros) : formatarBRL(l.custo));
 
-  function clicar(linha: ConsumidorPainel | undefined) {
+  function clicar(id: string) {
+    const linha = linhas.find((l) => l.id === id);
     if (!linha) return;
     if (linha.sentinela) {
       if (hrefSentinela) router.push(hrefSentinela);
@@ -353,118 +350,38 @@ export function TopConsumidores({
     recorte.alternar(dimensao, linha.id);
   }
 
+  const itens: ItemRanking[] = linhas.map((l) => {
+    const marcado = !l.sentinela && marcados.includes(l.id);
+    return {
+      id: l.id,
+      nome: l.nome,
+      detalhe: l.detalhe || undefined,
+      valor: metrica === "litros" ? formatarLitros(l.litros) : formatarBRL(l.custo),
+      fracao: maximo > 0 ? l[metrica] / maximo : 0,
+      cor: l.sentinela ? COR_PAINEL.atencao : marcado ? COR_PAINEL.marcado : COR_PAINEL.principal,
+      marcado,
+      esmaecido: !l.sentinela && marcados.length > 0 && !marcado,
+      sentinela: l.sentinela,
+      inerte: l.sentinela && !hrefSentinela,
+      dica: [
+        [l.nome, l.detalhe].filter(Boolean).join(" · "),
+        `${formatarLitros(l.litros)} · ${formatarBRL(l.custo)} · ${l.qtd} abastecimento${l.qtd === 1 ? "" : "s"}`,
+        l.sentinela ? "Clique para atribuir retroativamente" : "Clique para filtrar",
+      ].join("\n"),
+    };
+  });
+
   return (
     <CartaoGrafico
       titulo={proprios ? "Top equipamentos" : "Top carretas"}
       subtitulo={proprios ? "Maiores consumidores no período" : "Placas com maior consumo no período"}
-      altura={alturaGrafico + 32}
+      altura={ALTURA_RANKING}
       acoes={<Alternador rotulo="Métrica" opcoes={METRICAS} valor={metrica} onValorChange={setMetrica} />}
     >
       {linhas.length === 0 ? (
         <GraficoVazio texto={proprios ? "Nenhuma saída no período" : "Nenhuma carreta abasteceu no período"} />
-      ) : emLista ? (
-        <ul className="h-full space-y-2 overflow-y-auto px-3 py-2">
-          {linhas.map((l, i) => {
-            const marcado = !l.sentinela && marcados.includes(l.id);
-            return (
-              <li key={l.id}>
-                <button
-                  type="button"
-                  onClick={() => clicar(l)}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
-                    marcado ? "bg-primary/10" : "hover:bg-muted",
-                  )}
-                >
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-legenda font-semibold text-muted-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={cn(
-                        "flex items-center gap-1.5 truncate text-sm font-medium",
-                        l.sentinela ? "text-status-pendente" : "text-foreground",
-                        !proprios && "font-mono",
-                      )}
-                    >
-                      {l.sentinela ? <AlertTriangle className="size-3.5 shrink-0" /> : null}
-                      {l.nome}
-                    </span>
-                    {l.detalhe ? <span className="block truncate text-[10px] text-muted-foreground">{l.detalhe}</span> : null}
-                    <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted">
-                      <span
-                        className="block h-full"
-                        style={{
-                          width: `${Math.max(maximo > 0 ? (l[metrica] / maximo) * 100 : 0, 4)}%`,
-                          background: l.sentinela ? COR_PAINEL.atencao : COR_PAINEL.principal,
-                        }}
-                      />
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right text-sm tabular-nums text-foreground">{formatar(l)}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={linhas} layout="vertical" margin={{ top: 4, right: 16, left: 4, bottom: 4 }}>
-            <XAxis
-              type="number"
-              tick={EIXO}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v: number) => (metrica === "litros" ? litrosCompactos(v) : brlEixo(v))}
-              domain={[0, niceMax(maximo)]}
-            />
-            <YAxis
-              type="category"
-              dataKey="nome"
-              tick={proprios ? EIXO : { ...EIXO, fontFamily: "var(--font-mono)" }}
-              tickLine={false}
-              axisLine={false}
-              width={proprios ? 140 : 100}
-              interval={0}
-            />
-            <Tooltip
-              cursor={CURSOR}
-              content={({ active, payload }) => {
-                const l = payload?.[0]?.payload as ConsumidorPainel | undefined;
-                if (!active || !l) return null;
-                return (
-                  <Dica
-                    titulo={proprios ? l.nome : [l.nome, l.detalhe].filter(Boolean).join(" · ")}
-                    linhas={[
-                      { rotulo: "Volume", valor: formatarLitros(l.litros), cor: l.sentinela ? COR_PAINEL.atencao : COR_PAINEL.principal },
-                      { rotulo: "Custo", valor: formatarBRL(l.custo) },
-                      proprios && l.detalhe
-                        ? { rotulo: l.sentinela ? "Saídas" : "Código", valor: l.detalhe }
-                        : { rotulo: "Abastecimentos", valor: l.qtd },
-                    ]}
-                    rodape={l.sentinela ? "Clique para atribuir retroativamente" : "Clique para filtrar"}
-                  />
-                );
-              }}
-            />
-            <Bar dataKey={metrica} radius={[0, 6, 6, 0]} isAnimationActive={false} onClick={(_, indice) => clicar(linhas[indice])}>
-              {linhas.map((l) => {
-                const marcado = !l.sentinela && marcados.includes(l.id);
-                return (
-                  <Cell
-                    key={l.id}
-                    cursor="pointer"
-                    fill={l.sentinela ? COR_PAINEL.atencao : marcado ? COR_PAINEL.marcado : COR_PAINEL.principal}
-                    fillOpacity={!l.sentinela && marcados.length > 0 && !marcado ? 0.4 : 1}
-                    stroke={l.sentinela ? COR_PAINEL.atencao : undefined}
-                    strokeWidth={l.sentinela ? 1 : 0}
-                    strokeDasharray={l.sentinela ? "3 2" : undefined}
-                  />
-                );
-              })}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <ListaRanking itens={itens} onClicar={clicar} mono={!proprios} />
       )}
     </CartaoGrafico>
   );
@@ -480,12 +397,29 @@ export function CustoPorObra({ obras, filtro }: { obras: ObraPainel[]; filtro: F
   const alternar = (id: string) => {
     if (id !== ID_SEM_OBRA) recorte.alternar("obras", id);
   };
-  const opacidade = (id: string) => (marcados.length > 0 && !marcados.includes(id) ? 0.45 : 1);
-  // Uma cor só: a área (ou o comprimento) já carrega o tamanho. "Sem obra" é agregado.
-  const cor = (id: string) => (id === ID_SEM_OBRA ? COR_PAINEL.agregado : COR_PAINEL.principal);
+  const total = obras.reduce((acc, o) => acc + o.custo, 0);
+
+  // A barra é a fatia do TOTAL (é "distribuição"), não a razão para a maior obra.
+  const itens: ItemRanking[] = obras.map((o) => {
+    const semObra = o.id === ID_SEM_OBRA;
+    return {
+      id: o.id,
+      nome: o.nome,
+      detalhe: formatarLitros(o.litros),
+      valor: formatarBRL(o.custo),
+      complemento: porcento(o.pct),
+      fracao: o.pct / 100,
+      // Uma cor só: o comprimento já carrega o tamanho. "Sem obra" é agregado.
+      cor: semObra ? COR_PAINEL.agregado : marcados.includes(o.id) ? COR_PAINEL.marcado : COR_PAINEL.principal,
+      marcado: marcados.includes(o.id),
+      esmaecido: marcados.length > 0 && !marcados.includes(o.id),
+      inerte: semObra,
+      dica: `${o.nome}\n${formatarBRL(o.custo)} (${porcento(o.pct)}) · ${formatarLitros(o.litros)}${semObra ? "" : "\nClique para filtrar"}`,
+    };
+  });
 
   return (
-    <CartaoGrafico titulo="Custo por obra" subtitulo="Distribuição do custo no período">
+    <CartaoGrafico titulo="Custo por obra" subtitulo="Distribuição do custo no período" altura={ALTURA_RANKING}>
       {obras.length === 0 ? (
         <GraficoVazio />
       ) : obras.length === 1 ? (
@@ -496,72 +430,19 @@ export function CustoPorObra({ obras, filtro }: { obras: ObraPainel[]; filtro: F
             {formatarBRL(obras[0]!.custo)} · {formatarLitros(obras[0]!.litros)}
           </p>
         </div>
-      ) : obras.length >= 4 ? (
-        <ResponsiveContainer width="100%" height="100%">
-          <Treemap
-            isAnimationActive={false}
-            data={obras.map((o) => ({ ...o, name: o.nome, size: Math.max(o.custo, 0.01) }))}
-            dataKey="size"
-            stroke="var(--color-card)"
-            content={(no) => {
-              const id = typeof no.id === "string" ? no.id : null;
-              const { x, y, width, height } = no;
-              if (!id || no.depth !== 1 || width <= 0 || height <= 0) return <g />;
-              const nome = typeof no.nome === "string" ? no.nome : "";
-              const custo = typeof no.custo === "number" ? no.custo : 0;
-              const pct = typeof no.pct === "number" ? no.pct : 0;
-              const caracteres = Math.floor(width / 6);
-              return (
-                <g onClick={() => alternar(id)} style={{ cursor: id === ID_SEM_OBRA ? "default" : "pointer" }}>
-                  <title>{`${nome}: ${formatarBRL(custo)} (${porcento(pct)})`}</title>
-                  <rect
-                    x={x}
-                    y={y}
-                    width={width}
-                    height={height}
-                    fill={cor(id)}
-                    fillOpacity={opacidade(id)}
-                    stroke="var(--color-card)"
-                    strokeWidth={2}
-                  />
-                  {width > 70 && height > 32 ? (
-                    <text x={x + 8} y={y + 16} fill="white" fontSize={11} fontWeight={600} style={{ pointerEvents: "none" }}>
-                      {nome.length > caracteres ? `${nome.slice(0, Math.max(caracteres - 1, 1))}…` : nome}
-                    </text>
-                  ) : null}
-                  {width > 90 && height > 50 ? (
-                    <text x={x + 8} y={y + 32} fill="white" fontSize={10} fillOpacity={0.85} style={{ pointerEvents: "none" }}>
-                      {`${brlEixo(custo)} · ${porcento(pct)}`}
-                    </text>
-                  ) : null}
-                </g>
-              );
-            }}
-          />
-        </ResponsiveContainer>
       ) : (
-        <div className="flex h-full flex-col justify-center gap-2 px-2 py-3">
-          {obras.map((o) => (
-            <button
-              key={o.id}
-              type="button"
-              onClick={() => alternar(o.id)}
-              className="text-left"
-              style={{ opacity: opacidade(o.id) }}
-            >
-              <span className="mb-1 flex items-center justify-between gap-2 text-legenda">
-                <span className="truncate font-medium text-foreground">{o.nome}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">
-                  {formatarBRL(o.custo)} <span>· {porcento(o.pct)}</span>
-                </span>
+        <ListaRanking
+          itens={itens}
+          onClicar={alternar}
+          cabecalho={
+            <p className="flex items-baseline justify-between gap-3 px-4 pb-2 text-legenda text-muted-foreground">
+              <span>{obras.length} obras</span>
+              <span>
+                Total <span className="font-semibold tabular-nums text-foreground">{formatarBRL(total)}</span>
               </span>
-              <span className="block h-3 overflow-hidden rounded-full bg-muted">
-                <span className="block h-full" style={{ width: `${Math.max(o.pct, 1.5)}%`, background: cor(o.id) }} />
-              </span>
-              <span className="mt-0.5 block text-[10px] text-muted-foreground">{formatarLitros(o.litros)}</span>
-            </button>
-          ))}
-        </div>
+            </p>
+          }
+        />
       )}
     </CartaoGrafico>
   );
