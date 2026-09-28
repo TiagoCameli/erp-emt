@@ -32,6 +32,8 @@
 --   4q controle: a 2ª contra 29,01 tem de dar DIFERENTE.
 --   4r nada fora: obras, centros_custo, lancamentos com a mesma contagem; L09 com 10 medições e nenhum lançamento.
 --   4s grants: view só select para authenticated (nada para anon); RPCs sem anon; a interna sem authenticated.
+--   4t anexo mc_lancamento: vincular um arquivo a um lançamento de KL (na lista) passa; a um lançamento de
+--     um contrato fora da lista do Tiago (KZ) recusa "Sem acesso a este contrato".
 
 begin;
 create function public.fn_mc_prova_planilha(p_contrato uuid, p_numero int, p_aditivo uuid, p_desde date, p_linhas jsonb)
@@ -86,9 +88,10 @@ declare
   v_tiago constant uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_l09 constant uuid := 'c4109738-9af7-4ddb-8982-3b2c79fe6e43';
-  v_kl uuid; v_kt uuid; v_ks uuid; v_m1 uuid; v_m2 uuid; v_mt uuid;
+  v_kl uuid; v_kt uuid; v_ks uuid; v_kz uuid; v_m1 uuid; v_m2 uuid; v_mt uuid;
   v_i01 uuid; v_i0101 uuid; v_i0102 uuid; v_it0101 uuid;
   v_l1 uuid; v_l2 uuid; v_l3 uuid; v_l5 uuid; v_lt uuid;
+  v_vkz uuid; v_ikz uuid; v_mkz uuid; v_lkz uuid; v_arq uuid; v_vinc uuid;
   v_j jsonb; v_b jsonb; v_txt text; v_det text; v_n bigint; v_n2 bigint; v_hoje date; v_fora0 jsonb;
   r jsonb := '{}'::jsonb;
 begin
@@ -370,6 +373,31 @@ begin
       'authenticated', (select jsonb_agg(f <> 'public.fn_mc_lancamento_gravar(uuid, jsonb, uuid)' order by f) from unnest(array[
           'public.fn_mc_medicao_sugestao(uuid)', 'public.fn_mc_medicao_abrir(uuid, date, date)', 'public.fn_mc_lancamento_salvar(uuid, jsonb, uuid)',
           'public.fn_mc_lancamento_excluir(uuid, text)', 'public.fn_mc_lancamentos_colar(uuid, jsonb, boolean)', 'public.fn_mc_lancamento_gravar(uuid, jsonb, uuid)']) f))));
+
+  -- 4t. Anexo mc_lancamento: vincular passa dentro da lista (KL) e recusa fora dela. KZ nasce sem o Tiago
+  -- na lista, para ficar "fora da lista" mesmo com ele sendo o dono (created_by).
+  insert into public.mc_contratos (codigo, nome_obra, objeto, numero_contrato, contratante_nome, contratante_tipo,
+    valor_inicial, data_assinatura, prazo_meses, regra_arredondamento, created_by)
+  values ('PROVA-KZ', 'Prova KZ', 'Prova', 'KZ', 'Contratante prova', 'estadual', 1, '2026-06-01', 12, 'item_por_medicao', v_tiago)
+  returning id into v_kz;
+  v_vkz := public.fn_mc_prova_planilha(v_kz, 0, null, '2026-06-01', jsonb_build_array(
+    jsonb_build_object('ordem', 1, 'codigo', '01.01', 'descricao', 'Serviço', 'unidade', 'm3', 'tipo', 'servico', 'preco', '1', 'qtd', '10')));
+  v_ikz := public.fn_mc_prova_item(v_kz, '01.01');
+  insert into public.mc_medicoes (contrato_id, numero, periodo_inicio, periodo_fim, status, versao_id, origem, created_by)
+  values (v_kz, 1, '2026-06-01', '2026-06-30', 'aberta', v_vkz, 'app', v_tiago) returning id into v_mkz;
+  insert into public.mc_lancamentos (contrato_id, item_id, medicao_id, data, quantidade, created_by)
+  values (v_kz, v_ikz, v_mkz, '2026-06-10', 1, v_tiago) returning id into v_lkz;
+  insert into public.arquivos (path_storage, nome_original, tamanho_bytes, created_by)
+  values ('prova/anexo-mc-lancamento.jpg', 'anexo-mc-lancamento.jpg', 100, v_tiago) returning id into v_arq;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin v_vinc := public.fn_vincular_arquivo(v_arq, 'mc_lancamento', v_l1); v_txt := 'ok'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4t1_anexo_na_lista', public.fn_mc_prova_confere(to_jsonb(v_txt = 'ok' and v_vinc is not null), to_jsonb(true)));
+  begin perform public.fn_vincular_arquivo(v_arq, 'mc_lancamento', v_lkz);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('4t2_anexo_fora_da_lista', v_txt);
+  reset role;
 
   raise exception 'PROVA %', r;
 end $prova$;

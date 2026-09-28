@@ -40,6 +40,8 @@ const RECURSO_POR_ENTIDADE = {
   mc_contrato: "medicao.contratos",
   mc_aditivo: "medicao.contratos",
   mc_planilha_versao: "medicao.planilha",
+  // Foto do lançamento diário. O banco também exige estar na lista do contrato.
+  mc_lancamento: "medicao.lancamentos",
 } as const satisfies Record<string, RecursoId>;
 
 /** Tipo de documento que aceita anexo. */
@@ -86,6 +88,7 @@ const ROTULO_ENTIDADE: Record<EntidadeAnexo, string> = {
   mc_contrato: "contrato",
   mc_aditivo: "aditivo",
   mc_planilha_versao: "planilha contratual",
+  mc_lancamento: "Lançamento da medição",
 };
 
 export function rotuloDaEntidade(entidade: EntidadeAnexo): string {
