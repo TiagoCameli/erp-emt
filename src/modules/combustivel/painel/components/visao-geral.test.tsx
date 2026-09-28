@@ -129,8 +129,8 @@ describe("gráficos sem animação de entrada", () => {
   it("toda série do Recharts desliga a animação (senão a barra pode nunca aparecer)", () => {
     const fonte = readFileSync(join(__dirname, "graficos-impl.tsx"), "utf8");
     const series = fonte.match(/<(Bar|Line|Pie|Treemap)\b[\s\S]*?>/g) ?? [];
-    // Evolução (Bar + Line), Mix (Pie), Top (Bar), Obras (Treemap), Fornecedor (Bar).
-    expect(series.length).toBeGreaterThanOrEqual(6);
+    // Evolução (Bar + Line), Mix (Pie), Fornecedor (Bar). Top e Obras são `ListaRanking`.
+    expect(series.length).toBeGreaterThanOrEqual(4);
     for (const serie of series) expect(serie).toContain("isAnimationActive={false}");
   });
 });
