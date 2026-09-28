@@ -104,8 +104,9 @@ export function ListaRanking({
                     data-slot="barra-ranking"
                     className="block h-full rounded-full"
                     style={{
-                      // Um fio mínimo para o menor item não sumir; nunca passa de 100%.
-                      width: `${Math.min(100, Math.max(item.fracao * 100, 1.5))}%`,
+                      // Um fio mínimo para o menor item não sumir; nunca passa de 100%. Uma casa
+                      // decimal: 0,834 × 100 é 83,39999… em ponto flutuante.
+                      width: `${Math.min(100, Math.max(Math.round(item.fracao * 1000) / 10, 1.5))}%`,
                       background: item.cor,
                     }}
                   />
