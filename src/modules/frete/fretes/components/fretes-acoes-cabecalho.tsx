@@ -22,7 +22,7 @@ export interface FretesAcoesCabecalhoProps {
 /**
  * Ações do cabeçalho da aba (as da origem): "Exportar Excel" (os filtros da lista),
  * "Importar planilha" (frete de material), "Nova transferência" e "Novo frete". Criar e
- * importar só com `frete.fretes/criar`.
+ * importar só com `frete.fretes/criar`. Tudo em `xs`, casando com o `PageHeader compacto`.
  */
 export function FretesAcoesCabecalho({ podeCriar, opcoes }: FretesAcoesCabecalhoProps) {
   const { query } = useFiltrosUrl();
@@ -54,7 +54,7 @@ export function FretesAcoesCabecalho({ podeCriar, opcoes }: FretesAcoesCabecalho
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => void exportar()} disabled={exportando}>
+      <Button type="button" variant="outline" size="xs" onClick={() => void exportar()} disabled={exportando}>
         {exportando ? <LoaderCircle className="animate-spin" aria-hidden /> : <FileSpreadsheet />}
         Exportar Excel
       </Button>
@@ -65,12 +65,13 @@ export function FretesAcoesCabecalho({ podeCriar, opcoes }: FretesAcoesCabecalho
             modeloHref="/frete/fretes/modelo"
             validarAction={validarImportFretes}
             importarAction={importarFretes}
+            tamanho="xs"
           />
-          <Button type="button" variant="outline" size="sm" onClick={() => abrir("transferencia")}>
+          <Button type="button" variant="outline" size="xs" onClick={() => abrir("transferencia")}>
             <Plus />
             Nova transferência
           </Button>
-          <Button type="button" size="sm" onClick={() => abrir("material")}>
+          <Button type="button" size="xs" onClick={() => abrir("material")}>
             <Plus />
             Novo frete
           </Button>

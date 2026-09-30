@@ -85,3 +85,20 @@ describe("PageHeader em tela de detalhe", () => {
     ).not.toHaveClass("codigo-doc");
   });
 });
+
+describe("PageHeader compacto", () => {
+  it("CONTROLE: sem compacto o título é text-titulo e a sobrancelha fica acima dele", () => {
+    render(<PageHeader titulo="Fretes" modulo="Frete" />);
+    const titulo = screen.getByRole("heading", { name: "Fretes" });
+    expect(titulo).toHaveClass("text-titulo");
+    expect(titulo.parentElement).not.toContainElement(screen.getByText("Frete"));
+  });
+
+  it("põe a sobrancelha na linha do título e baixa o título para text-secao", () => {
+    render(<PageHeader compacto titulo="Fretes" modulo="Frete" descricao="Fretes de material" />);
+    const titulo = screen.getByRole("heading", { name: "Fretes" });
+    expect(titulo).toHaveClass("text-secao");
+    expect(titulo.parentElement).toContainElement(screen.getByText("Frete"));
+    expect(screen.getByText("Fretes de material")).toHaveClass("text-legenda");
+  });
+});

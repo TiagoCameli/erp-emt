@@ -20,6 +20,8 @@ export interface ImportarCadastroProps {
   ) => Promise<{ importadas: number } | { erro: string }>;
   /** Chamado após uma importação concluída. Padrão: router.refresh(). */
   aoConcluir?: () => void;
+  /** Tamanho do botão, para acompanhar os vizinhos do cabeçalho. Padrão: `sm`. */
+  tamanho?: "xs" | "sm";
 }
 
 /**
@@ -33,6 +35,7 @@ export function ImportarCadastro({
   validarAction,
   importarAction,
   aoConcluir,
+  tamanho = "sm",
 }: ImportarCadastroProps) {
   const router = useRouter();
   const [aberto, setAberto] = React.useState(false);
@@ -77,7 +80,7 @@ export function ImportarCadastro({
     <>
       {/* `sm` porque este botão fica lado a lado com o "Novo ..." de cada
           cadastro, que é `sm`: sem isso ele sai 4px mais alto que o vizinho. */}
-      <Button variant="outline" size="sm" onClick={() => setAberto(true)}>
+      <Button variant="outline" size={tamanho} onClick={() => setAberto(true)}>
         <Upload />
         Importar planilha
       </Button>

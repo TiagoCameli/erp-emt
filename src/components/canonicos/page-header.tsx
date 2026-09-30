@@ -41,6 +41,13 @@ export interface PageHeaderProps {
    * somar as duas coisas.
    */
   className?: string;
+  /**
+   * Versão baixa para aba de listagem cheia de filtro, em que o cabeçalho empurra
+   * a tabela para baixo: a sobrancelha vai para a mesma linha do título, o título
+   * cai para `text-secao`, a descrição vira legenda e o respiro cai para `mb-2`.
+   * Os botões de `acoes` são de quem chama: passe-os em `size="xs"` junto.
+   */
+  compacto?: boolean;
 }
 
 /**
@@ -67,8 +74,26 @@ export function PageHeader({
   selos,
   tituloMono,
   className,
+  compacto,
 }: PageHeaderProps) {
-  const identidade = (
+  const identidade = compacto ? (
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        {modulo ? (
+          <p className="text-legenda font-medium tracking-wide text-muted-foreground uppercase">
+            {modulo}
+          </p>
+        ) : null}
+        <h1 className={cn("text-secao font-semibold", tituloMono && "codigo-doc")}>
+          {titulo}
+        </h1>
+        {selos}
+      </div>
+      {descricao ? (
+        <p className="text-legenda text-muted-foreground">{descricao}</p>
+      ) : null}
+    </div>
+  ) : (
     <div className="min-w-0">
       {modulo ? (
         <p className="text-legenda font-medium tracking-wide text-muted-foreground uppercase">
@@ -90,10 +115,11 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "mb-4 flex flex-wrap justify-between gap-4",
+        "flex flex-wrap justify-between",
+        compacto ? "mb-2 gap-x-4 gap-y-2" : "mb-4 gap-4",
         // Com o botão de voltar, centrar: alinhar pelo topo deixaria o botão
         // pendurado acima da sobrancelha.
-        voltarPara ? "items-center" : "items-start",
+        voltarPara || compacto ? "items-center" : "items-start",
         className,
       )}
     >
