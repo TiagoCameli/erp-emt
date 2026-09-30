@@ -31,6 +31,7 @@ import { subirFilaDeAnexos } from "@/components/canonicos/fila-anexos";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { criarCotacao } from "@/modules/compras/cotacoes/actions";
 import type {
   CategoriaOpcao,
@@ -384,7 +385,7 @@ export function CotacoesTabela({
           onValorChange={(valor) => trocarFiltro("insumo", valor)}
           opcoes={insumos.map((insumo) => ({
             valor: insumo.id,
-            rotulo: insumo.nome,
+            rotulo: rotuloInsumo(insumo.nome, insumo.unidadeSigla),
           }))}
           placeholder="Insumo cotado"
           todosRotulo="Qualquer insumo"

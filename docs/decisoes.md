@@ -4654,3 +4654,26 @@ a tela de Medições não tem teste direto do botão "Abrir próxima medição",
 usuário pode ver o contrato, nem do fechar o drawer no meio do envio; e a lista de Lançamentos carrega
 tudo do filtro atual, sem paginação no servidor (mitigado pelo link que já chega com `?medicao=N` a
 partir de Medições).
+
+## 2026-09-30 - Insumo: nome igual só com unidade diferente, e o seletor mostra a unidade
+
+**Contexto:** o cadastro tinha "BRITA 0" (m3) e "BRITA 0\"" (t). As aspas eram o único jeito de
+separar os dois pelo nome, e o frete listava só o nome, então quem escolhia não via a unidade.
+
+**Decisão:**
+1. Dois insumos podem ter o mesmo nome se a unidade for outra. Nome e unidade iguais é o mesmo
+   material cadastrado duas vezes, e criar, editar e importar recusam (`cadastros/insumos/duplicidade.ts`,
+   comparação sem caixa e com espaço único).
+2. Todo lugar onde se escolhe um insumo mostra `rotuloInsumo(nome, unidade)`, "BRITA 0 - t", de
+   `_shared/insumo/rotulo.ts`: OC (item e filtro da lista), cotação (mapa e filtro), frete (form,
+   tabela, filtro, planilha, painel e anomalias), pedido de material (form, filtro e relatório),
+   entrada de combustível e almoxarifado. O formato antigo "BRITA 0 (t)" da OC saiu.
+3. No frete o nome exibido passa a ser o rótulo, porque a planilha agrupa "POR MATERIAL" pelo texto
+   e somaria tonelada com metro cúbico.
+4. As importações de frete e de pedido de material casam pelo nome puro ou pelo rótulo. Nome puro
+   que cai em mais de um cadastro vira erro da linha pedindo a unidade, em vez de escolher um.
+5. "BRITA 0\"" vira "BRITA 0" (migration `insumo_brita0_sem_aspas`).
+
+**Consequência:** o banco ainda não tem índice único em `(lower(nome), unidade_id)`: a carga da
+origem trouxe 86 pares com nome e unidade iguais (vinagre, água sanitária, pregos...), que precisam
+ser unificados antes, com as OCs, fretes e estoques deles repontados. Até lá a regra vale na action.

@@ -142,3 +142,23 @@ describe("export de pedidos (pedidosMaterialExport da origem)", () => {
     expect(nomeArquivoPedidos("2026-09-24")).toBe("pedidos-material-2026-09-24.xlsx");
   });
 });
+
+describe("material com o mesmo nome em unidades diferentes", () => {
+  const cadastros = {
+    ...CADASTROS,
+    insumos: [
+      { id: "i-brita0-t", nomes: ["BRITA 0", "BRITA 0 - t"] },
+      { id: "i-brita0-m3", nomes: ["BRITA 0", "BRITA 0 - m3"] },
+    ],
+  };
+
+  it("o rótulo com a unidade escolhe o cadastro certo", () => {
+    expect(lerLinhaPedido({ ...LINHA, material: "brita 0 - m3" }, cadastros).dados?.item.insumoId).toBe("i-brita0-m3");
+  });
+
+  it("o nome sozinho é ambíguo e a linha pede a unidade", () => {
+    expect(lerLinhaPedido({ ...LINHA, material: "Brita 0" }, cadastros).erros).toContain(
+      'Material "Brita 0" tem mais de um cadastro com esse nome: informe com a unidade (ex.: "Brita 0 - t")',
+    );
+  });
+});

@@ -10,6 +10,7 @@ import { idSchema } from "@/lib/id";
 import { type ColunaImportacao, lerEValidarXlsx } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { traduzirErroFrete } from "@/modules/frete/pagamentos/erros";
 import { trilhaDoRegistro } from "@/modules/frete/pagamentos/queries";
 import {
@@ -179,8 +180,8 @@ export async function gerarPlanilhaPedidosMaterial(filtros: unknown): Promise<Re
       rotulos.push(["Fornecedor", pedidos.find((p) => p.fornecedorId === f.fornecedorId)?.fornecedorNome ?? f.fornecedorId]);
     }
     if (f.materialId) {
-      const nome = pedidos.flatMap((p) => p.itens).find((i) => i.insumoId === f.materialId)?.insumoNome;
-      rotulos.push(["Material", nome ?? f.materialId]);
+      const item = pedidos.flatMap((p) => p.itens).find((i) => i.insumoId === f.materialId);
+      rotulos.push(["Material", item ? rotuloInsumo(item.insumoNome, item.unidade) : f.materialId]);
     }
     if (f.de) rotulos.push(["Data início", formatarData(f.de)]);
     if (f.ate) rotulos.push(["Data fim", formatarData(f.ate)]);
@@ -216,7 +217,9 @@ async function lerPlanilha(formData: FormData): Promise<PlanilhaLida> {
   const [fornecedores, insumos] = await Promise.all([listarFornecedoresAtivos(), listarInsumosAtivos()]);
   const cadastros = {
     fornecedores: fornecedores.map((f) => ({ id: f.id, nomes: f.nomes })),
-    insumos: insumos.map((i) => ({ id: i.id, nomes: [i.nome] })),
+    // Pelo nome puro ou pelo rótulo com unidade: "BRITA 0" sozinho é ambíguo quando há
+    // "BRITA 0 - t" e "BRITA 0 - m3", e aí a linha pede o rótulo.
+    insumos: insumos.map((i) => ({ id: i.id, nomes: [i.nome, rotuloInsumo(i.nome, i.unidade)] })),
   };
 
   const prontas: PlanilhaLida["prontas"] = [];

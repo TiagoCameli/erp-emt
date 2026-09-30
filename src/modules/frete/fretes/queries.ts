@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { precoUnitarioMaterial, tipoDoFrete } from "@/modules/frete/fretes/schemas";
-import type { FreteLinha, Opcao, OpcoesFrete } from "@/modules/frete/fretes/tipos";
+import type { FreteLinha, InsumoOpcaoFrete, Opcao, OpcoesFrete } from "@/modules/frete/fretes/tipos";
 import { nomesUsuariosFrete } from "@/modules/frete/_shared/usuarios";
 import { paraNumeroDoBanco } from "@/modules/manutencao/servicos/formato";
 
@@ -19,7 +20,7 @@ function nomeFornecedor(f: { razao_social: string; nome_fantasia: string | null 
 }
 
 const SELECT_FRETE =
-  "id, tipo, data, data_chegada, centro_custo_id, origem_localidade_id, destino_localidade_id, transportadora_id, motorista, placa_carreta, insumo_id, peso_toneladas, km_rodados, valor_tkm, valor_total, valor_material, nota_fiscal, nota_fiscal2, observacoes, excluido_em, motivo_exclusao, created_at, created_by, updated_at, updated_by, origem_loc:localidades!fretes_origem_localidade_id_fkey(nome), destino_loc:localidades!fretes_destino_localidade_id_fkey(nome), transportadora:fornecedores!fretes_transportadora_id_fkey(razao_social, nome_fantasia), insumos(nome), centros_custo(nome, codigo)";
+  "id, tipo, data, data_chegada, centro_custo_id, origem_localidade_id, destino_localidade_id, transportadora_id, motorista, placa_carreta, insumo_id, peso_toneladas, km_rodados, valor_tkm, valor_total, valor_material, nota_fiscal, nota_fiscal2, observacoes, excluido_em, motivo_exclusao, created_at, created_by, updated_at, updated_by, origem_loc:localidades!fretes_origem_localidade_id_fkey(nome), destino_loc:localidades!fretes_destino_localidade_id_fkey(nome), transportadora:fornecedores!fretes_transportadora_id_fkey(razao_social, nome_fantasia), insumos(nome, unidades_medida(sigla)), centros_custo(nome, codigo)";
 
 type LinhaFreteBanco = {
   id: string;
@@ -50,7 +51,7 @@ type LinhaFreteBanco = {
   origem_loc: { nome: string } | null;
   destino_loc: { nome: string } | null;
   transportadora: { razao_social: string; nome_fantasia: string | null } | null;
-  insumos: { nome: string } | null;
+  insumos: { nome: string; unidades_medida: { sigla: string } | null } | null;
   centros_custo: { nome: string; codigo: string | null } | null;
 };
 
@@ -73,7 +74,7 @@ function paraFreteLinha(l: LinhaFreteBanco): FreteLinha {
     motorista: l.motorista,
     placaCarreta: l.placa_carreta,
     insumoId: l.insumo_id,
-    insumoNome: l.insumos?.nome ?? l.insumo_id,
+    insumoNome: l.insumos ? rotuloInsumo(l.insumos.nome, l.insumos.unidades_medida?.sigla) : l.insumo_id,
     pesoToneladas: peso,
     kmRodados: paraNumeroDoBanco(l.km_rodados),
     valorTkm: paraNumeroDoBanco(l.valor_tkm),
@@ -155,14 +156,27 @@ export async function listarTransportadorasFrete(): Promise<Opcao[]> {
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
-/** Insumos ativos (são mais de 3 mil: `todasAsLinhas`). */
-export async function listarInsumosAtivos(): Promise<Opcao[]> {
+/**
+ * Insumos ativos (são mais de 3 mil: `todasAsLinhas`). O `nome` já vem com a unidade
+ * ("BRITA 0 - t"): dois insumos podem ter o mesmo nome em unidades diferentes.
+ */
+export async function listarInsumosAtivos(): Promise<InsumoOpcaoFrete[]> {
   const supabase = await createClient();
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
-    supabase.from("insumos").select("id, nome").eq("ativo", true).order("nome").order("id").range(de, ate),
+    supabase
+      .from("insumos")
+      .select("id, nome, unidades_medida(sigla)")
+      .eq("ativo", true)
+      .order("nome")
+      .order("id")
+      .range(de, ate),
   );
   if (erro) throw new Error("Não foi possível carregar os materiais");
-  return linhas.map((i) => ({ id: i.id, nome: i.nome }));
+  return linhas.map((i) => ({
+    id: i.id,
+    nome: rotuloInsumo(i.nome, i.unidades_medida?.sigla),
+    nomeCadastro: i.nome,
+  }));
 }
 
 /** Obras: as raízes de obra do centro de custo (a obra da origem). */

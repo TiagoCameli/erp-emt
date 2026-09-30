@@ -1,3 +1,4 @@
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { filtrarPedidos, subtotal, type FiltrosPedidos } from "@/modules/frete/pedidos-material/regras";
 
 /**
@@ -12,7 +13,7 @@ export interface PedidoDoRelatorio {
   fornecedorId: string;
   fornecedorNome: string;
   observacoes: string | null;
-  itens: { insumoId: string; insumoNome: string; quantidade: number; valorUnitario: number }[];
+  itens: { insumoId: string; insumoNome: string; unidade?: string | null; quantidade: number; valorUnitario: number }[];
 }
 
 export interface ItemAchatado {
@@ -33,7 +34,7 @@ export function achatarItens(pedidos: readonly PedidoDoRelatorio[], materialId: 
       saida.push({
         data: p.data,
         fornecedor: p.fornecedorNome || "-",
-        material: item.insumoNome || item.insumoId,
+        material: item.insumoNome ? rotuloInsumo(item.insumoNome, item.unidade) : item.insumoId,
         quantidade: item.quantidade,
         valorUnitario: item.valorUnitario,
         subtotal: subtotal(item.quantidade, item.valorUnitario),

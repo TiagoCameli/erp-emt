@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { salvarPrecos } from "@/modules/compras/cotacoes/actions";
 import {
   montarComparativo,
@@ -439,7 +440,7 @@ export function MapaComparativo({
               onValorChange={setInsumoNovo}
               opcoes={insumosDisponiveis.map((insumo) => ({
                 valor: insumo.id,
-                rotulo: insumo.nome,
+                rotulo: rotuloInsumo(insumo.nome, insumo.unidadeSigla),
               }))}
               placeholder={
                 insumosDisponiveis.length === 0

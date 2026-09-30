@@ -35,6 +35,7 @@ import {
   formatarMesAno,
 } from "@/lib/formatadores";
 import { infoStatusOC, ROTULO_STATUS_OC } from "@/modules/compras/_shared/formato";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import {
   OPCOES_AUTORIA_OC,
   OPCOES_NOTA_OC,
@@ -698,7 +699,7 @@ export function OrdensTabela({
                 }
                 opcoes={insumos.map((insumo) => ({
                   valor: insumo.id,
-                  rotulo: insumo.nome,
+                  rotulo: rotuloInsumo(insumo.nome, insumo.unidade),
                 }))}
                 placeholder="Insumo"
                 todosRotulo="Todos os insumos"
