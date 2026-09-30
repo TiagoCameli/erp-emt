@@ -5,6 +5,14 @@ import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 
 import type { FiltrosLancamentos, LancamentoLista, ServicoParaLancar } from "./tipos";
 
+/** Um contrato do usuário com medição aberta, para a tela de lançar pelo celular (Task 6). */
+export interface ContratoParaLancarCampo {
+  id: string;
+  codigo: string;
+  nomeObra: string;
+  tipoLocalizacao: "rodovia" | "texto";
+}
+
 /** Padrão ilike do termo, sem os caracteres que quebram o `or()` do PostgREST (mesmo padrão de
  * `padraoBuscaOs` em manutencao/servicos/filtros.ts). */
 function padraoBusca(termo: string): string {
@@ -166,4 +174,36 @@ export async function servicosParaLancar(contratoId: string): Promise<ServicoPar
     }
   }
   return servicos;
+}
+
+/**
+ * Contratos com pelo menos uma medição aberta, para a tela do celular (Task 6) perguntar o
+ * contrato só quando o usuário tem mais de um: a RLS de `mc_medicoes` e `mc_contratos` já limita
+ * à lista de acesso (D3), sem filtro de usuário aqui. Uma linha por medição aberta, então o mesmo
+ * contrato pode repetir na consulta (duas medições abertas ao mesmo tempo, spec 7.3): o mapa por
+ * id devolve cada contrato uma vez só.
+ */
+export async function contratosParaLancarCampo(): Promise<ContratoParaLancarCampo[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("mc_medicoes")
+    .select("contrato:mc_contratos!inner(id, codigo, nome_obra, tipo_localizacao, excluido_em)")
+    .eq("status", "aberta");
+  if (error) throw error;
+
+  const vistos = new Map<string, ContratoParaLancarCampo>();
+  for (const linha of data ?? []) {
+    const contrato = linha.contrato;
+    if (!contrato || contrato.excluido_em) continue;
+    if (!vistos.has(contrato.id)) {
+      vistos.set(contrato.id, {
+        id: contrato.id,
+        codigo: contrato.codigo,
+        nomeObra: contrato.nome_obra,
+        tipoLocalizacao: contrato.tipo_localizacao === "rodovia" ? "rodovia" : "texto",
+      });
+    }
+  }
+  return [...vistos.values()].sort((a, b) => a.codigo.localeCompare(b.codigo));
 }

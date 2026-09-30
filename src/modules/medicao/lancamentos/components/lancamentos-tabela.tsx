@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ClipboardList, Pencil, Plus, Trash2, TriangleAlert, Upload } from "lucide-react";
+import { ClipboardList, Pencil, Plus, Smartphone, Trash2, TriangleAlert, Upload } from "lucide-react";
 
 import {
   CelulaVazia,
@@ -257,6 +258,12 @@ export function LancamentosTabela({
     <div className="flex flex-col gap-3">
       {podeCriar ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" size="sm" variant="outline" asChild>
+            <Link href="/m/medicao">
+              <Smartphone />
+              Lançar pelo celular
+            </Link>
+          </Button>
           <Button type="button" size="sm" variant="outline" onClick={() => setColarAberto(true)}>
             <Upload />
             Colar do Excel

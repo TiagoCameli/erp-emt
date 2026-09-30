@@ -41,7 +41,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { listarLancamentos, servicosParaLancar } from "@/modules/medicao/lancamentos/queries";
+import { contratosParaLancarCampo, listarLancamentos, servicosParaLancar } from "@/modules/medicao/lancamentos/queries";
 
 const CONTRATO = "33333333-3333-4333-8333-333333333333";
 
@@ -182,5 +182,64 @@ describe("servicosParaLancar", () => {
   it("erro do banco sobe para quem chamou", async () => {
     estado.medicoes = { data: [], error: { message: "falhou" } };
     await expect(servicosParaLancar(CONTRATO)).rejects.toEqual({ message: "falhou" });
+  });
+});
+
+describe("contratosParaLancarCampo", () => {
+  it("nenhuma medição aberta: lista vazia", async () => {
+    estado.medicoes = { data: [], error: null };
+    await expect(contratosParaLancarCampo()).resolves.toEqual([]);
+  });
+
+  it("um contrato com medição aberta", async () => {
+    estado.medicoes = {
+      data: [
+        {
+          contrato: { id: "c1", codigo: "L09", nome_obra: "BR-364 Lote 09", tipo_localizacao: "rodovia", excluido_em: null },
+        },
+      ],
+      error: null,
+    };
+    await expect(contratosParaLancarCampo()).resolves.toEqual([
+      { id: "c1", codigo: "L09", nomeObra: "BR-364 Lote 09", tipoLocalizacao: "rodovia" },
+    ]);
+  });
+
+  it("duas medições abertas do MESMO contrato (spec 7.3): aparece uma vez só", async () => {
+    estado.medicoes = {
+      data: [
+        { contrato: { id: "c1", codigo: "L09", nome_obra: "BR-364 Lote 09", tipo_localizacao: "texto", excluido_em: null } },
+        { contrato: { id: "c1", codigo: "L09", nome_obra: "BR-364 Lote 09", tipo_localizacao: "texto", excluido_em: null } },
+      ],
+      error: null,
+    };
+    await expect(contratosParaLancarCampo()).resolves.toHaveLength(1);
+  });
+
+  it("contrato excluído não entra, mesmo com medição aberta", async () => {
+    estado.medicoes = {
+      data: [{ contrato: { id: "c1", codigo: "L09", nome_obra: "X", tipo_localizacao: "texto", excluido_em: "2026-01-01" } }],
+      error: null,
+    };
+    await expect(contratosParaLancarCampo()).resolves.toEqual([]);
+  });
+
+  it("ordena por código", async () => {
+    estado.medicoes = {
+      data: [
+        { contrato: { id: "c2", codigo: "L10", nome_obra: "Y", tipo_localizacao: "texto", excluido_em: null } },
+        { contrato: { id: "c1", codigo: "L09", nome_obra: "X", tipo_localizacao: "texto", excluido_em: null } },
+      ],
+      error: null,
+    };
+    await expect(contratosParaLancarCampo()).resolves.toEqual([
+      { id: "c1", codigo: "L09", nomeObra: "X", tipoLocalizacao: "texto" },
+      { id: "c2", codigo: "L10", nomeObra: "Y", tipoLocalizacao: "texto" },
+    ]);
+  });
+
+  it("erro do banco sobe para quem chamou", async () => {
+    estado.medicoes = { data: [], error: { message: "falhou" } };
+    await expect(contratosParaLancarCampo()).rejects.toEqual({ message: "falhou" });
   });
 });

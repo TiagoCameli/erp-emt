@@ -134,7 +134,7 @@ describe("LancamentosTabela", () => {
     expect(container.querySelector('tbody [data-coluna="excesso"] svg')).toBeTruthy();
   });
 
-  it("sem podeCriar, o botão Lançar não aparece", () => {
+  it("sem podeCriar, o botão Lançar e o link para o celular não aparecem", () => {
     render(
       <LancamentosTabela
         lancamentos={[]}
@@ -148,6 +148,24 @@ describe("LancamentosTabela", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /Lançar/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Lançar pelo celular/ })).toBeNull();
+  });
+
+  it("com podeCriar, mostra o link para lançar pelo celular apontando para /m/medicao", () => {
+    render(
+      <LancamentosTabela
+        lancamentos={[]}
+        contratoId={CONTRATO}
+        tipoLocalizacao="texto"
+        servicos={[]}
+        medicoesParaFiltro={[]}
+        podeCriar
+        podeEditar={false}
+        podeExcluir={false}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /Lançar pelo celular/ });
+    expect(link.getAttribute("href")).toBe("/m/medicao");
   });
 
   it("com podeCriar, clicar em Lançar abre o drawer de novo lançamento", () => {
@@ -163,7 +181,7 @@ describe("LancamentosTabela", () => {
         podeExcluir={false}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Lançar/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Lançar" }));
     expect(screen.getByTestId("drawer-novo")).toBeTruthy();
   });
 
