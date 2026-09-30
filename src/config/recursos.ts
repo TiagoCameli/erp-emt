@@ -593,6 +593,20 @@ export const RECURSOS = [
     acoes: ["ver", "criar", "excluir", "aprovar", "desaprovar"],
   },
   {
+    id: "medicao.lancamentos",
+    nome: "Lançamentos",
+    modulo: "medicao",
+    rota: "/medicao/lancamentos",
+    acoes: CRUD,
+  },
+  {
+    id: "medicao.medicoes",
+    nome: "Medições",
+    modulo: "medicao",
+    rota: "/medicao/medicoes",
+    acoes: ["ver", "criar"],
+  },
+  {
     id: "medicao.boletim",
     nome: "Boletim",
     modulo: "medicao",
