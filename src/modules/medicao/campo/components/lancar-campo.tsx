@@ -114,7 +114,7 @@ export function LancarCampo({ contratoId, tipoLocalizacao, servicos }: LancarCam
       observacao,
       motivoExcesso,
     };
-    const validado = lancamentoFormSchema(tipoLocalizacao).safeParse(valores);
+    const validado = lancamentoFormSchema(tipoLocalizacao, mostrarMotivo).safeParse(valores);
     if (!validado.success) {
       const novosErros: Partial<Record<CampoComErro, string>> = {};
       for (const problema of validado.error.issues) {
@@ -181,7 +181,19 @@ export function LancarCampo({ contratoId, tipoLocalizacao, servicos }: LancarCam
           value={data}
           max={dataHojeISO()}
           disabled={enviando}
-          onChange={(evento) => setData(evento.target.value)}
+          onChange={(evento) => {
+            const novaData = evento.target.value;
+            setData(novaData);
+            // A data escolhe a medição (spec 7.3): se o serviço já escolhido não está entre os da
+            // medição que cobre a NOVA data, a seleção não faz mais sentido (seria de outra
+            // medição, ou de nenhuma) e limpa, para não deixar gravar o serviço errado.
+            if (itemId && DATA_ISO.test(novaData)) {
+              const aindaValido = servicos.some(
+                (s) => s.itemId === itemId && s.periodoInicio <= novaData && novaData <= s.periodoFim,
+              );
+              if (!aindaValido) setItemId("");
+            }
+          }}
           className="h-12"
         />
       </CampoFormulario>

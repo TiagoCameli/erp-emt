@@ -44,15 +44,31 @@ export const LANCAMENTO_FORM_VAZIO: LancamentoFormInput = {
   motivoExcesso: "",
 };
 
-/** Contrato de rodovia exige km inicial e km final (spec, decisão do Tiago de 28/09/2026). */
-export function lancamentoFormSchema(tipoLocalizacao: "rodovia" | "texto") {
+/**
+ * Contrato de rodovia exige km inicial e km final (spec, decisão do Tiago de 28/09/2026).
+ *
+ * `exigirMotivoExcesso`: true só quando o alerta de excesso está na tela (o banco acabou de
+ * recusar por `MCEXC`) — exige pelo menos 3 letras antes de deixar reenviar, para não gastar uma
+ * ida ao servidor com o campo vazio. O banco continua sendo quem de fato impede gravar sem motivo
+ * (este check é só para poupar a chamada); editar um lançamento que já tinha motivo aceito, sem
+ * excesso novo, não cai aqui (reenvia o texto existente sem exigir nada).
+ */
+export function lancamentoFormSchema(tipoLocalizacao: "rodovia" | "texto", exigirMotivoExcesso = false) {
   return lancamentoFormBaseSchema.superRefine((valores, ctx) => {
-    if (tipoLocalizacao !== "rodovia") return;
-    if (valores.kmInicial.trim() === "") {
-      ctx.addIssue({ code: "custom", path: ["kmInicial"], message: "Informe o km inicial" });
+    if (tipoLocalizacao === "rodovia") {
+      if (valores.kmInicial.trim() === "") {
+        ctx.addIssue({ code: "custom", path: ["kmInicial"], message: "Informe o km inicial" });
+      }
+      if (valores.kmFinal.trim() === "") {
+        ctx.addIssue({ code: "custom", path: ["kmFinal"], message: "Informe o km final" });
+      }
     }
-    if (valores.kmFinal.trim() === "") {
-      ctx.addIssue({ code: "custom", path: ["kmFinal"], message: "Informe o km final" });
+    if (exigirMotivoExcesso && valores.motivoExcesso.trim().length < 3) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["motivoExcesso"],
+        message: "Informe o motivo do excesso (pelo menos 3 letras)",
+      });
     }
   });
 }

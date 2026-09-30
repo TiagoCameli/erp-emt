@@ -88,7 +88,7 @@ declare
   v_tiago constant uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_l09 constant uuid := 'c4109738-9af7-4ddb-8982-3b2c79fe6e43';
-  v_kl uuid; v_kt uuid; v_ks uuid; v_kz uuid; v_m1 uuid; v_m2 uuid; v_mt uuid;
+  v_kl uuid; v_kt uuid; v_ks uuid; v_kz uuid; v_m1 uuid; v_m2 uuid; v_mt uuid; v_mt2 uuid;
   v_i01 uuid; v_i0101 uuid; v_i0102 uuid; v_it0101 uuid;
   v_l1 uuid; v_l2 uuid; v_l3 uuid; v_l5 uuid; v_lt uuid;
   v_vkz uuid; v_ikz uuid; v_mkz uuid; v_lkz uuid; v_arq uuid; v_vinc uuid;
@@ -186,6 +186,12 @@ begin
       'l2_km', (select jsonb_build_array(km_inicial::text, km_final::text, codigo, unidade) from public.mc_v_lancamentos where id = v_l2)),
     jsonb_build_object('l1', 1, 'l2', 2, 'l2_km', jsonb_build_array('2.000', '1.000', '01.01', 'm3'))));
 
+  -- Medições de KT usadas nas provas 4f5 (data futura) e 4o (texto sem km): a 1ª cobre um período fixo no
+  -- passado; a 2ª cobre hoje até hoje + 30, para testar "ainda não chegou" com uma medição aberta que já
+  -- cobre a data (prova que quem recusa é o check de data futura, não "Não há medição para a data").
+  v_mt := public.fn_mc_medicao_abrir(v_kt, '2026-06-01', '2026-06-30');
+  v_mt2 := public.fn_mc_medicao_abrir(v_kt, v_hoje, v_hoje + 30);
+
   -- 4f. Recusas do lançamento
   begin perform public.fn_mc_lancamento_salvar(v_kl, public.fn_mc_prova_dados(v_i0101, '2026-06-22', '1', null, null));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
@@ -199,18 +205,25 @@ begin
   begin perform public.fn_mc_lancamento_salvar(v_kl, public.fn_mc_prova_dados(v_i0101, '2026-06-22', '1.00001', '1', '2'));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4f4_cinco_casas', v_txt);
-  begin perform public.fn_mc_lancamento_salvar(v_kl, public.fn_mc_prova_dados(v_i0101, (v_hoje + 1)::text, '1', '1', '2'));
+  begin perform public.fn_mc_lancamento_salvar(v_kt, public.fn_mc_prova_dados(v_it0101, (v_hoje + 1)::text, '1', null, null));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4f5_data_futura', v_txt);
+  r := r || jsonb_build_object('4f5_prova_ainda_nao_chegou', public.fn_mc_prova_confere(
+    to_jsonb(v_txt like '%ainda não chegou%'), to_jsonb(true)));
   begin perform public.fn_mc_lancamento_salvar(v_kl, public.fn_mc_prova_dados(v_i01, '2026-06-22', '1', '1', '2'));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4f6_titulo', v_txt);
   begin perform public.fn_mc_lancamento_salvar(v_kl, public.fn_mc_prova_dados(v_i0101, '2026-05-01', '1', '1', '2'));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4f7_sem_medicao', v_txt);
+  -- 4f8: o item de outro contrato nem chega à checagem de FK (item_id, contrato_id): o trigger recusa
+  -- antes, pelo MESMO check do título (4f6) - o item não tem linha na planilha da versão desta medição,
+  -- então "não é serviço" acusa. Não existe mensagem própria de "item de outro contrato".
   begin perform public.fn_mc_lancamento_salvar(v_kl, public.fn_mc_prova_dados(v_it0101, '2026-06-22', '1', '1', '2'));
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4f8_item_de_outro_contrato', v_txt);
+  r := r || jsonb_build_object('4f8_prova_nao_e_servico', public.fn_mc_prova_confere(
+    to_jsonb(v_txt like '%não é serviço%'), to_jsonb(true)));
 
   -- 4g. Excesso: 4 + 3 + 4 = 11 > 10
   begin perform public.fn_mc_lancamento_salvar(v_kl, public.fn_mc_prova_dados(v_i0101, '2026-07-02', '4', '3', '4'));
@@ -296,8 +309,7 @@ begin
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4l3_lancar_em_conferencia', v_txt);
 
-  -- 4o. KT (texto): lançar sem km grava
-  v_mt := public.fn_mc_medicao_abrir(v_kt, '2026-06-01', '2026-06-30');
+  -- 4o. KT (texto): lançar sem km grava (a 1ª medição de KT já foi aberta antes do grupo 4f)
   v_lt := public.fn_mc_lancamento_salvar(v_kt, public.fn_mc_prova_dados(v_it0101, '2026-06-10', '1', null, null)
                                                || jsonb_build_object('local_texto', '  Rua A  ', 'observacao', ''));
   r := r || jsonb_build_object('4o_texto_sem_km', public.fn_mc_prova_confere(
@@ -317,10 +329,14 @@ begin
   r := r || jsonb_build_object('4q_controle', case when v_j #>> '{1,valor}' = '29.01' then 'IGUAL (errado)' else 'DIFERENTE (esperado)' end);
   reset role;
 
-  -- 4n. Update direto como dono trocando o contrato do lançamento
+  -- 4n. Update direto como dono trocando o contrato do lançamento. No trigger (UPDATE), o check do
+  -- contrato é o PRIMEIRO depois da trava de status da medição atual: fire antes de olhar a medição do
+  -- contrato novo, então recusa mesmo o destino (KT) não tendo medição aberta cobrindo a data do lançamento.
   begin update public.mc_lancamentos set contrato_id = v_kt where id = v_l2;
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4n_contrato_nao_muda', v_txt);
+  r := r || jsonb_build_object('4n_prova_contrato_nao_muda', public.fn_mc_prova_confere(
+    to_jsonb(v_txt like '%contrato do lançamento não muda%'), to_jsonb(true)));
 
   -- 4m. Usuário zero: sem permissão; com permissão e fora da lista; sem medicao.medicoes/criar
   perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);

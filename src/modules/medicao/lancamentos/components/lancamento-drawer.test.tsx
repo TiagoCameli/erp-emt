@@ -206,6 +206,47 @@ describe("LancamentoDrawer", () => {
     expect(segundoEnvio.motivoExcesso).toBe("Chuva forte atrasou o cronograma");
   });
 
+  it("excesso (MCEXC): resubmeter sem preencher o motivo (ou com motivo curto) recusa no cliente, sem chamar o banco de novo", async () => {
+    salvarLancamento.mockResolvedValueOnce({
+      ok: false,
+      erro: "O acumulado do 02.02 passa a 1.100 m3, acima do previsto de 1.000 m3. Informe o motivo",
+      excesso: true,
+    });
+
+    render(
+      <LancamentoDrawer
+        aberto
+        onAbertoChange={vi.fn()}
+        lancamento={null}
+        contratoId={CONTRATO}
+        tipoLocalizacao="texto"
+        servicos={[servico()]}
+        onSalvo={vi.fn()}
+      />,
+    );
+
+    escolherServico();
+    fireEvent.change(screen.getByLabelText(/Quantidade/), { target: { value: "150" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => expect(screen.getByLabelText(/Motivo do excesso/)).toBeTruthy());
+    expect(salvarLancamento).toHaveBeenCalledTimes(1);
+
+    // Reenviar sem preencher o motivo: recusa no cliente, sem nova chamada ao banco.
+    fireEvent.click(screen.getByRole("button", { name: "Lançar" }));
+    await waitFor(() =>
+      expect(screen.getByText(/Informe o motivo do excesso/)).toBeTruthy(),
+    );
+    expect(salvarLancamento).toHaveBeenCalledTimes(1);
+
+    // Motivo curto (menos de 3 letras) também recusa no cliente.
+    const campoMotivo = screen.getByLabelText(/Motivo do excesso/);
+    fireEvent.change(campoMotivo, { target: { value: "ab" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(screen.getByText(/Informe o motivo do excesso/)).toBeTruthy());
+    expect(salvarLancamento).toHaveBeenCalledTimes(1);
+  });
+
   it("editar um lançamento que já tinha motivo de excesso: o campo já vem preenchido e visível", () => {
     render(
       <LancamentoDrawer

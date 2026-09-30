@@ -83,8 +83,12 @@ export function LancamentoDrawer({
   onSalvo,
 }: LancamentoDrawerProps) {
   const editando = lancamento !== null;
+  // Excesso pendente: a última tentativa de salvar voltou MCEXC. Reseta ao reabrir o drawer
+  // (`aberto`/`lancamento` mudando de novo é uma sessão nova). Precisa vir ANTES do `useForm`: o
+  // resolver exige o motivo (mínimo 3 letras) só enquanto este alerta está na tela.
+  const [excesso, setExcesso] = React.useState<string | null>(null);
   const form = useForm<LancamentoFormInput>({
-    resolver: zodResolver(lancamentoFormSchema(tipoLocalizacao)),
+    resolver: zodResolver(lancamentoFormSchema(tipoLocalizacao, excesso !== null)),
     defaultValues: valoresIniciais(lancamento, contratoId),
   });
   const salvando = form.formState.isSubmitting;
@@ -92,9 +96,6 @@ export function LancamentoDrawer({
 
   const [fila, setFila] = React.useState<FilaDeFotosEArquivos>(FILA_VAZIA);
   const [enviandoAnexos, setEnviandoAnexos] = React.useState(false);
-  // Excesso pendente: a última tentativa de salvar voltou MCEXC. Reseta ao reabrir o drawer
-  // (`aberto`/`lancamento` mudando de novo é uma sessão nova).
-  const [excesso, setExcesso] = React.useState<string | null>(null);
   React.useEffect(() => {
     if (aberto) {
       form.reset(valoresIniciais(lancamento, contratoId));

@@ -110,6 +110,29 @@ describe("LancarCampo", () => {
     expect(screen.queryByLabelText(/Km final/)).toBeNull();
   });
 
+  it("mudar a data para fora do período do serviço escolhido limpa a seleção (não só o rótulo: o item some de verdade)", () => {
+    render(<LancarCampo contratoId={CONTRATO} tipoLocalizacao="texto" servicos={[servico()]} />);
+    escolherServico();
+    expect(screen.getByRole("combobox").textContent).toContain("02.02");
+
+    // servico() cobre 2026-09-01 a 2026-09-30: 08-15 fica fora, sem nenhuma medição cobrindo. Se o
+    // itemId só ficasse "órfão" (sem limpar de verdade), o combobox mostraria "Registro não
+    // encontrado" em vez do placeholder — por isso o teste exige o placeholder exato, não só
+    // "não contém mais o código".
+    fireEvent.change(screen.getByLabelText(/^Data/), { target: { value: "2026-08-15" } });
+
+    expect(screen.getByRole("combobox").textContent).toBe("Buscar por código ou descrição");
+  });
+
+  it("mudar a data para outro dia dentro do mesmo período mantém o serviço escolhido", () => {
+    render(<LancarCampo contratoId={CONTRATO} tipoLocalizacao="texto" servicos={[servico()]} />);
+    escolherServico();
+
+    fireEvent.change(screen.getByLabelText(/^Data/), { target: { value: "2026-09-05" } });
+
+    expect(screen.getByRole("combobox").textContent).toContain("02.02");
+  });
+
   it("grava, sobe a foto no id devolvido, avisa a medição e limpa o formulário mantendo a data", async () => {
     salvarLancamento.mockResolvedValue({ ok: true, id: "novo-id" });
     render(<LancarCampo contratoId={CONTRATO} tipoLocalizacao="texto" servicos={[servico()]} />);
@@ -197,5 +220,33 @@ describe("LancarCampo", () => {
     const segundoEnvio = salvarLancamento.mock.calls[1][0];
     expect(segundoEnvio.quantidade).toBe("150");
     expect(segundoEnvio.motivoExcesso).toBe("Chuva forte atrasou o cronograma");
+  });
+
+  it("excesso (MCEXC): resubmeter sem preencher o motivo (ou com motivo curto) recusa no cliente, sem chamar o banco de novo", async () => {
+    salvarLancamento.mockResolvedValueOnce({
+      ok: false,
+      erro: "O acumulado do 02.02 passa a 1.100 m3, acima do previsto de 1.000 m3. Informe o motivo",
+      excesso: true,
+    });
+
+    render(<LancarCampo contratoId={CONTRATO} tipoLocalizacao="texto" servicos={[servico()]} />);
+    escolherServico();
+    fireEvent.change(screen.getByLabelText(/Quantidade/), { target: { value: "150" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lançar" }));
+
+    await waitFor(() => expect(screen.getByLabelText(/Motivo do excesso/)).toBeTruthy());
+    expect(salvarLancamento).toHaveBeenCalledTimes(1);
+
+    // Reenviar sem preencher o motivo: recusa no cliente, sem nova chamada ao banco.
+    fireEvent.click(screen.getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(toastErro).toHaveBeenCalledWith(expect.stringContaining("motivo do excesso")));
+    expect(salvarLancamento).toHaveBeenCalledTimes(1);
+
+    // Motivo curto (menos de 3 letras) também recusa no cliente.
+    const campoMotivo = screen.getByLabelText(/Motivo do excesso/);
+    fireEvent.change(campoMotivo, { target: { value: "ab" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lançar" }));
+    await waitFor(() => expect(screen.getByText(/Informe o motivo do excesso/)).toBeTruthy());
+    expect(salvarLancamento).toHaveBeenCalledTimes(1);
   });
 });
