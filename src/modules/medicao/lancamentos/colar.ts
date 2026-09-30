@@ -94,6 +94,43 @@ export function normalizarNumeroParaBanco(texto: string): string | null {
   return normalizado === null ? null : normalizado.replace(",", ".");
 }
 
+/** Resultado de `normalizarNumeroColado`: ou o texto pronto, ou uma mensagem já pronta pra tela. */
+interface NumeroColado {
+  valor: string | null;
+  /** Mensagem completa (cita o número e a sugestão); null quando não é o caso de ambiguidade. */
+  erroAmbiguo: string | null;
+}
+
+/**
+ * Só para o COLAR (não mexe no formulário manual, que continua usando `normalizarNumeroParaBanco`
+ * direto): uma célula com um ÚNICO ponto e exatamente 3 dígitos depois dele, sem vírgula nenhuma,
+ * é ambígua — "1.234" tanto pode ser 1.234 (Excel com separador de milhar e a célula sem casa
+ * decimal) quanto 1,234 (decimal digitado com ponto). Sem quem confira ao vivo (como no formulário,
+ * onde `InputQuantidade` mostra o que foi digitado), interpretar sozinho arriscaria gravar um
+ * número 1000x menor sem ninguém perceber. Em vez de adivinhar, a linha vira erro pedindo para
+ * formatar a célula.
+ *
+ * Mais de um ponto sem vírgula ("1.234.567") não é ambíguo: só faz sentido como milhar, e todos os
+ * pontos saem.
+ */
+function normalizarNumeroColado(texto: string): NumeroColado {
+  const t = texto.trim();
+  if (!t.includes(",")) {
+    const partesPonto = t.split(".");
+    if (partesPonto.length === 2 && /^\d{3}$/.test(partesPonto[1])) {
+      return {
+        valor: null,
+        erroAmbiguo: `Número ambíguo: "${t}". Formate a célula com vírgula decimal (${t.replace(".", ",")}) ou sem separador de milhar (${t.replace(".", "")})`,
+      };
+    }
+    if (partesPonto.length > 2) {
+      const semPontos = partesPonto.join("");
+      return { valor: /^\d+$/.test(semPontos) ? semPontos : null, erroAmbiguo: null };
+    }
+  }
+  return { valor: normalizarNumeroParaBanco(t), erroAmbiguo: null };
+}
+
 /**
  * Lê o bloco colado do Excel. Cada linha é resolvida contra `servicos` (os serviços das medições
  * ABERTAS do contrato, com o período de cada uma já embutido): a data escolhe a medição (spec
@@ -169,11 +206,16 @@ export function lerColagem(
     }
     const item = candidatos[0];
 
-    const quantidade = normalizarNumeroParaBanco(quantidadeTexto);
-    if (quantidade === null) {
+    const quantidadeResultado = normalizarNumeroColado(quantidadeTexto);
+    if (quantidadeResultado.erroAmbiguo) {
+      erros.push({ linha: numero, erro: quantidadeResultado.erroAmbiguo });
+      continue;
+    }
+    if (quantidadeResultado.valor === null) {
       erros.push({ linha: numero, erro: `Quantidade inválida: "${quantidadeTexto}"` });
       continue;
     }
+    const quantidade = quantidadeResultado.valor;
 
     if (tipoLocalizacao === "rodovia" && (kmInicialTexto === "" || kmFinalTexto === "")) {
       erros.push({ linha: numero, erro: "Informe o km inicial e o km final" });
@@ -182,19 +224,29 @@ export function lerColagem(
 
     let kmInicial: string | null = null;
     if (kmInicialTexto !== "") {
-      kmInicial = normalizarNumeroParaBanco(kmInicialTexto);
-      if (kmInicial === null) {
+      const kmInicialResultado = normalizarNumeroColado(kmInicialTexto);
+      if (kmInicialResultado.erroAmbiguo) {
+        erros.push({ linha: numero, erro: kmInicialResultado.erroAmbiguo });
+        continue;
+      }
+      if (kmInicialResultado.valor === null) {
         erros.push({ linha: numero, erro: `Km inicial inválido: "${kmInicialTexto}"` });
         continue;
       }
+      kmInicial = kmInicialResultado.valor;
     }
     let kmFinal: string | null = null;
     if (kmFinalTexto !== "") {
-      kmFinal = normalizarNumeroParaBanco(kmFinalTexto);
-      if (kmFinal === null) {
+      const kmFinalResultado = normalizarNumeroColado(kmFinalTexto);
+      if (kmFinalResultado.erroAmbiguo) {
+        erros.push({ linha: numero, erro: kmFinalResultado.erroAmbiguo });
+        continue;
+      }
+      if (kmFinalResultado.valor === null) {
         erros.push({ linha: numero, erro: `Km final inválido: "${kmFinalTexto}"` });
         continue;
       }
+      kmFinal = kmFinalResultado.valor;
     }
 
     linhas.push({

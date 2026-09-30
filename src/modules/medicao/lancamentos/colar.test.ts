@@ -21,6 +21,7 @@ function servico(over: Partial<ServicoParaLancar> = {}): ServicoParaLancar {
     descricao: "Escavação",
     unidade: "m3",
     quantidadePrevista: "1000",
+    ordem: 1,
     ...over,
   };
 }
@@ -79,6 +80,52 @@ describe("lerColagem", () => {
     const resultado = lerColagem(texto, [servico()], "texto");
     expect(resultado.erros).toEqual([]);
     expect(resultado.linhas[0].quantidade).toBe("1234.5");
+  });
+
+  it('quantidade "1.234.567" (mais de um ponto, sem vírgula) é milhar sem ambiguidade: "1234567"', () => {
+    const texto = "10/09/2026\t02.02\t1.234.567";
+    const resultado = lerColagem(texto, [servico()], "texto");
+    expect(resultado.erros).toEqual([]);
+    expect(resultado.linhas[0].quantidade).toBe("1234567");
+  });
+
+  it('quantidade "1.234" (um ponto, exatamente 3 dígitos depois, sem vírgula) é AMBÍGUA: erro da linha, não vira 1,234 nem 1234', () => {
+    const texto = "10/09/2026\t02.02\t1.234";
+    const resultado = lerColagem(texto, [servico()], "texto");
+    expect(resultado.linhas).toEqual([]);
+    expect(resultado.erros).toEqual([
+      {
+        linha: 1,
+        erro: 'Número ambíguo: "1.234". Formate a célula com vírgula decimal (1,234) ou sem separador de milhar (1234)',
+      },
+    ]);
+  });
+
+  it('quantidade "12.345" (um ponto, 3 dígitos depois) também é ambígua', () => {
+    const texto = "10/09/2026\t02.02\t12.345";
+    const resultado = lerColagem(texto, [servico()], "texto");
+    expect(resultado.linhas).toEqual([]);
+    expect(resultado.erros).toEqual([
+      {
+        linha: 1,
+        erro: 'Número ambíguo: "12.345". Formate a célula com vírgula decimal (12,345) ou sem separador de milhar (12345)',
+      },
+    ]);
+  });
+
+  it('quantidade "0.750" (um ponto, 3 dígitos depois) também é ambígua', () => {
+    const texto = "10/09/2026\t02.02\t0.750";
+    const resultado = lerColagem(texto, [servico()], "texto");
+    expect(resultado.linhas).toEqual([]);
+    expect(resultado.erros).toHaveLength(1);
+    expect(resultado.erros[0].erro).toContain("Número ambíguo");
+  });
+
+  it("km ambíguo (rodovia) também vira o erro de ambiguidade, não passa batido", () => {
+    const texto = "10/09/2026\t02.02\t10\t1.234\t120,5\t\t";
+    const resultado = lerColagem(texto, [servico()], "rodovia");
+    expect(resultado.linhas).toEqual([]);
+    expect(resultado.erros).toEqual([{ linha: 1, erro: expect.stringContaining("Número ambíguo") }]);
   });
 
   it("quantidade que não dá para interpretar vira erro da linha, sem chegar a Number", () => {

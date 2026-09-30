@@ -43,6 +43,7 @@ const SERVICO: ServicoParaLancar = {
   descricao: "Escavação",
   unidade: "m3",
   quantidadePrevista: "1000",
+  ordem: 1,
 };
 
 /** 3 linhas válidas (a mesma medição, o mesmo item), sem km (tipoLocalizacao "texto"). */

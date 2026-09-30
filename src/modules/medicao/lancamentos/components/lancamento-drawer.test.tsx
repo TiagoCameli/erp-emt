@@ -49,6 +49,7 @@ function servico(over: Partial<ServicoParaLancar> = {}): ServicoParaLancar {
     descricao: "Escavação",
     unidade: "m3",
     quantidadePrevista: "1000",
+    ordem: 1,
     ...over,
   };
 }
@@ -111,6 +112,29 @@ describe("LancamentoDrawer", () => {
     );
     expect(screen.getByText("Novo lançamento")).toBeTruthy();
     expect(screen.queryByLabelText(/Motivo do excesso/)).toBeNull();
+  });
+
+  it("código repetido entre serviços da mesma medição: as opções do combobox ficam distinguíveis pela linha da planilha", () => {
+    const servicos = [
+      servico({ itemId: "item-a", ordem: 5 }),
+      servico({ itemId: "item-b", ordem: 9 }),
+    ];
+    render(
+      <LancamentoDrawer
+        aberto
+        onAbertoChange={vi.fn()}
+        lancamento={null}
+        contratoId={CONTRATO}
+        tipoLocalizacao="texto"
+        servicos={servicos}
+        onSalvo={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("combobox"));
+    const opcoes = screen.getAllByRole("option", { name: /02\.02/ });
+    expect(opcoes).toHaveLength(2);
+    expect(opcoes[0].textContent).toContain("linha 5 da planilha");
+    expect(opcoes[1].textContent).toContain("linha 9 da planilha");
     expect((screen.getByLabelText(/^Data/) as HTMLInputElement).value).not.toBe("");
   });
 

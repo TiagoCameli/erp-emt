@@ -178,7 +178,7 @@ export function ColarLancamentos({ aberto, onAbertoChange, contratoId, tipoLocal
 
   function rotuloItem(itemId: string): string {
     const servico = servicos.find((s) => s.itemId === itemId);
-    return servico ? `${servico.codigo} — ${servico.descricao}` : itemId;
+    return servico ? `${servico.codigo} · ${servico.descricao}` : itemId;
   }
 
   return (

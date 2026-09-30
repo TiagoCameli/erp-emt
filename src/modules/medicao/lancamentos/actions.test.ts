@@ -12,6 +12,8 @@ const estado = vi.hoisted(() => ({
   negadas: [] as string[],
   chamadas: [] as { fn: string; args: Record<string, unknown> }[],
   resposta: { data: null as unknown, error: null as { code?: string; message?: string; details?: string } | null },
+  /** `mc_contratos.tipo_localizacao` do contrato, para `salvarLancamento` decidir se km é obrigatório. */
+  contrato: { tipo_localizacao: "texto" } as { tipo_localizacao: string } | null,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -27,6 +29,13 @@ vi.mock("@/lib/supabase/server", () => ({
       estado.chamadas.push({ fn, args });
       return estado.resposta;
     },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: estado.contrato, error: null }),
+        }),
+      }),
+    }),
   }),
 }));
 
@@ -63,6 +72,7 @@ beforeEach(() => {
   estado.negadas = [];
   estado.chamadas = [];
   estado.resposta = { data: null, error: null };
+  estado.contrato = { tipo_localizacao: "texto" };
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -175,6 +185,28 @@ describe("salvarLancamento", () => {
   it("item vazio não chama o banco (zod recusa antes)", async () => {
     await expect(salvarLancamento(form({ itemId: "" }))).resolves.toHaveProperty("erro");
     expect(estado.chamadas).toEqual([]);
+  });
+
+  it("contrato de rodovia (lido do banco, não do que a tela mandar) sem km: recusa antes de chamar a RPC", async () => {
+    estado.contrato = { tipo_localizacao: "rodovia" };
+    await expect(salvarLancamento(form({ kmInicial: "", kmFinal: "" }))).resolves.toEqual({
+      ok: false,
+      erro: "Informe o km inicial",
+      excesso: false,
+    });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("contrato de rodovia com os dois km preenchidos: grava normalmente", async () => {
+    estado.contrato = { tipo_localizacao: "rodovia" };
+    estado.resposta = { data: "novo-id", error: null };
+    await expect(salvarLancamento(form({ kmInicial: "10", kmFinal: "12" }))).resolves.toEqual({ ok: true, id: "novo-id" });
+  });
+
+  it("contrato de texto (não rodovia): km continua opcional", async () => {
+    estado.contrato = { tipo_localizacao: "texto" };
+    estado.resposta = { data: "novo-id", error: null };
+    await expect(salvarLancamento(form({ kmInicial: "", kmFinal: "" }))).resolves.toEqual({ ok: true, id: "novo-id" });
   });
 });
 
@@ -296,10 +328,10 @@ describe("gravarColagem", () => {
     await expect(gravarColagem(CONTRATO, [linha()])).resolves.toEqual({ erro: "Cole no máximo 500 linhas por vez" });
   });
 
-  it("erro de infraestrutura vira mensagem genérica", async () => {
+  it("erro de infraestrutura vira mensagem genérica (própria de GRAVAR, não a de conferir)", async () => {
     estado.resposta = { data: null, error: { code: "42501", message: "permission denied" } };
     await expect(gravarColagem(CONTRATO, [linha()])).resolves.toEqual({
-      erro: "Não foi possível conferir a colagem. Tente novamente",
+      erro: "Não foi possível gravar a colagem. Tente novamente",
     });
   });
 });

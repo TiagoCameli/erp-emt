@@ -96,6 +96,7 @@ describe("PaginaLancamentos", () => {
         descricao: "Escavação",
         unidade: "m3",
         quantidadePrevista: "1000",
+        ordem: 1,
       },
     ]);
     render(await PaginaLancamentos({ searchParams: Promise.resolve({ contrato: CONTRATO }) }));

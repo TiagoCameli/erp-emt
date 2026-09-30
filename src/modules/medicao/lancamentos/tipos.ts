@@ -51,6 +51,8 @@ export interface ServicoParaLancar {
   unidade: string | null;
   /** Texto do numeric, ponto decimal. Null quando a planilha não informou (raro). */
   quantidadePrevista: string | null;
+  /** Posição na planilha (`mc_v_planilha_linhas.ordem`): desempata código repetido na tela. */
+  ordem: number;
 }
 
 /** Filtros de `listarLancamentos`, todos opcionais além do contrato. */

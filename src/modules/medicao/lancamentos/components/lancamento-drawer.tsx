@@ -47,7 +47,7 @@ function valoresIniciais(lancamento: LancamentoLista | null, contratoId: string)
 /** Rótulo do combobox: código, descrição, unidade e previsto (spec, Step 3 do brief). */
 function rotuloServico(s: ServicoParaLancar): string {
   const previsto = s.quantidadePrevista === null ? "-" : numeroExibicao(s.quantidadePrevista);
-  return `${s.codigo} — ${s.descricao} (${s.unidade ?? "-"}) · previsto ${previsto}`;
+  return `${s.codigo} · ${s.descricao} (${s.unidade ?? "-"}) · previsto ${previsto}`;
 }
 
 export interface LancamentoDrawerProps {
@@ -114,9 +114,18 @@ export function LancamentoDrawer({
   const servicosDaData = dataValida
     ? servicos.filter((s) => s.periodoInicio <= dataAtual && dataAtual <= s.periodoFim)
     : servicos;
-  const opcoesServico = servicosDaData.map((s) => ({ valor: s.itemId, rotulo: rotuloServico(s) }));
+  // Código repetido entre serviços da mesma medição (aconteceu no Lote 09, "02.02" duas vezes): o
+  // combobox sozinho mostraria duas opções com o rótulo IDÊNTICO. Quando o código aparece mais de
+  // uma vez na lista atual, acrescenta a linha da planilha (ordem) só nessas opções, para dar para
+  // escolher a certa.
+  const contagemPorCodigo = new Map<string, number>();
+  for (const s of servicosDaData) contagemPorCodigo.set(s.codigo, (contagemPorCodigo.get(s.codigo) ?? 0) + 1);
+  const opcoesServico = servicosDaData.map((s) => ({
+    valor: s.itemId,
+    rotulo: (contagemPorCodigo.get(s.codigo) ?? 0) > 1 ? `${rotuloServico(s)} · linha ${s.ordem} da planilha` : rotuloServico(s),
+  }));
   const servicoEditado = lancamento && !servicosDaData.some((s) => s.itemId === lancamento.itemId)
-    ? `${lancamento.codigo ?? ""} — ${lancamento.descricao ?? ""}`
+    ? `${lancamento.codigo ?? ""} · ${lancamento.descricao ?? ""}`
     : undefined;
 
   // O campo do motivo aparece quando o BANCO acabou de recusar por excesso, OU quando o

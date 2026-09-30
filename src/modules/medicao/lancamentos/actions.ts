@@ -84,10 +84,22 @@ export async function salvarLancamento(input: LancamentoFormInput, id?: string):
       return { ok: false, erro: id ? "Sem permissão para editar lançamento" : "Sem permissão para lançar", excesso: false };
     }
 
-    const validado = lancamentoFormSchema("texto").safeParse(input);
-    // A validação de km obrigatório em rodovia é reforçada por quem chama (o drawer sabe o tipo de
-    // localização do contrato); aqui só se confere o formato comum, para não duplicar a leitura do
-    // contrato numa Server Action que já recebe o `contratoId` pronto.
+    const supabase = await createClient();
+
+    // O km obrigatório em rodovia usa o tipo REAL do contrato, lido aqui (a RLS já limita ao que a
+    // pessoa acessa); o drawer já manda o formulário certo, mas essa checagem não pode depender só
+    // de quem chama — sem isto, um contrato de rodovia sem km só seria pego pela RPC.
+    let tipoLocalizacao: "rodovia" | "texto" = "texto";
+    if (idSchema.safeParse(input.contratoId).success) {
+      const { data: contrato } = await supabase
+        .from("mc_contratos")
+        .select("tipo_localizacao")
+        .eq("id", input.contratoId)
+        .maybeSingle();
+      if (contrato?.tipo_localizacao === "rodovia") tipoLocalizacao = "rodovia";
+    }
+
+    const validado = lancamentoFormSchema(tipoLocalizacao).safeParse(input);
     if (!validado.success) {
       return { ok: false, erro: validado.error.issues[0]?.message ?? "Dados inválidos", excesso: false };
     }
@@ -102,7 +114,6 @@ export async function salvarLancamento(input: LancamentoFormInput, id?: string):
     if (kmInicial.invalido) return { ok: false, erro: "Km inicial inválido", excesso: false };
     if (kmFinal.invalido) return { ok: false, erro: "Km final inválido", excesso: false };
 
-    const supabase = await createClient();
     const { data, error } = await supabase.rpc("fn_mc_lancamento_salvar", {
       p_contrato: dados.contratoId,
       p_dados: {
@@ -213,7 +224,8 @@ async function colar(contratoId: string, linhas: LinhaParaColar[], gravar: boole
     if (error) {
       const estruturado = resultadoDoErroDeGravar(error, linhas.length);
       if (estruturado) return { ok: true, resultado: estruturado };
-      return erroAcao(contexto, error, mensagemDeNegocio(error, "Não foi possível conferir a colagem. Tente novamente"));
+      const fallback = gravar ? "Não foi possível gravar a colagem. Tente novamente" : "Não foi possível conferir a colagem. Tente novamente";
+      return erroAcao(contexto, error, mensagemDeNegocio(error, fallback));
     }
     if (!ehResultadoColagem(data)) {
       return erroAcao(contexto, data, "O banco devolveu a colagem num formato inesperado");

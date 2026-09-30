@@ -125,7 +125,7 @@ describe("servicosParaLancar", () => {
     };
     estado.planilhaLinhas = {
       data: [
-        { versao_id: "v1", item_id: "item-1", codigo: "02.02", descricao: "Escavação", unidade: "m3", quantidade_prevista: "1000" },
+        { versao_id: "v1", item_id: "item-1", codigo: "02.02", descricao: "Escavação", unidade: "m3", ordem: 3, quantidade_prevista: "1000" },
       ],
       error: null,
     };
@@ -141,6 +141,7 @@ describe("servicosParaLancar", () => {
         descricao: "Escavação",
         unidade: "m3",
         quantidadePrevista: "1000",
+        ordem: 3,
       },
     ]);
   });

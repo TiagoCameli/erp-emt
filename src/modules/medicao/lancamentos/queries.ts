@@ -139,7 +139,7 @@ export async function servicosParaLancar(contratoId: string): Promise<ServicoPar
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("mc_v_planilha_linhas")
-      .select("versao_id, item_id, codigo, descricao, unidade, quantidade_prevista:quantidade_prevista::text")
+      .select("versao_id, item_id, codigo, descricao, unidade, ordem, quantidade_prevista:quantidade_prevista::text")
       .eq("tipo", "servico")
       .in("versao_id", versaoIds)
       .order("ordem")
@@ -161,6 +161,7 @@ export async function servicosParaLancar(contratoId: string): Promise<ServicoPar
         descricao: l.descricao ?? "",
         unidade: l.unidade,
         quantidadePrevista: l.quantidade_prevista,
+        ordem: l.ordem ?? 0,
       });
     }
   }
