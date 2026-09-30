@@ -4559,3 +4559,98 @@ tudo" da árvore não reagem visualmente durante a busca (segue como minor, defe
 linha no Painel e o link do contrato no Boletim já passaram a exigir a permissão do usuário
 (`medicao.boletim/ver` e `medicao.contratos/ver`, respectivamente), corrigido na última onda de
 revisão desta fase.
+
+## 2026-09-30 - Medição de Contratos, Fase 4: abrir medição e lançamento diário
+
+**Contexto:** a Fase 4 entrega lançar o executado por item e dia (desktop, celular com foto e colar
+do Excel) nas medições abertas, com o banco conferindo cada regra, e abrir a próxima medição do
+contrato. Toda escrita passa por RPC `security definer`: uma função interna, `fn_mc_lancamento_gravar`
+(sem grant, chamada só pelas outras), concentra as regras do lançamento e é usada pelo formulário,
+pelo celular e pelo colar; o gatilho `fn_mc_lancamento_medicao` escolhe a medição pela data e trava a
+medição que não está aberta. Spec: seções 5.4, 7.2, 8 e 9.5, com as emendas de 28/09/2026 em 7.2 e 13.
+
+**Decisão:**
+1. Três decisões do Tiago em 28/09/2026: abrir medição entra nesta fase, só o abrir (fechar, revisar
+   e aprovar ficam para a Fase 5); o celular precisa de sinal, sem fila offline, como o Abastecer do
+   Combustível (as fotos sobem depois do lançamento gravado, e foto que falha vira aviso sem desfazer
+   o lançamento); em contrato de rodovia, km inicial e km final são obrigatórios (estaca opcional).
+2. Regras que o banco confere em todo lançamento, já escritas e provadas em SQL (Task 1):
+   - Abrir: período com fim maior ou igual ao início, começando depois do fim da última medição do
+     contrato; usa a versão vigente de maior número; nasce `aberta` com a REV00 em aberto e o evento
+     `abrir`. A sugestão de período vai do dia seguinte ao fim da última medição (ou da OS, ou da
+     assinatura, se não houver nenhuma) até a véspera do próximo `dia_inicio_periodo`.
+   - Lançamento: item obrigatório e serviço na versão da medição; data que já chegou (fuso
+     `America/Rio_Branco`) e dentro de uma medição aberta; quantidade maior que zero com até 4 casas;
+     rodovia exige km inicial e final, nenhum dos dois negativo; o lançamento só muda ou sai enquanto
+     a medição dele está aberta; o contrato do lançamento nunca muda; excluir exige motivo com pelo
+     menos 3 letras.
+   - Excesso: quando o acumulado do item em todas as medições do contrato (já com o próprio
+     lançamento) passa do previsto da versão da medição, a gravação é recusada com o código `MCEXC`
+     até vir `motivo_excesso` (também com pelo menos 3 letras).
+   - Colar: as mesmas regras, linha a linha e na ordem, com o excesso somando as linhas anteriores do
+     mesmo bloco; `p_gravar = false` só confere, sem gravar nada; gravar é tudo ou nada, com teto de
+     500 linhas.
+3. Três migrations aplicadas em produção:
+   - `20260928163029_mc_fase4a_lancamentos`: as RPCs `fn_mc_medicao_sugestao`, `fn_mc_medicao_abrir`,
+     `fn_mc_lancamento_salvar`, `fn_mc_lancamento_excluir` e `fn_mc_lancamentos_colar`, a função
+     interna `fn_mc_lancamento_gravar` e a view `mc_v_lancamentos`.
+   - `20260928164443_mc_fase4b_anexo_lancamento`: a entidade de anexo `mc_lancamento` (recurso
+     `medicao.lancamentos`, contrato pelo `mc_lancamentos.contrato_id`), recriando
+     `fn_recurso_da_entidade` e `fn_mc_contrato_da_entidade` a partir da definição viva do banco.
+   - `20260928165457_mc_fase4c_permissoes`: os recursos `medicao.lancamentos` (ver, criar, editar,
+     excluir) e `medicao.medicoes` (ver, criar), com o backfill dos 4 Admins ativos:
+     `usuario_permissoes` com `recurso like 'medicao.%'` foi de 44 para **68 linhas**, sempre os
+     mesmos **4 Admins**.
+4. Telas entregues: **Medições** (`/medicao/medicoes`, lista das medições do contrato com o drawer
+   "Abrir próxima medição", período sugerido pelo banco e editável); **Lançamentos**
+   (`/medicao/lancamentos`, lista com filtros, formulário de lançar/editar, excluir com motivo
+   obrigatório e "Colar do Excel", com prévia, conferência linha a linha e gravação tudo ou nada); e
+   `/m/medicao` (celular, formulário de uma coluna com foto carimbada de data, hora e GPS, sem fila
+   offline).
+5. Regra do colar para número ambíguo (ruling do Tiago, ledger da fase): um número colado com **um
+   único ponto seguido de exatamente 3 dígitos e sem vírgula é ambíguo** (pode ser milhar ou decimal)
+   e a linha é recusada, pedindo para formatar a célula com vírgula decimal ou sem separador de
+   milhar; vários pontos sem vírgula continuam lidos como milhar, e o formulário digitado mantém a
+   regra de sempre, porque o colar nunca adivinha número. Custo se o Tiago preferir ler como milhar:
+   trocar a mensagem por uma conversão.
+6. Demais rulings tomados durante a implementação (ledger da Fase 4), cada um com o custo de reverter
+   se o Tiago discordar:
+   - a trava "data que já chegou" (fuso de Rio Branco) entra como sanidade derivada de "lançar o
+     executado" (spec 1.3). Custo se errado: tirar uma linha do SQL.
+   - editar um lançamento pode trocar o item e a data, porque o gatilho re-roteia sozinho para a
+     medição aberta que cobre a nova data; só o contrato fica congelado. Custo se errado: uma
+     condição a mais no gatilho, para também travar o item.
+   - o km pode crescer ou decrescer, conforme o sentido do serviço, sem trava de ordem entre inicial
+     e final. Custo se errado: zero, é só acrescentar a condição.
+   - código repetido entre serviços da mesma medição (o Lote 09 tem "02.02" duas vezes) ganha "linha N
+     da planilha" no rótulo das opções repetidas do combobox, para distinguir sem mudar o fluxo de
+     lançar.
+   - a Task 5 foi redespachada no modelo intermediário (sonnet) em vez de esperar a cota semanal do
+     Opus liberar (30/09 às 21h em Rio Branco), porque o plano já trazia as interfaces e os casos de
+     teste completos; a revisão da task ficou reservada ao Opus quando disponível, senão ao sonnet.
+     Custo se a qualidade caísse: o conserto voltaria ao loop antes do merge, o que não aconteceu (a
+     revisão da Task 5 saiu limpa).
+7. **Incidente do iCloud, sem perda de trabalho.** Durante a Task 6, o arquivo
+   `.git/refs/heads/medicao-fase4-lancamentos` do checkout em iCloud ficou "dataless" (a leitura do
+   ref deu timeout, e `git status`/`git log` passaram a mostrar o repositório inteiro como alterado,
+   com o HEAD irresolvível). O reflog (`logs/HEAD`, arquivo separado, não afetado) confirmou o valor
+   correto do commit, `92ffb3e6...`, e o ref foi reescrito com esse valor: nada foi perdido, conferido
+   depois por `git log` e `git status` batendo exatamente com os arquivos tocados. Dali em diante o
+   trabalho passou a rodar num clone fora do iCloud, mesma branch, e o worktree em iCloud ficou
+   parado.
+8. **Nenhuma medição foi aberta e nenhum lançamento foi gravado em produção durante esta fase.** Os
+   testes contra o banco vivo (prova SQL da Task 1, pré e pós-conferências de permissão das Tasks 2 e
+   3) rodaram em transação desfeita (`rollback`), ou foram só leitura. Abrir a 11ª medição do Lote 09
+   e lançar os primeiros itens executados é do Tiago, pela tela.
+
+**Consequência:** ficam para a Fase 5 fechar, revisar e aprovar a medição, e travar as medições em
+ordem de número ao mover a data de uma delas (hoje duas medições concorrentes seguram a linha com
+`for share`, mas sem essa trava de ordem entre elas). Ficam registrados como minors adiados, sem
+bloquear o merge: `p_contrato` nulo passa por `fn_mc_exigir` sem checar o contrato (nada grava, só a
+mensagem sai com `<NULL>`); uma linha do colar que não é um objeto inteiro escapa como erro cru do
+Postgres, em vez de mensagem pt-BR (o TS de hoje sempre manda a linha inteira); excluir um lançamento
+distingue "não encontrado" de "contrato não encontrado" por uma checagem de uuid, sem efeito prático;
+a tela de Medições não tem teste direto do botão "Abrir próxima medição", do ramo que confere se o
+usuário pode ver o contrato, nem do fechar o drawer no meio do envio; e a lista de Lançamentos carrega
+tudo do filtro atual, sem paginação no servidor (mitigado pelo link que já chega com `?medicao=N` a
+partir de Medições).
