@@ -38,14 +38,15 @@ function revalidar() {
   }
 }
 
-function ehSugestao(valor: unknown): valor is SugestaoMedicao {
-  if (typeof valor !== "object" || valor === null) return false;
+const textoOuNulo = (v: unknown) => v === null || typeof v === "string";
+
+/** Valida o retorno da RPC. `periodo_manual` ausente (banco antes da migration) vira false. */
+function lerSugestao(valor: unknown): SugestaoMedicao | null {
+  if (typeof valor !== "object" || valor === null) return null;
   const s = valor as Record<string, unknown>;
-  return (
-    typeof s.numero === "number" &&
-    typeof s.periodo_inicio === "string" &&
-    typeof s.periodo_fim === "string"
-  );
+  if (typeof s.numero !== "number" || !textoOuNulo(s.periodo_inicio) || !textoOuNulo(s.periodo_fim)) return null;
+  if (s.periodo_manual !== undefined && typeof s.periodo_manual !== "boolean") return null;
+  return { ...(s as unknown as SugestaoMedicao), periodo_manual: s.periodo_manual === true };
 }
 
 export type ResultadoSugestao = { ok: true; sugestao: SugestaoMedicao } | { erro: string };
@@ -65,10 +66,11 @@ export async function sugestaoMedicao(contratoId: string): Promise<ResultadoSuge
         mensagemDeNegocio(error, "Não foi possível sugerir o período da medição. Tente novamente"),
       );
     }
-    if (!ehSugestao(data)) {
+    const sugestao = lerSugestao(data);
+    if (!sugestao) {
       return erroAcao("medicao.medicoes.sugestao", data, "O banco devolveu a sugestão num formato inesperado.");
     }
-    return { ok: true, sugestao: data };
+    return { ok: true, sugestao };
   });
 }
 

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { abrirMedicao, sugestaoMedicao } from "@/modules/medicao/medicoes/actions";
 import { periodoMedicaoSchema, type PeriodoMedicaoInput } from "@/modules/medicao/medicoes/schemas";
+import { formatarData } from "@/lib/formatadores";
 import type { SugestaoMedicao } from "@/modules/medicao/medicoes/tipos";
 
 const ID_FORM = "form-abrir-medicao";
@@ -68,7 +69,7 @@ export function AbrirMedicaoDrawer({ aberto, onAbertoChange, contratoId, sessao 
 
   // Preenche o formulário assim que a sugestão chega (ou volta ao vazio numa sessão nova).
   React.useEffect(() => {
-    form.reset(sugestao ? { inicio: sugestao.periodo_inicio, fim: sugestao.periodo_fim } : VALORES_INICIAIS);
+    form.reset(sugestao ? { inicio: sugestao.periodo_inicio ?? "", fim: sugestao.periodo_fim ?? "" } : VALORES_INICIAIS);
   }, [sugestao, form]);
 
   async function aoEnviar(valores: PeriodoMedicaoInput) {
@@ -89,7 +90,11 @@ export function AbrirMedicaoDrawer({ aberto, onAbertoChange, contratoId, sessao 
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={sugestao ? `Abrir a ${sugestao.numero}ª medição` : "Abrir próxima medição"}
-      descricao="Confira o período sugerido pelo banco (dia seguinte ao fim da última medição até a véspera do próximo corte) e ajuste se precisar"
+      descricao={
+        sugestao?.periodo_manual
+          ? "Informe o período desta medição"
+          : "Confira o período sugerido pelo banco (dia seguinte ao fim da última medição até a véspera do próximo corte) e ajuste se precisar"
+      }
       temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
@@ -123,6 +128,12 @@ export function AbrirMedicaoDrawer({ aberto, onAbertoChange, contratoId, sessao 
               <Input id="medicao-fim" type="date" disabled={salvando || carregando} {...form.register("fim")} />
             </CampoFormulario>
           </div>
+          {sugestao?.periodo_manual ? (
+            <p className="text-detalhe text-muted-foreground">
+              Período informado à mão neste contrato.{" "}
+              {sugestao.depois_de ? `Começa depois de ${formatarData(sugestao.depois_de)}.` : "Primeira medição do contrato."}
+            </p>
+          ) : null}
           {sugestao?.versao_numero !== null && sugestao ? (
             <p className="text-detalhe text-muted-foreground">Planilha vigente: v{sugestao.versao_numero}</p>
           ) : null}

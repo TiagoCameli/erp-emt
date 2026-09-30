@@ -32,6 +32,7 @@ const SUGESTAO = {
   periodo_fim: "2026-09-30",
   versao_numero: 1,
   depois_de: "2026-08-31",
+  periodo_manual: false,
 };
 
 beforeEach(() => {
@@ -57,6 +58,19 @@ describe("sugestaoMedicao", () => {
     estado.resposta = { data: SUGESTAO, error: null };
     await expect(sugestaoMedicao(ID)).resolves.toEqual({ ok: true, sugestao: SUGESTAO });
     expect(estado.chamadas).toEqual([{ fn: "fn_mc_medicao_sugestao", args: { p_contrato: ID } }]);
+  });
+
+  it("período manual: aceita datas nulas e devolve periodo_manual true", async () => {
+    const manual = { numero: 1, periodo_inicio: null, periodo_fim: null, versao_numero: null, depois_de: null, periodo_manual: true };
+    estado.resposta = { data: manual, error: null };
+    await expect(sugestaoMedicao(ID)).resolves.toEqual({ ok: true, sugestao: manual });
+  });
+
+  it("sem a chave periodo_manual (banco antes da migration): normaliza para false", async () => {
+    const { periodo_manual: _omitido, ...antiga } = SUGESTAO;
+    void _omitido;
+    estado.resposta = { data: antiga, error: null };
+    await expect(sugestaoMedicao(ID)).resolves.toEqual({ ok: true, sugestao: { ...antiga, periodo_manual: false } });
   });
 
   it("a recusa da RPC (P0001) vira a mensagem do banco", async () => {

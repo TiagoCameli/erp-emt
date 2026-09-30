@@ -44,6 +44,7 @@ export const contratoSchema = z
     prazoMeses: prazoMesesSchema,
     inicioPrazo: z.enum(["assinatura", "ordem_servico"]),
     diaInicioPeriodo: diaInicioPeriodoSchema,
+    periodoManual: z.boolean().default(false),
     tipoLocalizacao: z.enum(["rodovia", "texto"]),
     regraArredondamento: z.enum(REGRAS_ARREDONDAMENTO).nullable(),
     alertaPrazoDias: alertaPrazoDiasSchema,
@@ -87,6 +88,7 @@ export const contratoFormSchema = z
     prazoMeses: prazoMesesSchema,
     inicioPrazo: z.enum(["assinatura", "ordem_servico"]),
     diaInicioPeriodo: diaInicioPeriodoSchema,
+    periodoManual: z.boolean(),
     tipoLocalizacao: z.enum(["rodovia", "texto"]),
     regraArredondamento: z.enum(REGRAS_ARREDONDAMENTO).nullable(),
     alertaPrazoDias: alertaPrazoDiasSchema,
@@ -110,7 +112,7 @@ export function contratoDoForm(form: ContratoFormInput): ContratoInput {
 }
 
 /** Payload da fn_mc_contrato_salvar. Dinheiro vai como texto, para não passar por float no banco. */
-export function payloadDoContrato(c: ContratoInput): Record<string, string | number | null> {
+export function payloadDoContrato(c: ContratoInput): Record<string, string | number | boolean | null> {
   return {
     codigo: c.codigo.toUpperCase(),
     nome_obra: c.nomeObra,
@@ -126,6 +128,7 @@ export function payloadDoContrato(c: ContratoInput): Record<string, string | num
     prazo_meses: c.prazoMeses,
     inicio_prazo: c.inicioPrazo,
     dia_inicio_periodo: c.diaInicioPeriodo,
+    periodo_manual: c.periodoManual,
     tipo_localizacao: c.tipoLocalizacao,
     regra_arredondamento: c.regraArredondamento,
     alerta_prazo_dias: c.alertaPrazoDias,
