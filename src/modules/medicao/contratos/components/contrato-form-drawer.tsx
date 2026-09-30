@@ -16,6 +16,7 @@ import {
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { salvarContrato } from "@/modules/medicao/contratos/actions";
@@ -63,6 +64,7 @@ const VALORES_INICIAIS: ContratoFormInput = {
   prazoMeses: 12,
   inicioPrazo: "assinatura",
   diaInicioPeriodo: 1,
+  periodoManual: false,
   tipoLocalizacao: "rodovia",
   regraArredondamento: null,
   alertaPrazoDias: 90,
@@ -97,6 +99,7 @@ function iniciaisDoContrato(contrato: ContratoDetalhe): ContratoFormInput {
     prazoMeses: contrato.prazo_meses,
     inicioPrazo: contrato.inicio_prazo as ContratoFormInput["inicioPrazo"],
     diaInicioPeriodo: contrato.dia_inicio_periodo,
+    periodoManual: contrato.periodo_manual,
     tipoLocalizacao: contrato.tipo_localizacao as ContratoFormInput["tipoLocalizacao"],
     regraArredondamento: contrato.regra_arredondamento as ContratoFormInput["regraArredondamento"],
     alertaPrazoDias: contrato.alerta_prazo_dias,
@@ -138,9 +141,9 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
     if (aberto) form.reset(iniciais());
   }, [aberto, form, iniciais]);
 
-  const [contratanteTipo, valorTexto, inicioPrazo, tipoLocalizacao, regraArredondamento, status] = useWatch({
+  const [contratanteTipo, valorTexto, inicioPrazo, tipoLocalizacao, regraArredondamento, status, periodoManual] = useWatch({
     control: form.control,
-    name: ["contratanteTipo", "valorInicial", "inicioPrazo", "tipoLocalizacao", "regraArredondamento", "status"],
+    name: ["contratanteTipo", "valorInicial", "inicioPrazo", "tipoLocalizacao", "regraArredondamento", "status", "periodoManual"],
   });
 
   async function aoEnviar(valores: ContratoFormInput) {
@@ -283,7 +286,11 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
               rotulo="Dia de início do período"
               obrigatorio
               erro={erros.diaInicioPeriodo?.message}
-              ajuda="1 = mês civil; 26 = de 26 a 25, como no DNIT"
+              ajuda={
+                periodoManual
+                  ? "Não é usado para sugerir o período: neste contrato o período é digitado em cada medição"
+                  : "1 = mês civil; 26 = de 26 a 25, como no DNIT"
+              }
             >
               <Input
                 id="contrato-dia-inicio"
@@ -295,6 +302,19 @@ export function ContratoFormDrawer({ aberto, onAbertoChange, contrato, onSalvo }
                 className="text-right tabular-nums"
                 disabled={salvando}
                 {...form.register("diaInicioPeriodo", { valueAsNumber: true })}
+              />
+            </CampoFormulario>
+            <CampoFormulario
+              id="contrato-periodo-manual"
+              rotulo="Período da medição informado à mão"
+              erro={erros.periodoManual?.message}
+              ajuda="Para contrato que mede vários meses numa medição: ao abrir cada medição, o período é digitado, sem sugestão."
+            >
+              <Checkbox
+                id="contrato-periodo-manual"
+                checked={periodoManual}
+                disabled={salvando}
+                onCheckedChange={(v) => form.setValue("periodoManual", v === true, { shouldDirty: true, shouldValidate: true })}
               />
             </CampoFormulario>
             <CampoFormulario id="contrato-localizacao" rotulo="Localização" obrigatorio erro={erros.tipoLocalizacao?.message}>

@@ -25,8 +25,11 @@ export interface MedicaoLista {
  */
 export interface SugestaoMedicao {
   numero: number;
-  periodo_inicio: string;
-  periodo_fim: string;
+  /** Nulos quando o contrato informa o período à mão (`periodo_manual`): o banco não sugere datas. */
+  periodo_inicio: string | null;
+  periodo_fim: string | null;
+  /** Contrato em que o período é digitado a cada medição. */
+  periodo_manual: boolean;
   /** Nulo quando o contrato ainda não tem planilha vigente (a abertura vai recusar). */
   versao_numero: number | null;
   /** Fim da medição anterior; nulo na primeira medição do contrato. */

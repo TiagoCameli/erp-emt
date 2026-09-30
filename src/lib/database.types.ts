@@ -4703,6 +4703,7 @@ export type Database = {
           numero_contrato: string;
           objeto: string;
           observacoes: string | null;
+          periodo_manual: boolean;
           prazo_meses: number;
           regra_arredondamento: string | null;
           status: string;
@@ -4732,6 +4733,7 @@ export type Database = {
           numero_contrato: string;
           objeto: string;
           observacoes?: string | null;
+          periodo_manual?: boolean;
           prazo_meses: number;
           regra_arredondamento?: string | null;
           status?: string;
@@ -4761,6 +4763,7 @@ export type Database = {
           numero_contrato?: string;
           objeto?: string;
           observacoes?: string | null;
+          periodo_manual?: boolean;
           prazo_meses?: number;
           regra_arredondamento?: string | null;
           status?: string;

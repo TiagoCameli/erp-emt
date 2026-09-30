@@ -140,4 +140,25 @@ describe("ContratoFormDrawer", () => {
     expect(salvarContrato).not.toHaveBeenCalled();
     expect(String(toastErro.mock.calls[0][0])).toContain("Informe o valor");
   });
+
+  it("marcar 'Período da medição informado à mão' manda periodoManual true; sem marcar, false", async () => {
+    salvarContrato.mockResolvedValue({ ok: true, id: "novo-id" });
+    renderizar();
+    preencherObrigatorios();
+    fireEvent.change(screen.getByLabelText(/Valor do contrato/), { target: { value: "100,00" } });
+    expect(screen.getByText(/Para contrato que mede vários meses numa medição/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cadastrar contrato" }));
+    await waitFor(() => expect(salvarContrato).toHaveBeenCalledTimes(1));
+    expect(salvarContrato.mock.calls[0][1]).toMatchObject({ periodoManual: false });
+
+    cleanup();
+    salvarContrato.mockClear();
+    renderizar();
+    preencherObrigatorios();
+    fireEvent.change(screen.getByLabelText(/Valor do contrato/), { target: { value: "100,00" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Período da medição informado à mão/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Cadastrar contrato" }));
+    await waitFor(() => expect(salvarContrato).toHaveBeenCalledTimes(1));
+    expect(salvarContrato.mock.calls[0][1]).toMatchObject({ periodoManual: true });
+  });
 });
