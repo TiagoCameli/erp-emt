@@ -26,7 +26,15 @@ function servico(over: Partial<ServicoParaLancar> = {}): ServicoParaLancar {
 }
 
 function semErros(linhas: LinhaColada[]) {
-  return linhas.map(({ linha, ...resto }) => resto);
+  return linhas.map((l) => ({
+    data: l.data,
+    itemId: l.itemId,
+    quantidade: l.quantidade,
+    kmInicial: l.kmInicial,
+    kmFinal: l.kmFinal,
+    estaca: l.estaca,
+    observacao: l.observacao,
+  }));
 }
 
 describe("lerColagem", () => {
