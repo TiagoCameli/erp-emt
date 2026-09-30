@@ -91,11 +91,20 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  // Novo lançamento nasce com `data: dataHojeISO()` (relógio real) e o combobox só mostra os
+  // serviços cujo período cobre essa data: sem travar o relógio, `servico()` (período fixo de
+  // setembro/2026) some da lista assim que o dia real sai de setembro. Trava só o `Date`
+  // (RTL/async continuam com timers reais).
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-15T12:00:00-05:00"));
   salvarLancamento.mockReset();
   toastErro.mockReset();
   toastSucesso.mockReset();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("LancamentoDrawer", () => {
   it("novo lançamento: título, data default hoje e sem o campo de motivo do excesso", () => {

@@ -77,6 +77,12 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  // `data` nasce de `dataHojeISO()` (relógio real) e o combobox só mostra os serviços cujo
+  // período cobre essa data: sem travar o relógio, `servico()` (período fixo de setembro/2026)
+  // some da lista assim que o dia real sai de setembro. Trava só o `Date` (RTL/async continuam
+  // com timers reais).
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-15T12:00:00-05:00"));
   salvarLancamento.mockReset();
   toastErro.mockReset();
   toastSucesso.mockReset();
@@ -85,7 +91,10 @@ beforeEach(() => {
   subirFilaFotosEArquivos.mockResolvedValue([]);
   definirOnline(true);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe("LancarCampo", () => {
   it("formulário novo: data de hoje preenchida e sem o campo de motivo do excesso", () => {
