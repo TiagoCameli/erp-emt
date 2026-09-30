@@ -223,12 +223,18 @@ async function colar(contratoId: string, linhas: LinhaParaColar[], gravar: boole
   });
 }
 
-/** `p_gravar = false`: só confere, nada é gravado (a RPC desfaz tudo internamente). */
-export function conferirColagem(contratoId: string, linhas: LinhaParaColar[]): Promise<ResultadoColagemAcao> {
+/**
+ * `p_gravar = false`: só confere, nada é gravado (a RPC desfaz tudo internamente).
+ *
+ * `async` aqui não é estilo: um arquivo `"use server"` exige que TODO export seja função async —
+ * sem isso o Next descarta a exportação na compilação para o cliente, e o import quebra com
+ * "a export doesn't exist" (sintoma visto só no `next build`, nunca no vitest nem no tsc).
+ */
+export async function conferirColagem(contratoId: string, linhas: LinhaParaColar[]): Promise<ResultadoColagemAcao> {
   return colar(contratoId, linhas, false);
 }
 
 /** `p_gravar = true`: tudo ou nada — qualquer linha com erro e nenhuma é gravada. */
-export function gravarColagem(contratoId: string, linhas: LinhaParaColar[]): Promise<ResultadoColagemAcao> {
+export async function gravarColagem(contratoId: string, linhas: LinhaParaColar[]): Promise<ResultadoColagemAcao> {
   return colar(contratoId, linhas, true);
 }

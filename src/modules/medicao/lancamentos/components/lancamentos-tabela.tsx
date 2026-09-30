@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ClipboardList, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { ClipboardList, Pencil, Plus, Trash2, TriangleAlert, Upload } from "lucide-react";
 
 import {
   CelulaVazia,
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
 import { periodoMedicao } from "@/modules/medicao/boletim/formato";
+import { ColarLancamentos } from "@/modules/medicao/lancamentos/components/colar-lancamentos";
 import { ExcluirLancamento } from "@/modules/medicao/lancamentos/components/excluir-lancamento";
 import { LancamentoDrawer } from "@/modules/medicao/lancamentos/components/lancamento-drawer";
 import { numeroExibicao } from "@/modules/medicao/planilha/formato";
@@ -168,6 +169,7 @@ export function LancamentosTabela({
   const { busca, setBusca } = useBuscaUrl(get("busca") ?? "", "busca");
 
   const [novoAberto, setNovoAberto] = React.useState(false);
+  const [colarAberto, setColarAberto] = React.useState(false);
   const [editando, setEditando] = React.useState<LancamentoLista | null>(null);
   const [excluindo, setExcluindo] = React.useState<LancamentoLista | null>(null);
 
@@ -255,6 +257,10 @@ export function LancamentosTabela({
     <div className="flex flex-col gap-3">
       {podeCriar ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => setColarAberto(true)}>
+            <Upload />
+            Colar do Excel
+          </Button>
           <Button type="button" size="sm" onClick={() => setNovoAberto(true)}>
             <Plus />
             Lançar
@@ -339,6 +345,17 @@ export function LancamentosTabela({
           atualizar();
         }}
       />
+
+      {podeCriar ? (
+        <ColarLancamentos
+          aberto={colarAberto}
+          onAbertoChange={setColarAberto}
+          contratoId={contratoId}
+          tipoLocalizacao={tipoLocalizacao}
+          servicos={servicos}
+          onGravado={atualizar}
+        />
+      ) : null}
     </div>
   );
 }
