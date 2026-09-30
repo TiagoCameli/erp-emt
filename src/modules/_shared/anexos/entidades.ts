@@ -88,7 +88,7 @@ const ROTULO_ENTIDADE: Record<EntidadeAnexo, string> = {
   mc_contrato: "contrato",
   mc_aditivo: "aditivo",
   mc_planilha_versao: "planilha contratual",
-  mc_lancamento: "Lançamento da medição",
+  mc_lancamento: "lançamento da medição",
 };
 
 export function rotuloDaEntidade(entidade: EntidadeAnexo): string {

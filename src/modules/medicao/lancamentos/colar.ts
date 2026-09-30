@@ -116,13 +116,15 @@ interface NumeroColado {
 function normalizarNumeroColado(texto: string): NumeroColado {
   const t = texto.trim();
   if (!t.includes(",")) {
-    const partesPonto = t.split(".");
-    if (partesPonto.length === 2 && /^\d{3}$/.test(partesPonto[1])) {
+    // Só é ambíguo quando o texto inteiro é puramente numérico ("\d+.\d{3}"): "ab.234" ou "1a.234"
+    // não são números de jeito nenhum, e viram o erro normal de número inválido, não de ambiguidade.
+    if (/^\d+\.\d{3}$/.test(t)) {
       return {
         valor: null,
         erroAmbiguo: `Número ambíguo: "${t}". Formate a célula com vírgula decimal (${t.replace(".", ",")}) ou sem separador de milhar (${t.replace(".", "")})`,
       };
     }
+    const partesPonto = t.split(".");
     if (partesPonto.length > 2) {
       const semPontos = partesPonto.join("");
       return { valor: /^\d+$/.test(semPontos) ? semPontos : null, erroAmbiguo: null };

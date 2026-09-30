@@ -57,7 +57,7 @@ describe("entidades de anexo", () => {
   it("lançamento da medição anexa pelo recurso de lançamentos", () => {
     expect(ehEntidadeAnexo("mc_lancamento")).toBe(true);
     expect(recursoDaEntidade("mc_lancamento")).toBe("medicao.lancamentos");
-    expect(rotuloDaEntidade("mc_lancamento")).toBe("Lançamento da medição");
+    expect(rotuloDaEntidade("mc_lancamento")).toBe("lançamento da medição");
   });
 
   it("linha de controle: tipo desconhecido não é entidade", () => {

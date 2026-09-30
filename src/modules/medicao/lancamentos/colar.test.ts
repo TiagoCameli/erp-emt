@@ -135,6 +135,20 @@ describe("lerColagem", () => {
     expect(resultado.erros).toEqual([{ linha: 1, erro: expect.stringContaining("Quantidade") }]);
   });
 
+  it('quantidade "ab.234" (não numérica, com ponto e 3 dígitos depois) é inválida, não ambígua: a parte antes do ponto não é número', () => {
+    const texto = "10/09/2026\t02.02\tab.234";
+    const resultado = lerColagem(texto, [servico()], "texto");
+    expect(resultado.linhas).toEqual([]);
+    expect(resultado.erros).toEqual([{ linha: 1, erro: 'Quantidade inválida: "ab.234"' }]);
+  });
+
+  it('quantidade "1a.234" (mistura letra com dígitos, com ponto e 3 dígitos depois) é inválida, não ambígua', () => {
+    const texto = "10/09/2026\t02.02\t1a.234";
+    const resultado = lerColagem(texto, [servico()], "texto");
+    expect(resultado.linhas).toEqual([]);
+    expect(resultado.erros).toEqual([{ linha: 1, erro: 'Quantidade inválida: "1a.234"' }]);
+  });
+
   it("contrato de rodovia: célula de km vazia vira erro da linha", () => {
     const texto = "10/09/2026\t02.02\t10\t\t120,500\t\t";
     const resultado = lerColagem(texto, [servico()], "rodovia");
