@@ -29,6 +29,7 @@ import { totaisDosFretes } from "@/modules/frete/fretes/calculo";
 import {
   CHAVES_FILTRO_FRETES as CHAVE,
   filtrarFretes,
+  normalizarPlaca,
   presetAtivo,
   topTransportadoras,
   type FiltrosFretes,
@@ -222,6 +223,10 @@ export function FretesTabela({
     () => distintos(base, (f) => f.transportadoraId, (f) => f.transportadoraNome),
     [base],
   );
+  const opcoesPlaca = React.useMemo(
+    () => distintos(base, (f) => normalizarPlaca(f.placaCarreta) || null, (f) => normalizarPlaca(f.placaCarreta)),
+    [base],
+  );
   const opcoesMaterial = React.useMemo(() => distintos(base, (f) => f.insumoId, (f) => f.insumoNome), [base]);
   const opcoesOrigem = React.useMemo(() => distintos(base, (f) => f.origemId, (f) => f.origemNome), [base]);
   const opcoesDestino = React.useMemo(() => distintos(base, (f) => f.destinoId, (f) => f.destinoNome), [base]);
@@ -323,6 +328,7 @@ export function FretesTabela({
       onLimpar: () => setMotorista(""),
       elemento: <FiltroBusca valor={motorista} onValorChange={setMotorista} placeholder="Motorista" />,
     },
+    filtroSelect("placa", "Placa", CHAVE.placa, filtros.placa, opcoesPlaca, "Todas as placas"),
     filtroSelect("material", "Material", CHAVE.material, filtros.insumoId, opcoesMaterial, "Todos os materiais", true),
     filtroSelect("origem", "Pedreira", CHAVE.origem, filtros.origemId, opcoesOrigem, "Todas as origens", true),
     filtroSelect("destino", "Local de entrega", CHAVE.destino, filtros.destinoId, opcoesDestino, "Todos os destinos", true),
