@@ -155,7 +155,11 @@ export function ContratoDetalhe({
               {contrato.inicio_prazo === "ordem_servico" ? "Da ordem de serviço" : "Da assinatura"}
             </Dado>
             <Dado rotulo="Dia de início do período">
-              <span className="tabular-nums">{contrato.dia_inicio_periodo}</span>
+              {contrato.periodo_manual ? (
+                "não usado (período informado à mão)"
+              ) : (
+                <span className="tabular-nums">{contrato.dia_inicio_periodo}</span>
+              )}
             </Dado>
             <Dado rotulo="Período da medição">
               {contrato.periodo_manual ? "informado à mão" : `sugerido pelo dia ${contrato.dia_inicio_periodo}`}

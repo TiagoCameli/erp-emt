@@ -153,5 +153,7 @@ describe("ContratoDetalhe: período da medição", () => {
   it("informado à mão quando o contrato marca periodo_manual", () => {
     montar({ contratoOverrides: { periodo_manual: true } });
     expect(screen.getByText("informado à mão")).toBeTruthy();
+    expect(screen.getByText("não usado (período informado à mão)")).toBeTruthy();
+    expect(screen.queryByText("26")).toBeNull();
   });
 });
