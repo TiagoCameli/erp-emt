@@ -36,10 +36,10 @@ export function FretesPresets({ hoje, ativo, temAlgo, top, transportadoraId, onA
     <Button
       key={preset}
       type="button"
-      size="sm"
+      size="xs"
       variant={ativo === preset ? "default" : "outline"}
       aria-pressed={ativo === preset}
-      className="h-7 rounded-full px-3 text-detalhe"
+      className="rounded-full px-2.5 text-legenda"
       onClick={() => onAplicar(mudancas)}
     >
       {rotulo}
@@ -49,7 +49,7 @@ export function FretesPresets({ hoje, ativo, temAlgo, top, transportadoraId, onA
   const periodo = (p: { de: string; ate: string }) => ({ de: p.de, ate: p.ate, sem_chegada: null });
 
   return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Presets rápidos">
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Presets rápidos">
       {chip("sem_chegada", "Sem chegada", { de: null, ate: null, sem_chegada: "sim" })}
       {chip("esta_semana", "Esta semana", periodo(periodoEstaSemana(hoje)))}
       {chip("este_mes", "Este mês", periodo(periodoEsteMes(hoje)))}
@@ -58,9 +58,9 @@ export function FretesPresets({ hoje, ativo, temAlgo, top, transportadoraId, onA
         <PopoverTrigger asChild>
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant={transportadoraId && top.some((t) => t.id === transportadoraId) ? "default" : "outline"}
-            className="h-7 rounded-full px-3 text-detalhe"
+            className="rounded-full px-2.5 text-legenda"
           >
             <Trophy />
             Top transportadora
@@ -99,9 +99,9 @@ export function FretesPresets({ hoje, ativo, temAlgo, top, transportadoraId, onA
       {temAlgo ? (
         <Button
           type="button"
-          size="sm"
+          size="xs"
           variant="ghost"
-          className="h-7 px-2 text-detalhe"
+          className="px-2 text-legenda"
           onClick={() => onAplicar({ de: null, ate: null, transportadora: null, sem_chegada: null })}
         >
           <X />

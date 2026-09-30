@@ -49,6 +49,7 @@ export default async function PaginaFretes({
   return (
     <>
       <PageHeader
+        compacto
         modulo="Frete"
         titulo="Fretes"
         descricao="Fretes de material das pedreiras e transferências entre obras. Cada frete credita a transportadora na conta corrente"
