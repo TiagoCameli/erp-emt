@@ -7,6 +7,7 @@ import { montarPainel } from "@/modules/financeiro/aplicacoes/calculo";
 import { AplicacoesAcoesCabecalho } from "@/modules/financeiro/aplicacoes/components/aplicacoes-acoes-cabecalho";
 import { AplicacoesPainel } from "@/modules/financeiro/aplicacoes/components/aplicacoes-painel";
 import { carregarAplicacoes } from "@/modules/financeiro/aplicacoes/queries";
+import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
   listarAplicacoes as listarEtapas,
   listarContasAtivas,
@@ -30,6 +31,7 @@ export default async function PaginaAplicacoes() {
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   // Aplicar e resgatar são transferência: a permissão é a de Transferências.
   const podeTransferir = temPermissao(usuario, "financeiro.transferencias", "criar");
+  const podeVerRelatorios = temPermissao(usuario, "financeiro.relatorios", "ver");
 
   const [dados, contas, etapas] = await Promise.all([
     carregarAplicacoes(),
@@ -69,6 +71,14 @@ export default async function PaginaAplicacoes() {
           />
         }
       />
+
+      {/* Aplicações é o relatório Investimentos (25/09/2026): quem chega pela
+          barra dos relatórios precisa dela aqui para voltar aos outros. */}
+      {podeVerRelatorios ? (
+        <div className="mt-6 mb-6">
+          <RelatoriosNav ativo="investimentos" investimentosEmAplicacoes />
+        </div>
+      ) : null}
 
       <GradeKpis className="mb-2">
         <KPICard
