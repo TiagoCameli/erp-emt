@@ -17,6 +17,7 @@ import {
   chaveNomeUnidade,
   haRepetido,
   MENSAGEM_REPETIDO,
+  mudouNomeOuUnidade,
   padraoIlikeCandidatos,
 } from "@/modules/cadastros/insumos/duplicidade";
 import {
@@ -182,7 +183,20 @@ export async function editar(
   }
 
   const supabase = await createClient();
-  const repetido = await nomeRepetidoNaUnidade(supabase, validado.data, idValido.data);
+  // Só confere quando nome ou unidade mudam: a carga da origem deixou pares com nome e
+  // unidade iguais, e editar a descrição de um deles não pode ficar travado.
+  const { data: gravado, error: erroGravado } = await supabase
+    .from("insumos")
+    .select("nome, unidade_id")
+    .eq("id", idValido.data)
+    .maybeSingle();
+  if (erroGravado) {
+    return { erro: "Não foi possível conferir se o insumo já existe. Tente novamente" };
+  }
+  const repetido =
+    !gravado || mudouNomeOuUnidade(gravado, validado.data.nome, validado.data.unidadeId)
+      ? await nomeRepetidoNaUnidade(supabase, validado.data, idValido.data)
+      : false;
   if (repetido === "erro") {
     return { erro: "Não foi possível conferir se o insumo já existe. Tente novamente" };
   }

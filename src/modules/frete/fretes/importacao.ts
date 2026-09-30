@@ -109,20 +109,23 @@ export function indicePorNome(opcoes: readonly Opcao[]): Map<string, string> {
 
 /**
  * Índice dos insumos pelo rótulo com unidade ("brita 0 - t") E pelo nome puro. Dois
- * insumos podem ter o mesmo nome em unidades diferentes: o nome puro que cai em mais
- * de um cadastro fica `null` (ambíguo) e a linha pede o rótulo, em vez de gravar o
- * frete no material errado.
+ * insumos podem ter o mesmo nome em unidades diferentes: o nome que cai em cadastros de
+ * unidades diferentes fica `null` (ambíguo) e a linha pede o rótulo, em vez de gravar o
+ * frete no material errado. Nome e unidade iguais (par repetido da carga da origem) é o
+ * mesmo material: vale o primeiro, como no `indicePorNome`.
  */
 export function indiceInsumos(opcoes: readonly InsumoOpcaoFrete[]): Map<string, string | null> {
-  const mapa = new Map<string, string | null>();
-  const guardar = (nome: string, id: string) => {
+  const achados = new Map<string, { id: string; rotulo: string } | null>();
+  const guardar = (nome: string, o: InsumoOpcaoFrete) => {
     const chave = nome.trim().toLowerCase();
-    if (!mapa.has(chave)) mapa.set(chave, id);
-    else if (mapa.get(chave) !== id) mapa.set(chave, null);
+    const rotulo = o.nome.trim().toLowerCase();
+    const atual = achados.get(chave);
+    if (atual === undefined) achados.set(chave, { id: o.id, rotulo });
+    else if (atual !== null && atual.rotulo !== rotulo) achados.set(chave, null);
   };
-  for (const o of opcoes) guardar(o.nome, o.id);
-  for (const o of opcoes) guardar(o.nomeCadastro, o.id);
-  return mapa;
+  for (const o of opcoes) guardar(o.nome, o);
+  for (const o of opcoes) guardar(o.nomeCadastro, o);
+  return new Map([...achados].map(([chave, achado]) => [chave, achado?.id ?? null]));
 }
 
 export interface CadastrosImportacao {
@@ -163,7 +166,7 @@ export function validarLinhaFrete(linha: Partial<LinhaPlanilhaFrete>, cadastros:
       return null;
     }
     const id = mapa.get(nome.toLowerCase());
-    if (id === null) erros.push(`${rotulo} "${nome}" tem mais de um cadastro com esse nome: informe com a unidade (ex.: "${nome} - t")`);
+    if (id === null) erros.push(`${rotulo} "${nome}" tem mais de um cadastro com esse nome: informe com a unidade, como no seletor ("${nome} - unidade")`);
     else if (!id) erros.push(`${rotulo} "${nome}" nao encontrad${genero}`);
     return id ?? null;
   };

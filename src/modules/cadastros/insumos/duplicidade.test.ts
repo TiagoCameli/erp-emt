@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chaveNomeUnidade, haRepetido, padraoIlikeCandidatos } from "./duplicidade";
+import { chaveNomeUnidade, haRepetido, mudouNomeOuUnidade, padraoIlikeCandidatos } from "./duplicidade";
 
 const T = "unidade-t";
 const M3 = "unidade-m3";
@@ -35,7 +35,20 @@ describe("chaveNomeUnidade", () => {
 
 describe("padraoIlikeCandidatos", () => {
   it("escapa os curingas e troca espaço por %", () => {
-    expect(padraoIlikeCandidatos(" 50%  _x\\ ")).toBe("50\\%%\\_x\\\\");
-    expect(padraoIlikeCandidatos("BRITA  0")).toBe("BRITA%0");
+    expect(padraoIlikeCandidatos(" 50%  _x\\ ")).toBe("%50\\%%\\_x\\\\%");
+    expect(padraoIlikeCandidatos("BRITA  0")).toBe("%BRITA%0%");
+  });
+});
+
+describe("mudouNomeOuUnidade", () => {
+  const gravado = { nome: "PREGO 18x27", unidade_id: T };
+
+  it("trocar só a descrição ou a subcategoria não conta", () => {
+    expect(mudouNomeOuUnidade(gravado, "prego  18x27", T)).toBe(false);
+  });
+
+  it("trocar o nome ou a unidade conta", () => {
+    expect(mudouNomeOuUnidade(gravado, "PREGO 17x27", T)).toBe(true);
+    expect(mudouNomeOuUnidade(gravado, "PREGO 18x27", M3)).toBe(true);
   });
 });

@@ -158,7 +158,7 @@ describe("material com o mesmo nome em unidades diferentes", () => {
 
   it("o nome sozinho é ambíguo e a linha pede a unidade", () => {
     expect(lerLinhaPedido({ ...LINHA, material: "Brita 0" }, cadastros).erros).toContain(
-      'Material "Brita 0" tem mais de um cadastro com esse nome: informe com a unidade (ex.: "Brita 0 - t")',
+      'Material "Brita 0" tem mais de um cadastro com esse nome: informe com a unidade, como no seletor ("Brita 0 - unidade")',
     );
   });
 });

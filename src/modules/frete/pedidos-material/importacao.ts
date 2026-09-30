@@ -57,7 +57,7 @@ function casar(nome: string, cadastro: readonly CadastroCasavel[], rotulo: "Forn
   erros.push(
     casado.erro === "ambiguo"
       ? rotulo === "Material"
-        ? `${rotulo} "${nome}" tem mais de um cadastro com esse nome: informe com a unidade (ex.: "${nome} - t")`
+        ? `${rotulo} "${nome}" tem mais de um cadastro com esse nome: informe com a unidade, como no seletor ("${nome} - unidade")`
         : `${rotulo} "${nome}" tem mais de um cadastro com esse nome`
       : `${rotulo} "${nome}" não encontrado`,
   );

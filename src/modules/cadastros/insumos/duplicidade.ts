@@ -40,11 +40,22 @@ export function haRepetido(
  * e `haRepetido` filtra depois.
  */
 export function padraoIlikeCandidatos(texto: string): string {
-  return texto
+  const miolo = texto
     .trim()
     .split(/\s+/)
     .map((parte) => parte.replace(/[\\%_]/g, (c) => `\\${c}`))
     .join("%");
+  // `%` nas pontas: nome gravado com espaço sobrando (" BRITA 0") também é candidato.
+  return `%${miolo}%`;
+}
+
+/** Editar sem trocar nome nem unidade não é criar repetido (os pares antigos ainda existem). */
+export function mudouNomeOuUnidade(
+  gravado: { nome: string; unidade_id: string },
+  nome: string,
+  unidadeId: string,
+): boolean {
+  return chaveNomeUnidade(gravado.nome, gravado.unidade_id) !== chaveNomeUnidade(nome, unidadeId);
 }
 
 export const MENSAGEM_REPETIDO =

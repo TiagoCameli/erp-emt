@@ -168,11 +168,20 @@ describe("material com o mesmo nome em unidades diferentes", () => {
     const { erros, frete } = validarLinhaFrete({ ...LINHA, material: "Brita 0" }, cadastros);
     expect(frete).toBeNull();
     expect(erros).toContain(
-      'Material "Brita 0" tem mais de um cadastro com esse nome: informe com a unidade (ex.: "Brita 0 - t")',
+      'Material "Brita 0" tem mais de um cadastro com esse nome: informe com a unidade, como no seletor ("Brita 0 - unidade")',
     );
   });
 
   it("nome único continua casando sem a unidade", () => {
     expect(validarLinhaFrete({ ...LINHA, material: "BRITA 1" }, cadastros).frete?.insumoId).toBe(I);
+  });
+
+  it("par repetido da origem (nome e unidade iguais) continua casando no primeiro", () => {
+    const repetidos = indiceInsumos([
+      { id: TON, nome: "PREGO - kg", nomeCadastro: "PREGO" },
+      { id: M3, nome: "PREGO - kg", nomeCadastro: "PREGO" },
+    ]);
+    expect(repetidos.get("prego - kg")).toBe(TON);
+    expect(repetidos.get("prego")).toBe(TON);
   });
 });
