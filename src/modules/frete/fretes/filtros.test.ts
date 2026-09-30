@@ -6,6 +6,7 @@ import {
   FILTROS_VAZIOS,
   filtrarFretes,
   lerFiltrosFretes,
+  normalizarPlaca,
   periodoEsteMes,
   periodoEstaSemana,
   periodoMesPassado,
@@ -67,6 +68,36 @@ describe("lerFiltrosFretes", () => {
       excluidos: true,
     });
     expect(lerFiltrosFretes({ tipo: "outro" }).tipo).toBe("");
+  });
+
+  it("placa sai da URL normalizada", () => {
+    expect(lerFiltrosFretes({ placa: " sqs-7e71 " }).placa).toBe("SQS7E71");
+    expect(lerFiltrosFretes({}).placa).toBe("");
+  });
+});
+
+describe("filtro de placa", () => {
+  const lista = [
+    frete({ id: "a", placaCarreta: "SQS7E71" }),
+    frete({ id: "b", placaCarreta: "SQS7E01" }),
+    frete({ id: "c", placaCarreta: "sqs-7e71" }),
+    frete({ id: "d", placaCarreta: null }),
+  ];
+  const ids = (placa: string) => filtrarFretes(lista, { ...FILTROS_VAZIOS, placa }).map((x) => x.id);
+
+  it("casa a placa inteira, sem diferenciar grafia, e não por pedaço", () => {
+    expect(ids("SQS7E71")).toEqual(["a", "c"]);
+    expect(ids("SQS7E01")).toEqual(["b"]);
+    expect(ids("SQS7E")).toEqual([]);
+  });
+
+  it("sem placa no filtro, todos passam (inclusive quem não tem placa)", () => {
+    expect(ids("")).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("normalizarPlaca", () => {
+    expect(normalizarPlaca("abc 1.d-23")).toBe("ABC1D23");
+    expect(normalizarPlaca(null)).toBe("");
   });
 });
 

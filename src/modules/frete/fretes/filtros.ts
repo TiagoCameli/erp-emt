@@ -20,6 +20,7 @@ export const CHAVES_FILTRO_FRETES = {
   de: "de",
   ate: "ate",
   motorista: "motorista",
+  placa: "placa",
   material: "material",
   origem: "origem",
   destino: "destino",
@@ -38,6 +39,8 @@ export interface FiltrosFretes {
   ate: string;
   /** Substring do motorista. */
   motorista: string;
+  /** Placa da carreta, normalizada (ver `normalizarPlaca`); casa inteira, não por pedaço. */
+  placa: string;
   insumoId: string;
   origemId: string;
   destinoId: string;
@@ -55,6 +58,7 @@ export const FILTROS_VAZIOS: FiltrosFretes = {
   de: "",
   ate: "",
   motorista: "",
+  placa: "",
   insumoId: "",
   origemId: "",
   destinoId: "",
@@ -75,6 +79,15 @@ function uuid(valor: string | string[] | undefined): string {
   return UUID.test(bruto) ? bruto : "";
 }
 
+/**
+ * Placa comparável: maiúscula, sem hífen, espaço ou ponto. "sqs-7e71" e "SQS7E71" são a
+ * mesma carreta. O cadastro já grava assim (o formulário põe em maiúscula), mas a carga
+ * antiga e a URL digitada não prometem nada.
+ */
+export function normalizarPlaca(placa: string | null | undefined): string {
+  return (placa ?? "").toUpperCase().replace(/[\s.-]/g, "");
+}
+
 function dia(valor: string | string[] | undefined): string {
   const bruto = texto(valor);
   return dataIsoValida(bruto) ? bruto : "";
@@ -92,6 +105,7 @@ export function lerFiltrosFretes(params: Parametros): FiltrosFretes {
     de: dia(params[C.de]),
     ate: dia(params[C.ate]),
     motorista: texto(params[C.motorista]).slice(0, 100),
+    placa: normalizarPlaca(texto(params[C.placa]).slice(0, 20)),
     insumoId: uuid(params[C.material]),
     origemId: uuid(params[C.origem]),
     destinoId: uuid(params[C.destino]),
@@ -113,6 +127,7 @@ export function filtrarFretes(fretes: readonly FreteLinha[], filtros: FiltrosFre
     if (filtros.de && f.data < filtros.de) return false;
     if (filtros.ate && f.data > filtros.ate) return false;
     if (motorista && !(f.motorista ?? "").toLowerCase().includes(motorista)) return false;
+    if (filtros.placa && normalizarPlaca(f.placaCarreta) !== filtros.placa) return false;
     if (filtros.insumoId && f.insumoId !== filtros.insumoId) return false;
     if (filtros.origemId && f.origemId !== filtros.origemId) return false;
     if (filtros.destinoId && f.destinoId !== filtros.destinoId) return false;

@@ -97,6 +97,7 @@ export function filtrosDescritos(filtros: FiltrosFretes, fretes: readonly FreteL
   if (filtros.transportadoraId)
     lista.push(["Transportadora", nome("transportadoraId", filtros.transportadoraId, "transportadoraNome")]);
   if (filtros.motorista) lista.push(["Motorista", filtros.motorista]);
+  if (filtros.placa) lista.push(["Placa", filtros.placa]);
   if (filtros.insumoId) lista.push(["Material", nome("insumoId", filtros.insumoId, "insumoNome")]);
   if (filtros.origemId) lista.push(["Origem", nome("origemId", filtros.origemId, "origemNome")]);
   if (filtros.destinoId) lista.push(["Destino", nome("destinoId", filtros.destinoId, "destinoNome")]);
