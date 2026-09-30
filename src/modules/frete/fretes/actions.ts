@@ -24,7 +24,7 @@ import { dadosDaRpc, dataIsoValida, freteSchema, type FreteInput } from "@/modul
  */
 
 const RECURSO = "frete.fretes" as const;
-const ROTAS = ["/frete/fretes", "/frete", "/frete/conta-corrente", "/frete/anomalias"];
+const ROTAS = ["/frete/fretes", "/frete", "/frete/conta-corrente", "/frete/anomalias", "/frete/carretas-emt"];
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 

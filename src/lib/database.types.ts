@@ -9380,6 +9380,7 @@ export type Database = {
         Args: { p_contrato: string; p_dados: Json; p_id?: string };
         Returns: string;
       };
+      fn_frete_carretas_emt: { Args: never; Returns: Json };
       fn_mc_boletim: {
         Args: { p_ate?: number; p_contrato: string };
         Returns: Json;

@@ -115,6 +115,17 @@
   --chart-4: #8fb79a;
   --chart-5: #b91c1c;
 
+  /* Graficos das Carretas EMT (Frete): 4 carretas + 3 medidas. A paleta da marca
+     nao separa 4 series para daltonico (asfalto x verde claro); esta passou no
+     validador de paleta (faixa de luz, croma, CVD e contraste), claro e escuro. */
+  --viz-carreta-1: #2a78d6;
+  --viz-carreta-2: #eb6834;
+  --viz-carreta-3: #1baf7a;
+  --viz-carreta-4: #eda100;
+  --viz-producao: #2a78d6;
+  --viz-custo: #eb6834;
+  --viz-financiamento: #4a3aa7;
+
   /* Sidebar */
   --sidebar: #f7f7f5;
   --sidebar-foreground: #1f1f1f;
@@ -188,6 +199,14 @@
 
   --chart-3: #8e8f95;
   --chart-5: #e06666;
+
+  --viz-carreta-1: #3987e5;
+  --viz-carreta-2: #d95926;
+  --viz-carreta-3: #199e70;
+  --viz-carreta-4: #c98500;
+  --viz-producao: #3987e5;
+  --viz-custo: #d95926;
+  --viz-financiamento: #9085e9;
 
   --sidebar: #202020;
   --sidebar-foreground: #ececea;
@@ -414,6 +433,17 @@
 
     --chart-3: var(--emt-asfalto);
     --chart-5: #b91c1c;
+
+    /* Graficos das Carretas EMT (Frete): 4 carretas + 3 medidas. A paleta da marca
+       nao separa 4 series para daltonico (asfalto x verde claro); esta passou no
+       validador de paleta (faixa de luz, croma, CVD e contraste), claro e escuro. */
+    --viz-carreta-1: #2a78d6;
+    --viz-carreta-2: #eb6834;
+    --viz-carreta-3: #1baf7a;
+    --viz-carreta-4: #eda100;
+    --viz-producao: #2a78d6;
+    --viz-custo: #eb6834;
+    --viz-financiamento: #4a3aa7;
 
     --sidebar: #f7f7f5;
     --sidebar-foreground: #1f1f1f;
