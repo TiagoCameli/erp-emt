@@ -4732,7 +4732,17 @@ despesas e financiamentos.
 2. O que a pessoa muda: ordem (arrastando pelo ícone ou pelo menu "Mover para antes/depois", que é o caminho de teclado e toque), largura em 12 colunas (borda direita ou menu: 1/4, 1/3, metade, 2/3, 3/4, inteira), altura (borda de baixo ou menu), tirar da tela e "Colocar de volta". "Restaurar padrão" apaga a linha. Largura escolhida só vale com a grade a partir de 48rem (container query); em tela estreita o card escolhido ocupa a linha.
 3. Onde fica: na MESMA tabela `preferencias_tabela`, chave `painel.<id da grade>`, pelas mesmas RPCs (`fn_salvar_preferencia_tabela`, `fn_limpar_preferencia_tabela`). Sem migration: a tabela já é "uma preferência de tela por pessoa", com RLS no próprio usuário e teto de tamanho. O layout do app lê todas as `painel.*` da pessoa no servidor e entrega ao `ProvedorGrades`, para a grade nascer arrumada em vez de pular depois de montar. Gravação com espera de 600 ms (arrasto gera dezenas de mudanças); falha só vai pro log, porque é conforto e não trabalho.
 4. Saneamento na leitura (`layout-grade.ts`): card que sumiu da tela é ignorado, card novo nasce visível logo depois do vizinho que tem na ordem padrão (não no fim), tamanhos travados em 2 a 12 colunas e 80 a 1200 px.
-5. O botão "Personalizar cards" é flutuante no canto de baixo e só aparece em tela que tem grade personalizável: o desktop não tem barra de topo, e várias grades moram em telas sem `PageHeader` (Combustível, Frete). O modo de edição vale para a tela em que foi ligado, sai com Esc ou "Concluir", e deixa o conteúdo dos cards `inert` (link de card não navega enquanto se arruma).
+5. O botão "Personalizar tela" (era "Personalizar cards" até a entrada seguinte) é flutuante no canto de baixo e só aparece em tela que tem grade personalizável: o desktop não tem barra de topo, e várias grades moram em telas sem `PageHeader` (Combustível, Frete). O modo de edição vale para a tela em que foi ligado, sai com Esc ou "Concluir", e deixa o conteúdo dos cards `inert` (link de card não navega enquanto se arruma).
 6. Gráfico cresce com o card pelo canônico `AreaGrafico`: o ResponsiveContainer mora numa caixa `absolute inset-0` dentro de uma área `flex-1` com a altura antiga como mínimo, porque porcentagem de pai com altura automática resolve para zero e o gráfico some.
 
 **Fora:** grades dentro de drawer, diálogo, assistente de importação e documento impresso continuam fixas.
+
+## 2026-10-01 - Filtros personalizáveis por usuário
+
+**Pedido do Tiago (01/10/2026):** a mesma coisa dos cards com os filtros de cada tela.
+
+**Decisão:**
+1. Esconder e mostrar filtro já existia (menu "Filtros" do DataTable e da `BarraFiltrosConfiguravel`). Entram mudar a ordem e a largura, no mesmo modo de edição dos cards: o botão flutuante virou "Personalizar tela" e arruma cards e filtros de uma vez. Na edição cada filtro fica `inert`, ganha alça de arrasto, o olho de tirar da barra (só onde existe menu "Filtros" para trazer de volta) e a borda direita muda a largura, de 96 a 640 px. "Restaurar filtros" volta ordem, largura e visibilidade ao padrão da tela.
+2. Guardado na MESMA preferência da tabela, campos novos `ordemFiltros` e `largurasFiltros`. Não sobe a versão: campo que só acrescenta, pela regra da `alturaLinha`. A busca do DataTable entra na ordem e na largura pelo id `__busca`.
+3. A largura chega ao filtro pelo `ContextoLarguraFiltro`, o mesmo caminho do rótulo: os filtros canônicos (`CampoFiltro`) respeitam sem nenhuma tela mudar. Filtro não canônico muda de lugar mas mantém a largura dele.
+4. Tela que monta o `BlocoFiltros` direto, sem host (painel do Frete, Carretas EMT, Tanques), usa `usePersonalizacaoFiltros`: ordem e largura, sem esconder, porque lá não existe menu para trazer de volta.

@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Coins, FilterX, Search, X } from "lucide-react";
+import {
+  CalendarDays,
+  Coins,
+  EyeOff,
+  FilterX,
+  GripVertical,
+  RotateCcw,
+  Search,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,9 +39,13 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import {
   escreverPreferenciasTabela,
+  LARGURA_FILTRO_MAXIMA,
+  LARGURA_FILTRO_MINIMA,
   lerPreferenciasTabela,
   preferenciasVazias,
 } from "@/components/canonicos/preferencias-tabela";
+import { moverNaOrdem, ordemDaGrade } from "@/components/canonicos/layout-grade";
+import { useGrades } from "@/components/canonicos/provedor-grades";
 import {
   buscarPreferenciaTabela,
   limparPreferenciaTabela,
@@ -72,6 +85,13 @@ export const TRILHO_FILTRO_DUPLO = "w-[26.5rem]";
  * Label próprio) simplesmente não lê o contexto e continua como estava.
  */
 const ContextoRotuloFiltro = React.createContext<string | null>(null);
+
+/**
+ * Largura que a pessoa escolheu para o filtro, em px, pelo mesmo caminho do
+ * rótulo: o host recebe o filtro já montado e não tem como mudar a prop dele.
+ * `null` = o trilho padrão do filtro.
+ */
+const ContextoLarguraFiltro = React.createContext<number | null>(null);
 
 interface FilterBarProps {
   children: React.ReactNode;
@@ -115,8 +135,15 @@ function CampoFiltro({
   children: React.ReactNode;
 }) {
   const rotulo = React.useContext(ContextoRotuloFiltro);
+  const larguraEscolhida = React.useContext(ContextoLarguraFiltro);
   return (
-    <div className={cn("flex max-w-full min-w-0 flex-col gap-1", largura)}>
+    <div
+      className={cn(
+        "flex max-w-full min-w-0 flex-col gap-1",
+        larguraEscolhida === null && largura,
+      )}
+      style={larguraEscolhida === null ? undefined : { width: larguraEscolhida }}
+    >
       {rotulo === null ? null : (
         <span className="truncate text-legenda leading-none tracking-wide text-muted-foreground uppercase">
           {rotulo}
@@ -164,6 +191,27 @@ export interface CampoDaBarra {
   /** Vira o rótulo em cima do controle, via `ContextoRotuloFiltro`. */
   rotulo: string;
   elemento: React.ReactNode;
+  /** Não pode sair da barra (a busca principal). Só importa na personalização. */
+  fixo?: boolean;
+}
+
+/**
+ * Ordem e larguras que a pessoa escolheu para os filtros, e como mudar. Quem
+ * guarda é o host (DataTable ou BarraFiltrosConfiguravel), na mesma preferência
+ * que já tinha os filtros visíveis.
+ */
+export interface PersonalizacaoFiltros {
+  ordem: string[];
+  larguras: Record<string, number>;
+  onOrdem: (ordem: string[]) => void;
+  onLargura: (id: string, px: number | null) => void;
+  /**
+   * Tira o filtro da barra (o host limpa o valor, como no menu "Filtros").
+   * Ausente = a barra não tem menu "Filtros" para trazer de volta, e o olho some.
+   */
+  onOcultar?: (id: string) => void;
+  onRestaurar: () => void;
+  foraDoPadrao: boolean;
 }
 
 /**
@@ -187,8 +235,14 @@ export function BlocoFiltros({
   campos,
   acoesEsquerda,
   acoesDireita,
+  personalizacao,
 }: {
   campos: CampoDaBarra[];
+  /**
+   * Liga mudar a ordem, a largura e tirar filtro da barra no modo "Personalizar
+   * tela". Sem ela a barra é a de sempre.
+   */
+  personalizacao?: PersonalizacaoFiltros;
   /** Ações sobre o filtro (limpar) e da tela (importar). `undefined` = nenhuma. */
   acoesEsquerda?: React.ReactNode;
   /** Menus de vista da tabela e exportação. `undefined` = nenhuma. */
@@ -201,13 +255,17 @@ export function BlocoFiltros({
         // `items-end` para o controle de todo filtro cair na mesma linha de base
         // mesmo quando o vizinho não tem rótulo em cima (filtro não canônico, que
         // não lê o contexto).
-        <div className="flex flex-wrap items-end gap-2">
-          {campos.map((campo) => (
-            <ContextoRotuloFiltro.Provider key={campo.id} value={campo.rotulo}>
-              {campo.elemento}
-            </ContextoRotuloFiltro.Provider>
-          ))}
-        </div>
+        personalizacao ? (
+          <CamposPersonalizaveis campos={campos} personalizacao={personalizacao} />
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            {campos.map((campo) => (
+              <ContextoRotuloFiltro.Provider key={campo.id} value={campo.rotulo}>
+                {campo.elemento}
+              </ContextoRotuloFiltro.Provider>
+            ))}
+          </div>
+        )
       ) : null}
       {temAcoes ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -219,6 +277,284 @@ export function BlocoFiltros({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Os filtros da barra na ordem e na largura da pessoa, e o modo de edição deles.
+ * Entra no mesmo "Personalizar tela" dos cards (ProvedorGrades): um botão só
+ * arruma a tela inteira.
+ *
+ * No modo de edição o controle de cada filtro fica `inert` (o clique arrasta,
+ * não abre o seletor), ganha alça de arrasto e o olho de tirar da barra, e a
+ * borda direita muda a largura. O que sai da barra volta pelo menu "Filtros".
+ */
+function CamposPersonalizaveis({
+  campos,
+  personalizacao,
+}: {
+  campos: CampoDaBarra[];
+  personalizacao: PersonalizacaoFiltros;
+}) {
+  const contexto = useGrades();
+  const editando = contexto?.editando ?? false;
+  const registrar = contexto?.registrar;
+  React.useEffect(() => registrar?.(), [registrar]);
+
+  const [ordemArrasto, setOrdemArrasto] = React.useState<string[] | null>(null);
+  const [arrastando, setArrastando] = React.useState<string | null>(null);
+  const [previa, setPrevia] = React.useState<{ id: string; px: number } | null>(null);
+
+  const idsDaTela = campos.map((campo) => campo.id);
+  const ordem = ordemArrasto ?? ordemDaGrade(idsDaTela, personalizacao.ordem);
+  const porId = new Map(campos.map((campo) => [campo.id, campo]));
+
+  function iniciarLargura(evento: React.PointerEvent<HTMLElement>, id: string) {
+    const item = evento.currentTarget.parentElement;
+    if (!item) return;
+    evento.preventDefault();
+    const alca = evento.currentTarget;
+    alca.setPointerCapture(evento.pointerId);
+    const inicioX = evento.clientX;
+    const inicial = item.getBoundingClientRect().width;
+    let ultimo: number | null = null;
+
+    function aoMover(e: PointerEvent) {
+      const px = Math.round((inicial + e.clientX - inicioX) / 8) * 8;
+      ultimo = Math.min(LARGURA_FILTRO_MAXIMA, Math.max(LARGURA_FILTRO_MINIMA, px));
+      setPrevia({ id, px: ultimo });
+    }
+    function aoSoltar() {
+      alca.removeEventListener("pointermove", aoMover);
+      alca.removeEventListener("pointerup", aoSoltar);
+      alca.removeEventListener("pointercancel", aoSoltar);
+      alca.removeEventListener("lostpointercapture", aoSoltar);
+      setPrevia(null);
+      if (ultimo !== null) personalizacao.onLargura(id, ultimo);
+    }
+    alca.addEventListener("pointermove", aoMover);
+    alca.addEventListener("pointerup", aoSoltar);
+    alca.addEventListener("pointercancel", aoSoltar);
+    alca.addEventListener("lostpointercapture", aoSoltar);
+  }
+
+  function aoPassarPorCima(evento: React.DragEvent<HTMLElement>, alvo: string) {
+    if (!arrastando) return;
+    evento.preventDefault();
+    if (alvo === arrastando) return;
+    const caixa = evento.currentTarget.getBoundingClientRect();
+    const depois = evento.clientX > caixa.left + caixa.width / 2;
+    setOrdemArrasto((atual) => {
+      const base = atual ?? ordem;
+      const nova = moverNaOrdem(base, arrastando, alvo, depois);
+      return nova.join() === base.join() ? atual : nova;
+    });
+  }
+
+  function terminarArrasto(gravar: boolean) {
+    if (gravar && ordemArrasto) {
+      // Filtro que está fora da barra agora (escondido no menu) guarda o lugar
+      // que tinha: entra de volta logo depois do mesmo vizinho.
+      const base = [
+        ...personalizacao.ordem,
+        ...idsDaTela.filter((id) => !personalizacao.ordem.includes(id)),
+      ];
+      personalizacao.onOrdem(ordemDaGrade(base, ordemArrasto));
+    }
+    setArrastando(null);
+    setOrdemArrasto(null);
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {editando ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-border bg-surface px-3 py-2 print:hidden">
+          <p className="text-legenda text-muted-foreground">
+            <span className="font-medium text-foreground">Filtros: </span>
+            arraste pelo <GripVertical className="inline size-3.5 align-text-bottom" aria-hidden /> para
+            mudar a ordem e puxe a borda direita para mudar a largura.
+            {personalizacao.onOcultar ? " O que sair da barra volta pelo menu Filtros." : null}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={!personalizacao.foraDoPadrao}
+            onClick={personalizacao.onRestaurar}
+          >
+            <RotateCcw />
+            Restaurar filtros
+          </Button>
+        </div>
+      ) : null}
+      <div
+        className={cn("flex flex-wrap items-end gap-2", editando && "gap-y-6 pt-3")}
+        onDragOver={arrastando ? (e) => e.preventDefault() : undefined}
+        onDrop={(e) => {
+          if (!arrastando) return;
+          e.preventDefault();
+          terminarArrasto(true);
+        }}
+      >
+        {ordem.map((id) => {
+          const campo = porId.get(id);
+          if (!campo) return null;
+          const largura =
+            (editando && previa?.id === id ? previa.px : undefined) ??
+            personalizacao.larguras[id] ??
+            null;
+          return (
+            <div
+              key={id}
+              data-filtro-barra={id}
+              className={cn(
+                "relative max-w-full min-w-0",
+                editando && "rounded-md outline-1 outline-offset-4 outline-muted-foreground/50 outline-dashed",
+                arrastando === id && "opacity-50",
+              )}
+              onDragOver={editando ? (e) => aoPassarPorCima(e, id) : undefined}
+            >
+              <div inert={editando} className={cn(editando && "select-none")}>
+                <ContextoRotuloFiltro.Provider value={campo.rotulo}>
+                  <ContextoLarguraFiltro.Provider value={largura}>
+                    {campo.elemento}
+                  </ContextoLarguraFiltro.Provider>
+                </ContextoRotuloFiltro.Provider>
+              </div>
+              {editando ? (
+                <>
+                  <div className="absolute -top-5 right-0 z-10 flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm print:hidden">
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      draggable
+                      title={`Arrastar ${campo.rotulo}`}
+                      aria-label={`Arrastar o filtro ${campo.rotulo}`}
+                      className="flex size-5 cursor-grab items-center justify-center rounded-sm text-muted-foreground hover:bg-surface hover:text-foreground active:cursor-grabbing"
+                      onDragStart={(e) => {
+                        const item = e.currentTarget.closest<HTMLElement>("[data-filtro-barra]");
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", id);
+                        if (item) {
+                          const caixa = item.getBoundingClientRect();
+                          e.dataTransfer.setDragImage(item, e.clientX - caixa.left, e.clientY - caixa.top);
+                        }
+                        setArrastando(id);
+                        setOrdemArrasto(ordem);
+                      }}
+                      onDragEnd={() => terminarArrasto(false)}
+                    >
+                      <GripVertical className="size-3.5" />
+                    </span>
+                    {campo.fixo || !personalizacao.onOcultar ? null : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-5"
+                        aria-label={`Tirar o filtro ${campo.rotulo} da barra`}
+                        title="Tirar da barra"
+                        onClick={() => personalizacao.onOcultar?.(id)}
+                      >
+                        <EyeOff className="size-3.5" />
+                      </Button>
+                    )}
+                    {personalizacao.larguras[id] !== undefined ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-5"
+                        aria-label={`Voltar ${campo.rotulo} à largura padrão`}
+                        title="Largura padrão"
+                        onClick={() => personalizacao.onLargura(id, null)}
+                      >
+                        <RotateCcw className="size-3.5" />
+                      </Button>
+                    ) : null}
+                  </div>
+                  <span
+                    aria-hidden
+                    className="absolute top-0 -right-2.5 bottom-0 w-2 cursor-ew-resize rounded-sm bg-muted-foreground/30 hover:bg-ring/60"
+                    onPointerDown={(e) => iniciarLargura(e, id)}
+                  />
+                </>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ordem e largura dos filtros salvas por usuário, para a tela que monta o
+ * `BlocoFiltros` direto, sem DataTable nem BarraFiltrosConfiguravel (painéis com
+ * ações próprias na barra). Não esconde filtro: essas barras não têm menu
+ * "Filtros" para trazer de volta. Mesma tabela e mesmo formato das outras.
+ */
+export function usePersonalizacaoFiltros(
+  idTabela: string,
+  idsFiltros: string[],
+): PersonalizacaoFiltros {
+  const [ordem, setOrdem] = React.useState<string[]>([]);
+  const [larguras, setLarguras] = React.useState<Record<string, number>>({});
+  const refIds = React.useRef(idsFiltros);
+  const refFila = React.useRef<Promise<void>>(Promise.resolve());
+
+  React.useEffect(() => {
+    let ativo = true;
+    void buscarPreferenciaTabela(idTabela).then((bruto) => {
+      if (!ativo) return;
+      const salvo = lerPreferenciasTabela(bruto, [], refIds.current);
+      if (!salvo) return;
+      setOrdem(salvo.ordemFiltros);
+      setLarguras(salvo.largurasFiltros);
+    });
+    return () => {
+      ativo = false;
+    };
+  }, [idTabela]);
+
+  function gravar(proximaOrdem: string[], proximas: Record<string, number>) {
+    // Em fila: o delete do "restaurar" não pode chegar antes do save anterior.
+    refFila.current = refFila.current
+      .then(() =>
+        proximaOrdem.length === 0 && Object.keys(proximas).length === 0
+          ? limparPreferenciaTabela(idTabela)
+          : salvarPreferenciaTabela(
+              idTabela,
+              escreverPreferenciasTabela({
+                ...preferenciasVazias(),
+                ordemFiltros: proximaOrdem,
+                largurasFiltros: proximas,
+              }),
+            ),
+      )
+      .catch(() => undefined);
+  }
+
+  return {
+    ordem,
+    larguras,
+    onOrdem: (proxima) => {
+      setOrdem(proxima);
+      gravar(proxima, larguras);
+    },
+    onLargura: (id, px) => {
+      const proximas = { ...larguras };
+      if (px === null) delete proximas[id];
+      else proximas[id] = px;
+      setLarguras(proximas);
+      gravar(ordem, proximas);
+    },
+    onRestaurar: () => {
+      setOrdem([]);
+      setLarguras({});
+      gravar([], {});
+    },
+    foraDoPadrao: ordem.length > 0 || Object.keys(larguras).length > 0,
+  };
 }
 
 export interface OpcaoFiltro {
@@ -1071,6 +1407,8 @@ export function BarraFiltrosConfiguravel({
   onLimparFiltros,
 }: BarraFiltrosConfiguravelProps) {
   const [escolha, setEscolha] = React.useState<Record<string, boolean>>({});
+  const [ordemFiltros, setOrdemFiltros] = React.useState<string[]>([]);
+  const [largurasFiltros, setLargurasFiltros] = React.useState<Record<string, number>>({});
 
   const idsFiltros = React.useMemo(
     () => filtros.map((filtro) => filtro.id),
@@ -1121,6 +1459,8 @@ export function BarraFiltrosConfiguravel({
       const salvo = lerPreferenciasTabela(bruto, [], idsFiltros);
       if (!salvo) return;
       setEscolha(salvo.filtros);
+      setOrdemFiltros(salvo.ordemFiltros);
+      setLargurasFiltros(salvo.largurasFiltros);
     });
     return () => {
       ativo = false;
@@ -1152,28 +1492,67 @@ export function BarraFiltrosConfiguravel({
     const proximos = { ...escolha, [id]: !visivelAgora };
     setEscolha(proximos);
     if (visivelAgora && filtro.temValor) filtro.onLimpar?.();
+    gravar(proximos, ordemFiltros, largurasFiltros);
+  }
 
-    // Volta ao padrão da tela quando nada mais diverge: não deixa lixo salvo.
-    const divergentes = Object.entries(proximos).filter(
+  /**
+   * Grava a escolha inteira da barra. Volta ao padrão (apaga a linha) quando
+   * nada mais diverge da tela: não deixa lixo salvo.
+   */
+  function gravar(
+    visiveis: Record<string, boolean>,
+    ordem: string[],
+    larguras: Record<string, number>,
+  ) {
+    const divergentes = Object.entries(visiveis).filter(
       ([chave, valor]) => valor !== (ocultosPorPadrao[chave] ?? true),
     );
-    if (divergentes.length === 0) {
+    if (divergentes.length === 0 && ordem.length === 0 && Object.keys(larguras).length === 0) {
       enfileirar(() => limparPreferenciaTabela(idTabela));
       return;
     }
-    // Parte da preferência neutra do canônico e só troca os filtros: a barra não
-    // tem coluna nem linha para guardar, e campo novo do formato (altura de
-    // linha, por exemplo) entra aqui pelo padrão, sem esta tela precisar saber.
+    // Parte da preferência neutra do canônico e só troca o que é da barra: ela
+    // não tem coluna nem linha para guardar, e campo novo do formato entra aqui
+    // pelo padrão, sem esta tela precisar saber.
     enfileirar(() =>
       salvarPreferenciaTabela(
         idTabela,
         escreverPreferenciasTabela({
           ...preferenciasVazias(),
-          filtros: proximos,
+          filtros: visiveis,
+          ordemFiltros: ordem,
+          largurasFiltros: larguras,
         }),
       ),
     );
   }
+
+  const personalizacao: PersonalizacaoFiltros = {
+    ordem: ordemFiltros,
+    larguras: largurasFiltros,
+    onOrdem: (proxima) => {
+      setOrdemFiltros(proxima);
+      gravar(escolha, proxima, largurasFiltros);
+    },
+    onLargura: (id, px) => {
+      const proximas = { ...largurasFiltros };
+      if (px === null) delete proximas[id];
+      else proximas[id] = px;
+      setLargurasFiltros(proximas);
+      gravar(escolha, ordemFiltros, proximas);
+    },
+    onOcultar: alternar,
+    onRestaurar: () => {
+      setEscolha({});
+      setOrdemFiltros([]);
+      setLargurasFiltros({});
+      gravar({}, [], {});
+    },
+    foraDoPadrao:
+      ordemFiltros.length > 0 ||
+      Object.keys(largurasFiltros).length > 0 ||
+      Object.keys(escolha).length > 0,
+  };
 
   const temFiltroAtivo = filtros.some((filtro) => filtro.temValor === true);
 
@@ -1186,7 +1565,9 @@ export function BarraFiltrosConfiguravel({
             id: filtro.id,
             rotulo: filtro.rotulo,
             elemento: filtro.elemento,
+            fixo: filtro.fixo,
           }))}
+        personalizacao={personalizacao}
         acoesEsquerda={
           /* Mesmo botão do DataTable, mesma regra: só com filtro ativo. Esta
              barra é o outro lugar do app onde filtro vive, então ele tem que

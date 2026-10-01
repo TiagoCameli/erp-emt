@@ -12,6 +12,7 @@ import {
   KPICard,
   MoneyText,
   SecaoDetalhe,
+  usePersonalizacaoFiltros,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -160,9 +161,13 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
   const temFiltroTopo = obraId !== "" || de !== "" || ate !== "";
   const { fretes: af, materiais: am } = calc;
 
+  // Ordem e largura dos filtros por usuário, no "Personalizar tela".
+  const personalizacaoFiltros = usePersonalizacaoFiltros("frete.painel.filtros", ["obra", "periodo", "comparar", "comparar-periodo"]);
+
   return (
     <div className="flex flex-col gap-6">
       <BlocoFiltros
+        personalizacao={personalizacaoFiltros}
         campos={[
           {
             id: "obra",

@@ -69,6 +69,18 @@ export const PESOS_CABECALHO = [400, 500, 600, 700] as const;
 
 export type PesoCabecalho = (typeof PESOS_CABECALHO)[number];
 
+/** Largura mínima de um filtro redimensionado, em px. Menos que isso o valor some. */
+export const LARGURA_FILTRO_MINIMA = 96;
+
+/** Largura máxima de um filtro, em px. */
+export const LARGURA_FILTRO_MAXIMA = 640;
+
+/**
+ * Id da busca textual do DataTable na barra de filtros. Ela não está no menu
+ * "Filtros" (não dá para esconder), mas muda de lugar e de largura como os outros.
+ */
+export const ID_BUSCA_TABELA = "__busca";
+
 export interface PreferenciasTabela {
   versao: number;
   /** id da coluna -> visível. Coluna ausente segue o padrão definido na tela. */
@@ -94,6 +106,13 @@ export interface PreferenciasTabela {
    * Peso da fonte do rótulo do cabeçalho. `null` = o padrão do design (500).
    */
   pesoCabecalho: number | null;
+  /**
+   * Ordem dos filtros na barra. Vazio = a ordem da tela. Entrou depois do v2 e
+   * não sobe a versão, pela mesma regra da altura: campo novo que só acrescenta.
+   */
+  ordemFiltros: string[];
+  /** id do filtro -> largura em px. Ausente = a largura do trilho do filtro. */
+  largurasFiltros: Record<string, number>;
 }
 
 /** Preferência neutra: nada escondido, nada reordenado, nada redimensionado. */
@@ -107,6 +126,8 @@ export function preferenciasVazias(): PreferenciasTabela {
     alturaLinha: null,
     alturaCabecalho: null,
     pesoCabecalho: null,
+    ordemFiltros: [],
+    largurasFiltros: {},
   };
 }
 
@@ -155,13 +176,15 @@ function saneiaOrdem(bruto: unknown, idsValidos: Set<string>): string[] {
 function saneiaLarguras(
   bruto: unknown,
   idsValidos: Set<string>,
+  minima = LARGURA_MINIMA,
+  maxima = LARGURA_MAXIMA,
 ): Record<string, number> {
   if (!ehObjeto(bruto)) return {};
   const limpo: Record<string, number> = {};
   for (const [id, valor] of Object.entries(bruto)) {
     if (!idsValidos.has(id)) continue;
     if (typeof valor !== "number" || !Number.isFinite(valor)) continue;
-    limpo[id] = Math.min(LARGURA_MAXIMA, Math.max(LARGURA_MINIMA, Math.round(valor)));
+    limpo[id] = Math.min(maxima, Math.max(minima, Math.round(valor)));
   }
   return limpo;
 }
@@ -222,6 +245,7 @@ export function lerPreferenciasTabela(
   if (dados.versao !== VERSAO_PREFERENCIAS) return null;
 
   const validos = new Set(idsValidos);
+  const filtrosNaBarra = new Set([...idsFiltros, ID_BUSCA_TABELA]);
   return {
     versao: VERSAO_PREFERENCIAS,
     visiveis: saneiaVisiveis(dados.visiveis, validos),
@@ -233,6 +257,13 @@ export function lerPreferenciasTabela(
     alturaLinha: saneiaAlturaLinha(dados.alturaLinha),
     alturaCabecalho: saneiaAlturaCabecalho(dados.alturaCabecalho),
     pesoCabecalho: saneiaPesoCabecalho(dados.pesoCabecalho),
+    ordemFiltros: saneiaOrdem(dados.ordemFiltros, filtrosNaBarra),
+    largurasFiltros: saneiaLarguras(
+      dados.largurasFiltros,
+      filtrosNaBarra,
+      LARGURA_FILTRO_MINIMA,
+      LARGURA_FILTRO_MAXIMA,
+    ),
   };
 }
 

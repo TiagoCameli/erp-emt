@@ -88,7 +88,7 @@ describe("GradeKpis com id", () => {
           <GradeKpis id="teste.grade">{cartoes()}</GradeKpis>
         </ProvedorGrades>,
       );
-      fireEvent.click(screen.getByRole("button", { name: /Personalizar cards/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Personalizar tela/ }));
       fireEvent.click(screen.getByRole("button", { name: "Tirar Vencido da tela" }));
       expect(screen.queryByText("Vencido")).toBeNull();
 
@@ -120,7 +120,7 @@ describe("GradeKpis com id", () => {
         </GradeKpis>
       </ProvedorGrades>,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Personalizar cards/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Personalizar tela/ }));
     const link = document.querySelector('a[href="/financeiro/pagamentos"]');
     expect(link?.closest("[inert]")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Concluir/ }));
@@ -139,7 +139,7 @@ describe("GradeKpis com id", () => {
         </GradeKpis>
       </ProvedorGrades>,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Personalizar cards/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Personalizar tela/ }));
     expect(screen.getByRole("button", { name: "Tirar Bloco da tela" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Tirar Interno da tela" })).toBeNull();
   });

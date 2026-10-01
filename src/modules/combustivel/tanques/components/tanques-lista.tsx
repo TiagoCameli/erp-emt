@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Eraser, Fuel } from "lucide-react";
 
-import { BlocoFiltros, ConfirmDialog, EmptyState, FiltroBusca, FiltroSelect, StatusBadge } from "@/components/canonicos";
+import { BlocoFiltros, ConfirmDialog, EmptyState, FiltroBusca, FiltroSelect, StatusBadge, usePersonalizacaoFiltros } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { Button } from "@/components/ui/button";
@@ -132,6 +132,9 @@ export function TanquesLista({
     );
   }
 
+  // Ordem e largura dos filtros por usuário, no "Personalizar tela".
+  const personalizacaoFiltros = usePersonalizacaoFiltros("combustivel.tanques.filtros", ["busca", "status"]);
+
   return (
     <>
       <TituloAba
@@ -142,6 +145,7 @@ export function TanquesLista({
 
       <div className="mb-4">
         <BlocoFiltros
+          personalizacao={personalizacaoFiltros}
           campos={[
             {
               id: "busca",

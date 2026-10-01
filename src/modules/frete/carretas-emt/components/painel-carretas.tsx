@@ -13,6 +13,7 @@ import {
   KPICard,
   MoneyText,
   useFiltrosUrl,
+  usePersonalizacaoFiltros,
 } from "@/components/canonicos";
 import { CartaoGrafico } from "@/modules/combustivel/painel/components/cartao-grafico";
 import { Button } from "@/components/ui/button";
@@ -375,9 +376,13 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
     }
   }
 
+  // Ordem e largura dos filtros por usuário, no "Personalizar tela".
+  const personalizacaoFiltros = usePersonalizacaoFiltros("frete.carretas-emt.filtros", ["periodo", "carreta", "tipo"]);
+
   return (
     <div className="space-y-6">
       <BlocoFiltros
+        personalizacao={personalizacaoFiltros}
         campos={[
           {
             id: "periodo",
