@@ -139,6 +139,17 @@ describe("AprovarDrawer", () => {
     );
   });
 
+  it("aprovada acima da medida aparece no aviso", async () => {
+    renderizar();
+    fireEvent.change(campo("01.01"), { target: { value: "30" } });
+    fireEvent.change(campo("01.02"), { target: { value: "2,5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Revisar e aprovar" }));
+    const dialogo = await screen.findByRole("dialog", { name: "Confirmar a aprovação da REV01" });
+    const acima = within(dialogo).getByRole("list", { name: "Itens com aprovada acima da medida" });
+    expect(within(acima).getByText(/01\.01 · CBUQ: aprovada 30 t, 1 t acima da medida/)).toBeTruthy();
+    expect(within(dialogo).queryByRole("list", { name: "Itens que vão com aprovada 0" })).toBeNull();
+  });
+
   it("valor inválido fica no campo e não abre a confirmação", async () => {
     renderizar();
     fireEvent.change(campo("01.01"), { target: { value: "abc" } });

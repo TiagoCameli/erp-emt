@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchema } from "@/lib/id";
 import { normalizarNumeroDigitado } from "@/lib/numero-digitado";
-import { lerDecimal, paraTexto, subtrair } from "@/modules/medicao/_shared/decimal";
+import { comparar, lerDecimal, paraTexto, subtrair } from "@/modules/medicao/_shared/decimal";
 import { ehNumeroAmbiguo } from "@/modules/medicao/_shared/numero-ambiguo";
 
 import type { ItemMedicaoDetalhe } from "./tipos";
@@ -113,11 +113,13 @@ export interface ResumoAprovacao {
   zerados: LinhaAprovacao[];
   /** Itens com glosa diferente de zero (medida menos aprovada). */
   glosas: { linha: LinhaAprovacao; glosa: string }[];
+  /** Itens com aprovada acima da medida (glosa negativa), com a quantidade a mais. */
+  acima: { linha: LinhaAprovacao; aprovada: string; excesso: string }[];
 }
 
 /** O que a confirmação mostra antes de aprovar: zerados, glosa por item e erros de campo. */
 export function resumirAprovacao(linhas: LinhaAprovacao[], valores: Record<string, string>): ResumoAprovacao {
-  const resumo: ResumoAprovacao = { itens: [], erros: {}, zerados: [], glosas: [] };
+  const resumo: ResumoAprovacao = { itens: [], erros: {}, zerados: [], glosas: [], acima: [] };
   for (const linha of linhas) {
     const r = quantidadeAprovadaParaBanco(valores[linha.itemId] ?? "");
     if ("erro" in r) {
@@ -126,8 +128,11 @@ export function resumirAprovacao(linhas: LinhaAprovacao[], valores: Record<strin
     }
     resumo.itens.push({ itemId: linha.itemId, quantidade: r.valor });
     if (r.valor === "0") resumo.zerados.push(linha);
-    const glosa = paraTexto(subtrair(lerDecimal(linha.medida), lerDecimal(r.valor)));
+    const medida = lerDecimal(linha.medida);
+    const aprovada = lerDecimal(r.valor);
+    const glosa = paraTexto(subtrair(medida, aprovada));
     if (glosa !== "0") resumo.glosas.push({ linha, glosa });
+    if (comparar(aprovada, medida) > 0) resumo.acima.push({ linha, aprovada: r.valor, excesso: paraTexto(subtrair(aprovada, medida)) });
   }
   return resumo;
 }
@@ -146,10 +151,13 @@ export function compararRevisoes(congelados: ItemCongelado[], deId: string, para
   const para = new Map<string, string>();
   const ids: string[] = [];
   for (const c of congelados) {
-    const alvo = c.revisaoId === deId ? de : c.revisaoId === paraId ? para : null;
-    if (!alvo) continue;
+    // Não é "else": com a mesma revisão nos dois lados, a quantidade vai para os dois (diferença 0).
+    const emDe = c.revisaoId === deId;
+    const emPara = c.revisaoId === paraId;
+    if (!emDe && !emPara) continue;
     if (!de.has(c.itemId) && !para.has(c.itemId)) ids.push(c.itemId);
-    alvo.set(c.itemId, c.quantidade);
+    if (emDe) de.set(c.itemId, c.quantidade);
+    if (emPara) para.set(c.itemId, c.quantidade);
   }
   return ordenarIds(ids, rotulos).map((id) => {
     const a = lerDecimal(de.get(id) ?? "0");

@@ -104,6 +104,12 @@ describe("resumirAprovacao", () => {
     expect(r.glosas).toEqual([]);
   });
 
+  it("aprovada acima da medida aparece separada, com a quantidade a mais", () => {
+    const r = resumirAprovacao(linhas, { i1: "30", i2: "2,5" });
+    expect(r.acima).toEqual([{ linha: linhas[0], aprovada: "30", excesso: "1" }]);
+    expect(resumirAprovacao(linhas, { i1: "29", i2: "1" }).acima).toEqual([]);
+  });
+
   it("valor inválido vira erro do campo", () => {
     const r = resumirAprovacao(linhas, { i1: "1.234", i2: "-1" });
     expect(Object.keys(r.erros)).toEqual(["i1", "i2"]);
@@ -117,6 +123,10 @@ describe("compararRevisoes", () => {
       { ...ROTULOS[1], de: "0", para: "2.5", diferenca: "2.5" },
       { itemId: "i9", codigo: null, descricao: null, unidade: null, de: "0", para: "1", diferenca: "1" },
     ]);
+  });
+
+  it("a mesma revisão nos dois lados: quantidade igual dos dois lados, diferença 0", () => {
+    expect(compararRevisoes(CONGELADOS, "r1", "r1", ROTULOS)[0]).toMatchObject({ de: "29", para: "29", diferenca: "0" });
   });
 
   it("ao contrário, a diferença fica negativa", () => {

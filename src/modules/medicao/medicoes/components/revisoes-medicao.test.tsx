@@ -76,6 +76,35 @@ describe("RevisoesMedicao", () => {
     expect(within(cbuq).getByText("+2")).toBeTruthy();
   });
 
+  it("a revisão escolhida num lado não aparece como opção do outro", () => {
+    render(<RevisoesMedicao revisoes={[REV0, REV1, REV2]} congelados={CONGELADOS} rotulos={ROTULOS} />);
+    fireEvent.click(screen.getByRole("combobox", { name: "Comparar" }));
+    expect(screen.queryByRole("option", { name: /REV02/ })).toBeNull();
+    expect(screen.getByRole("option", { name: /REV00/ })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /REV01/ })).toBeTruthy();
+  });
+
+  it("depois do refresh com uma revisão nova enviada, passa a comparar as duas últimas", () => {
+    const { rerender } = render(<RevisoesMedicao revisoes={[REV0, REV1, { ...REV2, status: "em_aberto" }]} congelados={CONGELADOS.slice(0, 3)} rotulos={ROTULOS} />);
+    expect(within(screen.getByTestId("revisoes-comparacao")).getByRole("columnheader", { name: "REV00" })).toBeTruthy();
+    rerender(<RevisoesMedicao revisoes={[REV0, REV1, REV2]} congelados={CONGELADOS} rotulos={ROTULOS} />);
+    const comparacao = screen.getByTestId("revisoes-comparacao");
+    expect(within(comparacao).getByRole("columnheader", { name: "REV01" })).toBeTruthy();
+    expect(within(comparacao).getByRole("columnheader", { name: "REV02" })).toBeTruthy();
+  });
+
+  it("medição de carga (aprovada sem quantidade congelada): explica que não há o que comparar", () => {
+    render(
+      <RevisoesMedicao
+        revisoes={[{ ...REV0, status: "aprovada" }, { ...REV1, status: "substituida" }]}
+        congelados={[]}
+        rotulos={ROTULOS}
+      />,
+    );
+    expect(screen.getByText("Medição carregada da planilha: sem quantidades congeladas para comparar")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Comparar" })).toBeNull();
+  });
+
   it("com menos de duas revisões enviadas, explica que não há o que comparar", () => {
     render(<RevisoesMedicao revisoes={[{ ...REV0, status: "enviada" }, REV3]} congelados={CONGELADOS} rotulos={ROTULOS} />);
     expect(screen.getByText("A comparação precisa de duas revisões enviadas")).toBeTruthy();

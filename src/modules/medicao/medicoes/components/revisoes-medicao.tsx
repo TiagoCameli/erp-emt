@@ -126,16 +126,37 @@ export interface RevisoesMedicaoProps {
 /**
  * Revisões da medição (Fase 5, Task 4): a lista REV00..REVnn com fase, status e motivo, e a
  * comparação item a item de duas revisões escolhidas (quantidade congelada de cada uma e a
- * diferença, a segunda menos a primeira). Só entra na comparação revisão já enviada: a em aberto
- * ainda não tem quantidade congelada. Começa pelas duas últimas. Contas de quantidade, exatas e só
+ * diferença, a segunda menos a primeira). Só entra na comparação revisão com quantidade congelada
+ * (a em aberto ainda não tem; a de carga não tem). Começa pelas duas últimas e volta para elas
+ * quando a lista muda. A revisão escolhida num lado não é opção do outro. Contas de quantidade, exatas e só
  * de exibição (D7).
  */
 export function RevisoesMedicao({ revisoes, congelados, rotulos }: RevisoesMedicaoProps) {
-  const comparaveis = React.useMemo(() => revisoes.filter((r) => r.status !== "em_aberto"), [revisoes]);
-  const [deId, setDeId] = React.useState(() => comparaveis[comparaveis.length - 2]?.id ?? "");
-  const [paraId, setParaId] = React.useState(() => comparaveis[comparaveis.length - 1]?.id ?? "");
+  // Comparável é a revisão com quantidade congelada: a em aberto ainda não tem, e a medição de carga
+  // (L09, L10) tem revisão aprovada sem nenhuma linha em `mc_revisao_itens`.
+  const comCongelado = React.useMemo(() => new Set(congelados.map((c) => c.revisaoId)), [congelados]);
+  const comparaveis = React.useMemo(() => revisoes.filter((r) => comCongelado.has(r.id)), [revisoes, comCongelado]);
+  const semCongeladoEnviada = revisoes.some((r) => r.status !== "em_aberto" && !comCongelado.has(r.id));
 
-  const opcoes = comparaveis.map((r) => ({ valor: r.id, rotulo: `${rotuloRevisao(r.numero)} · ${rotuloStatusRevisao(r.status)}` }));
+  const chave = comparaveis.map((r) => r.id).join(",");
+  const padrao = (): [string, string] => [comparaveis[comparaveis.length - 2]?.id ?? "", comparaveis[comparaveis.length - 1]?.id ?? ""];
+  const [selecao, setSelecao] = React.useState<{ chave: string; de: string; para: string }>(() => {
+    const [de, para] = padrao();
+    return { chave, de, para };
+  });
+  // A lista mudou (ex.: router.refresh() depois de enviar uma revisão): volta para as duas últimas.
+  // Ajuste no render, sem efeito, como no drawer de aprovação.
+  if (selecao.chave !== chave) {
+    const [de, para] = padrao();
+    setSelecao({ chave, de, para });
+  }
+  const deId = selecao.chave === chave ? selecao.de : padrao()[0];
+  const paraId = selecao.chave === chave ? selecao.para : padrao()[1];
+
+  const opcao = (r: RevisaoMedicao) => ({ valor: r.id, rotulo: `${rotuloRevisao(r.numero)} · ${rotuloStatusRevisao(r.status)}` });
+  // A revisão escolhida num lado sai das opções do outro: comparar uma revisão com ela mesma não diz nada.
+  const opcoesDe = comparaveis.filter((r) => r.id !== paraId).map(opcao);
+  const opcoesPara = comparaveis.filter((r) => r.id !== deId).map(opcao);
   const de = comparaveis.find((r) => r.id === deId) ?? null;
   const para = comparaveis.find((r) => r.id === paraId) ?? null;
 
@@ -157,20 +178,28 @@ export function RevisoesMedicao({ revisoes, congelados, rotulos }: RevisoesMedic
       <div data-testid="revisoes-comparacao" className="flex flex-col gap-3">
         <h3 className="text-detalhe font-medium">Comparar revisões</h3>
         {comparaveis.length < 2 ? (
-          <EmptyState
-            icone={GitCompareArrows}
-            titulo="A comparação precisa de duas revisões enviadas"
-            descricao="Cada envio congela a quantidade medida de cada item; com duas revisões enviadas, aparece aqui o que mudou de uma para a outra."
-          />
+          semCongeladoEnviada ? (
+            <EmptyState
+              icone={GitCompareArrows}
+              titulo="Medição carregada da planilha: sem quantidades congeladas para comparar"
+              descricao="A comparação usa a quantidade congelada no envio de cada revisão, e esta medição veio da carga sem esse registro."
+            />
+          ) : (
+            <EmptyState
+              icone={GitCompareArrows}
+              titulo="A comparação precisa de duas revisões enviadas"
+              descricao="Cada envio congela a quantidade medida de cada item; com duas revisões enviadas, aparece aqui o que mudou de uma para a outra."
+            />
+          )
         ) : (
           <>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="w-full sm:w-56">
-                <Combobox id="comparar-de" ariaLabel="Comparar" valor={deId} onValorChange={setDeId} opcoes={opcoes} placeholder="Revisão" />
+                <Combobox id="comparar-de" ariaLabel="Comparar" valor={deId} onValorChange={(v) => setSelecao({ chave, de: v, para: paraId })} opcoes={opcoesDe} placeholder="Revisão" />
               </div>
               <span className="text-detalhe text-muted-foreground">com</span>
               <div className="w-full sm:w-56">
-                <Combobox id="comparar-para" ariaLabel="Com" valor={paraId} onValorChange={setParaId} opcoes={opcoes} placeholder="Revisão" />
+                <Combobox id="comparar-para" ariaLabel="Com" valor={paraId} onValorChange={(v) => setSelecao({ chave, de: deId, para: v })} opcoes={opcoesPara} placeholder="Revisão" />
               </div>
             </div>
             <DataTable columns={colunas} data={linhas} idDaLinha={(l) => l.itemId} />

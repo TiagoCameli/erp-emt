@@ -195,6 +195,18 @@ export function AprovarDrawer({ aberto, onAbertoChange, medicaoId, revisaoRotulo
           </ul>
         </div>
       ) : null}
+      {resumo.acima.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium">Aprovada acima da medida (glosa negativa)</span>
+          <ul aria-label="Itens com aprovada acima da medida" className="list-disc pl-5">
+            {resumo.acima.map(({ linha, aprovada, excesso }) => (
+              <li key={linha.itemId}>
+                {`${nomeItem(linha)}: aprovada ${comUnidade(aprovada, linha.unidade)}, ${comUnidade(excesso, linha.unidade)} acima da medida`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {resumo.glosas.length > 0 ? (
         <div className="flex flex-col gap-1">
           <span className="font-medium">Glosa por item (quantidade)</span>
