@@ -6,7 +6,7 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
   limparPreferenciaTabela: vi.fn(() => Promise.resolve()),
 }));
 
-import { GradeKpis, ItemGrade, itensDaGrade, KPICard, ProvedorGrades } from "@/components/canonicos";
+import { BotaoPersonalizar, GradeKpis, ItemGrade, itensDaGrade, KPICard, ProvedorGrades } from "@/components/canonicos";
 import {
   limparPreferenciaTabela,
   salvarPreferenciaTabela,
@@ -72,6 +72,7 @@ describe("GradeKpis com id", () => {
           "painel.teste.grade": { versao: 1, ordem: ["vencido", "total"], ocultos: ["em-aberto"], tamanhos: {} },
         }}
       >
+        <BotaoPersonalizar />
         <GradeKpis id="teste.grade">{cartoes()}</GradeKpis>
       </ProvedorGrades>,
     );
@@ -85,6 +86,7 @@ describe("GradeKpis com id", () => {
     try {
       render(
         <ProvedorGrades inicial={{}}>
+        <BotaoPersonalizar />
           <GradeKpis id="teste.grade">{cartoes()}</GradeKpis>
         </ProvedorGrades>,
       );
@@ -115,6 +117,7 @@ describe("GradeKpis com id", () => {
   it("no modo de edição o conteúdo do card fica inerte (link não navega)", () => {
     render(
       <ProvedorGrades inicial={{}}>
+        <BotaoPersonalizar />
         <GradeKpis id="teste.grade">
           <KPICard titulo="Pago" valor="1" href="/financeiro/pagamentos" />
         </GradeKpis>
@@ -130,6 +133,7 @@ describe("GradeKpis com id", () => {
   it("grade dentro do card de outra grade não entra em edição (o card de fora é inerte)", () => {
     render(
       <ProvedorGrades inicial={{}}>
+        <BotaoPersonalizar />
         <GradeKpis id="teste.fora">
           <ItemGrade titulo="Bloco">
             <GradeKpis id="teste.dentro">

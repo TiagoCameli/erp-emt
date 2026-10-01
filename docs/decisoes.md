@@ -4806,3 +4806,5 @@ frete futuro fora do padrão volta a alertar.
    conferência fica na aba Carretas EMT, que é onde o alerta mora; na aba Fretes se confere e corrige.
 
 **Ajuste (01/10/2026, pedido do Tiago):** o botão "Personalizar tela" saiu do canto de baixo, onde tapava o ⋮ da última linha das tabelas, e virou uma aba no canto direito alto, dentro do respiro de 24px do `<main>` acima do cabeçalho (`main` ganhou `relative`). Fora da edição ela é `absolute` e sobe com a página; na edição o "Concluir" fica `fixed` no mesmo canto. Só no desktop.
+
+**Ajuste 2 (01/10/2026, pedido do Tiago):** o "Personalizar tela" virou só o ícone, no rodapé da sidebar ao lado do botão de tema e com o mesmo desenho (`BotaoPersonalizar`). Ligado, vira o ✓ de concluir, destacado em verde. A sidebar está sempre à vista, então o concluir também. O `ProvedorGrades` passou a envolver o AppShell no layout do app, e a aba do topo saiu.
