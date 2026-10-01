@@ -4737,6 +4737,20 @@ despesas e financiamentos.
 
 **Fora:** grades dentro de drawer, diálogo, assistente de importação e documento impresso continuam fixas.
 
+## 2026-10-01 - Medição de Contratos: carga do Lote 10 (CT 00184/2026)
+
+**Pedido do Tiago (01/10/2026):** cadastrar o Lote 10 da BR-364/BR-307 (DNIT, CT 00184/2026, Consórcio EMT-Colorado II) a partir de `Medicao_Lote10_BR364_v5.xlsx` (sha256 `4a96245f…`), código `L10-BR364`.
+
+**Decisões do Tiago:**
+- **Regra `sem_arredondar`**: a planilha arredonda o previsto por item (`=ROUND(F*G;2)`) mas calcula a medição sem arredondar (`=F*SOMA`). Sem arredondar, as medições batem ao centavo com o DNIT e com as NFs (2ª 3.389.662,83, valor aprovado pelo DNIT), e o total previsto sai 121.573.053,78, 1 centavo acima dos ,77 da planilha. Arredondar por item daria a 2ª 3.389.662,84 e a 4ª 4.169.128,32.
+- **v0 = a planilha da v5, como está, com alerta**: ela soma R$ 121.573.053,77, R$ 17.567,23 a menos que o valor do contrato (R$ 121.590.621,00, confirmado pelo Tiago). A diferença fica registrada nas observações do contrato até aparecer a planilha licitada (proposta 003/2026).
+- **Medições** pelas NFs do ERP, mês civil, as 4 aprovadas pelo DNIT: 1ª 13/05 a 31/05/2026 (mobilização, valor zero); 2ª junho (NF 364); 3ª julho (NF 367); 4ª agosto (NF 370). As NFs somam a medição e o reajuste (2ª: 3.599.159,26 = 3.389.662,83 + 209.496,43).
+- A quantidade 0,0000045 da Administração local na 1ª medição (R$ 23,59) é resíduo de fórmula e entrou como zero.
+
+**Dados do contrato:** assinatura do consórcio em 08/05/2026 (SEI 24572499, PDF em `vault/sources/contratos/`); ordem de serviço 13/05/2026; 39 meses da assinatura; localização rodovia (BR-364 km 682,90 a 752,50 e BR-307 km 179,00 a 190,20); acesso dos 4 Admins.
+
+**Carga:** mesmo mecanismo da carga do Lote 09 (`app.mc_carga = '1'`), numa transação só, com os dados lidos do xlsx por `repr()` da célula e fora do git. Conferida antes de gravar contra cada linha (previsto e acumulado), cada medição, o total previsto e o acumulado, abortando se um centavo divergisse; ensaio em transação desfeita e controle com 1 centavo desviado na 2ª recusado. Resultado: 227 linhas (19 títulos, 208 serviços), 103 ajustes de carga, previsto 121.573.053,78, acumulado 11.103.466,25, saldo 110.469.587,53. A 5ª medição (setembro) abre pelo módulo.
+
 ## 2026-10-01 - Filtros personalizáveis por usuário
 
 **Pedido do Tiago (01/10/2026):** a mesma coisa dos cards com os filtros de cada tela.
