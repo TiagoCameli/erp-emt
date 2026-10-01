@@ -115,12 +115,17 @@ function tipoMovimento(tipo: string): TipoMovimento {
   return tipo === "credito" ? "credito" : "debito";
 }
 
-/** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
+/**
+ * Nome de exibição de quem recebe: o fornecedor (fantasia quando existe, senão
+ * razão social) ou, no lançamento do RH (folha, 13º, férias, rescisão), o
+ * colaborador.
+ */
 function nomeFornecedor(
   fornecedor: { razao_social: string; nome_fantasia: string | null } | null,
+  colaborador: { nome: string } | null = null,
 ): string | null {
-  if (!fornecedor) return null;
-  return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  if (fornecedor) return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  return colaborador?.nome ?? null;
 }
 
 /** Forma que o Supabase devolve a parcela embutida na transação (join). */
@@ -141,6 +146,7 @@ interface ParcelaJoin {
       razao_social: string;
       nome_fantasia: string | null;
     } | null;
+    colaboradores: { nome: string } | null;
   } | null;
 }
 
@@ -158,7 +164,10 @@ function paraParcelaVinculada(parcela: ParcelaJoin): ParcelaVinculada {
     lancamentoNumero: lancamento?.numero ?? null,
     lancamentoDescricao: lancamento?.descricao ?? "-",
     tipoLancamento: tipoLancamento(lancamento?.tipo),
-    fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
+    fornecedorNome: nomeFornecedor(
+      lancamento?.fornecedores ?? null,
+      lancamento?.colaboradores ?? null,
+    ),
     numeroParcela: parcela.numero_parcela,
     valor: parcela.valor,
     desconto: parcela.desconto ?? 0,
@@ -170,7 +179,7 @@ function paraParcelaVinculada(parcela: ParcelaJoin): ParcelaVinculada {
 
 /** Colunas da parcela usadas no select embutido das transações. */
 const SELECT_PARCELA =
-  "id, numero_parcela, valor, desconto, valor_liquido, data_pagamento, data_vencimento, lancamentos(id, numero, descricao, tipo, fornecedores(razao_social, nome_fantasia))";
+  "id, numero_parcela, valor, desconto, valor_liquido, data_pagamento, data_vencimento, lancamentos(id, numero, descricao, tipo, fornecedores(razao_social, nome_fantasia), colaboradores(nome))";
 
 /**
  * Colunas da transferência. Os dois nomes de conta PRECISAM do apelido com a

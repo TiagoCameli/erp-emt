@@ -256,12 +256,17 @@ function rateiosDoEmbed(
   }));
 }
 
-/** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
+/**
+ * Nome de exibição de quem recebe: o fornecedor (fantasia quando existe, senão
+ * razão social) ou, no lançamento do RH (folha, 13º, férias, rescisão), o
+ * colaborador. Sem isto o pagamento do RH aparecia com "-" no lugar do nome.
+ */
 function nomeFornecedor(
   fornecedor: { razao_social: string; nome_fantasia: string | null } | null,
+  colaborador: { nome: string } | null = null,
 ): string {
-  if (!fornecedor) return "-";
-  return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  if (fornecedor) return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  return colaborador?.nome ?? "-";
 }
 
 /** Rótulo da conta: nome + banco (ex: "Conta movimento - Sicredi"). */
@@ -296,6 +301,7 @@ interface LinhaAPagar {
     origem: string;
     categorias_financeiras: { nome: string } | null;
     fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
+    colaboradores: { nome: string } | null;
     lancamento_rateios:
       | {
           centro_custo_id: string | null;
@@ -320,6 +326,7 @@ const SELECT_A_PAGAR = `id, numero_parcela, valor, status, data_vencimento,
      categoria_id, mes_competencia, data_compra, origem,
      categorias_financeiras(nome),
      fornecedores(razao_social, nome_fantasia),
+     colaboradores(nome),
      lancamento_rateios(centro_custo_id, centros_custo(nome))
    )`;
 
@@ -375,7 +382,10 @@ export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
     centroCustoRotulo: rotuloCentroCusto(rateiosDoEmbed(parcela.lancamentos)),
     centroCustoNomes: nomesDoRateio(rateiosDoEmbed(parcela.lancamentos)),
     fornecedorId: parcela.lancamentos?.fornecedor_id ?? null,
-    fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
+    fornecedorNome: nomeFornecedor(
+      parcela.lancamentos?.fornecedores ?? null,
+      parcela.lancamentos?.colaboradores ?? null,
+    ),
     contaBancariaId: parcela.conta_bancaria_id,
     dataVencimento: parcela.data_vencimento,
     dataProgramada: parcela.data_programada,
@@ -714,6 +724,7 @@ export async function listarParcelasPagas({
          numero, descricao,
          categorias_financeiras(nome),
          fornecedores(razao_social, nome_fantasia),
+         colaboradores(nome),
          lancamento_rateios(centro_custo_id, centros_custo(nome))
        )`,
       { count: "exact" },
@@ -784,7 +795,10 @@ export async function listarParcelasPagas({
     categoriaNome: parcela.lancamentos?.categorias_financeiras?.nome ?? null,
     centroCustoRotulo: rotuloCentroCusto(rateiosDoEmbed(parcela.lancamentos)),
     centroCustoNomes: nomesDoRateio(rateiosDoEmbed(parcela.lancamentos)),
-    fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
+    fornecedorNome: nomeFornecedor(
+      parcela.lancamentos?.fornecedores ?? null,
+      parcela.lancamentos?.colaboradores ?? null,
+    ),
     contaNome: parcela.contas_bancarias
       ? rotuloConta(
           parcela.contas_bancarias.nome,
@@ -975,6 +989,7 @@ export async function lerPagamentosParaPlanilha(
            data_compra,
            categorias_financeiras(nome),
            fornecedores(razao_social, nome_fantasia),
+           colaboradores(nome),
            formas_pagamento(nome),
            lancamento_parcelas(id),
            lancamento_rateios(valor, centros_custo(id, nome))
@@ -1012,6 +1027,7 @@ export async function lerPagamentosParaPlanilha(
       fornecedorNome:
         lancamento?.fornecedores?.nome_fantasia ??
         lancamento?.fornecedores?.razao_social ??
+        lancamento?.colaboradores?.nome ??
         "",
       origem: lancamento?.origem ?? null,
       mesCompetencia: lancamento?.mes_competencia ?? null,
@@ -1075,6 +1091,7 @@ type LinhaPagamentoPlanilha = {
       razao_social: string | null;
       nome_fantasia: string | null;
     } | null;
+    colaboradores: { nome: string } | null;
     formas_pagamento: { nome: string } | null;
     lancamento_parcelas: { id: string }[];
     lancamento_rateios: {

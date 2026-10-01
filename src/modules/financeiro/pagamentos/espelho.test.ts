@@ -26,6 +26,7 @@ const LINHA = {
     mes_competencia: "2026-07-01",
     observacoes: null,
     fornecedores: { razao_social: "JOAO SANTIAGO DE OLIVEIRA" },
+    colaboradores: null,
     clientes: null,
     categorias_financeiras: { nome: "Salário Mão de Obra" },
     formas_pagamento: { nome: "PIX" },
@@ -135,6 +136,18 @@ describe("montarEspelhoPagamento", () => {
     // recebível em aberto (correção da revisão da task).
     expect(espelho.lancamentoTipo).toBe("a_pagar");
     expect(espelho.lancamentoStatus).toBe("pago");
+  });
+
+  it("pagamento do RH, sem fornecedor, sai com o nome de quem recebe", () => {
+    const espelho = montarEspelhoPagamento({
+      ...LINHA,
+      lancamentos: {
+        ...LINHA.lancamentos,
+        fornecedores: null,
+        colaboradores: { nome: "MICHARLE ROCHA DA SILVA" },
+      },
+    });
+    expect(espelho.fornecedorNome).toBe("MICHARLE ROCHA DA SILVA");
   });
 
   it("traz o rateio do lançamento pai, somando o valor dele", () => {

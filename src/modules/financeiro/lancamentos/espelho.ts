@@ -119,6 +119,8 @@ export interface LinhaEspelhoLancamento {
   mes_competencia: string | null;
   observacoes: string | null;
   fornecedores: { razao_social: string } | null;
+  /** Quem recebe no lançamento do RH (folha, 13º, férias, rescisão). */
+  colaboradores: { nome: string } | null;
   categorias_financeiras: { nome: string } | null;
   formas_pagamento: { nome: string } | null;
   lancamento_formas: {
@@ -270,7 +272,8 @@ export function montarEspelhoLancamento(
     dataVencimento: linha.data_vencimento,
     mesCompetencia: linha.mes_competencia,
     observacoes: linha.observacoes,
-    fornecedorNome: linha.fornecedores?.razao_social ?? null,
+    fornecedorNome:
+      linha.fornecedores?.razao_social ?? linha.colaboradores?.nome ?? null,
     categoriaNome: linha.categorias_financeiras?.nome ?? null,
     formaPagamentoNome:
       linha.formas_pagamento?.nome ?? formasDivididas(linha.lancamento_formas),
@@ -309,6 +312,7 @@ export async function buscarLancamentosParaEspelho(
         `id, numero, tipo, descricao, valor, status, data_compra, data_vencimento,
          mes_competencia, observacoes,
          fornecedores(razao_social),
+         colaboradores(nome),
          categorias_financeiras(nome),
          formas_pagamento(nome),
          lancamento_formas(valor, formas_pagamento(nome)),
