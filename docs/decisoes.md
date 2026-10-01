@@ -4689,3 +4689,33 @@ ser unificados antes, com as OCs, fretes e estoques deles repontados. Até lá a
 **Carga da v0** (01/10/2026, com o ok do Tiago): pelas mesmas RPCs da tela, impersonando o Tiago, a partir do xlsx (sha256 `c7e9a417…`): 735 linhas (101 títulos e 634 serviços), vigente desde 26/02/2026. Conferida antes de gravar contra cada serviço e cada título da planilha (valor do módulo = coluna O), total 13.735.512,00, abortando se um centavo divergisse; ensaio em transação desfeita e controle com 1 centavo desviado recusado no item exato. Os dados da planilha não vão para o git; o xlsx pode ser anexado à versão pela tela.
 
 **Pendente:** data da ordem de serviço (execução de 410 dias), reajuste pelo INCC (Fase 6).
+
+## 2026-09-30 - Frete: aba Carretas EMT
+
+**Pedido do Tiago:** uma aba no Frete que junte o que já foi gasto com as carretas (Financeiro,
+centro "001 - Carretas EMT") com os fretes delas (transportadora EMT TRANSPORTES), com gráficos de
+viagens por mês, produção mensal, gastos x produção e um relatório completo de desempenho contra
+despesas e financiamentos.
+
+**Decisões:**
+
+1. **RPC `security definer` presa ao recurso.** Os relatórios do Financeiro são `invoker` e quem só
+   vê o Frete não enxerga lançamento. `fn_frete_carretas_emt()` roda como definer, mas só para quem
+   tem `frete.carretas-emt/ver`, com o centro e a transportadora fixos no corpo (sem parâmetro) e só
+   devolvendo agregado. Ver a aba é ver o custo das carretas; por isso ela nasce só com os Admins.
+2. **A carreta é a etapa, e a placa sai do nome dela.** Frete casa com gasto pela placa (sem espaço,
+   sem hífen, maiúscula). Placa de frete que não é de nenhuma etapa aparece como "Placa não
+   reconhecida" com aviso, para o total bater com o módulo de fretes. O gasto da raiz aparece como
+   "Frota (gasto sem placa)", sem rateio inventado.
+3. **As definições dos números:** custo operacional = gasto não cancelado e sem `e_divida`, pelo mês de
+   competência (regra do custo por centro de custo), menos Aquisição de equipamento, mais o diesel do
+   tanque abastecido pela placa (lançado no Financeiro no centro do tanque, então sem contagem dupla);
+   aquisição à vista separada como investimento; financiamento pelas parcelas que vencem no período, na
+   fração da carreta (rateio / valor do contrato); resultado final = produção - custo operacional -
+   aquisição - parcelas. A posição do financiamento (pago, saldo, atraso, próxima parcela) é a de hoje.
+4. **Paleta própria dos gráficos (`--viz-*`).** A paleta da marca não separa quatro séries para
+   daltônico (asfalto x verde claro, e verde x âmbar no protan); a nova passou no validador de paleta
+   nos dois temas. Cor da carreta pela posição no cadastro, nunca pelo ranking. Um eixo por gráfico.
+
+**Consequência:** o agrupamento das categorias é por nome (`grupoDaCategoria`); categoria nova cai em
+"Outras despesas" até alguém ensinar o grupo. Quem mais vê a aba, o Tiago decide.
