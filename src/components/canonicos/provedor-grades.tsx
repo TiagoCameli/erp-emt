@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Check, LayoutDashboard } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   chaveLayoutGrade,
   layoutGradeEhPadrao,
@@ -117,9 +118,25 @@ export function ProvedorGrades({ inicial, children }: ProvedorGradesProps) {
     <Contexto.Provider value={valor}>
       {children}
       {grades > 0 ? (
-        <div className="fixed right-4 bottom-20 z-40 print:hidden md:bottom-4">
+        // Aba pendurada na borda de cima, no canto direito, dentro do respiro de
+        // 24px que o <main> tem acima do cabeçalho: ali não cobre nada. No canto
+        // de baixo ela tapava o ⋮ da última linha da tabela. Fora da edição é
+        // `absolute` (sobe junto ao rolar); na edição fica `fixed`, para o
+        // "Concluir" estar à mão em qualquer altura da página. Só no desktop: no
+        // celular o respiro é de 16px e a tela é a versão reduzida.
+        <div
+          className={cn(
+            "top-0 right-6 z-40 hidden print:hidden md:block",
+            editando ? "fixed" : "absolute",
+          )}
+        >
           {editando ? (
-            <Button type="button" size="sm" className="shadow-md" onClick={() => setEditando(false)}>
+            <Button
+              type="button"
+              size="xs"
+              className="h-6 rounded-t-none shadow-md"
+              onClick={() => setEditando(false)}
+            >
               <Check />
               Concluir
             </Button>
@@ -127,8 +144,8 @@ export function ProvedorGrades({ inicial, children }: ProvedorGradesProps) {
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="bg-background shadow-md"
+              size="xs"
+              className="h-6 rounded-t-none border-t-0 bg-background text-muted-foreground hover:text-foreground"
               onClick={() => setEditando(true)}
             >
               <LayoutDashboard />
