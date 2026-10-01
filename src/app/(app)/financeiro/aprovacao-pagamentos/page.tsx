@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { AprovacaoCliente } from "@/modules/financeiro/aprovacao-pagamentos/components/aprovacao-cliente";
 import {
+  PARAM_ABA,
   PARAM_LINK_APROVACAO,
   lerParcelasDoLink,
 } from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
@@ -65,8 +66,12 @@ export default async function PaginaAprovacaoPagamentos({
 
   // Parcelas apontadas por um link de aprovação (o que se manda no WhatsApp).
   // Id inválido é descartado aqui, então o resto da página nunca vê lixo.
-  const { [PARAM_LINK_APROVACAO]: doLink } = await searchParams;
+  const { [PARAM_LINK_APROVACAO]: doLink, [PARAM_ABA]: aba } =
+    await searchParams;
   const parcelasDoLink = lerParcelasDoLink(doLink);
+  // Quem volta da tela inteira de um pagamento em dinheiro ou cartão cai na aba
+  // de onde saiu. Qualquer outro valor abre a fila, como sempre.
+  const abaInicial = aba === "diretos" ? "diretos" : "fila";
 
   // As contas vêm junto porque a aprovação pode trocar a conta da parcela: é
   // exceção, mas quando acontece o modal precisa da lista já na mão.
@@ -108,6 +113,7 @@ export default async function PaginaAprovacaoPagamentos({
         descricao="Aprovar autoriza o pagamento para uma data. O que precisa de ajuste vai para revisão, sem cancelar nada. Dinheiro e cartão não passam por aqui: ficam na aba ao lado, só para conferência."
       />
       <AprovacaoCliente
+        abaInicial={abaInicial}
         fila={{
           parcelas,
           incompletas,

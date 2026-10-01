@@ -2,6 +2,10 @@ import { notFound } from "next/navigation";
 
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarAnexosDoDocumento } from "@/modules/_shared/anexos/queries";
+import {
+  ehPagamentoDireto,
+  tipoFormaPagamento,
+} from "@/modules/_shared/forma-pagamento";
 import { buscarOrdem } from "@/modules/compras/ordens/queries";
 import { PagamentoDetalheView } from "@/modules/financeiro/aprovacao-pagamentos/components/pagamento-detalhe";
 import { lancamentoDaParcela } from "@/modules/financeiro/aprovacao-pagamentos/queries";
@@ -50,6 +54,17 @@ export default async function PaginaPagamentoAprovacao({
   // só acontece com leitura parcial da RLS. 404 em vez de tela pela metade.
   if (!parcela) notFound();
 
+  // Mesma cadeia da fila (`formaQuePassa`): bloco da parcela > cabeçalho >
+  // bancário. Dinheiro e cartão também abrem aqui, pelo olho da aba deles, e a
+  // tela precisa saber disso para não oferecer aprovação nem mandar de volta
+  // para a fila errada.
+  const pagamentoDireto = ehPagamentoDireto(
+    tipoFormaPagamento(
+      lancamento.formas.find((forma) => forma.id === parcela.lancamentoFormaId)
+        ?.formaPagamentoTipo ?? lancamento.formaPagamentoTipo,
+    ),
+  );
+
   const podeAprovar = temPermissao(
     usuario,
     "financeiro.aprovacao-pagamentos",
@@ -86,6 +101,7 @@ export default async function PaginaPagamentoAprovacao({
       podeAprovar={podeAprovar}
       podeRevisar={podeRevisar}
       podeEditarLancamento={podeEditarLancamento}
+      pagamentoDireto={pagamentoDireto}
       // Mesma regra da coluna "Sem nota" da fila: só a OC de origem tem nota, e
       // a ausência dela avisa sem bloquear.
       semNota={lancamento.origem === "oc" && !lancamento.notaRegistrada}

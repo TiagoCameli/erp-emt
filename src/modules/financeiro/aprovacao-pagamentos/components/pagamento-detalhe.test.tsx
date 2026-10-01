@@ -330,3 +330,45 @@ describe("PagamentoDetalheView e a decisão de aprovar", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("PagamentoDetalheView de dinheiro e cartão", () => {
+  it("volta para a aba de dinheiro e cartão, não para a fila", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento({ status: "pago" })}
+        parcela={parcela({ status: "pago", dataPagamento: "2026-08-15" })}
+        {...PADRAO}
+        pagamentoDireto
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Voltar para dinheiro e cartão" }),
+    ).toHaveAttribute("href", "/financeiro/aprovacao-pagamentos?aba=diretos");
+    expect(
+      screen.getByRole("button", { name: "Ver dinheiro e cartão" }),
+    ).toBeInTheDocument();
+  });
+
+  it("não oferece aprovar nem mensagem de aprovação, mas oferece o espelho", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento()}
+        parcela={parcela()}
+        {...PADRAO}
+        pagamentoDireto
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /Aprovar pagamento/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Copiar mensagem de aprovação/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/não passam pela aprovação/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Imprimir espelho/i }),
+    ).toBeInTheDocument();
+  });
+});

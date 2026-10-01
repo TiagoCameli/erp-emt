@@ -84,4 +84,19 @@ describe("situacaoDaParcela prioriza o motivo mais específico", () => {
     });
     expect(situacao.motivo).toMatch(/já foi pag/i);
   });
+
+  it("dinheiro ou cartão pendente: não passa pela aprovação", () => {
+    const situacao = situacaoDaParcela({ ...NA_FILA, pagamentoDireto: true });
+    expect(situacao.podeAprovar).toBe(false);
+    expect(situacao.motivo).toMatch(/não passam pela aprovação/i);
+  });
+
+  it("dinheiro ou cartão já pago diz que foi pago, não que não se aprova", () => {
+    const situacao = situacaoDaParcela({
+      ...NA_FILA,
+      statusParcela: "pago",
+      pagamentoDireto: true,
+    });
+    expect(situacao.motivo).toMatch(/já foi pag/i);
+  });
 });
