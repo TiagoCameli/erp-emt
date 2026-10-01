@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import {
+  centrosDaListagem,
   centrosEfetivos,
   etapasDasRaizes,
   etapasValidas,
   opcoesDeEtapa,
   opcoesDeRaiz,
+  opcoesDeSemEtapa,
   rotuloDasEtapas,
+  separarCentrosDaListagem,
   separarRaizesEEtapas,
+  valorSemEtapa,
   temEtapasParaEscolher,
 } from "@/modules/_shared/centro-custo/filtro";
 
@@ -257,4 +261,63 @@ describe("separarRaizesEEtapas e centrosEfetivos são o ida e volta um do outro"
       );
     });
   }
+});
+
+describe("sem etapa: o rateio gravado direto na raiz", () => {
+  it("oferece uma opção por raiz escolhida que tem etapa, e só por ela", () => {
+    expect(opcoesDeSemEtapa(CADASTRO, [OBRA, ESCRITORIO])).toEqual([
+      { valor: valorSemEtapa(OBRA), rotulo: "Sem etapa (direto no centro)" },
+    ]);
+  });
+
+  it("na manutenção fala de equipamento, e com duas raízes nomeia o pai", () => {
+    expect(opcoesDeSemEtapa(CADASTRO, [MANUT])[0].rotulo).toBe(
+      "Sem equipamento (direto no centro)",
+    );
+    expect(
+      opcoesDeSemEtapa(CADASTRO, [OBRA, MANUT]).map((opcao) => opcao.rotulo),
+    ).toEqual([
+      "009 - BR-364 › Sem etapa (direto no centro)",
+      "Manutenção/Documentação de Equipamentos › Sem equipamento (direto no centro)",
+    ]);
+  });
+
+  it("tira a raiz do centro= e manda ela sozinha no centro_raiz=", () => {
+    expect(
+      centrosDaListagem(CADASTRO, [MANUT], [valorSemEtapa(MANUT)]),
+    ).toEqual({ centro: [], centroRaiz: [MANUT] });
+  });
+
+  it("junta sem etapa com etapas da mesma raiz e com outra raiz inteira", () => {
+    expect(
+      centrosDaListagem(
+        CADASTRO,
+        [MANUT, ESCRITORIO],
+        [valorSemEtapa(MANUT), MAQ_A],
+      ),
+    ).toEqual({ centro: [MAQ_A, ESCRITORIO], centroRaiz: [MANUT] });
+  });
+
+  it("descarta sem etapa de raiz que saiu da escolha ou não tem etapa", () => {
+    expect(
+      centrosDaListagem(
+        CADASTRO,
+        [ESCRITORIO],
+        [valorSemEtapa(MANUT), valorSemEtapa(ESCRITORIO)],
+      ),
+    ).toEqual({ centro: [ESCRITORIO], centroRaiz: [] });
+  });
+
+  it("lê de volta os dois parâmetros nos dois campos", () => {
+    expect(separarCentrosDaListagem(CADASTRO, [MAQ_A], [MANUT])).toEqual({
+      raizes: [MANUT],
+      segundoCampo: [MAQ_A, valorSemEtapa(MANUT)],
+    });
+  });
+
+  it("sem etapa some junto com a raiz quando ela é desmarcada", () => {
+    expect(
+      etapasValidas(CADASTRO, [OBRA], [valorSemEtapa(MANUT), valorSemEtapa(OBRA)]),
+    ).toEqual([valorSemEtapa(OBRA)]);
+  });
 });

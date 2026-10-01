@@ -85,13 +85,19 @@ export default async function PaginaLancamentos({
   // Com vários centros escolhidos a coluna soma o rateio de TODOS eles, então o
   // rótulo conta quantos em vez de nomear um: nomear o primeiro faria a coluna
   // parecer ser só dele, e o número embaixo é dinheiro.
-  const centrosEscolhidos = filtros.centroCustoIds ?? [];
+  const centrosEscolhidos = [
+    ...(filtros.centroCustoIds ?? []),
+    ...(filtros.centroSemEtapaIds ?? []),
+  ];
+  // "Sem etapa" diz no rótulo que a coluna é só a parte gravada na raiz: o
+  // nome do centro sozinho faria parecer que ela soma as etapas também.
+  const soSemEtapa = (filtros.centroSemEtapaIds ?? []).length === 1;
   const rotuloRecorte =
     centrosEscolhidos.length === 1
       ? `No centro ${
           centrosCusto.find((centro) => centro.id === centrosEscolhidos[0])
             ?.nome ?? "de custo"
-        }`
+        }${soSemEtapa ? " (sem etapa)" : ""}`
       : centrosEscolhidos.length > 1
         ? `Nos ${centrosEscolhidos.length} centros escolhidos`
         : filtros.recorte
