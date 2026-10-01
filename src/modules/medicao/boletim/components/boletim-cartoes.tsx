@@ -20,13 +20,13 @@ export function BoletimCartoes({ boletim }: { boletim: Boletim }) {
   const pctAMedir = percentualExibicao(t.pct_a_medir);
 
   return (
-    <GradeKpis className="mb-4">
+    <GradeKpis id="medicao.boletim.resumo" titulo="Resumo" className="mb-4">
       <KPICard
         titulo="Previsto"
         valor={<Valor texto={t.previsto} />}
         detalhe={boletim.versao ? `Versão v${boletim.versao.numero} da planilha` : "Sem versão vigente da planilha"}
       />
-      <KPICard titulo={n === null ? "Acumulado" : `Acumulado até a ${n}ª`} valor={<Valor texto={t.acumulado} />} />
+      <KPICard idCard="acumulado" titulo={n === null ? "Acumulado" : `Acumulado até a ${n}ª`} valor={<Valor texto={t.acumulado} />} />
       <KPICard
         titulo="% executado"
         valor={pctExecutado === "" ? <span className="text-muted-foreground">Sem valor</span> : <span className="tabular-nums">{pctExecutado}</span>}
@@ -37,9 +37,10 @@ export function BoletimCartoes({ boletim }: { boletim: Boletim }) {
         detalhe={pctAMedir === "" ? undefined : <span className="tabular-nums">{pctAMedir} a medir</span>}
       />
       {n === null ? (
-        <KPICard titulo="Medição" valor={<span className="text-muted-foreground">Nenhuma medição</span>} />
+        <KPICard idCard="medicao" titulo="Medição" valor={<span className="text-muted-foreground">Nenhuma medição</span>} />
       ) : (
         <KPICard
+          idCard="medicao"
           titulo={`${n}ª medição`}
           valor={<Valor texto={t.valor_medicao} />}
           detalhe={

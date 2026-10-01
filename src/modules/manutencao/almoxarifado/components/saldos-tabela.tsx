@@ -176,7 +176,7 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
+      <GradeKpis id="manutencao.almoxarifado.resumo" titulo="Resumo do estoque">
         <KPICard titulo="Itens com saldo" valor={resumo.comSaldo} />
         <KPICard titulo="Zerados" valor={resumo.zerados} />
         <KPICard

@@ -260,7 +260,7 @@ export function LoteDetalhe({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
+      <GradeKpis id="rh.decimo-terceiro.lote.resumo" titulo="Resumo do lote">
         <KPICard
           titulo="Líquido a pagar"
           valor={<MoneyText valor={lote.valorLiquido} />}

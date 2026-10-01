@@ -45,7 +45,7 @@ export default async function PaginaPainel({
     <>
       <PageHeader modulo="Medição" titulo={TITULO} descricao={DESCRICAO} />
       <PainelFiltros status={status} tipos={tipos} />
-      <GradeKpis className="mb-4">
+      <GradeKpis id="medicao.painel.resumo" titulo="Resumo" className="mb-4">
         <KPICard titulo="Previsto" valor={<MoneyText valor={t.previsto} />} />
         <KPICard titulo="Acumulado" valor={<MoneyText valor={t.acumulado} />} />
         <KPICard

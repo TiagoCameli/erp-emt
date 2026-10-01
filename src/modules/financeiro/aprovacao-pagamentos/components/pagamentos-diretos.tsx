@@ -1124,7 +1124,7 @@ export function PagamentosDiretos({
           {EXPLICACAO}
         </p>
 
-        <GradeKpis>
+        <GradeKpis id="financeiro.aprovacao-pagamentos.diretos" titulo="Pagamentos diretos">
           <KPICard
             titulo="Dinheiro e cartão"
             valor={formatarBRL(total)}

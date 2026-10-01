@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { cn } from "@/lib/utils";
 
 /**
  * O ChartCard da origem: moldura, título, subtítulo e ações à direita, e a área do gráfico
- * com altura fixa (o gráfico do Recharts mede o pai). Serve servidor e cliente.
+ * (o gráfico do Recharts mede o pai). A altura é a padrão; na grade personalizável a área
+ * cresce com o card. Serve servidor e cliente.
  */
 export function CartaoGrafico({
   titulo,
@@ -17,13 +19,13 @@ export function CartaoGrafico({
   titulo: string;
   subtitulo?: string;
   acoes?: ReactNode;
-  /** Altura da área do gráfico, em px. */
+  /** Altura padrão da área do gráfico, em px. */
   altura?: number;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={cn("rounded-lg border border-border bg-card", className)}>
+    <section className={cn("flex flex-col rounded-lg border border-border bg-card", className)}>
       <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold tracking-tight text-foreground">{titulo}</h3>
@@ -31,8 +33,8 @@ export function CartaoGrafico({
         </div>
         {acoes ? <div className="flex shrink-0 items-center gap-1.5">{acoes}</div> : null}
       </div>
-      <div className="px-2 pb-3" style={{ height: altura }}>
-        {children}
+      <div className="flex flex-1 flex-col px-2 pb-3">
+        <AreaGrafico altura={`${altura}px`}>{children}</AreaGrafico>
       </div>
     </section>
   );

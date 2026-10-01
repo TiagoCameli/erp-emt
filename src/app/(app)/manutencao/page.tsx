@@ -48,7 +48,7 @@ export default async function PainelManutencao() {
         descricao="Ordens de serviço em andamento e o custo da manutenção por data de conclusão"
       />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="manutencao.painel.indicadores" titulo="Indicadores" className="mb-4">
         <KPICard
           titulo="OS abertas"
           valor={<span className="tabular-nums">{painel.abertas}</span>}
@@ -77,6 +77,7 @@ export default async function PainelManutencao() {
           }
         />
         <KPICard
+          idCard="custo-ano"
           titulo={`Custo de ${ano}`}
           valor={<MoneyText valor={painel.custoAno} />}
           detalhe={`${plural(painel.osConcluidasAno, "OS concluída", "OS concluídas")} no ano`}

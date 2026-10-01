@@ -53,7 +53,7 @@ export default async function PaginaAnomaliasFrete({
         descricao="Fretes fora do padrão: preço, pedido, saldo na pedreira, duplicidade, cadastro e chegada"
       />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="frete.anomalias.indicadores" titulo="Indicadores" className="mb-4">
         <KPICard
           titulo="Anomalias em aberto"
           valor={<span className="tabular-nums">{abertas.length}</span>}

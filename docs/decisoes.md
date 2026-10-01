@@ -4689,3 +4689,17 @@ ser unificados antes, com as OCs, fretes e estoques deles repontados. Até lá a
 **Carga da v0** (01/10/2026, com o ok do Tiago): pelas mesmas RPCs da tela, impersonando o Tiago, a partir do xlsx (sha256 `c7e9a417…`): 735 linhas (101 títulos e 634 serviços), vigente desde 26/02/2026. Conferida antes de gravar contra cada serviço e cada título da planilha (valor do módulo = coluna O), total 13.735.512,00, abortando se um centavo divergisse; ensaio em transação desfeita e controle com 1 centavo desviado recusado no item exato. Os dados da planilha não vão para o git; o xlsx pode ser anexado à versão pela tela.
 
 **Pendente:** data da ordem de serviço (execução de 410 dias), reajuste pelo INCC (Fase 6).
+
+## 2026-10-01 - Cards e gráficos personalizáveis por usuário
+
+**Pedido do Tiago (01/10/2026):** todo card e todo gráfico do app maleável: cada pessoa muda o tamanho, tira da tela e coloca de volta, do seu jeito.
+
+**Decisão:**
+1. O canônico é o `GradeKpis` com `id`: sem `id` ele é a grade fixa de sempre; com `id` vira `GradePersonalizavel`. Nada de componente paralelo. Cada filho direto é um card, identificado por `idCard`, senão pelo `titulo` (sem acento, kebab), senão pela key. Bloco que não é KPICard entra com `ItemGrade`. A identidade é lida no servidor (em `itensDaGrade`), porque depois de atravessar para o cliente o KPICard já virou `<div>`.
+2. O que a pessoa muda: ordem (arrastando pelo ícone ou pelo menu "Mover para antes/depois", que é o caminho de teclado e toque), largura em 12 colunas (borda direita ou menu: 1/4, 1/3, metade, 2/3, 3/4, inteira), altura (borda de baixo ou menu), tirar da tela e "Colocar de volta". "Restaurar padrão" apaga a linha. Largura escolhida só vale com a grade a partir de 48rem (container query); em tela estreita o card escolhido ocupa a linha.
+3. Onde fica: na MESMA tabela `preferencias_tabela`, chave `painel.<id da grade>`, pelas mesmas RPCs (`fn_salvar_preferencia_tabela`, `fn_limpar_preferencia_tabela`). Sem migration: a tabela já é "uma preferência de tela por pessoa", com RLS no próprio usuário e teto de tamanho. O layout do app lê todas as `painel.*` da pessoa no servidor e entrega ao `ProvedorGrades`, para a grade nascer arrumada em vez de pular depois de montar. Gravação com espera de 600 ms (arrasto gera dezenas de mudanças); falha só vai pro log, porque é conforto e não trabalho.
+4. Saneamento na leitura (`layout-grade.ts`): card que sumiu da tela é ignorado, card novo nasce visível logo depois do vizinho que tem na ordem padrão (não no fim), tamanhos travados em 2 a 12 colunas e 80 a 1200 px.
+5. O botão "Personalizar cards" é flutuante no canto de baixo e só aparece em tela que tem grade personalizável: o desktop não tem barra de topo, e várias grades moram em telas sem `PageHeader` (Combustível, Frete). O modo de edição vale para a tela em que foi ligado, sai com Esc ou "Concluir", e deixa o conteúdo dos cards `inert` (link de card não navega enquanto se arruma).
+6. Gráfico cresce com o card pelo canônico `AreaGrafico`: o ResponsiveContainer mora numa caixa `absolute inset-0` dentro de uma área `flex-1` com a altura antiga como mínimo, porque porcentagem de pai com altura automática resolve para zero e o gráfico some.
+
+**Fora:** grades dentro de drawer, diálogo, assistente de importação e documento impresso continuam fixas.

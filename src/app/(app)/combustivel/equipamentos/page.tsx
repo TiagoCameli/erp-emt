@@ -110,7 +110,7 @@ export default async function PaginaEquipamentosCombustivel({
         />
       ) : (
         <>
-          <GradeKpis className="mb-4">
+          <GradeKpis id="combustivel.equipamentos.indicadores" titulo="Indicadores" className="mb-4">
             <KpiAnalitico
               titulo="Volume total"
               valor={formatarLitros(kpis.volume)}
@@ -129,6 +129,7 @@ export default async function PaginaEquipamentosCombustivel({
               explicacao="Soma do valor total das saídas no período. Alta de custo em vermelho."
             />
             <KpiAnalitico
+              idCard="consumidores-ativos"
               titulo={proprios ? "Equipamentos ativos" : "Carretas ativas"}
               valor={formatarContagem(kpis.qtdConsumidores)}
               detalhe={
@@ -145,6 +146,7 @@ export default async function PaginaEquipamentosCombustivel({
               }
             />
             <KpiAnalitico
+              idCard="top-consumidor"
               titulo={proprios ? "Top equipamento" : "Top carreta"}
               valor={
                 top ? (

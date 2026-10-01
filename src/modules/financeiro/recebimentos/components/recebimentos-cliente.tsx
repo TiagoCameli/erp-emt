@@ -890,8 +890,9 @@ export function RecebimentosCliente({
         }
       />
 
-      <GradeKpis>
+      <GradeKpis id="financeiro.recebimentos.resumo" titulo="Resumo a receber">
         <KPICard
+          idCard="total"
           titulo={temSelecao ? "Selecionado" : "Total a receber"}
           valor={formatarBRL(resumo.total)}
           detalhe={contagemRecebimentos(resumo.parcelas)}

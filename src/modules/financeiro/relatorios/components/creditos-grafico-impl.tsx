@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL } from "@/lib/formatadores";
 import {
   COR_ENTIDADE,
@@ -53,7 +54,7 @@ function ConteudoTooltip({
  */
 export function CreditosGrafico({ meses }: { meses: CreditoMes[] }) {
   return (
-    <div className="h-72 w-full">
+    <AreaGrafico altura="18rem">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={meses}
@@ -91,6 +92,6 @@ export function CreditosGrafico({ meses }: { meses: CreditoMes[] }) {
           />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

@@ -525,7 +525,7 @@ export function ConciliacaoCliente({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
+      <GradeKpis id="financeiro.conciliacao.resumo" titulo="Resumo do extrato">
         <KPICard titulo="Transações" valor={totalTransacoes} />
         <KPICard
           titulo="Conciliadas"

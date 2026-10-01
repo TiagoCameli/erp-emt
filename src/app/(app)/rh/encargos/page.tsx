@@ -44,7 +44,7 @@ export default async function PaginaEncargos() {
           `folhas.encargos_percentual` (soma dos ativos), então o cartão
           responde "por que o custo da folha deu isso" sem abrir a folha. */}
       {encargos.length > 0 ? (
-        <GradeKpis className="mb-4">
+        <GradeKpis id="rh.encargos.resumo" titulo="Resumo" className="mb-4">
           <KPICard
             titulo="Encargos ativos"
             valor={ativos.length}

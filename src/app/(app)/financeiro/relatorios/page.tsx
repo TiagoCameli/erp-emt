@@ -4,6 +4,7 @@ import { BarChart3 } from "lucide-react";
 import {
   EmptyState,
   GradeKpis,
+  ItemGrade,
   KPICard,
   MoneyText,
   PageHeader,
@@ -176,9 +177,27 @@ function SecaoRelatorio({
   );
 }
 
-function Painel({ children }: { children: React.ReactNode }) {
+/**
+ * Gráfico do relatório numa grade de um card só, para a pessoa poder aumentar,
+ * diminuir ou esconder. A moldura é coluna flex para o gráfico crescer junto.
+ */
+function PainelGrafico({
+  id,
+  titulo,
+  children,
+}: {
+  id: string;
+  titulo: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-border bg-card p-4">{children}</div>
+    <GradeKpis id={id} titulo={titulo} vao="amplo">
+      <ItemGrade titulo={titulo} idCard="grafico" larguraPadrao={12}>
+        <div className="flex flex-col rounded-lg border border-border bg-card p-4">
+          {children}
+        </div>
+      </ItemGrade>
+    </GradeKpis>
   );
 }
 
@@ -236,7 +255,7 @@ async function ConteudoFluxoCaixa({
   }
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.fluxo-caixa" titulo="Fluxo de caixa">
         <KPICard
           titulo="Entradas (a receber)"
           valor={<MoneyText valor={dados.totalEntradas} />}
@@ -275,14 +294,17 @@ async function ConteudoFluxoCaixa({
           detalhe={janelaDescrita}
         />
       </GradeKpis>
-      <Painel>
+      <PainelGrafico
+        id="financeiro.relatorios.fluxo-caixa.grafico"
+        titulo="Gráfico do fluxo de caixa"
+      >
         <FluxoCaixaGrafico
           meses={dados.meses}
           centrosCusto={centrosCusto}
           centrosReceita={centrosReceita}
           podeVerLancamentos={podeVerLancamentos}
         />
-      </Painel>
+      </PainelGrafico>
     </>
   );
 }
@@ -325,7 +347,7 @@ async function ConteudoDre({
   const descricao = descreverPeriodo(periodo);
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.dre" titulo="DRE">
         {/* Receita e despesa OPERACIONAIS: é o que a obra fez. A aplicação
             financeira da conta não entra, senão o cartão de receita mostraria a
             varredura noturna do banco como faturamento. */}
@@ -372,7 +394,7 @@ async function ConteudoAging({
     dados.totalAPagar === 0 && dados.totalAReceber === 0;
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.aging" titulo="Aging">
         <KPICard
           titulo="A pagar em aberto"
           valor={<MoneyText valor={dados.totalAPagar} />}
@@ -400,13 +422,16 @@ async function ConteudoAging({
         />
       ) : (
         <>
-          <Painel>
+          <PainelGrafico
+            id="financeiro.relatorios.aging.grafico"
+            titulo="Gráfico do aging"
+          >
             <AgingGrafico
               aPagar={dados.aPagar}
               aReceber={dados.aReceber}
               podeVerLancamentos={podeVerLancamentos}
             />
-          </Painel>
+          </PainelGrafico>
           <AgingTabela aging={dados} podeVerLancamentos={podeVerLancamentos} />
         </>
       )}
@@ -441,10 +466,14 @@ async function ConteudoPosicaoBancaria({
   }
   return (
     <>
-      <GradeKpis>
+      <GradeKpis
+        id="financeiro.relatorios.posicao-bancaria"
+        titulo="Posição bancária"
+      >
         {posicao.contas.map((conta) => (
           <KPICard
             key={conta.contaId}
+            idCard={conta.contaId}
             titulo={conta.nome}
             valor={<MoneyText valor={conta.saldoAtual} />}
             detalhe={
@@ -507,7 +536,7 @@ async function ConteudoCreditos({
   ).length;
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.creditos" titulo="Créditos">
         <KPICard
           titulo="Saldo devedor"
           valor={<MoneyText valor={dados.totalSaldo} />}
@@ -564,9 +593,12 @@ async function ConteudoCreditos({
         <h3 className="text-corpo font-medium text-foreground">
           O que vence pela frente
         </h3>
-        <Painel>
+        <PainelGrafico
+          id="financeiro.relatorios.creditos.grafico"
+          titulo="O que vence pela frente"
+        >
           <CreditosGrafico meses={dados.proximosMeses} />
-        </Painel>
+        </PainelGrafico>
         <CreditosPorMesTabela
           meses={dados.proximosMeses}
           total={dados.totalProximosMeses}
@@ -594,7 +626,7 @@ async function ConteudoInvestimentos({
   const temPeriodo = periodo.de !== "" || periodo.ate !== "";
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.investimentos" titulo="Investimentos">
         <KPICard
           titulo="Saldo aplicado"
           valor={<MoneyText valor={dados.saldoAplicado} />}
@@ -605,11 +637,13 @@ async function ConteudoInvestimentos({
           }
         />
         <KPICard
+          idCard="aplicado"
           titulo={temPeriodo ? "Aplicado no período" : "Aplicado (total)"}
           valor={<MoneyText valor={dados.aplicadoPeriodo} />}
           detalhe="Da conta para a subconta"
         />
         <KPICard
+          idCard="resgatado"
           titulo={temPeriodo ? "Resgatado no período" : "Resgatado (total)"}
           valor={<MoneyText valor={dados.resgatadoPeriodo} />}
           detalhe="Da subconta de volta para a conta"
@@ -802,7 +836,7 @@ async function ConteudoCustoCc({
 
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.custo-cc" titulo="Custo por centro">
         <KPICard
           titulo="Custo total"
           valor={<MoneyText valor={custo.total} />}
@@ -838,17 +872,23 @@ async function ConteudoCustoCc({
       </GradeKpis>
 
       {series && series.length > 0 ? (
-        <Painel>
+        <PainelGrafico
+          id="financeiro.relatorios.custo-cc.serie"
+          titulo="Custo mês a mês dos centros"
+        >
           <CustoCcSerie
             series={series}
             filtros={filtrosDoDrill}
             podeVerLancamentos={podeVerLancamentos}
           />
-        </Painel>
+        </PainelGrafico>
       ) : (
-        <Painel>
+        <PainelGrafico
+          id="financeiro.relatorios.custo-cc.grafico"
+          titulo="Custo por centro de custo"
+        >
           <CustoCcGrafico centros={custo.centros} destinos={destinos} />
-        </Painel>
+        </PainelGrafico>
       )}
 
       <CustoCcTabela
@@ -921,7 +961,7 @@ async function ConteudoCustoReceita({
 
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.custo-receita" titulo="Custo x receita">
         <KPICard
           titulo="Receita líquida"
           valor={<MoneyText valor={total.receitaLiquida} />}
@@ -966,9 +1006,12 @@ async function ConteudoCustoReceita({
           Central, que o corte por centro financeiro não pegava. Hoje a RPC só
           devolve categoria operacional, então não há o que mostrar. */}
 
-      <Painel>
+      <PainelGrafico
+        id="financeiro.relatorios.custo-receita.grafico"
+        titulo="Custo e receita por mês"
+      >
         <CustoReceitaGrafico meses={porMesDoRelatorio} />
-      </Painel>
+      </PainelGrafico>
 
       {/* Lado a lado no desktop, empilhado no mobile: as duas tabelas são de
           dinheiros opostos e se leem em par. */}
@@ -1031,7 +1074,7 @@ async function ConteudoCustoGrupo({
 
   return (
     <>
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.custo-grupo" titulo="Custo por grupo">
         <KPICard
           titulo="Custo total"
           valor={<MoneyText valor={custo.total} />}

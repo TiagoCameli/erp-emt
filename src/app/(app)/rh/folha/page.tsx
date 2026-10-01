@@ -45,7 +45,7 @@ export default async function PaginaFolha() {
       {/* Sem folha gerada não há número para mostrar: o estado vazio da tabela
           já explica o que fazer, e cartão zerado só ocupa espaço. */}
       {ultima ? (
-        <GradeKpis className="mb-4">
+        <GradeKpis id="rh.folha.resumo" titulo="Resumo" className="mb-4">
           <KPICard
             titulo="Custo da última folha"
             valor={<MoneyText valor={ultima.custoTotal} />}
@@ -53,6 +53,7 @@ export default async function PaginaFolha() {
             href={`/rh/folha/${ultima.id}`}
           />
           <KPICard
+            idCard="custo-acumulado-ano"
             titulo={`Custo acumulado em ${ano}`}
             valor={<MoneyText valor={custoAno} />}
             detalhe="Soma do custo total das folhas do ano"

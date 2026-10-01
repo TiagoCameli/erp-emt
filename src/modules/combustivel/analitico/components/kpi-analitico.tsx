@@ -1,13 +1,13 @@
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { KPICard } from "@/components/canonicos";
+import { KPICard, type PropsItemDaGrade } from "@/components/canonicos";
 import { cn } from "@/lib/utils";
 import { temPontosDeTendencia } from "@/modules/combustivel/analitico/calculo";
 import { leituraDaTendencia } from "@/modules/combustivel/analitico/formato";
 import { Sparkline } from "@/modules/combustivel/analitico/components/ranking";
 
-export interface KpiAnaliticoProps {
+export interface KpiAnaliticoProps extends PropsItemDaGrade {
   titulo: string;
   valor: ReactNode;
   /** O "hint" da origem, abaixo do número. */

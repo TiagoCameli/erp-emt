@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL } from "@/lib/formatadores";
 import { rotuloMes } from "@/modules/financeiro/relatorios/calculo";
 import {
@@ -93,7 +94,7 @@ export function CustoReceitaGrafico({ meses }: CustoReceitaGraficoProps) {
   }));
 
   return (
-    <div className="h-80 w-full">
+    <AreaGrafico altura="20rem">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={dados}
@@ -162,6 +163,6 @@ export function CustoReceitaGrafico({ meses }: CustoReceitaGraficoProps) {
           />
         </ComposedChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

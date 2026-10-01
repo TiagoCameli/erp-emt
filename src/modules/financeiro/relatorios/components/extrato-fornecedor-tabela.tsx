@@ -358,7 +358,7 @@ export function ExtratoFornecedorTabela({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
+      <GradeKpis id="financeiro.relatorios.extrato-fornecedor" titulo="Extrato por fornecedor">
         <KPICard
           titulo="Fornecedores"
           valor={

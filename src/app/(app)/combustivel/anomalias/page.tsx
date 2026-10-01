@@ -65,7 +65,7 @@ export default async function PaginaAnomalias({
         descricao="Saídas e estados fora do padrão no período, e saídas que pediram mais do que o tanque tinha"
       />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="combustivel.anomalias.indicadores" titulo="Indicadores" className="mb-4">
         <KPICard
           titulo="Anomalias pendentes"
           valor={<span className="tabular-nums">{resultado.pendentes}</span>}

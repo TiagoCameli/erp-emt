@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   EmptyState,
   GradeKpis,
+  ItemGrade,
   KPICard,
   MoneyText,
   SecaoDetalhe,
@@ -146,7 +147,7 @@ export function PainelAlertas({
           {/* Grade canônica: a quantidade de cartões varia com a permissão de
               cada categoria, e num grid fixo quem via só uma ficava com a linha
               vazia do lado. */}
-          <GradeKpis>
+          <GradeKpis id="rh.alertas.resumo" titulo="Resumo">
             {contagemDocumentos ? (
               <KPICard
                 titulo="Documentos"
@@ -213,154 +214,164 @@ export function PainelAlertas({
             ) : null}
           </GradeKpis>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <GradeKpis id="rh.alertas.listas" titulo="Listas de alertas" vao="amplo">
             {documentos ? (
-              <SecaoDetalhe
-                titulo="Documentos e ASO"
-                card
-                acao={<VerTudo href="/rh/documentos" />}
-              >
-                {documentos.length === 0 ? (
-                  <SemAlertas texto="Nenhum documento vencendo." />
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {documentos.slice(0, LIMITE_ITENS).map((item) => (
-                      <LinhaAlerta key={item.id} href="/rh/documentos">
-                        <div>
-                          <p className="text-detalhe">{item.colaboradorNome}</p>
-                          <p className="text-legenda text-muted-foreground tabular-nums">
-                            {ROTULO_TIPO_DOCUMENTO[item.tipo as TipoDocumento]} ·{" "}
-                            {item.descricao}
-                            {item.dataVencimento
-                              ? ` · Vence em ${formatarData(item.dataVencimento)}`
-                              : ""}
-                          </p>
-                        </div>
-                        <StatusBadge
-                          status={item.situacao === "vencido" ? "rejeitado" : "pendente_aprovacao"}
-                          rotulo={item.situacao === "vencido" ? "Vencido" : "A vencer"}
-                        />
-                      </LinhaAlerta>
-                    ))}
-                  </ul>
-                )}
-                <NotaMostrando total={documentos.length} />
-              </SecaoDetalhe>
+              <ItemGrade titulo="Documentos e ASO" larguraPadrao={6}>
+                <SecaoDetalhe
+                  titulo="Documentos e ASO"
+                  card
+                  acao={<VerTudo href="/rh/documentos" />}
+                >
+                  {documentos.length === 0 ? (
+                    <SemAlertas texto="Nenhum documento vencendo." />
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {documentos.slice(0, LIMITE_ITENS).map((item) => (
+                        <LinhaAlerta key={item.id} href="/rh/documentos">
+                          <div>
+                            <p className="text-detalhe">{item.colaboradorNome}</p>
+                            <p className="text-legenda text-muted-foreground tabular-nums">
+                              {ROTULO_TIPO_DOCUMENTO[item.tipo as TipoDocumento]} ·{" "}
+                              {item.descricao}
+                              {item.dataVencimento
+                                ? ` · Vence em ${formatarData(item.dataVencimento)}`
+                                : ""}
+                            </p>
+                          </div>
+                          <StatusBadge
+                            status={item.situacao === "vencido" ? "rejeitado" : "pendente_aprovacao"}
+                            rotulo={item.situacao === "vencido" ? "Vencido" : "A vencer"}
+                          />
+                        </LinhaAlerta>
+                      ))}
+                    </ul>
+                  )}
+                  <NotaMostrando total={documentos.length} />
+                </SecaoDetalhe>
+              </ItemGrade>
             ) : null}
 
             {ferias ? (
-              <SecaoDetalhe titulo="Férias" card acao={<VerTudo href="/rh/decimo-terceiro-e-ferias" />}>
-                {ferias.length === 0 ? (
-                  <SemAlertas texto="Nenhuma férias vencendo." />
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {ferias.slice(0, LIMITE_ITENS).map((item) => (
-                      <LinhaAlerta key={item.id} href="/rh/decimo-terceiro-e-ferias">
-                        <div>
-                          <p className="text-detalhe">{item.colaboradorNome}</p>
-                          <p className="text-legenda text-muted-foreground tabular-nums">
-                            Limite de gozo: {formatarData(item.limiteGozo)}
-                          </p>
-                        </div>
-                        <StatusBadge
-                          status={item.situacao === "vencida" ? "rejeitado" : "pendente_aprovacao"}
-                          rotulo={item.situacao === "vencida" ? "Vencida" : "A vencer"}
-                        />
-                      </LinhaAlerta>
-                    ))}
-                  </ul>
-                )}
-                <NotaMostrando total={ferias.length} />
-              </SecaoDetalhe>
+              <ItemGrade titulo="Férias" larguraPadrao={6}>
+                <SecaoDetalhe titulo="Férias" card acao={<VerTudo href="/rh/decimo-terceiro-e-ferias" />}>
+                  {ferias.length === 0 ? (
+                    <SemAlertas texto="Nenhuma férias vencendo." />
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {ferias.slice(0, LIMITE_ITENS).map((item) => (
+                        <LinhaAlerta key={item.id} href="/rh/decimo-terceiro-e-ferias">
+                          <div>
+                            <p className="text-detalhe">{item.colaboradorNome}</p>
+                            <p className="text-legenda text-muted-foreground tabular-nums">
+                              Limite de gozo: {formatarData(item.limiteGozo)}
+                            </p>
+                          </div>
+                          <StatusBadge
+                            status={item.situacao === "vencida" ? "rejeitado" : "pendente_aprovacao"}
+                            rotulo={item.situacao === "vencida" ? "Vencida" : "A vencer"}
+                          />
+                        </LinhaAlerta>
+                      ))}
+                    </ul>
+                  )}
+                  <NotaMostrando total={ferias.length} />
+                </SecaoDetalhe>
+              </ItemGrade>
             ) : null}
 
             {epis ? (
-              <SecaoDetalhe titulo="EPI a recolher" card acao={<VerTudo href="/rh/epis" />}>
-                {epis.length === 0 ? (
-                  <SemAlertas texto="Nenhum EPI a recolher." />
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {epis.slice(0, LIMITE_ITENS).map((item) => (
-                      <LinhaAlerta key={item.id} href="/rh/epis">
-                        <div>
-                          <p className="text-detalhe">{item.colaboradorNome}</p>
-                          <p className="text-legenda text-muted-foreground tabular-nums">
-                            {item.descricao}
-                            {item.ca ? ` · CA ${item.ca}` : ""} · Entregue em{" "}
-                            {formatarData(item.dataEntrega)}
-                          </p>
-                        </div>
-                        <StatusBadge status="rejeitado" rotulo="Recolher" />
-                      </LinhaAlerta>
-                    ))}
-                  </ul>
-                )}
-                <NotaMostrando total={epis.length} />
-              </SecaoDetalhe>
+              <ItemGrade titulo="EPI a recolher" larguraPadrao={6}>
+                <SecaoDetalhe titulo="EPI a recolher" card acao={<VerTudo href="/rh/epis" />}>
+                  {epis.length === 0 ? (
+                    <SemAlertas texto="Nenhum EPI a recolher." />
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {epis.slice(0, LIMITE_ITENS).map((item) => (
+                        <LinhaAlerta key={item.id} href="/rh/epis">
+                          <div>
+                            <p className="text-detalhe">{item.colaboradorNome}</p>
+                            <p className="text-legenda text-muted-foreground tabular-nums">
+                              {item.descricao}
+                              {item.ca ? ` · CA ${item.ca}` : ""} · Entregue em{" "}
+                              {formatarData(item.dataEntrega)}
+                            </p>
+                          </div>
+                          <StatusBadge status="rejeitado" rotulo="Recolher" />
+                        </LinhaAlerta>
+                      ))}
+                    </ul>
+                  )}
+                  <NotaMostrando total={epis.length} />
+                </SecaoDetalhe>
+              </ItemGrade>
             ) : null}
 
             {cadastros ? (
-              <SecaoDetalhe
-                titulo="Cadastro incompleto"
-                card
-                acao={<VerTudo href="/cadastros/colaboradores" />}
-              >
-                {cadastros.length === 0 ? (
-                  <SemAlertas texto="Nenhum cadastro incompleto." />
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {cadastros.slice(0, LIMITE_ITENS).map((item) => (
-                      <LinhaAlerta
-                        key={item.colaboradorId}
-                        href={`/cadastros/colaboradores/${item.colaboradorId}`}
-                      >
-                        <p className="text-detalhe">{item.colaboradorNome}</p>
-                        <div className="flex items-center gap-2">
-                          {item.semSalario ? (
-                            <StatusBadge status="rejeitado" rotulo="Sem salário" />
-                          ) : null}
-                          {item.semBanco ? (
-                            <StatusBadge status="rejeitado" rotulo="Sem banco" />
-                          ) : null}
-                        </div>
-                      </LinhaAlerta>
-                    ))}
-                  </ul>
-                )}
-                <NotaMostrando total={cadastros.length} />
-              </SecaoDetalhe>
+              <ItemGrade titulo="Cadastro incompleto" larguraPadrao={6}>
+                <SecaoDetalhe
+                  titulo="Cadastro incompleto"
+                  card
+                  acao={<VerTudo href="/cadastros/colaboradores" />}
+                >
+                  {cadastros.length === 0 ? (
+                    <SemAlertas texto="Nenhum cadastro incompleto." />
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {cadastros.slice(0, LIMITE_ITENS).map((item) => (
+                        <LinhaAlerta
+                          key={item.colaboradorId}
+                          href={`/cadastros/colaboradores/${item.colaboradorId}`}
+                        >
+                          <p className="text-detalhe">{item.colaboradorNome}</p>
+                          <div className="flex items-center gap-2">
+                            {item.semSalario ? (
+                              <StatusBadge status="rejeitado" rotulo="Sem salário" />
+                            ) : null}
+                            {item.semBanco ? (
+                              <StatusBadge status="rejeitado" rotulo="Sem banco" />
+                            ) : null}
+                          </div>
+                        </LinhaAlerta>
+                      ))}
+                    </ul>
+                  )}
+                  <NotaMostrando total={cadastros.length} />
+                </SecaoDetalhe>
+              </ItemGrade>
             ) : null}
 
             {adiantamentos ? (
-              <SecaoDetalhe
-                titulo="Adiantamento de inativo"
-                card
-                acao={<VerTudo href="/rh/adiantamentos" />}
-              >
-                {adiantamentos.length === 0 ? (
-                  <SemAlertas texto="Nenhum colaborador inativo com saldo em aberto." />
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {adiantamentos.slice(0, LIMITE_ITENS).map((item) => (
-                      <LinhaAlerta
-                        key={item.colaboradorId}
-                        href="/rh/adiantamentos"
-                      >
-                        <div>
-                          <p className="text-detalhe">{item.colaboradorNome}</p>
-                          <p className="text-legenda text-muted-foreground">
-                            Colaborador inativo
-                          </p>
-                        </div>
-                        <MoneyText valor={item.saldo} className="font-medium" />
-                      </LinhaAlerta>
-                    ))}
-                  </ul>
-                )}
-                <NotaMostrando total={adiantamentos.length} />
-              </SecaoDetalhe>
+              <ItemGrade titulo="Adiantamento de inativo" larguraPadrao={6}>
+                <SecaoDetalhe
+                  titulo="Adiantamento de inativo"
+                  card
+                  acao={<VerTudo href="/rh/adiantamentos" />}
+                >
+                  {adiantamentos.length === 0 ? (
+                    <SemAlertas texto="Nenhum colaborador inativo com saldo em aberto." />
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {adiantamentos.slice(0, LIMITE_ITENS).map((item) => (
+                        <LinhaAlerta
+                          key={item.colaboradorId}
+                          href="/rh/adiantamentos"
+                        >
+                          <div>
+                            <p className="text-detalhe">{item.colaboradorNome}</p>
+                            <p className="text-legenda text-muted-foreground">
+                              Colaborador inativo
+                            </p>
+                          </div>
+                          <MoneyText valor={item.saldo} className="font-medium" />
+                        </LinhaAlerta>
+                      ))}
+                    </ul>
+                  )}
+                  <NotaMostrando total={adiantamentos.length} />
+                </SecaoDetalhe>
+              </ItemGrade>
             ) : null}
-          </div>
+          </GradeKpis>
         </>
       )}
     </div>

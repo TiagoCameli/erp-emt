@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL, formatarMesAno } from "@/lib/formatadores";
 import {
   CORES_SERIE_CENTRO,
@@ -37,7 +38,7 @@ function rotuloEixo(valor: number): string {
 export function PosicaoGrafico({ aplicacoes, serie }: PosicaoGraficoProps) {
   const dados = serie.map((s) => ({ rotulo: formatarMesAno(s.mes), ...s.valores }));
   return (
-    <div className="h-72 w-full">
+    <AreaGrafico altura="18rem">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={dados} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -75,6 +76,6 @@ export function PosicaoGrafico({ aplicacoes, serie }: PosicaoGraficoProps) {
           ))}
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

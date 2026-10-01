@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL } from "@/lib/formatadores";
 
 /**
@@ -59,7 +60,7 @@ export interface EvolucaoGraficoProps {
 export function EvolucaoGrafico({ dados, unidade, nomeBarra, nomeContagem, selecionado, onAlternarMes }: EvolucaoGraficoProps) {
   const formatar = unidade === "valor" ? formatarBRL : (v: number) => `${v.toLocaleString("pt-BR")} t`;
   return (
-    <div className="h-72 w-full">
+    <AreaGrafico altura="18rem">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={dados}
@@ -104,7 +105,7 @@ export function EvolucaoGrafico({ dados, unidade, nomeBarra, nomeContagem, selec
           />
         </ComposedChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }
 
@@ -116,7 +117,7 @@ export interface MaterialVsFreteGraficoProps {
 export function MaterialVsFreteGrafico({ dados, onAlternarMaterial }: MaterialVsFreteGraficoProps) {
   const curtos = dados.map((d) => ({ ...d, curto: d.nome.length > 18 ? `${d.nome.slice(0, 18)}…` : d.nome }));
   return (
-    <div className="h-72 w-full">
+    <AreaGrafico altura="18rem">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={curtos}
@@ -137,6 +138,6 @@ export function MaterialVsFreteGrafico({ dados, onAlternarMaterial }: MaterialVs
           <Bar dataKey="frete" name="Frete (R$)" fill={COR_LINHA} radius={[3, 3, 0, 0]} maxBarSize={32} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

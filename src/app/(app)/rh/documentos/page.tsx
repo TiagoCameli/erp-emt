@@ -46,7 +46,7 @@ export default async function PaginaDocumentos() {
         }
       />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="rh.documentos.resumo" titulo="Resumo" className="mb-4">
         <KPICard
           titulo="Documentos vencidos"
           valor={qtdVencidos}

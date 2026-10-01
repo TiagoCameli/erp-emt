@@ -9,6 +9,8 @@ import {
   EmptyState,
   FiltroPeriodo,
   FiltroSelect,
+  GradeKpis,
+  ItemGrade,
   MoneyText,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
@@ -325,12 +327,16 @@ export function AplicacoesPainel({ aplicacoes, linhas, movimentos, podeEditar }:
       <Titulo descricao="Rendimento em branco é mês sem posição do extrato. Antes da abertura (25/09/2026) a posição é só o principal, sem rendimento: o salto de setembro é a abertura trazendo o saldo anterior e o rendimento passado.">
         Mês a mês
       </Titulo>
-      <div className="mb-3 rounded-md border border-border p-3">
-        <PosicaoGrafico
-          aplicacoes={aplicacoes.map((a) => ({ id: a.aplicacao.id, nome: a.aplicacao.nome }))}
-          serie={serie}
-        />
-      </div>
+      <GradeKpis id="financeiro.aplicacoes.grafico" titulo="Gráfico mês a mês" vao="amplo" className="mb-3">
+        <ItemGrade titulo="Posição mês a mês" idCard="posicao" larguraPadrao={12}>
+          <div className="flex flex-col rounded-md border border-border p-3">
+            <PosicaoGrafico
+              aplicacoes={aplicacoes.map((a) => ({ id: a.aplicacao.id, nome: a.aplicacao.nome }))}
+              serie={serie}
+            />
+          </div>
+        </ItemGrade>
+      </GradeKpis>
       <DataTable
         idTabela="financeiro.aplicacoes.meses"
         columns={colunasMes}

@@ -57,7 +57,7 @@ export default async function PaginaDecimoTerceiroEFerias() {
         descricao="Períodos aquisitivos e gozo de férias por colaborador, e o 13º salário em lote por ano e parcela."
       />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="rh.decimo-terceiro-e-ferias.resumo" titulo="Resumo" className="mb-4">
         <KPICard
           titulo="Férias vencidas"
           valor={vencidas}

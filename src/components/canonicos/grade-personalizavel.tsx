@@ -4,11 +4,11 @@ import * as React from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  Ellipsis,
   EyeOff,
   GripVertical,
   Plus,
   RotateCcw,
-  Scaling,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -235,7 +235,7 @@ export function GradePersonalizavel({
   return (
     <div className={cn("@container", className)}>
       {editando ? (
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-border bg-surface px-3 py-2 print:hidden">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-border bg-surface px-3 py-2 print:hidden">
           <p className="text-legenda text-muted-foreground">
             {titulo ? <span className="font-medium text-foreground">{titulo}: </span> : null}
             arraste pelo <GripVertical className="inline size-3.5 align-text-bottom" aria-hidden /> para
@@ -276,7 +276,10 @@ export function GradePersonalizavel({
 
       <div
         ref={gradeRef}
-        className="flex flex-wrap gap-(--vao-grade)"
+        // Na edição as fileiras se afastam para a barra de cada card (montada na
+        // borda de cima) não encostar no card de cima. Só o vão vertical muda: o
+        // horizontal entra na conta das larguras.
+        className={cn("flex flex-wrap gap-(--vao-grade)", editando && "gap-y-7")}
         style={{ "--vao-grade": VAOS[vao] } as React.CSSProperties}
         onDragOver={arrastando ? (e) => e.preventDefault() : undefined}
         onDrop={aoSoltarArrasto}
@@ -399,14 +402,16 @@ function BarraDoItem({
   const valorAltura = altura === undefined ? "auto" : String(altura);
 
   return (
-    <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm print:hidden">
+    // Montada em cima da borda de cima (metade fora do card) para não cobrir o
+    // título: dentro do card ela tapava o fim de "Pagamentos a aprovar".
+    <div className="absolute -top-3.5 right-2 z-10 flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5 shadow-sm print:hidden">
       <span
         role="button"
         tabIndex={-1}
         draggable
         title={`Arrastar ${titulo}`}
         aria-label={`Arrastar ${titulo}`}
-        className="flex size-7 cursor-grab items-center justify-center rounded-sm text-muted-foreground hover:bg-surface hover:text-foreground active:cursor-grabbing"
+        className="flex size-6 cursor-grab items-center justify-center rounded-sm text-muted-foreground hover:bg-surface hover:text-foreground active:cursor-grabbing"
         onDragStart={aoComecarArrasto}
         onDragEnd={aoTerminarArrasto}
       >
@@ -414,8 +419,8 @@ function BarraDoItem({
       </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button type="button" variant="ghost" size="icon-sm" className="size-7" aria-label={`Tamanho e posição de ${titulo}`}>
-            <Scaling />
+          <Button type="button" variant="ghost" size="icon-sm" className="size-6" aria-label={`Tamanho e posição de ${titulo}`}>
+            <Ellipsis />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
@@ -472,7 +477,7 @@ function BarraDoItem({
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="size-7"
+        className="size-6"
         aria-label={`Tirar ${titulo} da tela`}
         title="Tirar da tela"
         onClick={aoOcultar}

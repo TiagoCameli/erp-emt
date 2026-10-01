@@ -97,10 +97,11 @@ export function CardsSaldo({ cards, cardsIds, opcoes, podeConfigurar, hrefContaC
           Nenhum card escolhido.{podeConfigurar ? " Use Gerenciar cards para escolher os fornecedores." : ""}
         </p>
       ) : (
-        <GradeKpis>
+        <GradeKpis id="frete.painel.saldos" titulo="Saldos">
           {cards.map((c) => (
             <KPICard
               key={c.fornecedorId}
+              idCard={c.fornecedorId}
               titulo={c.titulo}
               href={hrefContaCorrente}
               valor={

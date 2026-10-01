@@ -478,7 +478,7 @@ export function ExtratoContaTabela({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
+      <GradeKpis id="financeiro.contas-bancarias.extrato" titulo="Resumo do extrato">
         {/*
           O cartão de saldo SOME sem permissão, e não vira travessão: com
           `MoneyText valor={null}` ele mostraria "R$ 0,00", que é o pior

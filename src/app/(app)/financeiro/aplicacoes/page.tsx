@@ -80,7 +80,7 @@ export default async function PaginaAplicacoes() {
         </div>
       ) : null}
 
-      <GradeKpis className="mb-2">
+      <GradeKpis id="financeiro.aplicacoes.resumo" titulo="Resumo das aplicações" className="mb-2">
         <KPICard
           titulo="Posição líquida total"
           valor={<MoneyText valor={cards.posicaoTotal} />}
