@@ -7,8 +7,8 @@ const base = { itemCodigo: null, unidade: null, valor: null, referencia: null, d
 describe("fraseAlerta", () => {
   it("acumulado acima do previsto, com e sem motivo", () => {
     const a = { ...base, tipo: "acumulado_acima_previsto", itemCodigo: "01.01", unidade: "m", valor: "35.0000", referencia: "30" };
-    expect(fraseAlerta({ ...a, comMotivo: true })).toBe("01.01 acumulado 35 m, acima do previsto de 30 m (com motivo informado)");
-    expect(fraseAlerta(a)).toBe("01.01 acumulado 35 m, acima do previsto de 30 m (sem motivo informado)");
+    expect(fraseAlerta({ ...a, comMotivo: true })).toBe("01.01 acumulado 35 m, acima do previsto de 30 m (motivo informado, ainda precisa de aditivo)");
+    expect(fraseAlerta(a)).toBe("01.01 acumulado 35 m, acima do previsto de 30 m (sem motivo informado, precisa de aditivo)");
   });
 
   it("prazo: faltando, um dia, hoje e vencido", () => {

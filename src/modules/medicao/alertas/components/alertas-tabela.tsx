@@ -4,12 +4,12 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { BellOff } from "lucide-react";
 
 import { DataTable, EmptyState, StatusBadge } from "@/components/canonicos";
-import { ROTULO_GRAVIDADE, ROTULO_TIPO_ALERTA, fraseAlerta } from "@/modules/medicao/alertas/formato";
+import { ORDEM_GRAVIDADE, ROTULO_GRAVIDADE, ROTULO_TIPO_ALERTA, fraseAlerta } from "@/modules/medicao/alertas/formato";
 import type { AlertaLinha } from "@/modules/medicao/alertas/tipos";
 
 const COR_GRAVIDADE: Record<string, string> = { alta: "rejeitado", media: "pendente_aprovacao", baixa: "rascunho" };
 
-const colunas: ColumnDef<AlertaLinha, unknown>[] = [
+export const colunasAlertas: ColumnDef<AlertaLinha, unknown>[] = [
   {
     accessorKey: "codigo",
     header: "Contrato",
@@ -18,7 +18,9 @@ const colunas: ColumnDef<AlertaLinha, unknown>[] = [
     cell: ({ row }) => <span className="font-mono font-medium">{row.original.codigo}</span>,
   },
   {
-    accessorKey: "gravidade",
+    id: "gravidade",
+    // Ordena por severidade (alta, média, baixa), não em ordem alfabética.
+    accessorFn: (a) => ORDEM_GRAVIDADE[a.gravidade] ?? 9,
     header: "Gravidade",
     size: 120,
     meta: { atomico: true },
@@ -51,7 +53,7 @@ export function AlertasTabela({ alertas }: { alertas: AlertaLinha[] }) {
   return (
     <DataTable
       idTabela="medicao.alertas"
-      columns={colunas}
+      columns={colunasAlertas}
       data={alertas}
       idDaLinha={idDaLinha}
       cabecalhoFixo

@@ -53,7 +53,9 @@ export function fraseAlerta(a: Pick<AlertaLinha, "tipo" | "itemCodigo" | "unidad
   switch (a.tipo) {
     case "acumulado_acima_previsto": {
       const base = `${a.itemCodigo ?? "Item"} acumulado ${comUnidade(a.valor, a.unidade)}, acima do previsto de ${comUnidade(a.referencia, a.unidade)}`;
-      return a.comMotivo ? `${base} (com motivo informado)` : `${base} (sem motivo informado)`;
+      return a.comMotivo
+        ? `${base} (motivo informado, ainda precisa de aditivo)`
+        : `${base} (sem motivo informado, precisa de aditivo)`;
     }
     case "prazo_perto_do_fim": {
       const restantes = Number.parseInt(a.valor ?? "", 10);

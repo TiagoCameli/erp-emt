@@ -50,4 +50,9 @@ describe("PaginaAlertas", () => {
     expect(screen.getByTestId("tabela")).toBeTruthy();
     expect(carregarAlertas).toHaveBeenCalledWith({ contratoId: undefined, gravidade: "alta" });
   });
+
+  it("chave herdada do protótipo não vira filtro de gravidade", async () => {
+    await PaginaAlertas({ searchParams: Promise.resolve({ gravidade: "toString" }) });
+    expect(carregarAlertas).toHaveBeenCalledWith({ contratoId: undefined, gravidade: undefined });
+  });
 });

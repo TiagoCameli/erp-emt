@@ -15,7 +15,7 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
 import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import type { AlertaLinha } from "@/modules/medicao/alertas/tipos";
 
-import { AlertasTabela } from "./alertas-tabela";
+import { AlertasTabela, colunasAlertas } from "./alertas-tabela";
 
 afterEach(() => {
   cleanup();
@@ -51,5 +51,14 @@ describe("AlertasTabela", () => {
   it("sem alertas, mostra o estado vazio", () => {
     render(<AlertasTabela alertas={[]} />);
     expect(screen.getByText("Nenhum alerta")).toBeTruthy();
+  });
+});
+
+describe("ordenação da coluna de gravidade", () => {
+  it("ordena por severidade (alta, média, baixa), não em ordem alfabética", () => {
+    const col = colunasAlertas.find((c) => c.id === "gravidade");
+    const rank = (g: string) => (col as unknown as { accessorFn: (a: AlertaLinha) => number }).accessorFn(alerta({ gravidade: g }));
+    expect(rank("alta")).toBeLessThan(rank("media"));
+    expect(rank("media")).toBeLessThan(rank("baixa"));
   });
 });

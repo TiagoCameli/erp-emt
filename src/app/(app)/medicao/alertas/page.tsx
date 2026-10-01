@@ -27,7 +27,7 @@ export default async function PaginaAlertas({
   const contratoParam = primeiro(params.contrato);
   const contratoId = idSchema.safeParse(contratoParam).success ? contratoParam : "";
   const gravidadeParam = primeiro(params.gravidade);
-  const gravidade = gravidadeParam in ROTULO_GRAVIDADE ? gravidadeParam : "";
+  const gravidade = Object.prototype.hasOwnProperty.call(ROTULO_GRAVIDADE, gravidadeParam) ? gravidadeParam : "";
 
   const [contratos, alertas] = await Promise.all([
     listarContratos({}),
