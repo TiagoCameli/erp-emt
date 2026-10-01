@@ -42,6 +42,11 @@
 --   5r grants: as 7 RPCs sem anon e com authenticated; as 2 internas sem authenticated; a view de alertas
 --      só select para authenticated; todas security definer com search_path vazio.
 --   5z controle: a glosa da 1ª depois de 5h (2) comparada com 3 tem de dar DIFERENTE.
+--   5s reforço (mc_fase5a2_reforco): 'NaN', 'Infinity', '-Infinity' e texto não numérico recusam com P0001
+--      em pt-BR no lançamento (quantidade e km), no ajuste e na aprovação ("Quantidade inválida: abc");
+--      aprovar com p_tudo_como_medido nulo não pula a validação (item fora da revisão recusa) e nada grava.
+--   5t preço do item que saiu: rascunho v2 que traz o 01.02 a 99 não conta; a 2ª (v1) segue com 5 da v0
+--      (2 x 5 = 10,00; total 70,00).
 
 begin;
 create function public.fn_mc_prova_planilha(p_contrato uuid, p_numero int, p_aditivo uuid, p_desde date, p_linhas jsonb)
@@ -97,7 +102,7 @@ declare
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_l09 constant uuid := 'c4109738-9af7-4ddb-8982-3b2c79fe6e43';
   v_l10 constant uuid := 'e0e21c04-1128-4cc3-8d2e-5f8e27a8fad1';
-  v_k uuid; v_v0 uuid; v_v1 uuid; v_ad uuid; v_i01 uuid; v_i1 uuid; v_i2 uuid; v_m1 uuid; v_m2 uuid; v_l uuid;
+  v_k uuid; v_v0 uuid; v_v1 uuid; v_v2 uuid; v_ad uuid; v_i01 uuid; v_i1 uuid; v_i2 uuid; v_m1 uuid; v_m2 uuid; v_l uuid;
   v_k6 uuid; v_i6 uuid; v_m61 uuid; v_m62 uuid;
   v_txt text; v_fora0 jsonb; v_glosa numeric; v_hoje date := current_date;
   r jsonb := '{}'::jsonb;
@@ -146,6 +151,17 @@ begin
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('5a2_aprovar_aberta', v_txt);
 
+  -- 5s (reforço). Lançamento com quantidade ou km não numéricos recusa com mensagem pt-BR (P0001)
+  begin perform public.fn_mc_lancamento_salvar(v_k, jsonb_build_object('item_id', v_i1, 'data', '2026-01-10', 'quantidade', 'NaN'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s1_lancamento_nan', v_txt);
+  begin perform public.fn_mc_lancamento_salvar(v_k, jsonb_build_object('item_id', v_i1, 'data', '2026-01-10', 'quantidade', 'Infinity'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s2_lancamento_infinity', v_txt);
+  begin perform public.fn_mc_lancamento_salvar(v_k, jsonb_build_object('item_id', v_i1, 'data', '2026-01-10', 'quantidade', '1', 'km_inicial', 'NaN', 'km_final', '1'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s3_lancamento_km_nan', v_txt);
+
   -- 5b. Fechar: em conferência, v0, sem evento versao; lançar nela recusa
   perform public.fn_mc_medicao_fechar(v_m1);
   r := r || jsonb_build_object('5b1_fechar', public.fn_mc_prova_confere(jsonb_build_object(
@@ -179,11 +195,24 @@ begin
   begin perform public.fn_mc_ajuste_lancar(v_m1, v_i1, '-2', ' ');
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('5d2_ajuste_sem_motivo', v_txt);
+  begin perform public.fn_mc_ajuste_lancar(v_m1, v_i1, 'NaN', 'motivo qualquer');
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s4_ajuste_nan', v_txt);
+  begin perform public.fn_mc_ajuste_lancar(v_m1, v_i1, '-Infinity', 'motivo qualquer');
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s5_ajuste_menos_infinity', v_txt);
+  begin perform public.fn_mc_ajuste_lancar(v_m1, v_i1, 'abc', 'motivo qualquer');
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s6_ajuste_abc', v_txt);
+  r := r || jsonb_build_object('5s6_ajuste_abc_mensagem', public.fn_mc_prova_confere(to_jsonb(v_txt),
+    to_jsonb('recusou [P0001]: Quantidade inválida: abc'::text)));
   perform public.fn_mc_ajuste_lancar(v_m1, v_i1, '-2', 'medido a mais');
   r := r || jsonb_build_object('5d3_ajuste', public.fn_mc_prova_confere(
     (select jsonb_build_object('rev', rv.numero, 'qtd', a.quantidade, 'motivo', a.motivo, 'tipo', a.tipo)
-       from public.mc_ajustes a join public.mc_medicao_revisoes rv on rv.id = a.revisao_id where a.medicao_id = v_m1),
+       from public.mc_ajustes a join public.mc_medicao_revisoes rv on rv.id = a.revisao_id where a.medicao_id = v_m1 and a.motivo <> 'motivo qualquer'),
     jsonb_build_object('rev', 0, 'qtd', -2, 'motivo', 'medido a mais', 'tipo', 'manual')));
+  r := r || jsonb_build_object('5s10_nenhum_ajuste_invalido', public.fn_mc_prova_confere(
+    to_jsonb((select count(*) from public.mc_ajustes where medicao_id = v_m1 and motivo = 'motivo qualquer')), to_jsonb(0)));
 
   -- 5e. Enviar: REV00 congela 28, medição enviada; enviar de novo recusa
   perform public.fn_mc_medicao_enviar(v_m1);
@@ -204,6 +233,20 @@ begin
   begin perform public.fn_mc_medicao_aprovar(v_m1, jsonb_build_array(jsonb_build_object('item_id', v_i1, 'quantidade', '-1')), false);
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('5f2_aprovar_negativo', v_txt);
+  begin perform public.fn_mc_medicao_aprovar(v_m1, jsonb_build_array(jsonb_build_object('item_id', v_i1, 'quantidade', 'NaN')), false);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s7_aprovar_nan', v_txt);
+  begin perform public.fn_mc_medicao_aprovar(v_m1, jsonb_build_array(jsonb_build_object('item_id', v_i2, 'quantidade', '1')), null);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou [' || sqlstate || ']: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5s8_aprovar_tudo_nulo_item_fora', v_txt);
+  r := r || jsonb_build_object('5s9_ainda_enviada', public.fn_mc_prova_confere(
+    (select jsonb_build_array(status, (select count(*) from public.mc_aprovacoes_item ai join public.mc_medicao_revisoes rv on rv.id = ai.revisao_id
+                                       where rv.medicao_id = v_m1)) from public.mc_medicoes where id = v_m1),
+    jsonb_build_array('enviada', 0)));
+  r := r || jsonb_build_object('5s11_todas_p0001', public.fn_mc_prova_confere(
+    (select jsonb_object_agg(key, value #>> '{}' like 'recusou [P0001]: %') from jsonb_each(r) where key ~ '^5s[1-8]_[a-z_]+$' and key !~ 'mensagem'),
+    jsonb_build_object('5s1_lancamento_nan', true, '5s2_lancamento_infinity', true, '5s3_lancamento_km_nan', true, '5s4_ajuste_nan', true,
+      '5s5_ajuste_menos_infinity', true, '5s6_ajuste_abc', true, '5s7_aprovar_nan', true, '5s8_aprovar_tudo_nulo_item_fora', true)));
 
   -- 5g. Nova revisão: sem motivo recusa; com motivo substitui a REV00 e volta a medição para conferência
   begin perform public.fn_mc_medicao_nova_revisao(v_m1, '');
@@ -283,6 +326,20 @@ begin
     jsonb_build_object('versao', 1, 'i1', jsonb_build_array(12, 60), 'i2', jsonb_build_array(5, 10), 'total', 70,
       'eventos', jsonb_build_array('abrir', 'fechar', 'versao'),
       'motivo_versao', 'Passou da planilha v0 para a v1, vigente em 28/02/2026 (fim do período)')));
+  reset role;
+  insert into public.mc_aditivos (contrato_id, numero, data_assinatura, data_vigencia, tipos, motivo)
+  values (v_k, 2, '2026-03-01', '2026-03-01', array['valor'], 'Prova rascunho') returning id into v_ad;
+  insert into public.mc_planilha_versoes (contrato_id, numero, aditivo_id, vigente_desde)
+  values (v_k, 2, v_ad, '2026-03-01') returning id into v_v2;
+  insert into public.mc_planilha_itens (versao_id, contrato_id, item_id, ordem, codigo, descricao, unidade, tipo, preco_unitario, quantidade_prevista)
+  values (v_v2, v_k, v_i2, 1, '01.02', 'Serviço 2', 't', 'servico', 99, 10);
+  set local role authenticated;
+  r := r || jsonb_build_object('5t_preco_ignora_rascunho', public.fn_mc_prova_confere(jsonb_build_object(
+      'v2', (select status from public.mc_planilha_versoes where id = v_v2),
+      'i2', (select jsonb_build_array(preco_unitario, valor_medicao, planilha_item_id = (select id from public.mc_planilha_itens where versao_id = v_v0 and item_id = v_i2))
+               from public.mc_v_medicao_itens where medicao_id = v_m2 and item_id = v_i2),
+      'total', (select valor from public.mc_v_medicao_totais where medicao_id = v_m2)),
+    jsonb_build_object('v2', 'rascunho', 'i2', jsonb_build_array(5, 10, true), 'total', 70)));
 
   -- 5l. Alertas de K5 (lidos como o Tiago)
   r := r || jsonb_build_object('5l_alertas_k5', public.fn_mc_prova_confere(
