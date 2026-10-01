@@ -32,9 +32,14 @@ export function AprovacaoCliente({
   fila,
   diretos,
 }: AprovacaoClienteProps) {
+  // Quem abre um link de aprovação no celular veio aprovar aqueles pagamentos:
+  // a aba de dinheiro e cartão é conferência de outra coisa e só tira o foco.
+  // No computador ela fica, porque lá cabe e é a mesma pessoa no mesmo dinheiro.
+  const doLink = fila.parcelasDoLink.length > 0;
+
   return (
     <Tabs defaultValue={abaInicial}>
-      <TabsList>
+      <TabsList className={doLink ? "max-md:hidden" : undefined}>
         <TabsTrigger value="fila">Fila de aprovação</TabsTrigger>
         <TabsTrigger value="diretos">{CONFERENCIA.aba}</TabsTrigger>
       </TabsList>
