@@ -62,6 +62,13 @@ export function arredondar(d: Decimal, casas: number): Decimal {
   return { digitos: negativo ? -quociente : quociente, escala: casas };
 }
 
+/** Corta as casas além de `casas`, em direção ao zero: o TRUNC(numeric, n) do Postgres. */
+export function truncar(d: Decimal, casas: number): Decimal {
+  if (d.escala <= casas) return { digitos: d.digitos * potencia(casas - d.escala), escala: casas };
+  // a divisão de BigInt já trunca em direção ao zero
+  return { digitos: d.digitos / potencia(d.escala - casas), escala: casas };
+}
+
 export function paraTexto(d: Decimal): string {
   const negativo = d.digitos < ZERO;
   let corpo = (negativo ? -d.digitos : d.digitos).toString().padStart(d.escala + 1, "0");

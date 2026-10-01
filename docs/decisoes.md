@@ -4678,6 +4678,18 @@ separar os dois pelo nome, e o frete listava só o nome, então quem escolhia n�
 origem trouxe 86 pares com nome e unidade iguais (vinagre, água sanitária, pregos...), que precisam
 ser unificados antes, com as OCs, fretes e estoques deles repontados. Até lá a regra vale na action.
 
+## 2026-10-01 - Medição de Contratos: Obra 012, período manual e regra "truncado por item"
+
+**Pedido do Tiago (30/09 e 01/10/2026):** cadastrar o contrato da Obra 012 (Escola de Tempo Integral de Mâncio Lima, CT 030/2026, Concorrência Pública 008/2025, Município de Mâncio Lima, R$ 13.735.512,00, assinado em 26/02/2026, vigência de 12 meses) e a planilha contratual, com o período de cada medição digitado à mão, porque a medição pode juntar vários meses.
+
+**Período manual por contrato** (PR #336, migration `20260930231940_mc_periodo_manual`): coluna `mc_contratos.periodo_manual`. Ligada, "Abrir próxima medição" vem sem datas e só avisa depois de quando a medição pode começar; as regras do banco não mudam. O Lote 09 continua com a sugestão. Contrato cadastrado por `20260930232007_mc_cadastro_obra012`, com os 4 Admins no acesso.
+
+**Regra nova `item_truncado`** (migration `20261001161633_mc_regra_item_truncado`): a planilha da Obra 012 (aba Orçamento Sintético, preço com BDI de 25% na coluna K) tem, nos 634 serviços, valor = TRUNCAR(quantidade x preço, 2), sem exceção, e a soma é exatamente o valor do contrato. Nenhuma das três regras existentes fechava (arredondar por item daria 13.735.513,62; sem arredondar, 13.735.513,49). Decisão do Tiago: criar a regra e usá-la também na medição (cada item truncado em cada medição; acumulado = soma das medições, como em toda regra). Se um boletim real da prefeitura mostrar outra conta, ajustar antes da 1ª medição no módulo. O diagnóstico da importação ganhou a classe "truncado".
+
+**Carga da v0** (01/10/2026, com o ok do Tiago): pelas mesmas RPCs da tela, impersonando o Tiago, a partir do xlsx (sha256 `c7e9a417…`): 735 linhas (101 títulos e 634 serviços), vigente desde 26/02/2026. Conferida antes de gravar contra cada serviço e cada título da planilha (valor do módulo = coluna O), total 13.735.512,00, abortando se um centavo divergisse; ensaio em transação desfeita e controle com 1 centavo desviado recusado no item exato. Os dados da planilha não vão para o git; o xlsx pode ser anexado à versão pela tela.
+
+**Pendente:** data da ordem de serviço (execução de 410 dias), reajuste pelo INCC (Fase 6).
+
 ## 2026-09-30 - Frete: aba Carretas EMT
 
 **Pedido do Tiago:** uma aba no Frete que junte o que já foi gasto com as carretas (Financeiro,

@@ -268,10 +268,26 @@ describe("PagamentosDiretos", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  it("explica que a aba não trava pagamento nenhum", () => {
-    render(<PagamentosDiretos pagamentos={[]} {...PADRAO} />);
+  it("cada linha abre a tela inteira do pagamento, a mesma da fila", () => {
+    render(<PagamentosDiretos pagamentos={[pagamento()]} {...PADRAO} />);
     expect(
-      screen.getByText(/Nada aqui prende, libera nem muda pagamento/i),
+      screen.getByRole("link", { name: /^Visualizar .* em tela inteira$/ }),
+    ).toHaveAttribute(
+      "href",
+      "/financeiro/aprovacao-pagamentos/11111111-1111-4111-8111-111111111111",
+    );
+  });
+
+  it("quem não pode conferir ainda vê o pagamento em tela inteira", () => {
+    render(
+      <PagamentosDiretos
+        pagamentos={[pagamento()]}
+        podeConferir={false}
+        podeVerLancamento
+      />,
+    );
+    expect(
+      screen.getByRole("link", { name: /^Visualizar .* em tela inteira$/ }),
     ).toBeInTheDocument();
   });
 });

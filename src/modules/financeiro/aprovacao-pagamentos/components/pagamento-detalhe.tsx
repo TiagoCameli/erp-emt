@@ -37,7 +37,10 @@ import {
   aprovarParcela,
   revisarParcela,
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
-import { mensagemAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
+import {
+  mensagemAprovacao,
+  ROTA_ABA_DIRETOS,
+} from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
 import {
   ehParcelaAberta,
   ROTULO_TIPO_LANCAMENTO,
@@ -72,6 +75,12 @@ export interface PagamentoDetalheViewProps {
   podeEditarLancamento: boolean;
   /** Nota fiscal da OC de origem ainda não registrada: avisa, não bloqueia. */
   semNota: boolean;
+  /**
+   * Parcela de dinheiro ou cartão, aberta pela aba deles. Não passa pela
+   * aprovação: a tela volta para aquela aba e não oferece aprovar, revisar nem
+   * a mensagem de aprovação.
+   */
+  pagamentoDireto?: boolean;
 }
 
 function Linha({
@@ -145,6 +154,7 @@ export function PagamentoDetalheView({
   podeRevisar,
   podeEditarLancamento,
   semNota,
+  pagamentoDireto = false,
 }: PagamentoDetalheViewProps) {
   const router = useRouter();
   const [aprovando, setAprovando] = React.useState(false);
@@ -169,7 +179,11 @@ export function PagamentoDetalheView({
     statusParcela: parcela.status,
     statusLancamento: lancamento.status,
     contaBancariaId: parcela.contaBancariaId,
+    pagamentoDireto,
   });
+  const retorno = pagamentoDireto
+    ? { rota: ROTA_ABA_DIRETOS, rotulo: "Voltar para dinheiro e cartão" }
+    : { rota: ROTA_FILA, rotulo: "Voltar para a fila de aprovação" };
 
   const titulo = rotuloParcela(
     lancamento.numero,
@@ -180,6 +194,11 @@ export function PagamentoDetalheView({
   /** Volta para a fila e recarrega, para a parcela decidida sair da lista. */
   function voltarParaFila() {
     router.push(ROTA_FILA);
+  }
+
+  /** Volta para a lista de onde a pessoa veio: a fila ou dinheiro e cartão. */
+  function voltarParaRetorno() {
+    router.push(retorno.rota);
   }
 
   async function confirmarAprovacao(
@@ -264,10 +283,7 @@ export function PagamentoDetalheView({
         titulo={titulo}
         tituloMono
         descricao={lancamento.fornecedorNome ?? "Sem fornecedor"}
-        voltarPara={{
-          rota: ROTA_FILA,
-          rotulo: "Voltar para a fila de aprovação",
-        }}
+        voltarPara={retorno}
         selos={
           <>
             {infoParcela ? (
@@ -292,15 +308,19 @@ export function PagamentoDetalheView({
                 "Pago em" saem como travessão. A guarda mora lá porque o link é
                 colável: guarda que só existe no botão não é guarda. */}
             <BotaoEspelho rota="/espelho/pagamentos" ids={[parcela.id]} />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void copiarMensagem()}
-            >
-              <ClipboardCopy />
-              Copiar mensagem de aprovação
-            </Button>
+            {/* Mensagem de aprovação para pagamento que não se aprova seria
+                pedir aval de dinheiro que já saiu. */}
+            {pagamentoDireto ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void copiarMensagem()}
+              >
+                <ClipboardCopy />
+                Copiar mensagem de aprovação
+              </Button>
+            )}
           </>
         }
       />
@@ -648,9 +668,11 @@ export function PagamentoDetalheView({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={voltarParaFila}
+              onClick={voltarParaRetorno}
             >
-              Ver a fila de aprovação
+              {pagamentoDireto
+                ? "Ver dinheiro e cartão"
+                : "Ver a fila de aprovação"}
             </Button>
             {podeEditarLancamento ? (
               <Button asChild type="button" variant="ghost" size="sm">

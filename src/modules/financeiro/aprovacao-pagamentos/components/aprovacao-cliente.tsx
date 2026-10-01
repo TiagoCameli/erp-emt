@@ -9,6 +9,8 @@ import {
 } from "./pagamentos-diretos";
 
 export interface AprovacaoClienteProps {
+  /** Aba aberta ao chegar. "diretos" vem da volta da tela inteira deles. */
+  abaInicial?: "fila" | "diretos";
   fila: FilaAprovacaoProps;
   diretos: PagamentosDiretosProps;
 }
@@ -25,9 +27,13 @@ export interface AprovacaoClienteProps {
  * Mesmas abas de Financeiro > Pagamentos (Tabs do shadcn dentro da página); a
  * régua TabNav é a navegação entre abas do módulo, que é outra coisa.
  */
-export function AprovacaoCliente({ fila, diretos }: AprovacaoClienteProps) {
+export function AprovacaoCliente({
+  abaInicial = "fila",
+  fila,
+  diretos,
+}: AprovacaoClienteProps) {
   return (
-    <Tabs defaultValue="fila">
+    <Tabs defaultValue={abaInicial}>
       <TabsList>
         <TabsTrigger value="fila">Fila de aprovação</TabsTrigger>
         <TabsTrigger value="diretos">{CONFERENCIA.aba}</TabsTrigger>
