@@ -6,12 +6,20 @@ import { erroAcao } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { type ColunaImportacao, lerEValidarXlsx } from "@/lib/importacao";
 import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
 import {
   SLUGS_GRUPO,
   type SlugGrupo,
 } from "@/modules/cadastros/_shared/insumo-grupos";
+import {
+  chaveNomeUnidade,
+  haRepetido,
+  MENSAGEM_REPETIDO,
+  mudouNomeOuUnidade,
+  padraoIlikeCandidatos,
+} from "@/modules/cadastros/insumos/duplicidade";
 import {
   insumoSchema,
   type InsumoInput,
@@ -98,6 +106,27 @@ function montarRegistro(dados: InsumoInput) {
   };
 }
 
+type Cliente = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * Já existe insumo com este nome nesta unidade? Nome igual só vale com unidade
+ * diferente (ver `duplicidade.ts`). "erro" quando a consulta falha: tratar falha como
+ * "não existe" deixaria passar o repetido justamente quando o banco está com problema.
+ */
+async function nomeRepetidoNaUnidade(
+  supabase: Cliente,
+  dados: InsumoInput,
+  ignorarId?: string,
+): Promise<boolean | "erro"> {
+  const { data, error } = await supabase
+    .from("insumos")
+    .select("id, nome, unidade_id")
+    .eq("unidade_id", dados.unidadeId)
+    .ilike("nome", padraoIlikeCandidatos(dados.nome));
+  if (error) return "erro";
+  return haRepetido(data ?? [], dados.nome, dados.unidadeId, ignorarId);
+}
+
 /** Cria um insumo. */
 export async function criar(dados: InsumoInput): Promise<ResultadoAcao> {
   try {
@@ -112,6 +141,12 @@ export async function criar(dados: InsumoInput): Promise<ResultadoAcao> {
   }
 
   const supabase = await createClient();
+  const repetido = await nomeRepetidoNaUnidade(supabase, validado.data);
+  if (repetido === "erro") {
+    return { erro: "Não foi possível conferir se o insumo já existe. Tente novamente" };
+  }
+  if (repetido) return { erro: MENSAGEM_REPETIDO };
+
   const { error } = await supabase
     .from("insumos")
     .insert(montarRegistro(validado.data));
@@ -148,6 +183,25 @@ export async function editar(
   }
 
   const supabase = await createClient();
+  // Só confere quando nome ou unidade mudam: a carga da origem deixou pares com nome e
+  // unidade iguais, e editar a descrição de um deles não pode ficar travado.
+  const { data: gravado, error: erroGravado } = await supabase
+    .from("insumos")
+    .select("nome, unidade_id")
+    .eq("id", idValido.data)
+    .maybeSingle();
+  if (erroGravado) {
+    return { erro: "Não foi possível conferir se o insumo já existe. Tente novamente" };
+  }
+  const repetido =
+    !gravado || mudouNomeOuUnidade(gravado, validado.data.nome, validado.data.unidadeId)
+      ? await nomeRepetidoNaUnidade(supabase, validado.data, idValido.data)
+      : false;
+  if (repetido === "erro") {
+    return { erro: "Não foi possível conferir se o insumo já existe. Tente novamente" };
+  }
+  if (repetido) return { erro: MENSAGEM_REPETIDO };
+
   const { error } = await supabase
     .from("insumos")
     .update(montarRegistro(validado.data))
@@ -301,21 +355,33 @@ export async function importar(
 
   // Sem buscar categorias_financeiras: a planilha deixou de pedir categoria de
   // custo, que agora é da subcategoria (Cadastros > Categorias de insumo).
-  const [categorias, unidades] = await Promise.all([
+  const [categorias, unidades, existentes] = await Promise.all([
     supabase
       .from("categorias_insumo")
       .select("id, nome, insumo_grupos!inner(slug, nome)")
       .eq("ativo", true),
     supabase.from("unidades_medida").select("id, sigla").eq("ativo", true),
+    // Mais de 3 mil insumos: `todasAsLinhas`, senão o repetido depois do corte do
+    // PostgREST passaria.
+    todasAsLinhas((de, ate) =>
+      supabase.from("insumos").select("id, nome, unidade_id").order("id").range(de, ate),
+    ),
   ]);
 
-  if (categorias.error || unidades.error) {
+  if (categorias.error || unidades.error || existentes.erro) {
     return erroAcao(
       "cadastros.insumos.importar",
-      categorias.error ?? unidades.error,
+      categorias.error ?? unidades.error ?? existentes.erro,
       "Não foi possível carregar categorias e unidades para casar",
     );
   }
+
+  // Nome igual só vale com unidade diferente: nem contra o cadastro, nem dentro do
+  // próprio arquivo.
+  const jaCadastrados = new Set(
+    existentes.linhas.map((e) => chaveNomeUnidade(e.nome, e.unidade_id)),
+  );
+  const noArquivo = new Set<string>();
 
   // A subcategoria é única por (nome, grupo), então a chave de casamento é o par
   // grupo + categoria. "A classificar" existe nos 4 grupos: sem o grupo na
@@ -376,6 +442,14 @@ export async function importar(
         erro: `Unidade "${linha.dados.unidade}" (linha ${linha.linha}) não encontrada. Cadastre a unidade antes de importar.`,
       };
     }
+
+    const chave = chaveNomeUnidade(nome, unidadeId);
+    if (jaCadastrados.has(chave) || noArquivo.has(chave)) {
+      return {
+        erro: `O insumo "${nome}" em ${linha.dados.unidade} (linha ${linha.linha}) já existe${jaCadastrados.has(chave) ? " no cadastro" : " no arquivo"}. Nome igual só vale com unidade diferente.`,
+      };
+    }
+    noArquivo.add(chave);
 
     const codigoBruto = linha.dados.codigo;
     const codigo =

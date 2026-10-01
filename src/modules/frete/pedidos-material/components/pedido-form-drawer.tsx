@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { anexosDoDocumento } from "@/modules/_shared/anexos/actions";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { salvarPedido } from "@/modules/frete/pedidos-material/actions";
 import type { FornecedorOpcao, InsumoOpcao, PedidoLinha } from "@/modules/frete/pedidos-material/queries";
 import {
@@ -80,6 +81,11 @@ export interface PedidoFormDrawerProps {
  * subtotal (quantidade × valor unitário); "Valor total do pedido" = soma dos subtotais.
  * Quem usa passa `key` com o id do pedido, para os itens recomeçarem a cada abertura.
  */
+/** Rótulo do material gravado que saiu da lista de ativos ("BRITA 0 - t"). */
+function rotuloGravado(item: { insumoNome: string; unidade: string | null } | undefined): string | undefined {
+  return item ? rotuloInsumo(item.insumoNome, item.unidade) : undefined;
+}
+
 export function PedidoFormDrawer({ aberto, onAbertoChange, pedido, fornecedores, insumos }: PedidoFormDrawerProps) {
   const editando = pedido !== null;
   const form = useForm<PedidoFormInput>({
@@ -122,7 +128,10 @@ export function PedidoFormDrawer({ aberto, onAbertoChange, pedido, fornecedores,
 
   const fornecedorId = useWatch({ control: form.control, name: "fornecedorId" });
   const opcoesFornecedores = React.useMemo(() => fornecedores.map((f) => ({ valor: f.id, rotulo: f.nome })), [fornecedores]);
-  const opcoesInsumos = React.useMemo(() => insumos.map((i) => ({ valor: i.id, rotulo: i.nome })), [insumos]);
+  const opcoesInsumos = React.useMemo(
+    () => insumos.map((i) => ({ valor: i.id, rotulo: rotuloInsumo(i.nome, i.unidade) })),
+    [insumos],
+  );
   const unidadePorInsumo = React.useMemo(() => new Map(insumos.map((i) => [i.id, i.unidade])), [insumos]);
   const nomeGravado = React.useMemo(() => new Map((pedido?.itens ?? []).map((i) => [i.insumoId, i])), [pedido]);
 
@@ -238,7 +247,7 @@ export function PedidoFormDrawer({ aberto, onAbertoChange, pedido, fornecedores,
                     {indice === 0 ? <span className="text-legenda text-muted-foreground">Material</span> : null}
                     <Combobox
                       valor={item.insumoId}
-                      rotuloDoValor={nomeGravado.get(item.insumoId)?.insumoNome}
+                      rotuloDoValor={rotuloGravado(nomeGravado.get(item.insumoId))}
                       onValorChange={(v) => mudarItem(indice, { insumoId: v })}
                       opcoes={opcoesInsumos}
                       placeholder="Selecione..."

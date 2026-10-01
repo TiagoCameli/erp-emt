@@ -48,14 +48,19 @@ export interface FreteLinha {
   motivoExclusao: string | null;
 }
 
+/** Insumo para o select: `nome` é o rótulo com a unidade, `nomeCadastro` o nome puro. */
+export interface InsumoOpcaoFrete extends Opcao {
+  nomeCadastro: string;
+}
+
 /** Opções do formulário de frete. */
 export interface OpcoesFrete {
   /** Localidades ativas (origem e destino). */
   localidades: Opcao[];
   /** Fornecedores marcados como transportadora ou dono de tanque, ativos. */
   transportadoras: Opcao[];
-  /** Insumos ativos. */
-  insumos: Opcao[];
+  /** Insumos ativos, com a unidade no nome. */
+  insumos: InsumoOpcaoFrete[];
   /** Raízes de obra do centro de custo. */
   obras: Opcao[];
 }
