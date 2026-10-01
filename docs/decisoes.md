@@ -4804,3 +4804,5 @@ frete futuro fora do padrão volta a alertar.
    pela RPC `fn_frete_carretas_conferir`, com a ação nova `frete.carretas-emt/editar` (Admins).
 4. **Fretes ganha o filtro `?fretes=<id>,<id>`** (até 200), com aviso e "Ver todos os fretes". A
    conferência fica na aba Carretas EMT, que é onde o alerta mora; na aba Fretes se confere e corrige.
+
+**Ajuste (01/10/2026, pedido do Tiago):** o botão "Personalizar tela" saiu do canto de baixo, onde tapava o ⋮ da última linha das tabelas, e virou uma aba no canto direito alto, dentro do respiro de 24px do `<main>` acima do cabeçalho (`main` ganhou `relative`). Fora da edição ela é `absolute` e sobe com a página; na edição o "Concluir" fica `fixed` no mesmo canto. Só no desktop.

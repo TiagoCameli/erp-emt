@@ -604,7 +604,7 @@ export function AppShell({
         ) : null}
 
         {/* Conteúdo */}
-        <main className="flex-1 overflow-auto bg-background p-4 pb-20 md:p-6 md:pb-6">
+        <main className="relative flex-1 overflow-auto bg-background p-4 pb-20 md:p-6 md:pb-6">
           {children}
         </main>
       </div>
