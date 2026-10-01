@@ -126,4 +126,21 @@ describe("GradeKpis com id", () => {
     fireEvent.click(screen.getByRole("button", { name: /Concluir/ }));
     expect(link?.closest("[inert]")).toBeNull();
   });
+
+  it("grade dentro do card de outra grade não entra em edição (o card de fora é inerte)", () => {
+    render(
+      <ProvedorGrades inicial={{}}>
+        <GradeKpis id="teste.fora">
+          <ItemGrade titulo="Bloco">
+            <GradeKpis id="teste.dentro">
+              <KPICard titulo="Interno" valor="1" />
+            </GradeKpis>
+          </ItemGrade>
+        </GradeKpis>
+      </ProvedorGrades>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Personalizar cards/ }));
+    expect(screen.getByRole("button", { name: "Tirar Bloco da tela" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tirar Interno da tela" })).toBeNull();
+  });
 });

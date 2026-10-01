@@ -37,6 +37,7 @@ import {
   moverNaOrdem,
   moverUmPasso,
   ordemDaGrade,
+  preservarForaDaTela,
   type LayoutGrade,
   type TamanhoItemGrade,
 } from "@/components/canonicos/layout-grade";
@@ -67,6 +68,13 @@ export interface GradePersonalizavelProps {
 
 type Borda = "direita" | "baixo" | "canto";
 
+/**
+ * Verdadeiro dentro do card de outra grade personalizável. Grade aninhada não
+ * entra em edição: o card de fora fica `inert` no modo de edição, e os controles
+ * dela ficariam visíveis e mortos. Ela anda junto com o card que a contém.
+ */
+const DentroDeGrade = React.createContext(false);
+
 interface Previa {
   id: string;
   tamanho: TamanhoItemGrade;
@@ -92,8 +100,9 @@ export function GradePersonalizavel({
   className,
 }: GradePersonalizavelProps) {
   const contexto = useGrades();
-  const editando = contexto?.editando ?? false;
-  const registrar = contexto?.registrar;
+  const aninhada = React.useContext(DentroDeGrade);
+  const editando = !aninhada && (contexto?.editando ?? false);
+  const registrar = aninhada ? undefined : contexto?.registrar;
   const idsPadrao = React.useMemo(() => itens.map((i) => i.id), [itens]);
 
   React.useEffect(() => registrar?.(), [registrar]);
@@ -116,7 +125,11 @@ export function GradePersonalizavel({
   const escondidos = itens.filter((i) => ocultos.has(i.id));
 
   function gravar(mudar: (atual: LayoutGrade) => LayoutGrade) {
-    contexto?.salvar(idGrade, mudar(layout));
+    if (!contexto) return;
+    contexto.salvar(
+      idGrade,
+      preservarForaDaTela(mudar(layout), contexto.layoutBruto(idGrade), idsPadrao),
+    );
   }
 
   function mudarTamanho(id: string, tamanho: TamanhoItemGrade) {
@@ -178,6 +191,7 @@ export function GradePersonalizavel({
       alca.removeEventListener("pointermove", aoMover);
       alca.removeEventListener("pointerup", aoSoltar);
       alca.removeEventListener("pointercancel", aoSoltar);
+      alca.removeEventListener("lostpointercapture", aoSoltar);
       setPrevia(null);
       if (ultimo.largura !== atual.largura || ultimo.altura !== atual.altura) {
         mudarTamanho(id, ultimo);
@@ -187,6 +201,7 @@ export function GradePersonalizavel({
     alca.addEventListener("pointermove", aoMover);
     alca.addEventListener("pointerup", aoSoltar);
     alca.addEventListener("pointercancel", aoSoltar);
+    alca.addEventListener("lostpointercapture", aoSoltar);
   }
 
   // ---- arrastar para reordenar --------------------------------------------
@@ -209,7 +224,12 @@ export function GradePersonalizavel({
     evento.dataTransfer.dropEffect = "move";
     if (alvo === arrastando) return;
     const caixa = evento.currentTarget.getBoundingClientRect();
-    const depois = evento.clientX > caixa.left + caixa.width / 2;
+    const larguraGrade = gradeRef.current?.getBoundingClientRect().width ?? 0;
+    // Card de linha inteira não tem vizinho dos lados: antes/depois é em cima/embaixo.
+    const linhaInteira = larguraGrade > 0 && caixa.width > larguraGrade * 0.9;
+    const depois = linhaInteira
+      ? evento.clientY > caixa.top + caixa.height / 2
+      : evento.clientX > caixa.left + caixa.width / 2;
     setOrdemArrasto((atual) => {
       const base = atual ?? ordem;
       const nova = moverNaOrdem(base, arrastando, alvo, depois);
@@ -288,7 +308,7 @@ export function GradePersonalizavel({
           const item = porId.get(id);
           if (!item) return null;
           const salvo = layout.tamanhos[id] ?? {};
-          const tamanho = previa?.id === id ? previa.tamanho : salvo;
+          const tamanho = editando && previa?.id === id ? previa.tamanho : salvo;
           const largura = tamanho.largura ?? item.larguraPadrao;
           const altura = tamanho.altura;
           return (
@@ -321,7 +341,7 @@ export function GradePersonalizavel({
                   editando && "select-none",
                 )}
               >
-                {item.conteudo}
+                <DentroDeGrade.Provider value={true}>{item.conteudo}</DentroDeGrade.Provider>
               </div>
 
               {editando ? (

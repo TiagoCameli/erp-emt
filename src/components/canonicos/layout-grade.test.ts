@@ -12,6 +12,7 @@ import {
   moverNaOrdem,
   moverUmPasso,
   ordemDaGrade,
+  preservarForaDaTela,
   VERSAO_LAYOUT_GRADE,
 } from "@/components/canonicos/layout-grade";
 
@@ -121,5 +122,36 @@ describe("identidade", () => {
 
   it("layout vazio é padrão", () => {
     expect(layoutGradeEhPadrao(layoutGradeVazio())).toBe(true);
+  });
+});
+
+describe("preservarForaDaTela", () => {
+  const salvo = {
+    versao: VERSAO_LAYOUT_GRADE,
+    ordem: ["pago", "total", "recorte", "vencido"],
+    ocultos: ["recorte"],
+    tamanhos: { recorte: { largura: 6 }, total: { largura: 4 } },
+  };
+
+  it("salvar sem o card condicional na tela não apaga o que estava salvo dele", () => {
+    // Tela sem recorte: o card "recorte" não existe agora; a pessoa só mudou o "vencido".
+    const naTela = ["total", "vencido", "pago"];
+    const limpo = lerLayoutGrade(salvo, naTela);
+    const novo = { ...limpo, tamanhos: { ...limpo.tamanhos, vencido: { altura: 200 } } };
+    const final = preservarForaDaTela(novo, salvo, naTela);
+    expect(final.ocultos).toEqual(["recorte"]);
+    expect(final.tamanhos).toEqual({ recorte: { largura: 6 }, total: { largura: 4 }, vencido: { altura: 200 } });
+    expect(final.ordem).toEqual(["pago", "total", "recorte", "vencido"]);
+  });
+
+  it("o card de fora fica atrás do mesmo vizinho depois de reordenar os da tela", () => {
+    const naTela = ["total", "vencido", "pago"];
+    const novo = { ...lerLayoutGrade(salvo, naTela), ordem: ["vencido", "pago", "total"] };
+    expect(preservarForaDaTela(novo, salvo, naTela).ordem).toEqual(["vencido", "pago", "total", "recorte"]);
+  });
+
+  it("sem nada salvo de fora, devolve o layout novo intacto", () => {
+    const novo = lerLayoutGrade(salvo, IDS);
+    expect(preservarForaDaTela(novo, null, IDS)).toBe(novo);
   });
 });

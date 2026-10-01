@@ -231,3 +231,48 @@ export function baseDaLargura(colunas: number): string {
   const n = limitarLargura(colunas);
   return `calc((100% - ${COLUNAS_GRADE - 1} * var(--vao-grade)) / ${COLUNAS_GRADE} * ${n} + ${n - 1} * var(--vao-grade) - 0.5px)`;
 }
+
+/**
+ * Devolve ao layout novo o que estava salvo para cards que NÃO estão na tela
+ * agora. Sem isso, salvar numa tela sem o card condicional ("Total no recorte"
+ * só existe com recorte) apagaria a ordem, o oculto e o tamanho dele, e o card
+ * voltaria visível e no lugar padrão da próxima vez que aparecesse.
+ */
+export function preservarForaDaTela(
+  novo: LayoutGrade,
+  bruto: unknown,
+  idsDaTela: string[],
+): LayoutGrade {
+  if (!ehObjeto(bruto) || bruto.versao !== VERSAO_LAYOUT_GRADE) return novo;
+  const naTela = new Set(idsDaTela);
+  const ordemSalva = Array.isArray(bruto.ordem)
+    ? bruto.ordem.filter((id): id is string => typeof id === "string")
+    : [];
+  const foraNaOrdem = ordemSalva.filter((id) => !naTela.has(id));
+  const ocultosSalvos = Array.isArray(bruto.ocultos)
+    ? bruto.ocultos.filter((id): id is string => typeof id === "string" && !naTela.has(id))
+    : [];
+  const todosSalvos = [...ordemSalva, ...ocultosSalvos, ...(ehObjeto(bruto.tamanhos) ? Object.keys(bruto.tamanhos) : [])];
+  const tamanhosFora = saneiaTamanhos(
+    bruto.tamanhos,
+    new Set(todosSalvos.filter((id) => !naTela.has(id))),
+  );
+  if (foraNaOrdem.length === 0 && ocultosSalvos.length === 0 && Object.keys(tamanhosFora).length === 0) {
+    return novo;
+  }
+
+  // A ordem salva manda a posição dos que estão fora; a nova manda a dos que
+  // estão na tela. Os de fora entram logo depois do vizinho que tinham.
+  let ordem = novo.ordem;
+  if (foraNaOrdem.length > 0) {
+    const base = [...ordemSalva, ...idsDaTela.filter((id) => !ordemSalva.includes(id))];
+    const naTelaNaOrdem = novo.ordem.length > 0 ? novo.ordem : idsDaTela;
+    ordem = ordemDaGrade(base, naTelaNaOrdem);
+  }
+  return {
+    versao: VERSAO_LAYOUT_GRADE,
+    ordem,
+    ocultos: [...novo.ocultos, ...ocultosSalvos.filter((id) => !novo.ocultos.includes(id))],
+    tamanhos: { ...tamanhosFora, ...novo.tamanhos },
+  };
+}
