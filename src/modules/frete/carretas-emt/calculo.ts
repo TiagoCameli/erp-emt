@@ -21,7 +21,7 @@
  *   Resultado final .......... resultado operacional - investimento à vista - parcelas.
  */
 
-import { montarRotas, type LinhaRota } from "./rotas";
+import { montarAlertas, montarRotas, type AlertaRota, type LinhaRota } from "./rotas";
 
 export const GRUPOS_GASTO = ["mao_de_obra", "manutencao", "combustivel", "documentacao", "aquisicao", "outros"] as const;
 export type GrupoGasto = (typeof GRUPOS_GASTO)[number];
@@ -71,6 +71,25 @@ export interface Localidade {
   nome: string;
   latitude: number | null;
   longitude: number | null;
+}
+
+/** Um frete fora do padrão da rota, ainda não conferido (regras na migration 20261001215045). */
+export interface AlertaFrete {
+  /** R1: km lançado longe da estrada. R2: viagem longa demais. */
+  regra: "R1" | "R2";
+  freteId: string;
+  /** yyyy-MM-dd da saída. */
+  data: string;
+  mes: string;
+  tipo: string;
+  placa: string;
+  origemId: string;
+  destinoId: string;
+  km: number;
+  kmMapa: number | null;
+  dias: number | null;
+  /** Mediana de dias da rota. */
+  mediana: number | null;
 }
 
 export interface TracadoRota {
@@ -127,6 +146,7 @@ export interface DadosCarretas {
   diesel: DieselMes[];
   localidades: Localidade[];
   tracados: TracadoRota[];
+  alertas: AlertaFrete[];
 }
 
 export interface FiltroCarretas {
@@ -140,6 +160,11 @@ export interface FiltroCarretas {
    * o gasto e a parcela são da carreta inteira e não se dividem por tipo de viagem.
    */
   tipo?: string;
+  /**
+   * Rota escolhida na tabela de rotas ("<origem>_<destino>", ids das localidades); vazio = todas.
+   * Como o tipo, recorta só a produção.
+   */
+  rota?: string;
 }
 
 const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -309,6 +334,8 @@ export interface PainelCarretas {
   placasNaoReconhecidas: string[];
   /** Produção por rota (origem -> destino), com o mesmo recorte de período, carreta e tipo. */
   rotas: LinhaRota[];
+  /** Fretes fora do padrão da rota ainda não conferidos, agrupados por rota e regra. */
+  alertas: AlertaRota[];
 }
 
 const c = (reais: number) => Math.round(reais * 100);
@@ -471,6 +498,7 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
     if (chave === CHAVE_OUTRAS) naoReconhecidas.add(f.placa || "(sem placa)");
     if (!entra(chave) || !dentro(f.mes)) continue;
     if (filtro.tipo && f.tipo !== filtro.tipo) continue;
+    if (filtro.rota && `${f.origemId ?? ""}_${f.destinoId ?? ""}` !== filtro.rota) continue;
     const a = acc(chave);
     a.viagens += f.viagens;
     a.toneladas += f.toneladas;
@@ -642,6 +670,8 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
       .map(({ _v, _p, ...k }) => ({ ...k, valor: r(_v), pago: r(_p) }))
       .sort((a, b) => b.valor - a.valor),
     placasNaoReconhecidas: [...naoReconhecidas].sort(),
-    rotas: montarRotas(dados, filtro),
+    // A tabela de rotas mostra todas (é nela que se troca a rota); os alertas seguem a rota escolhida.
+    rotas: montarRotas(dados, { ...filtro, rota: "" }),
+    alertas: montarAlertas(dados, filtro),
   };
 }

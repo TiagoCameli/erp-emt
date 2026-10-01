@@ -22,6 +22,7 @@ import {
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarDataHora, formatarQuantidade } from "@/lib/formatadores";
 import { excluirFrete, restaurarFrete } from "@/modules/frete/fretes/actions";
@@ -359,6 +360,18 @@ export function FretesTabela({
         transportadoraId={filtros.transportadoraId}
         onAplicar={setMuitos}
       />
+
+      {filtros.ids.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-status-pendente/40 bg-status-pendente/5 px-3 py-2 text-detalhe text-foreground">
+          <span className="min-w-0 flex-1">
+            Mostrando {filtros.ids.length === 1 ? "o frete" : `os ${filtros.ids.length} fretes`} de um alerta de rota das
+            Carretas EMT. Confira e corrija aqui; para tirar o alerta, marque como conferido lá.
+          </span>
+          <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => setMuitos({ [CHAVE.fretes]: null })}>
+            Ver todos os fretes
+          </Button>
+        </div>
+      ) : null}
 
       <DataTable
         idTabela="frete.fretes"

@@ -4784,3 +4784,23 @@ Pedreira Britam, Vale do Abunã); são exatamente os sete que aparecem nos frete
 "Pedreira Britam -> Colorado" com 145 km (pela estrada são 843; a origem deve ser a Usina Gregório),
 uma viagem Britam -> Gregório de 51 dias (out/2025, SQS7E01) e outra com 990 km. Os números ficam
 como estão até alguém corrigir o frete.
+
+## 2026-10-01 - Carretas EMT: rota como filtro e alertas por frete com conferência
+
+**Pedido do Tiago:** a tabela de rotas funciona como filtro da rota; clicar num alerta leva para a
+aba Fretes só com os fretes em questão; marcar como conferido tira o alerta desses fretes, e só
+frete futuro fora do padrão volta a alertar.
+
+**Decisões:**
+
+1. **Rota no filtro da aba** (`?rota=<origem>_<destino>`), como o tipo de transporte: recorta a
+   produção (KPIs, gráficos, relatório, alertas); gasto e parcela continuam os da carreta inteira. A
+   tabela de rotas mostra todas, para trocar de rota ali mesmo; clicar de novo tira o filtro.
+2. **Alerta por frete, calculado no banco** (`fn_frete_carretas_emt`, chave `alertas`): R1 km lançado a
+   mais de 20% do km da estrada; R2 viagem com mais de max(5, 2 x mediana da rota) dias. Saíram os
+   textos sobre o total da rota ("km varia", "sem chegada"): o primeiro é o R1, o segundo é a F6 das
+   Anomalias (o "sem chegada" virou só uma legenda no tempo médio).
+3. **Conferência na mesma `frete_anomalias_conferidas`** (auditada), chave `R1-<frete>`/`R2-<frete>`,
+   pela RPC `fn_frete_carretas_conferir`, com a ação nova `frete.carretas-emt/editar` (Admins).
+4. **Fretes ganha o filtro `?fretes=<id>,<id>`** (até 200), com aviso e "Ver todos os fretes". A
+   conferência fica na aba Carretas EMT, que é onde o alerta mora; na aba Fretes se confere e corrige.

@@ -1,10 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { erroAcao, textoDoErro } from "@/lib/erros";
 import { dataHojeISO } from "@/lib/formatadores";
 import { exigirPermissao } from "@/lib/permissoes";
+import { createClient } from "@/lib/supabase/server";
 import { montarPainel } from "@/modules/frete/carretas-emt/calculo";
 import { carregarCarretasEmt } from "@/modules/frete/carretas-emt/queries";
 import { TIPOS_FRETE } from "@/modules/frete/fretes/schemas";
@@ -50,5 +52,45 @@ export async function gerarPlanilhaCarretasEmt(pedido: unknown): Promise<Resulta
     };
   } catch (erro) {
     return erroAcao("frete.carretasEmt.planilha", erro, `Não foi possível gerar a planilha: ${textoDoErro(erro)}`);
+  }
+}
+
+const conferirSchema = z.strictObject({
+  regra: z.enum(["R1", "R2"]),
+  freteIds: z.array(z.uuid({ error: "Frete inválido" })).min(1, { error: "Nenhum frete no alerta" }).max(500),
+  conferida: z.boolean(),
+});
+
+/**
+ * Marca (ou desmarca) como conferidos os fretes de um alerta de rota. Conferir esconde o alerta só
+ * desses fretes: frete novo fora do padrão volta a aparecer. Pede frete.carretas-emt/editar, aqui e
+ * na RPC; a conferência fica auditada em frete_anomalias_conferidas.
+ */
+export async function conferirAlertasCarretas(dados: unknown): Promise<{ ok: true; total: number } | { erro: string }> {
+  try {
+    await exigirPermissao("frete.carretas-emt", "editar");
+  } catch {
+    return { erro: "Sem permissão para conferir os alertas das Carretas EMT" };
+  }
+  const validado = conferirSchema.safeParse(dados);
+  if (!validado.success) return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const { regra, freteIds, conferida } = validado.data;
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_frete_carretas_conferir", {
+      p_chaves: [...new Set(freteIds)].map((id) => `${regra}-${id}`),
+      p_conferida: conferida,
+    });
+    if (error) {
+      return erroAcao("frete.carretasEmt.conferir", error, error.code === "P0001" && error.message ? error.message : "Não foi possível gravar a conferência");
+    }
+    try {
+      revalidatePath("/frete/carretas-emt");
+    } catch {
+      // a gravação já aconteceu
+    }
+    return { ok: true, total: data ?? freteIds.length };
+  } catch (erro) {
+    return erroAcao("frete.carretasEmt.conferir", erro, "Não foi possível gravar a conferência. Tente novamente");
   }
 }

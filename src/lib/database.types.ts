@@ -9384,6 +9384,10 @@ export type Database = {
         Returns: string;
       };
       fn_frete_carretas_emt: { Args: never; Returns: Json };
+      fn_frete_carretas_conferir: {
+        Args: { p_chaves: string[]; p_conferida: boolean; p_motivo?: string };
+        Returns: number;
+      };
       fn_mc_boletim: {
         Args: { p_ate?: number; p_contrato: string };
         Returns: Json;
