@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { gerarPlanilhaCarretasEmt } from "@/modules/frete/carretas-emt/actions";
 import { ROTULO_TIPO_FRETE, TIPOS_FRETE, type TipoFrete } from "@/modules/frete/fretes/schemas";
 import {
+  CHAVE_FROTA,
   CHAVE_OUTRAS,
   GRUPOS_GASTO,
   ROTULO_GRUPO,
@@ -86,6 +87,9 @@ function Secao({ titulo, descricao, children, acoes }: { titulo: string; descric
 export function corDaCarreta(indice: number): string {
   return indice >= 0 && indice < 4 ? `var(--viz-carreta-${indice + 1})` : "var(--muted-foreground)";
 }
+
+/** O gasto lançado na raiz, sem placa: cinza mais escuro que o da placa não reconhecida. */
+const COR_FROTA = "color-mix(in srgb, var(--muted-foreground) 55%, var(--foreground))";
 
 // ---------------------------------------------------------------------------
 // Relatório por carreta: métricas nas linhas, carretas nas colunas
@@ -361,6 +365,13 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
     return lista;
   }, [carretas, painel]);
 
+  // O custo tem também o gasto da frota sem placa, que não produz frete.
+  const seriesCusto: SerieCarreta[] = React.useMemo(() => {
+    if (!painel.desempenhos.some((d) => d.chave === CHAVE_FROTA)) return series;
+    const semOutras = series.filter((s) => s.chave !== CHAVE_OUTRAS);
+    return [...semOutras, { chave: CHAVE_FROTA, rotulo: "Frota (sem placa)", cor: COR_FROTA }, ...series.filter((s) => s.chave === CHAVE_OUTRAS)];
+  }, [series, painel]);
+
   const rotaEscolhida = painel.filtro.rota ? painel.rotas.find((r) => r.chave === painel.filtro.rota) : undefined;
 
   const semDados = t.viagens === 0 && t.custoOperacional === 0 && t.parcelas === 0 && t.investimento === 0;
@@ -504,14 +515,24 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
               <PorCarretaMensalGrafico meses={painel.meses} series={series} medida="producao" />
             </CartaoGrafico>
           </ItemGrade>
+          <ItemGrade titulo="Custo operacional mensal" larguraPadrao={12}>
+            <CartaoGrafico
+              className="min-w-0"
+              titulo="Custo operacional mensal"
+              subtitulo="Gastos do Financeiro sem aquisição, mais o diesel do tanque, por carreta"
+              altura={288}
+            >
+              <PorCarretaMensalGrafico meses={painel.meses} series={seriesCusto} medida="custo" />
+            </CartaoGrafico>
+          </ItemGrade>
           <ItemGrade titulo="Produção x gastos" larguraPadrao={12}>
             <CartaoGrafico
               className="min-w-0"
               titulo="Produção x gastos"
-              subtitulo="Fretes contra o custo operacional e as parcelas de cada mês; a linha é o resultado final"
-              altura={288}
+              subtitulo="Produção e custo operacional de cada carreta, mais as parcelas de cada mês; a linha é o resultado final"
+              altura={320}
             >
-              <ProducaoVsGastosGrafico meses={painel.meses} />
+              <ProducaoVsGastosGrafico meses={painel.meses} series={seriesCusto} />
             </CartaoGrafico>
           </ItemGrade>
           <ItemGrade titulo="Resultado acumulado" larguraPadrao={6}>
@@ -521,7 +542,7 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
           </ItemGrade>
           <ItemGrade titulo="Comparativo por carreta" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Comparativo por carreta" subtitulo="Produção, custo e financiamento no período" altura={288}>
-              <ComparativoCarretasGrafico desempenhos={painel.desempenhos.filter((d) => d.chave !== CHAVE_OUTRAS)} />
+              <ComparativoCarretasGrafico desempenhos={painel.desempenhos.filter((d) => d.chave !== CHAVE_OUTRAS)} series={seriesCusto} />
             </CartaoGrafico>
           </ItemGrade>
         </GradeKpis>

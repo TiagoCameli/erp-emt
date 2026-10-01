@@ -4805,6 +4805,84 @@ frete futuro fora do padrão volta a alertar.
 4. **Fretes ganha o filtro `?fretes=<id>,<id>`** (até 200), com aviso e "Ver todos os fretes". A
    conferência fica na aba Carretas EMT, que é onde o alerta mora; na aba Fretes se confere e corrige.
 
+**Ajuste (01/10/2026, pedido do Tiago):** o botão "Personalizar tela" saiu do canto de baixo, onde tapava o ⋮ da última linha das tabelas, e virou uma aba no canto direito alto, dentro do respiro de 24px do `<main>` acima do cabeçalho (`main` ganhou `relative`). Fora da edição ela é `absolute` e sobe com a página; na edição o "Concluir" fica `fixed` no mesmo canto. Só no desktop.
+
+## 2026-10-01 - Aprovação de pagamentos no celular: a tela de quem recebe o link
+
+Pedido do Tiago: a aprovação pelo celular, principalmente aberta pelo link do WhatsApp, mais
+concisa e focada no que precisa ser aprovado. Desktop não mudou.
+
+**Decisões:**
+
+1. **Fila no celular é outra tela, não a tabela encolhida.** Abaixo do `md` os quatro KPIs, a barra
+   de filtros e a DataTable dão lugar a `FilaCelular`: um card por parcela com fornecedor, valor,
+   descrição, número (que abre a tela inteira), vencimento, "Sem nota" e a observação inteira (no
+   celular não há tooltip, e é ali que vem o PIX), com Aprovar e Revisar. Mesmos modais e mesmas
+   actions da tabela. Busca simples fora do link; lista de 20 em 20.
+2. **"Aprovar todos" só existe no recorte do link.** Barra fixa acima do menu inferior com a
+   quantidade e o total, e abre o mesmo modal do lote. Na fila inteira não existe: seriam centenas
+   de pagamentos autorizados com um toque. Com algo marcado, a barra vira a do selecionado.
+3. **`useTelaCelular()` (`src/lib/use-tela-celular.ts`) em vez de só CSS.** Esconder por CSS deixaria
+   as duas árvores montadas, com botão de aprovar em dobro no DOM e no leitor de tela. O hook devolve
+   `null` no servidor e na hidratação, e nesse momento as duas versões saem com `md:hidden` /
+   `max-md:hidden`, para o celular não piscar a tabela. Sem `matchMedia` (jsdom) é computador.
+4. **Tela de uma parcela: a decisão sobe para o topo no celular.** A coluna da direita vira
+   `max-lg:contents` e o card do valor ganha `max-lg:order-first`, com o vencimento junto. Datas,
+   Pagamento, Parcelas, Rateio, Itens da OC e Trilha ficam recolhidos atrás de "Ver datas, parcelas,
+   rateio e histórico" (classe `max-lg:hidden`, então o DOM e o desktop seguem iguais). Imprimir
+   espelho e Copiar mensagem saem do celular: são trabalho de quem monta o pedido, no computador.
+5. **No link, a aba Dinheiro e cartão some no celular.** Quem abriu o link veio aprovar aqueles
+   pagamentos.
+
+**Ajuste 2 (01/10/2026, pedido do Tiago):** o "Personalizar tela" virou só o ícone, no rodapé da sidebar ao lado do botão de tema e com o mesmo desenho (`BotaoPersonalizar`). Ligado, vira o ✓ de concluir, destacado em verde. A sidebar está sempre à vista, então o concluir também. O `ProvedorGrades` passou a envolver o AppShell no layout do app, e a aba do topo saiu.
+
+## 2026-10-01 - Carretas EMT: mapa e tabela de rotas, segunda versão
+
+**Pedido do Tiago:** "dê mais fluidez a esse mapa, faça com que essa tabela e o mapa sejam
+espetaculares [...] que me dê as informações da melhor maneira possível".
+
+**Decisões:**
+
+1. **Fundo Esri Canvas** (cinza claro ou escuro, pelo tema), com camada só de nomes por cima; o
+   satélite também ganha nomes. A CARTO (testada) passou a exigir chave de API.
+2. **Rota = contorno + linha + fluxo animado** no sentido da carga; o fluxo para em
+   `prefers-reduced-motion`. Locais com tamanho pela tonelagem; pedreira é anel, destino é cheio.
+3. **Mapa e tabela ligados pelo foco:** mouse numa linha acende a rota no mapa e vice-versa; um cartão
+   sobre o mapa mostra os números da rota em foco (ou o total). Escolher a rota voa até ela, com o
+   enquadramento reservando a faixa do cartão.
+4. **Zoom inteiro** (`zoomSnap` 1): no fracionado aparecem emendas entre os pedaços do mapa. Roda do
+   mouse só depois de clicar no mapa.
+5. **Tabela:** viagens por mês em minigráfico, participação na produção em barra, R$/viagem, R$/t,
+   desvio do km lançado contra a estrada (acima de 5% em destaque), ordenação por coluna, teclado
+   (Enter/espaço filtra). O número da rota é a posição pela produção e não muda com a ordenação.
+
+## 2026-10-01 - Celular, bloco 1: os canônicos viram app de celular
+
+Pedido do Tiago depois da aprovação no celular: levar o mesmo padrão para todos os módulos. Em vez de
+redesenhar 95 telas, evoluem os canônicos (regra 9), e toda tela que os usa muda junto. Desktop não
+muda.
+
+1. **DataTable vira lista de cards abaixo do `md`** (`data-table-cartoes.tsx`). Título = primeira
+   coluna de texto; valor = primeira alinhada à direita; subtítulo sem rótulo = a coluna seguinte
+   (quase sempre quem: fornecedor, colaborador); mais quatro campos em duas colunas com rótulo em cima;
+   o resto em "Mais N campos". Checkbox de seleção, menu "⋮", clique no registro, linha expandida
+   ("Ver detalhes"), rodapé de totais e estado vazio continuam, montados das MESMAS células da tabela.
+   O card lê as colunas visíveis, então o que a pessoa escondeu no menu Colunas some nos dois.
+2. **`meta.celular`** (`titulo | valor | destaque | oculta`) para a tela ajustar o card sem mexer na
+   tabela. Coluna com `esconderAte` vai para o fim do card, não some.
+3. **Árvore (`subLinhas`) continua tabela**: recuo pai/filho é o que ela comunica.
+4. **Filtros numa gaveta inferior** com selo de quantos estão ativos, "Limpar" e "Ver N resultados".
+   Na barra fica só a busca. Altura, Colunas e Linhas por página saem do celular (são da tabela).
+5. **KPI dois por linha** (`data-kpi` + `:has`), com número um degrau menor e sem quebra. Gráfico
+   continua na largura toda.
+6. **FormDrawer**: respiro menor e botões do rodapé dividindo a largura, acima da área segura.
+7. Mesmo `useTelaCelular()` da aprovação: `null` antes de hidratar desenha os dois e o CSS escolhe.
+8. **Colunas especiais feitas à mão também contam.** Trinta e poucas telas têm a própria coluna
+   `acoes` (ou rótulo "Ações"), `selecao` ou `expandir`: o card as reconhece por id e as põe no canto
+   (ações, fora do clique), à esquerda (seleção) ou fora (expandir). Filtro `fixo` (a busca das telas
+   com paginação no servidor) fica na barra, não na gaveta. Rodapé da coluna do título é rótulo e vira
+   cabeçalho do bloco de totais.
+
 ## 2026-10-01 - Medição de Contratos: Fase 5, ciclo da medição
 
 **Pedido do Tiago:** a medição passa a ter ciclo completo: fechar, reabrir, enviar ao fiscal, nova

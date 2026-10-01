@@ -55,6 +55,15 @@ describe("montarRotas", () => {
     expect(g.tracado).toHaveLength(3);
   });
 
+  it("monta a série mensal do período e o desvio do km", () => {
+    const [g] = montarRotas(dados(fretes), FILTRO);
+    expect(g!.porMes).toEqual([
+      { mes: "2026-08", viagens: 1, producao: 16000.1 },
+      { mes: "2026-09", viagens: 3, producao: 45000 },
+    ]);
+    expect(g!.desvioKm).toBeCloseTo(780 / 696.9 - 1, 6);
+  });
+
   it("conta os fretes sem chegada e marca a rota com alerta", () => {
     const comAlerta = { ...dados(fretes), alertas: [ALERTA_KM] };
     const [g, c] = montarRotas(comAlerta, FILTRO);

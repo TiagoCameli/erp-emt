@@ -41,6 +41,10 @@ export interface LinhaRota {
   tracado: [number, number][] | null;
   /** Fretes sem data de chegada (ficam fora do tempo médio). */
   semChegada: number;
+  /** km lançado / km da estrada - 1 (0,03 = lançado 3% acima); null sem traçado. */
+  desvioKm: number | null;
+  /** Viagens e produção mês a mês no período (todos os meses, zero onde não rodou). */
+  porMes: { mes: string; viagens: number; producao: number }[];
   /** Há alerta não conferido nesta rota (no recorte de período, carreta e tipo). */
   temAlerta: boolean;
 }
@@ -121,7 +125,24 @@ function numeroBR(valor: number, casas = 0): string {
   return valor.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
 }
 
+/** Meses de `de` a `ate` (yyyy-MM), inclusive. Local para não criar ciclo com calculo.ts. */
+function meses(de: string, ate: string): string[] {
+  const lista: string[] = [];
+  let [ano, mes] = de.split("-").map(Number) as [number, number];
+  const [anoFim, mesFim] = ate.split("-").map(Number) as [number, number];
+  while ((ano < anoFim || (ano === anoFim && mes <= mesFim)) && lista.length < 240) {
+    lista.push(`${ano}-${String(mes).padStart(2, "0")}`);
+    mes += 1;
+    if (mes > 12) {
+      mes = 1;
+      ano += 1;
+    }
+  }
+  return lista;
+}
+
 export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): LinhaRota[] {
+  const mesesDoPeriodo = meses(filtro.de, filtro.ate);
   const placa = filtro.placa ? somenteLetrasNumeros(filtro.placa) : "";
   const placas = new Set(dados.carretas.map((k) => k.placa));
   const local = new Map(dados.localidades.map((l) => [l.id, l]));
@@ -141,6 +162,7 @@ export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): Linha
     comChegada: number;
     dias: number;
     diasMax: number | null;
+    porMes: Map<string, { viagens: number; centavos: number }>;
   };
   const acc = new Map<string, Acc>();
 
@@ -165,9 +187,14 @@ export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): Linha
       comChegada: 0,
       dias: 0,
       diasMax: null,
+      porMes: new Map(),
     };
     a.tipos.add(f.tipo);
     a.viagens += f.viagens;
+    const mes = a.porMes.get(f.mes) ?? { viagens: 0, centavos: 0 };
+    mes.viagens += f.viagens;
+    mes.centavos += Math.round(f.valor * 100);
+    a.porMes.set(f.mes, mes);
     a.toneladas += f.toneladas;
     a.centavos += Math.round(f.valor * 100);
     a.km += f.km;
@@ -207,6 +234,11 @@ export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): Linha
         comChegada: a.comChegada,
         tracado: t && t.pontos.length >= 2 ? t.pontos : null,
         semChegada: a.viagens - a.comChegada,
+        desvioKm: t && t.kmMapa > 0 && kmMedio !== null ? kmMedio / t.kmMapa - 1 : null,
+        porMes: mesesDoPeriodo.map((m) => {
+          const v = a.porMes.get(m);
+          return { mes: m, viagens: v?.viagens ?? 0, producao: (v?.centavos ?? 0) / 100 };
+        }),
         temAlerta: comAlerta.has(chave),
       };
     })

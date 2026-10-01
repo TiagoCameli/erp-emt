@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PagamentoDetalheView } from "@/modules/financeiro/aprovacao-pagamentos/components/pagamento-detalhe";
@@ -152,7 +152,9 @@ describe("PagamentoDetalheView mostra o pagamento inteiro", () => {
     expect(
       screen.getAllByText("GUERRA IMPLEMENTOS RODOVIARIOS S.A"),
     ).toHaveLength(2);
-    expect(screen.getByText("1 SR LS BASCULHANTE D 2E 9351")).toBeInTheDocument();
+    expect(
+      screen.getByText("1 SR LS BASCULHANTE D 2E 9351"),
+    ).toBeInTheDocument();
     // Pela parte numérica: o `getByText` normaliza o espaço não separável que o
     // formatarBRL põe depois do "R$", e comparar com a string crua nunca casa.
     expect(screen.getAllByText(/7\.204,66/).length).toBeGreaterThan(0);
@@ -370,5 +372,44 @@ describe("PagamentoDetalheView de dinheiro e cartão", () => {
     expect(
       screen.getByRole("button", { name: /Imprimir espelho/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("PagamentoDetalheView no celular", () => {
+  it("o card da decisão traz o vencimento, que no celular fica fora das Datas recolhidas", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento()}
+        parcela={parcela()}
+        {...PADRAO}
+      />,
+    );
+    expect(screen.getByText("Vence em 15/08/2026")).toBeInTheDocument();
+  });
+
+  it("recolhe o que não decide o pagamento atrás de um botão que abre e fecha", () => {
+    render(
+      <PagamentoDetalheView
+        lancamento={lancamento()}
+        parcela={parcela()}
+        {...PADRAO}
+      />,
+    );
+    const botao = screen.getByRole("button", {
+      name: /Ver datas, parcelas, rateio e histórico/,
+    });
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+    // Recolhido só no celular: a classe é `max-lg:`, o computador vê tudo.
+    expect(
+      screen.getByRole("heading", { name: "Datas" }).closest("div"),
+    ).toHaveClass("max-lg:hidden");
+
+    fireEvent.click(botao);
+    expect(
+      screen.getByRole("button", { name: "Esconder detalhes" }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("heading", { name: "Datas" }).closest("div"),
+    ).not.toHaveClass("max-lg:hidden");
   });
 });

@@ -68,18 +68,21 @@ export default async function AppLayout({
     buscarLayoutsGrades().catch(() => ({})),
   ]);
 
+  // Como cada pessoa arrumou os cards, gráficos e filtros de cada tela. Lido
+  // aqui, no servidor, para a grade nascer arrumada em vez de pular depois. Fica
+  // POR FORA do AppShell porque o botão de personalizar mora na sidebar.
   return (
-    <AppShell
-      usuario={{ nome: usuario.nome, email: usuario.email, fotoUrl }}
-      modulos={modulos}
-      onSair={sair}
-    >
-      {/* Piso do app: rejeição de action que ninguém pegou vira aviso, em vez
-          de o botão piscar e nada acontecer. Ver o comentário do componente. */}
-      <RedeDeFalhaSilenciosa />
-      {/* Como cada pessoa arrumou os cards e gráficos de cada tela. Lido aqui,
-          no servidor, para a grade nascer arrumada em vez de pular depois. */}
-      <ProvedorGrades inicial={layoutsGrades}>{children}</ProvedorGrades>
-    </AppShell>
+    <ProvedorGrades inicial={layoutsGrades}>
+      <AppShell
+        usuario={{ nome: usuario.nome, email: usuario.email, fotoUrl }}
+        modulos={modulos}
+        onSair={sair}
+      >
+        {/* Piso do app: rejeição de action que ninguém pegou vira aviso, em vez
+            de o botão piscar e nada acontecer. Ver o comentário do componente. */}
+        <RedeDeFalhaSilenciosa />
+        {children}
+      </AppShell>
+    </ProvedorGrades>
   );
 }

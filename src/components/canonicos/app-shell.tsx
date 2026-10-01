@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/sheet";
 import { LogoEmt } from "@/components/canonicos/logo-emt";
 import { BotaoTema, ItensMenuTema } from "@/components/canonicos/seletor-tema";
+import { BotaoPersonalizar } from "@/components/canonicos/provedor-grades";
 import { useRestaurarFiltrosDaSessao } from "@/components/canonicos/use-restaurar-filtros";
 import { cn } from "@/lib/utils";
 
@@ -519,7 +520,12 @@ export function AppShell({
 
         {/* Tema e perfil fixos no rodapé */}
         <div className="shrink-0 border-t border-sidebar-border">
-          <BotaoTema className="h-10 w-full foco-anel-dentro hover:bg-sidebar-accent" />
+          {/* O "Personalizar tela" mora ao lado do tema, só o ícone, e só nas
+              telas que têm card, gráfico ou filtro para arrumar. */}
+          <div className="flex">
+            <BotaoTema className="h-10 flex-1 foco-anel-dentro hover:bg-sidebar-accent" />
+            <BotaoPersonalizar className="h-10 flex-1 foco-anel-dentro hover:bg-sidebar-accent" />
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger
               className="flex h-14 w-full items-center justify-center foco-anel-dentro hover:bg-sidebar-accent"

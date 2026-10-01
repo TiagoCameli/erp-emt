@@ -4,7 +4,7 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import { Check, LayoutDashboard } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   chaveLayoutGrade,
   layoutGradeEhPadrao,
@@ -26,6 +26,8 @@ interface ContextoGrades {
   setEditando: (editando: boolean) => void;
   /** A grade avisa que está na tela; é isso que faz o botão aparecer. */
   registrar: () => () => void;
+  /** Há grade ou barra de filtros personalizável na tela agora. */
+  temGrades: boolean;
 }
 
 const Contexto = React.createContext<ContextoGrades | null>(null);
@@ -109,34 +111,45 @@ export function ProvedorGrades({ inicial, children }: ProvedorGradesProps) {
   }, [editando]);
 
   const valor = React.useMemo<ContextoGrades>(
-    () => ({ layoutBruto, salvar, editando, setEditando, registrar }),
-    [layoutBruto, salvar, editando, setEditando, registrar],
+    () => ({ layoutBruto, salvar, editando, setEditando, registrar, temGrades: grades > 0 }),
+    [layoutBruto, salvar, editando, setEditando, registrar, grades],
   );
 
   return (
     <Contexto.Provider value={valor}>
       {children}
-      {grades > 0 ? (
-        <div className="fixed right-4 bottom-20 z-40 print:hidden md:bottom-4">
-          {editando ? (
-            <Button type="button" size="sm" className="shadow-md" onClick={() => setEditando(false)}>
-              <Check />
-              Concluir
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="bg-background shadow-md"
-              onClick={() => setEditando(true)}
-            >
-              <LayoutDashboard />
-              Personalizar tela
-            </Button>
-          )}
-        </div>
-      ) : null}
     </Contexto.Provider>
+  );
+}
+
+/**
+ * Liga e desliga o "Personalizar tela". Só o ícone, no rodapé da sidebar ao lado
+ * do botão de tema, com o mesmo desenho dele: fica à vista em toda tela e nunca
+ * cobre o conteúdo (flutuando, tapava o ⋮ das tabelas). Some em tela sem nada
+ * personalizável. Ligado, vira o ✓ de concluir, destacado.
+ */
+export function BotaoPersonalizar({ className }: { className?: string }) {
+  const contexto = useGrades();
+  if (!contexto?.temGrades) return null;
+  const { editando, setEditando } = contexto;
+  const rotulo = editando ? "Concluir a personalização da tela" : "Personalizar tela";
+  const Icone = editando ? Check : LayoutDashboard;
+  return (
+    <button
+      type="button"
+      aria-label={rotulo}
+      aria-pressed={editando}
+      title={rotulo}
+      onClick={() => setEditando(!editando)}
+      className={cn(
+        "inline-flex items-center justify-center transition-colors",
+        editando
+          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+          : "text-muted-foreground hover:text-foreground",
+        className,
+      )}
+    >
+      <Icone className="size-5" aria-hidden="true" />
+    </button>
   );
 }

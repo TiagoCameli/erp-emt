@@ -84,7 +84,7 @@ export const TRILHO_FILTRO_DUPLO = "w-[26.5rem]";
  * das 43 telas mudar uma linha, e elemento que não é canônico (um Switch com
  * Label próprio) simplesmente não lê o contexto e continua como estava.
  */
-const ContextoRotuloFiltro = React.createContext<string | null>(null);
+export const ContextoRotuloFiltro = React.createContext<string | null>(null);
 
 /**
  * Largura que a pessoa escolheu para o filtro, em px, pelo mesmo caminho do
@@ -258,7 +258,9 @@ export function BlocoFiltros({
         personalizacao ? (
           <CamposPersonalizaveis campos={campos} personalizacao={personalizacao} />
         ) : (
-          <div className="flex flex-wrap items-end gap-2">
+          // No celular cada filtro ocupa a linha inteira: o trilho de largura
+          // fixa do computador deixava meio campo vazio ao lado.
+          <div className="flex flex-wrap items-end gap-2 max-md:[&>*]:w-full!">
             {campos.map((campo) => (
               <ContextoRotuloFiltro.Provider key={campo.id} value={campo.rotulo}>
                 {campo.elemento}
