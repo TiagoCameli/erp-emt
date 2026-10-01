@@ -9,6 +9,11 @@ export interface EntradaSituacao {
   statusLancamento: StatusLancamento;
   /** Conta escolhida no lançamento. Sem ela o banco recusa aprovar. */
   contaBancariaId: string | null;
+  /**
+   * A parcela sai por dinheiro ou cartão (aba "Dinheiro e cartão"). Esses
+   * pagamentos não passam pela aprovação: a fila nem os lista.
+   */
+  pagamentoDireto?: boolean;
 }
 
 export interface SituacaoParcela {
@@ -55,6 +60,15 @@ export function situacaoDaParcela(entrada: EntradaSituacao): SituacaoParcela {
       return recusa("Esta parcela foi cancelada.");
     case "pendente":
       break;
+  }
+
+  // Depois do status de propósito: dinheiro já pago diz "já foi paga", que é o
+  // que aconteceu. Aqui só chega a parcela direta ainda pendente, e a tela não
+  // pode oferecer aprovar algo que a fila nunca mostraria.
+  if (entrada.pagamentoDireto) {
+    return recusa(
+      "Dinheiro e cartão não passam pela aprovação: este pagamento é só conferido, na aba Dinheiro e cartão.",
+    );
   }
 
   if (entrada.statusLancamento === "cancelado") {

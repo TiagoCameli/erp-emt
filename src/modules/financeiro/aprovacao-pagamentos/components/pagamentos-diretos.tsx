@@ -8,6 +8,7 @@ import {
   BadgeCheck,
   Check,
   ExternalLink,
+  Eye,
   Filter,
   Paperclip,
   Undo2,
@@ -52,6 +53,7 @@ import {
   marcarParcelasConferidasEmLote,
 } from "@/modules/financeiro/aprovacao-pagamentos/actions";
 import type { PagamentoDireto } from "@/modules/financeiro/aprovacao-pagamentos/queries";
+import { urlTelaInteira } from "@/modules/financeiro/aprovacao-pagamentos/link-aprovacao";
 import { CONFERENCIA } from "@/modules/financeiro/aprovacao-pagamentos/rotulos";
 import { rotuloOrigemLancamento } from "@/modules/financeiro/lancamentos/schemas";
 import {
@@ -66,13 +68,6 @@ import {
   STATUS_PARCELA,
 } from "@/modules/financeiro/_shared/formato";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
-
-/**
- * Explicação da aba. É o texto mais importante da tela: sem ele alguém lê
- * "não conferido" como pagamento preso esperando alguém liberar.
- */
-const EXPLICACAO =
-  "Dinheiro sai direto do caixa e cartão de crédito já nasce quitado: nenhum dos dois passa pela aprovação. Marcar como conferido é só o registro de que você conferiu, e pode ser feito depois de pago. Nada aqui prende, libera nem muda pagamento.";
 
 /** Filtro pelo estado da conferência: é para isso que a aba existe. */
 const OPCOES_CONFERENCIA = [
@@ -703,24 +698,36 @@ export function PagamentosDiretos({
       },
     );
 
-    if (podeConferir) {
-      base.push({
-        id: "acoes",
-        header: "Ações",
-        enableSorting: false,
-        size: 220,
-        meta: {
-          rotulo: "Ações",
-          fixa: true,
-          alinharDireita: true,
-          naoTruncar: true,
-        },
-        cell: ({ row }) => (
+    // Sempre existe: o olho só abre a tela inteira do pagamento, a mesma da
+    // fila, e vale para quem só tem 'ver'. Conferir segue atrás da permissão.
+    base.push({
+      id: "acoes",
+      header: "Ações",
+      enableSorting: false,
+      // Conferir tem texto (até ~180px) + o olho (32) + gap e padding. Sem
+      // conferir, sobra só o olho. Piso igual ao padrão pelo mesmo motivo da
+      // fila: largura salva estreita faria o botão transbordar sobre a coluna
+      // vizinha.
+      size: podeConferir ? 260 : 56,
+      minSize: podeConferir ? 260 : 56,
+      meta: {
+        rotulo: "Ações",
+        fixa: true,
+        alinharDireita: true,
+        naoTruncar: true,
+      },
+      cell: ({ row }) => {
+        const rotulo = rotuloParcela(
+          row.original.lancamentoNumero,
+          row.original.numeroParcela,
+          row.original.totalParcelas,
+        );
+        return (
           <div
             className="flex items-center justify-end gap-1"
             onClick={(evento) => evento.stopPropagation()}
           >
-            {row.original.conferidoEm ? (
+            {!podeConferir ? null : row.original.conferidoEm ? (
               // Desmarcar fica na própria linha, sem menu escondido: quem
               // clicou errado tem que desfazer no lugar em que errou.
               <Button
@@ -754,10 +761,26 @@ export function PagamentosDiretos({
                 {CONFERENCIA.acaoMarcar}
               </Button>
             )}
+            {/* Mesmo olho e mesma tela da fila de aprovação. A tela sabe que
+                é dinheiro ou cartão: não oferece aprovar e volta para esta aba. */}
+            <Button
+              asChild
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              title="Visualizar o pagamento em tela inteira"
+            >
+              <Link
+                href={urlTelaInteira(row.original.id)}
+                aria-label={`Visualizar ${rotulo} em tela inteira`}
+              >
+                <Eye />
+              </Link>
+            </Button>
           </div>
-        ),
-      });
-    }
+        );
+      },
+    });
 
     return base;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1090,10 +1113,6 @@ export function PagamentosDiretos({
     // falta passaria despercebida até chegar dado real.
     <TooltipProvider>
       <div className="flex flex-col gap-4">
-        <p className="rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-muted-foreground">
-          {EXPLICACAO}
-        </p>
-
         <GradeKpis>
           <KPICard
             titulo="Dinheiro e cartão"

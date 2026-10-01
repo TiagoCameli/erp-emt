@@ -607,6 +607,7 @@ function DiagnosticoValor({ previa }: { previa: Previa }) {
       <p className="text-detalhe">
         Das <span className="tabular-nums">{d.comValor}</span> linhas com valor na planilha:{" "}
         <span className="tabular-nums">{d.arredondado}</span> batem com qtd × preço arredondado a 2 casas,{" "}
+        <span className="tabular-nums">{d.truncado}</span> batem com qtd × preço truncado (TRUNCAR),{" "}
         <span className="tabular-nums">{d.exato}</span> batem com qtd × preço exato,{" "}
         <span className="tabular-nums">{d.indistinto}</span> dão o mesmo número nas duas leituras,{" "}
         <span className="tabular-nums">{d.diverge.length}</span> não fecham

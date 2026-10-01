@@ -275,6 +275,16 @@ export const RECURSOS = [
     rota: "/frete/anomalias",
     acoes: ["ver", "editar"],
   },
+  {
+    // Produção das carretas próprias (fretes da EMT TRANSPORTES) contra o gasto delas no
+    // Financeiro (centro "001 - Carretas EMT") e os financiamentos. Só leitura, por uma RPC
+    // definer presa a este recurso: ver a aba é ver o custo das carretas.
+    id: "frete.carretas-emt",
+    nome: "Carretas EMT",
+    modulo: "frete",
+    rota: "/frete/carretas-emt",
+    acoes: ["ver"],
+  },
   // Combustível (Fase 3 da migração do Gestão Obras, plano seção 4.1). Não gera
   // lançamento, parcela nem rateio: o abastecimento de carreta vira débito na conta
   // corrente da transportadora (Frete), nunca no Financeiro.
