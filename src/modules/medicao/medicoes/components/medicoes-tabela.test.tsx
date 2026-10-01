@@ -3,8 +3,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 /**
  * Tabela de Medições: número, período, selo de status, valor (texto do banco, D7) e a contagem de
- * lançamentos não excluídos. Clique na linha só navega para os lançamentos de quem tem
- * `medicao.lancamentos/ver` (senão a tela de lançamentos daria 404).
+ * lançamentos não excluídos. Clique na linha abre o detalhe da medição (Fase 5); o caminho para os
+ * lançamentos passou a ser botão no detalhe.
  */
 
 const push = vi.fn();
@@ -49,7 +49,7 @@ function texto(el: Element | null | undefined): string {
 describe("MedicoesTabela", () => {
   it("mostra número, período, status, valor e lançamentos", () => {
     const { container } = render(
-      <MedicoesTabela medicoes={[medicao()]} contratoId="c1" podeVerLancamentos />,
+      <MedicoesTabela medicoes={[medicao()]} />,
     );
     expect(texto(container.querySelector('tbody [data-coluna="numero"]'))).toBe("10ª");
     expect(texto(container.querySelector('tbody [data-coluna="periodo"]'))).toBe("01/09 a 30/09/2026");
@@ -60,28 +60,19 @@ describe("MedicoesTabela", () => {
 
   it("valor nulo (contrato sem regra de arredondamento): travessão, nunca R$ 0,00", () => {
     const { container } = render(
-      <MedicoesTabela medicoes={[medicao({ valor: null })]} contratoId="c1" podeVerLancamentos />,
+      <MedicoesTabela medicoes={[medicao({ valor: null })]} />,
     );
     expect(texto(container.querySelector('tbody [data-coluna="valor"]'))).toBe("—");
   });
 
-  it("clique na linha navega para os lançamentos da medição, com o número (não o id)", () => {
-    render(<MedicoesTabela medicoes={[medicao({ numero: 10 })]} contratoId="c1" podeVerLancamentos />);
+  it("clique na linha abre o detalhe da medição", () => {
+    render(<MedicoesTabela medicoes={[medicao({ id: "m10" })]} />);
     fireEvent.click(screen.getByText("Aprovada"));
-    expect(push).toHaveBeenCalledWith("/medicao/lancamentos?contrato=c1&medicao=10");
-  });
-
-  it("sem medicao.lancamentos/ver, a linha não é clicável", () => {
-    const { container } = render(
-      <MedicoesTabela medicoes={[medicao()]} contratoId="c1" podeVerLancamentos={false} />,
-    );
-    fireEvent.click(screen.getByText("Aprovada"));
-    expect(push).not.toHaveBeenCalled();
-    expect(container.querySelector("tbody tr")?.getAttribute("tabindex")).toBeNull();
+    expect(push).toHaveBeenCalledWith("/medicao/medicoes/m10");
   });
 
   it("nenhuma medição: estado vazio", () => {
-    render(<MedicoesTabela medicoes={[]} contratoId="c1" podeVerLancamentos />);
+    render(<MedicoesTabela medicoes={[]} />);
     expect(screen.getByText("Nenhuma medição aberta")).toBeTruthy();
   });
 });

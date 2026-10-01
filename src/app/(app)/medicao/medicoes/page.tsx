@@ -58,7 +58,6 @@ export default async function PaginaMedicoes({
 
   const medicoes = await carregarMedicoes(contratoId);
   const podeVerContrato = temPermissao(usuario, "medicao.contratos", "ver");
-  const podeVerLancamentos = temPermissao(usuario, "medicao.lancamentos", "ver");
   const identificacaoContrato = (
     <>
       <span className="font-mono">{contrato.codigo}</span> · {contrato.nome_obra}
@@ -83,7 +82,7 @@ export default async function PaginaMedicoes({
           identificacaoContrato
         )}
       </p>
-      <MedicoesTabela medicoes={medicoes} contratoId={contratoId} podeVerLancamentos={podeVerLancamentos} />
+      <MedicoesTabela medicoes={medicoes} />
     </>
   );
 }

@@ -37,3 +37,30 @@ export type StatusMedicao = (typeof STATUS_MEDICAO)[number];
 export const ROTULO_STATUS_MEDICAO: Record<StatusMedicao, string> = {
   aberta: "Aberta", em_conferencia: "Em conferência", enviada: "Enviada", aprovada: "Aprovada",
 };
+
+export const STATUS_REVISAO = ["em_aberto", "enviada", "aprovada", "substituida"] as const;
+export type StatusRevisao = (typeof STATUS_REVISAO)[number];
+export const ROTULO_STATUS_REVISAO: Record<StatusRevisao, string> = {
+  em_aberto: "Em aberto", enviada: "Enviada", aprovada: "Aprovada", substituida: "Substituída",
+};
+
+export const FASES_REVISAO = ["antes_aprovacao", "pos_aprovacao"] as const;
+export type FaseRevisao = (typeof FASES_REVISAO)[number];
+export const ROTULO_FASE_REVISAO: Record<FaseRevisao, string> = {
+  antes_aprovacao: "Antes da aprovação", pos_aprovacao: "Pós-aprovação",
+};
+
+/** "REV00", "REV01"...: o mesmo `lpad(numero, 2, '0')` das mensagens do banco. */
+export function rotuloRevisao(numero: number): string {
+  return `REV${String(numero).padStart(2, "0")}`;
+}
+
+/** Rótulo de um status de revisão vindo do banco; valor desconhecido volta como veio. */
+export function rotuloStatusRevisao(status: string): string {
+  return status in ROTULO_STATUS_REVISAO ? ROTULO_STATUS_REVISAO[status as StatusRevisao] : status;
+}
+
+/** Rótulo de um status de medição vindo do banco; valor desconhecido volta como veio. */
+export function rotuloStatusMedicao(status: string): string {
+  return status in ROTULO_STATUS_MEDICAO ? ROTULO_STATUS_MEDICAO[status as StatusMedicao] : status;
+}

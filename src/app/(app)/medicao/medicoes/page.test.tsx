@@ -3,8 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 /**
  * Página de Medições: guarda `medicao.medicoes/ver`; o botão "Abrir próxima medição" só some para
- * quem não tem `criar`; a linha só abre os lançamentos para quem tem `medicao.lancamentos/ver` (a
- * permissão é lida no servidor e vai para a tabela como booleano).
+ * quem não tem `criar`; a linha abre o detalhe da medição (o botão de lançamentos mora lá).
  */
 
 const getUsuarioLogado = vi.fn();
@@ -34,9 +33,7 @@ vi.mock("@/modules/medicao/medicoes/components/abrir-medicao-drawer", () => ({
   AbrirProximaMedicaoBotao: () => <button type="button">Abrir próxima medição</button>,
 }));
 vi.mock("@/modules/medicao/medicoes/components/medicoes-tabela", () => ({
-  MedicoesTabela: ({ podeVerLancamentos }: { podeVerLancamentos: boolean }) => (
-    <div data-testid="tabela">{podeVerLancamentos ? "abre lancamentos" : "não abre lancamentos"}</div>
-  ),
+  MedicoesTabela: () => <div data-testid="tabela" />,
 }));
 
 import PaginaMedicoes from "./page";
@@ -71,15 +68,9 @@ describe("PaginaMedicoes", () => {
     expect(screen.queryByText("Abrir próxima medição")).toBeNull();
   });
 
-  it("com medicao.lancamentos/ver, a tabela abre os lançamentos", async () => {
+  it("com contrato escolhido, mostra a tabela", async () => {
     render(await PaginaMedicoes({ searchParams: Promise.resolve({ contrato: CONTRATO }) }));
-    expect(screen.getByTestId("tabela").textContent).toBe("abre lancamentos");
-  });
-
-  it("sem medicao.lancamentos/ver, a tabela não abre os lançamentos", async () => {
-    temPermissao.mockImplementation((_u: unknown, recurso: string) => recurso !== "medicao.lancamentos");
-    render(await PaginaMedicoes({ searchParams: Promise.resolve({ contrato: CONTRATO }) }));
-    expect(screen.getByTestId("tabela").textContent).toBe("não abre lancamentos");
+    expect(screen.getByTestId("tabela")).toBeTruthy();
   });
 
   it("contrato fora da lista de acesso (RLS devolve null): 404", async () => {
