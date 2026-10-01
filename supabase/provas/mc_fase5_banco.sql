@@ -47,6 +47,10 @@
 --      aprovar com p_tudo_como_medido nulo não pula a validação (item fora da revisão recusa) e nada grava.
 --   5t preço do item que saiu: rascunho v2 que traz o 01.02 a 99 não conta; a 2ª (v1) segue com 5 da v0
 --      (2 x 5 = 10,00; total 70,00).
+--   5u-5y reforço (mc_fase5a3_reforco): revisão pós-aprovação pendente não mexe na medição de carga; abrir
+--      com a regra do fechar e fechar que recusa item sem preço; eventos em ordem (clock_timestamp); medição
+--      sem item aprova com valor zero; ajuste não deixa a medida negativa; aprovada acima da medida e item
+--      repetido recusam. Detalhe em cada bloco.
 
 begin;
 create function public.fn_mc_prova_planilha(p_contrato uuid, p_numero int, p_aditivo uuid, p_desde date, p_linhas jsonb)
@@ -104,6 +108,8 @@ declare
   v_l10 constant uuid := 'e0e21c04-1128-4cc3-8d2e-5f8e27a8fad1';
   v_k uuid; v_v0 uuid; v_v1 uuid; v_v2 uuid; v_ad uuid; v_i01 uuid; v_i1 uuid; v_i2 uuid; v_m1 uuid; v_m2 uuid; v_l uuid;
   v_k6 uuid; v_i6 uuid; v_m61 uuid; v_m62 uuid;
+  v_k7 uuid; v_v7 uuid; v_i7 uuid; v_m7 uuid; v_r7 uuid; v_a jsonb;
+  v_k8 uuid; v_v80 uuid; v_v81 uuid; v_i81 uuid; v_i82 uuid; v_m81 uuid; v_l81 uuid; v_l82 uuid;
   v_txt text; v_fora0 jsonb; v_glosa numeric; v_hoje date := current_date;
   r jsonb := '{}'::jsonb;
 begin
@@ -451,6 +457,155 @@ begin
           'public.fn_mc_medicao_revisar_aprovada(uuid, text)', 'public.fn_mc_medicao_para(uuid, text, text)', 'public.fn_mc_revisao_corrente(uuid)']) f),
       'definer_search_path', true,
       'view', jsonb_build_object('authenticated', 'SELECT'))));
+
+  -- 5u (mc_fase5a3_reforco). Medição de carga (como L09/L10: origem carga, REV00 aprovada sem congelado,
+  --    ajustes tipo carga, aprovada = medida): a revisão pós-aprovação com ajuste +2 não mexe em medida,
+  --    aprovada, glosa nem valor enquanto não é aprovada (10 / 10 / 0 / 20,00 em aberto e enviada); aprovada
+  --    como medida: 12 / 12 / 0 / 24,00.
+  begin
+    insert into public.mc_contratos (codigo, nome_obra, objeto, numero_contrato, contratante_nome, contratante_tipo,
+      valor_inicial, data_assinatura, prazo_meses, regra_arredondamento, tipo_localizacao, created_by)
+    values ('PROVA-K7', 'Prova K7', 'Prova', 'K7', 'Contratante prova', 'privado', 200, '2025-01-01', 24, 'item_por_medicao', 'texto', v_tiago)
+    returning id into v_k7;
+    insert into public.mc_contrato_usuarios (contrato_id, usuario_id) values (v_k7, v_tiago);
+    v_v7 := public.fn_mc_prova_planilha(v_k7, 0, null, '2025-01-01', jsonb_build_array(
+      jsonb_build_object('ordem', 1, 'codigo', '01.01', 'descricao', 'Serviço', 'unidade', 'm3', 'tipo', 'servico', 'preco', '2', 'qtd', '100')));
+    v_i7 := public.fn_mc_prova_item(v_k7, '01.01');
+    perform set_config('app.mc_carga', '1', true);
+    insert into public.mc_medicoes (contrato_id, numero, periodo_inicio, periodo_fim, status, versao_id, aprovada_em, origem, created_by)
+    values (v_k7, 1, '2025-01-01', '2025-01-31', 'aprovada', v_v7, now(), 'carga', null) returning id into v_m7;
+    insert into public.mc_medicao_revisoes (medicao_id, contrato_id, numero, fase, status, created_by)
+    values (v_m7, v_k7, 0, 'antes_aprovacao', 'aprovada', null) returning id into v_r7;
+    insert into public.mc_ajustes (medicao_id, contrato_id, revisao_id, item_id, quantidade, motivo, tipo, created_by)
+    values (v_m7, v_k7, v_r7, v_i7, 10, 'Carga da prova', 'carga', null);
+    insert into public.mc_aprovacoes_item (revisao_id, item_id, contrato_id, quantidade_aprovada, created_by)
+    values (v_r7, v_i7, v_k7, 10, null);
+    perform set_config('app.mc_carga', '', true);
+    set local role authenticated;
+    v_a := jsonb_build_object('carga', public.fn_mc_prova_linha(v_m7, v_i7));
+    perform public.fn_mc_medicao_revisar_aprovada(v_m7, 'faltou na carga');
+    perform public.fn_mc_ajuste_lancar(v_m7, v_i7, '2', 'faltou na carga');
+    v_a := v_a || jsonb_build_object('em_aberto', public.fn_mc_prova_linha(v_m7, v_i7),
+      'total_em_aberto', (select valor from public.mc_v_medicao_totais where medicao_id = v_m7));
+    perform public.fn_mc_medicao_enviar(v_m7);
+    v_a := v_a || jsonb_build_object('enviada', public.fn_mc_prova_linha(v_m7, v_i7));
+    perform public.fn_mc_medicao_aprovar(v_m7, null, true);
+    v_a := v_a || jsonb_build_object('aprovada', public.fn_mc_prova_linha(v_m7, v_i7));
+    reset role;
+    r := r || jsonb_build_object('5u_carga_pendente_nao_mexe', public.fn_mc_prova_confere(v_a, jsonb_build_object(
+      'carga', jsonb_build_object('medida', 10, 'aprovada', 10, 'glosa', 0, 'valor', 20),
+      'em_aberto', jsonb_build_object('medida', 10, 'aprovada', 10, 'glosa', 0, 'valor', 20), 'total_em_aberto', 20,
+      'enviada', jsonb_build_object('medida', 10, 'aprovada', 10, 'glosa', 0, 'valor', 20),
+      'aprovada', jsonb_build_object('medida', 12, 'aprovada', 12, 'glosa', 0, 'valor', 24))));
+  exception when others then r := r || jsonb_build_object('5u_carga_pendente_nao_mexe', 'ERRO: ' || sqlerrm);
+  end;
+
+  -- 5v (mc_fase5a3_reforco). Abrir usa a mesma regra do fechar (versão vigente no fim do período). K8: v0
+  --    vigente desde 2026-01-01 (01.01 a 1), v1 desde 2026-03-01 (01.01 a 2 e o 01.02 novo a 3).
+  --    5v1 abrir dez/2025 recusa (nenhuma versão vigente em 31/12/2025); 5v2 abrir jan/2026 fica na v0.
+  --    5v3 medição aberta na v1 (como as abertas pela regra antiga) com 01.01 1 e 01.02 2: fechar recusa e diz
+  --    o 01.02 (sem preço na v0); 5v4 sem o 01.02 (lançamento excluído) fecha na v0 com o evento versao
+  --    depois do fechar (clock_timestamp).
+  begin
+    insert into public.mc_contratos (codigo, nome_obra, objeto, numero_contrato, contratante_nome, contratante_tipo,
+      valor_inicial, data_assinatura, prazo_meses, regra_arredondamento, tipo_localizacao, created_by)
+    values ('PROVA-K8', 'Prova K8', 'Prova', 'K8', 'Contratante prova', 'privado', 100, '2025-12-01', 24, 'item_por_medicao', 'texto', v_tiago)
+    returning id into v_k8;
+    insert into public.mc_contrato_usuarios (contrato_id, usuario_id) values (v_k8, v_tiago);
+    v_v80 := public.fn_mc_prova_planilha(v_k8, 0, null, '2026-01-01', jsonb_build_array(
+      jsonb_build_object('ordem', 1, 'codigo', '01.01', 'descricao', 'Serviço 1', 'unidade', 'm3', 'tipo', 'servico', 'preco', '1', 'qtd', '100')));
+    v_i81 := public.fn_mc_prova_item(v_k8, '01.01');
+    insert into public.mc_aditivos (contrato_id, numero, data_assinatura, data_vigencia, tipos, motivo)
+    values (v_k8, 1, '2026-02-20', '2026-03-01', array['quantidade', 'valor'], 'Prova') returning id into v_ad;
+    v_v81 := public.fn_mc_prova_planilha(v_k8, 1, v_ad, '2026-03-01', jsonb_build_array(
+      jsonb_build_object('ordem', 1, 'item_id', v_i81, 'codigo', '01.01', 'descricao', 'Serviço 1', 'unidade', 'm3', 'tipo', 'servico', 'preco', '2', 'qtd', '100'),
+      jsonb_build_object('ordem', 2, 'codigo', '01.02', 'descricao', 'Serviço 2', 'unidade', 't', 'tipo', 'servico', 'preco', '3', 'qtd', '10')));
+    v_i82 := public.fn_mc_prova_item(v_k8, '01.02');
+    set local role authenticated;
+    begin perform public.fn_mc_medicao_abrir(v_k8, '2025-12-01', '2025-12-31');
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('5v1_abrir_sem_versao_no_fim', public.fn_mc_prova_confere(to_jsonb(v_txt), to_jsonb(
+      'recusou: O contrato PROVA-K8 não tem planilha vigente em 31/12/2025 (fim do período). Aprove a planilha ou o aditivo antes de abrir medição'::text)));
+    v_m81 := public.fn_mc_medicao_abrir(v_k8, '2026-01-01', '2026-01-31');
+    r := r || jsonb_build_object('5v2_abrir_versao_do_fim', public.fn_mc_prova_confere(
+      (select to_jsonb(v.numero) from public.mc_medicoes m join public.mc_planilha_versoes v on v.id = m.versao_id where m.id = v_m81), to_jsonb(0)));
+    reset role;
+    update public.mc_medicoes set versao_id = v_v81 where id = v_m81;
+    set local role authenticated;
+    v_l81 := public.fn_mc_lancamento_salvar(v_k8, jsonb_build_object('item_id', v_i81, 'data', '2026-01-10', 'quantidade', '1'));
+    v_l82 := public.fn_mc_lancamento_salvar(v_k8, jsonb_build_object('item_id', v_i82, 'data', '2026-01-10', 'quantidade', '2'));
+    begin perform public.fn_mc_medicao_fechar(v_m81);
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('5v3_fechar_item_sem_preco', public.fn_mc_prova_confere(jsonb_build_object('msg', v_txt,
+        'status', (select status from public.mc_medicoes where id = v_m81)),
+      jsonb_build_object('msg', 'recusou: A 1ª medição não fecha: os itens 01.02 têm quantidade e não têm preço na planilha v0 (vigente em 31/01/2026, fim do período) nem em versão anterior',
+        'status', 'aberta')));
+    perform public.fn_mc_lancamento_excluir(v_l82, 'item ainda não contratado');
+    perform public.fn_mc_medicao_fechar(v_m81);
+    r := r || jsonb_build_object('5v4_fechar_e_ordem_dos_eventos', public.fn_mc_prova_confere(jsonb_build_object(
+        'status', (select status from public.mc_medicoes where id = v_m81),
+        'versao', (select v.numero from public.mc_medicoes m join public.mc_planilha_versoes v on v.id = m.versao_id where m.id = v_m81),
+        'i1', (select jsonb_build_array(preco_unitario, valor_medicao) from public.mc_v_medicao_itens where medicao_id = v_m81 and item_id = v_i81),
+        'fechar_antes_de_versao', (select (select criado_em from public.mc_medicao_eventos where medicao_id = v_m81 and evento = 'fechar')
+                                        < (select criado_em from public.mc_medicao_eventos where medicao_id = v_m81 and evento = 'versao'))),
+      jsonb_build_object('status', 'em_conferencia', 'versao', 0, 'i1', jsonb_build_array(1, 1), 'fechar_antes_de_versao', true)));
+    reset role;
+  exception when others then r := r || jsonb_build_object('5v_abrir_fechar', 'ERRO: ' || sqlerrm);
+  end;
+
+  -- 5x (mc_fase5a3_reforco). Medição sem item medido (K8 1ª depois de excluir o 01.01): enviar congela nada e
+  --    aprovar tudo como medido aprova com valor zero (não fica presa em enviada).
+  begin
+    set local role authenticated;
+    perform public.fn_mc_medicao_reabrir(v_m81, 'tirar o item');
+    perform public.fn_mc_lancamento_excluir(v_l81, 'nada medido no mês');
+    perform public.fn_mc_medicao_fechar(v_m81);
+    perform public.fn_mc_medicao_enviar(v_m81);
+    perform public.fn_mc_medicao_aprovar(v_m81, '[]'::jsonb, true);
+    r := r || jsonb_build_object('5x_aprovar_sem_item', public.fn_mc_prova_confere(jsonb_build_object(
+        'status', (select status from public.mc_medicoes where id = v_m81),
+        'congelados', (select count(*) from public.mc_revisao_itens ri join public.mc_medicao_revisoes rv on rv.id = ri.revisao_id where rv.medicao_id = v_m81),
+        'total', coalesce((select valor from public.mc_v_medicao_totais where medicao_id = v_m81), 0)),
+      jsonb_build_object('status', 'aprovada', 'congelados', 0, 'total', 0)));
+    reset role;
+  exception when others then r := r || jsonb_build_object('5x_aprovar_sem_item', 'ERRO: ' || sqlerrm);
+  end;
+
+  -- 5w (mc_fase5a3_reforco). Ajuste não deixa a medida negativa: a 2ª de K5 (em conferência, 01.01 5) recusa
+  --    -6 dizendo -1; -5 (fica 0) passa.
+  begin
+    set local role authenticated;
+    begin perform public.fn_mc_ajuste_lancar(v_m2, v_i1, '-6', 'medido a mais');
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('5w1_ajuste_negativo', public.fn_mc_prova_confere(to_jsonb(v_txt), to_jsonb(
+      'recusou: O ajuste deixa a quantidade medida do item 01.01 em -1. A medida não pode ficar negativa'::text)));
+    perform public.fn_mc_ajuste_lancar(v_m2, v_i1, '-5', 'medido a mais');
+    r := r || jsonb_build_object('5w2_ajuste_ate_zero', public.fn_mc_prova_confere(
+      (select to_jsonb(qtd_medida) from public.mc_v_medicao_qtd where medicao_id = v_m2 and item_id = v_i1), to_jsonb(0)));
+    reset role;
+  exception when others then r := r || jsonb_build_object('5w_ajuste_negativo', 'ERRO: ' || sqlerrm);
+  end;
+
+  -- 5y (mc_fase5a3_reforco). Aprovar: aprovada acima da medida congelada recusa com o código; item repetido
+  --    em p_itens recusa; a 1ª de K6 continua enviada e sem aprovação.
+  begin
+    set local role authenticated;
+    begin perform public.fn_mc_medicao_aprovar(v_m61, jsonb_build_array(jsonb_build_object('item_id', v_i6, 'quantidade', '2')), false);
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('5y1_aprovada_acima_da_medida', public.fn_mc_prova_confere(to_jsonb(v_txt), to_jsonb(
+      'recusou: Quantidade aprovada acima da medida nos itens: 01.01'::text)));
+    begin perform public.fn_mc_medicao_aprovar(v_m61, jsonb_build_array(jsonb_build_object('item_id', v_i6, 'quantidade', '1'),
+                                                                       jsonb_build_object('item_id', v_i6, 'quantidade', '0')), false);
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('5y2_item_repetido', public.fn_mc_prova_confere(to_jsonb(v_txt), to_jsonb(
+      'recusou: Item repetido na aprovação: 01.01'::text)));
+    reset role;
+    r := r || jsonb_build_object('5y3_k6_intacta', public.fn_mc_prova_confere(
+      (select jsonb_build_array(status, (select count(*) from public.mc_aprovacoes_item ai join public.mc_medicao_revisoes rv on rv.id = ai.revisao_id
+                                         where rv.medicao_id = v_m61)) from public.mc_medicoes where id = v_m61),
+      jsonb_build_array('enviada', 0)));
+  exception when others then r := r || jsonb_build_object('5y_aprovar', 'ERRO: ' || sqlerrm);
+  end;
 
   -- 5z. Controle: a glosa da 1ª depois de 5h (2) contra 3 tem de dar DIFERENTE
   r := r || jsonb_build_object('5z_controle', case when v_glosa = 3 then 'IGUAL (errado)' else 'DIFERENTE (esperado)' end);

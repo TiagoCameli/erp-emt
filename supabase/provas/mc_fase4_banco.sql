@@ -141,7 +141,7 @@ begin
 
   -- 4a. Sugestão sem medição: da assinatura até a véspera do dia 26
   r := r || jsonb_build_object('4a_sugestao_1a', public.fn_mc_prova_confere(public.fn_mc_medicao_sugestao(v_kl),
-    jsonb_build_object('numero', 1, 'periodo_inicio', '2026-06-10', 'periodo_fim', '2026-06-25', 'versao_numero', 0, 'depois_de', null)));
+    jsonb_build_object('numero', 1, 'periodo_inicio', '2026-06-10', 'periodo_fim', '2026-06-25', 'versao_numero', 0, 'depois_de', null, 'periodo_manual', false)));
 
   -- 4b. Abrir a 1ª: aberta, REV00 em aberto e evento abrir
   v_m1 := public.fn_mc_medicao_abrir(v_kl, '2026-06-10', '2026-06-25');
@@ -161,7 +161,7 @@ begin
 
   -- 4c. Sugestão da 2ª, sobreposição recusada, 2ª aberta (duas abertas)
   r := r || jsonb_build_object('4c1_sugestao_2a', public.fn_mc_prova_confere(public.fn_mc_medicao_sugestao(v_kl),
-    jsonb_build_object('numero', 2, 'periodo_inicio', '2026-06-26', 'periodo_fim', '2026-07-25', 'versao_numero', 0, 'depois_de', '2026-06-25')));
+    jsonb_build_object('numero', 2, 'periodo_inicio', '2026-06-26', 'periodo_fim', '2026-07-25', 'versao_numero', 0, 'depois_de', '2026-06-25', 'periodo_manual', false)));
   begin perform public.fn_mc_medicao_abrir(v_kl, '2026-06-20', '2026-07-25');
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('4c2_sobreposicao', v_txt);
