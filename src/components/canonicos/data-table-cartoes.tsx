@@ -25,7 +25,26 @@ export interface PapeisCartao<TData> {
   subtitulo: Column<TData, unknown> | undefined;
   /** O resto, na ordem do card, com rótulo. */
   campos: Column<TData, unknown>[];
+  /** Checkbox da linha, no canto esquerdo do card. */
+  selecao: Column<TData, unknown> | undefined;
+  /** Botões ou menu da linha, no canto direito, fora do clique do card. */
+  acoes: Column<TData, unknown> | undefined;
 }
+
+/**
+ * As colunas que não são dado: a do canônico (`__acoes__`, `__selecao__`,
+ * `__expansao__`) e as que as telas montam à mão com os mesmos papéis. Trinta e
+ * poucas telas têm a própria coluna `acoes` (todos os cadastros, quase todo o
+ * RH), e sem reconhecer isso o "⋮" virava o valor do card ou um campo rotulado.
+ */
+export interface ColunasEspeciais {
+  selecao: readonly string[];
+  acoes: readonly string[];
+  /** Não entram no card (o chevron de expandir: o card tem o próprio). */
+  ocultas: readonly string[];
+}
+
+const ROTULO_ACOES = "Ações";
 
 /**
  * Distribui as colunas visíveis nos lugares do card.
@@ -41,14 +60,24 @@ export interface PapeisCartao<TData> {
  */
 export function papeisDoCartao<TData>(
   colunas: Column<TData, unknown>[],
-  idsEspeciais: ReadonlySet<string>,
+  especiais: ColunasEspeciais,
 ): PapeisCartao<TData> {
+  const meta = (coluna: Column<TData, unknown>) => coluna.columnDef.meta;
+  const selecao = colunas.find((coluna) =>
+    especiais.selecao.includes(coluna.id),
+  );
+  const acoes = colunas.find(
+    (coluna) =>
+      especiais.acoes.includes(coluna.id) ||
+      meta(coluna)?.rotulo === ROTULO_ACOES,
+  );
   const dados = colunas.filter(
     (coluna) =>
-      !idsEspeciais.has(coluna.id) &&
-      coluna.columnDef.meta?.celular !== "oculta",
+      coluna !== selecao &&
+      coluna !== acoes &&
+      !especiais.ocultas.includes(coluna.id) &&
+      meta(coluna)?.celular !== "oculta",
   );
-  const meta = (coluna: Column<TData, unknown>) => coluna.columnDef.meta;
 
   const titulo =
     dados.find((coluna) => meta(coluna)?.celular === "titulo") ??
@@ -85,15 +114,13 @@ export function papeisDoCartao<TData>(
   // `sort` é estável: dentro do mesmo peso, a ordem é a das colunas.
   const campos = [...resto].sort((a, b) => peso(a) - peso(b));
 
-  return { titulo, valor, subtitulo, campos };
+  return { titulo, valor, subtitulo, campos, selecao, acoes };
 }
 
 export interface DataTableCartoesProps<TData> {
   linhas: Row<TData>[];
   papeis: PapeisCartao<TData>;
   rotuloDe: (coluna: Column<TData, unknown>) => string;
-  idSelecao: string;
-  idAcoes: string;
   isLoading?: boolean;
   emptyState?: React.ReactNode;
   onRowClick?: (registro: TData) => void;
@@ -129,8 +156,6 @@ function Cartao<TData>({
   linha,
   papeis,
   rotuloDe,
-  idSelecao,
-  idAcoes,
   onRowClick,
   linhaExpandida,
 }: Omit<
@@ -138,18 +163,10 @@ function Cartao<TData>({
   "linhas" | "isLoading" | "emptyState" | "rodape" | "colunas" | "selecaoTodos"
 > & { linha: Row<TData> }) {
   const [todos, setTodos] = React.useState(false);
-  const temSelecao = linha
-    .getVisibleCells()
-    .some((celula) => celula.column.id === idSelecao);
-  const temAcoes = linha
-    .getVisibleCells()
-    .some((celula) => celula.column.id === idAcoes);
-  const colunaSelecao = linha
-    .getVisibleCells()
-    .find((celula) => celula.column.id === idSelecao)?.column;
-  const colunaAcoes = linha
-    .getVisibleCells()
-    .find((celula) => celula.column.id === idAcoes)?.column;
+  const colunaSelecao = papeis.selecao;
+  const colunaAcoes = papeis.acoes;
+  const temSelecao = colunaSelecao !== undefined;
+  const temAcoes = colunaAcoes !== undefined;
 
   const subtitulo = papeis.subtitulo;
   const grade = todos ? papeis.campos : papeis.campos.slice(0, CAMPOS_NA_GRADE);
@@ -298,8 +315,6 @@ export function DataTableCartoes<TData>({
   linhas,
   papeis,
   rotuloDe,
-  idSelecao,
-  idAcoes,
   isLoading,
   emptyState,
   onRowClick,
@@ -336,10 +351,16 @@ export function DataTableCartoes<TData>({
     );
   }
 
+  // O rodapé da coluna do título é rótulo ("Total do contrato"), não número:
+  // vira o cabeçalho do bloco em vez de uma linha que parece valor.
+  const rotuloTotais =
+    papeis.titulo && rodape ? rodape[papeis.titulo.id] : undefined;
   const totais = rodape
     ? colunas.filter(
         (coluna) =>
-          rodape[coluna.id] !== undefined && rodape[coluna.id] !== null,
+          coluna !== papeis.titulo &&
+          rodape[coluna.id] !== undefined &&
+          rodape[coluna.id] !== null,
       )
     : [];
 
@@ -358,8 +379,6 @@ export function DataTableCartoes<TData>({
             linha={linha}
             papeis={papeis}
             rotuloDe={rotuloDe}
-            idSelecao={idSelecao}
-            idAcoes={idAcoes}
             onRowClick={onRowClick}
             linhaExpandida={linhaExpandida}
           />
@@ -367,6 +386,9 @@ export function DataTableCartoes<TData>({
       </ul>
       {totais.length > 0 ? (
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-md border border-border bg-surface p-3 text-detalhe">
+          {rotuloTotais !== undefined && rotuloTotais !== null ? (
+            <p className="col-span-2 font-semibold">{rotuloTotais}</p>
+          ) : null}
           {totais.map((coluna) => (
             <React.Fragment key={coluna.id}>
               <dt className="text-muted-foreground">{rotuloDe(coluna)}</dt>

@@ -4857,3 +4857,8 @@ muda.
    continua na largura toda.
 6. **FormDrawer**: respiro menor e botões do rodapé dividindo a largura, acima da área segura.
 7. Mesmo `useTelaCelular()` da aprovação: `null` antes de hidratar desenha os dois e o CSS escolhe.
+8. **Colunas especiais feitas à mão também contam.** Trinta e poucas telas têm a própria coluna
+   `acoes` (ou rótulo "Ações"), `selecao` ou `expandir`: o card as reconhece por id e as põe no canto
+   (ações, fora do clique), à esquerda (seleção) ou fora (expandir). Filtro `fixo` (a busca das telas
+   com paginação no servidor) fica na barra, não na gaveta. Rodapé da coluna do título é rótulo e vira
+   cabeçalho do bloco de totais.

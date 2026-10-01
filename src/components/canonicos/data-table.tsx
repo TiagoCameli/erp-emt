@@ -36,6 +36,7 @@ import {
   ListFilter,
   LoaderCircle,
   Rows3,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -82,6 +83,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -1593,8 +1595,10 @@ export function DataTable<TData>({
   const temFiltroAtivo = (filtros ?? []).some(
     (filtro) => filtro.temValor === true,
   );
+  /** O que vai para a gaveta do celular: tudo menos o `fixo` (a busca). */
+  const filtrosGaveta = (filtros ?? []).filter((filtro) => filtro.fixo !== true);
   /** Quantos, para o selo do botão "Filtros" do celular. */
-  const qtdFiltrosAtivos = (filtros ?? []).filter(
+  const qtdFiltrosAtivos = filtrosGaveta.filter(
     (filtro) => filtro.temValor === true,
   ).length;
 
@@ -2442,10 +2446,11 @@ export function DataTable<TData>({
 
   const linhas = table.getRowModel().rows;
   const colunasVisiveis = table.getVisibleLeafColumns();
-  const papeisCartao = papeisDoCartao(
-    colunasVisiveis,
-    new Set([ID_COLUNA_SELECAO, ID_COLUNA_EXPANSAO, ID_COLUNA_ACOES]),
-  );
+  const papeisCartao = papeisDoCartao(colunasVisiveis, {
+    selecao: [ID_COLUNA_SELECAO, "selecao"],
+    acoes: [ID_COLUNA_ACOES, "acoes"],
+    ocultas: [ID_COLUNA_EXPANSAO, "expandir"],
+  });
   const qtdSkeleton = Math.min(tamanhoPagina, MAX_LINHAS_SKELETON);
 
   const colunasDoMenu: ColunaAlternavel[] = table
@@ -3141,8 +3146,12 @@ export function DataTable<TData>({
                 ]
               : []),
             // No celular só a busca fica à vista: o resto vai para a gaveta.
-            ...(soCartoes ? [] : (filtros ?? []))
-              .filter((filtro) => filtroVisivel(filtro.id))
+            // No celular só o que é `fixo` fica à vista (a busca, que nas telas
+            // com paginação no servidor vem por aqui): o resto vai para a gaveta.
+            ...(filtros ?? [])
+              .filter((filtro) =>
+                soCartoes ? filtro.fixo === true : filtroVisivel(filtro.id),
+              )
               .map((filtro) => ({
                 id: filtro.id,
                 rotulo: filtro.rotulo,
@@ -3155,9 +3164,9 @@ export function DataTable<TData>({
             temFiltroAtivo ||
             toolbar !== undefined ||
             arvoreAtiva ||
-            (soCartoes && (filtros ?? []).length > 0) ? (
+            (soCartoes && filtrosGaveta.length > 0) ? (
               <>
-                {soCartoes && (filtros ?? []).length > 0 ? (
+                {soCartoes && filtrosGaveta.length > 0 ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -3307,8 +3316,6 @@ export function DataTable<TData>({
                 coluna.columnDef.meta,
               )
             }
-            idSelecao={ID_COLUNA_SELECAO}
-            idAcoes={ID_COLUNA_ACOES}
             isLoading={isLoading}
             emptyState={emptyState}
             onRowClick={onRowClick}
@@ -3330,14 +3337,31 @@ export function DataTable<TData>({
         </div>
       ) : null}
 
-      {soCartoes && (filtros ?? []).length > 0 ? (
-        <Sheet open={filtrosAbertos} onOpenChange={setFiltrosAbertos}>
+      {soCartoes && filtrosGaveta.length > 0 ? (
+        // `&& soCartoes`: girar o tablet para a largura de computador desmonta a
+        // gaveta, e sem isto ela voltaria aberta sozinha ao girar de volta.
+        <Sheet
+          open={filtrosAbertos && soCartoes}
+          onOpenChange={setFiltrosAbertos}
+        >
           <SheetContent
             side="bottom"
             className="max-h-[85vh] gap-0 overflow-y-auto rounded-t-xl pb-[env(safe-area-inset-bottom)]"
+            // O X do shadcn diz "Close" ao leitor de tela; o nosso fala português.
+            showCloseButton={false}
           >
-            <SheetHeader>
+            <SheetHeader className="flex-row items-center justify-between">
               <SheetTitle>Filtros</SheetTitle>
+              <SheetClose asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Fechar filtros"
+                >
+                  <X />
+                </Button>
+              </SheetClose>
               <SheetDescription className="sr-only">
                 Filtros da listagem
               </SheetDescription>
@@ -3346,7 +3370,7 @@ export function DataTable<TData>({
                 menu "Filtros" para ligar o que está escondido. Cada campo ocupa
                 a largura toda, por cima da largura escolhida no computador. */}
             <div className="flex flex-col gap-3 px-4 pb-4 [&>*]:w-full! [&>*]:max-w-none!">
-              {(filtros ?? []).map((filtro) => (
+              {filtrosGaveta.map((filtro) => (
                 <ContextoRotuloFiltro.Provider
                   key={filtro.id}
                   value={filtro.rotulo}

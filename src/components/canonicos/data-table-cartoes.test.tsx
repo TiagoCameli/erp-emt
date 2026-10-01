@@ -207,6 +207,89 @@ describe("DataTable no celular", () => {
     expect(screen.getByText("Nenhuma ordem por aqui")).toBeInTheDocument();
   });
 
+  it("coluna de ações feita à mão vai para o canto do card, não para o valor", () => {
+    comoCelular();
+    const abrir = vi.fn();
+    const colunas: ColumnDef<Ordem, unknown>[] = [
+      { accessorKey: "numero", header: "Número" },
+      { accessorKey: "fornecedor", header: "Fornecedor" },
+      {
+        id: "acoes",
+        header: "",
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
+        cell: () => <button type="button">Editar ordem</button>,
+      },
+    ];
+    render(<DataTable columns={colunas} data={ORDENS} onRowClick={abrir} />);
+
+    const card = screen.getByRole("listitem");
+    // Sem rótulo "Ações" na grade e fora do clique do card.
+    expect(within(card).queryByText("Ações")).not.toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Editar ordem" }));
+    expect(abrir).not.toHaveBeenCalled();
+  });
+
+  it("checkbox feito à mão não vira o título do card", () => {
+    comoCelular();
+    const colunas: ColumnDef<Ordem, unknown>[] = [
+      {
+        id: "selecao",
+        meta: { fixa: true, rotulo: "Seleção" },
+        cell: () => <input type="checkbox" aria-label="Marcar" />,
+      },
+      ...COLUNAS,
+    ];
+    render(<DataTable columns={colunas} data={ORDENS} />);
+    const card = screen.getByRole("listitem");
+    expect(card.querySelector(".font-semibold")?.textContent).toBe(
+      "OC-2026-0041",
+    );
+    expect(
+      within(card).getByRole("checkbox", { name: "Marcar" }),
+    ).toBeInTheDocument();
+  });
+
+  it("rodapé com rótulo na coluna do título vira o cabeçalho dos totais", () => {
+    comoCelular();
+    render(
+      <DataTable
+        columns={COLUNAS}
+        data={ORDENS}
+        rodape={{ numero: "Total do contrato", valor: "R$ 9.999,00" }}
+      />,
+    );
+    expect(screen.getByText("Total do contrato")).toBeInTheDocument();
+    expect(screen.queryByText("Número")).not.toBeInTheDocument();
+    expect(screen.getByText("R$ 9.999,00")).toBeInTheDocument();
+  });
+
+  it("filtro fixo (a busca do servidor) fica na barra, fora da gaveta", () => {
+    comoCelular();
+    render(
+      <DataTable
+        columns={COLUNAS}
+        data={ORDENS}
+        idTabela="t.fixo"
+        filtros={[
+          {
+            id: "busca",
+            rotulo: "Busca",
+            fixo: true,
+            temValor: true,
+            elemento: <input aria-label="Buscar ordens" />,
+          },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Buscar ordens" }),
+    ).toBeInTheDocument();
+    // Só havia a busca: não sobra nada para a gaveta, então não há botão.
+    expect(
+      screen.queryByRole("button", { name: /^Filtros/ }),
+    ).not.toBeInTheDocument();
+  });
+
   it("no computador continua a tabela", () => {
     render(<DataTable columns={COLUNAS} data={ORDENS} />);
     expect(screen.getByRole("table")).toBeInTheDocument();

@@ -321,7 +321,7 @@ export function GradePersonalizavel({
                   ? "flex-1 basis-64"
                   : "shrink grow-0 basis-full @3xl:basis-(--base-item)",
                 // Celular: KPI dois por linha (ver GradeKpis), gráfico segue inteiro.
-                "max-md:has-[[data-kpi]]:basis-[calc(50%-var(--vao-grade)/2)]",
+                "max-md:has-[[data-kpi]]:basis-[calc(50%-var(--vao-grade)/2-0.5px)]",
                 editando && "rounded-lg outline-1 outline-offset-2 outline-muted-foreground/50 outline-dashed",
                 arrastando === id && "opacity-50",
               )}

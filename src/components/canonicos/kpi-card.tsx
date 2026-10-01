@@ -49,7 +49,7 @@ export function KPICard({
       <p className="text-legenda uppercase tracking-wide text-muted-foreground">
         {titulo}
       </p>
-      <p className="mt-1 text-titulo font-semibold tabular-nums text-foreground max-md:text-corpo max-md:whitespace-nowrap">
+      <p className="mt-1 text-titulo font-semibold tabular-nums text-foreground max-md:text-corpo max-md:wrap-anywhere">
         {valor}
       </p>
       {detalhe !== undefined && detalhe !== null ? (
