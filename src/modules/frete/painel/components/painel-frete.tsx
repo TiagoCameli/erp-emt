@@ -343,18 +343,9 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
           }
         />
         <KPICard
-          titulo="Status de entrega"
-          valor={`${af.pctEntregues.toFixed(0)}%`}
-          detalhe={
-            <span className="flex flex-col gap-1.5">
-              <span>
-                {af.entregues} entregues · {af.emTransito} em trânsito
-              </span>
-              <span className="block h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, af.pctEntregues))}%` }} />
-              </span>
-            </span>
-          }
+          titulo="Carretas em trânsito"
+          valor={af.carretasEmTransito.toLocaleString("pt-BR")}
+          detalhe={`${plural(af.fretesEmTransito, "frete", "fretes")} sem data de chegada`}
         />
       </GradeKpis>
 
