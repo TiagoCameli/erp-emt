@@ -157,6 +157,28 @@ describe("AcoesCiclo: passos com motivo", () => {
     await waitFor(() => expect(acoes.novaRevisao).toHaveBeenCalledWith(ID, "DNIT devolveu"));
   });
 
+  it("recusa do banco: o diálogo continua aberto com o motivo digitado", async () => {
+    acoes.reabrirMedicao.mockResolvedValue({ erro: "A 3ª medição está aberta e só reabre em conferência" });
+    renderizar(["reabrir"]);
+    fireEvent.click(screen.getByRole("button", { name: "Reabrir" }));
+    fireEvent.change(await screen.findByLabelText("Motivo"), { target: { value: "Faltou lançamento" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reabrir medição" }));
+    await waitFor(() => expect(toastErro).toHaveBeenCalledWith("A 3ª medição está aberta e só reabre em conferência"));
+    expect(screen.getByRole("dialog", { name: "Reabrir a 3ª medição" })).toBeTruthy();
+    expect((screen.getByLabelText("Motivo") as HTMLTextAreaElement).value).toBe("Faltou lançamento");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("motivo com menos de 3 letras não libera o confirmar (o banco exige 3)", async () => {
+    renderizar(["nova_revisao"]);
+    fireEvent.click(screen.getByRole("button", { name: "Nova revisão" }));
+    const motivo = await screen.findByLabelText("Motivo");
+    fireEvent.change(motivo, { target: { value: " ab " } });
+    expect(screen.getByRole("button", { name: "Abrir REV01" })).toBeDisabled();
+    fireEvent.change(motivo, { target: { value: "abc" } });
+    expect(screen.getByRole("button", { name: "Abrir REV01" })).not.toBeDisabled();
+  });
+
   it("revisar aprovada manda o motivo e mostra a recusa do banco", async () => {
     acoes.revisarAprovada.mockResolvedValue({ erro: "A 3ª medição já tem revisão pós-aprovação pendente" });
     renderizar(["revisar_aprovada"], null);

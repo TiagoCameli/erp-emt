@@ -21,6 +21,9 @@ import {
 import { AjusteDrawer } from "@/modules/medicao/medicoes/components/ajuste-drawer";
 import type { ServicoAjuste } from "@/modules/medicao/medicoes/tipos";
 
+/** O banco exige motivo com 3 letras ou mais (reabrir, nova revisão, revisar aprovada). */
+const MIN_MOTIVO = 3;
+
 type PassoComDialogo = Exclude<PassoCiclo, "ajuste" | "aprovar">;
 
 interface ConfigDialogo {
@@ -128,15 +131,17 @@ export function AcoesCiclo({ medicaoId, numero, passos, revisaoNumero, servicos,
   const temAprovar = passos.includes("aprovar") && botaoAprovar !== undefined;
   const ativo = dialogo ? configs[dialogo] : null;
 
-  async function confirmar(motivo?: string) {
-    if (!ativo) return;
+  /** Recusa do banco: avisa e devolve `false`, e o diálogo fica aberto com o motivo digitado. */
+  async function confirmar(motivo?: string): Promise<boolean> {
+    if (!ativo) return true;
     const resultado = await ativo.executar(motivo ?? "");
     if ("erro" in resultado) {
       toast.error(resultado.erro);
-      return;
+      return false;
     }
     toast.success(ativo.sucesso);
     atualizar();
+    return true;
   }
 
   function botao(passo: PassoComDialogo, variante: "default" | "outline") {
@@ -174,6 +179,7 @@ export function AcoesCiclo({ medicaoId, numero, passos, revisaoNumero, servicos,
         descricao={ativo?.descricao ?? ""}
         textoConfirmar={ativo?.confirmar ?? ""}
         exigeMotivo={ativo?.exigeMotivo ?? false}
+        minMotivo={MIN_MOTIVO}
         onConfirmar={confirmar}
       />
 

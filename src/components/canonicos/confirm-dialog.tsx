@@ -26,6 +26,11 @@ export interface ConfirmDialogProps {
   variante?: 'padrao' | 'destrutivo';
   exigeMotivo?: boolean;
   /**
+   * Tamanho mínimo do motivo (sem os espaços das pontas) para liberar o confirmar, quando
+   * `exigeMotivo`. Padrão 1: qualquer texto. Use o mesmo mínimo que o banco cobra.
+   */
+  minMotivo?: number;
+  /**
    * O que exatamente vai acontecer, quando uma frase não dá conta: a lista dos
    * registros afetados, o de/para de uma reclassificação, a contagem do
    * impacto. Fica entre a descrição e os botões, com teto de altura e rolagem
@@ -33,7 +38,11 @@ export interface ConfirmDialogProps {
    * fora da tela e o diálogo fica sem saída.
    */
   conteudo?: ReactNode;
-  onConfirmar: (motivo?: string) => void | Promise<void>;
+  /**
+   * Devolver `false` diz que a ação recusou (ex.: `{ erro }` da action, já avisado no toast): o
+   * diálogo continua aberto com o motivo digitado. Qualquer outro retorno fecha.
+   */
+  onConfirmar: (motivo?: string) => void | boolean | Promise<void | boolean>;
 }
 
 export function ConfirmDialog({
@@ -44,6 +53,7 @@ export function ConfirmDialog({
   textoConfirmar,
   variante = 'padrao',
   exigeMotivo = false,
+  minMotivo = 1,
   conteudo,
   onConfirmar,
 }: ConfirmDialogProps) {
@@ -51,7 +61,7 @@ export function ConfirmDialog({
   const [carregando, setCarregando] = useState(false);
   const motivoId = useId();
 
-  const motivoValido = !exigeMotivo || motivo.trim().length > 0;
+  const motivoValido = !exigeMotivo || motivo.trim().length >= Math.max(1, minMotivo);
 
   function trocarAberto(novoAberto: boolean) {
     if (carregando) return;
@@ -76,8 +86,8 @@ export function ConfirmDialog({
     let passou = false;
     try {
       await comAvisoDeFalha('canonicos.confirmDialog.confirmar', async () => {
-        await onConfirmar(exigeMotivo ? motivo.trim() : undefined);
-        passou = true;
+        const resultado = await onConfirmar(exigeMotivo ? motivo.trim() : undefined);
+        passou = resultado !== false;
       });
       if (passou) {
         setMotivo('');
