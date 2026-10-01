@@ -409,9 +409,9 @@ export interface AnaliseFretes {
   totalKm: number;
   custoMedioPorTon: number;
   custoMedioPorKm: number;
-  entregues: number;
-  emTransito: number;
-  pctEntregues: number;
+  /** Carretas distintas (pela placa) com frete sem data de chegada. Frete sem placa conta como uma. */
+  carretasEmTransito: number;
+  fretesEmTransito: number;
   evolucaoMensal: MesEvolucao[];
   topTransportadoras: ItemRanking[];
   topObras: ItemRanking[];
@@ -445,7 +445,8 @@ export function analisarFretes(bases: Bases, c: FiltrosCruzados, nomes: NomesPai
   const totalFretes = todos.reduce((s, f) => s + f.valorTotal, 0);
   const totalToneladas = todos.reduce((s, f) => s + (f.peso || 0), 0);
   const totalKm = todos.reduce((s, f) => s + (f.km || 0), 0);
-  const entregues = todos.filter((f) => !!f.dataChegada).length;
+  const emTransito = todos.filter((f) => !f.dataChegada);
+  const placasEmTransito = new Set(emTransito.map((f) => f.placaCarreta?.trim().toUpperCase() || `sem-placa:${f.id}`));
 
   const porMes = new Map<string, { valor: number; qtd: number; toneladas: number }>();
   for (const f of cruzarFretes(bases.fretes, c, "mes")) {
@@ -481,9 +482,8 @@ export function analisarFretes(bases: Bases, c: FiltrosCruzados, nomes: NomesPai
     totalKm,
     custoMedioPorTon: totalToneladas > 0 ? totalFretes / totalToneladas : 0,
     custoMedioPorKm: totalKm > 0 ? totalFretes / totalKm : 0,
-    entregues,
-    emTransito: todos.length - entregues,
-    pctEntregues: todos.length > 0 ? (entregues / todos.length) * 100 : 0,
+    carretasEmTransito: placasEmTransito.size,
+    fretesEmTransito: emTransito.length,
     evolucaoMensal,
     topTransportadoras: ranquear(
       cruzarFretes(bases.fretes, c, "transportadora").map((f) => paraRanking(f, f.transportadoraId)),

@@ -172,13 +172,28 @@ describe("analytics", () => {
     expect(a.totalFretes).toBe(500);
     expect(a.custoMedioPorTon).toBeCloseTo(500 / 35.4, 9);
     expect(a.custoMedioPorKm).toBe(500 / 200);
-    expect(a.entregues).toBe(2);
+    expect(a.carretasEmTransito).toBe(1);
+    expect(a.fretesEmTransito).toBe(1);
     expect(a.topPedreiras.map((p) => p.id)).toEqual(["lBritam"]);
     expect(a.topPedreiras[0]!.custoMedio).toBeCloseTo(400 / 30.4, 9);
     expect(a.evolucaoMensal).toEqual([
       { ym: "2026-03", rotulo: "Mar/26", valor: 200, qtd: 2, toneladas: 15 },
       { ym: "2026-04", rotulo: "Abr/26", valor: 300, qtd: 1, toneladas: 20 },
     ]);
+  });
+
+  it("carretas em trânsito: placas distintas sem chegada; sem placa conta uma por frete", () => {
+    const fretes = [
+      frete({ id: "a", dataChegada: null, placaCarreta: "ABC1D23" }),
+      frete({ id: "b", dataChegada: null, placaCarreta: " abc1d23 " }),
+      frete({ id: "c", dataChegada: null, placaCarreta: "XYZ9K88" }),
+      frete({ id: "d", dataChegada: null, placaCarreta: null }),
+      frete({ id: "e", dataChegada: null, placaCarreta: "" }),
+      frete({ id: "f", placaCarreta: "QWE1R23" }),
+    ];
+    const a = analisarFretes({ fretes, pagamentos: [], abastecimentos: [], pedidos: [] }, {}, nomes);
+    expect(a.carretasEmTransito).toBe(4);
+    expect(a.fretesEmTransito).toBe(5);
   });
 
   it("top soma antes de cortar (8)", () => {
