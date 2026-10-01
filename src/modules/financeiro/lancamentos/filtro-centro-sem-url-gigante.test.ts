@@ -239,6 +239,40 @@ describe("filtro de centro de custo na listagem", () => {
       filtros.some((f) => String(f.coluna).startsWith("lancamento_rateios")),
     ).toBe(false);
   });
+
+  it("sem etapa filtra só pelo próprio centro, sem buscar a subárvore", async () => {
+    const filtros = bancoCom({ centros: 61, lancamentos: 1871 });
+
+    await listarLancamentos({
+      pagina: 0,
+      tamanho: 25,
+      centroSemEtapaIds: [RAIZ],
+    });
+
+    expect(rpc).not.toHaveBeenCalled();
+    const noEmbed = filtros.find(
+      (f) => f.coluna === "lancamento_rateios.centro_custo_id",
+    );
+    expect(noEmbed?.valor).toEqual([RAIZ]);
+  });
+
+  it("sem etapa soma com a subárvore de outro centro no mesmo filtro", async () => {
+    const filtros = bancoCom({ centros: 61, lancamentos: 1871 });
+
+    await listarLancamentos({
+      pagina: 0,
+      tamanho: 25,
+      centroCustoIds: [OUTRA_RAIZ],
+      centroSemEtapaIds: [RAIZ],
+    });
+
+    expect(rpc).toHaveBeenCalledTimes(1);
+    const noEmbed = filtros.find(
+      (f) => f.coluna === "lancamento_rateios.centro_custo_id",
+    );
+    expect(noEmbed?.valor).toHaveLength(62);
+    expect(noEmbed?.valor).toContain(RAIZ);
+  });
 });
 
 /** O maior array entregue como valor de filtro para a consulta de lançamentos. */

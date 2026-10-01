@@ -437,6 +437,16 @@ describe("lerFiltrosLancamentos: filtros de múltipla escolha", () => {
     expect(valores.formas).toEqual([A, B]);
   });
 
+  it("lê centro_raiz como centro sem etapa, à parte do centro", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({
+      centro: A,
+      centro_raiz: B,
+    });
+    expect(filtros.centroCustoIds).toEqual([A]);
+    expect(filtros.centroSemEtapaIds).toEqual([B]);
+    expect(valores.centrosSemEtapa).toEqual([B]);
+  });
+
   it("sem_forma entra como filtro próprio e volta para a barra", () => {
     const { filtros, valores } = lerFiltrosLancamentos({ sem_forma: "1" });
     expect(filtros.semForma).toBe(true);

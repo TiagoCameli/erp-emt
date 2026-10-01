@@ -113,6 +113,12 @@ export interface ListarLancamentosParams {
    */
   centroCustoIds?: string[];
   /**
+   * Centros que valem SÓ por eles mesmos, sem a subárvore: o "sem etapa" do
+   * filtro, que é o rateio gravado direto na raiz de um centro com etapas. Soma
+   * com `centroCustoIds` no mesmo filtro e no mesmo recorte de valor.
+   */
+  centroSemEtapaIds?: string[];
+  /**
    * Conta bancária de alguma parcela do lançamento (paga ou a pagar). Mora em
    * lancamento_parcelas, então também vira consulta de ids + `in`.
    */
@@ -988,9 +994,18 @@ export async function listarLancamentos(
   // que morre antes de chegar ao servidor (medido: 1.115 ids dão HTTP 400, 1.753
   // dão 520 e 1.871 não completam a requisição).
   const centroP = (async () => {
-    const subarvore = params.centroCustoIds?.length
-      ? await subarvoreDosCentros(supabase, params.centroCustoIds)
-      : null;
+    const semEtapa = params.centroSemEtapaIds ?? [];
+    const subarvore =
+      params.centroCustoIds?.length || semEtapa.length
+        ? [
+            ...new Set([
+              ...(params.centroCustoIds?.length
+                ? await subarvoreDosCentros(supabase, params.centroCustoIds)
+                : []),
+              ...semEtapa,
+            ]),
+          ]
+        : null;
     const valores = subarvore?.length
       ? await valoresPorCentroCusto(supabase, subarvore)
       : null;

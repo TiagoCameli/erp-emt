@@ -78,6 +78,8 @@ export interface ValoresFiltrosLancamentos {
   fornecedores: string[];
   categorias: string[];
   centros: string[];
+  /** Raízes escolhidas "sem etapa" (`centro_raiz=`). */
+  centrosSemEtapa: string[];
   formas: string[];
   /** "1" quando os lançamentos SEM forma de pagamento estão incluídos. */
   semForma: string;
@@ -271,6 +273,9 @@ export function lerFiltrosLancamentos(
   const fornecedorIds = lerUuidsDaUrl(params.fornecedor);
   const categoriaIds = lerUuidsDaUrl(params.categoria);
   const centroCustoIds = lerUuidsDaUrl(params.centro);
+  // O "sem etapa" do filtro de centro: cada id vale só pelo rateio gravado
+  // nele, sem as etapas. Ver `centrosDaListagem` em `_shared/centro-custo`.
+  const centroSemEtapaIds = lerUuidsDaUrl(params.centro_raiz);
   const formaPagamentoIds = lerUuidsDaUrl(params.forma);
   // "Sem forma informada" é escolha, não resto: são 880 lançamentos a pagar
   // (R$ 13,4 mi em 20/08/2026), e o relatório de custo sabe marcá-los.
@@ -393,6 +398,7 @@ export function lerFiltrosLancamentos(
       fornecedorIds,
       categoriaIds,
       centroCustoIds,
+      centroSemEtapaIds,
       contaBancariaId,
       formaPagamentoIds,
       semForma,
@@ -435,6 +441,7 @@ export function lerFiltrosLancamentos(
       fornecedores: fornecedorIds,
       categorias: categoriaIds,
       centros: centroCustoIds,
+      centrosSemEtapa: centroSemEtapaIds,
       formas: formaPagamentoIds,
       semForma: semForma ? "1" : "",
       statusIn,

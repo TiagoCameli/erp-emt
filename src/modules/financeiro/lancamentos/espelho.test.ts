@@ -18,6 +18,7 @@ const LINHA = {
   mes_competencia: "2026-08-01",
   observacoes: "Documento: 123",
   fornecedores: { razao_social: "AUTO POSTO PROGRESSO" },
+  colaboradores: null,
   categorias_financeiras: { nome: "Combustível" },
   formas_pagamento: { nome: "PIX" },
   // Uma forma: o cabeçalho guarda ela e o bloco espelha o total.
@@ -112,6 +113,15 @@ describe("montarEspelhoLancamento", () => {
     expect(espelho.fornecedorNome).toBeNull();
     expect(espelho.categoriaNome).toBeNull();
     expect(espelho.formaPagamentoNome).toBeNull();
+  });
+
+  it("lançamento do RH, sem fornecedor, sai com o nome de quem recebe", () => {
+    const espelho = montarEspelhoLancamento({
+      ...LINHA,
+      fornecedores: null,
+      colaboradores: { nome: "MICHARLE ROCHA DA SILVA" },
+    });
+    expect(espelho.fornecedorNome).toBe("MICHARLE ROCHA DA SILVA");
   });
 
   it("pago por duas formas, o papel diz a divisão em vez de ficar em branco", () => {
