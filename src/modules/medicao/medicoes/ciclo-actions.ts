@@ -7,14 +7,15 @@ import { mensagemDeNegocio } from "@/lib/erros-banco";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import { aprovarMedicaoSchema, quantidadeAprovadaParaBanco, type AprovarMedicaoInput } from "@/modules/medicao/medicoes/aprovacao";
 import { lancarAjusteSchema, motivoCicloSchema, type LancarAjusteInput } from "@/modules/medicao/medicoes/ciclo-schemas";
 
 /**
  * Passos do ciclo da medição (Fase 5): fechar, reabrir, ajuste, enviar, nova revisão e revisar
  * aprovada. Cada RPC confere de novo a permissão, o contrato (D3) e o status com a medição travada
  * (`for update`): o segundo pedido de um duplo clique é recusado pela regra do status. A checagem
- * aqui só evita a ida ao banco sem permissão; a recusa (P0001, pt-BR) volta como está. Aprovar fica
- * na Task 4 (tela da aprovação por item).
+ * aqui só evita a ida ao banco sem permissão; a recusa (P0001, pt-BR) volta como está. Aprovar
+ * (Task 4) manda a quantidade aprovada por item, ou "tudo como medido".
  */
 
 const RECURSO = "medicao.medicoes" as const;
@@ -22,7 +23,7 @@ const ROTA_LISTA = "/medicao/medicoes";
 
 export type ResultadoCiclo = { ok: true } | { erro: string };
 
-type Acao = "editar" | "desaprovar";
+type Acao = "editar" | "aprovar" | "desaprovar";
 
 async function pode(acao: Acao): Promise<boolean> {
   try {
@@ -143,5 +144,47 @@ export async function revisarAprovada(id: string, motivo: string): Promise<Resul
     id,
     (s) => s.rpc("fn_mc_medicao_revisar_aprovada", { p_id: id, p_motivo: "motivo" in m ? m.motivo : "" }),
     () => ("erro" in m ? m.erro : null),
+  );
+}
+
+type ItensAprovados = { item_id: string; quantidade: string }[];
+
+/** Converte as quantidades cruas da tela (pt-BR; vazio é 0; ambíguo recusado) para a RPC. */
+function itensParaBanco(itens: { itemId: string; quantidade: string }[]): { itens: ItensAprovados } | { erro: string } {
+  const vistos = new Set<string>();
+  const saida: ItensAprovados = [];
+  for (const item of itens) {
+    if (vistos.has(item.itemId)) return { erro: "Item repetido na aprovação" };
+    vistos.add(item.itemId);
+    const r = quantidadeAprovadaParaBanco(item.quantidade);
+    if ("erro" in r) return { erro: `Quantidade aprovada inválida: ${r.erro}` };
+    saida.push({ item_id: item.itemId, quantidade: r.valor });
+  }
+  return { itens: saida };
+}
+
+/**
+ * Aprova a revisão enviada. Com `tudoComoMedido`, cada item vai com a medida congelada e os itens
+ * não são mandados. Sem ele, cada item vai com a quantidade digitada (vazio é 0); item congelado
+ * que não vier também vai 0 (regra da RPC). Permissão `aprovar`.
+ */
+export async function aprovarMedicao(dados: AprovarMedicaoInput): Promise<ResultadoCiclo> {
+  const validado = aprovarMedicaoSchema.safeParse(dados);
+  const medicaoId = typeof dados?.id === "string" ? dados.id : "";
+  const tudo = validado.success && validado.data.tudoComoMedido;
+  const convertidos = validado.success && !tudo ? itensParaBanco(validado.data.itens) : { itens: [] as ItensAprovados };
+  return executar(
+    { contexto: "medicao.medicoes.aprovar", acao: "aprovar", semPermissao: "Sem permissão para aprovar medição", falha: "Não foi possível aprovar a medição. Tente novamente" },
+    medicaoId,
+    (s) =>
+      s.rpc("fn_mc_medicao_aprovar", {
+        p_id: medicaoId,
+        p_itens: "itens" in convertidos ? convertidos.itens : [],
+        p_tudo_como_medido: tudo,
+      }),
+    () => {
+      if (!validado.success) return validado.error.issues[0]?.message ?? "Dados inválidos";
+      return "erro" in convertidos ? convertidos.erro : null;
+    },
   );
 }

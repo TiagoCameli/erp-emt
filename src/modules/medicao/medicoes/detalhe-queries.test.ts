@@ -53,7 +53,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { carregarMedicao } from "@/modules/medicao/medicoes/detalhe-queries";
+import { carregarMedicao, revisaoItens } from "@/modules/medicao/medicoes/detalhe-queries";
 
 const MED = "m1";
 
@@ -161,5 +161,51 @@ describe("carregarMedicao", () => {
     const original = estado.responder;
     estado.responder = (nome, filtros) => (nome === "mc_v_medicao_itens" ? { data: null, error: { message: "falhou" } } : original(nome, filtros));
     await expect(carregarMedicao(MED)).rejects.toThrow("falhou");
+  });
+});
+
+describe("revisaoItens", () => {
+  function cenarioCongelado(over: Record<string, unknown> = {}) {
+    const dados: Record<string, unknown> = {
+      mc_medicao_revisoes: [{ id: "r0" }, { id: "r1" }],
+      mc_revisao_itens: [
+        { revisao_id: "r0", item_id: "i1", quantidade: "28.0000" },
+        { revisao_id: "r1", item_id: "i1", quantidade: "29.0000" },
+        { revisao_id: "r1", item_id: "i9", quantidade: "1.5000" },
+      ],
+      mc_planilha_itens: [{ id: "p0-i9", item_id: "i9", codigo: "09.01", descricao: "Saiu no aditivo", unidade: "m", ordem: 9, tipo: "servico" }],
+      ...over,
+    };
+    estado.responder = (nome) => ({ data: dados[nome] ?? [], error: null });
+  }
+
+  it("quantidades congeladas de todas as revisões da medição, como texto", async () => {
+    cenarioCongelado();
+    const r = await revisaoItens(MED, ["i1"]);
+    expect(estado.consultas.find((c) => c.tabela === "mc_medicao_revisoes")?.filtros).toEqual({ medicao_id: MED });
+    expect(estado.consultas.find((c) => c.tabela === "mc_revisao_itens")?.filtros).toEqual({ "revisao_id:in": ["r0", "r1"] });
+    expect(r.congelados).toEqual([
+      { revisaoId: "r0", itemId: "i1", quantidade: "28.0000" },
+      { revisaoId: "r1", itemId: "i1", quantidade: "29.0000" },
+      { revisaoId: "r1", itemId: "i9", quantidade: "1.5000" },
+    ]);
+  });
+
+  it("rótulo só do item que o detalhe não conhece (saiu da planilha)", async () => {
+    cenarioCongelado();
+    const r = await revisaoItens(MED, ["i1"]);
+    expect(estado.consultas.find((c) => c.tabela === "mc_planilha_itens")?.filtros).toEqual({ "item_id:in": ["i9"] });
+    expect(r.extras).toEqual([{ itemId: "i9", codigo: "09.01", descricao: "Saiu no aditivo", unidade: "m" }]);
+  });
+
+  it("sem revisão não consulta itens congelados", async () => {
+    cenarioCongelado({ mc_medicao_revisoes: [] });
+    await expect(revisaoItens(MED, [])).resolves.toEqual({ congelados: [], extras: [] });
+    expect(estado.consultas.some((c) => c.tabela === "mc_revisao_itens")).toBe(false);
+  });
+
+  it("erro do banco sobe", async () => {
+    estado.responder = (nome) => (nome === "mc_revisao_itens" ? { data: null, error: { message: "falhou" } } : { data: [{ id: "r0" }], error: null });
+    await expect(revisaoItens(MED, [])).rejects.toThrow("falhou");
   });
 });

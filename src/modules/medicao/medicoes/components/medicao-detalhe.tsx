@@ -2,28 +2,20 @@
 
 import * as React from "react";
 import Link from "next/link";
-import type { ColumnDef } from "@tanstack/react-table";
 import { ClipboardList } from "lucide-react";
 
-import { CelulaVazia, DataTable, MoneyText, PageHeader, SecaoDetalhe, StatusBadge, Trilha } from "@/components/canonicos";
+import { CelulaVazia, MoneyText, PageHeader, SecaoDetalhe, Trilha } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { formatarData } from "@/lib/formatadores";
 import { periodoMedicao } from "@/modules/medicao/boletim/formato";
 import { SeloMedicao } from "@/modules/medicao/_shared/selo-medicao";
-import { ROTULO_FASE_REVISAO, rotuloRevisao, rotuloStatusRevisao, type FaseRevisao } from "@/modules/medicao/_shared/rotulos";
+import { rotuloRevisao, rotuloStatusRevisao } from "@/modules/medicao/_shared/rotulos";
+import { rotulosDosItens, type ItemCongelado, type RotuloItem } from "@/modules/medicao/medicoes/aprovacao";
 import type { PassoCiclo } from "@/modules/medicao/medicoes/ciclo";
 import { AcoesCiclo } from "@/modules/medicao/medicoes/components/acoes-ciclo";
 import { ItensMedicao } from "@/modules/medicao/medicoes/components/itens-medicao";
+import { RevisoesMedicao } from "@/modules/medicao/medicoes/components/revisoes-medicao";
 import { eventoMedicaoParaTrilha } from "@/modules/medicao/medicoes/eventos";
-import type { MedicaoDetalhe as MedicaoDetalheDados, RevisaoMedicao } from "@/modules/medicao/medicoes/tipos";
-
-/** Cor do selo da revisão: aprovada verde, enviada pendente, em aberto rascunho, substituída apagada. */
-const COR_REVISAO: Record<string, string> = {
-  em_aberto: "rascunho",
-  enviada: "pendente_aprovacao",
-  aprovada: "aprovado",
-  substituida: "cancelado",
-};
+import type { MedicaoDetalhe as MedicaoDetalheDados } from "@/modules/medicao/medicoes/tipos";
 
 function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
@@ -34,48 +26,8 @@ function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode 
   );
 }
 
-const rotuloFase = (fase: string) => (fase in ROTULO_FASE_REVISAO ? ROTULO_FASE_REVISAO[fase as FaseRevisao] : fase);
-
-const colunasRevisoes: ColumnDef<RevisaoMedicao, unknown>[] = [
-  {
-    accessorKey: "numero",
-    header: "Revisão",
-    size: 100,
-    meta: { fixa: true, atomico: true },
-    cell: ({ row }) => <span className="font-mono">{rotuloRevisao(row.original.numero)}</span>,
-  },
-  {
-    accessorKey: "fase",
-    header: "Fase",
-    size: 160,
-    cell: ({ row }) => rotuloFase(row.original.fase),
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    size: 140,
-    cell: ({ row }) => (
-      <StatusBadge status={COR_REVISAO[row.original.status] ?? row.original.status} rotulo={rotuloStatusRevisao(row.original.status)} />
-    ),
-  },
-  {
-    accessorKey: "motivo",
-    header: "Motivo",
-    size: 320,
-    cell: ({ row }) => row.original.motivo ?? <CelulaVazia />,
-  },
-  {
-    accessorKey: "criadoEm",
-    header: "Aberta em",
-    size: 120,
-    meta: { atomico: true },
-    cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.criadoEm)}</span>,
-  },
-];
-
-function idRevisao(r: RevisaoMedicao): string {
-  return r.id;
-}
+const SEM_CONGELADOS: ItemCongelado[] = [];
+const SEM_ROTULOS: RotuloItem[] = [];
 
 export interface MedicaoDetalheProps {
   medicao: MedicaoDetalheDados;
@@ -83,19 +35,24 @@ export interface MedicaoDetalheProps {
   passos: PassoCiclo[];
   /** `medicao.lancamentos/ver`, lido no servidor: sem ela o botão de lançamentos não aparece. */
   podeVerLancamentos: boolean;
-  /** Botão de aprovar da Task 4; repassado para `AcoesCiclo`. */
+  /** Botão de aprovar (Task 4, drawer com glosa); repassado para `AcoesCiclo`. */
   botaoAprovar?: React.ReactNode;
+  /** Quantidades congeladas de cada revisão (`revisaoItens`), para a comparação. */
+  congelados?: ItemCongelado[];
+  /** Rótulos dos itens congelados que não estão nos itens da medição. */
+  rotulosExtras?: RotuloItem[];
 }
 
 /**
  * Detalhe da medição (Fase 5, Task 3): cabeçalho com Nª, contrato, período, selo e os passos do
- * ciclo; resumo (versão da planilha, revisão corrente, valor); itens; revisões; e a trilha dos
- * eventos. Todo número vem do banco como texto e só é formatado (D7).
+ * ciclo; resumo (versão da planilha, revisão corrente, valor); itens; revisões (lista e comparação
+ * de duas revisões, Task 4); e a trilha dos eventos. Todo número vem do banco como texto e só é formatado (D7).
  */
-export function MedicaoDetalhe({ medicao, passos, podeVerLancamentos, botaoAprovar }: MedicaoDetalheProps) {
+export function MedicaoDetalhe({ medicao, passos, podeVerLancamentos, botaoAprovar, congelados = SEM_CONGELADOS, rotulosExtras = SEM_ROTULOS }: MedicaoDetalheProps) {
   const periodo = periodoMedicao(medicao.periodoInicio, medicao.periodoFim);
   const corrente = medicao.revisaoCorrente;
   const trilha = React.useMemo(() => medicao.eventos.map(eventoMedicaoParaTrilha), [medicao.eventos]);
+  const rotulos = React.useMemo(() => rotulosDosItens(medicao.itens, rotulosExtras), [medicao.itens, rotulosExtras]);
 
   return (
     <>
@@ -150,7 +107,7 @@ export function MedicaoDetalhe({ medicao, passos, podeVerLancamentos, botaoAprov
         </SecaoDetalhe>
 
         <SecaoDetalhe titulo="Revisões">
-          <DataTable idTabela="medicao.medicoes.revisoes" columns={colunasRevisoes} data={medicao.revisoes} idDaLinha={idRevisao} />
+          <RevisoesMedicao revisoes={medicao.revisoes} congelados={congelados} rotulos={rotulos} />
         </SecaoDetalhe>
 
         <SecaoDetalhe titulo="Histórico">

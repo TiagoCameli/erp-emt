@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { lerDecimal, paraTexto, somar } from "@/modules/medicao/_shared/decimal";
 
+import type { ItemCongelado, RotuloItem } from "./aprovacao";
 import { revisaoCorrente } from "./ciclo";
 import type { EventoMedicao, ItemMedicaoDetalhe, MedicaoDetalhe, RevisaoMedicao, ServicoAjuste } from "./tipos";
 
@@ -201,4 +202,60 @@ export async function carregarMedicao(id: string): Promise<MedicaoDetalhe | null
     servicos,
     eventos,
   };
+}
+
+/** Quantidades congeladas das revisões e os rótulos que o detalhe não tinha. */
+export interface RevisaoItens {
+  congelados: ItemCongelado[];
+  /** Código, descrição e unidade dos itens congelados que não estão nos itens do detalhe. */
+  extras: RotuloItem[];
+}
+
+/**
+ * Quantidades congeladas por revisão (`mc_revisao_itens`, gravadas no envio) de todas as revisões
+ * da medição, para o drawer de aprovação e a comparação de revisões. `conhecidos` são os itens que
+ * o detalhe já rotulou (`carregarMedicao`, com a linha da planilha que a view apontou); para os que
+ * faltarem, o rótulo vem de qualquer linha de planilha do item (preferindo serviço). D7: a
+ * quantidade chega como texto e só é exibida ou comparada.
+ */
+export async function revisaoItens(medicaoId: string, conhecidos: string[] = []): Promise<RevisaoItens> {
+  const supabase = await createClient();
+
+  const revisoesRes = await supabase.from("mc_medicao_revisoes").select("id").eq("medicao_id", medicaoId);
+  falhou(revisoesRes.error);
+  const ids = (revisoesRes.data ?? []).map((r) => r.id);
+  if (ids.length === 0) return { congelados: [], extras: [] };
+
+  type LinhaCongelada = { revisao_id: string; item_id: string; quantidade: string };
+  const congeladosRes = await todasAsLinhas<LinhaCongelada>((de, ate) =>
+    supabase
+      .from("mc_revisao_itens")
+      .select("revisao_id, item_id, quantidade:quantidade::text")
+      .in("revisao_id", ids)
+      .order("revisao_id", { ascending: true })
+      .order("item_id", { ascending: true })
+      .range(de, ate) as unknown as PromiseLike<{ data: LinhaCongelada[] | null; error: { message: string } | null }>,
+  );
+  if (congeladosRes.erro) throw new Error(congeladosRes.erro);
+
+  const congelados: ItemCongelado[] = congeladosRes.linhas.map((c) => ({ revisaoId: c.revisao_id, itemId: c.item_id, quantidade: c.quantidade }));
+
+  const sabidos = new Set(conhecidos);
+  const faltando = [...new Set(congelados.map((c) => c.itemId).filter((i) => !sabidos.has(i)))];
+  if (faltando.length === 0) return { congelados, extras: [] };
+
+  const extrasRes = await supabase.from("mc_planilha_itens").select(COLUNAS_PLANILHA).in("item_id", faltando);
+  falhou(extrasRes.error);
+  const porItem = new Map<string, LinhaPlanilha>();
+  for (const p of (extrasRes.data ?? []) as LinhaPlanilha[]) {
+    const atual = porItem.get(p.item_id);
+    if (!atual || (atual.tipo !== "servico" && p.tipo === "servico")) porItem.set(p.item_id, p);
+  }
+  const extras: RotuloItem[] = faltando
+    .filter((i) => porItem.has(i))
+    .map((i) => {
+      const p = porItem.get(i) as LinhaPlanilha;
+      return { itemId: i, codigo: p.codigo, descricao: p.descricao, unidade: p.unidade };
+    });
+  return { congelados, extras };
 }

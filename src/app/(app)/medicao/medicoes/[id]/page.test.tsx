@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 
 /**
@@ -10,6 +11,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 const getUsuarioLogado = vi.fn();
 const temPermissao = vi.fn();
 const carregarMedicao = vi.fn();
+const revisaoItens = vi.fn();
 const ID = "33333333-3333-4333-8333-333333333333";
 
 vi.mock("next/navigation", () => ({
@@ -23,12 +25,30 @@ vi.mock("@/lib/permissoes", () => ({
 }));
 vi.mock("@/modules/medicao/medicoes/detalhe-queries", () => ({
   carregarMedicao: (...a: unknown[]) => carregarMedicao(...a),
+  revisaoItens: (...a: unknown[]) => revisaoItens(...a),
+}));
+vi.mock("@/modules/medicao/medicoes/components/aprovar-drawer", () => ({
+  BotaoAprovar: ({ revisaoRotulo, linhas }: { revisaoRotulo: string; linhas: { itemId: string; medida: string }[] }) => (
+    <span data-testid="botao-aprovar">{`${revisaoRotulo}:${linhas.map((l) => `${l.itemId}=${l.medida}`).join(",")}`}</span>
+  ),
 }));
 vi.mock("@/modules/medicao/medicoes/components/medicao-detalhe", () => ({
-  MedicaoDetalhe: ({ passos, podeVerLancamentos }: { passos: string[]; podeVerLancamentos: boolean }) => (
+  MedicaoDetalhe: ({
+    passos,
+    podeVerLancamentos,
+    botaoAprovar,
+    congelados,
+  }: {
+    passos: string[];
+    podeVerLancamentos: boolean;
+    botaoAprovar?: ReactNode;
+    congelados: unknown[];
+  }) => (
     <div>
       <span data-testid="passos">{passos.join(",")}</span>
       <span data-testid="lancamentos">{podeVerLancamentos ? "sim" : "não"}</span>
+      <span data-testid="congelados">{congelados.length}</span>
+      {botaoAprovar ?? <span data-testid="sem-aprovar" />}
     </div>
   ),
 }));
@@ -42,6 +62,7 @@ function medicao(status: string, corrente: { status: string; fase: string; numer
     id: ID,
     status,
     revisaoCorrente: corrente ? { id: "r", motivo: null, criadoEm: "", ...corrente } : null,
+    itens: [{ itemId: "i1", codigo: "01.01", descricao: "CBUQ", unidade: "t" }],
   };
 }
 
@@ -51,6 +72,13 @@ beforeEach(() => {
   getUsuarioLogado.mockReset().mockResolvedValue({ id: "u" });
   temPermissao.mockReset().mockReturnValue(true);
   carregarMedicao.mockReset().mockResolvedValue(medicao("aberta", { status: "em_aberto", fase: "antes_aprovacao", numero: 0 }));
+  revisaoItens.mockReset().mockResolvedValue({
+    congelados: [
+      { revisaoId: "r-velha", itemId: "i1", quantidade: "28" },
+      { revisaoId: "r", itemId: "i1", quantidade: "29" },
+    ],
+    extras: [],
+  });
 });
 
 describe("PaginaMedicao", () => {
@@ -81,6 +109,23 @@ describe("PaginaMedicao", () => {
     temPermissao.mockImplementation((_u: unknown, recurso: string, acao: string) => recurso !== "medicao.medicoes" || acao === "ver" || acao === "aprovar");
     render(await PaginaMedicao(params()));
     expect(screen.getByTestId("passos").textContent).toBe("aprovar");
+    // O drawer recebe só os itens congelados da revisão enviada.
+    expect(screen.getByTestId("botao-aprovar").textContent).toBe("REV00:i1=29");
+    expect(revisaoItens).toHaveBeenCalledWith(ID, ["i1"]);
+  });
+
+  it("aprovada com revisão pós-aprovação enviada: o drawer usa a congelada da pendente; os itens da medição seguem os do banco", async () => {
+    const m = medicao("aprovada", { status: "enviada", fase: "pos_aprovacao", numero: 2 });
+    carregarMedicao.mockResolvedValue(m);
+    render(await PaginaMedicao(params()));
+    expect(screen.getByTestId("passos").textContent).toBe("nova_revisao,aprovar");
+    expect(screen.getByTestId("botao-aprovar").textContent).toBe("REV02:i1=29");
+  });
+
+  it("sem o passo aprovar, não vai botão de aprovar; as quantidades congeladas vão para as revisões", async () => {
+    render(await PaginaMedicao(params()));
+    expect(screen.queryByTestId("botao-aprovar")).toBeNull();
+    expect(screen.getByTestId("congelados").textContent).toBe("2");
   });
 
   it("aprovada sem pendente, com desaprovar: Revisar aprovada", async () => {

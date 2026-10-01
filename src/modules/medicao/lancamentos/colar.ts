@@ -13,6 +13,7 @@
 
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { normalizarNumeroDigitado } from "@/lib/numero-digitado";
+import { ehNumeroAmbiguo } from "@/modules/medicao/_shared/numero-ambiguo";
 import type { ServicoParaLancar } from "./tipos";
 
 /** Teto de linhas por colagem (o mesmo da RPC `fn_mc_lancamentos_colar`). */
@@ -116,9 +117,9 @@ interface NumeroColado {
 function normalizarNumeroColado(texto: string): NumeroColado {
   const t = texto.trim();
   if (!t.includes(",")) {
-    // Só é ambíguo quando o texto inteiro é puramente numérico ("\d+.\d{3}"): "ab.234" ou "1a.234"
-    // não são números de jeito nenhum, e viram o erro normal de número inválido, não de ambiguidade.
-    if (/^\d+\.\d{3}$/.test(t)) {
+    // Só é ambíguo quando o texto inteiro é puramente numérico: "ab.234" ou "1a.234" não são
+    // números de jeito nenhum, e viram o erro normal de número inválido, não de ambiguidade.
+    if (ehNumeroAmbiguo(t)) {
       return {
         valor: null,
         erroAmbiguo: `Número ambíguo: "${t}". Formate a célula com vírgula decimal (${t.replace(".", ",")}) ou sem separador de milhar (${t.replace(".", "")})`,

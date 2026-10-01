@@ -31,6 +31,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
+  aprovarMedicao,
   enviarMedicao,
   fecharMedicao,
   lancarAjuste,
@@ -155,5 +156,74 @@ describe("revisarAprovada", () => {
     estado.negadas = ["medicao.medicoes/editar"];
     await expect(revisarAprovada(ID, "DNIT pediu correção")).resolves.toEqual({ ok: true });
     expect(estado.chamadas).toEqual([{ fn: "fn_mc_medicao_revisar_aprovada", args: { p_id: ID, p_motivo: "DNIT pediu correção" } }]);
+  });
+});
+
+describe("aprovarMedicao", () => {
+  const ITEM2 = "55555555-5555-4555-8555-555555555555";
+
+  it("sem medicao.medicoes/aprovar não chama o banco", async () => {
+    estado.negadas = ["medicao.medicoes/aprovar"];
+    await expect(aprovarMedicao({ id: ID, itens: [], tudoComoMedido: true })).resolves.toEqual({ erro: "Sem permissão para aprovar medição" });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("aprovar tudo como medido manda p_tudo_como_medido true e itens vazios", async () => {
+    await expect(aprovarMedicao({ id: ID, itens: [{ itemId: ITEM, quantidade: "5" }], tudoComoMedido: true })).resolves.toEqual({ ok: true });
+    expect(estado.chamadas).toEqual([{ fn: "fn_mc_medicao_aprovar", args: { p_id: ID, p_itens: [], p_tudo_como_medido: true } }]);
+    expect(estado.revalidadas).toEqual(["/medicao/medicoes", `/medicao/medicoes/${ID}`]);
+  });
+
+  it("quantidade pt-BR chega com ponto e campo vazio vai 0", async () => {
+    await aprovarMedicao({
+      id: ID,
+      itens: [
+        { itemId: ITEM, quantidade: "1.234,5" },
+        { itemId: ITEM2, quantidade: "" },
+      ],
+      tudoComoMedido: false,
+    });
+    expect(estado.chamadas[0]).toEqual({
+      fn: "fn_mc_medicao_aprovar",
+      args: {
+        p_id: ID,
+        p_itens: [
+          { item_id: ITEM, quantidade: "1234.5" },
+          { item_id: ITEM2, quantidade: "0" },
+        ],
+        p_tudo_como_medido: false,
+      },
+    });
+  });
+
+  it("número ambíguo é recusado sem ir ao banco", async () => {
+    const r = await aprovarMedicao({ id: ID, itens: [{ itemId: ITEM, quantidade: "1.234" }], tudoComoMedido: false });
+    expect(r).toEqual({ erro: expect.stringContaining("ambíguo") });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("item repetido é recusado sem ir ao banco", async () => {
+    const r = await aprovarMedicao({
+      id: ID,
+      itens: [
+        { itemId: ITEM, quantidade: "1" },
+        { itemId: ITEM, quantidade: "2" },
+      ],
+      tudoComoMedido: false,
+    });
+    expect(r).toHaveProperty("erro");
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("id inválido não chama o banco", async () => {
+    await expect(aprovarMedicao({ id: "x", itens: [], tudoComoMedido: true })).resolves.toEqual({ erro: "Medição inválida" });
+    expect(estado.chamadas).toEqual([]);
+  });
+
+  it("recusa P0001 volta como está", async () => {
+    estado.resposta = { data: null, error: { code: "P0001", message: "A 2ª medição não tem revisão enviada para aprovar" } };
+    await expect(aprovarMedicao({ id: ID, itens: [], tudoComoMedido: true })).resolves.toEqual({
+      erro: "A 2ª medição não tem revisão enviada para aprovar",
+    });
   });
 });
