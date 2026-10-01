@@ -44,5 +44,7 @@ export function base(): DadosCarretas {
       { lancamentoId: "L2", centroId: "cc-b", mes: "2026-10", paga: false, quantidade: 1, valor: 10000 },
     ],
     diesel: [{ placa: "SQS7E01", mes: "2026-09", litros: 1000, valor: 6394.7 }],
+    localidades: [],
+    tracados: [],
   };
 }

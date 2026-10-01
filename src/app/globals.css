@@ -602,3 +602,30 @@
     break-inside: avoid;
   }
 }
+
+/*
+  Mapa das rotas (Frete > Carretas EMT): o número da rota em cima do círculo colorido e o nome do
+  local. O tooltip padrão do Leaflet é uma caixa branca com seta; aqui só o texto.
+*/
+.leaflet-tooltip.rota-numero {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 11px;
+}
+.leaflet-tooltip.rota-numero::before,
+.leaflet-tooltip.rota-local::before {
+  display: none;
+}
+.leaflet-tooltip.rota-local {
+  background: rgb(255 255 255 / 0.9);
+  border: 0;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  padding: 1px 6px;
+  color: #1f1f1f;
+  font-size: 11px;
+  font-weight: 600;
+}

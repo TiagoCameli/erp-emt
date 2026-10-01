@@ -10,6 +10,22 @@ function lista(valor: unknown): Linha[] {
 const texto = (v: unknown) => (typeof v === "string" ? v : "");
 const numero = (v: unknown) => paraNumeroDoBanco(typeof v === "number" || typeof v === "string" ? v : null);
 
+function coordenada(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** O traçado da rota: [[lat, lng], ...]. Ponto malformado sai, em vez de derrubar o mapa. */
+function pontos(v: unknown): [number, number][] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((p) =>
+    Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))
+      ? [[Number(p[0]), Number(p[1])] as [number, number]]
+      : [],
+  );
+}
+
 /** Converte o JSON da RPC (números em texto) no formato do cálculo. */
 export function paraDadosCarretas(bruto: unknown): DadosCarretas | null {
   if (typeof bruto !== "object" || bruto === null) return null;
@@ -26,6 +42,26 @@ export function paraDadosCarretas(bruto: unknown): DadosCarretas | null {
       toneladas: numero(f.toneladas),
       km: numero(f.km),
       valor: numero(f.valor),
+      origemId: texto(f.origem_id),
+      destinoId: texto(f.destino_id),
+      kmMin: numero(f.km_min),
+      kmMax: numero(f.km_max),
+      comChegada: numero(f.com_chegada),
+      dias: numero(f.dias),
+      diasMax: f.dias_max === null || f.dias_max === undefined ? null : numero(f.dias_max),
+    })),
+    localidades: lista(b.localidades).map((l) => ({
+      id: texto(l.id),
+      nome: texto(l.nome),
+      latitude: coordenada(l.latitude),
+      longitude: coordenada(l.longitude),
+    })),
+    tracados: lista(b.rotas).map((t) => ({
+      origemId: texto(t.origem_id),
+      destinoId: texto(t.destino_id),
+      kmMapa: numero(t.km_mapa),
+      horasMapa: t.horas_mapa === null || t.horas_mapa === undefined ? null : numero(t.horas_mapa),
+      pontos: pontos(t.tracado),
     })),
     gastos: lista(b.gastos).map((g) => ({
       centroId: texto(g.centro_id),

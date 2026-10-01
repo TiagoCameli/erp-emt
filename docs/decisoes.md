@@ -4760,3 +4760,27 @@ despesas e financiamentos.
 2. Guardado na MESMA preferência da tabela, campos novos `ordemFiltros` e `largurasFiltros`. Não sobe a versão: campo que só acrescenta, pela regra da `alturaLinha`. A busca do DataTable entra na ordem e na largura pelo id `__busca`.
 3. A largura chega ao filtro pelo `ContextoLarguraFiltro`, o mesmo caminho do rótulo: os filtros canônicos (`CampoFiltro`) respeitam sem nenhuma tela mudar. Filtro não canônico muda de lugar mas mantém a largura dele.
 4. Tela que monta o `BlocoFiltros` direto, sem host (painel do Frete, Carretas EMT, Tanques), usa `usePersonalizacaoFiltros`: ordem e largura, sem esconder, porque lá não existe menu para trazer de volta.
+
+## 2026-10-01 - Frete > Carretas EMT: mapa das rotas
+
+**Pedido do Tiago:** no fim da aba, um mapa com a produção de frete de cada rota das carretas, a
+rota traçada, os km, a produção e o tempo médio pela saída e chegada dos fretes. Ele mandou o link
+do Maps dos sete locais (Colorado, Pátio Lote 10, Usina Gregório, Pulmão 1 KM657, Pedreira Formate,
+Pedreira Britam, Vale do Abunã); são exatamente os sete que aparecem nos fretes da EMT TRANSPORTES.
+
+**Decisões:**
+
+1. **Leaflet + OpenStreetMap (e satélite da Esri), não Google Maps.** Desenhar rota no Google Maps
+   pede chave de API com faturamento. Coordenada e traçado são nossos e servem para qualquer mapa: se
+   um dia houver chave do Google, troca-se só a camada de fundo.
+2. **Coordenada na localidade** (`latitude`/`longitude` NUMERIC(9,6)) e **traçado guardado** em
+   `frete_rotas_tracado`, calculado uma vez no OSRM e simplificado (~90 m). A tela não chama serviço
+   externo de rota; rota nova sem traçado aparece como reta tracejada.
+3. **Dois km por rota:** o da estrada (OSRM) e a média do lançado no frete. Diferença acima de 20%
+   vira alerta, junto com km que varia na mesma rota, viagem com dias demais e frete sem chegada.
+4. **Tempo médio em dias**, só dos fretes com chegada: o frete guarda a data, não a hora.
+
+**Consequência:** os alertas mostraram três prováveis erros de digitação nos fretes: dois fretes
+"Pedreira Britam -> Colorado" com 145 km (pela estrada são 843; a origem deve ser a Usina Gregório),
+uma viagem Britam -> Gregório de 51 dias (out/2025, SQS7E01) e outra com 990 km. Os números ficam
+como estão até alguém corrigir o frete.
