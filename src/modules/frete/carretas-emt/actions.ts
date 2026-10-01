@@ -7,6 +7,7 @@ import { dataHojeISO } from "@/lib/formatadores";
 import { exigirPermissao } from "@/lib/permissoes";
 import { montarPainel } from "@/modules/frete/carretas-emt/calculo";
 import { carregarCarretasEmt } from "@/modules/frete/carretas-emt/queries";
+import { TIPOS_FRETE } from "@/modules/frete/fretes/schemas";
 
 /**
  * Exportação da aba Carretas EMT. Exportar é ler: pede frete.carretas-emt/ver, a mesma que
@@ -22,6 +23,7 @@ const pedidoSchema = z.strictObject({
   de: MES,
   ate: MES,
   placa: z.string().max(10),
+  tipo: z.enum(["", ...TIPOS_FRETE]).default(""),
 });
 
 export async function gerarPlanilhaCarretasEmt(pedido: unknown): Promise<ResultadoArquivo> {
@@ -40,7 +42,7 @@ export async function gerarPlanilhaCarretasEmt(pedido: unknown): Promise<Resulta
     const painel = montarPainel(dados, validado.data, hoje.slice(0, 7));
     const { montarPlanilhaCarretas } = await import("@/modules/frete/carretas-emt/planilha");
     const conteudo = await montarPlanilhaCarretas(painel).xlsx.writeBuffer();
-    const sufixo = validado.data.placa ? `-${validado.data.placa.toLowerCase()}` : "";
+    const sufixo = [validado.data.placa.toLowerCase(), validado.data.tipo].filter(Boolean).map((p) => `-${p}`).join("");
     return {
       ok: true,
       base64: Buffer.from(conteudo).toString("base64"),

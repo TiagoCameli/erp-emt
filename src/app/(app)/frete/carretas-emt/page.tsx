@@ -8,6 +8,7 @@ import { diaValido } from "@/modules/combustivel/relatorios/periodo";
 import { montarPainel, normalizarPlaca, periodoPadrao } from "@/modules/frete/carretas-emt/calculo";
 import { PainelCarretasEmt } from "@/modules/frete/carretas-emt/components/painel-carretas";
 import { carregarCarretasEmt } from "@/modules/frete/carretas-emt/queries";
+import { TIPOS_FRETE } from "@/modules/frete/fretes/schemas";
 
 /** A página hospeda a exportação em Excel (src/app/max-duration-de-quem-exporta.test.ts). */
 export const maxDuration = 60;
@@ -61,7 +62,10 @@ export default async function PaginaCarretasEmt({
   const placaUrl = normalizarPlaca(primeiro(params.placa));
   const placa = dados.carretas.some((k) => k.placa === placaUrl) ? placaUrl : "";
 
-  const painel = montarPainel(dados, { de, ate, placa }, mesAtual);
+  const tipoUrl = primeiro(params.tipo);
+  const tipo = (TIPOS_FRETE as readonly string[]).includes(tipoUrl) ? tipoUrl : "";
+
+  const painel = montarPainel(dados, { de, ate, placa, tipo }, mesAtual);
 
   return (
     <>

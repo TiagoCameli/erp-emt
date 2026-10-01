@@ -105,6 +105,11 @@ export interface FiltroCarretas {
   ate: string;
   /** Vazio = a frota inteira. */
   placa: string;
+  /**
+   * Tipo de transporte do frete (material, transferencia); vazio = todos. Recorta SÓ a produção:
+   * o gasto e a parcela são da carreta inteira e não se dividem por tipo de viagem.
+   */
+  tipo?: string;
 }
 
 const MES_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -433,6 +438,7 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
     const chave = chaveDaPlaca(f.placa);
     if (chave === CHAVE_OUTRAS) naoReconhecidas.add(f.placa || "(sem placa)");
     if (!entra(chave) || !dentro(f.mes)) continue;
+    if (filtro.tipo && f.tipo !== filtro.tipo) continue;
     const a = acc(chave);
     a.viagens += f.viagens;
     a.toneladas += f.toneladas;

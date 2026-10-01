@@ -20,6 +20,7 @@ import { baixarBase64, MIME_XLSX } from "@/lib/download";
 import { formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { gerarPlanilhaCarretasEmt } from "@/modules/frete/carretas-emt/actions";
+import { ROTULO_TIPO_FRETE, TIPOS_FRETE, type TipoFrete } from "@/modules/frete/fretes/schemas";
 import {
   CHAVE_OUTRAS,
   GRUPOS_GASTO,
@@ -361,7 +362,12 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
   async function exportar() {
     setExportando(true);
     try {
-      const resultado = await gerarPlanilhaCarretasEmt({ de: painel.filtro.de, ate: painel.filtro.ate, placa: painel.filtro.placa });
+      const resultado = await gerarPlanilhaCarretasEmt({
+        de: painel.filtro.de,
+        ate: painel.filtro.ate,
+        placa: painel.filtro.placa,
+        tipo: painel.filtro.tipo ?? "",
+      });
       if ("erro" in resultado) toast.error(resultado.erro);
       else baixarBase64(resultado.base64, resultado.nomeArquivo, MIME_XLSX);
     } finally {
@@ -397,6 +403,18 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
               />
             ),
           },
+          {
+            id: "tipo",
+            rotulo: "Tipo de transporte",
+            elemento: (
+              <FiltroSelect
+                valor={painel.filtro.tipo ?? ""}
+                onValorChange={(valor) => setMuitos({ tipo: valor || null })}
+                opcoes={TIPOS_FRETE.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_FRETE[t] }))}
+                todosRotulo="Todos os tipos"
+              />
+            ),
+          },
         ]}
         acoesDireita={
           <Button type="button" variant="outline" size="sm" onClick={exportar} disabled={exportando}>
@@ -405,6 +423,17 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
           </Button>
         }
       />
+
+      {painel.filtro.tipo ? (
+        <p className="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-foreground">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span>
+            Produção só de <strong>{ROTULO_TIPO_FRETE[painel.filtro.tipo as TipoFrete].toLowerCase()}</strong>. Gastos e
+            parcelas continuam os da carreta inteira: o Financeiro não separa o custo por tipo de viagem, então o
+            resultado aqui mostra quanto esse tipo de frete cobre do custo total.
+          </span>
+        </p>
+      ) : null}
 
       {painel.placasNaoReconhecidas.length > 0 && !painel.filtro.placa ? (
         <p className="flex items-start gap-2 rounded-md border border-status-pendente/40 bg-status-pendente/5 px-3 py-2 text-detalhe text-foreground">
