@@ -4750,3 +4750,27 @@ despesas e financiamentos.
 **Dados do contrato:** assinatura do consórcio em 08/05/2026 (SEI 24572499, PDF em `vault/sources/contratos/`); ordem de serviço 13/05/2026; 39 meses da assinatura; localização rodovia (BR-364 km 682,90 a 752,50 e BR-307 km 179,00 a 190,20); acesso dos 4 Admins.
 
 **Carga:** mesmo mecanismo da carga do Lote 09 (`app.mc_carga = '1'`), numa transação só, com os dados lidos do xlsx por `repr()` da célula e fora do git. Conferida antes de gravar contra cada linha (previsto e acumulado), cada medição, o total previsto e o acumulado, abortando se um centavo divergisse; ensaio em transação desfeita e controle com 1 centavo desviado na 2ª recusado. Resultado: 227 linhas (19 títulos, 208 serviços), 103 ajustes de carga, previsto 121.573.053,78, acumulado 11.103.466,25, saldo 110.469.587,53. A 5ª medição (setembro) abre pelo módulo.
+
+## 2026-10-01 - Frete > Carretas EMT: mapa das rotas
+
+**Pedido do Tiago:** no fim da aba, um mapa com a produção de frete de cada rota das carretas, a
+rota traçada, os km, a produção e o tempo médio pela saída e chegada dos fretes. Ele mandou o link
+do Maps dos sete locais (Colorado, Pátio Lote 10, Usina Gregório, Pulmão 1 KM657, Pedreira Formate,
+Pedreira Britam, Vale do Abunã); são exatamente os sete que aparecem nos fretes da EMT TRANSPORTES.
+
+**Decisões:**
+
+1. **Leaflet + OpenStreetMap (e satélite da Esri), não Google Maps.** Desenhar rota no Google Maps
+   pede chave de API com faturamento. Coordenada e traçado são nossos e servem para qualquer mapa: se
+   um dia houver chave do Google, troca-se só a camada de fundo.
+2. **Coordenada na localidade** (`latitude`/`longitude` NUMERIC(9,6)) e **traçado guardado** em
+   `frete_rotas_tracado`, calculado uma vez no OSRM e simplificado (~90 m). A tela não chama serviço
+   externo de rota; rota nova sem traçado aparece como reta tracejada.
+3. **Dois km por rota:** o da estrada (OSRM) e a média do lançado no frete. Diferença acima de 20%
+   vira alerta, junto com km que varia na mesma rota, viagem com dias demais e frete sem chegada.
+4. **Tempo médio em dias**, só dos fretes com chegada: o frete guarda a data, não a hora.
+
+**Consequência:** os alertas mostraram três prováveis erros de digitação nos fretes: dois fretes
+"Pedreira Britam -> Colorado" com 145 km (pela estrada são 843; a origem deve ser a Usina Gregório),
+uma viagem Britam -> Gregório de 51 dias (out/2025, SQS7E01) e outra com 990 km. Os números ficam
+como estão até alguém corrigir o frete.

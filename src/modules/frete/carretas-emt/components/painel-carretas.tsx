@@ -37,6 +37,7 @@ import {
   ResultadoAcumuladoGrafico,
 } from "./graficos";
 import type { SerieCarreta } from "./graficos-impl";
+import { RotasCarretas } from "./rotas-carretas";
 
 const TH = "px-3 py-2 font-medium";
 const TD = "px-3 py-1.5";
@@ -519,6 +520,13 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
 
       <Secao titulo="Gastos por categoria" descricao="Lançamentos do Financeiro nas carretas no período, sem os financiamentos">
         <TabelaCategorias painel={painel} />
+      </Secao>
+
+      <Secao
+        titulo="Rotas das carretas"
+        descricao="Produção de frete por rota no período, com o km pela estrada, o km lançado e o tempo médio de viagem"
+      >
+        <RotasCarretas rotas={painel.rotas} />
       </Secao>
     </div>
   );

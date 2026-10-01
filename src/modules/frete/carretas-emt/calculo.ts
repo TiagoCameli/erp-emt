@@ -21,6 +21,8 @@
  *   Resultado final .......... resultado operacional - investimento à vista - parcelas.
  */
 
+import { montarRotas, type LinhaRota } from "./rotas";
+
 export const GRUPOS_GASTO = ["mao_de_obra", "manutencao", "combustivel", "documentacao", "aquisicao", "outros"] as const;
 export type GrupoGasto = (typeof GRUPOS_GASTO)[number];
 
@@ -53,6 +55,32 @@ export interface FreteMes {
   toneladas: number;
   km: number;
   valor: number;
+  /** Rota do frete (migration 20261001193947). Ausente nas leituras antigas. */
+  origemId?: string;
+  destinoId?: string;
+  kmMin?: number;
+  kmMax?: number;
+  /** Fretes do grupo com data de chegada, a soma dos dias entre saída e chegada e o maior deles. */
+  comChegada?: number;
+  dias?: number;
+  diasMax?: number | null;
+}
+
+export interface Localidade {
+  id: string;
+  nome: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface TracadoRota {
+  origemId: string;
+  destinoId: string;
+  /** Distância pela estrada (OSRM). */
+  kmMapa: number;
+  horasMapa: number | null;
+  /** [lat, lng] */
+  pontos: [number, number][];
 }
 
 export interface GastoMes {
@@ -97,6 +125,8 @@ export interface DadosCarretas {
   contratos: Contrato[];
   parcelas: ParcelaMes[];
   diesel: DieselMes[];
+  localidades: Localidade[];
+  tracados: TracadoRota[];
 }
 
 export interface FiltroCarretas {
@@ -277,6 +307,8 @@ export interface PainelCarretas {
   categorias: LinhaCategoria[];
   /** Placas de frete que não casaram com nenhuma carreta. */
   placasNaoReconhecidas: string[];
+  /** Produção por rota (origem -> destino), com o mesmo recorte de período, carreta e tipo. */
+  rotas: LinhaRota[];
 }
 
 const c = (reais: number) => Math.round(reais * 100);
@@ -610,5 +642,6 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
       .map(({ _v, _p, ...k }) => ({ ...k, valor: r(_v), pago: r(_p) }))
       .sort((a, b) => b.valor - a.valor),
     placasNaoReconhecidas: [...naoReconhecidas].sort(),
+    rotas: montarRotas(dados, filtro),
   };
 }
