@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
@@ -27,6 +28,9 @@ import type { Desempenho, LinhaMensal } from "@/modules/frete/carretas-emt/calcu
  * `--viz-*` do globals.css (paleta validada para daltonismo nos dois temas); a cor de cada
  * carreta segue a POSIÇÃO DELA NO CADASTRO, não no ranking, para não trocar de cor quando o
  * filtro muda. Placa não reconhecida fica em cinza.
+ *
+ * Onde produção e custo dividem o quadro, a carreta mantém a cor dela: cheia na produção,
+ * clara (`tomClaro`) no custo operacional.
  */
 
 const EIXO = { fontSize: 11, fill: "var(--muted-foreground)" };
@@ -48,6 +52,45 @@ export interface SerieCarreta {
   chave: string;
   rotulo: string;
   cor: string;
+}
+
+/** O tom claro da cor da carreta, para o custo operacional ao lado da produção. */
+export function tomClaro(cor: string): string {
+  return `color-mix(in srgb, ${cor} 45%, var(--card))`;
+}
+
+function Amostra({ cor, tracejada = false }: { cor: string; tracejada?: boolean }) {
+  return tracejada ? (
+    <span className="inline-block w-3 border-t-2 border-dashed" style={{ borderColor: cor }} />
+  ) : (
+    <span className="inline-block size-2.5 rounded-sm" style={{ background: cor }} />
+  );
+}
+
+/** Legenda dos quadros de produção x custo: cada carreta com o par cheia/clara. */
+function LegendaProducaoCusto({ series, comResultado = false }: { series: SerieCarreta[]; comResultado?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 pb-2 text-legenda text-muted-foreground">
+      {series.map((s) => (
+        <span key={s.chave} className="inline-flex items-center gap-1">
+          <Amostra cor={s.cor} />
+          <Amostra cor={tomClaro(s.cor)} />
+          {s.rotulo}
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1">
+        <Amostra cor={COR_MEDIDA.financiamento} />
+        Financiamento e aquisição
+      </span>
+      {comResultado ? (
+        <span className="inline-flex items-center gap-1">
+          <Amostra cor={COR_MEDIDA.resultado} tracejada />
+          Resultado final
+        </span>
+      ) : null}
+      <span className="basis-full text-right">Cor cheia: produção. Cor clara: custo operacional.</span>
+    </div>
+  );
 }
 
 function Dica({ titulo, linhas, rodape }: { titulo: string; linhas: { rotulo: string; valor: React.ReactNode; cor?: string }[]; rodape?: React.ReactNode }) {
@@ -90,14 +133,14 @@ export function PorCarretaMensalGrafico({
 }: {
   meses: LinhaMensal[];
   series: SerieCarreta[];
-  medida: "viagens" | "producao";
+  medida: "viagens" | "producao" | "custo";
 }) {
+  const porCarreta = (m: LinhaMensal) =>
+    medida === "viagens" ? m.viagensPorCarreta : medida === "producao" ? m.producaoPorCarreta : m.custoPorCarreta;
   const dados = meses.map((m) => ({
     rotulo: m.rotulo,
-    total: medida === "viagens" ? m.viagens : m.producao,
-    ...Object.fromEntries(
-      series.map((s) => [s.chave, (medida === "viagens" ? m.viagensPorCarreta[s.chave] : m.producaoPorCarreta[s.chave]) ?? 0]),
-    ),
+    total: medida === "viagens" ? m.viagens : medida === "producao" ? m.producao : m.custoOperacional,
+    ...Object.fromEntries(series.map((s) => [s.chave, porCarreta(m)[s.chave] ?? 0])),
   }));
   const formatar = medida === "viagens" ? (v: number) => `${v.toLocaleString("pt-BR")} ${v === 1 ? "viagem" : "viagens"}` : formatarBRL;
   return (
@@ -153,11 +196,10 @@ export function PorCarretaMensalGrafico({
 // Produção x gastos, mês a mês
 // ---------------------------------------------------------------------------
 
-export function ProducaoVsGastosGrafico({ meses }: { meses: LinhaMensal[] }) {
+export function ProducaoVsGastosGrafico({ meses, series }: { meses: LinhaMensal[]; series: SerieCarreta[] }) {
   const dados = meses.map((m) => ({
     rotulo: m.rotulo,
-    producao: m.producao,
-    custo: m.custoOperacional,
+    ...Object.fromEntries(series.flatMap((s) => [[`p_${s.chave}`, m.producaoPorCarreta[s.chave] ?? 0], [`c_${s.chave}`, m.custoPorCarreta[s.chave] ?? 0]])),
     financiamento: m.parcelas + m.investimento,
     resultado: m.resultadoFinal,
     linha: m,
@@ -174,12 +216,17 @@ export function ProducaoVsGastosGrafico({ meses }: { meses: LinhaMensal[] }) {
           content={({ active, payload, label }) => {
             const m = (payload?.[0]?.payload as { linha?: LinhaMensal } | undefined)?.linha;
             if (!active || !m) return null;
+            const porCarreta = series.flatMap((s) => [
+              { rotulo: `${s.rotulo}, produção`, v: m.producaoPorCarreta[s.chave] ?? 0, cor: s.cor },
+              { rotulo: `${s.rotulo}, custo`, v: m.custoPorCarreta[s.chave] ?? 0, cor: tomClaro(s.cor) },
+            ]);
             return (
               <Dica
                 titulo={String(label)}
                 linhas={[
-                  { rotulo: "Produção (fretes)", valor: formatarBRL(m.producao), cor: COR_MEDIDA.producao },
-                  { rotulo: "Custo operacional", valor: formatarBRL(m.custoOperacional), cor: COR_MEDIDA.custo },
+                  ...porCarreta.filter((l) => l.v !== 0).map((l) => ({ rotulo: l.rotulo, valor: formatarBRL(l.v), cor: l.cor })),
+                  { rotulo: "Produção (fretes)", valor: formatarBRL(m.producao) },
+                  { rotulo: "Custo operacional", valor: formatarBRL(m.custoOperacional) },
                   { rotulo: "Parcelas de financiamento", valor: formatarBRL(m.parcelas), cor: COR_MEDIDA.financiamento },
                   { rotulo: "Aquisição à vista", valor: formatarBRL(m.investimento), cor: COR_MEDIDA.financiamento },
                   { rotulo: "Resultado operacional", valor: formatarBRL(m.resultadoOperacional) },
@@ -189,9 +236,34 @@ export function ProducaoVsGastosGrafico({ meses }: { meses: LinhaMensal[] }) {
             );
           }}
         />
-        <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={LEGENDA} />
-        <Bar dataKey="producao" name="Produção" fill={COR_MEDIDA.producao} maxBarSize={28} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-        <Bar dataKey="custo" name="Custo operacional" stackId="gasto" fill={COR_MEDIDA.custo} stroke="var(--card)" strokeWidth={1} maxBarSize={28} isAnimationActive={false} />
+        <Legend verticalAlign="top" content={() => <LegendaProducaoCusto series={series} comResultado />} />
+        {series.map((s, i) => (
+          <Bar
+            key={`p_${s.chave}`}
+            dataKey={`p_${s.chave}`}
+            name={`${s.rotulo}, produção`}
+            stackId="producao"
+            fill={s.cor}
+            stroke="var(--card)"
+            strokeWidth={1}
+            maxBarSize={28}
+            radius={i === series.length - 1 ? [4, 4, 0, 0] : 0}
+            isAnimationActive={false}
+          />
+        ))}
+        {series.map((s) => (
+          <Bar
+            key={`c_${s.chave}`}
+            dataKey={`c_${s.chave}`}
+            name={`${s.rotulo}, custo`}
+            stackId="gasto"
+            fill={tomClaro(s.cor)}
+            stroke="var(--card)"
+            strokeWidth={1}
+            maxBarSize={28}
+            isAnimationActive={false}
+          />
+        ))}
         <Bar
           dataKey="financiamento"
           name="Financiamento e aquisição"
@@ -258,14 +330,17 @@ export function ResultadoAcumuladoGrafico({ meses }: { meses: LinhaMensal[] }) {
 // Comparativo por carreta
 // ---------------------------------------------------------------------------
 
-export function ComparativoCarretasGrafico({ desempenhos }: { desempenhos: Desempenho[] }) {
+export function ComparativoCarretasGrafico({ desempenhos, series }: { desempenhos: Desempenho[]; series: SerieCarreta[] }) {
+  const corDe = new Map(series.map((s) => [s.chave, s.cor]));
   const dados = desempenhos.map((d) => ({
     rotulo: d.placa ?? d.nome,
     producao: d.producao,
     custo: d.custoOperacional,
     financiamento: d.parcelas + d.investimento,
+    cor: corDe.get(d.chave) ?? "var(--muted-foreground)",
     d,
   }));
+  const daLegenda = series.filter((s) => desempenhos.some((d) => d.chave === s.chave));
   return (
     <Moldura>
       <BarChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -281,8 +356,8 @@ export function ComparativoCarretasGrafico({ desempenhos }: { desempenhos: Desem
               <Dica
                 titulo={d.nome}
                 linhas={[
-                  { rotulo: "Produção", valor: formatarBRL(d.producao), cor: COR_MEDIDA.producao },
-                  { rotulo: "Custo operacional", valor: formatarBRL(d.custoOperacional), cor: COR_MEDIDA.custo },
+                  { rotulo: "Produção", valor: formatarBRL(d.producao), cor: corDe.get(d.chave) },
+                  { rotulo: "Custo operacional", valor: formatarBRL(d.custoOperacional), cor: tomClaro(corDe.get(d.chave) ?? "var(--muted-foreground)") },
                   { rotulo: "Financiamento e aquisição", valor: formatarBRL(d.parcelas + d.investimento), cor: COR_MEDIDA.financiamento },
                 ]}
                 rodape={<span className="tabular-nums">Resultado final: {formatarBRL(d.resultadoFinal)}</span>}
@@ -290,9 +365,17 @@ export function ComparativoCarretasGrafico({ desempenhos }: { desempenhos: Desem
             );
           }}
         />
-        <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={LEGENDA} />
-        <Bar dataKey="producao" name="Produção" fill={COR_MEDIDA.producao} maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-        <Bar dataKey="custo" name="Custo operacional" fill={COR_MEDIDA.custo} maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        <Legend verticalAlign="top" content={() => <LegendaProducaoCusto series={daLegenda} />} />
+        <Bar dataKey="producao" name="Produção" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          {dados.map((x) => (
+            <Cell key={x.rotulo} fill={x.cor} />
+          ))}
+        </Bar>
+        <Bar dataKey="custo" name="Custo operacional" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          {dados.map((x) => (
+            <Cell key={x.rotulo} fill={tomClaro(x.cor)} />
+          ))}
+        </Bar>
         <Bar dataKey="financiamento" name="Financiamento e aquisição" fill={COR_MEDIDA.financiamento} maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </Moldura>
