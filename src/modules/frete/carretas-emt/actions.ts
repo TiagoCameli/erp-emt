@@ -9,6 +9,7 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { montarPainel } from "@/modules/frete/carretas-emt/calculo";
 import { carregarCarretasEmt } from "@/modules/frete/carretas-emt/queries";
+import { conferirSchema } from "@/modules/frete/carretas-emt/schemas";
 import { TIPOS_FRETE } from "@/modules/frete/fretes/schemas";
 
 /**
@@ -54,12 +55,6 @@ export async function gerarPlanilhaCarretasEmt(pedido: unknown): Promise<Resulta
     return erroAcao("frete.carretasEmt.planilha", erro, `Não foi possível gerar a planilha: ${textoDoErro(erro)}`);
   }
 }
-
-const conferirSchema = z.strictObject({
-  regra: z.enum(["R1", "R2"]),
-  freteIds: z.array(z.uuid({ error: "Frete inválido" })).min(1, { error: "Nenhum frete no alerta" }).max(500),
-  conferida: z.boolean(),
-});
 
 /**
  * Marca (ou desmarca) como conferidos os fretes de um alerta de rota. Conferir esconde o alerta só
