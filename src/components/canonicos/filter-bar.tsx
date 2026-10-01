@@ -504,13 +504,16 @@ export function usePersonalizacaoFiltros(
 
   React.useEffect(() => {
     let ativo = true;
-    void buscarPreferenciaTabela(idTabela).then((bruto) => {
-      if (!ativo) return;
-      const salvo = lerPreferenciasTabela(bruto, [], refIds.current);
-      if (!salvo) return;
-      setOrdem(salvo.ordemFiltros);
-      setLarguras(salvo.largurasFiltros);
-    });
+    // Leitura que falha (sem sessão, rede) é "nada salvo": a barra abre no padrão.
+    void buscarPreferenciaTabela(idTabela)
+      .catch(() => null)
+      .then((bruto) => {
+        if (!ativo) return;
+        const salvo = lerPreferenciasTabela(bruto, [], refIds.current);
+        if (!salvo) return;
+        setOrdem(salvo.ordemFiltros);
+        setLarguras(salvo.largurasFiltros);
+      });
     return () => {
       ativo = false;
     };
@@ -1454,14 +1457,16 @@ export function BarraFiltrosConfiguravel({
   // em qualquer máquina (máquina compartilhada de escritório é comum na EMT).
   React.useEffect(() => {
     let ativo = true;
-    void buscarPreferenciaTabela(idTabela).then((bruto) => {
-      if (!ativo) return;
-      const salvo = lerPreferenciasTabela(bruto, [], idsFiltros);
-      if (!salvo) return;
-      setEscolha(salvo.filtros);
-      setOrdemFiltros(salvo.ordemFiltros);
-      setLargurasFiltros(salvo.largurasFiltros);
-    });
+    void buscarPreferenciaTabela(idTabela)
+      .catch(() => null)
+      .then((bruto) => {
+        if (!ativo) return;
+        const salvo = lerPreferenciasTabela(bruto, [], idsFiltros);
+        if (!salvo) return;
+        setEscolha(salvo.filtros);
+        setOrdemFiltros(salvo.ordemFiltros);
+        setLargurasFiltros(salvo.largurasFiltros);
+      });
     return () => {
       ativo = false;
     };
