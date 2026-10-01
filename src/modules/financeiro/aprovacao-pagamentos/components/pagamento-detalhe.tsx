@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Check,
+  ChevronDown,
   ClipboardCopy,
   ExternalLink,
   PenLine,
@@ -24,6 +25,7 @@ import {
   type EventoTrilha,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   formatarData,
   formatarDataHora,
@@ -86,12 +88,16 @@ export interface PagamentoDetalheViewProps {
 function Linha({
   rotulo,
   children,
+  className,
 }: {
   rotulo: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-1">
+    <div
+      className={cn("flex items-start justify-between gap-4 py-1", className)}
+    >
       <span className="text-detalhe text-muted-foreground">{rotulo}</span>
       <span className="text-right text-detalhe font-medium">{children}</span>
     </div>
@@ -101,12 +107,14 @@ function Linha({
 function Secao({
   titulo,
   children,
+  className,
 }: {
   titulo: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="flex flex-col gap-1.5">
+    <section className={cn("flex flex-col gap-1.5", className)}>
       <h2 className="text-legenda font-semibold tracking-wide text-muted-foreground uppercase">
         {titulo}
       </h2>
@@ -159,6 +167,13 @@ export function PagamentoDetalheView({
   const router = useRouter();
   const [aprovando, setAprovando] = React.useState(false);
   const [revisando, setRevisando] = React.useState(false);
+  /**
+   * Só no celular: o que não decide o pagamento fica recolhido. No computador
+   * tudo aparece sempre (as classes são `max-lg:`), porque lá a decisão tem
+   * coluna própria e a conferência cabe ao lado.
+   */
+  const [detalhesAbertos, setDetalhesAbertos] = React.useState(false);
+  const recolhido = detalhesAbertos ? undefined : "max-lg:hidden";
 
   /**
    * Selo do lançamento pela DÍVIDA, não pela etapa: esta tela existe justamente
@@ -298,7 +313,9 @@ export function PagamentoDetalheView({
           </>
         }
         acoes={
-          <>
+          // Imprimir e copiar a mensagem são trabalho de quem monta o pedido de
+          // aprovação, no computador. No celular quem chega veio decidir.
+          <div className="contents max-md:hidden">
             {/* Vale em QUALQUER status, igual à fila e a lancamentos. A
                 proteção não sumiu, mudou de camada: quem garante que o papel não
                 afirma pagamento inexistente é a página do espelho
@@ -321,7 +338,7 @@ export function PagamentoDetalheView({
                 Copiar mensagem de aprovação
               </Button>
             )}
-          </>
+          </div>
         }
       />
 
@@ -329,10 +346,10 @@ export function PagamentoDetalheView({
         <div className="flex flex-col gap-4 lg:col-span-2">
           <Secao titulo="Lançamento">
             <Campos>
-              <Linha rotulo="Tipo">
+              <Linha rotulo="Tipo" className={recolhido}>
                 {ROTULO_TIPO_LANCAMENTO[lancamento.tipo]}
               </Linha>
-              <Linha rotulo="Status do lançamento">
+              <Linha rotulo="Status do lançamento" className={recolhido}>
                 <span className="inline-flex flex-wrap items-center gap-1">
                   <StatusBadge
                     status={seloLancamento.badge}
@@ -347,7 +364,8 @@ export function PagamentoDetalheView({
                   ) : null}
                 </span>
               </Linha>
-              <Linha rotulo="Fornecedor">
+              {/* O fornecedor já é a linha de baixo do título. */}
+              <Linha rotulo="Fornecedor" className={recolhido}>
                 {lancamento.fornecedorNome ?? <CelulaVazia />}
               </Linha>
               <Linha rotulo="Descrição">{lancamento.descricao}</Linha>
@@ -357,7 +375,7 @@ export function PagamentoDetalheView({
               <Linha rotulo="Valor do lançamento">
                 <MoneyText valor={lancamento.valor} />
               </Linha>
-              <Linha rotulo="Origem">
+              <Linha rotulo="Origem" className={recolhido}>
                 {lancamento.origem === "oc" && lancamento.origemId ? (
                   <Link
                     href={`/compras/ordens/${lancamento.origemId}`}
@@ -394,59 +412,77 @@ export function PagamentoDetalheView({
             ) : null}
           </Secao>
 
-          <Secao titulo="Datas">
-            <Campos>
-              <Linha rotulo="Criado em">
-                {formatarDataHora(lancamento.criadoEm)}
-              </Linha>
-              <Linha rotulo="Data da compra / NF">
-                {lancamento.dataCompra ? (
-                  formatarData(lancamento.dataCompra)
-                ) : (
-                  <CelulaVazia />
-                )}
-              </Linha>
-              <Linha rotulo="Mês de referência">
-                {lancamento.mesCompetencia ? (
-                  formatarMesAno(lancamento.mesCompetencia)
-                ) : (
-                  <CelulaVazia />
-                )}
-              </Linha>
-              <Linha rotulo="Vencimento desta parcela">
-                {parcela.dataVencimento ? (
-                  formatarData(parcela.dataVencimento)
-                ) : (
-                  <CelulaVazia />
-                )}
-              </Linha>
-              <Linha rotulo="Data programada">
-                {parcela.dataProgramada
-                  ? formatarData(parcela.dataProgramada)
-                  : "definida na aprovação"}
-              </Linha>
-            </Campos>
-          </Secao>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="lg:hidden"
+            aria-expanded={detalhesAbertos}
+            onClick={() => setDetalhesAbertos((atual) => !atual)}
+          >
+            <ChevronDown
+              className={cn(detalhesAbertos && "rotate-180")}
+              aria-hidden="true"
+            />
+            {detalhesAbertos
+              ? "Esconder detalhes"
+              : "Ver datas, parcelas, rateio e histórico"}
+          </Button>
 
-          <Secao titulo="Pagamento">
-            <Campos>
-              <Linha rotulo="Forma">
-                {lancamento.formaPagamentoNome ?? <CelulaVazia />}
-              </Linha>
-              <Linha rotulo="Condição">
-                {lancamento.condicaoPagamentoDescricao ?? <CelulaVazia />}
-              </Linha>
-              <Linha rotulo="Conta bancária">
-                {parcela.contaBancariaNome ?? <CelulaVazia />}
-              </Linha>
-            </Campos>
-          </Secao>
+          <div className={cn("flex flex-col gap-4", recolhido)}>
+            <Secao titulo="Datas">
+              <Campos>
+                <Linha rotulo="Criado em">
+                  {formatarDataHora(lancamento.criadoEm)}
+                </Linha>
+                <Linha rotulo="Data da compra / NF">
+                  {lancamento.dataCompra ? (
+                    formatarData(lancamento.dataCompra)
+                  ) : (
+                    <CelulaVazia />
+                  )}
+                </Linha>
+                <Linha rotulo="Mês de referência">
+                  {lancamento.mesCompetencia ? (
+                    formatarMesAno(lancamento.mesCompetencia)
+                  ) : (
+                    <CelulaVazia />
+                  )}
+                </Linha>
+                <Linha rotulo="Vencimento desta parcela">
+                  {parcela.dataVencimento ? (
+                    formatarData(parcela.dataVencimento)
+                  ) : (
+                    <CelulaVazia />
+                  )}
+                </Linha>
+                <Linha rotulo="Data programada">
+                  {parcela.dataProgramada
+                    ? formatarData(parcela.dataProgramada)
+                    : "definida na aprovação"}
+                </Linha>
+              </Campos>
+            </Secao>
 
-          <Secao titulo={`Parcelas (${lancamento.parcelas.length})`}>
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead className="bg-surface">
-                  {/*
+            <Secao titulo="Pagamento">
+              <Campos>
+                <Linha rotulo="Forma">
+                  {lancamento.formaPagamentoNome ?? <CelulaVazia />}
+                </Linha>
+                <Linha rotulo="Condição">
+                  {lancamento.condicaoPagamentoDescricao ?? <CelulaVazia />}
+                </Linha>
+                <Linha rotulo="Conta bancária">
+                  {parcela.contaBancariaNome ?? <CelulaVazia />}
+                </Linha>
+              </Campos>
+            </Secao>
+
+            <Secao titulo={`Parcelas (${lancamento.parcelas.length})`}>
+              <div className="overflow-x-auto rounded-md border border-border">
+                <table className="w-full text-detalhe">
+                  <thead className="bg-surface">
+                    {/*
                     Todo cabeçalho centralizado, igual ao DataTable canônico. O
                     valor da célula continua à direita (vírgula embaixo de
                     vírgula); rótulo não tem vírgula para alinhar. Estas tabelas
@@ -454,142 +490,145 @@ export function PagamentoDetalheView({
                     filtro, ordenação nem preferência de coluna: o DataTable aqui
                     seria peso sem função. Mas a régua do cabeçalho é a mesma.
                   */}
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-1.5 text-center font-medium">#</th>
-                    <th className="px-3 py-1.5 text-center font-medium">
-                      Vencimento
-                    </th>
-                    <th className="px-3 py-1.5 text-center font-medium">
-                      Status
-                    </th>
-                    <th className="px-3 py-1.5 text-center font-medium">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lancamento.parcelas.map((linha) => {
-                    const info = STATUS_PARCELA[linha.status];
-                    const ehEsta = linha.id === parcela.id;
-                    return (
-                      <tr
-                        key={linha.id}
-                        className={
-                          ehEsta
-                            ? "border-b border-border bg-primary/5 last:border-0"
-                            : "border-b border-border last:border-0"
-                        }
-                      >
-                        <td className="px-3 py-1.5 text-center tabular-nums">
-                          {linha.numeroParcela}
-                          {/* Marca qual das 57 parcelas é a desta tela: sem
-                              isso a tabela vira uma lista onde a pessoa perde
-                              de vista o que ela está aprovando. */}
-                          {ehEsta ? (
-                            <span className="ml-1.5 text-legenda text-primary">
-                              esta
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-1.5 text-center tabular-nums">
-                          {linha.dataVencimento
-                            ? formatarData(linha.dataVencimento)
-                            : "-"}
-                        </td>
-                        <td className="px-3 py-1.5 text-center">
-                          {info ? (
-                            <StatusBadge
-                              status={info.badge}
-                              rotulo={info.rotulo}
-                            />
-                          ) : (
-                            linha.status
-                          )}
-                        </td>
-                        <td className="px-3 py-1.5 text-right">
-                          <MoneyText valor={linha.valor} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Secao>
-
-          <Secao titulo="Rateio por centro de custo">
-            {lancamento.rateios.length === 0 ? (
-              <Campos>
-                <p className="text-detalhe text-muted-foreground">
-                  Sem rateio informado.
-                </p>
-              </Campos>
-            ) : (
-              <Campos>
-                {lancamento.rateios.map((rateio) => (
-                  <Linha
-                    key={rateio.id}
-                    rotulo={
-                      rateio.centroCustoCodigo
-                        ? `${rateio.centroCustoCodigo} - ${rateio.centroCustoNome}`
-                        : rateio.centroCustoNome
-                    }
-                  >
-                    <MoneyText valor={rateio.valor} />
-                  </Linha>
-                ))}
-              </Campos>
-            )}
-          </Secao>
-
-          {itensOrigem.length > 0 ? (
-            <Secao titulo="Itens da ordem de compra">
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full text-detalhe">
-                  <thead className="bg-surface">
                     <tr className="border-b border-border text-legenda text-muted-foreground">
+                      <th className="px-3 py-1.5 text-center font-medium">#</th>
                       <th className="px-3 py-1.5 text-center font-medium">
-                        Insumo
+                        Vencimento
                       </th>
                       <th className="px-3 py-1.5 text-center font-medium">
-                        Centro de custo
+                        Status
                       </th>
                       <th className="px-3 py-1.5 text-center font-medium">
-                        Quantidade
-                      </th>
-                      <th className="px-3 py-1.5 text-center font-medium">
-                        Preço unitário
-                      </th>
-                      <th className="px-3 py-1.5 text-center font-medium">
-                        Subtotal
+                        Valor
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {itensOrigem.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="border-b border-border last:border-0"
-                      >
-                        <td className="px-3 py-1.5">{item.insumoNome}</td>
-                        <td className="px-3 py-1.5 text-center">
-                          {item.centroCustoNome}
-                        </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
-                          {formatarQuantidade(item.quantidade)}
-                          {item.unidade ? ` ${item.unidade}` : ""}
-                        </td>
-                        <td className="px-3 py-1.5 text-right">
-                          <MoneyText valor={item.precoUnitario} />
-                        </td>
-                        <td className="px-3 py-1.5 text-right">
-                          <MoneyText valor={item.subtotal} />
-                        </td>
-                      </tr>
-                    ))}
+                    {lancamento.parcelas.map((linha) => {
+                      const info = STATUS_PARCELA[linha.status];
+                      const ehEsta = linha.id === parcela.id;
+                      return (
+                        <tr
+                          key={linha.id}
+                          className={
+                            ehEsta
+                              ? "border-b border-border bg-primary/5 last:border-0"
+                              : "border-b border-border last:border-0"
+                          }
+                        >
+                          <td className="px-3 py-1.5 text-center tabular-nums">
+                            {linha.numeroParcela}
+                            {/* Marca qual das 57 parcelas é a desta tela: sem
+                              isso a tabela vira uma lista onde a pessoa perde
+                              de vista o que ela está aprovando. */}
+                            {ehEsta ? (
+                              <span className="ml-1.5 text-legenda text-primary">
+                                esta
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-1.5 text-center tabular-nums">
+                            {linha.dataVencimento
+                              ? formatarData(linha.dataVencimento)
+                              : "-"}
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            {info ? (
+                              <StatusBadge
+                                status={info.badge}
+                                rotulo={info.rotulo}
+                              />
+                            ) : (
+                              linha.status
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            <MoneyText valor={linha.valor} />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </Secao>
-          ) : null}
+
+            <Secao titulo="Rateio por centro de custo">
+              {lancamento.rateios.length === 0 ? (
+                <Campos>
+                  <p className="text-detalhe text-muted-foreground">
+                    Sem rateio informado.
+                  </p>
+                </Campos>
+              ) : (
+                <Campos>
+                  {lancamento.rateios.map((rateio) => (
+                    <Linha
+                      key={rateio.id}
+                      rotulo={
+                        rateio.centroCustoCodigo
+                          ? `${rateio.centroCustoCodigo} - ${rateio.centroCustoNome}`
+                          : rateio.centroCustoNome
+                      }
+                    >
+                      <MoneyText valor={rateio.valor} />
+                    </Linha>
+                  ))}
+                </Campos>
+              )}
+            </Secao>
+
+            {itensOrigem.length > 0 ? (
+              <Secao titulo="Itens da ordem de compra">
+                <div className="overflow-x-auto rounded-md border border-border">
+                  <table className="w-full text-detalhe">
+                    <thead className="bg-surface">
+                      <tr className="border-b border-border text-legenda text-muted-foreground">
+                        <th className="px-3 py-1.5 text-center font-medium">
+                          Insumo
+                        </th>
+                        <th className="px-3 py-1.5 text-center font-medium">
+                          Centro de custo
+                        </th>
+                        <th className="px-3 py-1.5 text-center font-medium">
+                          Quantidade
+                        </th>
+                        <th className="px-3 py-1.5 text-center font-medium">
+                          Preço unitário
+                        </th>
+                        <th className="px-3 py-1.5 text-center font-medium">
+                          Subtotal
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itensOrigem.map((item) => (
+                        <tr
+                          key={item.id}
+                          className="border-b border-border last:border-0"
+                        >
+                          <td className="px-3 py-1.5">{item.insumoNome}</td>
+                          <td className="px-3 py-1.5 text-center">
+                            {item.centroCustoNome}
+                          </td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">
+                            {formatarQuantidade(item.quantidade)}
+                            {item.unidade ? ` ${item.unidade}` : ""}
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            <MoneyText valor={item.precoUnitario} />
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            <MoneyText valor={item.subtotal} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Secao>
+            ) : null}
+          </div>
         </div>
 
         {/* A decisão fica na direita e acompanha a rolagem: numa tela cheia,
@@ -610,8 +649,12 @@ export function PagamentoDetalheView({
             scroller, então sobra 1.5rem (`md:p-6`) + 1rem (`top-4`) em cima, e
             descontar outros 1.5rem embaixo faz o painel terminar na mesma
             margem do resto da página. Com 2rem ele passava 10px da dobra. */}
-        <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-4rem)] lg:self-start">
-          <div className="flex shrink-0 flex-col gap-3 rounded-md border border-border border-l-[3px] border-l-faixa bg-surface p-4">
+        {/* No celular a coluna se desfaz (`max-lg:contents`) para a decisão
+            subir para o topo da página (`max-lg:order-first`): quem abre o link
+            no WhatsApp quer o valor e o botão, não rolar seis seções até
+            achá-los. Anexos e trilha continuam depois da conferência. */}
+        <div className="flex flex-col gap-4 max-lg:contents lg:sticky lg:top-4 lg:max-h-[calc(100vh-4rem)] lg:self-start">
+          <div className="flex shrink-0 flex-col gap-3 rounded-md border border-border border-l-[3px] border-l-faixa bg-surface p-4 max-lg:order-first">
             <div>
               <p className="text-legenda tracking-wide text-muted-foreground uppercase">
                 Valor desta parcela
@@ -619,6 +662,13 @@ export function PagamentoDetalheView({
               <p className="text-titulo font-semibold tabular-nums">
                 <MoneyText valor={parcela.valor} />
               </p>
+              {/* No celular as Datas estão recolhidas, e o vencimento é metade da
+                  decisão. No computador ele já está na seção ao lado. */}
+              {parcela.dataVencimento ? (
+                <p className="text-detalhe text-muted-foreground tabular-nums lg:hidden">
+                  Vence em {formatarData(parcela.dataVencimento)}
+                </p>
+              ) : null}
             </div>
 
             {situacao.podeAprovar ? (
@@ -668,6 +718,9 @@ export function PagamentoDetalheView({
               type="button"
               variant="ghost"
               size="sm"
+              // No celular a seta do cabeçalho já volta, e o card fica só com a
+              // decisão.
+              className="max-lg:hidden"
               onClick={voltarParaRetorno}
             >
               {pagamentoDireto
@@ -698,7 +751,7 @@ export function PagamentoDetalheView({
               />
             </Secao>
 
-            <Secao titulo="Trilha">
+            <Secao titulo="Trilha" className={recolhido}>
               <Trilha eventos={trilha} />
             </Secao>
           </div>
