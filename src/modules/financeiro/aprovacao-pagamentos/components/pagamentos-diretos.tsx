@@ -429,7 +429,12 @@ export function PagamentosDiretos({
         accessorKey: "lancamentoNumero",
         header: "Lançamento",
         size: 260,
-        meta: { rotulo: "Lançamento", fixa: true, naoTruncar: true },
+        meta: {
+          rotulo: "Lançamento",
+          fixa: true,
+          naoTruncar: true,
+          celular: "titulo",
+        },
         cell: ({ row }) => {
           const rotulo = rotuloParcela(
             row.original.lancamentoNumero,
@@ -654,7 +659,11 @@ export function PagamentosDiretos({
         header: "Situação do pagamento",
         size: 190,
         enableSorting: false,
-        meta: { rotulo: "Situação do pagamento", naoTruncar: true },
+        meta: {
+          rotulo: "Situação do pagamento",
+          naoTruncar: true,
+          celular: "destaque",
+        },
         cell: ({ row }) => {
           const info = STATUS_PARCELA[row.original.status];
           return <StatusBadge status={info.badge} rotulo={info.rotulo} />;

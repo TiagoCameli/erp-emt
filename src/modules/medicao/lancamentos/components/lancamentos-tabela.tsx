@@ -60,7 +60,7 @@ const colunas: ColumnDef<LancamentoLista, unknown>[] = [
     header: "Item",
     size: 260,
     enableSorting: false,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "titulo" },
     cell: ({ row }) => (
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-medium">{row.original.codigo ?? "-"}</span>

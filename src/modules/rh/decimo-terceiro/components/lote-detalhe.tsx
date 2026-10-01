@@ -206,7 +206,7 @@ export function LoteDetalhe({
       {
         accessorKey: "valorLiquido",
         header: "Líquido",
-        meta: { alinharDireita: true },
+        meta: { alinharDireita: true, celular: "valor" },
         cell: ({ row }) => (
           <span className="flex items-center justify-end gap-1.5">
             <MoneyText valor={row.original.valorLiquido} />

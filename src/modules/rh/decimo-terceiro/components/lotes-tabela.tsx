@@ -60,7 +60,7 @@ const colunas: ColumnDef<LoteLista, unknown>[] = [
   {
     accessorKey: "valorLiquido",
     header: "Líquido",
-    meta: { alinharDireita: true },
+    meta: { alinharDireita: true, celular: "valor" },
     cell: ({ row }) => <MoneyText valor={row.original.valorLiquido} />,
   },
   {

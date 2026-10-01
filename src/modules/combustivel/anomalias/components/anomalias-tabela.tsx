@@ -250,6 +250,7 @@ export function AnomaliasTabela({
         accessorFn: (a) => `${a.title} ${a.description}`,
         header: "Anomalia",
         size: 420,
+        meta: { celular: "titulo" },
         cell: ({ row }) => (
           <span className="flex flex-col whitespace-normal">
             <span className="font-medium">{row.original.title}</span>
@@ -289,6 +290,7 @@ export function AnomaliasTabela({
         id: "situacao",
         header: "Situação",
         size: 130,
+        meta: { celular: "destaque" },
         cell: ({ row }) => {
           const conferencia = row.original.conferencia;
           if (!conferencia) return <StatusBadge status="pendente_aprovacao" rotulo="Pendente" />;

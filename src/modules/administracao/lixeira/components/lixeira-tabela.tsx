@@ -138,6 +138,7 @@ export function LixeiraTabela({
       {
         accessorKey: "excluidoEm",
         header: "Excluído em",
+        meta: { celular: "valor" },
         cell: ({ row }) => (
           <span className="whitespace-nowrap tabular-nums">
             {formatarDataHora(row.original.excluidoEm)}
@@ -147,6 +148,7 @@ export function LixeiraTabela({
       {
         accessorKey: "tabela",
         header: "Tabela",
+        meta: { celular: "titulo" },
         cell: ({ row }) => (
           <span className="codigo-doc">{row.original.tabela}</span>
         ),

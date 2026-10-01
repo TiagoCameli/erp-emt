@@ -1077,7 +1077,11 @@ export function PagamentosCliente({
         accessorKey: "descricao",
         header: "Descrição e categoria",
         size: 240,
-        meta: { rotulo: "Descrição e categoria", naoTruncar: true },
+        meta: {
+          rotulo: "Descrição e categoria",
+          naoTruncar: true,
+          celular: "destaque",
+        },
         cell: ({ row }) => (
           <CelulaDescricaoCategoria
             descricao={row.original.descricao}
@@ -1202,7 +1206,11 @@ export function PagamentosCliente({
         accessorKey: "descricao",
         header: "Descrição e categoria",
         size: 240,
-        meta: { rotulo: "Descrição e categoria", naoTruncar: true },
+        meta: {
+          rotulo: "Descrição e categoria",
+          naoTruncar: true,
+          celular: "destaque",
+        },
         cell: ({ row }) => (
           <CelulaDescricaoCategoria
             descricao={row.original.descricao}

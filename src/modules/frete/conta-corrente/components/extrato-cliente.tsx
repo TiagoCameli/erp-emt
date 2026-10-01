@@ -104,11 +104,12 @@ const colunaDinheiro = <T extends MovimentoExtrato>(
   header: string,
   valor: (m: T) => number | null,
   cor: (m: T) => string,
+  meta?: ColumnDef<T, unknown>["meta"],
 ): ColumnDef<T, unknown> => ({
   id,
   header,
   size: 130,
-  meta: { alinharDireita: true, atomico: true },
+  meta: { alinharDireita: true, atomico: true, ...meta },
   cell: ({ row }) => {
     const v = valor(row.original);
     return v === null ? null : <MoneyText valor={v} className={cor(row.original)} />;
@@ -121,7 +122,7 @@ export const colunasTodos: ColumnDef<MovimentoComSaldo, unknown>[] = [
     id: "descricao",
     header: "Descrição",
     size: 460,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "titulo" },
     cell: ({ row }) => {
       const m = row.original;
       const placa = placaMovimento(m);
@@ -146,8 +147,12 @@ export const colunasTodos: ColumnDef<MovimentoComSaldo, unknown>[] = [
       );
     },
   },
-  colunaDinheiro<MovimentoComSaldo>("credito", "Crédito", (m) => (ehCredito(m.tipo) ? m.valor : null), () => COR_CREDITO),
-  colunaDinheiro<MovimentoComSaldo>("debito", "Débito", (m) => (ehCredito(m.tipo) ? null : m.valor), () => COR_DEBITO),
+  colunaDinheiro<MovimentoComSaldo>("credito", "Crédito", (m) => (ehCredito(m.tipo) ? m.valor : null), () => COR_CREDITO, {
+    celular: "destaque",
+  }),
+  colunaDinheiro<MovimentoComSaldo>("debito", "Débito", (m) => (ehCredito(m.tipo) ? null : m.valor), () => COR_DEBITO, {
+    celular: "destaque",
+  }),
   colunaDinheiro<MovimentoComSaldo>(
     "saldo",
     "Saldo",
@@ -162,7 +167,7 @@ export const colunasFretes: ColumnDef<MovimentoExtrato, unknown>[] = [
     id: "rota",
     header: "Rota / Obra",
     size: 260,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "titulo" },
     cell: ({ row }) => {
       const m = row.original;
       const rota = m.freteOrigem && m.freteDestino ? `${m.freteOrigem} → ${m.freteDestino}` : (m.descricao ?? "");
@@ -214,7 +219,7 @@ export const colunasFretes: ColumnDef<MovimentoExtrato, unknown>[] = [
       return partes.length > 0 ? <span className="text-legenda">{partes.join(" · ")}</span> : <CelulaVazia />;
     },
   },
-  colunaDinheiro("valor", "Valor", (m) => m.valor, () => cn("font-semibold", COR_CREDITO)),
+  colunaDinheiro("valor", "Valor", (m) => m.valor, () => cn("font-semibold", COR_CREDITO), { celular: "valor" }),
 ];
 
 export const colunasAbastecimentos: ColumnDef<MovimentoExtrato, unknown>[] = [
@@ -261,13 +266,13 @@ export const colunasAbastecimentos: ColumnDef<MovimentoExtrato, unknown>[] = [
     id: "placa",
     header: "Placa · Motorista",
     size: 220,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "titulo" },
     cell: ({ row }) => {
       const partes = [row.original.saidaPlaca, row.original.saidaMotorista].filter((p): p is string => Boolean(p));
       return partes.length > 0 ? <span className="text-legenda">{partes.join(" · ")}</span> : <CelulaVazia />;
     },
   },
-  colunaDinheiro("total", "Total", (m) => m.valor, () => cn("font-semibold", COR_DEBITO)),
+  colunaDinheiro("total", "Total", (m) => m.valor, () => cn("font-semibold", COR_DEBITO), { celular: "valor" }),
 ];
 
 export const colunasPagamentos: ColumnDef<MovimentoExtrato, unknown>[] = [
@@ -278,7 +283,13 @@ export const colunasPagamentos: ColumnDef<MovimentoExtrato, unknown>[] = [
     size: 90,
     cell: ({ row }) => <span className="tabular-nums">{mesRefCurto(row.original.mesReferencia) || "-"}</span>,
   },
-  { id: "metodo", header: "Método", size: 120, cell: ({ row }) => rotuloMetodo(row.original.pagamentoMetodo) || <CelulaVazia /> },
+  {
+    id: "metodo",
+    header: "Método",
+    size: 120,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => rotuloMetodo(row.original.pagamentoMetodo) || <CelulaVazia />,
+  },
   { id: "nf", header: "NF", size: 110, cell: ({ row }) => row.original.pagamentoNotaFiscal || <CelulaVazia /> },
   {
     id: "responsavel",
@@ -319,13 +330,17 @@ export const colunasAjustes: ColumnDef<MovimentoExtrato, unknown>[] = [
     id: "descricao",
     header: "Descrição",
     size: 320,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "titulo" },
     cell: ({ row }) => row.original.descricao || <CelulaVazia />,
   },
   { id: "obra", header: "Obra", size: 160, cell: ({ row }) => row.original.obraNome ?? <CelulaVazia /> },
   { id: "autor", header: "Criado por", size: 150, cell: ({ row }) => row.original.ajusteCriadoPor ?? <CelulaVazia /> },
-  colunaDinheiro("credito", "Crédito", (m) => (sinalDoTipo(m.tipo) === "credito" ? m.valor : null), () => COR_CREDITO),
-  colunaDinheiro("debito", "Débito", (m) => (sinalDoTipo(m.tipo) === "debito" ? m.valor : null), () => COR_DEBITO),
+  colunaDinheiro("credito", "Crédito", (m) => (sinalDoTipo(m.tipo) === "credito" ? m.valor : null), () => COR_CREDITO, {
+    celular: "destaque",
+  }),
+  colunaDinheiro("debito", "Débito", (m) => (sinalDoTipo(m.tipo) === "debito" ? m.valor : null), () => COR_DEBITO, {
+    celular: "destaque",
+  }),
 ];
 
 // ---------------------------------------------------------------------------

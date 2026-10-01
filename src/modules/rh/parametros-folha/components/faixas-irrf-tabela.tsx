@@ -57,7 +57,9 @@ export function FaixasIrrfTabela({
 
   const colunas = React.useMemo<ColumnDef<FaixaIrrfLista, unknown>[]>(() => {
     const base: ColumnDef<FaixaIrrfLista, unknown>[] = [
-      colunaDinheiro<FaixaIrrfLista>("limiteAte", "Limite até"),
+      colunaDinheiro<FaixaIrrfLista>("limiteAte", "Limite até", {
+        meta: { celular: "titulo" },
+      }),
       {
         accessorKey: "aliquota",
         header: "Alíquota",

@@ -140,7 +140,7 @@ export const colunasAbastecimentos: ColumnDef<SaidaLista, unknown>[] = [
     header: "Consumidor",
     size: 280,
     enableSorting: false,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "titulo" },
     cell: ({ row }) => <CelulaConsumidor saida={row.original} />,
   },
   {

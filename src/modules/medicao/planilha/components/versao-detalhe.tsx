@@ -77,7 +77,7 @@ export const colunasLinhas: ColumnDef<LinhaDaVersao, unknown>[] = [
     id: "valor",
     header: "Valor previsto",
     size: 170,
-    meta: { alinharDireita: true, atomico: true },
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
     cell: ({ row }) =>
       row.original.valorPrevisto === null ? (
         <CelulaVazia />

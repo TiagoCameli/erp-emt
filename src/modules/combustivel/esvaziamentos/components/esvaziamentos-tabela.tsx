@@ -40,6 +40,7 @@ export const colunas: ColumnDef<EsvaziamentoLinha, unknown>[] = [
     accessorKey: "tanqueNome",
     header: "Tanque",
     size: 220,
+    meta: { celular: "titulo" },
     cell: ({ row }) => <span className="font-medium">{row.original.tanqueNome}</span>,
   },
   {

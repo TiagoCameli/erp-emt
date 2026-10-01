@@ -102,7 +102,10 @@ const colunas: ColumnDef<CotacaoLista, unknown>[] = [
   },
   // 140 e não 130: em 130 o cabeçalho "Fornecedores" já truncava, porque o
   // rótulo é mais largo que a contagem de uma casa que ele nomeia.
-  colunaNumero<CotacaoLista>("qtdFornecedores", "Fornecedores", { size: 140 }),
+  colunaNumero<CotacaoLista>("qtdFornecedores", "Fornecedores", {
+    size: 140,
+    meta: { celular: "destaque" },
+  }),
   colunaTexto<CotacaoLista>("vencedorNome", "Vencedor", { size: 260 }),
   colunaData<CotacaoLista>("createdAt", "Criada em", formatarData, {
     size: 116,

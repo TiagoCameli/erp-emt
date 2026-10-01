@@ -107,7 +107,7 @@ const colunas: ColumnDef<ContratoPainel, unknown>[] = [
     id: "acumulado",
     header: "Acumulado",
     size: 150,
-    meta: { alinharDireita: true, atomico: true },
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
     cell: ({ row }) => <Dinheiro valor={row.original.acumulado} />,
   },
   {

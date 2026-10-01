@@ -102,6 +102,7 @@ export function EntradasTabela({
         accessorKey: "insumoNome",
         header: "Peça",
         size: 300,
+        meta: { celular: "titulo" },
         cell: ({ row }) => <span className="font-medium">{row.original.insumoNome}</span>,
       },
       {
@@ -131,7 +132,7 @@ export function EntradasTabela({
         accessorKey: "valorTotal",
         header: "Valor total",
         size: 130,
-        meta: { alinharDireita: true, atomico: true },
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
         cell: ({ row }) => <MoneyText valor={row.original.valorTotal} />,
       },
       {

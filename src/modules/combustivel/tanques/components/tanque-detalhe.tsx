@@ -57,6 +57,7 @@ function colunasMovimentos(comNivel: boolean): ColumnDef<MovimentoComNivel, unkn
       accessorKey: "tipo",
       header: "Movimento",
       size: 180,
+      meta: { celular: "titulo" },
       cell: ({ row }) => ROTULO_MOVIMENTO_TANQUE[row.original.tipo],
     },
     {

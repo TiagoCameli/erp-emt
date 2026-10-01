@@ -117,6 +117,7 @@ const colunas: ColumnDef<RegistroAuditoria, unknown>[] = [
   {
     accessorKey: "criadoEm",
     header: "Quando",
+    meta: { celular: "valor" },
     cell: ({ row }) => (
       <span className="whitespace-nowrap tabular-nums">
         {formatarDataHora(row.original.criadoEm)}
@@ -130,6 +131,7 @@ const colunas: ColumnDef<RegistroAuditoria, unknown>[] = [
   {
     accessorKey: "tabela",
     header: "Tabela",
+    meta: { celular: "titulo" },
     cell: ({ row }) => <span>{rotuloTabela(row.original.tabela)}</span>,
   },
   {

@@ -65,7 +65,7 @@ export const colunas: ColumnDef<TransferenciaLinha, unknown>[] = [
     accessorFn: (t) => `${t.origemNome} → ${t.destinoNome}`,
     header: "Origem → Destino",
     size: 300,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "titulo" },
     cell: ({ row }) => (
       <span className="inline-flex min-w-0 items-center gap-1.5">
         <span className="max-w-[140px] truncate font-medium">{row.original.origemNome}</span>

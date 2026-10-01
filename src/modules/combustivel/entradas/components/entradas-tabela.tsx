@@ -76,7 +76,7 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
   {
     accessorKey: "fornecedorNome",
     header: "Fornecedor",
-    meta: { esconderAte: "md" },
+    meta: { esconderAte: "md", celular: "titulo" },
     size: 200,
     cell: ({ row }) =>
       row.original.fornecedorNome ? (
@@ -91,7 +91,7 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
     accessorKey: "litros",
     header: "Litros",
     size: 130,
-    meta: { alinharDireita: true, atomico: true },
+    meta: { alinharDireita: true, atomico: true, celular: "destaque" },
     // Entrada soma no tanque: "+" e verde, como na origem.
     cell: ({ row }) => (
       <span className="font-medium tabular-nums text-primary">+{formatarLitros(row.original.litros)}</span>
@@ -101,7 +101,7 @@ export const colunasEntradas: ColumnDef<EntradaLinha, unknown>[] = [
     accessorKey: "valorTotal",
     header: "Valor",
     size: 140,
-    meta: { alinharDireita: true, atomico: true },
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
     cell: ({ row }) => <MoneyText valor={row.original.valorTotal} className="font-semibold" />,
   },
   {
