@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL } from "@/lib/formatadores";
 import { drillFluxoCaixa } from "@/modules/financeiro/relatorios/drill";
 import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
@@ -117,7 +118,7 @@ export function FluxoCaixaGrafico({
   const cursor = podeVerLancamentos ? "pointer" : undefined;
 
   return (
-    <div className="h-80 w-full">
+    <AreaGrafico altura="20rem">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={meses}
@@ -205,6 +206,6 @@ export function FluxoCaixaGrafico({
           />
         </ComposedChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

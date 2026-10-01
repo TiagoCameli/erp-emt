@@ -70,7 +70,7 @@ export async function ResumoLancamentosCartoes({
         : "A lista mudou enquanto os totais eram somados. Recarregue a tela";
 
     return (
-      <GradeKpis className="mb-4">
+      <GradeKpis id="financeiro.lancamentos.resumo-aviso" titulo="Totais" className="mb-4">
         <KPICard titulo="Totais" valor="Não calculado" detalhe={aviso} />
       </GradeKpis>
     );
@@ -79,7 +79,7 @@ export async function ResumoLancamentosCartoes({
   const r = resultado.resumo;
 
   return (
-    <GradeKpis className="mb-4">
+    <GradeKpis id="financeiro.lancamentos.resumo" titulo="Totais do filtro" className="mb-4">
       {r.temRecorte ? (
         <KPICard
           titulo="Total no recorte"
@@ -89,6 +89,8 @@ export async function ResumoLancamentosCartoes({
         />
       ) : null}
       <KPICard
+        // Id fixo: o título muda com o recorte, e o card não pode virar outro.
+        idCard="total"
         titulo={r.temRecorte ? "Valor dos documentos" : "Total no filtro"}
         valor={<MoneyText valor={r.valorTotal} />}
         detalhe={

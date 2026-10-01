@@ -83,7 +83,7 @@ export default async function PaginaFornecedoresCombustivel({
         <EmptyState titulo="Nenhuma entrada de combustível no período" descricao="Ajuste o período ou os filtros" />
       ) : (
         <>
-          <GradeKpis className="mb-4">
+          <GradeKpis id="combustivel.fornecedores.indicadores" titulo="Indicadores" className="mb-4">
             <KpiAnalitico
               titulo="Volume comprado"
               valor={formatarLitros(kpis.volume)}

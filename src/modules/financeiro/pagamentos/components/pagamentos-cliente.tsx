@@ -1405,8 +1405,9 @@ export function PagamentosCliente({
           histórico, o que já saiu no recorte. Resumo de uma aba enquanto a
           outra está na tela é número que ninguém consegue conferir. */}
       {aba === "pagas" ? (
-        <GradeKpis>
+        <GradeKpis id="financeiro.pagamentos.pagas" titulo="Histórico de pagamentos">
           <KPICard
+            idCard="pago"
             titulo={
               somaPagas.recortado ? "Pago neste centro" : "Pago no filtro"
             }
@@ -1422,8 +1423,9 @@ export function PagamentosCliente({
           />
         </GradeKpis>
       ) : (
-        <GradeKpis>
+        <GradeKpis id="financeiro.pagamentos.a-pagar" titulo="Fila a pagar">
           <KPICard
+            idCard="total"
             titulo={temSelecao ? "Selecionado" : "Total a pagar"}
             valor={formatarBRL(resumo.total)}
             detalhe={contagem(resumo.parcelas)}

@@ -51,7 +51,7 @@ export default async function PaginaRescisoes() {
       {/* Sem rescisão nenhuma não há número para mostrar: o estado vazio da
           tabela já explica o que fazer, e cartão zerado só ocupa espaço. */}
       {rescisoes.length > 0 ? (
-        <GradeKpis className="mb-4">
+        <GradeKpis id="rh.rescisoes.resumo" titulo="Resumo" className="mb-4">
           <KPICard
             titulo="Rescisões em aberto"
             valor={emAberto.length}

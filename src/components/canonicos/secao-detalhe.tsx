@@ -24,7 +24,9 @@ export interface SecaoDetalheProps {
 export function SecaoDetalhe({ titulo, acao, card, children }: SecaoDetalheProps) {
   if (card) {
     return (
-      <section className="rounded-md border border-border bg-surface p-4">
+      // Coluna flex para o AreaGrafico de dentro crescer quando a pessoa aumenta
+      // o card na grade personalizável.
+      <section className="flex flex-col rounded-md border border-border bg-surface p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-secao font-semibold">{titulo}</h2>
           {acao}

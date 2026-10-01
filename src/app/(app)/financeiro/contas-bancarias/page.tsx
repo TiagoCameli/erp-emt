@@ -49,7 +49,7 @@ export default async function PaginaContasBancarias() {
         acoes={<ContasAcoesCabecalho podeCriar={podeCriar} />}
       />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="financeiro.contas-bancarias.resumo" titulo="Resumo das contas" className="mb-4">
         {visiveis.length === 0 ? (
           // Sem nenhuma conta liberada, um cartão com R$ 0,00 seria mentira:
           // pareceria empresa sem dinheiro em vez de usuário sem permissão.

@@ -2,9 +2,9 @@ import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { EmptyState } from "@/components/canonicos";
+import { EmptyState, type PropsItemDaGrade } from "@/components/canonicos";
 
-interface PainelProps {
+interface PainelProps extends PropsItemDaGrade {
   titulo: string;
   /** O que o bloco responde e de que período ele fala. */
   descricao?: string;
@@ -72,7 +72,8 @@ export function Painel({
           ) : null}
         </div>
       </header>
-      <div className="flex-1 p-4">{children}</div>
+      {/* Coluna flex para o AreaGrafico crescer quando a pessoa aumenta o card. */}
+      <div className="flex flex-1 flex-col p-4">{children}</div>
       {nota ? (
         <p className="border-t border-border px-4 py-2 text-legenda text-muted-foreground">
           {nota}

@@ -8,6 +8,7 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   GradeKpis,
+  ItemGrade,
   KPICard,
   MoneyText,
   SecaoDetalhe,
@@ -261,7 +262,7 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
         </div>
       ) : null}
 
-      <GradeKpis>
+      <GradeKpis id="frete.painel.resumo" titulo="Resumo">
         <KPICard
           titulo="Total fretes"
           valor={<MoneyText valor={topo.totalFretes} />}
@@ -319,7 +320,7 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
         hrefContaCorrente={hrefContaCorrente}
       />
 
-      <GradeKpis>
+      <GradeKpis id="frete.painel.fretes" titulo="Análise de fretes">
         <KPICard titulo="Total de fretes" valor={<MoneyText valor={af.totalFretes} />} detalhe={`${plural(af.qtdFretes, "frete", "fretes")} no período`} />
         <KPICard
           titulo="Volume transportado"
@@ -352,8 +353,9 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
         />
       </GradeKpis>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2">
+      {/* Os blocos da análise numa grade só, que cada pessoa arruma. A largura padrão é a de antes. */}
+      <GradeKpis id="frete.painel.graficos-fretes" titulo="Gráficos de fretes" vao="amplo">
+        <ItemGrade titulo="Evolução mensal" larguraPadrao={8}>
           <SecaoDetalhe
             card
             titulo="Evolução mensal"
@@ -392,51 +394,53 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
               />
             )}
           </SecaoDetalhe>
-        </div>
-        <SecaoDetalhe card titulo="Top transportadoras">
-          <RankingBarras
-            itens={af.topTransportadoras.map((t) => ({ id: t.id, rotulo: t.nome, valor: t.valor, detalhe: plural(t.qtd, "frete", "fretes") }))}
-            selecionado={cruzados.transportadora}
-            onAlternar={alternar("transportadora")}
-            vazio="Sem dados de transportadoras."
-          />
-        </SecaoDetalhe>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SecaoDetalhe card titulo="Gasto por obra">
-          <RankingBarras
-            itens={af.topObras.map((t) => ({ id: t.id, rotulo: t.nome, valor: t.valor, detalhe: plural(t.qtd, "frete", "fretes") }))}
-            selecionado={cruzados.obraId}
-            onAlternar={alternar("obraId")}
-            vazio="Sem fretes vinculados a obra."
-          />
-        </SecaoDetalhe>
-        <SecaoDetalhe card titulo="Top materiais">
-          <RankingBarras
-            itens={af.topMateriais.map((t) => ({ id: t.id, rotulo: t.nome, valor: t.valor, detalhe: toneladas(t.toneladas) }))}
-            selecionado={cruzados.insumoId}
-            onAlternar={alternar("insumoId")}
-            vazio="Sem materiais transportados."
-          />
-        </SecaoDetalhe>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <SecaoDetalhe card titulo="Pagamentos por método">
-          <RankingBarras
-            itens={af.pagamentosPorMetodo.map((p) => ({
-              id: p.id,
-              rotulo: p.nome,
-              valor: p.valor,
-              detalhe: `${numero(af.totalPagamentosMetodo > 0 ? (p.valor / af.totalPagamentosMetodo) * 100 : 0, 1)}% · ${plural(p.qtd, "pagamento", "pagamentos")}`,
-            }))}
-            selecionado={cruzados.metodo}
-            onAlternar={alternar("metodo")}
-            vazio="Sem pagamentos no período."
-          />
-        </SecaoDetalhe>
-        <div className="xl:col-span-2">
+        </ItemGrade>
+        <ItemGrade titulo="Top transportadoras" larguraPadrao={4}>
+          <SecaoDetalhe card titulo="Top transportadoras">
+            <RankingBarras
+              itens={af.topTransportadoras.map((t) => ({ id: t.id, rotulo: t.nome, valor: t.valor, detalhe: plural(t.qtd, "frete", "fretes") }))}
+              selecionado={cruzados.transportadora}
+              onAlternar={alternar("transportadora")}
+              vazio="Sem dados de transportadoras."
+            />
+          </SecaoDetalhe>
+        </ItemGrade>
+        <ItemGrade titulo="Gasto por obra" larguraPadrao={6}>
+          <SecaoDetalhe card titulo="Gasto por obra">
+            <RankingBarras
+              itens={af.topObras.map((t) => ({ id: t.id, rotulo: t.nome, valor: t.valor, detalhe: plural(t.qtd, "frete", "fretes") }))}
+              selecionado={cruzados.obraId}
+              onAlternar={alternar("obraId")}
+              vazio="Sem fretes vinculados a obra."
+            />
+          </SecaoDetalhe>
+        </ItemGrade>
+        <ItemGrade titulo="Top materiais" larguraPadrao={6}>
+          <SecaoDetalhe card titulo="Top materiais">
+            <RankingBarras
+              itens={af.topMateriais.map((t) => ({ id: t.id, rotulo: t.nome, valor: t.valor, detalhe: toneladas(t.toneladas) }))}
+              selecionado={cruzados.insumoId}
+              onAlternar={alternar("insumoId")}
+              vazio="Sem materiais transportados."
+            />
+          </SecaoDetalhe>
+        </ItemGrade>
+        <ItemGrade titulo="Pagamentos por método" larguraPadrao={4}>
+          <SecaoDetalhe card titulo="Pagamentos por método">
+            <RankingBarras
+              itens={af.pagamentosPorMetodo.map((p) => ({
+                id: p.id,
+                rotulo: p.nome,
+                valor: p.valor,
+                detalhe: `${numero(af.totalPagamentosMetodo > 0 ? (p.valor / af.totalPagamentosMetodo) * 100 : 0, 1)}% · ${plural(p.qtd, "pagamento", "pagamentos")}`,
+              }))}
+              selecionado={cruzados.metodo}
+              onAlternar={alternar("metodo")}
+              vazio="Sem pagamentos no período."
+            />
+          </SecaoDetalhe>
+        </ItemGrade>
+        <ItemGrade titulo="Top pedreiras / origens" larguraPadrao={8}>
           <SecaoDetalhe card titulo="Top pedreiras / origens">
             <RankingBarras
               itens={af.topPedreiras.map((p) => ({
@@ -454,15 +458,15 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
               vazio="Sem dados de origem."
             />
           </SecaoDetalhe>
-        </div>
-      </div>
+        </ItemGrade>
+      </GradeKpis>
 
       <div className="flex flex-col gap-4">
         <div>
           <p className="text-legenda uppercase tracking-wide text-muted-foreground">Compras de material</p>
           <h2 className="text-secao font-semibold">Análise de materiais</h2>
         </div>
-        <GradeKpis>
+        <GradeKpis id="frete.painel.materiais" titulo="Análise de materiais">
           <KPICard
             titulo="Total comprado"
             valor={<MoneyText valor={am.totalComprado} />}
@@ -480,8 +484,8 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
             detalhe={am.topMaterial.valor > 0 ? <MoneyText valor={am.topMaterial.valor} /> : "Sem compras"}
           />
         </GradeKpis>
-        <div className="grid gap-4 xl:grid-cols-3">
-          <div className="xl:col-span-2">
+        <GradeKpis id="frete.painel.graficos-materiais" titulo="Gráficos de materiais" vao="amplo">
+          <ItemGrade titulo="Evolução de compras" larguraPadrao={8}>
             <SecaoDetalhe card titulo="Evolução de compras">
               {am.evolucao.length === 0 ? (
                 <p className="py-6 text-center text-detalhe text-muted-foreground">Nenhuma compra de material no período.</p>
@@ -496,18 +500,18 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
                 />
               )}
             </SecaoDetalhe>
-          </div>
-          <SecaoDetalhe card titulo="Top fornecedores">
-            <RankingBarras
-              itens={am.topFornecedores.map((f) => ({ id: f.id, rotulo: f.nome, valor: f.valor, detalhe: plural(f.pedidos, "pedido", "pedidos") }))}
-              selecionado={cruzados.fornecedorId}
-              onAlternar={alternar("fornecedorId")}
-              vazio="Sem fornecedores no período."
-            />
-          </SecaoDetalhe>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-3">
-          <div className="xl:col-span-2">
+          </ItemGrade>
+          <ItemGrade titulo="Top fornecedores" larguraPadrao={4}>
+            <SecaoDetalhe card titulo="Top fornecedores">
+              <RankingBarras
+                itens={am.topFornecedores.map((f) => ({ id: f.id, rotulo: f.nome, valor: f.valor, detalhe: plural(f.pedidos, "pedido", "pedidos") }))}
+                selecionado={cruzados.fornecedorId}
+                onAlternar={alternar("fornecedorId")}
+                vazio="Sem fornecedores no período."
+              />
+            </SecaoDetalhe>
+          </ItemGrade>
+          <ItemGrade titulo="Top materiais comprados" larguraPadrao={8}>
             <SecaoDetalhe card titulo="Top materiais comprados">
               <RankingBarras
                 itens={am.topMateriais.map((m) => ({
@@ -526,29 +530,33 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
                 vazio="Sem materiais comprados."
               />
             </SecaoDetalhe>
-          </div>
-          <SecaoDetalhe card titulo="Distribuição por material">
-            <RankingBarras
-              itens={am.distribuicao.map((d) => ({
-                id: d.id,
-                rotulo: d.nome,
-                valor: d.valor,
-                agregado: d.id === ID_OUTROS,
-                detalhe: `${numero(am.totalDistribuicao > 0 ? (d.valor / am.totalDistribuicao) * 100 : 0, 1)}% do gasto`,
-              }))}
-              selecionado={cruzados.insumoId}
-              onAlternar={alternar("insumoId")}
-              vazio="Sem materiais comprados."
-            />
-          </SecaoDetalhe>
-        </div>
-        <SecaoDetalhe card titulo="Custo material vs custo de frete">
-          {am.materialVsFrete.length === 0 ? (
-            <p className="py-6 text-center text-detalhe text-muted-foreground">Sem dados para comparar.</p>
-          ) : (
-            <MaterialVsFreteGrafico dados={am.materialVsFrete} onAlternarMaterial={alternar("insumoId")} />
-          )}
-        </SecaoDetalhe>
+          </ItemGrade>
+          <ItemGrade titulo="Distribuição por material" larguraPadrao={4}>
+            <SecaoDetalhe card titulo="Distribuição por material">
+              <RankingBarras
+                itens={am.distribuicao.map((d) => ({
+                  id: d.id,
+                  rotulo: d.nome,
+                  valor: d.valor,
+                  agregado: d.id === ID_OUTROS,
+                  detalhe: `${numero(am.totalDistribuicao > 0 ? (d.valor / am.totalDistribuicao) * 100 : 0, 1)}% do gasto`,
+                }))}
+                selecionado={cruzados.insumoId}
+                onAlternar={alternar("insumoId")}
+                vazio="Sem materiais comprados."
+              />
+            </SecaoDetalhe>
+          </ItemGrade>
+          <ItemGrade titulo="Custo material vs custo de frete" larguraPadrao={12}>
+            <SecaoDetalhe card titulo="Custo material vs custo de frete">
+              {am.materialVsFrete.length === 0 ? (
+                <p className="py-6 text-center text-detalhe text-muted-foreground">Sem dados para comparar.</p>
+              ) : (
+                <MaterialVsFreteGrafico dados={am.materialVsFrete} onAlternarMaterial={alternar("insumoId")} />
+              )}
+            </SecaoDetalhe>
+          </ItemGrade>
+        </GradeKpis>
       </div>
 
       <ResumoTransportadoraTabela calcular={(f) => resumoPorTransportadora(calc.fretesF, f, nomes)} opcoes={calc.opcoes} />

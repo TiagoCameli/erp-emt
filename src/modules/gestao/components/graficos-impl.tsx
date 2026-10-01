@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL } from "@/lib/formatadores";
 import type { MesDoResultado } from "../calculo";
 
@@ -79,7 +80,7 @@ function rotuloDaColuna(valor: unknown): string {
 
 const EIXO_TICK = { fontSize: 11, fill: "var(--muted-foreground)" };
 const ROTULO_BARRA = { fontSize: 11, fill: "var(--muted-foreground)" };
-const ALTURA = "h-64 w-full";
+const ALTURA = "16rem";
 
 const COR_RECEITA = "var(--color-chart-1)";
 const COR_DESPESA = "var(--color-chart-2)";
@@ -147,7 +148,7 @@ export function ReceitaDespesaGrafico({ meses }: { meses: MesDoResultado[] }) {
   }));
 
   return (
-    <div className={ALTURA}>
+    <AreaGrafico altura={ALTURA}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid
@@ -194,7 +195,7 @@ export function ReceitaDespesaGrafico({ meses }: { meses: MesDoResultado[] }) {
           />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }
 
@@ -216,7 +217,7 @@ export function ResultadoMesGrafico({ meses }: { meses: MesDoResultado[] }) {
   }));
 
   return (
-    <div className={ALTURA}>
+    <AreaGrafico altura={ALTURA}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={dados}
@@ -262,6 +263,6 @@ export function ResultadoMesGrafico({ meses }: { meses: MesDoResultado[] }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

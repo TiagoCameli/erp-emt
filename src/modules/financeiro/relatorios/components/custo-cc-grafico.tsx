@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { Skeleton } from "@/components/ui/skeleton";
 import { alturaDoGrafico } from "./custo-cc-altura";
 import type { CustoCentroCusto } from "../queries";
@@ -30,8 +31,8 @@ interface CustoCcGraficoProps {
  */
 export function CustoCcGrafico({ centros, destinos }: CustoCcGraficoProps) {
   return (
-    <div className="w-full" style={{ height: alturaDoGrafico(centros.length) }}>
+    <AreaGrafico altura={`${alturaDoGrafico(centros.length)}px`}>
       <Grafico centros={centros} destinos={destinos} />
-    </div>
+    </AreaGrafico>
   );
 }

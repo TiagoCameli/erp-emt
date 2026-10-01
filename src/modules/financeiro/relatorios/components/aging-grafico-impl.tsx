@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL } from "@/lib/formatadores";
 import { drillAging } from "@/modules/financeiro/relatorios/drill";
 import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
@@ -96,7 +97,7 @@ export function AgingGrafico({
   }));
 
   return (
-    <div className="h-80 w-full">
+    <AreaGrafico altura="20rem">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={dados}
@@ -166,6 +167,6 @@ export function AgingGrafico({
           />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

@@ -73,7 +73,7 @@ export default async function PaginaTransferencias() {
         }
       />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="financeiro.transferencias.resumo" titulo="Resumo das transferências" className="mb-4">
         <KPICard
           titulo="Transferido no mês"
           valor={<MoneyText valor={totalDoMesCentavos / 100} />}

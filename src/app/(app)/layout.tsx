@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import {
   AppShell,
+  ProvedorGrades,
   RedeDeFalhaSilenciosa,
   type ModuloNavegacao,
 } from "@/components/canonicos";
@@ -10,6 +11,7 @@ import { urlAssinadaDaFoto } from "@/lib/foto-perfil";
 import { abasVisiveis, getUsuarioLogado, modulosVisiveis } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { sair } from "@/modules/auth/actions";
+import { buscarLayoutsGrades } from "@/modules/_shared/preferencias-tabela/actions";
 
 export default async function AppLayout({
   children,
@@ -60,9 +62,11 @@ export default async function AppLayout({
   // ida ao Storage em toda página de quem não tem foto, que hoje é quase todo
   // mundo. Se a assinatura falhar, `urlAssinadaDaFoto` devolve null e o avatar
   // cai nas iniciais — o layout não pode quebrar por causa de um avatar.
-  const fotoUrl = usuario.fotoPath
-    ? await urlAssinadaDaFoto(usuario.fotoPath)
-    : null;
+  // Em paralelo: a foto e os layouts de cards não dependem um do outro.
+  const [fotoUrl, layoutsGrades] = await Promise.all([
+    usuario.fotoPath ? urlAssinadaDaFoto(usuario.fotoPath) : Promise.resolve(null),
+    buscarLayoutsGrades().catch(() => ({})),
+  ]);
 
   return (
     <AppShell
@@ -73,7 +77,9 @@ export default async function AppLayout({
       {/* Piso do app: rejeição de action que ninguém pegou vira aviso, em vez
           de o botão piscar e nada acontecer. Ver o comentário do componente. */}
       <RedeDeFalhaSilenciosa />
-      {children}
+      {/* Como cada pessoa arrumou os cards e gráficos de cada tela. Lido aqui,
+          no servidor, para a grade nascer arrumada em vez de pular depois. */}
+      <ProvedorGrades inicial={layoutsGrades}>{children}</ProvedorGrades>
     </AppShell>
   );
 }

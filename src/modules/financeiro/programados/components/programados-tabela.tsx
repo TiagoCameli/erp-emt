@@ -496,7 +496,7 @@ export function ProgramadosTabela({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
+      <GradeKpis id="financeiro.programados.resumo" titulo="Vencimentos">
         <KPICard
           titulo="Atrasado"
           valor={<MoneyText valor={resumo.atrasado} />}

@@ -9,6 +9,7 @@ import {
   FiltroPeriodo,
   FiltroSelect,
   GradeKpis,
+  ItemGrade,
   KPICard,
   MoneyText,
   useFiltrosUrl,
@@ -416,7 +417,7 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
         </p>
       ) : null}
 
-      <GradeKpis>
+      <GradeKpis id="frete.carretas-emt.resumo" titulo="Resumo">
         <KPICard titulo="Produção" valor={<MoneyText valor={t.producao} />} detalhe={`${numero(t.viagens)} viagens, ${numero(t.toneladas)} t`} />
         <KPICard titulo="Custo operacional" valor={<MoneyText valor={t.custoOperacional} />} detalhe={`Margem operacional ${porcento(t.margemOperacional)}`} />
         <KPICard
@@ -438,32 +439,38 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
           Nenhum frete, gasto ou parcela das carretas no período. Escolha outro período.
         </p>
       ) : (
-        <>
-          <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+        <GradeKpis id="frete.carretas-emt.graficos" titulo="Gráficos" vao="amplo">
+          <ItemGrade titulo="Viagens por mês" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Viagens por mês" subtitulo="Fretes da EMT TRANSPORTES, por carreta" altura={288}>
               <PorCarretaMensalGrafico meses={painel.meses} series={series} medida="viagens" />
             </CartaoGrafico>
+          </ItemGrade>
+          <ItemGrade titulo="Produção mensal" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Produção mensal" subtitulo="Valor dos fretes, por carreta" altura={288}>
               <PorCarretaMensalGrafico meses={painel.meses} series={series} medida="producao" />
             </CartaoGrafico>
-          </div>
-          <CartaoGrafico
-            className="min-w-0"
-            titulo="Produção x gastos"
-            subtitulo="Fretes contra o custo operacional e as parcelas de cada mês; a linha é o resultado final"
-            altura={288}
-          >
-            <ProducaoVsGastosGrafico meses={painel.meses} />
-          </CartaoGrafico>
-          <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+          </ItemGrade>
+          <ItemGrade titulo="Produção x gastos" larguraPadrao={12}>
+            <CartaoGrafico
+              className="min-w-0"
+              titulo="Produção x gastos"
+              subtitulo="Fretes contra o custo operacional e as parcelas de cada mês; a linha é o resultado final"
+              altura={288}
+            >
+              <ProducaoVsGastosGrafico meses={painel.meses} />
+            </CartaoGrafico>
+          </ItemGrade>
+          <ItemGrade titulo="Resultado acumulado" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Resultado acumulado" subtitulo="Quanto a produção já cobriu do que as carretas custaram" altura={288}>
               <ResultadoAcumuladoGrafico meses={painel.meses} />
             </CartaoGrafico>
+          </ItemGrade>
+          <ItemGrade titulo="Comparativo por carreta" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Comparativo por carreta" subtitulo="Produção, custo e financiamento no período" altura={288}>
               <ComparativoCarretasGrafico desempenhos={painel.desempenhos.filter((d) => d.chave !== CHAVE_OUTRAS)} />
             </CartaoGrafico>
-          </div>
-        </>
+          </ItemGrade>
+        </GradeKpis>
       )}
 
       <Secao

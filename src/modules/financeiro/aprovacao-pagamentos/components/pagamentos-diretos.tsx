@@ -1113,7 +1113,7 @@ export function PagamentosDiretos({
     // falta passaria despercebida até chegar dado real.
     <TooltipProvider>
       <div className="flex flex-col gap-4">
-        <GradeKpis>
+        <GradeKpis id="financeiro.aprovacao-pagamentos.diretos" titulo="Pagamentos diretos">
           <KPICard
             titulo="Dinheiro e cartão"
             valor={formatarBRL(total)}

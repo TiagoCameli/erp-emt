@@ -91,3 +91,25 @@ export async function limparPreferenciaTabela(tabela: string): Promise<void> {
     logErroServidor("preferencias-tabela.limpar", error);
   }
 }
+
+/**
+ * Todos os layouts de grade de cards da pessoa (chaves `painel.*`), de uma vez.
+ * O layout do app chama no servidor para cada grade nascer já arrumada. São
+ * poucas linhas e pequenas; falha devolve vazio, e aí as grades abrem no padrão.
+ */
+export async function buscarLayoutsGrades(): Promise<Record<string, unknown>> {
+  const usuario = await getUsuarioLogado();
+  if (!usuario) return {};
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("preferencias_tabela")
+    .select("tabela, preferencia")
+    .like("tabela", "painel.%");
+
+  if (error) {
+    logErroServidor("preferencias-tabela.layouts-grades", error);
+    return {};
+  }
+  return Object.fromEntries((data ?? []).map((linha) => [linha.tabela, linha.preferencia]));
+}

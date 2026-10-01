@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, Crown, Droplet, Gauge, Truck, Wallet, Wrench } from "lucide-react";
 
-import { MoneyText } from "@/components/canonicos";
+import { GradeKpis, ItemGrade, MoneyText } from "@/components/canonicos";
 import { dataHojeISO, formatarBRL } from "@/lib/formatadores";
 import { abasVisiveis, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { BarraFiltrosCombustivel } from "@/modules/combustivel/_shared/components/barra-filtros-combustivel";
@@ -122,7 +122,7 @@ export default async function VisaoGeralCombustivel({
       ) : null}
 
       <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <GradeKpis id="combustivel.painel.indicadores" titulo="Indicadores">
           <CartaoKpi
             titulo="Volume total"
             icone={Droplet}
@@ -154,6 +154,7 @@ export default async function VisaoGeralCombustivel({
             vazio={vazio}
           />
           <CartaoKpi
+            idCard="consumidores"
             titulo={proprios ? "Equipamentos" : "Carretas"}
             icone={proprios ? Wrench : Truck}
             valor={numero(kpis.qtdConsumidores, 0)}
@@ -171,6 +172,7 @@ export default async function VisaoGeralCombustivel({
             vazio={vazio}
           />
           <CartaoKpi
+            idCard="maior-consumidor"
             titulo={proprios ? "Maior equipamento" : "Maior carreta"}
             icone={Crown}
             valor={painel.maior?.nome}
@@ -193,30 +195,37 @@ export default async function VisaoGeralCombustivel({
             dica="Anomalias críticas e de atenção detectadas no período (D1-D4), sem as conferidas. D5 informativos não contam aqui."
             href={linkAnomalias}
           />
-        </div>
+        </GradeKpis>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+        {/* Os gráficos numa grade só, que cada pessoa arruma. A largura padrão é a de antes. */}
+        <GradeKpis id="combustivel.painel.graficos" titulo="Gráficos" vao="amplo">
+          <ItemGrade titulo="Evolução temporal" larguraPadrao={8}>
             <EvolucaoTemporal
               evolucao={painel.evolucao}
               granularidadeInicial={autoGranularidade(painel.periodo.de, painel.periodo.ate)}
               vazio={vazio}
               filtro={filtro}
             />
-          </div>
-          <MixCombustivel fatias={painel.mix} filtro={filtro} />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <TopConsumidores consumidores={painel.consumidores} filtro={filtro} hrefSentinela={linkAtribuir} />
-          <CustoPorObra obras={painel.obras} filtro={filtro} />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <CustoPorFornecedor fornecedores={painel.fornecedores.linhas} media={painel.fornecedores.media} filtro={filtro} />
+          </ItemGrade>
+          <ItemGrade titulo="Mix de combustível" larguraPadrao={4}>
+            <MixCombustivel fatias={painel.mix} filtro={filtro} />
+          </ItemGrade>
+          <ItemGrade titulo={proprios ? "Top equipamentos" : "Top carretas"} idCard="top-consumidores" larguraPadrao={6}>
+            <TopConsumidores consumidores={painel.consumidores} filtro={filtro} hrefSentinela={linkAtribuir} />
+          </ItemGrade>
+          <ItemGrade titulo="Custo por obra" larguraPadrao={6}>
+            <CustoPorObra obras={painel.obras} filtro={filtro} />
+          </ItemGrade>
+          <ItemGrade titulo="R$/L por fornecedor" idCard="custo-por-fornecedor" larguraPadrao={6}>
+            <CustoPorFornecedor fornecedores={painel.fornecedores.linhas} media={painel.fornecedores.media} filtro={filtro} />
+          </ItemGrade>
           {/* A origem só mostra o heatmap com 14+ dias: em recorte curto a grade fica quase vazia. */}
-          {diasNoPeriodo(painel.periodo) >= 14 ? <HeatmapDiaHora dados={painel.heatmap} /> : <div className="hidden lg:block" />}
-        </div>
+          {diasNoPeriodo(painel.periodo) >= 14 ? (
+            <ItemGrade titulo="Padrão semanal" larguraPadrao={6}>
+              <HeatmapDiaHora dados={painel.heatmap} />
+            </ItemGrade>
+          ) : null}
+        </GradeKpis>
 
         <UltimosAbastecimentos
           modo={filtro.modo}

@@ -294,7 +294,7 @@ export default async function GestaoPage({
 
       {/* Os números que decidem o dia: o que a obra custou, o que o caixa tem
           pela frente, o que está parado esperando alguém e o que já saiu. */}
-      <GradeKpis>
+      <GradeKpis id="gestao.painel.indicadores" titulo="Indicadores">
         <KPICard
           titulo="Caixa real"
           valor={ler(caixa, (d) => <MoneyText valor={d.total} />)}
@@ -368,8 +368,11 @@ export default async function GestaoPage({
         />
       </GradeKpis>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Todo bloco do painel mora numa grade só, e cada pessoa arruma a dela.
+          A largura padrão é a de antes: os pares lado a lado, o resto inteiro. */}
+      <GradeKpis id="gestao.painel.blocos" titulo="Blocos do painel" vao="amplo">
         <Painel
+          larguraPadrao={6}
           titulo="Receita e despesa mês a mês"
           descricao={`O que entrou e o que saiu por mês de referência, ${periodo}.`}
           destaque={
@@ -406,6 +409,7 @@ export default async function GestaoPage({
         </Painel>
 
         <Painel
+          larguraPadrao={6}
           titulo="Resultado do mês"
           descricao={`Receita menos despesa, mês a mês, ${periodo}.`}
           destaque={
@@ -430,27 +434,27 @@ export default async function GestaoPage({
             <ResultadoMesGrafico meses={resultado.meses} />
           )}
         </Painel>
-      </div>
 
-      <Painel
-        titulo="Resumo do período, mês a mês"
-        descricao="Os mesmos números do gráfico acima, exatos."
-        rotuloDestaque="Resultado do período"
-        destaque={
-          resultado === null ? undefined : (
-            <MoneyText valor={resultado.resultado} />
-          )
-        }
-      >
-        {resultado === null ? (
-          <PainelComFalha titulo="o resumo do período" />
-        ) : (
-          <ResumoPeriodoTabela resultado={resultado} />
-        )}
-      </Painel>
-
-      <div className="grid gap-4 lg:grid-cols-2">
         <Painel
+          larguraPadrao={12}
+          titulo="Resumo do período, mês a mês"
+          descricao="Os mesmos números do gráfico acima, exatos."
+          rotuloDestaque="Resultado do período"
+          destaque={
+            resultado === null ? undefined : (
+              <MoneyText valor={resultado.resultado} />
+            )
+          }
+        >
+          {resultado === null ? (
+            <PainelComFalha titulo="o resumo do período" />
+          ) : (
+            <ResumoPeriodoTabela resultado={resultado} />
+          )}
+        </Painel>
+
+        <Painel
+          larguraPadrao={6}
           titulo="Custo por centro de custo"
           descricao={`Onde o dinheiro está indo, ${periodo}. Maiores primeiro.`}
           destaque={ler(centros, (d) => `${d.quantidade}`)}
@@ -492,6 +496,7 @@ export default async function GestaoPage({
         </Painel>
 
         <Painel
+          larguraPadrao={6}
           titulo="Custo por grupo de insumo"
           descricao={`Quanto foi material, mão de obra, equipamento e serviço, ${periodo}.`}
           destaque={ler(grupos, (d) => <MoneyText valor={d.total} />)}
@@ -522,48 +527,48 @@ export default async function GestaoPage({
             <ComposicaoGrupos grupos={grupos.value.grupos} />
           )}
         </Painel>
-      </div>
 
-      <Painel
-        titulo="Maiores fornecedores"
-        descricao={`Com quem a empresa gastou, ${periodo}. Maiores primeiro.`}
-        destaque={ler(fornecedores, (d) => <MoneyText valor={d.aberto} />)}
-        rotuloDestaque="Ainda em aberto"
-        link={{
-          href: "/financeiro/relatorios?rel=extrato-fornecedor",
-          rotulo: "Abrir extrato",
-        }}
-        nota="Pago e em aberto saem das parcelas de cada documento, não do status do lançamento. Soma o rateio, então o total fecha com o custo do período — e com centro de custo escolhido cada barra é a fatia que caiu nele."
-      >
-        {fornecedores.status === "rejected" ? (
-          <PainelComFalha titulo="os maiores fornecedores" />
-        ) : fornecedores.value.linhas.length === 0 ? (
-          <EmptyState
-            icone={Truck}
-            titulo="Nenhum gasto no período"
-            descricao="Os fornecedores aparecem aqui assim que houver lançamento a pagar com mês de referência dentro do período."
-          />
-        ) : (
-          <BarrasHorizontais
-            series={SERIES_FORNECEDOR}
-            linhas={fornecedores.value.linhas.map<LinhaBarra>((linha) => ({
-              id: linha.id ?? linha.tipo,
-              rotulo: linha.nome,
-              emblema:
-                linha.lancamentos === 1
-                  ? "1 lançamento"
-                  : `${linha.lancamentos} lançamentos`,
-              segmentos: [
-                { rotulo: "Pago", valor: linha.pago, cor: COR_PAGO },
-                { rotulo: "Em aberto", valor: linha.aberto, cor: COR_DESPESA },
-              ],
-            }))}
-          />
-        )}
-      </Painel>
-
-      <div className="grid gap-4 lg:grid-cols-2">
         <Painel
+          larguraPadrao={12}
+          titulo="Maiores fornecedores"
+          descricao={`Com quem a empresa gastou, ${periodo}. Maiores primeiro.`}
+          destaque={ler(fornecedores, (d) => <MoneyText valor={d.aberto} />)}
+          rotuloDestaque="Ainda em aberto"
+          link={{
+            href: "/financeiro/relatorios?rel=extrato-fornecedor",
+            rotulo: "Abrir extrato",
+          }}
+          nota="Pago e em aberto saem das parcelas de cada documento, não do status do lançamento. Soma o rateio, então o total fecha com o custo do período — e com centro de custo escolhido cada barra é a fatia que caiu nele."
+        >
+          {fornecedores.status === "rejected" ? (
+            <PainelComFalha titulo="os maiores fornecedores" />
+          ) : fornecedores.value.linhas.length === 0 ? (
+            <EmptyState
+              icone={Truck}
+              titulo="Nenhum gasto no período"
+              descricao="Os fornecedores aparecem aqui assim que houver lançamento a pagar com mês de referência dentro do período."
+            />
+          ) : (
+            <BarrasHorizontais
+              series={SERIES_FORNECEDOR}
+              linhas={fornecedores.value.linhas.map<LinhaBarra>((linha) => ({
+                id: linha.id ?? linha.tipo,
+                rotulo: linha.nome,
+                emblema:
+                  linha.lancamentos === 1
+                    ? "1 lançamento"
+                    : `${linha.lancamentos} lançamentos`,
+                segmentos: [
+                  { rotulo: "Pago", valor: linha.pago, cor: COR_PAGO },
+                  { rotulo: "Em aberto", valor: linha.aberto, cor: COR_DESPESA },
+                ],
+              }))}
+            />
+          )}
+        </Painel>
+
+        <Painel
+          larguraPadrao={6}
           titulo="A pagar por prazo de vencimento"
           descricao={`Parcelas em aberto pelo prazo até o vencimento. É o que o caixa precisa suportar.${avisoSecao}`}
           destaque={ler(vencimentos, (d) => <MoneyText valor={d.total} />)}
@@ -609,6 +614,7 @@ export default async function GestaoPage({
         </Painel>
 
         <Painel
+          larguraPadrao={6}
           titulo="Compras"
           descricao={`O que está parado esperando decisão.${avisoSecao}`}
           link={{ href: "/compras/ordens", rotulo: "Abrir compras" }}
@@ -616,7 +622,7 @@ export default async function GestaoPage({
           {compras.status === "rejected" ? (
             <PainelComFalha titulo="o resumo de Compras" />
           ) : (
-            <GradeKpis>
+            <GradeKpis id="gestao.painel.compras" titulo="Compras">
               <KPICard
                 titulo="OCs a aprovar"
                 valor={compras.value.ocsAprovar.contagem}
@@ -637,61 +643,63 @@ export default async function GestaoPage({
             </GradeKpis>
           )}
         </Painel>
-      </div>
 
-      <Painel
-        titulo="Maiores custos do período"
-        descricao={`${valores.centro.length === 0 ? "Os lançamentos a pagar de maior valor" : "Maiores custos nos centros escolhidos, pelo valor rateado neles"}, ${periodo}.`}
-        link={{
-          href: "/financeiro/lancamentos",
-          rotulo: "Abrir lançamentos",
-        }}
-      >
-        {maiores.status === "rejected" ? (
-          <PainelComFalha titulo="os maiores custos" />
-        ) : maiores.value.length === 0 ? (
-          <EmptyState
-            icone={Receipt}
-            titulo="Nenhum lançamento no período"
-            descricao="Assim que houver lançamento a pagar com mês de referência no período, os maiores aparecem aqui."
-          />
-        ) : (
-          <MaioresCustosTabela custos={maiores.value} />
-        )}
-      </Painel>
+        <Painel
+          larguraPadrao={12}
+          titulo="Maiores custos do período"
+          descricao={`${valores.centro.length === 0 ? "Os lançamentos a pagar de maior valor" : "Maiores custos nos centros escolhidos, pelo valor rateado neles"}, ${periodo}.`}
+          link={{
+            href: "/financeiro/lancamentos",
+            rotulo: "Abrir lançamentos",
+          }}
+        >
+          {maiores.status === "rejected" ? (
+            <PainelComFalha titulo="os maiores custos" />
+          ) : maiores.value.length === 0 ? (
+            <EmptyState
+              icone={Receipt}
+              titulo="Nenhum lançamento no período"
+              descricao="Assim que houver lançamento a pagar com mês de referência no período, os maiores aparecem aqui."
+            />
+          ) : (
+            <MaioresCustosTabela custos={maiores.value} />
+          )}
+        </Painel>
 
-      <Painel
-        titulo="RH"
-        descricao={`Equipe e folha do mês.${avisoSecao}`}
-        link={{ href: "/rh/folha", rotulo: "Abrir RH" }}
-      >
-        {rh.status === "rejected" ? (
-          <PainelComFalha titulo="o resumo do RH" />
-        ) : (
-          <GradeKpis>
-            <KPICard
-              titulo="Colaboradores ativos"
-              valor={rh.value.colaboradoresAtivos}
-              href="/cadastros/colaboradores"
-            />
-            <KPICard
-              titulo="Custo da folha"
-              valor={<MoneyText valor={rh.value.folha.custoTotal} />}
-              detalhe={
-                rh.value.folha.competencia
-                  ? formatarCompetencia(rh.value.folha.competencia)
-                  : "Sem folha lançada"
-              }
-              href="/rh/folha"
-            />
-            <KPICard
-              titulo="Apontamentos em aberto"
-              valor={rh.value.apontamentosAbertos}
-              href="/rh/apontamentos"
-            />
-          </GradeKpis>
-        )}
-      </Painel>
+        <Painel
+          larguraPadrao={12}
+          titulo="RH"
+          descricao={`Equipe e folha do mês.${avisoSecao}`}
+          link={{ href: "/rh/folha", rotulo: "Abrir RH" }}
+        >
+          {rh.status === "rejected" ? (
+            <PainelComFalha titulo="o resumo do RH" />
+          ) : (
+            <GradeKpis id="gestao.painel.rh" titulo="RH">
+              <KPICard
+                titulo="Colaboradores ativos"
+                valor={rh.value.colaboradoresAtivos}
+                href="/cadastros/colaboradores"
+              />
+              <KPICard
+                titulo="Custo da folha"
+                valor={<MoneyText valor={rh.value.folha.custoTotal} />}
+                detalhe={
+                  rh.value.folha.competencia
+                    ? formatarCompetencia(rh.value.folha.competencia)
+                    : "Sem folha lançada"
+                }
+                href="/rh/folha"
+              />
+              <KPICard
+                titulo="Apontamentos em aberto"
+                valor={rh.value.apontamentosAbertos}
+                href="/rh/apontamentos"
+              />
+            </GradeKpis>
+          )}
+        </Painel>
+      </GradeKpis>
     </div>
   );
 }

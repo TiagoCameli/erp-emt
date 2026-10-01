@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 
+import type { PropsItemDaGrade } from "@/components/canonicos";
 import { cn } from "@/lib/utils";
 import { sparkVisivel } from "@/modules/combustivel/painel/calculo";
 
@@ -71,7 +72,7 @@ export function Sparkline({ dados, largura = 60, altura = 24 }: { dados: readonl
   );
 }
 
-export interface CartaoKpiProps {
+export interface CartaoKpiProps extends PropsItemDaGrade {
   titulo: string;
   valor: ReactNode;
   detalhe?: ReactNode;

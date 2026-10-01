@@ -287,7 +287,7 @@ export function RescisaoDetalhe({
         </p>
       ) : null}
 
-      <GradeKpis>
+      <GradeKpis id="rh.rescisoes.detalhe.resumo" titulo="Resumo da rescisão">
         <KPICard
           titulo="Proventos"
           valor={<MoneyText valor={rescisao.valorProventos} />}

@@ -106,7 +106,7 @@ export function ReciboDetalhe({
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis>
+      <GradeKpis id="rh.ferias.recibo.resumo" titulo="Resumo do recibo">
         <KPICard
           titulo="Líquido a pagar"
           valor={<MoneyText valor={recibo.valorLiquido} />}

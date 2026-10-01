@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { AreaGrafico } from "@/components/canonicos/area-grafico";
 import { formatarBRL } from "@/lib/formatadores";
 import { abrirDrill } from "@/modules/financeiro/relatorios/components/abrir-drill";
 import {
@@ -151,7 +152,7 @@ export function CustoCcSerie({
   }
 
   return (
-    <div className="h-72 w-full">
+    <AreaGrafico altura="18rem">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={dados}
@@ -210,6 +211,6 @@ export function CustoCcSerie({
           ))}
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </AreaGrafico>
   );
 }

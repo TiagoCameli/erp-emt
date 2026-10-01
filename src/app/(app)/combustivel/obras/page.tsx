@@ -69,7 +69,7 @@ export default async function PaginaObrasCombustivel({
 
       <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} ocultar={["fornecedores"]} />
 
-      <GradeKpis className="mb-4">
+      <GradeKpis id="combustivel.obras.indicadores" titulo="Indicadores" className="mb-4">
         <KpiAnalitico
           titulo="Volume total"
           valor={formatarLitros(kpis.volume)}

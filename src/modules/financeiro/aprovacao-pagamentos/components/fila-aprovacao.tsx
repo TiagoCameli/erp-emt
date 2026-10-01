@@ -1187,7 +1187,7 @@ export function FilaAprovacao({
     // Com a fila vazia nada disso renderiza, então a falta passa despercebida.
     <TooltipProvider>
       <div className="flex flex-col gap-4">
-        <GradeKpis>
+        <GradeKpis id="financeiro.aprovacao-pagamentos.fila" titulo="Fila de aprovação">
           <KPICard
             titulo="Total a aprovar"
             valor={formatarBRL(totalAprovar)}

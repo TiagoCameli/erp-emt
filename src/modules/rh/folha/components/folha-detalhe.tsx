@@ -20,6 +20,7 @@ import {
   ApprovalBar,
   CelulaVazia,
   ConfirmDialog,
+  GradeKpis,
   KPICard,
   MoneyText,
   PageHeader,
@@ -552,7 +553,7 @@ export function FolhaDetalheView({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <GradeKpis id="rh.folha.detalhe.resumo" titulo="Resumo da folha">
         <KPICard
           titulo="Bruto"
           valor={<MoneyText valor={folha.valorBruto} />}
@@ -581,7 +582,7 @@ export function FolhaDetalheView({
               : "A receber (bruto − INSS − IRRF − descontos − adiantamentos)"
           }
         />
-      </div>
+      </GradeKpis>
 
       {folha.motivoRejeicao && rascunho ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3">

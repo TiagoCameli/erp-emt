@@ -68,9 +68,10 @@ function Dica({ titulo, linhas, rodape }: { titulo: string; linhas: { rotulo: st
   );
 }
 
+/** Ocupa a área que o CartaoGrafico dá (AreaGrafico), que cresce com o card. */
 function Moldura({ children }: { children: React.ReactElement }) {
   return (
-    <div className="h-72 w-full">
+    <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
         {children}
       </ResponsiveContainer>
