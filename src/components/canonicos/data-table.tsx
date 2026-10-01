@@ -48,7 +48,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Combobox } from "@/components/canonicos/combobox";
-import { BlocoFiltros, FiltroBusca } from "@/components/canonicos/filter-bar";
+import {
+  BlocoFiltros,
+  FiltroBusca,
+  type PersonalizacaoFiltros,
+} from "@/components/canonicos/filter-bar";
 import { MenuColunas, type ColunaAlternavel } from "@/components/canonicos/menu-colunas";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
 import {
@@ -65,6 +69,7 @@ import {
   escreverPreferenciasTabela,
   LARGURA_MAXIMA,
   LARGURA_MINIMA,
+  ID_BUSCA_TABELA,
   lerPreferenciasTabela,
   ordemEfetiva,
   VERSAO_PREFERENCIAS,
@@ -357,6 +362,10 @@ interface EstadoTabela {
   alturaCabecalho: number | null;
   /** `null` = o peso padrão do design (500). */
   pesoCabecalho: number | null;
+  /** Ordem dos filtros na barra. Vazio = a da tela. */
+  ordemFiltros: string[];
+  /** id do filtro -> largura em px. */
+  largurasFiltros: Record<string, number>;
 }
 
 /** Tudo que as instâncias de um mesmo `idTabela` compartilham. */
@@ -1225,6 +1234,8 @@ export function DataTable<TData>({
     alturaLinha: null,
     alturaCabecalho: null,
     pesoCabecalho: null,
+    ordemFiltros: [],
+    largurasFiltros: {},
   }));
 
   const assinarEstado = React.useCallback(
@@ -1249,6 +1260,8 @@ export function DataTable<TData>({
     alturaLinha,
     alturaCabecalho,
     pesoCabecalho,
+    ordemFiltros,
+    largurasFiltros,
   } = React.useSyncExternalStore(
     assinarEstado,
     // Só leitura, nunca criação: chave que ainda não existe cai no snapshot
@@ -1352,6 +1365,8 @@ export function DataTable<TData>({
         alturaLinha: salvo.alturaLinha,
         alturaCabecalho: salvo.alturaCabecalho,
         pesoCabecalho: salvo.pesoCabecalho,
+        ordemFiltros: salvo.ordemFiltros,
+        largurasFiltros: salvo.largurasFiltros,
       });
     });
     return () => {
@@ -1391,6 +1406,8 @@ export function DataTable<TData>({
         alturaLinha: entrada.estado.alturaLinha,
         alturaCabecalho: entrada.estado.alturaCabecalho,
         pesoCabecalho: entrada.estado.pesoCabecalho,
+        ordemFiltros: entrada.estado.ordemFiltros,
+        largurasFiltros: entrada.estado.largurasFiltros,
       });
       if (entrada.temporizador !== null) clearTimeout(entrada.temporizador);
       entrada.temporizador = setTimeout(
@@ -1517,6 +1534,8 @@ export function DataTable<TData>({
       alturaLinha: null,
       alturaCabecalho: null,
       pesoCabecalho: null,
+      ordemFiltros: [],
+      largurasFiltros: {},
     });
     // Uma gravação em espera aqui ressuscitaria o que a pessoa acabou de limpar.
     descartarPendente(entrada);
@@ -1587,6 +1606,31 @@ export function DataTable<TData>({
     if (visivelAgora && filtro.temValor) filtro.onLimpar?.();
     aplicarPreferencia({ filtros: proximos });
   }
+
+  /** Ordem e largura dos filtros na barra, no modo "Personalizar tela". */
+  const personalizacaoFiltros: PersonalizacaoFiltros | undefined =
+    idTabela && personalizavel
+      ? {
+          ordem: ordemFiltros,
+          larguras: largurasFiltros,
+          onOrdem: (proxima) => aplicarPreferencia({ ordemFiltros: proxima }),
+          onLargura: (id, px) => {
+            const proximas = { ...largurasFiltros };
+            if (px === null) delete proximas[id];
+            else proximas[id] = px;
+            aplicarPreferencia({ largurasFiltros: proximas });
+          },
+          onOcultar: alternarFiltro,
+          // Só o que é dos filtros: colunas e alturas têm o "Restaurar" delas. Não
+          // limpa valor: filtro preenchido aparece sempre, mesmo oculto por padrão.
+          onRestaurar: () =>
+            aplicarPreferencia({ filtros: {}, ordemFiltros: [], largurasFiltros: {} }),
+          foraDoPadrao:
+            ordemFiltros.length > 0 ||
+            Object.keys(largurasFiltros).length > 0 ||
+            Object.keys(filtrosVisiveis).length > 0,
+        }
+      : undefined;
 
   function reordenar(idOrigem: string, idDestino: string) {
     if (idOrigem === idDestino) return;
@@ -3003,8 +3047,9 @@ export function DataTable<TData>({
             ...(colunaBusca
               ? [
                   {
-                    id: "__busca",
+                    id: ID_BUSCA_TABELA,
                     rotulo: "Busca",
+                    fixo: true,
                     elemento: (
                       <FiltroBusca
                         valor={
@@ -3030,8 +3075,10 @@ export function DataTable<TData>({
                 id: filtro.id,
                 rotulo: filtro.rotulo,
                 elemento: filtro.elemento,
+                fixo: filtro.fixo,
               })),
           ]}
+          personalizacao={personalizacaoFiltros}
           acoesEsquerda={
             temFiltroAtivo || toolbar !== undefined || arvoreAtiva ? (
               <>

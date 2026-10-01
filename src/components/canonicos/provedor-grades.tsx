@@ -132,7 +132,7 @@ export function ProvedorGrades({ inicial, children }: ProvedorGradesProps) {
               onClick={() => setEditando(true)}
             >
               <LayoutDashboard />
-              Personalizar cards
+              Personalizar tela
             </Button>
           )}
         </div>
