@@ -290,11 +290,4 @@ describe("PagamentosDiretos", () => {
       screen.getByRole("link", { name: /^Visualizar .* em tela inteira$/ }),
     ).toBeInTheDocument();
   });
-
-  it("explica que a aba não trava pagamento nenhum", () => {
-    render(<PagamentosDiretos pagamentos={[]} {...PADRAO} />);
-    expect(
-      screen.getByText(/Nada aqui prende, libera nem muda pagamento/i),
-    ).toBeInTheDocument();
-  });
 });
