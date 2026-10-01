@@ -56,6 +56,26 @@ export function paraDadosCarretas(bruto: unknown): DadosCarretas | null {
       latitude: coordenada(l.latitude),
       longitude: coordenada(l.longitude),
     })),
+    alertas: lista(b.alertas).flatMap((a) => {
+      const regra = texto(a.regra);
+      if (regra !== "R1" && regra !== "R2") return [];
+      return [
+        {
+          regra,
+          freteId: texto(a.frete_id),
+          data: texto(a.data),
+          mes: texto(a.mes),
+          tipo: texto(a.tipo),
+          placa: texto(a.placa),
+          origemId: texto(a.origem_id),
+          destinoId: texto(a.destino_id),
+          km: numero(a.km),
+          kmMapa: coordenada(a.km_mapa),
+          dias: coordenada(a.dias),
+          mediana: coordenada(a.mediana),
+        },
+      ];
+    }),
     tracados: lista(b.rotas).map((t) => ({
       origemId: texto(t.origem_id),
       destinoId: texto(t.destino_id),

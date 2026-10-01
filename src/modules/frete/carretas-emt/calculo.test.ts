@@ -151,6 +151,18 @@ describe("montarPainel, por tipo de transporte", () => {
   });
 });
 
+describe("montarPainel, por rota", () => {
+  it("recorta a produção pela rota escolhida e mantém a tabela de rotas inteira", () => {
+    const dados = base();
+    dados.fretes = dados.fretes.map((f, i) => ({ ...f, origemId: "o", destinoId: i === 0 ? "d1" : "d2" }));
+    const painel = montarPainel(dados, { ...FILTRO, rota: "o_d1" }, "2026-09");
+    expect(painel.total.viagens).toBe(10);
+    expect(painel.total.producao).toBe(100000);
+    expect(painel.total.custoOperacional).toBe(montarPainel(dados, FILTRO, "2026-09").total.custoOperacional);
+    expect(painel.rotas.map((r) => r.chave).sort()).toEqual(["o_d1", "o_d2"]);
+  });
+});
+
 describe("paraDadosCarretas", () => {
   it("lê os números em texto da RPC", () => {
     const dados = paraDadosCarretas({

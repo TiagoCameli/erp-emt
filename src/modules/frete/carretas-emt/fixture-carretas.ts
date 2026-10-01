@@ -46,5 +46,6 @@ export function base(): DadosCarretas {
     diesel: [{ placa: "SQS7E01", mes: "2026-09", litros: 1000, valor: 6394.7 }],
     localidades: [],
     tracados: [],
+    alertas: [],
   };
 }

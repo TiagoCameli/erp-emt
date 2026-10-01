@@ -6,10 +6,14 @@
  *
  * Km: o lançado no frete (média, mínimo e máximo) e o da estrada (traçado do OSRM). Tempo: o
  * frete guarda só a DATA de saída e de chegada, então o tempo médio é em DIAS, só dos fretes com
- * chegada lançada. Os alertas apontam o que parece digitação errada, sem esconder o número.
+ * chegada lançada.
+ *
+ * Os ALERTAS vêm frete a frete do banco (R1 km longe da estrada, R2 viagem longa demais), já sem
+ * os conferidos, e aqui só se agrupam por rota e regra: cada grupo leva aos fretes dele na aba
+ * Fretes e pode ser marcado como conferido de uma vez.
  */
 
-import type { DadosCarretas, FiltroCarretas, Localidade, TracadoRota } from "./calculo";
+import type { AlertaFrete, DadosCarretas, FiltroCarretas, Localidade, TracadoRota } from "./calculo";
 
 export interface LinhaRota {
   chave: string;
@@ -35,11 +39,81 @@ export interface LinhaRota {
   comChegada: number;
   /** null: sem traçado, o mapa desenha reta tracejada entre os dois pontos (se tiverem coordenada). */
   tracado: [number, number][] | null;
-  alertas: string[];
+  /** Fretes sem data de chegada (ficam fora do tempo médio). */
+  semChegada: number;
+  /** Há alerta não conferido nesta rota (no recorte de período, carreta e tipo). */
+  temAlerta: boolean;
 }
 
-/** Km lançado que se afasta mais que isto do km da estrada vira alerta. */
-export const TOLERANCIA_KM = 0.2;
+export interface AlertaRota {
+  chave: string;
+  rotaChave: string;
+  regra: AlertaFrete["regra"];
+  origemNome: string;
+  destinoNome: string;
+  freteIds: string[];
+  mensagem: string;
+}
+
+/** A chave da rota, também usada na URL (?rota=): os ids das duas localidades. */
+export function chaveDaRota(origemId: string, destinoId: string): string {
+  return `${origemId}_${destinoId}`;
+}
+
+/** Onde o alerta leva: a aba Fretes só com os fretes dele. */
+export function linkDosFretes(freteIds: readonly string[]): string {
+  return `/frete/fretes?fretes=${freteIds.map(encodeURIComponent).join(",")}`;
+}
+
+function diaBR(dia: string): string {
+  const [a, m, d] = dia.split("-");
+  return a && m && d ? `${d}/${m}/${a}` : dia;
+}
+
+function noRecorte(filtro: FiltroCarretas, a: { mes: string; tipo: string; placa: string; origemId: string; destinoId: string }) {
+  const placa = filtro.placa ? somenteLetrasNumeros(filtro.placa) : "";
+  if (a.mes < filtro.de || a.mes > filtro.ate) return false;
+  if (filtro.tipo && a.tipo !== filtro.tipo) return false;
+  if (placa && a.placa !== placa) return false;
+  if (filtro.rota && chaveDaRota(a.origemId, a.destinoId) !== filtro.rota) return false;
+  return true;
+}
+
+/** Os alertas do recorte, um por rota e regra, na ordem das rotas mais produtivas primeiro. */
+export function montarAlertas(dados: DadosCarretas, filtro: FiltroCarretas): AlertaRota[] {
+  const local = new Map(dados.localidades.map((l) => [l.id, l.nome]));
+  const grupos = new Map<string, AlertaFrete[]>();
+  for (const a of dados.alertas) {
+    if (!a.freteId || !noRecorte(filtro, a)) continue;
+    const chave = `${chaveDaRota(a.origemId, a.destinoId)}|${a.regra}`;
+    grupos.set(chave, [...(grupos.get(chave) ?? []), a]);
+  }
+  return [...grupos.entries()]
+    .map(([chave, lista]) => {
+      const a = lista[0]!;
+      const n = lista.length;
+      const fretes = n === 1 ? "1 frete" : `${n} fretes`;
+      const datas = [...new Set(lista.map((x) => diaBR(x.data)))].join(", ");
+      let mensagem: string;
+      if (a.regra === "R1") {
+        const kms = [...new Set(lista.map((x) => numeroBR(x.km)))].join(", ");
+        mensagem = `${fretes} com km lançado longe da estrada (${kms} km; a estrada tem ${numeroBR(a.kmMapa ?? 0)} km), em ${datas}`;
+      } else {
+        const dias = [...new Set(lista.map((x) => x.dias ?? 0))].join(", ");
+        mensagem = `${fretes} com viagem longa demais (${dias} dias da saída à chegada; o normal da rota é ${numeroBR(a.mediana ?? 0, 1)} dias), em ${datas}`;
+      }
+      return {
+        chave,
+        rotaChave: chaveDaRota(a.origemId, a.destinoId),
+        regra: a.regra,
+        origemNome: local.get(a.origemId) ?? "Local sem cadastro",
+        destinoNome: local.get(a.destinoId) ?? "Local sem cadastro",
+        freteIds: lista.map((x) => x.freteId),
+        mensagem,
+      };
+    })
+    .sort((x, y) => x.chave.localeCompare(y.chave));
+}
 
 const somenteLetrasNumeros = (placa: string) => placa.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
 
@@ -51,7 +125,8 @@ export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): Linha
   const placa = filtro.placa ? somenteLetrasNumeros(filtro.placa) : "";
   const placas = new Set(dados.carretas.map((k) => k.placa));
   const local = new Map(dados.localidades.map((l) => [l.id, l]));
-  const tracado = new Map<string, TracadoRota>(dados.tracados.map((t) => [`${t.origemId}>${t.destinoId}`, t]));
+  const tracado = new Map<string, TracadoRota>(dados.tracados.map((t) => [chaveDaRota(t.origemId, t.destinoId), t]));
+  const comAlerta = new Set(montarAlertas(dados, { ...filtro, rota: "" }).map((a) => a.rotaChave));
 
   type Acc = {
     origemId: string;
@@ -76,7 +151,7 @@ export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): Linha
     // Com uma carreta escolhida, só a placa dela; sem filtro, todas (inclusive placa desconhecida,
     // para o total do mapa bater com o resto da aba).
     if (placa && (f.placa !== placa || !placas.has(placa))) continue;
-    const chave = `${f.origemId}>${f.destinoId}`;
+    const chave = chaveDaRota(f.origemId, f.destinoId);
     const a = acc.get(chave) ?? {
       origemId: f.origemId,
       destinoId: f.destinoId,
@@ -112,22 +187,6 @@ export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): Linha
       const producao = a.centavos / 100;
       const kmMedio = a.viagens > 0 ? a.km / a.viagens : null;
       const diasMedio = a.comChegada > 0 ? a.dias / a.comChegada : null;
-      const alertas: string[] = [];
-      if (t && kmMedio !== null && t.kmMapa > 0 && Math.abs(kmMedio - t.kmMapa) / t.kmMapa > TOLERANCIA_KM) {
-        alertas.push(
-          `Km lançado (${numeroBR(kmMedio)}) bem diferente da estrada (${numeroBR(t.kmMapa)} km): confira a origem e o destino desses fretes`,
-        );
-      }
-      if (a.viagens > 1 && a.kmMin > 0 && a.kmMax > a.kmMin * 1.15) {
-        alertas.push(`Km lançado varia de ${numeroBR(a.kmMin)} a ${numeroBR(a.kmMax)} na mesma rota`);
-      }
-      if (a.diasMax !== null && diasMedio !== null && a.diasMax > Math.max(5, diasMedio * 2)) {
-        alertas.push(`Uma viagem levou ${a.diasMax} dias da saída à chegada: confira a data de chegada`);
-      }
-      if (a.comChegada < a.viagens) {
-        const faltam = a.viagens - a.comChegada;
-        alertas.push(`${faltam} ${faltam === 1 ? "frete sem" : "fretes sem"} data de chegada (fora do tempo médio)`);
-      }
       return {
         chave,
         origem: local.get(a.origemId) ?? semLocal(a.origemId),
@@ -147,7 +206,8 @@ export function montarRotas(dados: DadosCarretas, filtro: FiltroCarretas): Linha
         diasMax: a.diasMax,
         comChegada: a.comChegada,
         tracado: t && t.pontos.length >= 2 ? t.pontos : null,
-        alertas,
+        semChegada: a.viagens - a.comChegada,
+        temAlerta: comAlerta.has(chave),
       };
     })
     .sort((x, y) => y.producao - x.producao);

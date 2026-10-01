@@ -170,3 +170,13 @@ describe("presets (utils/dateRangePresets.ts)", () => {
     ]);
   });
 });
+
+describe("filtro por fretes escolhidos (alerta de rota das Carretas EMT)", () => {
+  it("lê só ids válidos, sem repetir, e filtra só eles", () => {
+    const filtros = lerFiltrosFretes({ fretes: `${UUID_A}, nao-e-id,${UUID_B},${UUID_A}` });
+    expect(filtros.ids).toEqual([UUID_A, UUID_B]);
+    const lista = [frete({ id: UUID_A }), frete({ id: UUID_B }), frete({ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" })];
+    expect(filtrarFretes(lista, filtros).map((f) => f.id)).toEqual([UUID_A, UUID_B]);
+    expect(filtrarFretes(lista, FILTROS_VAZIOS)).toHaveLength(3);
+  });
+});

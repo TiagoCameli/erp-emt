@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { FileSpreadsheet, TriangleAlert } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/canonicos/toast";
 
 import {
   BlocoFiltros,
@@ -342,9 +342,11 @@ export interface PainelCarretasProps {
   /** Período no formato do FiltroPeriodo (yyyy-MM-dd). */
   de: string;
   ate: string;
+  /** frete.carretas-emt/editar: marcar alerta de rota como conferido. */
+  podeConferirAlertas?: boolean;
 }
 
-export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasProps) {
+export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlertas = false }: PainelCarretasProps) {
   const { setMuitos } = useFiltrosUrl();
   const [exportando, setExportando] = React.useState(false);
   const t = painel.total;
@@ -358,6 +360,8 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
     }
     return lista;
   }, [carretas, painel]);
+
+  const rotaEscolhida = painel.filtro.rota ? painel.rotas.find((r) => r.chave === painel.filtro.rota) : undefined;
 
   const semDados = t.viagens === 0 && t.custoOperacional === 0 && t.parcelas === 0 && t.investimento === 0;
 
@@ -429,6 +433,21 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
           </Button>
         }
       />
+
+      {rotaEscolhida ? (
+        <p className="flex flex-wrap items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-detalhe text-foreground">
+          <span className="min-w-0 flex-1">
+            Produção só da rota{" "}
+            <strong>
+              {rotaEscolhida.origem.nome} → {rotaEscolhida.destino.nome}
+            </strong>
+            . Gastos e parcelas continuam os da carreta inteira.
+          </span>
+          <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => setMuitos({ rota: null })}>
+            Ver todas as rotas
+          </Button>
+        </p>
+      ) : null}
 
       {painel.filtro.tipo ? (
         <p className="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-foreground">
@@ -531,7 +550,13 @@ export function PainelCarretasEmt({ painel, carretas, de, ate }: PainelCarretasP
         titulo="Rotas das carretas"
         descricao="Produção de frete por rota no período, com o km pela estrada, o km lançado e o tempo médio de viagem"
       >
-        <RotasCarretas rotas={painel.rotas} />
+        <RotasCarretas
+          rotas={painel.rotas}
+          alertas={painel.alertas}
+          rotaSelecionada={painel.filtro.rota ?? ""}
+          onSelecionarRota={(rota) => setMuitos({ rota })}
+          podeConferir={podeConferirAlertas}
+        />
       </Secao>
     </div>
   );

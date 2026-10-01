@@ -65,7 +65,11 @@ export default async function PaginaCarretasEmt({
   const tipoUrl = primeiro(params.tipo);
   const tipo = (TIPOS_FRETE as readonly string[]).includes(tipoUrl) ? tipoUrl : "";
 
-  const painel = montarPainel(dados, { de, ate, placa, tipo }, mesAtual);
+  // A rota vem da tabela de rotas ("<origem>_<destino>"); só vale se existir nos fretes.
+  const rotaUrl = primeiro(params.rota);
+  const rota = dados.fretes.some((f) => `${f.origemId}_${f.destinoId}` === rotaUrl) ? rotaUrl : "";
+
+  const painel = montarPainel(dados, { de, ate, placa, tipo, rota }, mesAtual);
 
   return (
     <>
@@ -75,6 +79,7 @@ export default async function PaginaCarretasEmt({
         carretas={dados.carretas.map((k) => ({ placa: k.placa, nome: k.nome }))}
         de={`${de}-01`}
         ate={ultimoDia(ate)}
+        podeConferirAlertas={temPermissao(usuario, "frete.carretas-emt", "editar")}
       />
     </>
   );

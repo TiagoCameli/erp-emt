@@ -26,6 +26,8 @@ export const CHAVES_FILTRO_FRETES = {
   destino: "destino",
   semChegada: "sem_chegada",
   excluidos: "excluidos",
+  /** Fretes escolhidos por id, separados por vírgula (o alerta de rota das Carretas EMT leva aqui). */
+  fretes: "fretes",
 } as const;
 
 export interface FiltrosFretes {
@@ -48,6 +50,8 @@ export interface FiltrosFretes {
   semChegada: boolean;
   /** "Mostrar excluídos" (a página só aceita para quem pode restaurar). */
   excluidos: boolean;
+  /** Só estes fretes (vazio = sem esse filtro). */
+  ids: string[];
 }
 
 export const FILTROS_VAZIOS: FiltrosFretes = {
@@ -64,6 +68,7 @@ export const FILTROS_VAZIOS: FiltrosFretes = {
   destinoId: "",
   semChegada: false,
   excluidos: false,
+  ids: [],
 };
 
 type Parametros = Record<string, string | string[] | undefined>;
@@ -111,6 +116,8 @@ export function lerFiltrosFretes(params: Parametros): FiltrosFretes {
     destinoId: uuid(params[C.destino]),
     semChegada: texto(params[C.semChegada]) === "sim",
     excluidos: texto(params[C.excluidos]) === "sim",
+    // Até 200 ids válidos; o resto é ignorado, como todo parâmetro inválido.
+    ids: [...new Set(texto(params[C.fretes]).split(",").map((id) => id.trim()).filter((id) => UUID.test(id)))].slice(0, 200),
   };
 }
 
@@ -118,7 +125,9 @@ export function lerFiltrosFretes(params: Parametros): FiltrosFretes {
 export function filtrarFretes(fretes: readonly FreteLinha[], filtros: FiltrosFretes): FreteLinha[] {
   const nf = filtros.busca.trim().toLowerCase();
   const motorista = filtros.motorista.trim().toLowerCase();
+  const ids = filtros.ids.length > 0 ? new Set(filtros.ids) : null;
   return fretes.filter((f) => {
+    if (ids && !ids.has(f.id)) return false;
     if (filtros.semChegada && f.dataChegada) return false;
     if (nf && !(f.notaFiscal ?? "").toLowerCase().includes(nf)) return false;
     if (filtros.tipo && f.tipo !== filtros.tipo) return false;
