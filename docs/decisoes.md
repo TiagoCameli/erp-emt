@@ -4804,3 +4804,41 @@ frete futuro fora do padrão volta a alertar.
    pela RPC `fn_frete_carretas_conferir`, com a ação nova `frete.carretas-emt/editar` (Admins).
 4. **Fretes ganha o filtro `?fretes=<id>,<id>`** (até 200), com aviso e "Ver todos os fretes". A
    conferência fica na aba Carretas EMT, que é onde o alerta mora; na aba Fretes se confere e corrige.
+
+## 2026-10-01 - Medição de Contratos: Fase 5, ciclo da medição
+
+**Pedido do Tiago:** a medição passa a ter ciclo completo: fechar, reabrir, enviar ao fiscal, nova
+revisão, aprovar (com glosa por item) e revisar uma medição já aprovada. Mais uma tela de alertas do
+contrato.
+
+**Decisões:**
+
+1. **Versão da planilha:** vale a versão vigente no último dia do período (Q4 do Tiago). Ela é
+   aplicada ao abrir e de novo ao fechar, pela mesma regra: versão vigente, não excluída,
+   `vigente_desde` até o fim do período, e a de maior número. O fechar recusa a troca quando algum
+   item com quantidade ficaria sem preço na versão de destino, e a mensagem lista os códigos.
+2. **Item que saiu da planilha continua contando** (Q8). O preço vem da última versão vigente que
+   tinha o item, com número até o da versão da medição. Versão em rascunho ou excluída nunca entra.
+3. **Ao enviar, a revisão é congelada** (`mc_revisao_itens`, só itens com quantidade). A aprovação lê
+   o que foi congelado. A medição de carga (Lotes 09 e 10, sem congelado) soma os lançamentos e só os
+   ajustes de revisões até a aprovada. Uma revisão pós-aprovação pendente não mexe na medida nem na
+   glosa.
+4. **Travas no banco:**
+   - Aprovada acima da medida é recusada, porque o fiscal não aprova mais do que foi medido. Se um dia
+     precisar, isso volta a ser só aviso.
+   - Item repetido na aprovação é recusado.
+   - Um ajuste não pode deixar a medida negativa.
+   - NaN, Infinity e número em texto pt-BR são recusados, com mensagem em pt-BR.
+5. **Revisão sem item medido** é aprovada "tudo como medido", com valor zero. É o caso do mês de
+   chuva e da 1ª do Lote 10.
+6. **Não existe "cancelar revisão pós-aprovação".** Quem desistir aprova com as mesmas quantidades.
+   Se for preciso cancelar, é um status a mais.
+7. **O ajuste não passa pela regra de excesso**, porque já exige motivo. Os motivos (reabrir, nova
+   revisão, revisar aprovada) pedem pelo menos 3 letras e ficam no diálogo quando o banco recusa.
+8. **"1.234" digitado na quantidade vira 1,234.** É o comportamento do `InputQuantidade` canônico: a
+   vírgula aparece e a glosa atualiza antes de confirmar. Não mexemos no canônico.
+9. **Alertas** (`mc_v_alertas`, permissão `medicao.alertas/ver`): excesso sobre o contratado e item
+   sem preço. O alerta de vínculo de insumos fica para depois.
+
+**Pendente:** `fn_mc_medicao_sugestao` ainda mostra a maior versão vigente sem olhar o fim do período.
+É só exibição: abrir e fechar já usam a regra certa.
