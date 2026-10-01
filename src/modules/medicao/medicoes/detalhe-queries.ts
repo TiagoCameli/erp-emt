@@ -15,7 +15,7 @@ import type { EventoMedicao, ItemMedicaoDetalhe, MedicaoDetalhe, RevisaoMedicao,
  * - os itens de `mc_v_medicao_itens` com código, descrição e unidade da linha da planilha que a view
  *   apontou (`planilha_item_id`: a da versão da medição ou, para o item que saiu num aditivo, a da
  *   última versão em que aparece), na ordem da planilha;
- * - os ajustes da revisão corrente (sem corrente, os da última revisão) somados por item;
+ * - os ajustes manuais da revisão corrente somados por item (sem corrente, vazio; os de carga não entram);
  * - os eventos, com o nome de quem fez.
  *
  * D7: todo numeric chega como TEXTO (`::text` no select) e só é exibido. A única conta feita aqui é
@@ -111,7 +111,6 @@ export async function carregarMedicao(id: string): Promise<MedicaoDetalhe | null
     criadoEm: r.created_at,
   }));
   const corrente = revisaoCorrente(revisoes);
-  const referencia = corrente ?? revisoes[revisoes.length - 1] ?? null;
 
   // Linhas da planilha: as da versão da medição e, só para o que faltar (item que saiu num aditivo),
   // as que a view apontou em outra versão.
@@ -127,12 +126,15 @@ export async function carregarMedicao(id: string): Promise<MedicaoDetalhe | null
   ];
 
   const [ajustesRes, extrasRes, nomesRes] = await Promise.all([
-    referencia
+    // "Ajustes da revisão": só os manuais da revisão corrente. Sem corrente, vazio (na carga do L09/L10 os
+    // ajustes tipo carga são a própria quantidade carregada e repetiriam a medida).
+    corrente
       ? todasAsLinhas<{ item_id: string; quantidade: string }>((de, ate) =>
           supabase
             .from("mc_ajustes")
             .select("item_id, quantidade:quantidade::text")
-            .eq("revisao_id", referencia.id)
+            .eq("revisao_id", corrente.id)
+            .neq("tipo", "carga")
             .range(de, ate) as unknown as PromiseLike<{ data: { item_id: string; quantidade: string }[] | null; error: { message: string } | null }>,
         )
       : Promise.resolve({ linhas: [] as { item_id: string; quantidade: string }[], erro: null }),

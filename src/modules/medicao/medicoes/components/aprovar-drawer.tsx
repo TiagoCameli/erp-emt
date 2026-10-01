@@ -3,9 +3,9 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CheckCheck, CircleCheck } from "lucide-react";
+import { CheckCheck, CircleCheck, Inbox } from "lucide-react";
 
-import { CelulaVazia, ConfirmDialog, DataTable, FormDrawer, InputQuantidade } from "@/components/canonicos";
+import { CelulaVazia, ConfirmDialog, DataTable, EmptyState, FormDrawer, InputQuantidade } from "@/components/canonicos";
 import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,9 @@ export interface AprovarDrawerProps {
   onAprovado?: () => void;
 }
 
+/** Revisão enviada sem item congelado (nada medido): aprova como medida, com valor zero. */
+export const MENSAGEM_SEM_ITEM = "Nenhum item medido nesta revisão; a medição é aprovada com valor zero";
+
 function nomeItem(l: LinhaAprovacao): string {
   return [l.codigo, l.descricao].filter(Boolean).join(" · ") || "Item sem código";
 }
@@ -52,7 +55,9 @@ interface LinhaTela extends LinhaAprovacao {
  * glosa da tela é só exibição (medida menos aprovada, exata): quem grava e recalcula é o banco.
  *
  * Antes de confirmar, o diálogo lista os itens que vão com aprovada 0 (campo vazio ou zero) e a
- * glosa de cada item. O confirmar fica desabilitado enquanto aprova; se mesmo assim chegarem dois
+ * glosa de cada item. Aprovada acima da medida bloqueia (o banco recusa: o contratante não aprova mais
+ * do que o medido): a lista fica no drawer e "Revisar e aprovar" desabilitado até corrigir. Revisão
+ * sem item medido aprova como medida, com valor zero. O confirmar fica desabilitado enquanto aprova; se mesmo assim chegarem dois
  * pedidos, a RPC trava a medição e recusa o segundo pelo status. A recusa do banco aparece no toast
  * e o drawer continua aberto com o que foi digitado.
  */
@@ -92,19 +97,29 @@ export function AprovarDrawer({ aberto, onAbertoChange, medicaoId, revisaoRotulo
     setErros({});
   }
 
+  const semItem = linhas.length === 0;
+  const acima = React.useMemo(() => resumirAprovacao(linhas, valores).acima, [linhas, valores]);
+
   function revisar() {
+    if (semItem) {
+      setTudoComoMedido(true);
+      setResumo(resumirAprovacao(linhas, valores));
+      return;
+    }
     const r = resumirAprovacao(linhas, valores);
     if (Object.keys(r.erros).length > 0) {
       setErros(r.erros);
       return;
     }
+    if (r.acima.length > 0) return;
     setResumo(r);
   }
 
   async function confirmar() {
     // Quantidades cruas (o servidor converte); campo vazio vai como "0".
-    const itens = tudoComoMedido ? [] : linhas.map((l) => ({ itemId: l.itemId, quantidade: (valores[l.itemId] ?? "").trim() || "0" }));
-    const resultado = await aprovarMedicao({ id: medicaoId, itens, tudoComoMedido });
+    const comoMedido = tudoComoMedido || semItem;
+    const itens = comoMedido ? [] : linhas.map((l) => ({ itemId: l.itemId, quantidade: (valores[l.itemId] ?? "").trim() || "0" }));
+    const resultado = await aprovarMedicao({ id: medicaoId, itens, tudoComoMedido: comoMedido });
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
@@ -195,18 +210,6 @@ export function AprovarDrawer({ aberto, onAbertoChange, medicaoId, revisaoRotulo
           </ul>
         </div>
       ) : null}
-      {resumo.acima.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          <span className="font-medium">Aprovada acima da medida (glosa negativa)</span>
-          <ul aria-label="Itens com aprovada acima da medida" className="list-disc pl-5">
-            {resumo.acima.map(({ linha, aprovada, excesso }) => (
-              <li key={linha.itemId}>
-                {`${nomeItem(linha)}: aprovada ${comUnidade(aprovada, linha.unidade)}, ${comUnidade(excesso, linha.unidade)} acima da medida`}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
       {resumo.glosas.length > 0 ? (
         <div className="flex flex-col gap-1">
           <span className="font-medium">Glosa por item (quantidade)</span>
@@ -221,8 +224,9 @@ export function AprovarDrawer({ aberto, onAbertoChange, medicaoId, revisaoRotulo
   ) : null;
 
   const semGlosa = resumo !== null && resumo.glosas.length === 0;
-  const descricaoAviso =
-    tudoComoMedido || semGlosa
+  const descricaoAviso = semItem
+    ? MENSAGEM_SEM_ITEM
+    : tudoComoMedido || semGlosa
       ? "Todos os itens vão com a quantidade medida, sem glosa. O banco grava a aprovada e recalcula o valor."
       : "Confira os itens abaixo. O banco grava a aprovada de cada item e recalcula a glosa e o valor.";
 
@@ -240,22 +244,38 @@ export function AprovarDrawer({ aberto, onAbertoChange, medicaoId, revisaoRotulo
             <Button type="button" variant="outline" onClick={() => onAbertoChange(false)}>
               Cancelar
             </Button>
-            <Button type="button" onClick={revisar} disabled={linhas.length === 0}>
+            <Button type="button" onClick={revisar} disabled={acima.length > 0}>
               <CircleCheck />
               Revisar e aprovar
             </Button>
           </>
         }
       >
-        <div className="flex flex-col gap-4">
-          <div>
-            <Button type="button" variant="outline" size="sm" onClick={aprovarTudo} disabled={linhas.length === 0}>
-              <CheckCheck />
-              Aprovar tudo como medido
-            </Button>
+        {semItem ? (
+          <EmptyState icone={Inbox} titulo={MENSAGEM_SEM_ITEM} />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div>
+              <Button type="button" variant="outline" size="sm" onClick={aprovarTudo}>
+                <CheckCheck />
+                Aprovar tudo como medido
+              </Button>
+            </div>
+            {acima.length > 0 ? (
+              <div role="alert" className="flex flex-col gap-1 rounded-md border border-destructive/50 p-3 text-detalhe text-destructive">
+                <span className="font-medium">Aprovada acima da medida: corrija antes de aprovar (o contratante não aprova mais do que o medido)</span>
+                <ul aria-label="Itens com aprovada acima da medida" className="list-disc pl-5">
+                  {acima.map(({ linha, aprovada, excesso }) => (
+                    <li key={linha.itemId}>
+                      {`${nomeItem(linha)}: aprovada ${comUnidade(aprovada, linha.unidade)}, ${comUnidade(excesso, linha.unidade)} acima da medida`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <DataTable columns={colunas} data={dados} idDaLinha={(l) => l.itemId} />
           </div>
-          <DataTable columns={colunas} data={dados} idDaLinha={(l) => l.itemId} />
-        </div>
+        )}
       </FormDrawer>
 
       <ConfirmDialog

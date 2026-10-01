@@ -139,15 +139,34 @@ describe("AprovarDrawer", () => {
     );
   });
 
-  it("aprovada acima da medida aparece no aviso", async () => {
+  it("aprovada acima da medida bloqueia: a lista aparece no drawer e o botão fica desabilitado", async () => {
     renderizar();
     fireEvent.change(campo("01.01"), { target: { value: "30" } });
     fireEvent.change(campo("01.02"), { target: { value: "2,5" } });
-    fireEvent.click(screen.getByRole("button", { name: "Revisar e aprovar" }));
-    const dialogo = await screen.findByRole("dialog", { name: "Confirmar a aprovação da REV01" });
-    const acima = within(dialogo).getByRole("list", { name: "Itens com aprovada acima da medida" });
+    const acima = screen.getByRole("list", { name: "Itens com aprovada acima da medida" });
     expect(within(acima).getByText(/01\.01 · CBUQ: aprovada 30 t, 1 t acima da medida/)).toBeTruthy();
-    expect(within(dialogo).queryByRole("list", { name: "Itens que vão com aprovada 0" })).toBeNull();
+    const revisarBotao = screen.getByRole("button", { name: "Revisar e aprovar" });
+    expect(revisarBotao).toBeDisabled();
+    fireEvent.click(revisarBotao);
+    expect(screen.queryByRole("dialog", { name: "Confirmar a aprovação da REV01" })).toBeNull();
+    // Corrigida a quantidade, o bloqueio sai.
+    fireEvent.change(campo("01.01"), { target: { value: "29" } });
+    expect(screen.queryByRole("list", { name: "Itens com aprovada acima da medida" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Revisar e aprovar" })).not.toBeDisabled();
+    expect(aprovarMedicao).not.toHaveBeenCalled();
+  });
+
+  it("revisão sem item medido aprova com valor zero, como tudoComoMedido", async () => {
+    aprovarMedicao.mockResolvedValue({ ok: true });
+    const onAbertoChange = vi.fn();
+    render(<AprovarDrawer aberto onAbertoChange={onAbertoChange} medicaoId={MEDICAO} revisaoRotulo="REV00" linhas={[]} />);
+    expect(screen.getByText("Nenhum item medido nesta revisão; a medição é aprovada com valor zero")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Revisar e aprovar" }));
+    const dialogo = await screen.findByRole("dialog", { name: "Confirmar a aprovação da REV00" });
+    expect(within(dialogo).getByText("Nenhum item medido nesta revisão; a medição é aprovada com valor zero")).toBeTruthy();
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Aprovar REV00" }));
+    await waitFor(() => expect(aprovarMedicao).toHaveBeenCalledWith({ id: MEDICAO, itens: [], tudoComoMedido: true }));
+    await waitFor(() => expect(onAbertoChange).toHaveBeenCalledWith(false));
   });
 
   it("valor inválido fica no campo e não abre a confirmação", async () => {

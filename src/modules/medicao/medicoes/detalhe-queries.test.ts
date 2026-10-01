@@ -32,6 +32,10 @@ function tabela(nome: string) {
     filtros[coluna] = valor;
     return builder;
   };
+  builder.neq = (coluna: string, valor: unknown) => {
+    filtros[`${coluna}:neq`] = valor;
+    return builder;
+  };
   builder.in = (coluna: string, valores: unknown) => {
     filtros[`${coluna}:in`] = valores;
     return builder;
@@ -134,9 +138,9 @@ describe("carregarMedicao", () => {
     ]);
   });
 
-  it("ajustes vêm da revisão corrente; sem corrente (aprovada), da última revisão", async () => {
+  it("ajustes vêm da revisão corrente, sem os de carga; sem corrente (aprovada), a coluna fica vazia", async () => {
     await carregarMedicao(MED);
-    expect(estado.consultas.find((c) => c.tabela === "mc_ajustes")?.filtros).toEqual({ revisao_id: "r0" });
+    expect(estado.consultas.find((c) => c.tabela === "mc_ajustes")?.filtros).toEqual({ revisao_id: "r0", "tipo:neq": "carga" });
 
     estado.consultas = [];
     cenario({
@@ -148,7 +152,9 @@ describe("carregarMedicao", () => {
     });
     const m = await carregarMedicao(MED);
     expect(m?.revisaoCorrente).toBeNull();
-    expect(estado.consultas.find((c) => c.tabela === "mc_ajustes")?.filtros).toEqual({ revisao_id: "r1" });
+    // Sem revisão corrente não há ajuste em andamento: na carga (L09/L10) a soma repetiria a quantidade carregada.
+    expect(estado.consultas.some((c) => c.tabela === "mc_ajustes")).toBe(false);
+    expect(m?.itens.every((i) => i.ajustes === null)).toBe(true);
   });
 
   it("não busca de novo a linha da planilha que já veio da versão", async () => {
