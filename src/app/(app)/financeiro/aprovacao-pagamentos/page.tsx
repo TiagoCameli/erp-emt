@@ -105,7 +105,6 @@ export default async function PaginaAprovacaoPagamentos({
       <PageHeader
         modulo="Financeiro"
         titulo="Aprovação de pagamentos"
-        descricao="Aprovar autoriza o pagamento para uma data. O que precisa de ajuste vai para revisão, sem cancelar nada. Dinheiro e cartão não passam por aqui: ficam na aba ao lado, só para conferência."
       />
       <AprovacaoCliente
         fila={{

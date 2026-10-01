@@ -267,11 +267,4 @@ describe("PagamentosDiretos", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
-
-  it("explica que a aba não trava pagamento nenhum", () => {
-    render(<PagamentosDiretos pagamentos={[]} {...PADRAO} />);
-    expect(
-      screen.getByText(/Nada aqui prende, libera nem muda pagamento/i),
-    ).toBeInTheDocument();
-  });
 });

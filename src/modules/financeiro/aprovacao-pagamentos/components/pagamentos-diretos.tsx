@@ -67,13 +67,6 @@ import {
 } from "@/modules/financeiro/_shared/formato";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
-/**
- * Explicação da aba. É o texto mais importante da tela: sem ele alguém lê
- * "não conferido" como pagamento preso esperando alguém liberar.
- */
-const EXPLICACAO =
-  "Dinheiro sai direto do caixa e cartão de crédito já nasce quitado: nenhum dos dois passa pela aprovação. Marcar como conferido é só o registro de que você conferiu, e pode ser feito depois de pago. Nada aqui prende, libera nem muda pagamento.";
-
 /** Filtro pelo estado da conferência: é para isso que a aba existe. */
 const OPCOES_CONFERENCIA = [
   { valor: "nao", rotulo: CONFERENCIA.naoMarcado },
@@ -1090,10 +1083,6 @@ export function PagamentosDiretos({
     // falta passaria despercebida até chegar dado real.
     <TooltipProvider>
       <div className="flex flex-col gap-4">
-        <p className="rounded-md border border-border bg-surface px-3 py-2 text-detalhe text-muted-foreground">
-          {EXPLICACAO}
-        </p>
-
         <GradeKpis>
           <KPICard
             titulo="Dinheiro e cartão"
