@@ -4836,6 +4836,26 @@ concisa e focada no que precisa ser aprovado. Desktop não mudou.
 
 **Ajuste 2 (01/10/2026, pedido do Tiago):** o "Personalizar tela" virou só o ícone, no rodapé da sidebar ao lado do botão de tema e com o mesmo desenho (`BotaoPersonalizar`). Ligado, vira o ✓ de concluir, destacado em verde. A sidebar está sempre à vista, então o concluir também. O `ProvedorGrades` passou a envolver o AppShell no layout do app, e a aba do topo saiu.
 
+## 2026-10-01 - Carretas EMT: mapa e tabela de rotas, segunda versão
+
+**Pedido do Tiago:** "dê mais fluidez a esse mapa, faça com que essa tabela e o mapa sejam
+espetaculares [...] que me dê as informações da melhor maneira possível".
+
+**Decisões:**
+
+1. **Fundo Esri Canvas** (cinza claro ou escuro, pelo tema), com camada só de nomes por cima; o
+   satélite também ganha nomes. A CARTO (testada) passou a exigir chave de API.
+2. **Rota = contorno + linha + fluxo animado** no sentido da carga; o fluxo para em
+   `prefers-reduced-motion`. Locais com tamanho pela tonelagem; pedreira é anel, destino é cheio.
+3. **Mapa e tabela ligados pelo foco:** mouse numa linha acende a rota no mapa e vice-versa; um cartão
+   sobre o mapa mostra os números da rota em foco (ou o total). Escolher a rota voa até ela, com o
+   enquadramento reservando a faixa do cartão.
+4. **Zoom inteiro** (`zoomSnap` 1): no fracionado aparecem emendas entre os pedaços do mapa. Roda do
+   mouse só depois de clicar no mapa.
+5. **Tabela:** viagens por mês em minigráfico, participação na produção em barra, R$/viagem, R$/t,
+   desvio do km lançado contra a estrada (acima de 5% em destaque), ordenação por coluna, teclado
+   (Enter/espaço filtra). O número da rota é a posição pela produção e não muda com a ordenação.
+
 ## 2026-10-01 - Celular, bloco 1: os canônicos viram app de celular
 
 Pedido do Tiago depois da aprovação no celular: levar o mesmo padrão para todos os módulos. Em vez de

@@ -629,3 +629,22 @@
   font-size: 11px;
   font-weight: 600;
 }
+
+/*
+  O fluxo das rotas (Carretas EMT): traço curto andando no sentido da carga. Quem pede menos
+  movimento no sistema operacional vê a linha parada.
+*/
+.leaflet-container path.rota-fluxo {
+  stroke-dasharray: 1 16;
+  animation: rota-fluxo 1.1s linear infinite;
+}
+@keyframes rota-fluxo {
+  to {
+    stroke-dashoffset: -17;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .leaflet-container path.rota-fluxo {
+    animation: none;
+  }
+}
