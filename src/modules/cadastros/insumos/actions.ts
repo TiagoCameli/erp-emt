@@ -152,6 +152,8 @@ export async function criar(dados: InsumoInput): Promise<ResultadoAcao> {
     .insert(montarRegistro(validado.data));
 
   if (error) {
+    // Índice único entre os ativos (nome + unidade): pega a corrida e o reativar.
+    if (error.code === "23505") return { erro: MENSAGEM_REPETIDO };
     return erroAcao(
       "cadastros.insumos.criar",
       error,
@@ -208,6 +210,8 @@ export async function editar(
     .eq("id", idValido.data);
 
   if (error) {
+    // Índice único entre os ativos (nome + unidade): pega a corrida e o reativar.
+    if (error.code === "23505") return { erro: MENSAGEM_REPETIDO };
     return erroAcao(
       "cadastros.insumos.editar",
       error,
@@ -240,6 +244,8 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
+    // Índice único entre os ativos (nome + unidade): pega a corrida e o reativar.
+    if (error.code === "23505") return { erro: MENSAGEM_REPETIDO };
     return erroAcao(
       "cadastros.insumos.alternarAtivo",
       error,
@@ -468,6 +474,8 @@ export async function importar(
 
   const { error } = await supabase.from("insumos").insert(registros);
   if (error) {
+    // Índice único entre os ativos (nome + unidade): pega a corrida e o reativar.
+    if (error.code === "23505") return { erro: MENSAGEM_REPETIDO };
     return erroAcao(
       "cadastros.insumos.importar",
       error,

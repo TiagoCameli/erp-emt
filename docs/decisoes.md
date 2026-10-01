@@ -4674,9 +4674,12 @@ separar os dois pelo nome, e o frete listava só o nome, então quem escolhia n�
    que cai em mais de um cadastro vira erro da linha pedindo a unidade, em vez de escolher um.
 5. "BRITA 0\"" vira "BRITA 0" (migration `insumo_brita0_sem_aspas`).
 
-**Consequência:** o banco ainda não tem índice único em `(lower(nome), unidade_id)`: a carga da
-origem trouxe 86 pares com nome e unidade iguais (vinagre, água sanitária, pregos...), que precisam
-ser unificados antes, com as OCs, fretes e estoques deles repontados. Até lá a regra vale na action.
+**Consequência:** a carga da origem tinha 92 pares com nome e unidade iguais (86 na primeira conta,
+que não juntava espaço sobrando). Em 01/10/2026 foram unificados (migration `insumos_unificar_repetidos`):
+o item de THINNER 375 da OC-2026-0100 passou para o 6027, e os 92 que sobravam foram desativados. Daí
+entrou o índice único `insumos_nome_unidade_ativos_key` em (nome sem caixa e com espaço único,
+unidade) **só entre os ativos**: os desativados continuam na história. Reativar um deles, ou criar um
+repetido numa corrida, devolve a mensagem de repetido em vez de erro genérico.
 
 ## 2026-10-01 - Medição de Contratos: Obra 012, período manual e regra "truncado por item"
 
