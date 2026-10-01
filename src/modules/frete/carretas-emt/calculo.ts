@@ -290,6 +290,8 @@ export interface LinhaMensal {
   /** Por placa (e CHAVE_OUTRAS), para os gráficos empilhados. */
   viagensPorCarreta: Record<string, number>;
   producaoPorCarreta: Record<string, number>;
+  /** Custo operacional (gasto sem aquisição + diesel) por placa, CHAVE_FROTA e CHAVE_OUTRAS. */
+  custoPorCarreta: Record<string, number>;
   custoOperacional: number;
   investimento: number;
   parcelas: number;
@@ -480,6 +482,7 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
     producao: 0,
     viagensPorCarreta: {},
     producaoPorCarreta: {},
+    custoPorCarreta: {},
     custoOperacional: 0,
     investimento: 0,
     parcelas: 0,
@@ -529,7 +532,10 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
     const linha = linhaDoMes.get(g.mes);
     if (linha) {
       if (grupo === "aquisicao") linha._c.investimento += c(g.valor);
-      else linha._c.custo += c(g.valor);
+      else {
+        linha._c.custo += c(g.valor);
+        linha.custoPorCarreta[chave] = (linha.custoPorCarreta[chave] ?? 0) + c(g.valor);
+      }
     }
   }
 
@@ -540,7 +546,10 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
     a.diesel += c(d.valor);
     a.litros += d.litros;
     const linha = linhaDoMes.get(d.mes);
-    if (linha) linha._c.custo += c(d.valor);
+    if (linha) {
+      linha._c.custo += c(d.valor);
+      linha.custoPorCarreta[chave] = (linha.custoPorCarreta[chave] ?? 0) + c(d.valor);
+    }
   }
 
   // Financiamento: a parcela do período entra no resultado; a posição (pago, saldo) é de hoje.
@@ -641,6 +650,7 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
         ...m,
         producao: r(producao),
         producaoPorCarreta: Object.fromEntries(Object.entries(m.producaoPorCarreta).map(([k, v]) => [k, r(v)])),
+        custoPorCarreta: Object.fromEntries(Object.entries(m.custoPorCarreta).map(([k, v]) => [k, r(v)])),
         custoOperacional: r(custo),
         investimento: r(investimento),
         parcelas: r(parcelas),

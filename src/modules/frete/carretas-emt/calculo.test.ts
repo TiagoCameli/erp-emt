@@ -114,6 +114,15 @@ describe("montarPainel, frota inteira", () => {
     expect(painel.meses.at(-1)?.operacionalAcumulado).toBe(painel.total.resultadoOperacional);
   });
 
+  it("separa o custo operacional do mês por carreta, com a frota e o diesel", () => {
+    const [ago, set] = painel.meses;
+    expect(ago?.custoPorCarreta).toEqual({ SQS7E01: 5000 });
+    // SQS7E01: 12.000,30 de manutenção + 6.394,70 de diesel; a aquisição da SQU9C94 fica fora.
+    expect(set?.custoPorCarreta).toEqual({ SQS7E01: 18395, SQU9C94: 3000, [CHAVE_FROTA]: 1000 });
+    const somaSet = Object.values(set?.custoPorCarreta ?? {}).reduce((s, v) => s + Math.round(v * 100), 0) / 100;
+    expect(somaSet).toBe(set?.custoOperacional);
+  });
+
   it("indicadores por viagem, tonelada e km", () => {
     const a = porChave.SQS7E01!;
     expect(a.producaoPorViagem).toBeCloseTo(10000.0067, 3);
