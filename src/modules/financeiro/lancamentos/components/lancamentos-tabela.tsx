@@ -34,12 +34,13 @@ import {
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
-  centrosEfetivos,
+  centrosDaListagem,
   etapasValidas,
   opcoesDeEtapa,
   opcoesDeRaiz,
+  opcoesDeSemEtapa,
   rotuloDasEtapas,
-  separarRaizesEEtapas,
+  separarCentrosDaListagem,
   temEtapasParaEscolher,
 } from "@/modules/_shared/centro-custo/filtro";
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
@@ -504,10 +505,18 @@ export function LancamentosTabela({
    * drill deles, que já manda a ETAPA dentro de `centro=`, continuar abrindo
    * esta tela recortada pelo equipamento em vez de pela manutenção inteira.
    */
-  const { raizes: raizesEscolhidas, etapas: etapasEscolhidas } =
+  // O segundo campo carrega também o "sem etapa" de cada raiz com etapas, que
+  // mora num parâmetro à parte (`centro_raiz=`): é o rateio gravado direto na
+  // raiz, que nem a raiz (subárvore inteira) nem as etapas alcançam sozinhas.
+  const { raizes: raizesEscolhidas, segundoCampo: etapasEscolhidas } =
     React.useMemo(
-      () => separarRaizesEEtapas(centrosCusto, valores.centros),
-      [centrosCusto, valores.centros],
+      () =>
+        separarCentrosDaListagem(
+          centrosCusto,
+          valores.centros,
+          valores.centrosSemEtapa,
+        ),
+      [centrosCusto, valores.centros, valores.centrosSemEtapa],
     );
 
   const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
@@ -515,8 +524,13 @@ export function LancamentosTabela({
     [centrosCusto],
   );
 
+  // "Sem etapa" vai no topo da lista: com 61 equipamentos embaixo, no fim ele
+  // ficaria escondido depois da rolagem.
   const opcoesEtapa = React.useMemo<OpcaoFiltro[]>(
-    () => opcoesDeEtapa(centrosCusto, raizesEscolhidas),
+    () => [
+      ...opcoesDeSemEtapa(centrosCusto, raizesEscolhidas),
+      ...opcoesDeEtapa(centrosCusto, raizesEscolhidas),
+    ],
     [centrosCusto, raizesEscolhidas],
   );
 
@@ -525,10 +539,14 @@ export function LancamentosTabela({
   /** Grava os dois campos no `centro=`, sempre numa navegação só. */
   const escreverCentro = React.useCallback(
     (raizes: string[], etapas: string[]) => {
+      const { centro, centroRaiz } = centrosDaListagem(
+        centrosCusto,
+        raizes,
+        etapas,
+      );
       setMuitos({
-        centro: escreverListaNaUrl(
-          centrosEfetivos(centrosCusto, raizes, etapas),
-        ),
+        centro: escreverListaNaUrl(centro),
+        centro_raiz: escreverListaNaUrl(centroRaiz),
         pagina: "1",
       });
     },
@@ -866,7 +884,8 @@ export function LancamentosTabela({
       // mostrando que ele está lá.
       onValores: (ids) =>
         escreverCentro(ids, etapasValidas(centrosCusto, ids, etapasEscolhidas)),
-      onLimpar: () => setMuitos({ centro: null, pagina: "1" }),
+      onLimpar: () =>
+        setMuitos({ centro: null, centro_raiz: null, pagina: "1" }),
     }),
     // O segundo degrau só entra na barra quando há o que escolher nele, e entra
     // VISÍVEL (sem `oculto`): ele aparece por causa de uma escolha que a pessoa

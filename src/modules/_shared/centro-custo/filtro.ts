@@ -151,9 +151,12 @@ export function etapasValidas(
   raizesEscolhidas: readonly string[],
   etapasEscolhidas: readonly string[],
 ): string[] {
-  const oferecidas = new Set(
-    etapasDasRaizes(centros, raizesEscolhidas).map((etapa) => etapa.id),
-  );
+  // O "sem etapa" das listagens mora no mesmo campo e segue a mesma regra: some
+  // junto com a raiz dele.
+  const oferecidas = new Set([
+    ...etapasDasRaizes(centros, raizesEscolhidas).map((etapa) => etapa.id),
+    ...opcoesDeSemEtapa(centros, raizesEscolhidas).map((opcao) => opcao.valor),
+  ]);
   return etapasEscolhidas.filter((id) => oferecidas.has(id));
 }
 
@@ -235,4 +238,111 @@ export function separarRaizesEEtapas(
   }
 
   return { raizes, etapas };
+}
+
+/**
+ * "Sem etapa": o que foi rateado DIRETO na raiz de um centro que tem etapas.
+ *
+ * Pedido do Tiago em 01/10/2026: num centro com etapas, escolher a raiz traz a
+ * subárvore inteira e escolher uma etapa traz só ela, e não havia como ver o que
+ * ficou na raiz sem etapa nenhuma. É o lançamento que alguém esqueceu de
+ * descer para a etapa, e é justamente ele que quem confere quer achar.
+ *
+ * Mora no segundo campo, ao lado das etapas, com um valor que não é id de
+ * cadastro (`sem-etapa:<raiz>`). Por enquanto só as LISTAGENS sabem ler
+ * (`centro_raiz=` na URL); as RPCs dos relatórios agrupam por subárvore e não
+ * têm esse recorte.
+ */
+const PREFIXO_SEM_ETAPA = "sem-etapa:";
+
+/** O valor da opção "sem etapa" de uma raiz, no segundo campo. */
+export function valorSemEtapa(raizId: string): string {
+  return `${PREFIXO_SEM_ETAPA}${raizId}`;
+}
+
+/**
+ * As opções "sem etapa", uma por raiz escolhida que TEM etapa. Raiz sem etapa
+ * não ganha: nela, "sem etapa" é a raiz inteira, que o primeiro campo já é.
+ *
+ * O nome do pai entra no rótulo pela mesma regra de `opcoesDeEtapa`: só quando
+ * duas raízes com etapa estão escolhidas ao mesmo tempo.
+ */
+export function opcoesDeSemEtapa(
+  centros: readonly CentroCustoOpcao[],
+  raizesEscolhidas: readonly string[],
+): OpcaoDeFiltro[] {
+  const etapas = etapasDasRaizes(centros, raizesEscolhidas);
+  const paisComEtapa = new Set(etapas.map((etapa) => etapa.paiId));
+  const porId = new Map(centros.map((centro) => [centro.id, centro]));
+
+  return raizesEscolhidas
+    .filter((raiz) => paisComEtapa.has(raiz))
+    .map((raiz) => {
+      const centro = porId.get(raiz);
+      const sem =
+        centro?.tipo === "manutencao"
+          ? "Sem equipamento (direto no centro)"
+          : "Sem etapa (direto no centro)";
+      return {
+        valor: valorSemEtapa(raiz),
+        rotulo:
+          paisComEtapa.size > 1 ? `${centro?.nome ?? "?"} › ${sem}` : sem,
+      };
+    });
+}
+
+/**
+ * Os dois campos da tela viram os dois parâmetros da listagem: `centro=` (cada
+ * id vale pela subárvore) e `centro_raiz=` (cada id vale só por ele mesmo).
+ *
+ * A raiz marcada "sem etapa" SAI do `centro=`, pela mesma regra de
+ * `centrosEfetivos`: quem desceu ao segundo campo pediu aquele recorte, e a raiz
+ * no `centro=` traria a subárvore inteira de volta.
+ *
+ * "Sem etapa" de raiz que não está escolhida, ou que não tem etapa, é
+ * descartado: é a última porta antes da URL.
+ */
+export function centrosDaListagem(
+  centros: readonly CentroCustoOpcao[],
+  raizesEscolhidas: readonly string[],
+  valoresDoSegundoCampo: readonly string[],
+): { centro: string[]; centroRaiz: string[] } {
+  const oferecidas = new Set(
+    opcoesDeSemEtapa(centros, raizesEscolhidas).map((opcao) => opcao.valor),
+  );
+  const centroRaiz: string[] = [];
+  const etapas: string[] = [];
+  for (const valor of valoresDoSegundoCampo) {
+    if (!valor.startsWith(PREFIXO_SEM_ETAPA)) {
+      etapas.push(valor);
+      continue;
+    }
+    if (!oferecidas.has(valor)) continue;
+    const raiz = valor.slice(PREFIXO_SEM_ETAPA.length);
+    if (!centroRaiz.includes(raiz)) centroRaiz.push(raiz);
+  }
+
+  const centro = centrosEfetivos(centros, raizesEscolhidas, etapas).filter(
+    (id) => !centroRaiz.includes(id),
+  );
+  return { centro, centroRaiz };
+}
+
+/**
+ * O contrário de `centrosDaListagem`: lê `centro=` e `centro_raiz=` de volta
+ * nos dois campos. A raiz do "sem etapa" entra no primeiro campo, senão a barra
+ * diria "todos os centros de custo" numa tela recortada por um deles.
+ */
+export function separarCentrosDaListagem(
+  centros: readonly CentroCustoOpcao[],
+  centro: readonly string[],
+  centroRaiz: readonly string[],
+): { raizes: string[]; segundoCampo: string[] } {
+  const { raizes, etapas } = separarRaizesEEtapas(centros, centro);
+  const segundoCampo = [...etapas];
+  for (const raiz of centroRaiz) {
+    if (!raizes.includes(raiz)) raizes.push(raiz);
+    segundoCampo.push(valorSemEtapa(raiz));
+  }
+  return { raizes, segundoCampo };
 }
