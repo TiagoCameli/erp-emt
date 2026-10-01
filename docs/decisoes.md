@@ -4806,3 +4806,30 @@ frete futuro fora do padrão volta a alertar.
    conferência fica na aba Carretas EMT, que é onde o alerta mora; na aba Fretes se confere e corrige.
 
 **Ajuste (01/10/2026, pedido do Tiago):** o botão "Personalizar tela" saiu do canto de baixo, onde tapava o ⋮ da última linha das tabelas, e virou uma aba no canto direito alto, dentro do respiro de 24px do `<main>` acima do cabeçalho (`main` ganhou `relative`). Fora da edição ela é `absolute` e sobe com a página; na edição o "Concluir" fica `fixed` no mesmo canto. Só no desktop.
+
+## 2026-10-01 - Aprovação de pagamentos no celular: a tela de quem recebe o link
+
+Pedido do Tiago: a aprovação pelo celular, principalmente aberta pelo link do WhatsApp, mais
+concisa e focada no que precisa ser aprovado. Desktop não mudou.
+
+**Decisões:**
+
+1. **Fila no celular é outra tela, não a tabela encolhida.** Abaixo do `md` os quatro KPIs, a barra
+   de filtros e a DataTable dão lugar a `FilaCelular`: um card por parcela com fornecedor, valor,
+   descrição, número (que abre a tela inteira), vencimento, "Sem nota" e a observação inteira (no
+   celular não há tooltip, e é ali que vem o PIX), com Aprovar e Revisar. Mesmos modais e mesmas
+   actions da tabela. Busca simples fora do link; lista de 20 em 20.
+2. **"Aprovar todos" só existe no recorte do link.** Barra fixa acima do menu inferior com a
+   quantidade e o total, e abre o mesmo modal do lote. Na fila inteira não existe: seriam centenas
+   de pagamentos autorizados com um toque. Com algo marcado, a barra vira a do selecionado.
+3. **`useTelaCelular()` (`src/lib/use-tela-celular.ts`) em vez de só CSS.** Esconder por CSS deixaria
+   as duas árvores montadas, com botão de aprovar em dobro no DOM e no leitor de tela. O hook devolve
+   `null` no servidor e na hidratação, e nesse momento as duas versões saem com `md:hidden` /
+   `max-md:hidden`, para o celular não piscar a tabela. Sem `matchMedia` (jsdom) é computador.
+4. **Tela de uma parcela: a decisão sobe para o topo no celular.** A coluna da direita vira
+   `max-lg:contents` e o card do valor ganha `max-lg:order-first`, com o vencimento junto. Datas,
+   Pagamento, Parcelas, Rateio, Itens da OC e Trilha ficam recolhidos atrás de "Ver datas, parcelas,
+   rateio e histórico" (classe `max-lg:hidden`, então o DOM e o desktop seguem iguais). Imprimir
+   espelho e Copiar mensagem saem do celular: são trabalho de quem monta o pedido, no computador.
+5. **No link, a aba Dinheiro e cartão some no celular.** Quem abriu o link veio aprovar aqueles
+   pagamentos.

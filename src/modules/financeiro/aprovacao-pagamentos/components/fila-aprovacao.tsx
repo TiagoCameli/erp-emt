@@ -78,7 +78,10 @@ import {
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
+import { cn } from "@/lib/utils";
+import { useTelaCelular } from "@/lib/use-tela-celular";
 import { AprovarDialog } from "./aprovar-dialog";
+import { FilaCelular } from "./fila-celular";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Aviso de nota fiscal da OC de origem: não bloqueia aprovar, só informa. */
@@ -241,6 +244,7 @@ export function FilaAprovacao({
 }: FilaAprovacaoProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const celular = useTelaCelular();
   const [selecionadas, setSelecionadas] = React.useState<Set<string>>(
     new Set(),
   );
@@ -248,17 +252,35 @@ export function FilaAprovacao({
   const [alvoRevisao, setAlvoRevisao] = React.useState<Alvo | null>(null);
   const [filtroBusca, setFiltroBusca] = useFiltroSessao("filtroBusca", "");
   const [filtroConta, setFiltroConta] = useFiltroSessao("filtroConta", "");
-  const [filtroCategoria, setFiltroCategoria] = useFiltroSessao("filtroCategoria", "");
-  const [filtroFornecedor, setFiltroFornecedor] = useFiltroSessao("filtroFornecedor", "");
-  const [filtroCentroCusto, setFiltroCentroCusto] = useFiltroSessao("filtroCentroCusto", "");
+  const [filtroCategoria, setFiltroCategoria] = useFiltroSessao(
+    "filtroCategoria",
+    "",
+  );
+  const [filtroFornecedor, setFiltroFornecedor] = useFiltroSessao(
+    "filtroFornecedor",
+    "",
+  );
+  const [filtroCentroCusto, setFiltroCentroCusto] = useFiltroSessao(
+    "filtroCentroCusto",
+    "",
+  );
   const [filtroForma, setFiltroForma] = useFiltroSessao("filtroForma", "");
   const [filtroOrigem, setFiltroOrigem] = useFiltroSessao("filtroOrigem", "");
   const [filtroNota, setFiltroNota] = useFiltroSessao("filtroNota", "");
   const [filtroMes, setFiltroMes] = useFiltroSessao("filtroMes", "");
-  const [filtroValorDe, setFiltroValorDe] = useFiltroSessao("filtroValorDe", "");
-  const [filtroValorAte, setFiltroValorAte] = useFiltroSessao("filtroValorAte", "");
+  const [filtroValorDe, setFiltroValorDe] = useFiltroSessao(
+    "filtroValorDe",
+    "",
+  );
+  const [filtroValorAte, setFiltroValorAte] = useFiltroSessao(
+    "filtroValorAte",
+    "",
+  );
   const [filtroVencDe, setFiltroVencDe] = useFiltroSessao("filtroVencDe", "");
-  const [filtroVencAte, setFiltroVencAte] = useFiltroSessao("filtroVencAte", "");
+  const [filtroVencAte, setFiltroVencAte] = useFiltroSessao(
+    "filtroVencAte",
+    "",
+  );
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
   const filtrando =
@@ -286,8 +308,13 @@ export function FilaAprovacao({
     // O link é recorte, não filtro: vem antes de tudo e não aparece na barra de
     // filtros. Quem abriu um link não quer aprovar por engano a parcela vizinha.
     const doLink = parcelasDoLink.length > 0 ? new Set(parcelasDoLink) : null;
+    // No celular o link não mostra barra de filtros, então filtro guardado na
+    // sessão esconderia parcela do link sem ninguém ver por quê (e o estado
+    // vazio diria que elas saíram da fila). Lá o recorte do link é a lista toda.
+    const soLink = doLink !== null && celular === true;
     return parcelas.filter((parcela) => {
       if (doLink && !doLink.has(parcela.id)) return false;
+      if (soLink) return true;
       if (filtroConta !== "" && parcela.contaBancariaId !== filtroConta) {
         return false;
       }
@@ -339,6 +366,7 @@ export function FilaAprovacao({
   }, [
     parcelas,
     parcelasDoLink,
+    celular,
     filtroBusca,
     filtroConta,
     filtroCategoria,
@@ -455,6 +483,16 @@ export function FilaAprovacao({
     router.replace(pathname);
   }
 
+  /**
+   * "Aprovar todos" do celular, só no recorte do link: marca o recorte inteiro
+   * e abre o mesmo modal do lote. A confirmação continua sendo do modal, com o
+   * total e a quantidade na frente de quem aprova.
+   */
+  function aprovarTodasDoLink() {
+    setSelecionadas(new Set(visiveis.map((parcela) => parcela.id)));
+    setAlvoAprovacao({ tipo: "lote" });
+  }
+
   async function confirmarAprovacao(
     dataProgramada: string | null,
     contaId: string | null,
@@ -476,7 +514,7 @@ export function FilaAprovacao({
       tirarDaSelecao(parcela.id);
     } else {
       const resultado = await aprovarParcelasEmLote(
-        [...selecionadas],
+        selecionadasNaFila.map((parcela) => parcela.id),
         dataProgramada,
         contaId,
       );
@@ -513,7 +551,10 @@ export function FilaAprovacao({
       toast.success("Pagamento enviado para revisão");
       tirarDaSelecao(parcela.id);
     } else {
-      const resultado = await revisarParcelasEmLote([...selecionadas], texto);
+      const resultado = await revisarParcelasEmLote(
+        selecionadasNaFila.map((parcela) => parcela.id),
+        texto,
+      );
       if ("erro" in resultado) {
         toast.error(
           resultado.revisadas > 0
@@ -604,7 +645,10 @@ export function FilaAprovacao({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="cursor-help">
-                    <StatusBadge status="pendente_aprovacao" rotulo="Sem nota" />
+                    <StatusBadge
+                      status="pendente_aprovacao"
+                      rotulo="Sem nota"
+                    />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
@@ -763,9 +807,7 @@ export function FilaAprovacao({
         header: "Conta bancária",
         size: 180,
         meta: { rotulo: "Conta bancária", ocultaPorPadrao: true },
-        cell: ({ row }) => (
-          <span>{row.original.contaBancariaNome ?? "-"}</span>
-        ),
+        cell: ({ row }) => <span>{row.original.contaBancariaNome ?? "-"}</span>,
       },
       {
         accessorKey: "anexos",
@@ -1152,7 +1194,9 @@ export function FilaAprovacao({
       elemento: (
         <FiltroSelect
           valor={filtroOrigem}
-          onValorChange={(valor) => aoTrocarFiltro(() => setFiltroOrigem(valor))}
+          onValorChange={(valor) =>
+            aoTrocarFiltro(() => setFiltroOrigem(valor))
+          }
           opcoes={OPCOES_ORIGEM}
           placeholder="Origem"
           todosRotulo="Todas as origens"
@@ -1174,11 +1218,46 @@ export function FilaAprovacao({
         : null;
 
   const quantidadeRevisao =
-    alvoRevisao?.tipo === "linha" ? 1 : selecionadas.size;
+    alvoRevisao?.tipo === "linha" ? 1 : selecionadasNaFila.length;
   const valorRevisao =
     alvoRevisao?.tipo === "linha"
       ? alvoRevisao.parcela.valor
       : totalSelecionado;
+
+  // Mesmo estado vazio na tabela e nos cards do celular.
+  const estadoVazio =
+    // Link cobre os outros dois casos: a fila pode estar cheia e o
+    // recorte do link vazio, e aí nem "sem filtro" nem "fila vazia"
+    // explicam. O aviso acima da tabela já diz o motivo de cada parcela.
+    parcelasDoLink.length > 0 ? (
+      <EmptyState
+        icone={Link2}
+        titulo="Os pagamentos deste link já saíram da fila"
+        descricao="O link continua válido, mas esses pagamentos não estão mais aguardando aprovação. O aviso acima diz onde cada um foi parar."
+        acao={
+          <Button type="button" size="sm" onClick={verFilaInteira}>
+            Ver a fila inteira
+          </Button>
+        }
+        className="border-none bg-transparent"
+      />
+    ) : // Fila cheia e nada na tela é filtro, não fila vazia: dizer
+    // "nenhum pagamento aguardando aprovação" aqui seria mentira.
+    filtrando && parcelas.length > 0 ? (
+      <EmptyState
+        icone={Filter}
+        titulo="Nenhum pagamento com esses filtros"
+        descricao="A fila tem pagamentos, mas nenhum bate com os filtros escolhidos. Limpe os filtros para ver tudo."
+        className="border-none bg-transparent"
+      />
+    ) : (
+      <EmptyState
+        icone={Inbox}
+        titulo="Nenhum pagamento aguardando aprovação"
+        descricao={descricaoVazia(incompletas)}
+        className="border-none bg-transparent"
+      />
+    );
 
   return (
     // Um provider para a tela inteira: o Tooltip do projeto é o Radix cru, sem
@@ -1187,88 +1266,108 @@ export function FilaAprovacao({
     // Com a fila vazia nada disso renderiza, então a falta passa despercebida.
     <TooltipProvider>
       <div className="flex flex-col gap-4">
-        <GradeKpis id="financeiro.aprovacao-pagamentos.fila" titulo="Fila de aprovação">
-          <KPICard
-            titulo="Total a aprovar"
-            valor={formatarBRL(totalAprovar)}
-            detalhe={
-              filtrando
-                ? `${visiveis.length} de ${parcelas.length} pagamento(s) da fila`
-                : `${parcelas.length} pagamento(s) na fila`
-            }
-          />
-          <KPICard
-            titulo="Em revisão"
-            valor={formatarBRL(emRevisao.valor)}
-            detalhe={`${emRevisao.parcelas} devolvido(s) para ajuste`}
-          />
-          <KPICard
-            titulo="Aprovado aguardando data"
-            valor={formatarBRL(aguardandoData.valor)}
-            detalhe={`${aguardandoData.parcelas} com data autorizada à frente`}
-          />
-          {/* Este número já vinha do servidor e não aparecia em lugar nenhum.
+        {/*
+          Computador e celular são telas diferentes, não a mesma encolhida. Antes
+          de hidratar (`celular === null`) as duas saem e o CSS escolhe, para o
+          celular não piscar a tabela.
+        */}
+        {celular !== true ? (
+          <div
+            className={cn(
+              "flex flex-col gap-4",
+              celular === null && "max-md:hidden",
+            )}
+          >
+            <GradeKpis
+              id="financeiro.aprovacao-pagamentos.fila"
+              titulo="Fila de aprovação"
+            >
+              <KPICard
+                titulo="Total a aprovar"
+                valor={formatarBRL(totalAprovar)}
+                detalhe={
+                  filtrando
+                    ? `${visiveis.length} de ${parcelas.length} pagamento(s) da fila`
+                    : `${parcelas.length} pagamento(s) na fila`
+                }
+              />
+              <KPICard
+                titulo="Em revisão"
+                valor={formatarBRL(emRevisao.valor)}
+                detalhe={`${emRevisao.parcelas} devolvido(s) para ajuste`}
+              />
+              <KPICard
+                titulo="Aprovado aguardando data"
+                valor={formatarBRL(aguardandoData.valor)}
+                detalhe={`${aguardandoData.parcelas} com data autorizada à frente`}
+              />
+              {/* Este número já vinha do servidor e não aparecia em lugar nenhum.
               É o que segura pagamento fora da fila por um motivo que se
               resolve em um clique: escolher a conta no lançamento. */}
-          <KPICard
-            titulo="Aguardando conta bancária"
-            valor={formatarBRL(aguardandoConta.valor)}
-            detalhe={`${aguardandoConta.parcelas} sem conta escolhida no lançamento`}
-          />
-        </GradeKpis>
+              <KPICard
+                titulo="Aguardando conta bancária"
+                valor={formatarBRL(aguardandoConta.valor)}
+                detalhe={`${aguardandoConta.parcelas} sem conta escolhida no lançamento`}
+              />
+            </GradeKpis>
 
-        {/*
+            {/*
           Aviso do link de aprovação. Aparece antes da tabela porque explica por
           que a fila está curta: sem ele, quem abre o link vê 1 pagamento e conclui
           que a empresa só tem 1 pagamento para aprovar.
         */}
-        {parcelasDoLink.length > 0 ? (
-          <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border border-l-[3px] border-l-faixa bg-surface px-4 py-2.5">
-            <div className="flex flex-col gap-1">
-              <p className="text-detalhe text-foreground">
-                <Link2 className="mr-1.5 inline size-3.5" aria-hidden="true" />
-                Você abriu um link de aprovação:{" "}
-                {visiveis.length === 0
-                  ? "nenhum destes pagamentos está na fila."
-                  : `a fila está mostrando só ${visiveis.length} pagamento(s) deste link.`}
-              </p>
-              {foraDaFila.map((parcela) => (
-                <p
-                  key={parcela.id}
-                  className="text-legenda text-muted-foreground"
+            {parcelasDoLink.length > 0 ? (
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border border-l-[3px] border-l-faixa bg-surface px-4 py-2.5">
+                <div className="flex flex-col gap-1">
+                  <p className="text-detalhe text-foreground">
+                    <Link2
+                      className="mr-1.5 inline size-3.5"
+                      aria-hidden="true"
+                    />
+                    Você abriu um link de aprovação:{" "}
+                    {visiveis.length === 0
+                      ? "nenhum destes pagamentos está na fila."
+                      : `a fila está mostrando só ${visiveis.length} pagamento(s) deste link.`}
+                  </p>
+                  {foraDaFila.map((parcela) => (
+                    <p
+                      key={parcela.id}
+                      className="text-legenda text-muted-foreground"
+                    >
+                      {parcela.numero ? (
+                        <span className="codigo-doc">{parcela.numero}</span>
+                      ) : (
+                        "Um dos pagamentos do link"
+                      )}
+                      {parcela.naoEncontrada
+                        ? ""
+                        : ` de ${parcela.fornecedorNome}`}{" "}
+                      {explicacaoFora(parcela)}.
+                    </p>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={verFilaInteira}
                 >
-                  {parcela.numero ? (
-                    <span className="codigo-doc">{parcela.numero}</span>
-                  ) : (
-                    "Um dos pagamentos do link"
-                  )}
-                  {parcela.naoEncontrada ? "" : ` de ${parcela.fornecedorNome}`}{" "}
-                  {explicacaoFora(parcela)}.
-                </p>
-              ))}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={verFilaInteira}
-            >
-              Ver a fila inteira
-            </Button>
-          </div>
-        ) : null}
+                  Ver a fila inteira
+                </Button>
+              </div>
+            ) : null}
 
-        {algumaSelecionada ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-2.5">
-            <p className="text-detalhe text-foreground">
-              {selecionadas.size} selecionado(s)
-              <span className="text-muted-foreground">
-                {" "}
-                · {formatarBRL(totalSelecionado)}
-              </span>
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Primeiro da fileira, igual a lancamentos, ordens e à aba
+            {algumaSelecionada ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-2.5">
+                <p className="text-detalhe text-foreground">
+                  {selecionadas.size} selecionado(s)
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {formatarBRL(totalSelecionado)}
+                  </span>
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Primeiro da fileira, igual a lancamentos, ordens e à aba
                   "Pagas": imprimir não muta nada e é o que a mão procura antes
                   das ações que mexem no dinheiro.
 
@@ -1281,103 +1380,111 @@ export function FilaAprovacao({
                   Os ids vêm de `selecionadasNaFila`, não do Set cru: o Set
                   guarda id que o filtro tirou da tela, e imprimir linha que
                   sumiu da vista é maço com folha que ninguém conferiu. */}
-              <BotaoEspelho
-                rota="/espelho/pagamentos"
-                ids={selecionadasNaFila.map((parcela) => parcela.id)}
-              />
-              {/* Sem permissão: montar a mensagem não muta nada. É o caminho de
+                  <BotaoEspelho
+                    rota="/espelho/pagamentos"
+                    ids={selecionadasNaFila.map((parcela) => parcela.id)}
+                  />
+                  {/* Sem permissão: montar a mensagem não muta nada. É o caminho de
                   quem confere e repassa para quem aprova. */}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void copiarMensagem(selecionadasNaFila)}
-              >
-                <ClipboardCopy />
-                Copiar mensagem de aprovação
-              </Button>
-              {podeRevisar ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAlvoRevisao({ tipo: "lote" })}
-                >
-                  <PenLine />
-                  Enviar selecionados para revisão
-                </Button>
-              ) : null}
-              {podeAprovar ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setAlvoAprovacao({ tipo: "lote" })}
-                >
-                  <CheckCheck />
-                  Aprovar selecionados
-                </Button>
-              ) : null}
-            </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void copiarMensagem(selecionadasNaFila)}
+                  >
+                    <ClipboardCopy />
+                    Copiar mensagem de aprovação
+                  </Button>
+                  {podeRevisar ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAlvoRevisao({ tipo: "lote" })}
+                    >
+                      <PenLine />
+                      Enviar selecionados para revisão
+                    </Button>
+                  ) : null}
+                  {podeAprovar ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setAlvoAprovacao({ tipo: "lote" })}
+                    >
+                      <CheckCheck />
+                      Aprovar selecionados
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <DataTable
+              columns={colunas}
+              data={visiveis}
+              filtros={filtros}
+              pageIndex={paginacao.pageIndex}
+              pageSize={paginacao.pageSize}
+              onPaginationChange={setPaginacao}
+              // Sem onRowClick de propósito: clicar na linha não abre nada. A linha
+              // inteira clicável fazia o clique no checkbox subir e abrir a
+              // conferência junto, então marcar uma parcela para aprovar em lote
+              // virava abrir um painel por cima. Quem quer ver o pagamento usa o
+              // botão do olho ou o número do lançamento.
+              idTabela="financeiro.aprovacao-pagamentos"
+              idUsuario={idUsuario}
+              cabecalhoFixo
+              emptyState={estadoVazio}
+            />
           </div>
         ) : null}
 
-        <DataTable
-          columns={colunas}
-          data={visiveis}
-          filtros={filtros}
-          pageIndex={paginacao.pageIndex}
-          pageSize={paginacao.pageSize}
-          onPaginationChange={setPaginacao}
-          // Sem onRowClick de propósito: clicar na linha não abre nada. A linha
-          // inteira clicável fazia o clique no checkbox subir e abrir a
-          // conferência junto, então marcar uma parcela para aprovar em lote
-          // virava abrir um painel por cima. Quem quer ver o pagamento usa o
-          // botão do olho ou o número do lançamento.
-          idTabela="financeiro.aprovacao-pagamentos"
-          idUsuario={idUsuario}
-          cabecalhoFixo
-          emptyState={
-            // Link cobre os outros dois casos: a fila pode estar cheia e o
-            // recorte do link vazio, e aí nem "sem filtro" nem "fila vazia"
-            // explicam. O aviso acima da tabela já diz o motivo de cada parcela.
-            parcelasDoLink.length > 0 ? (
-              <EmptyState
-                icone={Link2}
-                titulo="Os pagamentos deste link já saíram da fila"
-                descricao="O link continua válido, mas esses pagamentos não estão mais aguardando aprovação. O aviso acima diz onde cada um foi parar."
-                acao={
-                  <Button type="button" size="sm" onClick={verFilaInteira}>
-                    Ver a fila inteira
-                  </Button>
-                }
-                className="border-none bg-transparent"
-              />
-            ) : // Fila cheia e nada na tela é filtro, não fila vazia: dizer
-            // "nenhum pagamento aguardando aprovação" aqui seria mentira.
-            filtrando && parcelas.length > 0 ? (
-              <EmptyState
-                icone={Filter}
-                titulo="Nenhum pagamento com esses filtros"
-                descricao="A fila tem pagamentos, mas nenhum bate com os filtros escolhidos. Limpe os filtros para ver tudo."
-                className="border-none bg-transparent"
-              />
-            ) : (
-              <EmptyState
-                icone={Inbox}
-                titulo="Nenhum pagamento aguardando aprovação"
-                descricao={descricaoVazia(incompletas)}
-                className="border-none bg-transparent"
-              />
-            )
-          }
-        />
+        {celular !== false ? (
+          <div className={celular === null ? "md:hidden" : undefined}>
+            <FilaCelular
+              parcelas={visiveis}
+              selecionadas={selecionadas}
+              onAlternar={alternarUma}
+              podeAprovar={podeAprovar}
+              podeRevisar={podeRevisar}
+              onAprovar={(parcela) =>
+                setAlvoAprovacao({ tipo: "linha", parcela })
+              }
+              onRevisar={(parcela) =>
+                setAlvoRevisao({ tipo: "linha", parcela })
+              }
+              onAprovarSelecionadas={() => setAlvoAprovacao({ tipo: "lote" })}
+              onRevisarSelecionadas={() => setAlvoRevisao({ tipo: "lote" })}
+              onAprovarTodas={aprovarTodasDoLink}
+              link={{
+                ativo: parcelasDoLink.length > 0,
+                avisos: foraDaFila.map((parcela) => ({
+                  id: parcela.id,
+                  texto: `${parcela.numero ?? "Um dos pagamentos do link"}${
+                    parcela.naoEncontrada ? "" : ` de ${parcela.fornecedorNome}`
+                  } ${explicacaoFora(parcela)}.`,
+                })),
+                onVerFilaInteira: verFilaInteira,
+              }}
+              busca={{
+                valor: filtroBusca,
+                onValorChange: (valor) =>
+                  aoTrocarFiltro(() => setFiltroBusca(valor)),
+              }}
+              vazio={estadoVazio}
+            />
+          </div>
+        ) : null}
 
         <AprovarDialog
           aberto={alvoAprovacao !== null}
           onAbertoChange={(aberto) => {
             if (!aberto) setAlvoAprovacao(null);
           }}
-          quantidade={alvoAprovacao?.tipo === "linha" ? 1 : selecionadas.size}
+          quantidade={
+            alvoAprovacao?.tipo === "linha" ? 1 : selecionadasNaFila.length
+          }
           valorTotal={
             alvoAprovacao?.tipo === "linha"
               ? alvoAprovacao.parcela.valor
