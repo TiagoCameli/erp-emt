@@ -53,6 +53,7 @@ import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/act
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { criarFornecedorRapido } from "@/modules/_shared/fornecedor/actions";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { criarCartaoRapido } from "@/modules/cadastros/cartoes/actions";
 import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
@@ -324,10 +325,7 @@ function nomesDaOrdemDe(ordem: OrdemDetalhe | null): NomesDaOrdem {
     if (item.centroCustoId && centro) centrosCusto.set(item.centroCustoId, centro);
     const insumo = nomeUtil(item.insumoNome);
     if (item.insumoId && insumo) {
-      insumos.set(
-        item.insumoId,
-        item.unidade ? `${insumo} (${item.unidade})` : insumo,
-      );
+      insumos.set(item.insumoId, rotuloInsumo(insumo, item.unidade));
     }
   }
   return { centrosCusto, insumos };
@@ -2261,7 +2259,7 @@ function GrupoCentroCusto({
                   }}
                   opcoes={insumosDisponiveis.map((insumo) => ({
                     valor: insumo.id,
-                    rotulo: `${insumo.nome}${insumo.unidade ? ` (${insumo.unidade})` : ""}`,
+                    rotulo: rotuloInsumo(insumo.nome, insumo.unidade),
                   }))}
                   rotuloDoValor={nomesDaOrdem.insumos.get(
                     form.watch(`centrosCusto.${indice}.insumos.${j}.insumoId`),

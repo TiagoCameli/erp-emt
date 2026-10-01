@@ -50,6 +50,7 @@ function contrato(overrides: Partial<ContratoDetalheRow> = {}): ContratoDetalheR
     prazo_meses: 39,
     inicio_prazo: "assinatura",
     dia_inicio_periodo: 26,
+    periodo_manual: false,
     tipo_localizacao: "rodovia",
     regra_arredondamento: null,
     alerta_prazo_dias: 90,
@@ -139,5 +140,20 @@ describe("ContratoDetalhe: excluir contrato", () => {
     expect(screen.queryByRole("button", { name: "Editar contrato" })).toBeNull();
     expect(screen.getByText(/Este contrato está na lixeira/)).toBeInTheDocument();
     expect(screen.queryByText(/Restaure-o pela lista/)).toBeNull();
+  });
+});
+
+describe("ContratoDetalhe: período da medição", () => {
+  it("sugerido pelo dia N quando o período não é manual", () => {
+    montar();
+    expect(screen.getByText("Período da medição")).toBeTruthy();
+    expect(screen.getByText("sugerido pelo dia 26")).toBeTruthy();
+  });
+
+  it("informado à mão quando o contrato marca periodo_manual", () => {
+    montar({ contratoOverrides: { periodo_manual: true } });
+    expect(screen.getByText("informado à mão")).toBeTruthy();
+    expect(screen.getByText("não usado (período informado à mão)")).toBeTruthy();
+    expect(screen.queryByText("26")).toBeNull();
   });
 });

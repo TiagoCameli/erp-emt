@@ -10,6 +10,7 @@ import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 import { traduzirErroFrete } from "@/modules/frete/fretes/erros";
 import {
   COLUNAS_PLANILHA_FRETE,
+  indiceInsumos,
   indicePorNome,
   validarLinhaFrete,
   type CadastrosImportacao,
@@ -58,7 +59,7 @@ async function carregarCadastros(): Promise<CadastrosImportacao> {
   return {
     localidades: indicePorNome(localidades),
     transportadoras: indicePorNome(transportadoras),
-    insumos: indicePorNome(insumos),
+    insumos: indiceInsumos(insumos),
     obras,
   };
 }

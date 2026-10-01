@@ -19,6 +19,7 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData, formatarDataHora } from "@/lib/formatadores";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { excluirPedido, restaurarPedido } from "@/modules/frete/pedidos-material/actions";
 import type { FornecedorOpcao, InsumoOpcao, PedidoLinha } from "@/modules/frete/pedidos-material/queries";
 import { filtrarPedidos, rotuloTotalPedidos } from "@/modules/frete/pedidos-material/regras";
@@ -176,7 +177,7 @@ export function PedidosTabela({
   }, [fornecedores, pedidos]);
   const opcoesMaterial = React.useMemo(() => {
     const mapa = new Map<string, string>();
-    for (const p of pedidos) for (const i of p.itens) mapa.set(i.insumoId, i.insumoNome);
+    for (const p of pedidos) for (const i of p.itens) mapa.set(i.insumoId, rotuloInsumo(i.insumoNome, i.unidade));
     return [...mapa.entries()]
       .map(([valor, rotulo]) => ({ valor, rotulo }))
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));

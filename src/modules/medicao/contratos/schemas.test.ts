@@ -17,6 +17,13 @@ describe("contratoSchema", () => {
       data_ordem_servico: null, dia_inicio_periodo: 26 });
   });
 
+  it("período manual nasce falso e vai como periodo_manual no payload", () => {
+    expect(contratoSchema.parse(valido).periodoManual).toBe(false);
+    expect(payloadDoContrato(contratoSchema.parse(valido))).toMatchObject({ periodo_manual: false });
+    const r = contratoSchema.parse({ ...valido, periodoManual: true });
+    expect(payloadDoContrato(r)).toMatchObject({ periodo_manual: true });
+  });
+
   it("valor inicial com 3 casas é recusado", () => {
     expect(contratoSchema.safeParse({ ...valido, valorInicial: 1.005 }).success).toBe(false);
   });
@@ -59,7 +66,7 @@ describe("contratoSchema", () => {
 });
 
 describe("contratoFormSchema / contratoDoForm", () => {
-  const validoForm = { ...valido, valorInicial: "243.927.498,02" };
+  const validoForm = { ...valido, periodoManual: false, valorInicial: "243.927.498,02" };
 
   it("aceita o valor digitado com milhar e converte para o número exato no envio", () => {
     const r = contratoFormSchema.parse(validoForm);

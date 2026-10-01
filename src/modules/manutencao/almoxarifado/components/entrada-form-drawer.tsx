@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { dataHojeISO } from "@/lib/formatadores";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { registrarEntrada } from "@/modules/manutencao/almoxarifado/actions";
 import { paraNumero, totalDaLinha } from "@/modules/manutencao/almoxarifado/calculo";
 import type { InsumoOpcao, Opcao } from "@/modules/manutencao/almoxarifado/queries";
@@ -113,7 +114,7 @@ export function EntradaFormDrawer({
     () =>
       insumos.map((i) => ({
         valor: i.id,
-        rotulo: i.unidade ? `${i.nome} (${i.unidade})` : i.nome,
+        rotulo: rotuloInsumo(i.nome, i.unidade),
       })),
     [insumos],
   );

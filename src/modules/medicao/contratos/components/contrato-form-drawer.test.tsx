@@ -56,6 +56,7 @@ vi.mock("@/components/canonicos", async (importOriginal) => {
   };
 });
 
+import type { ContratoDetalhe } from "@/modules/medicao/contratos/queries";
 import { ContratoFormDrawer } from "@/modules/medicao/contratos/components/contrato-form-drawer";
 
 function renderizar() {
@@ -139,5 +140,44 @@ describe("ContratoFormDrawer", () => {
     await waitFor(() => expect(toastErro).toHaveBeenCalled());
     expect(salvarContrato).not.toHaveBeenCalled();
     expect(String(toastErro.mock.calls[0][0])).toContain("Informe o valor");
+  });
+
+  it("marcar 'Período da medição informado à mão' manda periodoManual true; sem marcar, false", async () => {
+    salvarContrato.mockResolvedValue({ ok: true, id: "novo-id" });
+    renderizar();
+    preencherObrigatorios();
+    fireEvent.change(screen.getByLabelText(/Valor do contrato/), { target: { value: "100,00" } });
+    expect(screen.getByText(/Para contrato que mede vários meses numa medição/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cadastrar contrato" }));
+    await waitFor(() => expect(salvarContrato).toHaveBeenCalledTimes(1));
+    expect(salvarContrato.mock.calls[0][1]).toMatchObject({ periodoManual: false });
+
+    cleanup();
+    salvarContrato.mockClear();
+    renderizar();
+    preencherObrigatorios();
+    fireEvent.change(screen.getByLabelText(/Valor do contrato/), { target: { value: "100,00" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /Período da medição informado à mão/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Cadastrar contrato" }));
+    await waitFor(() => expect(salvarContrato).toHaveBeenCalledTimes(1));
+    expect(salvarContrato.mock.calls[0][1]).toMatchObject({ periodoManual: true });
+  });
+
+  it.each([true, false])("editar contrato com periodo_manual %s, sem mexer no checkbox, reenvia o mesmo valor", async (valor) => {
+    salvarContrato.mockResolvedValue({ ok: true, id: "c1" });
+    const contrato = {
+      id: "c1", codigo: "OB-012", nome_obra: "Obra 012", local: null, objeto: "Obra", numero_contrato: "012/2025",
+      contratante_nome: "Prefeitura", contratante_tipo: "municipal", contratante_documento: null, valor_inicial: 1000,
+      data_assinatura: "2025-10-01", data_ordem_servico: null, prazo_meses: 12, inicio_prazo: "assinatura",
+      dia_inicio_periodo: 1, periodo_manual: valor, tipo_localizacao: "texto", regra_arredondamento: null,
+      alerta_prazo_dias: 90, alerta_valor_pct: 90, status: "ativo", observacoes: null,
+    } as unknown as ContratoDetalhe;
+    render(<ContratoFormDrawer aberto onAbertoChange={vi.fn()} contrato={contrato} />);
+    const caixa = screen.getByRole("checkbox", { name: /Período da medição informado à mão/ });
+    expect(caixa.getAttribute("aria-checked")).toBe(String(valor));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/ }));
+    await waitFor(() => expect(salvarContrato).toHaveBeenCalledTimes(1));
+    expect(salvarContrato.mock.calls[0][0]).toBe("c1");
+    expect(salvarContrato.mock.calls[0][1]).toMatchObject({ periodoManual: valor });
   });
 });

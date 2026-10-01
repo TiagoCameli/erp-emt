@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { avisoDeFalhas, type FalhaDeEnvio } from "@/modules/_shared/anexos/fila";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import {
   AnexosCombustivel,
   FILA_VAZIA,
@@ -165,7 +166,7 @@ export function EntradaFormDrawer({
     () =>
       insumos
         .filter((i) => i.ativo || i.id === entrada?.insumoId)
-        .map((i) => ({ valor: i.id, rotulo: i.unidade ? `${i.nome} (${i.unidade})` : i.nome })),
+        .map((i) => ({ valor: i.id, rotulo: rotuloInsumo(i.nome, i.unidade) })),
     [insumos, entrada],
   );
   const opcoesFornecedores = React.useMemo(

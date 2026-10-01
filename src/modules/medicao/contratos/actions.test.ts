@@ -38,7 +38,7 @@ const USUARIO = "44444444-4444-4444-8444-444444444444";
 const DADOS: ContratoInput = {
   codigo: "L09-BR364", nomeObra: "BR-364 Lote 09", local: "", objeto: "Manutenção", numeroContrato: "00615/2025",
   contratanteNome: "DNIT", contratanteTipo: "federal", contratanteDocumento: "", valorInicial: 243927498.02,
-  dataAssinatura: "2025-10-01", dataOrdemServico: "", prazoMeses: 39, inicioPrazo: "assinatura", diaInicioPeriodo: 26,
+  dataAssinatura: "2025-10-01", dataOrdemServico: "", prazoMeses: 39, inicioPrazo: "assinatura", diaInicioPeriodo: 26, periodoManual: false,
   tipoLocalizacao: "rodovia", regraArredondamento: null, alertaPrazoDias: 90, alertaValorPct: 90, status: "ativo", observacoes: "",
 };
 const ADITIVO: AditivoInput = {

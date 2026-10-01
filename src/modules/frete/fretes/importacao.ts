@@ -1,6 +1,6 @@
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { dataIsoValida, REGEX_PLACA, type FreteInput } from "@/modules/frete/fretes/schemas";
-import type { Opcao } from "@/modules/frete/fretes/tipos";
+import type { InsumoOpcaoFrete, Opcao } from "@/modules/frete/fretes/tipos";
 import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
 /**
@@ -107,10 +107,32 @@ export function indicePorNome(opcoes: readonly Opcao[]): Map<string, string> {
   return mapa;
 }
 
+/**
+ * Índice dos insumos pelo rótulo com unidade ("brita 0 - t") E pelo nome puro. Dois
+ * insumos podem ter o mesmo nome em unidades diferentes: o nome que cai em cadastros de
+ * unidades diferentes fica `null` (ambíguo) e a linha pede o rótulo, em vez de gravar o
+ * frete no material errado. Nome e unidade iguais (par repetido da carga da origem) é o
+ * mesmo material: vale o primeiro, como no `indicePorNome`.
+ */
+export function indiceInsumos(opcoes: readonly InsumoOpcaoFrete[]): Map<string, string | null> {
+  const achados = new Map<string, { id: string; rotulo: string } | null>();
+  const guardar = (nome: string, o: InsumoOpcaoFrete) => {
+    const chave = nome.trim().toLowerCase();
+    const rotulo = o.nome.trim().toLowerCase();
+    const atual = achados.get(chave);
+    if (atual === undefined) achados.set(chave, { id: o.id, rotulo });
+    else if (atual !== null && atual.rotulo !== rotulo) achados.set(chave, null);
+  };
+  for (const o of opcoes) guardar(o.nome, o);
+  for (const o of opcoes) guardar(o.nomeCadastro, o);
+  return new Map([...achados].map(([chave, achado]) => [chave, achado?.id ?? null]));
+}
+
 export interface CadastrosImportacao {
   localidades: Map<string, string>;
   transportadoras: Map<string, string>;
-  insumos: Map<string, string>;
+  /** `null` = nome de mais de um insumo (ver `indiceInsumos`). */
+  insumos: Map<string, string | null>;
   obras: Map<string, string>;
 }
 
@@ -131,15 +153,22 @@ export function validarLinhaFrete(linha: Partial<LinhaPlanilhaFrete>, cadastros:
   const dataChegada = chegadaBruta ? lerDataPlanilha(linha.dataChegada) : null;
   if (chegadaBruta && !dataChegada) erros.push(`Data de chegada "${chegadaBruta}" inválida`);
 
-  const casar = (valor: unknown, mapa: Map<string, string>, falta: string, rotulo: string, genero: "o" | "a" = "o"): string | null => {
+  const casar = (
+    valor: unknown,
+    mapa: ReadonlyMap<string, string | null>,
+    falta: string,
+    rotulo: string,
+    genero: "o" | "a" = "o",
+  ): string | null => {
     const nome = textoCelula(valor);
     if (!nome) {
       erros.push(falta);
       return null;
     }
-    const id = mapa.get(nome.toLowerCase()) ?? null;
-    if (!id) erros.push(`${rotulo} "${nome}" nao encontrad${genero}`);
-    return id;
+    const id = mapa.get(nome.toLowerCase());
+    if (id === null) erros.push(`${rotulo} "${nome}" tem mais de um cadastro com esse nome: informe com a unidade, como no seletor ("${nome} - unidade")`);
+    else if (!id) erros.push(`${rotulo} "${nome}" nao encontrad${genero}`);
+    return id ?? null;
   };
 
   const origem = casar(linha.origem, cadastros.localidades, "Falta origem", "Origem", "a");

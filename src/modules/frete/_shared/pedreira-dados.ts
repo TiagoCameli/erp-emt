@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { raizDoCentro } from "@/modules/combustivel/anomalias/base";
 import { paraNumeroDoBanco } from "@/modules/manutencao/servicos/formato";
 import { tipoDoFrete, type ItemDoPedido, type TipoFrete } from "@/modules/frete/_shared/pedreira";
@@ -125,7 +126,9 @@ export const carregarBaseFrete = cache(async (): Promise<BaseFrete> => {
     todasAsLinhas((de, ate) =>
       supabase.from("localidades").select("id, nome, fornecedor_id").order("id").range(de, ate),
     ),
-    todasAsLinhas((de, ate) => supabase.from("insumos").select("id, nome").order("id").range(de, ate)),
+    todasAsLinhas((de, ate) =>
+      supabase.from("insumos").select("id, nome, unidades_medida(sigla)").order("id").range(de, ate),
+    ),
     todasAsLinhas((de, ate) => supabase.from("centros_custo").select("id, nome, pai_id").order("id").range(de, ate)),
     todasAsLinhas((de, ate) =>
       supabase
@@ -184,7 +187,8 @@ export const carregarBaseFrete = cache(async (): Promise<BaseFrete> => {
     fretes: listaFretes,
     pedidos: listaPedidos,
     localidadeNome: new Map(localidades.linhas.map((l) => [l.id, l.nome.trim()])),
-    insumoNome: new Map(insumos.linhas.map((i) => [i.id, i.nome])),
+    // Com a unidade: "BRITA 0 - t" e "BRITA 0 - m3" são materiais diferentes.
+    insumoNome: new Map(insumos.linhas.map((i) => [i.id, rotuloInsumo(i.nome, i.unidades_medida?.sigla)])),
     obraNome,
     fornecedores: new Map(
       fornecedores.linhas.map((f) => [

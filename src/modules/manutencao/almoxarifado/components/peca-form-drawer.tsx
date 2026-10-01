@@ -18,6 +18,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { criarPeca, editarPeca } from "@/modules/manutencao/almoxarifado/actions";
 import { numeroParaTexto } from "@/modules/manutencao/almoxarifado/calculo";
 import type { InsumoOpcao, Opcao, PecaLinha } from "@/modules/manutencao/almoxarifado/queries";
@@ -101,7 +102,7 @@ export function PecaFormDrawer({
     () =>
       insumos
         .filter((i) => i.id === peca?.insumoId || !insumosJaCadastrados.has(i.id))
-        .map((i) => ({ valor: i.id, rotulo: i.unidade ? `${i.nome} (${i.unidade})` : i.nome })),
+        .map((i) => ({ valor: i.id, rotulo: rotuloInsumo(i.nome, i.unidade) })),
     [insumos, insumosJaCadastrados, peca?.insumoId],
   );
 

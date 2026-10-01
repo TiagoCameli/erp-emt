@@ -34,7 +34,9 @@ const SUGESTAO = {
   periodo_fim: "2026-09-30",
   versao_numero: 2,
   depois_de: "2026-08-31",
+  periodo_manual: false,
 };
+const SUGESTAO_MANUAL = { ...SUGESTAO, periodo_inicio: null, periodo_fim: null, periodo_manual: true };
 
 function renderizar(onAbertoChange = vi.fn(), onAberta = vi.fn()) {
   render(
@@ -106,5 +108,39 @@ describe("AbrirMedicaoDrawer", () => {
     );
     expect(screen.getByRole("button", { name: "Abrir medição" })).toBeDisabled();
     expect(abrirMedicao).not.toHaveBeenCalled();
+  });
+
+  it("período manual: datas vazias, dica com 'depois de' e as duas datas obrigatórias", async () => {
+    sugestaoMedicao.mockResolvedValue({ ok: true, sugestao: SUGESTAO_MANUAL });
+    renderizar();
+
+    await waitFor(() => expect(screen.getByText("Abrir a 11ª medição")).toBeTruthy());
+    expect((screen.getByLabelText(/Início do período/) as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText(/Fim do período/) as HTMLInputElement).value).toBe("");
+    expect(screen.getByText("Período informado à mão neste contrato. Começa depois de 31/08/2026.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Abrir medição" }));
+    await waitFor(() => expect(screen.getAllByText("Data inválida").length).toBe(2));
+    expect(abrirMedicao).not.toHaveBeenCalled();
+  });
+
+  it("período manual na primeira medição: 'Primeira medição do contrato.' e grava o que foi digitado", async () => {
+    sugestaoMedicao.mockResolvedValue({ ok: true, sugestao: { ...SUGESTAO_MANUAL, numero: 1, depois_de: null } });
+    abrirMedicao.mockResolvedValue({ ok: true, id: "nova" });
+    renderizar();
+
+    await waitFor(() => expect(screen.getByText("Abrir a 1ª medição")).toBeTruthy());
+    expect(screen.getByText(/Período informado à mão neste contrato\. Primeira medição do contrato\./)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/Início do período/), { target: { value: "2026-07-01" } });
+    fireEvent.change(screen.getByLabelText(/Fim do período/), { target: { value: "2026-09-30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Abrir medição" }));
+    await waitFor(() => expect(abrirMedicao).toHaveBeenCalledWith({ contratoId: CONTRATO, inicio: "2026-07-01", fim: "2026-09-30" }));
+  });
+
+  it("período automático não mostra a dica de período manual", async () => {
+    renderizar();
+    await waitFor(() => expect(screen.getByText("Abrir a 11ª medição")).toBeTruthy());
+    expect(screen.queryByText(/informado à mão/)).toBeNull();
   });
 });

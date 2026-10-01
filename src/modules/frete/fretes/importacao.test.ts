@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   COLUNAS_PLANILHA_FRETE,
+  indiceInsumos,
   indicePorNome,
   lerDataPlanilha,
   lerNumeroPlanilha,
@@ -143,5 +144,44 @@ describe("validarLinhaFrete", () => {
   it("peso zero, placa inválida", () => {
     const { erros } = validarLinhaFrete({ ...LINHA, peso: 0, placa: "XX" }, CADASTROS);
     expect(erros).toEqual(expect.arrayContaining(["Peso deve ser > 0", "Placa inválida (ex: ABC-1D34)"]));
+  });
+});
+
+describe("material com o mesmo nome em unidades diferentes", () => {
+  const TON = "66666666-6666-4666-8666-666666666666";
+  const M3 = "77777777-7777-4777-8777-777777777777";
+  const cadastros: CadastrosImportacao = {
+    ...CADASTROS,
+    insumos: indiceInsumos([
+      { id: TON, nome: "BRITA 0 - t", nomeCadastro: "BRITA 0" },
+      { id: M3, nome: "BRITA 0 - m3", nomeCadastro: "BRITA 0" },
+      { id: I, nome: "Brita 1 - t", nomeCadastro: "Brita 1" },
+    ]),
+  };
+
+  it("o rótulo com a unidade escolhe o cadastro certo", () => {
+    expect(validarLinhaFrete({ ...LINHA, material: "brita 0 - t" }, cadastros).frete?.insumoId).toBe(TON);
+    expect(validarLinhaFrete({ ...LINHA, material: "BRITA 0 - m3" }, cadastros).frete?.insumoId).toBe(M3);
+  });
+
+  it("o nome sozinho é ambíguo e a linha pede a unidade, sem escolher um dos dois", () => {
+    const { erros, frete } = validarLinhaFrete({ ...LINHA, material: "Brita 0" }, cadastros);
+    expect(frete).toBeNull();
+    expect(erros).toContain(
+      'Material "Brita 0" tem mais de um cadastro com esse nome: informe com a unidade, como no seletor ("Brita 0 - unidade")',
+    );
+  });
+
+  it("nome único continua casando sem a unidade", () => {
+    expect(validarLinhaFrete({ ...LINHA, material: "BRITA 1" }, cadastros).frete?.insumoId).toBe(I);
+  });
+
+  it("par repetido da origem (nome e unidade iguais) continua casando no primeiro", () => {
+    const repetidos = indiceInsumos([
+      { id: TON, nome: "PREGO - kg", nomeCadastro: "PREGO" },
+      { id: M3, nome: "PREGO - kg", nomeCadastro: "PREGO" },
+    ]);
+    expect(repetidos.get("prego - kg")).toBe(TON);
+    expect(repetidos.get("prego")).toBe(TON);
   });
 });
