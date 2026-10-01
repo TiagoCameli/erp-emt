@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import type { PropsItemDaGrade } from "@/components/canonicos/grade-kpis";
 import { cn } from "@/lib/utils";
 
-interface KPICardProps {
+interface KPICardProps extends PropsItemDaGrade {
   titulo: string;
   valor: ReactNode;
   detalhe?: ReactNode;
