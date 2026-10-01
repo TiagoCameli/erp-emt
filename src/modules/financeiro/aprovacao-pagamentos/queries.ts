@@ -133,12 +133,17 @@ const EMBED_FORMA = `valor,
        lancamento_formas(formas_pagamento(tipo)),
        lancamentos!inner(tipo, status, formas_pagamento(tipo))` as const;
 
-/** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
+/**
+ * Nome de exibição de quem recebe: o fornecedor (fantasia quando existe, senão
+ * razão social) ou, no lançamento do RH (folha, 13º, férias, rescisão), o
+ * colaborador.
+ */
 function nomeFornecedor(
   fornecedor: { razao_social: string; nome_fantasia: string | null } | null,
+  colaborador: { nome: string } | null = null,
 ): string {
-  if (!fornecedor) return "-";
-  return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  if (fornecedor) return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  return colaborador?.nome ?? "-";
 }
 
 /**
@@ -175,6 +180,7 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
          categorias_financeiras(nome),
          formas_pagamento(nome, tipo),
          fornecedores(razao_social, nome_fantasia),
+         colaboradores(nome),
          lancamento_rateios(valor, centros_custo(nome))
        )`,
         )
@@ -236,7 +242,10 @@ export async function listarParcelasPendentes(): Promise<ParcelaPendente[]> {
       lancamentoNumero: lancamento?.numero ?? null,
       lancamentoDescricao: lancamento?.descricao ?? "-",
       observacoes: lancamento?.observacoes ?? null,
-      fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
+      fornecedorNome: nomeFornecedor(
+        lancamento?.fornecedores ?? null,
+        lancamento?.colaboradores ?? null,
+      ),
       origem: lancamento?.origem ?? "manual",
       origemId,
       origemNumero:
@@ -489,7 +498,7 @@ export async function statusDasParcelas(
     .from("lancamento_parcelas")
     .select(
       `id, valor, status,
-       lancamentos(numero, fornecedores(razao_social, nome_fantasia))`,
+       lancamentos(numero, fornecedores(razao_social, nome_fantasia), colaboradores(nome))`,
     )
     .in("id", ids);
 
@@ -516,7 +525,10 @@ export async function statusDasParcelas(
     return {
       id,
       numero: linha.lancamentos?.numero ?? null,
-      fornecedorNome: nomeFornecedor(linha.lancamentos?.fornecedores ?? null),
+      fornecedorNome: nomeFornecedor(
+        linha.lancamentos?.fornecedores ?? null,
+        linha.lancamentos?.colaboradores ?? null,
+      ),
       valor: linha.valor,
       status: linha.status as StatusParcela,
       naoEncontrada: false,
@@ -707,6 +719,7 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
          categorias_financeiras(nome),
          formas_pagamento(nome, tipo),
          fornecedores(razao_social, nome_fantasia),
+         colaboradores(nome),
          lancamento_rateios(valor, centros_custo(nome))
        )`,
     )
@@ -776,7 +789,10 @@ export async function listarPagamentosDiretos(): Promise<PagamentoDireto[]> {
       lancamentoNumero: lancamento?.numero ?? null,
       lancamentoDescricao: lancamento?.descricao ?? "-",
       observacoes: lancamento?.observacoes ?? null,
-      fornecedorNome: nomeFornecedor(lancamento?.fornecedores ?? null),
+      fornecedorNome: nomeFornecedor(
+        lancamento?.fornecedores ?? null,
+        lancamento?.colaboradores ?? null,
+      ),
       origem: lancamento?.origem ?? "manual",
       origemId,
       origemNumero:

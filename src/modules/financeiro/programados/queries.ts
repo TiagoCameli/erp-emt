@@ -31,12 +31,17 @@ export interface ParcelaProgramada {
   contaBancariaNome: string | null;
 }
 
-/** Nome de exibição do fornecedor: fantasia quando existe, senão razão social. */
+/**
+ * Nome de exibição de quem recebe: o fornecedor (fantasia quando existe, senão
+ * razão social) ou, no lançamento do RH (folha, 13º, férias, rescisão), o
+ * colaborador.
+ */
 function nomeFornecedor(
   fornecedor: { razao_social: string; nome_fantasia: string | null } | null,
+  colaborador: { nome: string } | null = null,
 ): string {
-  if (!fornecedor) return "-";
-  return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  if (fornecedor) return fornecedor.nome_fantasia ?? fornecedor.razao_social;
+  return colaborador?.nome ?? "-";
 }
 
 /**
@@ -65,7 +70,8 @@ export async function listarProgramados(): Promise<ParcelaProgramada[]> {
        lancamentos!inner(
          numero, descricao, tipo, status,
          categorias_financeiras(nome),
-         fornecedores(razao_social, nome_fantasia)
+         fornecedores(razao_social, nome_fantasia),
+         colaboradores(nome)
        )`,
     )
     .eq("status", "aprovado")
@@ -91,7 +97,10 @@ export async function listarProgramados(): Promise<ParcelaProgramada[]> {
       parcela.data_programada,
       parcela.data_vencimento,
     ),
-    fornecedorNome: nomeFornecedor(parcela.lancamentos?.fornecedores ?? null),
+    fornecedorNome: nomeFornecedor(
+      parcela.lancamentos?.fornecedores ?? null,
+      parcela.lancamentos?.colaboradores ?? null,
+    ),
     contaBancariaId: parcela.conta_bancaria_id,
     contaBancariaNome: parcela.contas_bancarias?.nome ?? null,
   }));
