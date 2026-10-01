@@ -33,6 +33,7 @@ import {
   EllipsisVertical,
   FileSpreadsheet,
   FilterX,
+  ListFilter,
   LoaderCircle,
   Rows3,
 } from "lucide-react";
@@ -50,10 +51,14 @@ import {
 import { Combobox } from "@/components/canonicos/combobox";
 import {
   BlocoFiltros,
+  ContextoRotuloFiltro,
   FiltroBusca,
   type PersonalizacaoFiltros,
 } from "@/components/canonicos/filter-bar";
-import { MenuColunas, type ColunaAlternavel } from "@/components/canonicos/menu-colunas";
+import {
+  MenuColunas,
+  type ColunaAlternavel,
+} from "@/components/canonicos/menu-colunas";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
 import {
   buscarPreferenciaTabela,
@@ -75,6 +80,15 @@ import {
   VERSAO_PREFERENCIAS,
 } from "@/components/canonicos/preferencias-tabela";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { useTelaCelular } from "@/lib/use-tela-celular";
+import { DataTableCartoes, papeisDoCartao } from "./data-table-cartoes";
 import {
   TableBody,
   TableCell,
@@ -116,6 +130,13 @@ declare module "@tanstack/react-table" {
      * dinheiro alinhado com tabular-nums. Só o texto quebra.
      */
     atomico?: boolean;
+    /**
+     * Lugar da coluna no card do celular (ver `papeisDoCartao`). Sem nada, o
+     * título é a primeira coluna de texto e o valor a primeira alinhada à
+     * direita. `destaque` sobe a coluna para os primeiros campos do card e
+     * `oculta` tira a coluna do card (continua na tabela).
+     */
+    celular?: "titulo" | "valor" | "destaque" | "oculta";
   }
 }
 
@@ -1081,7 +1102,9 @@ export function corteEmLinhas(linhas: number): React.CSSProperties {
 }
 
 /** Texto do title (tooltip nativo) quando o conteúdo da célula é texto puro. */
-function tituloDaCelula<TData>(celula: Cell<TData, unknown>): string | undefined {
+function tituloDaCelula<TData>(
+  celula: Cell<TData, unknown>,
+): string | undefined {
   if (celula.column.columnDef.meta?.naoTruncar === true) return undefined;
   const valor = celula.getValue();
   if (typeof valor === "string" && valor.trim() !== "") return valor;
@@ -1127,6 +1150,15 @@ export function DataTable<TData>({
   const modoServidor = total !== undefined && onPaginationChange !== undefined;
   const personalizavel = idTabela !== undefined;
   const arvoreAtiva = subLinhas !== undefined;
+  /**
+   * No celular a lista vira cards e os filtros vão para uma gaveta. A árvore
+   * fica de fora: recuo de pai e filho é o que ela comunica, e card não tem
+   * como mostrar isso.
+   */
+  const celular = useTelaCelular();
+  const cartoesLigados = !arvoreAtiva;
+  const soCartoes = cartoesLigados && celular === true;
+  const [filtrosAbertos, setFiltrosAbertos] = React.useState(false);
 
   if (arvoreAtiva && (linhaExpandida !== undefined || selecao !== undefined)) {
     throw new Error(
@@ -1198,12 +1230,13 @@ export function DataTable<TData>({
     return padrao;
   }, [colunasComAcoes, idsColunas]);
 
-  const [paginacaoInterna, setPaginacaoInterna] = React.useState<PaginationState>({
-    pageIndex: pageIndex ?? 0,
-    pageSize: pageSize ?? TAMANHO_PADRAO,
-  });
+  const [paginacaoInterna, setPaginacaoInterna] =
+    React.useState<PaginationState>({
+      pageIndex: pageIndex ?? 0,
+      pageSize: pageSize ?? TAMANHO_PADRAO,
+    });
   const [ordenacaoInterna, setOrdenacaoInterna] = React.useState<SortingState>(
-    sorting ?? []
+    sorting ?? [],
   );
   // Chave do estado de preferência. Com `idTabela`, TODAS as instâncias da mesma
   // tabela caem na mesma entrada e mudam juntas (é o conserto da tela repartida
@@ -1339,7 +1372,6 @@ export function DataTable<TData>({
     return filtrosVisiveis[id] ?? filtrosOcultosPadrao[id] ?? true;
   }
 
-
   // Hidrata a personalização depois da montagem. Vem do BANCO, por usuário, para
   // seguir a pessoa em qualquer máquina (o localStorage morria ao trocar de
   // navegador, e máquina compartilhada de escritório é comum na EMT).
@@ -1359,7 +1391,8 @@ export function DataTable<TData>({
       if (!salvo) return;
       definirEstado(entrada, {
         visibilidade: { ...visibilidadePadrao, ...salvo.visiveis },
-        ordem: salvo.ordem.length > 0 ? ordemEfetiva(salvo.ordem, idsColunas) : [],
+        ordem:
+          salvo.ordem.length > 0 ? ordemEfetiva(salvo.ordem, idsColunas) : [],
         larguras: salvo.larguras,
         filtros: salvo.filtros,
         alturaLinha: salvo.alturaLinha,
@@ -1383,8 +1416,7 @@ export function DataTable<TData>({
     alturaCabecalho !== null ||
     pesoCabecalho !== null ||
     idsColunas.some(
-      (id) =>
-        (visibilidade[id] ?? true) !== (visibilidadePadrao[id] ?? true),
+      (id) => (visibilidade[id] ?? true) !== (visibilidadePadrao[id] ?? true),
     );
 
   /**
@@ -1468,7 +1500,9 @@ export function DataTable<TData>({
   const paginacao: PaginationState = onPaginationChange
     ? { pageIndex: pageIndex ?? 0, pageSize: pageSize ?? TAMANHO_PADRAO }
     : paginacaoInterna;
-  const ordenacao: SortingState = onSortingChange ? (sorting ?? []) : ordenacaoInterna;
+  const ordenacao: SortingState = onSortingChange
+    ? (sorting ?? [])
+    : ordenacaoInterna;
 
   const aoMudarPaginacao: OnChangeFn<PaginationState> = (atualizador) => {
     const nova =
@@ -1486,7 +1520,9 @@ export function DataTable<TData>({
 
   const aoMudarVisibilidade: OnChangeFn<VisibilityState> = (atualizador) => {
     const nova =
-      typeof atualizador === "function" ? atualizador(visibilidade) : atualizador;
+      typeof atualizador === "function"
+        ? atualizador(visibilidade)
+        : atualizador;
     aplicarPreferencia({ visibilidade: nova });
   };
 
@@ -1557,6 +1593,10 @@ export function DataTable<TData>({
   const temFiltroAtivo = (filtros ?? []).some(
     (filtro) => filtro.temValor === true,
   );
+  /** Quantos, para o selo do botão "Filtros" do celular. */
+  const qtdFiltrosAtivos = (filtros ?? []).filter(
+    (filtro) => filtro.temValor === true,
+  ).length;
 
   /**
    * Limpa todos os filtros preenchidos de uma vez.
@@ -1624,7 +1664,11 @@ export function DataTable<TData>({
           // Só o que é dos filtros: colunas e alturas têm o "Restaurar" delas. Não
           // limpa valor: filtro preenchido aparece sempre, mesmo oculto por padrão.
           onRestaurar: () =>
-            aplicarPreferencia({ filtros: {}, ordemFiltros: [], largurasFiltros: {} }),
+            aplicarPreferencia({
+              filtros: {},
+              ordemFiltros: [],
+              largurasFiltros: {},
+            }),
           foraDoPadrao:
             ordemFiltros.length > 0 ||
             Object.keys(largurasFiltros).length > 0 ||
@@ -1635,7 +1679,9 @@ export function DataTable<TData>({
   function reordenar(idOrigem: string, idDestino: string) {
     if (idOrigem === idDestino) return;
     const atual =
-      ordemColunas.length > 0 ? ordemEfetiva(ordemColunas, idsColunas) : idsColunas;
+      ordemColunas.length > 0
+        ? ordemEfetiva(ordemColunas, idsColunas)
+        : idsColunas;
     const proxima = atual.filter((id) => id !== idOrigem);
     const posicao = proxima.indexOf(idDestino);
     proxima.splice(posicao < 0 ? proxima.length : posicao, 0, idOrigem);
@@ -1675,7 +1721,8 @@ export function DataTable<TData>({
   React.useEffect(() => {
     if (arrasteAltura === null) return;
     const { clienteY, alturaBase, alvo } = arrasteAltura;
-    const aplicar = alvo === "cabecalho" ? aplicarAlturaCabecalho : aplicarAltura;
+    const aplicar =
+      alvo === "cabecalho" ? aplicarAlturaCabecalho : aplicarAltura;
 
     function mover(evento: MouseEvent) {
       aplicar(alturaBase + (evento.clientY - clienteY));
@@ -2074,7 +2121,9 @@ export function DataTable<TData>({
       // a põe no lugar assim que ela monta é o efeito que chama `redesenhar`.
       if (refGuia.current !== null) {
         refGuia.current.style.left = `${
-          naTela === null ? bordaInicial + (largura - larguraBase) : naTela.borda
+          naTela === null
+            ? bordaInicial + (largura - larguraBase)
+            : naTela.borda
         }px`;
       }
       if (refRotuloGuia.current !== null) {
@@ -2328,7 +2377,9 @@ export function DataTable<TData>({
     },
     onPaginationChange: aoMudarPaginacao,
     onSortingChange: aoMudarOrdenacao,
-    ...(idDaLinha ? { getRowId: (registro: TData) => idDaLinha(registro) } : {}),
+    ...(idDaLinha
+      ? { getRowId: (registro: TData) => idDaLinha(registro) }
+      : {}),
     ...(expansivel
       ? { onExpandedChange: setExpandidas, getRowCanExpand: () => true }
       : {}),
@@ -2370,7 +2421,9 @@ export function DataTable<TData>({
           // volta no modelo anterior a paginação (ver RowPagination no
           // TanStack), que é a árvore inteira, e a barra de baixo (que lista
           // "Próxima página") fica escondida (ver o retorno, mais abaixo).
-          ...(arvoreAtiva ? {} : { getPaginationRowModel: getPaginationRowModel() }),
+          ...(arvoreAtiva
+            ? {}
+            : { getPaginationRowModel: getPaginationRowModel() }),
           getSortedRowModel: getSortedRowModel(),
           getFilteredRowModel: getFilteredRowModel(),
         }),
@@ -2389,6 +2442,10 @@ export function DataTable<TData>({
 
   const linhas = table.getRowModel().rows;
   const colunasVisiveis = table.getVisibleLeafColumns();
+  const papeisCartao = papeisDoCartao(
+    colunasVisiveis,
+    new Set([ID_COLUNA_SELECAO, ID_COLUNA_EXPANSAO, ID_COLUNA_ACOES]),
+  );
   const qtdSkeleton = Math.min(tamanhoPagina, MAX_LINHAS_SKELETON);
 
   const colunasDoMenu: ColunaAlternavel[] = table
@@ -2563,7 +2620,9 @@ export function DataTable<TData>({
                     ? () => setArrastando(header.column.id)
                     : undefined
                 }
-                onDragEnd={podeReordenar ? () => setArrastando(null) : undefined}
+                onDragEnd={
+                  podeReordenar ? () => setArrastando(null) : undefined
+                }
                 onDragOver={
                   podeReordenar
                     ? (evento) => {
@@ -2625,7 +2684,7 @@ export function DataTable<TData>({
                     <span data-medir className={CLASSES_ROTULO}>
                       {flexRender(
                         header.column.columnDef.header,
-                        header.getContext()
+                        header.getContext(),
                       )}
                     </span>
                     <IconeOrdenacao direcao={header.column.getIsSorted()} />
@@ -2663,8 +2722,12 @@ export function DataTable<TData>({
                     )}`}
                     // Leitor de tela anuncia a largura ao focar e a cada seta.
                     aria-valuenow={Math.round(header.getSize())}
-                    aria-valuemin={header.column.columnDef.minSize ?? LARGURA_MINIMA}
-                    aria-valuemax={header.column.columnDef.maxSize ?? LARGURA_MAXIMA}
+                    aria-valuemin={
+                      header.column.columnDef.minSize ?? LARGURA_MINIMA
+                    }
+                    aria-valuemax={
+                      header.column.columnDef.maxSize ?? LARGURA_MAXIMA
+                    }
                     aria-valuetext={`${Math.round(header.getSize())} pixels`}
                     // Foco de teclado é obrigatório: a alça é a única forma de
                     // mudar largura, e sem mouse ela não existia.
@@ -2697,7 +2760,9 @@ export function DataTable<TData>({
                       ajustarAoConteudo([header.column.id]);
                     }}
                     onClick={(evento) => evento.stopPropagation()}
-                    onKeyDown={(evento) => aoTeclarNaAlca(evento, header.column)}
+                    onKeyDown={(evento) =>
+                      aoTeclarNaAlca(evento, header.column)
+                    }
                     className={cn(
                       // 12px de área de pega (`w-3`) montada SOBRE a divisória
                       // (`-right-1.5`): 6px de cada lado, com a linha que a pessoa
@@ -2745,7 +2810,10 @@ export function DataTable<TData>({
             // A altura escolhida vale no loading também, senão o layout pula
             // quando os dados chegam.
             style={estiloLinha}
-            className={cn("hover:bg-transparent", alturaLinha === null && "h-9")}
+            className={cn(
+              "hover:bg-transparent",
+              alturaLinha === null && "h-9",
+            )}
           >
             {colunasVisiveis.map((coluna) => (
               <TableCell
@@ -2775,7 +2843,9 @@ export function DataTable<TData>({
           <React.Fragment key={linha.id}>
             <TableRow
               data-expandida={expansivel ? linha.getIsExpanded() : undefined}
-              onClick={onRowClick ? () => onRowClick(linha.original) : undefined}
+              onClick={
+                onRowClick ? () => onRowClick(linha.original) : undefined
+              }
               onKeyDown={
                 onRowClick
                   ? (evento) => {
@@ -2794,7 +2864,7 @@ export function DataTable<TData>({
                 // A alça de altura é posicionada em relação à linha.
                 personalizavel && "group/linha relative",
                 onRowClick &&
-                  "cursor-pointer foco-anel-dentro focus-visible:bg-muted/50"
+                  "cursor-pointer foco-anel-dentro focus-visible:bg-muted/50",
               )}
             >
               {linha.getVisibleCells().map((celula, indiceCelula) => {
@@ -3053,8 +3123,9 @@ export function DataTable<TData>({
                     elemento: (
                       <FiltroBusca
                         valor={
-                          (colunaBusca.getFilterValue() as string | undefined) ??
-                          ""
+                          (colunaBusca.getFilterValue() as
+                            | string
+                            | undefined) ?? ""
                         }
                         onValorChange={(texto) => {
                           colunaBusca.setFilterValue(texto);
@@ -3069,7 +3140,8 @@ export function DataTable<TData>({
                   },
                 ]
               : []),
-            ...(filtros ?? [])
+            // No celular só a busca fica à vista: o resto vai para a gaveta.
+            ...(soCartoes ? [] : (filtros ?? []))
               .filter((filtro) => filtroVisivel(filtro.id))
               .map((filtro) => ({
                 id: filtro.id,
@@ -3078,10 +3150,29 @@ export function DataTable<TData>({
                 fixo: filtro.fixo,
               })),
           ]}
-          personalizacao={personalizacaoFiltros}
+          personalizacao={soCartoes ? undefined : personalizacaoFiltros}
           acoesEsquerda={
-            temFiltroAtivo || toolbar !== undefined || arvoreAtiva ? (
+            temFiltroAtivo ||
+            toolbar !== undefined ||
+            arvoreAtiva ||
+            (soCartoes && (filtros ?? []).length > 0) ? (
               <>
+                {soCartoes && (filtros ?? []).length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFiltrosAbertos(true)}
+                  >
+                    <ListFilter />
+                    Filtros
+                    {qtdFiltrosAtivos > 0 ? (
+                      <span className="rounded-full bg-primary px-1.5 text-legenda text-primary-foreground tabular-nums">
+                        {qtdFiltrosAtivos}
+                      </span>
+                    ) : null}
+                  </Button>
+                ) : null}
                 {/*
                   Só aparece com filtro ativo. Botão morto em toda tela do app é
                   ruído, e a presença dele já avisa que a lista está filtrada, que
@@ -3115,9 +3206,10 @@ export function DataTable<TData>({
             ) : undefined
           }
           acoesDireita={
-            personalizavel || exportar !== undefined ? (
+            (personalizavel && !soCartoes) || exportar !== undefined ? (
               <>
-                {personalizavel && (filtros ?? []).length > 0 && (
+                {/* Altura e colunas são da tabela: no celular não há tabela. */}
+                {personalizavel && !soCartoes && (filtros ?? []).length > 0 && (
                   <MenuFiltros
                     filtros={(filtros ?? []).map((filtro) => ({
                       id: filtro.id,
@@ -3128,7 +3220,7 @@ export function DataTable<TData>({
                     onAlternar={alternarFiltro}
                   />
                 )}
-                {personalizavel && (
+                {personalizavel && !soCartoes && (
                   <MenuAltura
                     altura={alturaLinha}
                     onEscolher={aplicarAltura}
@@ -3138,7 +3230,7 @@ export function DataTable<TData>({
                     onEscolherPeso={aplicarPesoCabecalho}
                   />
                 )}
-                {personalizavel && (
+                {personalizavel && !soCartoes && (
                   <MenuColunas
                     colunas={colunasDoMenu}
                     onRestaurarPadrao={restaurarPadrao}
@@ -3155,7 +3247,10 @@ export function DataTable<TData>({
                     onClick={exportar}
                   >
                     {exportando ? (
-                      <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                      <LoaderCircle
+                        className="size-4 animate-spin"
+                        aria-hidden
+                      />
                     ) : (
                       <FileSpreadsheet />
                     )}
@@ -3168,24 +3263,121 @@ export function DataTable<TData>({
         />
       )}
 
-      {cabecalhoFixo ? (
-        // `relative` é o que dá à linha guia do arraste um lugar de onde sair (a
-        // guia mede em px a partir da borda esquerda da tabela).
+      {soCartoes ? null : (
         <div
-          className="relative overflow-auto rounded-md border border-border"
-          style={{ maxHeight: alturaMaxima ?? ALTURA_MAXIMA_PADRAO }}
+          className={cn(cartoesLigados && celular === null && "max-md:hidden")}
         >
-          {tabela}
-          {guiaLargura}
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-md border border-border">
-          <div data-slot="table-container" className="relative w-full overflow-x-auto">
-            {tabela}
-            {guiaLargura}
-          </div>
+          {cabecalhoFixo ? (
+            // `relative` é o que dá à linha guia do arraste um lugar de onde sair (a
+            // guia mede em px a partir da borda esquerda da tabela).
+            <div
+              className="relative overflow-auto rounded-md border border-border"
+              style={{ maxHeight: alturaMaxima ?? ALTURA_MAXIMA_PADRAO }}
+            >
+              {tabela}
+              {guiaLargura}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-md border border-border">
+              <div
+                data-slot="table-container"
+                className="relative w-full overflow-x-auto"
+              >
+                {tabela}
+                {guiaLargura}
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/*
+        Antes de hidratar (`celular === null`) saem os dois e o CSS escolhe, para
+        o celular não piscar a tabela. Depois, só um.
+      */}
+      {cartoesLigados && celular !== false ? (
+        <div className={cn(celular === null && "md:hidden")}>
+          <DataTableCartoes
+            linhas={linhas}
+            papeis={papeisCartao}
+            rotuloDe={(coluna) =>
+              rotuloColuna(
+                coluna.id,
+                coluna.columnDef.header,
+                coluna.columnDef.meta,
+              )
+            }
+            idSelecao={ID_COLUNA_SELECAO}
+            idAcoes={ID_COLUNA_ACOES}
+            isLoading={isLoading}
+            emptyState={emptyState}
+            onRowClick={onRowClick}
+            linhaExpandida={linhaExpandida}
+            rodape={rodape}
+            colunas={colunasVisiveis}
+            selecaoTodos={(() => {
+              const cabecalhoSelecao = table
+                .getFlatHeaders()
+                .find((header) => header.column.id === ID_COLUNA_SELECAO);
+              return cabecalhoSelecao
+                ? flexRender(
+                    cabecalhoSelecao.column.columnDef.header,
+                    cabecalhoSelecao.getContext(),
+                  )
+                : undefined;
+            })()}
+          />
+        </div>
+      ) : null}
+
+      {soCartoes && (filtros ?? []).length > 0 ? (
+        <Sheet open={filtrosAbertos} onOpenChange={setFiltrosAbertos}>
+          <SheetContent
+            side="bottom"
+            className="max-h-[85vh] gap-0 overflow-y-auto rounded-t-xl pb-[env(safe-area-inset-bottom)]"
+          >
+            <SheetHeader>
+              <SheetTitle>Filtros</SheetTitle>
+              <SheetDescription className="sr-only">
+                Filtros da listagem
+              </SheetDescription>
+            </SheetHeader>
+            {/* Todos os filtros, não só os da barra: no celular não existe o
+                menu "Filtros" para ligar o que está escondido. Cada campo ocupa
+                a largura toda, por cima da largura escolhida no computador. */}
+            <div className="flex flex-col gap-3 px-4 pb-4 [&>*]:w-full! [&>*]:max-w-none!">
+              {(filtros ?? []).map((filtro) => (
+                <ContextoRotuloFiltro.Provider
+                  key={filtro.id}
+                  value={filtro.rotulo}
+                >
+                  {filtro.elemento}
+                </ContextoRotuloFiltro.Provider>
+              ))}
+            </div>
+            <div className="sticky bottom-0 flex gap-2 border-t border-border bg-background px-4 py-3">
+              {temFiltroAtivo ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={limparFiltros}
+                >
+                  <FilterX />
+                  Limpar
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={() => setFiltrosAbertos(false)}
+              >
+                Ver {totalRegistros} resultado{totalRegistros === 1 ? "" : "s"}
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
 
       {arvoreAtiva ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3193,24 +3385,26 @@ export function DataTable<TData>({
             {de} a {ate} de {totalRegistros}
           </p>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-detalhe text-muted-foreground">
-                Linhas por página
-              </span>
-              <Combobox
-                valor={String(tamanhoPagina)}
-                onValorChange={(valor) =>
-                  aoMudarPaginacao({ pageIndex: 0, pageSize: Number(valor) })
-                }
-                opcoes={TAMANHOS_PAGINA.map((tamanho) => ({
-                  valor: String(tamanho),
-                  rotulo: String(tamanho),
-                }))}
-                size="sm"
-                className="w-[4.5rem] text-detalhe"
-                ariaLabel="Linhas por página"
-              />
-            </div>
+            {soCartoes ? null : (
+              <div className="flex items-center gap-2 max-md:hidden">
+                <span className="text-detalhe text-muted-foreground">
+                  Linhas por página
+                </span>
+                <Combobox
+                  valor={String(tamanhoPagina)}
+                  onValorChange={(valor) =>
+                    aoMudarPaginacao({ pageIndex: 0, pageSize: Number(valor) })
+                  }
+                  opcoes={TAMANHOS_PAGINA.map((tamanho) => ({
+                    valor: String(tamanho),
+                    rotulo: String(tamanho),
+                  }))}
+                  size="sm"
+                  className="w-[4.5rem] text-detalhe"
+                  ariaLabel="Linhas por página"
+                />
+              </div>
+            )}
             <div className="flex items-center gap-1">
               <Button
                 type="button"
@@ -3267,7 +3461,9 @@ export function colunaDinheiro<TData>(
       return (
         <MoneyText
           valor={
-            typeof valor === "number" || typeof valor === "string" ? valor : null
+            typeof valor === "number" || typeof valor === "string"
+              ? valor
+              : null
           }
         />
       );
@@ -3319,7 +3515,8 @@ export function colunaTexto<TData>(
     size: 180,
     cell: ({ getValue }) => {
       const valor = getValue();
-      if (typeof valor !== "string" || valor.trim() === "") return <CelulaVazia />;
+      if (typeof valor !== "string" || valor.trim() === "")
+        return <CelulaVazia />;
       return valor;
     },
     ...extra,

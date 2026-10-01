@@ -26,6 +26,9 @@ export function KPICard({
 }: KPICardProps) {
   const conteudo = (
     <div
+      // A grade acha o KPI por aqui para pôr dois por linha no celular, sem
+      // levar os gráficos junto.
+      data-kpi=""
       className={cn(
         // Sem `h-full` aqui: como item direto do flex da GradeKpis o cartão já é
         // esticado pelo `align-items: stretch`, e fixar altura de 100% DESLIGA
@@ -36,7 +39,9 @@ export function KPICard({
         //
         // Dentro do Link o `h-full` volta a ser necessário e a funcionar: lá o
         // item de flex é o Link, que fica com altura definida depois do stretch.
-        "faixa-esquerda rounded-lg border border-border bg-card p-4",
+        // No celular o card é metade da largura (ver GradeKpis), então aperta o
+        // respiro e o tamanho do número para "R$ 1.234.567,89" caber.
+        "faixa-esquerda rounded-lg border border-border bg-card p-4 max-md:p-3",
         href && "h-full transition-colors hover:bg-surface",
         className,
       )}
@@ -44,11 +49,13 @@ export function KPICard({
       <p className="text-legenda uppercase tracking-wide text-muted-foreground">
         {titulo}
       </p>
-      <p className="mt-1 text-titulo font-semibold tabular-nums text-foreground">
+      <p className="mt-1 text-titulo font-semibold tabular-nums text-foreground max-md:text-corpo max-md:whitespace-nowrap">
         {valor}
       </p>
       {detalhe !== undefined && detalhe !== null ? (
-        <p className="mt-1 text-detalhe text-muted-foreground">{detalhe}</p>
+        <p className="mt-1 text-detalhe text-muted-foreground max-md:text-legenda">
+          {detalhe}
+        </p>
       ) : null}
     </div>
   );

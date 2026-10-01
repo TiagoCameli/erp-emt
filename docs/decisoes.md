@@ -4835,3 +4835,25 @@ concisa e focada no que precisa ser aprovado. Desktop não mudou.
    pagamentos.
 
 **Ajuste 2 (01/10/2026, pedido do Tiago):** o "Personalizar tela" virou só o ícone, no rodapé da sidebar ao lado do botão de tema e com o mesmo desenho (`BotaoPersonalizar`). Ligado, vira o ✓ de concluir, destacado em verde. A sidebar está sempre à vista, então o concluir também. O `ProvedorGrades` passou a envolver o AppShell no layout do app, e a aba do topo saiu.
+
+## 2026-10-01 - Celular, bloco 1: os canônicos viram app de celular
+
+Pedido do Tiago depois da aprovação no celular: levar o mesmo padrão para todos os módulos. Em vez de
+redesenhar 95 telas, evoluem os canônicos (regra 9), e toda tela que os usa muda junto. Desktop não
+muda.
+
+1. **DataTable vira lista de cards abaixo do `md`** (`data-table-cartoes.tsx`). Título = primeira
+   coluna de texto; valor = primeira alinhada à direita; subtítulo sem rótulo = a coluna seguinte
+   (quase sempre quem: fornecedor, colaborador); mais quatro campos em duas colunas com rótulo em cima;
+   o resto em "Mais N campos". Checkbox de seleção, menu "⋮", clique no registro, linha expandida
+   ("Ver detalhes"), rodapé de totais e estado vazio continuam, montados das MESMAS células da tabela.
+   O card lê as colunas visíveis, então o que a pessoa escondeu no menu Colunas some nos dois.
+2. **`meta.celular`** (`titulo | valor | destaque | oculta`) para a tela ajustar o card sem mexer na
+   tabela. Coluna com `esconderAte` vai para o fim do card, não some.
+3. **Árvore (`subLinhas`) continua tabela**: recuo pai/filho é o que ela comunica.
+4. **Filtros numa gaveta inferior** com selo de quantos estão ativos, "Limpar" e "Ver N resultados".
+   Na barra fica só a busca. Altura, Colunas e Linhas por página saem do celular (são da tabela).
+5. **KPI dois por linha** (`data-kpi` + `:has`), com número um degrau menor e sem quebra. Gráfico
+   continua na largura toda.
+6. **FormDrawer**: respiro menor e botões do rodapé dividindo a largura, acima da área segura.
+7. Mesmo `useTelaCelular()` da aprovação: `null` antes de hidratar desenha os dois e o CSS escolhe.
