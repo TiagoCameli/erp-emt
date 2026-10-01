@@ -87,7 +87,9 @@ export function FilaCelular({
   const total = somar(parcelas);
   const marcadas = parcelas.filter((parcela) => selecionadas.has(parcela.id));
   const totalMarcado = somar(marcadas);
-  const visiveis = parcelas.slice(0, limite);
+  // O link mostra tudo de uma vez: é um recorte que alguém escolheu, e o
+  // "Aprovar todos" só pode alcançar card que está na tela.
+  const visiveis = link.ativo ? parcelas : parcelas.slice(0, limite);
 
   // Barra de baixo: o que foi marcado manda; sem marca, o link oferece aprovar
   // o recorte inteiro, que é o que quem mandou o link pediu.
@@ -239,7 +241,7 @@ export function FilaCelular({
         </ul>
       )}
 
-      {parcelas.length > limite ? (
+      {visiveis.length < parcelas.length ? (
         <Button
           type="button"
           variant="outline"

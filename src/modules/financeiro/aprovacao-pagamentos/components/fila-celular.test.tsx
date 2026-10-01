@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { salvarFiltroSessao } from "@/components/canonicos/filtros-sessao";
 import { FilaAprovacao } from "@/modules/financeiro/aprovacao-pagamentos/components/fila-aprovacao";
 import type { ParcelaPendente } from "@/modules/financeiro/aprovacao-pagamentos/queries";
 
@@ -238,6 +239,63 @@ describe("FilaAprovacao no celular", () => {
     expect(
       screen.queryByRole("button", { name: /^Aprovar/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("no link mostra todos os cards, para o aprovar todos não alcançar card fora da tela", () => {
+    comoCelular();
+    const muitas = Array.from({ length: 25 }, (_, i) =>
+      parcela({
+        id: `${String(i).padStart(8, "0")}-1111-4111-8111-111111111111`,
+        lancamentoNumero: `LAN-2026-${String(i).padStart(4, "0")}`,
+      }),
+    );
+    render(
+      <FilaAprovacao
+        parcelas={muitas}
+        {...PADRAO}
+        parcelasDoLink={muitas.map((p) => p.id)}
+      />,
+    );
+    expect(
+      screen.getByRole("list", { name: "Pagamentos para aprovar" }).children,
+    ).toHaveLength(25);
+    expect(
+      screen.queryByRole("button", { name: /Mostrar mais/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("fora do link a lista vem de 20 em 20", () => {
+    comoCelular();
+    const muitas = Array.from({ length: 25 }, (_, i) =>
+      parcela({
+        id: `${String(i).padStart(8, "0")}-1111-4111-8111-111111111111`,
+      }),
+    );
+    render(<FilaAprovacao parcelas={muitas} {...PADRAO} />);
+    expect(
+      screen.getByRole("list", { name: "Pagamentos para aprovar" }).children,
+    ).toHaveLength(20);
+    expect(
+      screen.getByRole("button", { name: /Mostrar mais 5/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("no link, busca guardada na sessão não esconde parcela do link", () => {
+    comoCelular();
+    salvarFiltroSessao(
+      "/financeiro/aprovacao-pagamentos",
+      "filtroBusca",
+      "nada bate com isto",
+    );
+    render(
+      <FilaAprovacao
+        parcelas={[parcela()]}
+        {...PADRAO}
+        parcelasDoLink={[parcela().id]}
+      />,
+    );
+    expect(screen.getByText("A CRUZEIRENSE")).toBeInTheDocument();
+    window.sessionStorage.clear();
   });
 
   it("no computador continua a tabela, sem os cards", () => {

@@ -308,8 +308,13 @@ export function FilaAprovacao({
     // O link é recorte, não filtro: vem antes de tudo e não aparece na barra de
     // filtros. Quem abriu um link não quer aprovar por engano a parcela vizinha.
     const doLink = parcelasDoLink.length > 0 ? new Set(parcelasDoLink) : null;
+    // No celular o link não mostra barra de filtros, então filtro guardado na
+    // sessão esconderia parcela do link sem ninguém ver por quê (e o estado
+    // vazio diria que elas saíram da fila). Lá o recorte do link é a lista toda.
+    const soLink = doLink !== null && celular === true;
     return parcelas.filter((parcela) => {
       if (doLink && !doLink.has(parcela.id)) return false;
+      if (soLink) return true;
       if (filtroConta !== "" && parcela.contaBancariaId !== filtroConta) {
         return false;
       }
@@ -361,6 +366,7 @@ export function FilaAprovacao({
   }, [
     parcelas,
     parcelasDoLink,
+    celular,
     filtroBusca,
     filtroConta,
     filtroCategoria,
@@ -508,7 +514,7 @@ export function FilaAprovacao({
       tirarDaSelecao(parcela.id);
     } else {
       const resultado = await aprovarParcelasEmLote(
-        [...selecionadas],
+        selecionadasNaFila.map((parcela) => parcela.id),
         dataProgramada,
         contaId,
       );
@@ -545,7 +551,10 @@ export function FilaAprovacao({
       toast.success("Pagamento enviado para revisão");
       tirarDaSelecao(parcela.id);
     } else {
-      const resultado = await revisarParcelasEmLote([...selecionadas], texto);
+      const resultado = await revisarParcelasEmLote(
+        selecionadasNaFila.map((parcela) => parcela.id),
+        texto,
+      );
       if ("erro" in resultado) {
         toast.error(
           resultado.revisadas > 0
@@ -1209,7 +1218,7 @@ export function FilaAprovacao({
         : null;
 
   const quantidadeRevisao =
-    alvoRevisao?.tipo === "linha" ? 1 : selecionadas.size;
+    alvoRevisao?.tipo === "linha" ? 1 : selecionadasNaFila.length;
   const valorRevisao =
     alvoRevisao?.tipo === "linha"
       ? alvoRevisao.parcela.valor
@@ -1473,7 +1482,9 @@ export function FilaAprovacao({
           onAbertoChange={(aberto) => {
             if (!aberto) setAlvoAprovacao(null);
           }}
-          quantidade={alvoAprovacao?.tipo === "linha" ? 1 : selecionadas.size}
+          quantidade={
+            alvoAprovacao?.tipo === "linha" ? 1 : selecionadasNaFila.length
+          }
           valorTotal={
             alvoAprovacao?.tipo === "linha"
               ? alvoAprovacao.parcela.valor
