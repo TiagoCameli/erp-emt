@@ -21,6 +21,12 @@ export const PARAM_LINK_APROVACAO = "parcela";
 
 const ROTA_FILA = "/financeiro/aprovacao-pagamentos";
 
+/** Parâmetro que abre a tela de aprovação já numa aba. */
+export const PARAM_ABA = "aba";
+
+/** Aba de dinheiro e cartão, para quem volta da tela inteira de um deles. */
+export const ROTA_ABA_DIRETOS = `${ROTA_FILA}?${PARAM_ABA}=diretos`;
+
 /** Rota da tela inteira de aprovação de uma parcela, relativa. */
 export function urlTelaInteira(id: string): string {
   return `${ROTA_FILA}/${id}`;

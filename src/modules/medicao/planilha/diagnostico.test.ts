@@ -30,6 +30,24 @@ describe("diagnosticarValores", () => {
     expect(d).toMatchObject({ exato: 1, indistinto: 0, diverge: [] });
   });
 
+  it("classifica como truncado quando a planilha tem TRUNCAR(q x p, 2)", () => {
+    const d = diagnosticarValores([
+      serv(1, "01", "55.12", "328.06", "18082.66"),  // 18082.6672: trunca 66, arredonda 67
+      serv(2, "02", "1", "1.025", "1.02"),           // 1.025: trunca 1.02, arredonda 1.03
+    ]);
+    expect(d).toMatchObject({ comValor: 2, truncado: 2, arredondado: 0, exato: 0, indistinto: 0, diverge: [] });
+  });
+
+  it("arredondado continua arredondado quando difere do truncado", () => {
+    const d = diagnosticarValores([serv(1, "01", "55.12", "328.06", "18082.67")]);
+    expect(d).toMatchObject({ arredondado: 1, truncado: 0 });
+  });
+
+  it("valor que bate com truncado e arredondado ao mesmo tempo é indistinto", () => {
+    const d = diagnosticarValores([serv(1, "01", "1", "1.0123", "1.01")]); // trunc = round = 1.01
+    expect(d).toMatchObject({ indistinto: 1, truncado: 0, arredondado: 0, diverge: [] });
+  });
+
   it("sem coluna de valor não há diagnóstico", () => {
     expect(diagnosticarValores([serv(1, "01", "1", "1", null)])).toBeNull();
   });

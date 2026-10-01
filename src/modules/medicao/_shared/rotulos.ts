@@ -15,12 +15,13 @@ export const ROTULO_STATUS_CONTRATO: Record<StatusContrato, string> = {
   ativo: "Ativo", paralisado: "Paralisado", encerrado: "Encerrado",
 };
 
-export const REGRAS_ARREDONDAMENTO = ["item_por_medicao", "item_por_acumulado", "sem_arredondar"] as const;
+export const REGRAS_ARREDONDAMENTO = ["item_por_medicao", "item_por_acumulado", "sem_arredondar", "item_truncado"] as const;
 export type RegraArredondamento = (typeof REGRAS_ARREDONDAMENTO)[number];
 export const ROTULO_REGRA: Record<RegraArredondamento, string> = {
   item_por_medicao: "Por item, em cada medição",
   item_por_acumulado: "Por item, no acumulado",
   sem_arredondar: "Sem arredondar, só no total",
+  item_truncado: "Truncado por item, em cada medição",
 };
 
 export const TIPOS_ADITIVO = ["quantidade", "valor", "prazo", "inclusao_item"] as const;

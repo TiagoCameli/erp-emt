@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { absoluto, arredondar, casasDecimais, comparar, lerDecimal, multiplicar, paraTexto, subtrair } from "./decimal";
+import { absoluto, arredondar, truncar, casasDecimais, comparar, lerDecimal, multiplicar, paraTexto, subtrair } from "./decimal";
 
 const t = (s: string) => lerDecimal(s);
 
@@ -14,6 +14,14 @@ describe("decimal exato", () => {
     expect(paraTexto(arredondar(t("0.5025"), 2))).toBe("0.5");
     expect(paraTexto(arredondar(t("-1.005"), 2))).toBe("-1.01");
     expect(paraTexto(arredondar(t("2"), 2))).toBe("2");
+  });
+
+  it("trunca sem arredondar, em direção ao zero", () => {
+    expect(paraTexto(truncar(t("18082.6672"), 2))).toBe("18082.66");
+    expect(paraTexto(truncar(t("1.025"), 2))).toBe("1.02");
+    expect(paraTexto(truncar(t("-1.029"), 2))).toBe("-1.02");
+    expect(paraTexto(truncar(t("2"), 2))).toBe("2");
+    expect(paraTexto(truncar(t("0.999"), 2))).toBe("0.99");
   });
 
   it("subtrai, compara e tira o absoluto", () => {
