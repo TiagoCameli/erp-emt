@@ -4834,6 +4834,8 @@ concisa e focada no que precisa ser aprovado. Desktop não mudou.
 5. **No link, a aba Dinheiro e cartão some no celular.** Quem abriu o link veio aprovar aqueles
    pagamentos.
 
+**Ajuste 2 (01/10/2026, pedido do Tiago):** o "Personalizar tela" virou só o ícone, no rodapé da sidebar ao lado do botão de tema e com o mesmo desenho (`BotaoPersonalizar`). Ligado, vira o ✓ de concluir, destacado em verde. A sidebar está sempre à vista, então o concluir também. O `ProvedorGrades` passou a envolver o AppShell no layout do app, e a aba do topo saiu.
+
 ## 2026-10-01 - Carretas EMT: mapa e tabela de rotas, segunda versão
 
 **Pedido do Tiago:** "dê mais fluidez a esse mapa, faça com que essa tabela e o mapa sejam

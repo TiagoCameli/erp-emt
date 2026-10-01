@@ -9,6 +9,7 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
 
 import {
   BlocoFiltros,
+  BotaoPersonalizar,
   FiltroBusca,
   ID_BUSCA_TABELA,
   lerPreferenciasTabela,
@@ -79,6 +80,7 @@ describe("BlocoFiltros personalizável", () => {
     const p = personalizacao({ foraDoPadrao: true });
     render(
       <ProvedorGrades inicial={{}}>
+        <BotaoPersonalizar />
         <BlocoFiltros campos={campos()} personalizacao={p} />
       </ProvedorGrades>,
     );
@@ -94,6 +96,7 @@ describe("BlocoFiltros personalizável", () => {
   it("fora do modo de edição nada muda para quem usa", () => {
     render(
       <ProvedorGrades inicial={{}}>
+        <BotaoPersonalizar />
         <BlocoFiltros campos={campos()} personalizacao={personalizacao()} />
       </ProvedorGrades>,
     );
