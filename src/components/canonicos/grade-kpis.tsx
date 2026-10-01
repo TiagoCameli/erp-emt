@@ -121,6 +121,11 @@ export function GradeKpis({ children, className, id, titulo, vao }: GradeKpisPro
     <div
       className={cn(
         "flex flex-wrap gap-3 [&>*]:min-w-0 [&>*]:flex-1 [&>*]:basis-64",
+        // Celular: KPI dois por linha. Um por linha fazia quatro números
+        // ocuparem a tela inteira antes da lista.
+        // `[data-kpi]` é o KPICard direto; o `:has` pega o que vem embrulhado
+        // (o Link do KPI com `href`).
+        "max-md:[&>[data-kpi]]:basis-[calc(50%-0.375rem-0.5px)] max-md:[&>*:has([data-kpi])]:basis-[calc(50%-0.375rem-0.5px)]",
         className,
       )}
     >

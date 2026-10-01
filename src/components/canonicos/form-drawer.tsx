@@ -73,7 +73,7 @@ export function FormDrawer({
         )}
         {...(descricao ? {} : { 'aria-describedby': undefined })}
       >
-        <DialogHeader className="shrink-0 space-y-0 border-b border-border bg-background px-6 py-4 text-left">
+        <DialogHeader className="shrink-0 space-y-0 border-b border-border bg-background px-6 py-4 text-left max-md:px-4 max-md:py-3">
           <div className={cn('mx-auto flex w-full flex-col gap-1', larguraConteudo)}>
             <DialogTitle className="text-secao font-semibold">{titulo}</DialogTitle>
             {descricao ? (
@@ -85,16 +85,18 @@ export function FormDrawer({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className={cn('mx-auto w-full px-6 py-6', larguraConteudo)}>
+          <div className={cn('mx-auto w-full px-6 py-6 max-md:px-4 max-md:py-4', larguraConteudo)}>
             {children}
           </div>
         </div>
 
         {rodape ? (
-          <div className="shrink-0 border-t border-border bg-surface">
+          <div className="shrink-0 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]">
             <div
               className={cn(
                 'mx-auto flex w-full items-center justify-end gap-2 px-6 py-4',
+                // Celular: botões dividem a largura, ao alcance do polegar.
+                'max-md:px-4 max-md:py-3 max-md:[&>*]:flex-1',
                 larguraConteudo,
               )}
             >

@@ -4855,3 +4855,30 @@ espetaculares [...] que me dê as informações da melhor maneira possível".
 5. **Tabela:** viagens por mês em minigráfico, participação na produção em barra, R$/viagem, R$/t,
    desvio do km lançado contra a estrada (acima de 5% em destaque), ordenação por coluna, teclado
    (Enter/espaço filtra). O número da rota é a posição pela produção e não muda com a ordenação.
+
+## 2026-10-01 - Celular, bloco 1: os canônicos viram app de celular
+
+Pedido do Tiago depois da aprovação no celular: levar o mesmo padrão para todos os módulos. Em vez de
+redesenhar 95 telas, evoluem os canônicos (regra 9), e toda tela que os usa muda junto. Desktop não
+muda.
+
+1. **DataTable vira lista de cards abaixo do `md`** (`data-table-cartoes.tsx`). Título = primeira
+   coluna de texto; valor = primeira alinhada à direita; subtítulo sem rótulo = a coluna seguinte
+   (quase sempre quem: fornecedor, colaborador); mais quatro campos em duas colunas com rótulo em cima;
+   o resto em "Mais N campos". Checkbox de seleção, menu "⋮", clique no registro, linha expandida
+   ("Ver detalhes"), rodapé de totais e estado vazio continuam, montados das MESMAS células da tabela.
+   O card lê as colunas visíveis, então o que a pessoa escondeu no menu Colunas some nos dois.
+2. **`meta.celular`** (`titulo | valor | destaque | oculta`) para a tela ajustar o card sem mexer na
+   tabela. Coluna com `esconderAte` vai para o fim do card, não some.
+3. **Árvore (`subLinhas`) continua tabela**: recuo pai/filho é o que ela comunica.
+4. **Filtros numa gaveta inferior** com selo de quantos estão ativos, "Limpar" e "Ver N resultados".
+   Na barra fica só a busca. Altura, Colunas e Linhas por página saem do celular (são da tabela).
+5. **KPI dois por linha** (`data-kpi` + `:has`), com número um degrau menor e sem quebra. Gráfico
+   continua na largura toda.
+6. **FormDrawer**: respiro menor e botões do rodapé dividindo a largura, acima da área segura.
+7. Mesmo `useTelaCelular()` da aprovação: `null` antes de hidratar desenha os dois e o CSS escolhe.
+8. **Colunas especiais feitas à mão também contam.** Trinta e poucas telas têm a própria coluna
+   `acoes` (ou rótulo "Ações"), `selecao` ou `expandir`: o card as reconhece por id e as põe no canto
+   (ações, fora do clique), à esquerda (seleção) ou fora (expandir). Filtro `fixo` (a busca das telas
+   com paginação no servidor) fica na barra, não na gaveta. Rodapé da coluna do título é rótulo e vira
+   cabeçalho do bloco de totais.
