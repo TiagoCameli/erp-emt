@@ -2,7 +2,7 @@
  * Carretas EMT: a produção das carretas próprias contra o que elas custam.
  *
  * Os números chegam agregados da RPC `fn_frete_carretas_emt` (mês x carreta x categoria; as
- * regras de cada um estão no comentário da migration 20260930180000). Aqui só se recorta pelo
+ * regras de cada um estão no comentário da migration 20261001155959). Aqui só se recorta pelo
  * período e pela carreta, se agrupa e se deriva: resultado, margem, R$ por viagem, por tonelada
  * e por km.
  *
