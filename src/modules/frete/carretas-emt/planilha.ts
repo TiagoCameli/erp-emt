@@ -8,6 +8,7 @@ import {
   type Desempenho,
   type PainelCarretas,
 } from "@/modules/frete/carretas-emt/calculo";
+import { ROTULO_TIPO_FRETE, type TipoFrete } from "@/modules/frete/fretes/schemas";
 
 /**
  * A planilha da aba Carretas EMT: as quatro tabelas da tela (desempenho por carreta, mês a
@@ -81,7 +82,8 @@ const INDICADORES: LinhaIndicador[] = [
 export function montarPlanilhaCarretas(painel: PainelCarretas): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
   workbook.created = new Date();
-  const periodo = `${rotuloMes(painel.filtro.de)} a ${rotuloMes(painel.filtro.ate)}`;
+  const tipo = painel.filtro.tipo ? `, só ${ROTULO_TIPO_FRETE[painel.filtro.tipo as TipoFrete].toLowerCase()}` : "";
+  const periodo = `${rotuloMes(painel.filtro.de)} a ${rotuloMes(painel.filtro.ate)}${tipo}`;
   const colunasDesempenho = painel.desempenhos.length > 1 ? [...painel.desempenhos, painel.total] : painel.desempenhos;
 
   // Indicador nas linhas, carreta nas colunas: o formato vai por linha, então cada célula

@@ -137,6 +137,20 @@ describe("montarPainel, uma carreta", () => {
   });
 });
 
+describe("montarPainel, por tipo de transporte", () => {
+  it("recorta só a produção; gasto e parcela continuam os da carreta inteira", () => {
+    const todos = montarPainel(base(), FILTRO, "2026-09");
+    const painel = montarPainel(base(), { ...FILTRO, tipo: "transferencia" }, "2026-09");
+    // Transferências: SQU9C94 (4 viagens, 8.000,20) e a placa errada (2 viagens, 3.000).
+    expect(painel.total.viagens).toBe(6);
+    expect(painel.total.producao).toBe(11000.2);
+    expect(painel.desempenhos.find((d) => d.chave === "SQS7E01")?.viagens).toBe(0);
+    expect(painel.total.custoOperacional).toBe(todos.total.custoOperacional);
+    expect(painel.total.parcelas).toBe(todos.total.parcelas);
+    expect(painel.meses[1]?.viagensPorCarreta).toEqual({ SQU9C94: 4, [CHAVE_OUTRAS]: 2 });
+  });
+});
+
 describe("paraDadosCarretas", () => {
   it("lê os números em texto da RPC", () => {
     const dados = paraDadosCarretas({
