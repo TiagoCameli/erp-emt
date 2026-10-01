@@ -4805,6 +4805,8 @@ frete futuro fora do padrão volta a alertar.
 4. **Fretes ganha o filtro `?fretes=<id>,<id>`** (até 200), com aviso e "Ver todos os fretes". A
    conferência fica na aba Carretas EMT, que é onde o alerta mora; na aba Fretes se confere e corrige.
 
+**Ajuste (01/10/2026, pedido do Tiago):** o botão "Personalizar tela" saiu do canto de baixo, onde tapava o ⋮ da última linha das tabelas, e virou uma aba no canto direito alto, dentro do respiro de 24px do `<main>` acima do cabeçalho (`main` ganhou `relative`). Fora da edição ela é `absolute` e sobe com a página; na edição o "Concluir" fica `fixed` no mesmo canto. Só no desktop.
+
 ## 2026-10-01 - Aprovação de pagamentos no celular: a tela de quem recebe o link
 
 Pedido do Tiago: a aprovação pelo celular, principalmente aberta pelo link do WhatsApp, mais
