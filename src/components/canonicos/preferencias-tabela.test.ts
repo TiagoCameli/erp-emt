@@ -62,6 +62,8 @@ describe("lerPreferenciasTabela", () => {
       pesoCabecalho: null,
       ordemFiltros: [],
       largurasFiltros: {},
+      alturaTabela: null,
+      larguraTabela: null,
     });
 
     expect(lerPreferenciasTabela(salvo, IDS)).toEqual({
@@ -75,6 +77,8 @@ describe("lerPreferenciasTabela", () => {
       pesoCabecalho: null,
       ordemFiltros: [],
       largurasFiltros: {},
+      alturaTabela: null,
+      larguraTabela: null,
     });
   });
 
@@ -90,6 +94,8 @@ describe("lerPreferenciasTabela", () => {
       pesoCabecalho: null,
       ordemFiltros: [],
       largurasFiltros: {},
+      alturaTabela: null,
+      larguraTabela: null,
     });
 
     const lido = lerPreferenciasTabela(salvo, IDS);
@@ -118,6 +124,8 @@ describe("lerPreferenciasTabela", () => {
       pesoCabecalho: null,
       ordemFiltros: [],
       largurasFiltros: {},
+      alturaTabela: null,
+      larguraTabela: null,
     });
   });
 
@@ -308,6 +316,8 @@ describe("altura da linha na preferência", () => {
       pesoCabecalho: null,
       ordemFiltros: [],
       largurasFiltros: {},
+      alturaTabela: null,
+      larguraTabela: null,
     });
   });
 

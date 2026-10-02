@@ -61,6 +61,7 @@ import {
   type ColunaAlternavel,
 } from "@/components/canonicos/menu-colunas";
 import { MenuFiltros } from "@/components/canonicos/menu-filtros";
+import { useGrades } from "@/components/canonicos/provedor-grades";
 import {
   buscarPreferenciaTabela,
   limparPreferenciaTabela,
@@ -75,7 +76,10 @@ import {
   escreverPreferenciasTabela,
   LARGURA_MAXIMA,
   LARGURA_MINIMA,
+  ALTURA_TABELA_MAXIMA,
+  ALTURA_TABELA_MINIMA,
   ID_BUSCA_TABELA,
+  LARGURA_TABELA_MINIMA,
   lerPreferenciasTabela,
   ordemEfetiva,
   VERSAO_PREFERENCIAS,
@@ -389,6 +393,10 @@ interface EstadoTabela {
   ordemFiltros: string[];
   /** id do filtro -> largura em px. */
   largurasFiltros: Record<string, number>;
+  /** Altura da área da tabela em px (rolagem própria). `null` = a da tela. */
+  alturaTabela: number | null;
+  /** Largura da tabela em % do espaço. `null` = toda. */
+  larguraTabela: number | null;
 }
 
 /** Tudo que as instâncias de um mesmo `idTabela` compartilham. */
@@ -1271,6 +1279,8 @@ export function DataTable<TData>({
     pesoCabecalho: null,
     ordemFiltros: [],
     largurasFiltros: {},
+    alturaTabela: null,
+    larguraTabela: null,
   }));
 
   const assinarEstado = React.useCallback(
@@ -1297,6 +1307,8 @@ export function DataTable<TData>({
     pesoCabecalho,
     ordemFiltros,
     largurasFiltros,
+    alturaTabela,
+    larguraTabela,
   } = React.useSyncExternalStore(
     assinarEstado,
     // Só leitura, nunca criação: chave que ainda não existe cai no snapshot
@@ -1402,6 +1414,8 @@ export function DataTable<TData>({
         pesoCabecalho: salvo.pesoCabecalho,
         ordemFiltros: salvo.ordemFiltros,
         largurasFiltros: salvo.largurasFiltros,
+        alturaTabela: salvo.alturaTabela,
+        larguraTabela: salvo.larguraTabela,
       });
     });
     return () => {
@@ -1417,6 +1431,8 @@ export function DataTable<TData>({
     alturaLinha !== null ||
     alturaCabecalho !== null ||
     pesoCabecalho !== null ||
+    alturaTabela !== null ||
+    larguraTabela !== null ||
     idsColunas.some(
       (id) => (visibilidade[id] ?? true) !== (visibilidadePadrao[id] ?? true),
     );
@@ -1442,6 +1458,8 @@ export function DataTable<TData>({
         pesoCabecalho: entrada.estado.pesoCabecalho,
         ordemFiltros: entrada.estado.ordemFiltros,
         largurasFiltros: entrada.estado.largurasFiltros,
+        alturaTabela: entrada.estado.alturaTabela,
+        larguraTabela: entrada.estado.larguraTabela,
       });
       if (entrada.temporizador !== null) clearTimeout(entrada.temporizador);
       entrada.temporizador = setTimeout(
@@ -1459,6 +1477,88 @@ export function DataTable<TData>({
     },
     [agendarGravacao, mudarEstado],
   );
+
+  // ---- tamanho da tabela no "Personalizar tela" ---------------------------
+  // A tabela entra no mesmo modo de edição dos cards: borda direita muda a
+  // largura (em % do espaço) e a de baixo a altura (px, com rolagem própria e
+  // cabeçalho fixo). Contínuo, sem degrau, como os cards.
+  const grades = useGrades();
+  const tamanhoLigado = Boolean(idTabela) && personalizavel;
+  const editandoTamanho = tamanhoLigado && (grades?.editando ?? false);
+  const registrarGrade = tamanhoLigado ? grades?.registrar : undefined;
+  React.useEffect(() => registrarGrade?.(), [registrarGrade]);
+  const refBlocoTabela = React.useRef<HTMLDivElement>(null);
+  const refAreaTabela = React.useRef<HTMLDivElement>(null);
+  const [previaTabela, setPreviaTabela] = React.useState<{
+    altura: number | null;
+    largura: number | null;
+  } | null>(null);
+  const alturaTabelaEfetiva = (editandoTamanho && previaTabela ? previaTabela.altura : alturaTabela);
+  const larguraTabelaEfetiva = (editandoTamanho && previaTabela ? previaTabela.largura : larguraTabela);
+
+  function iniciarTamanhoTabela(
+    evento: React.PointerEvent<HTMLElement>,
+    borda: "direita" | "baixo" | "canto",
+  ) {
+    const bloco = refBlocoTabela.current;
+    const area = refAreaTabela.current;
+    const pai = bloco?.parentElement;
+    if (!bloco || !area || !pai) return;
+    evento.preventDefault();
+    evento.stopPropagation();
+    const alca = evento.currentTarget;
+    alca.setPointerCapture(evento.pointerId);
+    const inicioX = evento.clientX;
+    const inicioY = evento.clientY;
+    const larguraInicial = bloco.getBoundingClientRect().width;
+    const alturaInicial = area.getBoundingClientRect().height;
+    const larguraPai = pai.getBoundingClientRect().width || 1;
+    let ultimo = { altura: alturaTabela, largura: larguraTabela };
+    let quadro: number | null = null;
+
+    function aoMover(e: PointerEvent) {
+      const proximo = { ...ultimo };
+      if (borda !== "baixo") {
+        const pct = ((larguraInicial + e.clientX - inicioX) / larguraPai) * 100;
+        proximo.largura =
+          Math.round(Math.min(100, Math.max(LARGURA_TABELA_MINIMA, pct)) * 100) / 100;
+      }
+      if (borda !== "direita") {
+        proximo.altura = Math.round(
+          Math.min(
+            ALTURA_TABELA_MAXIMA,
+            Math.max(ALTURA_TABELA_MINIMA, alturaInicial + e.clientY - inicioY),
+          ),
+        );
+      }
+      ultimo = proximo;
+      if (quadro !== null) return;
+      quadro = requestAnimationFrame(() => {
+        quadro = null;
+        setPreviaTabela(ultimo);
+      });
+    }
+    function aoSoltar() {
+      if (quadro !== null) cancelAnimationFrame(quadro);
+      alca.removeEventListener("pointermove", aoMover);
+      alca.removeEventListener("pointerup", aoSoltar);
+      alca.removeEventListener("pointercancel", aoSoltar);
+      alca.removeEventListener("lostpointercapture", aoSoltar);
+      setPreviaTabela(null);
+      // Largura de 100% é a padrão: não guarda número que não muda nada.
+      const largura = ultimo.largura !== null && ultimo.largura >= 100 ? null : ultimo.largura;
+      if (ultimo.altura !== alturaTabela || largura !== larguraTabela) {
+        aplicarPreferencia({ alturaTabela: ultimo.altura, larguraTabela: largura });
+      }
+    }
+    alca.addEventListener("pointermove", aoMover);
+    alca.addEventListener("pointerup", aoSoltar);
+    alca.addEventListener("pointercancel", aoSoltar);
+    alca.addEventListener("lostpointercapture", aoSoltar);
+  }
+
+  /** Com altura escolhida a tabela rola por dentro, então o cabeçalho fica fixo. */
+  const cabecalhoFixoEfetivo = cabecalhoFixo || alturaTabelaEfetiva !== null;
 
   // Conta as instâncias montadas. A ÚLTIMA a sair grava o que estava esperando o
   // debounce (sair da tela não pode perder o último ajuste) e descarta a entrada,
@@ -1574,6 +1674,8 @@ export function DataTable<TData>({
       pesoCabecalho: null,
       ordemFiltros: [],
       largurasFiltros: {},
+      alturaTabela: null,
+      larguraTabela: null,
     });
     // Uma gravação em espera aqui ressuscitaria o que a pessoa acabou de limpar.
     descartarPendente(entrada);
@@ -2671,7 +2773,7 @@ export function DataTable<TData>({
                     arrastando !== header.column.id &&
                     podeReordenar &&
                     "border-l-2 border-l-faixa",
-                  cabecalhoFixo &&
+                  cabecalhoFixoEfetivo &&
                     "sticky top-0 z-10 bg-background shadow-[inset_0_-1px_0_var(--color-border)]",
                   classesResponsivas(header),
                 )}
@@ -3105,13 +3207,15 @@ export function DataTable<TData>({
 
   return (
     <div
+      ref={refBlocoTabela}
       className={cn(
-        "flex flex-col gap-2",
+        "flex max-w-full flex-col gap-2",
         // Enquanto arrasta, o cursor não muda de cara ao sair da alça e o texto da
         // tabela não é selecionado sem querer.
         arrasteAltura !== null && "cursor-row-resize select-none",
         arrasteLargura !== null && "cursor-col-resize select-none",
       )}
+      style={larguraTabelaEfetiva === null ? undefined : { width: `${larguraTabelaEfetiva}%` }}
     >
       {temBarra && (
         <BlocoFiltros
@@ -3274,14 +3378,23 @@ export function DataTable<TData>({
 
       {soCartoes ? null : (
         <div
-          className={cn(cartoesLigados && celular === null && "max-md:hidden")}
+          ref={refAreaTabela}
+          className={cn(
+            "relative",
+            cartoesLigados && celular === null && "max-md:hidden",
+            editandoTamanho && "rounded-md outline-1 outline-offset-4 outline-muted-foreground/50 outline-dashed",
+          )}
         >
-          {cabecalhoFixo ? (
+          {cabecalhoFixoEfetivo ? (
             // `relative` é o que dá à linha guia do arraste um lugar de onde sair (a
             // guia mede em px a partir da borda esquerda da tabela).
             <div
               className="relative overflow-auto rounded-md border border-border"
-              style={{ maxHeight: alturaMaxima ?? ALTURA_MAXIMA_PADRAO }}
+              style={
+                alturaTabelaEfetiva !== null
+                  ? { height: alturaTabelaEfetiva }
+                  : { maxHeight: alturaMaxima ?? ALTURA_MAXIMA_PADRAO }
+              }
             >
               {tabela}
               {guiaLargura}
@@ -3297,6 +3410,41 @@ export function DataTable<TData>({
               </div>
             </div>
           )}
+          {editandoTamanho ? (
+            <>
+              <span
+                aria-hidden
+                className="absolute top-2 -right-3 bottom-4 z-20 w-2 cursor-ew-resize rounded-sm bg-muted-foreground/30 hover:bg-ring/60"
+                onPointerDown={(e) => iniciarTamanhoTabela(e, "direita")}
+              />
+              <span
+                aria-hidden
+                className="absolute right-4 -bottom-3 left-2 z-20 h-2 cursor-ns-resize rounded-sm bg-muted-foreground/30 hover:bg-ring/60"
+                onPointerDown={(e) => iniciarTamanhoTabela(e, "baixo")}
+              />
+              <span
+                aria-hidden
+                className="absolute -right-3 -bottom-3 z-20 size-4 cursor-nwse-resize rounded-sm border-r-2 border-b-2 border-muted-foreground hover:border-ring"
+                onPointerDown={(e) => iniciarTamanhoTabela(e, "canto")}
+              />
+              <div className="absolute -top-3 right-2 z-20 flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-legenda text-muted-foreground shadow-sm print:hidden">
+                <span className="tabular-nums">
+                  {previaTabela
+                    ? `${previaTabela.largura === null ? 100 : Math.round(previaTabela.largura)}% · ${previaTabela.altura === null ? "altura da tela" : `${previaTabela.altura} px`}`
+                    : "Tabela: puxe a borda direita, a de baixo ou o canto"}
+                </span>
+                {alturaTabela !== null || larguraTabela !== null ? (
+                  <button
+                    type="button"
+                    className="rounded-sm px-1 hover:bg-surface hover:text-foreground"
+                    onClick={() => aplicarPreferencia({ alturaTabela: null, larguraTabela: null })}
+                  >
+                    Tamanho padrão
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : null}
         </div>
       )}
 

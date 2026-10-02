@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   ALTURA_MAXIMA_GRADE,
   ALTURA_MINIMA_GRADE,
+  baseDaLargura,
+  LARGURA_MINIMA_GRADE,
+  limitarAltura,
+  porcentagemDaLargura,
   chaveLayoutGrade,
   colunasDaLargura,
   idDoTitulo,
@@ -55,7 +59,7 @@ describe("lerLayoutGrade", () => {
       IDS,
     );
     expect(layout.tamanhos.total).toEqual({ largura: 12, altura: ALTURA_MINIMA_GRADE });
-    expect(layout.tamanhos.pago).toEqual({ largura: 2, altura: ALTURA_MAXIMA_GRADE });
+    expect(layout.tamanhos.pago).toEqual({ largura: LARGURA_MINIMA_GRADE, altura: ALTURA_MAXIMA_GRADE });
     // Nada utilizável: o card volta ao padrão em vez de guardar um tamanho vazio.
     expect(layout.tamanhos.vencido).toBeUndefined();
   });
@@ -104,8 +108,8 @@ describe("colunasDaLargura", () => {
     expect(colunasDaLargura(291, 1200, 12)).toBe(3);
   });
 
-  it("nunca sai de 2 a 12", () => {
-    expect(colunasDaLargura(10, 1200, 12)).toBe(2);
+  it("nunca sai do mínimo à linha inteira", () => {
+    expect(colunasDaLargura(10, 1200, 12)).toBe(LARGURA_MINIMA_GRADE);
     expect(colunasDaLargura(5000, 1200, 12)).toBe(12);
   });
 });
@@ -153,5 +157,37 @@ describe("preservarForaDaTela", () => {
   it("sem nada salvo de fora, devolve o layout novo intacto", () => {
     const novo = lerLayoutGrade(salvo, IDS);
     expect(preservarForaDaTela(novo, null, IDS)).toBe(novo);
+  });
+});
+
+describe("tamanho contínuo", () => {
+  it("o arrasto não tem degrau: px de diferença viram fração de coluna", () => {
+    // 700px numa grade de 1200 com vão 12: (712 / 1212) × 12 = 7,05 colunas.
+    expect(colunasDaLargura(700, 1200, 12)).toBe(7.05);
+    expect(colunasDaLargura(701, 1200, 12)).toBeGreaterThan(colunasDaLargura(700, 1200, 12));
+    expect(limitarAltura(337)).toBe(337);
+  });
+
+  it("ida e volta: a base CSS da fração devolve a mesma largura em px", () => {
+    // P × (grade + vão) − vão, a conta que o calc() faz com 100% = 1200px.
+    const colunas = colunasDaLargura(700, 1200, 12);
+    const px = (colunas / 12) * (1200 + 12) - 12;
+    expect(Math.abs(px - 700)).toBeLessThan(1);
+    expect(baseDaLargura(colunas)).toBe("calc(58.75% - var(--vao-grade) * 0.4125 - 0.5px)");
+  });
+
+  it("layout salvo antes, em colunas inteiras, continua com a mesma largura", () => {
+    // Metade da linha: 50% menos meio vão, igual à conta antiga de 6 colunas.
+    expect(baseDaLargura(6)).toBe("calc(50% - var(--vao-grade) * 0.5 - 0.5px)");
+    expect(porcentagemDaLargura(6)).toBe(50);
+    expect(porcentagemDaLargura(4)).toBe(33);
+  });
+
+  it("fração vinda do banco é aceita, com duas casas", () => {
+    const layout = lerLayoutGrade(
+      { versao: VERSAO_LAYOUT_GRADE, ordem: [], ocultos: [], tamanhos: { total: { largura: 6.3749, altura: 333.4 } } },
+      IDS,
+    );
+    expect(layout.tamanhos.total).toEqual({ largura: 6.37, altura: 333 });
   });
 });

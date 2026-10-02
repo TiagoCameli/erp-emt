@@ -4920,3 +4920,11 @@ contrato.
 
 **Pendente:** `fn_mc_medicao_sugestao` ainda mostra a maior versão vigente sem olhar o fim do período.
 É só exibição: abrir e fechar já usam a regra certa.
+
+## 2026-10-02 - Tamanho livre de cards, gráficos e tabelas
+
+**Pedido do Tiago (02/10/2026):** ajuste ainda mais fluido, cada card, gráfico e tabela em qualquer tamanho que a pessoa quiser.
+
+**Decisão:**
+1. Cards e gráficos: a largura deixou de pular de coluna em coluna. Continua guardada em "colunas de 12", agora com fração (6,37), para o layout salvo em inteiros seguir igual sem conversão; a base CSS é `P% − vão × (1 − P)`, que enche a linha exata quando as frações somam 1. Mínimo 1 coluna (≈8%). Altura no pixel, sem o degrau de 8 px, mínimo 60. O arrasto atualiza um quadro por vez (`requestAnimationFrame`) e mostra a medida ("48% da linha · 320 px").
+2. Tabela (DataTable com `idTabela`): entra no mesmo "Personalizar tela". Borda direita muda a largura (20% a 100% do espaço) e a de baixo a altura (160 a 4000 px). Altura escolhida liga a rolagem própria com cabeçalho fixo (o mesmo modo do `cabecalhoFixo`). Guardado na preferência da tabela (`alturaTabela`, `larguraTabela`), campos que só acrescentam, sem versão nova. "Tamanho padrão" e o "Restaurar" das colunas desfazem.
