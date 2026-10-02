@@ -41,14 +41,27 @@ export interface MedicaoDetalheProps {
   congelados?: ItemCongelado[];
   /** Rótulos dos itens congelados que não estão nos itens da medição. */
   rotulosExtras?: RotuloItem[];
+  /**
+   * Seção Reajuste (Fase 6), montada pela página só para quem tem `medicao.reajuste/ver`; fica entre
+   * Itens e Revisões. Sem ela, a seção não aparece.
+   */
+  secaoReajuste?: React.ReactNode;
 }
 
 /**
  * Detalhe da medição (Fase 5, Task 3): cabeçalho com Nª, contrato, período, selo e os passos do
- * ciclo; resumo (versão da planilha, revisão corrente, valor); itens; revisões (lista e comparação
+ * ciclo; resumo (versão da planilha, revisão corrente, valor); itens; reajuste (Fase 6); revisões (lista e comparação
  * de duas revisões, Task 4); e a trilha dos eventos. Todo número vem do banco como texto e só é formatado (D7).
  */
-export function MedicaoDetalhe({ medicao, passos, podeVerLancamentos, botaoAprovar, congelados = SEM_CONGELADOS, rotulosExtras = SEM_ROTULOS }: MedicaoDetalheProps) {
+export function MedicaoDetalhe({
+  medicao,
+  passos,
+  podeVerLancamentos,
+  botaoAprovar,
+  congelados = SEM_CONGELADOS,
+  rotulosExtras = SEM_ROTULOS,
+  secaoReajuste,
+}: MedicaoDetalheProps) {
   const periodo = periodoMedicao(medicao.periodoInicio, medicao.periodoFim);
   const corrente = medicao.revisaoCorrente;
   const trilha = React.useMemo(() => medicao.eventos.map(eventoMedicaoParaTrilha), [medicao.eventos]);
@@ -105,6 +118,8 @@ export function MedicaoDetalhe({ medicao, passos, podeVerLancamentos, botaoAprov
         <SecaoDetalhe titulo="Itens">
           <ItensMedicao itens={medicao.itens} valorTotal={medicao.valor} />
         </SecaoDetalhe>
+
+        {secaoReajuste}
 
         <SecaoDetalhe titulo="Revisões">
           <RevisoesMedicao revisoes={medicao.revisoes} congelados={congelados} rotulos={rotulos} />

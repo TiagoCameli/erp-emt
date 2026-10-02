@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { configSchema, escolhasSchema, manualSchema, valorManualParaBanco } from "./schemas";
+import { configSchema, escolhasSchema, manualFormSchema, manualSchema, valorManualParaBanco } from "./schemas";
 
 // Id de carga (md5 formatado como uuid, sem versão nem variante): z.uuid() recusaria.
 const ID_CARGA = "c4109738-9af7-4ddb-8982-3b2c79fe6e43";
@@ -69,6 +69,25 @@ describe("manualSchema", () => {
     expect(manualSchema.safeParse({ ...base, situacao: "final" }).success).toBe(false);
     expect(manualSchema.safeParse({ ...base, observacao: "a".repeat(501) }).success).toBe(false);
     expect(manualSchema.safeParse({ ...base, arquivoId: "x" }).success).toBe(false);
+  });
+});
+
+describe("manualFormSchema", () => {
+  it("vazio: diz de uma vez o que falta (valor, sentido e situação)", () => {
+    const r = manualFormSchema.safeParse({ valor: "", sentido: "", situacao: "", observacao: "", arquivoId: "" });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues.map((i) => [i.path.join("."), i.message])).toEqual([
+      ["valor", "Informe o valor do reajuste, até 2 casas"],
+      ["sentido", "Escolha se o reajuste é positivo ou negativo"],
+      ["situacao", "Escolha a situação dos índices: provisório ou definitivo"],
+    ]);
+  });
+
+  it("número ambíguo recusado como no colar; valor válido passa cru", () => {
+    const ambiguo = manualFormSchema.safeParse({ valor: "1.234", sentido: "positivo", situacao: "definitivo", observacao: "", arquivoId: "" });
+    expect(ambiguo.error?.issues[0]?.message).toMatch(/^Número ambíguo: "1.234"/);
+    const ok = manualFormSchema.safeParse({ valor: "1.234,56", sentido: "negativo", situacao: "provisorio", observacao: "", arquivoId: "" });
+    expect(ok.success && ok.data.valor).toBe("1.234,56");
   });
 });
 

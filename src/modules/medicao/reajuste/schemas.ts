@@ -59,6 +59,27 @@ export const manualSchema = z
   .transform((d) => ({ ...d, valor: valorManualParaBanco(d.valor, d.sentido) as string }));
 export type ManualInput = z.input<typeof manualSchema>;
 
+/**
+ * O formulário do lançamento manual na tela: os mesmos textos do `manualSchema`, mas cada campo se
+ * valida sozinho (o `superRefine` do objeto só roda quando sentido e situação já passaram, e a tela
+ * precisa dizer tudo que falta de uma vez). Os valores vão crus para a action, que usa o
+ * `manualSchema`; o anexo vazio ("") vira null no envio.
+ */
+export const manualFormSchema = z.object({
+  valor: z.string().superRefine((valor, ctx) => {
+    const limpo = (valor ?? "").trim();
+    if (ehNumeroAmbiguo(limpo)) ctx.addIssue({ code: "custom", message: mensagemAmbiguo(limpo) });
+    else if (valorManualParaBanco(valor, "positivo") === null) ctx.addIssue({ code: "custom", message: MENSAGEM_VALOR_MANUAL });
+  }),
+  sentido: z.string().refine((v) => (SENTIDOS_REAJUSTE as readonly string[]).includes(v), "Escolha se o reajuste é positivo ou negativo"),
+  situacao: z
+    .string()
+    .refine((v) => (SITUACOES_REAJUSTE as readonly string[]).includes(v), "Escolha a situação dos índices: provisório ou definitivo"),
+  observacao: z.string().max(500, "A observação tem no máximo 500 caracteres"),
+  arquivoId: z.string(),
+});
+export type ManualFormInput = z.input<typeof manualFormSchema>;
+
 /** Seção Reajuste do contrato: data-base em mês ("aaaa-mm"), obrigatória com reajuste. */
 export const configSchema = z
   .object({

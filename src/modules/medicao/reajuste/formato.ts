@@ -17,6 +17,11 @@ export function rotuloOrigemReajuste(origem: string): string {
   return ROTULO_ORIGEM[origem] ?? origem;
 }
 
+/** O reajuste entra só em medição enviada ou aprovada (a RPC confere de novo). */
+export function medicaoRecebeReajuste(status: string): boolean {
+  return status === "enviada" || status === "aprovada";
+}
+
 /** Diferença para o relatório anterior: + a receber, - a devolver. */
 export function diferencaReajuste(texto: string): { texto: string; sinal: -1 | 0 | 1 } {
   const sinal = comparar(lerDecimal(texto), lerDecimal("0"));
