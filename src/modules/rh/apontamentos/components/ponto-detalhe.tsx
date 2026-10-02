@@ -9,8 +9,10 @@ import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 import {
   CelulaVazia,
   ConfirmDialog,
+  GradeKpis,
   PageHeader,
   StatusBadge,
+  type PropsItemDaGrade,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
@@ -33,7 +35,11 @@ import {
   type ApontamentoEdicao,
 } from "./apontamento-form-drawer";
 
-/** Card de seção do detalhe (borda + superfície), com título e ação. */
+/**
+ * Card de seção do detalhe (borda + superfície), com título e ação. Aceita a
+ * identidade de card (`PropsItemDaGrade`) porque a tabela mora na grade
+ * personalizável (tamanho, ordem, tirar da tela).
+ */
 function Secao({
   titulo,
   acao,
@@ -42,7 +48,7 @@ function Secao({
   titulo: string;
   acao?: React.ReactNode;
   children: React.ReactNode;
-}) {
+} & PropsItemDaGrade) {
   return (
     <section className="rounded-md border border-border bg-surface p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -233,176 +239,181 @@ export function PontoDetalheView({
         ) : null}
       </Secao>
 
-      <Secao
-        titulo="Apontamentos"
-        acao={
-          aceitaLancamentos ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={abrirNovo}
-            >
-              <Plus />
-              Adicionar colaborador
-            </Button>
-          ) : null
-        }
-      >
-        {ponto.apontamentos.length === 0 ? (
-          <p className="text-detalhe text-muted-foreground">
-            Nenhum colaborador apontado neste dia.
-          </p>
-        ) : (
-          <>
-            {/* Mobile: cartões por colaborador. */}
-            <ul className="flex flex-col gap-2 sm:hidden">
-              {ponto.apontamentos.map((linha) => (
-                <li
-                  key={linha.id}
-                  className="rounded-md border border-border p-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-medium">{linha.colaboradorNome}</p>
-                      {linha.colaboradorFuncao ? (
-                        <p className="text-legenda text-muted-foreground">
-                          {linha.colaboradorFuncao}
-                        </p>
-                      ) : null}
-                    </div>
-                    <StatusBadge
-                      status="rascunho"
-                      rotulo={ROTULO_TIPO_APONTAMENTO[linha.tipo]}
-                    />
-                  </div>
-                  <div className="mt-2 flex items-center gap-4 text-detalhe tabular-nums">
-                    <span>
-                      <span className="text-muted-foreground">Normais </span>
-                      {formatarQuantidade(linha.horasNormais)} h
-                    </span>
-                    <span>
-                      <span className="text-muted-foreground">Extras </span>
-                      {formatarQuantidade(linha.horasExtras)} h
-                    </span>
-                  </div>
-                  {linha.observacao ? (
-                    <p className="mt-1 text-legenda text-muted-foreground">
-                      {linha.observacao}
-                    </p>
-                  ) : null}
-                  {aceitaLancamentos ? (
-                    <div className="mt-2 flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Editar apontamento"
-                        className="text-muted-foreground"
-                        onClick={() => abrirEdicao(linha)}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Remover apontamento"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => aoRemover(linha.id)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-
-            {/* Desktop: tabela. */}
-            <div className="hidden overflow-x-auto rounded-md border border-border sm:block">
-              <table className="w-full text-detalhe">
-                <thead>
-                  {/* Centralizado é o padrão de tabela do app (ver DataTable);
-                      só dinheiro, quantidade, total, percentual e horas vão à
-                      direita. */}
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-center font-medium">
-                      Colaborador
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Horas normais
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Horas extras
-                    </th>
-                    <th className="px-3 py-2 text-center font-medium">Tipo</th>
-                    {aceitaLancamentos ? (
-                      <th className="px-3 py-2 text-right font-medium" />
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ponto.apontamentos.map((linha) => (
-                    <tr
-                      key={linha.id}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-3 py-2 text-center">
-                        {linha.colaboradorNome}
+      {/* A tabela é card da grade: tamanho, ordem e tirar da tela por pessoa; com
+          altura escolhida ela rola por dentro. */}
+      <GradeKpis id="rh.apontamentos.detalhe.tabelas" titulo="Tabelas" vao="amplo">
+        <Secao
+          larguraPadrao={12}
+          titulo="Apontamentos"
+          acao={
+            aceitaLancamentos ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={abrirNovo}
+              >
+                <Plus />
+                Adicionar colaborador
+              </Button>
+            ) : null
+          }
+        >
+          {ponto.apontamentos.length === 0 ? (
+            <p className="text-detalhe text-muted-foreground">
+              Nenhum colaborador apontado neste dia.
+            </p>
+          ) : (
+            <>
+              {/* Mobile: cartões por colaborador. */}
+              <ul className="flex flex-col gap-2 sm:hidden">
+                {ponto.apontamentos.map((linha) => (
+                  <li
+                    key={linha.id}
+                    className="rounded-md border border-border p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">{linha.colaboradorNome}</p>
                         {linha.colaboradorFuncao ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            ({linha.colaboradorFuncao})
-                          </span>
+                          <p className="text-legenda text-muted-foreground">
+                            {linha.colaboradorFuncao}
+                          </p>
                         ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarQuantidade(linha.horasNormais)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarQuantidade(linha.horasExtras)}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <StatusBadge
-                          status="rascunho"
-                          rotulo={ROTULO_TIPO_APONTAMENTO[linha.tipo]}
-                        />
-                      </td>
+                      </div>
+                      <StatusBadge
+                        status="rascunho"
+                        rotulo={ROTULO_TIPO_APONTAMENTO[linha.tipo]}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center gap-4 text-detalhe tabular-nums">
+                      <span>
+                        <span className="text-muted-foreground">Normais </span>
+                        {formatarQuantidade(linha.horasNormais)} h
+                      </span>
+                      <span>
+                        <span className="text-muted-foreground">Extras </span>
+                        {formatarQuantidade(linha.horasExtras)} h
+                      </span>
+                    </div>
+                    {linha.observacao ? (
+                      <p className="mt-1 text-legenda text-muted-foreground">
+                        {linha.observacao}
+                      </p>
+                    ) : null}
+                    {aceitaLancamentos ? (
+                      <div className="mt-2 flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Editar apontamento"
+                          className="text-muted-foreground"
+                          onClick={() => abrirEdicao(linha)}
+                        >
+                          <Pencil />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Remover apontamento"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => aoRemover(linha.id)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop: tabela. */}
+              <div className="hidden overflow-x-auto rounded-md border border-border sm:block">
+                <table className="w-full text-detalhe">
+                  <thead>
+                    {/* Centralizado é o padrão de tabela do app (ver DataTable);
+                        só dinheiro, quantidade, total, percentual e horas vão à
+                        direita. */}
+                    <tr className="border-b border-border text-legenda text-muted-foreground">
+                      <th className="px-3 py-2 text-center font-medium">
+                        Colaborador
+                      </th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Horas normais
+                      </th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Horas extras
+                      </th>
+                      <th className="px-3 py-2 text-center font-medium">Tipo</th>
                       {aceitaLancamentos ? (
-                        <td className="px-3 py-2 text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Editar apontamento"
-                              className="text-muted-foreground"
-                              onClick={() => abrirEdicao(linha)}
-                            >
-                              <Pencil />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Remover apontamento"
-                              className="text-muted-foreground hover:text-destructive"
-                              onClick={() => aoRemover(linha.id)}
-                            >
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        </td>
+                        <th className="px-3 py-2 text-right font-medium" />
                       ) : null}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </Secao>
+                  </thead>
+                  <tbody>
+                    {ponto.apontamentos.map((linha) => (
+                      <tr
+                        key={linha.id}
+                        className="border-b border-border last:border-0"
+                      >
+                        <td className="px-3 py-2 text-center">
+                          {linha.colaboradorNome}
+                          {linha.colaboradorFuncao ? (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              ({linha.colaboradorFuncao})
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatarQuantidade(linha.horasNormais)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatarQuantidade(linha.horasExtras)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <StatusBadge
+                            status="rascunho"
+                            rotulo={ROTULO_TIPO_APONTAMENTO[linha.tipo]}
+                          />
+                        </td>
+                        {aceitaLancamentos ? (
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Editar apontamento"
+                                className="text-muted-foreground"
+                                onClick={() => abrirEdicao(linha)}
+                              >
+                                <Pencil />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Remover apontamento"
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => aoRemover(linha.id)}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </div>
+                          </td>
+                        ) : null}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Secao>
+      </GradeKpis>
 
       {aceitaLancamentos ? (
         <ApontamentoFormDrawer
