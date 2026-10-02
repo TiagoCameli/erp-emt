@@ -5,6 +5,7 @@ import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { relogioDeParede } from "@/modules/combustivel/anomalias/base";
 import { paraNumeroDoBanco } from "@/modules/manutencao/servicos/formato";
 import { carregarBaseFrete } from "@/modules/frete/_shared/pedreira-dados";
+import { paraMapaDeRotas } from "@/modules/frete/carretas-emt/dados";
 import { CNPJ_ETAM, type DadosPainel } from "@/modules/frete/painel/calculo";
 
 export interface OpcaoFornecedorCard {
@@ -33,7 +34,7 @@ function soDigitos(texto: string | null): string {
  */
 export async function carregarPainelFrete(veAbastecimentos: boolean): Promise<PainelFreteCarregado> {
   const supabase = await createClient();
-  const [base, pagamentos, saidas, saldos, config] = await Promise.all([
+  const [base, pagamentos, saidas, saldos, config, locais, tracados] = await Promise.all([
     carregarBaseFrete(),
     todasAsLinhas((de, ate) =>
       supabase
@@ -65,8 +66,20 @@ export async function carregarPainelFrete(veAbastecimentos: boolean): Promise<Pa
         .range(de, ate),
     ),
     supabase.from("frete_painel_config").select("fornecedor_ids").eq("id", "global").maybeSingle(),
+    // Mapa das rotas: coordenada dos locais e o traçado pela estrada (migration 20261001193947).
+    todasAsLinhas((de, ate) =>
+      supabase.from("localidades").select("id, nome, latitude, longitude").order("id").range(de, ate),
+    ),
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("frete_rotas_tracado")
+        .select("origem_localidade_id, destino_localidade_id, km_mapa, horas_mapa, tracado")
+        .order("origem_localidade_id")
+        .order("destino_localidade_id")
+        .range(de, ate),
+    ),
   ]);
-  if (pagamentos.erro || saidas.erro || saldos.erro || config.error) {
+  if (pagamentos.erro || saidas.erro || saldos.erro || config.error || locais.erro || tracados.erro) {
     throw new Error("Não foi possível carregar o painel do frete");
   }
 
@@ -84,6 +97,8 @@ export async function carregarPainelFrete(veAbastecimentos: boolean): Promise<Pa
     const f = fornecedores.get(id);
     if (f) nomeFornecedor[id] = f.nome;
   }
+
+  const usadosNoFrete = new Set(base.fretes.flatMap((f) => [f.origemId, f.destinoId]));
 
   const opcoesCards = [...fornecedores.values()]
     .filter((f) => f.ativo || cardsIds.includes(f.id))
@@ -141,6 +156,11 @@ export async function carregarPainelFrete(veAbastecimentos: boolean): Promise<Pa
       },
       transportadoras: [...fornecedores.values()].filter((f) => f.ehTransportadora).map((f) => f.id).filter((id) => usados.has(id)),
       cardsIds,
+      // Só os locais que aparecem em frete viajam para a tela.
+      mapa: paraMapaDeRotas(
+        locais.linhas.filter((l) => usadosNoFrete.has(l.id)),
+        tracados.linhas,
+      ),
     },
   };
 }
